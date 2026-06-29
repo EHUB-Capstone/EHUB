@@ -1,0 +1,14 @@
+bin/
+obj/
+.vs/
+.vscode/
+*.user
+*.suo
+.env
+.env.*
+!*.env.example
+TestResults/
+coverage/
+.git/
+.gitignore
+README.md

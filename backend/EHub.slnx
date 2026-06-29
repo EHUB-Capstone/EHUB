@@ -1,0 +1,14 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/EHub.Api/EHub.Api.csproj" />
+    <Project Path="src/EHub.Application/EHub.Application.csproj" />
+    <Project Path="src/EHub.Contracts/EHub.Contracts.csproj" />
+    <Project Path="src/EHub.Domain/EHub.Domain.csproj" />
+    <Project Path="src/EHub.Infrastructure/EHub.Infrastructure.csproj" />
+    <Project Path="src/EHub.Shared/EHub.Shared.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/EHub.IntegrationTests/EHub.IntegrationTests.csproj" />
+    <Project Path="tests/EHub.UnitTests/EHub.UnitTests.csproj" />
+  </Folder>
+</Solution>

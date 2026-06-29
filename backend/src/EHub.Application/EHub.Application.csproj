@@ -1,0 +1,15 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\EHub.Domain\EHub.Domain.csproj" />
+    <ProjectReference Include="..\EHub.Contracts\EHub.Contracts.csproj" />
+    <ProjectReference Include="..\EHub.Shared\EHub.Shared.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>
