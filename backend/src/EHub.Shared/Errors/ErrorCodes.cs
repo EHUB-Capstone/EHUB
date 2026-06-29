@@ -17,4 +17,7 @@ public static class ErrorCodes
     public const string AuthUserInactive = "AUTH_USER_INACTIVE";
     public const string AuthRefreshTokenInvalid = "AUTH_REFRESH_TOKEN_INVALID";
     public const string AuthRefreshTokenExpired = "AUTH_REFRESH_TOKEN_EXPIRED";
+
+    // System error codes
+    public const string InternalServerError = "INTERNAL_SERVER_ERROR";
 }
