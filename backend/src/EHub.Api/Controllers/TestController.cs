@@ -56,4 +56,22 @@ public class TestController : ControllerBase
     {
         throw new Exception("Database disk full error occurred!");
     }
+
+    [HttpPost("register")]
+    public IActionResult TestRegister(EHub.Contracts.Auth.RegisterRequest request)
+    {
+        return Ok(ApiResponse<string>.SuccessResponse("Validation passed", "Success"));
+    }
+
+    [HttpPost("login")]
+    public IActionResult TestLogin(EHub.Contracts.Auth.EmailPasswordLoginRequest request)
+    {
+        return Ok(ApiResponse<string>.SuccessResponse("Validation passed", "Success"));
+    }
+
+    [HttpPost("google-login")]
+    public IActionResult TestGoogleLogin(EHub.Contracts.Auth.GoogleLoginRequest request)
+    {
+        return Ok(ApiResponse<string>.SuccessResponse("Validation passed", "Success"));
+    }
 }
