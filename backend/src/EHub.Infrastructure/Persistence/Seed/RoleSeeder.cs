@@ -15,11 +15,9 @@ public static class RoleSeeder
             var roles = new[]
             {
                 new Role { Name = SystemRoles.Admin, Description = "System Administrator", CreatedAt = DateTime.UtcNow },
-                new Role { Name = SystemRoles.DepartmentManager, Description = "Academic Department Manager", CreatedAt = DateTime.UtcNow },
                 new Role { Name = SystemRoles.Lecturer, Description = "Class Lecturer / Instructor", CreatedAt = DateTime.UtcNow },
                 new Role { Name = SystemRoles.Student, Description = "FPT Student", CreatedAt = DateTime.UtcNow },
-                new Role { Name = SystemRoles.Mentor, Description = "Startup Mentor (Business/Technical)", CreatedAt = DateTime.UtcNow },
-                new Role { Name = SystemRoles.Viewer, Description = "External Guest / Viewer", CreatedAt = DateTime.UtcNow }
+                new Role { Name = SystemRoles.Mentor, Description = "Startup Mentor (Business/Technical)", CreatedAt = DateTime.UtcNow }
             };
 
             await context.Roles.AddRangeAsync(roles);

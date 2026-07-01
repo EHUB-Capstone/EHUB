@@ -7,15 +7,17 @@ using Microsoft.EntityFrameworkCore;
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
-
 builder.Services.AddControllers();
 builder.Services.AddInfrastructure(builder.Configuration);
 
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
-builder.Services.AddOpenApi();
+// Setup infrastructure extensions
+builder.Services.AddSwaggerDocumentation();
+builder.Services.AddCorsPolicy(builder.Configuration);
+builder.Services.AddApplicationHealthChecks();
 
 var app = builder.Build();
 
+// Global Exception Handling at the beginning
 app.UseGlobalExceptionHandling();
 
 // Auto-migrate and seed in Development environment
@@ -38,13 +40,20 @@ if (app.Environment.IsDevelopment())
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
-    app.MapOpenApi();
+    app.UseSwaggerDocumentation(); // Swagger UI enabled in Development
 }
 
 app.UseHttpsRedirection();
 
+// CORS must be configured before Authentication & Authorization middleware
+app.UseCors(CorsExtensions.FrontendPolicy);
+
+// app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+
+// Health Check Endpoint
+app.MapApplicationHealthChecks();
 
 app.Run();
