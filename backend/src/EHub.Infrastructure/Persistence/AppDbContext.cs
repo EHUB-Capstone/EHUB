@@ -18,6 +18,12 @@ public class AppDbContext : DbContext, IApplicationDbContext
     public DbSet<Role> Roles => Set<Role>();
     public DbSet<UserRole> UserRoles => Set<UserRole>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
+    public DbSet<Semester> Semesters => Set<Semester>();
+    public DbSet<Course> Courses => Set<Course>();
+    public DbSet<Class> Classes => Set<Class>();
+    public DbSet<ClassLecturer> ClassLecturers => Set<ClassLecturer>();
+    public DbSet<Student> Students => Set<Student>();
+    public DbSet<ClassStudent> ClassStudents => Set<ClassStudent>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

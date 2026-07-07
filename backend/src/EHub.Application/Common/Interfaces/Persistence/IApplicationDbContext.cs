@@ -11,6 +11,12 @@ public interface IApplicationDbContext
     DbSet<Role> Roles { get; }
     DbSet<UserRole> UserRoles { get; }
     DbSet<RefreshToken> RefreshTokens { get; }
+    DbSet<Semester> Semesters { get; }
+    DbSet<Course> Courses { get; }
+    DbSet<Class> Classes { get; }
+    DbSet<ClassLecturer> ClassLecturers { get; }
+    DbSet<Student> Students { get; }
+    DbSet<ClassStudent> ClassStudents { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }
