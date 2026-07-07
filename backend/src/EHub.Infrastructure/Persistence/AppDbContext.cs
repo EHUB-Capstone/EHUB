@@ -24,6 +24,10 @@ public class AppDbContext : DbContext, IApplicationDbContext
     public DbSet<ClassLecturer> ClassLecturers => Set<ClassLecturer>();
     public DbSet<Student> Students => Set<Student>();
     public DbSet<ClassStudent> ClassStudents => Set<ClassStudent>();
+    public DbSet<Team> Teams => Set<Team>();
+    public DbSet<TeamMember> TeamMembers => Set<TeamMember>();
+    public DbSet<Project> Projects => Set<Project>();
+    public DbSet<ProjectTag> ProjectTags => Set<ProjectTag>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

@@ -1,0 +1,31 @@
+using System;
+using System.Collections.Generic;
+using EHub.Domain.Common;
+using EHub.Domain.Enums;
+
+namespace EHub.Domain.Entities;
+
+public class Project : AuditableEntity
+{
+    public Guid TeamId { get; set; }
+    public virtual Team Team { get; set; } = null!;
+
+    public string Name { get; set; } = string.Empty;
+    public string? Description { get; set; }
+    public string? Problem { get; set; }
+    public string? Solution { get; set; }
+    public string? StartupField { get; set; }
+    public string? BusinessModel { get; set; }
+    public string? Technology { get; set; }
+
+    public ProjectStatus Status { get; set; } = ProjectStatus.Draft;
+    public bool IsHighPotential { get; set; } = false;
+
+    public Guid? CreatedById { get; set; }
+    public virtual User? Creator { get; set; }
+
+    public DateTime? SubmittedAt { get; set; }
+
+    // Navigation properties
+    public virtual ICollection<ProjectTag> ProjectTags { get; set; } = new List<ProjectTag>();
+}
