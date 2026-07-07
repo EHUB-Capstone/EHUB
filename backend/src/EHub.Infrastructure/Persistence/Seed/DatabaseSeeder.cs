@@ -9,5 +9,6 @@ public static class DatabaseSeeder
         await RoleSeeder.SeedAsync(context);
         await SemesterSeeder.SeedAsync(context);
         await CourseSeeder.SeedAsync(context);
+        await CheckpointSeeder.SeedAsync(context);
     }
 }

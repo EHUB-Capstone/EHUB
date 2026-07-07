@@ -28,6 +28,10 @@ public class AppDbContext : DbContext, IApplicationDbContext
     public DbSet<TeamMember> TeamMembers => Set<TeamMember>();
     public DbSet<Project> Projects => Set<Project>();
     public DbSet<ProjectTag> ProjectTags => Set<ProjectTag>();
+    public DbSet<Checkpoint> Checkpoints => Set<Checkpoint>();
+    public DbSet<Submission> Submissions => Set<Submission>();
+    public DbSet<SubmissionFile> SubmissionFiles => Set<SubmissionFile>();
+    public DbSet<SubmissionFeedback> SubmissionFeedbacks => Set<SubmissionFeedback>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

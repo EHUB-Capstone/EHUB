@@ -21,6 +21,10 @@ public interface IApplicationDbContext
     DbSet<TeamMember> TeamMembers { get; }
     DbSet<Project> Projects { get; }
     DbSet<ProjectTag> ProjectTags { get; }
+    DbSet<Checkpoint> Checkpoints { get; }
+    DbSet<Submission> Submissions { get; }
+    DbSet<SubmissionFile> SubmissionFiles { get; }
+    DbSet<SubmissionFeedback> SubmissionFeedbacks { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }
