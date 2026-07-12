@@ -29,4 +29,5 @@ public class Class : AuditableEntity
     public virtual ICollection<ClassLecturer> ClassLecturers { get; set; } = new List<ClassLecturer>();
     public virtual ICollection<ClassStudent> ClassStudents { get; set; } = new List<ClassStudent>();
     public virtual ICollection<Team> Teams { get; set; } = new List<Team>();
+    public virtual ICollection<Rubric> Rubrics { get; set; } = new List<Rubric>();
 }

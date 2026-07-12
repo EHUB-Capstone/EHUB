@@ -15,4 +15,5 @@ public class Course : AuditableEntity
 
     // Navigation properties
     public virtual ICollection<Class> Classes { get; set; } = new List<Class>();
+    public virtual ICollection<Rubric> Rubrics { get; set; } = new List<Rubric>();
 }

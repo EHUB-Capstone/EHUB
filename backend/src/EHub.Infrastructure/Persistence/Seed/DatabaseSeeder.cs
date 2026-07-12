@@ -10,5 +10,6 @@ public static class DatabaseSeeder
         await SemesterSeeder.SeedAsync(context);
         await CourseSeeder.SeedAsync(context);
         await CheckpointSeeder.SeedAsync(context);
+        await RubricSeeder.SeedAsync(context);
     }
 }

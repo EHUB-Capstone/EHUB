@@ -25,6 +25,11 @@ public interface IApplicationDbContext
     DbSet<Submission> Submissions { get; }
     DbSet<SubmissionFile> SubmissionFiles { get; }
     DbSet<SubmissionFeedback> SubmissionFeedbacks { get; }
+    DbSet<Rubric> Rubrics { get; }
+    DbSet<RubricCriterion> RubricCriteria { get; }
+    DbSet<Evaluation> Evaluations { get; }
+    DbSet<EvaluationDetail> EvaluationDetails { get; }
+    DbSet<EvaluationHistory> EvaluationHistories { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

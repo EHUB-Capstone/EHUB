@@ -32,6 +32,11 @@ public class AppDbContext : DbContext, IApplicationDbContext
     public DbSet<Submission> Submissions => Set<Submission>();
     public DbSet<SubmissionFile> SubmissionFiles => Set<SubmissionFile>();
     public DbSet<SubmissionFeedback> SubmissionFeedbacks => Set<SubmissionFeedback>();
+    public DbSet<Rubric> Rubrics => Set<Rubric>();
+    public DbSet<RubricCriterion> RubricCriteria => Set<RubricCriterion>();
+    public DbSet<Evaluation> Evaluations => Set<Evaluation>();
+    public DbSet<EvaluationDetail> EvaluationDetails => Set<EvaluationDetail>();
+    public DbSet<EvaluationHistory> EvaluationHistories => Set<EvaluationHistory>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
