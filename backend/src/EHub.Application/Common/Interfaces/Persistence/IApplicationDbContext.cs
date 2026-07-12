@@ -48,6 +48,10 @@ public interface IApplicationDbContext
     DbSet<PitchDeck> PitchDecks { get; }
     DbSet<ProjectShortcut> Shortcuts { get; }
     DbSet<StartupLineage> StartupLineages { get; }
+    DbSet<Notification> Notifications { get; }
+    DbSet<ChatGroup> ChatGroups { get; }
+    DbSet<ChatGroupMember> ChatGroupMembers { get; }
+    DbSet<ChatMessage> ChatMessages { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

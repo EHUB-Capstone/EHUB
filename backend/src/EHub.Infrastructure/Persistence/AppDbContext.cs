@@ -55,6 +55,10 @@ public class AppDbContext : DbContext, IApplicationDbContext
     public DbSet<PitchDeck> PitchDecks => Set<PitchDeck>();
     public DbSet<ProjectShortcut> Shortcuts => Set<ProjectShortcut>();
     public DbSet<StartupLineage> StartupLineages => Set<StartupLineage>();
+    public DbSet<Notification> Notifications => Set<Notification>();
+    public DbSet<ChatGroup> ChatGroups => Set<ChatGroup>();
+    public DbSet<ChatGroupMember> ChatGroupMembers => Set<ChatGroupMember>();
+    public DbSet<ChatMessage> ChatMessages => Set<ChatMessage>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

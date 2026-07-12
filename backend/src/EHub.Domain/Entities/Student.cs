@@ -27,4 +27,5 @@ public class Student : AuditableEntity
     public virtual ICollection<MentoringActionItem> AssignedMentoringActionItems { get; set; } = new List<MentoringActionItem>();
     public virtual ICollection<MentoringAttendance> MentoringAttendances { get; set; } = new List<MentoringAttendance>();
     public virtual ICollection<AcademicDataset> AcademicDatasets { get; set; } = new List<AcademicDataset>();
+    public virtual ICollection<ChatGroupMember> ChatGroupMemberships { get; set; } = new List<ChatGroupMember>();
 }
