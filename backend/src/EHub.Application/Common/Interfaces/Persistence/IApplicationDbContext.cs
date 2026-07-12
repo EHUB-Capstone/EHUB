@@ -30,6 +30,11 @@ public interface IApplicationDbContext
     DbSet<Evaluation> Evaluations { get; }
     DbSet<EvaluationDetail> EvaluationDetails { get; }
     DbSet<EvaluationHistory> EvaluationHistories { get; }
+    DbSet<MentorProfile> MentorProfiles { get; }
+    DbSet<MentorAssignment> MentorAssignments { get; }
+    DbSet<MentoringSession> MentoringSessions { get; }
+    DbSet<MentoringActionItem> MentoringActionItems { get; }
+    DbSet<MentoringAttendance> MentoringAttendances { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

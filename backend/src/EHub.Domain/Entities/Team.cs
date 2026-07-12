@@ -26,4 +26,5 @@ public class Team : AuditableEntity
     // Navigation properties
     public virtual ICollection<TeamMember> TeamMembers { get; set; } = new List<TeamMember>();
     public virtual Project? Project { get; set; }
+    public virtual ICollection<MentorAssignment> MentorAssignments { get; set; } = new List<MentorAssignment>();
 }

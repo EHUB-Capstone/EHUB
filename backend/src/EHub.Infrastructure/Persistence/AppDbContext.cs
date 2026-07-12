@@ -37,6 +37,11 @@ public class AppDbContext : DbContext, IApplicationDbContext
     public DbSet<Evaluation> Evaluations => Set<Evaluation>();
     public DbSet<EvaluationDetail> EvaluationDetails => Set<EvaluationDetail>();
     public DbSet<EvaluationHistory> EvaluationHistories => Set<EvaluationHistory>();
+    public DbSet<MentorProfile> MentorProfiles => Set<MentorProfile>();
+    public DbSet<MentorAssignment> MentorAssignments => Set<MentorAssignment>();
+    public DbSet<MentoringSession> MentoringSessions => Set<MentoringSession>();
+    public DbSet<MentoringActionItem> MentoringActionItems => Set<MentoringActionItem>();
+    public DbSet<MentoringAttendance> MentoringAttendances => Set<MentoringAttendance>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
