@@ -3,6 +3,7 @@ using System;
 using EHub.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace EHub.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260712121258_AddCommunicationSchema")]
+    partial class AddCommunicationSchema
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1937,119 +1940,6 @@ namespace EHub.Infrastructure.Persistence.Migrations
                         });
                 });
 
-            modelBuilder.Entity("EHub.Domain.Entities.Milestone", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<Guid?>("ClassId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("class_id");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at");
-
-                    b.Property<Guid?>("CreatedBy")
-                        .HasColumnType("uuid")
-                        .HasColumnName("created_by");
-
-                    b.Property<Guid>("CreatedById")
-                        .HasColumnType("uuid")
-                        .HasColumnName("created_by_id");
-
-                    b.Property<DateTime?>("DeletedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("deleted_at");
-
-                    b.Property<Guid?>("DeletedBy")
-                        .HasColumnType("uuid")
-                        .HasColumnName("deleted_by");
-
-                    b.Property<string>("Description")
-                        .HasColumnType("text")
-                        .HasColumnName("description");
-
-                    b.Property<DateTime>("DueDate")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("due_date");
-
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("is_deleted");
-
-                    b.Property<int>("Progress")
-                        .HasColumnType("integer")
-                        .HasColumnName("progress");
-
-                    b.Property<Guid?>("ProjectId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("project_id");
-
-                    b.Property<DateTime>("StartDate")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("start_date");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)")
-                        .HasColumnName("status");
-
-                    b.Property<Guid>("TeamId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("team_id");
-
-                    b.Property<string>("Title")
-                        .IsRequired()
-                        .HasMaxLength(300)
-                        .HasColumnType("character varying(300)")
-                        .HasColumnName("title");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("updated_at");
-
-                    b.Property<Guid?>("UpdatedBy")
-                        .HasColumnType("uuid")
-                        .HasColumnName("updated_by");
-
-                    b.Property<Guid?>("UpdatedById")
-                        .HasColumnType("uuid")
-                        .HasColumnName("updated_by_id");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ClassId");
-
-                    b.HasIndex("CreatedById");
-
-                    b.HasIndex("DueDate");
-
-                    b.HasIndex("ProjectId");
-
-                    b.HasIndex("Status");
-
-                    b.HasIndex("TeamId");
-
-                    b.HasIndex("UpdatedById");
-
-                    b.HasIndex("ProjectId", "Status");
-
-                    b.HasIndex("TeamId", "Status");
-
-                    b.ToTable("milestones", null, t =>
-                        {
-                            t.HasCheckConstraint("CK_Milestone_DueDateAfterOrEqualsStartDate", "due_date >= start_date");
-
-                            t.HasCheckConstraint("CK_Milestone_ProgressRange", "progress >= 0 AND progress <= 100");
-                        });
-                });
-
             modelBuilder.Entity("EHub.Domain.Entities.Notification", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2381,124 +2271,6 @@ namespace EHub.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("projects", (string)null);
-                });
-
-            modelBuilder.Entity("EHub.Domain.Entities.ProjectAnalysis", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<string>("AnalysisType")
-                        .IsRequired()
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)")
-                        .HasColumnName("analysis_type");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at");
-
-                    b.Property<Guid?>("CreatedBy")
-                        .HasColumnType("uuid")
-                        .HasColumnName("created_by");
-
-                    b.Property<DateTime?>("DeletedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("deleted_at");
-
-                    b.Property<Guid?>("DeletedBy")
-                        .HasColumnType("uuid")
-                        .HasColumnName("deleted_by");
-
-                    b.Property<string>("FeasibilityAnalysis")
-                        .HasColumnType("text")
-                        .HasColumnName("feasibility_analysis");
-
-                    b.Property<DateTime>("GeneratedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("generated_at");
-
-                    b.Property<Guid?>("GeneratedById")
-                        .HasColumnType("uuid")
-                        .HasColumnName("generated_by_id");
-
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("is_deleted");
-
-                    b.Property<string>("MarketPotential")
-                        .HasColumnType("text")
-                        .HasColumnName("market_potential");
-
-                    b.Property<string>("Model")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
-                        .HasColumnName("model");
-
-                    b.Property<Guid>("ProjectId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("project_id");
-
-                    b.Property<string>("RisksJson")
-                        .IsRequired()
-                        .HasColumnType("jsonb")
-                        .HasColumnName("risks_json");
-
-                    b.Property<decimal?>("Score")
-                        .HasPrecision(5, 2)
-                        .HasColumnType("numeric(5,2)")
-                        .HasColumnName("score");
-
-                    b.Property<string>("SimilarIdeasJson")
-                        .IsRequired()
-                        .HasColumnType("jsonb")
-                        .HasColumnName("similar_ideas_json");
-
-                    b.Property<string>("StrengthsJson")
-                        .IsRequired()
-                        .HasColumnType("jsonb")
-                        .HasColumnName("strengths_json");
-
-                    b.Property<string>("SuggestionsJson")
-                        .IsRequired()
-                        .HasColumnType("jsonb")
-                        .HasColumnName("suggestions_json");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("updated_at");
-
-                    b.Property<Guid?>("UpdatedBy")
-                        .HasColumnType("uuid")
-                        .HasColumnName("updated_by");
-
-                    b.Property<string>("WeaknessesJson")
-                        .IsRequired()
-                        .HasColumnType("jsonb")
-                        .HasColumnName("weaknesses_json");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("AnalysisType");
-
-                    b.HasIndex("GeneratedAt");
-
-                    b.HasIndex("GeneratedById");
-
-                    b.HasIndex("ProjectId");
-
-                    b.HasIndex("Score");
-
-                    b.HasIndex("ProjectId", "GeneratedAt");
-
-                    b.ToTable("project_analyses", null, t =>
-                        {
-                            t.HasCheckConstraint("CK_ProjectAnalysis_ScoreRange", "score IS NULL OR (score >= 0 AND score <= 100)");
-                        });
                 });
 
             modelBuilder.Entity("EHub.Domain.Entities.ProjectComment", b =>
@@ -3297,145 +3069,6 @@ namespace EHub.Infrastructure.Persistence.Migrations
                     b.ToTable("semesters", (string)null);
                 });
 
-            modelBuilder.Entity("EHub.Domain.Entities.SprintTask", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<Guid?>("AssigneeStudentId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("assignee_student_id");
-
-                    b.Property<Guid?>("AssigneeUserId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("assignee_user_id");
-
-                    b.Property<DateTime?>("CompletedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("completed_at");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at");
-
-                    b.Property<Guid?>("CreatedBy")
-                        .HasColumnType("uuid")
-                        .HasColumnName("created_by");
-
-                    b.Property<Guid>("CreatedById")
-                        .HasColumnType("uuid")
-                        .HasColumnName("created_by_id");
-
-                    b.Property<DateTime?>("DeletedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("deleted_at");
-
-                    b.Property<Guid?>("DeletedBy")
-                        .HasColumnType("uuid")
-                        .HasColumnName("deleted_by");
-
-                    b.Property<string>("Description")
-                        .HasColumnType("text")
-                        .HasColumnName("description");
-
-                    b.Property<DateTime?>("DueDate")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("due_date");
-
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("is_deleted");
-
-                    b.Property<Guid?>("MilestoneId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("milestone_id");
-
-                    b.Property<int>("Position")
-                        .HasColumnType("integer")
-                        .HasColumnName("position");
-
-                    b.Property<string>("Priority")
-                        .IsRequired()
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)")
-                        .HasColumnName("priority");
-
-                    b.Property<Guid?>("ProjectId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("project_id");
-
-                    b.Property<DateTime?>("StartDate")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("start_date");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)")
-                        .HasColumnName("status");
-
-                    b.Property<Guid>("TeamId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("team_id");
-
-                    b.Property<string>("Title")
-                        .IsRequired()
-                        .HasMaxLength(300)
-                        .HasColumnType("character varying(300)")
-                        .HasColumnName("title");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("updated_at");
-
-                    b.Property<Guid?>("UpdatedBy")
-                        .HasColumnType("uuid")
-                        .HasColumnName("updated_by");
-
-                    b.Property<Guid?>("UpdatedById")
-                        .HasColumnType("uuid")
-                        .HasColumnName("updated_by_id");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("AssigneeStudentId");
-
-                    b.HasIndex("AssigneeUserId");
-
-                    b.HasIndex("CreatedById");
-
-                    b.HasIndex("DueDate");
-
-                    b.HasIndex("MilestoneId");
-
-                    b.HasIndex("Position");
-
-                    b.HasIndex("Priority");
-
-                    b.HasIndex("ProjectId");
-
-                    b.HasIndex("Status");
-
-                    b.HasIndex("TeamId");
-
-                    b.HasIndex("UpdatedById");
-
-                    b.HasIndex("MilestoneId", "Position");
-
-                    b.HasIndex("TeamId", "Status");
-
-                    b.ToTable("sprint_tasks", null, t =>
-                        {
-                            t.HasCheckConstraint("CK_SprintTask_PositionNonNegative", "position >= 0");
-
-                            t.HasCheckConstraint("CK_SprintTask_SingleAssigneeType", "NOT (assignee_user_id IS NOT NULL AND assignee_student_id IS NOT NULL)");
-                        });
-                });
-
             modelBuilder.Entity("EHub.Domain.Entities.StartupLineage", b =>
                 {
                     b.Property<Guid>("Id")
@@ -4125,434 +3758,6 @@ namespace EHub.Infrastructure.Persistence.Migrations
                     b.ToTable("user_roles", (string)null);
                 });
 
-            modelBuilder.Entity("EHub.Domain.Entities.WeeklyTask", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<Guid?>("AssigneeStudentId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("assignee_student_id");
-
-                    b.Property<string>("AttachmentsJson")
-                        .IsRequired()
-                        .HasColumnType("jsonb")
-                        .HasColumnName("attachments_json");
-
-                    b.Property<string>("ChecklistJson")
-                        .IsRequired()
-                        .HasColumnType("jsonb")
-                        .HasColumnName("checklist_json");
-
-                    b.Property<Guid?>("ClassId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("class_id");
-
-                    b.Property<int>("CompletionPercentage")
-                        .HasColumnType("integer")
-                        .HasColumnName("completion_percentage");
-
-                    b.Property<Guid?>("CourseId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("course_id");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at");
-
-                    b.Property<Guid?>("CreatedBy")
-                        .HasColumnType("uuid")
-                        .HasColumnName("created_by");
-
-                    b.Property<Guid>("CreatedById")
-                        .HasColumnType("uuid")
-                        .HasColumnName("created_by_id");
-
-                    b.Property<DateTime?>("DeletedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("deleted_at");
-
-                    b.Property<Guid?>("DeletedBy")
-                        .HasColumnType("uuid")
-                        .HasColumnName("deleted_by");
-
-                    b.Property<string>("Description")
-                        .HasColumnType("text")
-                        .HasColumnName("description");
-
-                    b.Property<DateTime?>("DueDate")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("due_date");
-
-                    b.Property<decimal?>("EstimatedHours")
-                        .HasPrecision(5, 2)
-                        .HasColumnType("numeric(5,2)")
-                        .HasColumnName("estimated_hours");
-
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("is_deleted");
-
-                    b.Property<bool>("IsMandatory")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("is_mandatory");
-
-                    b.Property<bool>("IsTemplate")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("is_template");
-
-                    b.Property<string>("Priority")
-                        .IsRequired()
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)")
-                        .HasColumnName("priority");
-
-                    b.Property<string>("Scope")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
-                        .HasColumnName("scope");
-
-                    b.Property<DateTime?>("StartDate")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("start_date");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)")
-                        .HasColumnName("status");
-
-                    b.PrimitiveCollection<string[]>("Tags")
-                        .IsRequired()
-                        .HasColumnType("text[]")
-                        .HasColumnName("tags");
-
-                    b.Property<string>("TaskType")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
-                        .HasColumnName("task_type");
-
-                    b.Property<Guid?>("TeamId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("team_id");
-
-                    b.Property<string>("Title")
-                        .IsRequired()
-                        .HasMaxLength(300)
-                        .HasColumnType("character varying(300)")
-                        .HasColumnName("title");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("updated_at");
-
-                    b.Property<Guid?>("UpdatedBy")
-                        .HasColumnType("uuid")
-                        .HasColumnName("updated_by");
-
-                    b.Property<Guid?>("UpdatedById")
-                        .HasColumnType("uuid")
-                        .HasColumnName("updated_by_id");
-
-                    b.Property<bool>("VisibleToStudents")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(true)
-                        .HasColumnName("visible_to_students");
-
-                    b.Property<int>("WeekNumber")
-                        .HasColumnType("integer")
-                        .HasColumnName("week_number");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("AssigneeStudentId");
-
-                    b.HasIndex("ClassId");
-
-                    b.HasIndex("CourseId");
-
-                    b.HasIndex("CreatedById");
-
-                    b.HasIndex("IsTemplate");
-
-                    b.HasIndex("Priority");
-
-                    b.HasIndex("Scope");
-
-                    b.HasIndex("Status");
-
-                    b.HasIndex("TeamId");
-
-                    b.HasIndex("UpdatedById");
-
-                    b.HasIndex("WeekNumber");
-
-                    b.HasIndex("ClassId", "WeekNumber");
-
-                    b.HasIndex("CourseId", "WeekNumber");
-
-                    b.HasIndex("TeamId", "WeekNumber");
-
-                    b.ToTable("weekly_tasks", null, t =>
-                        {
-                            t.HasCheckConstraint("CK_WeeklyTask_CompletionPercentageRange", "completion_percentage >= 0 AND completion_percentage <= 100");
-
-                            t.HasCheckConstraint("CK_WeeklyTask_EstimatedHoursNonNegative", "estimated_hours IS NULL OR estimated_hours >= 0");
-
-                            t.HasCheckConstraint("CK_WeeklyTask_WeekNumberPositive", "week_number >= 1");
-                        });
-                });
-
-            modelBuilder.Entity("EHub.Domain.Entities.Workshop", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<string>("AttachmentsJson")
-                        .IsRequired()
-                        .HasColumnType("jsonb")
-                        .HasColumnName("attachments_json");
-
-                    b.Property<string>("BannerUrl")
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)")
-                        .HasColumnName("banner_url");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at");
-
-                    b.Property<Guid?>("CreatedBy")
-                        .HasColumnType("uuid")
-                        .HasColumnName("created_by");
-
-                    b.Property<Guid>("CreatedById")
-                        .HasColumnType("uuid")
-                        .HasColumnName("created_by_id");
-
-                    b.Property<DateTime?>("DeletedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("deleted_at");
-
-                    b.Property<Guid?>("DeletedBy")
-                        .HasColumnType("uuid")
-                        .HasColumnName("deleted_by");
-
-                    b.Property<string>("Description")
-                        .HasColumnType("text")
-                        .HasColumnName("description");
-
-                    b.Property<DateTimeOffset>("EndAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("end_at");
-
-                    b.Property<string>("Format")
-                        .IsRequired()
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)")
-                        .HasColumnName("format");
-
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("is_deleted");
-
-                    b.Property<string>("Location")
-                        .HasMaxLength(300)
-                        .HasColumnType("character varying(300)")
-                        .HasColumnName("location");
-
-                    b.Property<string>("MeetingLink")
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)")
-                        .HasColumnName("meeting_link");
-
-                    b.Property<DateTimeOffset>("StartAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("start_at");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)")
-                        .HasColumnName("status");
-
-                    b.Property<string>("TargetAudience")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
-                        .HasColumnName("target_audience");
-
-                    b.Property<string>("Title")
-                        .IsRequired()
-                        .HasMaxLength(300)
-                        .HasColumnType("character varying(300)")
-                        .HasColumnName("title");
-
-                    b.Property<string>("Type")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
-                        .HasColumnName("type");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("updated_at");
-
-                    b.Property<Guid?>("UpdatedBy")
-                        .HasColumnType("uuid")
-                        .HasColumnName("updated_by");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CreatedById");
-
-                    b.HasIndex("Format");
-
-                    b.HasIndex("StartAt");
-
-                    b.HasIndex("Status");
-
-                    b.HasIndex("TargetAudience");
-
-                    b.HasIndex("Type");
-
-                    b.HasIndex("StartAt", "EndAt");
-
-                    b.HasIndex("Status", "StartAt");
-
-                    b.ToTable("workshops", null, t =>
-                        {
-                            t.HasCheckConstraint("CK_Workshop_EndAtAfterStartAt", "end_at > start_at");
-                        });
-                });
-
-            modelBuilder.Entity("EHub.Domain.Entities.WorkshopAttendance", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<DateTime?>("CheckInAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("check_in_at");
-
-                    b.Property<Guid?>("ClassId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("class_id");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at");
-
-                    b.Property<Guid?>("CreatedBy")
-                        .HasColumnType("uuid")
-                        .HasColumnName("created_by");
-
-                    b.Property<DateTime?>("DeletedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("deleted_at");
-
-                    b.Property<Guid?>("DeletedBy")
-                        .HasColumnType("uuid")
-                        .HasColumnName("deleted_by");
-
-                    b.Property<string>("EvidenceUrl")
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)")
-                        .HasColumnName("evidence_url");
-
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("is_deleted");
-
-                    b.Property<string>("Mode")
-                        .IsRequired()
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)")
-                        .HasColumnName("mode");
-
-                    b.Property<string>("RejectReason")
-                        .HasColumnType("text")
-                        .HasColumnName("reject_reason");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
-                        .HasColumnName("status");
-
-                    b.Property<Guid?>("StudentId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("student_id");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("updated_at");
-
-                    b.Property<Guid?>("UpdatedBy")
-                        .HasColumnType("uuid")
-                        .HasColumnName("updated_by");
-
-                    b.Property<Guid?>("UserId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("user_id");
-
-                    b.Property<DateTime?>("VerifiedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("verified_at");
-
-                    b.Property<Guid?>("VerifiedById")
-                        .HasColumnType("uuid")
-                        .HasColumnName("verified_by_id");
-
-                    b.Property<Guid>("WorkshopId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("workshop_id");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ClassId");
-
-                    b.HasIndex("Status");
-
-                    b.HasIndex("StudentId");
-
-                    b.HasIndex("UserId");
-
-                    b.HasIndex("VerifiedById");
-
-                    b.HasIndex("WorkshopId");
-
-                    b.HasIndex("WorkshopId", "StudentId");
-
-                    b.HasIndex("WorkshopId", "UserId");
-
-                    b.ToTable("workshop_attendances", null, t =>
-                        {
-                            t.HasCheckConstraint("CK_WorkshopAttendance_HasIdentification", "NOT (user_id IS NULL AND student_id IS NULL)");
-
-                            t.HasCheckConstraint("CK_WorkshopAttendance_SingleParticipantType", "NOT (user_id IS NOT NULL AND student_id IS NOT NULL)");
-                        });
-                });
-
             modelBuilder.Entity("EHub.Domain.Entities.AcademicDataset", b =>
                 {
                     b.HasOne("EHub.Domain.Entities.Class", "Class")
@@ -5022,46 +4227,6 @@ namespace EHub.Infrastructure.Persistence.Migrations
                     b.Navigation("MentorAssignment");
                 });
 
-            modelBuilder.Entity("EHub.Domain.Entities.Milestone", b =>
-                {
-                    b.HasOne("EHub.Domain.Entities.Class", "Class")
-                        .WithMany("Milestones")
-                        .HasForeignKey("ClassId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("EHub.Domain.Entities.User", "Creator")
-                        .WithMany()
-                        .HasForeignKey("CreatedById")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("EHub.Domain.Entities.Project", "Project")
-                        .WithMany("Milestones")
-                        .HasForeignKey("ProjectId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("EHub.Domain.Entities.Team", "Team")
-                        .WithMany("Milestones")
-                        .HasForeignKey("TeamId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("EHub.Domain.Entities.User", "Updater")
-                        .WithMany()
-                        .HasForeignKey("UpdatedById")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.Navigation("Class");
-
-                    b.Navigation("Creator");
-
-                    b.Navigation("Project");
-
-                    b.Navigation("Team");
-
-                    b.Navigation("Updater");
-                });
-
             modelBuilder.Entity("EHub.Domain.Entities.Notification", b =>
                 {
                     b.HasOne("EHub.Domain.Entities.User", "Creator")
@@ -5122,24 +4287,6 @@ namespace EHub.Infrastructure.Persistence.Migrations
                     b.Navigation("Creator");
 
                     b.Navigation("Team");
-                });
-
-            modelBuilder.Entity("EHub.Domain.Entities.ProjectAnalysis", b =>
-                {
-                    b.HasOne("EHub.Domain.Entities.User", "GeneratedBy")
-                        .WithMany()
-                        .HasForeignKey("GeneratedById")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("EHub.Domain.Entities.Project", "Project")
-                        .WithMany("ProjectAnalyses")
-                        .HasForeignKey("ProjectId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("GeneratedBy");
-
-                    b.Navigation("Project");
                 });
 
             modelBuilder.Entity("EHub.Domain.Entities.ProjectComment", b =>
@@ -5339,60 +4486,6 @@ namespace EHub.Infrastructure.Persistence.Migrations
                     b.Navigation("Rubric");
                 });
 
-            modelBuilder.Entity("EHub.Domain.Entities.SprintTask", b =>
-                {
-                    b.HasOne("EHub.Domain.Entities.Student", "AssigneeStudent")
-                        .WithMany("SprintTasks")
-                        .HasForeignKey("AssigneeStudentId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("EHub.Domain.Entities.User", "AssigneeUser")
-                        .WithMany()
-                        .HasForeignKey("AssigneeUserId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("EHub.Domain.Entities.User", "Creator")
-                        .WithMany()
-                        .HasForeignKey("CreatedById")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("EHub.Domain.Entities.Milestone", "Milestone")
-                        .WithMany("Tasks")
-                        .HasForeignKey("MilestoneId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("EHub.Domain.Entities.Project", "Project")
-                        .WithMany("SprintTasks")
-                        .HasForeignKey("ProjectId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("EHub.Domain.Entities.Team", "Team")
-                        .WithMany("SprintTasks")
-                        .HasForeignKey("TeamId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("EHub.Domain.Entities.User", "Updater")
-                        .WithMany()
-                        .HasForeignKey("UpdatedById")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.Navigation("AssigneeStudent");
-
-                    b.Navigation("AssigneeUser");
-
-                    b.Navigation("Creator");
-
-                    b.Navigation("Milestone");
-
-                    b.Navigation("Project");
-
-                    b.Navigation("Team");
-
-                    b.Navigation("Updater");
-                });
-
             modelBuilder.Entity("EHub.Domain.Entities.StartupLineage", b =>
                 {
                     b.HasOne("EHub.Domain.Entities.User", "Creator")
@@ -5587,102 +4680,6 @@ namespace EHub.Infrastructure.Persistence.Migrations
                     b.Navigation("User");
                 });
 
-            modelBuilder.Entity("EHub.Domain.Entities.WeeklyTask", b =>
-                {
-                    b.HasOne("EHub.Domain.Entities.Student", "AssigneeStudent")
-                        .WithMany("WeeklyTasks")
-                        .HasForeignKey("AssigneeStudentId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("EHub.Domain.Entities.Class", "Class")
-                        .WithMany("WeeklyTasks")
-                        .HasForeignKey("ClassId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("EHub.Domain.Entities.Course", "Course")
-                        .WithMany("WeeklyTasks")
-                        .HasForeignKey("CourseId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("EHub.Domain.Entities.User", "Creator")
-                        .WithMany()
-                        .HasForeignKey("CreatedById")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("EHub.Domain.Entities.Team", "Team")
-                        .WithMany("WeeklyTasks")
-                        .HasForeignKey("TeamId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("EHub.Domain.Entities.User", "Updater")
-                        .WithMany()
-                        .HasForeignKey("UpdatedById")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.Navigation("AssigneeStudent");
-
-                    b.Navigation("Class");
-
-                    b.Navigation("Course");
-
-                    b.Navigation("Creator");
-
-                    b.Navigation("Team");
-
-                    b.Navigation("Updater");
-                });
-
-            modelBuilder.Entity("EHub.Domain.Entities.Workshop", b =>
-                {
-                    b.HasOne("EHub.Domain.Entities.User", "Creator")
-                        .WithMany()
-                        .HasForeignKey("CreatedById")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Creator");
-                });
-
-            modelBuilder.Entity("EHub.Domain.Entities.WorkshopAttendance", b =>
-                {
-                    b.HasOne("EHub.Domain.Entities.Class", "Class")
-                        .WithMany("WorkshopAttendances")
-                        .HasForeignKey("ClassId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("EHub.Domain.Entities.Student", "Student")
-                        .WithMany("WorkshopAttendances")
-                        .HasForeignKey("StudentId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("EHub.Domain.Entities.User", "User")
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("EHub.Domain.Entities.User", "VerifiedBy")
-                        .WithMany()
-                        .HasForeignKey("VerifiedById")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("EHub.Domain.Entities.Workshop", "Workshop")
-                        .WithMany("Attendances")
-                        .HasForeignKey("WorkshopId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Class");
-
-                    b.Navigation("Student");
-
-                    b.Navigation("User");
-
-                    b.Navigation("VerifiedBy");
-
-                    b.Navigation("Workshop");
-                });
-
             modelBuilder.Entity("EHub.Domain.Entities.AcademicDataset", b =>
                 {
                     b.Navigation("FieldHistories");
@@ -5714,15 +4711,9 @@ namespace EHub.Infrastructure.Persistence.Migrations
 
                     b.Navigation("DataBankImportBatches");
 
-                    b.Navigation("Milestones");
-
                     b.Navigation("Rubrics");
 
                     b.Navigation("Teams");
-
-                    b.Navigation("WeeklyTasks");
-
-                    b.Navigation("WorkshopAttendances");
                 });
 
             modelBuilder.Entity("EHub.Domain.Entities.ClassStudent", b =>
@@ -5735,8 +4726,6 @@ namespace EHub.Infrastructure.Persistence.Migrations
                     b.Navigation("Classes");
 
                     b.Navigation("Rubrics");
-
-                    b.Navigation("WeeklyTasks");
                 });
 
             modelBuilder.Entity("EHub.Domain.Entities.DataBankImportBatch", b =>
@@ -5772,11 +4761,6 @@ namespace EHub.Infrastructure.Persistence.Migrations
                     b.Navigation("Attendances");
                 });
 
-            modelBuilder.Entity("EHub.Domain.Entities.Milestone", b =>
-                {
-                    b.Navigation("Tasks");
-                });
-
             modelBuilder.Entity("EHub.Domain.Entities.Project", b =>
                 {
                     b.Navigation("AcademicDatasets");
@@ -5787,21 +4771,15 @@ namespace EHub.Infrastructure.Persistence.Migrations
 
                     b.Navigation("MentorAssignments");
 
-                    b.Navigation("Milestones");
-
                     b.Navigation("OriginalLineages");
 
                     b.Navigation("PitchDecks");
-
-                    b.Navigation("ProjectAnalyses");
 
                     b.Navigation("ProjectProposal");
 
                     b.Navigation("ProjectTags");
 
                     b.Navigation("Shortcuts");
-
-                    b.Navigation("SprintTasks");
 
                     b.Navigation("Submissions");
                 });
@@ -5850,12 +4828,6 @@ namespace EHub.Infrastructure.Persistence.Migrations
                     b.Navigation("ClassStudents");
 
                     b.Navigation("MentoringAttendances");
-
-                    b.Navigation("SprintTasks");
-
-                    b.Navigation("WeeklyTasks");
-
-                    b.Navigation("WorkshopAttendances");
                 });
 
             modelBuilder.Entity("EHub.Domain.Entities.Submission", b =>
@@ -5873,15 +4845,9 @@ namespace EHub.Infrastructure.Persistence.Migrations
 
                     b.Navigation("MentorAssignments");
 
-                    b.Navigation("Milestones");
-
                     b.Navigation("Project");
 
-                    b.Navigation("SprintTasks");
-
                     b.Navigation("TeamMembers");
-
-                    b.Navigation("WeeklyTasks");
                 });
 
             modelBuilder.Entity("EHub.Domain.Entities.User", b =>
@@ -5891,11 +4857,6 @@ namespace EHub.Infrastructure.Persistence.Migrations
                     b.Navigation("RefreshTokens");
 
                     b.Navigation("UserRoles");
-                });
-
-            modelBuilder.Entity("EHub.Domain.Entities.Workshop", b =>
-                {
-                    b.Navigation("Attendances");
                 });
 #pragma warning restore 612, 618
         }

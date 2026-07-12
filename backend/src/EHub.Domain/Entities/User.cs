@@ -19,4 +19,5 @@ public class User : AuditableEntity
     // Navigation properties
     public virtual ICollection<UserRole> UserRoles { get; set; } = new List<UserRole>();
     public virtual ICollection<RefreshToken> RefreshTokens { get; set; } = new List<RefreshToken>();
+    public virtual MentorProfile? MentorProfile { get; set; }
 }
