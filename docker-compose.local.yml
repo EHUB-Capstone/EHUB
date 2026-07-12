@@ -1,0 +1,15 @@
+services:
+  postgres:
+    image: postgres:18
+    container_name: ehub-postgres
+    environment:
+      POSTGRES_DB: ehub_db
+      POSTGRES_USER: ehub_user
+      POSTGRES_PASSWORD: ehub_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - ehub_postgres_data:/var/lib/postgresql
+
+volumes:
+  ehub_postgres_data:

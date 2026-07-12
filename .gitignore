@@ -1,0 +1,159 @@
+# =========================
+# OS generated files
+# =========================
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+
+# =========================
+# IDE / Editor
+# =========================
+.vs/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.example.json
+.idea/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+
+# =========================
+# .NET / ASP.NET Core
+# =========================
+[Bb]in/
+[Oo]bj/
+.vs/
+TestResults/
+*.trx
+*.coverage
+*.coveragexml
+
+# Rider / ReSharper
+_ReSharper*/
+*.DotSettings.user
+
+# NuGet
+*.nupkg
+.nuget/
+packages/
+project.lock.json
+project.assets.json
+
+
+# =========================
+# Node / React / Vite
+# =========================
+node_modules/
+dist/
+build/
+.vite/
+.cache/
+coverage/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+
+# =========================
+# Environment variables / Secrets
+# =========================
+.env
+.env.*
+!.env.example
+!.env.development.example
+!.env.production.example
+
+# ASP.NET appsettings secrets
+appsettings.Production.json
+appsettings.Staging.json
+appsettings.Local.json
+appsettings.Secrets.json
+
+# User secrets / local settings
+secrets.json
+local.settings.json
+
+
+# =========================
+# Docker / Deployment sensitive files
+# =========================
+docker-compose.override.yml
+docker-compose.prod.override.yml
+
+# Do not commit real production env files
+*.env
+*.pem
+*.key
+*.crt
+*.pfx
+*.p12
+
+# SSH keys
+id_rsa
+id_rsa.pub
+id_ed25519
+id_ed25519.pub
+
+
+# =========================
+# Database files / Backups
+# =========================
+*.db
+*.sqlite
+*.sqlite3
+*.bak
+*.dump
+*.sql
+*.backup
+pgdata/
+postgres-data/
+data/postgres/
+
+
+# =========================
+# Logs
+# =========================
+logs/
+*.log
+log/
+
+
+# =========================
+# Uploads / Temporary files
+# =========================
+uploads/
+wwwroot/uploads/
+temp/
+tmp/
+
+
+# =========================
+# Build artifacts
+# =========================
+artifacts/
+out/
+publish/
+
+
+# =========================
+# Testing / Coverage
+# =========================
+coverage/
+.coverage/
+lcov.info
+
+
+# =========================
+# Misc
+# =========================
+*.tmp
+*.swp
+*.bak

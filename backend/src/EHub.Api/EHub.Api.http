@@ -1,0 +1,6 @@
+@EHub.Api_HostAddress = http://localhost:5226
+
+GET {{EHub.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
