@@ -49,6 +49,12 @@ public class AppDbContext : DbContext, IApplicationDbContext
     public DbSet<DataBankFieldHistory> DataBankFieldHistories => Set<DataBankFieldHistory>();
     public DbSet<DataBankExportTemplate> DataBankExportTemplates => Set<DataBankExportTemplate>();
     public DbSet<DataBankAuditLog> DataBankAuditLogs => Set<DataBankAuditLog>();
+    public DbSet<ProjectProposal> ProjectProposals => Set<ProjectProposal>();
+    public DbSet<ProjectProposalVersion> ProjectProposalVersions => Set<ProjectProposalVersion>();
+    public DbSet<ProjectComment> ProjectComments => Set<ProjectComment>();
+    public DbSet<PitchDeck> PitchDecks => Set<PitchDeck>();
+    public DbSet<ProjectShortcut> Shortcuts => Set<ProjectShortcut>();
+    public DbSet<StartupLineage> StartupLineages => Set<StartupLineage>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

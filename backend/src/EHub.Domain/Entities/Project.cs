@@ -32,4 +32,9 @@ public class Project : AuditableEntity
     public virtual ICollection<Evaluation> Evaluations { get; set; } = new List<Evaluation>();
     public virtual ICollection<MentorAssignment> MentorAssignments { get; set; } = new List<MentorAssignment>();
     public virtual ICollection<AcademicDataset> AcademicDatasets { get; set; } = new List<AcademicDataset>();
+    public virtual ProjectProposal? ProjectProposal { get; set; }
+    public virtual ICollection<PitchDeck> PitchDecks { get; set; } = new List<PitchDeck>();
+    public virtual ICollection<ProjectShortcut> Shortcuts { get; set; } = new List<ProjectShortcut>();
+    public virtual ICollection<StartupLineage> OriginalLineages { get; set; } = new List<StartupLineage>();
+    public virtual ICollection<StartupLineage> CurrentLineages { get; set; } = new List<StartupLineage>();
 }

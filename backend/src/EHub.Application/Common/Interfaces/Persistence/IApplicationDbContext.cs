@@ -42,6 +42,12 @@ public interface IApplicationDbContext
     DbSet<DataBankFieldHistory> DataBankFieldHistories { get; }
     DbSet<DataBankExportTemplate> DataBankExportTemplates { get; }
     DbSet<DataBankAuditLog> DataBankAuditLogs { get; }
+    DbSet<ProjectProposal> ProjectProposals { get; }
+    DbSet<ProjectProposalVersion> ProjectProposalVersions { get; }
+    DbSet<ProjectComment> ProjectComments { get; }
+    DbSet<PitchDeck> PitchDecks { get; }
+    DbSet<ProjectShortcut> Shortcuts { get; }
+    DbSet<StartupLineage> StartupLineages { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }
