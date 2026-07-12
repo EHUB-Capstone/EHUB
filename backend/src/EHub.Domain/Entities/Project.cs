@@ -37,4 +37,7 @@ public class Project : AuditableEntity
     public virtual ICollection<ProjectShortcut> Shortcuts { get; set; } = new List<ProjectShortcut>();
     public virtual ICollection<StartupLineage> OriginalLineages { get; set; } = new List<StartupLineage>();
     public virtual ICollection<StartupLineage> CurrentLineages { get; set; } = new List<StartupLineage>();
+    public virtual ICollection<Milestone> Milestones { get; set; } = new List<Milestone>();
+    public virtual ICollection<SprintTask> SprintTasks { get; set; } = new List<SprintTask>();
+    public virtual ICollection<ProjectAnalysis> ProjectAnalyses { get; set; } = new List<ProjectAnalysis>();
 }

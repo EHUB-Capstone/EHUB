@@ -33,4 +33,7 @@ public class Class : AuditableEntity
     public virtual ICollection<AcademicDataset> AcademicDatasets { get; set; } = new List<AcademicDataset>();
     public virtual ICollection<DataBankImportBatch> DataBankImportBatches { get; set; } = new List<DataBankImportBatch>();
     public virtual ICollection<ChatGroup> ChatGroups { get; set; } = new List<ChatGroup>();
+    public virtual ICollection<WorkshopAttendance> WorkshopAttendances { get; set; } = new List<WorkshopAttendance>();
+    public virtual ICollection<Milestone> Milestones { get; set; } = new List<Milestone>();
+    public virtual ICollection<WeeklyTask> WeeklyTasks { get; set; } = new List<WeeklyTask>();
 }

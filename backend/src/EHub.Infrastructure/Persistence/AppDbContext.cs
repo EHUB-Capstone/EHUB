@@ -59,6 +59,12 @@ public class AppDbContext : DbContext, IApplicationDbContext
     public DbSet<ChatGroup> ChatGroups => Set<ChatGroup>();
     public DbSet<ChatGroupMember> ChatGroupMembers => Set<ChatGroupMember>();
     public DbSet<ChatMessage> ChatMessages => Set<ChatMessage>();
+    public DbSet<Workshop> Workshops => Set<Workshop>();
+    public DbSet<WorkshopAttendance> WorkshopAttendances => Set<WorkshopAttendance>();
+    public DbSet<Milestone> Milestones => Set<Milestone>();
+    public DbSet<SprintTask> SprintTasks => Set<SprintTask>();
+    public DbSet<WeeklyTask> WeeklyTasks => Set<WeeklyTask>();
+    public DbSet<ProjectAnalysis> ProjectAnalyses => Set<ProjectAnalysis>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

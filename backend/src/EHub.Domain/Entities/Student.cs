@@ -28,4 +28,7 @@ public class Student : AuditableEntity
     public virtual ICollection<MentoringAttendance> MentoringAttendances { get; set; } = new List<MentoringAttendance>();
     public virtual ICollection<AcademicDataset> AcademicDatasets { get; set; } = new List<AcademicDataset>();
     public virtual ICollection<ChatGroupMember> ChatGroupMemberships { get; set; } = new List<ChatGroupMember>();
+    public virtual ICollection<WorkshopAttendance> WorkshopAttendances { get; set; } = new List<WorkshopAttendance>();
+    public virtual ICollection<SprintTask> SprintTasks { get; set; } = new List<SprintTask>();
+    public virtual ICollection<WeeklyTask> WeeklyTasks { get; set; } = new List<WeeklyTask>();
 }

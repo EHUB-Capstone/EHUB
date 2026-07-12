@@ -52,6 +52,12 @@ public interface IApplicationDbContext
     DbSet<ChatGroup> ChatGroups { get; }
     DbSet<ChatGroupMember> ChatGroupMembers { get; }
     DbSet<ChatMessage> ChatMessages { get; }
+    DbSet<Workshop> Workshops { get; }
+    DbSet<WorkshopAttendance> WorkshopAttendances { get; }
+    DbSet<Milestone> Milestones { get; }
+    DbSet<SprintTask> SprintTasks { get; }
+    DbSet<WeeklyTask> WeeklyTasks { get; }
+    DbSet<ProjectAnalysis> ProjectAnalyses { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

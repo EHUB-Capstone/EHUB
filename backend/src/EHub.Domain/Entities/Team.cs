@@ -28,4 +28,7 @@ public class Team : AuditableEntity
     public virtual Project? Project { get; set; }
     public virtual ICollection<MentorAssignment> MentorAssignments { get; set; } = new List<MentorAssignment>();
     public virtual ICollection<ChatGroup> ChatGroups { get; set; } = new List<ChatGroup>();
+    public virtual ICollection<Milestone> Milestones { get; set; } = new List<Milestone>();
+    public virtual ICollection<SprintTask> SprintTasks { get; set; } = new List<SprintTask>();
+    public virtual ICollection<WeeklyTask> WeeklyTasks { get; set; } = new List<WeeklyTask>();
 }
