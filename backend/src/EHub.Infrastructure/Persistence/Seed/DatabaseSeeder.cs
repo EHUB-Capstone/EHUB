@@ -12,5 +12,6 @@ public static class DatabaseSeeder
         await CheckpointSeeder.SeedAsync(context);
         await RubricSeeder.SeedAsync(context);
         await MentorSeeder.SeedAsync(context);
+        await DataBankColumnSeeder.SeedAsync(context);
     }
 }

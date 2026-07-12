@@ -42,6 +42,13 @@ public class AppDbContext : DbContext, IApplicationDbContext
     public DbSet<MentoringSession> MentoringSessions => Set<MentoringSession>();
     public DbSet<MentoringActionItem> MentoringActionItems => Set<MentoringActionItem>();
     public DbSet<MentoringAttendance> MentoringAttendances => Set<MentoringAttendance>();
+    public DbSet<AcademicDataset> AcademicDatasets => Set<AcademicDataset>();
+    public DbSet<DataBankColumn> DataBankColumns => Set<DataBankColumn>();
+    public DbSet<DataBankImportBatch> DataBankImportBatches => Set<DataBankImportBatch>();
+    public DbSet<DataBankSnapshot> DataBankSnapshots => Set<DataBankSnapshot>();
+    public DbSet<DataBankFieldHistory> DataBankFieldHistories => Set<DataBankFieldHistory>();
+    public DbSet<DataBankExportTemplate> DataBankExportTemplates => Set<DataBankExportTemplate>();
+    public DbSet<DataBankAuditLog> DataBankAuditLogs => Set<DataBankAuditLog>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
