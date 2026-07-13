@@ -59,19 +59,58 @@ Trong quá trình chạy local, nếu gặp lỗi liên quan đến Database, b�
 
 ---
 
-## 🖥️ KIỂM TRA DỮ LIỆU BẰNG PGADMIN 4
+## 🖥️ KẾT NỐI VÀ XEM CƠ SỞ DỮ LIỆU BẰNG PGADMIN 4
 
-Để kết nối và xem cấu trúc bảng trên giao diện pgAdmin 4:
-1.  Mở pgAdmin 4 $\rightarrow$ Chuột phải vào **Servers** $\rightarrow$ **Register** $\rightarrow$ **Server...**
-2.  Tab **General**: Đặt tên bất kỳ (ví dụ: `EHub Local Docker`).
-3.  Tab **Connection**: Điền các thông tin sau:
-    *   **Host name/address:** `localhost`
-    *   **Port:** `5432`
-    *   **Maintenance database:** `ehub_db`
-    *   **Username:** `ehub_user`
-    *   **Password:** `ehub_password`
-4.  Nhấn **Save**. 
-5.  *Mẹo nhỏ:* Nếu bạn đang mở sẵn pgAdmin 4 trong khi chạy code backend lần đầu, hãy click chuột phải vào thư mục `Tables` trong pgAdmin và chọn **`Refresh`** (hoặc nhấn **F5**). Bạn sẽ thấy hệ thống tự động tạo ra **4 bảng nghiệp vụ Auth** (`users`, `roles`, `user_roles`, `refresh_tokens`) và **1 bảng hệ thống** của EF Core (`__EFMigrationsHistory`).
+Để xem cấu trúc bảng và truy vấn dữ liệu local, bạn có thể lựa chọn 1 trong 2 phương án dưới đây tùy thuộc vào thói quen phát triển của mình:
+
+---
+
+### Phương án 1: Sử dụng pgAdmin 4 cài trên máy Windows (Local Desktop)
+Đây là cách truyền thống nếu bạn thích chạy ứng dụng pgAdmin độc lập trên hệ điều hành Windows của mình.
+
+1. Khởi động phần mềm **pgAdmin 4** trên Windows.
+2. Click chuột phải vào **Servers** $\rightarrow$ **Register** $\rightarrow$ **Server...**
+3. Tab **General**: Đặt tên bất kỳ (Ví dụ: `EHub Local Database`).
+4. Tab **Connection**: Điền các thông số kết nối:
+   *   **Host name/address:** **`localhost`** (hoặc `127.0.0.1`)
+       > [!NOTE]
+       > Vì pgAdmin chạy trực tiếp trên Windows, nó có thể giao tiếp trực tiếp với cổng `5432` đang được mapping từ container ra máy Host thông qua `localhost`.
+   *   **Port:** `5432`
+   *   **Maintenance database:** `ehub_db`
+   *   **Username:** `ehub_user`
+   *   **Password:** `ehub_password`
+5. Nhấn **Save**.
+
+---
+
+### Phương án 2: Sử dụng pgAdmin 4 Extension trong Docker Desktop
+Cách này giúp bạn quản lý trực tiếp DB bên trong giao diện **Docker Desktop** mà không cần cài đặt thêm pgAdmin 4 riêng trên máy Windows.
+
+#### Bước 1: Cài đặt Extension
+1. Mở **Docker Desktop**.
+2. Chọn mục **Extensions** ở cột menu bên trái.
+3. Tìm kiếm từ khóa **`pgAdmin4`** (Open Source management tool for PostgreSQL) và nhấn **Install**. Giao diện pgAdmin4 sẽ hiển thị trực tiếp trong menu bên trái.
+
+#### Bước 2: Cấu hình kết nối
+1. Mở tiện ích **pgAdmin4** trên Docker Desktop.
+2. Click chuột phải vào **Servers** $\rightarrow$ **Register** $\rightarrow$ **Server...**
+3. Tab **General**: Đặt tên bất kỳ (Ví dụ: `EHub Local Docker`).
+4. Tab **Connection**: Điền các thông số kết nối:
+   *   **Host name/address:** **`host.docker.internal`**
+       > [!IMPORTANT]
+       > **LƯU Ý QUAN TRỌNG:** Bạn **bắt buộc** phải dùng `host.docker.internal` thay vì `localhost` hay `127.0.0.1`. Lý do là vì pgAdmin 4 lúc này đang chạy biệt lập trong một container sandbox của Docker Desktop, nếu điền `localhost` nó sẽ kết nối tới chính nó thay vì trỏ ra cổng `5432` của máy Host để vào container CSDL.
+   *   **Port:** `5432`
+   *   **Maintenance database:** `ehub_db`
+   *   **Username:** `ehub_user`
+   *   **Password:** `ehub_password`
+5. Nhấn **Save**.
+
+---
+
+### Cách Xem cấu trúc bảng & Chạy câu lệnh truy vấn
+Sau khi đã kết nối thành công theo một trong hai phương án trên:
+*   Mở cây thư mục bên trái: **Servers** $\rightarrow$ *[Tên Server bạn đã đặt]* $\rightarrow$ **Databases** $\rightarrow$ **ehub_db** $\rightarrow$ **Schemas** $\rightarrow$ **public** $\rightarrow$ **Tables**.
+*   **Mở cửa sổ truy vấn SQL:** Click chuột phải vào bảng bất kỳ $\rightarrow$ Chọn **Query Tool** $\rightarrow$ Nhập lệnh SQL (Ví dụ: `SELECT * FROM public.users`) $\rightarrow$ Click nút **Play** (hoặc nhấn **F5**) để chạy.
 
 ---
 
