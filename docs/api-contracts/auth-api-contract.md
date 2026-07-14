@@ -258,3 +258,29 @@ Tất cả các API đều phản hồi theo cấu trúc thống nhất:
   "errors": null
 }
 ```
+
+---
+
+## 3. Danh mục Mã lỗi Xác thực (Auth Error Codes)
+
+Frontend dựa vào giá trị trả về trong trường `code` (cho phản hồi chung) hoặc `errors[].code` (cho lỗi validation chi tiết theo từng ô nhập) để điều khiển giao diện UI/UX tương ứng mà không phụ thuộc vào câu chữ thông báo `message`.
+
+| Mã lỗi (Code) | HTTP Status | Ý nghĩa nghiệp vụ | Hành động Frontend đề xuất |
+| :--- | :---: | :--- | :--- |
+| **`AUTH_INVALID_CREDENTIALS`** | `401` | Sai Email hoặc Mật khẩu | Hiển thị thông báo đỏ trên form đăng nhập. |
+| **`AUTH_EMAIL_ALREADY_EXISTS`** | `409` | Email đăng ký đã tồn tại trong CSDL | Báo đỏ trường nhập Email: "Email đã được sử dụng". |
+| **`AUTH_INVALID_ROLE`** | `400` | Vai trò đăng ký không hợp lệ (ví dụ chọn Admin) | Từ chối đăng ký, thông báo lỗi trường vai trò. |
+| **`AUTH_ACCOUNT_PENDING_APPROVAL`** | `403` | Tài khoản Lecturer/Mentor đang chờ duyệt | Hiển thị màn hình thông báo chờ duyệt hoặc popup báo chờ Admin duyệt. |
+| **`AUTH_ACCOUNT_REJECTED`** | `403` | Tài khoản đăng ký bị Admin từ chối duyệt | Hiển thị thông báo tài khoản bị từ chối duyệt. |
+| **`AUTH_USER_BLOCKED`** | `403` | Tài khoản đang bị khóa do vi phạm | Hiển thị thông báo tài khoản bị khóa, liên hệ hỗ trợ. |
+| **`AUTH_USER_INACTIVE`** | `403` | Tài khoản chưa được kích hoạt hoặc tạm ngưng | Hiển thị thông báo tài khoản tạm ngưng hoạt động. |
+| **`AUTH_ACCOUNT_NOT_REGISTERED`** | `401` / `404` | Tài khoản Google chưa từng đăng ký hệ thống | Điều hướng sang màn hình **Hoàn tất hồ sơ**, autofill Email & Name. |
+| **`AUTH_INVALID_GOOGLE_TOKEN`** | `401` | Token Google ID Token sai hoặc hết hạn | Thông báo đăng nhập bằng Google thất bại. |
+| **`AUTH_GOOGLE_EMAIL_NOT_VERIFIED`** | `401` | Tài khoản Google chưa được xác thực email | Từ chối đăng nhập. |
+| **`AUTH_REFRESH_TOKEN_INVALID`** | `401` | Refresh token không khớp hoặc sai định dạng | Xóa cookies/storage và chuyển hướng về màn hình Đăng nhập. |
+| **`AUTH_REFRESH_TOKEN_EXPIRED`** | `401` | Phiên làm việc hết hạn | Chuyển hướng về màn hình Đăng nhập. |
+| **`AUTH_REFRESH_TOKEN_REVOKED`** | `401` | Token đã bị thu hồi (đăng xuất hoặc chiếm đoạt) | Xóa toàn bộ token lưu trữ, yêu cầu đăng nhập lại. |
+| **`AUTH_PASSWORD_CONFIRMATION_MISMATCH`** | `400` | Mật khẩu xác nhận không khớp mật khẩu chính | Hiển thị lỗi ô Nhập lại mật khẩu. |
+| **`AUTH_STUDENT_MAJOR_REQUIRED`** | `400` | Sinh viên đăng ký nhưng chưa chọn chuyên ngành | Hiển thị bắt buộc chọn Chuyên ngành. |
+| **`AUTH_INVALID_MAJOR`** | `400` | Mã chuyên ngành gửi lên bị sai | Hiển thị lỗi chuyên ngành không hợp lệ. |
+

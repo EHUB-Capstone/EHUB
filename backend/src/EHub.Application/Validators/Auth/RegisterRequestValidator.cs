@@ -1,6 +1,7 @@
 using FluentValidation;
 using EHub.Contracts.Auth;
 using EHub.Shared.Constants;
+using EHub.Shared.Errors;
 using System.Linq;
 
 namespace EHub.Application.Validators.Auth;
@@ -27,19 +28,23 @@ public sealed class RegisterRequestValidator : AbstractValidator<RegisterRequest
 
         RuleFor(x => x.ConfirmPassword)
             .NotEmpty().WithMessage("Confirm password is required.")
-            .Equal(x => x.Password).WithMessage("Confirm password must match the password.");
+            .Equal(x => x.Password).WithMessage("Confirm password must match the password.")
+            .WithErrorCode(ErrorCodes.AuthPasswordConfirmationMismatch);
 
         RuleFor(x => x.Role)
             .NotEmpty().WithMessage("Role is required.")
             .Must(role => SystemRoles.PublicRegisterRoles.Contains(role))
-            .WithMessage($"Role is invalid. Only {string.Join(", ", SystemRoles.PublicRegisterRoles)} roles are allowed for public registration.");
+            .WithMessage($"Role is invalid. Only {string.Join(", ", SystemRoles.PublicRegisterRoles)} roles are allowed for public registration.")
+            .WithErrorCode(ErrorCodes.AuthInvalidRole);
 
         RuleFor(x => x.MajorCode)
             .NotEmpty().WithMessage("Major is required for Student role.")
+            .WithErrorCode(ErrorCodes.AuthStudentMajorRequired)
             .When(x => x.Role == SystemRoles.Student);
 
         RuleFor(x => x.MajorCode)
             .Must(major => MajorCodes.IsValid(major)).WithMessage("Selected major is invalid.")
+            .WithErrorCode(ErrorCodes.AuthInvalidMajor)
             .When(x => !string.IsNullOrEmpty(x.MajorCode));
     }
 }
