@@ -5,6 +5,8 @@ using EHub.Application.Features.Auth.Register;
 using EHub.Application.Features.Auth.Login;
 using EHub.Application.Features.Auth.GoogleLogin;
 using EHub.Application.Features.Auth.GetCurrentUser;
+using EHub.Application.Features.Auth.RefreshToken;
+using EHub.Application.Features.Auth.Logout;
 
 namespace EHub.Application;
 
@@ -18,6 +20,8 @@ public static class DependencyInjection
         services.AddScoped<ILoginCommandHandler, LoginCommandHandler>();
         services.AddScoped<IGoogleLoginCommandHandler, GoogleLoginCommandHandler>();
         services.AddScoped<IGetCurrentUserQueryHandler, GetCurrentUserQueryHandler>();
+        services.AddScoped<IRefreshTokenCommandHandler, RefreshTokenCommandHandler>();
+        services.AddScoped<ILogoutCommandHandler, LogoutCommandHandler>();
 
         return services;
     }

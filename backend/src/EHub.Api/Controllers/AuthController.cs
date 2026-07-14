@@ -7,6 +7,8 @@ using EHub.Application.Features.Auth.Register;
 using EHub.Application.Features.Auth.Login;
 using EHub.Application.Features.Auth.GoogleLogin;
 using EHub.Application.Features.Auth.GetCurrentUser;
+using EHub.Application.Features.Auth.RefreshToken;
+using EHub.Application.Features.Auth.Logout;
 using EHub.Contracts.Auth;
 using EHub.Contracts.Common;
 using EHub.Shared.Errors;
@@ -21,17 +23,23 @@ public class AuthController : ControllerBase
     private readonly ILoginCommandHandler _loginCommandHandler;
     private readonly IGoogleLoginCommandHandler _googleLoginCommandHandler;
     private readonly IGetCurrentUserQueryHandler _getCurrentUserQueryHandler;
+    private readonly IRefreshTokenCommandHandler _refreshTokenCommandHandler;
+    private readonly ILogoutCommandHandler _logoutCommandHandler;
 
     public AuthController(
         IRegisterCommandHandler registerCommandHandler,
         ILoginCommandHandler loginCommandHandler,
         IGoogleLoginCommandHandler googleLoginCommandHandler,
-        IGetCurrentUserQueryHandler getCurrentUserQueryHandler)
+        IGetCurrentUserQueryHandler getCurrentUserQueryHandler,
+        IRefreshTokenCommandHandler refreshTokenCommandHandler,
+        ILogoutCommandHandler logoutCommandHandler)
     {
         _registerCommandHandler = registerCommandHandler;
         _loginCommandHandler = loginCommandHandler;
         _googleLoginCommandHandler = googleLoginCommandHandler;
         _getCurrentUserQueryHandler = getCurrentUserQueryHandler;
+        _refreshTokenCommandHandler = refreshTokenCommandHandler;
+        _logoutCommandHandler = logoutCommandHandler;
     }
 
     [HttpPost("register")]
@@ -226,5 +234,90 @@ public class AuthController : ControllerBase
         return Ok(ApiResponse<CurrentUserResponse>.SuccessResponse(
             result.Value,
             "Current user retrieved successfully"));
+    }
+
+    [HttpPost("refresh-token")]
+    public async Task<IActionResult> RefreshToken(
+        [FromBody] RefreshTokenRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await _refreshTokenCommandHandler.HandleAsync(
+            request,
+            cancellationToken);
+
+        if (result.IsFailure)
+        {
+            return result.Error.Code switch
+            {
+                ErrorCodes.AuthRefreshTokenInvalid => Unauthorized(
+                    ApiResponse<object>.FailureResponse(
+                        result.Error.Message,
+                        result.Error.Code)),
+
+                ErrorCodes.AuthRefreshTokenExpired => Unauthorized(
+                    ApiResponse<object>.FailureResponse(
+                        result.Error.Message,
+                        result.Error.Code)),
+
+                ErrorCodes.AuthRefreshTokenRevoked => Unauthorized(
+                    ApiResponse<object>.FailureResponse(
+                        result.Error.Message,
+                        result.Error.Code)),
+
+                ErrorCodes.AuthAccountPendingApproval => StatusCode(
+                    StatusCodes.Status403Forbidden,
+                    ApiResponse<object>.FailureResponse(
+                        result.Error.Message,
+                        result.Error.Code)),
+
+                ErrorCodes.AuthAccountRejected => StatusCode(
+                    StatusCodes.Status403Forbidden,
+                    ApiResponse<object>.FailureResponse(
+                        result.Error.Message,
+                        result.Error.Code)),
+
+                ErrorCodes.AuthUserBlocked => StatusCode(
+                    StatusCodes.Status403Forbidden,
+                    ApiResponse<object>.FailureResponse(
+                        result.Error.Message,
+                        result.Error.Code)),
+
+                ErrorCodes.AuthUserInactive => StatusCode(
+                    StatusCodes.Status403Forbidden,
+                    ApiResponse<object>.FailureResponse(
+                        result.Error.Message,
+                        result.Error.Code)),
+
+                _ => BadRequest(
+                    ApiResponse<object>.FailureResponse(
+                        result.Error.Message,
+                        result.Error.Code))
+            };
+        }
+
+        return Ok(ApiResponse<AuthResponse>.SuccessResponse(
+            result.Value,
+            "Token refreshed successfully"));
+    }
+
+    [HttpPost("logout")]
+    public async Task<IActionResult> Logout(
+        [FromBody] LogoutRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await _logoutCommandHandler.HandleAsync(
+            request,
+            cancellationToken);
+
+        if (result.IsFailure)
+        {
+            return BadRequest(ApiResponse<object>.FailureResponse(
+                result.Error.Message,
+                result.Error.Code));
+        }
+
+        return Ok(ApiResponse<object?>.SuccessResponse(
+            null,
+            "Logout successfully"));
     }
 }

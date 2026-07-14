@@ -103,7 +103,7 @@ public sealed class LoginCommandHandler : ILoginCommandHandler
         var accessToken = _jwtTokenService.GenerateAccessToken(user, roles);
         var refreshToken = _refreshTokenService.GenerateRefreshToken();
 
-        var refreshTokenEntity = new RefreshToken
+        var refreshTokenEntity = new EHub.Domain.Entities.RefreshToken
         {
             UserId = user.Id,
             TokenHash = refreshToken.TokenHash,

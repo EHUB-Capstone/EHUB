@@ -108,7 +108,7 @@ public class GoogleLoginCommandHandlerTests
         Assert.Equal(UserStatus.Active.ToString(), result.Value.User?.Status);
         Assert.Equal(MajorCodes.BIT_SE, result.Value.User?.MajorCode);
 
-        await _refreshTokenRepository.Received(1).AddAsync(Arg.Any<RefreshToken>(), Arg.Any<CancellationToken>());
+        await _refreshTokenRepository.Received(1).AddAsync(Arg.Any<EHub.Domain.Entities.RefreshToken>(), Arg.Any<CancellationToken>());
         await _unitOfWork.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
     }
 
