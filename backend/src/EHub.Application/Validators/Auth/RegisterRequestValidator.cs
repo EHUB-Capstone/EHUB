@@ -33,12 +33,12 @@ public sealed class RegisterRequestValidator : AbstractValidator<RegisterRequest
             .Must(role => SystemRoles.PublicRegisterRoles.Contains(role))
             .WithMessage($"Role is invalid. Only {string.Join(", ", SystemRoles.PublicRegisterRoles)} roles are allowed for public registration.");
 
-        RuleFor(x => x.Major)
+        RuleFor(x => x.MajorCode)
             .NotEmpty().WithMessage("Major is required for Student role.")
             .When(x => x.Role == SystemRoles.Student);
 
-        RuleFor(x => x.Major)
-            .MaximumLength(100).WithMessage("Major must not exceed 100 characters.")
-            .When(x => !string.IsNullOrEmpty(x.Major));
+        RuleFor(x => x.MajorCode)
+            .MaximumLength(50).WithMessage("Major must not exceed 50 characters.")
+            .When(x => !string.IsNullOrEmpty(x.MajorCode));
     }
 }

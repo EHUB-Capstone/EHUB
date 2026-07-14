@@ -5,6 +5,6 @@ public enum UserStatus
     Active = 1,
     Inactive = 2,
     Blocked = 3,
-    Pending = 4,
+    PendingApproval = 4,
     Rejected = 5
 }
