@@ -2,7 +2,12 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using EHub.Application.Common.Interfaces.Persistence;
+using EHub.Application.Common.Interfaces.Identity;
+using EHub.Application.Common.Interfaces.Services;
 using EHub.Infrastructure.Persistence;
+using EHub.Infrastructure.Persistence.Repositories;
+using EHub.Infrastructure.Identity;
+using EHub.Infrastructure.Services;
 
 namespace EHub.Infrastructure;
 
@@ -19,6 +24,32 @@ public static class DependencyInjection
                 b => b.MigrationsAssembly(typeof(AppDbContext).Assembly.FullName)));
 
         services.AddScoped<IApplicationDbContext>(provider => provider.GetRequiredService<AppDbContext>());
+
+        // Repositories & Persistence
+        services.AddScoped<IUserRepository, UserRepository>();
+        services.AddScoped<IRoleRepository, RoleRepository>();
+        services.AddScoped<IUserRoleRepository, UserRoleRepository>();
+        services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
+        services.AddScoped<IStudentRepository, StudentRepository>();
+        services.AddScoped<IMentorProfileRepository, MentorProfileRepository>();
+        services.AddScoped<IUnitOfWork, UnitOfWork>();
+
+        // Identity Services
+        services.AddScoped<IPasswordHasher, BCryptPasswordHasher>();
+        services.AddScoped<IJwtTokenService, JwtTokenService>();
+        services.AddScoped<IRefreshTokenService, RefreshTokenService>();
+        services.AddScoped<IGoogleAuthService, GoogleAuthService>();
+        services.AddScoped<ICurrentUserService, CurrentUserService>();
+
+        // Common Services
+        services.AddScoped<IDateTimeProvider, DateTimeProvider>();
+
+        // HTTP Context Accessor
+        services.AddHttpContextAccessor();
+
+        // Configuration Options Binding
+        services.Configure<JwtOptions>(configuration.GetSection(JwtOptions.SectionName));
+        services.Configure<GoogleOptions>(configuration.GetSection(GoogleOptions.SectionName));
 
         return services;
     }
