@@ -67,8 +67,8 @@ const Home: React.FC = () => {
           <div className="flex items-center gap-2.5">
             <img src={logo} alt="EHub" className="w-10 h-10 object-contain" />
             <span className="text-xl font-extrabold tracking-tight">
-              <span className="text-[#034EA2]">E</span>
-              <span className="text-[#F37021]">HUB</span>
+              <span className="text-[#F37021]">E</span> 
+              <span className="text-[#034EA2]">HUB</span>
             </span>
           </div>
 
@@ -328,12 +328,12 @@ const Home: React.FC = () => {
           <div className="flex items-center gap-2.5">
             <img src={logo} alt="EHub" className="w-8 h-8 object-contain" />
             <span className="text-base font-extrabold">
-              <span className="text-[#034EA2]">E</span>
-              <span className="text-[#F37021]">HUB</span>
+              <span className="text-[#F37021]">E</span> 
+              <span className="text-[#034EA2]">HUB</span>
             </span>
           </div>
           <p className="text-[13px] text-center text-slate-500 dark:text-slate-400">
-            © 2024 EHub — Entrepreneurship Hub Management & Startup Incubation Support Platform
+            © 2026 EHub — Entrepreneurship Hub Management & Startup Incubation Support Platform
           </p>
           <div className="flex gap-6">
             {['Features', 'How it works', 'About'].map(item => (

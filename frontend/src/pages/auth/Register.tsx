@@ -302,11 +302,11 @@ const Register: React.FC = () => {
                 {/* Major (STUDENT only) */}
                 {role === 'STUDENT' && (
                   <div>
-                    <label className="block text-[13px] font-semibold text-slate-900 dark:text-slate-50 mb-1.5">Major (Chuyên ngành)</label>
+                    <label className="block text-[13px] font-semibold text-slate-900 dark:text-slate-50 mb-1.5">Major</label>
                     <select id="reg-major" value={major} onChange={(e: ChangeEvent<HTMLSelectElement>) => setMajor(e.target.value)} required
                       className="w-full py-2.5 px-3.5 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 text-[14px] outline-none transition-colors focus:border-[#F37021] dark:focus:border-[#F37021] text-slate-900 dark:text-slate-100"
                     >
-                      <option value="" className="text-slate-500">-- Chọn chuyên ngành --</option>
+                      <option value="" className="text-slate-500">-- Select Major --</option>
                       {TEAM_MAJOR_GROUPS.map(g => (
                         <optgroup key={g.key} label={g.label} className="text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800">
                           {g.majors.map(m => <option key={m.code} value={m.code}>{m.code} — {m.name}</option>)}
