@@ -12,6 +12,18 @@ public static class AuthErrors
         ErrorCodes.AuthEmailAlreadyExists,
         "Email already exists.");
 
+    public static readonly Error InvalidRole = new(
+        ErrorCodes.AuthInvalidRole,
+        "Role must be Student, Lecturer, or Mentor.");
+
+    public static readonly Error InvalidMajor = new(
+        ErrorCodes.AuthInvalidMajor,
+        "Selected major is invalid.");
+
+    public static readonly Error StudentMajorRequired = new(
+        ErrorCodes.AuthStudentMajorRequired,
+        "Major is required for Student role.");
+
     public static readonly Error AccountPendingApproval = new(
         ErrorCodes.AuthAccountPendingApproval,
         "Your account is pending admin approval.");

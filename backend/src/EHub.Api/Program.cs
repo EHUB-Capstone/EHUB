@@ -21,6 +21,7 @@ builder.Services.AddControllers(options =>
 
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.AddAuth(builder.Configuration);
 
 // Customize Model State Binding validation response format
 builder.Services.Configure<ApiBehaviorOptions>(options =>
@@ -98,7 +99,7 @@ app.UseHttpsRedirection();
 // CORS must be configured before Authentication & Authorization middleware
 app.UseCors(CorsExtensions.FrontendPolicy);
 
-// app.UseAuthentication();
+app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
