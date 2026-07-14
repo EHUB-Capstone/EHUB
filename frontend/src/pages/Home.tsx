@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import type { Easing, Variants } from 'framer-motion';
 import {
   ArrowRight, GraduationCap, Users, Brain, BarChart3,
   Rocket, Menu, X, CheckCircle2, TrendingUp, Shield, Star,
@@ -10,14 +11,16 @@ import logo from '../assets/logo.png';
 import { useTheme } from '../context/ThemeContext';
 
 /* ─── Animation variants ─────────────────────────────── */
-const fadeUp = {
+const smoothEase: Easing = [0.22, 1, 0.36, 1] as const;
+
+const fadeUp: Variants = {
   hidden: { opacity: 0, y: 40 },
   visible: (i = 0) => ({
     opacity: 1, y: 0,
-    transition: { delay: i * 0.12, duration: 0.65, ease: [0.22, 1, 0.36, 1] },
+    transition: { delay: i * 0.12, duration: 0.65, ease: smoothEase },
   }),
 };
-const fadeIn = {
+const fadeIn: Variants = {
   hidden: { opacity: 0 },
   visible: (i = 0) => ({ opacity: 1, transition: { delay: i * 0.1, duration: 0.5 } }),
 };

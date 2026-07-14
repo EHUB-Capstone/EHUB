@@ -1,4 +1,5 @@
-import { forwardRef, ElementType } from 'react';
+import { forwardRef } from 'react';
+import type { ButtonHTMLAttributes, ElementType, SVGProps } from 'react';
 import { cn } from '../../utils/cn';
 import { Loader2 } from 'lucide-react';
 
@@ -23,12 +24,12 @@ const sizes: Record<ButtonSize, string> = {
   xl: 'h-12 px-8 text-[1rem] gap-2.5',
 };
 
-export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
   size?: ButtonSize;
   isLoading?: boolean;
-  icon?: ElementType<React.SVGProps<SVGSVGElement>>;
-  iconRight?: ElementType<React.SVGProps<SVGSVGElement>>;
+  icon?: ElementType<SVGProps<SVGSVGElement>>;
+  iconRight?: ElementType<SVGProps<SVGSVGElement>>;
 }
 
 const Button = forwardRef<HTMLButtonElement, ButtonProps>(({

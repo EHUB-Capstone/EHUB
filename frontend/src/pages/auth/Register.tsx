@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef, FormEvent, ChangeEvent, KeyboardEvent, ClipboardEvent } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import type { ChangeEvent, ClipboardEvent, FormEvent, KeyboardEvent } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
