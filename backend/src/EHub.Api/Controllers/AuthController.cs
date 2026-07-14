@@ -1,10 +1,12 @@
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using EHub.Application.Features.Auth.Register;
 using EHub.Application.Features.Auth.Login;
 using EHub.Application.Features.Auth.GoogleLogin;
+using EHub.Application.Features.Auth.GetCurrentUser;
 using EHub.Contracts.Auth;
 using EHub.Contracts.Common;
 using EHub.Shared.Errors;
@@ -18,15 +20,18 @@ public class AuthController : ControllerBase
     private readonly IRegisterCommandHandler _registerCommandHandler;
     private readonly ILoginCommandHandler _loginCommandHandler;
     private readonly IGoogleLoginCommandHandler _googleLoginCommandHandler;
+    private readonly IGetCurrentUserQueryHandler _getCurrentUserQueryHandler;
 
     public AuthController(
         IRegisterCommandHandler registerCommandHandler,
         ILoginCommandHandler loginCommandHandler,
-        IGoogleLoginCommandHandler googleLoginCommandHandler)
+        IGoogleLoginCommandHandler googleLoginCommandHandler,
+        IGetCurrentUserQueryHandler getCurrentUserQueryHandler)
     {
         _registerCommandHandler = registerCommandHandler;
         _loginCommandHandler = loginCommandHandler;
         _googleLoginCommandHandler = googleLoginCommandHandler;
+        _getCurrentUserQueryHandler = getCurrentUserQueryHandler;
     }
 
     [HttpPost("register")]
@@ -170,5 +175,56 @@ public class AuthController : ControllerBase
         return Ok(ApiResponse<AuthResponse>.SuccessResponse(
             result.Value,
             "Google login successfully"));
+    }
+
+    [Authorize]
+    [HttpGet("me")]
+    public async Task<IActionResult> Me(CancellationToken cancellationToken)
+    {
+        var result = await _getCurrentUserQueryHandler.HandleAsync(cancellationToken);
+
+        if (result.IsFailure)
+        {
+            return result.Error.Code switch
+            {
+                ErrorCodes.AuthAccountPendingApproval => StatusCode(
+                    StatusCodes.Status403Forbidden,
+                    ApiResponse<object>.FailureResponse(
+                        result.Error.Message,
+                        result.Error.Code)),
+
+                ErrorCodes.AuthAccountRejected => StatusCode(
+                    StatusCodes.Status403Forbidden,
+                    ApiResponse<object>.FailureResponse(
+                        result.Error.Message,
+                        result.Error.Code)),
+
+                ErrorCodes.AuthUserBlocked => StatusCode(
+                    StatusCodes.Status403Forbidden,
+                    ApiResponse<object>.FailureResponse(
+                        result.Error.Message,
+                        result.Error.Code)),
+
+                ErrorCodes.AuthUserInactive => StatusCode(
+                    StatusCodes.Status403Forbidden,
+                    ApiResponse<object>.FailureResponse(
+                        result.Error.Message,
+                        result.Error.Code)),
+
+                ErrorCodes.CommonUnauthorizedError => Unauthorized(
+                    ApiResponse<object>.FailureResponse(
+                        result.Error.Message,
+                        result.Error.Code)),
+
+                _ => BadRequest(
+                    ApiResponse<object>.FailureResponse(
+                        result.Error.Message,
+                        result.Error.Code))
+            };
+        }
+
+        return Ok(ApiResponse<CurrentUserResponse>.SuccessResponse(
+            result.Value,
+            "Current user retrieved successfully"));
     }
 }

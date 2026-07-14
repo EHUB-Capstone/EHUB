@@ -21,12 +21,14 @@ public class CurrentUserService : ICurrentUserService
     {
         get
         {
-            var userIdClaim = _httpContextAccessor.HttpContext?.User?.FindFirst(ClaimNames.UserId)?.Value;
+            var userIdClaim = _httpContextAccessor.HttpContext?.User?.FindFirst(ClaimNames.UserId)?.Value
+                ?? _httpContextAccessor.HttpContext?.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             return Guid.TryParse(userIdClaim, out var userId) ? userId : null;
         }
     }
 
-    public string? Email => _httpContextAccessor.HttpContext?.User?.FindFirst(ClaimNames.Email)?.Value;
+    public string? Email => _httpContextAccessor.HttpContext?.User?.FindFirst(ClaimNames.Email)?.Value
+        ?? _httpContextAccessor.HttpContext?.User?.FindFirst(ClaimTypes.Email)?.Value;
 
     public IReadOnlyCollection<string> Roles
     {

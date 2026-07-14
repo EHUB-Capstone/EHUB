@@ -58,6 +58,7 @@ public static class AuthenticationExtensions
         })
         .AddJwtBearer(options =>
         {
+            options.MapInboundClaims = false;
             options.TokenValidationParameters = new TokenValidationParameters
             {
                 ValidateIssuer = true,
@@ -70,6 +71,26 @@ public static class AuthenticationExtensions
                 ClockSkew = TimeSpan.FromMinutes(1),
                 NameClaimType = ClaimNames.UserId,
                 RoleClaimType = ClaimNames.Role
+            };
+
+            // Diagnostic: log JWT validation failures
+            options.Events = new JwtBearerEvents
+            {
+                OnAuthenticationFailed = context =>
+                {
+                    Console.WriteLine($"[JWT] Authentication FAILED: {context.Exception.GetType().Name}: {context.Exception.Message}");
+                    return Task.CompletedTask;
+                },
+                OnTokenValidated = context =>
+                {
+                    Console.WriteLine($"[JWT] Token VALIDATED for: {context.Principal?.Identity?.Name}");
+                    return Task.CompletedTask;
+                },
+                OnChallenge = context =>
+                {
+                    Console.WriteLine($"[JWT] Challenge issued. Error: {context.Error}, Desc: {context.ErrorDescription}");
+                    return Task.CompletedTask;
+                }
             };
         });
 
