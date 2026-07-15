@@ -9,6 +9,8 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useTheme } from '../../context/ThemeContext';
+import { useAuth } from '../../hooks/useAuth';
+import { AUTH_ERROR_CODES } from '../../types/auth';
 import { TEAM_MAJOR_GROUPS } from '../../constants/majors';
 import logo from '../../assets/logo.png';
 
@@ -18,8 +20,51 @@ const RESEND_COOLDOWN    = 60;
 type Role = 'STUDENT' | 'LECTURER' | 'MENTOR';
 interface LocationState { step?: string; email?: string; }
 
+const BACKEND_ROLE_BY_FORM_ROLE: Record<Role, string> = {
+  STUDENT: 'Student',
+  LECTURER: 'Lecturer',
+  MENTOR: 'Mentor',
+};
+
+interface ApiErrorBody {
+  code?: string | null;
+  errorCode?: string | null;
+  message?: string;
+}
+
+function getApiError(err: unknown): { code: string; message: string } {
+  const apiError = (err as { response?: { data?: ApiErrorBody } }).response?.data;
+  return {
+    code: apiError?.code ?? apiError?.errorCode ?? '',
+    message: apiError?.message ?? 'Registration failed.',
+  };
+}
+
+// Approval pending screen shown to LECTURER/MENTOR after register
+const PendingApprovalScreen: React.FC<{ email: string; onBack: () => void }> = ({ email, onBack }) => (
+  <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-[420px] text-center">
+    <div className="w-[72px] h-[72px] rounded-[24px] bg-blue-500/15 border border-blue-500/30 flex items-center justify-center mx-auto mb-6">
+      <ShieldCheck size={34} className="text-blue-400" />
+    </div>
+    <h1 className="text-[24px] font-extrabold text-slate-900 dark:text-slate-50 mb-2">Account Pending Approval</h1>
+    <p className="text-slate-500 dark:text-slate-400 text-[14px] mb-2">Your registration was submitted successfully.</p>
+    <p className="text-blue-400 text-[14px] font-bold mb-6">{email}</p>
+    <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-4 mb-6 text-left">
+      <p className="text-[13px] text-slate-600 dark:text-slate-300 leading-[1.7]">
+        An admin will review and approve your <strong>Mentor / Lecturer</strong> account shortly.
+        You will be able to sign in once approved.
+      </p>
+    </div>
+    <button onClick={onBack}
+      className="w-full h-12 rounded-[14px] border border-[#E5E7EB] dark:border-white/10 bg-white dark:bg-white/5 text-slate-700 dark:text-slate-300 font-semibold text-[14px] cursor-pointer hover:bg-slate-50 dark:hover:bg-white/10 transition-colors">
+      ← Back to Register
+    </button>
+  </motion.div>
+);
+
 const Register: React.FC = () => {
   const { isDark, toggleTheme } = useTheme();
+  const { register } = useAuth();
 
   /* Step 1 */
   const [name,            setName]            = useState<string>('');
@@ -32,6 +77,7 @@ const Register: React.FC = () => {
   const [showPass,        setShowPass]        = useState<boolean>(false);
   const [showConfirm,     setShowConfirm]     = useState<boolean>(false);
   const [emailTakenError, setEmailTakenError] = useState<boolean>(false);
+  const [pendingApproval, setPendingApproval] = useState<boolean>(false);
 
   /* Step 2 OTP */
   const [step,           setStep]           = useState<1 | 2>(1);
@@ -74,18 +120,41 @@ const Register: React.FC = () => {
     if (!email.trim() || !/\S+@\S+\.\S+/.test(email)) return void toast.error('Enter a valid email.');
     if (password.length < 6)                          return void toast.error('Password must be at least 6 characters.');
     if (password !== confirmPassword)                 return void toast.error('Passwords do not match.');
+    if (role === 'STUDENT' && !major)                 return void toast.error('Please select your major.');
     setLoading(true); setEmailTakenError(false);
     try {
-      // TODO: await register({ name, email, password, role, major });
-      toast.success('Account created! Check your email for OTP.');
-      setStep(2); setCountdown(OTP_EXPIRE_SECONDS); setResendCooldown(RESEND_COOLDOWN);
-      setTimeout(() => otpRefs.current[0]?.focus(), 300);
+      const { requiresApproval, message } = await register({
+        fullName: name.trim(),
+        email: email.trim(),
+        password,
+        confirmPassword,
+        role: BACKEND_ROLE_BY_FORM_ROLE[role],
+        majorCode: role === 'STUDENT' ? major : undefined,
+      });
+
+      if (requiresApproval) {
+        // LECTURER or MENTOR → show pending screen
+        setPendingApproval(true);
+        toast.success(message);
+      } else {
+        // STUDENT → auto-logged in, redirect
+        toast.success('Account created! Welcome to EHub 🎉');
+        navigate('/student');
+      }
     } catch (err: unknown) {
-      const error = err as { message?: string; response?: { status?: number; data?: { message?: string } }; data?: { emailTaken?: boolean; needVerify?: boolean } };
-      if (error.data?.emailTaken)  { setEmailTakenError(true); return; }
-      if (error.data?.needVerify)  { toast(error.message ?? '', { icon: '📧' }); setStep(2); setCountdown(OTP_EXPIRE_SECONDS); setResendCooldown(RESEND_COOLDOWN); setTimeout(() => otpRefs.current[0]?.focus(), 300); }
-      else if (error.response?.status === 409) { toast.error(error.message ?? ''); navigate('/login', { state: { email } }); }
-      else toast.error(error.message ?? 'Registration failed.');
+      const { code, message } = getApiError(err);
+
+      if (code === AUTH_ERROR_CODES.EMAIL_ALREADY_EXISTS) {
+        setEmailTakenError(true);
+      } else if (code === AUTH_ERROR_CODES.INVALID_ROLE) {
+        toast.error('Invalid role selected.');
+      } else if (code === AUTH_ERROR_CODES.INVALID_MAJOR) {
+        toast.error('Invalid major code.');
+      } else if (code === AUTH_ERROR_CODES.STUDENT_MAJOR_REQUIRED) {
+        toast.error('Major is required for Student role.');
+      } else {
+        toast.error(message);
+      }
     } finally { setLoading(false); }
   };
 
@@ -150,8 +219,8 @@ const Register: React.FC = () => {
           <Link to="/" className="inline-flex items-center gap-2.5 no-underline">
             <img src={logo} alt="EHub" className="w-10 h-10 object-contain" />
             <span className="text-[20px] font-extrabold tracking-tight">
-              <span className="text-white">E</span>
-              <span className="text-[#EA6A12]">HUB</span>
+              <span className="text-[#F3A07A]">E</span>
+              <span className="text-[#79A8D9]">HUB</span>
             </span>
           </Link>
         </div>
@@ -190,8 +259,17 @@ const Register: React.FC = () => {
 
         <AnimatePresence mode="wait">
 
+          {/* ── PENDING APPROVAL (LECTURER/MENTOR after register) ── */}
+          {pendingApproval && (
+            <PendingApprovalScreen
+              key="pending"
+              email={email}
+              onBack={() => { setPendingApproval(false); }}
+            />
+          )}
+
           {/* ── STEP 1: Registration form ── */}
-          {step === 1 && (
+          {!pendingApproval && step === 1 && (
             <motion.div key="step1"
               initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}
               transition={{ duration: 0.3 }}
@@ -202,7 +280,7 @@ const Register: React.FC = () => {
                 <Link to="/" className="inline-flex items-center gap-2.5 no-underline">
                   <img src={logo} alt="EHub" className="w-[36px] h-[36px] object-contain" />
                   <span className="text-[18px] font-extrabold tracking-tight">
-                    <span className="text-[#0F172A] dark:text-white">E</span><span className="text-[#EA6A12]">HUB</span>
+                    <span className="text-[#F08A5D]">E</span><span className="text-[#1E5E9F] dark:text-[#79A8D9]">HUB</span>
                   </span>
                 </Link>
               </div>

@@ -7,7 +7,11 @@ import {
   Mail, Lock, ArrowRight, AlertCircle, Eye, EyeOff,
   Sun, Moon, GraduationCap, Users, Shield, TrendingUp,
 } from 'lucide-react';
+import { GoogleLogin } from '@react-oauth/google';
+import type { CredentialResponse } from '@react-oauth/google';
 import { useTheme } from '../../context/ThemeContext';
+import { useAuth } from '../../hooks/useAuth';
+import { AUTH_ERROR_CODES } from '../../types/auth';
 import logo from '../../assets/logo.png';
 
 /* ─── Google icon ─────────────────────────────────── */
@@ -36,67 +40,115 @@ interface LocationState {
 }
 
 /* ─── Component ───────────────────────────────────── */
+interface ApiErrorBody {
+  code?: string | null;
+  errorCode?: string | null;
+  message?: string;
+}
+
+function getApiError(err: unknown): { code: string; message: string } {
+  const apiError = (err as { response?: { data?: ApiErrorBody } }).response?.data;
+  return {
+    code: apiError?.code ?? apiError?.errorCode ?? '',
+    message: apiError?.message ?? 'Login failed.',
+  };
+}
+
+function normalizeRole(role: string): string {
+  return role.trim().toUpperCase();
+}
+
 const Login: React.FC = () => {
   const { isDark, toggleTheme } = useTheme();
+  const { loginWithEmail, loginWithGoogle } = useAuth();
 
-  const [email, setEmail]             = useState<string>('');
-  const [password, setPassword]       = useState<string>('');
-  const [showPass, setShowPass]       = useState<boolean>(false);
-  const [loading, setLoading]         = useState<boolean>(false);
-  const [googleLoading, setGoogleLoading] = useState<boolean>(false);
-  const [unverifiedEmail, setUnverifiedEmail] = useState<string | null>(null);
+  const [email, setEmail]                     = useState<string>('');
+  const [password, setPassword]               = useState<string>('');
+  const [showPass, setShowPass]               = useState<boolean>(false);
+  const [loading, setLoading]                 = useState<boolean>(false);
+  const [googleLoading, setGoogleLoading]     = useState<boolean>(false);
   const [pendingApproval, setPendingApproval] = useState<boolean>(false);
   const [rejectedStatus, setRejectedStatus]   = useState<boolean>(false);
-  const [resendLoading, setResendLoading]     = useState<boolean>(false);
 
-  const navigate = useNavigate();
-  const location = useLocation();
-  const state = location.state as LocationState | null;
+  const navigate  = useNavigate();
+  const location  = useLocation();
+  const state     = location.state as LocationState | null;
+  const googleButtonWidth = typeof window === 'undefined'
+    ? 400
+    : Math.min(400, Math.max(240, window.innerWidth - 48));
 
   useEffect(() => {
     if (state?.prefillEmail || state?.email) setEmail(state.prefillEmail ?? state.email ?? '');
     if (state?.isPending) setPendingApproval(true);
   }, [state]);
 
-  const redirectByRole = (role: string) => {
-    if (role === 'ADMIN') navigate('/admin');
-    else if (role === 'LECTURER') navigate('/lecturer');
-    else if (role === 'MENTOR') navigate('/mentor');
-    else navigate('/student');
+  const redirectByRole = (roles: string[]) => {
+    const normalizedRoles = roles.map(normalizeRole);
+    if (normalizedRoles.includes('ADMIN'))         navigate('/admin');
+    else if (normalizedRoles.includes('LECTURER')) navigate('/lecturer');
+    else if (normalizedRoles.includes('MENTOR'))   navigate('/mentor');
+    else                                           navigate('/student');
   };
 
+  /* ── Email / password login ─────────────────────── */
   const handleLogin = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!email || !password) return void toast.error('Please fill in all fields.');
     setLoading(true);
-    setUnverifiedEmail(null); setPendingApproval(false); setRejectedStatus(false);
+    setPendingApproval(false); setRejectedStatus(false);
     try {
-      // TODO: const user = await login(email, password);
+      const user = await loginWithEmail({ email, password });
       toast.success('Login successful!');
-      redirectByRole('STUDENT');
+      redirectByRole(user.roles as string[]);
     } catch (err: unknown) {
-      const error = err as { data?: { needVerify?: boolean; email?: string; isPending?: boolean }; response?: { status?: number; data?: { message?: string } }; message?: string };
-      if (error.data?.needVerify)           setUnverifiedEmail(error.data?.email ?? email);
-      else if (error.data?.isPending)       setPendingApproval(true);
-      else if (error.response?.status === 403 && error.message?.toLowerCase().includes('rejected')) setRejectedStatus(true);
-      else toast.error(error.message ?? error.response?.data?.message ?? 'Login failed.');
+      const { code, message } = getApiError(err);
+      if (code === AUTH_ERROR_CODES.ACCOUNT_PENDING_APPROVAL) setPendingApproval(true);
+      else if (code === AUTH_ERROR_CODES.ACCOUNT_REJECTED)    setRejectedStatus(true);
+      else if (code === AUTH_ERROR_CODES.USER_BLOCKED)        setRejectedStatus(true);
+      else if (code === AUTH_ERROR_CODES.USER_INACTIVE)       toast.error('Your account is inactive. Contact support.');
+      else toast.error(message);
     } finally { setLoading(false); }
   };
 
-  const handleResendOtp = async () => {
-    if (!unverifiedEmail) return;
-    setResendLoading(true);
+  /* ── Google login ───────────────────────────────── */
+  const handleGoogleSuccess = async (credentialResponse: CredentialResponse) => {
+    if (!credentialResponse.credential) {
+      toast.error('Google did not return an ID token. Please try again.');
+      return;
+    }
+
+    setGoogleLoading(true);
+    setPendingApproval(false);
+    setRejectedStatus(false);
+
     try {
-      toast.success('OTP sent! Check your inbox.');
-      navigate('/register', { state: { email: unverifiedEmail, step: 'otp' } });
-    } catch { toast.error('Failed to resend OTP.'); }
-    finally { setResendLoading(false); }
+      const user = await loginWithGoogle(credentialResponse.credential);
+      toast.success('Signed in with Google!');
+      redirectByRole(user.roles as string[]);
+    } catch (err: unknown) {
+      const { code, message } = getApiError(err);
+      if (code === AUTH_ERROR_CODES.ACCOUNT_NOT_REGISTERED) {
+        toast.error('No account found for this Google email. Please register first.');
+      } else if (code === AUTH_ERROR_CODES.ACCOUNT_PENDING_APPROVAL) {
+        setPendingApproval(true);
+      } else if (code === AUTH_ERROR_CODES.ACCOUNT_REJECTED || code === AUTH_ERROR_CODES.USER_BLOCKED) {
+        setRejectedStatus(true);
+      } else if (code === AUTH_ERROR_CODES.USER_INACTIVE) {
+        toast.error('Your account is inactive. Contact support.');
+      } else {
+        toast.error(message || 'Google sign-in failed.');
+      }
+    } finally {
+      setGoogleLoading(false);
+    }
   };
 
   const handleGoogleLogin = () => {
-    setGoogleLoading(true);
-    toast('Google sign-in coming soon!', { icon: '🔜' });
-    setTimeout(() => setGoogleLoading(false), 1000);
+    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID ?? '';
+    if (!clientId) {
+      toast('Google sign-in is not configured yet.', { icon: '🔜' });
+      return;
+    }
   };
 
   return (
@@ -109,12 +161,11 @@ const Login: React.FC = () => {
         <div className="absolute bottom-[10%] -left-[5%] w-[320px] h-[320px] rounded-full bg-white/5 blur-[90px]" />
 
         <div className="relative z-10">
-          {/* Logo */}
           <Link to="/" className="inline-flex items-center gap-2.5 no-underline">
             <img src={logo} alt="EHub" className="w-[42px] h-[42px] object-contain" />
             <span className="text-[22px] font-extrabold tracking-tight">
-              <span className="text-white">E</span>
-              <span className="text-[#EA6A12]">HUB</span>
+              <span className="text-[#F3A07A]">E</span>
+              <span className="text-[#79A8D9]">HUB</span>
             </span>
           </Link>
         </div>
@@ -142,9 +193,7 @@ const Login: React.FC = () => {
           </motion.div>
         </div>
 
-        <p className="text-white/30 text-[12px] relative z-10">
-        
-        </p>
+        <p className="text-white/30 text-[12px] relative z-10" />
       </div>
 
       {/* ── RIGHT PANEL (form) ── */}
@@ -166,8 +215,8 @@ const Login: React.FC = () => {
             <Link to="/" className="inline-flex items-center gap-2.5 no-underline">
               <img src={logo} alt="EHub" className="w-[38px] h-[38px] object-contain" />
               <span className="text-[20px] font-extrabold tracking-tight">
-                <span className="text-[#0F172A] dark:text-white">E</span>
-                <span className="text-[#EA6A12]">HUB</span>
+                <span className="text-[#F08A5D]">E</span>
+                <span className="text-[#1E5E9F] dark:text-[#79A8D9]">HUB</span>
               </span>
             </Link>
           </div>
@@ -176,19 +225,6 @@ const Login: React.FC = () => {
           <p className="text-[#64748B] dark:text-slate-400 text-[14px] mb-7">Sign in to your EHub account</p>
 
           {/* Alert banners */}
-          {unverifiedEmail && !pendingApproval && !rejectedStatus && (
-            <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3.5 flex gap-3 items-start mb-5">
-              <AlertCircle size={18} className="text-amber-500 shrink-0 mt-0.5" />
-              <div>
-                <p className="text-[13px] font-semibold text-amber-500 mb-1">Account not verified</p>
-                <p className="text-[12px] text-slate-500 dark:text-slate-400 mb-2"><strong>{unverifiedEmail}</strong> — check your inbox for the OTP.</p>
-                <button onClick={handleResendOtp} disabled={resendLoading}
-                  className="text-[12px] font-semibold text-amber-500 bg-transparent border-none cursor-pointer p-0 underline">
-                  {resendLoading ? 'Sending...' : 'Resend OTP →'}
-                </button>
-              </div>
-            </div>
-          )}
           {pendingApproval && (
             <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-3.5 flex gap-3 mb-5">
               <AlertCircle size={18} className="text-blue-400 shrink-0 mt-0.5" />
@@ -209,15 +245,35 @@ const Login: React.FC = () => {
           )}
 
           {/* Google btn */}
-          <button onClick={handleGoogleLogin} disabled={googleLoading}
-            className="w-full flex items-center justify-center gap-2.5 py-3 rounded-[14px] border border-[#E5E7EB] dark:border-white/10 bg-white dark:bg-white/5 text-[#0F172A] dark:text-slate-100 text-[14px] font-semibold cursor-pointer mb-5 transition-all hover:bg-[#F8FAFC] dark:hover:bg-white/10"
-          >
-            {googleLoading
-              ? <div className="w-[18px] h-[18px] rounded-full border-2 border-[#EA6A12] border-t-transparent animate-spin" />
-              : <GoogleIcon />
-            }
-            {googleLoading ? 'Connecting...' : 'Continue with Google'}
-          </button>
+          {import.meta.env.VITE_GOOGLE_CLIENT_ID ? (
+            <div className={`relative mb-5 flex justify-center ${googleLoading ? 'pointer-events-none opacity-70' : ''}`}>
+              <GoogleLogin
+                onSuccess={handleGoogleSuccess}
+                onError={() => { toast.error('Google sign-in failed.'); setGoogleLoading(false); }}
+                theme={isDark ? 'filled_black' : 'outline'}
+                size="large"
+                text="continue_with"
+                shape="rectangular"
+                logo_alignment="center"
+                width={googleButtonWidth}
+              />
+              {googleLoading && (
+                <div className="absolute inset-0 flex items-center justify-center rounded-[14px] bg-white/70 dark:bg-[#0F172A]/70">
+                  <div className="w-[18px] h-[18px] rounded-full border-2 border-[#EA6A12] border-t-transparent animate-spin" />
+                </div>
+              )}
+            </div>
+          ) : (
+            <button onClick={handleGoogleLogin} disabled={googleLoading}
+              className="w-full flex items-center justify-center gap-2.5 py-3 rounded-[14px] border border-[#E5E7EB] dark:border-white/10 bg-white dark:bg-white/5 text-[#0F172A] dark:text-slate-100 text-[14px] font-semibold cursor-pointer mb-5 transition-all hover:bg-[#F8FAFC] dark:hover:bg-white/10"
+            >
+              {googleLoading
+                ? <div className="w-[18px] h-[18px] rounded-full border-2 border-[#EA6A12] border-t-transparent animate-spin" />
+                : <GoogleIcon />
+              }
+              {googleLoading ? 'Connecting...' : 'Continue with Google'}
+            </button>
+          )}
 
           {/* Divider */}
           <div className="flex items-center gap-3 mb-5">
