@@ -140,23 +140,25 @@ const Register: React.FC = () => {
 
   /* ─── Render ───────────────────────────────────── */
   return (
-    <div className="min-h-screen flex font-sans transition-colors duration-300 bg-slate-50 dark:bg-[#0a0f1e]">
+    <div className="min-h-screen flex font-sans transition-colors duration-300 bg-white dark:bg-[#0F172A]">
 
       {/* ── LEFT PANEL ── */}
-      <div className="hidden lg:flex w-[40%] flex-col justify-center p-12 relative overflow-hidden bg-gradient-to-br from-[#034EA2] to-[#023a78] dark:from-[#0d1a3a] dark:to-[#0a0f1e]">
-        <div className="absolute -top-[10%] -right-[10%] w-[350px] h-[350px] rounded-full bg-[#F37021]/10 blur-[80px]" />
-        
+      <div className="hidden lg:flex w-[40%] flex-col justify-between p-12 relative overflow-hidden bg-[#0F172A]">
+        <div className="absolute -top-[10%] -right-[10%] w-[360px] h-[360px] rounded-full bg-[#EA6A12]/12 blur-[110px]" />
+
         <div className="relative z-10">
-          <Link to="/" className="inline-flex items-center gap-2.5 no-underline mb-12">
+          <Link to="/" className="inline-flex items-center gap-2.5 no-underline">
             <img src={logo} alt="EHub" className="w-10 h-10 object-contain" />
             <span className="text-[20px] font-extrabold tracking-tight">
-              <span className="text-[#93c5fd] dark:text-[#5b9bd5]">E</span>
-              <span className="text-[#F37021]">HUB</span>
+              <span className="text-white">E</span>
+              <span className="text-[#EA6A12]">HUB</span>
             </span>
           </Link>
-          
+        </div>
+
+        <div className="relative z-10">
           <h2 className="text-[32px] font-extrabold text-white leading-[1.2] mb-4 tracking-tight">
-            Join the future of <span className="text-[#F37021]">student startups</span>
+            Join the future of <span className="text-[#EA6A12]">student startups</span>
           </h2>
           <p className="text-white/50 text-[15px] leading-[1.7] mb-9">
             Create your account and start managing your startup journey with mentors, evaluations, and AI-powered insights.
@@ -165,12 +167,14 @@ const Register: React.FC = () => {
           <div className="flex flex-col gap-3.5">
             {['Free to join, forever', 'AI-powered project evaluation', 'Connect with expert mentors', 'Track your startup progress'].map((t, i) => (
               <div key={i} className="flex items-center gap-3">
-                <CheckCircle size={18} color="#F37021" />
+                <CheckCircle size={18} color="#EA6A12" />
                 <span className="text-white/65 text-[14px]">{t}</span>
               </div>
             ))}
           </div>
         </div>
+
+        <div className="relative z-10 h-10" />
       </div>
 
       {/* ── RIGHT PANEL ── */}
@@ -178,7 +182,7 @@ const Register: React.FC = () => {
 
         {/* Theme toggle */}
         <button onClick={toggleTheme}
-          className="absolute top-6 right-6 w-10 h-10 rounded-[10px] border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 cursor-pointer flex items-center justify-center text-slate-500 dark:text-slate-400 transition-all hover:bg-slate-100 dark:hover:bg-white/10"
+          className="absolute top-6 right-6 w-10 h-10 rounded-[14px] border border-[#E5E7EB] dark:border-white/10 bg-white dark:bg-white/5 cursor-pointer flex items-center justify-center text-[#64748B] dark:text-slate-400 transition-all hover:bg-[#F8FAFC] dark:hover:bg-white/10"
           aria-label="Toggle theme"
         >
           {isDark ? <Sun size={18} /> : <Moon size={18} />}
@@ -198,13 +202,13 @@ const Register: React.FC = () => {
                 <Link to="/" className="inline-flex items-center gap-2.5 no-underline">
                   <img src={logo} alt="EHub" className="w-[36px] h-[36px] object-contain" />
                   <span className="text-[18px] font-extrabold tracking-tight">
-                    <span className="text-[#034EA2]">E</span><span className="text-[#F37021]">HUB</span>
+                    <span className="text-[#0F172A] dark:text-white">E</span><span className="text-[#EA6A12]">HUB</span>
                   </span>
                 </Link>
               </div>
 
-              <h1 className="text-[26px] font-extrabold text-slate-900 dark:text-slate-50 mb-1.5 tracking-tight">Create your account</h1>
-              <p className="text-slate-500 dark:text-slate-400 text-[14px] mb-6">Join EHub and start your startup journey</p>
+              <h1 className="text-[26px] font-extrabold text-[#0F172A] dark:text-slate-50 mb-1.5 tracking-tight">Create your account</h1>
+              <p className="text-[#64748B] dark:text-slate-400 text-[14px] mb-6">Join EHub and start your startup journey</p>
 
               {/* Email taken banner */}
               <AnimatePresence>
@@ -232,7 +236,7 @@ const Register: React.FC = () => {
                     <User size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                     <input id="reg-name" type="text" value={name} onChange={(e: ChangeEvent<HTMLInputElement>) => setName(e.target.value)}
                       placeholder="Nguyen Van A" required
-                      className="w-full py-2.5 pr-3.5 pl-10 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 text-slate-900 dark:text-slate-100 text-[14px] outline-none transition-colors focus:border-[#F37021] dark:focus:border-[#F37021]"
+                      className="w-full py-2.5 pr-3.5 pl-10 rounded-[14px] border border-[#E5E7EB] dark:border-white/10 bg-[#F8FAFC] dark:bg-white/5 text-[#0F172A] dark:text-slate-100 text-[14px] outline-none transition-colors focus:border-[#EA6A12] dark:focus:border-[#EA6A12]"
                     />
                   </div>
                 </div>
@@ -244,7 +248,7 @@ const Register: React.FC = () => {
                     <Mail size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                     <input id="reg-email" type="email" value={email} onChange={(e: ChangeEvent<HTMLInputElement>) => { setEmail(e.target.value); setEmailTakenError(false); }}
                       placeholder="you@example.com" required
-                      className="w-full py-2.5 pr-3.5 pl-10 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 text-slate-900 dark:text-slate-100 text-[14px] outline-none transition-colors focus:border-[#F37021] dark:focus:border-[#F37021]"
+                      className="w-full py-2.5 pr-3.5 pl-10 rounded-[14px] border border-[#E5E7EB] dark:border-white/10 bg-[#F8FAFC] dark:bg-white/5 text-[#0F172A] dark:text-slate-100 text-[14px] outline-none transition-colors focus:border-[#EA6A12] dark:focus:border-[#EA6A12]"
                     />
                   </div>
                 </div>
@@ -256,7 +260,7 @@ const Register: React.FC = () => {
                     <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                     <input id="reg-password" type={showPass ? 'text' : 'password'} value={password} onChange={(e: ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
                       placeholder="Min. 6 characters" required
-                      className="w-full py-2.5 pr-11 pl-10 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 text-slate-900 dark:text-slate-100 text-[14px] outline-none transition-colors focus:border-[#F37021] dark:focus:border-[#F37021]"
+                      className="w-full py-2.5 pr-11 pl-10 rounded-[14px] border border-[#E5E7EB] dark:border-white/10 bg-[#F8FAFC] dark:bg-white/5 text-[#0F172A] dark:text-slate-100 text-[14px] outline-none transition-colors focus:border-[#EA6A12] dark:focus:border-[#EA6A12]"
                     />
                     <button type="button" onClick={() => setShowPass(p => !p)}
                       className="absolute right-3.5 top-1/2 -translate-y-1/2 bg-transparent border-none cursor-pointer text-slate-400 p-0">
@@ -272,7 +276,7 @@ const Register: React.FC = () => {
                     <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                     <input id="reg-confirm" type={showConfirm ? 'text' : 'password'} value={confirmPassword} onChange={(e: ChangeEvent<HTMLInputElement>) => setConfirmPassword(e.target.value)}
                       placeholder="Re-enter password" required
-                      className="w-full py-2.5 pr-11 pl-10 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 text-slate-900 dark:text-slate-100 text-[14px] outline-none transition-colors focus:border-[#F37021] dark:focus:border-[#F37021]"
+                      className="w-full py-2.5 pr-11 pl-10 rounded-[14px] border border-[#E5E7EB] dark:border-white/10 bg-[#F8FAFC] dark:bg-white/5 text-[#0F172A] dark:text-slate-100 text-[14px] outline-none transition-colors focus:border-[#EA6A12] dark:focus:border-[#EA6A12]"
                     />
                     <button type="button" onClick={() => setShowConfirm(p => !p)}
                       className="absolute right-3.5 top-1/2 -translate-y-1/2 bg-transparent border-none cursor-pointer text-slate-400 p-0">
@@ -284,13 +288,13 @@ const Register: React.FC = () => {
                 {/* Role */}
                 <div>
                   <label className="block text-[13px] font-semibold text-slate-900 dark:text-slate-50 mb-2">Role</label>
-                  <div className="grid grid-cols-3 gap-2 p-1 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-white/5">
+                  <div className="grid grid-cols-3 gap-2 p-1 rounded-[14px] border border-[#E5E7EB] dark:border-white/10 bg-[#F8FAFC] dark:bg-white/5">
                     {(['STUDENT','LECTURER','MENTOR'] as Role[]).map(r => (
                       <label key={r} className="cursor-pointer">
                         <input type="radio" name="role" value={r} checked={role === r} onChange={() => setRole(r)} className="hidden" />
                         <div className={`text-center py-[9px] px-1 rounded-[9px] text-[13px] font-semibold transition-all ${
                           role === r 
-                            ? 'bg-white text-[#F37021] border border-[#F37021]/30 shadow-[0_0_12px_rgba(243,112,33,0.15)] dark:bg-[#F37021]/15'
+                            ? 'bg-white text-[#EA6A12] border border-[#EA6A12]/30 shadow-[0_10px_24px_rgba(234,106,18,0.12)] dark:bg-[#EA6A12]/15'
                             : 'bg-transparent text-slate-500 dark:text-slate-400 border border-transparent shadow-none'
                         }`}>
                           {r.charAt(0) + r.slice(1).toLowerCase()}
@@ -305,7 +309,7 @@ const Register: React.FC = () => {
                   <div>
                     <label className="block text-[13px] font-semibold text-slate-900 dark:text-slate-50 mb-1.5">Major</label>
                     <select id="reg-major" value={major} onChange={(e: ChangeEvent<HTMLSelectElement>) => setMajor(e.target.value)} required
-                      className="w-full py-2.5 px-3.5 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 text-[14px] outline-none transition-colors focus:border-[#F37021] dark:focus:border-[#F37021] text-slate-900 dark:text-slate-100"
+                      className="w-full py-2.5 px-3.5 rounded-[14px] border border-[#E5E7EB] dark:border-white/10 bg-[#F8FAFC] dark:bg-white/5 text-[14px] outline-none transition-colors focus:border-[#EA6A12] dark:focus:border-[#EA6A12] text-[#0F172A] dark:text-slate-100"
                     >
                       <option value="" className="text-slate-500">-- Select Major --</option>
                       {TEAM_MAJOR_GROUPS.map(g => (
@@ -319,7 +323,7 @@ const Register: React.FC = () => {
 
                 {/* Submit */}
                 <button type="submit" disabled={loading}
-                  className={`w-full py-3 rounded-xl border-none font-bold text-[15px] text-white flex items-center justify-center gap-2 mt-1 transition-all bg-gradient-to-br from-[#F37021] to-[#e05a10] shadow-[0_0_24px_rgba(243,112,33,0.3)] ${loading ? 'opacity-70 cursor-not-allowed' : 'cursor-pointer hover:-translate-y-0.5 hover:shadow-[0_4px_32px_rgba(243,112,33,0.5)]'}`}
+                  className={`w-full h-14 rounded-[14px] border-none font-semibold text-[15px] text-white flex items-center justify-center gap-2 mt-1 transition-all duration-200 ease-out bg-[linear-gradient(135deg,#EA6A12,#D97706)] shadow-[0_10px_28px_rgba(234,106,18,0.18)] ${loading ? 'opacity-70 cursor-not-allowed' : 'cursor-pointer hover:-translate-y-0.5 hover:shadow-[0_14px_36px_rgba(234,106,18,0.22)]'}`}
                 >
                   {loading
                     ? <div className="w-[18px] h-[18px] rounded-full border-2 border-white/50 border-t-white animate-spin" />
@@ -330,7 +334,7 @@ const Register: React.FC = () => {
 
               <p className="text-center mt-5 text-[14px] text-slate-500 dark:text-slate-400">
                 Already have an account?{' '}
-                <Link to="/login" className="text-[#F37021] font-bold no-underline">Sign in</Link>
+                <Link to="/login" className="text-[#EA6A12] font-bold no-underline">Sign in</Link>
               </p>
             </motion.div>
           )}
@@ -343,13 +347,13 @@ const Register: React.FC = () => {
               className="w-full max-w-[400px] text-center">
 
               {/* Icon */}
-              <div className="w-[72px] h-[72px] rounded-[20px] bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center mx-auto mb-6 shadow-[0_0_30px_rgba(16,185,129,0.35)]">
+              <div className="w-[72px] h-[72px] rounded-[24px] bg-[#0F172A] flex items-center justify-center mx-auto mb-6 shadow-[0_22px_55px_rgba(15,23,42,0.18)]">
                 <ShieldCheck size={34} color="#fff" />
               </div>
 
               <h1 className="text-[24px] font-extrabold text-slate-900 dark:text-slate-50 mb-2">Verify your email</h1>
               <p className="text-slate-500 dark:text-slate-400 text-[14px] mb-1">OTP code sent to</p>
-              <p className="text-[#F37021] text-[14px] font-bold mb-6">{email}</p>
+              <p className="text-[#EA6A12] text-[14px] font-bold mb-6">{email}</p>
 
               {/* Countdown */}
               <div className={`inline-flex items-center gap-2 px-4.5 py-2 rounded-full mb-7 text-[13px] font-bold border ${countdown > 60 ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-500' : countdown > 0 ? 'bg-amber-500/10 border-amber-500/30 text-amber-500' : 'bg-red-500/10 border-red-500/30 text-red-500'}`}>
@@ -368,7 +372,7 @@ const Register: React.FC = () => {
                       onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => handleOtpKeyDown(idx, e)}
                       className={`w-[52px] h-[60px] text-center text-[22px] font-extrabold rounded-xl border-2 outline-none transition-all ${
                         val 
-                          ? 'border-[#F37021] bg-orange-50 dark:bg-[#F37021]/10 text-[#F37021]'
+                          ? 'border-[#EA6A12] bg-orange-50 dark:bg-[#EA6A12]/10 text-[#EA6A12]'
                           : 'border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 text-slate-900 dark:text-slate-50'
                       }`}
                     />
@@ -376,10 +380,10 @@ const Register: React.FC = () => {
                 </div>
 
                 <button type="submit" disabled={otpLoading || countdown <= 0}
-                  className={`w-full py-3 rounded-xl border-none font-bold text-[15px] text-white flex items-center justify-center gap-2 transition-all bg-gradient-to-br from-[#F37021] to-[#e05a10] shadow-[0_0_24px_rgba(243,112,33,0.3)] ${
+                  className={`w-full h-14 rounded-[14px] border-none font-semibold text-[15px] text-white flex items-center justify-center gap-2 transition-all duration-200 ease-out bg-[linear-gradient(135deg,#EA6A12,#D97706)] shadow-[0_10px_28px_rgba(234,106,18,0.18)] ${
                     (otpLoading || countdown <= 0) 
                       ? 'opacity-60 cursor-not-allowed' 
-                      : 'cursor-pointer hover:-translate-y-0.5 hover:shadow-[0_4px_32px_rgba(243,112,33,0.5)]'
+                      : 'cursor-pointer hover:-translate-y-0.5 hover:shadow-[0_14px_36px_rgba(234,106,18,0.22)]'
                   }`}
                 >
                   {otpLoading
@@ -396,7 +400,7 @@ const Register: React.FC = () => {
                   className={`bg-transparent border-none inline-flex items-center gap-1.5 text-[13px] font-bold ${
                     (resendCooldown > 0 || resendLoading) 
                       ? 'cursor-not-allowed text-slate-500 dark:text-slate-400' 
-                      : 'cursor-pointer text-[#F37021]'
+                      : 'cursor-pointer text-[#EA6A12]'
                   }`}>
                   <RefreshCw size={14} className={resendLoading ? 'animate-spin' : ''} />
                   {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : resendLoading ? 'Sending...' : 'Resend OTP'}
