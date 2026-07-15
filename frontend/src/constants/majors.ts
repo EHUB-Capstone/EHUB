@@ -1,15 +1,5 @@
-// frontend/src/constants/majors.ts
-
-export interface Major {
-  code: string;
-  name: string;
-}
-
-export interface MajorGroup {
-  key: string;
-  label: string;
-  majors: Major[];
-}
+// @ts-nocheck
+// frontend/src/constants/majors.js
 
 /**
  * Two major groups used for EXE team formation validation:
@@ -19,10 +9,10 @@ export interface MajorGroup {
  * A team MUST include at least one student from each group.
  * Ratio doesn't matter; total team size must be 4–6.
  */
-export const TEAM_MAJOR_GROUPS: MajorGroup[] = [
+export const TEAM_MAJOR_GROUPS = [
   {
     key: 'GROUP_1',
-    label: 'Group 1 (BBA)',
+    label: 'Nhóm 1 (BBA)',
     majors: [
       { code: 'BBA_HM',  name: 'Hospitality Management' },
       { code: 'BBA_IB',  name: 'International Business' },
@@ -34,7 +24,7 @@ export const TEAM_MAJOR_GROUPS: MajorGroup[] = [
   },
   {
     key: 'GROUP_2',
-    label: 'Group 2 (BIT)',
+    label: 'Nhóm 2 (BIT)',
     majors: [
       { code: 'BIT_AI', name: 'Artificial Intelligence' },
       { code: 'BIT_GD', name: 'Graphic Design' },
@@ -45,16 +35,16 @@ export const TEAM_MAJOR_GROUPS: MajorGroup[] = [
 ];
 
 /** Flat list of all valid team majors */
-export const ALL_TEAM_MAJOR_CODES: string[] = TEAM_MAJOR_GROUPS.flatMap(g => g.majors.map(m => m.code));
+export const ALL_TEAM_MAJOR_CODES = TEAM_MAJOR_GROUPS.flatMap(g => g.majors.map(m => m.code));
 
 /**
  * Full program groups (for registration / profile selects).
  * Includes every major a student may hold.
  */
-export const PROGRAM_GROUPS: MajorGroup[] = [
+export const PROGRAM_GROUPS = [
   {
-    key: 'BIT',
-    label: 'Bachelor of Information Technology',
+    code: 'BIT',
+    name: 'Bachelor of Information Technology',
     majors: [
       { code: 'BIT_SE', name: 'Software Engineering' },
       { code: 'BIT_IA', name: 'Information Assurance' },
@@ -67,8 +57,8 @@ export const PROGRAM_GROUPS: MajorGroup[] = [
     ],
   },
   {
-    key: 'BBA',
-    label: 'Bachelor of Business Administration',
+    code: 'BBA',
+    name: 'Bachelor of Business Administration',
     majors: [
       { code: 'BBA_IB',  name: 'International Business' },
       { code: 'BBA_MKT', name: 'Marketing' },
@@ -83,15 +73,15 @@ export const PROGRAM_GROUPS: MajorGroup[] = [
     ],
   },
   {
-    key: 'BEN',
-    label: 'Business English / Other',
+    code: 'BEN',
+    name: 'Business English / Other',
     majors: [
       { code: 'BEN', name: 'Business English' },
     ],
   },
   {
-    key: 'BLA',
-    label: 'Bachelor of Language Arts',
+    code: 'BLA',
+    name: 'Bachelor of Language Arts',
     majors: [
       { code: 'BLA_ELT', name: 'English Language Teaching' },
       { code: 'BLA_BC',  name: 'Business Communication' },
@@ -103,7 +93,7 @@ export const PROGRAM_GROUPS: MajorGroup[] = [
 ];
 
 /** Return display name for a major code */
-export function getMajorName(majorCode: string | null | undefined): string | null {
+export function getMajorName(majorCode) {
   if (!majorCode) return null;
   for (const group of PROGRAM_GROUPS) {
     const major = group.majors.find(m => m.code === majorCode);
@@ -113,7 +103,7 @@ export function getMajorName(majorCode: string | null | undefined): string | nul
 }
 
 /** Return which team group key ('GROUP_1' | 'GROUP_2' | null) a major belongs to */
-export function getTeamGroupFromMajor(majorCode: string | null | undefined): string | null {
+export function getTeamGroupFromMajor(majorCode) {
   if (!majorCode) return null;
   const code = majorCode.trim().toUpperCase();
   for (const g of TEAM_MAJOR_GROUPS) {

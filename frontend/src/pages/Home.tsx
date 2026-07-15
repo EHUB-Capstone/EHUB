@@ -70,8 +70,8 @@ const Home: React.FC = () => {
           <div className="flex items-center gap-2.5">
             <img src={logo} alt="EHub" className="w-10 h-10 object-contain" />
             <span className="text-xl font-extrabold tracking-tight">
-              <span className="text-[#F97316]">E</span> 
-              <span className="text-[#0F172A] dark:text-white">HUB</span>
+              <span className="text-[#F08A5D]">E</span>
+              <span className="text-[#1E5E9F] dark:text-[#79A8D9]">HUB</span>
             </span>
           </div>
 

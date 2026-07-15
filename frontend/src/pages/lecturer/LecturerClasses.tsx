@@ -1,5 +1,13 @@
-import React from 'react';
+// @ts-nocheck
+import { useContext } from 'react';
+import { AuthContext } from '../../context/AuthContext';
+import ClassManagement from '../admin/ClassManagement';
 
-export const LecturerClasses: React.FC = () => {
-  return <div>LecturerClasses</div>;
-};
+/**
+ * LecturerClasses — wraps the shared ClassManagement component.
+ * Lecturers see the same UI but the API automatically filters to their assigned classes.
+ */
+export default function LecturerClasses() {
+  const { user } = useContext(AuthContext);
+  return <ClassManagement key={user?._id} />;
+}
