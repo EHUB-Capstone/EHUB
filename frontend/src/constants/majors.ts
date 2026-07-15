@@ -22,7 +22,7 @@ export interface MajorGroup {
 export const TEAM_MAJOR_GROUPS: MajorGroup[] = [
   {
     key: 'GROUP_1',
-    label: 'Nhóm 1 (BBA)',
+    label: 'Group 1 (BBA)',
     majors: [
       { code: 'BBA_HM',  name: 'Hospitality Management' },
       { code: 'BBA_IB',  name: 'International Business' },
@@ -34,7 +34,7 @@ export const TEAM_MAJOR_GROUPS: MajorGroup[] = [
   },
   {
     key: 'GROUP_2',
-    label: 'Nhóm 2 (BIT)',
+    label: 'Group 2 (BIT)',
     majors: [
       { code: 'BIT_AI', name: 'Artificial Intelligence' },
       { code: 'BIT_GD', name: 'Graphic Design' },
