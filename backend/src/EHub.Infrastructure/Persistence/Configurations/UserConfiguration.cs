@@ -20,10 +20,18 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
 
         builder.Property(u => u.Email)
             .HasColumnName("email")
-            .HasMaxLength(150)
+            .HasMaxLength(320)
+            .IsRequired();
+
+        builder.Property(u => u.NormalizedEmail)
+            .HasColumnName("normalized_email")
+            .HasMaxLength(320)
             .IsRequired();
 
         builder.HasIndex(u => u.Email)
+            .IsUnique();
+
+        builder.HasIndex(u => u.NormalizedEmail)
             .IsUnique();
 
         builder.Property(u => u.PasswordHash)

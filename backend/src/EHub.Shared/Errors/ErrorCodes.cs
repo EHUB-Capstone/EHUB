@@ -18,6 +18,23 @@ public static class ErrorCodes
     public const string AuthRefreshTokenInvalid = "AUTH_REFRESH_TOKEN_INVALID";
     public const string AuthRefreshTokenExpired = "AUTH_REFRESH_TOKEN_EXPIRED";
 
+    public const string AuthInvalidRole = "AUTH_INVALID_ROLE";
+    public const string AuthAccountPendingApproval = "AUTH_ACCOUNT_PENDING_APPROVAL";
+    public const string AuthAccountRejected = "AUTH_ACCOUNT_REJECTED";
+    public const string AuthUserBlocked = "AUTH_USER_BLOCKED";
+    public const string AuthAccountNotRegistered = "AUTH_ACCOUNT_NOT_REGISTERED";
+    public const string AuthInvalidGoogleToken = "AUTH_INVALID_GOOGLE_TOKEN";
+    public const string AuthGoogleEmailNotVerified = "AUTH_GOOGLE_EMAIL_NOT_VERIFIED";
+    public const string AuthRefreshTokenRevoked = "AUTH_REFRESH_TOKEN_REVOKED";
+    public const string AuthPasswordConfirmationMismatch = "AUTH_PASSWORD_CONFIRMATION_MISMATCH";
+    public const string AuthStudentMajorRequired = "AUTH_STUDENT_MAJOR_REQUIRED";
+    public const string AuthInvalidMajor = "AUTH_INVALID_MAJOR";
+
     // System error codes
-    public const string InternalServerError = "INTERNAL_SERVER_ERROR";
+    public const string InternalServerError = "COMMON_INTERNAL_SERVER_ERROR";
+
+    // Admin approval error codes
+    public const string UserNotFound = "USER_NOT_FOUND";
+    public const string ApprovalUserNotPending = "APPROVAL_USER_NOT_PENDING";
+    public const string ApprovalInvalidTargetRole = "APPROVAL_INVALID_TARGET_ROLE";
 }
