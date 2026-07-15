@@ -15,6 +15,8 @@ using EHub.Shared.Constants;
 using EHub.Shared.Errors;
 using EHub.Domain.Common;
 
+using Microsoft.Extensions.Logging;
+
 namespace EHub.ApplicationTests.Features.Admin.Users.RejectUser;
 
 public class RejectUserCommandHandlerTests
@@ -22,6 +24,7 @@ public class RejectUserCommandHandlerTests
     private readonly IUserRepository _userRepository = Substitute.For<IUserRepository>();
     private readonly IUnitOfWork _unitOfWork = Substitute.For<IUnitOfWork>();
     private readonly ICurrentUserService _currentUserService = Substitute.For<ICurrentUserService>();
+    private readonly ILogger<RejectUserCommandHandler> _logger = Substitute.For<ILogger<RejectUserCommandHandler>>();
     private readonly RejectUserCommandHandler _handler;
 
     public RejectUserCommandHandlerTests()
@@ -29,7 +32,8 @@ public class RejectUserCommandHandlerTests
         _handler = new RejectUserCommandHandler(
             _userRepository,
             _unitOfWork,
-            _currentUserService);
+            _currentUserService,
+            _logger);
     }
 
     private static void SetId(BaseEntity entity, Guid id)

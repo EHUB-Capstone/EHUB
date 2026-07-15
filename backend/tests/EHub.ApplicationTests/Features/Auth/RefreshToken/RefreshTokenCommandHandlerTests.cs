@@ -18,6 +18,8 @@ using EHub.Shared.Results;
 using EHub.Shared.Errors;
 using EHub.Domain.Common;
 
+using Microsoft.Extensions.Logging;
+
 namespace EHub.ApplicationTests.Features.Auth.RefreshToken;
 
 public class RefreshTokenCommandHandlerTests
@@ -28,6 +30,7 @@ public class RefreshTokenCommandHandlerTests
     private readonly IStudentRepository _studentRepository = Substitute.For<IStudentRepository>();
     private readonly IJwtTokenService _jwtTokenService = Substitute.For<IJwtTokenService>();
     private readonly IUnitOfWork _unitOfWork = Substitute.For<IUnitOfWork>();
+    private readonly ILogger<RefreshTokenCommandHandler> _logger = Substitute.For<ILogger<RefreshTokenCommandHandler>>();
 
     private readonly RefreshTokenCommandHandler _handler;
 
@@ -39,7 +42,8 @@ public class RefreshTokenCommandHandlerTests
             _userRepository,
             _studentRepository,
             _jwtTokenService,
-            _unitOfWork);
+            _unitOfWork,
+            _logger);
     }
 
     private static void SetId(BaseEntity entity, Guid id)

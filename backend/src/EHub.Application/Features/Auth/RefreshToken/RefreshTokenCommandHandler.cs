@@ -9,6 +9,7 @@ using EHub.Domain.Entities;
 using EHub.Domain.Enums;
 using EHub.Shared.Constants;
 using EHub.Shared.Results;
+using Microsoft.Extensions.Logging;
 
 namespace EHub.Application.Features.Auth.RefreshToken;
 
@@ -21,13 +22,16 @@ public sealed class RefreshTokenCommandHandler : IRefreshTokenCommandHandler
     private readonly IJwtTokenService _jwtTokenService;
     private readonly IUnitOfWork _unitOfWork;
 
+    private readonly ILogger<RefreshTokenCommandHandler> _logger;
+
     public RefreshTokenCommandHandler(
         IRefreshTokenService refreshTokenService,
         IRefreshTokenRepository refreshTokenRepository,
         IUserRepository userRepository,
         IStudentRepository studentRepository,
         IJwtTokenService jwtTokenService,
-        IUnitOfWork unitOfWork)
+        IUnitOfWork unitOfWork,
+        ILogger<RefreshTokenCommandHandler> _logger)
     {
         _refreshTokenService = refreshTokenService;
         _refreshTokenRepository = refreshTokenRepository;
@@ -35,6 +39,7 @@ public sealed class RefreshTokenCommandHandler : IRefreshTokenCommandHandler
         _studentRepository = studentRepository;
         _jwtTokenService = jwtTokenService;
         _unitOfWork = unitOfWork;
+        this._logger = _logger;
     }
 
     public async Task<Result<AuthResponse>> HandleAsync(
@@ -51,12 +56,16 @@ public sealed class RefreshTokenCommandHandler : IRefreshTokenCommandHandler
 
         if (storedToken is null)
         {
+            _logger.LogWarning("Refresh token failed. Reason: invalid token.");
             return Result.Failure<AuthResponse>(AuthErrors.RefreshTokenInvalid);
         }
 
         // 3. Check if the token is already revoked
         if (storedToken.RevokedAt is not null)
         {
+            _logger.LogWarning(
+                "Refresh token failed. Reason: revoked token. UserId: {UserId}.",
+                storedToken.UserId);
             return Result.Failure<AuthResponse>(AuthErrors.RefreshTokenRevoked);
         }
 
@@ -64,6 +73,9 @@ public sealed class RefreshTokenCommandHandler : IRefreshTokenCommandHandler
         var now = DateTime.UtcNow;
         if (storedToken.ExpiresAt <= now)
         {
+            _logger.LogWarning(
+                "Refresh token failed. Reason: expired token. UserId: {UserId}.",
+                storedToken.UserId);
             return Result.Failure<AuthResponse>(AuthErrors.RefreshTokenExpired);
         }
 
@@ -74,27 +86,40 @@ public sealed class RefreshTokenCommandHandler : IRefreshTokenCommandHandler
 
         if (user is null)
         {
+            _logger.LogWarning("Refresh token failed. Reason: user not found.");
             return Result.Failure<AuthResponse>(AuthErrors.RefreshTokenInvalid);
         }
 
         // 6. Check user status
         if (user.Status == UserStatus.PendingApproval)
         {
+            _logger.LogWarning(
+                "Refresh token failed. Reason: user pending approval. UserId: {UserId}.",
+                user.Id);
             return Result.Failure<AuthResponse>(AuthErrors.AccountPendingApproval);
         }
 
         if (user.Status == UserStatus.Rejected)
         {
+            _logger.LogWarning(
+                "Refresh token failed. Reason: user rejected. UserId: {UserId}.",
+                user.Id);
             return Result.Failure<AuthResponse>(AuthErrors.AccountRejected);
         }
 
         if (user.Status == UserStatus.Blocked)
         {
+            _logger.LogWarning(
+                "Refresh token failed. Reason: user blocked. UserId: {UserId}.",
+                user.Id);
             return Result.Failure<AuthResponse>(AuthErrors.UserBlocked);
         }
 
         if (user.Status == UserStatus.Inactive || user.Status != UserStatus.Active)
         {
+            _logger.LogWarning(
+                "Refresh token failed. Reason: user inactive. UserId: {UserId}.",
+                user.Id);
             return Result.Failure<AuthResponse>(AuthErrors.UserInactive);
         }
 
@@ -155,6 +180,10 @@ public sealed class RefreshTokenCommandHandler : IRefreshTokenCommandHandler
                 MajorCode = majorCode
             }
         };
+
+        _logger.LogInformation(
+            "Refresh token succeeded for user {UserId}. Old token revoked and new token issued.",
+            user.Id);
 
         return Result.Success(response);
     }

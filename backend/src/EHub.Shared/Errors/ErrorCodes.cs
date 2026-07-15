@@ -31,7 +31,7 @@ public static class ErrorCodes
     public const string AuthInvalidMajor = "AUTH_INVALID_MAJOR";
 
     // System error codes
-    public const string InternalServerError = "INTERNAL_SERVER_ERROR";
+    public const string InternalServerError = "COMMON_INTERNAL_SERVER_ERROR";
 
     // Admin approval error codes
     public const string UserNotFound = "USER_NOT_FOUND";

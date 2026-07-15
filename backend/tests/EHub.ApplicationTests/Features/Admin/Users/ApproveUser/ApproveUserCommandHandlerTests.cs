@@ -15,6 +15,8 @@ using EHub.Shared.Constants;
 using EHub.Shared.Errors;
 using EHub.Domain.Common;
 
+using Microsoft.Extensions.Logging;
+
 namespace EHub.ApplicationTests.Features.Admin.Users.ApproveUser;
 
 public class ApproveUserCommandHandlerTests
@@ -22,6 +24,7 @@ public class ApproveUserCommandHandlerTests
     private readonly IUserRepository _userRepository = Substitute.For<IUserRepository>();
     private readonly IUnitOfWork _unitOfWork = Substitute.For<IUnitOfWork>();
     private readonly ICurrentUserService _currentUserService = Substitute.For<ICurrentUserService>();
+    private readonly ILogger<ApproveUserCommandHandler> _logger = Substitute.For<ILogger<ApproveUserCommandHandler>>();
     private readonly ApproveUserCommandHandler _handler;
 
     public ApproveUserCommandHandlerTests()
@@ -29,7 +32,8 @@ public class ApproveUserCommandHandlerTests
         _handler = new ApproveUserCommandHandler(
             _userRepository,
             _unitOfWork,
-            _currentUserService);
+            _currentUserService,
+            _logger);
     }
 
     private static void SetId(BaseEntity entity, Guid id)

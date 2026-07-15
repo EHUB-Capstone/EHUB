@@ -17,6 +17,8 @@ using EHub.Application.Features.Auth;
 using EHub.Domain.Common;
 using EHub.Shared.Errors;
 
+using Microsoft.Extensions.Logging;
+
 namespace EHub.ApplicationTests.Features.Auth.Login;
 
 public class LoginCommandHandlerTests
@@ -28,6 +30,7 @@ public class LoginCommandHandlerTests
     private readonly IPasswordHasher _passwordHasher = Substitute.For<IPasswordHasher>();
     private readonly IJwtTokenService _jwtTokenService = Substitute.For<IJwtTokenService>();
     private readonly IRefreshTokenService _refreshTokenService = Substitute.For<IRefreshTokenService>();
+    private readonly ILogger<LoginCommandHandler> _logger = Substitute.For<ILogger<LoginCommandHandler>>();
 
     private readonly LoginCommandHandler _handler;
 
@@ -40,7 +43,8 @@ public class LoginCommandHandlerTests
             _unitOfWork,
             _passwordHasher,
             _jwtTokenService,
-            _refreshTokenService);
+            _refreshTokenService,
+            _logger);
     }
 
     private static void SetId(BaseEntity entity, Guid id)

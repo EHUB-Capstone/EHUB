@@ -7,6 +7,7 @@ using EHub.Application.Common.Interfaces.Persistence;
 using EHub.Domain.Enums;
 using EHub.Shared.Constants;
 using EHub.Shared.Results;
+using Microsoft.Extensions.Logging;
 
 namespace EHub.Application.Features.Admin.Users.RejectUser;
 
@@ -16,14 +17,18 @@ public sealed class RejectUserCommandHandler : IRejectUserCommandHandler
     private readonly IUnitOfWork _unitOfWork;
     private readonly ICurrentUserService _currentUserService;
 
+    private readonly ILogger<RejectUserCommandHandler> _logger;
+
     public RejectUserCommandHandler(
         IUserRepository userRepository,
         IUnitOfWork unitOfWork,
-        ICurrentUserService currentUserService)
+        ICurrentUserService currentUserService,
+        ILogger<RejectUserCommandHandler> _logger)
     {
         _userRepository = userRepository;
         _unitOfWork = unitOfWork;
         _currentUserService = currentUserService;
+        this._logger = _logger;
     }
 
     public async Task<Result> HandleAsync(
@@ -41,6 +46,9 @@ public sealed class RejectUserCommandHandler : IRejectUserCommandHandler
 
         if (user.Status != UserStatus.PendingApproval)
         {
+            _logger.LogWarning(
+                "Admin rejection failed. Target user {TargetUserId} is not pending approval.",
+                user.Id);
             return Result.Failure(AdminUserErrors.UserNotPendingApproval);
         }
 
@@ -67,6 +75,11 @@ public sealed class RejectUserCommandHandler : IRejectUserCommandHandler
         _userRepository.Update(user);
 
         await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        _logger.LogInformation(
+            "Admin {AdminId} rejected user {TargetUserId}.",
+            _currentUserService.UserId,
+            user.Id);
 
         return Result.Success();
     }

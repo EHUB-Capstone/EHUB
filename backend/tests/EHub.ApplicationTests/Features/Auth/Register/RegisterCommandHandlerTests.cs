@@ -14,6 +14,7 @@ using EHub.Shared.Constants;
 using EHub.Shared.Results;
 using EHub.Application.Common.Models.Identity;
 using EHub.Application.Features.Auth;
+using Microsoft.Extensions.Logging;
 
 namespace EHub.ApplicationTests.Features.Auth.Register;
 
@@ -29,6 +30,7 @@ public class RegisterCommandHandlerTests
     private readonly IPasswordHasher _passwordHasher = Substitute.For<IPasswordHasher>();
     private readonly IJwtTokenService _jwtTokenService = Substitute.For<IJwtTokenService>();
     private readonly IRefreshTokenService _refreshTokenService = Substitute.For<IRefreshTokenService>();
+    private readonly ILogger<RegisterCommandHandler> _logger = Substitute.For<ILogger<RegisterCommandHandler>>();
 
     private readonly RegisterCommandHandler _handler;
 
@@ -44,7 +46,8 @@ public class RegisterCommandHandlerTests
             _unitOfWork,
             _passwordHasher,
             _jwtTokenService,
-            _refreshTokenService);
+            _refreshTokenService,
+            _logger);
 
         // Setup common UnitOfWork mocks to execute actions directly
         _unitOfWork.ExecuteInTransactionAsync(Arg.Any<Func<CancellationToken, Task>>(), Arg.Any<CancellationToken>())

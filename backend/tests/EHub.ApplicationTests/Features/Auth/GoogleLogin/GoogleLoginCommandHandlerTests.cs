@@ -17,6 +17,8 @@ using EHub.Application.Features.Auth;
 using EHub.Domain.Common;
 using EHub.Shared.Errors;
 
+using Microsoft.Extensions.Logging;
+
 namespace EHub.ApplicationTests.Features.Auth.GoogleLogin;
 
 public class GoogleLoginCommandHandlerTests
@@ -28,6 +30,7 @@ public class GoogleLoginCommandHandlerTests
     private readonly IUnitOfWork _unitOfWork = Substitute.For<IUnitOfWork>();
     private readonly IJwtTokenService _jwtTokenService = Substitute.For<IJwtTokenService>();
     private readonly IRefreshTokenService _refreshTokenService = Substitute.For<IRefreshTokenService>();
+    private readonly ILogger<GoogleLoginCommandHandler> _logger = Substitute.For<ILogger<GoogleLoginCommandHandler>>();
 
     private readonly GoogleLoginCommandHandler _handler;
 
@@ -40,7 +43,8 @@ public class GoogleLoginCommandHandlerTests
             _refreshTokenRepository,
             _unitOfWork,
             _jwtTokenService,
-            _refreshTokenService);
+            _refreshTokenService,
+            _logger);
     }
 
     private static void SetId(BaseEntity entity, Guid id)

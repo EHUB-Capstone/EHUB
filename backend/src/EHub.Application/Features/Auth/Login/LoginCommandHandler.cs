@@ -10,6 +10,8 @@ using EHub.Domain.Entities;
 using EHub.Domain.Enums;
 using EHub.Shared.Constants;
 using EHub.Shared.Results;
+using EHub.Shared.Security;
+using Microsoft.Extensions.Logging;
 
 namespace EHub.Application.Features.Auth.Login;
 
@@ -23,6 +25,8 @@ public sealed class LoginCommandHandler : ILoginCommandHandler
     private readonly IJwtTokenService _jwtTokenService;
     private readonly IRefreshTokenService _refreshTokenService;
 
+    private readonly ILogger<LoginCommandHandler> _logger;
+
     public LoginCommandHandler(
         IUserRepository userRepository,
         IStudentRepository studentRepository,
@@ -30,7 +34,8 @@ public sealed class LoginCommandHandler : ILoginCommandHandler
         IUnitOfWork unitOfWork,
         IPasswordHasher passwordHasher,
         IJwtTokenService jwtTokenService,
-        IRefreshTokenService refreshTokenService)
+        IRefreshTokenService refreshTokenService,
+        ILogger<LoginCommandHandler> _logger)
     {
         _userRepository = userRepository;
         _studentRepository = studentRepository;
@@ -39,6 +44,7 @@ public sealed class LoginCommandHandler : ILoginCommandHandler
         _passwordHasher = passwordHasher;
         _jwtTokenService = jwtTokenService;
         _refreshTokenService = refreshTokenService;
+        this._logger = _logger;
     }
 
     public async Task<Result<AuthResponse>> HandleAsync(
@@ -55,6 +61,9 @@ public sealed class LoginCommandHandler : ILoginCommandHandler
         // 2. Defensive check: Email not found
         if (user is null)
         {
+            _logger.LogWarning(
+                "Login failed. Reason: invalid credentials. Email: {Email}.",
+                SensitiveDataMasker.MaskEmail(request.Email));
             return Result.Failure<AuthResponse>(AuthErrors.InvalidCredentials);
         }
 
@@ -65,32 +74,50 @@ public sealed class LoginCommandHandler : ILoginCommandHandler
 
         if (!isPasswordValid)
         {
+            _logger.LogWarning(
+                "Login failed. Reason: invalid credentials. Email: {Email}.",
+                SensitiveDataMasker.MaskEmail(request.Email));
             return Result.Failure<AuthResponse>(AuthErrors.InvalidCredentials);
         }
 
         // 4. Validate status (only Active allowed to log in)
         if (user.Status == UserStatus.PendingApproval)
         {
+            _logger.LogWarning(
+                "Login blocked for pending approval account. UserId: {UserId}.",
+                user.Id);
             return Result.Failure<AuthResponse>(AuthErrors.AccountPendingApproval);
         }
 
         if (user.Status == UserStatus.Rejected)
         {
+            _logger.LogWarning(
+                "Login blocked for rejected account. UserId: {UserId}.",
+                user.Id);
             return Result.Failure<AuthResponse>(AuthErrors.AccountRejected);
         }
 
         if (user.Status == UserStatus.Blocked)
         {
+            _logger.LogWarning(
+                "Login blocked for blocked account. UserId: {UserId}.",
+                user.Id);
             return Result.Failure<AuthResponse>(AuthErrors.UserBlocked);
         }
 
         if (user.Status == UserStatus.Inactive)
         {
+            _logger.LogWarning(
+                "Login blocked for inactive account. UserId: {UserId}.",
+                user.Id);
             return Result.Failure<AuthResponse>(AuthErrors.UserInactive);
         }
 
         if (user.Status != UserStatus.Active)
         {
+            _logger.LogWarning(
+                "Login blocked for inactive account. UserId: {UserId}.",
+                user.Id);
             return Result.Failure<AuthResponse>(AuthErrors.UserInactive);
         }
 
@@ -143,6 +170,11 @@ public sealed class LoginCommandHandler : ILoginCommandHandler
                 MajorCode = majorCode
             }
         };
+
+        _logger.LogInformation(
+            "Login succeeded for user {UserId}. Roles: {Roles}.",
+            user.Id,
+            roles);
 
         return Result.Success(response);
     }

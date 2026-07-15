@@ -9,6 +9,8 @@ using EHub.Domain.Entities;
 using EHub.Domain.Enums;
 using EHub.Shared.Constants;
 using EHub.Shared.Results;
+using EHub.Shared.Security;
+using Microsoft.Extensions.Logging;
 
 namespace EHub.Application.Features.Auth.Register;
 
@@ -25,6 +27,8 @@ public sealed class RegisterCommandHandler : IRegisterCommandHandler
     private readonly IJwtTokenService _jwtTokenService;
     private readonly IRefreshTokenService _refreshTokenService;
 
+    private readonly ILogger<RegisterCommandHandler> _logger;
+
     public RegisterCommandHandler(
         IUserRepository userRepository,
         IRoleRepository roleRepository,
@@ -35,7 +39,8 @@ public sealed class RegisterCommandHandler : IRegisterCommandHandler
         IUnitOfWork unitOfWork,
         IPasswordHasher passwordHasher,
         IJwtTokenService jwtTokenService,
-        IRefreshTokenService refreshTokenService)
+        IRefreshTokenService refreshTokenService,
+        ILogger<RegisterCommandHandler> _logger)
     {
         _userRepository = userRepository;
         _roleRepository = roleRepository;
@@ -47,6 +52,7 @@ public sealed class RegisterCommandHandler : IRegisterCommandHandler
         _passwordHasher = passwordHasher;
         _jwtTokenService = jwtTokenService;
         _refreshTokenService = refreshTokenService;
+        this._logger = _logger;
     }
 
     public async Task<Result<RegisterResponse>> HandleAsync(
@@ -71,6 +77,9 @@ public sealed class RegisterCommandHandler : IRegisterCommandHandler
 
         if (emailExists)
         {
+            _logger.LogWarning(
+                "Register duplicate email attempt. Email: {Email}.",
+                SensitiveDataMasker.MaskEmail(email));
             return Result.Failure<RegisterResponse>(AuthErrors.EmailAlreadyExists);
         }
 
@@ -194,6 +203,12 @@ public sealed class RegisterCommandHandler : IRegisterCommandHandler
 
             await _unitOfWork.SaveChangesAsync(ct);
         }, cancellationToken);
+
+        _logger.LogInformation(
+            "Register succeeded for user {UserId}. Role: {Role}. Status: {Status}.",
+            response.User?.Id,
+            roleName,
+            response.Status);
 
         return Result.Success(response);
     }

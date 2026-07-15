@@ -10,6 +10,8 @@ using EHub.Contracts.Auth;
 using EHub.Domain.Entities;
 using EHub.Shared.Results;
 
+using Microsoft.Extensions.Logging;
+
 namespace EHub.ApplicationTests.Features.Auth.Logout;
 
 public class LogoutCommandHandlerTests
@@ -17,6 +19,7 @@ public class LogoutCommandHandlerTests
     private readonly IRefreshTokenService _refreshTokenService = Substitute.For<IRefreshTokenService>();
     private readonly IRefreshTokenRepository _refreshTokenRepository = Substitute.For<IRefreshTokenRepository>();
     private readonly IUnitOfWork _unitOfWork = Substitute.For<IUnitOfWork>();
+    private readonly ILogger<LogoutCommandHandler> _logger = Substitute.For<ILogger<LogoutCommandHandler>>();
 
     private readonly LogoutCommandHandler _handler;
 
@@ -25,7 +28,8 @@ public class LogoutCommandHandlerTests
         _handler = new LogoutCommandHandler(
             _refreshTokenService,
             _refreshTokenRepository,
-            _unitOfWork);
+            _unitOfWork,
+            _logger);
     }
 
     [Fact]
