@@ -100,21 +100,21 @@ const Login: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex font-sans transition-colors duration-300 bg-slate-50 dark:bg-[#0a0f1e]">
+    <div className="min-h-screen flex font-sans transition-colors duration-300 bg-white dark:bg-[#0F172A]">
 
       {/* ── LEFT PANEL (branding) ── */}
-      <div className="hidden lg:flex w-[44%] flex-col justify-between p-12 relative overflow-hidden bg-gradient-to-br from-[#034EA2] to-[#023a78] dark:from-[#0d1a3a] dark:to-[#0a0f1e]">
+      <div className="hidden lg:flex w-[44%] flex-col justify-between p-12 relative overflow-hidden bg-[#0F172A]">
         {/* BG orbs */}
-        <div className="absolute -top-[10%] -right-[10%] w-[400px] h-[400px] rounded-full bg-[#F37021]/15 blur-[80px]" />
-        <div className="absolute bottom-[10%] -left-[5%] w-[300px] h-[300px] rounded-full bg-[#034EA2]/20 dark:bg-[#034EA2]/30 blur-[60px]" />
+        <div className="absolute -top-[10%] -right-[10%] w-[420px] h-[420px] rounded-full bg-[#EA6A12]/12 blur-[110px]" />
+        <div className="absolute bottom-[10%] -left-[5%] w-[320px] h-[320px] rounded-full bg-white/5 blur-[90px]" />
 
         <div className="relative z-10">
           {/* Logo */}
           <Link to="/" className="inline-flex items-center gap-2.5 no-underline">
             <img src={logo} alt="EHub" className="w-[42px] h-[42px] object-contain" />
             <span className="text-[22px] font-extrabold tracking-tight">
-              <span className="text-[#93c5fd] dark:text-[#5b9bd5]">E</span>
-              <span className="text-[#F37021]">HUB</span>
+              <span className="text-white">E</span>
+              <span className="text-[#EA6A12]">HUB</span>
             </span>
           </Link>
         </div>
@@ -123,7 +123,7 @@ const Login: React.FC = () => {
           <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7 }}>
             <h2 className="text-4xl font-extrabold text-white leading-[1.2] mb-4 tracking-tight">
               Build tomorrow's startups,{' '}
-              <span className="text-[#F37021]">today.</span>
+              <span className="text-[#EA6A12]">today.</span>
             </h2>
             <p className="text-white/60 text-[15px] leading-[1.7] mb-9">
               EHub is the all-in-one platform for managing, evaluating, and growing student startup projects from idea to reality.
@@ -132,8 +132,8 @@ const Login: React.FC = () => {
               {sideFeatures.map((f, i) => (
                 <motion.div key={i} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 + i * 0.1, duration: 0.5 }}
                   className="flex items-center gap-3.5">
-                  <div className="w-[38px] h-[38px] rounded-[10px] bg-[#F37021]/20 border border-[#F37021]/30 flex items-center justify-center shrink-0">
-                    <f.icon size={18} color="#F37021" />
+                  <div className="w-[38px] h-[38px] rounded-[10px] bg-[#EA6A12]/14 border border-[#EA6A12]/25 flex items-center justify-center shrink-0">
+                    <f.icon size={18} color="#EA6A12" />
                   </div>
                   <span className="text-white/70 text-[14px] font-medium">{f.text}</span>
                 </motion.div>
@@ -143,7 +143,7 @@ const Login: React.FC = () => {
         </div>
 
         <p className="text-white/30 text-[12px] relative z-10">
-          © 2024 EHub Platform
+        
         </p>
       </div>
 
@@ -152,7 +152,7 @@ const Login: React.FC = () => {
 
         {/* Theme toggle */}
         <button onClick={toggleTheme}
-          className="absolute top-6 right-6 w-10 h-10 rounded-[10px] border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 cursor-pointer flex items-center justify-center text-slate-500 dark:text-slate-400 transition-all hover:bg-slate-100 dark:hover:bg-white/10"
+          className="absolute top-6 right-6 w-10 h-10 rounded-[14px] border border-[#E5E7EB] dark:border-white/10 bg-white dark:bg-white/5 cursor-pointer flex items-center justify-center text-[#64748B] dark:text-slate-400 transition-all hover:bg-[#F8FAFC] dark:hover:bg-white/10"
           aria-label="Toggle theme"
         >
           {isDark ? <Sun size={18} /> : <Moon size={18} />}
@@ -166,14 +166,14 @@ const Login: React.FC = () => {
             <Link to="/" className="inline-flex items-center gap-2.5 no-underline">
               <img src={logo} alt="EHub" className="w-[38px] h-[38px] object-contain" />
               <span className="text-[20px] font-extrabold tracking-tight">
-                <span className="text-[#034EA2]">E</span>
-                <span className="text-[#F37021]">HUB</span>
+                <span className="text-[#0F172A] dark:text-white">E</span>
+                <span className="text-[#EA6A12]">HUB</span>
               </span>
             </Link>
           </div>
 
-          <h1 className="text-[28px] font-extrabold text-slate-900 dark:text-slate-50 mb-1.5 tracking-tight">Welcome back</h1>
-          <p className="text-slate-500 dark:text-slate-400 text-[14px] mb-7">Sign in to your EHub account</p>
+          <h1 className="text-[28px] font-extrabold text-[#0F172A] dark:text-slate-50 mb-1.5 tracking-tight">Welcome back</h1>
+          <p className="text-[#64748B] dark:text-slate-400 text-[14px] mb-7">Sign in to your EHub account</p>
 
           {/* Alert banners */}
           {unverifiedEmail && !pendingApproval && !rejectedStatus && (
@@ -210,10 +210,10 @@ const Login: React.FC = () => {
 
           {/* Google btn */}
           <button onClick={handleGoogleLogin} disabled={googleLoading}
-            className="w-full flex items-center justify-center gap-2.5 py-3 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 text-slate-900 dark:text-slate-100 text-[14px] font-semibold cursor-pointer mb-5 transition-all hover:bg-slate-50 dark:hover:bg-white/10"
+            className="w-full flex items-center justify-center gap-2.5 py-3 rounded-[14px] border border-[#E5E7EB] dark:border-white/10 bg-white dark:bg-white/5 text-[#0F172A] dark:text-slate-100 text-[14px] font-semibold cursor-pointer mb-5 transition-all hover:bg-[#F8FAFC] dark:hover:bg-white/10"
           >
             {googleLoading
-              ? <div className="w-[18px] h-[18px] rounded-full border-2 border-[#F37021] border-t-transparent animate-spin" />
+              ? <div className="w-[18px] h-[18px] rounded-full border-2 border-[#EA6A12] border-t-transparent animate-spin" />
               : <GoogleIcon />
             }
             {googleLoading ? 'Connecting...' : 'Continue with Google'}
@@ -221,9 +221,9 @@ const Login: React.FC = () => {
 
           {/* Divider */}
           <div className="flex items-center gap-3 mb-5">
-            <div className="flex-1 h-px bg-slate-200 dark:bg-white/10" />
-            <span className="text-[12px] text-slate-500 dark:text-slate-400 font-medium">or sign in with email</span>
-            <div className="flex-1 h-px bg-slate-200 dark:bg-white/10" />
+            <div className="flex-1 h-px bg-[#E5E7EB] dark:bg-white/10" />
+            <span className="text-[12px] text-[#64748B] dark:text-slate-400 font-medium">or sign in with email</span>
+            <div className="flex-1 h-px bg-[#E5E7EB] dark:bg-white/10" />
           </div>
 
           {/* Form */}
@@ -235,7 +235,7 @@ const Login: React.FC = () => {
                 <Mail size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                 <input id="login-email" type="email" value={email} onChange={e => setEmail(e.target.value)}
                   placeholder="you@example.com" required
-                  className="w-full py-2.5 pr-3.5 pl-10 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 text-slate-900 dark:text-slate-100 text-[14px] outline-none transition-colors focus:border-[#F37021] dark:focus:border-[#F37021]"
+                  className="w-full py-2.5 pr-3.5 pl-10 rounded-[14px] border border-[#E5E7EB] dark:border-white/10 bg-[#F8FAFC] dark:bg-white/5 text-[#0F172A] dark:text-slate-100 text-[14px] outline-none transition-colors focus:border-[#EA6A12] dark:focus:border-[#EA6A12]"
                 />
               </div>
             </div>
@@ -244,13 +244,13 @@ const Login: React.FC = () => {
             <div>
               <div className="flex justify-between items-center mb-1.5">
                 <label className="text-[13px] font-semibold text-slate-900 dark:text-slate-50">Password</label>
-                <Link to="/forgot-password" className="text-[12px] text-[#F37021] no-underline font-semibold">Forgot?</Link>
+                <Link to="/forgot-password" className="text-[12px] text-[#EA6A12] no-underline font-semibold">Forgot?</Link>
               </div>
               <div className="relative">
                 <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                 <input id="login-password" type={showPass ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)}
                   placeholder="••••••••" required
-                  className="w-full py-2.5 pr-11 pl-10 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 text-slate-900 dark:text-slate-100 text-[14px] outline-none transition-colors focus:border-[#F37021] dark:focus:border-[#F37021]"
+                  className="w-full py-2.5 pr-11 pl-10 rounded-[14px] border border-[#E5E7EB] dark:border-white/10 bg-[#F8FAFC] dark:bg-white/5 text-[#0F172A] dark:text-slate-100 text-[14px] outline-none transition-colors focus:border-[#EA6A12] dark:focus:border-[#EA6A12]"
                 />
                 <button type="button" onClick={() => setShowPass(p => !p)}
                   className="absolute right-3.5 top-1/2 -translate-y-1/2 bg-transparent border-none cursor-pointer text-slate-400 p-0">
@@ -261,7 +261,7 @@ const Login: React.FC = () => {
 
             {/* Submit */}
             <button type="submit" disabled={loading}
-              className={`w-full py-3 rounded-xl border-none font-bold text-[15px] text-white flex items-center justify-center gap-2 mt-1 transition-all bg-gradient-to-br from-[#F37021] to-[#e05a10] shadow-[0_0_24px_rgba(243,112,33,0.35)] ${loading ? 'opacity-70 cursor-not-allowed' : 'cursor-pointer hover:-translate-y-0.5 hover:shadow-[0_4px_32px_rgba(243,112,33,0.5)]'}`}
+              className={`w-full h-14 rounded-[14px] border-none font-semibold text-[15px] text-white flex items-center justify-center gap-2 mt-1 transition-all duration-200 ease-out bg-[linear-gradient(135deg,#EA6A12,#D97706)] shadow-[0_10px_28px_rgba(234,106,18,0.18)] ${loading ? 'opacity-70 cursor-not-allowed' : 'cursor-pointer hover:-translate-y-0.5 hover:shadow-[0_14px_36px_rgba(234,106,18,0.22)]'}`}
             >
               {loading
                 ? <div className="w-[18px] h-[18px] rounded-full border-2 border-white/50 border-t-white animate-spin" />
@@ -272,7 +272,7 @@ const Login: React.FC = () => {
 
           <p className="text-center mt-6 text-[14px] text-slate-500 dark:text-slate-400">
             Don't have an account?{' '}
-            <Link to="/register" className="text-[#F37021] font-bold no-underline">Create one</Link>
+            <Link to="/register" className="text-[#EA6A12] font-bold no-underline">Create one</Link>
           </p>
         </motion.div>
       </div>
