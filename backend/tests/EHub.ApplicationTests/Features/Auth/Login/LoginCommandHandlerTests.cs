@@ -4,7 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Xunit;
 using NSubstitute;
-using EHub.Application.Features.Auth.GoogleLogin;
+using EHub.Application.Features.Auth.Login;
 using EHub.Application.Common.Interfaces.Identity;
 using EHub.Application.Common.Interfaces.Persistence;
 using EHub.Contracts.Auth;
@@ -17,28 +17,28 @@ using EHub.Application.Features.Auth;
 using EHub.Domain.Common;
 using EHub.Shared.Errors;
 
-namespace EHub.UnitTests.Features.Auth.GoogleLogin;
+namespace EHub.ApplicationTests.Features.Auth.Login;
 
-public class GoogleLoginCommandHandlerTests
+public class LoginCommandHandlerTests
 {
-    private readonly IGoogleAuthService _googleAuthService = Substitute.For<IGoogleAuthService>();
     private readonly IUserRepository _userRepository = Substitute.For<IUserRepository>();
     private readonly IStudentRepository _studentRepository = Substitute.For<IStudentRepository>();
     private readonly IRefreshTokenRepository _refreshTokenRepository = Substitute.For<IRefreshTokenRepository>();
     private readonly IUnitOfWork _unitOfWork = Substitute.For<IUnitOfWork>();
+    private readonly IPasswordHasher _passwordHasher = Substitute.For<IPasswordHasher>();
     private readonly IJwtTokenService _jwtTokenService = Substitute.For<IJwtTokenService>();
     private readonly IRefreshTokenService _refreshTokenService = Substitute.For<IRefreshTokenService>();
 
-    private readonly GoogleLoginCommandHandler _handler;
+    private readonly LoginCommandHandler _handler;
 
-    public GoogleLoginCommandHandlerTests()
+    public LoginCommandHandlerTests()
     {
-        _handler = new GoogleLoginCommandHandler(
-            _googleAuthService,
+        _handler = new LoginCommandHandler(
             _userRepository,
             _studentRepository,
             _refreshTokenRepository,
             _unitOfWork,
+            _passwordHasher,
             _jwtTokenService,
             _refreshTokenService);
     }
@@ -50,20 +50,13 @@ public class GoogleLoginCommandHandlerTests
     }
 
     [Fact]
-    public async Task Should_Login_Successfully_When_Google_Token_Valid_And_User_Active()
+    public async Task Should_Login_Successfully_When_Credentials_Are_Valid_And_User_Active()
     {
-        var request = new GoogleLoginRequest { IdToken = "valid-google-id-token" };
-
-        var googleUserInfo = new GoogleUserInfo
+        var request = new EmailPasswordLoginRequest
         {
             Email = "student@fpt.edu.vn",
-            FullName = "Nguyen Van A",
-            EmailVerified = true,
-            Subject = "google-sub-id"
+            Password = "Password123"
         };
-
-        _googleAuthService.VerifyIdTokenAsync("valid-google-id-token", Arg.Any<CancellationToken>())
-            .Returns(Result.Success(googleUserInfo));
 
         var userId = Guid.NewGuid();
         var user = new User
@@ -71,6 +64,7 @@ public class GoogleLoginCommandHandlerTests
             FullName = "Nguyen Van A",
             Email = "student@fpt.edu.vn",
             NormalizedEmail = "student@fpt.edu.vn",
+            PasswordHash = "hashed_password",
             Status = UserStatus.Active
         };
         SetId(user, userId);
@@ -80,6 +74,7 @@ public class GoogleLoginCommandHandlerTests
         user.UserRoles.Add(new UserRole { UserId = userId, Role = role });
 
         _userRepository.GetByEmailWithRolesAsync("student@fpt.edu.vn", Arg.Any<CancellationToken>()).Returns(user);
+        _passwordHasher.Verify("Password123", "hashed_password").Returns(true);
         
         _jwtTokenService.GenerateAccessToken(user, Arg.Any<string[]>()).Returns(new AccessTokenResult
         {
@@ -113,71 +108,53 @@ public class GoogleLoginCommandHandlerTests
     }
 
     [Fact]
-    public async Task Should_Fail_Login_When_Google_Token_Invalid()
+    public async Task Should_Fail_Login_When_User_Not_Found()
     {
-        var request = new GoogleLoginRequest { IdToken = "invalid-google-id-token" };
+        var request = new EmailPasswordLoginRequest
+        {
+            Email = "nonexistent@fpt.edu.vn",
+            Password = "Password123"
+        };
 
-        var invalidError = new Error(ErrorCodes.AuthInvalidGoogleToken, "Invalid Google token.");
-        _googleAuthService.VerifyIdTokenAsync("invalid-google-id-token", Arg.Any<CancellationToken>())
-            .Returns(Result.Failure<GoogleUserInfo>(invalidError));
+        _userRepository.GetByEmailWithRolesAsync("nonexistent@fpt.edu.vn", Arg.Any<CancellationToken>()).Returns((User?)null);
 
         var result = await _handler.HandleAsync(request, CancellationToken.None);
 
         Assert.False(result.IsSuccess);
-        Assert.Equal(ErrorCodes.AuthInvalidGoogleToken, result.Error.Code);
+        Assert.Equal(AuthErrors.InvalidCredentials.Code, result.Error.Code);
 
-        await _userRepository.DidNotReceiveWithAnyArgs().GetByEmailWithRolesAsync(default!, default!);
+        _passwordHasher.DidNotReceiveWithAnyArgs().Verify(default!, default!);
         await _unitOfWork.DidNotReceiveWithAnyArgs().SaveChangesAsync(Arg.Any<CancellationToken>());
     }
 
     [Fact]
-    public async Task Should_Fail_Login_When_Google_Email_Not_Verified()
+    public async Task Should_Fail_Login_When_Password_Is_Incorrect()
     {
-        var request = new GoogleLoginRequest { IdToken = "unverified-google-id-token" };
-
-        var googleUserInfo = new GoogleUserInfo
+        var request = new EmailPasswordLoginRequest
         {
             Email = "student@fpt.edu.vn",
-            FullName = "Nguyen Van A",
-            EmailVerified = false,
-            Subject = "google-sub-id"
+            Password = "WrongPassword"
         };
 
-        _googleAuthService.VerifyIdTokenAsync("unverified-google-id-token", Arg.Any<CancellationToken>())
-            .Returns(Result.Success(googleUserInfo));
-
-        var result = await _handler.HandleAsync(request, CancellationToken.None);
-
-        Assert.False(result.IsSuccess);
-        Assert.Equal(ErrorCodes.AuthGoogleEmailNotVerified, result.Error.Code);
-
-        await _userRepository.DidNotReceiveWithAnyArgs().GetByEmailWithRolesAsync(default!, default!);
-    }
-
-    [Fact]
-    public async Task Should_Fail_Login_When_User_Not_Registered()
-    {
-        var request = new GoogleLoginRequest { IdToken = "valid-google-id-token" };
-
-        var googleUserInfo = new GoogleUserInfo
+        var user = new User
         {
-            Email = "notregistered@fpt.edu.vn",
-            FullName = "Unregistered User",
-            EmailVerified = true,
-            Subject = "google-sub-id"
+            FullName = "Nguyen Van A",
+            Email = "student@fpt.edu.vn",
+            NormalizedEmail = "student@fpt.edu.vn",
+            PasswordHash = "hashed_password",
+            Status = UserStatus.Active
         };
 
-        _googleAuthService.VerifyIdTokenAsync("valid-google-id-token", Arg.Any<CancellationToken>())
-            .Returns(Result.Success(googleUserInfo));
-
-        _userRepository.GetByEmailWithRolesAsync("notregistered@fpt.edu.vn", Arg.Any<CancellationToken>()).Returns((User?)null);
+        _userRepository.GetByEmailWithRolesAsync("student@fpt.edu.vn", Arg.Any<CancellationToken>()).Returns(user);
+        _passwordHasher.Verify("WrongPassword", "hashed_password").Returns(false);
 
         var result = await _handler.HandleAsync(request, CancellationToken.None);
 
         Assert.False(result.IsSuccess);
-        Assert.Equal(ErrorCodes.AuthAccountNotRegistered, result.Error.Code);
+        Assert.Equal(AuthErrors.InvalidCredentials.Code, result.Error.Code);
 
         _jwtTokenService.DidNotReceiveWithAnyArgs().GenerateAccessToken(default!, default!);
+        await _unitOfWork.DidNotReceiveWithAnyArgs().SaveChangesAsync(Arg.Any<CancellationToken>());
     }
 
     [Theory]
@@ -187,28 +164,23 @@ public class GoogleLoginCommandHandlerTests
     [InlineData(UserStatus.Inactive, ErrorCodes.AuthUserInactive)]
     public async Task Should_Fail_Login_When_User_Is_Not_Active(UserStatus status, string expectedErrorCode)
     {
-        var request = new GoogleLoginRequest { IdToken = "valid-google-id-token" };
-
-        var googleUserInfo = new GoogleUserInfo
+        var request = new EmailPasswordLoginRequest
         {
             Email = "user@fpt.edu.vn",
-            FullName = "Nguyen Van A",
-            EmailVerified = true,
-            Subject = "google-sub-id"
+            Password = "Password123"
         };
-
-        _googleAuthService.VerifyIdTokenAsync("valid-google-id-token", Arg.Any<CancellationToken>())
-            .Returns(Result.Success(googleUserInfo));
 
         var user = new User
         {
             FullName = "Nguyen Van A",
             Email = "user@fpt.edu.vn",
             NormalizedEmail = "user@fpt.edu.vn",
+            PasswordHash = "hashed_password",
             Status = status
         };
 
         _userRepository.GetByEmailWithRolesAsync("user@fpt.edu.vn", Arg.Any<CancellationToken>()).Returns(user);
+        _passwordHasher.Verify("Password123", "hashed_password").Returns(true);
 
         var result = await _handler.HandleAsync(request, CancellationToken.None);
 
@@ -216,5 +188,6 @@ public class GoogleLoginCommandHandlerTests
         Assert.Equal(expectedErrorCode, result.Error.Code);
 
         _jwtTokenService.DidNotReceiveWithAnyArgs().GenerateAccessToken(default!, default!);
+        await _unitOfWork.DidNotReceiveWithAnyArgs().SaveChangesAsync(Arg.Any<CancellationToken>());
     }
 }

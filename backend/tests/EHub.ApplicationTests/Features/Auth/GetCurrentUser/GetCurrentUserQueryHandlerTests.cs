@@ -15,7 +15,7 @@ using EHub.Shared.Results;
 using EHub.Shared.Errors;
 using EHub.Domain.Common;
 
-namespace EHub.UnitTests.Features.Auth.GetCurrentUser;
+namespace EHub.ApplicationTests.Features.Auth.GetCurrentUser;
 
 public class GetCurrentUserQueryHandlerTests
 {

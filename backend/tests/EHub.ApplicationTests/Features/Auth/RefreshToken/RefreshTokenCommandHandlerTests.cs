@@ -18,7 +18,7 @@ using EHub.Shared.Results;
 using EHub.Shared.Errors;
 using EHub.Domain.Common;
 
-namespace EHub.UnitTests.Features.Auth.RefreshToken;
+namespace EHub.ApplicationTests.Features.Auth.RefreshToken;
 
 public class RefreshTokenCommandHandlerTests
 {

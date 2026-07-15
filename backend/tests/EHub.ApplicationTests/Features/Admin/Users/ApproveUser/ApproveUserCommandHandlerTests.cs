@@ -5,7 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Xunit;
 using NSubstitute;
-using EHub.Application.Features.Admin.Users.RejectUser;
+using EHub.Application.Features.Admin.Users.ApproveUser;
 using EHub.Application.Features.Admin.Users;
 using EHub.Application.Common.Interfaces.Identity;
 using EHub.Application.Common.Interfaces.Persistence;
@@ -15,18 +15,18 @@ using EHub.Shared.Constants;
 using EHub.Shared.Errors;
 using EHub.Domain.Common;
 
-namespace EHub.UnitTests.Features.Admin.Users.RejectUser;
+namespace EHub.ApplicationTests.Features.Admin.Users.ApproveUser;
 
-public class RejectUserCommandHandlerTests
+public class ApproveUserCommandHandlerTests
 {
     private readonly IUserRepository _userRepository = Substitute.For<IUserRepository>();
     private readonly IUnitOfWork _unitOfWork = Substitute.For<IUnitOfWork>();
     private readonly ICurrentUserService _currentUserService = Substitute.For<ICurrentUserService>();
-    private readonly RejectUserCommandHandler _handler;
+    private readonly ApproveUserCommandHandler _handler;
 
-    public RejectUserCommandHandlerTests()
+    public ApproveUserCommandHandlerTests()
     {
-        _handler = new RejectUserCommandHandler(
+        _handler = new ApproveUserCommandHandler(
             _userRepository,
             _unitOfWork,
             _currentUserService);
@@ -90,7 +90,7 @@ public class RejectUserCommandHandlerTests
     }
 
     [Fact]
-    public async Task Should_Reject_Successfully_When_Lecturer_Pending()
+    public async Task Should_Approve_Successfully_When_Lecturer_Pending()
     {
         // Arrange
         var userId = Guid.NewGuid();
@@ -110,7 +110,7 @@ public class RejectUserCommandHandlerTests
 
         // Assert
         Assert.True(result.IsSuccess);
-        Assert.Equal(UserStatus.Rejected, user.Status);
+        Assert.Equal(UserStatus.Active, user.Status);
         Assert.Equal(adminId, user.UpdatedBy);
 
         _userRepository.Received(1).Update(user);
@@ -118,7 +118,7 @@ public class RejectUserCommandHandlerTests
     }
 
     [Fact]
-    public async Task Should_Reject_Successfully_When_Mentor_Pending()
+    public async Task Should_Approve_Successfully_When_Mentor_Pending()
     {
         // Arrange
         var userId = Guid.NewGuid();
@@ -138,7 +138,7 @@ public class RejectUserCommandHandlerTests
 
         // Assert
         Assert.True(result.IsSuccess);
-        Assert.Equal(UserStatus.Rejected, user.Status);
+        Assert.Equal(UserStatus.Active, user.Status);
         Assert.Equal(adminId, user.UpdatedBy);
 
         _userRepository.Received(1).Update(user);

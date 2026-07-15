@@ -13,7 +13,7 @@ using EHub.Domain.Enums;
 using EHub.Domain.Common;
 using EHub.Shared.Constants;
 
-namespace EHub.UnitTests.Features.Admin.Users.GetPendingApprovalUsers;
+namespace EHub.ApplicationTests.Features.Admin.Users.GetPendingApprovalUsers;
 
 public class GetPendingApprovalUsersQueryHandlerTests
 {

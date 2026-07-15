@@ -15,7 +15,7 @@ using EHub.Shared.Results;
 using EHub.Application.Common.Models.Identity;
 using EHub.Application.Features.Auth;
 
-namespace EHub.UnitTests.Features.Auth.Register;
+namespace EHub.ApplicationTests.Features.Auth.Register;
 
 public class RegisterCommandHandlerTests
 {

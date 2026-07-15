@@ -111,3 +111,5 @@ app.MapControllers();
 app.MapApplicationHealthChecks();
 
 app.Run();
+
+public partial class Program;

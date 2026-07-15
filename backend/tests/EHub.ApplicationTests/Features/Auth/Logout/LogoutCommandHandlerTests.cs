@@ -10,7 +10,7 @@ using EHub.Contracts.Auth;
 using EHub.Domain.Entities;
 using EHub.Shared.Results;
 
-namespace EHub.UnitTests.Features.Auth.Logout;
+namespace EHub.ApplicationTests.Features.Auth.Logout;
 
 public class LogoutCommandHandlerTests
 {
