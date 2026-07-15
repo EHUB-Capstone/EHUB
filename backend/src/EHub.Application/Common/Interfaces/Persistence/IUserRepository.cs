@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using EHub.Domain.Entities;
@@ -24,4 +25,7 @@ public interface IUserRepository
         CancellationToken cancellationToken = default);
 
     void Update(User user);
+
+    Task<IReadOnlyCollection<User>> GetPendingApprovalUsersAsync(
+        CancellationToken cancellationToken = default);
 }

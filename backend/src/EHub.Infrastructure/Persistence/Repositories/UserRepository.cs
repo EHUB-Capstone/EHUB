@@ -1,9 +1,13 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using EHub.Application.Common.Interfaces.Persistence;
 using EHub.Domain.Entities;
+using EHub.Domain.Enums;
+using EHub.Shared.Constants;
 
 namespace EHub.Infrastructure.Persistence.Repositories;
 
@@ -55,5 +59,21 @@ public class UserRepository : IUserRepository
     public void Update(User user)
     {
         _context.Users.Update(user);
+    }
+
+    public async Task<IReadOnlyCollection<User>> GetPendingApprovalUsersAsync(
+        CancellationToken cancellationToken = default)
+    {
+        return await _context.Users
+            .AsNoTracking()
+            .Include(user => user.UserRoles)
+                .ThenInclude(userRole => userRole.Role)
+            .Where(user => user.Status == UserStatus.PendingApproval)
+            .Where(user => user.UserRoles.Any(userRole =>
+                userRole.Role.Name == SystemRoles.Lecturer ||
+                userRole.Role.Name == SystemRoles.Mentor))
+            .Where(user => !user.IsDeleted)
+            .OrderByDescending(user => user.CreatedAt)
+            .ToListAsync(cancellationToken);
     }
 }

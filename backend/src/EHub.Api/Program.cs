@@ -76,10 +76,12 @@ if (app.Environment.IsDevelopment())
 {
     using var scope = app.Services.CreateScope();
     var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    var configuration = scope.ServiceProvider.GetRequiredService<Microsoft.Extensions.Configuration.IConfiguration>();
+    var passwordHasher = scope.ServiceProvider.GetRequiredService<EHub.Application.Common.Interfaces.Identity.IPasswordHasher>();
     try
     {
         await context.Database.MigrateAsync();
-        await DatabaseSeeder.SeedAllAsync(context);
+        await DatabaseSeeder.SeedAllAsync(context, configuration, passwordHasher);
     }
     catch (Exception ex)
     {

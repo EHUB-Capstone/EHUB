@@ -7,6 +7,9 @@ using EHub.Application.Features.Auth.GoogleLogin;
 using EHub.Application.Features.Auth.GetCurrentUser;
 using EHub.Application.Features.Auth.RefreshToken;
 using EHub.Application.Features.Auth.Logout;
+using EHub.Application.Features.Admin.Users.GetPendingApprovalUsers;
+using EHub.Application.Features.Admin.Users.ApproveUser;
+using EHub.Application.Features.Admin.Users.RejectUser;
 
 namespace EHub.Application;
 
@@ -22,6 +25,10 @@ public static class DependencyInjection
         services.AddScoped<IGetCurrentUserQueryHandler, GetCurrentUserQueryHandler>();
         services.AddScoped<IRefreshTokenCommandHandler, RefreshTokenCommandHandler>();
         services.AddScoped<ILogoutCommandHandler, LogoutCommandHandler>();
+
+        services.AddScoped<IGetPendingApprovalUsersQueryHandler, GetPendingApprovalUsersQueryHandler>();
+        services.AddScoped<IApproveUserCommandHandler, ApproveUserCommandHandler>();
+        services.AddScoped<IRejectUserCommandHandler, RejectUserCommandHandler>();
 
         return services;
     }

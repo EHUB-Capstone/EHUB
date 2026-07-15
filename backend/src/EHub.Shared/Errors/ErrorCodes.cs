@@ -32,4 +32,9 @@ public static class ErrorCodes
 
     // System error codes
     public const string InternalServerError = "INTERNAL_SERVER_ERROR";
+
+    // Admin approval error codes
+    public const string UserNotFound = "USER_NOT_FOUND";
+    public const string ApprovalUserNotPending = "APPROVAL_USER_NOT_PENDING";
+    public const string ApprovalInvalidTargetRole = "APPROVAL_INVALID_TARGET_ROLE";
 }

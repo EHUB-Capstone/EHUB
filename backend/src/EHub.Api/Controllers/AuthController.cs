@@ -17,7 +17,7 @@ namespace EHub.Api.Controllers;
 
 [ApiController]
 [Route("api/auth")]
-public class AuthController : ControllerBase
+public sealed class AuthController : ControllerBase
 {
     private readonly IRegisterCommandHandler _registerCommandHandler;
     private readonly ILoginCommandHandler _loginCommandHandler;
@@ -57,6 +57,12 @@ public class AuthController : ControllerBase
                     ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code)),
 
                 ErrorCodes.AuthInvalidRole => BadRequest(
+                    ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code)),
+
+                ErrorCodes.AuthInvalidMajor => BadRequest(
+                    ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code)),
+
+                ErrorCodes.AuthStudentMajorRequired => BadRequest(
                     ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code)),
 
                 _ => BadRequest(
