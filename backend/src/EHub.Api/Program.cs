@@ -22,6 +22,7 @@ builder.Services.AddControllers(options =>
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddAuth(builder.Configuration);
+builder.Services.AddApplicationAuthorization();
 
 // Customize Model State Binding validation response format
 builder.Services.Configure<ApiBehaviorOptions>(options =>

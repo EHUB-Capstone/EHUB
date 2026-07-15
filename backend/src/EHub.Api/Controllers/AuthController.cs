@@ -12,6 +12,7 @@ using EHub.Application.Features.Auth.Logout;
 using EHub.Contracts.Auth;
 using EHub.Contracts.Common;
 using EHub.Shared.Errors;
+using EHub.Shared.Constants;
 
 namespace EHub.Api.Controllers;
 
@@ -191,7 +192,7 @@ public sealed class AuthController : ControllerBase
             "Google login successfully"));
     }
 
-    [Authorize]
+    [Authorize(Policy = SystemPolicies.AuthenticatedOnly)]
     [HttpGet("me")]
     public async Task<IActionResult> Me(CancellationToken cancellationToken)
     {

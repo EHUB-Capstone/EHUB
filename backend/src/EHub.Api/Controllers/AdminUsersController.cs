@@ -17,7 +17,7 @@ namespace EHub.Api.Controllers;
 
 [ApiController]
 [Route("api/admin/users")]
-[Authorize(Roles = SystemRoles.Admin)]
+[Authorize(Policy = SystemPolicies.AdminOnly)]
 public sealed class AdminUsersController : ControllerBase
 {
     private readonly IGetPendingApprovalUsersQueryHandler _getPendingApprovalUsersQueryHandler;
