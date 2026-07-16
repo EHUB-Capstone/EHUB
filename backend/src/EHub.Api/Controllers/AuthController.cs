@@ -1,6 +1,7 @@
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using EHub.Application.Features.Auth.Register;
@@ -9,6 +10,8 @@ using EHub.Application.Features.Auth.GoogleLogin;
 using EHub.Application.Features.Auth.GetCurrentUser;
 using EHub.Application.Features.Auth.RefreshToken;
 using EHub.Application.Features.Auth.Logout;
+using EHub.Application.Features.Auth.Common;
+using EHub.Api.Extensions;
 using EHub.Contracts.Auth;
 using EHub.Contracts.Common;
 using EHub.Shared.Errors;
@@ -26,6 +29,7 @@ public sealed class AuthController : ControllerBase
     private readonly IGetCurrentUserQueryHandler _getCurrentUserQueryHandler;
     private readonly IRefreshTokenCommandHandler _refreshTokenCommandHandler;
     private readonly ILogoutCommandHandler _logoutCommandHandler;
+    private readonly IWebHostEnvironment _environment;
 
     public AuthController(
         IRegisterCommandHandler registerCommandHandler,
@@ -33,7 +37,8 @@ public sealed class AuthController : ControllerBase
         IGoogleLoginCommandHandler googleLoginCommandHandler,
         IGetCurrentUserQueryHandler getCurrentUserQueryHandler,
         IRefreshTokenCommandHandler refreshTokenCommandHandler,
-        ILogoutCommandHandler logoutCommandHandler)
+        ILogoutCommandHandler logoutCommandHandler,
+        IWebHostEnvironment environment)
     {
         _registerCommandHandler = registerCommandHandler;
         _loginCommandHandler = loginCommandHandler;
@@ -41,6 +46,7 @@ public sealed class AuthController : ControllerBase
         _getCurrentUserQueryHandler = getCurrentUserQueryHandler;
         _refreshTokenCommandHandler = refreshTokenCommandHandler;
         _logoutCommandHandler = logoutCommandHandler;
+        _environment = environment;
     }
 
     [HttpPost("register")]
@@ -71,8 +77,29 @@ public sealed class AuthController : ControllerBase
             };
         }
 
+        // Auto-login if registration returned access token (Student)
+        if (!string.IsNullOrWhiteSpace(result.Value.AccessToken) && 
+            !string.IsNullOrWhiteSpace(result.Value.RefreshToken) && 
+            result.Value.ExpiresAt.HasValue)
+        {
+            Response.SetRefreshTokenCookie(
+                result.Value.RefreshToken,
+                result.Value.ExpiresAt.Value,
+                _environment);
+        }
+
+        var publicResponse = new RegisterResponse
+        {
+            Status = result.Value.Status,
+            RequiresApproval = result.Value.RequiresApproval,
+            Message = result.Value.Message,
+            User = result.Value.User,
+            AccessToken = result.Value.AccessToken,
+            ExpiresAt = result.Value.ExpiresAt
+        };
+
         return Ok(ApiResponse<RegisterResponse>.SuccessResponse(
-            result.Value,
+            publicResponse,
             result.Value.Message));
     }
 
@@ -123,8 +150,21 @@ public sealed class AuthController : ControllerBase
             };
         }
 
+        // Set HttpOnly refresh token cookie
+        Response.SetRefreshTokenCookie(
+            result.Value.RefreshToken,
+            result.Value.RefreshTokenExpiresAt,
+            _environment);
+
+        var publicResponse = new AuthResponse
+        {
+            AccessToken = result.Value.AccessToken,
+            ExpiresAt = result.Value.AccessTokenExpiresAt,
+            User = result.Value.User
+        };
+
         return Ok(ApiResponse<AuthResponse>.SuccessResponse(
-            result.Value,
+            publicResponse,
             "Login successfully"));
     }
 
@@ -187,8 +227,21 @@ public sealed class AuthController : ControllerBase
             };
         }
 
+        // Set HttpOnly refresh token cookie
+        Response.SetRefreshTokenCookie(
+            result.Value.RefreshToken,
+            result.Value.RefreshTokenExpiresAt,
+            _environment);
+
+        var publicResponse = new AuthResponse
+        {
+            AccessToken = result.Value.AccessToken,
+            ExpiresAt = result.Value.AccessTokenExpiresAt,
+            User = result.Value.User
+        };
+
         return Ok(ApiResponse<AuthResponse>.SuccessResponse(
-            result.Value,
+            publicResponse,
             "Google login successfully"));
     }
 
@@ -244,16 +297,27 @@ public sealed class AuthController : ControllerBase
     }
 
     [HttpPost("refresh-token")]
-    public async Task<IActionResult> RefreshToken(
-        [FromBody] RefreshTokenRequest request,
-        CancellationToken cancellationToken)
+    public async Task<IActionResult> RefreshToken(CancellationToken cancellationToken)
     {
+        // Read refresh token from HTTP cookie
+        var refreshToken = Request.Cookies[RefreshTokenCookieExtensions.RefreshTokenCookieName];
+
+        if (string.IsNullOrWhiteSpace(refreshToken))
+        {
+            return Unauthorized(ApiResponse<object>.FailureResponse(
+                "Refresh token is missing or invalid.",
+                ErrorCodes.AuthRefreshTokenInvalid));
+        }
+
         var result = await _refreshTokenCommandHandler.HandleAsync(
-            request,
+            refreshToken,
             cancellationToken);
 
         if (result.IsFailure)
         {
+            // Clear the invalid cookie
+            Response.DeleteRefreshTokenCookie(_environment);
+
             return result.Error.Code switch
             {
                 ErrorCodes.AuthRefreshTokenInvalid => Unauthorized(
@@ -302,26 +366,39 @@ public sealed class AuthController : ControllerBase
             };
         }
 
+        // Set the rotated new refresh token cookie
+        Response.SetRefreshTokenCookie(
+            result.Value.RefreshToken,
+            result.Value.RefreshTokenExpiresAt,
+            _environment);
+
+        var publicResponse = new AuthResponse
+        {
+            AccessToken = result.Value.AccessToken,
+            ExpiresAt = result.Value.AccessTokenExpiresAt,
+            User = result.Value.User
+        };
+
         return Ok(ApiResponse<AuthResponse>.SuccessResponse(
-            result.Value,
+            publicResponse,
             "Token refreshed successfully"));
     }
 
     [HttpPost("logout")]
-    public async Task<IActionResult> Logout(
-        [FromBody] LogoutRequest request,
-        CancellationToken cancellationToken)
+    public async Task<IActionResult> Logout(CancellationToken cancellationToken)
     {
-        var result = await _logoutCommandHandler.HandleAsync(
-            request,
-            cancellationToken);
+        // Read refresh token from HTTP cookie
+        var refreshToken = Request.Cookies[RefreshTokenCookieExtensions.RefreshTokenCookieName];
 
-        if (result.IsFailure)
+        if (!string.IsNullOrWhiteSpace(refreshToken))
         {
-            return BadRequest(ApiResponse<object>.FailureResponse(
-                result.Error.Message,
-                result.Error.Code));
+            await _logoutCommandHandler.HandleAsync(
+                refreshToken,
+                cancellationToken);
         }
+
+        // Clean cookie from client browser
+        Response.DeleteRefreshTokenCookie(_environment);
 
         return Ok(ApiResponse<object?>.SuccessResponse(
             null,

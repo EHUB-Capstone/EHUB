@@ -26,7 +26,6 @@ public sealed class RegisterCommandHandler : IRegisterCommandHandler
     private readonly IPasswordHasher _passwordHasher;
     private readonly IJwtTokenService _jwtTokenService;
     private readonly IRefreshTokenService _refreshTokenService;
-
     private readonly ILogger<RegisterCommandHandler> _logger;
 
     public RegisterCommandHandler(
@@ -40,7 +39,7 @@ public sealed class RegisterCommandHandler : IRegisterCommandHandler
         IPasswordHasher passwordHasher,
         IJwtTokenService jwtTokenService,
         IRefreshTokenService refreshTokenService,
-        ILogger<RegisterCommandHandler> _logger)
+        ILogger<RegisterCommandHandler> logger)
     {
         _userRepository = userRepository;
         _roleRepository = roleRepository;
@@ -52,76 +51,87 @@ public sealed class RegisterCommandHandler : IRegisterCommandHandler
         _passwordHasher = passwordHasher;
         _jwtTokenService = jwtTokenService;
         _refreshTokenService = refreshTokenService;
-        this._logger = _logger;
+        _logger = logger;
     }
 
-    public async Task<Result<RegisterResponse>> HandleAsync(
+    public async Task<Result<RegisterResult>> HandleAsync(
         RegisterRequest request,
         CancellationToken cancellationToken = default)
     {
-        var fullName = request.FullName.Trim();
-        var email = request.Email.Trim();
-        var normalizedEmail = email.ToLowerInvariant();
-        var roleName = request.Role.Trim();
+        var normalizedEmail = request.Email.Trim().ToLowerInvariant();
 
-        // Defensive check for allowed public roles
-        if (!SystemRoles.PublicRegisterRoles.Contains(roleName))
-        {
-            return Result.Failure<RegisterResponse>(AuthErrors.InvalidRole);
-        }
-
-        // Check if email already exists
-        var emailExists = await _userRepository.ExistsByEmailAsync(
+        // 1. Check duplicate email
+        var isEmailDuplicate = await _userRepository.ExistsByEmailAsync(
             normalizedEmail,
             cancellationToken);
 
-        if (emailExists)
+        if (isEmailDuplicate)
         {
             _logger.LogWarning(
-                "Register duplicate email attempt. Email: {Email}.",
-                SensitiveDataMasker.MaskEmail(email));
-            return Result.Failure<RegisterResponse>(AuthErrors.EmailAlreadyExists);
+                "Register failed. Reason: email already exists. Email: {Email}.",
+                SensitiveDataMasker.MaskEmail(request.Email));
+            return Result.Failure<RegisterResult>(AuthErrors.EmailAlreadyExists);
         }
 
-        // Get Role entity from database
-        var role = await _roleRepository.GetByNameAsync(
-            roleName,
-            cancellationToken);
+        // 2. Validate role
+        var roleName = request.Role.Trim();
+        if (roleName != SystemRoles.Student &&
+            roleName != SystemRoles.Lecturer &&
+            roleName != SystemRoles.Mentor)
+        {
+            _logger.LogWarning(
+                "Register failed. Reason: invalid role '{Role}'.",
+                roleName);
+            return Result.Failure<RegisterResult>(AuthErrors.InvalidRole);
+        }
 
+        var role = await _roleRepository.GetByNameAsync(roleName, cancellationToken);
         if (role is null)
         {
-            return Result.Failure<RegisterResponse>(AuthErrors.InvalidRole);
+            _logger.LogWarning("Register failed. Reason: role '{Role}' not found in database.", roleName);
+            return Result.Failure<RegisterResult>(AuthErrors.InvalidRole);
         }
 
-        // Determine initial user status
-        var status = roleName == SystemRoles.Student
-            ? UserStatus.Active
-            : UserStatus.PendingApproval;
+        // 3. Validate Student specific constraints
+        if (roleName == SystemRoles.Student)
+        {
+            if (string.IsNullOrWhiteSpace(request.MajorCode))
+            {
+                _logger.LogWarning("Register failed. Reason: student major code is required.");
+                return Result.Failure<RegisterResult>(AuthErrors.StudentMajorRequired);
+            }
 
-        var passwordHash = _passwordHasher.Hash(request.Password);
+            var isValidMajor = MajorCodes.IsValid(request.MajorCode);
+            if (!isValidMajor)
+            {
+                _logger.LogWarning(
+                    "Register failed. Reason: invalid student major code '{Major}'.",
+                    request.MajorCode);
+                return Result.Failure<RegisterResult>(AuthErrors.InvalidMajor);
+            }
+        }
 
-        // Build core User entity
+        // 4. Create user
         var user = new User
         {
-            FullName = fullName,
-            Email = email,
+            FullName = request.FullName.Trim(),
+            Email = normalizedEmail,
             NormalizedEmail = normalizedEmail,
-            PasswordHash = passwordHash,
-            Status = status
+            PasswordHash = _passwordHasher.Hash(request.Password),
+            Status = roleName == SystemRoles.Student ? UserStatus.Active : UserStatus.PendingApproval
         };
 
-        var userRole = new UserRole
-        {
-            UserId = user.Id,
-            RoleId = role.Id
-        };
+        RegisterResult response = null!;
 
-        RegisterResponse response = default!;
-
-        // Execute in transaction
-        await _unitOfWork.ExecuteInTransactionAsync(async ct =>
+        await _unitOfWork.ExecuteInTransactionAsync(async (ct) =>
         {
             await _userRepository.AddAsync(user, ct);
+
+            var userRole = new UserRole
+            {
+                UserId = user.Id,
+                RoleId = role.Id
+            };
             await _userRoleRepository.AddAsync(userRole, ct);
 
             if (roleName == SystemRoles.Student)
@@ -131,13 +141,11 @@ public sealed class RegisterCommandHandler : IRegisterCommandHandler
                     UserId = user.Id,
                     FullName = user.FullName,
                     Email = user.Email,
-                    MajorCode = request.MajorCode?.Trim(),
-                    Status = StudentStatus.Active
+                    MajorCode = request.MajorCode!.Trim().ToUpperInvariant()
                 };
-
                 await _studentRepository.AddAsync(student, ct);
 
-                // Auto-login for Student
+                // Auto-login: Generate and save tokens
                 var roles = new[] { SystemRoles.Student };
                 var accessToken = _jwtTokenService.GenerateAccessToken(user, roles);
                 var refreshToken = _refreshTokenService.GenerateRefreshToken();
@@ -151,7 +159,7 @@ public sealed class RegisterCommandHandler : IRegisterCommandHandler
 
                 await _refreshTokenRepository.AddAsync(refreshTokenEntity, ct);
 
-                response = new RegisterResponse
+                response = new RegisterResult
                 {
                     Status = UserStatus.Active.ToString(),
                     RequiresApproval = false,
@@ -184,7 +192,7 @@ public sealed class RegisterCommandHandler : IRegisterCommandHandler
                     await _mentorProfileRepository.AddAsync(mentorProfile, ct);
                 }
 
-                response = new RegisterResponse
+                response = new RegisterResult
                 {
                     Status = UserStatus.PendingApproval.ToString(),
                     RequiresApproval = true,

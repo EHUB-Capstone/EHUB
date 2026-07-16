@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
-import { TOKEN_KEYS } from '../api/axiosClient';
+import { TOKEN_KEYS, setAccessToken } from '../api/axiosClient';
 import * as authApi from '../api/authApi';
 import type { CurrentUser, LoginPayload, RegisterPayload, WorkspaceUser } from '../types/auth';
 
@@ -28,16 +28,6 @@ export const AuthContext = createContext<AuthContextValue | null>(null);
 
 // ─── Helper ──────────────────────────────────────────────────────────────────
 
-function saveTokens(access: string, refresh: string) {
-  localStorage.setItem(TOKEN_KEYS.ACCESS,  access);
-  localStorage.setItem(TOKEN_KEYS.REFRESH, refresh);
-}
-
-function clearTokens() {
-  localStorage.removeItem(TOKEN_KEYS.ACCESS);
-  localStorage.removeItem(TOKEN_KEYS.REFRESH);
-}
-
 function toWorkspaceUser(user: CurrentUser): WorkspaceUser {
   const roles = Array.isArray(user.roles) ? user.roles : [];
   const role = roles[0]?.trim().toUpperCase() || 'STUDENT';
@@ -55,26 +45,34 @@ function toWorkspaceUser(user: CurrentUser): WorkspaceUser {
 // ─── Provider ────────────────────────────────────────────────────────────────
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user,      setUser]      = useState<WorkspaceUser | null>(null);
+  const [user, setUser] = useState<WorkspaceUser | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true); // true until initial check done
 
-  // On mount: if we have an access token, verify it by calling /me
+  // On mount: try to restore session by calling refresh-token
   useEffect(() => {
-    const accessToken = localStorage.getItem(TOKEN_KEYS.ACCESS);
-    if (!accessToken) {
-      setIsLoading(false);
-      return;
-    }
-    authApi.getCurrentUser()
-      .then(u => setUser(toWorkspaceUser(u)))
-      .catch(() => clearTokens())   // token invalid/expired — axiosClient handles redirect
-      .finally(() => setIsLoading(false));
+    // Legacy localStorage cleanup (runs once on bootstrap)
+    localStorage.removeItem(TOKEN_KEYS.ACCESS);
+    localStorage.removeItem(TOKEN_KEYS.REFRESH);
+
+    authApi.refreshToken()
+      .then(result => {
+        setAccessToken(result.accessToken);
+        setUser(toWorkspaceUser(result.user as CurrentUser));
+      })
+      .catch(() => {
+        // Safe to ignore on mount (no active session cookie exists)
+        setAccessToken(null);
+        setUser(null);
+      })
+      .finally(() => {
+        setIsLoading(false);
+      });
   }, []);
 
   // ── loginWithEmail ──────────────────────────────────────────────────────
   const loginWithEmail = useCallback(async (payload: LoginPayload): Promise<WorkspaceUser> => {
     const result = await authApi.login(payload);
-    saveTokens(result.accessToken, result.refreshToken);
+    setAccessToken(result.accessToken);
     const workspaceUser = toWorkspaceUser(result.user as CurrentUser);
     setUser(workspaceUser);
     return workspaceUser;
@@ -83,7 +81,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // ── loginWithGoogle ─────────────────────────────────────────────────────
   const loginWithGoogle = useCallback(async (idToken: string): Promise<WorkspaceUser> => {
     const result = await authApi.googleLogin({ idToken });
-    saveTokens(result.accessToken, result.refreshToken);
+    setAccessToken(result.accessToken);
     const workspaceUser = toWorkspaceUser(result.user as CurrentUser);
     setUser(workspaceUser);
     return workspaceUser;
@@ -96,8 +94,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const result = await authApi.register(payload);
 
     // Student → auto-login (backend returns tokens)
-    if (!result.requiresApproval && result.accessToken && result.refreshToken && result.user) {
-      saveTokens(result.accessToken, result.refreshToken);
+    if (!result.requiresApproval && result.accessToken && result.user) {
+      setAccessToken(result.accessToken);
       setUser(toWorkspaceUser(result.user as CurrentUser));
     }
 
@@ -106,11 +104,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // ── logout ──────────────────────────────────────────────────────────────
   const logout = useCallback(async (): Promise<void> => {
-    const refreshToken = localStorage.getItem(TOKEN_KEYS.REFRESH);
     try {
-      if (refreshToken) await authApi.logout(refreshToken);
+      await authApi.logout();
     } finally {
-      clearTokens();
+      setAccessToken(null);
       setUser(null);
     }
   }, []);

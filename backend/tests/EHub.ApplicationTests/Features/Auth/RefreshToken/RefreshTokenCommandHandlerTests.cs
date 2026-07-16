@@ -64,7 +64,7 @@ public class RefreshTokenCommandHandlerTests
             .Returns((EHub.Domain.Entities.RefreshToken?)null);
 
         // Act
-        var result = await _handler.HandleAsync(request, CancellationToken.None);
+        var result = await _handler.HandleAsync(request.RefreshToken, CancellationToken.None);
 
         // Assert
         Assert.False(result.IsSuccess);
@@ -90,7 +90,7 @@ public class RefreshTokenCommandHandlerTests
             .Returns(storedToken);
 
         // Act
-        var result = await _handler.HandleAsync(request, CancellationToken.None);
+        var result = await _handler.HandleAsync(request.RefreshToken, CancellationToken.None);
 
         // Assert
         Assert.False(result.IsSuccess);
@@ -116,7 +116,7 @@ public class RefreshTokenCommandHandlerTests
             .Returns(storedToken);
 
         // Act
-        var result = await _handler.HandleAsync(request, CancellationToken.None);
+        var result = await _handler.HandleAsync(request.RefreshToken, CancellationToken.None);
 
         // Assert
         Assert.False(result.IsSuccess);
@@ -145,7 +145,7 @@ public class RefreshTokenCommandHandlerTests
             .Returns((User?)null);
 
         // Act
-        var result = await _handler.HandleAsync(request, CancellationToken.None);
+        var result = await _handler.HandleAsync(request.RefreshToken, CancellationToken.None);
 
         // Assert
         Assert.False(result.IsSuccess);
@@ -183,7 +183,7 @@ public class RefreshTokenCommandHandlerTests
             .Returns(user);
 
         // Act
-        var result = await _handler.HandleAsync(request, CancellationToken.None);
+        var result = await _handler.HandleAsync(request.RefreshToken, CancellationToken.None);
 
         // Assert
         Assert.False(result.IsSuccess);
@@ -256,7 +256,7 @@ public class RefreshTokenCommandHandlerTests
             });
 
         // Act
-        var result = await _handler.HandleAsync(request, CancellationToken.None);
+        var result = await _handler.HandleAsync(request.RefreshToken, CancellationToken.None);
 
         // Assert
         Assert.True(result.IsSuccess);

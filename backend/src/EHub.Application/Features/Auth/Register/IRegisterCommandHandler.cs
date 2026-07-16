@@ -7,7 +7,7 @@ namespace EHub.Application.Features.Auth.Register;
 
 public interface IRegisterCommandHandler
 {
-    Task<Result<RegisterResponse>> HandleAsync(
+    Task<Result<RegisterResult>> HandleAsync(
         RegisterRequest request,
         CancellationToken cancellationToken = default);
 }

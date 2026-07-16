@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -12,7 +13,7 @@ using EHub.IntegrationTests.Common;
 
 namespace EHub.IntegrationTests.Auth;
 
-[Collection("Sequential")] // Run sequentially to avoid DB collision during test container lifetime if multiple classes run
+[Collection("Sequential")]
 public class AuthIntegrationTests
 {
     private readonly HttpClient _client;
@@ -20,6 +21,21 @@ public class AuthIntegrationTests
     public AuthIntegrationTests(CustomWebApplicationFactory factory)
     {
         _client = factory.CreateClient();
+    }
+
+    private string ExtractRefreshToken(HttpResponseMessage response)
+    {
+        if (response.Headers.TryGetValues("Set-Cookie", out var values))
+        {
+            var cookie = values.FirstOrDefault(v => v.StartsWith("ehub_refresh_token="));
+            if (cookie != null)
+            {
+                var parts = cookie.Split(';');
+                var firstPart = parts[0];
+                return firstPart.Substring("ehub_refresh_token=".Length);
+            }
+        }
+        return string.Empty;
     }
 
     [Fact]
@@ -41,14 +57,23 @@ public class AuthIntegrationTests
         var response = await _client.PostAsJsonAsync("/api/auth/register", request);
 
         // Assert
+        if (response.StatusCode != HttpStatusCode.OK)
+        {
+            var err = await response.Content.ReadAsStringAsync();
+            Assert.Fail($"Status: {response.StatusCode}, Body: {err}");
+        }
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var body = await response.Content.ReadFromJsonAsync<ApiResponse<RegisterResponse>>();
         body.Should().NotBeNull();
-        body.Success.Should().BeTrue();
+        body!.Success.Should().BeTrue();
         body.Data.Should().NotBeNull();
         body.Data!.User.Should().NotBeNull();
         body.Data.User!.Email.Should().Be(uniqueEmail);
         body.Data.RequiresApproval.Should().BeFalse();
+
+        // Should also set the refresh token cookie
+        var refreshToken = ExtractRefreshToken(response);
+        refreshToken.Should().NotBeNullOrEmpty();
     }
 
     [Fact]
@@ -159,7 +184,9 @@ public class AuthIntegrationTests
         body!.Success.Should().BeTrue();
         body.Data.Should().NotBeNull();
         body.Data!.AccessToken.Should().NotBeNullOrEmpty();
-        body.Data.RefreshToken.Should().NotBeNullOrEmpty();
+
+        var refreshToken = ExtractRefreshToken(response);
+        refreshToken.Should().NotBeNullOrEmpty();
     }
 
     [Fact]
@@ -243,7 +270,7 @@ public class AuthIntegrationTests
         var email = $"student-{Guid.NewGuid()}@example.com";
         var registerRequest = new RegisterRequest
         {
-            FullName = "Student Me Test",
+            FullName = "Student Token Test",
             Email = email,
             Password = "Password123",
             ConfirmPassword = "Password123",
@@ -292,11 +319,12 @@ public class AuthIntegrationTests
         await _client.PostAsJsonAsync("/api/auth/register", registerRequest);
 
         var loginResponse = await _client.PostAsJsonAsync("/api/auth/login", new EmailPasswordLoginRequest { Email = email, Password = "Password123" });
-        var loginBody = await loginResponse.Content.ReadFromJsonAsync<ApiResponse<AuthResponse>>();
-        var firstRefreshToken = loginBody!.Data!.RefreshToken;
+        var firstRefreshToken = ExtractRefreshToken(loginResponse);
 
-        // Act - Call refresh
-        var refreshResponse = await _client.PostAsJsonAsync("/api/auth/refresh-token", new RefreshTokenRequest { RefreshToken = firstRefreshToken });
+        // Act - Call refresh using Cookie
+        var refreshRequest = new HttpRequestMessage(HttpMethod.Post, "/api/auth/refresh-token");
+        refreshRequest.Headers.Add("Cookie", $"ehub_refresh_token={firstRefreshToken}");
+        var refreshResponse = await _client.SendAsync(refreshRequest);
 
         // Assert
         refreshResponse.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -304,8 +332,10 @@ public class AuthIntegrationTests
         refreshBody.Should().NotBeNull();
         refreshBody!.Success.Should().BeTrue();
         refreshBody.Data!.AccessToken.Should().NotBeNullOrEmpty();
-        refreshBody.Data.RefreshToken.Should().NotBeNullOrEmpty();
-        refreshBody.Data.RefreshToken.Should().NotBe(firstRefreshToken);
+
+        var newRefreshToken = ExtractRefreshToken(refreshResponse);
+        newRefreshToken.Should().NotBeNullOrEmpty();
+        newRefreshToken.Should().NotBe(firstRefreshToken);
     }
 
     [Fact]
@@ -325,15 +355,18 @@ public class AuthIntegrationTests
         await _client.PostAsJsonAsync("/api/auth/register", registerRequest);
 
         var loginResponse = await _client.PostAsJsonAsync("/api/auth/login", new EmailPasswordLoginRequest { Email = email, Password = "Password123" });
-        var loginBody = await loginResponse.Content.ReadFromJsonAsync<ApiResponse<AuthResponse>>();
-        var firstRefreshToken = loginBody!.Data!.RefreshToken;
+        var firstRefreshToken = ExtractRefreshToken(loginResponse);
 
         // First rotation (valid)
-        var refreshResponse1 = await _client.PostAsJsonAsync("/api/auth/refresh-token", new RefreshTokenRequest { RefreshToken = firstRefreshToken });
+        var refreshRequest1 = new HttpRequestMessage(HttpMethod.Post, "/api/auth/refresh-token");
+        refreshRequest1.Headers.Add("Cookie", $"ehub_refresh_token={firstRefreshToken}");
+        var refreshResponse1 = await _client.SendAsync(refreshRequest1);
         refreshResponse1.StatusCode.Should().Be(HttpStatusCode.OK);
 
         // Act - Attempt to use the first token again
-        var refreshResponse2 = await _client.PostAsJsonAsync("/api/auth/refresh-token", new RefreshTokenRequest { RefreshToken = firstRefreshToken });
+        var refreshRequest2 = new HttpRequestMessage(HttpMethod.Post, "/api/auth/refresh-token");
+        refreshRequest2.Headers.Add("Cookie", $"ehub_refresh_token={firstRefreshToken}");
+        var refreshResponse2 = await _client.SendAsync(refreshRequest2);
 
         // Assert
         refreshResponse2.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
@@ -359,17 +392,20 @@ public class AuthIntegrationTests
         await _client.PostAsJsonAsync("/api/auth/register", registerRequest);
 
         var loginResponse = await _client.PostAsJsonAsync("/api/auth/login", new EmailPasswordLoginRequest { Email = email, Password = "Password123" });
-        var loginBody = await loginResponse.Content.ReadFromJsonAsync<ApiResponse<AuthResponse>>();
-        var refreshToken = loginBody!.Data!.RefreshToken;
+        var refreshToken = ExtractRefreshToken(loginResponse);
 
-        // Act - Logout
-        var logoutResponse = await _client.PostAsJsonAsync("/api/auth/logout", new LogoutRequest { RefreshToken = refreshToken });
+        // Act - Logout using Cookie
+        var logoutRequest = new HttpRequestMessage(HttpMethod.Post, "/api/auth/logout");
+        logoutRequest.Headers.Add("Cookie", $"ehub_refresh_token={refreshToken}");
+        var logoutResponse = await _client.SendAsync(logoutRequest);
 
         // Assert
         logoutResponse.StatusCode.Should().Be(HttpStatusCode.OK);
 
         // Act - Attempt to refresh using the logged out token
-        var refreshResponse = await _client.PostAsJsonAsync("/api/auth/refresh-token", new RefreshTokenRequest { RefreshToken = refreshToken });
+        var refreshRequest = new HttpRequestMessage(HttpMethod.Post, "/api/auth/refresh-token");
+        refreshRequest.Headers.Add("Cookie", $"ehub_refresh_token={refreshToken}");
+        var refreshResponse = await _client.SendAsync(refreshRequest);
         refreshResponse.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 }

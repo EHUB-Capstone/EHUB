@@ -9,9 +9,8 @@ export interface UserSummary {
   majorCode: string | null;
 }
 
-export interface AuthTokens {
+export interface AuthResponse {
   accessToken: string;
-  refreshToken: string;
   expiresAt: string;
   user: UserSummary;
 }
@@ -22,7 +21,6 @@ export interface RegisterResult {
   message: string;
   user: UserSummary | null;
   accessToken: string | null;
-  refreshToken: string | null;
   expiresAt: string | null;
 }
 

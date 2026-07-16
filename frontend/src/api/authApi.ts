@@ -1,7 +1,7 @@
 import axiosClient from './axiosClient';
 import type {
   ApiResponse,
-  AuthTokens,
+  AuthResponse,
   CurrentUser,
   GoogleLoginPayload,
   LoginPayload,
@@ -16,13 +16,13 @@ export async function register(payload: RegisterPayload): Promise<RegisterResult
 }
 
 // ─── POST /api/auth/login ────────────────────────────────────────────────
-export async function login(payload: LoginPayload): Promise<AuthTokens> {
+export async function login(payload: LoginPayload): Promise<AuthResponse> {
   const data = await axiosClient.post('/auth/login', payload);
   return data.data;
 }
 
 // ─── POST /api/auth/google ────────────────────────────────────────────────
-export async function googleLogin(payload: GoogleLoginPayload): Promise<AuthTokens> {
+export async function googleLogin(payload: GoogleLoginPayload): Promise<AuthResponse> {
   const data = await axiosClient.post('/auth/google', payload);
   return data.data;
 }
@@ -34,14 +34,12 @@ export async function getCurrentUser(): Promise<CurrentUser> {
 }
 
 // ─── POST /api/auth/refresh-token ────────────────────────────────────────
-export async function refreshToken(token: string): Promise<AuthTokens> {
-  const data = await axiosClient.post('/auth/refresh-token', {
-    refreshToken: token,
-  });
+export async function refreshToken(): Promise<AuthResponse> {
+  const data = await axiosClient.post('/auth/refresh-token');
   return data.data;
 }
 
 // ─── POST /api/auth/logout ────────────────────────────────────────────────
-export async function logout(token: string): Promise<void> {
-  await axiosClient.post('/auth/logout', { refreshToken: token });
+export async function logout(): Promise<void> {
+  await axiosClient.post('/auth/logout');
 }

@@ -1,25 +1,34 @@
 import axios from 'axios';
 import type { AxiosRequestConfig, InternalAxiosRequestConfig } from 'axios';
 
-// ─── Storage keys ───────────────────────────────────────────────────────────
+// ─── Storage keys (legacy cleanup) ───────────────────────────────────────────
 export const TOKEN_KEYS = {
   ACCESS:  'ehub_access_token',
   REFRESH: 'ehub_refresh_token',
 } as const;
 
+// ─── In-memory access token storage ──────────────────────────────────────────
+let accessToken: string | null = null;
+
+export const setAccessToken = (token: string | null) => {
+  accessToken = token;
+};
+
+export const getAccessToken = () => accessToken;
+
 // ─── Axios instance ──────────────────────────────────────────────────────────
-// Vite proxy forwards /api/* → http://localhost:5000
+// withCredentials: true allows sending and receiving cookies cross-origin
 const axiosClient: any = axios.create({
   baseURL: '/api',
   headers: { 'Content-Type': 'application/json' },
   timeout: 15_000,
+  withCredentials: true,
 });
 
-// ─── Request interceptor: attach Bearer token ─────────────────────────────
+// ─── Request interceptor: attach Bearer token from memory ─────────────────────
 axiosClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
-  const token = localStorage.getItem(TOKEN_KEYS.ACCESS);
-  if (token && config.headers) {
-    config.headers['Authorization'] = `Bearer ${token}`;
+  if (accessToken && config.headers) {
+    config.headers['Authorization'] = `Bearer ${accessToken}`;
   }
   return config;
 });
@@ -38,34 +47,26 @@ function onRefreshed(token: string) {
 }
 
 function clearAuth() {
+  setAccessToken(null);
+  // Clear legacy tokens if any
   localStorage.removeItem(TOKEN_KEYS.ACCESS);
   localStorage.removeItem(TOKEN_KEYS.REFRESH);
 }
 
 // ─── Response interceptor: auto-refresh on 401 ───────────────────────────
 axiosClient.interceptors.response.use(
-  // The WDP feature modules expect the response body, rather than Axios's
-  // wrapper object. Auth calls below still consume the C# ApiResponse shape.
   response => response.data,
   async error => {
     const originalRequest = error.config as AxiosRequestConfig & { _retry?: boolean };
 
-    // Do not intercept 401 for auth endpoints (prevents page reload loop on login failure)
+    // Do not intercept 401 for auth endpoints
     const isAuthEndpoint = originalRequest.url?.includes('/auth/login') ||
                            originalRequest.url?.includes('/auth/google') ||
                            originalRequest.url?.includes('/auth/register') ||
-                           originalRequest.url?.includes('/auth/refresh-token');
+                           originalRequest.url?.includes('/auth/refresh-token') ||
+                           originalRequest.url?.includes('/auth/logout');
 
-    // Only intercept 401 and only retry once
     if (error.response?.status === 401 && !originalRequest._retry && !isAuthEndpoint) {
-      const refreshToken = localStorage.getItem(TOKEN_KEYS.REFRESH);
-
-      if (!refreshToken) {
-        clearAuth();
-        window.location.href = '/login';
-        return Promise.reject(error);
-      }
-
       if (_isRefreshing) {
         // Queue requests while refreshing
         return new Promise(resolve => {
@@ -82,13 +83,11 @@ axiosClient.interceptors.response.use(
       _isRefreshing = true;
 
       try {
-        const { data } = await axios.post('/api/auth/refresh-token', { refreshToken });
-        const newAccess: string  = data.data.accessToken;
-        const newRefresh: string = data.data.refreshToken;
+        // Call refresh-token endpoint without body, browser automatically forwards the cookie
+        const { data } = await axios.post('/api/auth/refresh-token', null, { withCredentials: true });
+        const newAccess: string = data.data.accessToken;
 
-        localStorage.setItem(TOKEN_KEYS.ACCESS,  newAccess);
-        localStorage.setItem(TOKEN_KEYS.REFRESH, newRefresh);
-
+        setAccessToken(newAccess);
         onRefreshed(newAccess);
         _isRefreshing = false;
 
@@ -96,11 +95,11 @@ axiosClient.interceptors.response.use(
           (originalRequest.headers as Record<string, string>)['Authorization'] = `Bearer ${newAccess}`;
         }
         return axiosClient(originalRequest);
-      } catch {
+      } catch (refreshError) {
         _isRefreshing = false;
         clearAuth();
         window.location.href = '/login';
-        return Promise.reject(error);
+        return Promise.reject(refreshError);
       }
     }
 

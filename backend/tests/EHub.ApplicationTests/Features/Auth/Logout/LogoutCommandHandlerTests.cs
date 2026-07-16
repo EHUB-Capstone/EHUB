@@ -51,7 +51,7 @@ public class LogoutCommandHandlerTests
             .Returns(storedToken);
 
         // Act
-        var result = await _handler.HandleAsync(request, CancellationToken.None);
+        var result = await _handler.HandleAsync(request.RefreshToken, CancellationToken.None);
 
         // Assert
         Assert.True(result.IsSuccess);
@@ -74,7 +74,7 @@ public class LogoutCommandHandlerTests
             .Returns((EHub.Domain.Entities.RefreshToken?)null);
 
         // Act
-        var result = await _handler.HandleAsync(request, CancellationToken.None);
+        var result = await _handler.HandleAsync(request.RefreshToken, CancellationToken.None);
 
         // Assert
         Assert.True(result.IsSuccess);
@@ -102,7 +102,7 @@ public class LogoutCommandHandlerTests
             .Returns(storedToken);
 
         // Act
-        var result = await _handler.HandleAsync(request, CancellationToken.None);
+        var result = await _handler.HandleAsync(request.RefreshToken, CancellationToken.None);
 
         // Assert
         Assert.True(result.IsSuccess);
