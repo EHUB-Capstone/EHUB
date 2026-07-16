@@ -4,7 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using EHub.Application.Common.Interfaces.Identity;
 using EHub.Application.Common.Interfaces.Persistence;
-using EHub.Application.Features.Auth;
+using EHub.Application.Features.Auth.Common;
 using EHub.Contracts.Auth;
 using EHub.Domain.Entities;
 using EHub.Domain.Enums;
@@ -24,7 +24,6 @@ public sealed class LoginCommandHandler : ILoginCommandHandler
     private readonly IPasswordHasher _passwordHasher;
     private readonly IJwtTokenService _jwtTokenService;
     private readonly IRefreshTokenService _refreshTokenService;
-
     private readonly ILogger<LoginCommandHandler> _logger;
 
     public LoginCommandHandler(
@@ -35,7 +34,7 @@ public sealed class LoginCommandHandler : ILoginCommandHandler
         IPasswordHasher passwordHasher,
         IJwtTokenService jwtTokenService,
         IRefreshTokenService refreshTokenService,
-        ILogger<LoginCommandHandler> _logger)
+        ILogger<LoginCommandHandler> logger)
     {
         _userRepository = userRepository;
         _studentRepository = studentRepository;
@@ -44,10 +43,10 @@ public sealed class LoginCommandHandler : ILoginCommandHandler
         _passwordHasher = passwordHasher;
         _jwtTokenService = jwtTokenService;
         _refreshTokenService = refreshTokenService;
-        this._logger = _logger;
+        _logger = logger;
     }
 
-    public async Task<Result<AuthResponse>> HandleAsync(
+    public async Task<Result<AuthSessionResult>> HandleAsync(
         EmailPasswordLoginRequest request,
         CancellationToken cancellationToken = default)
     {
@@ -64,7 +63,7 @@ public sealed class LoginCommandHandler : ILoginCommandHandler
             _logger.LogWarning(
                 "Login failed. Reason: invalid credentials. Email: {Email}.",
                 SensitiveDataMasker.MaskEmail(request.Email));
-            return Result.Failure<AuthResponse>(AuthErrors.InvalidCredentials);
+            return Result.Failure<AuthSessionResult>(AuthErrors.InvalidCredentials);
         }
 
         // 3. Verify password hash
@@ -77,7 +76,7 @@ public sealed class LoginCommandHandler : ILoginCommandHandler
             _logger.LogWarning(
                 "Login failed. Reason: invalid credentials. Email: {Email}.",
                 SensitiveDataMasker.MaskEmail(request.Email));
-            return Result.Failure<AuthResponse>(AuthErrors.InvalidCredentials);
+            return Result.Failure<AuthSessionResult>(AuthErrors.InvalidCredentials);
         }
 
         // 4. Validate status (only Active allowed to log in)
@@ -86,7 +85,7 @@ public sealed class LoginCommandHandler : ILoginCommandHandler
             _logger.LogWarning(
                 "Login blocked for pending approval account. UserId: {UserId}.",
                 user.Id);
-            return Result.Failure<AuthResponse>(AuthErrors.AccountPendingApproval);
+            return Result.Failure<AuthSessionResult>(AuthErrors.AccountPendingApproval);
         }
 
         if (user.Status == UserStatus.Rejected)
@@ -94,7 +93,7 @@ public sealed class LoginCommandHandler : ILoginCommandHandler
             _logger.LogWarning(
                 "Login blocked for rejected account. UserId: {UserId}.",
                 user.Id);
-            return Result.Failure<AuthResponse>(AuthErrors.AccountRejected);
+            return Result.Failure<AuthSessionResult>(AuthErrors.AccountRejected);
         }
 
         if (user.Status == UserStatus.Blocked)
@@ -102,7 +101,7 @@ public sealed class LoginCommandHandler : ILoginCommandHandler
             _logger.LogWarning(
                 "Login blocked for blocked account. UserId: {UserId}.",
                 user.Id);
-            return Result.Failure<AuthResponse>(AuthErrors.UserBlocked);
+            return Result.Failure<AuthSessionResult>(AuthErrors.UserBlocked);
         }
 
         if (user.Status == UserStatus.Inactive)
@@ -110,7 +109,7 @@ public sealed class LoginCommandHandler : ILoginCommandHandler
             _logger.LogWarning(
                 "Login blocked for inactive account. UserId: {UserId}.",
                 user.Id);
-            return Result.Failure<AuthResponse>(AuthErrors.UserInactive);
+            return Result.Failure<AuthSessionResult>(AuthErrors.UserInactive);
         }
 
         if (user.Status != UserStatus.Active)
@@ -118,7 +117,7 @@ public sealed class LoginCommandHandler : ILoginCommandHandler
             _logger.LogWarning(
                 "Login blocked for inactive account. UserId: {UserId}.",
                 user.Id);
-            return Result.Failure<AuthResponse>(AuthErrors.UserInactive);
+            return Result.Failure<AuthSessionResult>(AuthErrors.UserInactive);
         }
 
         // 5. Get roles
@@ -155,11 +154,12 @@ public sealed class LoginCommandHandler : ILoginCommandHandler
             majorCode = student?.MajorCode;
         }
 
-        var response = new AuthResponse
+        var result = new AuthSessionResult
         {
             AccessToken = accessToken.Token,
+            AccessTokenExpiresAt = accessToken.ExpiresAt,
             RefreshToken = refreshToken.RawToken,
-            ExpiresAt = accessToken.ExpiresAt,
+            RefreshTokenExpiresAt = refreshToken.ExpiresAt,
             User = new UserSummaryResponse
             {
                 Id = user.Id,
@@ -176,6 +176,6 @@ public sealed class LoginCommandHandler : ILoginCommandHandler
             user.Id,
             roles);
 
-        return Result.Success(response);
+        return Result.Success(result);
     }
 }

@@ -4,7 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using EHub.Application.Common.Interfaces.Identity;
 using EHub.Application.Common.Interfaces.Persistence;
-using EHub.Application.Features.Auth;
+using EHub.Application.Features.Auth.Common;
 using EHub.Contracts.Auth;
 using EHub.Domain.Entities;
 using EHub.Domain.Enums;
@@ -24,7 +24,6 @@ public class GoogleLoginCommandHandler : IGoogleLoginCommandHandler
     private readonly IUnitOfWork _unitOfWork;
     private readonly IJwtTokenService _jwtTokenService;
     private readonly IRefreshTokenService _refreshTokenService;
-
     private readonly ILogger<GoogleLoginCommandHandler> _logger;
 
     public GoogleLoginCommandHandler(
@@ -35,7 +34,7 @@ public class GoogleLoginCommandHandler : IGoogleLoginCommandHandler
         IUnitOfWork unitOfWork,
         IJwtTokenService jwtTokenService,
         IRefreshTokenService refreshTokenService,
-        ILogger<GoogleLoginCommandHandler> _logger)
+        ILogger<GoogleLoginCommandHandler> logger)
     {
         _googleAuthService = googleAuthService;
         _userRepository = userRepository;
@@ -44,10 +43,10 @@ public class GoogleLoginCommandHandler : IGoogleLoginCommandHandler
         _unitOfWork = unitOfWork;
         _jwtTokenService = jwtTokenService;
         _refreshTokenService = refreshTokenService;
-        this._logger = _logger;
+        _logger = logger;
     }
 
-    public async Task<Result<AuthResponse>> HandleAsync(
+    public async Task<Result<AuthSessionResult>> HandleAsync(
         GoogleLoginRequest request,
         CancellationToken cancellationToken = default)
     {
@@ -59,7 +58,7 @@ public class GoogleLoginCommandHandler : IGoogleLoginCommandHandler
         if (googleResult.IsFailure)
         {
             _logger.LogWarning("Google login failed. Reason: invalid Google token.");
-            return Result.Failure<AuthResponse>(googleResult.Error);
+            return Result.Failure<AuthSessionResult>(googleResult.Error);
         }
 
         var googleUser = googleResult.Value;
@@ -70,7 +69,7 @@ public class GoogleLoginCommandHandler : IGoogleLoginCommandHandler
             _logger.LogWarning(
                 "Google login failed. Reason: Google email not verified. Email: {Email}.",
                 SensitiveDataMasker.MaskEmail(googleUser.Email));
-            return Result.Failure<AuthResponse>(AuthErrors.GoogleEmailNotVerified);
+            return Result.Failure<AuthSessionResult>(AuthErrors.GoogleEmailNotVerified);
         }
 
         var normalizedEmail = googleUser.Email.Trim().ToLowerInvariant();
@@ -85,7 +84,7 @@ public class GoogleLoginCommandHandler : IGoogleLoginCommandHandler
             _logger.LogWarning(
                 "Google login failed. Reason: account not registered. Email: {Email}.",
                 SensitiveDataMasker.MaskEmail(googleUser.Email));
-            return Result.Failure<AuthResponse>(AuthErrors.AccountNotRegistered);
+            return Result.Failure<AuthSessionResult>(AuthErrors.AccountNotRegistered);
         }
 
         // 4. Validate user status
@@ -94,7 +93,7 @@ public class GoogleLoginCommandHandler : IGoogleLoginCommandHandler
             _logger.LogWarning(
                 "Google login blocked for pending approval account. UserId: {UserId}.",
                 user.Id);
-            return Result.Failure<AuthResponse>(AuthErrors.AccountPendingApproval);
+            return Result.Failure<AuthSessionResult>(AuthErrors.AccountPendingApproval);
         }
 
         if (user.Status == UserStatus.Rejected)
@@ -102,7 +101,7 @@ public class GoogleLoginCommandHandler : IGoogleLoginCommandHandler
             _logger.LogWarning(
                 "Google login blocked for rejected account. UserId: {UserId}.",
                 user.Id);
-            return Result.Failure<AuthResponse>(AuthErrors.AccountRejected);
+            return Result.Failure<AuthSessionResult>(AuthErrors.AccountRejected);
         }
 
         if (user.Status == UserStatus.Blocked)
@@ -110,7 +109,7 @@ public class GoogleLoginCommandHandler : IGoogleLoginCommandHandler
             _logger.LogWarning(
                 "Google login blocked for blocked account. UserId: {UserId}.",
                 user.Id);
-            return Result.Failure<AuthResponse>(AuthErrors.UserBlocked);
+            return Result.Failure<AuthSessionResult>(AuthErrors.UserBlocked);
         }
 
         if (user.Status == UserStatus.Inactive)
@@ -118,7 +117,7 @@ public class GoogleLoginCommandHandler : IGoogleLoginCommandHandler
             _logger.LogWarning(
                 "Google login blocked for inactive account. UserId: {UserId}.",
                 user.Id);
-            return Result.Failure<AuthResponse>(AuthErrors.UserInactive);
+            return Result.Failure<AuthSessionResult>(AuthErrors.UserInactive);
         }
 
         if (user.Status != UserStatus.Active)
@@ -126,7 +125,7 @@ public class GoogleLoginCommandHandler : IGoogleLoginCommandHandler
             _logger.LogWarning(
                 "Google login blocked for inactive account. UserId: {UserId}.",
                 user.Id);
-            return Result.Failure<AuthResponse>(AuthErrors.UserInactive);
+            return Result.Failure<AuthSessionResult>(AuthErrors.UserInactive);
         }
 
         // 5. Get roles
@@ -163,11 +162,12 @@ public class GoogleLoginCommandHandler : IGoogleLoginCommandHandler
             majorCode = student?.MajorCode;
         }
 
-        var response = new AuthResponse
+        var response = new AuthSessionResult
         {
             AccessToken = accessToken.Token,
+            AccessTokenExpiresAt = accessToken.ExpiresAt,
             RefreshToken = refreshToken.RawToken,
-            ExpiresAt = accessToken.ExpiresAt,
+            RefreshTokenExpiresAt = refreshToken.ExpiresAt,
             User = new UserSummaryResponse
             {
                 Id = user.Id,
