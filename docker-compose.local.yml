@@ -10,6 +10,61 @@ services:
       - "5432:5432"
     volumes:
       - ehub_postgres_data:/var/lib/postgresql
+    networks:
+      - ehub-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ehub_user -d ehub_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    profiles:
+      - full
+    container_name: ehub-backend
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=ehub_db;Username=ehub_user;Password=ehub_password
+      Jwt__Issuer: EHub.Api
+      Jwt__Audience: EHub.Client
+      Jwt__Secret: ${JWT_SECRET}
+      Jwt__AccessTokenExpirationMinutes: 30
+      Jwt__RefreshTokenExpirationDays: 7
+      Google__ClientId: ${GOOGLE_CLIENT_ID}
+      Cors__AllowedOrigins__0: http://localhost:5173
+      Cors__AllowedOrigins__1: http://localhost:3000
+    ports:
+      - "5226:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - ehub-network
+
+  frontend:
+    profiles:
+      - full
+    container_name: ehub-frontend
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: /api
+        VITE_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    networks:
+      - ehub-network
 
 volumes:
   ehub_postgres_data:
+
+networks:
+  ehub-network:
+    driver: bridge

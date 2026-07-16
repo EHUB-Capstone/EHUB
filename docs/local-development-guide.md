@@ -133,3 +133,47 @@ Sau khi đã kết nối thành công theo một trong hai phương án trên:
 ```bash
 dotnet test
 ```
+
+---
+
+## 🐳 CHẠY TOÀN BỘ DỰ ÁN BẰNG DOCKER COMPOSE (FULL STACK)
+
+Dự án hiện tại hỗ trợ hai phương án chạy bằng Docker Compose tại tệp `docker-compose.local.yml`:
+
+### Bước 1: Chuẩn bị biến môi trường
+Trước khi chạy, sao chép tệp cấu hình mẫu ở thư mục gốc của dự án:
+*   Copy tệp `.env.example` thành `.env` (tệp `.env` đã được bỏ qua trong Git).
+*   Điền các thông số local hoặc giữ nguyên giá trị placeholder.
+
+### Bước 2: Lựa chọn chế độ khởi chạy
+
+#### 🔹 Phương án A: Chỉ khởi chạy Database (Mặc định)
+Dành cho trường hợp bạn muốn chạy Database bằng Docker, còn Backend và Frontend thì chạy trực tiếp trên IDE (Visual Studio, Rider) hoặc qua terminal:
+```bash
+docker compose -f docker-compose.local.yml up -d
+```
+*(Chỉ có duy nhất container `ehub-postgres` được bật).*
+
+#### 🔹 Phương án B: Khởi chạy toàn bộ hệ thống (Full Stack)
+Khởi chạy đồng thời cả Database, Backend (API) và Frontend (UI) trong mạng ảo nội bộ của Docker:
+```bash
+docker compose -f docker-compose.local.yml --profile full up --build -d
+```
+
+### Bước 3: Địa chỉ truy cập
+Khi chạy ở chế độ Full Stack, bạn có thể truy cập các dịch vụ qua các đường dẫn sau:
+*   **Giao diện Frontend (React):** `http://localhost:3000`
+*   **Trang tài liệu API (Swagger):** `http://localhost:5226/swagger`
+*   **Trang kiểm tra sức khỏe hệ thống (Health Check):** `http://localhost:5226/health`
+*   **PostgreSQL Database:** `localhost:5432` (kết nối bằng pgAdmin)
+
+### Bước 4: Tắt các container
+*   Để tắt hệ thống (ở chế độ Full Stack):
+    ```bash
+    docker compose -f docker-compose.local.yml --profile full down
+    ```
+*   Để tắt hệ thống và **xóa sạch dữ liệu cục bộ** trong database (Reset DB):
+    ```bash
+    docker compose -f docker-compose.local.yml --profile full down -v
+    ```
+
