@@ -1,25 +1,49 @@
-// @ts-nocheck
 import { useState } from 'react';
+import type { FormEvent } from 'react';
 import { Link } from 'react-router-dom';
-import { Sparkles, ArrowLeft, Mail, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, Mail, CheckCircle2 } from 'lucide-react';
 import Button from '../../components/ui/Button';
-import axiosClient from '../../api/axiosClient';
+import Input from '../../components/ui/Input';
+import { forgotPassword } from '../../api/authApi';
+import { parseApiError } from '../../utils/apiError';
 import toast from 'react-hot-toast';
+import logo from '../../assets/logo.png';
 
-const ForgotPassword = () => {
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+const ForgotPassword = (): React.ReactElement => {
   const [email, setEmail] = useState('');
+  const [emailError, setEmailError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!email) return toast.error('Please enter your email');
+    const normalizedEmail = email.trim();
+
+    if (!normalizedEmail) {
+      setEmailError('Email is required.');
+      return;
+    }
+
+    if (!EMAIL_PATTERN.test(normalizedEmail)) {
+      setEmailError('Enter a valid email address.');
+      return;
+    }
+
+    setEmailError('');
     setIsLoading(true);
     try {
-      await axiosClient.post('/auth/forgot-password', { email });
+      await forgotPassword({ email: normalizedEmail });
+      setEmail(normalizedEmail);
       setIsSuccess(true);
-    } catch (err) {
-      toast.error(err.message || 'Failed to process request');
+    } catch (error: unknown) {
+      const apiError = parseApiError(error, 'Unable to send the reset link. Please try again.');
+      if (apiError.fieldErrors.email) {
+        setEmailError(apiError.fieldErrors.email);
+      } else {
+        toast.error(apiError.message);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -36,9 +60,13 @@ const ForgotPassword = () => {
         <div className="bg-white/90 backdrop-blur-xl border border-slate-200/60 rounded-2xl shadow-float p-8 sm:p-10">
           {/* Logo */}
           <div className="text-center mb-8">
-            <div className="w-14 h-14 bg-gradient-to-br from-primary to-secondary rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-glow-primary">
-              <Sparkles className="w-6 h-6 text-white" />
-            </div>
+            <Link to="/" className="mb-5 inline-flex items-center gap-2.5 no-underline">
+              <img src={logo} alt="EHub" className="w-[38px] h-[38px] object-contain" />
+              <span className="text-[20px] font-extrabold tracking-tight">
+                <span className="text-[#F08A5D]">E</span>
+                <span className="text-[#1E5E9F]">HUB</span>
+              </span>
+            </Link>
             <h1 className="text-heading font-bold text-slate-900">Forgot Password</h1>
             <p className="text-body text-slate-500 mt-1">Enter your email and we'll send you instructions to reset your password.</p>
           </div>
@@ -57,20 +85,23 @@ const ForgotPassword = () => {
               </Link>
             </div>
           ) : (
-            <form onSubmit={handleSubmit} className="space-y-5">
+            <form onSubmit={handleSubmit} className="space-y-5" noValidate>
               <div>
-                <label htmlFor="forgot-email" className="block text-caption font-medium text-slate-600 mb-1.5">Email Address</label>
-                <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <input
-                    id="forgot-email"
-                    type="email"
-                    required
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="w-full bg-white border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 text-body text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-                  />
-                </div>
+                <Input
+                  id="forgot-email"
+                  type="email"
+                  label="Email Address"
+                  icon={Mail}
+                  autoComplete="email"
+                  required
+                  value={email}
+                  error={emailError}
+                  aria-invalid={Boolean(emailError)}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    if (emailError) setEmailError('');
+                  }}
+                />
               </div>
 
               <Button type="submit" variant="gradient" className="w-full" size="lg" isLoading={isLoading}>

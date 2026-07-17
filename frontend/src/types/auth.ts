@@ -66,12 +66,22 @@ export interface GoogleLoginPayload {
   idToken: string;
 }
 
+export interface ForgotPasswordPayload {
+  email: string;
+}
+
+export interface ResetPasswordPayload {
+  token: string;
+  newPassword: string;
+  confirmPassword: string;
+}
+
 // ─── Backend ApiResponse<T> wrapper ─────────────────────────────────────────
 
 export interface ApiResponse<T> {
   success: boolean;
   message: string;
-  data: T;
+  data: T | null;
   code: string | null;
   errors?: Array<{
     field: string;
@@ -97,4 +107,7 @@ export const AUTH_ERROR_CODES = {
   INVALID_ROLE:             'AUTH_INVALID_ROLE',
   INVALID_MAJOR:            'AUTH_INVALID_MAJOR',
   STUDENT_MAJOR_REQUIRED:   'AUTH_STUDENT_MAJOR_REQUIRED',
+  PASSWORD_RESET_TOKEN_INVALID: 'AUTH_PASSWORD_RESET_TOKEN_INVALID',
+  PASSWORD_RESET_RATE_LIMITED:  'AUTH_PASSWORD_RESET_RATE_LIMITED',
+  PASSWORD_RESET_FAILED:        'AUTH_PASSWORD_RESET_FAILED',
 } as const;

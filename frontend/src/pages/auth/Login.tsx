@@ -298,10 +298,7 @@ const Login: React.FC = () => {
 
             {/* Password */}
             <div>
-              <div className="flex justify-between items-center mb-1.5">
-                <label className="text-[13px] font-semibold text-slate-900 dark:text-slate-50">Password</label>
-                <Link to="/forgot-password" className="text-[12px] text-[#EA6A12] no-underline font-semibold">Forgot?</Link>
-              </div>
+              <label htmlFor="login-password" className="block text-[13px] font-semibold text-slate-900 dark:text-slate-50 mb-1.5">Password</label>
               <div className="relative">
                 <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                 <input id="login-password" type={showPass ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)}
@@ -312,6 +309,11 @@ const Login: React.FC = () => {
                   className="absolute right-3.5 top-1/2 -translate-y-1/2 bg-transparent border-none cursor-pointer text-slate-400 p-0">
                   {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
+              </div>
+              <div className="mt-2 text-right">
+                <Link to="/forgot-password" className="text-[12px] text-[#EA6A12] no-underline font-semibold hover:underline">
+                  Forgot password?
+                </Link>
               </div>
             </div>
 

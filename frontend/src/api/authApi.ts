@@ -1,12 +1,13 @@
 import axiosClient from './axiosClient';
 import type {
-  ApiResponse,
   AuthResponse,
   CurrentUser,
+  ForgotPasswordPayload,
   GoogleLoginPayload,
   LoginPayload,
   RegisterPayload,
   RegisterResult,
+  ResetPasswordPayload,
 } from '../types/auth';
 
 // ─── POST /api/auth/register ──────────────────────────────────────────────
@@ -42,4 +43,14 @@ export async function refreshToken(): Promise<AuthResponse> {
 // ─── POST /api/auth/logout ────────────────────────────────────────────────
 export async function logout(): Promise<void> {
   await axiosClient.post('/auth/logout');
+}
+
+// ─── POST /api/auth/forgot-password ──────────────────────────────────────
+export async function forgotPassword(payload: ForgotPasswordPayload): Promise<void> {
+  await axiosClient.post('/auth/forgot-password', payload);
+}
+
+// ─── POST /api/auth/reset-password ───────────────────────────────────────
+export async function resetPassword(payload: ResetPasswordPayload): Promise<void> {
+  await axiosClient.post('/auth/reset-password', payload);
 }
