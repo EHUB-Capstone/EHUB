@@ -11,6 +11,7 @@ using EHub.Infrastructure.Services;
 using EHub.Infrastructure.Services.Email;
 using EHub.Infrastructure.Services.Auth;
 using EHub.Application.Common.Models.Identity;
+using EHub.Infrastructure.Options;
 
 namespace EHub.Infrastructure;
 
@@ -49,7 +50,16 @@ public static class DependencyInjection
         services.AddScoped<IDateTimeProvider, DateTimeProvider>();
         services.AddScoped<IPasswordResetTokenService, PasswordResetTokenService>();
         
-        services.AddScoped<IEmailService, ConsoleEmailService>();
+        services.Configure<EmailOptions>(configuration.GetSection(EmailOptions.SectionName));
+        var emailProvider = configuration["Email:Provider"];
+        if (string.Equals(emailProvider, "Smtp", StringComparison.OrdinalIgnoreCase))
+        {
+            services.AddScoped<IEmailService, SmtpEmailService>();
+        }
+        else
+        {
+            services.AddScoped<IEmailService, ConsoleEmailService>();
+        }
 
         // HTTP Context Accessor
         services.AddHttpContextAccessor();

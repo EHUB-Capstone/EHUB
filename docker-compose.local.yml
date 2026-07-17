@@ -37,9 +37,14 @@ services:
       Google__ClientId: ${GOOGLE_CLIENT_ID}
       Cors__AllowedOrigins__0: http://localhost:5173
       Cors__AllowedOrigins__1: http://localhost:3000
-      Email__Provider: Console
+      Email__Provider: Smtp
       Email__FromName: EHUB
-      Email__FromEmail: noreply@ehub.local
+      Email__FromEmail: fptsmep@gmail.com
+      Email__SmtpHost: smtp.gmail.com
+      Email__SmtpPort: 587
+      Email__Username: ${EMAIL_USERNAME}
+      Email__Password: ${EMAIL_PASSWORD}
+      Email__SecureSocketOption: StartTls
       Frontend__BaseUrl: http://localhost:3000
       PasswordReset__TokenExpirationMinutes: 15
     ports:
