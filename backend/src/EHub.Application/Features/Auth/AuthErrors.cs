@@ -63,4 +63,8 @@ public static class AuthErrors
     public static readonly Error RefreshTokenRevoked = new(
         ErrorCodes.AuthRefreshTokenRevoked,
         "Refresh token has been revoked.");
+
+    public static readonly Error PasswordResetTokenInvalid = new(
+        ErrorCodes.AuthPasswordResetTokenInvalid,
+        "Password reset token is invalid or expired.");
 }

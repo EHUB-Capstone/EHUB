@@ -8,6 +8,9 @@ using EHub.Infrastructure.Persistence;
 using EHub.Infrastructure.Persistence.Repositories;
 using EHub.Infrastructure.Identity;
 using EHub.Infrastructure.Services;
+using EHub.Infrastructure.Services.Email;
+using EHub.Infrastructure.Services.Auth;
+using EHub.Application.Common.Models.Identity;
 
 namespace EHub.Infrastructure;
 
@@ -32,6 +35,7 @@ public static class DependencyInjection
         services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
         services.AddScoped<IStudentRepository, StudentRepository>();
         services.AddScoped<IMentorProfileRepository, MentorProfileRepository>();
+        services.AddScoped<IPasswordResetTokenRepository, PasswordResetTokenRepository>();
         services.AddScoped<IUnitOfWork, UnitOfWork>();
 
         // Identity Services
@@ -43,6 +47,9 @@ public static class DependencyInjection
 
         // Common Services
         services.AddScoped<IDateTimeProvider, DateTimeProvider>();
+        services.AddScoped<IPasswordResetTokenService, PasswordResetTokenService>();
+        
+        services.AddScoped<IEmailService, ConsoleEmailService>();
 
         // HTTP Context Accessor
         services.AddHttpContextAccessor();
@@ -50,6 +57,8 @@ public static class DependencyInjection
         // Configuration Options Binding
         services.Configure<JwtOptions>(configuration.GetSection(JwtOptions.SectionName));
         services.Configure<GoogleOptions>(configuration.GetSection(GoogleOptions.SectionName));
+        services.Configure<FrontendOptions>(configuration.GetSection(FrontendOptions.SectionName));
+        services.Configure<PasswordResetOptions>(configuration.GetSection(PasswordResetOptions.SectionName));
 
         return services;
     }

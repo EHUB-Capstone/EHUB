@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
+using EHub.Application.Common.Interfaces.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Configuration;
 using Testcontainers.PostgreSql;
@@ -70,6 +71,67 @@ public sealed class CustomWebApplicationFactory
                 services.Remove(googleAuthDescriptor);
             }
             services.AddScoped<IGoogleAuthService, FakeGoogleAuthService>();
+
+            var emailServiceDescriptor = services.SingleOrDefault(
+                d => d.ServiceType == typeof(IEmailService));
+            if (emailServiceDescriptor != null)
+            {
+                services.Remove(emailServiceDescriptor);
+            }
+            services.AddSingleton<IEmailService, FakeEmailService>();
         });
+    }
+}
+
+public class FakeEmailService : IEmailService
+{
+    public static string? LastResetUrl { get; set; }
+    public static string? LastRawToken { get; set; }
+
+    public Task SendPasswordResetEmailAsync(
+        string toEmail,
+        string fullName,
+        string resetUrl,
+        DateTime expiresAt,
+        CancellationToken cancellationToken = default)
+    {
+        LastResetUrl = resetUrl;
+        
+        if (!string.IsNullOrEmpty(resetUrl))
+        {
+            try
+            {
+                var uri = new Uri(resetUrl);
+                var query = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(uri.Query);
+                if (query.TryGetValue("token", out var tokenValue))
+                {
+                    LastRawToken = tokenValue;
+                }
+            }
+            catch (UriFormatException)
+            {
+                // Fallback for relative URI
+                var queryStart = resetUrl.IndexOf('?');
+                if (queryStart >= 0)
+                {
+                    var queryStr = resetUrl.Substring(queryStart);
+                    var query = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(queryStr);
+                    if (query.TryGetValue("token", out var tokenValue))
+                    {
+                        LastRawToken = tokenValue;
+                    }
+                }
+            }
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public Task SendPasswordChangedNotificationAsync(
+        string toEmail,
+        string fullName,
+        CancellationToken cancellationToken = default)
+    {
+        return Task.CompletedTask;
     }
 }
