@@ -1,8 +1,13 @@
-// @ts-nocheck
 import { AlertOctagon, RefreshCw } from 'lucide-react';
 import Button from './Button';
 
-const ErrorState = ({ title = 'Something went wrong', message = 'Failed to load data. Please try again.', onRetry }) => {
+interface ErrorStateProps {
+  title?: string;
+  message?: string;
+  onRetry?: () => void;
+}
+
+const ErrorState = ({ title = 'Something went wrong', message = 'Failed to load data. Please try again.', onRetry }: ErrorStateProps) => {
   return (
     <div className="flex flex-col items-center justify-center p-12 text-center h-full w-full bg-white rounded-2xl border border-slate-200/60 shadow-sm">
       <div className="w-16 h-16 bg-red-50 text-red-500 flex items-center justify-center rounded-2xl mb-4">

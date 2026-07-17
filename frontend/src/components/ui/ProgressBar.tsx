@@ -1,25 +1,33 @@
-// @ts-nocheck
 import { cn } from '../../utils/cn';
 
-const ProgressBar = ({ value = 0, max = 100, color = 'primary', size = 'md', showLabel = false, className }) => {
+const colors = {
+  primary: 'bg-primary',
+  secondary: 'bg-secondary',
+  cyan: 'bg-cyan-500',
+  success: 'bg-success',
+  warning: 'bg-warning',
+  danger: 'bg-danger',
+  gradient: 'bg-gradient-to-r from-primary to-secondary',
+};
+
+const sizes = {
+  xs: 'h-1',
+  sm: 'h-1.5',
+  md: 'h-2',
+  lg: 'h-3',
+};
+
+interface ProgressBarProps {
+  value?: number;
+  max?: number;
+  color?: keyof typeof colors;
+  size?: keyof typeof sizes;
+  showLabel?: boolean;
+  className?: string;
+}
+
+const ProgressBar = ({ value = 0, max = 100, color = 'primary', size = 'md', showLabel = false, className }: ProgressBarProps) => {
   const percent = Math.min(Math.max((value / max) * 100, 0), 100);
-
-  const colors = {
-    primary: 'bg-primary',
-    secondary: 'bg-secondary',
-    cyan: 'bg-cyan-500',
-    success: 'bg-success',
-    warning: 'bg-warning',
-    danger: 'bg-danger',
-    gradient: 'bg-gradient-to-r from-primary to-secondary',
-  };
-
-  const sizes = {
-    xs: 'h-1',
-    sm: 'h-1.5',
-    md: 'h-2',
-    lg: 'h-3',
-  };
 
   return (
     <div className={cn('w-full', className)}>

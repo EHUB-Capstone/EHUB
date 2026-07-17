@@ -1,5 +1,5 @@
-// @ts-nocheck
 import { NavLink, useNavigate } from 'react-router-dom';
+import type { LucideIcon } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { cn } from '../../utils/cn';
 import logo from '../../assets/logo.png';
@@ -8,7 +8,7 @@ import {
   Kanban, Brain, Video, Rocket, LogOut, Plus, X, MessageSquare, Database, BookOpen
 } from 'lucide-react';
 
-const iconMap = {
+const iconMap: Record<string, LucideIcon> = {
   dashboard: LayoutDashboard,
   group: Users,
   school: GraduationCap,
@@ -26,7 +26,20 @@ const iconMap = {
   book_open: BookOpen,
 };
 
-const Sidebar = ({ mobileOpen, onMobileClose }) => {
+interface SidebarProps {
+  mobileOpen: boolean;
+  onMobileClose: () => void;
+}
+
+interface NavItem {
+  path: string;
+  icon: string;
+  label: string;
+}
+
+type NavigationRole = 'ADMIN' | 'LECTURER' | 'MENTOR' | 'STUDENT';
+
+const Sidebar = ({ mobileOpen, onMobileClose }: SidebarProps) => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
@@ -36,9 +49,11 @@ const Sidebar = ({ mobileOpen, onMobileClose }) => {
   };
 
   const rawRole = user?.role?.toUpperCase();
-  const role = rawRole === 'USER' ? 'STUDENT' : rawRole;
+  const role: NavigationRole = rawRole === 'USER' || !rawRole
+    ? 'STUDENT'
+    : (rawRole as NavigationRole);
 
-  const navItems = {
+  const navItems: Record<NavigationRole, NavItem[]> = {
     ADMIN: [
       { path: '/admin', icon: 'dashboard', label: 'Overview' },
       { path: '/admin/subjects', icon: 'book_open', label: 'Subject Management' },
@@ -95,17 +110,17 @@ const Sidebar = ({ mobileOpen, onMobileClose }) => {
   return (
     <aside
       className={cn(
-        'fixed left-0 top-0 h-screen z-50 flex flex-col bg-white border-r border-slate-200/80 transition-transform duration-300 ease-out w-[260px]',
+        'fixed left-0 top-0 h-screen z-50 flex flex-col bg-white/95 dark:bg-[#111827]/95 backdrop-blur-xl border-r border-slate-200/80 dark:border-white/10 transition-transform duration-300 ease-out w-[260px]',
         mobileOpen ? 'translate-x-0' : '-translate-x-full',
         'lg:translate-x-0'
       )}
     >
       {/* Brand */}
-      <div className="flex items-center justify-between h-16 border-b border-slate-100 px-4">
+      <div className="flex items-center justify-between h-16 border-b border-slate-100 dark:border-white/10 px-4">
         <div className="flex items-center gap-3">
           <img src={logo} alt="EHub" className="w-9 h-9 rounded-xl object-contain shrink-0" />
           <div className="min-w-0">
-            <h1 className="text-[15px] font-bold leading-tight tracking-tight"><span className="text-[#F08A5D]">E</span><span className="text-[#1E5E9F]">HUB</span></h1>
+            <h1 className="text-[15px] font-bold leading-tight tracking-tight"><span className="text-[#F08A5D]">E</span><span className="text-[#1E5E9F] dark:text-[#79A8D9]">HUB</span></h1>
             <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-[0.12em]">Startup Portal</p>
           </div>
         </div>

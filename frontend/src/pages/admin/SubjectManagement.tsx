@@ -1,5 +1,4 @@
-// @ts-nocheck
-// src/pages/admin/SubjectManagement.jsx
+// src/pages/admin/SubjectManagement.tsx
 import { useState, useEffect } from 'react';
 import { Search, Filter, Plus, Edit, Trash2, BookOpen, RefreshCw, Calendar, Sparkles } from 'lucide-react';
 import Button from '../../components/ui/Button';
@@ -57,7 +56,7 @@ const SubjectManagement = () => {
   const fetchSubjects = async () => {
     try {
       setLoading(true);
-      const params = {};
+      const params: { search?: string; status?: string } = {};
       if (debouncedSearch) params.search = debouncedSearch;
       if (statusFilter !== 'ALL') params.status = statusFilter;
 
@@ -145,9 +144,7 @@ const SubjectManagement = () => {
     }
   };
 
-  const handleSubmit = async (e) => {
-    if (e && e.preventDefault) e.preventDefault();
-
+  const handleSubmit = async () => {
     if (!formData.subjectCode || !formData.subjectCode.trim()) {
       toast.error('Subject Code is required');
       return;

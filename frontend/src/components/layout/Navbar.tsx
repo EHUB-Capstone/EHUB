@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { useAuth } from '../../hooks/useAuth';
 import { Search, ChevronDown, User, LogOut, Menu, Settings, Moon, Sun, AlertTriangle } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
@@ -10,7 +9,7 @@ import { notificationApi } from '../../api/notificationApi';
 
 const Navbar = ({ onMenuClick }) => {
   const { user, logout } = useAuth();
-  const { theme, toggleTheme } = useTheme();
+  const { isDark, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [classConflictAlert, setClassConflictAlert] = useState(null);
@@ -85,7 +84,7 @@ const Navbar = ({ onMenuClick }) => {
   if (!user) return null;
 
   return (
-    <header className="bg-white/80 backdrop-blur-xl border-b border-slate-200/60 sticky top-0 z-30 h-16 flex items-center justify-between px-4 sm:px-6 gap-4">
+    <header className="bg-white/85 dark:bg-[#111827]/88 backdrop-blur-xl border-b border-slate-200/60 dark:border-white/10 sticky top-0 z-30 h-16 flex items-center justify-between px-4 sm:px-6 gap-4 transition-colors duration-200">
       {/* Left: Hamburger + Search */}
       <div className="flex items-center gap-3 flex-1 min-w-0">
         <button
@@ -118,10 +117,10 @@ const Navbar = ({ onMenuClick }) => {
           type="button"
           onClick={toggleTheme}
           className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 text-slate-600 transition-all hover:bg-slate-200 hover:text-slate-900"
-          aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
-          title={theme === 'dark' ? 'Light theme' : 'Dark theme'}
+          aria-label={isDark ? 'Switch to light theme' : 'Switch to dark theme'}
+          title={isDark ? 'Light theme' : 'Dark theme'}
         >
-          {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+          {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
         </button>
 
         {/* Notification */}

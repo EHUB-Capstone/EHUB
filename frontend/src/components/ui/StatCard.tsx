@@ -1,4 +1,5 @@
-// @ts-nocheck
+import type { ReactNode } from 'react';
+import type { LucideIcon } from 'lucide-react';
 import { cn } from '../../utils/cn';
 import { motion } from 'framer-motion';
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
@@ -22,7 +23,24 @@ const iconBgColors = {
   success: 'bg-success-50 text-success',
   warning: 'bg-warning-50 text-warning-dark',
   danger: 'bg-danger-50 text-danger',
+  indigo: 'bg-indigo-50 text-indigo-600',
+  violet: 'bg-violet-50 text-violet-600',
+  orange: 'bg-orange-50 text-orange-600',
 };
+
+type StatTrend = keyof typeof trendIcons;
+type StatColor = keyof typeof iconBgColors;
+
+interface StatCardProps {
+  title: ReactNode;
+  value: ReactNode;
+  change?: ReactNode;
+  trend?: StatTrend;
+  icon: LucideIcon;
+  color?: StatColor;
+  suffix?: ReactNode;
+  delay?: number;
+}
 
 const StatCard = ({
   title,
@@ -33,7 +51,7 @@ const StatCard = ({
   color = 'primary',
   suffix,
   delay = 0,
-}) => {
+}: StatCardProps) => {
   const TrendIcon = trendIcons[trend];
 
   return (

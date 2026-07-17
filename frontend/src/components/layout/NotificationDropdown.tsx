@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Bell, Check, Calendar, Award, Kanban, Brain, MessageSquare, ShieldAlert } from 'lucide-react';

@@ -6,32 +6,32 @@
 /* ─── Tailwind v4: Custom theme via CSS variables ─── */
 @theme {
   /* Colors */
-  --color-primary: #F37021;
-  --color-primary-light: #f58f4d;
-  --color-primary-lighter: #f8b48d;
-  --color-primary-dark: #c1581a;
-  --color-primary-50: #fff3ea;
-  --color-primary-100: #fdede4;
-  --color-primary-200: #fbd4c0;
-  --color-primary-300: #f9bb9d;
-  --color-primary-400: #f58f4d;
-  --color-primary-500: #f47d33;
-  --color-primary-600: #F37021;
-  --color-primary-700: #c1581a;
-  --color-primary-800: #914213;
-  --color-primary-900: #602c0d;
+  --color-primary: #EA6A12;
+  --color-primary-light: #F08A5D;
+  --color-primary-lighter: #F6B27A;
+  --color-primary-dark: #C4570C;
+  --color-primary-50: #fff7ed;
+  --color-primary-100: #ffedd5;
+  --color-primary-200: #fed7aa;
+  --color-primary-300: #fdba74;
+  --color-primary-400: #fb923c;
+  --color-primary-500: #f97316;
+  --color-primary-600: #EA6A12;
+  --color-primary-700: #C4570C;
+  --color-primary-800: #9a4310;
+  --color-primary-900: #7c3510;
 
-  --color-secondary: #034EA2;
-  --color-secondary-light: #3371b8;
-  --color-secondary-dark: #023a78;
+  --color-secondary: #1E5E9F;
+  --color-secondary-light: #79A8D9;
+  --color-secondary-dark: #164A7F;
   --color-secondary-50: #eaf2ff;
   --color-secondary-100: #d5e4fc;
   --color-secondary-200: #adc9f7;
   --color-secondary-300: #85aef2;
   --color-secondary-400: #5c93ed;
   --color-secondary-500: #3371b8;
-  --color-secondary-600: #034EA2;
-  --color-secondary-700: #023a78;
+  --color-secondary-600: #1E5E9F;
+  --color-secondary-700: #164A7F;
 
   --color-cyan: #0084c8;
   --color-cyan-light: #33a5dd;
@@ -71,8 +71,8 @@
   --shadow-card: 0 2px 8px -2px rgb(0 0 0 / 0.05), 0 1px 4px -2px rgb(0 0 0 / 0.04);
   --shadow-elevated: 0 4px 16px -4px rgb(0 0 0 / 0.08), 0 2px 6px -2px rgb(0 0 0 / 0.04);
   --shadow-float: 0 8px 30px -6px rgb(0 0 0 / 0.1), 0 4px 10px -4px rgb(0 0 0 / 0.04);
-  --shadow-glow-primary: 0 0 20px -5px rgba(243, 112, 33, 0.25);
-  --shadow-glow-cyan: 0 0 20px -5px rgba(3, 78, 162, 0.25);
+  --shadow-glow-primary: 0 14px 36px -12px rgba(234, 106, 18, 0.34);
+  --shadow-glow-cyan: 0 14px 36px -12px rgba(30, 94, 159, 0.28);
 
   /* Animations */
   --animate-fade-in: fadeIn 0.5s ease-out;
@@ -118,6 +118,21 @@ html {
 body {
   background-color: #f8fafc;
   color: #0f172a;
+  transition: background-color 200ms ease, color 200ms ease;
+}
+
+:root {
+  --app-toast-bg: #ffffff;
+  --app-toast-color: #0f172a;
+  --app-toast-border: #e2e8f0;
+}
+
+.dark body {
+  background-color: #0f172a;
+  color: #f8fafc;
+  --app-toast-bg: #111827;
+  --app-toast-color: #f8fafc;
+  --app-toast-border: rgba(255, 255, 255, 0.12);
 }
 
 ::selection {
@@ -127,7 +142,7 @@ body {
 
 /* ─── Gradient backgrounds ─── */
 .bg-gradient-primary {
-  background: linear-gradient(135deg, #F37021 0%, #f58f4d 100%);
+  background: linear-gradient(135deg, #EA6A12 0%, #D97706 100%);
 }
 
 .bg-gradient-hero {
@@ -140,7 +155,7 @@ body {
 
 /* ─── Text gradients ─── */
 .text-gradient-primary {
-  background: linear-gradient(to right, #F37021, #034EA2);
+  background: linear-gradient(to right, #EA6A12, #1E5E9F);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -155,6 +170,143 @@ body {
   border-radius: 1rem;
   box-shadow: var(--shadow-card);
 }
+
+/* Dashboard surfaces share the visual language used by Home and Login. */
+.dashboard-shell {
+  background-color: #f8fafc;
+  background-image:
+    radial-gradient(ellipse at 12% 0%, rgba(234, 106, 18, 0.055), transparent 36%),
+    radial-gradient(ellipse at 92% 8%, rgba(30, 94, 159, 0.05), transparent 34%);
+  color: #0f172a;
+  transition: background-color 200ms ease, color 200ms ease;
+}
+
+.dark .dashboard-shell {
+  background-color: #0f172a;
+  background-image:
+    radial-gradient(ellipse at 12% 0%, rgba(234, 106, 18, 0.09), transparent 36%),
+    radial-gradient(ellipse at 92% 8%, rgba(121, 168, 217, 0.08), transparent 34%);
+  color: #f8fafc;
+  color-scheme: dark;
+}
+
+/* App-wide dark surfaces. Keeping this at the utility level also covers portals,
+   auth pages, student workspaces, tables and imported WDP modals. */
+.dark :where(.bg-white) { background-color: #111827; }
+.dark :where(.bg-white\/60) { background-color: rgba(17, 24, 39, 0.66); }
+.dark :where(.bg-white\/70) { background-color: rgba(17, 24, 39, 0.74); }
+.dark :where(.bg-white\/80) { background-color: rgba(17, 24, 39, 0.84); }
+.dark :where(.bg-white\/85) { background-color: rgba(17, 24, 39, 0.88); }
+.dark :where(.bg-white\/90) { background-color: rgba(17, 24, 39, 0.92); }
+.dark :where(.bg-white\/95) { background-color: rgba(17, 24, 39, 0.96); }
+
+.dark :where(.bg-slate-50, .bg-gray-50) { background-color: #162033; }
+.dark :where(
+  .bg-slate-50\/20, .bg-slate-50\/30, .bg-slate-50\/40,
+  .bg-slate-50\/50, .bg-slate-50\/60, .bg-slate-50\/70, .bg-slate-50\/80,
+  .bg-gray-50\/20, .bg-gray-50\/30, .bg-gray-50\/40, .bg-gray-50\/50
+) { background-color: rgba(30, 41, 59, 0.56); }
+.dark :where(.bg-slate-100, .bg-gray-100) { background-color: #1e293b; }
+.dark :where(.bg-slate-100\/60, .bg-slate-100\/80) { background-color: rgba(51, 65, 85, 0.64); }
+.dark :where(.bg-slate-200, .bg-gray-200) { background-color: #334155; }
+.dark :where(.bg-slate-300, .bg-gray-300) { background-color: #475569; }
+
+.dark :where(.bg-primary-50) { background-color: rgba(234, 106, 18, 0.12); }
+.dark :where(.bg-primary-100, .bg-primary-200) { background-color: rgba(234, 106, 18, 0.18); }
+.dark :where(.bg-success-50, .bg-green-50) { background-color: rgba(34, 197, 94, 0.11); }
+.dark :where(.bg-warning-50, .bg-amber-50, .bg-yellow-50) { background-color: rgba(245, 158, 11, 0.11); }
+.dark :where(.bg-danger-50, .bg-red-50) { background-color: rgba(239, 68, 68, 0.11); }
+.dark :where(.bg-secondary-50, .bg-blue-50, .bg-cyan-50) { background-color: rgba(121, 168, 217, 0.11); }
+
+/* Semantic chips and alert panels keep their meaning without becoming bright
+   islands inside the dark interface. */
+.dark :where(
+  .bg-blue-100, .bg-blue-100\/60, .bg-cyan-100, .bg-cyan-100\/40,
+  .bg-indigo-50, .bg-indigo-100, .bg-indigo-100\/50, .bg-indigo-200
+) { background-color: rgba(59, 130, 246, 0.16); }
+.dark :where(
+  .bg-green-100, .bg-green-200, .bg-emerald-50, .bg-emerald-50\/40,
+  .bg-emerald-50\/50, .bg-emerald-50\/60, .bg-emerald-100,
+  .bg-emerald-100\/60, .bg-emerald-200
+) { background-color: rgba(34, 197, 94, 0.15); }
+.dark :where(
+  .bg-orange-50, .bg-orange-50\/30, .bg-orange-50\/40, .bg-orange-50\/50,
+  .bg-orange-50\/70, .bg-orange-100, .bg-amber-100, .bg-amber-100\/50,
+  .bg-amber-100\/60, .bg-amber-200, .bg-yellow-100, .bg-yellow-200
+) { background-color: rgba(245, 158, 11, 0.15); }
+.dark :where(.bg-red-100, .bg-pink-50, .bg-pink-100) { background-color: rgba(239, 68, 68, 0.15); }
+.dark :where(.bg-purple-50, .bg-purple-100, .bg-violet-50) { background-color: rgba(168, 85, 247, 0.15); }
+
+.dark :where(.text-slate-950, .text-slate-900, .text-gray-900) { color: #f8fafc; }
+.dark :where(.text-slate-800, .text-gray-800) { color: #e2e8f0; }
+.dark :where(.text-slate-700, .text-gray-700) { color: #cbd5e1; }
+.dark :where(.text-slate-600, .text-gray-600) { color: #b6c2d1; }
+.dark :where(.text-slate-500, .text-gray-500) { color: #94a3b8; }
+.dark :where(.text-slate-400, .text-gray-400) { color: #8493aa; }
+.dark :where(.text-primary-dark) { color: #fb923c; }
+.dark :where(.text-secondary-dark) { color: #93c5fd; }
+.dark :where(.text-blue-600, .text-blue-700, .text-blue-800, .text-blue-900, .text-cyan-600, .text-cyan-700, .text-indigo-600, .text-indigo-600\/80, .text-indigo-700, .text-indigo-800) { color: #93c5fd; }
+.dark :where(.text-green-600, .text-green-700, .text-green-800, .text-green-900, .text-emerald-600, .text-emerald-700, .text-emerald-800) { color: #86efac; }
+.dark :where(.text-orange-600, .text-orange-700, .text-orange-800, .text-amber-600, .text-amber-600\/80, .text-amber-700, .text-amber-800, .text-amber-900, .text-yellow-600, .text-yellow-800, .text-yellow-900) { color: #fbbf24; }
+.dark :where(.text-red-600, .text-red-700, .text-red-800, .text-red-900, .text-pink-700) { color: #fca5a5; }
+.dark :where(.text-purple-600, .text-purple-700, .text-purple-800, .text-purple-900, .text-violet-600, .text-violet-700) { color: #d8b4fe; }
+.dark :where(.text-\[\#034EA2\]) { color: #79a8d9; }
+
+.dark :where(
+  .border-slate-50, .border-slate-100, .border-slate-100\/60,
+  .border-slate-200, .border-slate-200\/40, .border-slate-200\/50,
+  .border-slate-200\/60, .border-slate-200\/70, .border-slate-200\/80,
+  .border-slate-300, .border-slate-300\/60, .border-gray-100,
+  .border-gray-200, .border-gray-300
+) { border-color: rgba(255, 255, 255, 0.11); }
+
+.dark :where(
+  .border-blue-50, .border-blue-100, .border-blue-100\/50, .border-blue-200,
+  .border-blue-200\/60, .border-blue-300, .border-cyan-100, .border-cyan-200,
+  .border-indigo-100, .border-indigo-100\/50, .border-indigo-200, .border-indigo-300
+) { border-color: rgba(96, 165, 250, 0.28); }
+.dark :where(
+  .border-green-50, .border-green-100, .border-green-200, .border-green-300,
+  .border-emerald-50, .border-emerald-100, .border-emerald-100\/60,
+  .border-emerald-200, .border-emerald-200\/50, .border-emerald-200\/60,
+  .border-emerald-300
+) { border-color: rgba(74, 222, 128, 0.28); }
+.dark :where(
+  .border-orange-50, .border-orange-100, .border-orange-200, .border-orange-200\/80,
+  .border-orange-300, .border-amber-50, .border-amber-100, .border-amber-100\/50,
+  .border-amber-200, .border-amber-200\/60, .border-amber-300,
+  .border-yellow-200, .border-yellow-300
+) { border-color: rgba(251, 191, 36, 0.3); }
+.dark :where(.border-red-50, .border-red-100, .border-red-200, .border-red-200\/50, .border-red-200\/60, .border-red-300, .border-pink-100, .border-pink-200) { border-color: rgba(248, 113, 113, 0.28); }
+.dark :where(.border-purple-100, .border-purple-200, .border-purple-300, .border-violet-200\/60) { border-color: rgba(192, 132, 252, 0.28); }
+
+.dark :where(.divide-slate-100, .divide-slate-200, .divide-gray-100, .divide-gray-200) > :not(:last-child) {
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.dark :where(input, select, textarea) {
+  background-color: rgba(15, 23, 42, 0.72);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: #f8fafc;
+}
+
+.dark :where(input, textarea)::placeholder { color: #718096; }
+.dark :where(select option) { background-color: #111827; color: #f8fafc; }
+
+.dark :where(.hover\:bg-white):hover { background-color: #1e293b; }
+.dark :where(.hover\:bg-slate-50, .hover\:bg-gray-50):hover { background-color: #1e293b; }
+.dark :where(.hover\:bg-slate-100, .hover\:bg-gray-100):hover { background-color: #334155; }
+.dark :where(.hover\:text-slate-900, .hover\:text-gray-900):hover { color: #ffffff; }
+.dark :where(.hover\:text-slate-800, .hover\:text-gray-800):hover { color: #f1f5f9; }
+.dark :where(.focus\:bg-white):focus { background-color: #111827; }
+.dark :where(.disabled\:bg-slate-50, .disabled\:bg-gray-50):disabled { background-color: #1e293b; }
+
+.dark :where(.shadow-sm, .shadow-card, .shadow-elevated, .shadow-float) {
+  --tw-shadow-color: rgba(0, 0, 0, 0.32);
+}
+
+.dark ::-webkit-scrollbar-thumb { background-color: #475569; }
+.dark ::-webkit-scrollbar-thumb:hover { background-color: #64748b; }
 
 /* ─── Hover lift ─── */
 .hover-lift {

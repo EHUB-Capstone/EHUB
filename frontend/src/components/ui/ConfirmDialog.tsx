@@ -1,7 +1,18 @@
-// @ts-nocheck
 import Modal from './Modal';
-import Button from './Button';
+import Button, { type ButtonVariant } from './Button';
 import { AlertTriangle } from 'lucide-react';
+
+interface ConfirmDialogProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onConfirm: () => void | Promise<void>;
+  title: string;
+  description: string;
+  isSubmitting?: boolean;
+  confirmText?: string;
+  cancelText?: string;
+  confirmVariant?: ButtonVariant;
+}
 
 const ConfirmDialog = ({
   isOpen,
@@ -12,7 +23,8 @@ const ConfirmDialog = ({
   isSubmitting,
   confirmText = 'Delete',
   cancelText = 'Cancel',
-}) => {
+  confirmVariant = 'danger',
+}: ConfirmDialogProps) => {
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="">
       <div className="flex flex-col items-center text-center space-y-4 pt-4">
@@ -27,8 +39,8 @@ const ConfirmDialog = ({
             {cancelText}
           </Button>
           <Button
-            variant="primary"
-            className="flex-1 bg-red-500 hover:bg-red-600 focus:ring-red-500/20"
+            variant={confirmVariant}
+            className="flex-1"
             onClick={onConfirm}
             isLoading={isSubmitting}
           >

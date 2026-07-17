@@ -1,7 +1,12 @@
-// @ts-nocheck
 import { cn } from '../../utils/cn';
 
-const LoadingSkeleton = ({ className, lines = 1, variant = 'text' }) => {
+interface LoadingSkeletonProps {
+  className?: string;
+  lines?: number;
+  variant?: 'text' | 'card' | 'table';
+}
+
+const LoadingSkeleton = ({ className, lines = 1, variant = 'text' }: LoadingSkeletonProps) => {
   if (variant === 'card') {
     return (
       <div className={cn('bg-white rounded-2xl border border-slate-200/60 p-6 animate-pulse', className)}>

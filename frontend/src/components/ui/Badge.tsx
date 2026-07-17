@@ -1,4 +1,4 @@
-// @ts-nocheck
+import type { ReactNode } from 'react';
 import { cn } from '../../utils/cn';
 
 const statusColors = {
@@ -16,8 +16,18 @@ const statusColors = {
   Completed: 'bg-slate-100 text-slate-600 border-slate-200',
 };
 
-const Badge = ({ children, variant = 'Draft', className, dot = false, size = 'sm' }) => {
-  const sizeClasses = {
+type BadgeSize = 'xs' | 'sm' | 'md';
+
+interface BadgeProps {
+  children: ReactNode;
+  variant?: string;
+  className?: string;
+  dot?: boolean;
+  size?: BadgeSize;
+}
+
+const Badge = ({ children, variant = 'Draft', className, dot = false, size = 'sm' }: BadgeProps) => {
+  const sizeClasses: Record<BadgeSize, string> = {
     xs: 'text-[10px] px-1.5 py-0.5',
     sm: 'text-[11px] px-2 py-0.5',
     md: 'text-caption px-2.5 py-1',
@@ -26,7 +36,7 @@ const Badge = ({ children, variant = 'Draft', className, dot = false, size = 'sm
   return (
     <span className={cn(
       'inline-flex items-center gap-1 font-semibold rounded-full border',
-      statusColors[variant] || statusColors.Draft,
+      statusColors[variant as keyof typeof statusColors] || statusColors.Draft,
       sizeClasses[size],
       className
     )}>
