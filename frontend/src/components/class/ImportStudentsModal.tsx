@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { useState, useRef } from 'react';
 import toast from 'react-hot-toast';
 import { X, Upload, FileSpreadsheet, Download, CheckCircle2, AlertCircle, Loader2, Info } from 'lucide-react';

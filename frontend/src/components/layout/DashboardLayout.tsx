@@ -1,14 +1,13 @@
-// @ts-nocheck
 import { useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Navbar from './Navbar';
 
-const DashboardLayout = () => {
+const DashboardLayout = (): React.ReactElement => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
-    <div className="min-h-screen bg-slate-50 bg-mesh">
+    <div className="dashboard-shell min-h-screen">
       {/* Mobile overlay */}
       {sidebarOpen && (
         <div

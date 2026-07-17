@@ -1,9 +1,16 @@
-// @ts-nocheck
-import { forwardRef } from 'react';
+import { forwardRef, useId, type InputHTMLAttributes } from 'react';
+import type { LucideIcon } from 'lucide-react';
 import { cn } from '../../utils/cn';
 
-const Input = forwardRef(({ className, label, error, icon: Icon, id, ...props }, ref) => {
-  const inputId = id || `input-${Math.random().toString(36).substr(2, 9)}`;
+interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
+  label?: string;
+  error?: string;
+  icon?: LucideIcon;
+}
+
+const Input = forwardRef<HTMLInputElement, InputProps>(({ className, label, error, icon: Icon, id, ...props }, ref) => {
+  const generatedId = useId();
+  const inputId = id || generatedId;
 
   return (
     <div className="w-full">

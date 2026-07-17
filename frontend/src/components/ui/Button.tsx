@@ -1,6 +1,5 @@
-// @ts-nocheck
-
-import { forwardRef } from 'react';
+import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from 'react';
+import type { LucideIcon } from 'lucide-react';
 import { cn } from '../../utils/cn';
 import { Loader2 } from 'lucide-react';
 
@@ -22,7 +21,19 @@ const sizes = {
   xl: 'h-12 px-8 text-body-lg gap-2.5',
 };
 
-const Button = forwardRef(({
+export type ButtonVariant = keyof typeof variants;
+export type ButtonSize = keyof typeof sizes;
+
+export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+  variant?: ButtonVariant;
+  size?: ButtonSize;
+  isLoading?: boolean;
+  icon?: LucideIcon;
+  iconRight?: LucideIcon;
+  children?: ReactNode;
+}
+
+const Button = forwardRef<HTMLButtonElement, ButtonProps>(({
   className,
   variant = 'primary',
   size = 'md',

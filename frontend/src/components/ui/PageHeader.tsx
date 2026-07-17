@@ -1,8 +1,10 @@
-// @ts-nocheck
+import type { ReactNode } from 'react';
+import type { LucideIcon } from 'lucide-react';
 import { cn } from '../../utils/cn';
 import { motion } from 'framer-motion';
 import { ChevronRight } from 'lucide-react';
 import Button from './Button';
+import type { ButtonSize, ButtonVariant } from './Button';
 
 /**
  * PageHeader — Reusable premium page header
@@ -16,6 +18,27 @@ import Button from './Button';
  * - badge: { text, variant? }
  * - className: string
  */
+interface PageAction {
+  label: ReactNode;
+  onClick: () => void;
+  variant?: ButtonVariant;
+  size?: ButtonSize;
+  icon?: LucideIcon;
+  iconRight?: LucideIcon;
+  className?: string;
+}
+
+interface PageHeaderProps {
+  title: string;
+  subtitle?: string;
+  breadcrumb?: string[];
+  action?: PageAction;
+  actions?: PageAction[];
+  badge?: { text: string; className?: string };
+  className?: string;
+  children?: ReactNode;
+}
+
 const PageHeader = ({
   title,
   subtitle,
@@ -25,7 +48,7 @@ const PageHeader = ({
   badge,
   className,
   children,
-}) => {
+}: PageHeaderProps) => {
   return (
     <motion.div
       initial={{ opacity: 0, y: -8 }}

@@ -43,6 +43,7 @@ export interface WorkspaceUser extends CurrentUser {
   name: string;
   role: string;
   major: string | null;
+  avatar?: string;
 }
 
 // ─── Request payloads ────────────────────────────────────────────────────────

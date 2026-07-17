@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { useState, useEffect, useContext, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
@@ -75,7 +74,12 @@ export default function ClassManagement() {
   const fetchAll = async () => {
     setLoading(true);
     try {
-      const params = {};
+      const params: {
+        semester?: string;
+        year?: string;
+        subjectCode?: string;
+        search?: string;
+      } = {};
       if (filterSem)  params.semester    = filterSem;
       if (filterYear) params.year        = filterYear;
       if (filterSubj) params.subjectCode = filterSubj;

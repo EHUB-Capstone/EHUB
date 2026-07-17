@@ -1,6 +1,4 @@
-// @ts-nocheck
 import { useState, useEffect } from 'react';
-import toast from 'react-hot-toast';
 import { motion } from 'framer-motion';
 import { Users, GraduationCap, Rocket, Brain, TrendingUp, Trophy, BarChart3, Activity, UserCheck, LogIn, AlertTriangle, UserPlus, ShieldAlert, Zap, Wifi, WifiOff, Clock } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, Legend } from 'recharts';
@@ -12,7 +10,7 @@ import EmptyState from '../../components/ui/EmptyState';
 import Button from '../../components/ui/Button';
 import { useNavigate } from 'react-router-dom';
 
-const COLORS = ['#034EA2', '#F37021', '#51B848', '#3371b8', '#f58f4d'];
+const COLORS = ['#1E5E9F', '#EA6A12', '#51B848', '#79A8D9', '#F08A5D'];
 
 const AdminDashboard = () => {
   const [data, setData] = useState(null);
@@ -28,9 +26,9 @@ const AdminDashboard = () => {
       try {
         const res = await dashboardApi.getAdmin();
         setData(res.data || res);
-      } catch (err) {
-        setError(err.message || 'Failed to load dashboard');
-        toast.error('Could not load dashboard data');
+      } catch {
+        setData(null);
+        setError('Dashboard data is not available yet.');
       } finally {
         setLoading(false);
       }
@@ -45,7 +43,7 @@ const AdminDashboard = () => {
         setTrackingData(res.data || res);
       } catch (err) {
         // Tracking failure không làm vỡ dashboard
-        console.warn('Could not load tracking data:', err.message);
+        setTrackingData(null);
       }
     };
     fetchTracking();
@@ -58,7 +56,7 @@ const AdminDashboard = () => {
         const res = await trackingApi.getOnlineUsers();
         setOnlineData(res.data || res);
       } catch (err) {
-        console.warn('Could not load online users:', err.message);
+        setOnlineData(null);
       }
     };
     fetchOnline();
@@ -67,7 +65,7 @@ const AdminDashboard = () => {
   }, []);
 
   if (loading) return <LoadingSkeleton />;
-  if (error) return <EmptyState icon={Activity} title="Error Loading Dashboard" description={error} action={{ label: 'Retry', onClick: () => window.location.reload() }} />;
+  if (error) return <EmptyState icon={Activity} title="No Dashboard Data" description={error} action={{ label: 'Retry', onClick: () => window.location.reload() }} />;
   if (!data) return null;
 
   const { stats = {}, usersByRole = [], ideasByStatus = [], topTeams = [] } = data;

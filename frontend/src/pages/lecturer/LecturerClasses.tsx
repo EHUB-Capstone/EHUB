@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { useContext } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import ClassManagement from '../admin/ClassManagement';

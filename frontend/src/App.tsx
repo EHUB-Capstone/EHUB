@@ -59,6 +59,9 @@ function App(): React.ReactElement {
                 toastOptions={{
                   duration: 3500,
                   style: {
+                    background: 'var(--app-toast-bg)',
+                    color: 'var(--app-toast-color)',
+                    border: '1px solid var(--app-toast-border)',
                     borderRadius: '12px',
                     fontFamily: 'Inter, sans-serif',
                     fontSize: '14px',

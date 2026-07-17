@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { useState, useEffect } from 'react';
 import { Search, Filter, Plus, Edit, Trash2, Users, ArrowLeft, ArrowRight, Check, X } from 'lucide-react';
 import Button from '../../components/ui/Button';
@@ -46,7 +45,13 @@ const UserManagement = () => {
   const fetchUsers = async () => {
     try {
       setLoading(true);
-      const params = { page, limit: 10 };
+      const params: {
+        page: number;
+        limit: number;
+        search?: string;
+        role?: string;
+        status?: string;
+      } = { page, limit: 10 };
       if (debouncedSearch) params.search = debouncedSearch;
       if (roleFilter !== 'ALL') params.role = roleFilter;
       if (statusFilter !== 'ALL') params.status = statusFilter;
@@ -83,7 +88,7 @@ const UserManagement = () => {
 
   const openAddModal = () => {
     setEditingUser(null);
-    setFormData({ name: '', email: '', role: 'STUDENT' });
+    setFormData({ name: '', email: '', role: 'STUDENT', status: 'APPROVED' });
     setIsModalOpen(true);
   };
 
