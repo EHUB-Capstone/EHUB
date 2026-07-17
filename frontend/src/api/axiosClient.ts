@@ -63,6 +63,8 @@ axiosClient.interceptors.response.use(
     const isAuthEndpoint = originalRequest.url?.includes('/auth/login') ||
                            originalRequest.url?.includes('/auth/google') ||
                            originalRequest.url?.includes('/auth/register') ||
+                           originalRequest.url?.includes('/auth/forgot-password') ||
+                           originalRequest.url?.includes('/auth/reset-password') ||
                            originalRequest.url?.includes('/auth/refresh-token') ||
                            originalRequest.url?.includes('/auth/logout');
 

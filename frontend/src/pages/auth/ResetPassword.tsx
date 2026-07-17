@@ -1,33 +1,70 @@
-// @ts-nocheck
-import { useState } from 'react';
-import { Link, useParams, useNavigate } from 'react-router-dom';
-import { Sparkles, Key, CheckCircle2, ArrowRight } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import type { FormEvent } from 'react';
+import { Link, useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { Key, CheckCircle2, ArrowRight, AlertCircle } from 'lucide-react';
 import Button from '../../components/ui/Button';
-import axiosClient from '../../api/axiosClient';
+import Input from '../../components/ui/Input';
+import { resetPassword } from '../../api/authApi';
+import { AUTH_ERROR_CODES } from '../../types/auth';
+import { parseApiError } from '../../utils/apiError';
 import toast from 'react-hot-toast';
+import logo from '../../assets/logo.png';
 
-const ResetPassword = () => {
-  const { token } = useParams();
+interface ResetPasswordErrors {
+  password?: string;
+  confirmPassword?: string;
+}
+
+const ResetPassword = (): React.ReactElement => {
+  const { token: pathToken } = useParams<{ token?: string }>();
+  const [searchParams] = useSearchParams();
+  const token = searchParams.get('token')?.trim() || pathToken?.trim() || '';
   const navigate = useNavigate();
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [errors, setErrors] = useState<ResetPasswordErrors>({});
+  const [formError, setFormError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
 
-  const handleSubmit = async (e) => {
+  useEffect(() => {
+    if (!isSuccess) return undefined;
+
+    const redirectTimer = window.setTimeout(() => navigate('/login'), 3000);
+    return () => window.clearTimeout(redirectTimer);
+  }, [isSuccess, navigate]);
+
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!password || !confirmPassword) return toast.error('Please fill all fields');
-    if (password.length < 6) return toast.error('Password must be at least 6 characters');
-    if (password !== confirmPassword) return toast.error('Passwords do not match');
+    const nextErrors: ResetPasswordErrors = {};
+
+    if (!password) nextErrors.password = 'New password is required.';
+    else if (password.length < 8) nextErrors.password = 'Password must be at least 8 characters.';
+
+    if (!confirmPassword) nextErrors.confirmPassword = 'Please confirm your new password.';
+    else if (password !== confirmPassword) nextErrors.confirmPassword = 'Passwords do not match.';
+
+    setErrors(nextErrors);
+    setFormError('');
+    if (Object.keys(nextErrors).length > 0 || !token) return;
 
     setIsLoading(true);
     try {
-      await axiosClient.post(`/auth/reset-password/${token}`, { password });
+      await resetPassword({ token, newPassword: password, confirmPassword });
       setIsSuccess(true);
       toast.success('Password reset successfully');
-      setTimeout(() => navigate('/login'), 3000);
-    } catch (err) {
-      toast.error(err.message || 'Invalid or expired token');
+    } catch (error: unknown) {
+      const apiError = parseApiError(error, 'Unable to reset your password. Please try again.');
+      setErrors({
+        password: apiError.fieldErrors.newPassword,
+        confirmPassword: apiError.fieldErrors.confirmPassword,
+      });
+
+      if (apiError.code === AUTH_ERROR_CODES.PASSWORD_RESET_TOKEN_INVALID) {
+        setFormError('This password reset link is invalid or has expired. Request a new link.');
+      } else if (!apiError.fieldErrors.newPassword && !apiError.fieldErrors.confirmPassword) {
+        setFormError(apiError.message);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -44,14 +81,31 @@ const ResetPassword = () => {
         <div className="bg-white/90 backdrop-blur-xl border border-slate-200/60 rounded-2xl shadow-float p-8 sm:p-10">
           {/* Logo */}
           <div className="text-center mb-8">
-            <div className="w-14 h-14 bg-gradient-to-br from-primary to-secondary rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-glow-primary">
-              <Sparkles className="w-6 h-6 text-white" />
-            </div>
+            <Link to="/" className="mb-5 inline-flex items-center gap-2.5 no-underline">
+              <img src={logo} alt="EHub" className="w-[38px] h-[38px] object-contain" />
+              <span className="text-[20px] font-extrabold tracking-tight">
+                <span className="text-[#F08A5D]">E</span>
+                <span className="text-[#1E5E9F]">HUB</span>
+              </span>
+            </Link>
             <h1 className="text-heading font-bold text-slate-900">Create New Password</h1>
             <p className="text-body text-slate-500 mt-1">Your new password must be different from previously used passwords.</p>
           </div>
 
-          {isSuccess ? (
+          {!token ? (
+            <div className="flex flex-col items-center text-center space-y-4" role="alert">
+              <div className="w-16 h-16 bg-danger/10 rounded-2xl flex items-center justify-center">
+                <AlertCircle className="w-8 h-8 text-danger" />
+              </div>
+              <h3 className="text-xl font-bold text-slate-900">Invalid reset link</h3>
+              <p className="text-slate-500 text-body leading-relaxed">
+                This link does not contain a reset token. Request a new password reset email.
+              </p>
+              <Link to="/forgot-password" className="w-full mt-4">
+                <Button variant="gradient" className="w-full">Request New Link</Button>
+              </Link>
+            </div>
+          ) : isSuccess ? (
             <div className="flex flex-col items-center text-center space-y-4">
               <div className="w-16 h-16 bg-success-50 rounded-2xl flex items-center justify-center">
                 <CheckCircle2 className="w-8 h-8 text-success" />
@@ -65,39 +119,61 @@ const ResetPassword = () => {
               </Link>
             </div>
           ) : (
-            <form onSubmit={handleSubmit} className="space-y-5">
-              <div>
-                <label htmlFor="new-password" className="block text-caption font-medium text-slate-600 mb-1.5">New Password</label>
-                <div className="relative">
-                  <Key className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <input
-                    id="new-password"
-                    type="password"
-                    required
-                    minLength={6}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="w-full bg-white border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 text-body text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-                    placeholder="••••••••"
-                  />
+            <form onSubmit={handleSubmit} className="space-y-5" noValidate>
+              {formError && (
+                <div className="flex gap-3 rounded-xl border border-danger/30 bg-danger/10 p-3.5 text-left" role="alert">
+                  <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-danger" />
+                  <div>
+                    <p className="text-body-sm text-slate-700">{formError}</p>
+                    {formError.includes('expired') && (
+                      <Link to="/forgot-password" className="mt-1 inline-block text-body-sm font-medium text-primary hover:underline">
+                        Request a new reset link
+                      </Link>
+                    )}
+                  </div>
                 </div>
+              )}
+
+              <div>
+                <Input
+                  id="new-password"
+                  type="password"
+                  label="New Password"
+                  icon={Key}
+                  autoComplete="new-password"
+                  required
+                  minLength={8}
+                  value={password}
+                  error={errors.password}
+                  aria-invalid={Boolean(errors.password)}
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+                    setErrors((current) => ({ ...current, password: undefined }));
+                    setFormError('');
+                  }}
+                  placeholder="••••••••"
+                />
               </div>
 
               <div>
-                <label htmlFor="confirm-password" className="block text-caption font-medium text-slate-600 mb-1.5">Confirm Password</label>
-                <div className="relative">
-                  <Key className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <input
-                    id="confirm-password"
-                    type="password"
-                    required
-                    minLength={6}
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    className="w-full bg-white border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 text-body text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-                    placeholder="••••••••"
-                  />
-                </div>
+                <Input
+                  id="confirm-password"
+                  type="password"
+                  label="Confirm Password"
+                  icon={Key}
+                  autoComplete="new-password"
+                  required
+                  minLength={8}
+                  value={confirmPassword}
+                  error={errors.confirmPassword}
+                  aria-invalid={Boolean(errors.confirmPassword)}
+                  onChange={(e) => {
+                    setConfirmPassword(e.target.value);
+                    setErrors((current) => ({ ...current, confirmPassword: undefined }));
+                    setFormError('');
+                  }}
+                  placeholder="••••••••"
+                />
               </div>
 
               <Button type="submit" variant="gradient" className="w-full" size="lg" isLoading={isLoading}>
