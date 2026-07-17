@@ -20,5 +20,10 @@ public interface IRefreshTokenRepository
         Guid userId,
         CancellationToken cancellationToken = default);
 
+    Task RevokeAllActiveByUserIdAsync(
+        Guid userId,
+        DateTime revokedAt,
+        CancellationToken cancellationToken = default);
+
     void Update(RefreshToken refreshToken);
 }

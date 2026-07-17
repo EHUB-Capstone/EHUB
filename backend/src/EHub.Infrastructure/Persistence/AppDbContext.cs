@@ -65,6 +65,7 @@ public class AppDbContext : DbContext, IApplicationDbContext
     public DbSet<SprintTask> SprintTasks => Set<SprintTask>();
     public DbSet<WeeklyTask> WeeklyTasks => Set<WeeklyTask>();
     public DbSet<ProjectAnalysis> ProjectAnalyses => Set<ProjectAnalysis>();
+    public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

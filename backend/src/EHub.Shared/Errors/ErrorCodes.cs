@@ -37,4 +37,9 @@ public static class ErrorCodes
     public const string UserNotFound = "USER_NOT_FOUND";
     public const string ApprovalUserNotPending = "APPROVAL_USER_NOT_PENDING";
     public const string ApprovalInvalidTargetRole = "APPROVAL_INVALID_TARGET_ROLE";
+
+    // Password reset error codes
+    public const string AuthPasswordResetTokenInvalid = "AUTH_PASSWORD_RESET_TOKEN_INVALID";
+    public const string AuthPasswordResetRateLimited = "AUTH_PASSWORD_RESET_RATE_LIMITED";
+    public const string AuthPasswordResetFailed = "AUTH_PASSWORD_RESET_FAILED";
 }

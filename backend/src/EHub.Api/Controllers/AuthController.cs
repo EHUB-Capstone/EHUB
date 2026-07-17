@@ -10,6 +10,8 @@ using EHub.Application.Features.Auth.GoogleLogin;
 using EHub.Application.Features.Auth.GetCurrentUser;
 using EHub.Application.Features.Auth.RefreshToken;
 using EHub.Application.Features.Auth.Logout;
+using EHub.Application.Features.Auth.ForgotPassword;
+using EHub.Application.Features.Auth.ResetPassword;
 using EHub.Application.Features.Auth.Common;
 using EHub.Api.Extensions;
 using EHub.Contracts.Auth;
@@ -403,5 +405,49 @@ public sealed class AuthController : ControllerBase
         return Ok(ApiResponse<object?>.SuccessResponse(
             null,
             "Logout successfully"));
+    }
+
+    [HttpPost("forgot-password")]
+    [AllowAnonymous]
+    public async Task<IActionResult> ForgotPassword(
+        [FromBody] ForgotPasswordRequest request,
+        [FromServices] IForgotPasswordCommandHandler forgotPasswordCommandHandler,
+        CancellationToken cancellationToken)
+    {
+        var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
+        var userAgent = Request.Headers.UserAgent.ToString();
+
+        await forgotPasswordCommandHandler.HandleAsync(
+            request,
+            ipAddress,
+            userAgent,
+            cancellationToken);
+
+        return Ok(ApiResponse<object?>.SuccessResponse(
+            null,
+            "If this email exists in our system, a password reset link has been sent."));
+    }
+
+    [HttpPost("reset-password")]
+    [AllowAnonymous]
+    public async Task<IActionResult> ResetPassword(
+        [FromBody] ResetPasswordRequest request,
+        [FromServices] IResetPasswordCommandHandler resetPasswordCommandHandler,
+        CancellationToken cancellationToken)
+    {
+        var result = await resetPasswordCommandHandler.HandleAsync(
+            request,
+            cancellationToken);
+
+        if (result.IsFailure)
+        {
+            return BadRequest(ApiResponse<object>.FailureResponse(
+                result.Error.Message,
+                result.Error.Code));
+        }
+
+        return Ok(ApiResponse<object?>.SuccessResponse(
+            null,
+            "Password has been reset successfully. Please login again."));
     }
 }
