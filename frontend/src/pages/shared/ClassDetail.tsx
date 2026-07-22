@@ -5,15 +5,17 @@ import toast from 'react-hot-toast';
 import { motion } from 'framer-motion';
 import {
   ArrowLeft, GraduationCap, Users, BookOpen,
-  Upload, Download, UserPlus, Loader2, Calendar, Pencil, ShieldCheck, Lock, Unlock, Trash2
+  Upload, Download, UserPlus, Loader2, Calendar, Pencil, ShieldCheck, Lock, Unlock, Trash2, UserRoundCheck
 } from 'lucide-react';
 import { AuthContext } from '../../context/AuthContext';
 import { classApi } from '../../api/classApi';
+import { userApi } from '../../api/userApi';
 import LoadingSkeleton from '../../components/ui/LoadingSkeleton';
 import StudentTable from '../../components/class/StudentTable';
 import TeamList from '../../components/class/TeamList';
+import TeamManagementModal from '../../components/class/TeamManagementModal';
+import StudentAssignmentModal from '../../components/class/StudentAssignmentModal';
 import ImportStudentsModal from '../../components/class/ImportStudentsModal';
-import TeamGeneratePanel from '../../components/class/TeamGeneratePanel';
 import StudentTeamGeneratePanel from '../../components/class/StudentTeamGeneratePanel';
 import TeamSuggestionTooltip from '../../components/class/TeamSuggestionTooltip';
 import ReviewTeamProposalModal from '../../components/class/ReviewTeamProposalModal';
@@ -23,6 +25,13 @@ import RenameClassModal from '../../components/class/RenameClassModal';
 import VerifyMajorModal from '../../components/class/VerifyMajorModal';
 import AddStudentModal from '../../components/class/AddStudentModal';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
+import { entityId, getTeamMemberIds } from '../../utils/teamManagement';
+import {
+  directoryRecordToStudent,
+  mergeAssignmentCandidates,
+  normalizeClassStudents,
+  studentBelongsToClass,
+} from '../../utils/studentAssignment';
 
 export default function ClassDetail() {
   const { id }    = useParams();
@@ -40,6 +49,14 @@ export default function ClassDetail() {
 
   // Modals & Actions
   const [showImport, setShowImport] = useState(false);
+  const [showTeamManagement, setShowTeamManagement] = useState(false);
+  const [teamToEdit, setTeamToEdit] = useState(null);
+  const [teamFormMemberIds, setTeamFormMemberIds] = useState([]);
+  const [showStudentAssignment, setShowStudentAssignment] = useState(false);
+  const [assignmentMode, setAssignmentMode] = useState('CLASS');
+  const [assignmentInitialStudentIds, setAssignmentInitialStudentIds] = useState([]);
+  const [assignmentCandidates, setAssignmentCandidates] = useState([]);
+  const [loadingAssignmentCandidates, setLoadingAssignmentCandidates] = useState(false);
   const [showAddStudent, setShowAddStudent] = useState(false);
   const [showEditSchedule, setShowEditSchedule] = useState(false);
   const [showAssignMentors, setShowAssignMentors] = useState(false);
@@ -59,9 +76,13 @@ export default function ClassDetail() {
     try {
       const res = await classApi.getById(id);
       const data = res?.data || res;
+      const currentClassId = String(id || data.class?._id || '');
       setCls(data.class);
-      setStudents(data.students || []);
-      setTeams(data.teams || []);
+      setStudents(normalizeClassStudents(data.students || [], currentClassId));
+      setTeams((data.teams || []).map(team => ({
+        ...team,
+        classId: entityId(team.classId) || currentClassId,
+      })));
       return data;
     } catch (err) {
       toast.error(err?.message || 'Failed to load class');
@@ -76,15 +97,112 @@ export default function ClassDetail() {
     fetchData();
   }, [fetchData]);
 
-  const handleImported = async () => {
-    setShowImport(false);
-    await fetchData();
-    toast.success('Students imported!');
+  const handleImported = (importedStudents = []) => {
+    const clientStudents = importedStudents.map((student, index) => ({
+      _id: `frontend-import-${Date.now()}-${index}`,
+      rollNumber: student.studentCode,
+      fullName: student.fullName,
+      email: student.email,
+      major: student.major || null,
+      classId: id,
+      teamId: null,
+      source: 'IMPORTED',
+      importedOnFrontend: true,
+    }));
+    setStudents(current => [...current, ...clientStudents]);
   };
 
   const handleTeamCreated = async () => {
     setSelected([]);
     await fetchData();
+  };
+
+  const openCreateTeam = (memberIds = []) => {
+    setTeamToEdit(null);
+    setTeamFormMemberIds(memberIds);
+    setShowTeamManagement(true);
+  };
+
+  const openEditTeam = (team) => {
+    setTeamToEdit(team);
+    setTeamFormMemberIds([]);
+    setShowTeamManagement(true);
+  };
+
+  const closeTeamManagement = () => {
+    setShowTeamManagement(false);
+    setTeamToEdit(null);
+    setTeamFormMemberIds([]);
+  };
+
+  const closeStudentAssignment = () => {
+    setShowStudentAssignment(false);
+    setAssignmentInitialStudentIds([]);
+  };
+
+  const openStudentAssignment = async (mode = 'CLASS', studentIds = []) => {
+    const currentClassId = String(id || cls?._id || '');
+    const currentStudents = normalizeClassStudents(students, currentClassId);
+    setAssignmentMode(mode);
+    setAssignmentInitialStudentIds(studentIds);
+    setAssignmentCandidates(currentStudents);
+    setShowStudentAssignment(true);
+    setLoadingAssignmentCandidates(true);
+
+    try {
+      const response = await userApi.getAll({ page: 1, limit: 200, role: 'STUDENT', status: 'APPROVED' });
+      const payload = response?.data || response;
+      const records = payload?.users || payload?.data?.users || payload?.data || [];
+      const directoryStudents = (Array.isArray(records) ? records : [])
+        .map(directoryRecordToStudent)
+        .filter(Boolean);
+      setAssignmentCandidates(mergeAssignmentCandidates(currentStudents, directoryStudents));
+    } catch {
+      // The current class roster remains fully usable if the user directory is not accessible.
+    } finally {
+      setLoadingAssignmentCandidates(false);
+    }
+  };
+
+  const handleStudentsAssigned = (result) => {
+    const currentClassId = String(id || cls?._id || result.classId);
+    const nextClassStudents = result.students
+      .filter(student => studentBelongsToClass(student, currentClassId))
+      .map(student => ({ ...student, source: student.source || 'CLASS_ROSTER' }));
+    setStudents(nextClassStudents);
+    setTeams(result.teams);
+    setAssignmentCandidates(result.students);
+    setSelected([]);
+    setTab(result.mode === 'TEAM' ? 'teams' : 'students');
+    closeStudentAssignment();
+  };
+
+  const handleTeamSaved = (savedTeam) => {
+    const memberIds = new Set(getTeamMemberIds(savedTeam));
+    setTeams(current => (
+      current.some(team => team._id === savedTeam._id)
+        ? current.map(team => team._id === savedTeam._id ? savedTeam : team)
+        : [...current, savedTeam]
+    ));
+    setStudents(current => current.map(student => {
+      if (memberIds.has(student._id)) return { ...student, classId: id, teamId: savedTeam._id };
+      if (entityId(student.teamId) === savedTeam._id) return { ...student, teamId: null };
+      return student;
+    }));
+    setSelected([]);
+    closeTeamManagement();
+  };
+
+  const handleTeamDeleted = (deletedTeam) => {
+    const deletedMemberIds = new Set(getTeamMemberIds(deletedTeam));
+    setTeams(current => current.filter(team => team._id !== deletedTeam._id));
+    setStudents(current => current.map(student => (
+      deletedMemberIds.has(student._id) || entityId(student.teamId) === deletedTeam._id
+        ? { ...student, teamId: null }
+        : student
+    )));
+    setSelected(current => current.filter(studentId => !deletedMemberIds.has(studentId)));
+    toast.success('Team deleted');
   };
 
   const handleBackfillChats = async () => {
@@ -177,9 +295,9 @@ export default function ClassDetail() {
   const safeTeams    = Array.isArray(teams) ? teams : [];
   const unassignedCount = safeStudents.filter(s => !s.teamId).length;
   
-  const isAdminOrLecturer = user?.role === 'ADMIN' || (user?.role === 'LECTURER' && cls.lectureId?._id?.toString() === user._id);
   const createdById = cls.createdBy?._id?.toString() || cls.createdBy?.toString();
   const lecturerId = cls.lectureId?._id?.toString() || cls.lectureId?.toString();
+  const isAdminOrLecturer = user?.role === 'ADMIN' || (user?.role === 'LECTURER' && lecturerId === user._id);
   const canDeleteClass = user?.role === 'ADMIN' || (
     user?.role === 'LECTURER' &&
     (createdById === user._id || (!createdById && lecturerId === user._id))
@@ -285,9 +403,19 @@ export default function ClassDetail() {
     >
       <UserPlus className="w-4 h-4" /> Thêm 1 SV
     </button>
+
+    {isAdminOrLecturer && (
+      <button
+        id="btn-assign-students"
+        onClick={() => openStudentAssignment('CLASS')}
+        className="flex items-center gap-2 rounded-xl bg-gradient-primary px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all hover:shadow-glow-primary"
+      >
+        <UserRoundCheck className="h-4 w-4" /> Assign students
+      </button>
+    )}
   </>
 )}
-          {(user?.role === 'ADMIN' || user?.role === 'LECTURER') && (
+          {user?.role === 'ADMIN' && (
             <button
               onClick={() => setShowImport(true)}
               className="flex items-center gap-2 px-4 py-2 border border-primary text-primary rounded-xl text-sm hover:bg-primary-50 transition-all font-medium"
@@ -439,13 +567,23 @@ export default function ClassDetail() {
               currentStudentId={safeStudents.find(s => s.userId === user._id)?._id}
             />
           ) : (
-            <TeamGeneratePanel
-              classId={id}
-              selected={selected}
-              students={safeStudents}
-              classMentors={cls.mentorIds || []}
-              onTeamCreated={handleTeamCreated}
-            />
+            <div className="flex flex-col gap-3 rounded-2xl border border-primary-100 bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-50 text-primary"><Users className="h-5 w-5" /></div>
+                <div>
+                  <p className="font-semibold text-slate-800">{selected.length} student{selected.length === 1 ? '' : 's'} selected</p>
+                  <p className="text-xs text-slate-500">Continue to enter the team name and review members.</p>
+                </div>
+              </div>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <button onClick={() => openStudentAssignment('TEAM', selected)} className="flex items-center justify-center gap-2 rounded-xl border border-primary px-4 py-2.5 text-sm font-semibold text-primary hover:bg-primary-50">
+                  <UserRoundCheck className="h-4 w-4" /> Assign to team
+                </button>
+                <button onClick={() => openCreateTeam(selected)} className="flex items-center justify-center gap-2 rounded-xl bg-gradient-primary px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:shadow-glow-primary">
+                  <UserPlus className="h-4 w-4" /> Create team with selected
+                </button>
+              </div>
+            </div>
           )}
         </div>
       )}
@@ -490,24 +628,23 @@ export default function ClassDetail() {
                   </div>
                 </TeamSuggestionTooltip>
               ) : (
-                <TeamGeneratePanel
-                  classId={id}
-                  selected={selected}
-                  students={safeStudents}
-                  classMentors={cls.mentorIds || []}
-                  onTeamCreated={handleTeamCreated}
-                />
+                <button onClick={() => openCreateTeam()} className="flex items-center gap-2 rounded-xl border border-primary px-3 py-2 text-sm font-semibold text-primary hover:bg-primary-50">
+                  <UserPlus className="h-4 w-4" /> Create team
+                </button>
               )
             ) : null}
           />
         ) : (
           <TeamList
             teams={safeTeams}
-            onRefresh={fetchData}
             onReview={(team) => setReviewTeam(team)}
             canDelete={isAdminOrLecturer}
             canManageInfo={isAdminOrLecturer}
             classStudents={safeStudents}
+            onCreate={isAdminOrLecturer ? () => openCreateTeam() : undefined}
+            onAssign={isAdminOrLecturer ? () => openStudentAssignment('TEAM') : undefined}
+            onEdit={isAdminOrLecturer ? openEditTeam : undefined}
+            onDelete={isAdminOrLecturer ? handleTeamDeleted : undefined}
           />
         )}
       </motion.div>
@@ -515,9 +652,42 @@ export default function ClassDetail() {
       {/* ── Modals ── */}
       {showImport && (
         <ImportStudentsModal
-          classId={id}
           onClose={() => setShowImport(false)}
           onImported={handleImported}
+          existingStudents={safeStudents}
+        />
+      )}
+
+      {showTeamManagement && isAdminOrLecturer && (
+        <TeamManagementModal
+          classInfo={{
+            id: id || cls._id,
+            code: cls.classCode || 'Class',
+            name: cls.subjectName || cls.subjectCode || '',
+          }}
+          students={safeStudents}
+          teams={safeTeams}
+          team={teamToEdit}
+          initialMemberIds={teamFormMemberIds}
+          onClose={closeTeamManagement}
+          onSave={handleTeamSaved}
+        />
+      )}
+
+      {showStudentAssignment && isAdminOrLecturer && (
+        <StudentAssignmentModal
+          classInfo={{
+            id: id || cls._id,
+            code: cls.classCode || 'Class',
+            name: cls.subjectName || cls.subjectCode || '',
+          }}
+          students={assignmentCandidates}
+          teams={safeTeams}
+          initialMode={assignmentMode}
+          initialStudentIds={assignmentInitialStudentIds}
+          loadingCandidates={loadingAssignmentCandidates}
+          onClose={closeStudentAssignment}
+          onSave={handleStudentsAssigned}
         />
       )}
 
