@@ -18,6 +18,7 @@ import AdminDashboard from './pages/admin/AdminDashboard';
 import ClassManagement from './pages/admin/ClassManagement';
 import SubjectManagement from './pages/admin/SubjectManagement';
 import UserManagement from './pages/admin/UserManagement';
+import AccountApprovals from './pages/admin/AccountApprovals';
 
 import LecturerDashboard from './pages/lecturer/LecturerDashboard';
 import LecturerClasses from './pages/lecturer/LecturerClasses';
@@ -84,6 +85,7 @@ function App(): React.ReactElement {
                 <Route element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
                   <Route path="/admin" element={<ProtectedRoute allowedRoles={['ADMIN']}><AdminDashboard /></ProtectedRoute>} />
                   <Route path="/admin/users" element={<ProtectedRoute allowedRoles={['ADMIN']}><UserManagement /></ProtectedRoute>} />
+                  <Route path="/admin/account-approvals" element={<ProtectedRoute allowedRoles={['ADMIN']}><AccountApprovals /></ProtectedRoute>} />
                   <Route path="/admin/classes" element={<ProtectedRoute allowedRoles={['ADMIN']}><ClassManagement /></ProtectedRoute>} />
                   <Route path="/admin/subjects" element={<ProtectedRoute allowedRoles={['ADMIN']}><SubjectManagement /></ProtectedRoute>} />
 

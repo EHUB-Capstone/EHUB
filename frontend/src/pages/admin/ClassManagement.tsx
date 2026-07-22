@@ -135,9 +135,12 @@ export default function ClassManagement() {
     toast.success('Classes created successfully!');
   };
 
-  const handleImported = () => {
-    setImportTarget(null);
-    fetchAll();
+  const handleImported = (importedStudents) => {
+    setClasses(current => current.map(cls => (
+      cls._id === importTarget
+        ? { ...cls, studentCount: (cls.studentCount ?? 0) + importedStudents.length }
+        : cls
+    )));
   };
 
   const sortedClasses = useMemo(() => sortClasses(classes), [classes]);
@@ -371,7 +374,7 @@ export default function ClassManagement() {
                   >
                     <Eye className="w-3.5 h-3.5" /> View Detail
                   </button>
-                  {(isAdmin || user?.role === 'LECTURER') && (
+                  {isAdmin && (
                     <button
                       onClick={(e) => { e.stopPropagation(); setImportTarget(cls._id); }}
                       className="flex-1 flex items-center justify-center gap-1.5 text-xs text-primary hover:text-primary-dark font-medium transition-colors border-l border-slate-100"
@@ -398,7 +401,6 @@ export default function ClassManagement() {
       )}
       {importTarget && (
         <ImportStudentsModal
-          classId={importTarget}
           onClose={() => setImportTarget(null)}
           onImported={handleImported}
         />

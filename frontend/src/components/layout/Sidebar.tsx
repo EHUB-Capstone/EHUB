@@ -5,7 +5,7 @@ import { cn } from '../../utils/cn';
 import logo from '../../assets/logo.png';
 import {
   LayoutDashboard, Users, GraduationCap, Trophy, CalendarDays,
-  Kanban, Brain, Video, Rocket, LogOut, Plus, X, MessageSquare, Database, BookOpen
+  Kanban, Brain, Video, Rocket, LogOut, Plus, X, MessageSquare, Database, BookOpen, ShieldCheck
 } from 'lucide-react';
 
 const iconMap: Record<string, LucideIcon> = {
@@ -24,6 +24,7 @@ const iconMap: Record<string, LucideIcon> = {
   chat: MessageSquare,
   database: Database,
   book_open: BookOpen,
+  account_approval: ShieldCheck,
 };
 
 interface SidebarProps {
@@ -58,6 +59,7 @@ const Sidebar = ({ mobileOpen, onMobileClose }: SidebarProps) => {
       { path: '/admin', icon: 'dashboard', label: 'Overview' },
       { path: '/admin/subjects', icon: 'book_open', label: 'Subject Management' },
       { path: '/admin/users', icon: 'group', label: 'Users' },
+      { path: '/admin/account-approvals', icon: 'account_approval', label: 'Account Approvals' },
       { path: '/admin/classes', icon: 'school', label: 'Classes' },
       { path: '/lecturer/data-bank', icon: 'database', label: 'Data Bank' },
       { path: '/workspace', icon: 'view_kanban', label: 'Startup Workspace' },

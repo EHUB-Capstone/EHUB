@@ -1,391 +1,270 @@
-// @ts-nocheck
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import toast from 'react-hot-toast';
-import { Users, Trash2, MessageSquare, MessageSquareDashed, ChevronDown, ChevronRight, Loader2, UserCog } from 'lucide-react';
-import { teamApi } from '../../api/teamApi';
-import TeamMemberEditModal from './TeamMemberEditModal';
-import { getDisplayGroupName, getDisplayTeamName } from '../../utils/teamDisplay';
+import {
+  ChevronDown,
+  ChevronRight,
+  Crown,
+  ExternalLink,
+  FolderKanban,
+  Lightbulb,
+  Pencil,
+  Plus,
+  Rocket,
+  Trash2,
+  UserRoundCheck,
+  Users,
+} from 'lucide-react';
+import Button from '../ui/Button';
+import type { ManagedTeam, TeamProject, TeamStudent } from '../../types/teamManagement';
+import { entityId, getTeamMembers, getTeamProject } from '../../utils/teamManagement';
 
-const majorColor = (major) => {
-  const palette = ['bg-blue-50 text-blue-700', 'bg-purple-50 text-purple-700', 'bg-cyan-50 text-cyan-700', 'bg-orange-50 text-orange-700', 'bg-pink-50 text-pink-700'];
-  let h = 0; for (const c of (major || '')) h = c.charCodeAt(0) + ((h << 5) - h);
-  return palette[Math.abs(h) % palette.length];
+interface TeamListProps {
+  teams: ManagedTeam[];
+  classStudents?: TeamStudent[];
+  canDelete?: boolean;
+  canManageInfo?: boolean;
+  currentStudentId?: string;
+  onCreate?: () => void;
+  onAssign?: () => void;
+  onEdit?: (team: ManagedTeam) => void;
+  onDelete?: (team: ManagedTeam) => void;
+  onReview?: (team: ManagedTeam) => void;
+  onRefresh?: () => void | Promise<void>;
+}
+
+const statusStyles: Record<string, string> = {
+  ACTIVE: 'bg-green-100 text-green-700',
+  APPROVED: 'bg-green-100 text-green-700',
+  PENDING: 'bg-amber-100 text-amber-700',
+  NEEDS_REVISION: 'bg-orange-100 text-orange-700',
+  REJECTED: 'bg-red-100 text-red-700',
+  ARCHIVED: 'bg-slate-100 text-slate-600',
 };
 
-// Safe display: avoids rendering raw ObjectId or object
-const safeName = (ref) => {
-  if (!ref) return null;
-  if (typeof ref === 'string') return null; // unpopulated ObjectId string — don't render
-  if (typeof ref === 'object' && ref.name) return ref.name;
-  return null;
+const projectStatusStyles: Record<string, string> = {
+  DRAFT: 'bg-slate-100 text-slate-600',
+  IN_PROGRESS: 'bg-blue-100 text-blue-700',
+  VALIDATED: 'bg-green-100 text-green-700',
+  COMPLETED: 'bg-purple-100 text-purple-700',
 };
 
-const normalizeTeamText = (value) => (typeof value === 'string' ? value.trim() : '');
+const readableStatus = (status?: string | null) => (status || 'ACTIVE')
+  .replaceAll('_', ' ')
+  .toLowerCase()
+  .replace(/^./, (character) => character.toUpperCase());
 
-function TeamCard({ team, onRefresh, onReview, canDelete = true, canManageInfo = true, currentStudentId, classStudents = [] }) {
-  const navigate = useNavigate();
-  const displayTeamName = getDisplayTeamName(team) || 'Unnamed Team';
-  const [expanded,  setExpanded]  = useState(false);
-  const [deleting,  setDeleting]  = useState(false);
-  const [editing,   setEditing]   = useState(false);
-  const [saving,    setSaving]    = useState(false);
-  const [showEditMembers, setShowEditMembers] = useState(false);
-  const [formData,  setFormData]  = useState({
-    teamName: getDisplayTeamName(team),
-    groupName: getDisplayGroupName(team),
-    projectName: team.projectName || '',
-    description: team.description || '',
-  });
-
-  const resetFormData = () => {
-    setFormData({
-      teamName: getDisplayTeamName(team),
-      groupName: getDisplayGroupName(team),
-      projectName: team.projectName || '',
-      description: team.description || '',
-    });
-  };
-
-  const beginEdit = () => {
-    resetFormData();
-    setEditing(true);
-  };
-
-  const handleDelete = async () => {
-    if (!confirm(`Delete ${displayTeamName}? This will also remove the chat group.`)) return;
-    setDeleting(true);
-    try {
-      await teamApi.delete(team._id);
-      toast.success(`${displayTeamName} deleted`);
-      onRefresh();
-    } catch (e) {
-      toast.error(e?.message || 'Failed to delete team');
-    } finally {
-      setDeleting(false);
-    }
-  };
-
-  const handleSave = async () => {
-    const nextData = {
-      groupName: normalizeTeamText(formData.groupName),
-      projectName: normalizeTeamText(formData.projectName),
-      description: normalizeTeamText(formData.description),
-    };
-
-    if (canManageInfo) {
-      nextData.teamName = normalizeTeamText(formData.teamName);
-      if (nextData.teamName.length < 3 || nextData.teamName.length > 60) {
-        toast.error('Team name must be 3-60 characters.');
-        return;
-      }
-    }
-    if (nextData.groupName.length < 3 || nextData.groupName.length > 60) {
-      toast.error('Group name must be 3-60 characters.');
-      return;
-    }
-    if (nextData.projectName.length < 3 || nextData.projectName.length > 60) {
-      toast.error('Project name must be 3-60 characters.');
-      return;
-    }
-    if (nextData.description && (nextData.description.length < 20 || nextData.description.length > 500)) {
-      toast.error('Description must be 20-500 characters when provided.');
-      return;
-    }
-
-    setSaving(true);
-    try {
-      await teamApi.update(team._id, nextData);
-      toast.success('Team info updated');
-      setEditing(false);
-      onRefresh();
-    } catch (e) {
-      toast.error(e?.message || 'Failed to update team info');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const members = Array.isArray(team.members) ? team.members : [];
-  const lecturerName = safeName(team.lectureId);
-  const mentorName   = safeName(team.mentorId);
-  const teamNameText = displayTeamName;
-  const teamNumberMatch = teamNameText.match(/\bTeam\s*(\d+)\b/i);
-  const teamBadge = teamNumberMatch?.[1] || teamNameText.trim().charAt(0)?.toUpperCase() || '?';
-  
-  const isPending = team.status === 'PENDING' || team.status === 'NEEDS_REVISION';
-  const leaderId = (team.leaderId?._id || team.leaderId || '').toString();
-  const isLeader = currentStudentId && leaderId === currentStudentId.toString();
-  const canEditInfo = canManageInfo || isLeader;
+export default function TeamList({
+  teams,
+  classStudents = [],
+  canDelete = true,
+  canManageInfo = true,
+  currentStudentId,
+  onCreate,
+  onAssign,
+  onEdit,
+  onDelete,
+  onReview,
+}: TeamListProps) {
+  const safeTeams = Array.isArray(teams) ? teams : [];
 
   return (
-    <div className={`bg-white rounded-2xl border ${isPending ? 'border-orange-300 shadow-orange-100' : 'border-slate-200/60'} shadow-sm overflow-hidden`}>
-      {/* Team header */}
-      <div className="flex items-center justify-between p-4">
-        <button
-          onClick={() => setExpanded(!expanded)}
-          className="flex items-center gap-3 flex-1 text-left"
-        >
-          <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${isPending ? 'bg-orange-100 text-orange-600' : 'bg-gradient-to-br from-primary to-secondary text-white'}`}>
-            <span className="font-bold text-sm">{teamBadge}</span>
-          </div>
+    <div className="space-y-4">
+      <div className="flex flex-col gap-3 rounded-2xl border border-slate-200/60 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-50 text-primary"><Users className="h-5 w-5" /></div>
           <div>
-            <div className="flex items-center gap-2">
-              <p className="font-bold text-slate-900">{teamNameText}</p>
-              {team.status === 'PENDING' && (
-                <span className="px-2 py-0.5 bg-orange-100 text-orange-700 text-[10px] font-bold rounded-full uppercase">Pending</span>
-              )}
-              {team.status === 'NEEDS_REVISION' && (
-                <span className="px-2 py-0.5 bg-amber-100 text-amber-700 text-[10px] font-bold rounded-full uppercase">Needs revision</span>
-              )}
-              {team.status === 'REJECTED' && (
-                <span className="px-2 py-0.5 bg-red-100 text-red-700 text-[10px] font-bold rounded-full uppercase">Rejected</span>
-              )}
-            </div>
-            <p className="text-xs text-slate-400 font-mono">{team.teamCode || '—'}</p>
+            <h2 className="font-bold text-slate-900">Team management</h2>
+            <p className="text-sm text-slate-500">{safeTeams.length} team{safeTeams.length === 1 ? '' : 's'} in this class</p>
           </div>
-          {expanded ? <ChevronDown className="w-4 h-4 text-slate-400 ml-2" /> : <ChevronRight className="w-4 h-4 text-slate-400 ml-2" />}
-        </button>
-
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-slate-400 flex items-center gap-1">
-            <Users className="w-3.5 h-3.5" /> {members.length}
-          </span>
-          {/* Chat group status badge */}
-          {team.chatGroupId ? (
-            <span className="px-2 py-0.5 bg-green-50 text-green-600 text-xs font-semibold rounded-full flex items-center gap-1 hidden sm:flex">
-              <MessageSquare className="w-3 h-3" /> Chat
-            </span>
-          ) : (
-            <span className="px-2 py-0.5 bg-slate-100 text-slate-400 text-xs font-semibold rounded-full flex items-center gap-1 hidden sm:flex">
-              <MessageSquareDashed className="w-3 h-3" /> No Chat
-            </span>
-          )}
-          
-          {isPending && onReview && (
-            <button
-              onClick={(e) => { e.stopPropagation(); onReview(team); }}
-              className="px-2.5 py-1 text-xs font-semibold border border-orange-200 bg-orange-50 text-orange-600 hover:bg-orange-600 hover:text-white rounded-lg transition-all shadow-sm"
-            >
-              Review
-            </button>
-          )}
-
-          {/* Edit Members button — Lecturer/Admin only */}
-          {canManageInfo && (
-            <button
-              onClick={(e) => { e.stopPropagation(); setShowEditMembers(true); }}
-              title="Chỉnh sửa thành viên nhóm"
-              className="px-2.5 py-1 text-xs font-semibold border border-indigo-200 bg-indigo-50 text-indigo-600 hover:bg-indigo-600 hover:text-white rounded-lg transition-all shadow-sm flex items-center gap-1"
-            >
-              <UserCog className="w-3.5 h-3.5" />
-              Thành viên
-            </button>
-          )}
-
-          <button
-            onClick={() => navigate(`/workspace/teams/${team._id}`)}
-            className="px-2.5 py-1 text-xs font-semibold border border-slate-200 text-slate-600 hover:border-primary hover:text-primary rounded-lg transition-all bg-white shrink-0 cursor-pointer shadow-2xs"
-          >
-            Workspace
-          </button>
-          {canDelete && (
-            <button
-              onClick={handleDelete}
-              disabled={deleting}
-              className="p-1.5 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-all shrink-0"
-            >
-              {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-            </button>
-          )}
         </div>
+        {canManageInfo && (onAssign || onCreate) && (
+          <div className="flex flex-col gap-2 sm:flex-row">
+            {onAssign && <Button variant="outline" icon={UserRoundCheck} onClick={onAssign}>Assign students</Button>}
+            {onCreate && <Button variant="gradient" icon={Plus} onClick={onCreate}>Create team</Button>}
+          </div>
+        )}
       </div>
 
-      {/* Members & Details */}
-      {expanded && (
-        <div className="border-t border-slate-100 p-4">
-          {team.status === 'NEEDS_REVISION' && team.rejectReason && (
-            <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3">
-              <p className="text-xs font-bold uppercase text-amber-700">Nội dung cần chỉnh sửa</p>
-              <p className="mt-1 whitespace-pre-wrap text-sm text-amber-800">{team.rejectReason}</p>
-            </div>
-          )}
-          {team.status === 'REJECTED' && team.rejectReason && (
-            <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-3">
-              <p className="text-xs font-bold uppercase text-red-700">Lý do từ chối</p>
-              <p className="mt-1 whitespace-pre-wrap text-sm text-red-800">{team.rejectReason}</p>
-            </div>
-          )}
-          
-          {/* Team Info Section */}
-          <div className="mb-5 bg-slate-50 rounded-xl p-3 border border-slate-100">
-            <div className="flex items-center justify-between mb-3">
-              <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Team Info</h4>
-              {!editing && canEditInfo && (
-                <button onClick={beginEdit} className="text-xs font-medium text-primary hover:underline">
-                  Edit Info
-                </button>
-              )}
-            </div>
-
-            {editing ? (
-              <div className="space-y-3">
-                {canManageInfo && (
-                  <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-1">Team Name</label>
-                    <input
-                      type="text"
-                      value={formData.teamName}
-                      onChange={e => setFormData({ ...formData, teamName: e.target.value })}
-                      className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-sm outline-none focus:border-primary"
-                      maxLength={60}
-                    />
-                  </div>
-                )}
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Group Name</label>
-                  <input
-                    type="text"
-                    value={formData.groupName}
-                    onChange={e => setFormData({ ...formData, groupName: e.target.value })}
-                    className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-sm outline-none focus:border-primary"
-                    maxLength={60}
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Project Name</label>
-                  <input type="text" value={formData.projectName} onChange={e => setFormData({ ...formData, projectName: e.target.value })} className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-sm outline-none focus:border-primary" maxLength={60} />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Description</label>
-                  <textarea value={formData.description} onChange={e => setFormData({ ...formData, description: e.target.value })} className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-sm outline-none focus:border-primary" rows={2} maxLength={500} />
-                </div>
-                <div className="flex items-center gap-2 pt-1">
-                  <button onClick={handleSave} disabled={saving} className="px-3 py-1.5 bg-primary text-white rounded-lg text-xs font-medium hover:bg-primary-700 transition-all flex items-center gap-1">
-                    {saving && <Loader2 className="w-3 h-3 animate-spin" />} Save
-                  </button>
-                  <button onClick={() => { resetFormData(); setEditing(false); }} disabled={saving} className="px-3 py-1.5 border border-slate-200 text-slate-600 rounded-lg text-xs hover:bg-slate-100 transition-all">
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="grid grid-cols-2 gap-y-2 gap-x-4">
-                <div>
-                  <p className="text-[10px] uppercase font-semibold text-slate-400">Team Name</p>
-                  <p className="text-sm text-slate-700 font-medium">{teamNameText}</p>
-                </div>
-                <div>
-                  <p className="text-[10px] uppercase font-semibold text-slate-400">Group Name</p>
-                  <p className="text-sm text-slate-700 font-medium">{getDisplayGroupName(team) || 'Not set'}</p>
-                </div>
-                <div className="col-span-2">
-                  <p className="text-[10px] uppercase font-semibold text-slate-400">Project Name</p>
-                  <p className="text-sm text-slate-700">{team.projectName || 'Not set'}</p>
-                </div>
-                <div className="col-span-2">
-                  <p className="text-[10px] uppercase font-semibold text-slate-400">Description</p>
-                  <p className="text-sm text-slate-700">{team.description || 'No description'}</p>
-                </div>
-              </div>
-            )}
-          </div>
-
-          <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Members</h4>
-          {members.length === 0 ? (
-            <p className="text-sm text-slate-400 text-center py-2">No members</p>
-          ) : (
-            <div className="space-y-2">
-              {members.map((m, i) => {
-                const s = m?.studentId;
-                // Guard: studentId could be null or unpopulated ObjectId
-                const studentName  = (typeof s === 'object' && s?.fullName) ? s.fullName : 'Unknown';
-                const studentEmail = (typeof s === 'object' && s?.email) ? s.email : '';
-                const studentMajor = (typeof s === 'object' && s?.major) ? s.major : null;
-                const initial      = studentName.charAt(0)?.toUpperCase() || '?';
-
-                return (
-                  <div key={i} className="flex items-center gap-3 p-2 rounded-xl hover:bg-slate-50 transition-colors">
-                    <div className="w-7 h-7 rounded-full bg-gradient-to-br from-secondary-300 to-secondary flex items-center justify-center text-white text-xs font-bold shrink-0">
-                      {initial}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-slate-800 truncate">{studentName}</p>
-                      {studentEmail && <p className="text-xs text-slate-400 truncate">{studentEmail}</p>}
-                    </div>
-                    {studentMajor && (
-                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full shrink-0 ${majorColor(studentMajor)}`}>
-                        {studentMajor}
-                      </span>
-                    )}
-                    <span className="text-xs text-slate-400 shrink-0">{m.roleInTeam || 'Member'}</span>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-          {/* Mentor / Lecture — safe display */}
-          {(lecturerName || mentorName) && (
-            <div className="mt-3 pt-3 border-t border-slate-100 flex flex-wrap gap-3">
-              {lecturerName && (
-                <div className="flex items-center gap-2 text-xs text-slate-500">
-                  <span className="px-2 py-0.5 bg-secondary-50 text-secondary rounded-full font-semibold">Lecturer</span>
-                  {lecturerName}
-                </div>
-              )}
-              {mentorName && (
-                <div className="flex items-center gap-2 text-xs text-slate-500">
-                  <span className="px-2 py-0.5 bg-primary-50 text-primary rounded-full font-semibold">Mentor</span>
-                  {mentorName}
-                </div>
-              )}
-            </div>
-          )}
+      {safeTeams.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-12 text-center">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-slate-400 shadow-xs"><Users className="h-6 w-6" /></div>
+          <h3 className="mt-4 font-semibold text-slate-700">No teams yet</h3>
+          <p className="mt-1 text-sm text-slate-500">Create the first team and assign students from this class.</p>
+          {canManageInfo && onCreate && <Button className="mt-4" variant="outline" icon={Plus} onClick={onCreate}>Create first team</Button>}
         </div>
-      )}
-
-      {/* Edit Members Modal */}
-      {showEditMembers && (
-        <TeamMemberEditModal
-          team={team}
-          classStudents={classStudents}
-          onClose={() => setShowEditMembers(false)}
-          onRefresh={onRefresh}
-        />
+      ) : (
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+          {safeTeams.map((team) => (
+            <TeamCard
+              key={team._id}
+              team={team}
+              students={classStudents}
+              canDelete={canDelete}
+              canManageInfo={canManageInfo}
+              currentStudentId={currentStudentId}
+              onEdit={onEdit}
+              onDelete={onDelete}
+              onReview={onReview}
+            />
+          ))}
+        </div>
       )}
     </div>
   );
 }
 
-export default function TeamList({ teams, onRefresh, onReview, canDelete = true, canManageInfo = true, currentStudentId, classStudents = [] }) {
-  // Guard: teams might be null/undefined
-  const safeTeams = Array.isArray(teams) ? teams : [];
+interface TeamCardProps {
+  team: ManagedTeam;
+  students: TeamStudent[];
+  canDelete: boolean;
+  canManageInfo: boolean;
+  currentStudentId?: string;
+  onEdit?: (team: ManagedTeam) => void;
+  onDelete?: (team: ManagedTeam) => void;
+  onReview?: (team: ManagedTeam) => void;
+}
 
-  if (safeTeams.length === 0) {
+function TeamCard({
+  team,
+  students,
+  canDelete,
+  canManageInfo,
+  currentStudentId,
+  onEdit,
+  onDelete,
+  onReview,
+}: TeamCardProps) {
+  const navigate = useNavigate();
+  const [expanded, setExpanded] = useState(false);
+  const members = getTeamMembers(team, students);
+  const project = getTeamProject(team);
+  const leaderId = entityId(team.leaderId);
+  const status = String(team.status || 'ACTIVE').toUpperCase();
+  const teamInitial = team.teamName.trim().charAt(0).toUpperCase() || 'T';
+  const isPending = status === 'PENDING' || status === 'NEEDS_REVISION';
+
+  const requestDelete = () => {
+    if (!onDelete) return;
+    if (window.confirm(`Delete “${team.teamName}”? Students will become unassigned.`)) onDelete(team);
+  };
+
+  return (
+    <article className={`overflow-hidden rounded-2xl border bg-white shadow-sm transition-shadow hover:shadow-card ${isPending ? 'border-amber-200' : 'border-slate-200/70'}`}>
+      <div className="p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-primary text-base font-bold text-white">{teamInitial}</div>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="truncate font-bold text-slate-900">{team.teamName || 'Unnamed team'}</h3>
+                <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${statusStyles[status] || statusStyles.ACTIVE}`}>{readableStatus(status)}</span>
+              </div>
+              <p className="mt-0.5 font-mono text-xs text-slate-400">{team.teamCode || 'No team code'}</p>
+            </div>
+          </div>
+
+          <div className="flex shrink-0 items-center gap-1">
+            {isPending && onReview && <button type="button" onClick={() => onReview(team)} className="rounded-lg bg-amber-50 px-2.5 py-1.5 text-xs font-semibold text-amber-700 hover:bg-amber-100">Review</button>}
+            {canManageInfo && onEdit && <button type="button" onClick={() => onEdit(team)} className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-primary-50 hover:text-primary" aria-label={`Edit ${team.teamName}`} title="Edit team"><Pencil className="h-4 w-4" /></button>}
+            {canDelete && onDelete && <button type="button" onClick={requestDelete} className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-300 hover:bg-red-50 hover:text-red-500" aria-label={`Delete ${team.teamName}`} title="Delete team"><Trash2 className="h-4 w-4" /></button>}
+          </div>
+        </div>
+
+        <div className="mt-4 grid grid-cols-2 gap-2">
+          <div className="rounded-xl bg-slate-50 p-3">
+            <p className="flex items-center gap-1.5 text-xs font-medium text-slate-500"><Users className="h-3.5 w-3.5" /> Members</p>
+            <p className="mt-1 text-lg font-bold text-slate-900">{members.length}</p>
+          </div>
+          <div className={`rounded-xl p-3 ${project ? 'bg-secondary-50' : 'bg-slate-50'}`}>
+            <p className={`flex items-center gap-1.5 text-xs font-medium ${project ? 'text-secondary' : 'text-slate-500'}`}><Rocket className="h-3.5 w-3.5" /> Project</p>
+            <p className={`mt-1 truncate text-sm font-bold ${project ? 'text-secondary-dark' : 'text-slate-400'}`}>{project?.name || 'Not linked'}</p>
+          </div>
+        </div>
+
+        <div className="mt-4 flex items-center justify-between gap-3">
+          <div className="flex -space-x-2">
+            {members.slice(0, 5).map((member) => (
+              <span key={member._id} title={member.fullName} className={`flex h-8 w-8 items-center justify-center rounded-full border-2 border-white text-[10px] font-bold text-white ${member._id === leaderId ? 'bg-amber-500' : 'bg-secondary'}`}>{member.fullName.charAt(0).toUpperCase()}</span>
+            ))}
+            {members.length > 5 && <span className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-white bg-slate-200 text-[10px] font-bold text-slate-600">+{members.length - 5}</span>}
+          </div>
+          <button type="button" onClick={() => setExpanded((value) => !value)} className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100" aria-expanded={expanded}>
+            {expanded ? 'Hide details' : 'View details'}
+            {expanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+          </button>
+        </div>
+      </div>
+
+      {expanded && (
+        <div className="border-t border-slate-100 bg-slate-50/50 p-4">
+          {team.rejectReason && (status === 'REJECTED' || status === 'NEEDS_REVISION') && (
+            <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800"><strong>Review note:</strong> {team.rejectReason}</div>
+          )}
+
+          <div className="space-y-4">
+            <div>
+              <h4 className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-500"><Users className="h-3.5 w-3.5" /> Members</h4>
+              {members.length === 0 ? (
+                <p className="rounded-xl border border-dashed border-slate-200 bg-white py-5 text-center text-sm text-slate-400">No members assigned</p>
+              ) : (
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {members.map((member) => (
+                    <div key={member._id} className="flex items-center gap-2.5 rounded-xl border border-slate-100 bg-white p-2.5">
+                      <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white ${member._id === leaderId ? 'bg-amber-500' : 'bg-secondary'}`}>{member.fullName.charAt(0).toUpperCase()}</span>
+                      <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold text-slate-800">{member.fullName}</span><span className="block truncate text-xs text-slate-400">{member.rollNumber || member.email || 'Student'}</span></span>
+                      {member._id === leaderId && <Crown className="h-4 w-4 shrink-0 text-amber-500" />}
+                      {member._id === currentStudentId && <span className="rounded-full bg-primary-50 px-1.5 py-0.5 text-[10px] font-semibold text-primary">You</span>}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <ProjectDetail project={project} />
+
+            {team.description && (
+              <div className="rounded-xl border border-slate-200 bg-white p-3">
+                <h4 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-500"><Lightbulb className="h-3.5 w-3.5" /> Team description</h4>
+                <p className="mt-2 text-sm leading-6 text-slate-600">{team.description}</p>
+              </div>
+            )}
+
+            <button type="button" onClick={() => navigate(`/workspace/teams/${team._id}`)} className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:border-primary hover:text-primary">Open team workspace <ExternalLink className="h-4 w-4" /></button>
+          </div>
+        </div>
+      )}
+    </article>
+  );
+}
+
+function ProjectDetail({ project }: { project: TeamProject | null }) {
+  if (!project) {
     return (
-      <div className="bg-slate-50 rounded-2xl border border-dashed border-slate-200 p-10 text-center text-slate-400">
-        <Users className="w-10 h-10 mx-auto mb-3 opacity-30" />
-        <p className="font-medium">No teams yet</p>
-        <p className="text-sm mt-1">Select students above and click &quot;Create Team&quot;</p>
+      <div className="rounded-xl border border-dashed border-slate-300 bg-white p-4 text-center">
+        <FolderKanban className="mx-auto h-5 w-5 text-slate-300" />
+        <p className="mt-2 text-sm font-medium text-slate-500">No project linked to this team</p>
       </div>
     );
   }
 
+  const status = String(project.status || 'DRAFT').toUpperCase();
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-      {safeTeams.map(team => (
-        <TeamCard
-          key={team._id}
-          team={team}
-          onRefresh={onRefresh}
-          onReview={onReview}
-          canDelete={canDelete}
-          canManageInfo={canManageInfo}
-          currentStudentId={currentStudentId}
-          classStudents={classStudents}
-        />
-      ))}
+    <div className="rounded-xl border border-secondary-100 bg-secondary-50 p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-secondary shadow-xs"><Rocket className="h-4 w-4" /></span>
+          <div className="min-w-0"><p className="text-[10px] font-bold uppercase tracking-wider text-secondary">Linked project</p><h4 className="truncate font-bold text-slate-900">{project.name}</h4></div>
+        </div>
+        <span className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-bold uppercase ${projectStatusStyles[status] || projectStatusStyles.DRAFT}`}>{readableStatus(status)}</span>
+      </div>
+      {project.startupField && <p className="mt-3 text-xs font-semibold text-secondary">Field: {project.startupField}</p>}
+      {project.description && <p className="mt-2 text-sm leading-6 text-slate-600">{project.description}</p>}
+      {(project.problem || project.solution) && (
+        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+          {project.problem && <div className="rounded-lg bg-white/80 p-2.5"><p className="text-[10px] font-bold uppercase text-slate-400">Problem</p><p className="mt-1 text-xs text-slate-600">{project.problem}</p></div>}
+          {project.solution && <div className="rounded-lg bg-white/80 p-2.5"><p className="text-[10px] font-bold uppercase text-slate-400">Solution</p><p className="mt-1 text-xs text-slate-600">{project.solution}</p></div>}
+        </div>
+      )}
     </div>
   );
 }
