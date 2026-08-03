@@ -16,7 +16,7 @@ public class TestController : ControllerBase
         var errors = new List<ValidationError>
         {
             new() { Field = "Email", Message = "Email is required", Code = "EMAIL_REQUIRED" },
-            new() { Field = "Password", Message = "Password must be at least 8 characters", Code = "PASSWORD_TOO_SHORT" }
+            new() { Field = "Password", Message = "Password must be at least 6 characters", Code = "PASSWORD_TOO_SHORT" }
         };
         throw new ValidationException(errors);
     }

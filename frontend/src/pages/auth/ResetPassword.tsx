@@ -39,7 +39,7 @@ const ResetPassword = (): React.ReactElement => {
     const nextErrors: ResetPasswordErrors = {};
 
     if (!password) nextErrors.password = 'New password is required.';
-    else if (password.length < 8) nextErrors.password = 'Password must be at least 8 characters.';
+    else if (password.length < 6) nextErrors.password = 'Password must be at least 6 characters.';
 
     if (!confirmPassword) nextErrors.confirmPassword = 'Please confirm your new password.';
     else if (password !== confirmPassword) nextErrors.confirmPassword = 'Passwords do not match.';
@@ -142,7 +142,7 @@ const ResetPassword = (): React.ReactElement => {
                   icon={Key}
                   autoComplete="new-password"
                   required
-                  minLength={8}
+                  minLength={6}
                   value={password}
                   error={errors.password}
                   aria-invalid={Boolean(errors.password)}
@@ -163,7 +163,7 @@ const ResetPassword = (): React.ReactElement => {
                   icon={Key}
                   autoComplete="new-password"
                   required
-                  minLength={8}
+                  minLength={6}
                   value={confirmPassword}
                   error={errors.confirmPassword}
                   aria-invalid={Boolean(errors.confirmPassword)}

@@ -12,7 +12,7 @@ public sealed class ResetPasswordRequestValidator : AbstractValidator<ResetPassw
 
         RuleFor(x => x.NewPassword)
             .NotEmpty().WithMessage("New password is required.")
-            .MinimumLength(8).WithMessage("New password must be at least 8 characters.");
+            .MinimumLength(6).WithMessage("New password must be at least 6 characters.");
 
         RuleFor(x => x.ConfirmPassword)
             .NotEmpty().WithMessage("Confirm password is required.")

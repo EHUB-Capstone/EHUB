@@ -23,7 +23,7 @@ public sealed class RegisterRequestValidator : AbstractValidator<RegisterRequest
 
         RuleFor(x => x.Password)
             .NotEmpty().WithMessage("Password is required.")
-            .MinimumLength(8).WithMessage("Password must be at least 8 characters.")
+            .MinimumLength(6).WithMessage("Password must be at least 6 characters.")
             .MaximumLength(100).WithMessage("Password must not exceed 100 characters.");
 
         RuleFor(x => x.ConfirmPassword)
