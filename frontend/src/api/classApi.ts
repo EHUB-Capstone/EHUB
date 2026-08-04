@@ -6,7 +6,10 @@ export const classApi = {
   // ─── Class CRUD ───────────────────────────────────────────────────────────
   getAll:      (params) => axiosClient.get('/classes', { params }),
   getById:     (id)     => axiosClient.get(`/classes/${id}`),
-  bulkCreate:  (data)   => axiosClient.post('/classes/bulk-create', data),
+  create:            (data)   => axiosClient.post('/classes', data),
+  previewBulkCreate: (data)   => axiosClient.post('/classes/bulk/preview', data),
+  commitBulkCreate:  (data)   => axiosClient.post('/classes/bulk/commit', data),
+  bulkCreate:        (data)   => axiosClient.post('/classes/bulk/commit', data),
   reportCodeConflict: (data) => axiosClient.post('/classes/report-code-conflict', data),
   update:      (id, data) => axiosClient.put(`/classes/${id}`, data),
   rename:      (id, classCode) => axiosClient.put(`/classes/${id}/rename`, { classCode }),

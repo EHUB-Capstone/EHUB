@@ -13,7 +13,7 @@ namespace EHub.Api.Controllers;
 
 [ApiController]
 [Route("api/users")]
-[Authorize(Policy = SystemPolicies.AdminOnly)]
+[Authorize(Policy = SystemPolicies.StaffOnly)]
 public sealed class UsersController(IApplicationDbContext context, ICurrentUserService currentUser, IPasswordHasher passwordHasher) : ControllerBase
 {
     private static readonly IReadOnlyDictionary<string, string[]> ValidMajors = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
@@ -26,12 +26,12 @@ public sealed class UsersController(IApplicationDbContext context, ICurrentUserS
     [HttpGet]
     public async Task<IActionResult> GetUsers([FromQuery] int page = 1, [FromQuery] int limit = 10, [FromQuery] string? search = null, [FromQuery] string? role = null, [FromQuery] string? status = null, CancellationToken cancellationToken = default)
     {
-        if (page < 1 || limit is < 1 or > 100) return BadRequest(ApiResponse<object>.FailureResponse("Page and limit are invalid.", "VALIDATION_ERROR"));
+        if (page < 1 || limit is < 1 or > 500) return BadRequest(ApiResponse<object>.FailureResponse("Page and limit are invalid.", "VALIDATION_ERROR"));
         var query = context.Users.AsNoTracking().Include(user => user.UserRoles).ThenInclude(item => item.Role).Include(user => user.Student).AsQueryable();
         if (!string.IsNullOrWhiteSpace(search)) { var term = search.Trim().ToLower(); query = query.Where(user => user.FullName.ToLower().Contains(term) || user.Email.ToLower().Contains(term) || (user.Student != null && user.Student.RollNumber != null && user.Student.RollNumber.ToLower().Contains(term))); }
         var roleName = string.Empty;
         if (!string.IsNullOrWhiteSpace(role) && !TryRole(role, out roleName)) return BadRequest(ApiResponse<object>.FailureResponse("Role is invalid.", "VALIDATION_ERROR"));
-        if (!string.IsNullOrWhiteSpace(role)) query = query.Where(user => user.UserRoles.Any(item => item.Role.Name == roleName));
+        if (!string.IsNullOrWhiteSpace(role)) query = query.Where(user => user.UserRoles.Any(item => item.Role.Name.ToUpper() == roleName.ToUpper()));
         var userStatus = UserStatus.Active;
         if (!string.IsNullOrWhiteSpace(status) && !TryStatus(status, out userStatus)) return BadRequest(ApiResponse<object>.FailureResponse("Status is invalid.", "VALIDATION_ERROR"));
         if (!string.IsNullOrWhiteSpace(status)) query = query.Where(user => user.Status == userStatus);
@@ -44,6 +44,7 @@ public sealed class UsersController(IApplicationDbContext context, ICurrentUserS
     public async Task<IActionResult> GetUser(Guid id, CancellationToken cancellationToken) => await GetUserEntity(id, cancellationToken) is { } user ? Ok(ApiResponse<ManagedUserResponse>.SuccessResponse(ToResponse(user), "User retrieved successfully.")) : NotFound(ApiResponse<object>.FailureResponse("User was not found.", "NOT_FOUND"));
 
     [HttpPost]
+    [Authorize(Policy = SystemPolicies.AdminOnly)]
     public async Task<IActionResult> CreateUser([FromBody] SaveManagedUserRequest request, CancellationToken cancellationToken)
     {
         var error = await ValidateRequest(request, null, true, cancellationToken); if (error is not null) return BadRequest(ApiResponse<object>.FailureResponse(error, "VALIDATION_ERROR"));
@@ -55,6 +56,7 @@ public sealed class UsersController(IApplicationDbContext context, ICurrentUserS
     }
 
     [HttpPut("{id:guid}")]
+    [Authorize(Policy = SystemPolicies.AdminOnly)]
     public async Task<IActionResult> UpdateUser(Guid id, [FromBody] SaveManagedUserRequest request, CancellationToken cancellationToken)
     {
         var user = await GetUserEntity(id, cancellationToken); if (user is null) return NotFound(ApiResponse<object>.FailureResponse("User was not found.", "NOT_FOUND"));
@@ -74,6 +76,7 @@ public sealed class UsersController(IApplicationDbContext context, ICurrentUserS
     }
 
     [HttpDelete("{id:guid}")]
+    [Authorize(Policy = SystemPolicies.AdminOnly)]
     public async Task<IActionResult> DeleteUser(Guid id, CancellationToken cancellationToken)
     {
         if (id == currentUser.UserId) return BadRequest(ApiResponse<object>.FailureResponse("You cannot delete your own account.", "BUSINESS_RULE"));
