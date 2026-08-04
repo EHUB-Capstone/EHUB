@@ -30,6 +30,9 @@ public class ClassConfiguration : IEntityTypeConfiguration<Class>
             .HasColumnName("course_id")
             .IsRequired();
 
+        builder.Property(c => c.PrimaryLecturerId)
+            .HasColumnName("primary_lecturer_id");
+
         builder.Property(c => c.Room)
             .HasColumnName("room")
             .HasMaxLength(50);
@@ -38,8 +41,8 @@ public class ClassConfiguration : IEntityTypeConfiguration<Class>
             .HasColumnName("schedule_json")
             .HasColumnType("jsonb");
 
-        builder.Property(c => c.IsMajorLocked)
-            .HasColumnName("is_major_locked")
+        builder.Property(c => c.IsEnrollmentMajorLocked)
+            .HasColumnName("is_enrollment_major_locked")
             .HasDefaultValue(false);
 
         builder.Property(c => c.Status)
@@ -48,15 +51,23 @@ public class ClassConfiguration : IEntityTypeConfiguration<Class>
             .HasMaxLength(20)
             .IsRequired();
 
+        builder.Property(c => c.ArchivedAtUtc)
+            .HasColumnName("archived_at_utc");
+
+        builder.Property(c => c.ArchivedByUserId)
+            .HasColumnName("archived_by_user_id");
+
         builder.Property(c => c.CreatedById)
             .HasColumnName("created_by_id");
 
-        // Composite unique indexes
+        // Composite unique indexes & performance indexes
         builder.HasIndex(c => new { c.ClassCode, c.SemesterId })
             .IsUnique();
 
         builder.HasIndex(c => new { c.SemesterId, c.CourseId, c.ClassIndex })
             .IsUnique();
+
+        builder.HasIndex(c => new { c.SemesterId, c.CourseId, c.PrimaryLecturerId, c.Status });
 
         // Audit & Soft Delete properties configuration
         builder.Property(c => c.CreatedAt).HasColumnName("created_at").IsRequired();
@@ -80,6 +91,16 @@ public class ClassConfiguration : IEntityTypeConfiguration<Class>
             .WithMany(co => co.Classes)
             .HasForeignKey(c => c.CourseId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne(c => c.PrimaryLecturer)
+            .WithMany()
+            .HasForeignKey(c => c.PrimaryLecturerId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        builder.HasOne(c => c.ArchivedByUser)
+            .WithMany()
+            .HasForeignKey(c => c.ArchivedByUserId)
+            .OnDelete(DeleteBehavior.SetNull);
 
         builder.HasOne(c => c.Creator)
             .WithMany()

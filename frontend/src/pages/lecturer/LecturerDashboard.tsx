@@ -94,7 +94,7 @@ const LecturerDashboard = () => {
             ) : (
               <div className="space-y-3">
                 {myClasses.map(cls => (
-                  <div key={cls._id} className="flex items-center justify-between p-4 rounded-xl border border-slate-100 hover:border-primary-200 hover:bg-primary-50/30 transition-all cursor-pointer" onClick={() => navigate(`/lecturer/classes/${cls._id}`)}>
+                  <div key={cls._id || cls.id} className="flex items-center justify-between p-4 rounded-xl border border-slate-100 hover:border-primary-200 hover:bg-primary-50/30 transition-all cursor-pointer" onClick={() => navigate(`/lecturer/classes/${cls._id || cls.id}`)}>
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-xl bg-primary-100 flex items-center justify-center font-bold text-primary text-sm">{cls.code?.slice(0, 3)}</div>
                       <div>

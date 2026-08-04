@@ -90,7 +90,19 @@ export default function ClassManagement() {
         isAdmin ? userApi.getAll({ role: 'LECTURER' }) : Promise.resolve({ users: [] }),
       ]);
 
-      setClasses(clsRes?.data?.classes || clsRes?.classes || []);
+      const rawClasses = clsRes?.data?.items || clsRes?.data?.classes || clsRes?.items || clsRes?.classes || [];
+      const normalizedClasses = rawClasses.map(c => ({
+        ...c,
+        _id: c.id || c._id,
+        semester: c.semesterCode || c.semester,
+        lectureId: c.primaryLecturerName ? {
+          _id: c.primaryLecturerId,
+          name: c.primaryLecturerName,
+          email: c.primaryLecturerEmail
+        } : (c.lectureId || null),
+        schedule: c.scheduleJson ? (typeof c.scheduleJson === 'string' ? JSON.parse(c.scheduleJson) : c.scheduleJson) : c.schedule
+      }));
+      setClasses(normalizedClasses);
       const lects = usrRes?.data?.users || usrRes?.users || [];
       setLecturers(lects.filter(u => u.role === 'LECTURER'));
     } catch {
@@ -135,12 +147,9 @@ export default function ClassManagement() {
     toast.success('Classes created successfully!');
   };
 
-  const handleImported = (importedStudents) => {
-    setClasses(current => current.map(cls => (
-      cls._id === importTarget
-        ? { ...cls, studentCount: (cls.studentCount ?? 0) + importedStudents.length }
-        : cls
-    )));
+  const handleImported = () => {
+    setImportTarget(null);
+    fetchAll();
   };
 
   const sortedClasses = useMemo(() => sortClasses(classes), [classes]);
@@ -270,7 +279,7 @@ export default function ClassManagement() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.04 }}
                 className="bg-white rounded-2xl border border-slate-200/60 shadow-sm hover:shadow-elevated hover:-translate-y-1 transition-all group cursor-pointer"
-                onClick={() => navigate(`/classes/${cls._id}`)}
+                onClick={() => navigate(`/classes/${cls._id || cls.id}`)}
               >
                 <div className="p-5">
                   {/* Top row */}
@@ -369,7 +378,7 @@ export default function ClassManagement() {
                 {/* Footer actions */}
                 <div className="border-t border-slate-100 px-5 py-3 flex gap-2">
                   <button
-                    onClick={(e) => { e.stopPropagation(); navigate(`/classes/${cls._id}`); }}
+                    onClick={(e) => { e.stopPropagation(); navigate(`/classes/${cls._id || cls.id}`); }}
                     className="flex-1 flex items-center justify-center gap-1.5 text-xs text-secondary hover:text-secondary-dark font-medium transition-colors"
                   >
                     <Eye className="w-3.5 h-3.5" /> View Detail
@@ -401,6 +410,7 @@ export default function ClassManagement() {
       )}
       {importTarget && (
         <ImportStudentsModal
+          classId={importTarget}
           onClose={() => setImportTarget(null)}
           onImported={handleImported}
         />

@@ -7,4 +7,6 @@ export const userApi = {
   create: (data) => axiosClient.post('/users', data),
   update: (id, data) => axiosClient.put(`/users/${id}`, data),
   delete: (id) => axiosClient.delete(`/users/${id}`),
+  approveUser: (userId) => axiosClient.post(`/admin/users/${userId}/approve`),
+  rejectUser: (userId) => axiosClient.post(`/admin/users/${userId}/reject`),
 };

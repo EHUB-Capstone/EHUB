@@ -508,6 +508,14 @@ namespace EHub.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<DateTime?>("ArchivedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("archived_at_utc");
+
+                    b.Property<Guid?>("ArchivedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("archived_by_user_id");
+
                     b.Property<string>("ClassCode")
                         .IsRequired()
                         .HasMaxLength(50)
@@ -548,11 +556,15 @@ namespace EHub.Infrastructure.Persistence.Migrations
                         .HasDefaultValue(false)
                         .HasColumnName("is_deleted");
 
-                    b.Property<bool>("IsMajorLocked")
+                    b.Property<bool>("IsEnrollmentMajorLocked")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
                         .HasDefaultValue(false)
-                        .HasColumnName("is_major_locked");
+                        .HasColumnName("is_enrollment_major_locked");
+
+                    b.Property<Guid?>("PrimaryLecturerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("primary_lecturer_id");
 
                     b.Property<string>("Room")
                         .HasMaxLength(50)
@@ -583,15 +595,21 @@ namespace EHub.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("ArchivedByUserId");
+
                     b.HasIndex("CourseId");
 
                     b.HasIndex("CreatedById");
+
+                    b.HasIndex("PrimaryLecturerId");
 
                     b.HasIndex("ClassCode", "SemesterId")
                         .IsUnique();
 
                     b.HasIndex("SemesterId", "CourseId", "ClassIndex")
                         .IsUnique();
+
+                    b.HasIndex("SemesterId", "CourseId", "PrimaryLecturerId", "Status");
 
                     b.ToTable("classes", (string)null);
                 });
@@ -4785,6 +4803,11 @@ namespace EHub.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("EHub.Domain.Entities.Class", b =>
                 {
+                    b.HasOne("EHub.Domain.Entities.User", "ArchivedByUser")
+                        .WithMany()
+                        .HasForeignKey("ArchivedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("EHub.Domain.Entities.Course", "Course")
                         .WithMany("Classes")
                         .HasForeignKey("CourseId")
@@ -4796,15 +4819,24 @@ namespace EHub.Infrastructure.Persistence.Migrations
                         .HasForeignKey("CreatedById")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("EHub.Domain.Entities.User", "PrimaryLecturer")
+                        .WithMany()
+                        .HasForeignKey("PrimaryLecturerId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("EHub.Domain.Entities.Semester", "Semester")
                         .WithMany("Classes")
                         .HasForeignKey("SemesterId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.Navigation("ArchivedByUser");
+
                     b.Navigation("Course");
 
                     b.Navigation("Creator");
+
+                    b.Navigation("PrimaryLecturer");
 
                     b.Navigation("Semester");
                 });

@@ -1,5 +1,7 @@
-export const STUDENT_IMPORT_ACCEPT = '.xlsx,.csv';
-export const STUDENT_IMPORT_MAX_SIZE = 5 * 1024 * 1024;
+import * as XLSX from 'xlsx';
+
+export const STUDENT_IMPORT_ACCEPT = '.xlsx,.xls,.csv';
+export const STUDENT_IMPORT_MAX_SIZE = 10 * 1024 * 1024;
 
 export interface ExistingStudentRecord {
   rollNumber?: string | null;
@@ -109,18 +111,27 @@ export function parseCsv(text: string): string[][] {
 }
 
 export async function readStudentImportFile(file: File): Promise<unknown[][]> {
-  const extension = file.name.split('.').pop()?.toLowerCase();
+  try {
+    const arrayBuffer = await file.arrayBuffer();
+    const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+    const firstSheetName = workbook.SheetNames[0];
+    if (!firstSheetName) return [];
 
-  if (extension === 'csv') {
-    return parseCsv(await file.text());
+    const worksheet = workbook.Sheets[firstSheetName];
+    if (!worksheet) return [];
+
+    // Parse worksheet to 2D array
+    const rawRows = XLSX.utils.sheet_to_json<unknown[]>(worksheet, { header: 1, defval: '' });
+    return rawRows;
+  } catch {
+    // Fallback for plain CSV/Text files
+    try {
+      const text = await file.text();
+      return parseCsv(text);
+    } catch (err: any) {
+      throw new Error(err?.message || 'Could not parse Excel/CSV file.');
+    }
   }
-
-  if (extension === 'xlsx') {
-    const { readSheet } = await import('read-excel-file/browser');
-    return readSheet(file);
-  }
-
-  throw new Error('Unsupported file type. Please upload an .xlsx or .csv file.');
 }
 
 export function validateStudentRows(
@@ -135,7 +146,26 @@ export function validateStudentRows(
     return { rows: [], validRows: [], invalidRows: [], fileErrors: ['The file is empty.'] };
   }
 
-  const headerRow = nonEmptyRows[0];
+  // Find header row dynamically
+  let headerRowIndex = 0;
+  for (let i = 0; i < Math.min(nonEmptyRows.length, 10); i++) {
+    const row = nonEmptyRows[i];
+    const columnIndexesTemp = new Map<SupportedField, number>();
+    row.cells.forEach((header, colIdx) => {
+      const normalized = normalizeHeader(header);
+      (Object.keys(HEADER_ALIASES) as SupportedField[]).forEach((field) => {
+        if (!columnIndexesTemp.has(field) && HEADER_ALIASES[field].includes(normalized)) {
+          columnIndexesTemp.set(field, colIdx);
+        }
+      });
+    });
+    if (REQUIRED_FIELDS.every((field) => columnIndexesTemp.has(field))) {
+      headerRowIndex = i;
+      break;
+    }
+  }
+
+  const headerRow = nonEmptyRows[headerRowIndex];
   const columnIndexes = new Map<SupportedField, number>();
 
   headerRow.cells.forEach((header, columnIndex) => {
@@ -170,7 +200,9 @@ export function validateStudentRows(
   const firstCodeRows = new Map<string, number>();
   const firstEmailRows = new Map<string, number>();
 
-  const rows = nonEmptyRows.slice(1).map(({ cells, originalRowNumber }) => {
+  const dataRows = nonEmptyRows.slice(headerRowIndex + 1);
+
+  const rows = dataRows.map(({ cells, originalRowNumber }) => {
     const readField = (field: SupportedField) => {
       const index = columnIndexes.get(field);
       return index === undefined ? '' : cellText(cells[index]);
