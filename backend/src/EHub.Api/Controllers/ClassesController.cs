@@ -5,11 +5,16 @@ using System.Security.Claims;
 using System.Threading;
 using System.Threading.Tasks;
 using EHub.Application.Common.Interfaces.Identity;
+using EHub.Application.Features.Classes.AddStudentToClass;
 using EHub.Application.Features.Classes.CreateBulkClasses;
 using EHub.Application.Features.Classes.CreateClass;
+using EHub.Application.Features.Classes.GetClassDetail;
 using EHub.Application.Features.Classes.GetClasses;
+using EHub.Application.Features.Classes.GetClassRoster;
+using EHub.Application.Features.Classes.RemoveStudentFromClass;
 using EHub.Application.Features.Classes.UpdateClass;
 using EHub.Application.Features.Classes.UpdateClassSchedule;
+using EHub.Application.Features.Classes.UpdateClassStudent;
 using EHub.Contracts.Classes;
 using EHub.Contracts.Common;
 using EHub.Shared.Constants;
@@ -58,6 +63,41 @@ public sealed class ClassesController : ControllerBase
         return Ok(ApiResponse<ClassListResponse>.SuccessResponse(
             result.Value,
             "Classes retrieved successfully."));
+    }
+
+    [HttpGet("{id:guid}")]
+    public async Task<IActionResult> GetClassDetail(
+        Guid id,
+        [FromServices] IGetClassDetailQueryHandler queryHandler,
+        CancellationToken cancellationToken)
+    {
+        var currentUserId = _currentUserService.UserId ?? Guid.Empty;
+        var currentUserRole = GetCurrentUserRole();
+
+        var result = await queryHandler.HandleAsync(
+            id,
+            currentUserId,
+            currentUserRole,
+            cancellationToken);
+
+        if (result.IsFailure)
+        {
+            if (result.Error.Code.Contains("AccessDenied", StringComparison.OrdinalIgnoreCase))
+            {
+                return StatusCode(403, ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
+            }
+
+            if (result.Error.Code.Contains("NotFound", StringComparison.OrdinalIgnoreCase))
+            {
+                return NotFound(ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
+            }
+
+            return BadRequest(ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
+        }
+
+        return Ok(ApiResponse<ClassResponse>.SuccessResponse(
+            result.Value,
+            "Class details retrieved successfully."));
     }
 
     [HttpPost]
@@ -251,6 +291,146 @@ public sealed class ClassesController : ControllerBase
         return Ok(ApiResponse<ClassResponse>.SuccessResponse(
             result.Value,
             "Teaching assignment updated successfully."));
+    }
+
+    [HttpGet("{id:guid}/students")]
+    public async Task<IActionResult> GetClassRoster(
+        Guid id,
+        [FromQuery] GetClassRosterRequest request,
+        [FromServices] IGetClassRosterQueryHandler queryHandler,
+        CancellationToken cancellationToken)
+    {
+        var currentUserId = _currentUserService.UserId ?? Guid.Empty;
+        var currentUserRole = GetCurrentUserRole();
+
+        var result = await queryHandler.HandleAsync(
+            id,
+            request,
+            currentUserId,
+            currentUserRole,
+            cancellationToken);
+
+        if (result.IsFailure)
+        {
+            if (result.Error.Code.Contains("AccessDenied", StringComparison.OrdinalIgnoreCase))
+            {
+                return StatusCode(403, ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
+            }
+
+            return BadRequest(ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
+        }
+
+        return Ok(ApiResponse<ClassRosterListResponse>.SuccessResponse(
+            result.Value,
+            "Class roster retrieved successfully."));
+    }
+
+    [HttpPost("{id:guid}/students")]
+    public async Task<IActionResult> AddStudentToClass(
+        Guid id,
+        [FromBody] AddStudentToClassRequest request,
+        [FromServices] IAddStudentToClassCommandHandler commandHandler,
+        CancellationToken cancellationToken)
+    {
+        var currentUserId = _currentUserService.UserId ?? Guid.Empty;
+        var currentUserRole = GetCurrentUserRole();
+
+        var result = await commandHandler.HandleAsync(
+            id,
+            request,
+            currentUserId,
+            currentUserRole,
+            cancellationToken);
+
+        if (result.IsFailure)
+        {
+            if (result.Error.Code.Contains("AccessDenied", StringComparison.OrdinalIgnoreCase))
+            {
+                return StatusCode(403, ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
+            }
+
+            if (result.Error.Code.Contains("AlreadyEnrolled", StringComparison.OrdinalIgnoreCase) ||
+                result.Error.Code.Contains("ConflictSameSubjectSemester", StringComparison.OrdinalIgnoreCase))
+            {
+                return Conflict(ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
+            }
+
+            return BadRequest(ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
+        }
+
+        return Ok(ApiResponse<ClassStudentDto>.SuccessResponse(
+            result.Value,
+            "Student added to class successfully."));
+    }
+
+    [HttpPut("{id:guid}/students/{studentId:guid}")]
+    public async Task<IActionResult> UpdateClassStudent(
+        Guid id,
+        Guid studentId,
+        [FromBody] UpdateClassStudentRequest request,
+        [FromServices] IUpdateClassStudentCommandHandler commandHandler,
+        CancellationToken cancellationToken)
+    {
+        var currentUserId = _currentUserService.UserId ?? Guid.Empty;
+        var currentUserRole = GetCurrentUserRole();
+
+        var result = await commandHandler.HandleAsync(
+            id,
+            studentId,
+            request,
+            currentUserId,
+            currentUserRole,
+            cancellationToken);
+
+        if (result.IsFailure)
+        {
+            if (result.Error.Code.Contains("AccessDenied", StringComparison.OrdinalIgnoreCase))
+            {
+                return StatusCode(403, ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
+            }
+
+            return BadRequest(ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
+        }
+
+        return Ok(ApiResponse<ClassStudentDto>.SuccessResponse(
+            result.Value,
+            "Class student updated successfully."));
+    }
+
+    [HttpDelete("{id:guid}/students/{studentId:guid}")]
+    public async Task<IActionResult> RemoveStudentFromClass(
+        Guid id,
+        Guid studentId,
+        [FromServices] IRemoveStudentFromClassCommandHandler commandHandler,
+        CancellationToken cancellationToken)
+    {
+        var currentUserId = _currentUserService.UserId ?? Guid.Empty;
+        var currentUserRole = GetCurrentUserRole();
+
+        var result = await commandHandler.HandleAsync(
+            id,
+            studentId,
+            currentUserId,
+            currentUserRole,
+            cancellationToken);
+
+        if (result.IsFailure)
+        {
+            if (result.Error.Code.Contains("AccessDenied", StringComparison.OrdinalIgnoreCase))
+            {
+                return StatusCode(403, ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
+            }
+
+            if (result.Error.Code.Contains("StudentInActiveTeam", StringComparison.OrdinalIgnoreCase) ||
+                result.Error.Code.Contains("StudentIsTeamLeader", StringComparison.OrdinalIgnoreCase))
+            {
+                return Conflict(ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
+            }
+
+            return BadRequest(ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
+        }
+
+        return Ok(ApiResponse<object?>.SuccessResponse(null, "Student removed from class successfully."));
     }
 
     private string GetCurrentUserRole()

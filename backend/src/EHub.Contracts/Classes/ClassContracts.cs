@@ -114,3 +114,54 @@ public sealed class UpdateTeachingAssignmentRequest
 {
     public Guid? PrimaryLecturerId { get; init; }
 }
+
+// ─── GIAI ĐOẠN 4 CONTRACTS ───────────────────────────────────────────────
+
+public sealed class ClassStudentDto
+{
+    public Guid StudentId { get; init; }
+    public string RollNumber { get; init; } = string.Empty;
+    public string FullName { get; init; } = string.Empty;
+    public string Email { get; init; } = string.Empty;
+    public string? MajorCode { get; init; }
+    public string? MemberCode { get; init; }
+    public string EnrollmentStatus { get; init; } = string.Empty;
+    public Guid? TeamId { get; init; }
+    public string? TeamName { get; init; }
+    public bool IsTeamLeader { get; init; }
+    public DateTime JoinedAtUtc { get; init; }
+}
+
+public sealed class GetClassRosterRequest
+{
+    public string? Search { get; init; }
+    public string? MajorCode { get; init; }
+    public string? Status { get; init; }
+    public int Page { get; init; } = 1;
+    public int PageSize { get; init; } = 20;
+}
+
+public sealed class ClassRosterListResponse
+{
+    public IReadOnlyCollection<ClassStudentDto> Items { get; init; } = Array.Empty<ClassStudentDto>();
+    public int TotalCount { get; init; }
+    public int Page { get; init; }
+    public int PageSize { get; init; }
+    public int TotalPages { get; init; }
+}
+
+public sealed class AddStudentToClassRequest
+{
+    public string StudentCode { get; init; } = string.Empty;
+    public string FullName { get; init; } = string.Empty;
+    public string Email { get; init; } = string.Empty;
+    public string MajorCode { get; init; } = string.Empty;
+}
+
+public sealed class UpdateClassStudentRequest
+{
+    public string FullName { get; init; } = string.Empty;
+    public string Email { get; init; } = string.Empty;
+    public string MajorCode { get; init; } = string.Empty;
+    public string? EnrollmentStatus { get; init; }
+}
