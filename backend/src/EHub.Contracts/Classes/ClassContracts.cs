@@ -115,8 +115,6 @@ public sealed class UpdateTeachingAssignmentRequest
     public Guid? PrimaryLecturerId { get; init; }
 }
 
-// ─── GIAI ĐOẠN 4 CONTRACTS ───────────────────────────────────────────────
-
 public sealed class ClassStudentDto
 {
     public Guid StudentId { get; init; }
@@ -164,4 +162,40 @@ public sealed class UpdateClassStudentRequest
     public string Email { get; init; } = string.Empty;
     public string MajorCode { get; init; } = string.Empty;
     public string? EnrollmentStatus { get; init; }
+}
+
+// ─── GIAI ĐOẠN 5: EXCEL IMPORT & EXPORT CONTRACTS ──────────────────────────────
+
+public sealed class ImportStudentRowPreviewDto
+{
+    public int RowNumber { get; init; }
+    public string StudentCode { get; init; } = string.Empty;
+    public string FullName { get; init; } = string.Empty;
+    public string Email { get; init; } = string.Empty;
+    public string MajorCode { get; init; } = string.Empty;
+    public bool IsValid { get; init; }
+    public string Status { get; init; } = "Valid";
+    public string? ErrorMessage { get; init; }
+}
+
+public sealed class ImportStudentsPreviewResponse
+{
+    public Guid SessionId { get; init; }
+    public int TotalRows { get; init; }
+    public int ValidRowsCount { get; init; }
+    public int ErrorRowsCount { get; init; }
+    public IReadOnlyCollection<ImportStudentRowPreviewDto> Rows { get; init; } = Array.Empty<ImportStudentRowPreviewDto>();
+}
+
+public sealed class CommitImportStudentsRequest
+{
+    public Guid SessionId { get; init; }
+}
+
+public sealed class ImportStudentsCommitResponse
+{
+    public int InsertedCount { get; init; }
+    public int UpdatedCount { get; init; }
+    public int SkippedCount { get; init; }
+    public int ErrorCount { get; init; }
 }

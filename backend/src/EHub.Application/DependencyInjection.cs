@@ -44,6 +44,10 @@ public static class DependencyInjection
         services.AddScoped<EHub.Application.Features.Classes.AddStudentToClass.IAddStudentToClassCommandHandler, EHub.Application.Features.Classes.AddStudentToClass.AddStudentToClassCommandHandler>();
         services.AddScoped<EHub.Application.Features.Classes.UpdateClassStudent.IUpdateClassStudentCommandHandler, EHub.Application.Features.Classes.UpdateClassStudent.UpdateClassStudentCommandHandler>();
         services.AddScoped<EHub.Application.Features.Classes.RemoveStudentFromClass.IRemoveStudentFromClassCommandHandler, EHub.Application.Features.Classes.RemoveStudentFromClass.RemoveStudentFromClassCommandHandler>();
+        services.AddScoped<EHub.Application.Features.Classes.ImportStudents.IPreviewImportStudentsCommandHandler, EHub.Application.Features.Classes.ImportStudents.PreviewImportStudentsCommandHandler>();
+        services.AddScoped<EHub.Application.Features.Classes.ImportStudents.ICommitImportStudentsCommandHandler, EHub.Application.Features.Classes.ImportStudents.CommitImportStudentsCommandHandler>();
+        services.AddScoped<EHub.Application.Features.Classes.ExportClassRoster.IExportClassRosterQueryHandler, EHub.Application.Features.Classes.ExportClassRoster.ExportClassRosterQueryHandler>();
+        services.AddScoped<EHub.Application.Features.Classes.GetImportTemplate.IGetImportTemplateQueryHandler, EHub.Application.Features.Classes.GetImportTemplate.GetImportTemplateQueryHandler>();
 
         services.AddScoped<EHub.Application.Common.Interfaces.Authorization.IPermissionService, EHub.Application.Common.Services.Authorization.PermissionService>();
 

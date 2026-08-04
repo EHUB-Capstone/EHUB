@@ -81,7 +81,7 @@ export default function ClassDetail() {
     try {
       const [classRes, studentRes] = await Promise.allSettled([
         classApi.getById(id),
-        classApi.getStudents(id),
+        classApi.getStudents(id, { pageSize: 200 }),
       ]);
 
       const classData = classRes.status === 'fulfilled' ? (classRes.value?.data || classRes.value) : null;
@@ -730,9 +730,11 @@ export default function ClassDetail() {
       {/* ── Modals ── */}
       {showImport && (
         <ImportStudentsModal
+          classId={id || cls?._id}
           onClose={() => setShowImport(false)}
-          onImported={handleImported}
-          existingStudents={safeStudents}
+          onImported={() => {
+            fetchData();
+          }}
         />
       )}
 

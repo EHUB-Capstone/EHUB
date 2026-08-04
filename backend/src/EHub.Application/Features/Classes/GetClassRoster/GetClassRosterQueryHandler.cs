@@ -55,7 +55,7 @@ public sealed class GetClassRosterQueryHandler : IGetClassRosterQueryHandler
         }
 
         var page = request.Page <= 0 ? 1 : request.Page;
-        var pageSize = request.PageSize is <= 0 or > 200 ? 20 : request.PageSize;
+        var pageSize = request.PageSize <= 0 ? 200 : Math.Min(request.PageSize, 500);
 
         var query = _context.ClassStudents
             .AsNoTracking()

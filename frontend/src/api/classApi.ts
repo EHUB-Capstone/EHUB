@@ -24,10 +24,18 @@ export const classApi = {
 
   // ─── Students ────────────────────────────────────────────────────────────
   getStudents: (classId, params) => axiosClient.get(`/classes/${classId}/students`, { params }),
-  importStudents: (classId, formData) =>
-    axiosClient.post(`/classes/${classId}/import-students`, formData, {
+  previewImportStudents: (classId, formData) =>
+    axiosClient.post(`/classes/${classId}/import-students/preview`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     }),
+  commitImportStudents: (classId, payload) =>
+    axiosClient.post(`/classes/${classId}/import-students/commit`, payload),
+  importStudents: (classId, formData) =>
+    axiosClient.post(`/classes/${classId}/import-students/preview`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+  getImportTemplate: () =>
+    axiosClient.get('/classes/import-template', { responseType: 'blob' }),
   exportClassExcel: (classId) => 
     axiosClient.get(`/classes/${classId}/export-excel`, { responseType: 'blob' }),
 

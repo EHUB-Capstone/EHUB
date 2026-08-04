@@ -8,9 +8,12 @@ using EHub.Application.Common.Interfaces.Identity;
 using EHub.Application.Features.Classes.AddStudentToClass;
 using EHub.Application.Features.Classes.CreateBulkClasses;
 using EHub.Application.Features.Classes.CreateClass;
+using EHub.Application.Features.Classes.ExportClassRoster;
 using EHub.Application.Features.Classes.GetClassDetail;
 using EHub.Application.Features.Classes.GetClasses;
 using EHub.Application.Features.Classes.GetClassRoster;
+using EHub.Application.Features.Classes.GetImportTemplate;
+using EHub.Application.Features.Classes.ImportStudents;
 using EHub.Application.Features.Classes.RemoveStudentFromClass;
 using EHub.Application.Features.Classes.UpdateClass;
 using EHub.Application.Features.Classes.UpdateClassSchedule;
@@ -19,6 +22,7 @@ using EHub.Contracts.Classes;
 using EHub.Contracts.Common;
 using EHub.Shared.Constants;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
 namespace EHub.Api.Controllers;
@@ -63,6 +67,20 @@ public sealed class ClassesController : ControllerBase
         return Ok(ApiResponse<ClassListResponse>.SuccessResponse(
             result.Value,
             "Classes retrieved successfully."));
+    }
+
+    [HttpGet("import-template")]
+    public async Task<IActionResult> GetImportTemplate(
+        [FromServices] IGetImportTemplateQueryHandler queryHandler,
+        CancellationToken cancellationToken)
+    {
+        var result = await queryHandler.HandleAsync(cancellationToken);
+        if (result.IsFailure)
+        {
+            return BadRequest(ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
+        }
+
+        return File(result.Value.FileBytes, result.Value.ContentType, result.Value.FileName);
     }
 
     [HttpGet("{id:guid}")]
@@ -293,6 +311,8 @@ public sealed class ClassesController : ControllerBase
             "Teaching assignment updated successfully."));
     }
 
+    // ─── ROSTER MANAGEMENT ENDPOINTS ──────────────────────────────────────────
+
     [HttpGet("{id:guid}/students")]
     public async Task<IActionResult> GetClassRoster(
         Guid id,
@@ -431,6 +451,106 @@ public sealed class ClassesController : ControllerBase
         }
 
         return Ok(ApiResponse<object?>.SuccessResponse(null, "Student removed from class successfully."));
+    }
+
+    // ─── GIAI ĐOẠN 5: EXCEL IMPORT & EXPORT ENDPOINTS ─────────────────────────
+
+    [HttpPost("{id:guid}/import-students/preview")]
+    public async Task<IActionResult> PreviewImportStudents(
+        Guid id,
+        IFormFile file,
+        [FromServices] IPreviewImportStudentsCommandHandler commandHandler,
+        CancellationToken cancellationToken)
+    {
+        var currentUserId = _currentUserService.UserId ?? Guid.Empty;
+        var currentUserRole = GetCurrentUserRole();
+
+        var result = await commandHandler.HandleAsync(
+            id,
+            file,
+            currentUserId,
+            currentUserRole,
+            cancellationToken);
+
+        if (result.IsFailure)
+        {
+            if (result.Error.Code.Contains("AccessDenied", StringComparison.OrdinalIgnoreCase))
+            {
+                return StatusCode(403, ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
+            }
+
+            return BadRequest(ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
+        }
+
+        return Ok(ApiResponse<ImportStudentsPreviewResponse>.SuccessResponse(
+            result.Value,
+            "Import preview generated successfully."));
+    }
+
+    [HttpPost("{id:guid}/import-students/commit")]
+    public async Task<IActionResult> CommitImportStudents(
+        Guid id,
+        [FromBody] CommitImportStudentsRequest request,
+        [FromServices] ICommitImportStudentsCommandHandler commandHandler,
+        CancellationToken cancellationToken)
+    {
+        var currentUserId = _currentUserService.UserId ?? Guid.Empty;
+        var currentUserRole = GetCurrentUserRole();
+
+        var result = await commandHandler.HandleAsync(
+            id,
+            request,
+            currentUserId,
+            currentUserRole,
+            cancellationToken);
+
+        if (result.IsFailure)
+        {
+            if (result.Error.Code.Contains("AccessDenied", StringComparison.OrdinalIgnoreCase))
+            {
+                return StatusCode(403, ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
+            }
+
+            if (result.Error.Code.Contains("ExpiredOrProcessed", StringComparison.OrdinalIgnoreCase))
+            {
+                return Conflict(ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
+            }
+
+            return BadRequest(ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
+        }
+
+        return Ok(ApiResponse<ImportStudentsCommitResponse>.SuccessResponse(
+            result.Value,
+            "Students imported successfully."));
+    }
+
+    [HttpGet("{id:guid}/export-students")]
+    [HttpGet("{id:guid}/export-excel")]
+    public async Task<IActionResult> ExportClassRoster(
+        Guid id,
+        [FromServices] IExportClassRosterQueryHandler queryHandler,
+        CancellationToken cancellationToken)
+    {
+        var currentUserId = _currentUserService.UserId ?? Guid.Empty;
+        var currentUserRole = GetCurrentUserRole();
+
+        var result = await queryHandler.HandleAsync(
+            id,
+            currentUserId,
+            currentUserRole,
+            cancellationToken);
+
+        if (result.IsFailure)
+        {
+            if (result.Error.Code.Contains("AccessDenied", StringComparison.OrdinalIgnoreCase))
+            {
+                return StatusCode(403, ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
+            }
+
+            return BadRequest(ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
+        }
+
+        return File(result.Value.FileBytes, result.Value.ContentType, result.Value.FileName);
     }
 
     private string GetCurrentUserRole()

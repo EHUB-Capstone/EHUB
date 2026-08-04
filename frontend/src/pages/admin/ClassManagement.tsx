@@ -147,12 +147,9 @@ export default function ClassManagement() {
     toast.success('Classes created successfully!');
   };
 
-  const handleImported = (importedStudents) => {
-    setClasses(current => current.map(cls => (
-      cls._id === importTarget
-        ? { ...cls, studentCount: (cls.studentCount ?? 0) + importedStudents.length }
-        : cls
-    )));
+  const handleImported = () => {
+    setImportTarget(null);
+    fetchAll();
   };
 
   const sortedClasses = useMemo(() => sortClasses(classes), [classes]);
@@ -413,6 +410,7 @@ export default function ClassManagement() {
       )}
       {importTarget && (
         <ImportStudentsModal
+          classId={importTarget}
           onClose={() => setImportTarget(null)}
           onImported={handleImported}
         />
