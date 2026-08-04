@@ -9,7 +9,9 @@ public class RubricCriterion : AuditableEntity
     public virtual Rubric Rubric { get; set; } = null!;
 
     public string Name { get; set; } = string.Empty;
+    public string Key { get; set; } = string.Empty;
     public string? Description { get; set; }
+    public string LevelsJson { get; set; } = "[]";
 
     public decimal MaxScore { get; set; } = 10;
     public decimal Weight { get; set; } = 0;

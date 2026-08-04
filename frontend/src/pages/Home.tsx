@@ -91,7 +91,7 @@ const Home: React.FC = () => {
             </Link>
 
             <Link to="/register" className="hidden sm:flex items-center gap-1.5 px-5 py-2 rounded-[14px] text-sm font-semibold text-white bg-[linear-gradient(135deg,#EA6A12,#D97706)] shadow-[0_10px_28px_rgba(234,106,18,0.18)] hover:-translate-y-[2px] hover:shadow-[0_14px_36px_rgba(234,106,18,0.22)] transition-all duration-200 ease-out">
-              Get Started <ArrowRight size={14} />
+              Sign Up <ArrowRight size={14} />
             </Link>
 
             {/* Theme Toggle */}
@@ -165,7 +165,7 @@ const Home: React.FC = () => {
                   className="flex flex-wrap gap-4">
                   <Link to="/register"
                     className="flex h-14 items-center gap-2 px-8 rounded-[14px] text-[15px] font-semibold text-white bg-[linear-gradient(135deg,#EA6A12,#D97706)] shadow-[0_10px_28px_rgba(234,106,18,0.18)] hover:-translate-y-[2px] hover:shadow-[0_14px_36px_rgba(234,106,18,0.22)] transition-all duration-200 ease-out">
-                    Start Now <ArrowRight size={18} />
+                    Sign up <ArrowRight size={18} />
                   </Link>
                   <Link to="/login"
                     className="flex h-14 items-center px-8 rounded-[14px] text-[15px] font-semibold transition-colors duration-200 ease-out border border-[#E5E7EB] bg-white hover:bg-[#F8FAFC] text-[#0F172A] dark:border-white/10 dark:bg-[#111827]/80 dark:hover:bg-white/10 dark:text-[#F8FAFC]">
@@ -313,11 +313,11 @@ const Home: React.FC = () => {
             <div className="flex flex-wrap justify-center gap-4">
               <Link to="/register"
                 className="flex items-center gap-2 px-8 py-4 rounded-xl text-base font-bold text-white bg-[#F97316] shadow-[0_18px_42px_rgba(249,115,22,0.22)] hover:bg-[#EA6A12] hover:-translate-y-0.5 transition-all duration-200">
-                Get started today <ArrowRight size={18} />
+                Sign up <ArrowRight size={18} />
               </Link>
               <Link to="/login"
                 className="px-8 py-4 rounded-xl text-base font-semibold transition-colors duration-200 border border-[#E5E7EB] bg-white hover:bg-[#F8FAFC] text-[#0F172A] dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10 dark:text-white">
-                Sign in instead
+                Sign in
               </Link>
             </div>
           </motion.div>

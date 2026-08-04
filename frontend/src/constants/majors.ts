@@ -12,7 +12,7 @@
 export const TEAM_MAJOR_GROUPS = [
   {
     key: 'GROUP_1',
-    label: 'Nhóm 1 (BBA)',
+    label: 'GROUP 1 (BBA)',
     majors: [
       { code: 'BBA_HM',  name: 'Hospitality Management' },
       { code: 'BBA_IB',  name: 'International Business' },
@@ -24,7 +24,7 @@ export const TEAM_MAJOR_GROUPS = [
   },
   {
     key: 'GROUP_2',
-    label: 'Nhóm 2 (BIT)',
+    label: 'GROUP 2 (BIT)',
     majors: [
       { code: 'BIT_AI', name: 'Artificial Intelligence' },
       { code: 'BIT_GD', name: 'Graphic Design' },

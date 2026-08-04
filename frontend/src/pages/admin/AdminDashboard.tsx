@@ -1,449 +1,140 @@
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Users, GraduationCap, Rocket, Brain, TrendingUp, Trophy, BarChart3, Activity, UserCheck, LogIn, AlertTriangle, UserPlus, ShieldAlert, Zap, Wifi, WifiOff, Clock } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, Legend } from 'recharts';
+import io from 'socket.io-client';
+import {
+  Activity, AlertTriangle, BarChart3, Brain, Clock, GraduationCap, LogIn,
+  RefreshCw, Rocket, ShieldAlert, Sparkles, TrendingUp, Trophy, UserCheck,
+  UserPlus, Users, Wifi, WifiOff,
+} from 'lucide-react';
+import {
+  Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart,
+  ResponsiveContainer, Tooltip, XAxis, YAxis,
+} from 'recharts';
 import { dashboardApi } from '../../api/dashboardApi';
 import { trackingApi } from '../../api/trackingApi';
-import StatCard from '../../components/ui/StatCard';
-import LoadingSkeleton from '../../components/ui/LoadingSkeleton';
-import EmptyState from '../../components/ui/EmptyState';
 import Button from '../../components/ui/Button';
-import { useNavigate } from 'react-router-dom';
+import EmptyState from '../../components/ui/EmptyState';
+import ErrorState from '../../components/ui/ErrorState';
+import LoadingSkeleton from '../../components/ui/LoadingSkeleton';
+import StatCard from '../../components/ui/StatCard';
 
-const COLORS = ['#1E5E9F', '#EA6A12', '#51B848', '#79A8D9', '#F08A5D'];
-
-const AdminDashboard = () => {
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [trackingData, setTrackingData] = useState(null);
-  const [trackingDays, setTrackingDays] = useState(7);
-  const [onlineData, setOnlineData] = useState(null);
-  const navigate = useNavigate();
-
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const res = await dashboardApi.getAdmin();
-        setData(res.data || res);
-      } catch {
-        setData(null);
-        setError('Dashboard data is not available yet.');
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchData();
-  }, []);
-
-  useEffect(() => {
-    const fetchTracking = async () => {
-      try {
-        const res = await trackingApi.getAuthStats(trackingDays);
-        setTrackingData(res.data || res);
-      } catch (err) {
-        // Tracking failure không làm vỡ dashboard
-        setTrackingData(null);
-      }
-    };
-    fetchTracking();
-  }, [trackingDays]);
-
-  // Fetch online users (auto-refresh every 30s)
-  useEffect(() => {
-    const fetchOnline = async () => {
-      try {
-        const res = await trackingApi.getOnlineUsers();
-        setOnlineData(res.data || res);
-      } catch (err) {
-        setOnlineData(null);
-      }
-    };
-    fetchOnline();
-    const interval = setInterval(fetchOnline, 30000);
-    return () => clearInterval(interval);
-  }, []);
-
-  if (loading) return <LoadingSkeleton />;
-  if (error) return <EmptyState icon={Activity} title="No Dashboard Data" description={error} action={{ label: 'Retry', onClick: () => window.location.reload() }} />;
-  if (!data) return null;
-
-  const { stats = {}, usersByRole = [], ideasByStatus = [], topTeams = [] } = data;
-
-  const roleChartData = usersByRole.map(r => ({ name: r.role, value: r.count }));
-  const statusChartData = ideasByStatus.map(s => ({ name: s.status, value: s.count }));
-
-  const scoreBarData = topTeams.slice(0, 8).map((t, i) => ({
-    name: t.team?.name || `Team ${i + 1}`,
-    score: t.avgScore || 0,
-  }));
-
-  const fade = (i = 0) => ({ initial: { opacity: 0, y: 20 }, animate: { opacity: 1, y: 0 }, transition: { delay: i * 0.07 } });
-
-  return (
-    <div className="space-y-6">
-      {/* Header */}
-      <motion.div {...fade(0)} className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-3">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">Admin Overview</h1>
-          <p className="text-slate-500 mt-1">Platform analytics and system health</p>
-        </div>
-        <Button variant="outline" size="sm" icon={BarChart3} onClick={() => navigate('/rankings')}>View Rankings</Button>
-      </motion.div>
-
-      {/* Stat Cards */}
-      <motion.div {...fade(1)} className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
-        <StatCard title="Total Users" value={(stats.totalUsers || 0).toLocaleString()} icon={Users} color="primary" change="Platform users" trend="up" />
-        <StatCard title="Classes" value={stats.totalClasses || 0} icon={GraduationCap} color="cyan" change="Active semester" trend="up" />
-        <StatCard title="Teams" value={stats.totalTeams || 0} icon={Rocket} color="secondary" change="Startup teams" trend="up" />
-        <StatCard title="Sprint Progress" value={`${stats.overallTaskProgress || 0}%`} icon={Activity} color="success" change={`${stats.completedTasks || 0} / ${stats.totalTasks || 0} tasks done`} trend="up" />
-        <StatCard title="Ideas" value={stats.totalIdeas || 0} icon={Brain} color="indigo" change="Registered ideas" trend="up" />
-        <StatCard title="Proposals" value={stats.submittedProposals || 0} icon={Brain} color="violet" change="Submitted" trend="up" />
-        <StatCard title="Evaluations" value={stats.totalEvaluations || 0} icon={TrendingUp} color="warning" change="Completed" trend="up" />
-        <StatCard title="Sessions" value={stats.totalMentoringSessions || 0} icon={TrendingUp} color="orange" change="Mentoring sessions" trend="up" />
-      </motion.div>
-
-      {/* Charts Row */}
-      <motion.div {...fade(2)} className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
-        {/* Bar chart */}
-        <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200/60 shadow-sm p-6">
-          <h3 className="text-lg font-semibold text-slate-900 mb-5 flex items-center gap-2"><BarChart3 className="w-5 h-5 text-primary" />Top Team Rankings</h3>
-          {scoreBarData.length === 0 ? (
-            <EmptyState icon={Trophy} title="No data yet" description="Complete some evaluations first" size="sm" />
-          ) : (
-            <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={scoreBarData} barSize={32}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                <YAxis domain={[0, 10]} tick={{ fontSize: 11 }} />
-                <Tooltip formatter={(v) => [typeof v === 'number' ? v.toFixed(2) : v, 'Score']} />
-                <Bar dataKey="score" radius={[6, 6, 0, 0]} fill="#034EA2" />
-              </BarChart>
-            </ResponsiveContainer>
-          )}
-        </div>
-
-        {/* Pie charts */}
-        <div className="space-y-5">
-          <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-5">
-            <h3 className="text-base font-semibold text-slate-900 mb-3">Users by Role</h3>
-            {roleChartData.length > 0 ? (
-              <div className="flex items-center gap-4">
-                <PieChart width={100} height={100}>
-                  <Pie data={roleChartData} cx={45} cy={45} innerRadius={25} outerRadius={45} dataKey="value">
-                    {roleChartData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                  </Pie>
-                </PieChart>
-                <div className="space-y-1.5">
-                  {roleChartData.map((r, i) => (
-                    <div key={r.name} className="flex items-center gap-2 text-sm">
-                      <div className="w-2.5 h-2.5 rounded-full" style={{ background: COLORS[i % COLORS.length] }} />
-                      <span className="text-slate-600">{r.name}</span>
-                      <span className="font-bold text-slate-900">{r.value}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : <p className="text-slate-400 text-sm">No data</p>}
-          </div>
-
-          <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-5">
-            <h3 className="text-base font-semibold text-slate-900 mb-3">Ideas by Status</h3>
-            {statusChartData.length > 0 ? (
-              <div className="space-y-2">
-                {statusChartData.map((s, i) => (
-                  <div key={s.name} className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className="w-2.5 h-2.5 rounded-full" style={{ background: COLORS[i % COLORS.length] }} />
-                      <span className="text-sm text-slate-600">{s.name}</span>
-                    </div>
-                    <span className="font-bold text-slate-900 text-sm">{s.value}</span>
-                  </div>
-                ))}
-              </div>
-            ) : <p className="text-slate-400 text-sm">No data</p>}
-          </div>
-        </div>
-      </motion.div>
-
-      {/* Top Teams Table */}
-      <motion.div {...fade(3)} className="bg-white rounded-2xl border border-slate-200/60 shadow-sm overflow-hidden">
-        <div className="p-6 flex items-center justify-between border-b border-slate-100">
-          <h3 className="text-lg font-semibold text-slate-900 flex items-center gap-2"><Trophy className="w-5 h-5 text-amber-500" />Top Teams Leaderboard</h3>
-          <Button variant="ghost-primary" size="xs" onClick={() => navigate('/rankings')}>View All →</Button>
-        </div>
-        {topTeams.length === 0 ? (
-          <div className="p-8"><EmptyState icon={Trophy} title="No evaluations yet" description="Evaluations will appear here" size="sm" /></div>
-        ) : (
-          <table className="w-full">
-            <thead>
-              <tr className="bg-slate-50 text-xs text-slate-400 uppercase">
-                <th className="px-6 py-3 text-left">Rank</th>
-                <th className="px-6 py-3 text-left">Team</th>
-                <th className="px-6 py-3 text-left">Class</th>
-                <th className="px-6 py-3 text-left">Startup</th>
-                <th className="px-6 py-3 text-right">Score</th>
-              </tr>
-            </thead>
-            <tbody>
-              {topTeams.slice(0, 10).map((t, i) => (
-                <tr key={i} className="border-t border-slate-50 hover:bg-primary-50/20 transition-colors">
-                  <td className="px-6 py-3.5">
-                    <span className={`inline-flex w-7 h-7 items-center justify-center rounded-lg text-sm font-bold ${i === 0 ? 'bg-amber-100 text-amber-600' : i === 1 ? 'bg-slate-100 text-slate-600' : i === 2 ? 'bg-orange-100 text-orange-600' : 'text-slate-500'}`}>
-                      {i + 1}
-                    </span>
-                  </td>
-                  <td className="px-6 py-3.5 font-semibold text-slate-900">{t.team?.name || '—'}</td>
-                  <td className="px-6 py-3.5 text-slate-500 text-sm">{t.team?.classId?.code || t.team?.classId?.classCode || t.team?.classId?.name || '—'}</td>
-                  <td className="px-6 py-3.5 text-slate-700 text-sm">{t.startupName || '—'}</td>
-                  <td className="px-6 py-3.5 text-right">
-                    <span className={`inline-flex px-2.5 py-1 rounded-lg text-sm font-bold ${t.avgScore >= 8 ? 'bg-green-100 text-green-700' : t.avgScore >= 6 ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600'}`}>
-                      {t.avgScore?.toFixed(2) || '—'}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </motion.div>
-      {/* Auth Analytics Section */}
-      {trackingData && (
-        <motion.div {...fade(4)} className="space-y-4">
-          {/* Section Header */}
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-indigo-100 flex items-center justify-center">
-                <Zap className="w-4 h-4 text-indigo-600" />
-              </div>
-              <div>
-                <h2 className="text-lg font-bold text-slate-900">Auth Analytics</h2>
-                <p className="text-xs text-slate-500">Real-time authentication tracking</p>
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setTrackingDays(7)}
-                className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
-                  trackingDays === 7
-                    ? 'bg-indigo-600 text-white'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                }`}
-              >
-                7 Days
-              </button>
-              <button
-                onClick={() => setTrackingDays(30)}
-                className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
-                  trackingDays === 30
-                    ? 'bg-indigo-600 text-white'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                }`}
-              >
-                30 Days
-              </button>
-            </div>
-          </div>
-
-          {/* Tracking Stat Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-            <div className="bg-gradient-to-br from-blue-50 to-blue-100/50 rounded-2xl border border-blue-200/60 p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <Users className="w-4 h-4 text-blue-600" />
-                <span className="text-xs text-blue-600 font-medium">Total Users</span>
-              </div>
-              <p className="text-2xl font-bold text-blue-700">{(trackingData.totalUsers || 0).toLocaleString()}</p>
-            </div>
-            <div className="bg-gradient-to-br from-emerald-50 to-emerald-100/50 rounded-2xl border border-emerald-200/60 p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <UserPlus className="w-4 h-4 text-emerald-600" />
-                <span className="text-xs text-emerald-600 font-medium">Total Registers</span>
-              </div>
-              <p className="text-2xl font-bold text-emerald-700">{(trackingData.totalRegisters || 0).toLocaleString()}</p>
-            </div>
-            <div className="bg-gradient-to-br from-violet-50 to-violet-100/50 rounded-2xl border border-violet-200/60 p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <LogIn className="w-4 h-4 text-violet-600" />
-                <span className="text-xs text-violet-600 font-medium">Total Logins</span>
-              </div>
-              <p className="text-2xl font-bold text-violet-700">{(trackingData.totalLogins || 0).toLocaleString()}</p>
-            </div>
-            <div className="bg-gradient-to-br from-red-50 to-red-100/50 rounded-2xl border border-red-200/60 p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <ShieldAlert className="w-4 h-4 text-red-500" />
-                <span className="text-xs text-red-500 font-medium">Failed Logins</span>
-              </div>
-              <p className="text-2xl font-bold text-red-600">{(trackingData.failedLogins || 0).toLocaleString()}</p>
-            </div>
-            <div className="bg-gradient-to-br from-amber-50 to-amber-100/50 rounded-2xl border border-amber-200/60 p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <AlertTriangle className="w-4 h-4 text-amber-500" />
-                <span className="text-xs text-amber-500 font-medium">Today Registers</span>
-              </div>
-              <p className="text-2xl font-bold text-amber-600">{trackingData.todayRegisters || 0}</p>
-              <p className="text-xs text-amber-500 mt-1">{trackingData.todayLogins || 0} logins today</p>
-            </div>
-            <div className="bg-gradient-to-br from-teal-50 to-teal-100/50 rounded-2xl border border-teal-200/60 p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <UserCheck className="w-4 h-4 text-teal-600" />
-                <span className="text-xs text-teal-600 font-medium">Active Today</span>
-              </div>
-              <p className="text-2xl font-bold text-teal-700">{trackingData.activeUsersToday || 0}</p>
-              <p className="text-xs text-teal-500 mt-1">unique users</p>
-            </div>
-          </div>
-
-          {/* Login & Register Line Chart */}
-          <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-6">
-            <h3 className="text-base font-semibold text-slate-900 mb-4 flex items-center gap-2">
-              <TrendingUp className="w-4 h-4 text-indigo-600" />
-              Login &amp; Register Trend
-              <span className="ml-auto text-xs text-slate-400 font-normal">Last {trackingDays} days</span>
-            </h3>
-            {(trackingData.loginRate?.length > 0 || trackingData.registerRate?.length > 0) ? (
-              <ResponsiveContainer width="100%" height={200}>
-                <LineChart
-                  data={trackingData.loginRate?.map((item, i) => ({
-                    date: item.date.slice(5), // MM-DD
-                    Logins: item.count,
-                    Registers: trackingData.registerRate?.[i]?.count || 0,
-                  }))}
-                >
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                  <XAxis dataKey="date" tick={{ fontSize: 11 }} />
-                  <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
-                  <Tooltip />
-                  <Legend />
-                  <Line type="monotone" dataKey="Logins" stroke="#6366f1" strokeWidth={2} dot={{ r: 3 }} />
-                  <Line type="monotone" dataKey="Registers" stroke="#10b981" strokeWidth={2} dot={{ r: 3 }} />
-                </LineChart>
-              </ResponsiveContainer>
-            ) : (
-              <p className="text-slate-400 text-sm text-center py-8">No tracking data yet</p>
-            )}
-          </div>
-        </motion.div>
-      )}
-
-      {/* Online Users Section */}
-      {onlineData && (
-        <motion.div {...fade(5)} className="bg-white rounded-2xl border border-slate-200/60 shadow-sm overflow-hidden">
-          {/* Header */}
-          <div className="p-6 border-b border-slate-100 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center">
-                <Wifi className="w-5 h-5 text-emerald-600" />
-              </div>
-              <div>
-                <h3 className="text-lg font-bold text-slate-900">Online Users</h3>
-                <p className="text-xs text-slate-500">
-                  {onlineData.onlineCount} online of {onlineData.totalUsers} total · auto-refreshes every 30s
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="relative flex h-3 w-3">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
-              </span>
-              <span className="text-sm font-bold text-emerald-600">{onlineData.onlineCount} Online</span>
-            </div>
-          </div>
-
-          <div className="p-6">
-            {/* Online Users List */}
-            {onlineData.onlineUsers?.length > 0 && (
-              <div className="mb-6">
-                <h4 className="text-xs font-bold text-emerald-600 uppercase tracking-wider mb-3 flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                  Currently Online ({onlineData.onlineUsers.length})
-                </h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                  {onlineData.onlineUsers.map(u => (
-                    <div key={u._id} className="flex items-center gap-3 p-3 rounded-xl bg-emerald-50/50 border border-emerald-100/60 hover:bg-emerald-50 transition-colors">
-                      <div className="relative shrink-0">
-                        {u.avatar ? (
-                          <img src={u.avatar} alt={u.name} className="w-9 h-9 rounded-full border border-emerald-200 object-cover" />
-                        ) : (
-                          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center text-white text-sm font-bold">
-                            {(u.name || '?')[0].toUpperCase()}
-                          </div>
-                        )}
-                        <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 border-2 border-white rounded-full"></span>
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-semibold text-slate-800 truncate">{u.name}</p>
-                        <div className="flex items-center gap-1.5">
-                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md border uppercase tracking-wider ${
-                            u.role === 'ADMIN' ? 'bg-red-50 text-red-600 border-red-200' :
-                            u.role === 'LECTURER' ? 'bg-purple-50 text-purple-600 border-purple-200' :
-                            u.role === 'MENTOR' ? 'bg-amber-50 text-amber-600 border-amber-200' :
-                            'bg-blue-50 text-blue-600 border-blue-200'
-                          }`}>{u.role}</span>
-                          <span className="text-[10px] text-slate-400 truncate">{u.email}</span>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Recently Active Users */}
-            {onlineData.recentlyActive?.length > 0 && (
-              <div>
-                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-1.5">
-                  <WifiOff className="w-3 h-3" />
-                  Recently Active ({onlineData.recentlyActive.length})
-                </h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                  {onlineData.recentlyActive.slice(0, 12).map(u => (
-                    <div key={u._id} className="flex items-center gap-3 p-3 rounded-xl bg-slate-50/50 border border-slate-100/60 hover:bg-slate-50 transition-colors">
-                      <div className="relative shrink-0">
-                        {u.avatar ? (
-                          <img src={u.avatar} alt={u.name} className="w-9 h-9 rounded-full border border-slate-200 object-cover opacity-70" />
-                        ) : (
-                          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-slate-300 to-slate-400 flex items-center justify-center text-white text-sm font-bold">
-                            {(u.name || '?')[0].toUpperCase()}
-                          </div>
-                        )}
-                        <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-slate-300 border-2 border-white rounded-full"></span>
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium text-slate-600 truncate">{u.name}</p>
-                        <div className="flex items-center gap-1">
-                          <Clock className="w-3 h-3 text-slate-400" />
-                          <span className="text-[10px] text-slate-400">
-                            {u.lastSeen ? (() => {
-                              const diff = Date.now() - new Date(u.lastSeen).getTime();
-                              const mins = Math.floor(diff / 60000);
-                              if (mins < 1) return 'just now';
-                              if (mins < 60) return `${mins}m ago`;
-                              const hrs = Math.floor(mins / 60);
-                              if (hrs < 24) return `${hrs}h ago`;
-                              return `${Math.floor(hrs / 24)}d ago`;
-                            })() : 'unknown'}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Empty State */}
-            {(!onlineData.onlineUsers?.length && !onlineData.recentlyActive?.length) && (
-              <div className="text-center py-8">
-                <WifiOff className="w-10 h-10 text-slate-300 mx-auto mb-2" />
-                <p className="text-sm text-slate-400">No user activity detected yet</p>
-              </div>
-            )}
-          </div>
-        </motion.div>
-      )}
-    </div>
-  );
+type AnyRecord = Record<string, any>;
+const roleColors: Record<string, string> = { ADMIN: '#dc2626', LECTURER: '#7c3aed', MENTOR: '#d97706', STUDENT: '#2563eb' };
+const statusColors = ['#1e5e9f', '#ea6a12', '#51b848', '#8b5cf6', '#dc2626', '#64748b'];
+const responseData = (response: any) => response?.data?.data ?? response?.data ?? response;
+const number = (value: unknown) => Number(value ?? 0);
+const formatNumber = (value: unknown) => number(value).toLocaleString();
+const initials = (name: string) => name.trim().charAt(0).toUpperCase() || '?';
+const ago = (value?: string) => {
+  if (!value) return 'unknown';
+  const minutes = Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 60000));
+  if (minutes < 1) return 'just now';
+  if (minutes < 60) return `${minutes}m ago`;
+  if (minutes < 1440) return `${Math.floor(minutes / 60)}h ago`;
+  return `${Math.floor(minutes / 1440)}d ago`;
 };
 
-export default AdminDashboard;
+function SectionUnavailable({ title }: { title: string }) {
+  return <div className="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-500">{title}: Data unavailable</div>;
+}
+
+function ActivityUser({ user, online }: { user: AnyRecord; online: boolean }) {
+  const role = String(user.role ?? 'STUDENT').toUpperCase();
+  return <div className={`flex min-w-0 items-center gap-3 rounded-xl border p-3 ${online ? 'border-emerald-100 bg-emerald-50/50' : 'border-slate-100 bg-slate-50'}`}>
+    <div className="relative shrink-0">
+      {user.avatar ? <img src={user.avatar} alt="" className={`h-9 w-9 rounded-full object-cover ${online ? '' : 'opacity-70'}`} /> : <div className={`flex h-9 w-9 items-center justify-center rounded-full text-sm font-bold text-white ${online ? 'bg-emerald-600' : 'bg-slate-400'}`}>{initials(user.name ?? '')}</div>}
+      <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white ${online ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+    </div>
+    <div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold text-slate-800">{user.name ?? 'Unknown user'}</p><p className="truncate text-xs text-slate-500">{online ? user.email : ago(user.lastSeen)}</p></div>
+    {online && <span className="rounded-md bg-white px-1.5 py-0.5 text-[10px] font-bold text-slate-600">{role}</span>}
+  </div>;
+}
+
+export default function AdminDashboard() {
+  const navigate = useNavigate();
+  const [dashboard, setDashboard] = useState<AnyRecord | null>(null);
+  const [dashboardLoading, setDashboardLoading] = useState(true);
+  const [dashboardError, setDashboardError] = useState(false);
+  const [days, setDays] = useState<7 | 30>(7);
+  const [tracking, setTracking] = useState<AnyRecord | null>(null);
+  const [trackingLoading, setTrackingLoading] = useState(true);
+  const [trackingError, setTrackingError] = useState(false);
+  const [online, setOnline] = useState<AnyRecord | null>(null);
+  const [onlineLoading, setOnlineLoading] = useState(true);
+  const [onlineError, setOnlineError] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [socketConnected, setSocketConnected] = useState(false);
+  const onlineLoaderRef = useRef<() => Promise<void>>(async () => {});
+
+  const loadDashboard = useCallback(async () => {
+    setDashboardLoading(true); setDashboardError(false);
+    try { setDashboard(responseData(await dashboardApi.getAdmin())); } catch { setDashboardError(true); } finally { setDashboardLoading(false); }
+  }, []);
+  const loadTracking = useCallback(async () => {
+    setTrackingLoading(true); setTrackingError(false);
+    try { setTracking(responseData(await trackingApi.getAuthStats(days))); } catch { setTrackingError(true); } finally { setTrackingLoading(false); }
+  }, [days]);
+  const loadOnline = useCallback(async () => {
+    setOnlineLoading(true); setOnlineError(false);
+    try { setOnline(responseData(await trackingApi.getOnlineUsers())); } catch { setOnlineError(true); } finally { setOnlineLoading(false); }
+  }, []);
+  onlineLoaderRef.current = loadOnline;
+
+  useEffect(() => { void loadDashboard(); }, [loadDashboard]);
+  useEffect(() => { void loadTracking(); }, [loadTracking]);
+  useEffect(() => { void loadOnline(); const timer = window.setInterval(() => void loadOnline(), 30000); return () => window.clearInterval(timer); }, [loadOnline]);
+  useEffect(() => {
+    const url = (import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api').replace(/\/api$/, '');
+    const socket = io(url, { withCredentials: true, transports: ['websocket', 'polling'], reconnection: true });
+    socket.on('connect', () => setSocketConnected(true));
+    socket.on('disconnect', () => setSocketConnected(false));
+    const refreshPresence = () => void onlineLoaderRef.current();
+    socket.on('presence', refreshPresence); socket.on('user_online', refreshPresence); socket.on('user_offline', refreshPresence);
+    return () => { socket.disconnect(); };
+  }, []);
+
+  const refreshAll = async () => { setRefreshing(true); await Promise.all([loadDashboard(), loadTracking(), loadOnline()]); setRefreshing(false); };
+  const stats = dashboard?.stats ?? {};
+  const topTeams = Array.isArray(dashboard?.topTeams) ? dashboard.topTeams : [];
+  const roleCounts = useMemo(() => {
+    const source = new Map((dashboard?.usersByRole ?? []).map((item: AnyRecord) => [String(item.role).toUpperCase(), number(item.count)]));
+    return ['ADMIN', 'LECTURER', 'MENTOR', 'STUDENT'].map(role => ({ name: role, value: source.get(role) ?? 0 }));
+  }, [dashboard]);
+  const trendData = useMemo(() => {
+    const byDate = new Map<string, AnyRecord>();
+    for (const item of tracking?.loginRate ?? []) byDate.set(item.date, { ...(byDate.get(item.date) ?? {}), date: item.date, Logins: number(item.count) });
+    for (const item of tracking?.registerRate ?? []) byDate.set(item.date, { ...(byDate.get(item.date) ?? {}), date: item.date, Registers: number(item.count) });
+    return [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date)).map(item => ({ ...item, date: String(item.date).slice(5), Logins: item.Logins ?? 0, Registers: item.Registers ?? 0 }));
+  }, [tracking]);
+  const statCards = [
+    ['Total Users', stats.totalUsers, Users, 'primary', 'Platform users'], ['Classes', stats.totalClasses, GraduationCap, 'cyan', 'All classes'],
+    ['Teams', stats.totalTeams, Rocket, 'secondary', 'Startup teams'], ['Sprint Progress', `${number(stats.overallTaskProgress)}%`, Activity, 'success', `${number(stats.completedTasks)} / ${number(stats.totalTasks)} tasks done`],
+    ['Ideas', stats.totalIdeas, Brain, 'indigo', 'Registered ideas'], ['Proposals', stats.submittedProposals, Sparkles, 'violet', 'Submitted'],
+    ['Evaluations', stats.totalEvaluations, TrendingUp, 'warning', 'Completed'], ['Sessions', stats.totalMentoringSessions, Clock, 'orange', 'Mentoring sessions'],
+  ] as const;
+
+  if (dashboardLoading && !dashboard) return <div className="space-y-6"><LoadingSkeleton lines={2} /><div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">{Array.from({ length: 8 }).map((_, index) => <LoadingSkeleton key={index} variant="card" />)}</div></div>;
+  if (dashboardError && !dashboard) return <ErrorState title="Dashboard unavailable" message="The platform overview could not be loaded." onRetry={() => void loadDashboard()} />;
+
+  return <div className="space-y-6 pb-6">
+    <motion.header initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
+      <div><h1 className="text-2xl font-bold text-slate-900 sm:text-3xl">Admin Overview</h1><p className="mt-1 text-slate-500">Platform analytics and system health</p></div>
+      <div className="flex gap-2"><Button aria-label="Refresh dashboard data" variant="outline" icon={RefreshCw} isLoading={refreshing} onClick={() => void refreshAll()}>Refresh</Button><Button variant="outline" icon={BarChart3} onClick={() => navigate('/rankings')}>View Rankings</Button></div>
+    </motion.header>
+
+    <section className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">{statCards.map(([title, value, icon, color, description], index) => <StatCard key={title} title={title} value={typeof value === 'string' ? value : formatNumber(value)} icon={icon} color={color} change={description} delay={index * 0.04} />)}</section>
+
+    <section className="grid gap-5 lg:grid-cols-3">
+      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm lg:col-span-2"><h2 className="mb-5 flex items-center gap-2 text-lg font-bold text-slate-900"><BarChart3 className="h-5 w-5 text-primary" />Top Team Rankings</h2>{topTeams.length === 0 ? <EmptyState icon={Trophy} title="No data yet" description="Complete some evaluations first" size="sm" /> : <ResponsiveContainer width="100%" height={250}><BarChart data={topTeams.slice(0, 8).map((team: AnyRecord, index: number) => ({ name: team.team?.name ?? `Team ${index + 1}`, score: number(team.avgScore) }))}><CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" /><XAxis dataKey="name" tick={{ fontSize: 11 }} /><YAxis domain={[0, 10]} /><Tooltip formatter={(value: number) => [value.toFixed(2), 'Score']} /><Bar dataKey="score" fill="#1e5e9f" radius={[5, 5, 0, 0]} /></BarChart></ResponsiveContainer>}</div>
+      <div className="space-y-5"><div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><h2 className="mb-3 text-base font-bold text-slate-900">Users by Role</h2><div className="flex items-center gap-4"><PieChart width={108} height={108}><Pie data={roleCounts} dataKey="value" cx={50} cy={50} innerRadius={28} outerRadius={46}>{roleCounts.map(item => <Cell key={item.name} fill={roleColors[item.name]} />)}</Pie></PieChart><div className="space-y-1.5">{roleCounts.map(item => <div key={item.name} className="flex items-center gap-2 text-sm"><span className="h-2.5 w-2.5 rounded-full" style={{ background: roleColors[item.name] }} /><span className="text-slate-600">{item.name}</span><b>{formatNumber(item.value)}</b></div>)}</div></div></div>
+      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><h2 className="mb-3 text-base font-bold text-slate-900">Ideas by Status</h2>{(dashboard?.ideasByStatus ?? []).length ? <div className="space-y-2">{dashboard.ideasByStatus.map((item: AnyRecord, index: number) => <div key={item.status} className="flex items-center justify-between text-sm"><span className="flex items-center gap-2 text-slate-600"><span className="h-2.5 w-2.5 rounded-full" style={{ background: statusColors[index % statusColors.length] }} />{item.status}</span><b>{formatNumber(item.count)}</b></div>)}</div> : <p className="text-sm text-slate-400">No data yet</p>}</div></div>
+    </section>
+
+    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"><div className="flex items-center justify-between border-b border-slate-100 p-5"><h2 className="flex items-center gap-2 text-lg font-bold text-slate-900"><Trophy className="h-5 w-5 text-amber-500" />Top Teams Leaderboard</h2><Button variant="ghost-primary" size="sm" onClick={() => navigate('/rankings')}>View All -&gt;</Button></div>{topTeams.length === 0 ? <div className="p-8"><EmptyState icon={Trophy} title="No evaluations yet" description="Evaluations will appear here" size="sm" /></div> : <div className="overflow-x-auto"><table className="min-w-[680px] w-full text-sm"><thead className="bg-slate-50 text-left text-xs uppercase text-slate-400"><tr>{['Rank', 'Team', 'Class', 'Startup', 'Score'].map(header => <th key={header} className="px-5 py-3">{header}</th>)}</tr></thead><tbody>{topTeams.slice(0, 10).map((team: AnyRecord, index: number) => { const score = number(team.avgScore); return <tr key={`${team.team?.name}-${index}`} className="border-t border-slate-100"><td className="px-5 py-3"><span className={`inline-flex h-7 w-7 items-center justify-center rounded-lg font-bold ${index === 0 ? 'bg-amber-100 text-amber-700' : index === 1 ? 'bg-slate-200 text-slate-700' : index === 2 ? 'bg-orange-100 text-orange-700' : 'text-slate-500'}`}>{index + 1}</span></td><td className="px-5 py-3 font-semibold text-slate-900">{team.team?.name ?? '-'}</td><td className="px-5 py-3 text-slate-600">{team.team?.classId?.classCode ?? '-'}</td><td className="px-5 py-3 text-slate-600">{team.startupName ?? '-'}</td><td className="px-5 py-3"><span className={`rounded-lg px-2 py-1 font-bold ${score >= 8 ? 'bg-emerald-100 text-emerald-700' : score >= 6 ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600'}`}>{score.toFixed(2)}</span></td></tr>; })}</tbody></table></div>}</section>
+
+    <section className="space-y-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-lg font-bold text-slate-900">Auth Analytics</h2><p className="text-sm text-slate-500">Real-time authentication tracking</p></div><div className="flex rounded-xl bg-slate-100 p-1">{([7, 30] as const).map(value => <button key={value} aria-label={`Show last ${value} days`} onClick={() => setDays(value)} className={`rounded-lg px-3 py-1.5 text-sm font-medium ${days === value ? 'bg-white text-primary shadow-sm' : 'text-slate-600'}`}>{value} Days</button>)}</div></div>{trackingLoading && !tracking ? <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">{Array.from({ length: 6 }).map((_, index) => <LoadingSkeleton key={index} variant="card" />)}</div> : trackingError ? <SectionUnavailable title="Auth Analytics" /> : <><div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">{[['Total Users', tracking?.totalUsers, Users, 'primary', ''], ['Total Registers', tracking?.totalRegisters, UserPlus, 'success', ''], ['Total Logins', tracking?.totalLogins, LogIn, 'violet', ''], ['Failed Logins', tracking?.failedLogins, ShieldAlert, 'danger', ''], ['Today Registers', tracking?.todayRegisters, AlertTriangle, 'warning', `${formatNumber(tracking?.todayLogins)} logins today`], ['Active Today', tracking?.activeUsersToday, UserCheck, 'cyan', '']].map(([title, value, icon, color, hint], index) => <StatCard key={String(title)} title={title} value={formatNumber(value)} icon={icon as any} color={color as any} change={hint as string} delay={index * 0.04} />)}</div><div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><h3 className="mb-4 flex items-center gap-2 font-bold text-slate-900"><TrendingUp className="h-4 w-4 text-primary" />Login &amp; Register Trend <span className="ml-auto text-xs font-normal text-slate-400">Last {days} days</span></h3>{trendData.length ? <ResponsiveContainer width="100%" height={220}><LineChart data={trendData}><CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" /><XAxis dataKey="date" /><YAxis allowDecimals={false} /><Tooltip /><Legend /><Line type="monotone" dataKey="Logins" stroke="#2563eb" strokeWidth={2} /><Line type="monotone" dataKey="Registers" stroke="#10b981" strokeWidth={2} /></LineChart></ResponsiveContainer> : <p className="py-8 text-center text-sm text-slate-400">No tracking data yet</p>}</div></>}</section>
+
+    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"><div className="flex items-center justify-between border-b border-slate-100 p-5"><div><h2 className="flex items-center gap-2 text-lg font-bold text-slate-900"><Wifi className="h-5 w-5 text-emerald-600" />Online Users</h2><p className="text-sm text-slate-500">{formatNumber(online?.onlineCount)} online of {formatNumber(online?.totalUsers)} total · {socketConnected ? 'live updates' : 'refreshes every 30s'}</p></div><Button aria-label="Refresh online users" variant="outline" size="sm" icon={RefreshCw} isLoading={onlineLoading} onClick={() => void loadOnline()}>Refresh</Button></div>{onlineLoading && !online ? <div className="p-5"><LoadingSkeleton variant="table" lines={4} /></div> : onlineError ? <div className="p-5"><SectionUnavailable title="Online Users" /></div> : <div className="space-y-5 p-5">{online?.onlineUsers?.length ? <div><h3 className="mb-3 text-xs font-bold uppercase text-emerald-600">Currently Online</h3><div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{online.onlineUsers.map((user: AnyRecord) => <ActivityUser key={user.id ?? user._id} user={user} online />)}</div></div> : null}{online?.recentlyActive?.length ? <div><h3 className="mb-3 flex items-center gap-1 text-xs font-bold uppercase text-slate-500"><WifiOff className="h-3 w-3" />Recently Active</h3><div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{online.recentlyActive.slice(0, 12).map((user: AnyRecord) => <ActivityUser key={user.id ?? user._id} user={user} online={false} />)}</div></div> : null}{!online?.onlineUsers?.length && !online?.recentlyActive?.length ? <EmptyState icon={WifiOff} title="No user activity detected yet" description="" size="sm" /> : null}</div>}</section>
+  </div>;
+}

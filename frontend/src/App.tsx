@@ -17,6 +17,7 @@ import ResetPassword from './pages/auth/ResetPassword';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import ClassManagement from './pages/admin/ClassManagement';
 import SubjectManagement from './pages/admin/SubjectManagement';
+import SubjectDetail from './pages/admin/SubjectDetail';
 import UserManagement from './pages/admin/UserManagement';
 import AccountApprovals from './pages/admin/AccountApprovals';
 
@@ -88,6 +89,7 @@ function App(): React.ReactElement {
                   <Route path="/admin/account-approvals" element={<ProtectedRoute allowedRoles={['ADMIN']}><AccountApprovals /></ProtectedRoute>} />
                   <Route path="/admin/classes" element={<ProtectedRoute allowedRoles={['ADMIN']}><ClassManagement /></ProtectedRoute>} />
                   <Route path="/admin/subjects" element={<ProtectedRoute allowedRoles={['ADMIN']}><SubjectManagement /></ProtectedRoute>} />
+                  <Route path="/admin/subjects/:subjectCode" element={<ProtectedRoute allowedRoles={['ADMIN']}><SubjectDetail /></ProtectedRoute>} />
 
                   <Route path="/lecturer" element={<ProtectedRoute allowedRoles={['LECTURER', 'MENTOR']}><LecturerDashboard /></ProtectedRoute>} />
                   <Route path="/lecturer/classes" element={<ProtectedRoute allowedRoles={['LECTURER', 'MENTOR']}><LecturerClasses /></ProtectedRoute>} />

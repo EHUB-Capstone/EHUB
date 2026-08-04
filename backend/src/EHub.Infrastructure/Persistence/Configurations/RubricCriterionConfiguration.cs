@@ -22,9 +22,13 @@ public class RubricCriterionConfiguration : IEntityTypeConfiguration<RubricCrite
             .HasMaxLength(100)
             .IsRequired();
 
+        builder.Property(rc => rc.Key).HasColumnName("key").HasMaxLength(100).HasDefaultValue("").IsRequired();
+
         builder.Property(rc => rc.Description)
             .HasColumnName("description")
             .HasMaxLength(1000);
+
+        builder.Property(rc => rc.LevelsJson).HasColumnName("levels_json").HasDefaultValue("[]").IsRequired();
 
         builder.Property(rc => rc.MaxScore)
             .HasColumnName("max_score")
