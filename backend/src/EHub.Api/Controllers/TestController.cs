@@ -3,13 +3,26 @@ using System.Collections.Generic;
 using Microsoft.AspNetCore.Mvc;
 using EHub.Application.Common.Exceptions;
 using EHub.Contracts.Common;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Mvc.Filters;
 
 namespace EHub.Api.Controllers;
 
 [ApiController]
 [Route("api/test")]
-public class TestController : ControllerBase
+public sealed class TestController(IWebHostEnvironment environment) : Controller
 {
+    public override void OnActionExecuting(ActionExecutingContext context)
+    {
+        if (!environment.IsDevelopment())
+        {
+            context.Result = NotFound();
+            return;
+        }
+
+        base.OnActionExecuting(context);
+    }
+
     [HttpGet("validation")]
     public IActionResult GetValidationError()
     {
