@@ -168,7 +168,8 @@ public sealed class CreateClassCommandHandler : ICreateClassCommandHandler
             Status = newClass.Status.ToString(),
             StudentCount = 0,
             TeamCount = 0,
-            CreatedAtUtc = newClass.CreatedAt
+            CreatedAtUtc = newClass.CreatedAt,
+            RowVersion = newClass.Version.ToString()
         };
 
         return Result.Success(response);

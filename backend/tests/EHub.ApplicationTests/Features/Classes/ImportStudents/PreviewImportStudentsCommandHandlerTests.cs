@@ -4,6 +4,7 @@ using EHub.Application.Common.Interfaces.Persistence;
 using EHub.Application.Common.Interfaces.Services;
 using EHub.Application.Features.Classes.ImportStudents;
 using EHub.Shared.Constants;
+using EHub.Shared.Errors;
 using FluentAssertions;
 using Microsoft.AspNetCore.Http;
 using NSubstitute;
@@ -32,7 +33,16 @@ public class PreviewImportStudentsCommandHandlerTests
 
         // Assert
         result.IsFailure.Should().BeTrue();
-        result.Error.Code.Should().Be("Classes.AccessDenied");
+        result.Error.Code.Should().Be(ErrorCodes.ClassAccessDenied);
+    }
+
+    [Fact]
+    public async Task HandleAsync_WhenUserIsLecturer_ReturnsAccessDeniedDuringSafetyHardening()
+    {
+        var result = await _handler.HandleAsync(Guid.NewGuid(), null!, Guid.NewGuid(), SystemRoles.Lecturer);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be(ErrorCodes.ClassAccessDenied);
     }
 
     [Fact]

@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using EHub.Application.Common.Interfaces.Persistence;
@@ -15,6 +16,7 @@ namespace EHub.Application.Features.Classes.UpdateClass;
 
 public sealed class UpdateClassCommandHandler : IUpdateClassCommandHandler
 {
+    private const string TeachingAssignmentChanged = "TEACHING_ASSIGNMENT_CHANGED";
     private readonly IApplicationDbContext _context;
 
     public UpdateClassCommandHandler(IApplicationDbContext context)
@@ -29,101 +31,199 @@ public sealed class UpdateClassCommandHandler : IUpdateClassCommandHandler
         string currentUserRole,
         CancellationToken cancellationToken = default)
     {
-        // 1. Role Check
         var isAdmin = string.Equals(currentUserRole, SystemRoles.Admin, StringComparison.OrdinalIgnoreCase);
         var isLecturer = string.Equals(currentUserRole, SystemRoles.Lecturer, StringComparison.OrdinalIgnoreCase);
 
         if (!isAdmin && !isLecturer)
         {
-            return Result.Failure<ClassResponse>(
-                new Error("Classes.AccessDenied", "You do not have permission to update class information."));
+            return Failure(ErrorCodes.ClassAccessDenied, "You do not have permission to update class information.");
         }
 
-        // 2. Fetch Entity
-        var targetClass = await _context.Classes
-            .Include(c => c.Course)
-            .Include(c => c.Semester)
-            .Include(c => c.PrimaryLecturer)
-            .Include(c => c.ClassLecturers)
-            .FirstOrDefaultAsync(c => c.Id == classId, cancellationToken);
-
+        var targetClass = await LoadClassAsync(classId, cancellationToken);
         if (targetClass == null)
         {
-            return Result.Failure<ClassResponse>(
-                new Error("Classes.NotFound", "The requested class was not found."));
+            return Failure(ErrorCodes.ClassNotFound, "The requested class was not found.");
         }
 
         if (targetClass.Status == ClassStatus.Archived)
         {
-            return Result.Failure<ClassResponse>(
-                new Error("Classes.ClassArchived", "Cannot update information of an archived class."));
+            return Failure(ErrorCodes.ClassArchived, "Cannot update information of an archived class.");
         }
 
-        if (isLecturer)
+        if (isLecturer && !IsAssigned(targetClass, currentUserId))
         {
-            // Ownership check for Lecturer
-            var isAssigned = targetClass.PrimaryLecturerId == currentUserId ||
-                             targetClass.ClassLecturers.Any(cl => cl.LecturerId == currentUserId);
-
-            if (!isAssigned)
-            {
-                return Result.Failure<ClassResponse>(
-                    new Error("Classes.AccessDenied", "You can only update classes assigned to you."));
-            }
+            return Failure(ErrorCodes.ClassAccessDenied, "You can only update classes assigned to you.");
         }
 
-        // Room update
         if (request.Room != null)
         {
-            targetClass.Room = request.Room.Trim();
-        }
-
-        // PrimaryLecturer update (Admin ONLY)
-        if (isAdmin)
-        {
-            if (request.PrimaryLecturerId.HasValue)
+            var room = request.Room.Trim();
+            if (room.Length > 50)
             {
-                var newLecturer = await _context.Users
-                    .Include(u => u.UserRoles)
-                    .ThenInclude(ur => ur.Role)
-                    .FirstOrDefaultAsync(u => u.Id == request.PrimaryLecturerId.Value, cancellationToken);
-
-                if (newLecturer == null || newLecturer.Status != UserStatus.Active ||
-                    !newLecturer.UserRoles.Any(ur => string.Equals(ur.Role.Name, SystemRoles.Lecturer, StringComparison.OrdinalIgnoreCase)))
-                {
-                    return Result.Failure<ClassResponse>(
-                        new Error("Classes.InvalidLecturer", "The specified lecturer does not exist, is inactive, or does not have LECTURER role."));
-                }
-
-                targetClass.PrimaryLecturerId = newLecturer.Id;
-                targetClass.PrimaryLecturer = newLecturer;
-
-                // Sync ClassLecturers
-                if (!targetClass.ClassLecturers.Any(cl => cl.LecturerId == newLecturer.Id))
-                {
-                    _context.ClassLecturers.Add(new ClassLecturer
-                    {
-                        ClassId = targetClass.Id,
-                        LecturerId = newLecturer.Id,
-                        AssignedAt = DateTime.UtcNow
-                    });
-                }
+                return Failure(ErrorCodes.ClassValidationError, "Room must not exceed 50 characters.");
             }
-            else
-            {
-                // Unassign Lecturer (Explicit null)
-                targetClass.PrimaryLecturerId = null;
-                targetClass.PrimaryLecturer = null;
-            }
+
+            targetClass.Room = room;
         }
 
         targetClass.UpdatedBy = currentUserId;
-        await _context.SaveChangesAsync(cancellationToken);
 
-        var studentCount = await _context.ClassStudents.CountAsync(cs => cs.ClassId == targetClass.Id && cs.EnrollmentStatus == EnrollmentStatus.Active, cancellationToken);
-        var teamCount = await _context.Teams.CountAsync(t => t.ClassId == targetClass.Id && t.Status == TeamStatus.Active, cancellationToken);
+        try
+        {
+            await _context.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return Failure(ErrorCodes.ClassConcurrencyConflict, "The class was changed by another user. Reload and try again.");
+        }
 
-        var response = new ClassResponse
+        return Result.Success(await BuildResponseAsync(targetClass, cancellationToken));
+    }
+
+    public async Task<Result<ClassResponse>> UpdateTeachingAssignmentAsync(
+        Guid classId,
+        UpdateTeachingAssignmentRequest request,
+        Guid currentUserId,
+        string currentUserRole,
+        CancellationToken cancellationToken = default)
+    {
+        if (!string.Equals(currentUserRole, SystemRoles.Admin, StringComparison.OrdinalIgnoreCase))
+        {
+            return Failure(ErrorCodes.ClassAccessDenied, "Only Admin can update teaching assignments.");
+        }
+
+        if (!uint.TryParse(request.RowVersion, out var expectedVersion))
+        {
+            return Failure(ErrorCodes.ClassValidationError, "A valid rowVersion is required.");
+        }
+
+        var targetClass = await LoadClassAsync(classId, cancellationToken);
+        if (targetClass == null)
+        {
+            return Failure(ErrorCodes.ClassNotFound, "The requested class was not found.");
+        }
+
+        if (targetClass.Status == ClassStatus.Archived)
+        {
+            return Failure(ErrorCodes.ClassArchived, "Cannot update an archived class.");
+        }
+
+        if (targetClass.Version != expectedVersion)
+        {
+            return Failure(ErrorCodes.ClassConcurrencyConflict, "The class was changed by another user. Reload and try again.");
+        }
+
+        User? newLecturer = null;
+        if (request.PrimaryLecturerId.HasValue)
+        {
+            newLecturer = await _context.Users
+                .Include(user => user.UserRoles)
+                .ThenInclude(userRole => userRole.Role)
+                .FirstOrDefaultAsync(user => user.Id == request.PrimaryLecturerId.Value, cancellationToken);
+
+            if (newLecturer == null ||
+                newLecturer.Status != UserStatus.Active ||
+                !newLecturer.UserRoles.Any(userRole =>
+                    string.Equals(userRole.Role.Name, SystemRoles.Lecturer, StringComparison.OrdinalIgnoreCase)))
+            {
+                return Failure(
+                    ErrorCodes.ClassInvalidLecturer,
+                    "The specified lecturer does not exist, is inactive, or does not have LECTURER role.");
+            }
+        }
+
+        var previousLecturerId = targetClass.PrimaryLecturerId;
+        var assignmentsToRevoke = targetClass.ClassLecturers
+            .Where(assignment =>
+                assignment.LecturerId != newLecturer?.Id &&
+                (assignment.IsPrimary || assignment.LecturerId == previousLecturerId))
+            .ToList();
+
+        foreach (var assignment in assignmentsToRevoke)
+        {
+            _context.ClassLecturers.Remove(assignment);
+        }
+
+        if (newLecturer != null)
+        {
+            var existingAssignment = targetClass.ClassLecturers
+                .FirstOrDefault(assignment => assignment.LecturerId == newLecturer.Id);
+
+            if (existingAssignment != null)
+            {
+                existingAssignment.IsPrimary = true;
+                existingAssignment.AssignedAt = DateTime.UtcNow;
+                existingAssignment.AssignedById = currentUserId;
+            }
+            else
+            {
+                _context.ClassLecturers.Add(new ClassLecturer
+                {
+                    ClassId = targetClass.Id,
+                    LecturerId = newLecturer.Id,
+                    IsPrimary = true,
+                    AssignedAt = DateTime.UtcNow,
+                    AssignedById = currentUserId
+                });
+            }
+        }
+
+        targetClass.PrimaryLecturerId = newLecturer?.Id;
+        targetClass.PrimaryLecturer = newLecturer;
+        targetClass.UpdatedBy = currentUserId;
+
+        _context.ClassAuditLogs.Add(new ClassAuditLog
+        {
+            ClassId = targetClass.Id,
+            Action = TeachingAssignmentChanged,
+            PerformedByUserId = currentUserId,
+            OccurredAtUtc = DateTime.UtcNow,
+            DetailsJson = JsonSerializer.Serialize(new
+            {
+                PreviousPrimaryLecturerId = previousLecturerId,
+                NewPrimaryLecturerId = newLecturer?.Id
+            })
+        });
+
+        try
+        {
+            // EF Core wraps this multi-entity SaveChanges in one database transaction.
+            await _context.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return Failure(ErrorCodes.ClassConcurrencyConflict, "The class was changed by another user. Reload and try again.");
+        }
+        catch (DbUpdateException)
+        {
+            return Failure(ErrorCodes.ClassConcurrencyConflict, "The teaching assignment conflicted with another update. Reload and try again.");
+        }
+
+        return Result.Success(await BuildResponseAsync(targetClass, cancellationToken));
+    }
+
+    private Task<Class?> LoadClassAsync(Guid classId, CancellationToken cancellationToken) =>
+        _context.Classes
+            .Include(@class => @class.Course)
+            .Include(@class => @class.Semester)
+            .Include(@class => @class.PrimaryLecturer)
+            .Include(@class => @class.ClassLecturers)
+            .FirstOrDefaultAsync(@class => @class.Id == classId, cancellationToken);
+
+    private static bool IsAssigned(Class targetClass, Guid userId) =>
+        targetClass.PrimaryLecturerId == userId ||
+        targetClass.ClassLecturers.Any(assignment => assignment.LecturerId == userId);
+
+    private async Task<ClassResponse> BuildResponseAsync(Class targetClass, CancellationToken cancellationToken)
+    {
+        var studentCount = await _context.ClassStudents.CountAsync(
+            enrollment => enrollment.ClassId == targetClass.Id && enrollment.EnrollmentStatus == EnrollmentStatus.Active,
+            cancellationToken);
+        var teamCount = await _context.Teams.CountAsync(
+            team => team.ClassId == targetClass.Id && team.Status == TeamStatus.Active,
+            cancellationToken);
+
+        return new ClassResponse
         {
             Id = targetClass.Id,
             ClassCode = targetClass.ClassCode,
@@ -143,31 +243,11 @@ public sealed class UpdateClassCommandHandler : IUpdateClassCommandHandler
             Status = targetClass.Status.ToString(),
             StudentCount = studentCount,
             TeamCount = teamCount,
-            CreatedAtUtc = targetClass.CreatedAt
+            CreatedAtUtc = targetClass.CreatedAt,
+            RowVersion = targetClass.Version.ToString()
         };
-
-        return Result.Success(response);
     }
 
-    public async Task<Result<ClassResponse>> UpdateTeachingAssignmentAsync(
-        Guid classId,
-        UpdateTeachingAssignmentRequest request,
-        Guid currentUserId,
-        string currentUserRole,
-        CancellationToken cancellationToken = default)
-    {
-        var isAdmin = string.Equals(currentUserRole, SystemRoles.Admin, StringComparison.OrdinalIgnoreCase);
-        if (!isAdmin)
-        {
-            return Result.Failure<ClassResponse>(
-                new Error("Classes.AccessDenied", "Only Admin can update teaching assignments."));
-        }
-
-        var updateRequest = new UpdateClassRequest
-        {
-            PrimaryLecturerId = request.PrimaryLecturerId
-        };
-
-        return await HandleAsync(classId, updateRequest, currentUserId, currentUserRole, cancellationToken);
-    }
+    private static Result<ClassResponse> Failure(string code, string message) =>
+        Result.Failure<ClassResponse>(new Error(code, message));
 }

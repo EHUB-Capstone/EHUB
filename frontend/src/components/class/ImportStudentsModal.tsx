@@ -82,10 +82,10 @@ export default function ImportStudentsModal({
     if (!selectedFile) return;
 
     const extension = selectedFile.name.split('.').pop()?.toLowerCase();
-    if (extension !== 'xlsx' && extension !== 'xls') {
+    if (extension !== 'xlsx') {
       setFile(null);
       setPreviewData(null);
-      setFileError('Unsupported file type. Please choose an .xlsx or .xls file.');
+      setFileError('Unsupported file type. Please choose an .xlsx file.');
       return;
     }
 
@@ -259,7 +259,7 @@ export default function ImportStudentsModal({
                       : 'border-slate-300 bg-white hover:border-primary hover:bg-primary-50/40'
                 }`}
               >
-                <input ref={inputRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleFileInput} />
+                <input ref={inputRef} type="file" accept=".xlsx" className="hidden" onChange={handleFileInput} />
                 <div className={`mx-auto flex h-12 w-12 items-center justify-center rounded-2xl ${fileError ? 'bg-red-100 text-red-600' : 'bg-primary-50 text-primary'}`}>
                   {analyzing ? <Loader2 className="h-6 w-6 animate-spin" /> : fileError ? <AlertCircle className="h-6 w-6" /> : <Upload className="h-6 w-6" />}
                 </div>

@@ -60,6 +60,10 @@ public class ClassConfiguration : IEntityTypeConfiguration<Class>
         builder.Property(c => c.CreatedById)
             .HasColumnName("created_by_id");
 
+        builder.Property(c => c.Version)
+            .IsRowVersion()
+            .HasColumnName("xmin");
+
         // Composite unique indexes & performance indexes
         builder.HasIndex(c => new { c.ClassCode, c.SemesterId })
             .IsUnique();

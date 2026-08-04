@@ -20,6 +20,7 @@ import StudentTeamGeneratePanel from '../../components/class/StudentTeamGenerate
 import TeamSuggestionTooltip from '../../components/class/TeamSuggestionTooltip';
 import ReviewTeamProposalModal from '../../components/class/ReviewTeamProposalModal';
 import EditScheduleModal from '../../components/class/EditScheduleModal';
+import AssignLectureModal from '../../components/class/AssignLectureModal';
 import AssignMentorsModal from '../../components/class/AssignMentorsModal';
 import RenameClassModal from '../../components/class/RenameClassModal';
 import VerifyMajorModal from '../../components/class/VerifyMajorModal';
@@ -32,6 +33,7 @@ import {
   normalizeClassStudents,
   studentBelongsToClass,
 } from '../../utils/studentAssignment';
+import { classFeatureFlags } from '../../config/classFeatureFlags';
 
 export default function ClassDetail() {
   const { id }    = useParams();
@@ -59,6 +61,7 @@ export default function ClassDetail() {
   const [loadingAssignmentCandidates, setLoadingAssignmentCandidates] = useState(false);
   const [showAddStudent, setShowAddStudent] = useState(false);
   const [showEditSchedule, setShowEditSchedule] = useState(false);
+  const [showAssignLecturer, setShowAssignLecturer] = useState(false);
   const [showAssignMentors, setShowAssignMentors] = useState(false);
   const [showRename, setShowRename] = useState(false);
   const [showVerify, setShowVerify] = useState(false);
@@ -144,8 +147,8 @@ export default function ClassDetail() {
 
       setStudents(mappedStudents);
 
-      let rawTeams = rawClass.teams || [];
-      if (rawTeams.length === 0) {
+      let rawTeams = classFeatureFlags.teamManagement ? (rawClass.teams || []) : [];
+      if (classFeatureFlags.teamManagement && rawTeams.length === 0) {
         try {
           const teamRes = await classApi.getTeams(id);
           const tData = teamRes?.data || teamRes;
@@ -174,21 +177,6 @@ export default function ClassDetail() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchData();
   }, [fetchData]);
-
-  const handleImported = (importedStudents = []) => {
-    const clientStudents = importedStudents.map((student, index) => ({
-      _id: `frontend-import-${Date.now()}-${index}`,
-      rollNumber: student.studentCode,
-      fullName: student.fullName,
-      email: student.email,
-      major: student.major || null,
-      classId: id,
-      teamId: null,
-      source: 'IMPORTED',
-      importedOnFrontend: true,
-    }));
-    setStudents(current => [...current, ...clientStudents]);
-  };
 
   const handleTeamCreated = async () => {
     setSelected([]);
@@ -402,6 +390,14 @@ export default function ClassDetail() {
   };
 
   const activeMentors = getUniqueMentors();
+  const primarySchedule = Array.isArray(cls.schedule) ? cls.schedule[0] : cls.schedule;
+  const scheduleDayValue = primarySchedule?.dayOfWeek ?? primarySchedule?.DayOfWeek;
+  const scheduleSlotValue = primarySchedule?.slotNumber ?? primarySchedule?.SlotNumber ?? primarySchedule?.slot;
+  const scheduleRoomValue = primarySchedule?.room ?? primarySchedule?.Room ?? cls.room;
+  const scheduleDayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const scheduleDayLabel = typeof scheduleDayValue === 'number'
+    ? scheduleDayNames[scheduleDayValue]
+    : scheduleDayValue;
 
   return (
     <div className="space-y-6">
@@ -417,7 +413,7 @@ export default function ClassDetail() {
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-2xl font-bold text-slate-900">{cls.classCode}</h1>
-              {(user?.role === 'ADMIN' ||
+              {classFeatureFlags.rename && (user?.role === 'ADMIN' ||
                 (user?.role === 'LECTURER' && cls.lectureId?._id?.toString() === user._id)) && (
                 <button
                   id="btn-rename-class"
@@ -433,7 +429,7 @@ export default function ClassDetail() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {(user?.role === 'ADMIN' || user?.role === 'LECTURER') && (
+          {classFeatureFlags.chatBackfill && (user?.role === 'ADMIN' || user?.role === 'LECTURER') && (
             <button
               onClick={handleBackfillChats}
               disabled={backfilling}
@@ -448,7 +444,7 @@ export default function ClassDetail() {
               )}
             </button>
           )}
-          {(user?.role === 'ADMIN' || user?.role === 'LECTURER' || user?.role === 'MENTOR') && (
+          {(user?.role === 'ADMIN' || user?.role === 'LECTURER') && (
             <button
               onClick={handleExportExcel}
               disabled={exporting}
@@ -457,7 +453,7 @@ export default function ClassDetail() {
               {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />} Export
             </button>
           )}
-          {(user?.role === 'ADMIN' || user?.role === 'LECTURER') && (
+          {classFeatureFlags.majorVerification && (user?.role === 'ADMIN' || user?.role === 'LECTURER') && (
   <>
     <button
       onClick={() =>
@@ -501,7 +497,7 @@ export default function ClassDetail() {
               <Upload className="w-4 h-4" /> Import Excel
             </button>
           )}
-          {(user?.role === 'ADMIN' || user?.role === 'LECTURER') && (
+          {classFeatureFlags.majorVerification && (user?.role === 'ADMIN' || user?.role === 'LECTURER') && (
             <button
               id="btn-verify-majors"
               onClick={() => setShowVerify(true)}
@@ -526,7 +522,7 @@ export default function ClassDetail() {
               {cls.isMajorLocked ? 'Mở khóa cập nhật' : 'Khóa cập nhật CN'}
             </button>
           )}
-          {canDeleteClass && (
+          {classFeatureFlags.lifecycle && canDeleteClass && (
             <button
               onClick={() => setShowDeleteClass(true)}
               className="flex items-center gap-2 px-4 py-2 border border-red-300 text-red-600 rounded-xl text-sm hover:bg-red-50 transition-all font-medium"
@@ -553,7 +549,7 @@ export default function ClassDetail() {
           </div>
           {user?.role === 'ADMIN' && (
             <button
-              onClick={() => setShowEditSchedule(true)}
+              onClick={() => setShowAssignLecturer(true)}
               className="text-xs font-semibold text-primary hover:text-primary-700 px-2.5 py-1.5 bg-primary-50 rounded-lg transition-all shrink-0 cursor-pointer"
             >
               Edit
@@ -562,21 +558,31 @@ export default function ClassDetail() {
         </div>
 
         {/* Schedule Card */}
-        <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-4 flex items-center gap-3 relative group">
-          <div className="w-10 h-10 rounded-xl bg-indigo-100 flex items-center justify-center shrink-0">
-            <Calendar className="w-5 h-5 text-indigo-500" />
+        <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-4 flex items-center justify-between gap-3 relative group">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-10 h-10 rounded-xl bg-indigo-100 flex items-center justify-center shrink-0">
+              <Calendar className="w-5 h-5 text-indigo-500" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[10px] text-slate-400 uppercase font-semibold tracking-wider">Schedule</p>
+              {primarySchedule ? (
+                <>
+                  <p className="font-semibold text-slate-800 text-sm truncate">{scheduleDayLabel}, Slot {scheduleSlotValue}</p>
+                  <p className="text-[11px] text-slate-400 truncate">Room {scheduleRoomValue || 'TBD'}</p>
+                </>
+              ) : (
+                <p className="font-semibold text-slate-800 text-sm truncate">TBD</p>
+              )}
+            </div>
           </div>
-          <div className="min-w-0">
-            <p className="text-[10px] text-slate-400 uppercase font-semibold tracking-wider">Schedule</p>
-            {cls.schedule && cls.schedule.dayOfWeek ? (
-              <>
-                <p className="font-semibold text-slate-800 text-sm truncate">{cls.schedule.dayOfWeek}, Slot {cls.schedule.slot}</p>
-                <p className="text-[11px] text-slate-400 truncate">Room {cls.schedule.room}</p>
-              </>
-            ) : (
-              <p className="font-semibold text-slate-800 text-sm truncate">TBD</p>
-            )}
-          </div>
+          {(user?.role === 'ADMIN' || user?.role === 'LECTURER') && (
+            <button
+              onClick={() => setShowEditSchedule(true)}
+              className="text-xs font-semibold text-primary hover:text-primary-700 px-2.5 py-1.5 bg-primary-50 rounded-lg transition-all shrink-0 cursor-pointer"
+            >
+              Edit
+            </button>
+          )}
         </div>
 
         {/* Mentors Card */}
@@ -599,7 +605,7 @@ export default function ClassDetail() {
               )}
             </div>
           </div>
-          {user?.role === 'ADMIN' && (
+          {classFeatureFlags.mentorAssignment && user?.role === 'ADMIN' && (
             <button
               onClick={() => setShowAssignMentors(true)}
               className="text-xs font-semibold text-primary hover:text-primary-700 px-2.5 py-1.5 bg-primary-50 rounded-lg transition-all shrink-0 cursor-pointer"
@@ -622,7 +628,7 @@ export default function ClassDetail() {
         </div>
 
         {/* Teams Card */}
-        <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-4 flex items-center gap-3">
+        {classFeatureFlags.teamManagement && <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-4 flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-green-100 flex items-center justify-center shrink-0">
             <BookOpen className="w-5 h-5 text-green-600" />
           </div>
@@ -630,11 +636,11 @@ export default function ClassDetail() {
             <p className="text-[10px] text-slate-400 uppercase font-semibold tracking-wider">Teams</p>
             <p className="font-bold text-2xl text-slate-900 leading-none mt-1">{safeTeams.length}</p>
           </div>
-        </div>
+        </div>}
       </div>
 
       {/* ── Team Generation Panel (always visible when students exist) ── */}
-      {safeStudents.length > 0 && selected.length > 0 && (
+      {classFeatureFlags.teamManagement && safeStudents.length > 0 && selected.length > 0 && (
         <div className="sticky top-20 z-40 shadow-xl rounded-2xl bg-white/80 backdrop-blur-md">
           {user?.role === 'STUDENT' ? (
             <StudentTeamGeneratePanel
@@ -668,7 +674,7 @@ export default function ClassDetail() {
 
       {/* ── Tabs ── */}
       <div className="flex gap-1 p-1 bg-slate-100 rounded-xl w-fit">
-        {['students', 'teams'].map(t => (
+        {(classFeatureFlags.teamManagement ? ['students', 'teams'] : ['students']).map(t => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -686,13 +692,13 @@ export default function ClassDetail() {
         {tab === 'students' ? (
           <StudentTable
             students={safeStudents}
-            teams={safeTeams}
+            teams={classFeatureFlags.teamManagement ? safeTeams : []}
             cls={cls}
-            selected={selected}
-            onSelectionChange={setSelected}
+            selected={classFeatureFlags.teamManagement ? selected : []}
+            onSelectionChange={classFeatureFlags.teamManagement ? setSelected : undefined}
             onRefresh={fetchData}
             onDeleteStudent={isAdminOrLecturer ? handleRemoveStudent : undefined}
-            toolbarAction={selected.length === 0 ? (
+            toolbarAction={classFeatureFlags.teamManagement && selected.length === 0 ? (
               user?.role === 'STUDENT' ? (
                 <TeamSuggestionTooltip label="Xem hướng dẫn tạo nhóm">
                   <div className="space-y-2">
@@ -738,7 +744,7 @@ export default function ClassDetail() {
         />
       )}
 
-      {showTeamManagement && isAdminOrLecturer && (
+      {classFeatureFlags.teamManagement && showTeamManagement && isAdminOrLecturer && (
         <TeamManagementModal
           classInfo={{
             id: id || cls._id,
@@ -774,17 +780,30 @@ export default function ClassDetail() {
       {showEditSchedule && (
         <EditScheduleModal
           classId={id}
-          currentLecture={cls.lectureId}
           currentSchedule={cls.schedule}
+          rowVersion={cls.rowVersion}
           onClose={() => setShowEditSchedule(false)}
-          onAssigned={async () => {
+          onUpdated={async () => {
             setShowEditSchedule(false);
             await fetchData();
           }}
         />
       )}
 
-      {showAssignMentors && (
+      {showAssignLecturer && user?.role === 'ADMIN' && (
+        <AssignLectureModal
+          classId={id}
+          currentLecture={cls.lectureId}
+          rowVersion={cls.rowVersion}
+          onClose={() => setShowAssignLecturer(false)}
+          onAssigned={async () => {
+            setShowAssignLecturer(false);
+            await fetchData();
+          }}
+        />
+      )}
+
+      {classFeatureFlags.mentorAssignment && showAssignMentors && (
         <AssignMentorsModal
           classId={id}
           currentMentors={activeMentors}
@@ -797,7 +816,7 @@ export default function ClassDetail() {
       )}
 
       {/* ── Rename Class Modal ── */}
-      {showRename && (
+      {classFeatureFlags.rename && showRename && (
         <RenameClassModal
           classId={id}
           currentCode={cls.classCode}
@@ -810,7 +829,7 @@ export default function ClassDetail() {
       )}
 
       {/* ── Verify Majors Modal ── */}
-      {showVerify && (
+      {classFeatureFlags.majorVerification && showVerify && (
         <VerifyMajorModal
           classId={id}
           onClose={() => setShowVerify(false)}
@@ -829,7 +848,7 @@ export default function ClassDetail() {
         />
       )}
 
-      {reviewTeam && (
+      {classFeatureFlags.teamManagement && reviewTeam && (
         <ReviewTeamProposalModal
           team={reviewTeam}
           classStudents={safeStudents}
@@ -853,7 +872,7 @@ export default function ClassDetail() {
         cancelText="Hủy"
       />
 
-      <ConfirmDialog
+      {classFeatureFlags.lifecycle && <ConfirmDialog
         isOpen={showDeleteClass}
         onClose={() => setShowDeleteClass(false)}
         onConfirm={confirmDeleteClass}
@@ -862,7 +881,7 @@ export default function ClassDetail() {
         description={`Class "${cls.classCode}" will be removed from active class lists. Student and team data will remain in the system.`}
         confirmText="Delete class"
         cancelText="Cancel"
-      />
+      />}
     </div>
   );
 }

@@ -4,6 +4,7 @@ using EHub.Application.Common.Interfaces.Persistence;
 using EHub.Application.Features.Classes.UpdateClass;
 using EHub.Contracts.Classes;
 using EHub.Shared.Constants;
+using EHub.Shared.Errors;
 using FluentAssertions;
 using NSubstitute;
 using Xunit;
@@ -35,7 +36,7 @@ public class UpdateClassCommandHandlerTests
 
         // Assert
         result.IsFailure.Should().BeTrue();
-        result.Error.Code.Should().Be("Classes.AccessDenied");
+        result.Error.Code.Should().Be(ErrorCodes.ClassAccessDenied);
     }
 
     [Fact]
@@ -52,6 +53,6 @@ public class UpdateClassCommandHandlerTests
 
         // Assert
         result.IsFailure.Should().BeTrue();
-        result.Error.Code.Should().Be("Classes.AccessDenied");
+        result.Error.Code.Should().Be(ErrorCodes.ClassAccessDenied);
     }
 }

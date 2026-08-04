@@ -5,6 +5,7 @@ using EHub.Application.Common.Interfaces.Persistence;
 using EHub.Application.Features.Classes.UpdateClassSchedule;
 using EHub.Contracts.Classes;
 using EHub.Shared.Constants;
+using EHub.Shared.Errors;
 using FluentAssertions;
 using NSubstitute;
 using Xunit;
@@ -39,7 +40,7 @@ public class UpdateClassScheduleCommandHandlerTests
 
         // Assert
         result.IsFailure.Should().BeTrue();
-        result.Error.Code.Should().Be("Classes.AccessDenied");
+        result.Error.Code.Should().Be(ErrorCodes.ClassAccessDenied);
     }
 
     [Theory]
@@ -62,6 +63,23 @@ public class UpdateClassScheduleCommandHandlerTests
 
         // Assert
         result.IsFailure.Should().BeTrue();
-        result.Error.Code.Should().Be("Classes.InvalidSlotNumber");
+        result.Error.Code.Should().Be(ErrorCodes.ClassValidationError);
+    }
+
+    [Fact]
+    public async Task HandleAsync_WhenRowVersionIsMissing_ReturnsValidationError()
+    {
+        var request = new UpdateClassScheduleRequest
+        {
+            Schedules = new List<ClassScheduleSlotDto>
+            {
+                new() { DayOfWeek = DayOfWeek.Monday, SlotNumber = 1 }
+            }
+        };
+
+        var result = await _handler.HandleAsync(Guid.NewGuid(), request, Guid.NewGuid(), SystemRoles.Admin);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be(ErrorCodes.ClassValidationError);
     }
 }

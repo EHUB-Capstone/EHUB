@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { dashboardApi } from '../../../api/dashboardApi';
 import { teamApi } from '../../../api/teamApi';
+import { classFeatureFlags } from '../../../config/classFeatureFlags';
 import {
   createWeeklyTask,
   deleteWeeklyTask,
@@ -50,7 +51,7 @@ export function useTeamContext({ user, queryTeamId }) {
 export function useTeamMembers(teamId) {
   return useQuery({
     queryKey: ['execution-board', 'team-members', teamId],
-    enabled: Boolean(teamId),
+    enabled: Boolean(teamId) && classFeatureFlags.teamManagement,
     staleTime: 5 * 60_000,
     queryFn: async ({ signal }) => {
       const response = await teamApi.getById(teamId, { signal });

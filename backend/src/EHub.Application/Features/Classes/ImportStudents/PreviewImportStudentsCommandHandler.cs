@@ -23,13 +23,6 @@ public sealed class PreviewImportStudentsCommandHandler : IPreviewImportStudents
     private readonly IApplicationDbContext _context;
     private readonly IImportSessionStore _sessionStore;
 
-    private static readonly HashSet<string> ValidMajorCodes = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "BIT_SE", "BIT_IA", "BIT_GD", "BIT_AI", "BIT_IS", "BIT_CS", "BIT_CY", "BIT_DS",
-        "BBA_IB", "BBA_MKT", "BBA_HM", "BBA_MC", "BBA_TM", "BBA_FIN", "BBA_HRM", "BBA_DM", "BBA_BA", "BBA_LOG",
-        "BLA_ELT", "BLA_BC", "BLA_JP", "BLA_KR", "BLA_CN"
-    };
-
     public PreviewImportStudentsCommandHandler(
         IApplicationDbContext context,
         IImportSessionStore sessionStore)
@@ -46,12 +39,12 @@ public sealed class PreviewImportStudentsCommandHandler : IPreviewImportStudents
         CancellationToken cancellationToken = default)
     {
         var isAdmin = string.Equals(currentUserRole, SystemRoles.Admin, StringComparison.OrdinalIgnoreCase);
-        var isLecturer = string.Equals(currentUserRole, SystemRoles.Lecturer, StringComparison.OrdinalIgnoreCase);
 
-        if (!isAdmin && !isLecturer)
+        // Safety hotfix: keep import Admin-only until the durable session/transaction redesign is complete.
+        if (!isAdmin)
         {
             return Result.Failure<ImportStudentsPreviewResponse>(
-                new Error("Classes.AccessDenied", "You do not have permission to import students to this class."));
+                new Error(ErrorCodes.ClassAccessDenied, "Only Admin can import students during the safety hardening period."));
         }
 
         if (file == null || file.Length == 0)
@@ -67,10 +60,10 @@ public sealed class PreviewImportStudentsCommandHandler : IPreviewImportStudents
         }
 
         var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
-        if (ext != ".xlsx" && ext != ".xls")
+        if (ext != ".xlsx")
         {
             return Result.Failure<ImportStudentsPreviewResponse>(
-                new Error("Classes.InvalidFileType", "Only Excel files (.xlsx, .xls) are allowed."));
+                new Error("Classes.InvalidFileType", "Only OpenXML Excel files (.xlsx) are allowed."));
         }
 
         var targetClass = await _context.Classes
@@ -88,18 +81,6 @@ public sealed class PreviewImportStudentsCommandHandler : IPreviewImportStudents
         {
             return Result.Failure<ImportStudentsPreviewResponse>(
                 new Error("Classes.ClassArchived", "Cannot import students to an archived class."));
-        }
-
-        if (isLecturer)
-        {
-            var isAssigned = targetClass.PrimaryLecturerId == currentUserId ||
-                             targetClass.ClassLecturers.Any(cl => cl.LecturerId == currentUserId);
-
-            if (!isAssigned)
-            {
-                return Result.Failure<ImportStudentsPreviewResponse>(
-                    new Error("Classes.AccessDenied", "You can only import students to classes assigned to you."));
-            }
         }
 
         // Fetch existing enrollments in this class & active enrollments across same subject/semester
@@ -227,7 +208,7 @@ public sealed class PreviewImportStudentsCommandHandler : IPreviewImportStudents
                     isValid = false;
                     errorMessage = $"Email '{email}' is invalid.";
                 }
-                else if (!string.IsNullOrWhiteSpace(majorCode) && !ValidMajorCodes.Contains(majorCode))
+                else if (!MajorCodes.IsValid(majorCode))
                 {
                     isValid = false;
                     errorMessage = $"Major code '{majorCode}' is invalid.";

@@ -38,6 +38,7 @@ public sealed class ClassResponse
     public int StudentCount { get; init; }
     public int TeamCount { get; init; }
     public DateTime CreatedAtUtc { get; init; }
+    public string RowVersion { get; init; } = string.Empty;
 }
 
 public sealed class ClassListResponse
@@ -94,7 +95,6 @@ public sealed class BulkClassPreviewResponse
 
 public sealed class UpdateClassRequest
 {
-    public Guid? PrimaryLecturerId { get; init; }
     public string? Room { get; init; }
 }
 
@@ -108,11 +108,13 @@ public sealed class ClassScheduleSlotDto
 public sealed class UpdateClassScheduleRequest
 {
     public IReadOnlyCollection<ClassScheduleSlotDto> Schedules { get; init; } = Array.Empty<ClassScheduleSlotDto>();
+    public string RowVersion { get; init; } = string.Empty;
 }
 
 public sealed class UpdateTeachingAssignmentRequest
 {
     public Guid? PrimaryLecturerId { get; init; }
+    public string RowVersion { get; init; } = string.Empty;
 }
 
 public sealed class ClassStudentDto

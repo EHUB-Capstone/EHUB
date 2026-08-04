@@ -15,6 +15,7 @@ import EmptyState from '../../components/ui/EmptyState';
 import BulkCreateModal from '../../components/class/BulkCreateModal';
 import ImportStudentsModal from '../../components/class/ImportStudentsModal';
 import ClassDirectionOverview from '../../components/class/ClassDirectionOverview';
+import { classFeatureFlags } from '../../config/classFeatureFlags';
 
 const SEMESTERS = ['SP', 'SU', 'FA'];
 const CURRENT_YEAR = new Date().getFullYear();
@@ -104,7 +105,13 @@ export default function ClassManagement() {
       }));
       setClasses(normalizedClasses);
       const lects = usrRes?.data?.users || usrRes?.users || [];
-      setLecturers(lects.filter(u => u.role === 'LECTURER'));
+      setLecturers(lects
+        .filter(u => u.role === 'LECTURER')
+        .map(lecturer => ({
+          ...lecturer,
+          _id: lecturer._id || lecturer.id,
+          name: lecturer.name || lecturer.fullName,
+        })));
     } catch {
       toast.error('Failed to load classes');
     } finally {
@@ -185,7 +192,7 @@ export default function ClassManagement() {
         </div>
       </div>
 
-      {isLecturer && (
+      {isLecturer && classFeatureFlags.projectDirection && (
         <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1">
           <button
             type="button"
@@ -251,7 +258,7 @@ export default function ClassManagement() {
       </div>
 
       {/* ── Class Grid ── */}
-      {isLecturer && viewMode === 'overview' ? (
+      {isLecturer && classFeatureFlags.projectDirection && viewMode === 'overview' ? (
         <ClassDirectionOverview semester={filterSem} year={filterYear} />
       ) : classes.length === 0 ? (
         <EmptyState
@@ -408,7 +415,7 @@ export default function ClassManagement() {
           onCreated={handleBulkCreated}
         />
       )}
-      {importTarget && (
+      {isAdmin && importTarget && (
         <ImportStudentsModal
           classId={importTarget}
           onClose={() => setImportTarget(null)}

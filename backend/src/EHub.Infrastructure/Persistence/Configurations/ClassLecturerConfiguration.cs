@@ -31,6 +31,10 @@ public class ClassLecturerConfiguration : IEntityTypeConfiguration<ClassLecturer
         builder.Property(cl => cl.AssignedById)
             .HasColumnName("assigned_by_id");
 
+        builder.HasIndex(cl => cl.ClassId)
+            .IsUnique()
+            .HasFilter("is_primary = true");
+
         // Relationships configuration
         builder.HasOne(cl => cl.Class)
             .WithMany(c => c.ClassLecturers)

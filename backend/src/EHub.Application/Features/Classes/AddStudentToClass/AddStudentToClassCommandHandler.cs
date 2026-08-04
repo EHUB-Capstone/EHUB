@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Net.Mail;
 using System.Threading;
@@ -19,13 +18,6 @@ public sealed class AddStudentToClassCommandHandler : IAddStudentToClassCommandH
 {
     private readonly IApplicationDbContext _context;
 
-    private static readonly HashSet<string> ValidMajorCodes = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "BIT_SE", "BIT_IA", "BIT_GD", "BIT_AI", "BIT_IS", "BIT_CS", "BIT_CY", "BIT_DS",
-        "BBA_IB", "BBA_MKT", "BBA_HM", "BBA_MC", "BBA_TM", "BBA_FIN", "BBA_HRM", "BBA_DM", "BBA_BA", "BBA_LOG",
-        "BLA_ELT", "BLA_BC", "BLA_JP", "BLA_KR", "BLA_CN"
-    };
-
     public AddStudentToClassCommandHandler(IApplicationDbContext context)
     {
         _context = context;
@@ -38,134 +30,124 @@ public sealed class AddStudentToClassCommandHandler : IAddStudentToClassCommandH
         string currentUserRole,
         CancellationToken cancellationToken = default)
     {
-        // 1. Authorization
         var isAdmin = string.Equals(currentUserRole, SystemRoles.Admin, StringComparison.OrdinalIgnoreCase);
         var isLecturer = string.Equals(currentUserRole, SystemRoles.Lecturer, StringComparison.OrdinalIgnoreCase);
 
         if (!isAdmin && !isLecturer)
         {
-            return Result.Failure<ClassStudentDto>(
-                new Error("Classes.AccessDenied", "You do not have permission to add students to this class."));
+            return Failure(ErrorCodes.ClassAccessDenied, "You do not have permission to add students to this class.");
         }
 
-        // 2. Input Validation
-        if (string.IsNullOrWhiteSpace(request.StudentCode))
+        var validationError = ValidateAndNormalize(request, out var studentCode, out var fullName, out var email, out var majorCode);
+        if (validationError != null)
         {
-            return Result.Failure<ClassStudentDto>(
-                new Error("Classes.InvalidStudentCode", "Student code (Roll number) is required."));
+            return Failure(ErrorCodes.ClassValidationError, validationError);
         }
 
-        if (string.IsNullOrWhiteSpace(request.FullName))
-        {
-            return Result.Failure<ClassStudentDto>(
-                new Error("Classes.InvalidFullName", "Student full name is required."));
-        }
-
-        if (string.IsNullOrWhiteSpace(request.Email) || !MailAddress.TryCreate(request.Email.Trim(), out _))
-        {
-            return Result.Failure<ClassStudentDto>(
-                new Error("Classes.InvalidEmail", "A valid student email address is required."));
-        }
-
-        var majorCode = request.MajorCode?.Trim().ToUpperInvariant() ?? string.Empty;
-        if (string.IsNullOrWhiteSpace(majorCode) || !ValidMajorCodes.Contains(majorCode))
-        {
-            return Result.Failure<ClassStudentDto>(
-                new Error("Classes.InvalidMajorCode", $"Major code '{request.MajorCode}' is invalid."));
-        }
-
-        var studentCode = request.StudentCode.Trim().ToUpperInvariant();
-        var email = request.Email.Trim().ToLowerInvariant();
-
-        // 3. Target Class Check
         var targetClass = await _context.Classes
-            .Include(c => c.ClassLecturers)
-            .FirstOrDefaultAsync(c => c.Id == classId, cancellationToken);
+            .Include(@class => @class.ClassLecturers)
+            .FirstOrDefaultAsync(@class => @class.Id == classId, cancellationToken);
 
         if (targetClass == null)
         {
-            return Result.Failure<ClassStudentDto>(
-                new Error("Classes.NotFound", "The requested class was not found."));
+            return Failure(ErrorCodes.ClassNotFound, "The requested class was not found.");
         }
 
         if (targetClass.Status == ClassStatus.Archived)
         {
-            return Result.Failure<ClassStudentDto>(
-                new Error("Classes.ClassArchived", "Cannot add students to an archived class."));
+            return Failure(ErrorCodes.ClassArchived, "Cannot add students to an archived class.");
         }
 
-        if (isLecturer)
+        if (isLecturer &&
+            targetClass.PrimaryLecturerId != currentUserId &&
+            targetClass.ClassLecturers.All(assignment => assignment.LecturerId != currentUserId))
         {
-            var isAssigned = targetClass.PrimaryLecturerId == currentUserId ||
-                             targetClass.ClassLecturers.Any(cl => cl.LecturerId == currentUserId);
+            return Failure(ErrorCodes.ClassAccessDenied, "You can only add students to classes assigned to you.");
+        }
 
-            if (!isAssigned)
+        // Resolve identity before changing any tracked student profile. Code and email may not point to two people.
+        var studentByCode = await _context.Students
+            .FirstOrDefaultAsync(student => student.NormalizedRollNumber == studentCode, cancellationToken);
+        var studentByEmail = await _context.Students
+            .FirstOrDefaultAsync(student => student.Email != null && student.Email.ToLower() == email, cancellationToken);
+
+        if (studentByCode != null && studentByEmail != null && studentByCode.Id != studentByEmail.Id)
+        {
+            return Failure(
+                ErrorCodes.ClassStudentIdentityConflict,
+                "Student code and email belong to different student profiles.");
+        }
+
+        var studentProfile = studentByCode ?? studentByEmail;
+        if (studentProfile != null &&
+            !string.IsNullOrWhiteSpace(studentProfile.NormalizedRollNumber) &&
+            !string.Equals(studentProfile.NormalizedRollNumber, studentCode, StringComparison.OrdinalIgnoreCase))
+        {
+            return Failure(
+                ErrorCodes.ClassStudentIdentityConflict,
+                "The email is already associated with a different student code.");
+        }
+
+        ClassStudent? existingEnrollment = null;
+        if (studentProfile != null)
+        {
+            existingEnrollment = await _context.ClassStudents
+                .FirstOrDefaultAsync(
+                    enrollment => enrollment.ClassId == classId && enrollment.StudentId == studentProfile.Id,
+                    cancellationToken);
+
+            if (existingEnrollment?.EnrollmentStatus == EnrollmentStatus.Active)
             {
-                return Result.Failure<ClassStudentDto>(
-                    new Error("Classes.AccessDenied", "You can only add students to classes assigned to you."));
+                return Failure(
+                    ErrorCodes.ClassStudentAlreadyEnrolled,
+                    $"Student '{studentCode}' is already actively enrolled in this class.");
+            }
+
+            var conflictEnrollment = await _context.ClassStudents
+                .Include(enrollment => enrollment.Class)
+                .AsNoTracking()
+                .FirstOrDefaultAsync(enrollment =>
+                    enrollment.StudentId == studentProfile.Id &&
+                    enrollment.ClassId != classId &&
+                    enrollment.Class.CourseId == targetClass.CourseId &&
+                    enrollment.Class.SemesterId == targetClass.SemesterId &&
+                    enrollment.Class.Status == ClassStatus.Active &&
+                    enrollment.EnrollmentStatus == EnrollmentStatus.Active,
+                    cancellationToken);
+
+            if (conflictEnrollment != null)
+            {
+                return Failure(
+                    ErrorCodes.ClassStudentEnrollmentConflict,
+                    $"Student '{studentCode}' is already enrolled in active class '{conflictEnrollment.Class.ClassCode}' for the same subject and academic term.");
             }
         }
 
-        // 4. Upsert Student Profile
-        var studentProfile = await _context.Students
-            .FirstOrDefaultAsync(s => s.NormalizedRollNumber == studentCode || (s.Email != null && s.Email.ToLower() == email), cancellationToken);
-
+        // No mutation occurs before all identity and enrollment validation has succeeded.
         if (studentProfile == null)
         {
             studentProfile = new Student
             {
                 RollNumber = studentCode,
                 NormalizedRollNumber = studentCode,
-                FullName = request.FullName.Trim(),
+                FullName = fullName,
                 Email = email,
                 MajorCode = majorCode,
-                Status = StudentStatus.Active
+                Status = StudentStatus.Active,
+                CreatedBy = currentUserId
             };
             await _context.Students.AddAsync(studentProfile, cancellationToken);
         }
         else
         {
-            studentProfile.FullName = request.FullName.Trim();
+            studentProfile.RollNumber = studentCode;
+            studentProfile.NormalizedRollNumber = studentCode;
+            studentProfile.FullName = fullName;
             studentProfile.Email = email;
             studentProfile.MajorCode = majorCode;
-            if (string.IsNullOrEmpty(studentProfile.RollNumber))
-            {
-                studentProfile.RollNumber = studentCode;
-                studentProfile.NormalizedRollNumber = studentCode;
-            }
+            studentProfile.UpdatedBy = currentUserId;
         }
 
-        await _context.SaveChangesAsync(cancellationToken);
-
-        // 5. Duplicate Check in SAME Class
-        var existingEnrollment = await _context.ClassStudents
-            .FirstOrDefaultAsync(cs => cs.ClassId == classId && cs.StudentId == studentProfile.Id, cancellationToken);
-
-        if (existingEnrollment != null && existingEnrollment.EnrollmentStatus == EnrollmentStatus.Active)
-        {
-            return Result.Failure<ClassStudentDto>(
-                new Error("Classes.StudentAlreadyEnrolled", $"Student '{studentCode}' is already actively enrolled in this class."));
-        }
-
-        // 6. Same Subject + Same Term Conflict Check across other classes
-        var conflictEnrollment = await _context.ClassStudents
-            .Include(cs => cs.Class)
-            .AsNoTracking()
-            .FirstOrDefaultAsync(cs => cs.StudentId == studentProfile.Id &&
-                                       cs.ClassId != classId &&
-                                       cs.Class.CourseId == targetClass.CourseId &&
-                                       cs.Class.SemesterId == targetClass.SemesterId &&
-                                       cs.Class.Status == ClassStatus.Active &&
-                                       cs.EnrollmentStatus == EnrollmentStatus.Active, cancellationToken);
-
-        if (conflictEnrollment != null)
-        {
-            return Result.Failure<ClassStudentDto>(
-                new Error("Classes.StudentConflictSameSubjectSemester",
-                    $"Student '{studentCode}' is already enrolled in active class '{conflictEnrollment.Class.ClassCode}' for the same subject and academic term."));
-        }
-
-        // 7. Add or Re-activate ClassStudent
         if (existingEnrollment == null)
         {
             existingEnrollment = new ClassStudent
@@ -184,9 +166,19 @@ public sealed class AddStudentToClassCommandHandler : IAddStudentToClassCommandH
             existingEnrollment.UpdatedAt = DateTime.UtcNow;
         }
 
-        await _context.SaveChangesAsync(cancellationToken);
+        try
+        {
+            // Student profile and enrollment are committed atomically by a single SaveChanges.
+            await _context.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException)
+        {
+            return Failure(
+                ErrorCodes.ClassStudentEnrollmentConflict,
+                "The student could not be enrolled because the data changed concurrently.");
+        }
 
-        var dto = new ClassStudentDto
+        return Result.Success(new ClassStudentDto
         {
             StudentId = studentProfile.Id,
             RollNumber = studentProfile.RollNumber ?? studentCode,
@@ -199,8 +191,44 @@ public sealed class AddStudentToClassCommandHandler : IAddStudentToClassCommandH
             TeamName = null,
             IsTeamLeader = false,
             JoinedAtUtc = existingEnrollment.CreatedAt
-        };
-
-        return Result.Success(dto);
+        });
     }
+
+    private static string? ValidateAndNormalize(
+        AddStudentToClassRequest request,
+        out string studentCode,
+        out string fullName,
+        out string email,
+        out string majorCode)
+    {
+        studentCode = request.StudentCode?.Trim().ToUpperInvariant() ?? string.Empty;
+        fullName = request.FullName?.Trim() ?? string.Empty;
+        email = request.Email?.Trim().ToLowerInvariant() ?? string.Empty;
+        majorCode = request.MajorCode?.Trim().ToUpperInvariant() ?? string.Empty;
+
+        if (string.IsNullOrWhiteSpace(studentCode) || studentCode.Length > 20)
+        {
+            return "Student code is required and must not exceed 20 characters.";
+        }
+
+        if (string.IsNullOrWhiteSpace(fullName) || fullName.Length > 150)
+        {
+            return "Student full name is required and must not exceed 150 characters.";
+        }
+
+        if (string.IsNullOrWhiteSpace(email) || email.Length > 150 || !MailAddress.TryCreate(email, out _))
+        {
+            return "A valid student email address is required.";
+        }
+
+        if (!MajorCodes.IsValid(majorCode))
+        {
+            return $"Major code '{request.MajorCode}' is invalid.";
+        }
+
+        return null;
+    }
+
+    private static Result<ClassStudentDto> Failure(string code, string message) =>
+        Result.Failure<ClassStudentDto>(new Error(code, message));
 }

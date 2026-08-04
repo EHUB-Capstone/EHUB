@@ -7,6 +7,7 @@ import {
   LayoutDashboard, Users, GraduationCap, Trophy, CalendarDays,
   Kanban, Brain, Video, Rocket, LogOut, Plus, X, MessageSquare, Database, BookOpen, ShieldCheck
 } from 'lucide-react';
+import { classFeatureFlags } from '../../config/classFeatureFlags';
 
 const iconMap: Record<string, LucideIcon> = {
   dashboard: LayoutDashboard,
@@ -83,15 +84,18 @@ const Sidebar = ({ mobileOpen, onMobileClose }: SidebarProps) => {
     MENTOR: [
       { path: '/mentor', icon: 'dashboard', label: 'Dashboard' },
       { path: '/workspace', icon: 'view_kanban', label: 'Startup Workspace' },
-      { path: '/lecturer/classes', icon: 'school', label: 'My Classes' },
       { path: '/workshops', icon: 'calendar_month', label: 'Workshops' },
       { path: '/chat', icon: 'chat', label: 'Group Chat' },
       { path: '/sessions', icon: 'event', label: 'Sessions' },
       { path: '/rankings', icon: 'military_tech', label: 'Rankings' },
     ],
     STUDENT: [
-      { path: '/student/classes', icon: 'school', label: 'My Classes' },
-      { path: '/student/team', icon: 'group', label: 'My Team' },
+      ...(classFeatureFlags.studentSelfService
+        ? [
+            { path: '/student/classes', icon: 'school', label: 'My Classes' },
+            { path: '/student/team', icon: 'group', label: 'My Team' },
+          ]
+        : []),
       { path: '/student/workspace', icon: 'view_kanban', label: 'Startup Workspace' },
       { path: '/student', icon: 'dashboard', label: 'Dashboard' },
       { path: '/workshops', icon: 'calendar_month', label: 'Workshops' },

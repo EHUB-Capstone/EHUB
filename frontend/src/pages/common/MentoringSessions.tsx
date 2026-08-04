@@ -12,6 +12,7 @@ import Button from '../../components/ui/Button';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import Modal from '../../components/ui/Modal';
 import { formatSlotTime, SLOT_OPTIONS, TEACHING_DAYS } from '../../constants/classSchedule';
+import { classFeatureFlags } from '../../config/classFeatureFlags';
 import { Calendar, Plus, Video, Clock, Trash2, Edit, ChevronLeft, ChevronRight, CheckCircle } from 'lucide-react';
 
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
@@ -59,7 +60,7 @@ const MentoringSessions = () => {
     : [];
 
   const loadTeamsForClass = async (classId) => {
-    if (!classId) {
+    if (!classId || !classFeatureFlags.teamManagement) {
       setClassTeams([]);
       return;
     }
@@ -102,7 +103,7 @@ const MentoringSessions = () => {
           list = mRes.data?.sessions || mRes.sessions || mRes.data || [];
         }
 
-        try {
+        if (classFeatureFlags.studentSelfService) try {
           const classesRes = await classApi.getMyClasses();
           accessibleClasses = classesRes.data?.classes || classesRes.classes || classesRes.data || [];
         } catch (classesErr) {
@@ -113,7 +114,7 @@ const MentoringSessions = () => {
         const [sessionsRes, classesRes, teamsRes] = await Promise.allSettled([
           mentoringApi.getAllSessions(),
           classApi.getAll(),
-          teamApi.getAll()
+          classFeatureFlags.teamManagement ? teamApi.getAll() : Promise.resolve({ data: [] })
         ]);
 
         if (sessionsRes.status === 'fulfilled') {
@@ -153,7 +154,7 @@ const MentoringSessions = () => {
             toId(t.mentorId) === toId(user?._id)
           );
 
-          if (filteredTeams.length === 0 && mentorClassIds.size > 0) {
+          if (classFeatureFlags.teamManagement && filteredTeams.length === 0 && mentorClassIds.size > 0) {
             const classTeamResults = await Promise.allSettled(
               [...mentorClassIds].map(classId => classApi.getTeams(classId))
             );

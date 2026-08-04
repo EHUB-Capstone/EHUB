@@ -1,19 +1,26 @@
 // @ts-nocheck
 // frontend/src/api/workspaceApi.js
 import axiosClient from './axiosClient';
+import { classFeatureFlags, runClassFeatureRequest } from '../config/classFeatureFlags';
 
 export const workspaceApi = {
   getMyWorkspace: () => axiosClient.get('/workspace/my-team'),
   getAccessibleTeams: () => axiosClient.get('/workspace/accessible-teams'),
   getTeamWorkspace: (teamId) => axiosClient.get(`/workspace/teams/${teamId}`),
-  updateProjectDirection: (teamId, projectDirection) => axiosClient.put(
-    `/workspace/teams/${teamId}/project-direction`,
-    { projectDirection }
+  updateProjectDirection: (teamId, projectDirection) => runClassFeatureRequest(
+    classFeatureFlags.projectDirection,
+    'Project direction',
+    () => axiosClient.put(`/workspace/teams/${teamId}/project-direction`, { projectDirection }),
   ),
-  getClassProjectDirections: (classId) => axiosClient.get(`/workspace/classes/${classId}/project-directions`),
-  reviewProjectDirection: (teamId, decision, comment) => axiosClient.put(
-    `/workspace/teams/${teamId}/project-direction/review`,
-    { decision, comment }
+  getClassProjectDirections: (classId) => runClassFeatureRequest(
+    classFeatureFlags.projectDirection,
+    'Project direction',
+    () => axiosClient.get(`/workspace/classes/${classId}/project-directions`),
+  ),
+  reviewProjectDirection: (teamId, decision, comment) => runClassFeatureRequest(
+    classFeatureFlags.projectDirection,
+    'Project direction',
+    () => axiosClient.put(`/workspace/teams/${teamId}/project-direction/review`, { decision, comment }),
   ),
   
   createProposal: (teamId, payload) => axiosClient.post(`/workspace/teams/${teamId}/proposal`, payload),

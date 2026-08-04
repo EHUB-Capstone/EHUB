@@ -48,6 +48,8 @@ import ClassDetail from './pages/shared/ClassDetail';
 import Forbidden from './pages/shared/Forbidden';
 import NotFound from './pages/shared/NotFound';
 import ProfileSettings from './pages/shared/ProfileSettings';
+import { classFeatureFlags } from './config/classFeatureFlags';
+import { classRouteAccess } from './config/classAccessPolicy';
 
 function App(): React.ReactElement {
   return (
@@ -91,12 +93,12 @@ function App(): React.ReactElement {
                   <Route path="/admin/subjects" element={<ProtectedRoute allowedRoles={['ADMIN']}><SubjectManagement /></ProtectedRoute>} />
                   <Route path="/admin/subjects/:subjectCode" element={<ProtectedRoute allowedRoles={['ADMIN']}><SubjectDetail /></ProtectedRoute>} />
 
-                  <Route path="/lecturer" element={<ProtectedRoute allowedRoles={['LECTURER', 'MENTOR']}><LecturerDashboard /></ProtectedRoute>} />
-                  <Route path="/lecturer/classes" element={<ProtectedRoute allowedRoles={['LECTURER', 'MENTOR']}><LecturerClasses /></ProtectedRoute>} />
+                  <Route path="/lecturer" element={<ProtectedRoute allowedRoles={[...classRouteAccess.lecturerArea]}><LecturerDashboard /></ProtectedRoute>} />
+                  <Route path="/lecturer/classes" element={<ProtectedRoute allowedRoles={[...classRouteAccess.lecturerArea]}><LecturerClasses /></ProtectedRoute>} />
                   <Route path="/lecturer/data-bank" element={<ProtectedRoute allowedRoles={['ADMIN', 'LECTURER']}><DataBankPage /></ProtectedRoute>} />
                   <Route path="/mentor" element={<ProtectedRoute allowedRoles={['MENTOR']}><MentorDashboard /></ProtectedRoute>} />
 
-                  <Route path="/classes/:id" element={<ProtectedRoute allowedRoles={['ADMIN', 'LECTURER', 'MENTOR']}><ClassDetail /></ProtectedRoute>} />
+                  <Route path="/classes/:id" element={<ProtectedRoute allowedRoles={[...classRouteAccess.classDetail]}><ClassDetail /></ProtectedRoute>} />
 
                   <Route path="/student" element={<ProtectedRoute allowedRoles={['STUDENT']}><StudentDashboard /></ProtectedRoute>} />
                   <Route path="/student/idea/new" element={<ProtectedRoute allowedRoles={['STUDENT']}><IdeaForm /></ProtectedRoute>} />
@@ -104,9 +106,13 @@ function App(): React.ReactElement {
                   <Route path="/student/feedback" element={<ProtectedRoute allowedRoles={['STUDENT']}><IdeaDetail /></ProtectedRoute>} />
                   <Route path="/student/ai-analysis" element={<ProtectedRoute allowedRoles={['STUDENT']}><AIAnalysis /></ProtectedRoute>} />
                   <Route path="/student/ai-analysis/:startupIdeaId" element={<ProtectedRoute allowedRoles={['STUDENT']}><AIAnalysis /></ProtectedRoute>} />
-                  <Route path="/student/classes" element={<ProtectedRoute allowedRoles={['STUDENT']}><MyClasses /></ProtectedRoute>} />
-                  <Route path="/student/classes/:id" element={<ProtectedRoute allowedRoles={['STUDENT']}><StudentClassDetail /></ProtectedRoute>} />
-                  <Route path="/student/team" element={<ProtectedRoute allowedRoles={['STUDENT']}><MyTeam /></ProtectedRoute>} />
+                  {classFeatureFlags.studentSelfService && (
+                    <>
+                      <Route path="/student/classes" element={<ProtectedRoute allowedRoles={['STUDENT']}><MyClasses /></ProtectedRoute>} />
+                      <Route path="/student/classes/:id" element={<ProtectedRoute allowedRoles={['STUDENT']}><StudentClassDetail /></ProtectedRoute>} />
+                      <Route path="/student/team" element={<ProtectedRoute allowedRoles={['STUDENT']}><MyTeam /></ProtectedRoute>} />
+                    </>
+                  )}
 
                   <Route path="/workspace" element={<ProtectedRoute allowedRoles={['ADMIN', 'LECTURER', 'MENTOR']}><StartupWorkspaceHub /></ProtectedRoute>} />
                   <Route path="/student/workspace" element={<ProtectedRoute allowedRoles={['STUDENT']}><TeamWorkspace /></ProtectedRoute>} />

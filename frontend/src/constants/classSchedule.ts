@@ -8,6 +8,16 @@ export const TEACHING_DAYS = [
   'SATURDAY',
 ];
 
+// System.DayOfWeek values used by the .NET API (Sunday = 0).
+export const DAY_OF_WEEK_OPTIONS = [
+  { value: 1, key: 'MONDAY', label: 'Monday' },
+  { value: 2, key: 'TUESDAY', label: 'Tuesday' },
+  { value: 3, key: 'WEDNESDAY', label: 'Wednesday' },
+  { value: 4, key: 'THURSDAY', label: 'Thursday' },
+  { value: 5, key: 'FRIDAY', label: 'Friday' },
+  { value: 6, key: 'SATURDAY', label: 'Saturday' },
+];
+
 export const SLOT_TIMES = {
   1: { startTime: '07:00', endTime: '09:15' },
   2: { startTime: '09:30', endTime: '11:45' },

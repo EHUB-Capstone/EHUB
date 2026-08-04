@@ -21,6 +21,7 @@ using EHub.Application.Features.Classes.UpdateClassStudent;
 using EHub.Contracts.Classes;
 using EHub.Contracts.Common;
 using EHub.Shared.Constants;
+using EHub.Shared.Errors;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -260,17 +261,7 @@ public sealed class ClassesController : ControllerBase
 
         if (result.IsFailure)
         {
-            if (result.Error.Code.Contains("AccessDenied", StringComparison.OrdinalIgnoreCase))
-            {
-                return StatusCode(403, ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
-            }
-
-            if (result.Error.Code.Contains("ScheduleConflict", StringComparison.OrdinalIgnoreCase))
-            {
-                return Conflict(ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
-            }
-
-            return BadRequest(ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
+            return ToClassErrorResponse(result.Error);
         }
 
         return Ok(ApiResponse<ClassResponse>.SuccessResponse(
@@ -298,12 +289,7 @@ public sealed class ClassesController : ControllerBase
 
         if (result.IsFailure)
         {
-            if (result.Error.Code.Contains("AccessDenied", StringComparison.OrdinalIgnoreCase))
-            {
-                return StatusCode(403, ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
-            }
-
-            return BadRequest(ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
+            return ToClassErrorResponse(result.Error);
         }
 
         return Ok(ApiResponse<ClassResponse>.SuccessResponse(
@@ -364,18 +350,7 @@ public sealed class ClassesController : ControllerBase
 
         if (result.IsFailure)
         {
-            if (result.Error.Code.Contains("AccessDenied", StringComparison.OrdinalIgnoreCase))
-            {
-                return StatusCode(403, ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
-            }
-
-            if (result.Error.Code.Contains("AlreadyEnrolled", StringComparison.OrdinalIgnoreCase) ||
-                result.Error.Code.Contains("ConflictSameSubjectSemester", StringComparison.OrdinalIgnoreCase))
-            {
-                return Conflict(ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
-            }
-
-            return BadRequest(ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
+            return ToClassErrorResponse(result.Error);
         }
 
         return Ok(ApiResponse<ClassStudentDto>.SuccessResponse(
@@ -456,6 +431,7 @@ public sealed class ClassesController : ControllerBase
     // ─── GIAI ĐOẠN 5: EXCEL IMPORT & EXPORT ENDPOINTS ─────────────────────────
 
     [HttpPost("{id:guid}/import-students/preview")]
+    [Authorize(Policy = SystemPolicies.AdminOnly)]
     public async Task<IActionResult> PreviewImportStudents(
         Guid id,
         IFormFile file,
@@ -474,12 +450,7 @@ public sealed class ClassesController : ControllerBase
 
         if (result.IsFailure)
         {
-            if (result.Error.Code.Contains("AccessDenied", StringComparison.OrdinalIgnoreCase))
-            {
-                return StatusCode(403, ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
-            }
-
-            return BadRequest(ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
+            return ToClassErrorResponse(result.Error);
         }
 
         return Ok(ApiResponse<ImportStudentsPreviewResponse>.SuccessResponse(
@@ -488,6 +459,7 @@ public sealed class ClassesController : ControllerBase
     }
 
     [HttpPost("{id:guid}/import-students/commit")]
+    [Authorize(Policy = SystemPolicies.AdminOnly)]
     public async Task<IActionResult> CommitImportStudents(
         Guid id,
         [FromBody] CommitImportStudentsRequest request,
@@ -506,17 +478,7 @@ public sealed class ClassesController : ControllerBase
 
         if (result.IsFailure)
         {
-            if (result.Error.Code.Contains("AccessDenied", StringComparison.OrdinalIgnoreCase))
-            {
-                return StatusCode(403, ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
-            }
-
-            if (result.Error.Code.Contains("ExpiredOrProcessed", StringComparison.OrdinalIgnoreCase))
-            {
-                return Conflict(ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
-            }
-
-            return BadRequest(ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
+            return ToClassErrorResponse(result.Error);
         }
 
         return Ok(ApiResponse<ImportStudentsCommitResponse>.SuccessResponse(
@@ -553,11 +515,40 @@ public sealed class ClassesController : ControllerBase
         return File(result.Value.FileBytes, result.Value.ContentType, result.Value.FileName);
     }
 
+    private IActionResult ToClassErrorResponse(Error error)
+    {
+        var response = ApiResponse<object>.FailureResponse(error.Message, error.Code);
+
+        return error.Code switch
+        {
+            ErrorCodes.ClassAccessDenied => StatusCode(StatusCodes.Status403Forbidden, response),
+            ErrorCodes.ClassNotFound => NotFound(response),
+            ErrorCodes.ClassScheduleConflict or
+            ErrorCodes.ClassConcurrencyConflict or
+            ErrorCodes.ClassArchived or
+            ErrorCodes.ClassStudentIdentityConflict or
+            ErrorCodes.ClassStudentAlreadyEnrolled or
+            ErrorCodes.ClassStudentEnrollmentConflict or
+            ErrorCodes.ClassImportSessionInvalid => Conflict(response),
+            _ => BadRequest(response)
+        };
+    }
+
     private string GetCurrentUserRole()
     {
-        return _currentUserService.Roles.FirstOrDefault()
-            ?? User.FindFirstValue(ClaimNames.Role)
+        if (_currentUserService.Roles.Any(role => string.Equals(role, SystemRoles.Admin, StringComparison.OrdinalIgnoreCase)))
+        {
+            return SystemRoles.Admin;
+        }
+
+        if (_currentUserService.Roles.Any(role => string.Equals(role, SystemRoles.Lecturer, StringComparison.OrdinalIgnoreCase)))
+        {
+            return SystemRoles.Lecturer;
+        }
+
+        return User.FindFirstValue(ClaimNames.Role)
             ?? User.FindFirstValue(ClaimTypes.Role)
+            ?? _currentUserService.Roles.FirstOrDefault()
             ?? string.Empty;
     }
 }

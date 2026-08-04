@@ -38,6 +38,20 @@ public static class ErrorCodes
     public const string ApprovalUserNotPending = "APPROVAL_USER_NOT_PENDING";
     public const string ApprovalInvalidTargetRole = "APPROVAL_INVALID_TARGET_ROLE";
 
+    // Class management error codes
+    public const string ClassAccessDenied = "CLASS_ACCESS_DENIED";
+    public const string ClassNotFound = "CLASS_NOT_FOUND";
+    public const string ClassArchived = "CLASS_ARCHIVED";
+    public const string ClassValidationError = "VALIDATION_ERROR";
+    public const string ClassScheduleConflict = "SCHEDULE_CONFLICT";
+    public const string ClassConcurrencyConflict = "CLASS_CONCURRENCY_CONFLICT";
+    public const string ClassInvalidLecturer = "CLASS_INVALID_LECTURER";
+    public const string ClassStudentIdentityConflict = "STUDENT_IDENTITY_CONFLICT";
+    public const string ClassStudentAlreadyEnrolled = "STUDENT_ALREADY_ENROLLED";
+    public const string ClassStudentEnrollmentConflict = "STUDENT_ENROLLMENT_CONFLICT";
+    public const string ClassImportSessionInvalid = "IMPORT_SESSION_INVALID";
+    public const string ClassImportNoValidRows = "IMPORT_NO_VALID_ROWS";
+
     // Password reset error codes
     public const string AuthPasswordResetTokenInvalid = "AUTH_PASSWORD_RESET_TOKEN_INVALID";
     public const string AuthPasswordResetRateLimited = "AUTH_PASSWORD_RESET_RATE_LIMITED";

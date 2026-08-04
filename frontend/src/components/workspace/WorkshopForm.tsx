@@ -2,6 +2,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { X, Calendar, Clock, MapPin, Link2, Users, Upload, Image as ImageIcon, FileText, Trash2, Globe, Monitor, Search, ArrowRightLeft } from 'lucide-react';
 import { classApi } from '../../api/classApi';
+import { classFeatureFlags } from '../../config/classFeatureFlags';
 import { workshopApi } from '../../api/workshopApi';
 import { userApi } from '../../api/userApi';
 import { chatApi } from '../../api/chatApi';
@@ -114,6 +115,11 @@ const WorkshopForm = ({ isOpen, onClose, workshop, onSave }) => {
 
   useEffect(() => {
     const fetchTeams = async () => {
+      if (!classFeatureFlags.teamManagement) {
+        setAvailableTeams([]);
+        return;
+      }
+
       const allSelectedClassIds = [...onlineClassIds, ...offlineClassIds];
       if (allSelectedClassIds.length === 0) {
         setAvailableTeams([]);

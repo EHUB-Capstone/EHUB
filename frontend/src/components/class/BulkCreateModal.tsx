@@ -2,11 +2,13 @@ import { useState, useEffect, useRef } from 'react';
 import toast from 'react-hot-toast';
 import { X, Loader2, AlertTriangle, FileSpreadsheet, Keyboard, Upload, CheckCircle2 } from 'lucide-react';
 import { classApi } from '../../api/classApi';
+import { classFeatureFlags } from '../../config/classFeatureFlags';
 import { userApi } from '../../api/userApi';
 import { subjectApi } from '../../api/subjectApi';
 import { readStudentImportFile } from '../../utils/studentImport';
 
 const CURRENT_YR = new Date().getFullYear();
+const DEFAULT_CLASS_COUNT = 5;
 
 export default function BulkCreateModal({ lecturers: initialLecturers = [], isLecturer = false, onClose, onCreated }) {
   const [tabMode, setTabMode] = useState('numbers'); // 'numbers' | 'excel'
@@ -14,7 +16,7 @@ export default function BulkCreateModal({ lecturers: initialLecturers = [], isLe
     subjectCode: '',
     semester: 'SP',
     year: String(CURRENT_YR),
-    count: '5',
+    count: String(DEFAULT_CLASS_COUNT),
     classIndicesText: '',
     lecturerIds: [],
     mentorIds: [],
@@ -30,7 +32,6 @@ export default function BulkCreateModal({ lecturers: initialLecturers = [], isLe
   const [classConflict, setClassConflict] = useState(null);
 
   const [allLecturers, setAllLecturers] = useState(initialLecturers);
-  const [allMentors, setAllMentors] = useState([]);
   const [loadingUsers, setLoadingUsers] = useState(true);
   const [subjects, setSubjects] = useState([]);
 
@@ -39,17 +40,19 @@ export default function BulkCreateModal({ lecturers: initialLecturers = [], isLe
   useEffect(() => {
     const fetchUsersAndSubjects = async () => {
       try {
-        const [lectRes, mentorRes, subjRes, semRes] = await Promise.all([
-          allLecturers.length === 0 ? userApi.getAll({ role: 'LECTURER', limit: 200 }) : Promise.resolve(null),
-          userApi.getAll({ role: 'MENTOR', limit: 200 }),
+        const [lectRes, subjRes, semRes] = await Promise.all([
+          !isLecturer && initialLecturers.length === 0 ? userApi.getAll({ role: 'LECTURER', limit: 200 }) : Promise.resolve(null),
           subjectApi.getActive(),
           subjectApi.getCurrentSemester()
         ]);
         if (lectRes) {
-          setAllLecturers(lectRes?.data?.users || lectRes?.users || []);
+          const lecturerList = lectRes?.data?.users || lectRes?.users || [];
+          setAllLecturers(lecturerList.map(lecturer => ({
+            ...lecturer,
+            _id: lecturer._id || lecturer.id,
+            name: lecturer.name || lecturer.fullName,
+          })));
         }
-        setAllMentors(mentorRes?.data?.users || mentorRes?.users || []);
-
         const list = subjRes?.data?.subjects || subjRes?.subjects || [];
         setSubjects(list);
 
@@ -68,7 +71,7 @@ export default function BulkCreateModal({ lecturers: initialLecturers = [], isLe
         }));
 
         if (defaultSubj && !isLecturer) {
-          setPreview(Array.from({ length: Math.min(parseInt(form.count, 10), 5) }, (_, i) => `${defaultSubj}_${i + 1}`));
+          setPreview(Array.from({ length: DEFAULT_CLASS_COUNT }, (_, i) => `${defaultSubj}_${i + 1}`));
         }
       } catch {
         toast.error('Failed to load active subjects, active semester or users list');
@@ -77,7 +80,7 @@ export default function BulkCreateModal({ lecturers: initialLecturers = [], isLe
       }
     };
     fetchUsersAndSubjects();
-  }, []);
+  }, [initialLecturers.length, isLecturer]);
 
   const parseClassIndices = (value) => {
     const numbers = String(value || '')
@@ -225,16 +228,28 @@ export default function BulkCreateModal({ lecturers: initialLecturers = [], isLe
     setSubmitting(true);
     setClassConflict(null);
     try {
-      if (isLecturer && tabMode === 'excel') {
-        // Luồng Import Excel cho Giảng viên
-        // 1. Lấy tất cả classIndex duy nhất từ file Excel (ví dụ "EXE101_4" -> index 4, hoặc "4" -> index 4)
+      if (isLecturer && classFeatureFlags.lecturerStudentImport && tabMode === 'excel') {
+        const parseClassIndexFromVal = (strVal: any) => {
+          const str = String(strVal || '').trim();
+          if (str.includes('_') || str.includes('-')) {
+            const parts = str.split(/[-_]/);
+            const lastPart = parts[parts.length - 1];
+            const num = parseInt(lastPart, 10);
+            if (!isNaN(num)) return num;
+          }
+          const directNum = parseInt(str, 10);
+          if (!isNaN(directNum)) return directNum;
+          const matches = str.match(/\d+/g);
+          if (matches && matches.length > 0) {
+            return parseInt(matches[matches.length - 1], 10);
+          }
+          return 0;
+        };
+
         const detectedIndicesSet = new Set<number>();
         excelParsedRows.forEach(r => {
-          const match = r.classVal.match(/\d+/);
-          if (match) {
-            const idx = parseInt(match[0], 10);
-            if (idx > 0) detectedIndicesSet.add(idx);
-          }
+          const idx = parseClassIndexFromVal(r.classVal);
+          if (idx > 0) detectedIndicesSet.add(idx);
         });
 
         const classIndices = Array.from(detectedIndicesSet);
@@ -262,8 +277,7 @@ export default function BulkCreateModal({ lecturers: initialLecturers = [], isLe
 
           // Lọc sinh viên thuộc lớp này
           const matchingStudents = excelParsedRows.filter(r => {
-            const match = r.classVal.match(/\d+/);
-            const idx = match ? parseInt(match[0], 10) : 0;
+            const idx = parseClassIndexFromVal(r.classVal);
             return idx === clsItem.classIndex || r.classVal.toUpperCase().includes(clsCode.toUpperCase());
           });
 
@@ -360,7 +374,7 @@ export default function BulkCreateModal({ lecturers: initialLecturers = [], isLe
         {/* Body */}
         <div className="p-6 space-y-4">
           {/* Tabs for Lecturer */}
-          {isLecturer && (
+          {isLecturer && classFeatureFlags.lecturerStudentImport && (
             <div className="p-1 bg-slate-100 rounded-xl flex gap-1 mb-2">
               <button
                 type="button"
@@ -527,7 +541,7 @@ export default function BulkCreateModal({ lecturers: initialLecturers = [], isLe
           )}
 
           {/* TAB 2: IMPORT EXCEL (FOR LECTURER) */}
-          {isLecturer && tabMode === 'excel' && (
+          {isLecturer && classFeatureFlags.lecturerStudentImport && tabMode === 'excel' && (
             <div className="space-y-4">
               {/* Helper info banner */}
               <div className="p-3.5 bg-blue-50/70 border border-blue-100 rounded-xl text-xs text-blue-800 leading-relaxed">
@@ -596,12 +610,12 @@ export default function BulkCreateModal({ lecturers: initialLecturers = [], isLe
           </button>
           <button
             onClick={handleSubmit}
-            disabled={submitting || (isLecturer && tabMode === 'excel' && (!excelFile || excelParsedRows.length === 0))}
+            disabled={submitting || (isLecturer && classFeatureFlags.lecturerStudentImport && tabMode === 'excel' && (!excelFile || excelParsedRows.length === 0))}
             className="flex-1 px-4 py-2.5 bg-primary text-white rounded-xl text-sm font-medium hover:bg-primary-700 disabled:opacity-50 transition-all flex items-center justify-center gap-2"
           >
             {submitting ? (
               <><Loader2 className="w-4 h-4 animate-spin" /> Processing...</>
-            ) : isLecturer && tabMode === 'excel' ? (
+            ) : isLecturer && classFeatureFlags.lecturerStudentImport && tabMode === 'excel' ? (
               <><Upload className="w-4 h-4" /> Create &amp; Import</>
             ) : (
               'Create Classes'
@@ -632,14 +646,14 @@ export default function BulkCreateModal({ lecturers: initialLecturers = [], isLe
                 >
                   Issue is on my side
                 </button>
-                <button
+                {classFeatureFlags.codeConflictReport && <button
                   type="button"
                   onClick={handleConflictOtherLecturer}
                   disabled={submitting}
                   className="px-4 py-2.5 bg-amber-500 text-white rounded-xl text-sm font-medium hover:bg-amber-600 disabled:opacity-50 transition-all"
                 >
                   Issue is on the other lecturer side
-                </button>
+                </button>}
               </div>
             </div>
           </div>

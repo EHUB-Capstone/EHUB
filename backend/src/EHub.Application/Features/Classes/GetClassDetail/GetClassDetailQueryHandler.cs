@@ -91,7 +91,8 @@ public sealed class GetClassDetailQueryHandler : IGetClassDetailQueryHandler
             Status = targetClass.Status.ToString(),
             StudentCount = studentCount,
             TeamCount = teamCount,
-            CreatedAtUtc = targetClass.CreatedAt
+            CreatedAtUtc = targetClass.CreatedAt,
+            RowVersion = targetClass.Version.ToString()
         };
 
         return Result.Success(response);
