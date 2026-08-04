@@ -34,6 +34,8 @@ public static class DependencyInjection
         services.AddScoped<IApproveUserCommandHandler, ApproveUserCommandHandler>();
         services.AddScoped<IRejectUserCommandHandler, RejectUserCommandHandler>();
 
+        services.AddScoped<EHub.Application.Features.Classes.GetClasses.IGetClassesQueryHandler, EHub.Application.Features.Classes.GetClasses.GetClassesQueryHandler>();
+
         services.AddScoped<EHub.Application.Common.Interfaces.Authorization.IPermissionService, EHub.Application.Common.Services.Authorization.PermissionService>();
 
         return services;

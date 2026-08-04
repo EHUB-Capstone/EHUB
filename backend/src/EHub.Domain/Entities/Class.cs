@@ -16,11 +16,18 @@ public class Class : AuditableEntity
     public Guid CourseId { get; set; }
     public virtual Course Course { get; set; } = null!;
 
+    public Guid? PrimaryLecturerId { get; set; }
+    public virtual User? PrimaryLecturer { get; set; }
+
     public string? Room { get; set; }
     public string? ScheduleJson { get; set; }
 
-    public bool IsMajorLocked { get; set; } = false;
+    public bool IsEnrollmentMajorLocked { get; set; } = false;
     public ClassStatus Status { get; set; } = ClassStatus.Active;
+
+    public DateTime? ArchivedAtUtc { get; set; }
+    public Guid? ArchivedByUserId { get; set; }
+    public virtual User? ArchivedByUser { get; set; }
 
     public Guid? CreatedById { get; set; }
     public virtual User? Creator { get; set; }

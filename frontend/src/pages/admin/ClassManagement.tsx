@@ -90,7 +90,8 @@ export default function ClassManagement() {
         isAdmin ? userApi.getAll({ role: 'LECTURER' }) : Promise.resolve({ users: [] }),
       ]);
 
-      setClasses(clsRes?.data?.classes || clsRes?.classes || []);
+      const rawClasses = clsRes?.data?.items || clsRes?.data?.classes || clsRes?.items || clsRes?.classes || [];
+      setClasses(rawClasses);
       const lects = usrRes?.data?.users || usrRes?.users || [];
       setLecturers(lects.filter(u => u.role === 'LECTURER'));
     } catch {
