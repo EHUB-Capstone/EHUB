@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
-import type { SheetData } from 'write-excel-file/browser';
 import {
   AlertCircle,
   ArrowLeft,
@@ -15,20 +14,12 @@ import {
   X,
 } from 'lucide-react';
 import Button from '../ui/Button';
-import {
-  readStudentImportFile,
-  STUDENT_IMPORT_ACCEPT,
-  STUDENT_IMPORT_MAX_SIZE,
-  validateStudentRows,
-  type ExistingStudentRecord,
-  type StudentImportRecord,
-  type StudentImportValidation,
-} from '../../utils/studentImport';
+import { classApi } from '../../api/classApi';
 
 interface ImportStudentsModalProps {
+  classId?: string;
   onClose: () => void;
-  onImported: (students: StudentImportRecord[]) => void;
-  existingStudents?: ExistingStudentRecord[];
+  onImported: () => void;
 }
 
 type ImportPhase = 'upload' | 'review' | 'result';
@@ -47,43 +38,16 @@ const formatFileSize = (bytes: number) => {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 };
 
-const downloadTemplate = async () => {
-  const { default: writeXlsxFile } = await import('write-excel-file/browser');
-  const headerStyle = {
-    fontWeight: 'bold' as const,
-    backgroundColor: '#FFF1E6',
-    color: '#9A4310',
-    align: 'center' as const,
-  };
-  const data: SheetData = [
-    [
-      { value: 'StudentCode', ...headerStyle },
-      { value: 'FullName', ...headerStyle },
-      { value: 'Email', ...headerStyle },
-      { value: 'Major', ...headerStyle },
-    ],
-    [
-      { value: 'SE170001' },
-      { value: 'Nguyen Van An' },
-      { value: 'an.nguyen@fpt.edu.vn' },
-      { value: 'SE' },
-    ],
-  ];
-
-  await writeXlsxFile(data, {
-    columns: [{ width: 18 }, { width: 28 }, { width: 34 }, { width: 16 }],
-  }).toFile('ehub_student_import_template.xlsx');
-};
-
 export default function ImportStudentsModal({
+  classId,
   onClose,
   onImported,
-  existingStudents = [],
 }: ImportStudentsModalProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [phase, setPhase] = useState<ImportPhase>('upload');
   const [file, setFile] = useState<File | null>(null);
-  const [validation, setValidation] = useState<StudentImportValidation | null>(null);
+  const [previewData, setPreviewData] = useState<any | null>(null);
+  const [commitResult, setCommitResult] = useState<any | null>(null);
   const [fileError, setFileError] = useState('');
   const [analyzing, setAnalyzing] = useState(false);
   const [importing, setImporting] = useState(false);
@@ -107,7 +71,8 @@ export default function ImportStudentsModal({
   const resetImport = () => {
     setPhase('upload');
     setFile(null);
-    setValidation(null);
+    setPreviewData(null);
+    setCommitResult(null);
     setFileError('');
     setDragActive(false);
     if (inputRef.current) inputRef.current.value = '';
@@ -117,37 +82,36 @@ export default function ImportStudentsModal({
     if (!selectedFile) return;
 
     const extension = selectedFile.name.split('.').pop()?.toLowerCase();
-    if (extension !== 'xlsx' && extension !== 'csv') {
+    if (extension !== 'xlsx' && extension !== 'xls') {
       setFile(null);
-      setValidation(null);
-      setFileError('Unsupported file type. Please choose an .xlsx or .csv file.');
+      setPreviewData(null);
+      setFileError('Unsupported file type. Please choose an .xlsx or .xls file.');
       return;
     }
 
-    if (selectedFile.size > STUDENT_IMPORT_MAX_SIZE) {
+    if (selectedFile.size > 10 * 1024 * 1024) {
       setFile(null);
-      setValidation(null);
-      setFileError('The file is larger than 5 MB. Please upload a smaller student list.');
+      setPreviewData(null);
+      setFileError('The file is larger than 10 MB. Please upload a smaller student list.');
       return;
     }
 
     setFile(selectedFile);
-    setValidation(null);
+    setPreviewData(null);
     setFileError('');
     setAnalyzing(true);
 
     try {
-      const rows = await readStudentImportFile(selectedFile);
-      const nextValidation = validateStudentRows(rows, existingStudents);
-      setValidation(nextValidation);
+      const formData = new FormData();
+      formData.append('file', selectedFile);
 
-      if (nextValidation.fileErrors.length > 0) {
-        setFileError(nextValidation.fileErrors[0]);
-      } else {
-        setPhase('review');
-      }
-    } catch (error) {
-      setFileError(error instanceof Error ? error.message : 'The file could not be read. Please check its contents.');
+      const res = await classApi.previewImportStudents(classId, formData);
+      const data = res?.data || res;
+
+      setPreviewData(data);
+      setPhase('review');
+    } catch (error: any) {
+      setFileError(error?.response?.data?.message || error?.message || 'The file could not be read. Please check its format.');
     } finally {
       setAnalyzing(false);
     }
@@ -166,37 +130,44 @@ export default function ImportStudentsModal({
 
   const handleDownloadTemplate = async () => {
     try {
-      await downloadTemplate();
+      const response = await classApi.getImportTemplate();
+      const blob = new Blob([response.data || response], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'Student_Import_Template.xlsx';
+      link.click();
+      window.URL.revokeObjectURL(url);
       toast.success('Template downloaded');
     } catch {
-      toast.error('Unable to download the template');
+      toast.error('Unable to download template');
     }
   };
 
   const handleImport = async () => {
-    if (!validation || validation.validRows.length === 0) return;
+    if (!previewData || !previewData.sessionId || previewData.validRowsCount === 0) return;
 
     setImporting(true);
-    await new Promise((resolve) => window.setTimeout(resolve, 450));
-    onImported(validation.validRows);
-    setImporting(false);
-    setPhase('result');
-
-    if (validation.invalidRows.length === 0) {
-      toast.success(`${validation.validRows.length} students are ready to use`);
-    } else {
-      toast.success(`${validation.validRows.length} valid students imported`);
+    try {
+      const res = await classApi.commitImportStudents(classId, { sessionId: previewData.sessionId });
+      const result = res?.data || res;
+      setCommitResult(result);
+      setPhase('result');
+      onImported();
+      toast.success(`Successfully imported ${result.insertedCount + result.updatedCount} students.`);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || err?.message || 'Failed to commit student import.');
+    } finally {
+      setImporting(false);
     }
   };
 
-  const handleDone = () => {
-    onClose();
-  };
-
   const currentStep = phaseIndex(phase);
-  const totalRows = validation?.rows.length ?? 0;
-  const successCount = validation?.validRows.length ?? 0;
-  const failedCount = validation?.invalidRows.length ?? 0;
+  const totalRows = previewData?.totalRows ?? 0;
+  const successCount = previewData?.validRowsCount ?? 0;
+  const failedCount = previewData?.errorRowsCount ?? 0;
 
   return (
     <div className="fixed inset-0 z-[70] flex items-end justify-center p-0 sm:items-center sm:p-6" role="dialog" aria-modal="true" aria-labelledby="import-students-title">
@@ -215,8 +186,8 @@ export default function ImportStudentsModal({
                 <FileSpreadsheet className="h-5 w-5" />
               </div>
               <div className="min-w-0">
-                <h2 id="import-students-title" className="text-lg font-bold text-slate-900">Import students</h2>
-                <p className="truncate text-sm text-slate-500">Create multiple student profiles from one file</p>
+                <h2 id="import-students-title" className="text-lg font-bold text-slate-900">Import students (Excel)</h2>
+                <p className="truncate text-sm text-slate-500">Preview &amp; commit student roster from Excel</p>
               </div>
             </div>
             <button
@@ -258,20 +229,20 @@ export default function ImportStudentsModal({
                 <div className="flex items-start gap-3">
                   <Download className="mt-0.5 h-5 w-5 shrink-0 text-secondary" />
                   <div>
-                    <p className="text-sm font-semibold text-secondary-dark">Start with the EHUB template</p>
-                    <p className="mt-0.5 text-xs text-slate-500">Includes the correct column names and one example row.</p>
+                    <p className="text-sm font-semibold text-secondary-dark">Start with the official EHUB template</p>
+                    <p className="mt-0.5 text-xs text-slate-500">Includes exact columns: StudentCode, FullName, Email, MajorCode.</p>
                   </div>
                 </div>
                 <Button variant="outline" size="sm" icon={Download} onClick={() => void handleDownloadTemplate()} className="shrink-0 border-secondary-200 text-secondary">
-                  Download template
+                  Download template (.xlsx)
                 </Button>
               </div>
 
               <div className="flex items-start gap-2.5 rounded-xl border border-slate-200 bg-slate-50 p-3.5">
                 <Info className="mt-0.5 h-4 w-4 shrink-0 text-secondary" />
                 <div className="text-xs leading-5 text-slate-600">
-                  <p><strong className="text-slate-700">Required:</strong> StudentCode, FullName, Email</p>
-                  <p><strong className="text-slate-700">Optional:</strong> Major · First row must contain column names · Maximum file size 5 MB</p>
+                  <p><strong className="text-slate-700">Required columns:</strong> StudentCode (RollNumber), FullName, Email</p>
+                  <p><strong className="text-slate-700">Optional:</strong> MajorCode · Max file size 10 MB · Validated line by line without immediate DB write</p>
                 </div>
               </div>
 
@@ -288,15 +259,15 @@ export default function ImportStudentsModal({
                       : 'border-slate-300 bg-white hover:border-primary hover:bg-primary-50/40'
                 }`}
               >
-                <input ref={inputRef} type="file" accept={STUDENT_IMPORT_ACCEPT} className="hidden" onChange={handleFileInput} />
+                <input ref={inputRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleFileInput} />
                 <div className={`mx-auto flex h-12 w-12 items-center justify-center rounded-2xl ${fileError ? 'bg-red-100 text-red-600' : 'bg-primary-50 text-primary'}`}>
                   {analyzing ? <Loader2 className="h-6 w-6 animate-spin" /> : fileError ? <AlertCircle className="h-6 w-6" /> : <Upload className="h-6 w-6" />}
                 </div>
 
                 {analyzing ? (
                   <>
-                    <p className="mt-4 text-sm font-semibold text-slate-800">Checking {file?.name}</p>
-                    <p className="mt-1 text-xs text-slate-500">Reading rows and validating duplicates…</p>
+                    <p className="mt-4 text-sm font-semibold text-slate-800">Analyzing {file?.name}</p>
+                    <p className="mt-1 text-xs text-slate-500">Validating rows and checking cross-class conflicts…</p>
                   </>
                 ) : (
                   <>
@@ -304,7 +275,7 @@ export default function ImportStudentsModal({
                       {fileError ? 'This file cannot be used' : 'Drop your student list here'}
                     </p>
                     <p className={`mx-auto mt-1 max-w-lg text-xs ${fileError ? 'text-red-600' : 'text-slate-500'}`}>
-                      {fileError || 'Choose an Excel (.xlsx) or CSV (.csv) file'}
+                      {fileError || 'Choose an Excel (.xlsx) file'}
                     </p>
                     <Button variant="outline" size="sm" className="mt-4" onClick={() => inputRef.current?.click()}>
                       {fileError ? 'Choose another file' : 'Browse files'}
@@ -315,7 +286,7 @@ export default function ImportStudentsModal({
             </div>
           )}
 
-          {phase === 'review' && validation && (
+          {phase === 'review' && previewData && (
             <div className="space-y-4">
               <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3.5 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex min-w-0 items-center gap-3">
@@ -334,49 +305,40 @@ export default function ImportStudentsModal({
 
               <div className="grid grid-cols-3 gap-2.5">
                 <SummaryCard label="Total rows" value={totalRows} tone="neutral" />
-                <SummaryCard label="Ready" value={successCount} tone="success" />
-                <SummaryCard label="Has errors" value={failedCount} tone="danger" />
+                <SummaryCard label="Valid &amp; Ready" value={successCount} tone="success" />
+                <SummaryCard label="Errors / Skip" value={failedCount} tone="danger" />
               </div>
 
               {failedCount > 0 && (
                 <div className="flex items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50 p-3.5 text-sm text-amber-800">
                   <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-                  <p><strong>{failedCount} row{failedCount > 1 ? 's have' : ' has'} errors.</strong> Invalid rows will be skipped; valid rows can still be imported.</p>
+                  <p><strong>{failedCount} row{failedCount > 1 ? 's have' : ' has'} validation errors.</strong> Invalid rows will be skipped; valid rows will be committed safely.</p>
                 </div>
               )}
 
-              <StudentRowsTable validation={validation} />
+              <StudentRowsTable rows={previewData.rows || []} />
             </div>
           )}
 
-          {phase === 'result' && validation && (
+          {phase === 'result' && commitResult && (
             <div className="space-y-5">
-              <div className={`rounded-2xl border p-5 text-center ${failedCount === 0 ? 'border-green-200 bg-green-50' : 'border-amber-200 bg-amber-50'}`}>
-                <div className={`mx-auto flex h-12 w-12 items-center justify-center rounded-full ${failedCount === 0 ? 'bg-green-100 text-green-600' : 'bg-amber-100 text-amber-600'}`}>
-                  {failedCount === 0 ? <CheckCircle2 className="h-6 w-6" /> : <AlertCircle className="h-6 w-6" />}
+              <div className="rounded-2xl border border-green-200 bg-green-50 p-5 text-center">
+                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-green-100 text-green-600">
+                  <CheckCircle2 className="h-6 w-6" />
                 </div>
                 <h3 className="mt-3 text-lg font-bold text-slate-900">
-                  {failedCount === 0 ? 'Import completed successfully' : 'Import completed with some errors'}
+                  Import committed successfully
                 </h3>
                 <p className="mt-1 text-sm text-slate-600">
-                  {successCount} of {totalRows} student records were imported.
+                  {commitResult.insertedCount} new inserted, {commitResult.updatedCount} updated, {commitResult.skippedCount} skipped.
                 </p>
               </div>
 
               <div className="grid grid-cols-3 gap-2.5">
-                <SummaryCard label="Processed" value={totalRows} tone="neutral" />
-                <SummaryCard label="Successful" value={successCount} tone="success" />
-                <SummaryCard label="Failed" value={failedCount} tone="danger" />
+                <SummaryCard label="Inserted" value={commitResult.insertedCount} tone="success" />
+                <SummaryCard label="Updated" value={commitResult.updatedCount} tone="neutral" />
+                <SummaryCard label="Skipped" value={commitResult.skippedCount} tone="danger" />
               </div>
-
-              {failedCount > 0 && (
-                <div>
-                  <h4 className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-800">
-                    <AlertCircle className="h-4 w-4 text-red-500" /> Failed rows
-                  </h4>
-                  <StudentRowsTable validation={{ ...validation, rows: validation.invalidRows }} compact />
-                </div>
-              )}
             </div>
           )}
         </main>
@@ -396,15 +358,14 @@ export default function ImportStudentsModal({
                 disabled={successCount === 0}
                 onClick={() => void handleImport()}
               >
-                {successCount === 0 ? 'No valid rows to import' : `Import ${successCount} valid student${successCount > 1 ? 's' : ''}`}
+                {successCount === 0 ? 'No valid rows to commit' : `Commit ${successCount} valid student${successCount > 1 ? 's' : ''}`}
               </Button>
             </>
           )}
 
           {phase === 'result' && (
             <>
-              <Button variant="outline" icon={RotateCcw} onClick={resetImport}>Import another file</Button>
-              <Button variant="gradient" icon={Check} onClick={handleDone}>Done</Button>
+              <Button variant="gradient" icon={Check} onClick={onClose}>Done</Button>
             </>
           )}
         </footer>
@@ -428,7 +389,7 @@ function SummaryCard({ label, value, tone }: { label: string; value: number; ton
   );
 }
 
-function StudentRowsTable({ validation, compact = false }: { validation: StudentImportValidation; compact?: boolean }) {
+function StudentRowsTable({ rows, compact = false }: { rows: any[]; compact?: boolean }) {
   return (
     <div className="overflow-hidden rounded-xl border border-slate-200">
       <div className={`${compact ? 'max-h-52' : 'max-h-72'} overflow-auto`}>
@@ -439,25 +400,27 @@ function StudentRowsTable({ validation, compact = false }: { validation: Student
               <th className="px-3 py-2.5 font-semibold">Student code</th>
               <th className="px-3 py-2.5 font-semibold">Full name</th>
               <th className="px-3 py-2.5 font-semibold">Email</th>
+              <th className="px-3 py-2.5 font-semibold">Major</th>
               <th className="w-40 px-3 py-2.5 font-semibold">Validation</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 bg-white">
-            {validation.rows.map((row) => (
+            {rows.map((row) => (
               <tr key={row.rowNumber} className={row.isValid ? 'hover:bg-slate-50/60' : 'bg-red-50/50'}>
                 <td className="px-3 py-3 font-mono text-slate-400">{row.rowNumber}</td>
                 <td className="px-3 py-3 font-semibold text-slate-700">{row.studentCode || '—'}</td>
                 <td className="px-3 py-3 text-slate-700">{row.fullName || '—'}</td>
                 <td className="px-3 py-3 text-slate-600">{row.email || '—'}</td>
+                <td className="px-3 py-3 text-slate-600">{row.majorCode || '—'}</td>
                 <td className="px-3 py-3">
                   {row.isValid ? (
                     <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-1 font-semibold text-green-700">
                       <CheckCircle2 className="h-3 w-3" /> Ready
                     </span>
                   ) : (
-                    <ul className="space-y-1 text-red-600">
-                      {row.errors.map((error) => <li key={error}>• {error}</li>)}
-                    </ul>
+                    <span className="text-red-600 font-medium">
+                      • {row.errorMessage}
+                    </span>
                   )}
                 </td>
               </tr>

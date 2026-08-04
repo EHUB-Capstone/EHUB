@@ -9,7 +9,7 @@ namespace EHub.Api.Controllers;
 
 [ApiController]
 [Route("api/users")]
-[Authorize(Policy = SystemPolicies.AdminOnly)]
+[Authorize(Policy = SystemPolicies.StaffOnly)]
 public sealed class UsersController(IUserManagementHandler handler) : ControllerBase
 {
     [HttpGet]
@@ -33,13 +33,17 @@ public sealed class UsersController(IUserManagementHandler handler) : Controller
     }
 
     [HttpGet("{id:guid}")]
-    public async Task<IActionResult> GetUser(Guid id, CancellationToken cancellationToken)
+    public async Task<IActionResult> GetUser(
+        Guid id,
+        CancellationToken cancellationToken)
     {
         var result = await handler.GetUserAsync(id, cancellationToken);
+
         return ToActionResult(result, "User retrieved successfully.");
     }
 
     [HttpPost]
+    [Authorize(Policy = SystemPolicies.AdminOnly)]
     public async Task<IActionResult> CreateUser(
         [FromBody] SaveManagedUserRequest request,
         CancellationToken cancellationToken)
@@ -57,34 +61,62 @@ public sealed class UsersController(IUserManagementHandler handler) : Controller
     }
 
     [HttpPut("{id:guid}")]
+    [Authorize(Policy = SystemPolicies.AdminOnly)]
     public async Task<IActionResult> UpdateUser(
         Guid id,
         [FromBody] SaveManagedUserRequest request,
         CancellationToken cancellationToken)
     {
-        var result = await handler.UpdateUserAsync(id, request, cancellationToken);
+        var result = await handler.UpdateUserAsync(
+            id,
+            request,
+            cancellationToken);
+
         return ToActionResult(result, "User updated successfully.");
     }
 
     [HttpDelete("{id:guid}")]
-    public async Task<IActionResult> DeleteUser(Guid id, CancellationToken cancellationToken)
+    [Authorize(Policy = SystemPolicies.AdminOnly)]
+    public async Task<IActionResult> DeleteUser(
+        Guid id,
+        CancellationToken cancellationToken)
     {
         var result = await handler.DeleteUserAsync(id, cancellationToken);
 
         return result.IsSuccess
-            ? Ok(ApiResponse<object?>.SuccessResponse(null, "User deleted successfully."))
+            ? Ok(ApiResponse<object?>.SuccessResponse(
+                null,
+                "User deleted successfully."))
             : ToError(result.Error);
     }
 
-    private IActionResult ToActionResult<T>(EHub.Shared.Results.Result<T> result, string message) =>
-        result.IsSuccess
+    private IActionResult ToActionResult<T>(
+        EHub.Shared.Results.Result<T> result,
+        string message)
+    {
+        return result.IsSuccess
             ? Ok(ApiResponse<T>.SuccessResponse(result.Value!, message))
             : ToError(result.Error);
+    }
 
-    private IActionResult ToError(EHub.Shared.Errors.Error error) => error.Code switch
+    private IActionResult ToError(EHub.Shared.Errors.Error error)
     {
-        "NOT_FOUND" => NotFound(ApiResponse<object>.FailureResponse(error.Message, error.Code)),
-        "RELATED_DATA_EXISTS" => Conflict(ApiResponse<object>.FailureResponse(error.Message, error.Code)),
-        _ => BadRequest(ApiResponse<object>.FailureResponse(error.Message, error.Code)),
-    };
+        return error.Code switch
+        {
+            "NOT_FOUND" => NotFound(
+                ApiResponse<object>.FailureResponse(
+                    error.Message,
+                    error.Code)),
+
+            "RELATED_DATA_EXISTS" => Conflict(
+                ApiResponse<object>.FailureResponse(
+                    error.Message,
+                    error.Code)),
+
+            _ => BadRequest(
+                ApiResponse<object>.FailureResponse(
+                    error.Message,
+                    error.Code))
+        };
+    }
 }

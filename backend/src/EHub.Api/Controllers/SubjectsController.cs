@@ -14,7 +14,7 @@ namespace EHub.Api.Controllers;
 
 [ApiController]
 [Route("api/subjects")]
-[Authorize(Policy = SystemPolicies.AdminOnly)]
+[Authorize(Policy = SystemPolicies.StaffOnly)]
 public sealed class SubjectsController : ControllerBase
 {
     private readonly ISubjectManagementHandler _subjectHandler;
@@ -63,6 +63,7 @@ public sealed class SubjectsController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Policy = SystemPolicies.AdminOnly)]
     public async Task<IActionResult> CreateSubject(
         [FromBody] CreateSubjectRequest request,
         CancellationToken cancellationToken)
@@ -74,6 +75,7 @@ public sealed class SubjectsController : ControllerBase
     }
 
     [HttpPut("{id:guid}")]
+    [Authorize(Policy = SystemPolicies.AdminOnly)]
     public async Task<IActionResult> UpdateSubject(
         Guid id,
         [FromBody] UpdateSubjectRequest request,
@@ -86,6 +88,7 @@ public sealed class SubjectsController : ControllerBase
     }
 
     [HttpDelete("{id:guid}")]
+    [Authorize(Policy = SystemPolicies.AdminOnly)]
     public async Task<IActionResult> DisableSubject(Guid id, CancellationToken cancellationToken)
     {
         var result = await _subjectHandler.DisableAsync(id, cancellationToken);
@@ -106,6 +109,7 @@ public sealed class SubjectsController : ControllerBase
     }
 
     [HttpPost("current-semester")]
+    [Authorize(Policy = SystemPolicies.AdminOnly)]
     public async Task<IActionResult> SetCurrentSemester(
         [FromBody] SetCurrentSemesterRequest request,
         CancellationToken cancellationToken)

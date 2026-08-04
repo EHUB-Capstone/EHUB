@@ -72,18 +72,96 @@ export default function ClassDetail() {
   const [deletingClass, setDeletingClass] = useState(false);
 
   const fetchData = useCallback(async () => {
+    if (!id || id === 'undefined') {
+      toast.error('Invalid class ID');
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
-      const res = await classApi.getById(id);
-      const data = res?.data || res;
-      const currentClassId = String(id || data.class?._id || '');
-      setCls(data.class);
-      setStudents(normalizeClassStudents(data.students || [], currentClassId));
-      setTeams((data.teams || []).map(team => ({
+      const [classRes, studentRes] = await Promise.allSettled([
+        classApi.getById(id),
+        classApi.getStudents(id, { pageSize: 200 }),
+      ]);
+
+      const classData = classRes.status === 'fulfilled' ? (classRes.value?.data || classRes.value) : null;
+      if (!classData) {
+        toast.error('Failed to load class');
+        return null;
+      }
+
+      const rawClass = classData.class || classData;
+      const currentClassId = String(id || rawClass.id || rawClass._id || '');
+
+      let parsedSchedule = rawClass.schedule;
+      if (!parsedSchedule && rawClass.scheduleJson) {
+        try {
+          parsedSchedule = typeof rawClass.scheduleJson === 'string' ? JSON.parse(rawClass.scheduleJson) : rawClass.scheduleJson;
+        } catch {
+          parsedSchedule = null;
+        }
+      }
+
+      const normalizedClass = {
+        ...rawClass,
+        _id: rawClass.id || rawClass._id || currentClassId,
+        classCode: rawClass.classCode,
+        subjectCode: rawClass.subjectCode,
+        subjectName: rawClass.subjectName,
+        semester: rawClass.semesterCode || rawClass.semester,
+        year: rawClass.year,
+        lectureId: rawClass.primaryLecturerId ? {
+          _id: rawClass.primaryLecturerId,
+          name: rawClass.primaryLecturerName,
+          email: rawClass.primaryLecturerEmail
+        } : (rawClass.lectureId || null),
+        schedule: parsedSchedule
+      };
+      setCls(normalizedClass);
+
+      let rawStudents = [];
+      if (studentRes.status === 'fulfilled') {
+        const sData = studentRes.value?.data || studentRes.value;
+        rawStudents = sData.items || sData.students || sData.data || (Array.isArray(sData) ? sData : []);
+      } else if (rawClass.students) {
+        rawStudents = rawClass.students;
+      }
+
+      const mappedStudents = rawStudents.map((s, idx) => ({
+        _id: s.studentId || s.id || s._id || `student-${idx}`,
+        studentCode: s.rollNumber || s.studentCode,
+        rollNumber: s.rollNumber || s.studentCode,
+        fullName: s.fullName,
+        email: s.email,
+        major: s.majorCode || s.major,
+        majorCode: s.majorCode || s.major,
+        enrollmentStatus: s.enrollmentStatus || 'Active',
+        classId: currentClassId,
+        teamId: s.teamId || null,
+        teamName: s.teamName || null,
+        isTeamLeader: s.isTeamLeader || false
+      }));
+
+      setStudents(mappedStudents);
+
+      let rawTeams = rawClass.teams || [];
+      if (rawTeams.length === 0) {
+        try {
+          const teamRes = await classApi.getTeams(id);
+          const tData = teamRes?.data || teamRes;
+          rawTeams = tData.teams || tData.items || (Array.isArray(tData) ? tData : []);
+        } catch {
+          // ignore
+        }
+      }
+
+      setTeams(rawTeams.map(team => ({
         ...team,
+        _id: team.id || team._id,
         classId: entityId(team.classId) || currentClassId,
       })));
-      return data;
+
+      return classData;
     } catch (err) {
       toast.error(err?.message || 'Failed to load class');
       return null;
@@ -652,9 +730,11 @@ export default function ClassDetail() {
       {/* ── Modals ── */}
       {showImport && (
         <ImportStudentsModal
+          classId={id || cls?._id}
           onClose={() => setShowImport(false)}
-          onImported={handleImported}
-          existingStudents={safeStudents}
+          onImported={() => {
+            fetchData();
+          }}
         />
       )}
 

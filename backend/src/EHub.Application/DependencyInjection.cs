@@ -55,6 +55,21 @@ public static class DependencyInjection
         services.AddScoped<ISubjectRoadmapHandler, SubjectRoadmapHandler>();
         services.AddScoped<ISubjectRubricHandler, SubjectRubricHandler>();
 
+        services.AddScoped<EHub.Application.Features.Classes.GetClasses.IGetClassesQueryHandler, EHub.Application.Features.Classes.GetClasses.GetClassesQueryHandler>();
+        services.AddScoped<EHub.Application.Features.Classes.CreateClass.ICreateClassCommandHandler, EHub.Application.Features.Classes.CreateClass.CreateClassCommandHandler>();
+        services.AddScoped<EHub.Application.Features.Classes.CreateBulkClasses.ICreateBulkClassesCommandHandler, EHub.Application.Features.Classes.CreateBulkClasses.CreateBulkClassesCommandHandler>();
+        services.AddScoped<EHub.Application.Features.Classes.UpdateClass.IUpdateClassCommandHandler, EHub.Application.Features.Classes.UpdateClass.UpdateClassCommandHandler>();
+        services.AddScoped<EHub.Application.Features.Classes.UpdateClassSchedule.IUpdateClassScheduleCommandHandler, EHub.Application.Features.Classes.UpdateClassSchedule.UpdateClassScheduleCommandHandler>();
+        services.AddScoped<EHub.Application.Features.Classes.GetClassDetail.IGetClassDetailQueryHandler, EHub.Application.Features.Classes.GetClassDetail.GetClassDetailQueryHandler>();
+        services.AddScoped<EHub.Application.Features.Classes.GetClassRoster.IGetClassRosterQueryHandler, EHub.Application.Features.Classes.GetClassRoster.GetClassRosterQueryHandler>();
+        services.AddScoped<EHub.Application.Features.Classes.AddStudentToClass.IAddStudentToClassCommandHandler, EHub.Application.Features.Classes.AddStudentToClass.AddStudentToClassCommandHandler>();
+        services.AddScoped<EHub.Application.Features.Classes.UpdateClassStudent.IUpdateClassStudentCommandHandler, EHub.Application.Features.Classes.UpdateClassStudent.UpdateClassStudentCommandHandler>();
+        services.AddScoped<EHub.Application.Features.Classes.RemoveStudentFromClass.IRemoveStudentFromClassCommandHandler, EHub.Application.Features.Classes.RemoveStudentFromClass.RemoveStudentFromClassCommandHandler>();
+        services.AddScoped<EHub.Application.Features.Classes.ImportStudents.IPreviewImportStudentsCommandHandler, EHub.Application.Features.Classes.ImportStudents.PreviewImportStudentsCommandHandler>();
+        services.AddScoped<EHub.Application.Features.Classes.ImportStudents.ICommitImportStudentsCommandHandler, EHub.Application.Features.Classes.ImportStudents.CommitImportStudentsCommandHandler>();
+        services.AddScoped<EHub.Application.Features.Classes.ExportClassRoster.IExportClassRosterQueryHandler, EHub.Application.Features.Classes.ExportClassRoster.ExportClassRosterQueryHandler>();
+        services.AddScoped<EHub.Application.Features.Classes.GetImportTemplate.IGetImportTemplateQueryHandler, EHub.Application.Features.Classes.GetImportTemplate.GetImportTemplateQueryHandler>();
+
         services.AddScoped<EHub.Application.Common.Interfaces.Authorization.IPermissionService, EHub.Application.Common.Services.Authorization.PermissionService>();
 
         return services;
