@@ -1,475 +1,293 @@
-// src/pages/admin/SubjectManagement.tsx
-import { useState, useEffect } from 'react';
-import { Search, Filter, Plus, Edit, Trash2, BookOpen, RefreshCw, Calendar, Sparkles } from 'lucide-react';
-import Button from '../../components/ui/Button';
-import Badge from '../../components/ui/Badge';
-import Modal from '../../components/ui/Modal';
-import ConfirmDialog from '../../components/ui/ConfirmDialog';
-import LoadingSkeleton from '../../components/ui/LoadingSkeleton';
-import EmptyState from '../../components/ui/EmptyState';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import {
+  BookOpen, Calendar, CheckCircle2, Edit3, Filter, GraduationCap, Plus,
+  LockKeyhole, RefreshCw, Search, ShieldAlert, Sparkles, Users,
+} from 'lucide-react';
 import toast from 'react-hot-toast';
 import { subjectApi } from '../../api/subjectApi';
+import Badge from '../../components/ui/Badge';
+import Button from '../../components/ui/Button';
+import ConfirmDialog from '../../components/ui/ConfirmDialog';
+import EmptyState from '../../components/ui/EmptyState';
+import LoadingSkeleton from '../../components/ui/LoadingSkeleton';
+import Modal from '../../components/ui/Modal';
+import { parseApiError } from '../../utils/apiError';
 
-const statusBadge = { active: 'Approved', disabled: 'Overdue' };
-const statusLabel = { active: 'Active', disabled: 'Disabled' };
-const termColor = { SP: 'bg-green-100 text-green-700', SU: 'bg-amber-100 text-amber-700', FA: 'bg-blue-100 text-blue-700' };
+type SemesterCode = 'SP' | 'SU' | 'FA';
+type SubjectStatus = 'active' | 'disabled';
+type Subject = { _id: string; subjectCode: string; subjectName: string; status: SubjectStatus };
+type Semester = { semester: SemesterCode; year: number };
+type Assignment = { _id: string; classCode: string; subjectCode: string };
+type TeachingStaff = {
+  _id: string;
+  name: string;
+  email: string;
+  avatar?: string;
+  role: 'LECTURER' | 'MENTOR';
+  status: string;
+  classCount: number;
+  assignments: Assignment[];
+};
+type StaffSummary = { lecturers: number; mentors: number; assigned: number; unassigned: number; classes: number };
+
+const emptySummary: StaffSummary = { lecturers: 0, mentors: 0, assigned: 0, unassigned: 0, classes: 0 };
+const currentYear = new Date().getFullYear();
+
+function responseData(response: any) {
+  return response?.data ?? response ?? {};
+}
+
+function initials(name: string) {
+  return name.split(' ').filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase() || '?';
+}
+
+function semesterLabel({ semester, year }: Semester) {
+  return `${semester} ${year}`;
+}
 
 const SubjectManagement = () => {
-  const [subjects, setSubjects] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  // Filter state
+  const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState<'subjects' | 'staff'>('subjects');
+  const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [subjectsLoading, setSubjectsLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('ALL');
-
-  // Semester Setting State
-  const [currentSemester, setCurrentSemester] = useState({ semester: 'SP', year: new Date().getFullYear() });
-  const [selectedSemester, setSelectedSemester] = useState('SP');
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
-  const [availableYears, setAvailableYears] = useState([new Date().getFullYear()]);
-  const [isDecember, setIsDecember] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<'ALL' | SubjectStatus>('ALL');
+  const [currentSemester, setCurrentSemester] = useState<Semester>({ semester: 'SP', year: currentYear });
+  const [selectedSemester, setSelectedSemester] = useState<SemesterCode>('SP');
+  const [selectedYear, setSelectedYear] = useState(currentYear);
+  const [availableYears, setAvailableYears] = useState<number[]>([currentYear]);
+  const [canPlanNextYear, setCanPlanNextYear] = useState(false);
   const [savingSemester, setSavingSemester] = useState(false);
+  const [staff, setStaff] = useState<TeachingStaff[]>([]);
+  const [staffSummary, setStaffSummary] = useState<StaffSummary>(emptySummary);
+  const [staffLoading, setStaffLoading] = useState(false);
+  const [staffSearch, setStaffSearch] = useState('');
+  const [staffRole, setStaffRole] = useState<'ALL' | TeachingStaff['role']>('ALL');
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editingSubject, setEditingSubject] = useState<Subject | null>(null);
+  const [form, setForm] = useState({ subjectCode: '', subjectName: '', status: 'active' as SubjectStatus });
+  const [savingSubject, setSavingSubject] = useState(false);
+  const [disableTarget, setDisableTarget] = useState<Subject | null>(null);
+  const [disabling, setDisabling] = useState(false);
 
-  // Modal states
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [editingSubject, setEditingSubject] = useState(null);
-  const [disableTarget, setDisableTarget] = useState(null);
-  const [isDisabling, setIsDisabling] = useState(false);
-
-  // Form state
-  const [formData, setFormData] = useState({
-    subjectCode: '',
-    subjectName: '',
-    status: 'active',
-  });
-
-  // Debounce search
   useEffect(() => {
-    const handler = setTimeout(() => {
-      setDebouncedSearch(search);
-    }, 500);
-    return () => clearTimeout(handler);
+    const timeout = window.setTimeout(() => setDebouncedSearch(search), 500);
+    return () => window.clearTimeout(timeout);
   }, [search]);
 
-  const fetchSubjects = async () => {
+  const loadSubjects = async () => {
+    setSubjectsLoading(true);
     try {
-      setLoading(true);
-      const params: { search?: string; status?: string } = {};
-      if (debouncedSearch) params.search = debouncedSearch;
+      const params: { search?: string; status?: SubjectStatus } = {};
+      if (debouncedSearch.trim()) params.search = debouncedSearch.trim();
       if (statusFilter !== 'ALL') params.status = statusFilter;
-
-      const res = await subjectApi.getAll(params);
-      const list = res.data?.subjects || res.subjects || [];
-      setSubjects(list);
-    } catch (err) {
-      toast.error('Failed to load subjects');
+      const payload = responseData(await subjectApi.getAll(params));
+      setSubjects(payload.subjects ?? []);
+    } catch (error) {
+      toast.error(parseApiError(error, 'Failed to load subjects').message);
     } finally {
-      setLoading(false);
+      setSubjectsLoading(false);
     }
   };
 
-  const fetchSemester = async () => {
+  const loadSemester = async () => {
     try {
-      const res = await subjectApi.getCurrentSemester();
-      const config = res.data?.currentSemester || res.currentSemester || { semester: 'SP', year: new Date().getFullYear() };
-      const years  = res.data?.availableYears   || [new Date().getFullYear()];
-      const isDec  = res.data?.isDecember       || false;
-      setCurrentSemester(config);
-      setSelectedSemester(config.semester);
-      setSelectedYear(config.year);
+      const payload = responseData(await subjectApi.getCurrentSemester());
+      const semester = payload.currentSemester as Semester | undefined;
+      const years = Array.isArray(payload.availableYears) && payload.availableYears.length
+        ? payload.availableYears.map(Number)
+        : [currentYear];
+      if (semester) {
+        setCurrentSemester(semester);
+        setSelectedSemester(semester.semester);
+        setSelectedYear(Number(semester.year));
+      }
       setAvailableYears(years);
-      setIsDecember(isDec);
-    } catch (err) {
-      console.error('Failed to load active semester configuration');
+      setCanPlanNextYear(Boolean(payload.isDecember || payload.canPlanNextYear));
+    } catch (error) {
+      toast.error(parseApiError(error, 'Failed to load the active semester').message);
     }
   };
 
-  useEffect(() => {
-    fetchSubjects();
-  }, [debouncedSearch, statusFilter]); // eslint-disable-line react-hooks/exhaustive-deps
+  const loadStaff = async () => {
+    setStaffLoading(true);
+    try {
+      const payload = responseData(await subjectApi.getTeachingStaff({ semester: selectedSemester, year: selectedYear }));
+      setStaff(payload.staff ?? payload.teachingStaff ?? []);
+      setStaffSummary({ ...emptySummary, ...(payload.summary ?? {}) });
+    } catch (error) {
+      toast.error(parseApiError(error, 'Failed to load teaching staff').message);
+      setStaff([]);
+      setStaffSummary(emptySummary);
+    } finally {
+      setStaffLoading(false);
+    }
+  };
 
+  useEffect(() => { void loadSemester(); }, []);
+  useEffect(() => { void loadSubjects(); }, [debouncedSearch, statusFilter]);
   useEffect(() => {
-    fetchSemester();
-  }, []);
+    if (activeTab === 'staff') void loadStaff();
+  }, [activeTab, selectedSemester, selectedYear]);
 
-  const openAddModal = () => {
+  const refresh = async () => {
+    await loadSemester();
+    if (activeTab === 'subjects') await loadSubjects();
+    else await loadStaff();
+  };
+
+  const openAdd = () => {
     setEditingSubject(null);
-    setFormData({ subjectCode: '', subjectName: '', status: 'active' });
-    setIsModalOpen(true);
+    setForm({ subjectCode: '', subjectName: '', status: 'active' });
+    setModalOpen(true);
   };
 
-  const openEditModal = (subj) => {
-    setEditingSubject(subj);
-    setFormData({
-      subjectCode: subj.subjectCode,
-      subjectName: subj.subjectName,
-      status: subj.status || 'active',
-    });
-    setIsModalOpen(true);
+  const openEdit = (subject: Subject) => {
+    setEditingSubject(subject);
+    setForm({ subjectCode: subject.subjectCode, subjectName: subject.subjectName, status: subject.status });
+    setModalOpen(true);
   };
 
-  const handleDisableRequest = (subj) => {
-    setDisableTarget(subj);
+  const saveSubject = async () => {
+    if (!form.subjectCode.trim() || !form.subjectName.trim()) {
+      toast.error('Subject Code and Subject Name are required');
+      return;
+    }
+    setSavingSubject(true);
+    try {
+      if (editingSubject) {
+        await subjectApi.update(editingSubject._id, { subjectName: form.subjectName.trim(), status: form.status });
+        toast.success('Subject updated successfully');
+      } else {
+        await subjectApi.create({ ...form, subjectCode: form.subjectCode.trim(), subjectName: form.subjectName.trim() });
+        toast.success('Subject created successfully');
+      }
+      setModalOpen(false);
+      await loadSubjects();
+    } catch (error) {
+      toast.error(parseApiError(error, 'Failed to save subject').message);
+    } finally {
+      setSavingSubject(false);
+    }
   };
 
-  const confirmDisable = async () => {
+  const disableSubject = async () => {
     if (!disableTarget) return;
-    setIsDisabling(true);
+    setDisabling(true);
     try {
       await subjectApi.delete(disableTarget._id);
-      toast.success(`Subject ${disableTarget.subjectCode} disabled successfully!`);
+      toast.success(`Subject ${disableTarget.subjectCode} disabled successfully`);
       setDisableTarget(null);
-      fetchSubjects();
-    } catch (err) {
-      toast.error('Failed to disable subject');
+      await loadSubjects();
+    } catch (error) {
+      toast.error(parseApiError(error, 'Failed to disable subject').message);
     } finally {
-      setIsDisabling(false);
+      setDisabling(false);
     }
   };
 
-  const handleSaveSemester = async () => {
+  const saveSemester = async () => {
     setSavingSemester(true);
     try {
-      const res = await subjectApi.updateCurrentSemester(selectedSemester, selectedYear);
-      const config = res.data?.currentSemester || res.currentSemester;
-      setCurrentSemester(config);
-      toast.success(`Active semester set to ${config.semester} ${config.year}!`);
-    } catch (err) {
-      const msg = err.response?.data?.message || 'Failed to update active semester';
-      toast.error(msg);
+      const payload = responseData(await subjectApi.updateCurrentSemester(selectedSemester, selectedYear));
+      const nextSemester = payload.currentSemester ?? { semester: selectedSemester, year: selectedYear };
+      setCurrentSemester(nextSemester);
+      toast.success(`Active semester set to ${semesterLabel(nextSemester)}`);
+    } catch (error) {
+      toast.error(parseApiError(error, 'Failed to update active semester').message);
     } finally {
       setSavingSemester(false);
     }
   };
 
-  const handleSubmit = async () => {
-    if (!formData.subjectCode || !formData.subjectCode.trim()) {
-      toast.error('Subject Code is required');
-      return;
-    }
-    if (!formData.subjectName || !formData.subjectName.trim()) {
-      toast.error('Subject Name is required');
-      return;
-    }
+  const visibleStaff = useMemo(() => {
+    const query = staffSearch.trim().toLowerCase();
+    return staff.filter((member) => {
+      const matchesRole = staffRole === 'ALL' || member.role === staffRole;
+      const matchesSearch = !query || [member.name, member.email, ...member.assignments.flatMap((item) => [item.classCode, item.subjectCode])]
+        .some((value) => value?.toLowerCase().includes(query));
+      return matchesRole && matchesSearch;
+    });
+  }, [staff, staffRole, staffSearch]);
 
-    setIsSubmitting(true);
-    try {
-      if (editingSubject) {
-        await subjectApi.update(editingSubject._id, {
-          subjectName: formData.subjectName,
-          status: formData.status,
-        });
-        toast.success('Subject updated successfully!');
-      } else {
-        await subjectApi.create(formData);
-        toast.success('Subject created successfully!');
-      }
-      setIsModalOpen(false);
-      fetchSubjects();
-    } catch (err) {
-      const errorMsg = err.response?.data?.message || err.message || 'Failed to save subject';
-      toast.error(errorMsg);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
+  const staffStats = [
+    { label: 'Lecturers', value: staffSummary.lecturers, icon: GraduationCap, style: 'text-primary bg-primary-50' },
+    { label: 'Mentors', value: staffSummary.mentors, icon: Users, style: 'text-secondary bg-secondary-50' },
+    { label: 'Assigned', value: staffSummary.assigned, icon: CheckCircle2, style: 'text-success bg-success-50' },
+    { label: 'Unassigned', value: staffSummary.unassigned, icon: ShieldAlert, style: 'text-warning-dark bg-warning-50' },
+    { label: 'Classes', value: staffSummary.classes, icon: BookOpen, style: 'text-cyan-700 bg-cyan-50' },
+  ];
 
   return (
     <div className="space-y-6">
-      {/* Page Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">Subject & Semester</h1>
-          <p className="text-slate-500 mt-1">Manage academic subjects and active semesters</p>
+          <h1 className="text-2xl font-bold text-slate-900 sm:text-3xl">
+            {activeTab === 'subjects' ? 'Subject & Semester' : 'Lecturers & Mentors'}
+          </h1>
+          <p className="mt-1 text-slate-500">
+            {activeTab === 'subjects' ? 'Manage academic subjects and the active semester.' : 'Review teaching assignments for each semester.'}
+          </p>
         </div>
-        <div className="flex gap-2">
-          <button
-            onClick={() => { fetchSubjects(); fetchSemester(); }}
-            className="flex items-center gap-2 px-3 py-2 text-sm border border-slate-200 rounded-xl text-slate-600 hover:bg-slate-50 transition-all bg-white"
-          >
-            <RefreshCw className="w-4 h-4" /> Refresh
-          </button>
-          <Button variant="primary" icon={Plus} onClick={openAddModal}>
-            Add Subject
-          </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" icon={RefreshCw} onClick={() => void refresh()}>Refresh</Button>
+          {activeTab === 'subjects' && <Button icon={Plus} onClick={openAdd}>Add Subject</Button>}
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        {/* Left Column: Subjects CRUD */}
-        <div className="lg:col-span-3 space-y-6">
-          {/* Filter and Search Bar */}
-          <div className="flex flex-col sm:flex-row gap-3">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-              <input
-                className="w-full bg-white border border-slate-200 rounded-xl pl-10 pr-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                placeholder="Search subjects by code or name..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
-            </div>
-            <div className="relative w-full sm:w-48 shrink-0">
-              <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-              <select
-                className="w-full bg-white border border-slate-200 rounded-xl pl-10 pr-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary appearance-none"
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-              >
-                <option value="ALL">All Status</option>
-                <option value="active">Active</option>
-                <option value="disabled">Disabled</option>
-              </select>
-            </div>
-          </div>
+      <div className="inline-flex w-full gap-1 overflow-x-auto rounded-xl bg-slate-100 p-1 sm:w-auto">
+        <button type="button" onClick={() => setActiveTab('subjects')} className={`inline-flex shrink-0 items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition ${activeTab === 'subjects' ? 'bg-white text-primary shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+          <BookOpen className="h-4 w-4" /> Subject & Semester
+        </button>
+        <button type="button" onClick={() => setActiveTab('staff')} className={`inline-flex shrink-0 items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition ${activeTab === 'staff' ? 'bg-white text-primary shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+          <Users className="h-4 w-4" /> Lecturers & Mentors by Semester
+        </button>
+      </div>
 
-          {/* Subjects Table */}
-          <div className="bg-white border border-slate-200/60 rounded-2xl shadow-sm overflow-hidden">
-            {loading ? (
-              <div className="p-6">
-                <LoadingSkeleton lines={5} />
+      {activeTab === 'subjects' ? (
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-4">
+          <div className="space-y-4 lg:col-span-3">
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search subjects by code or name..." className="w-full rounded-xl border border-slate-200 bg-white py-2 pl-10 pr-4 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20" />
               </div>
-            ) : subjects.length === 0 ? (
-              <div className="p-12">
-                <EmptyState
-                  icon={BookOpen}
-                  title="No subjects found"
-                  description="Try adjusting your search query or filters, or add a new subject."
-                  action={{ label: 'Add Subject', onClick: openAddModal }}
-                />
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[600px]">
-                  <thead>
-                    <tr className="border-b border-slate-100 bg-slate-50/60">
-                      <th className="py-3 px-6 text-xs text-slate-400 uppercase text-left font-semibold tracking-wider w-1/4">
-                        Subject Code
-                      </th>
-                      <th className="py-3 px-6 text-xs text-slate-400 uppercase text-left font-semibold tracking-wider">
-                        Subject Name
-                      </th>
-                      <th className="py-3 px-6 text-xs text-slate-400 uppercase text-left font-semibold tracking-wider w-40">
-                        Status
-                      </th>
-                      <th className="py-3 px-6 text-xs text-slate-400 uppercase text-right font-semibold tracking-wider w-32">
-                        Actions
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {subjects.map((subj) => (
-                      <tr
-                        key={subj._id}
-                        className="border-b border-slate-50 hover:bg-primary-50/20 transition-colors group"
-                      >
-                        <td className="py-3.5 px-6">
-                          <div className="flex items-center gap-3">
-                            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary-50 to-primary-100 flex items-center justify-center font-mono font-bold text-primary shrink-0">
-                              {subj.subjectCode?.substring(0, 3)}
-                            </div>
-                            <span className="font-mono font-bold text-slate-900">
-                              {subj.subjectCode}
-                            </span>
-                          </div>
-                        </td>
-                        <td className="py-3.5 px-6 text-sm text-slate-700 font-medium">
-                          {subj.subjectName}
-                        </td>
-                        <td className="py-3.5 px-6">
-                          <Badge variant={statusBadge[subj.status || 'active']} size="sm">
-                            {statusLabel[subj.status || 'active']}
-                          </Badge>
-                        </td>
-                        <td className="py-3.5 px-6 text-right">
-                          <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button
-                              className="p-1.5 rounded-lg text-slate-400 hover:text-primary hover:bg-primary-50 transition-all"
-                              onClick={() => openEditModal(subj)}
-                              title="Edit Subject"
-                            >
-                              <Edit className="w-4 h-4" />
-                            </button>
-                            {subj.status !== 'disabled' && (
-                              <button
-                                className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-all"
-                                onClick={() => handleDisableRequest(subj)}
-                                  title="Disable Subject"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Right Column: Current Semester Management */}
-        <div className="space-y-6">
-          <div className="bg-white border border-slate-200/60 rounded-2xl shadow-sm p-5 space-y-4">
-            <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
-              <Calendar className="w-5 h-5 text-primary" />
-              <h2 className="font-bold text-slate-800 text-base">Active Semester</h2>
-            </div>
-            
-            <div className="space-y-1.5">
-              <span className="text-xs text-slate-400 font-medium">Current Setting</span>
-              <div className="flex items-center gap-2.5 p-3.5 bg-slate-50 border border-slate-100 rounded-xl">
-                <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-primary-500 to-secondary-500 flex items-center justify-center text-white shrink-0 font-bold text-sm">
-                  {currentSemester.semester}
-                </div>
-                <div>
-                  <div className="font-bold text-slate-800">
-                    {currentSemester.semester} {currentSemester.year}
-                  </div>
-                  <div className="text-[11px] text-slate-400 font-medium leading-none">
-                    Locked configuration active
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-3 pt-2">
-              <div>
-                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
-                  Change Term
-                </label>
-                <select
-                  className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none bg-white focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                  value={selectedSemester}
-                  onChange={(e) => setSelectedSemester(e.target.value)}
-                >
-                  <option value="SP">SP (Spring)</option>
-                  <option value="SU">SU (Summer)</option>
-                  <option value="FA">FA (Fall)</option>
+              <div className="relative sm:w-44">
+                <Filter className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)} className="w-full appearance-none rounded-xl border border-slate-200 bg-white py-2 pl-10 pr-4 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20">
+                  <option value="ALL">All Status</option><option value="active">Active</option><option value="disabled">Disabled</option>
                 </select>
               </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
-                  Year
-                </label>
-                {availableYears.length > 1 ? (
-                  <select
-                    className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none bg-white focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                    value={selectedYear}
-                    onChange={(e) => setSelectedYear(Number(e.target.value))}
-                  >
-                    {availableYears.map(y => (
-                      <option key={y} value={y}>
-                        {y}{y === new Date().getFullYear() ? ' (Current)' : ' (Next Year)'}
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  <input
-                    type="text"
-                    disabled
-                    className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none bg-slate-50 text-slate-400 font-medium"
-                    value={`${availableYears[0] ?? new Date().getFullYear()} (Current Year)`}
-                  />
-                )}
-                {isDecember && (
-                  <p className="text-[11px] text-green-600 font-medium mt-1">
-                    ✓ December — you may plan for next year ({new Date().getFullYear() + 1})
-                  </p>
-                )}
-              </div>
-
-              <button
-                onClick={handleSaveSemester}
-                disabled={savingSemester}
-                className="w-full bg-gradient-to-r from-primary to-secondary hover:shadow-glow-primary text-white font-semibold py-2.5 rounded-xl text-sm transition-all active:scale-[0.98] flex items-center justify-center gap-2 mt-2"
-              >
-                {savingSemester ? 'Saving...' : 'Set Active Semester'}
-              </button>
             </div>
-
-            <div className="flex items-start gap-2 p-3 bg-amber-50/50 border border-amber-100/50 rounded-xl text-[11px] text-amber-700 leading-normal">
-              <Sparkles className="w-4 h-4 shrink-0 text-amber-500 mt-0.5" />
-              <span>
-                Setting this will lock class creation to this active semester. Users will not be able to choose other semesters.
-              </span>
-            </div>
+            <div className="overflow-hidden rounded-2xl border border-slate-200/70 bg-white shadow-sm">
+              {subjectsLoading ? <LoadingSkeleton variant="table" lines={6} className="p-4" /> : subjects.length === 0 ? <EmptyState icon={BookOpen} title="No subjects found" description="Try adjusting your search or add a new subject." action={{ label: 'Add Subject', onClick: openAdd }} /> : (
+                <div className="overflow-x-auto"><table className="w-full min-w-[620px]"><thead><tr className="border-b border-slate-100 bg-slate-50"><th className="px-6 py-3 text-left text-xs font-semibold uppercase text-slate-400">Subject Code</th><th className="px-6 py-3 text-left text-xs font-semibold uppercase text-slate-400">Subject Name</th><th className="px-6 py-3 text-left text-xs font-semibold uppercase text-slate-400">Status</th><th className="px-6 py-3 text-right text-xs font-semibold uppercase text-slate-400">Actions</th></tr></thead>
+                  <tbody>{subjects.map((subject) => <tr key={subject._id} className="group border-b border-slate-50 last:border-0 hover:bg-slate-50/80"><td className="px-6 py-3.5"><div className="flex items-center gap-3"><span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary-50 font-mono text-xs font-bold text-primary">{subject.subjectCode.slice(0, 3)}</span><Link to={`/admin/subjects/${subject.subjectCode}`} className="font-mono font-semibold text-slate-900 hover:text-primary hover:underline">{subject.subjectCode}</Link></div></td><td className="px-6 py-3.5 text-sm font-medium text-slate-700">{subject.subjectName}</td><td className="px-6 py-3.5"><Badge variant={subject.status === 'active' ? 'Active' : 'Overdue'}>{subject.status === 'active' ? 'Active' : 'Disabled'}</Badge></td><td className="px-6 py-3.5"><div className="flex justify-end gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100"><button type="button" title="Edit Subject" onClick={() => openEdit(subject)} className="rounded-lg p-2 text-slate-400 hover:bg-primary-50 hover:text-primary"><Edit3 className="h-4 w-4" /></button>{subject.status !== 'disabled' && <button type="button" title="Disable Subject" onClick={() => setDisableTarget(subject)} className="rounded-lg p-2 text-slate-400 hover:bg-danger-50 hover:text-danger"><LockKeyhole className="h-4 w-4" /></button>}</div></td></tr>)}</tbody></table></div>
+              )}</div>
           </div>
+          <aside className="rounded-2xl border border-slate-200/70 bg-white p-5 shadow-sm">
+            <div className="flex items-center gap-2 border-b border-slate-100 pb-3"><Calendar className="h-5 w-5 text-primary" /><h2 className="font-bold text-slate-800">Active Semester</h2></div>
+            <div className="mt-4 rounded-xl border border-slate-100 bg-slate-50 p-3"><p className="text-xs font-medium text-slate-400">Current Setting</p><p className="mt-1 text-lg font-bold text-slate-900">{semesterLabel(currentSemester)}</p></div>
+            <div className="mt-4 space-y-3"><label className="block text-xs font-semibold uppercase text-slate-400">Semester<select value={selectedSemester} onChange={(event) => setSelectedSemester(event.target.value as SemesterCode)} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-normal text-slate-700 outline-none focus:border-primary"><option value="SP">SP (Spring)</option><option value="SU">SU (Summer)</option><option value="FA">FA (Fall)</option></select></label><label className="block text-xs font-semibold uppercase text-slate-400">Year<select value={selectedYear} onChange={(event) => setSelectedYear(Number(event.target.value))} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-normal text-slate-700 outline-none focus:border-primary">{availableYears.map((year) => <option key={year} value={year}>{year}</option>)}</select></label><Button className="w-full" onClick={() => void saveSemester()} isLoading={savingSemester}>{savingSemester ? 'Saving...' : 'Set Active Semester'}</Button></div>
+            {canPlanNextYear && <p className="mt-3 rounded-xl border border-success-light bg-success-50 p-3 text-xs font-medium text-success-dark">December planning is available for next year.</p>}
+            <p className="mt-3 flex gap-2 rounded-xl border border-warning-light bg-warning-50 p-3 text-xs leading-5 text-warning-dark"><Sparkles className="mt-0.5 h-4 w-4 shrink-0" />Changing the active semester limits new class creation to the selected semester.</p>
+          </aside>
         </div>
-      </div>
+      ) : (
+        <section className="space-y-5">
+          <div className="flex flex-col gap-3 rounded-2xl border border-slate-200/70 bg-white p-4 shadow-sm md:flex-row md:items-end md:justify-between"><div className="flex flex-col gap-3 sm:flex-row"><label className="text-xs font-semibold uppercase text-slate-400">Semester<select value={selectedSemester} onChange={(event) => setSelectedSemester(event.target.value as SemesterCode)} className="mt-1.5 block rounded-xl border border-slate-200 px-3 py-2 text-sm font-normal text-slate-700 outline-none"><option value="SP">SP (Spring)</option><option value="SU">SU (Summer)</option><option value="FA">FA (Fall)</option></select></label><label className="text-xs font-semibold uppercase text-slate-400">Year<select value={selectedYear} onChange={(event) => setSelectedYear(Number(event.target.value))} className="mt-1.5 block rounded-xl border border-slate-200 px-3 py-2 text-sm font-normal text-slate-700 outline-none">{availableYears.map((year) => <option key={year} value={year}>{year}</option>)}</select></label></div><Button variant="outline" icon={Users} onClick={() => navigate('/admin/classes')}>Manage Assignments</Button></div>
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">{staffStats.map(({ label, value, icon: Icon, style }) => <div key={label} className="rounded-xl border border-slate-200/70 bg-white p-4 shadow-sm"><div className={`flex h-9 w-9 items-center justify-center rounded-lg ${style}`}><Icon className="h-4 w-4" /></div><p className="mt-3 text-2xl font-bold text-slate-900">{value}</p><p className="text-sm text-slate-500">{label}</p></div>)}</div>
+          <div className="flex flex-col gap-3 sm:flex-row"><div className="relative flex-1"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input value={staffSearch} onChange={(event) => setStaffSearch(event.target.value)} placeholder="Search name, email, class or subject code..." className="w-full rounded-xl border border-slate-200 bg-white py-2 pl-10 pr-4 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20" /></div><select value={staffRole} onChange={(event) => setStaffRole(event.target.value as typeof staffRole)} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none"><option value="ALL">All roles</option><option value="LECTURER">Lecturers only</option><option value="MENTOR">Mentors only</option></select></div>
+          <div className="overflow-hidden rounded-2xl border border-slate-200/70 bg-white shadow-sm">{staffLoading ? <LoadingSkeleton variant="table" lines={6} className="p-4" /> : visibleStaff.length === 0 ? <EmptyState icon={Users} title="No teaching staff found" description="Try another semester, role, or search term." /> : <div className="divide-y divide-slate-100">{visibleStaff.map((member) => <article key={member._id} className="flex flex-col gap-4 p-5 lg:flex-row lg:items-center"><div className="flex min-w-0 flex-1 items-center gap-3">{member.avatar ? <img src={member.avatar} alt="" className="h-10 w-10 rounded-full object-cover" /> : <span className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-600">{initials(member.name)}</span>}<div className="min-w-0"><p className="truncate font-semibold text-slate-900">{member.name}</p><p className="truncate text-sm text-slate-500">{member.email}</p></div></div><div className="flex items-center gap-2"><Badge variant={member.role === 'LECTURER' ? 'Submitted' : 'Reviewed'}>{member.role === 'LECTURER' ? 'Lecturer' : 'Mentor'}</Badge><Badge variant={member.status.toLowerCase() === 'active' ? 'Active' : 'Inactive'}>{member.status}</Badge><span className="text-sm font-medium text-slate-600">{member.classCount} classes</span></div><div className="flex flex-1 flex-wrap gap-1.5 lg:justify-end">{member.assignments.length ? member.assignments.map((assignment) => <span key={assignment._id} className="rounded-full border border-primary-100 bg-primary-50 px-2 py-1 text-xs font-semibold text-primary">{assignment.classCode} · {assignment.subjectCode}</span>) : <span className="rounded-full border border-danger-light bg-danger-50 px-2 py-1 text-xs font-semibold text-danger">Not assigned in {selectedSemester} {selectedYear}</span>}</div></article>)}</div>}</div>
+        </section>
+      )}
 
-      {/* Add / Edit Modal */}
-      <Modal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        title={editingSubject ? 'Edit Subject' : 'Add New Subject'}
-        submitText={isSubmitting ? 'Saving...' : 'Save Subject'}
-        isSubmitting={isSubmitting}
-        onSubmit={handleSubmit}
-      >
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
-              Subject Code *
-            </label>
-            <input
-              type="text"
-              disabled={!!editingSubject}
-              placeholder="e.g. EXE301"
-              className="w-full border border-slate-200 rounded-xl px-3 py-2.5 outline-none text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary disabled:bg-slate-50 disabled:text-slate-400 font-mono"
-              value={formData.subjectCode}
-              onChange={(e) => setFormData({ ...formData, subjectCode: e.target.value })}
-            />
-            {editingSubject && (
-              <p className="text-[11px] text-slate-400 mt-1">
-                Subject code cannot be changed after creation.
-              </p>
-            )}
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
-              Subject Name *
-            </label>
-            <input
-              type="text"
-              placeholder="e.g. Experiential Entrepreneurship 3"
-              className="w-full border border-slate-200 rounded-xl px-3 py-2.5 outline-none text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary"
-              value={formData.subjectName}
-              onChange={(e) => setFormData({ ...formData, subjectName: e.target.value })}
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
-              Status
-            </label>
-            <select
-              className="w-full border border-slate-200 rounded-xl px-3 py-2.5 outline-none bg-white text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary"
-              value={formData.status}
-              onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-            >
-              <option value="active">Active</option>
-              <option value="disabled">Disabled</option>
-            </select>
-          </div>
-        </div>
+      <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title={editingSubject ? 'Edit Subject' : 'Add Subject'} submitText={savingSubject ? 'Saving...' : 'Save Subject'} isSubmitting={savingSubject} onSubmit={saveSubject}>
+        <div className="space-y-4"><label className="block text-sm font-medium text-slate-700">Subject Code *<input disabled={Boolean(editingSubject)} value={form.subjectCode} onChange={(event) => setForm({ ...form, subjectCode: event.target.value })} placeholder="e.g. EXE301" className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 font-mono text-sm outline-none focus:border-primary disabled:bg-slate-50" /></label><label className="block text-sm font-medium text-slate-700">Subject Name *<input value={form.subjectName} onChange={(event) => setForm({ ...form, subjectName: event.target.value })} placeholder="e.g. Experiential Entrepreneurship 3" className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-primary" /></label><label className="block text-sm font-medium text-slate-700">Status<select value={form.status} onChange={(event) => setForm({ ...form, status: event.target.value as SubjectStatus })} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-primary"><option value="active">Active</option><option value="disabled">Disabled</option></select></label></div>
       </Modal>
-
-      {/* Soft Disable Confirmation Dialog */}
-      <ConfirmDialog
-        isOpen={!!disableTarget}
-        onClose={() => setDisableTarget(null)}
-        onConfirm={confirmDisable}
-        title="Disable Subject"
-        description={`Are you sure you want to disable the subject ${disableTarget?.subjectCode}? Existing class data will remain, but this subject can no longer be used to create new classes.`}
-        isSubmitting={isDisabling}
-        confirmText="Disable"
-        confirmVariant="danger"
-      />
+      <ConfirmDialog isOpen={Boolean(disableTarget)} onClose={() => setDisableTarget(null)} onConfirm={disableSubject} title="Disable Subject" description="Existing class data will be kept, but this subject can no longer be used when creating new classes." confirmText="Disable Subject" isSubmitting={disabling} />
     </div>
   );
 };

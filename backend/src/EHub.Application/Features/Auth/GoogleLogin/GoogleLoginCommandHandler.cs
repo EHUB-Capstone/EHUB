@@ -148,6 +148,8 @@ public class GoogleLoginCommandHandler : IGoogleLoginCommandHandler
             refreshTokenEntity,
             cancellationToken);
 
+        user.LastLoginAt = DateTime.UtcNow;
+
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         // 7. Resolve MajorCode for Student

@@ -8,6 +8,8 @@ import LoadingSkeleton from '../../components/ui/LoadingSkeleton';
 import EmptyState from '../../components/ui/EmptyState';
 import toast from 'react-hot-toast';
 import { userApi } from '../../api/userApi';
+import { parseApiError } from '../../utils/apiError';
+import { PROGRAM_GROUPS } from '../../constants/majors';
 
 const roleBadge = { ADMIN: 'Approved', LECTURER: 'Submitted', MENTOR: 'Review', STUDENT: 'Reviewed' };
 const roleLabel = { ADMIN: 'Admin', LECTURER: 'Lecturer', MENTOR: 'Mentor', STUDENT: 'Student' };
@@ -34,7 +36,8 @@ const UserManagement = () => {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
-  const [formData, setFormData] = useState({ name: '', email: '', role: 'STUDENT', status: 'APPROVED' });
+  const [rowActionId, setRowActionId] = useState(null);
+  const [formData, setFormData] = useState({ name: '', email: '', password: '', role: 'STUDENT', status: 'APPROVED', phone: '', bio: '', studentId: '', programGroup: 'BIT', major: 'BIT_SE' });
 
   // Debounce search
   useEffect(() => {
@@ -57,11 +60,12 @@ const UserManagement = () => {
       if (statusFilter !== 'ALL') params.status = statusFilter;
       
       const res = await userApi.getAll(params);
-      const list = res.data?.users || res.users || res.data || [];
+      const payload = res.data?.data || res.data || res;
+      const list = payload.users || [];
       setUsers(Array.isArray(list) ? list : []);
-      if (res.data?.pagination) {
-        setTotalPages(res.data.pagination.pages);
-        setTotalItems(res.data.pagination.total);
+      if (payload.pagination) {
+        setTotalPages(payload.pagination.pages);
+        setTotalItems(payload.pagination.total);
       } else {
         setTotalItems(list.length);
         setTotalPages(1);
@@ -77,24 +81,23 @@ const UserManagement = () => {
   useEffect(() => { fetchUsers(); }, [page, debouncedSearch, roleFilter, statusFilter]);
 
   const handleStatusUpdate = async (userId, newStatus) => {
+    setRowActionId(userId);
     try {
       await userApi.update(userId, { status: newStatus });
       toast.success(`User marked as ${newStatus}`);
       fetchUsers();
-    } catch {
-      toast.error('Failed to update status');
-    }
+    } catch (error) { toast.error(parseApiError(error, 'Failed to update status').message); } finally { setRowActionId(null); }
   };
 
   const openAddModal = () => {
     setEditingUser(null);
-    setFormData({ name: '', email: '', role: 'STUDENT', status: 'APPROVED' });
+    setFormData({ name: '', email: '', password: '', role: 'STUDENT', status: 'APPROVED', phone: '', bio: '', studentId: '', programGroup: 'BIT', major: 'BIT_SE' });
     setIsModalOpen(true);
   };
 
   const openEditModal = (user) => {
     setEditingUser(user);
-    setFormData({ name: user.name, email: user.email, role: user.role, status: user.status || 'APPROVED' });
+    setFormData({ name: user.name || '', email: user.email || '', password: '', role: user.role || 'STUDENT', status: user.status || 'APPROVED', phone: user.phone || '', bio: '', studentId: user.studentId || '', programGroup: user.programGroup || 'BIT', major: user.major || 'BIT_SE' });
     setIsModalOpen(true);
   };
 
@@ -110,27 +113,28 @@ const UserManagement = () => {
       fetchUsers();
       toast.success('User deleted!');
       setDeleteTarget(null);
-    } catch {
-      toast.error('Failed to delete user');
+    } catch (error) {
+      toast.error(parseApiError(error, 'Failed to delete user').message);
     } finally {
       setIsDeleting(false);
     }
   };
 
   const handleSubmit = async () => {
-    if (!formData.name || !formData.email) { toast.error('Fill in all required fields'); return; }
+    if (!formData.name.trim() || !formData.email.trim() || (!editingUser && formData.password.length < 6)) { toast.error(editingUser ? 'Name and email are required' : 'Name, email and a 6-character password are required'); return; }
     setIsSubmitting(true);
     try {
       if (editingUser) {
-        await userApi.update(editingUser._id, formData);
+        await userApi.update(editingUser.id || editingUser._id, formData);
         toast.success('User updated!');
       } else {
-        toast.error('Use Register flow to add new users');
+        await userApi.create(formData);
+        toast.success('User created!');
       }
       setIsModalOpen(false);
       fetchUsers();
     } catch (err) {
-      toast.error(err.message || 'Failed to save');
+      toast.error(parseApiError(err, 'Failed to save user').message);
     } finally {
       setIsSubmitting(false);
     }
@@ -143,7 +147,7 @@ const UserManagement = () => {
           <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">User Management</h1>
           <p className="text-slate-500 mt-1">{totalItems} users registered on the platform</p>
         </div>
-        <Button variant="primary" icon={Plus} onClick={openAddModal}>Invite User</Button>
+        <Button variant="primary" icon={Plus} onClick={openAddModal}>Create User</Button>
       </div>
 
       <div className="flex flex-col sm:flex-row gap-3">
@@ -151,7 +155,7 @@ const UserManagement = () => {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <input
             className="w-full bg-white border border-slate-200 rounded-xl pl-10 pr-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-            placeholder="Search users by name, email..."
+            placeholder="Search users by name, email, student ID..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -205,12 +209,10 @@ const UserManagement = () => {
               </thead>
               <tbody>
                 {users.map(user => (
-                  <tr key={user._id} className="border-b border-slate-50 hover:bg-primary-50/20 transition-colors group">
+                  <tr key={user.id || user._id} className="border-b border-slate-50 hover:bg-primary-50/20 transition-colors group">
                     <td className="py-3.5 px-6">
                       <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary-100 to-primary-200 flex items-center justify-center font-bold text-primary shrink-0">
-                          {user.name?.charAt(0)?.toUpperCase()}
-                        </div>
+                        {user.avatar ? <img src={user.avatar} alt="" className="w-9 h-9 rounded-xl object-cover shrink-0" /> : <div className="w-9 h-9 rounded-xl bg-primary-100 flex items-center justify-center font-bold text-primary shrink-0">{user.name?.charAt(0)?.toUpperCase() || '?'}</div>}
                         <div className="min-w-0">
                           <div className="font-semibold text-slate-900 truncate">{user.name}</div>
                           <div className="text-sm text-slate-400 truncate">{user.email}</div>
@@ -222,15 +224,15 @@ const UserManagement = () => {
                     <td className="py-3.5 px-6 text-sm text-slate-500 font-mono">{user.studentId || '—'}</td>
                     <td className="py-3.5 px-6 text-sm text-slate-400">{user.createdAt ? new Date(user.createdAt).toLocaleDateString() : '—'}</td>
                     <td className="py-3.5 px-6 text-right">
-                      <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="flex items-center justify-end gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                         {user.status === 'PENDING' && (
                           <>
-                            <button className="p-1.5 rounded-lg text-success-dark hover:bg-success-50 transition-all" onClick={() => handleStatusUpdate(user._id, 'APPROVED')} title="Approve"><Check className="w-4 h-4" /></button>
-                            <button className="p-1.5 rounded-lg text-danger hover:bg-danger-50 transition-all" onClick={() => handleStatusUpdate(user._id, 'REJECTED')} title="Reject"><X className="w-4 h-4" /></button>
+                            <button aria-label={`Approve ${user.name}`} disabled={rowActionId === (user.id || user._id)} className="p-1.5 rounded-lg text-success-dark hover:bg-success-50 transition-all" onClick={() => handleStatusUpdate(user.id || user._id, 'APPROVED')}><Check className="w-4 h-4" /></button>
+                            <button aria-label={`Reject ${user.name}`} disabled={rowActionId === (user.id || user._id)} className="p-1.5 rounded-lg text-danger hover:bg-danger-50 transition-all" onClick={() => handleStatusUpdate(user.id || user._id, 'REJECTED')}><X className="w-4 h-4" /></button>
                           </>
                         )}
-                        <button className="p-1.5 rounded-lg text-slate-400 hover:text-primary hover:bg-primary-50 transition-all" onClick={() => openEditModal(user)}><Edit className="w-4 h-4" /></button>
-                        <button className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-all" onClick={() => handleDelete(user._id, user.name)}><Trash2 className="w-4 h-4" /></button>
+                        <button aria-label={`Edit ${user.name}`} className="p-1.5 rounded-lg text-slate-400 hover:text-primary hover:bg-primary-50 transition-all" onClick={() => openEditModal(user)}><Edit className="w-4 h-4" /></button>
+                        <button aria-label={`Delete ${user.name}`} className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-all" onClick={() => handleDelete(user.id || user._id, `${user.name} (${user.email})`)}><Trash2 className="w-4 h-4" /></button>
                       </div>
                     </td>
                   </tr>
@@ -258,10 +260,11 @@ const UserManagement = () => {
         )}
       </div>
 
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingUser ? 'Edit User' : 'Invite User'} submitText="Save Changes" isSubmitting={isSubmitting} onSubmit={handleSubmit}>
+      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingUser ? 'Edit User' : 'Create User'} submitText={editingUser ? 'Save Changes' : 'Create User'} isSubmitting={isSubmitting} onSubmit={handleSubmit}>
         <div className="space-y-4">
           <div><label className="block text-sm font-medium text-slate-700 mb-1">Full Name *</label><input type="text" className="w-full border border-slate-200 rounded-xl px-3 py-2.5 outline-none text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} /></div>
           <div><label className="block text-sm font-medium text-slate-700 mb-1">Email *</label><input type="email" className="w-full border border-slate-200 rounded-xl px-3 py-2.5 outline-none text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} /></div>
+          {!editingUser && <div><label className="block text-sm font-medium text-slate-700 mb-1">Temporary Password *</label><input type="password" minLength={6} className="w-full border border-slate-200 rounded-xl px-3 py-2.5 outline-none text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary" value={formData.password} onChange={(e) => setFormData({ ...formData, password: e.target.value })} /></div>}
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Role</label>
             <select className="w-full border border-slate-200 rounded-xl px-3 py-2.5 outline-none bg-white text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary" value={formData.role} onChange={(e) => setFormData({ ...formData, role: e.target.value })}>
@@ -271,6 +274,8 @@ const UserManagement = () => {
               <option value="ADMIN">Admin</option>
             </select>
           </div>
+          <div><label className="block text-sm font-medium text-slate-700 mb-1">Phone</label><input className="w-full border border-slate-200 rounded-xl px-3 py-2.5 outline-none text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary" value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value })} /></div>
+          {formData.role === 'STUDENT' && <><div><label className="block text-sm font-medium text-slate-700 mb-1">Student ID *</label><input className="w-full border border-slate-200 rounded-xl px-3 py-2.5 outline-none text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary" value={formData.studentId} onChange={(e) => setFormData({ ...formData, studentId: e.target.value })} /></div><div><label className="block text-sm font-medium text-slate-700 mb-1">Program Group *</label><select className="w-full border border-slate-200 rounded-xl px-3 py-2.5" value={formData.programGroup} onChange={(e) => { const group = PROGRAM_GROUPS.find(item => item.code === e.target.value); setFormData({ ...formData, programGroup: e.target.value, major: group?.majors[0]?.code || '' }); }}>{PROGRAM_GROUPS.filter(group => ['BIT', 'BBA', 'BLA'].includes(group.code)).map(group => <option key={group.code} value={group.code}>{group.code}</option>)}</select></div><div><label className="block text-sm font-medium text-slate-700 mb-1">Major *</label><select className="w-full border border-slate-200 rounded-xl px-3 py-2.5" value={formData.major} onChange={(e) => setFormData({ ...formData, major: e.target.value })}>{(PROGRAM_GROUPS.find(group => group.code === formData.programGroup)?.majors || []).map(major => <option key={major.code} value={major.code}>{major.name}</option>)}</select></div></>}
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Status</label>
             <select className="w-full border border-slate-200 rounded-xl px-3 py-2.5 outline-none bg-white text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary" value={formData.status} onChange={(e) => setFormData({ ...formData, status: e.target.value })}>

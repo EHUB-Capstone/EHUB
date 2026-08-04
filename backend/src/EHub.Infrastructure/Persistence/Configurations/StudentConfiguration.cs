@@ -71,7 +71,7 @@ public class StudentConfiguration : IEntityTypeConfiguration<Student>
 
         // 1-to-1 relationship with User
         builder.HasOne(s => s.User)
-            .WithOne()
+            .WithOne(u => u.Student)
             .HasForeignKey<Student>(s => s.UserId)
             .OnDelete(DeleteBehavior.Restrict);
     }

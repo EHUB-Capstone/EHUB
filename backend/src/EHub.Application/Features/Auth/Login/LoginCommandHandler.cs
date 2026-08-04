@@ -140,6 +140,8 @@ public sealed class LoginCommandHandler : ILoginCommandHandler
             refreshTokenEntity,
             cancellationToken);
 
+        user.LastLoginAt = DateTime.UtcNow;
+
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         // 7. Resolve major code for Student
