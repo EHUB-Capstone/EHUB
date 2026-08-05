@@ -35,34 +35,30 @@ public sealed class UpdateClassStudentCommandHandler : IUpdateClassStudentComman
         if (!isAdmin && !isLecturer)
         {
             return Result.Failure<ClassStudentDto>(
-                new Error("Classes.AccessDenied", "You do not have permission to update student information."));
+                new Error(ErrorCodes.ClassAccessDenied, "You do not have permission to update student information."));
         }
 
         var targetClass = await _context.Classes
-            .Include(c => c.ClassLecturers)
             .FirstOrDefaultAsync(c => c.Id == classId, cancellationToken);
 
         if (targetClass == null)
         {
             return Result.Failure<ClassStudentDto>(
-                new Error("Classes.NotFound", "The requested class was not found."));
+                new Error(ErrorCodes.ClassNotFound, "The requested class was not found."));
         }
 
         if (targetClass.Status == ClassStatus.Archived)
         {
             return Result.Failure<ClassStudentDto>(
-                new Error("Classes.ClassArchived", "Cannot update student in an archived class."));
+                new Error(ErrorCodes.ClassArchived, "Cannot update student in an archived class."));
         }
 
         if (isLecturer)
         {
-            var isAssigned = targetClass.PrimaryLecturerId == currentUserId ||
-                             targetClass.ClassLecturers.Any(cl => cl.LecturerId == currentUserId);
-
-            if (!isAssigned)
+            if (targetClass.PrimaryLecturerId != currentUserId)
             {
                 return Result.Failure<ClassStudentDto>(
-                    new Error("Classes.AccessDenied", "You can only update students in classes assigned to you."));
+                    new Error(ErrorCodes.ClassAccessDenied, "You can only update students in classes assigned to you."));
             }
         }
 
@@ -75,7 +71,7 @@ public sealed class UpdateClassStudentCommandHandler : IUpdateClassStudentComman
         if (classStudent == null)
         {
             return Result.Failure<ClassStudentDto>(
-                new Error("Classes.StudentNotFound", "Student is not enrolled in this class."));
+                new Error(ErrorCodes.ClassStudentNotFound, "Student is not enrolled in this class."));
         }
 
         if (!string.IsNullOrWhiteSpace(request.MajorCode))

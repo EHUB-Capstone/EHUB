@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using EHub.Application.Common.Interfaces.Persistence;
+using EHub.Application.Features.Classes.Common;
 using EHub.Contracts.Classes;
 using EHub.Domain.Entities;
 using EHub.Domain.Enums;
@@ -33,13 +34,13 @@ public sealed class GetClassesQueryHandler : IGetClassesQueryHandler
         if (request.Page < 1)
         {
             return Result.Failure<ClassListResponse>(
-                new Error("Classes.InvalidPage", "Page number must be greater than 0."));
+                new Error(ErrorCodes.ClassValidationError, "Page number must be greater than 0."));
         }
 
         if (request.PageSize is < 1 or > 100)
         {
             return Result.Failure<ClassListResponse>(
-                new Error("Classes.InvalidPageSize", "Page size must be between 1 and 100."));
+                new Error(ErrorCodes.ClassValidationError, "Page size must be between 1 and 100."));
         }
 
         // 2. Ownership & Authorization Filter
@@ -49,15 +50,16 @@ public sealed class GetClassesQueryHandler : IGetClassesQueryHandler
         if (!isAdmin && !isLecturer)
         {
             return Result.Failure<ClassListResponse>(
-                new Error("Classes.AccessDenied", "You do not have permission to view class list."));
+                new Error(ErrorCodes.ClassAccessDenied, "You do not have permission to view class list."));
         }
 
         var query = _context.Classes.AsNoTracking();
 
         if (isLecturer)
         {
-            query = query.Where(c => c.PrimaryLecturerId == currentUserId ||
-                                     c.ClassLecturers.Any(cl => cl.LecturerId == currentUserId));
+            // PrimaryLecturerId is the only source of truth for current ownership.
+            // Historical/auxiliary assignment rows must never grant access.
+            query = query.Where(c => c.PrimaryLecturerId == currentUserId);
         }
 
         // 3. Status Filter (Mặc định là Active)
@@ -72,7 +74,7 @@ public sealed class GetClassesQueryHandler : IGetClassesQueryHandler
         else
         {
             return Result.Failure<ClassListResponse>(
-                new Error("Classes.InvalidStatus", "Status filter must be Draft, Active, Inactive, or Archived."));
+                new Error(ErrorCodes.ClassValidationError, "Status filter must be Draft, Active, Inactive, or Archived."));
         }
 
         // 4. AcademicTerm Filter
@@ -122,7 +124,19 @@ public sealed class GetClassesQueryHandler : IGetClassesQueryHandler
         var totalCount = await query.CountAsync(cancellationToken);
 
         // 8. Sorting Whitelist
-        query = request.Sort?.Trim().ToLowerInvariant() switch
+        var normalizedSort = request.Sort?.Trim().ToLowerInvariant() ?? "code";
+        var allowedSorts = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "code", "classcode", "-code", "-classcode",
+            "createdat", "-createdat", "classindex", "-classindex"
+        };
+        if (!allowedSorts.Contains(normalizedSort))
+        {
+            return Result.Failure<ClassListResponse>(
+                new Error(ErrorCodes.ClassValidationError, "Sort must be code, createdAt, classIndex, or the descending '-' variant."));
+        }
+
+        query = normalizedSort switch
         {
             "-code" or "-classcode" => query.OrderByDescending(c => c.ClassCode),
             "createdat" => query.OrderBy(c => c.CreatedAt),
@@ -133,32 +147,57 @@ public sealed class GetClassesQueryHandler : IGetClassesQueryHandler
         };
 
         // 9. Pagination & Projection
-        var items = await query
+        var projectedItems = await query
             .Skip((request.Page - 1) * request.PageSize)
             .Take(request.PageSize)
-            .Select(c => new ClassResponse
+            .Select(c => new
             {
-                Id = c.Id,
-                ClassCode = c.ClassCode,
-                ClassIndex = c.ClassIndex,
-                CourseId = c.CourseId,
+                c.Id,
+                c.ClassCode,
+                c.ClassIndex,
+                c.CourseId,
                 SubjectCode = c.Course.Code,
                 SubjectName = c.Course.Name,
-                SemesterId = c.SemesterId,
+                c.SemesterId,
                 SemesterCode = c.Semester.Code,
-                Year = c.Semester.Year,
-                PrimaryLecturerId = c.PrimaryLecturerId,
+                c.Semester.Year,
+                c.PrimaryLecturerId,
                 PrimaryLecturerName = c.PrimaryLecturer != null ? c.PrimaryLecturer.FullName : null,
                 PrimaryLecturerEmail = c.PrimaryLecturer != null ? c.PrimaryLecturer.Email : null,
-                Room = c.Room,
-                ScheduleJson = c.ScheduleJson,
-                IsEnrollmentMajorLocked = c.IsEnrollmentMajorLocked,
-                Status = c.Status.ToString(),
+                c.Room,
+                c.ScheduleJson,
+                c.IsEnrollmentMajorLocked,
+                c.Status,
                 StudentCount = c.ClassStudents.Count(cs => cs.EnrollmentStatus == EnrollmentStatus.Active),
                 TeamCount = c.Teams.Count(t => t.Status == TeamStatus.Active),
-                CreatedAtUtc = c.CreatedAt
+                c.CreatedAt,
+                c.Version
             })
             .ToListAsync(cancellationToken);
+
+        var items = projectedItems.Select(c => new ClassResponse
+        {
+            Id = c.Id,
+            ClassCode = c.ClassCode,
+            ClassIndex = c.ClassIndex,
+            CourseId = c.CourseId,
+            SubjectCode = c.SubjectCode,
+            SubjectName = c.SubjectName,
+            SemesterId = c.SemesterId,
+            SemesterCode = c.SemesterCode,
+            Year = c.Year,
+            PrimaryLecturerId = c.PrimaryLecturerId,
+            PrimaryLecturerName = c.PrimaryLecturerName,
+            PrimaryLecturerEmail = c.PrimaryLecturerEmail,
+            Room = c.Room,
+            Schedules = ClassScheduleRules.Deserialize(c.ScheduleJson),
+            IsEnrollmentMajorLocked = c.IsEnrollmentMajorLocked,
+            Status = c.Status.ToString(),
+            StudentCount = c.StudentCount,
+            TeamCount = c.TeamCount,
+            CreatedAtUtc = c.CreatedAt,
+            RowVersion = c.Version.ToString()
+        }).ToArray();
 
         var totalPages = Math.Max(1, (int)Math.Ceiling(totalCount / (double)request.PageSize));
 

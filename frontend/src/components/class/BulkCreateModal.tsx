@@ -5,7 +5,14 @@ import { classApi } from '../../api/classApi';
 import { classFeatureFlags } from '../../config/classFeatureFlags';
 import { userApi } from '../../api/userApi';
 import { subjectApi } from '../../api/subjectApi';
+import { parseApiError } from '../../utils/apiError';
+import { unwrapApiData } from '../../utils/classMappers';
 import { readStudentImportFile } from '../../utils/studentImport';
+import type {
+  BulkClassPreviewResponse,
+  ClassDto,
+  CreateBulkClassesRequest,
+} from '../../types/classes';
 import {
   importStudentsIntoCreatedClasses,
   parseClassIndex,
@@ -24,8 +31,7 @@ export default function BulkCreateModal({ lecturers: initialLecturers = [], isLe
     year: String(CURRENT_YR),
     count: String(DEFAULT_CLASS_COUNT),
     classIndicesText: '',
-    lecturerIds: [],
-    mentorIds: [],
+    primaryLecturerId: '',
   });
 
   const [excelFile, setExcelFile] = useState<File | null>(null);
@@ -35,7 +41,8 @@ export default function BulkCreateModal({ lecturers: initialLecturers = [], isLe
   const [bulkImportResult, setBulkImportResult] = useState<BulkStudentImportSummary | null>(null);
 
   const [submitting, setSubmitting] = useState(false);
-  const [preview, setPreview] = useState([]);
+  const [preview, setPreview] = useState<string[]>([]);
+  const [serverPreview, setServerPreview] = useState<BulkClassPreviewResponse | null>(null);
   const [classConflict, setClassConflict] = useState(null);
 
   const [allLecturers, setAllLecturers] = useState(initialLecturers);
@@ -112,6 +119,7 @@ export default function BulkCreateModal({ lecturers: initialLecturers = [], isLe
   const handleChange = (k, v) => {
     const next = { ...form, [k]: v };
     setForm(next);
+    setServerPreview(null);
     if (k === 'subjectCode' || k === 'count' || k === 'classIndicesText') {
       setPreview(buildPreview(next));
     }
@@ -131,6 +139,7 @@ export default function BulkCreateModal({ lecturers: initialLecturers = [], isLe
     setExcelFile(file);
     setExcelError('');
     setBulkImportResult(null);
+    setServerPreview(null);
     setParsingExcel(true);
 
     try {
@@ -183,20 +192,18 @@ export default function BulkCreateModal({ lecturers: initialLecturers = [], isLe
         const nameVal = String(row[nameCol] || '').trim();
         const majorVal = majorCol !== -1 ? String(row[majorCol] || '').trim().toUpperCase() : '';
 
-        if (classVal && rollVal && emailVal && nameVal) {
-          parsed.push({
-            sourceRowNumber: i + 1,
-            classVal,
-            studentCode: rollVal,
-            email: emailVal,
-            fullName: nameVal,
-            majorCode: majorVal
-          });
-        }
+        parsed.push({
+          sourceRowNumber: i + 1,
+          classVal,
+          studentCode: rollVal,
+          email: emailVal,
+          fullName: nameVal,
+          majorCode: majorVal
+        });
       }
 
       if (parsed.length === 0) {
-        setExcelError('No valid student rows found in the file.');
+        setExcelError('No student rows found in the file.');
       } else {
         setExcelParsedRows(parsed);
       }
@@ -214,12 +221,22 @@ export default function BulkCreateModal({ lecturers: initialLecturers = [], isLe
 
     if (isLecturer) {
       if (tabMode === 'numbers') {
+        const rawIndices = String(form.classIndicesText || '').split(/[,\s]+/).filter(Boolean);
+        if (rawIndices.some(value => !/^\d+$/.test(value))) return 'Class numbers must contain digits separated by commas or spaces';
         const indices = parseClassIndices(form.classIndicesText);
         if (indices.length === 0) return 'Assign Class is required';
+        if (indices.length !== rawIndices.length) return 'Class numbers must not contain duplicates';
         if (indices.some(idx => idx < 1 || idx > 999)) return 'Class numbers must be between 1 and 999';
       } else {
         if (!excelFile) return 'Please select an Excel file to import';
-        if (excelParsedRows.length === 0) return 'No valid data in Excel file';
+        if (excelParsedRows.length === 0) return 'No student data found in the Excel file';
+        const invalidClassRows = excelParsedRows.filter(row => {
+          const match = String(row.classVal || '').trim().match(/^(.+)[_-](\d+)$/);
+          return !match || match[1].toUpperCase() !== form.subjectCode.toUpperCase();
+        });
+        if (invalidClassRows.length > 0) {
+          return `Excel row ${invalidClassRows[0].sourceRowNumber} must contain a class matching ${form.subjectCode}, for example ${form.subjectCode}_1`;
+        }
       }
     } else {
       const n = parseInt(form.count, 10);
@@ -230,6 +247,23 @@ export default function BulkCreateModal({ lecturers: initialLecturers = [], isLe
     return null;
   };
 
+  const buildBulkRequest = (): CreateBulkClassesRequest => {
+    const classIndices = isLecturer
+      ? tabMode === 'excel'
+        ? [...new Set(excelParsedRows.map(row => parseClassIndex(row.classVal)).filter((value): value is number => value !== null))]
+        : parseClassIndices(form.classIndicesText)
+      : undefined;
+
+    return {
+      subjectCode: form.subjectCode,
+      semester: form.semester,
+      year: parseInt(form.year, 10),
+      quantity: isLecturer ? undefined : parseInt(form.count, 10),
+      classIndices,
+      primaryLecturerId: !isLecturer && form.primaryLecturerId ? form.primaryLecturerId : undefined,
+    };
+  };
+
   const handleSubmit = async () => {
     const err = validate();
     if (err) { toast.error(err); return; }
@@ -238,32 +272,34 @@ export default function BulkCreateModal({ lecturers: initialLecturers = [], isLe
     setClassConflict(null);
     setBulkImportResult(null);
     try {
+      const request = buildBulkRequest();
+      if (!serverPreview) {
+        const previewResponse = unwrapApiData<BulkClassPreviewResponse>(
+          await classApi.previewBulkCreate(request),
+        );
+        setServerPreview(previewResponse);
+        if (previewResponse.invalidCount > 0) {
+          toast.error(`${previewResponse.invalidCount} class(es) cannot be created. Review the preview.`);
+        } else {
+          toast.success('Preview is valid. Confirm once more to create the classes.');
+        }
+        return;
+      }
+
+      if (serverPreview.invalidCount > 0) {
+        toast.error('Resolve the preview errors before creating classes.');
+        return;
+      }
+
+      const committedClasses = unwrapApiData<ClassDto[]>(
+        await classApi.commitBulkCreate(request),
+      );
+      if (!Array.isArray(committedClasses) || committedClasses.length === 0) {
+        throw new Error('The server did not return the newly created classes.');
+      }
+
       if (isLecturer && classFeatureFlags.lecturerStudentImport && tabMode === 'excel') {
-        const detectedIndicesSet = new Set<number>();
-        excelParsedRows.forEach(r => {
-          const idx = parseClassIndex(r.classVal);
-          if (idx !== null) detectedIndicesSet.add(idx);
-        });
-
-        const classIndices = Array.from(detectedIndicesSet);
-        if (classIndices.length === 0) {
-          toast.error('Could not detect class numbers from Class column in Excel file');
-          setSubmitting(false);
-          return;
-        }
-
-        // 2. Gọi API bulkCreate để khởi tạo các Lớp học
-        const bulkRes = await classApi.bulkCreate({
-          subjectCode: form.subjectCode,
-          semester: form.semester,
-          year: parseInt(form.year, 10),
-          classIndices: classIndices
-        });
-
-        const createdClasses = bulkRes?.data || bulkRes?.items || [];
-        if (!Array.isArray(createdClasses) || createdClasses.length === 0) {
-          throw new Error('Classes were created but the server did not return their details.');
-        }
+        const createdClasses = committedClasses;
 
         const importResult = await importStudentsIntoCreatedClasses(
           createdClasses,
@@ -286,16 +322,7 @@ export default function BulkCreateModal({ lecturers: initialLecturers = [], isLe
         }
       } else {
         // Luồng nhập số lớp thủ công
-        const res = await classApi.bulkCreate({
-          subjectCode: form.subjectCode,
-          semester: form.semester,
-          year: parseInt(form.year, 10),
-          count: isLecturer ? undefined : parseInt(form.count, 10),
-          classIndices: isLecturer ? parseClassIndices(form.classIndicesText) : undefined,
-          lecturerIds: !isLecturer && form.lecturerIds.length > 0 ? form.lecturerIds : undefined,
-          mentorIds: !isLecturer && form.mentorIds.length > 0 ? form.mentorIds : undefined,
-        });
-        const count = res?.data?.count || res?.count || (isLecturer ? parseClassIndices(form.classIndicesText).length : parseInt(form.count, 10));
+        const count = committedClasses.length;
         toast.success(`${count} classes created successfully!`);
         onCreated({ suppressToast: true });
       }
@@ -305,7 +332,9 @@ export default function BulkCreateModal({ lecturers: initialLecturers = [], isLe
         setClassConflict(conflict);
         return;
       }
-      toast.error(e?.message || 'Failed to create classes');
+      const parsed = parseApiError(e, 'Failed to create classes');
+      setServerPreview(null);
+      toast.error(parsed.message);
     } finally {
       setSubmitting(false);
     }
@@ -364,7 +393,10 @@ export default function BulkCreateModal({ lecturers: initialLecturers = [], isLe
             <div className="p-1 bg-slate-100 rounded-xl flex gap-1 mb-2">
               <button
                 type="button"
-                onClick={() => setTabMode('numbers')}
+                onClick={() => {
+                  setTabMode('numbers');
+                  setServerPreview(null);
+                }}
                 className={`flex-1 flex items-center justify-center gap-2 py-2 text-xs font-semibold rounded-lg transition-all ${
                   tabMode === 'numbers' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-700'
                 }`}
@@ -373,7 +405,10 @@ export default function BulkCreateModal({ lecturers: initialLecturers = [], isLe
               </button>
               <button
                 type="button"
-                onClick={() => setTabMode('excel')}
+                onClick={() => {
+                  setTabMode('excel');
+                  setServerPreview(null);
+                }}
                 className={`flex-1 flex items-center justify-center gap-2 py-2 text-xs font-semibold rounded-lg transition-all ${
                   tabMode === 'excel' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-700'
                 }`}
@@ -472,30 +507,33 @@ export default function BulkCreateModal({ lecturers: initialLecturers = [], isLe
                 <>
                   {!isLecturer && (
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">Assign Lecturers (optional)</label>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">Primary Lecturer (optional)</label>
                       <div className="max-h-28 overflow-y-auto border border-slate-200 rounded-xl p-3 bg-slate-50 space-y-1.5">
+                        <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="primaryLecturer"
+                            checked={form.primaryLecturerId === ''}
+                            onChange={() => handleChange('primaryLecturerId', '')}
+                            className="border-slate-300 text-primary focus:ring-primary h-3.5 w-3.5"
+                          />
+                          <span>Create as Draft without a lecturer</span>
+                        </label>
                         {allLecturers.length === 0 ? (
                           <p className="text-xs text-slate-400 text-center py-2">No lecturers found</p>
                         ) : (
-                          allLecturers.map(l => {
-                            const checked = form.lecturerIds.includes(l._id);
-                            return (
-                              <label key={l._id} className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
-                                <input
-                                  type="checkbox"
-                                  checked={checked}
-                                  onChange={() => {
-                                    const nextIds = checked
-                                      ? form.lecturerIds.filter(id => id !== l._id)
-                                      : [...form.lecturerIds, l._id];
-                                    handleChange('lecturerIds', nextIds);
-                                  }}
-                                  className="rounded border-slate-300 text-primary focus:ring-primary h-3.5 w-3.5"
-                                />
-                                <span>{l.name} ({l.email})</span>
-                              </label>
-                            );
-                          })
+                          allLecturers.map(l => (
+                            <label key={l._id} className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
+                              <input
+                                type="radio"
+                                name="primaryLecturer"
+                                checked={form.primaryLecturerId === l._id}
+                                onChange={() => handleChange('primaryLecturerId', l._id)}
+                                className="border-slate-300 text-primary focus:ring-primary h-3.5 w-3.5"
+                              />
+                              <span>{l.name} ({l.email})</span>
+                            </label>
+                          ))
                         )}
                       </div>
                     </div>
@@ -529,6 +567,19 @@ export default function BulkCreateModal({ lecturers: initialLecturers = [], isLe
           {/* TAB 2: IMPORT EXCEL (FOR LECTURER) */}
           {isLecturer && classFeatureFlags.lecturerStudentImport && tabMode === 'excel' && (
             <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Subject Code *</label>
+                <select
+                  value={form.subjectCode}
+                  onChange={(event) => handleChange('subjectCode', event.target.value)}
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none bg-white focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                >
+                  {subjects.map(subject => (
+                    <option key={subject.subjectCode} value={subject.subjectCode}>{subject.subjectCode}</option>
+                  ))}
+                </select>
+              </div>
+
               {/* Helper info banner */}
               <div className="p-3.5 bg-blue-50/70 border border-blue-100 rounded-xl text-xs text-blue-800 leading-relaxed">
                 The <strong className="font-semibold text-blue-900">Class</strong> column determines the classes to create, for example <strong className="font-mono text-blue-900">EXE101_4</strong> or <strong className="font-mono text-blue-900">EXE201_2</strong>. Each student will be imported into the matching class, and all new classes will be assigned to you.
@@ -568,7 +619,7 @@ export default function BulkCreateModal({ lecturers: initialLecturers = [], isLe
                   <div>
                     <p className="text-sm font-semibold text-slate-900">{excelFile.name}</p>
                     <p className="text-xs text-green-600 font-medium mt-1">
-                      {excelParsedRows.length} valid student rows detected
+                      {excelParsedRows.length} student rows detected
                     </p>
                   </div>
                 ) : (
@@ -583,6 +634,42 @@ export default function BulkCreateModal({ lecturers: initialLecturers = [], isLe
                 <div className="p-3 bg-red-50 border border-red-100 rounded-xl text-xs text-red-600 flex items-center gap-2">
                   <AlertTriangle className="w-4 h-4 shrink-0" />
                   <span>{excelError}</span>
+                </div>
+              )}
+
+              {serverPreview && (
+                <div className={`rounded-xl border p-3 ${serverPreview.invalidCount > 0 ? 'border-red-200 bg-red-50' : 'border-green-200 bg-green-50'}`}>
+                  <p className="text-xs font-semibold text-slate-700">
+                    Server preview: {serverPreview.validCount}/{serverPreview.totalCount} valid
+                  </p>
+                  <div className="mt-2 max-h-36 space-y-1 overflow-y-auto">
+                    {serverPreview.items.map(item => (
+                      <div key={`${item.classCode}-${item.classIndex}`} className="flex items-start justify-between gap-2 text-xs">
+                        <span className="font-mono text-slate-700">{item.classCode}</span>
+                        <span className={item.isValid ? 'text-green-700' : 'text-red-700'}>
+                          {item.isValid ? 'Ready' : item.errorMessage}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {serverPreview && (
+                <div className={`rounded-xl border p-3 ${serverPreview.invalidCount > 0 ? 'border-red-200 bg-red-50' : 'border-green-200 bg-green-50'}`}>
+                  <p className="text-xs font-semibold text-slate-700">
+                    Server preview: {serverPreview.validCount}/{serverPreview.totalCount} valid
+                  </p>
+                  <div className="mt-2 max-h-36 space-y-1 overflow-y-auto">
+                    {serverPreview.items.map(item => (
+                      <div key={`${item.classCode}-${item.classIndex}`} className="flex items-start justify-between gap-2 text-xs">
+                        <span className="font-mono text-slate-700">{item.classCode}</span>
+                        <span className={item.isValid ? 'text-green-700' : 'text-red-700'}>
+                          {item.isValid ? 'Ready' : item.errorMessage}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
 
@@ -637,10 +724,12 @@ export default function BulkCreateModal({ lecturers: initialLecturers = [], isLe
               >
                 {submitting ? (
                   <><Loader2 className="w-4 h-4 animate-spin" /> Processing...</>
+                ) : !serverPreview ? (
+                  'Preview Classes'
                 ) : isLecturer && classFeatureFlags.lecturerStudentImport && tabMode === 'excel' ? (
-                  <><Upload className="w-4 h-4" /> Create &amp; Import</>
+                  <><Upload className="w-4 h-4" /> Confirm &amp; Import</>
                 ) : (
-                  'Create Classes'
+                  'Confirm & Create'
                 )}
               </button>
             </>

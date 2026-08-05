@@ -34,29 +34,25 @@ public sealed class ExportClassRosterQueryHandler : IExportClassRosterQueryHandl
         if (!isAdmin && !isLecturer)
         {
             return Result.Failure<(byte[], string, string)>(
-                new Error("Classes.AccessDenied", "You do not have permission to export class roster."));
+                new Error(ErrorCodes.ClassAccessDenied, "You do not have permission to export class roster."));
         }
 
         var targetClass = await _context.Classes
             .AsNoTracking()
-            .Include(c => c.ClassLecturers)
             .FirstOrDefaultAsync(c => c.Id == classId, cancellationToken);
 
         if (targetClass == null)
         {
             return Result.Failure<(byte[], string, string)>(
-                new Error("Classes.NotFound", "The requested class was not found."));
+                new Error(ErrorCodes.ClassNotFound, "The requested class was not found."));
         }
 
         if (isLecturer)
         {
-            var isAssigned = targetClass.PrimaryLecturerId == currentUserId ||
-                             targetClass.ClassLecturers.Any(cl => cl.LecturerId == currentUserId);
-
-            if (!isAssigned)
+            if (targetClass.PrimaryLecturerId != currentUserId)
             {
                 return Result.Failure<(byte[], string, string)>(
-                    new Error("Classes.AccessDenied", "You can only export roster for classes assigned to you."));
+                    new Error(ErrorCodes.ClassAccessDenied, "You can only export roster for classes assigned to you."));
             }
         }
 

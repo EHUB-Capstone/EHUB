@@ -4,6 +4,7 @@ using EHub.Application.Common.Interfaces.Persistence;
 using EHub.Application.Features.Classes.CreateClass;
 using EHub.Contracts.Classes;
 using EHub.Shared.Constants;
+using EHub.Shared.Errors;
 using FluentAssertions;
 using NSubstitute;
 using Xunit;
@@ -24,6 +25,7 @@ public class CreateClassCommandHandlerTests
     [Theory]
     [InlineData(0)]
     [InlineData(-1)]
+    [InlineData(1000)]
     public async Task HandleAsync_WhenClassIndexIsInvalid_ReturnsValidationError(int invalidIndex)
     {
         // Arrange
@@ -39,7 +41,7 @@ public class CreateClassCommandHandlerTests
 
         // Assert
         result.IsFailure.Should().BeTrue();
-        result.Error.Code.Should().Be("Classes.InvalidClassIndex");
+        result.Error.Code.Should().Be(ErrorCodes.ClassValidationError);
     }
 
     [Fact]
@@ -58,6 +60,6 @@ public class CreateClassCommandHandlerTests
 
         // Assert
         result.IsFailure.Should().BeTrue();
-        result.Error.Code.Should().Be("Classes.AccessDenied");
+        result.Error.Code.Should().Be(ErrorCodes.ClassAccessDenied);
     }
 }

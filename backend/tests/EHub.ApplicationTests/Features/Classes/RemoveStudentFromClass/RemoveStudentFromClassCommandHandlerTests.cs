@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using EHub.Application.Common.Interfaces.Persistence;
 using EHub.Application.Features.Classes.RemoveStudentFromClass;
 using EHub.Shared.Constants;
+using EHub.Shared.Errors;
 using FluentAssertions;
 using NSubstitute;
 using Xunit;
@@ -28,6 +29,6 @@ public class RemoveStudentFromClassCommandHandlerTests
 
         // Assert
         result.IsFailure.Should().BeTrue();
-        result.Error.Code.Should().Be("Classes.AccessDenied");
+        result.Error.Code.Should().Be(ErrorCodes.ClassAccessDenied);
     }
 }

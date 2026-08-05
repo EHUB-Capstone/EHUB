@@ -47,8 +47,14 @@ public static class ErrorCodes
     public const string ClassConcurrencyConflict = "CLASS_CONCURRENCY_CONFLICT";
     public const string ClassInvalidLecturer = "CLASS_INVALID_LECTURER";
     public const string ClassLecturerRequired = "CLASS_LECTURER_REQUIRED";
+    public const string ClassCodeDuplicated = "CLASS_CODE_DUPLICATED";
+    public const string ClassIndexDuplicated = "CLASS_INDEX_DUPLICATED";
+    public const string ClassBulkCreateInvalid = "CLASS_BULK_CREATE_INVALID";
     public const string ClassStudentIdentityConflict = "STUDENT_IDENTITY_CONFLICT";
     public const string ClassStudentAlreadyEnrolled = "STUDENT_ALREADY_ENROLLED";
+    public const string ClassStudentNotFound = "CLASS_STUDENT_NOT_FOUND";
+    public const string ClassStudentIsTeamLeader = "STUDENT_IS_TEAM_LEADER";
+    public const string ClassStudentInActiveTeam = "STUDENT_IN_ACTIVE_TEAM";
     public const string ClassStudentEnrollmentConflict = "STUDENT_ENROLLMENT_CONFLICT";
     public const string ClassEnrollmentMajorLocked = "MAJOR_LOCKED";
     public const string ClassImportSessionInvalid = "IMPORT_SESSION_INVALID";

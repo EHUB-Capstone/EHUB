@@ -4,8 +4,9 @@ import toast from 'react-hot-toast';
 import { X, Loader2, Search, Check } from 'lucide-react';
 import { classApi } from '../../api/classApi';
 import { userApi } from '../../api/userApi';
+import { parseApiError } from '../../utils/apiError';
 
-export default function AssignLectureModal({ classId, currentLecture, rowVersion, onClose, onAssigned }) {
+export default function AssignLectureModal({ classId, currentLecture, rowVersion, allowUnassign = false, onClose, onAssigned }) {
   const [lecturers, setLecturers] = useState([]);
   const [selectedId, setSelectedId] = useState(currentLecture?._id || currentLecture?.id || '');
   const [searchTerm, setSearchTerm] = useState('');
@@ -45,7 +46,7 @@ export default function AssignLectureModal({ classId, currentLecture, rowVersion
       toast.success(selectedId ? 'Lecturer assigned successfully!' : 'Lecturer unassigned successfully!');
       await onAssigned();
     } catch (e) {
-      toast.error(e?.message || 'Failed to assign lecturer');
+      toast.error(parseApiError(e, 'Failed to assign lecturer').message);
     } finally {
       setSubmitting(false);
     }
@@ -90,15 +91,17 @@ export default function AssignLectureModal({ classId, currentLecture, rowVersion
             </div>
           ) : (
             <div className="max-h-60 overflow-y-auto space-y-1.5 border border-slate-100 rounded-xl p-2.5 bg-slate-50/50">
-              <button
-                type="button"
-                onClick={() => setSelectedId('')}
-                className={`w-full p-2.5 rounded-xl border text-left text-xs font-semibold transition-all ${
-                  selectedId === '' ? 'bg-primary-50/40 border-primary/20 text-primary' : 'bg-white border-slate-200/60 text-slate-600 hover:bg-slate-50'
-                }`}
-              >
-                Unassigned
-              </button>
+              {allowUnassign && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedId('')}
+                  className={`w-full p-2.5 rounded-xl border text-left text-xs font-semibold transition-all ${
+                    selectedId === '' ? 'bg-primary-50/40 border-primary/20 text-primary' : 'bg-white border-slate-200/60 text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  Unassigned (Draft classes only)
+                </button>
+              )}
               {filtered.length === 0 ? (
                 <p className="text-xs text-slate-400 text-center py-6">No lecturers found</p>
               ) : (

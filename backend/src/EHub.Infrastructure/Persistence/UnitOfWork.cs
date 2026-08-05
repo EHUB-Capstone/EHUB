@@ -1,8 +1,11 @@
 using System;
+using System.Data;
 using System.Threading;
 using System.Threading.Tasks;
+using EHub.Application.Common.Exceptions;
 using Microsoft.EntityFrameworkCore;
 using EHub.Application.Common.Interfaces.Persistence;
+using Npgsql;
 
 namespace EHub.Infrastructure.Persistence;
 
@@ -48,6 +51,33 @@ public class UnitOfWork : IUnitOfWork
             var result = await action(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
             return result;
+        }
+        catch
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            throw;
+        }
+    }
+
+    public async Task<TResult> ExecuteInSerializableTransactionAsync<TResult>(
+        Func<CancellationToken, Task<TResult>> action,
+        CancellationToken cancellationToken = default)
+    {
+        await using var transaction = await _context.Database.BeginTransactionAsync(
+            IsolationLevel.Serializable,
+            cancellationToken);
+        try
+        {
+            var result = await action(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            return result;
+        }
+        catch (PostgresException exception) when (exception.SqlState == PostgresErrorCodes.SerializationFailure)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            throw new SerializableTransactionConflictException(
+                "The serializable transaction conflicted with another concurrent transaction.",
+                exception);
         }
         catch
         {

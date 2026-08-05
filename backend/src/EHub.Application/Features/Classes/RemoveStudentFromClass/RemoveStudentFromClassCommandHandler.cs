@@ -33,34 +33,30 @@ public sealed class RemoveStudentFromClassCommandHandler : IRemoveStudentFromCla
         if (!isAdmin && !isLecturer)
         {
             return Result.Failure(
-                new Error("Classes.AccessDenied", "You do not have permission to remove students from this class."));
+                new Error(ErrorCodes.ClassAccessDenied, "You do not have permission to remove students from this class."));
         }
 
         var targetClass = await _context.Classes
-            .Include(c => c.ClassLecturers)
             .FirstOrDefaultAsync(c => c.Id == classId, cancellationToken);
 
         if (targetClass == null)
         {
             return Result.Failure(
-                new Error("Classes.NotFound", "The requested class was not found."));
+                new Error(ErrorCodes.ClassNotFound, "The requested class was not found."));
         }
 
         if (targetClass.Status == ClassStatus.Archived)
         {
             return Result.Failure(
-                new Error("Classes.ClassArchived", "Cannot remove students from an archived class."));
+                new Error(ErrorCodes.ClassArchived, "Cannot remove students from an archived class."));
         }
 
         if (isLecturer)
         {
-            var isAssigned = targetClass.PrimaryLecturerId == currentUserId ||
-                             targetClass.ClassLecturers.Any(cl => cl.LecturerId == currentUserId);
-
-            if (!isAssigned)
+            if (targetClass.PrimaryLecturerId != currentUserId)
             {
                 return Result.Failure(
-                    new Error("Classes.AccessDenied", "You can only remove students from classes assigned to you."));
+                    new Error(ErrorCodes.ClassAccessDenied, "You can only remove students from classes assigned to you."));
             }
         }
 
@@ -72,7 +68,7 @@ public sealed class RemoveStudentFromClassCommandHandler : IRemoveStudentFromCla
         if (classStudent == null)
         {
             return Result.Failure(
-                new Error("Classes.StudentNotFound", "Student is not enrolled in this class."));
+                new Error(ErrorCodes.ClassStudentNotFound, "Student is not enrolled in this class."));
         }
 
         // Team Safety Rule 1: Check if student is Team Leader of an active team
@@ -82,7 +78,7 @@ public sealed class RemoveStudentFromClassCommandHandler : IRemoveStudentFromCla
         if (activeLeaderTeam != null)
         {
             return Result.Failure(
-                new Error("Classes.StudentIsTeamLeader",
+                new Error(ErrorCodes.ClassStudentIsTeamLeader,
                     $"Cannot remove student because they are the leader of active team '{activeLeaderTeam.Team.TeamName}'. Please transfer leadership or update the team first."));
         }
 
@@ -93,7 +89,7 @@ public sealed class RemoveStudentFromClassCommandHandler : IRemoveStudentFromCla
         if (activeMemberTeam != null)
         {
             return Result.Failure(
-                new Error("Classes.StudentInActiveTeam",
+                new Error(ErrorCodes.ClassStudentInActiveTeam,
                     $"Cannot remove student because they are currently a member of active team '{activeMemberTeam.Team.TeamName}'. Please remove the student from the team first."));
         }
 

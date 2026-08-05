@@ -1,7 +1,7 @@
 // @ts-nocheck
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import toast from 'react-hot-toast';
-import { Search, Users, AlertTriangle, Trash2 } from 'lucide-react';
+import { Search, Users, AlertTriangle, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
 import EmptyState from '../ui/EmptyState';
 import { getMajorName, TEAM_MAJOR_GROUPS } from '../../constants/majors';
 import { getDisplayGroupName } from '../../utils/teamDisplay';
@@ -48,17 +48,26 @@ export default function StudentTable({
   toolbarAction,
   selectionDisabled = false,
   maxSelection = 6,
+  serverQuery,
+  onServerQueryChange,
 }) {
   const students = useMemo(() => (Array.isArray(rawStudents) ? rawStudents : []), [rawStudents]);
   const teams = useMemo(() => (Array.isArray(rawTeams) ? rawTeams : []), [rawTeams]);
-  const [search,      setSearch]      = useState('');
+  const [search, setSearch] = useState(serverQuery?.search || '');
 
   const teamMap = useMemo(() => {
     const map = new Map();
     teams.forEach(t => map.set(t._id.toString(), t));
     return map;
   }, [teams]);
-  const [filterMajor, setFilterMajor] = useState('');
+  const [localFilterMajor, setLocalFilterMajor] = useState('');
+  const filterMajor = serverQuery?.majorCode ?? localFilterMajor;
+
+  useEffect(() => {
+    if (!serverQuery || !onServerQueryChange || search === serverQuery.search) return undefined;
+    const timeout = window.setTimeout(() => onServerQueryChange({ search }), 300);
+    return () => window.clearTimeout(timeout);
+  }, [onServerQueryChange, search, serverQuery]);
 
   const majors = useMemo(() => {
     const codes = students
@@ -70,6 +79,7 @@ export default function StudentTable({
 
   const filtered = useMemo(() => {
     let result = students.filter(s => {
+      if (serverQuery) return true;
       const matchSearch = !search || [s.fullName, s.rollNumber, s.email]
         .some(v => v?.toLowerCase().includes(search.toLowerCase()));
       const matchMajor = !filterMajor || (s.major && s.major.toUpperCase() === filterMajor);
@@ -102,7 +112,7 @@ export default function StudentTable({
     });
 
     return result;
-  }, [students, teams, search, filterMajor, teamMap]);
+  }, [students, teams, search, filterMajor, teamMap, serverQuery]);
 
   const hideProjectName = useMemo(() => {
     if (teams.length === 0) return false;
@@ -162,12 +172,14 @@ export default function StudentTable({
         </div>
         <select
           value={filterMajor}
-          onChange={(e) => setFilterMajor(e.target.value)}
+          onChange={(e) => serverQuery && onServerQueryChange
+            ? onServerQueryChange({ majorCode: e.target.value })
+            : setLocalFilterMajor(e.target.value)}
           className="min-h-8 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15 sm:text-sm"
         >
           <option value="">Tất cả chuyên ngành</option>
           {TEAM_MAJOR_GROUPS.map(group => {
-            const presentInGroup = group.majors.filter(m => majors.includes(m.code));
+            const presentInGroup = serverQuery ? group.majors : group.majors.filter(m => majors.includes(m.code));
             if (presentInGroup.length === 0) return null;
             return (
               <optgroup key={group.key} label={group.label}>
@@ -190,6 +202,18 @@ export default function StudentTable({
             );
           })()}
         </select>
+        {serverQuery && (
+          <select
+            value={serverQuery.status || ''}
+            onChange={(e) => onServerQueryChange?.({ status: e.target.value })}
+            className="min-h-8 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15 sm:text-sm"
+          >
+            <option value="">All enrollment statuses</option>
+            <option value="Active">Active</option>
+            <option value="Dropped">Dropped</option>
+            <option value="Completed">Completed</option>
+          </select>
+        )}
         {selected.length > 0 && (
           <span className="inline-flex min-h-8 items-center rounded-lg bg-primary-50 px-2.5 py-1 text-xs font-semibold text-primary">
             {selected.length} selected
@@ -338,8 +362,21 @@ export default function StudentTable({
         </div>
       )}
 
-      <div className="border-t border-slate-100 px-3 py-2.5 text-[11px] text-slate-400">
-        Showing {filtered.length} of {students.length} students · {students.filter(s => s.teamId).length} assigned
+      <div className="flex flex-col gap-2 border-t border-slate-100 px-3 py-2.5 text-[11px] text-slate-400 sm:flex-row sm:items-center sm:justify-between">
+        <span>
+          Showing {filtered.length} of {serverQuery?.totalCount ?? students.length} students · {students.filter(s => s.teamId).length} assigned on this page
+        </span>
+        {serverQuery && serverQuery.totalPages > 1 && (
+          <div className="flex items-center gap-2">
+            <button type="button" disabled={serverQuery.page <= 1} onClick={() => onServerQueryChange?.({ page: serverQuery.page - 1 })} className="inline-flex h-7 items-center gap-1 rounded-md border border-slate-200 px-2 font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40">
+              <ChevronLeft className="h-3.5 w-3.5" /> Previous
+            </button>
+            <span>Page {serverQuery.page} of {serverQuery.totalPages}</span>
+            <button type="button" disabled={serverQuery.page >= serverQuery.totalPages} onClick={() => onServerQueryChange?.({ page: serverQuery.page + 1 })} className="inline-flex h-7 items-center gap-1 rounded-md border border-slate-200 px-2 font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40">
+              Next <ChevronRight className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

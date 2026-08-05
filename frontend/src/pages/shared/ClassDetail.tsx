@@ -36,6 +36,7 @@ import {
 } from '../../utils/studentAssignment';
 import { classFeatureFlags } from '../../config/classFeatureFlags';
 import { parseApiError } from '../../utils/apiError';
+import { toClassViewModel, unwrapApiData } from '../../utils/classMappers';
 
 const classActionTone = {
   neutral: 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-800',
@@ -69,6 +70,12 @@ export default function ClassDetail() {
   const [teams,    setTeams]    = useState([]);
   const [loading,  setLoading]  = useState(true);
   const [rosterLoadError, setRosterLoadError] = useState('');
+  const [rosterPage, setRosterPage] = useState(1);
+  const [rosterPageSize] = useState(50);
+  const [rosterSearch, setRosterSearch] = useState('');
+  const [rosterMajor, setRosterMajor] = useState('');
+  const [rosterStatus, setRosterStatus] = useState('Active');
+  const [rosterMeta, setRosterMeta] = useState({ totalCount: 0, page: 1, pageSize: 50, totalPages: 1 });
   const [tab,      setTab]      = useState('students'); // 'students' | 'teams'
 
   // Selected students for team generation
@@ -110,10 +117,16 @@ export default function ClassDetail() {
     try {
       const [classRes, studentRes] = await Promise.allSettled([
         classApi.getById(id),
-        classApi.getStudents(id, { pageSize: 200 }),
+        classApi.getStudents(id, {
+          page: rosterPage,
+          pageSize: rosterPageSize,
+          search: rosterSearch || undefined,
+          majorCode: rosterMajor || undefined,
+          status: rosterStatus || undefined,
+        }),
       ]);
 
-      const classData = classRes.status === 'fulfilled' ? (classRes.value?.data || classRes.value) : null;
+      const classData = classRes.status === 'fulfilled' ? unwrapApiData(classRes.value) : null;
       if (!classData) {
         toast.error('Failed to load class');
         return null;
@@ -121,37 +134,25 @@ export default function ClassDetail() {
 
       const rawClass = classData.class || classData;
       const currentClassId = String(id || rawClass.id || rawClass._id || '');
-
-      let parsedSchedule = rawClass.schedule;
-      if (!parsedSchedule && rawClass.scheduleJson) {
-        try {
-          parsedSchedule = typeof rawClass.scheduleJson === 'string' ? JSON.parse(rawClass.scheduleJson) : rawClass.scheduleJson;
-        } catch {
-          parsedSchedule = null;
-        }
-      }
-
+      const classViewModel = toClassViewModel(rawClass);
       const normalizedClass = {
-        ...rawClass,
-        _id: rawClass.id || rawClass._id || currentClassId,
-        classCode: rawClass.classCode,
-        subjectCode: rawClass.subjectCode,
-        subjectName: rawClass.subjectName,
-        semester: rawClass.semesterCode || rawClass.semester,
-        year: rawClass.year,
-        lectureId: rawClass.primaryLecturerId ? {
-          _id: rawClass.primaryLecturerId,
-          name: rawClass.primaryLecturerName,
-          email: rawClass.primaryLecturerEmail
-        } : (rawClass.lectureId || null),
-        schedule: parsedSchedule
+        ...classViewModel,
+        _id: classViewModel._id || currentClassId,
+        schedule: classViewModel.schedules,
+        isMajorLocked: rawClass.isEnrollmentMajorLocked ?? rawClass.isMajorLocked ?? false,
       };
       setCls(normalizedClass);
 
       let rawStudents = [];
       if (studentRes.status === 'fulfilled') {
-        const sData = studentRes.value?.data || studentRes.value;
+        const sData = unwrapApiData(studentRes.value);
         rawStudents = sData.items || sData.students || sData.data || (Array.isArray(sData) ? sData : []);
+        setRosterMeta({
+          totalCount: sData.totalCount ?? rawStudents.length,
+          page: sData.page ?? rosterPage,
+          pageSize: sData.pageSize ?? rosterPageSize,
+          totalPages: Math.max(1, sData.totalPages ?? 1),
+        });
       } else if (rawClass.students) {
         rawStudents = rawClass.students;
       } else {
@@ -199,7 +200,7 @@ export default function ClassDetail() {
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id, rosterMajor, rosterPage, rosterPageSize, rosterSearch, rosterStatus]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -418,14 +419,9 @@ export default function ClassDetail() {
   };
 
   const activeMentors = getUniqueMentors();
-  const primarySchedule = Array.isArray(cls.schedule) ? cls.schedule[0] : cls.schedule;
-  const scheduleDayValue = primarySchedule?.dayOfWeek ?? primarySchedule?.DayOfWeek;
-  const scheduleSlotValue = primarySchedule?.slotNumber ?? primarySchedule?.SlotNumber ?? primarySchedule?.slot;
-  const scheduleRoomValue = primarySchedule?.room ?? primarySchedule?.Room ?? cls.room;
+  const schedules = Array.isArray(cls.schedule) ? cls.schedule : (cls.schedule ? [cls.schedule] : []);
+  const primarySchedule = schedules[0];
   const scheduleDayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-  const scheduleDayLabel = typeof scheduleDayValue === 'number'
-    ? scheduleDayNames[scheduleDayValue]
-    : scheduleDayValue;
   const showDevelopmentControls = classFeatureFlags.showDevelopmentControls;
   const isFeatureVisible = (enabled) => enabled || showDevelopmentControls;
   const runFeatureAction = (enabled, featureName, action) => {
@@ -582,11 +578,9 @@ export default function ClassDetail() {
               {cls.lectureId?.email && <p className="text-[11px] text-slate-400 truncate">{cls.lectureId.email}</p>}
             </div>
           </div>
-          {(user?.role === 'ADMIN' || user?.role === 'LECTURER') && (
+          {user?.role === 'ADMIN' && (
             <button
-              onClick={() => user?.role === 'ADMIN'
-                ? setShowAssignLecturer(true)
-                : toast('Lecturer reassignment is restricted to Admin.')}
+              onClick={() => setShowAssignLecturer(true)}
               className="shrink-0 cursor-pointer rounded-md border border-primary-100 bg-primary-50 px-2 py-1 text-[11px] font-semibold text-primary transition-colors hover:border-primary-200 hover:bg-primary-100"
             >
               Edit
@@ -603,16 +597,21 @@ export default function ClassDetail() {
             <div className="min-w-0">
               <p className="text-[10px] text-slate-400 uppercase font-semibold tracking-wider">Schedule</p>
               {primarySchedule ? (
-                <>
-                  <p className="font-semibold text-slate-800 text-sm truncate">{scheduleDayLabel}, Slot {scheduleSlotValue}</p>
-                  <p className="text-[11px] text-slate-400 truncate">Room {scheduleRoomValue || 'TBD'}</p>
-                </>
+                <div className="space-y-0.5">
+                  {schedules.slice(0, 3).map((schedule, index) => {
+                    const day = schedule.dayOfWeek ?? schedule.DayOfWeek;
+                    const slot = schedule.slotNumber ?? schedule.SlotNumber ?? schedule.slot;
+                    const room = schedule.room ?? schedule.Room ?? cls.room;
+                    return <p key={`${day}-${slot}-${index}`} className="truncate text-xs font-semibold text-slate-700">{typeof day === 'number' ? scheduleDayNames[day] : day}, Slot {slot} · Room {room || 'TBD'}</p>;
+                  })}
+                  {schedules.length > 3 && <p className="text-[11px] font-medium text-primary">+{schedules.length - 3} more sessions</p>}
+                </div>
               ) : (
                 <p className="font-semibold text-slate-800 text-sm truncate">TBD</p>
               )}
             </div>
           </div>
-          {(user?.role === 'ADMIN' || user?.role === 'LECTURER') && (
+          {isAdminOrLecturer && (
             <button
               onClick={() => setShowEditSchedule(true)}
               className="shrink-0 cursor-pointer rounded-md border border-primary-100 bg-primary-50 px-2 py-1 text-[11px] font-semibold text-primary transition-colors hover:border-primary-200 hover:bg-primary-100"
@@ -659,7 +658,7 @@ export default function ClassDetail() {
           </div>
           <div>
             <p className="text-[10px] text-slate-400 uppercase font-semibold tracking-wider">Students</p>
-            <p className="mt-0.5 text-xl font-bold leading-none text-slate-900">{rosterLoadError ? '—' : safeStudents.length}</p>
+            <p className="mt-0.5 text-xl font-bold leading-none text-slate-900">{rosterLoadError ? '—' : (cls.studentCount ?? rosterMeta.totalCount)}</p>
             <p className="mt-1 text-[11px] text-slate-400">{rosterLoadError ? 'Unable to load roster' : `${unassignedCount} unassigned`}</p>
           </div>
         </div>
@@ -719,7 +718,7 @@ export default function ClassDetail() {
               tab === t ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:bg-white/60 hover:text-slate-700'
             }`}
           >
-            {t === 'students' ? `Students (${rosterLoadError ? '—' : safeStudents.length})` : `Teams (${safeTeams.length})`}
+            {t === 'students' ? `Students (${rosterLoadError ? '—' : rosterMeta.totalCount})` : `Teams (${safeTeams.length})`}
           </button>
         ))}
       </div>
@@ -748,6 +747,22 @@ export default function ClassDetail() {
             onSelectionChange={teamControlsVisible ? setSelected : undefined}
             onRefresh={fetchData}
             onDeleteStudent={isAdminOrLecturer ? handleRemoveStudent : undefined}
+            serverQuery={{
+              search: rosterSearch,
+              majorCode: rosterMajor,
+              status: rosterStatus,
+              page: rosterMeta.page,
+              pageSize: rosterMeta.pageSize,
+              totalCount: rosterMeta.totalCount,
+              totalPages: rosterMeta.totalPages,
+            }}
+            onServerQueryChange={(next) => {
+              if (Object.prototype.hasOwnProperty.call(next, 'search')) setRosterSearch(next.search);
+              if (Object.prototype.hasOwnProperty.call(next, 'majorCode')) setRosterMajor(next.majorCode);
+              if (Object.prototype.hasOwnProperty.call(next, 'status')) setRosterStatus(next.status);
+              if (Object.prototype.hasOwnProperty.call(next, 'page')) setRosterPage(next.page);
+              if (!Object.prototype.hasOwnProperty.call(next, 'page')) setRosterPage(1);
+            }}
             toolbarAction={teamControlsVisible && selected.length === 0 ? (
               user?.role === 'STUDENT' ? (
                 <TeamSuggestionTooltip label="Xem hướng dẫn tạo nhóm">
@@ -845,6 +860,7 @@ export default function ClassDetail() {
           classId={id}
           currentLecture={cls.lectureId}
           rowVersion={cls.rowVersion}
+          allowUnassign={cls.status === 'Draft'}
           onClose={() => setShowAssignLecturer(false)}
           onAssigned={async () => {
             setShowAssignLecturer(false);

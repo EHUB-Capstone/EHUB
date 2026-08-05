@@ -3,6 +3,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using EHub.Application.Common.Interfaces.Persistence;
+using EHub.Application.Features.Classes.Common;
 using EHub.Contracts.Classes;
 using EHub.Domain.Enums;
 using EHub.Shared.Constants;
@@ -27,12 +28,20 @@ public sealed class GetClassDetailQueryHandler : IGetClassDetailQueryHandler
         string currentUserRole,
         CancellationToken cancellationToken = default)
     {
+        var isAdmin = string.Equals(currentUserRole, SystemRoles.Admin, StringComparison.OrdinalIgnoreCase);
+        var isLecturer = string.Equals(currentUserRole, SystemRoles.Lecturer, StringComparison.OrdinalIgnoreCase);
+        var isStudent = string.Equals(currentUserRole, SystemRoles.Student, StringComparison.OrdinalIgnoreCase);
+        if (!isAdmin && !isLecturer && !isStudent)
+        {
+            return Result.Failure<ClassResponse>(
+                new Error(ErrorCodes.ClassAccessDenied, "You do not have permission to view details of this class."));
+        }
+
         var targetClass = await _context.Classes
             .AsNoTracking()
             .Include(c => c.Course)
             .Include(c => c.Semester)
             .Include(c => c.PrimaryLecturer)
-            .Include(c => c.ClassLecturers)
             .Include(c => c.ClassStudents)
             .ThenInclude(cs => cs.Student)
             .FirstOrDefaultAsync(c => c.Id == classId, cancellationToken);
@@ -40,22 +49,15 @@ public sealed class GetClassDetailQueryHandler : IGetClassDetailQueryHandler
         if (targetClass == null)
         {
             return Result.Failure<ClassResponse>(
-                new Error("Classes.NotFound", "The requested class was not found."));
+                new Error(ErrorCodes.ClassNotFound, "The requested class was not found."));
         }
-
-        var isAdmin = string.Equals(currentUserRole, SystemRoles.Admin, StringComparison.OrdinalIgnoreCase);
-        var isLecturer = string.Equals(currentUserRole, SystemRoles.Lecturer, StringComparison.OrdinalIgnoreCase);
-        var isStudent = string.Equals(currentUserRole, SystemRoles.Student, StringComparison.OrdinalIgnoreCase);
 
         if (isLecturer)
         {
-            var isAssigned = targetClass.PrimaryLecturerId == currentUserId ||
-                             targetClass.ClassLecturers.Any(cl => cl.LecturerId == currentUserId);
-
-            if (!isAssigned)
+            if (targetClass.PrimaryLecturerId != currentUserId)
             {
                 return Result.Failure<ClassResponse>(
-                    new Error("Classes.AccessDenied", "You do not have permission to view details of this class."));
+                    new Error(ErrorCodes.ClassAccessDenied, "You do not have permission to view details of this class."));
             }
         }
         else if (isStudent)
@@ -64,10 +66,9 @@ public sealed class GetClassDetailQueryHandler : IGetClassDetailQueryHandler
             if (!isEnrolled)
             {
                 return Result.Failure<ClassResponse>(
-                    new Error("Classes.AccessDenied", "You are not enrolled in this class."));
+                    new Error(ErrorCodes.ClassAccessDenied, "You are not enrolled in this class."));
             }
         }
-
         var studentCount = await _context.ClassStudents.CountAsync(cs => cs.ClassId == targetClass.Id && cs.EnrollmentStatus == EnrollmentStatus.Active, cancellationToken);
         var teamCount = await _context.Teams.CountAsync(t => t.ClassId == targetClass.Id && t.Status == TeamStatus.Active, cancellationToken);
 
@@ -86,7 +87,7 @@ public sealed class GetClassDetailQueryHandler : IGetClassDetailQueryHandler
             PrimaryLecturerName = targetClass.PrimaryLecturer?.FullName,
             PrimaryLecturerEmail = targetClass.PrimaryLecturer?.Email,
             Room = targetClass.Room,
-            ScheduleJson = targetClass.ScheduleJson,
+            Schedules = ClassScheduleRules.Deserialize(targetClass.ScheduleJson),
             IsEnrollmentMajorLocked = targetClass.IsEnrollmentMajorLocked,
             Status = targetClass.Status.ToString(),
             StudentCount = studentCount,

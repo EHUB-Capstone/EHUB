@@ -1,19 +1,22 @@
-// @ts-nocheck
 // src/api/classApi.js — Module 2 Class Management API
 import axiosClient from './axiosClient';
 import { classFeatureFlags, runClassFeatureRequest } from '../config/classFeatureFlags';
+import type {
+  CreateBulkClassesRequest,
+  GetClassesParams,
+  GetClassRosterParams,
+} from '../types/classes';
 
 export const classApi = {
   // ─── Class CRUD ───────────────────────────────────────────────────────────
-  getAll:      (params) => axiosClient.get('/classes', { params }),
-  getById:     (id)     => axiosClient.get(`/classes/${id}`),
-  create:            (data)   => axiosClient.post('/classes', data),
-  previewBulkCreate: (data)   => axiosClient.post('/classes/bulk/preview', data),
-  commitBulkCreate:  (data)   => axiosClient.post('/classes/bulk/commit', data),
-  bulkCreate:        (data)   => axiosClient.post('/classes/bulk/commit', data),
+  getAll:      (params: GetClassesParams = {}) => axiosClient.get('/classes', { params }),
+  getById:     (id: string) => axiosClient.get(`/classes/${id}`),
+  create:            (data: unknown) => axiosClient.post('/classes', data),
+  previewBulkCreate: (data: CreateBulkClassesRequest) => axiosClient.post('/classes/bulk/preview', data),
+  commitBulkCreate:  (data: CreateBulkClassesRequest) => axiosClient.post('/classes/bulk/commit', data),
   reportCodeConflict: (data) => runClassFeatureRequest(classFeatureFlags.codeConflictReport, 'Class code conflict reporting', () =>
     axiosClient.post('/classes/report-code-conflict', data)),
-  update:      (id, data) => axiosClient.put(`/classes/${id}`, data),
+  update:      (id: string, data: unknown) => axiosClient.put(`/classes/${id}`, data),
   rename:      (id, classCode) => runClassFeatureRequest(classFeatureFlags.rename, 'Class rename', () =>
     axiosClient.put(`/classes/${id}/rename`, { classCode })),
   delete:      (id) => runClassFeatureRequest(classFeatureFlags.lifecycle, 'Class lifecycle management', () =>
@@ -22,13 +25,13 @@ export const classApi = {
   // ─── Lecturer Assignment & Schedule ──────────────────────────────────────────
   assignMentors: (id, mentorIds) => runClassFeatureRequest(classFeatureFlags.mentorAssignment, 'Class mentor assignment', () =>
     axiosClient.put(`/classes/${id}/assign-mentors`, { mentorIds })),
-  updateSchedule: (id, schedule) => axiosClient.put(`/classes/${id}/schedule`, schedule),
-  updateTeachingAssignment: (id, data) => axiosClient.put(`/classes/${id}/teaching-assignment`, data),
+  updateSchedule: (id: string, schedule: unknown) => axiosClient.put(`/classes/${id}/schedule`, schedule),
+  updateTeachingAssignment: (id: string, data: unknown) => axiosClient.put(`/classes/${id}/teaching-assignment`, data),
   backfillChats: (id) => runClassFeatureRequest(classFeatureFlags.chatBackfill, 'Class chat backfill', () =>
     axiosClient.post(`/classes/${id}/backfill-chats`)),
 
   // ─── Students ────────────────────────────────────────────────────────────
-  getStudents: (classId, params) => axiosClient.get(`/classes/${classId}/students`, { params }),
+  getStudents: (classId: string, params: GetClassRosterParams) => axiosClient.get(`/classes/${classId}/students`, { params }),
   previewImportStudents: (classId, formData) =>
     axiosClient.post(`/classes/${classId}/import-students/preview`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },

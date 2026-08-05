@@ -8,6 +8,7 @@ using System.IO;
 using System.Threading.Tasks;
 using ClosedXML.Excel;
 using EHub.Application.Common.Interfaces.Identity;
+using EHub.Application.Common.Interfaces.Persistence;
 using EHub.Application.Features.Classes.AddStudentToClass;
 using EHub.Application.Features.Classes.CreateClass;
 using EHub.Application.Features.Classes.UpdateClass;
@@ -160,7 +161,9 @@ public sealed class ClassSafetyHotfixIntegrationTests
         var rowVersion = trackedClass.Version.ToString();
         context.ChangeTracker.Clear();
 
-        var handler = new UpdateClassScheduleCommandHandler(context);
+        var handler = new UpdateClassScheduleCommandHandler(
+            context,
+            scope.ServiceProvider.GetRequiredService<IUnitOfWork>());
         var result = await handler.HandleAsync(
             seed.ClassId,
             new UpdateClassScheduleRequest
@@ -219,7 +222,9 @@ public sealed class ClassSafetyHotfixIntegrationTests
         context.ChangeTracker.Clear();
 
         var draft = await context.Classes.SingleAsync(@class => @class.Id == createResult.Value.Id);
-        var scheduleHandler = new UpdateClassScheduleCommandHandler(context);
+        var scheduleHandler = new UpdateClassScheduleCommandHandler(
+            context,
+            scope.ServiceProvider.GetRequiredService<IUnitOfWork>());
         var scheduleResult = await scheduleHandler.HandleAsync(
             draft.Id,
             new UpdateClassScheduleRequest
@@ -321,7 +326,9 @@ public sealed class ClassSafetyHotfixIntegrationTests
         var persistedScheduleJson = trackedClass.ScheduleJson;
         context.ChangeTracker.Clear();
 
-        var handler = new UpdateClassCommandHandler(context);
+        var handler = new UpdateClassCommandHandler(
+            context,
+            scope.ServiceProvider.GetRequiredService<IUnitOfWork>());
         var result = await handler.UpdateTeachingAssignmentAsync(
             seed.ClassId,
             new UpdateTeachingAssignmentRequest

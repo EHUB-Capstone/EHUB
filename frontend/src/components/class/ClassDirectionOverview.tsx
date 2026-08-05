@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { CheckCircle2, FileText, Loader2, MessageSquareText, RefreshCw, XCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { classApi } from '../../api/classApi';
+import { toClassViewModel, unwrapApiData } from '../../utils/classMappers';
 import { workspaceApi } from '../../api/workspaceApi';
 import { getDisplayTeamName } from '../../utils/teamDisplay';
 
@@ -34,9 +35,10 @@ export default function ClassDirectionOverview({ semester, year }) {
     const loadClasses = async () => {
       setLoadingClasses(true);
       try {
-        const response = await classApi.getAll({ semester, year });
+        const response = await classApi.getAll({ semesterCode: semester && year ? `${semester}${year}` : undefined, year });
         if (!active) return;
-        const list = response?.data?.classes || response?.classes || [];
+        const payload = unwrapApiData(response);
+        const list = (payload?.items || []).map(toClassViewModel);
         setClasses(list);
         setSelectedClassId((current) => list.some((item) => item._id === current) ? current : (list[0]?._id || ''));
       } catch (error) {

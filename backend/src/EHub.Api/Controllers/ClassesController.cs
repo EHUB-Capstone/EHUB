@@ -57,12 +57,7 @@ public sealed class ClassesController : ControllerBase
 
         if (result.IsFailure)
         {
-            if (result.Error.Code.Contains("AccessDenied", StringComparison.OrdinalIgnoreCase))
-            {
-                return StatusCode(403, ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
-            }
-
-            return BadRequest(ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
+            return ToClassErrorResponse(result.Error);
         }
 
         return Ok(ApiResponse<ClassListResponse>.SuccessResponse(
@@ -101,17 +96,7 @@ public sealed class ClassesController : ControllerBase
 
         if (result.IsFailure)
         {
-            if (result.Error.Code.Contains("AccessDenied", StringComparison.OrdinalIgnoreCase))
-            {
-                return StatusCode(403, ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
-            }
-
-            if (result.Error.Code.Contains("NotFound", StringComparison.OrdinalIgnoreCase))
-            {
-                return NotFound(ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
-            }
-
-            return BadRequest(ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
+            return ToClassErrorResponse(result.Error);
         }
 
         return Ok(ApiResponse<ClassResponse>.SuccessResponse(
@@ -136,16 +121,11 @@ public sealed class ClassesController : ControllerBase
 
         if (result.IsFailure)
         {
-            if (result.Error.Code.Contains("AccessDenied", StringComparison.OrdinalIgnoreCase))
-            {
-                return StatusCode(403, ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
-            }
-
-            return BadRequest(ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
+            return ToClassErrorResponse(result.Error);
         }
 
         return CreatedAtAction(
-            nameof(GetClasses),
+            nameof(GetClassDetail),
             new { id = result.Value.Id },
             ApiResponse<ClassResponse>.SuccessResponse(result.Value, "Class created successfully."));
     }
@@ -167,12 +147,7 @@ public sealed class ClassesController : ControllerBase
 
         if (result.IsFailure)
         {
-            if (result.Error.Code.Contains("AccessDenied", StringComparison.OrdinalIgnoreCase))
-            {
-                return StatusCode(403, ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
-            }
-
-            return BadRequest(ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
+            return ToClassErrorResponse(result.Error);
         }
 
         return Ok(ApiResponse<BulkClassPreviewResponse>.SuccessResponse(
@@ -197,12 +172,7 @@ public sealed class ClassesController : ControllerBase
 
         if (result.IsFailure)
         {
-            if (result.Error.Code.Contains("AccessDenied", StringComparison.OrdinalIgnoreCase))
-            {
-                return StatusCode(403, ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
-            }
-
-            return BadRequest(ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
+            return ToClassErrorResponse(result.Error);
         }
 
         return Ok(ApiResponse<IReadOnlyCollection<ClassResponse>>.SuccessResponse(
@@ -229,12 +199,7 @@ public sealed class ClassesController : ControllerBase
 
         if (result.IsFailure)
         {
-            if (result.Error.Code.Contains("AccessDenied", StringComparison.OrdinalIgnoreCase))
-            {
-                return StatusCode(403, ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
-            }
-
-            return BadRequest(ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
+            return ToClassErrorResponse(result.Error);
         }
 
         return Ok(ApiResponse<ClassResponse>.SuccessResponse(
@@ -318,12 +283,7 @@ public sealed class ClassesController : ControllerBase
 
         if (result.IsFailure)
         {
-            if (result.Error.Code.Contains("AccessDenied", StringComparison.OrdinalIgnoreCase))
-            {
-                return StatusCode(403, ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
-            }
-
-            return BadRequest(ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
+            return ToClassErrorResponse(result.Error);
         }
 
         return Ok(ApiResponse<ClassRosterListResponse>.SuccessResponse(
@@ -379,12 +339,7 @@ public sealed class ClassesController : ControllerBase
 
         if (result.IsFailure)
         {
-            if (result.Error.Code.Contains("AccessDenied", StringComparison.OrdinalIgnoreCase))
-            {
-                return StatusCode(403, ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
-            }
-
-            return BadRequest(ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
+            return ToClassErrorResponse(result.Error);
         }
 
         return Ok(ApiResponse<ClassStudentDto>.SuccessResponse(
@@ -411,18 +366,7 @@ public sealed class ClassesController : ControllerBase
 
         if (result.IsFailure)
         {
-            if (result.Error.Code.Contains("AccessDenied", StringComparison.OrdinalIgnoreCase))
-            {
-                return StatusCode(403, ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
-            }
-
-            if (result.Error.Code.Contains("StudentInActiveTeam", StringComparison.OrdinalIgnoreCase) ||
-                result.Error.Code.Contains("StudentIsTeamLeader", StringComparison.OrdinalIgnoreCase))
-            {
-                return Conflict(ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
-            }
-
-            return BadRequest(ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
+            return ToClassErrorResponse(result.Error);
         }
 
         return Ok(ApiResponse<object?>.SuccessResponse(null, "Student removed from class successfully."));
@@ -502,12 +446,7 @@ public sealed class ClassesController : ControllerBase
 
         if (result.IsFailure)
         {
-            if (result.Error.Code.Contains("AccessDenied", StringComparison.OrdinalIgnoreCase))
-            {
-                return StatusCode(403, ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
-            }
-
-            return BadRequest(ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
+            return ToClassErrorResponse(result.Error);
         }
 
         return File(result.Value.FileBytes, result.Value.ContentType, result.Value.FileName);
@@ -520,13 +459,19 @@ public sealed class ClassesController : ControllerBase
         return error.Code switch
         {
             ErrorCodes.ClassAccessDenied => StatusCode(StatusCodes.Status403Forbidden, response),
-            ErrorCodes.ClassNotFound => NotFound(response),
+            ErrorCodes.ClassNotFound or
+            ErrorCodes.ClassStudentNotFound => NotFound(response),
             ErrorCodes.ClassScheduleConflict or
             ErrorCodes.ClassConcurrencyConflict or
+            ErrorCodes.ClassCodeDuplicated or
+            ErrorCodes.ClassIndexDuplicated or
+            ErrorCodes.ClassBulkCreateInvalid or
             ErrorCodes.ClassLecturerRequired or
             ErrorCodes.ClassArchived or
             ErrorCodes.ClassStudentIdentityConflict or
             ErrorCodes.ClassStudentAlreadyEnrolled or
+            ErrorCodes.ClassStudentIsTeamLeader or
+            ErrorCodes.ClassStudentInActiveTeam or
             ErrorCodes.ClassStudentEnrollmentConflict or
             ErrorCodes.ClassEnrollmentMajorLocked or
             ErrorCodes.ClassImportSessionInvalid or

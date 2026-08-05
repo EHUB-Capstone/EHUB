@@ -4,7 +4,9 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using EHub.Application.Common.Exceptions;
 using EHub.Application.Common.Interfaces.Persistence;
+using EHub.Application.Features.Classes.Common;
 using EHub.Contracts.Classes;
 using EHub.Domain.Entities;
 using EHub.Domain.Enums;
@@ -18,18 +20,58 @@ namespace EHub.Application.Features.Classes.UpdateClass;
 public sealed class UpdateClassCommandHandler : IUpdateClassCommandHandler
 {
     private const string TeachingAssignmentChanged = "TEACHING_ASSIGNMENT_CHANGED";
-    private static readonly JsonSerializerOptions ScheduleJsonOptions = new(JsonSerializerDefaults.Web)
-    {
-        PropertyNameCaseInsensitive = true
-    };
+    private const string ClassInformationChanged = "CLASS_INFORMATION_CHANGED";
     private readonly IApplicationDbContext _context;
+    private readonly IUnitOfWork _unitOfWork;
 
-    public UpdateClassCommandHandler(IApplicationDbContext context)
+    public UpdateClassCommandHandler(IApplicationDbContext context, IUnitOfWork unitOfWork)
     {
         _context = context;
+        _unitOfWork = unitOfWork;
     }
 
     public async Task<Result<ClassResponse>> HandleAsync(
+        Guid classId,
+        UpdateClassRequest request,
+        Guid currentUserId,
+        string currentUserRole,
+        CancellationToken cancellationToken = default)
+    {
+        var isAdmin = string.Equals(currentUserRole, SystemRoles.Admin, StringComparison.OrdinalIgnoreCase);
+        var isLecturer = string.Equals(currentUserRole, SystemRoles.Lecturer, StringComparison.OrdinalIgnoreCase);
+        if (!isAdmin && !isLecturer)
+        {
+            return Failure(ErrorCodes.ClassAccessDenied, "You do not have permission to update class information.");
+        }
+
+        if (!uint.TryParse(request.RowVersion, out _))
+        {
+            return Failure(ErrorCodes.ClassValidationError, "A valid rowVersion is required.");
+        }
+
+        if (!request.IsRoomSpecified)
+        {
+            return Failure(ErrorCodes.ClassValidationError, "room is required; use null explicitly to clear the default room.");
+        }
+
+        try
+        {
+            return await _unitOfWork.ExecuteInSerializableTransactionAsync(
+                transactionCancellationToken => UpdateInformationWithinTransactionAsync(
+                    classId,
+                    request,
+                    currentUserId,
+                    currentUserRole,
+                    transactionCancellationToken),
+                cancellationToken);
+        }
+        catch (SerializableTransactionConflictException)
+        {
+            return Failure(ErrorCodes.ClassScheduleConflict, "The room conflicted with another concurrent schedule update. Reload and try again.");
+        }
+    }
+
+    private async Task<Result<ClassResponse>> UpdateInformationWithinTransactionAsync(
         Guid classId,
         UpdateClassRequest request,
         Guid currentUserId,
@@ -44,6 +86,11 @@ public sealed class UpdateClassCommandHandler : IUpdateClassCommandHandler
             return Failure(ErrorCodes.ClassAccessDenied, "You do not have permission to update class information.");
         }
 
+        if (!uint.TryParse(request.RowVersion, out var expectedVersion))
+        {
+            return Failure(ErrorCodes.ClassValidationError, "A valid rowVersion is required.");
+        }
+
         var targetClass = await LoadClassAsync(classId, cancellationToken);
         if (targetClass == null)
         {
@@ -55,23 +102,57 @@ public sealed class UpdateClassCommandHandler : IUpdateClassCommandHandler
             return Failure(ErrorCodes.ClassArchived, "Cannot update information of an archived class.");
         }
 
+        if (targetClass.Version != expectedVersion)
+        {
+            return Failure(ErrorCodes.ClassConcurrencyConflict, "The class was changed by another user. Reload and try again.");
+        }
+
         if (isLecturer && !IsAssigned(targetClass, currentUserId))
         {
             return Failure(ErrorCodes.ClassAccessDenied, "You can only update classes assigned to you.");
         }
 
-        if (request.Room != null)
+        var previousRoom = targetClass.Room;
+        if (request.IsRoomSpecified)
         {
-            var room = request.Room.Trim();
-            if (room.Length > 50)
+            var room = request.Room?.Trim();
+            if (room?.Length > 50)
             {
                 return Failure(ErrorCodes.ClassValidationError, "Room must not exceed 50 characters.");
             }
 
-            targetClass.Room = room;
+            var normalizedRoom = string.IsNullOrWhiteSpace(room) ? null : room;
+            var conflictingClassCode = await FindDefaultRoomConflictAsync(
+                targetClass,
+                normalizedRoom,
+                cancellationToken);
+            if (conflictingClassCode != null)
+            {
+                return Failure(
+                    ErrorCodes.ClassScheduleConflict,
+                    $"Room '{normalizedRoom}' is occupied by class '{conflictingClassCode}' in one or more schedule slots of this class.");
+            }
+
+            targetClass.Room = normalizedRoom;
         }
 
         targetClass.UpdatedBy = currentUserId;
+
+        if (!string.Equals(previousRoom, targetClass.Room, StringComparison.Ordinal))
+        {
+            _context.ClassAuditLogs.Add(new ClassAuditLog
+            {
+                ClassId = targetClass.Id,
+                Action = ClassInformationChanged,
+                PerformedByUserId = currentUserId,
+                OccurredAtUtc = DateTime.UtcNow,
+                DetailsJson = JsonSerializer.Serialize(new
+                {
+                    PreviousRoom = previousRoom,
+                    NewRoom = targetClass.Room
+                })
+            });
+        }
 
         try
         {
@@ -101,6 +182,44 @@ public sealed class UpdateClassCommandHandler : IUpdateClassCommandHandler
         {
             return Failure(ErrorCodes.ClassValidationError, "A valid rowVersion is required.");
         }
+
+        if (!request.IsPrimaryLecturerIdSpecified)
+        {
+            return Failure(ErrorCodes.ClassValidationError, "primaryLecturerId is required; use null explicitly to unassign a Draft class.");
+        }
+
+        try
+        {
+            return await _unitOfWork.ExecuteInSerializableTransactionAsync(
+                transactionCancellationToken => UpdateTeachingAssignmentWithinTransactionAsync(
+                    classId,
+                    request,
+                    currentUserId,
+                    expectedVersion,
+                    transactionCancellationToken),
+                cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return Failure(ErrorCodes.ClassConcurrencyConflict, "The class was changed by another user. Reload and try again.");
+        }
+        catch (DbUpdateException)
+        {
+            return Failure(ErrorCodes.ClassConcurrencyConflict, "The teaching assignment conflicted with another update. Reload and try again.");
+        }
+        catch (SerializableTransactionConflictException)
+        {
+            return Failure(ErrorCodes.ClassConcurrencyConflict, "The teaching assignment conflicted with another update. Reload and try again.");
+        }
+    }
+
+    private async Task<Result<ClassResponse>> UpdateTeachingAssignmentWithinTransactionAsync(
+        Guid classId,
+        UpdateTeachingAssignmentRequest request,
+        Guid currentUserId,
+        uint expectedVersion,
+        CancellationToken cancellationToken)
+    {
 
         var targetClass = await LoadClassAsync(classId, cancellationToken);
         if (targetClass == null)
@@ -195,9 +314,7 @@ public sealed class UpdateClassCommandHandler : IUpdateClassCommandHandler
 
         targetClass.PrimaryLecturerId = newLecturer?.Id;
         targetClass.PrimaryLecturer = newLecturer;
-        targetClass.Status = newLecturer != null && HasSchedule(targetClass.ScheduleJson)
-            ? ClassStatus.Active
-            : ClassStatus.Draft;
+        targetClass.Status = ClassScheduleRules.DetermineOperationalStatus(newLecturer?.Id, targetClass.ScheduleJson);
         targetClass.UpdatedBy = currentUserId;
 
         _context.ClassAuditLogs.Add(new ClassAuditLog
@@ -213,19 +330,7 @@ public sealed class UpdateClassCommandHandler : IUpdateClassCommandHandler
             })
         });
 
-        try
-        {
-            // EF Core wraps this multi-entity SaveChanges in one database transaction.
-            await _context.SaveChangesAsync(cancellationToken);
-        }
-        catch (DbUpdateConcurrencyException)
-        {
-            return Failure(ErrorCodes.ClassConcurrencyConflict, "The class was changed by another user. Reload and try again.");
-        }
-        catch (DbUpdateException)
-        {
-            return Failure(ErrorCodes.ClassConcurrencyConflict, "The teaching assignment conflicted with another update. Reload and try again.");
-        }
+        await _context.SaveChangesAsync(cancellationToken);
 
         return Result.Success(await BuildResponseAsync(targetClass, cancellationToken));
     }
@@ -239,15 +344,14 @@ public sealed class UpdateClassCommandHandler : IUpdateClassCommandHandler
             .FirstOrDefaultAsync(@class => @class.Id == classId, cancellationToken);
 
     private static bool IsAssigned(Class targetClass, Guid userId) =>
-        targetClass.PrimaryLecturerId == userId ||
-        targetClass.ClassLecturers.Any(assignment => assignment.LecturerId == userId);
+        targetClass.PrimaryLecturerId == userId;
 
     private async Task<string?> FindLecturerScheduleConflictAsync(
         Class targetClass,
         Guid lecturerId,
         CancellationToken cancellationToken)
     {
-        var targetSchedules = DeserializeSchedules(targetClass.ScheduleJson);
+        var targetSchedules = ClassScheduleRules.Deserialize(targetClass.ScheduleJson);
         if (targetSchedules.Count == 0)
         {
             return null;
@@ -266,7 +370,7 @@ public sealed class UpdateClassCommandHandler : IUpdateClassCommandHandler
 
         foreach (var otherClass in otherClasses)
         {
-            var otherSchedules = DeserializeSchedules(otherClass.ScheduleJson);
+            var otherSchedules = ClassScheduleRules.Deserialize(otherClass.ScheduleJson);
             if (targetSchedules.Any(target => otherSchedules.Any(other =>
                     target.DayOfWeek == other.DayOfWeek &&
                     target.SlotNumber == other.SlotNumber)))
@@ -278,23 +382,54 @@ public sealed class UpdateClassCommandHandler : IUpdateClassCommandHandler
         return null;
     }
 
-    private static bool HasSchedule(string? scheduleJson) => DeserializeSchedules(scheduleJson).Count > 0;
-
-    private static IReadOnlyCollection<ClassScheduleSlotDto> DeserializeSchedules(string? scheduleJson)
+    private async Task<string?> FindDefaultRoomConflictAsync(
+        Class targetClass,
+        string? newDefaultRoom,
+        CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(scheduleJson))
+        if (string.IsNullOrWhiteSpace(newDefaultRoom))
         {
-            return Array.Empty<ClassScheduleSlotDto>();
+            return null;
         }
 
-        try
+        var affectedSchedules = ClassScheduleRules.Deserialize(targetClass.ScheduleJson)
+            .Where(schedule => string.IsNullOrWhiteSpace(schedule.Room))
+            .ToArray();
+        if (affectedSchedules.Length == 0)
         {
-            return JsonSerializer.Deserialize<List<ClassScheduleSlotDto>>(scheduleJson, ScheduleJsonOptions) ?? [];
+            return null;
         }
-        catch (JsonException)
+
+        var otherClasses = await _context.Classes
+            .AsNoTracking()
+            .Where(@class =>
+                @class.Id != targetClass.Id &&
+                @class.SemesterId == targetClass.SemesterId &&
+                @class.Status != ClassStatus.Archived &&
+                @class.ScheduleJson != null)
+            .Select(@class => new { @class.ClassCode, @class.Room, @class.ScheduleJson })
+            .ToListAsync(cancellationToken);
+
+        foreach (var otherClass in otherClasses)
         {
-            return Array.Empty<ClassScheduleSlotDto>();
+            foreach (var otherSchedule in ClassScheduleRules.Deserialize(otherClass.ScheduleJson))
+            {
+                var sameTime = affectedSchedules.Any(schedule =>
+                    schedule.DayOfWeek == otherSchedule.DayOfWeek &&
+                    schedule.SlotNumber == otherSchedule.SlotNumber);
+                var otherRoom = string.IsNullOrWhiteSpace(otherSchedule.Room)
+                    ? otherClass.Room
+                    : otherSchedule.Room;
+                if (sameTime &&
+                    !string.IsNullOrWhiteSpace(otherRoom) &&
+                    string.Equals(newDefaultRoom, otherRoom.Trim(), StringComparison.OrdinalIgnoreCase))
+                {
+                    return otherClass.ClassCode;
+                }
+            }
         }
+
+        return null;
     }
 
     private async Task<ClassResponse> BuildResponseAsync(Class targetClass, CancellationToken cancellationToken)
@@ -321,7 +456,7 @@ public sealed class UpdateClassCommandHandler : IUpdateClassCommandHandler
             PrimaryLecturerName = targetClass.PrimaryLecturer?.FullName,
             PrimaryLecturerEmail = targetClass.PrimaryLecturer?.Email,
             Room = targetClass.Room,
-            ScheduleJson = targetClass.ScheduleJson,
+            Schedules = ClassScheduleRules.Deserialize(targetClass.ScheduleJson),
             IsEnrollmentMajorLocked = targetClass.IsEnrollmentMajorLocked,
             Status = targetClass.Status.ToString(),
             StudentCount = studentCount,

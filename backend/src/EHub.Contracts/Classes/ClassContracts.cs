@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Text.Json.Serialization;
 
 namespace EHub.Contracts.Classes;
 
@@ -31,8 +32,9 @@ public sealed class ClassResponse
     public Guid? PrimaryLecturerId { get; init; }
     public string? PrimaryLecturerName { get; init; }
     public string? PrimaryLecturerEmail { get; init; }
+    // Default room. A schedule slot may override it with its own Room value.
     public string? Room { get; init; }
-    public string? ScheduleJson { get; init; }
+    public IReadOnlyCollection<ClassScheduleSlotDto> Schedules { get; init; } = Array.Empty<ClassScheduleSlotDto>();
     public bool IsEnrollmentMajorLocked { get; init; }
     public string Status { get; init; } = string.Empty;
     public int StudentCount { get; init; }
@@ -68,10 +70,8 @@ public sealed class CreateBulkClassesRequest
     public int? Year { get; init; }
     public int StartClassIndex { get; init; } = 1;
     public int Quantity { get; init; } = 1;
-    public int? Count { get; init; }
     public IReadOnlyCollection<int>? ClassIndices { get; init; }
     public Guid? PrimaryLecturerId { get; init; }
-    public IReadOnlyCollection<Guid>? LecturerIds { get; init; }
 }
 
 public sealed class BulkClassPreviewItem
@@ -95,25 +95,56 @@ public sealed class BulkClassPreviewResponse
 
 public sealed class UpdateClassRequest
 {
-    public string? Room { get; init; }
+    private string? _room;
+
+    public string? Room
+    {
+        get => _room;
+        init
+        {
+            _room = value;
+            IsRoomSpecified = true;
+        }
+    }
+
+    [JsonIgnore]
+    public bool IsRoomSpecified { get; private set; }
+
+    public string RowVersion { get; init; } = string.Empty;
 }
 
 public sealed class ClassScheduleSlotDto
 {
     public DayOfWeek DayOfWeek { get; init; }
     public int SlotNumber { get; init; }
+    // Null means use the class default Room.
     public string? Room { get; init; }
 }
 
 public sealed class UpdateClassScheduleRequest
 {
-    public IReadOnlyCollection<ClassScheduleSlotDto> Schedules { get; init; } = Array.Empty<ClassScheduleSlotDto>();
+    // Null/missing is invalid; an explicit empty array intentionally clears the schedule.
+    public IReadOnlyCollection<ClassScheduleSlotDto>? Schedules { get; init; }
     public string RowVersion { get; init; } = string.Empty;
 }
 
 public sealed class UpdateTeachingAssignmentRequest
 {
-    public Guid? PrimaryLecturerId { get; init; }
+    private Guid? _primaryLecturerId;
+
+    public Guid? PrimaryLecturerId
+    {
+        get => _primaryLecturerId;
+        init
+        {
+            _primaryLecturerId = value;
+            IsPrimaryLecturerIdSpecified = true;
+        }
+    }
+
+    [JsonIgnore]
+    public bool IsPrimaryLecturerIdSpecified { get; private set; }
+
     public string RowVersion { get; init; } = string.Empty;
 }
 

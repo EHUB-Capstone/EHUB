@@ -5,6 +5,7 @@ import { mentoringApi } from '../../api/mentoringApi';
 import { dashboardApi } from '../../api/dashboardApi';
 import { teamApi } from '../../api/teamApi';
 import { classApi } from '../../api/classApi';
+import { toClassViewModel, unwrapApiData } from '../../utils/classMappers';
 import { useAuth } from '../../hooks/useAuth';
 import LoadingSkeleton from '../../components/ui/LoadingSkeleton';
 import EmptyState from '../../components/ui/EmptyState';
@@ -123,7 +124,7 @@ const MentoringSessions = () => {
         }
 
         const classesData = classesRes.status === 'fulfilled'
-          ? (classesRes.value.data?.classes || classesRes.value.classes || classesRes.value.data || [])
+          ? (unwrapApiData(classesRes.value)?.items || []).map(toClassViewModel)
           : [];
         const teamsData = teamsRes.status === 'fulfilled'
           ? (teamsRes.value.data?.teams || teamsRes.value.teams || teamsRes.value.data || [])

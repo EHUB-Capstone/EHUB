@@ -69,7 +69,6 @@ public sealed class PreviewImportStudentsCommandHandler : IPreviewImportStudents
 
         var targetClass = await _context.Classes
             .AsNoTracking()
-            .Include(@class => @class.ClassLecturers)
             .FirstOrDefaultAsync(@class => @class.Id == classId, cancellationToken);
 
         if (targetClass == null)

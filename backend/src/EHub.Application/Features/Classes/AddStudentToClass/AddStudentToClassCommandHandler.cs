@@ -52,7 +52,6 @@ public sealed class AddStudentToClassCommandHandler : IAddStudentToClassCommandH
         var (studentCode, fullName, email, majorCode) = input;
 
         var targetClass = await _context.Classes
-            .Include(@class => @class.ClassLecturers)
             .FirstOrDefaultAsync(@class => @class.Id == classId, cancellationToken);
 
         if (targetClass == null)
@@ -65,9 +64,7 @@ public sealed class AddStudentToClassCommandHandler : IAddStudentToClassCommandH
             return Failure(ErrorCodes.ClassArchived, "Cannot add students to an archived class.");
         }
 
-        if (isLecturer &&
-            targetClass.PrimaryLecturerId != currentUserId &&
-            targetClass.ClassLecturers.All(assignment => assignment.LecturerId != currentUserId))
+        if (isLecturer && targetClass.PrimaryLecturerId != currentUserId)
         {
             return Failure(ErrorCodes.ClassAccessDenied, "You can only add students to classes assigned to you.");
         }

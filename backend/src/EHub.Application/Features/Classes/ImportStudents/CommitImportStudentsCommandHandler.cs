@@ -89,7 +89,6 @@ public sealed class CommitImportStudentsCommandHandler : ICommitImportStudentsCo
         }
 
         var targetClass = await _context.Classes
-            .Include(@class => @class.ClassLecturers)
             .FirstOrDefaultAsync(@class => @class.Id == classId, cancellationToken);
 
         if (targetClass == null)

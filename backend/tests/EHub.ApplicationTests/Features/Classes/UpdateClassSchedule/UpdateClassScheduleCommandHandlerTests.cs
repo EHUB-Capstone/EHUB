@@ -15,12 +15,14 @@ namespace EHub.ApplicationTests.Features.Classes.UpdateClassSchedule;
 public class UpdateClassScheduleCommandHandlerTests
 {
     private readonly IApplicationDbContext _context;
+    private readonly IUnitOfWork _unitOfWork;
     private readonly UpdateClassScheduleCommandHandler _handler;
 
     public UpdateClassScheduleCommandHandlerTests()
     {
         _context = Substitute.For<IApplicationDbContext>();
-        _handler = new UpdateClassScheduleCommandHandler(_context);
+        _unitOfWork = Substitute.For<IUnitOfWork>();
+        _handler = new UpdateClassScheduleCommandHandler(_context, _unitOfWork);
     }
 
     [Fact]
@@ -76,6 +78,17 @@ public class UpdateClassScheduleCommandHandlerTests
                 new() { DayOfWeek = DayOfWeek.Monday, SlotNumber = 1 }
             }
         };
+
+        var result = await _handler.HandleAsync(Guid.NewGuid(), request, Guid.NewGuid(), SystemRoles.Admin);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be(ErrorCodes.ClassValidationError);
+    }
+
+    [Fact]
+    public async Task HandleAsync_WhenSchedulesPropertyIsMissing_ReturnsValidationError()
+    {
+        var request = new UpdateClassScheduleRequest { RowVersion = "1" };
 
         var result = await _handler.HandleAsync(Guid.NewGuid(), request, Guid.NewGuid(), SystemRoles.Admin);
 

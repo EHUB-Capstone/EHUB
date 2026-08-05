@@ -14,12 +14,14 @@ namespace EHub.ApplicationTests.Features.Classes.UpdateClass;
 public class UpdateClassCommandHandlerTests
 {
     private readonly IApplicationDbContext _context;
+    private readonly IUnitOfWork _unitOfWork;
     private readonly UpdateClassCommandHandler _handler;
 
     public UpdateClassCommandHandlerTests()
     {
         _context = Substitute.For<IApplicationDbContext>();
-        _handler = new UpdateClassCommandHandler(_context);
+        _unitOfWork = Substitute.For<IUnitOfWork>();
+        _handler = new UpdateClassCommandHandler(_context, _unitOfWork);
     }
 
     [Fact]
@@ -54,5 +56,35 @@ public class UpdateClassCommandHandlerTests
         // Assert
         result.IsFailure.Should().BeTrue();
         result.Error.Code.Should().Be(ErrorCodes.ClassAccessDenied);
+    }
+
+    [Fact]
+    public async Task UpdateTeachingAssignmentAsync_WhenLecturerPropertyIsMissing_ReturnsValidationError()
+    {
+        var request = new UpdateTeachingAssignmentRequest { RowVersion = "1" };
+
+        var result = await _handler.UpdateTeachingAssignmentAsync(
+            Guid.NewGuid(),
+            request,
+            Guid.NewGuid(),
+            SystemRoles.Admin);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be(ErrorCodes.ClassValidationError);
+    }
+
+    [Fact]
+    public async Task HandleAsync_WhenRoomPropertyIsMissing_ReturnsValidationError()
+    {
+        var request = new UpdateClassRequest { RowVersion = "1" };
+
+        var result = await _handler.HandleAsync(
+            Guid.NewGuid(),
+            request,
+            Guid.NewGuid(),
+            SystemRoles.Admin);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be(ErrorCodes.ClassValidationError);
     }
 }
