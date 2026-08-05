@@ -147,23 +147,23 @@ export default function StudentTable({
   const canSelect = (s) => !selectionDisabled && !s.teamId;
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm overflow-hidden">
+    <div className="overflow-hidden rounded-xl border border-slate-200/70 bg-white shadow-xs">
       {/* Toolbar */}
-      <div className="flex flex-wrap gap-3 p-4 border-b border-slate-100">
+      <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 p-3">
         <div className="relative flex-1 min-w-[180px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
             placeholder="Search name, roll, email…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+            className="min-h-8 w-full rounded-lg border border-slate-200 bg-white py-1.5 pl-8 pr-3 text-xs outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15 sm:text-sm"
           />
         </div>
         <select
           value={filterMajor}
           onChange={(e) => setFilterMajor(e.target.value)}
-          className="border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none bg-white focus:ring-2 focus:ring-primary/20 focus:border-primary"
+          className="min-h-8 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15 sm:text-sm"
         >
           <option value="">Tất cả chuyên ngành</option>
           {TEAM_MAJOR_GROUPS.map(group => {
@@ -191,7 +191,7 @@ export default function StudentTable({
           })()}
         </select>
         {selected.length > 0 && (
-          <span className="flex items-center px-3 py-1.5 bg-primary-50 text-primary rounded-xl text-sm font-medium">
+          <span className="inline-flex min-h-8 items-center rounded-lg bg-primary-50 px-2.5 py-1 text-xs font-semibold text-primary">
             {selected.length} selected
           </span>
         )}
@@ -199,7 +199,7 @@ export default function StudentTable({
       </div>
 
       {filtered.length === 0 ? (
-        <div className="p-8">
+        <div className="p-7">
           <EmptyState icon={Users} title="No students found" description="Try adjusting your search or filters" />
         </div>
       ) : (
@@ -208,7 +208,7 @@ export default function StudentTable({
             <thead className="bg-slate-50 border-b border-slate-100">
               <tr>
                 {!selectionDisabled && (
-                  <th className="w-10 px-4 py-3">
+                  <th className="w-9 px-3 py-2.5">
                     <input
                       type="checkbox"
                       className="rounded"
@@ -217,17 +217,17 @@ export default function StudentTable({
                     />
                   </th>
                 )}
-                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider min-w-[240px]">Student</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider hidden sm:table-cell">Roll No.</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Major</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider hidden lg:table-cell">GroupName</th>
+                <th className="min-w-[220px] px-3 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-slate-500">Student</th>
+                <th className="hidden px-3 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-slate-500 sm:table-cell">Roll No.</th>
+                <th className="px-3 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-slate-500">Major</th>
+                <th className="hidden px-3 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-slate-500 lg:table-cell">GroupName</th>
                 {!hideProjectName && (
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider hidden 2xl:table-cell">Project Name</th>
+                  <th className="hidden px-3 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-slate-500 2xl:table-cell">Project Name</th>
                 )}
-                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider hidden 2xl:table-cell w-1/4">Description</th>
-                <th className="px-4 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">Team Status</th>
+                <th className="hidden w-1/4 px-3 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-slate-500 2xl:table-cell">Description</th>
+                <th className="px-3 py-2.5 text-center text-[10px] font-bold uppercase tracking-wider text-slate-500">Team Status</th>
                 {onDeleteStudent && (
-                  <th className="px-4 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">Action</th>
+                  <th className="px-3 py-2.5 text-center text-[10px] font-bold uppercase tracking-wider text-slate-500">Action</th>
                 )}
               </tr>
             </thead>
@@ -248,20 +248,20 @@ export default function StudentTable({
                 return (
                   <tr key={s._id} onClick={() => selectable && toggleSelect(s._id)} className={rowClass}>
                     {!selectionDisabled && (
-                      <td className="px-4 py-3">
-                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${isSelected ? 'bg-primary border-primary' : 'border-slate-300'} ${!selectable ? 'opacity-30' : ''}`}>
-                          {isSelected && <div className="w-2 h-2 rounded-full bg-white" />}
+                      <td className="px-3 py-2.5">
+                        <div className={`flex h-4.5 w-4.5 items-center justify-center rounded-full border-2 transition-all ${isSelected ? 'border-primary bg-primary' : 'border-slate-300'} ${!selectable ? 'opacity-30' : ''}`}>
+                          {isSelected && <div className="h-1.5 w-1.5 rounded-full bg-white" />}
                         </div>
                       </td>
                     )}
 
-                    <td className="px-4 py-3 min-w-[240px]">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary-300 to-secondary flex items-center justify-center text-white text-xs font-bold shrink-0">
+                    <td className="min-w-[220px] px-3 py-2.5">
+                      <div className="flex items-center gap-2.5">
+                        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary-300 to-secondary text-[11px] font-bold text-white">
                           {s.fullName?.charAt(0)?.toUpperCase() || '?'}
                         </div>
                         <div className="flex min-w-0 flex-col">
-                          <span className="font-medium text-slate-800 flex flex-wrap items-center gap-1 whitespace-normal break-words leading-snug">
+                          <span className="flex flex-wrap items-center gap-1 whitespace-normal break-words text-sm font-medium leading-snug text-slate-800">
                             {s.fullName || 'Unknown'}
                             {team && team.leaderId && (typeof team.leaderId === 'string' ? team.leaderId : team.leaderId._id).toString() === s._id.toString() && (
                               <span className="px-1.5 py-0.5 bg-amber-100 text-amber-700 text-[10px] rounded font-bold ml-1">L</span>
@@ -271,62 +271,62 @@ export default function StudentTable({
                       </div>
                     </td>
 
-                    <td className="px-4 py-3 text-slate-500 hidden sm:table-cell font-mono text-xs">{s.rollNumber || '—'}</td>
+                    <td className="hidden px-3 py-2.5 font-mono text-xs text-slate-500 sm:table-cell">{s.rollNumber || '—'}</td>
 
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-2.5">
                       {mLabel ? (
-                        <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${majorColor(s.major)}`} title={mTooltip}>
+                        <span className={`rounded-full px-1.5 py-0.5 text-[11px] font-semibold ${majorColor(s.major)}`} title={mTooltip}>
                           {mLabel}
                         </span>
                       ) : (
-                        <span className="px-2 py-0.5 text-xs font-semibold bg-amber-100 text-amber-700 rounded-full flex items-center w-fit gap-1" title="Missing major">
-                          <AlertTriangle className="w-3 h-3" /> Missing
+                        <span className="flex w-fit items-center gap-1 rounded-full bg-amber-100 px-1.5 py-0.5 text-[11px] font-semibold text-amber-700" title="Missing major">
+                          <AlertTriangle className="h-2.5 w-2.5" /> Missing
                         </span>
                       )}
                     </td>
 
-                    <td className="px-4 py-3 text-slate-500 hidden lg:table-cell font-medium text-xs">
+                    <td className="hidden px-3 py-2.5 text-xs font-medium text-slate-500 lg:table-cell">
                       {(!s.teamId || isFirstInTeam) ? (getDisplayGroupName(team) || '—') : ''}
                     </td>
 
                     {!hideProjectName && (
-                      <td className="px-4 py-3 text-slate-500 hidden 2xl:table-cell truncate max-w-[150px] text-xs" title={team?.projectName}>
+                      <td className="hidden max-w-[150px] truncate px-3 py-2.5 text-xs text-slate-500 2xl:table-cell" title={team?.projectName}>
                         {(!s.teamId || isFirstInTeam) ? (team?.projectName || '—') : ''}
                       </td>
                     )}
 
-                    <td className="px-4 py-3 text-slate-500 hidden 2xl:table-cell text-xs" title={team?.description}>
+                    <td className="hidden px-3 py-2.5 text-xs text-slate-500 2xl:table-cell" title={team?.description}>
                       {(!s.teamId || isFirstInTeam) ? (
                         <div className="line-clamp-2 max-w-sm">{team?.description || '—'}</div>
                       ) : ''}
                     </td>
 
-                    <td className="px-4 py-3 text-center">
+                    <td className="px-3 py-2.5 text-center">
                       {(!s.teamId || isFirstInTeam) ? (
                         team ? (
                           team.status === 'PENDING' ? (
-                            <span className="px-2 py-0.5 text-xs font-semibold bg-orange-100 text-orange-700 rounded-full">Pending</span>
+                            <span className="rounded-full bg-orange-100 px-1.5 py-0.5 text-[11px] font-semibold text-orange-700">Pending</span>
                           ) : team.status === 'NEEDS_REVISION' ? (
-                            <span className="px-2 py-0.5 text-xs font-semibold bg-amber-100 text-amber-700 rounded-full">Needs revision</span>
+                            <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[11px] font-semibold text-amber-700">Needs revision</span>
                           ) : team.status === 'REJECTED' ? (
-                            <span className="px-2 py-0.5 text-xs font-semibold bg-red-100 text-red-700 rounded-full">Rejected</span>
+                            <span className="rounded-full bg-red-100 px-1.5 py-0.5 text-[11px] font-semibold text-red-700">Rejected</span>
                           ) : (
-                            <span className="px-2 py-0.5 text-xs font-semibold bg-green-100 text-green-700 rounded-full">Approved</span>
+                            <span className="rounded-full bg-green-100 px-1.5 py-0.5 text-[11px] font-semibold text-green-700">Approved</span>
                           )
                         ) : (
-                          <span className="px-2 py-0.5 text-xs font-semibold bg-slate-100 text-slate-500 rounded-full">Unassigned</span>
+                          <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[11px] font-semibold text-slate-500">Unassigned</span>
                         )
                       ) : ''}
                     </td>
                     
                     {onDeleteStudent && (
-                      <td className="px-4 py-3 text-center">
+                      <td className="px-3 py-2.5 text-center">
                         <button
                           onClick={(e) => { e.stopPropagation(); onDeleteStudent(s); }}
-                          className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors inline-flex"
+                          className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600"
                           title="Xóa sinh viên"
                         >
-                          <Trash2 className="w-4 h-4" />
+                          <Trash2 className="h-3.5 w-3.5" />
                         </button>
                       </td>
                     )}
@@ -338,7 +338,7 @@ export default function StudentTable({
         </div>
       )}
 
-      <div className="px-4 py-3 border-t border-slate-100 text-xs text-slate-400">
+      <div className="border-t border-slate-100 px-3 py-2.5 text-[11px] text-slate-400">
         Showing {filtered.length} of {students.length} students · {students.filter(s => s.teamId).length} assigned
       </div>
     </div>

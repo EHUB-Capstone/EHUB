@@ -29,6 +29,13 @@ export interface StudentImportValidation {
   fileErrors: string[];
 }
 
+export interface StudentWorkbookRecord {
+  studentCode: string;
+  fullName: string;
+  email: string;
+  majorCode?: string | null;
+}
+
 type SupportedField = 'studentCode' | 'fullName' | 'email' | 'major';
 
 const REQUIRED_FIELDS: SupportedField[] = ['studentCode', 'fullName', 'email'];
@@ -132,6 +139,26 @@ export async function readStudentImportFile(file: File): Promise<unknown[][]> {
       throw new Error(err?.message || 'Could not parse Excel/CSV file.');
     }
   }
+}
+
+export function buildStudentImportWorkbookBlob(rows: StudentWorkbookRecord[]): Blob {
+  const worksheet = XLSX.utils.json_to_sheet(
+    rows.map(row => ({
+      StudentCode: row.studentCode,
+      FullName: row.fullName,
+      Email: row.email,
+      // A blank legacy major is intentionally preserved. The backend maps it to UNDECLARED.
+      MajorCode: row.majorCode || '',
+    })),
+    { header: ['StudentCode', 'FullName', 'Email', 'MajorCode'] },
+  );
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'Students');
+  const bytes = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+
+  return new Blob([bytes], {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  });
 }
 
 export function validateStudentRows(

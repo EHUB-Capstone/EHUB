@@ -99,7 +99,7 @@ public sealed class ExportClassRosterQueryHandler : IExportClassRosterQueryHandl
             worksheet.Cell(rowIndex, 2).Value = cs.Student.RollNumber ?? string.Empty;
             worksheet.Cell(rowIndex, 3).Value = cs.Student.FullName;
             worksheet.Cell(rowIndex, 4).Value = cs.Student.Email ?? string.Empty;
-            worksheet.Cell(rowIndex, 5).Value = cs.Student.MajorCode ?? string.Empty;
+            worksheet.Cell(rowIndex, 5).Value = cs.MajorCodeAtEnrollment;
             worksheet.Cell(rowIndex, 6).Value = cs.EnrollmentStatus.ToString();
             worksheet.Cell(rowIndex, 7).Value = activeTeamMember?.Team?.TeamName ?? "N/A";
             worksheet.Cell(rowIndex, 8).Value = activeTeamMember?.RoleInTeam == TeamMemberRole.Leader ? "Yes" : "No";

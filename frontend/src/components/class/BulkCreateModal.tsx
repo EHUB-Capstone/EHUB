@@ -6,6 +6,12 @@ import { classFeatureFlags } from '../../config/classFeatureFlags';
 import { userApi } from '../../api/userApi';
 import { subjectApi } from '../../api/subjectApi';
 import { readStudentImportFile } from '../../utils/studentImport';
+import {
+  importStudentsIntoCreatedClasses,
+  parseClassIndex,
+  type BulkStudentImportSummary,
+  type ParsedBulkClassStudentRow,
+} from '../../utils/bulkClassStudentImport';
 
 const CURRENT_YR = new Date().getFullYear();
 const DEFAULT_CLASS_COUNT = 5;
@@ -26,6 +32,7 @@ export default function BulkCreateModal({ lecturers: initialLecturers = [], isLe
   const [excelParsedRows, setExcelParsedRows] = useState<any[]>([]);
   const [excelError, setExcelError] = useState('');
   const [parsingExcel, setParsingExcel] = useState(false);
+  const [bulkImportResult, setBulkImportResult] = useState<BulkStudentImportSummary | null>(null);
 
   const [submitting, setSubmitting] = useState(false);
   const [preview, setPreview] = useState([]);
@@ -123,6 +130,7 @@ export default function BulkCreateModal({ lecturers: initialLecturers = [], isLe
 
     setExcelFile(file);
     setExcelError('');
+    setBulkImportResult(null);
     setParsingExcel(true);
 
     try {
@@ -173,10 +181,11 @@ export default function BulkCreateModal({ lecturers: initialLecturers = [], isLe
           emailVal = `${emailVal}@fpt.edu.vn`;
         }
         const nameVal = String(row[nameCol] || '').trim();
-        const majorVal = majorCol !== -1 ? String(row[majorCol] || '').trim().toUpperCase() : 'BIT_SE';
+        const majorVal = majorCol !== -1 ? String(row[majorCol] || '').trim().toUpperCase() : '';
 
         if (classVal && rollVal && emailVal && nameVal) {
           parsed.push({
+            sourceRowNumber: i + 1,
             classVal,
             studentCode: rollVal,
             email: emailVal,
@@ -227,29 +236,13 @@ export default function BulkCreateModal({ lecturers: initialLecturers = [], isLe
 
     setSubmitting(true);
     setClassConflict(null);
+    setBulkImportResult(null);
     try {
       if (isLecturer && classFeatureFlags.lecturerStudentImport && tabMode === 'excel') {
-        const parseClassIndexFromVal = (strVal: any) => {
-          const str = String(strVal || '').trim();
-          if (str.includes('_') || str.includes('-')) {
-            const parts = str.split(/[-_]/);
-            const lastPart = parts[parts.length - 1];
-            const num = parseInt(lastPart, 10);
-            if (!isNaN(num)) return num;
-          }
-          const directNum = parseInt(str, 10);
-          if (!isNaN(directNum)) return directNum;
-          const matches = str.match(/\d+/g);
-          if (matches && matches.length > 0) {
-            return parseInt(matches[matches.length - 1], 10);
-          }
-          return 0;
-        };
-
         const detectedIndicesSet = new Set<number>();
         excelParsedRows.forEach(r => {
-          const idx = parseClassIndexFromVal(r.classVal);
-          if (idx > 0) detectedIndicesSet.add(idx);
+          const idx = parseClassIndex(r.classVal);
+          if (idx !== null) detectedIndicesSet.add(idx);
         });
 
         const classIndices = Array.from(detectedIndicesSet);
@@ -268,36 +261,29 @@ export default function BulkCreateModal({ lecturers: initialLecturers = [], isLe
         });
 
         const createdClasses = bulkRes?.data || bulkRes?.items || [];
-        
-        // 3. Import sinh viên vào từng lớp tương ứng
-        let totalImportedStudents = 0;
-        for (const clsItem of createdClasses) {
-          const clsCode = clsItem.classCode || `${form.subjectCode}_${clsItem.classIndex}`;
-          const clsId = clsItem.id || clsItem._id;
-
-          // Lọc sinh viên thuộc lớp này
-          const matchingStudents = excelParsedRows.filter(r => {
-            const idx = parseClassIndexFromVal(r.classVal);
-            return idx === clsItem.classIndex || r.classVal.toUpperCase().includes(clsCode.toUpperCase());
-          });
-
-          for (const st of matchingStudents) {
-            try {
-              await classApi.addStudent(clsId, {
-                studentCode: st.studentCode,
-                fullName: st.fullName,
-                email: st.email,
-                majorCode: st.majorCode
-              });
-              totalImportedStudents++;
-            } catch {
-              // Bỏ qua nếu SV đã trùng
-            }
-          }
+        if (!Array.isArray(createdClasses) || createdClasses.length === 0) {
+          throw new Error('Classes were created but the server did not return their details.');
         }
 
-        toast.success(`Tạo thành công ${createdClasses.length || classIndices.length} lớp và import ${totalImportedStudents} sinh viên!`);
-        onCreated();
+        const importResult = await importStudentsIntoCreatedClasses(
+          createdClasses,
+          excelParsedRows as ParsedBulkClassStudentRow[],
+          classApi,
+        );
+        setBulkImportResult(importResult);
+
+        const importedCount = importResult.insertedCount + importResult.updatedCount;
+        if (importResult.errorCount > 0) {
+          toast.error(
+            importedCount > 0
+              ? `${importedCount} students imported; ${importResult.errorCount} rows require attention.`
+              : `No students were imported. ${importResult.errorCount} rows require attention.`,
+          );
+          onCreated({ keepOpen: true, suppressToast: true });
+        } else {
+          toast.success(`Created ${createdClasses.length} class(es) and imported ${importedCount} students.`);
+          onCreated({ suppressToast: true });
+        }
       } else {
         // Luồng nhập số lớp thủ công
         const res = await classApi.bulkCreate({
@@ -311,7 +297,7 @@ export default function BulkCreateModal({ lecturers: initialLecturers = [], isLe
         });
         const count = res?.data?.count || res?.count || (isLecturer ? parseClassIndices(form.classIndicesText).length : parseInt(form.count, 10));
         toast.success(`${count} classes created successfully!`);
-        onCreated();
+        onCreated({ suppressToast: true });
       }
     } catch (e: any) {
       const conflict = e?.data?.conflict;
@@ -353,7 +339,7 @@ export default function BulkCreateModal({ lecturers: initialLecturers = [], isLe
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl shadow-float w-full max-w-md animate-scale-in overflow-hidden">
+      <div className="relative flex max-h-[92vh] w-full max-w-md flex-col overflow-hidden rounded-2xl bg-white shadow-float animate-scale-in">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-slate-100">
           <div>
@@ -372,7 +358,7 @@ export default function BulkCreateModal({ lecturers: initialLecturers = [], isLe
         </div>
 
         {/* Body */}
-        <div className="p-6 space-y-4">
+        <div className="min-h-0 flex-1 overflow-y-auto p-6 space-y-4">
           {/* Tabs for Lecturer */}
           {isLecturer && classFeatureFlags.lecturerStudentImport && (
             <div className="p-1 bg-slate-100 rounded-xl flex gap-1 mb-2">
@@ -599,28 +585,66 @@ export default function BulkCreateModal({ lecturers: initialLecturers = [], isLe
                   <span>{excelError}</span>
                 </div>
               )}
+
+              {bulkImportResult && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-3.5">
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-amber-900">Class creation completed with roster issues</p>
+                      <p className="mt-1 text-xs leading-relaxed text-amber-800">
+                        Imported {bulkImportResult.insertedCount + bulkImportResult.updatedCount} of {bulkImportResult.requestedCount} students.
+                        {' '}{bulkImportResult.errorCount} row(s) were not enrolled.
+                      </p>
+                      <p className="mt-1 text-[11px] leading-relaxed text-amber-700">
+                        The new classes already exist. Resolve the conflicts below, then use Import students on the relevant class; do not create the classes again.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 max-h-44 space-y-2 overflow-y-auto pr-1">
+                    {bulkImportResult.issues.map((issue, index) => (
+                      <div key={`${issue.classCode}-${issue.rowNumber}-${issue.studentCode}-${index}`} className="rounded-lg border border-amber-200/70 bg-white px-3 py-2">
+                        <p className="text-[11px] font-semibold text-slate-800">
+                          {issue.classCode} · {issue.rowNumber > 0 ? `Excel row ${issue.rowNumber}` : 'Import request'}
+                          {issue.studentCode ? ` · ${issue.studentCode}` : ''}
+                        </p>
+                        <p className="mt-0.5 text-[11px] leading-relaxed text-slate-600">{issue.errorMessage}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
 
         {/* Footer */}
         <div className="flex gap-3 p-6 pt-0">
-          <button onClick={onClose} className="flex-1 px-4 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-600 hover:bg-slate-50 transition-all font-medium">
-            Cancel
-          </button>
-          <button
-            onClick={handleSubmit}
-            disabled={submitting || (isLecturer && classFeatureFlags.lecturerStudentImport && tabMode === 'excel' && (!excelFile || excelParsedRows.length === 0))}
-            className="flex-1 px-4 py-2.5 bg-primary text-white rounded-xl text-sm font-medium hover:bg-primary-700 disabled:opacity-50 transition-all flex items-center justify-center gap-2"
-          >
-            {submitting ? (
-              <><Loader2 className="w-4 h-4 animate-spin" /> Processing...</>
-            ) : isLecturer && classFeatureFlags.lecturerStudentImport && tabMode === 'excel' ? (
-              <><Upload className="w-4 h-4" /> Create &amp; Import</>
-            ) : (
-              'Create Classes'
-            )}
-          </button>
+          {bulkImportResult ? (
+            <button onClick={onClose} className="w-full px-4 py-2.5 bg-primary text-white rounded-xl text-sm font-medium hover:bg-primary-700 transition-all">
+              Close result
+            </button>
+          ) : (
+            <>
+              <button onClick={onClose} className="flex-1 px-4 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-600 hover:bg-slate-50 transition-all font-medium">
+                Cancel
+              </button>
+              <button
+                onClick={handleSubmit}
+                disabled={submitting || (isLecturer && classFeatureFlags.lecturerStudentImport && tabMode === 'excel' && (!excelFile || excelParsedRows.length === 0))}
+                className="flex-1 px-4 py-2.5 bg-primary text-white rounded-xl text-sm font-medium hover:bg-primary-700 disabled:opacity-50 transition-all flex items-center justify-center gap-2"
+              >
+                {submitting ? (
+                  <><Loader2 className="w-4 h-4 animate-spin" /> Processing...</>
+                ) : isLecturer && classFeatureFlags.lecturerStudentImport && tabMode === 'excel' ? (
+                  <><Upload className="w-4 h-4" /> Create &amp; Import</>
+                ) : (
+                  'Create Classes'
+                )}
+              </button>
+            </>
+          )}
         </div>
 
         {classConflict && (

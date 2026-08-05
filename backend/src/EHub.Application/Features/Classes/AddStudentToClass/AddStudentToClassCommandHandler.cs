@@ -1,9 +1,9 @@
 using System;
 using System.Linq;
-using System.Net.Mail;
 using System.Threading;
 using System.Threading.Tasks;
 using EHub.Application.Common.Interfaces.Persistence;
+using EHub.Application.Features.Classes.Common;
 using EHub.Contracts.Classes;
 using EHub.Domain.Entities;
 using EHub.Domain.Enums;
@@ -38,11 +38,18 @@ public sealed class AddStudentToClassCommandHandler : IAddStudentToClassCommandH
             return Failure(ErrorCodes.ClassAccessDenied, "You do not have permission to add students to this class.");
         }
 
-        var validationError = ValidateAndNormalize(request, out var studentCode, out var fullName, out var email, out var majorCode);
+        var validationError = StudentEnrollmentRules.ValidateAndNormalize(
+            request.StudentCode,
+            request.FullName,
+            request.Email,
+            request.MajorCode,
+            out var input);
         if (validationError != null)
         {
             return Failure(ErrorCodes.ClassValidationError, validationError);
         }
+
+        var (studentCode, fullName, email, majorCode) = input;
 
         var targetClass = await _context.Classes
             .Include(@class => @class.ClassLecturers)
@@ -67,7 +74,9 @@ public sealed class AddStudentToClassCommandHandler : IAddStudentToClassCommandH
 
         // Resolve identity before changing any tracked student profile. Code and email may not point to two people.
         var studentByCode = await _context.Students
-            .FirstOrDefaultAsync(student => student.NormalizedRollNumber == studentCode, cancellationToken);
+            .FirstOrDefaultAsync(student =>
+                student.NormalizedRollNumber == studentCode || student.RollNumber == studentCode,
+                cancellationToken);
         var studentByEmail = await _context.Students
             .FirstOrDefaultAsync(student => student.Email != null && student.Email.ToLower() == email, cancellationToken);
 
@@ -79,13 +88,14 @@ public sealed class AddStudentToClassCommandHandler : IAddStudentToClassCommandH
         }
 
         var studentProfile = studentByCode ?? studentByEmail;
+        var profileCode = studentProfile?.NormalizedRollNumber ?? studentProfile?.RollNumber;
         if (studentProfile != null &&
-            !string.IsNullOrWhiteSpace(studentProfile.NormalizedRollNumber) &&
-            !string.Equals(studentProfile.NormalizedRollNumber, studentCode, StringComparison.OrdinalIgnoreCase))
+            (!string.Equals(profileCode, studentCode, StringComparison.OrdinalIgnoreCase) ||
+             !string.Equals(studentProfile.Email, email, StringComparison.OrdinalIgnoreCase)))
         {
             return Failure(
                 ErrorCodes.ClassStudentIdentityConflict,
-                "The email is already associated with a different student code.");
+                "Student code and email must exactly match the existing student profile.");
         }
 
         ClassStudent? existingEnrollment = null;
@@ -96,7 +106,7 @@ public sealed class AddStudentToClassCommandHandler : IAddStudentToClassCommandH
                     enrollment => enrollment.ClassId == classId && enrollment.StudentId == studentProfile.Id,
                     cancellationToken);
 
-            if (existingEnrollment?.EnrollmentStatus == EnrollmentStatus.Active)
+            if (existingEnrollment?.CountsTowardCourseSemesterLimit == true)
             {
                 return Failure(
                     ErrorCodes.ClassStudentAlreadyEnrolled,
@@ -111,8 +121,8 @@ public sealed class AddStudentToClassCommandHandler : IAddStudentToClassCommandH
                     enrollment.ClassId != classId &&
                     enrollment.Class.CourseId == targetClass.CourseId &&
                     enrollment.Class.SemesterId == targetClass.SemesterId &&
-                    enrollment.Class.Status == ClassStatus.Active &&
-                    enrollment.EnrollmentStatus == EnrollmentStatus.Active,
+                    enrollment.Class.Status != ClassStatus.Archived &&
+                    enrollment.CountsTowardCourseSemesterLimit,
                     cancellationToken);
 
             if (conflictEnrollment != null)
@@ -138,15 +148,8 @@ public sealed class AddStudentToClassCommandHandler : IAddStudentToClassCommandH
             };
             await _context.Students.AddAsync(studentProfile, cancellationToken);
         }
-        else
-        {
-            studentProfile.RollNumber = studentCode;
-            studentProfile.NormalizedRollNumber = studentCode;
-            studentProfile.FullName = fullName;
-            studentProfile.Email = email;
-            studentProfile.MajorCode = majorCode;
-            studentProfile.UpdatedBy = currentUserId;
-        }
+        // Existing Student profile data remains the global source of truth.
+        // Enrolling a student must not let a lecturer overwrite that profile.
 
         if (existingEnrollment == null)
         {
@@ -154,7 +157,12 @@ public sealed class AddStudentToClassCommandHandler : IAddStudentToClassCommandH
             {
                 ClassId = classId,
                 StudentId = studentProfile.Id,
+                SemesterId = targetClass.SemesterId,
+                CourseId = targetClass.CourseId,
                 EnrollmentStatus = EnrollmentStatus.Active,
+                CountsTowardCourseSemesterLimit = true,
+                MajorCodeAtEnrollment = majorCode,
+                MajorVerificationStatus = EnrollmentMajorVerificationStatus.Unverified,
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
             };
@@ -163,6 +171,13 @@ public sealed class AddStudentToClassCommandHandler : IAddStudentToClassCommandH
         else
         {
             existingEnrollment.EnrollmentStatus = EnrollmentStatus.Active;
+            existingEnrollment.CountsTowardCourseSemesterLimit = true;
+            existingEnrollment.SemesterId = targetClass.SemesterId;
+            existingEnrollment.CourseId = targetClass.CourseId;
+            existingEnrollment.MajorCodeAtEnrollment = majorCode;
+            existingEnrollment.MajorVerificationStatus = EnrollmentMajorVerificationStatus.Unverified;
+            existingEnrollment.MajorVerifiedAtUtc = null;
+            existingEnrollment.MajorVerifiedByUserId = null;
             existingEnrollment.UpdatedAt = DateTime.UtcNow;
         }
 
@@ -184,7 +199,9 @@ public sealed class AddStudentToClassCommandHandler : IAddStudentToClassCommandH
             RollNumber = studentProfile.RollNumber ?? studentCode,
             FullName = studentProfile.FullName,
             Email = studentProfile.Email ?? email,
-            MajorCode = studentProfile.MajorCode,
+            MajorCode = existingEnrollment.MajorCodeAtEnrollment,
+            ProfileMajorCode = studentProfile.MajorCode,
+            MajorVerificationStatus = existingEnrollment.MajorVerificationStatus.ToString(),
             MemberCode = existingEnrollment.MemberCode,
             EnrollmentStatus = existingEnrollment.EnrollmentStatus.ToString(),
             TeamId = null,
@@ -192,41 +209,6 @@ public sealed class AddStudentToClassCommandHandler : IAddStudentToClassCommandH
             IsTeamLeader = false,
             JoinedAtUtc = existingEnrollment.CreatedAt
         });
-    }
-
-    private static string? ValidateAndNormalize(
-        AddStudentToClassRequest request,
-        out string studentCode,
-        out string fullName,
-        out string email,
-        out string majorCode)
-    {
-        studentCode = request.StudentCode?.Trim().ToUpperInvariant() ?? string.Empty;
-        fullName = request.FullName?.Trim() ?? string.Empty;
-        email = request.Email?.Trim().ToLowerInvariant() ?? string.Empty;
-        majorCode = request.MajorCode?.Trim().ToUpperInvariant() ?? string.Empty;
-
-        if (string.IsNullOrWhiteSpace(studentCode) || studentCode.Length > 20)
-        {
-            return "Student code is required and must not exceed 20 characters.";
-        }
-
-        if (string.IsNullOrWhiteSpace(fullName) || fullName.Length > 150)
-        {
-            return "Student full name is required and must not exceed 150 characters.";
-        }
-
-        if (string.IsNullOrWhiteSpace(email) || email.Length > 150 || !MailAddress.TryCreate(email, out _))
-        {
-            return "A valid student email address is required.";
-        }
-
-        if (!MajorCodes.IsValid(majorCode))
-        {
-            return $"Major code '{request.MajorCode}' is invalid.";
-        }
-
-        return null;
     }
 
     private static Result<ClassStudentDto> Failure(string code, string message) =>

@@ -5,7 +5,8 @@ import toast from 'react-hot-toast';
 import { motion } from 'framer-motion';
 import {
   ArrowLeft, GraduationCap, Users, BookOpen,
-  Upload, Download, UserPlus, Loader2, Calendar, Pencil, ShieldCheck, Lock, Unlock, Trash2, UserRoundCheck
+  Upload, Download, UserPlus, Loader2, Calendar, Pencil, ShieldCheck, Lock, Unlock, Trash2, UserRoundCheck, AlertTriangle,
+  Database, MessagesSquare
 } from 'lucide-react';
 import { AuthContext } from '../../context/AuthContext';
 import { classApi } from '../../api/classApi';
@@ -34,6 +35,29 @@ import {
   studentBelongsToClass,
 } from '../../utils/studentAssignment';
 import { classFeatureFlags } from '../../config/classFeatureFlags';
+import { parseApiError } from '../../utils/apiError';
+
+const classActionTone = {
+  neutral: 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-800',
+  primary: 'border-primary-200 bg-primary-50 text-primary hover:border-primary-300 hover:bg-primary-100',
+  secondary: 'border-secondary-200 bg-secondary-50 text-secondary hover:border-secondary-300 hover:bg-secondary-100 dark:hover:bg-secondary-900/30',
+  indigo: 'border-indigo-200 bg-indigo-50/70 text-indigo-600 hover:border-indigo-300 hover:bg-indigo-50 dark:border-indigo-800 dark:bg-indigo-950/30 dark:text-indigo-300',
+  success: 'border-green-200 bg-green-50 text-green-700 hover:border-green-300 hover:bg-green-100 dark:hover:bg-green-950/30',
+  danger: 'border-red-200 bg-red-50 text-red-600 hover:border-red-300 hover:bg-red-100 dark:hover:bg-red-950/30',
+};
+
+function ClassActionButton({ icon: Icon, tone = 'neutral', loading = false, children, className = '', ...props }) {
+  return (
+    <button
+      {...props}
+      aria-busy={loading || undefined}
+      className={`inline-flex min-h-8 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border px-2.5 py-1.5 text-xs font-semibold shadow-xs transition-all duration-150 hover:-translate-y-px hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/25 disabled:pointer-events-none disabled:opacity-50 ${classActionTone[tone]} ${className}`}
+    >
+      {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : Icon ? <Icon className="h-3.5 w-3.5" /> : null}
+      <span>{children}</span>
+    </button>
+  );
+}
 
 export default function ClassDetail() {
   const { id }    = useParams();
@@ -44,6 +68,7 @@ export default function ClassDetail() {
   const [students, setStudents] = useState([]);
   const [teams,    setTeams]    = useState([]);
   const [loading,  setLoading]  = useState(true);
+  const [rosterLoadError, setRosterLoadError] = useState('');
   const [tab,      setTab]      = useState('students'); // 'students' | 'teams'
 
   // Selected students for team generation
@@ -81,6 +106,7 @@ export default function ClassDetail() {
       return;
     }
     setLoading(true);
+    setRosterLoadError('');
     try {
       const [classRes, studentRes] = await Promise.allSettled([
         classApi.getById(id),
@@ -128,6 +154,8 @@ export default function ClassDetail() {
         rawStudents = sData.items || sData.students || sData.data || (Array.isArray(sData) ? sData : []);
       } else if (rawClass.students) {
         rawStudents = rawClass.students;
+      } else {
+        setRosterLoadError(parseApiError(studentRes.reason, 'Failed to load the class roster.').message);
       }
 
       const mappedStudents = rawStudents.map((s, idx) => ({
@@ -398,148 +426,155 @@ export default function ClassDetail() {
   const scheduleDayLabel = typeof scheduleDayValue === 'number'
     ? scheduleDayNames[scheduleDayValue]
     : scheduleDayValue;
+  const showDevelopmentControls = classFeatureFlags.showDevelopmentControls;
+  const isFeatureVisible = (enabled) => enabled || showDevelopmentControls;
+  const runFeatureAction = (enabled, featureName, action) => {
+    if (!enabled) {
+      toast(`${featureName} is visible for local development, but its API is not enabled yet.`);
+      return;
+    }
+
+    action();
+  };
+  const teamControlsVisible = isFeatureVisible(classFeatureFlags.teamManagement);
 
   return (
-    <div className="space-y-6">
-      {/* ── Back + Header ── */}
-      <div className="flex items-center justify-between gap-3 flex-wrap">
+    <div className="space-y-5">
+      {/* ── Class heading + compact actions ── */}
+      <section className="space-y-3">
         <div className="flex items-center gap-3">
           <button
+            type="button"
             onClick={() => navigate(-1)}
-            className="p-2 rounded-xl border border-slate-200 text-slate-400 hover:text-slate-700 hover:border-slate-300 transition-all"
+            aria-label="Go back"
+            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-400 shadow-xs transition-all hover:border-slate-300 hover:bg-slate-50 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/25"
           >
-            <ArrowLeft className="w-5 h-5" />
+            <ArrowLeft className="h-4.5 w-4.5" />
           </button>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-bold text-slate-900">{cls.classCode}</h1>
-              {classFeatureFlags.rename && (user?.role === 'ADMIN' ||
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5">
+              <h1 className="truncate text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">{cls.classCode}</h1>
+              {isFeatureVisible(classFeatureFlags.rename) && (user?.role === 'ADMIN' ||
                 (user?.role === 'LECTURER' && cls.lectureId?._id?.toString() === user._id)) && (
                 <button
+                  type="button"
                   id="btn-rename-class"
-                  onClick={() => setShowRename(true)}
+                  onClick={() => runFeatureAction(classFeatureFlags.rename, 'Class rename', () => setShowRename(true))}
                   title="Đổi tên lớp"
-                  className="p-1.5 rounded-lg text-slate-400 hover:text-primary hover:bg-primary-50 transition-all"
+                  aria-label="Đổi tên lớp"
+                  className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-primary-50 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/25"
                 >
-                  <Pencil className="w-4 h-4" />
+                  <Pencil className="h-3.5 w-3.5" />
                 </button>
               )}
             </div>
-            <p className="text-sm text-slate-500">{cls.subjectCode || '—'} · {cls.semester || '—'} {cls.year || ''}</p>
+            <p className="mt-0.5 truncate text-xs font-medium text-slate-500 sm:text-sm">
+              {cls.subjectCode || '—'} · {cls.semester || '—'} {cls.year || ''}
+            </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          {classFeatureFlags.chatBackfill && (user?.role === 'ADMIN' || user?.role === 'LECTURER') && (
-            <button
-              onClick={handleBackfillChats}
+
+        <div className="flex flex-wrap items-center gap-1.5">
+          {isFeatureVisible(classFeatureFlags.chatBackfill) && (user?.role === 'ADMIN' || user?.role === 'LECTURER') && (
+            <ClassActionButton
+              icon={MessagesSquare}
+              loading={backfilling}
+              onClick={() => runFeatureAction(classFeatureFlags.chatBackfill, 'Chat backfill', handleBackfillChats)}
               disabled={backfilling}
-              className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-600 rounded-xl text-sm hover:bg-slate-50 disabled:opacity-50 transition-all font-medium"
             >
-              {backfilling ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" /> Backfilling...
-                </>
-              ) : (
-                'Backfill Chats'
-              )}
-            </button>
+              {backfilling ? 'Backfilling...' : 'Backfill Chats'}
+            </ClassActionButton>
           )}
+
           {(user?.role === 'ADMIN' || user?.role === 'LECTURER') && (
-            <button
-              onClick={handleExportExcel}
-              disabled={exporting}
-              className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-700 rounded-xl text-sm hover:bg-slate-50 transition-all font-medium disabled:opacity-50"
-            >
-              {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />} Export
-            </button>
+            <ClassActionButton icon={Download} loading={exporting} onClick={handleExportExcel} disabled={exporting}>
+              Export
+            </ClassActionButton>
           )}
-          {classFeatureFlags.majorVerification && (user?.role === 'ADMIN' || user?.role === 'LECTURER') && (
-  <>
-    <button
-      onClick={() =>
-        navigate('/lecturer/data-bank', {
-          state: {
-            classId: cls._id,
-            classCode: cls.classCode,
-            subjectCode: cls.subjectCode,
-            semester: `${cls.semester || ''}${String(cls.year || '').slice(-2)}`,
-          },
-        })
-      }
-      className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-700 rounded-xl text-sm hover:bg-slate-50 transition-all font-medium"
-    >
-      Open Data Bank
-    </button>
 
-    <button
-      onClick={() => setShowAddStudent(true)}
-      className="flex items-center gap-2 px-4 py-2 border border-primary text-primary rounded-xl text-sm hover:bg-primary-50 transition-all font-medium"
-    >
-      <UserPlus className="w-4 h-4" /> Thêm 1 SV
-    </button>
+          {(user?.role === 'ADMIN' || user?.role === 'LECTURER') && (
+            <>
+              <ClassActionButton
+                icon={Database}
+                onClick={() =>
+                  navigate('/lecturer/data-bank', {
+                    state: {
+                      classId: cls._id,
+                      classCode: cls.classCode,
+                      subjectCode: cls.subjectCode,
+                      semester: `${cls.semester || ''}${String(cls.year || '').slice(-2)}`,
+                    },
+                  })
+                }
+              >
+                Open Data Bank
+              </ClassActionButton>
 
-    {isAdminOrLecturer && (
-      <button
-        id="btn-assign-students"
-        onClick={() => openStudentAssignment('CLASS')}
-        className="flex items-center gap-2 rounded-xl bg-gradient-primary px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all hover:shadow-glow-primary"
-      >
-        <UserRoundCheck className="h-4 w-4" /> Assign students
-      </button>
-    )}
-  </>
-)}
-          {user?.role === 'ADMIN' && (
-            <button
-              onClick={() => setShowImport(true)}
-              className="flex items-center gap-2 px-4 py-2 border border-primary text-primary rounded-xl text-sm hover:bg-primary-50 transition-all font-medium"
-            >
-              <Upload className="w-4 h-4" /> Import Excel
-            </button>
+              <ClassActionButton icon={UserPlus} tone="primary" onClick={() => setShowAddStudent(true)}>
+                Thêm 1 SV
+              </ClassActionButton>
+
+              {isAdminOrLecturer && (
+                <ClassActionButton
+                  id="btn-assign-students"
+                  icon={UserRoundCheck}
+                  tone="secondary"
+                  onClick={() => runFeatureAction(classFeatureFlags.teamManagement, 'Student assignment', () => openStudentAssignment('CLASS'))}
+                >
+                  Assign students
+                </ClassActionButton>
+              )}
+            </>
           )}
-          {classFeatureFlags.majorVerification && (user?.role === 'ADMIN' || user?.role === 'LECTURER') && (
-            <button
+
+          {(user?.role === 'ADMIN' || (isAdminOrLecturer && classFeatureFlags.lecturerStudentImport)) && (
+            <ClassActionButton icon={Upload} tone="primary" onClick={() => setShowImport(true)}>
+              Import Excel
+            </ClassActionButton>
+          )}
+
+          {isFeatureVisible(classFeatureFlags.majorVerification) && (user?.role === 'ADMIN' || user?.role === 'LECTURER') && (
+            <ClassActionButton
               id="btn-verify-majors"
-              onClick={() => setShowVerify(true)}
-              className="flex items-center gap-2 px-4 py-2 border border-indigo-300 text-indigo-600 rounded-xl text-sm hover:bg-indigo-50 transition-all font-medium"
+              icon={ShieldCheck}
+              tone="indigo"
+              onClick={() => runFeatureAction(classFeatureFlags.majorVerification, 'Major verification', () => setShowVerify(true))}
             >
-              <ShieldCheck className="w-4 h-4" /> Kiểm tra Chuyên ngành
-            </button>
+              Kiểm tra Chuyên ngành
+            </ClassActionButton>
           )}
+
           {(user?.role === 'ADMIN' || user?.role === 'LECTURER') && (
-            <button
-              onClick={handleToggleMajorLock}
+            <ClassActionButton
+              icon={cls.isMajorLocked ? Lock : Unlock}
+              tone={cls.isMajorLocked ? 'danger' : 'success'}
+              loading={togglingLock}
+              onClick={() => runFeatureAction(classFeatureFlags.majorVerification, 'Major locking', handleToggleMajorLock)}
               disabled={togglingLock}
-              className={`flex items-center gap-2 px-4 py-2 border rounded-xl text-sm transition-all font-medium disabled:opacity-50 ${
-                cls.isMajorLocked 
-                  ? 'border-red-300 text-red-600 hover:bg-red-50' 
-                  : 'border-green-300 text-green-600 hover:bg-green-50'
-              }`}
             >
-              {togglingLock ? <Loader2 className="w-4 h-4 animate-spin" /> : (
-                cls.isMajorLocked ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />
-              )}
               {cls.isMajorLocked ? 'Mở khóa cập nhật' : 'Khóa cập nhật CN'}
-            </button>
+            </ClassActionButton>
           )}
-          {classFeatureFlags.lifecycle && canDeleteClass && (
-            <button
-              onClick={() => setShowDeleteClass(true)}
-              className="flex items-center gap-2 px-4 py-2 border border-red-300 text-red-600 rounded-xl text-sm hover:bg-red-50 transition-all font-medium"
+
+          {isFeatureVisible(classFeatureFlags.lifecycle) && canDeleteClass && (
+            <ClassActionButton
+              icon={Trash2}
+              tone="danger"
+              onClick={() => runFeatureAction(classFeatureFlags.lifecycle, 'Class lifecycle management', () => setShowDeleteClass(true))}
             >
-              <Trash2 className="w-4 h-4" /> Delete Class
-            </button>
+              Delete Class
+            </ClassActionButton>
           )}
         </div>
-      </div>
+      </section>
 
       {/* ── Info Cards Grid ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {/* Lecturer Card */}
-        <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-4 flex items-center justify-between gap-3 relative group">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-10 h-10 rounded-xl bg-primary-100 flex items-center justify-center shrink-0">
-              <GraduationCap className="w-5 h-5 text-primary" />
+        <div className="group relative flex min-h-20 items-center justify-between gap-2.5 rounded-xl border border-slate-200/70 bg-white p-3.5 shadow-xs transition-all hover:border-slate-300 hover:shadow-sm">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary-100">
+              <GraduationCap className="h-4.5 w-4.5 text-primary" />
             </div>
             <div className="min-w-0">
               <p className="text-[10px] text-slate-400 uppercase font-semibold tracking-wider">Lecturer</p>
@@ -547,10 +582,12 @@ export default function ClassDetail() {
               {cls.lectureId?.email && <p className="text-[11px] text-slate-400 truncate">{cls.lectureId.email}</p>}
             </div>
           </div>
-          {user?.role === 'ADMIN' && (
+          {(user?.role === 'ADMIN' || user?.role === 'LECTURER') && (
             <button
-              onClick={() => setShowAssignLecturer(true)}
-              className="text-xs font-semibold text-primary hover:text-primary-700 px-2.5 py-1.5 bg-primary-50 rounded-lg transition-all shrink-0 cursor-pointer"
+              onClick={() => user?.role === 'ADMIN'
+                ? setShowAssignLecturer(true)
+                : toast('Lecturer reassignment is restricted to Admin.')}
+              className="shrink-0 cursor-pointer rounded-md border border-primary-100 bg-primary-50 px-2 py-1 text-[11px] font-semibold text-primary transition-colors hover:border-primary-200 hover:bg-primary-100"
             >
               Edit
             </button>
@@ -558,10 +595,10 @@ export default function ClassDetail() {
         </div>
 
         {/* Schedule Card */}
-        <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-4 flex items-center justify-between gap-3 relative group">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-10 h-10 rounded-xl bg-indigo-100 flex items-center justify-center shrink-0">
-              <Calendar className="w-5 h-5 text-indigo-500" />
+        <div className="group relative flex min-h-20 items-center justify-between gap-2.5 rounded-xl border border-slate-200/70 bg-white p-3.5 shadow-xs transition-all hover:border-slate-300 hover:shadow-sm">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-indigo-100">
+              <Calendar className="h-4.5 w-4.5 text-indigo-500" />
             </div>
             <div className="min-w-0">
               <p className="text-[10px] text-slate-400 uppercase font-semibold tracking-wider">Schedule</p>
@@ -578,7 +615,7 @@ export default function ClassDetail() {
           {(user?.role === 'ADMIN' || user?.role === 'LECTURER') && (
             <button
               onClick={() => setShowEditSchedule(true)}
-              className="text-xs font-semibold text-primary hover:text-primary-700 px-2.5 py-1.5 bg-primary-50 rounded-lg transition-all shrink-0 cursor-pointer"
+              className="shrink-0 cursor-pointer rounded-md border border-primary-100 bg-primary-50 px-2 py-1 text-[11px] font-semibold text-primary transition-colors hover:border-primary-200 hover:bg-primary-100"
             >
               Edit
             </button>
@@ -586,10 +623,10 @@ export default function ClassDetail() {
         </div>
 
         {/* Mentors Card */}
-        <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-4 flex items-center justify-between gap-3 relative group">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center shrink-0">
-              <Users className="w-5 h-5 text-amber-500" />
+        <div className="group relative flex min-h-20 items-center justify-between gap-2.5 rounded-xl border border-slate-200/70 bg-white p-3.5 shadow-xs transition-all hover:border-slate-300 hover:shadow-sm">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-100">
+              <Users className="h-4.5 w-4.5 text-amber-500" />
             </div>
             <div className="min-w-0 flex-1">
               <p className="text-[10px] text-slate-400 uppercase font-semibold tracking-wider">Mentors</p>
@@ -605,10 +642,10 @@ export default function ClassDetail() {
               )}
             </div>
           </div>
-          {classFeatureFlags.mentorAssignment && user?.role === 'ADMIN' && (
+          {isFeatureVisible(classFeatureFlags.mentorAssignment) && user?.role === 'ADMIN' && (
             <button
-              onClick={() => setShowAssignMentors(true)}
-              className="text-xs font-semibold text-primary hover:text-primary-700 px-2.5 py-1.5 bg-primary-50 rounded-lg transition-all shrink-0 cursor-pointer"
+              onClick={() => runFeatureAction(classFeatureFlags.mentorAssignment, 'Mentor assignment', () => setShowAssignMentors(true))}
+              className="shrink-0 cursor-pointer rounded-md border border-primary-100 bg-primary-50 px-2 py-1 text-[11px] font-semibold text-primary transition-colors hover:border-primary-200 hover:bg-primary-100"
             >
               Manage
             </button>
@@ -616,32 +653,32 @@ export default function ClassDetail() {
         </div>
 
         {/* Students Card */}
-        <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-4 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-secondary-100 flex items-center justify-center shrink-0">
-            <Users className="w-5 h-5 text-secondary" />
+        <div className="flex min-h-20 items-center gap-2.5 rounded-xl border border-slate-200/70 bg-white p-3.5 shadow-xs transition-all hover:border-slate-300 hover:shadow-sm">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-secondary-100">
+            <Users className="h-4.5 w-4.5 text-secondary" />
           </div>
           <div>
             <p className="text-[10px] text-slate-400 uppercase font-semibold tracking-wider">Students</p>
-            <p className="font-bold text-2xl text-slate-900 leading-none mt-1">{safeStudents.length}</p>
-            <p className="text-[11px] text-slate-400 mt-1">{unassignedCount} unassigned</p>
+            <p className="mt-0.5 text-xl font-bold leading-none text-slate-900">{rosterLoadError ? '—' : safeStudents.length}</p>
+            <p className="mt-1 text-[11px] text-slate-400">{rosterLoadError ? 'Unable to load roster' : `${unassignedCount} unassigned`}</p>
           </div>
         </div>
 
         {/* Teams Card */}
-        {classFeatureFlags.teamManagement && <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-4 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-green-100 flex items-center justify-center shrink-0">
-            <BookOpen className="w-5 h-5 text-green-600" />
+        {teamControlsVisible && <div className="flex min-h-20 items-center gap-2.5 rounded-xl border border-slate-200/70 bg-white p-3.5 shadow-xs transition-all hover:border-slate-300 hover:shadow-sm">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-green-100">
+            <BookOpen className="h-4.5 w-4.5 text-green-600" />
           </div>
           <div>
             <p className="text-[10px] text-slate-400 uppercase font-semibold tracking-wider">Teams</p>
-            <p className="font-bold text-2xl text-slate-900 leading-none mt-1">{safeTeams.length}</p>
+            <p className="mt-0.5 text-xl font-bold leading-none text-slate-900">{safeTeams.length}</p>
           </div>
         </div>}
       </div>
 
       {/* ── Team Generation Panel (always visible when students exist) ── */}
-      {classFeatureFlags.teamManagement && safeStudents.length > 0 && selected.length > 0 && (
-        <div className="sticky top-20 z-40 shadow-xl rounded-2xl bg-white/80 backdrop-blur-md">
+      {teamControlsVisible && safeStudents.length > 0 && selected.length > 0 && (
+        <div className="sticky top-20 z-40 rounded-xl bg-white/85 shadow-elevated backdrop-blur-md">
           {user?.role === 'STUDENT' ? (
             <StudentTeamGeneratePanel
               classId={id}
@@ -651,20 +688,20 @@ export default function ClassDetail() {
               currentStudentId={safeStudents.find(s => s.userId === user._id)?._id}
             />
           ) : (
-            <div className="flex flex-col gap-3 rounded-2xl border border-primary-100 bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-50 text-primary"><Users className="h-5 w-5" /></div>
+            <div className="flex flex-col gap-2.5 rounded-xl border border-primary-100 bg-white p-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-50 text-primary"><Users className="h-4 w-4" /></div>
                 <div>
-                  <p className="font-semibold text-slate-800">{selected.length} student{selected.length === 1 ? '' : 's'} selected</p>
-                  <p className="text-xs text-slate-500">Continue to enter the team name and review members.</p>
+                  <p className="text-sm font-semibold text-slate-800">{selected.length} student{selected.length === 1 ? '' : 's'} selected</p>
+                  <p className="text-[11px] text-slate-500">Continue to enter the team name and review members.</p>
                 </div>
               </div>
-              <div className="flex flex-col gap-2 sm:flex-row">
-                <button onClick={() => openStudentAssignment('TEAM', selected)} className="flex items-center justify-center gap-2 rounded-xl border border-primary px-4 py-2.5 text-sm font-semibold text-primary hover:bg-primary-50">
-                  <UserRoundCheck className="h-4 w-4" /> Assign to team
+              <div className="flex flex-col gap-1.5 sm:flex-row">
+                <button onClick={() => runFeatureAction(classFeatureFlags.teamManagement, 'Team assignment', () => openStudentAssignment('TEAM', selected))} className="inline-flex min-h-8 items-center justify-center gap-1.5 rounded-lg border border-primary-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-primary hover:bg-primary-50">
+                  <UserRoundCheck className="h-3.5 w-3.5" /> Assign to team
                 </button>
-                <button onClick={() => openCreateTeam(selected)} className="flex items-center justify-center gap-2 rounded-xl bg-gradient-primary px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:shadow-glow-primary">
-                  <UserPlus className="h-4 w-4" /> Create team with selected
+                <button onClick={() => runFeatureAction(classFeatureFlags.teamManagement, 'Team management', () => openCreateTeam(selected))} className="inline-flex min-h-8 items-center justify-center gap-1.5 rounded-lg bg-gradient-primary px-2.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:shadow-sm">
+                  <UserPlus className="h-3.5 w-3.5" /> Create team with selected
                 </button>
               </div>
             </div>
@@ -673,32 +710,45 @@ export default function ClassDetail() {
       )}
 
       {/* ── Tabs ── */}
-      <div className="flex gap-1 p-1 bg-slate-100 rounded-xl w-fit">
-        {(classFeatureFlags.teamManagement ? ['students', 'teams'] : ['students']).map(t => (
+      <div className="flex w-fit gap-0.5 rounded-lg bg-slate-100 p-0.5">
+        {(teamControlsVisible ? ['students', 'teams'] : ['students']).map(t => (
           <button
             key={t}
             onClick={() => setTab(t)}
-            className={`px-5 py-2 rounded-lg text-sm font-medium transition-all capitalize cursor-pointer ${
-              tab === t ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-700'
+            className={`cursor-pointer rounded-md px-3.5 py-1.5 text-xs font-semibold capitalize transition-all ${
+              tab === t ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:bg-white/60 hover:text-slate-700'
             }`}
           >
-            {t === 'students' ? `Students (${safeStudents.length})` : `Teams (${safeTeams.length})`}
+            {t === 'students' ? `Students (${rosterLoadError ? '—' : safeStudents.length})` : `Teams (${safeTeams.length})`}
           </button>
         ))}
       </div>
 
       {/* ── Tab Content ── */}
       <motion.div key={tab} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.2 }}>
-        {tab === 'students' ? (
+        {tab === 'students' && rosterLoadError ? (
+          <div className="rounded-xl border border-red-200 bg-red-50 p-5 text-center">
+            <AlertTriangle className="mx-auto h-6 w-6 text-red-500" />
+            <p className="mt-2 text-sm font-semibold text-red-800">The class roster could not be loaded</p>
+            <p className="mt-1 text-sm text-red-600">{rosterLoadError}</p>
+            <button
+              type="button"
+              onClick={() => void fetchData()}
+              className="mt-3 rounded-lg border border-red-300 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100"
+            >
+              Retry
+            </button>
+          </div>
+        ) : tab === 'students' ? (
           <StudentTable
             students={safeStudents}
-            teams={classFeatureFlags.teamManagement ? safeTeams : []}
+            teams={teamControlsVisible ? safeTeams : []}
             cls={cls}
-            selected={classFeatureFlags.teamManagement ? selected : []}
-            onSelectionChange={classFeatureFlags.teamManagement ? setSelected : undefined}
+            selected={teamControlsVisible ? selected : []}
+            onSelectionChange={teamControlsVisible ? setSelected : undefined}
             onRefresh={fetchData}
             onDeleteStudent={isAdminOrLecturer ? handleRemoveStudent : undefined}
-            toolbarAction={classFeatureFlags.teamManagement && selected.length === 0 ? (
+            toolbarAction={teamControlsVisible && selected.length === 0 ? (
               user?.role === 'STUDENT' ? (
                 <TeamSuggestionTooltip label="Xem hướng dẫn tạo nhóm">
                   <div className="space-y-2">
@@ -712,8 +762,8 @@ export default function ClassDetail() {
                   </div>
                 </TeamSuggestionTooltip>
               ) : (
-                <button onClick={() => openCreateTeam()} className="flex items-center gap-2 rounded-xl border border-primary px-3 py-2 text-sm font-semibold text-primary hover:bg-primary-50">
-                  <UserPlus className="h-4 w-4" /> Create team
+                <button onClick={() => runFeatureAction(classFeatureFlags.teamManagement, 'Team management', () => openCreateTeam())} className="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-primary-200 bg-primary-50/60 px-2.5 py-1.5 text-xs font-semibold text-primary hover:bg-primary-50">
+                  <UserPlus className="h-3.5 w-3.5" /> Create team
                 </button>
               )
             ) : null}
@@ -725,9 +775,9 @@ export default function ClassDetail() {
             canDelete={isAdminOrLecturer}
             canManageInfo={isAdminOrLecturer}
             classStudents={safeStudents}
-            onCreate={isAdminOrLecturer ? () => openCreateTeam() : undefined}
-            onAssign={isAdminOrLecturer ? () => openStudentAssignment('TEAM') : undefined}
-            onEdit={isAdminOrLecturer ? openEditTeam : undefined}
+            onCreate={isAdminOrLecturer ? () => runFeatureAction(classFeatureFlags.teamManagement, 'Team management', () => openCreateTeam()) : undefined}
+            onAssign={isAdminOrLecturer ? () => runFeatureAction(classFeatureFlags.teamManagement, 'Team assignment', () => openStudentAssignment('TEAM')) : undefined}
+            onEdit={isAdminOrLecturer ? (team) => runFeatureAction(classFeatureFlags.teamManagement, 'Team management', () => openEditTeam(team)) : undefined}
             onDelete={isAdminOrLecturer ? handleTeamDeleted : undefined}
           />
         )}

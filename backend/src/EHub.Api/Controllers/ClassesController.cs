@@ -431,7 +431,6 @@ public sealed class ClassesController : ControllerBase
     // ─── GIAI ĐOẠN 5: EXCEL IMPORT & EXPORT ENDPOINTS ─────────────────────────
 
     [HttpPost("{id:guid}/import-students/preview")]
-    [Authorize(Policy = SystemPolicies.AdminOnly)]
     public async Task<IActionResult> PreviewImportStudents(
         Guid id,
         IFormFile file,
@@ -459,7 +458,6 @@ public sealed class ClassesController : ControllerBase
     }
 
     [HttpPost("{id:guid}/import-students/commit")]
-    [Authorize(Policy = SystemPolicies.AdminOnly)]
     public async Task<IActionResult> CommitImportStudents(
         Guid id,
         [FromBody] CommitImportStudentsRequest request,
@@ -525,11 +523,15 @@ public sealed class ClassesController : ControllerBase
             ErrorCodes.ClassNotFound => NotFound(response),
             ErrorCodes.ClassScheduleConflict or
             ErrorCodes.ClassConcurrencyConflict or
+            ErrorCodes.ClassLecturerRequired or
             ErrorCodes.ClassArchived or
             ErrorCodes.ClassStudentIdentityConflict or
             ErrorCodes.ClassStudentAlreadyEnrolled or
             ErrorCodes.ClassStudentEnrollmentConflict or
-            ErrorCodes.ClassImportSessionInvalid => Conflict(response),
+            ErrorCodes.ClassEnrollmentMajorLocked or
+            ErrorCodes.ClassImportSessionInvalid or
+            ErrorCodes.ClassImportSessionExpired or
+            ErrorCodes.ClassImportSessionAlreadyProcessing => Conflict(response),
             _ => BadRequest(response)
         };
     }

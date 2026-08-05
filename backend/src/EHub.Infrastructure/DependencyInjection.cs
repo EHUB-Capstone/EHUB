@@ -49,7 +49,6 @@ public static class DependencyInjection
         // Common Services
         services.AddScoped<IDateTimeProvider, DateTimeProvider>();
         services.AddScoped<IPasswordResetTokenService, PasswordResetTokenService>();
-        services.AddSingleton<IImportSessionStore, ImportSessionStore>();
         
         services.Configure<EmailOptions>(configuration.GetSection(EmailOptions.SectionName));
         var emailProvider = configuration["Email:Provider"];

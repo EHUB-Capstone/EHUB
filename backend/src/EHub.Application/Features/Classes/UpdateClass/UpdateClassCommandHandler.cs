@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 using System.Threading;
@@ -17,6 +18,10 @@ namespace EHub.Application.Features.Classes.UpdateClass;
 public sealed class UpdateClassCommandHandler : IUpdateClassCommandHandler
 {
     private const string TeachingAssignmentChanged = "TEACHING_ASSIGNMENT_CHANGED";
+    private static readonly JsonSerializerOptions ScheduleJsonOptions = new(JsonSerializerDefaults.Web)
+    {
+        PropertyNameCaseInsensitive = true
+    };
     private readonly IApplicationDbContext _context;
 
     public UpdateClassCommandHandler(IApplicationDbContext context)
@@ -132,11 +137,31 @@ public sealed class UpdateClassCommandHandler : IUpdateClassCommandHandler
             }
         }
 
+        if (newLecturer == null && targetClass.Status == ClassStatus.Active)
+        {
+            return Failure(
+                ErrorCodes.ClassLecturerRequired,
+                "An active class must have exactly one lecturer. Reassign it atomically instead of unassigning it.");
+        }
+
+        if (newLecturer != null)
+        {
+            var conflictClassCode = await FindLecturerScheduleConflictAsync(
+                targetClass,
+                newLecturer.Id,
+                cancellationToken);
+
+            if (conflictClassCode != null)
+            {
+                return Failure(
+                    ErrorCodes.ClassScheduleConflict,
+                    $"Lecturer already teaches class '{conflictClassCode}' in one or more schedule slots of this class.");
+            }
+        }
+
         var previousLecturerId = targetClass.PrimaryLecturerId;
         var assignmentsToRevoke = targetClass.ClassLecturers
-            .Where(assignment =>
-                assignment.LecturerId != newLecturer?.Id &&
-                (assignment.IsPrimary || assignment.LecturerId == previousLecturerId))
+            .Where(assignment => assignment.LecturerId != newLecturer?.Id)
             .ToList();
 
         foreach (var assignment in assignmentsToRevoke)
@@ -170,6 +195,9 @@ public sealed class UpdateClassCommandHandler : IUpdateClassCommandHandler
 
         targetClass.PrimaryLecturerId = newLecturer?.Id;
         targetClass.PrimaryLecturer = newLecturer;
+        targetClass.Status = newLecturer != null && HasSchedule(targetClass.ScheduleJson)
+            ? ClassStatus.Active
+            : ClassStatus.Draft;
         targetClass.UpdatedBy = currentUserId;
 
         _context.ClassAuditLogs.Add(new ClassAuditLog
@@ -213,6 +241,61 @@ public sealed class UpdateClassCommandHandler : IUpdateClassCommandHandler
     private static bool IsAssigned(Class targetClass, Guid userId) =>
         targetClass.PrimaryLecturerId == userId ||
         targetClass.ClassLecturers.Any(assignment => assignment.LecturerId == userId);
+
+    private async Task<string?> FindLecturerScheduleConflictAsync(
+        Class targetClass,
+        Guid lecturerId,
+        CancellationToken cancellationToken)
+    {
+        var targetSchedules = DeserializeSchedules(targetClass.ScheduleJson);
+        if (targetSchedules.Count == 0)
+        {
+            return null;
+        }
+
+        var otherClasses = await _context.Classes
+            .AsNoTracking()
+            .Where(@class =>
+                @class.Id != targetClass.Id &&
+                @class.SemesterId == targetClass.SemesterId &&
+                @class.PrimaryLecturerId == lecturerId &&
+                @class.Status != ClassStatus.Archived &&
+                @class.ScheduleJson != null)
+            .Select(@class => new { @class.ClassCode, @class.ScheduleJson })
+            .ToListAsync(cancellationToken);
+
+        foreach (var otherClass in otherClasses)
+        {
+            var otherSchedules = DeserializeSchedules(otherClass.ScheduleJson);
+            if (targetSchedules.Any(target => otherSchedules.Any(other =>
+                    target.DayOfWeek == other.DayOfWeek &&
+                    target.SlotNumber == other.SlotNumber)))
+            {
+                return otherClass.ClassCode;
+            }
+        }
+
+        return null;
+    }
+
+    private static bool HasSchedule(string? scheduleJson) => DeserializeSchedules(scheduleJson).Count > 0;
+
+    private static IReadOnlyCollection<ClassScheduleSlotDto> DeserializeSchedules(string? scheduleJson)
+    {
+        if (string.IsNullOrWhiteSpace(scheduleJson))
+        {
+            return Array.Empty<ClassScheduleSlotDto>();
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<List<ClassScheduleSlotDto>>(scheduleJson, ScheduleJsonOptions) ?? [];
+        }
+        catch (JsonException)
+        {
+            return Array.Empty<ClassScheduleSlotDto>();
+        }
+    }
 
     private async Task<ClassResponse> BuildResponseAsync(Class targetClass, CancellationToken cancellationToken)
     {

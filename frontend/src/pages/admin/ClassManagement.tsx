@@ -148,14 +148,13 @@ export default function ClassManagement() {
     fetchAll();
   };
 
-  const handleBulkCreated = () => {
-    setShowBulk(false);
+  const handleBulkCreated = (options: { keepOpen?: boolean; suppressToast?: boolean } = {}) => {
+    if (!options.keepOpen) setShowBulk(false);
     fetchAll();
-    toast.success('Classes created successfully!');
+    if (!options.suppressToast) toast.success('Classes created successfully!');
   };
 
   const handleImported = () => {
-    setImportTarget(null);
     fetchAll();
   };
 
@@ -390,7 +389,7 @@ export default function ClassManagement() {
                   >
                     <Eye className="w-3.5 h-3.5" /> View Detail
                   </button>
-                  {isAdmin && (
+                  {(isAdmin || (isLecturer && classFeatureFlags.lecturerStudentImport)) && (
                     <button
                       onClick={(e) => { e.stopPropagation(); setImportTarget(cls._id); }}
                       className="flex-1 flex items-center justify-center gap-1.5 text-xs text-primary hover:text-primary-dark font-medium transition-colors border-l border-slate-100"
@@ -415,7 +414,7 @@ export default function ClassManagement() {
           onCreated={handleBulkCreated}
         />
       )}
-      {isAdmin && importTarget && (
+      {(isAdmin || (isLecturer && classFeatureFlags.lecturerStudentImport)) && importTarget && (
         <ImportStudentsModal
           classId={importTarget}
           onClose={() => setImportTarget(null)}

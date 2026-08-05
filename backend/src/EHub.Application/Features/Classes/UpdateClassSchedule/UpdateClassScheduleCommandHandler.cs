@@ -114,12 +114,12 @@ public sealed class UpdateClassScheduleCommandHandler : IUpdateClassScheduleComm
             return Failure(ErrorCodes.ClassAccessDenied, "You can only update schedule for classes assigned to you.");
         }
 
-        var otherActiveClasses = await _context.Classes
+        var otherSchedulableClasses = await _context.Classes
             .AsNoTracking()
             .Where(@class =>
                 @class.SemesterId == targetClass.SemesterId &&
                 @class.Id != targetClass.Id &&
-                @class.Status == ClassStatus.Active &&
+                @class.Status != ClassStatus.Archived &&
                 @class.ScheduleJson != null)
             .ToListAsync(cancellationToken);
 
@@ -127,7 +127,7 @@ public sealed class UpdateClassScheduleCommandHandler : IUpdateClassScheduleComm
         {
             var slotRoom = NormalizeRoom(slot.Room, targetClass.Room);
 
-            foreach (var otherClass in otherActiveClasses)
+            foreach (var otherClass in otherSchedulableClasses)
             {
                 var otherSchedules = DeserializeSchedules(otherClass.ScheduleJson);
                 foreach (var otherSlot in otherSchedules)
@@ -166,6 +166,9 @@ public sealed class UpdateClassScheduleCommandHandler : IUpdateClassScheduleComm
         }).ToArray();
 
         targetClass.ScheduleJson = JsonSerializer.Serialize(normalizedSchedules, ScheduleJsonOptions);
+        targetClass.Status = targetClass.PrimaryLecturerId.HasValue
+            ? ClassStatus.Active
+            : ClassStatus.Draft;
         targetClass.UpdatedBy = currentUserId;
 
         try

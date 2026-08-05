@@ -32,8 +32,11 @@ public class ClassLecturerConfiguration : IEntityTypeConfiguration<ClassLecturer
             .HasColumnName("assigned_by_id");
 
         builder.HasIndex(cl => cl.ClassId)
-            .IsUnique()
-            .HasFilter("is_primary = true");
+            .IsUnique();
+
+        builder.ToTable(tableBuilder => tableBuilder.HasCheckConstraint(
+            "CK_class_lecturers_primary_only",
+            "is_primary = true"));
 
         // Relationships configuration
         builder.HasOne(cl => cl.Class)

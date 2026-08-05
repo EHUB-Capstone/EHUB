@@ -148,7 +148,7 @@ public sealed class CreateBulkClassesCommandHandler : ICreateBulkClassesCommandH
                     SemesterId = semester.Id,
                     CourseId = course.Id,
                     PrimaryLecturerId = lecturerUser?.Id,
-                    Status = ClassStatus.Active,
+                    Status = ClassStatus.Draft,
                     CreatedById = currentUserId
                 };
 
@@ -161,6 +161,7 @@ public sealed class CreateBulkClassesCommandHandler : ICreateBulkClassesCommandH
                     {
                         ClassId = newClass.Id,
                         LecturerId = lecturerUser.Id,
+                        IsPrimary = true,
                         AssignedAt = DateTime.UtcNow
                     });
                 }

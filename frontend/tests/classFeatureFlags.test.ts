@@ -7,10 +7,27 @@ import {
 } from '../src/config/classFeatureFlags.ts';
 import { canAccessClassRoute, classRouteAccess } from '../src/config/classAccessPolicy.ts';
 
-test('keeps unfinished class features disabled by default', () => {
+test('keeps unfinished class features disabled and enables hardened lecturer import', () => {
   const flags = createClassFeatureFlags({});
 
-  assert.equal(Object.values(flags).every(enabled => enabled === false), true);
+  assert.equal(flags.lecturerStudentImport, true);
+  assert.equal(Object.entries(flags)
+    .filter(([name]) => name !== 'lecturerStudentImport')
+    .every(([, enabled]) => enabled === false), true);
+});
+
+test('shows unavailable class controls in local development without enabling their APIs', () => {
+  const flags = createClassFeatureFlags({ DEV: true });
+
+  assert.equal(flags.showDevelopmentControls, true);
+  assert.equal(flags.rename, false);
+  assert.equal(flags.teamManagement, false);
+});
+
+test('allows lecturer import to be disabled explicitly', () => {
+  const flags = createClassFeatureFlags({ VITE_FEATURE_CLASS_LECTURER_STUDENT_IMPORT: 'false' });
+
+  assert.equal(flags.lecturerStudentImport, false);
 });
 
 test('does not execute a request factory when its feature is disabled', async () => {

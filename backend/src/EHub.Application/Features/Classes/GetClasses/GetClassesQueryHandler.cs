@@ -63,20 +63,16 @@ public sealed class GetClassesQueryHandler : IGetClassesQueryHandler
         // 3. Status Filter (Mặc định là Active)
         if (string.IsNullOrWhiteSpace(request.Status))
         {
-            query = query.Where(c => c.Status == ClassStatus.Active);
+            query = query.Where(c => c.Status == ClassStatus.Draft || c.Status == ClassStatus.Active);
         }
-        else if (request.Status.Equals("Archived", StringComparison.OrdinalIgnoreCase))
+        else if (Enum.TryParse<ClassStatus>(request.Status, true, out var requestedStatus))
         {
-            query = query.Where(c => c.Status == ClassStatus.Archived);
-        }
-        else if (request.Status.Equals("Active", StringComparison.OrdinalIgnoreCase))
-        {
-            query = query.Where(c => c.Status == ClassStatus.Active);
+            query = query.Where(c => c.Status == requestedStatus);
         }
         else
         {
             return Result.Failure<ClassListResponse>(
-                new Error("Classes.InvalidStatus", "Status filter must be 'Active' or 'Archived'."));
+                new Error("Classes.InvalidStatus", "Status filter must be Draft, Active, Inactive, or Archived."));
         }
 
         // 4. AcademicTerm Filter

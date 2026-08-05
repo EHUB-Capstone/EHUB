@@ -23,7 +23,7 @@ public class Class : AuditableEntity
     public string? ScheduleJson { get; set; }
 
     public bool IsEnrollmentMajorLocked { get; set; } = false;
-    public ClassStatus Status { get; set; } = ClassStatus.Active;
+    public ClassStatus Status { get; set; } = ClassStatus.Draft;
 
     public DateTime? ArchivedAtUtc { get; set; }
     public Guid? ArchivedByUserId { get; set; }
@@ -47,4 +47,5 @@ public class Class : AuditableEntity
     public virtual ICollection<Milestone> Milestones { get; set; } = new List<Milestone>();
     public virtual ICollection<WeeklyTask> WeeklyTasks { get; set; } = new List<WeeklyTask>();
     public virtual ICollection<ClassAuditLog> AuditLogs { get; set; } = new List<ClassAuditLog>();
+    public virtual ICollection<ClassImportSession> ImportSessions { get; set; } = new List<ClassImportSession>();
 }

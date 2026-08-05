@@ -78,7 +78,7 @@ public sealed class GetClassRosterQueryHandler : IGetClassRosterQueryHandler
         if (!string.IsNullOrWhiteSpace(request.MajorCode))
         {
             var major = request.MajorCode.Trim().ToUpper();
-            query = query.Where(cs => cs.Student.MajorCode != null && cs.Student.MajorCode.ToUpper() == major);
+            query = query.Where(cs => cs.MajorCodeAtEnrollment.ToUpper() == major);
         }
 
         // Status filter
@@ -109,7 +109,9 @@ public sealed class GetClassRosterQueryHandler : IGetClassRosterQueryHandler
                 RollNumber = cs.Student.RollNumber ?? string.Empty,
                 FullName = cs.Student.FullName,
                 Email = cs.Student.Email ?? string.Empty,
-                MajorCode = cs.Student.MajorCode,
+                MajorCode = cs.MajorCodeAtEnrollment,
+                ProfileMajorCode = cs.Student.MajorCode,
+                MajorVerificationStatus = cs.MajorVerificationStatus.ToString(),
                 MemberCode = cs.MemberCode,
                 EnrollmentStatus = cs.EnrollmentStatus.ToString(),
                 TeamId = activeTeamMember?.TeamId,

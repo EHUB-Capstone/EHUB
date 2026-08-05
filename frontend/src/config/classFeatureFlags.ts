@@ -4,6 +4,8 @@ const isEnabled = (value: string | boolean | undefined): boolean =>
   value === true || (typeof value === 'string' && value.toLowerCase() === 'true');
 
 export const createClassFeatureFlags = (environment: FeatureEnvironment) => Object.freeze({
+  showDevelopmentControls: isEnabled(environment.DEV) ||
+    isEnabled(environment.VITE_SHOW_UNAVAILABLE_CLASS_FEATURES),
   rename: isEnabled(environment.VITE_FEATURE_CLASS_RENAME),
   lifecycle: isEnabled(environment.VITE_FEATURE_CLASS_LIFECYCLE),
   majorVerification: isEnabled(environment.VITE_FEATURE_CLASS_MAJOR_VERIFICATION),
@@ -13,7 +15,9 @@ export const createClassFeatureFlags = (environment: FeatureEnvironment) => Obje
   codeConflictReport: isEnabled(environment.VITE_FEATURE_CLASS_CODE_CONFLICT_REPORT),
   projectDirection: isEnabled(environment.VITE_FEATURE_CLASS_PROJECT_DIRECTION),
   studentSelfService: isEnabled(environment.VITE_FEATURE_CLASS_STUDENT_SELF_SERVICE),
-  lecturerStudentImport: isEnabled(environment.VITE_FEATURE_CLASS_LECTURER_STUDENT_IMPORT),
+  lecturerStudentImport: environment.VITE_FEATURE_CLASS_LECTURER_STUDENT_IMPORT === undefined
+    ? true
+    : isEnabled(environment.VITE_FEATURE_CLASS_LECTURER_STUDENT_IMPORT),
 });
 
 const runtimeEnvironment = (import.meta as ImportMeta & { env?: FeatureEnvironment }).env ?? {};

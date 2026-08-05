@@ -20,6 +20,14 @@ public class ClassStudentConfiguration : IEntityTypeConfiguration<ClassStudent>
             .HasColumnName("student_id")
             .IsRequired();
 
+        builder.Property(cs => cs.SemesterId)
+            .HasColumnName("semester_id")
+            .IsRequired();
+
+        builder.Property(cs => cs.CourseId)
+            .HasColumnName("course_id")
+            .IsRequired();
+
         builder.Property(cs => cs.MemberCode)
             .HasColumnName("member_code")
             .HasMaxLength(50);
@@ -29,6 +37,28 @@ public class ClassStudentConfiguration : IEntityTypeConfiguration<ClassStudent>
             .HasConversion<string>()
             .HasMaxLength(20)
             .IsRequired();
+
+        builder.Property(cs => cs.CountsTowardCourseSemesterLimit)
+            .HasColumnName("counts_toward_course_semester_limit")
+            .HasDefaultValue(true)
+            .IsRequired();
+
+        builder.Property(cs => cs.MajorCodeAtEnrollment)
+            .HasColumnName("major_code_at_enrollment")
+            .HasMaxLength(20)
+            .IsRequired();
+
+        builder.Property(cs => cs.MajorVerificationStatus)
+            .HasColumnName("major_verification_status")
+            .HasConversion<string>()
+            .HasMaxLength(20)
+            .IsRequired();
+
+        builder.Property(cs => cs.MajorVerifiedAtUtc)
+            .HasColumnName("major_verified_at_utc");
+
+        builder.Property(cs => cs.MajorVerifiedByUserId)
+            .HasColumnName("major_verified_by_user_id");
 
         builder.Property(cs => cs.ExamDate)
             .HasColumnName("exam_date");
@@ -77,6 +107,10 @@ public class ClassStudentConfiguration : IEntityTypeConfiguration<ClassStudent>
             .IsUnique()
             .HasFilter("member_code IS NOT NULL"); // Filtered index to allow multiple null values in Postgres/EF Core!
 
+        builder.HasIndex(cs => new { cs.StudentId, cs.SemesterId, cs.CourseId })
+            .IsUnique()
+            .HasFilter("counts_toward_course_semester_limit = true");
+
         // Relationships configuration
         builder.HasOne(cs => cs.Class)
             .WithMany(c => c.ClassStudents)
@@ -87,5 +121,10 @@ public class ClassStudentConfiguration : IEntityTypeConfiguration<ClassStudent>
             .WithMany(s => s.ClassStudents)
             .HasForeignKey(cs => cs.StudentId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne(cs => cs.MajorVerifiedByUser)
+            .WithMany()
+            .HasForeignKey(cs => cs.MajorVerifiedByUserId)
+            .OnDelete(DeleteBehavior.SetNull);
     }
 }

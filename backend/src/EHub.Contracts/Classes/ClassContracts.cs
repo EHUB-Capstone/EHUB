@@ -124,6 +124,8 @@ public sealed class ClassStudentDto
     public string FullName { get; init; } = string.Empty;
     public string Email { get; init; } = string.Empty;
     public string? MajorCode { get; init; }
+    public string? ProfileMajorCode { get; init; }
+    public string MajorVerificationStatus { get; init; } = "Unverified";
     public string? MemberCode { get; init; }
     public string EnrollmentStatus { get; init; } = string.Empty;
     public Guid? TeamId { get; init; }
@@ -160,8 +162,6 @@ public sealed class AddStudentToClassRequest
 
 public sealed class UpdateClassStudentRequest
 {
-    public string FullName { get; init; } = string.Empty;
-    public string Email { get; init; } = string.Empty;
     public string MajorCode { get; init; } = string.Empty;
     public string? EnrollmentStatus { get; init; }
 }
@@ -200,4 +200,13 @@ public sealed class ImportStudentsCommitResponse
     public int UpdatedCount { get; init; }
     public int SkippedCount { get; init; }
     public int ErrorCount { get; init; }
+    public IReadOnlyCollection<ImportStudentCommitErrorDto> Errors { get; init; } = Array.Empty<ImportStudentCommitErrorDto>();
+}
+
+public sealed class ImportStudentCommitErrorDto
+{
+    public int RowNumber { get; init; }
+    public string StudentCode { get; init; } = string.Empty;
+    public string ErrorCode { get; init; } = string.Empty;
+    public string ErrorMessage { get; init; } = string.Empty;
 }

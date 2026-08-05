@@ -99,6 +99,7 @@ public sealed class RemoveStudentFromClassCommandHandler : IRemoveStudentFromCla
 
         // Soft Removal: Mark status as Dropped
         classStudent.EnrollmentStatus = EnrollmentStatus.Dropped;
+        classStudent.CountsTowardCourseSemesterLimit = false;
         classStudent.UpdatedAt = DateTime.UtcNow;
 
         await _context.SaveChangesAsync(cancellationToken);

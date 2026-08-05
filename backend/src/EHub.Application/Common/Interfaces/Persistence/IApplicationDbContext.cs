@@ -16,6 +16,7 @@ public interface IApplicationDbContext
     DbSet<Class> Classes { get; }
     DbSet<ClassLecturer> ClassLecturers { get; }
     DbSet<ClassAuditLog> ClassAuditLogs { get; }
+    DbSet<ClassImportSession> ClassImportSessions { get; }
     DbSet<Student> Students { get; }
     DbSet<ClassStudent> ClassStudents { get; }
     DbSet<Team> Teams { get; }
@@ -61,4 +62,5 @@ public interface IApplicationDbContext
     DbSet<ProjectAnalysis> ProjectAnalyses { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
+    void ClearChanges();
 }

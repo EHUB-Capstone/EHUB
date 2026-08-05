@@ -46,10 +46,14 @@ public static class ErrorCodes
     public const string ClassScheduleConflict = "SCHEDULE_CONFLICT";
     public const string ClassConcurrencyConflict = "CLASS_CONCURRENCY_CONFLICT";
     public const string ClassInvalidLecturer = "CLASS_INVALID_LECTURER";
+    public const string ClassLecturerRequired = "CLASS_LECTURER_REQUIRED";
     public const string ClassStudentIdentityConflict = "STUDENT_IDENTITY_CONFLICT";
     public const string ClassStudentAlreadyEnrolled = "STUDENT_ALREADY_ENROLLED";
     public const string ClassStudentEnrollmentConflict = "STUDENT_ENROLLMENT_CONFLICT";
+    public const string ClassEnrollmentMajorLocked = "MAJOR_LOCKED";
     public const string ClassImportSessionInvalid = "IMPORT_SESSION_INVALID";
+    public const string ClassImportSessionExpired = "IMPORT_SESSION_EXPIRED";
+    public const string ClassImportSessionAlreadyProcessing = "IMPORT_SESSION_ALREADY_PROCESSING";
     public const string ClassImportNoValidRows = "IMPORT_NO_VALID_ROWS";
 
     // Password reset error codes

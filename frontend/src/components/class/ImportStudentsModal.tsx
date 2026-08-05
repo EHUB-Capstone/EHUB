@@ -82,10 +82,10 @@ export default function ImportStudentsModal({
     if (!selectedFile) return;
 
     const extension = selectedFile.name.split('.').pop()?.toLowerCase();
-    if (extension !== 'xlsx') {
+    if (extension !== 'xlsx' && extension !== 'xls') {
       setFile(null);
       setPreviewData(null);
-      setFileError('Unsupported file type. Please choose an .xlsx file.');
+      setFileError('Unsupported file type. Please choose an .xlsx or .xls file.');
       return;
     }
 
@@ -156,7 +156,18 @@ export default function ImportStudentsModal({
       setCommitResult(result);
       setPhase('result');
       onImported();
-      toast.success(`Successfully imported ${result.insertedCount + result.updatedCount} students.`);
+      const committedCount = result.insertedCount + result.updatedCount;
+      if (committedCount > 0) {
+        toast.success(
+          result.errorCount > 0
+            ? `Imported ${committedCount} students; ${result.errorCount} rows require attention.`
+            : `Successfully imported ${committedCount} students.`,
+        );
+      } else if (result.errorCount > 0) {
+        toast.error(`No students were imported. ${result.errorCount} rows require attention.`);
+      } else {
+        toast.error('No students were imported. Preview the file again and verify its rows.');
+      }
     } catch (err: any) {
       toast.error(err?.response?.data?.message || err?.message || 'Failed to commit student import.');
     } finally {
@@ -168,6 +179,8 @@ export default function ImportStudentsModal({
   const totalRows = previewData?.totalRows ?? 0;
   const successCount = previewData?.validRowsCount ?? 0;
   const failedCount = previewData?.errorRowsCount ?? 0;
+  const committedCount = (commitResult?.insertedCount ?? 0) + (commitResult?.updatedCount ?? 0);
+  const commitHasChanges = committedCount > 0;
 
   return (
     <div className="fixed inset-0 z-[70] flex items-end justify-center p-0 sm:items-center sm:p-6" role="dialog" aria-modal="true" aria-labelledby="import-students-title">
@@ -230,7 +243,7 @@ export default function ImportStudentsModal({
                   <Download className="mt-0.5 h-5 w-5 shrink-0 text-secondary" />
                   <div>
                     <p className="text-sm font-semibold text-secondary-dark">Start with the official EHUB template</p>
-                    <p className="mt-0.5 text-xs text-slate-500">Includes exact columns: StudentCode, FullName, Email, MajorCode.</p>
+                    <p className="mt-0.5 text-xs text-slate-500">Includes recommended columns: StudentCode, FullName, Email, MajorCode.</p>
                   </div>
                 </div>
                 <Button variant="outline" size="sm" icon={Download} onClick={() => void handleDownloadTemplate()} className="shrink-0 border-secondary-200 text-secondary">
@@ -242,7 +255,8 @@ export default function ImportStudentsModal({
                 <Info className="mt-0.5 h-4 w-4 shrink-0 text-secondary" />
                 <div className="text-xs leading-5 text-slate-600">
                   <p><strong className="text-slate-700">Required columns:</strong> StudentCode (RollNumber), FullName, Email</p>
-                  <p><strong className="text-slate-700">Optional:</strong> MajorCode · Max file size 10 MB · Validated line by line without immediate DB write</p>
+                  <p><strong className="text-slate-700">MajorCode:</strong> Optional for legacy files; missing values are imported as unverified.</p>
+                  <p><strong className="text-slate-700">Limits:</strong> Max file size 10 MB · Maximum 5,000 rows · Validated line by line before commit</p>
                 </div>
               </div>
 
@@ -259,7 +273,7 @@ export default function ImportStudentsModal({
                       : 'border-slate-300 bg-white hover:border-primary hover:bg-primary-50/40'
                 }`}
               >
-                <input ref={inputRef} type="file" accept=".xlsx" className="hidden" onChange={handleFileInput} />
+                <input ref={inputRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleFileInput} />
                 <div className={`mx-auto flex h-12 w-12 items-center justify-center rounded-2xl ${fileError ? 'bg-red-100 text-red-600' : 'bg-primary-50 text-primary'}`}>
                   {analyzing ? <Loader2 className="h-6 w-6 animate-spin" /> : fileError ? <AlertCircle className="h-6 w-6" /> : <Upload className="h-6 w-6" />}
                 </div>
@@ -275,7 +289,7 @@ export default function ImportStudentsModal({
                       {fileError ? 'This file cannot be used' : 'Drop your student list here'}
                     </p>
                     <p className={`mx-auto mt-1 max-w-lg text-xs ${fileError ? 'text-red-600' : 'text-slate-500'}`}>
-                      {fileError || 'Choose an Excel (.xlsx) file'}
+                      {fileError || 'Choose an Excel (.xlsx or .xls) file'}
                     </p>
                     <Button variant="outline" size="sm" className="mt-4" onClick={() => inputRef.current?.click()}>
                       {fileError ? 'Choose another file' : 'Browse files'}
@@ -322,12 +336,12 @@ export default function ImportStudentsModal({
 
           {phase === 'result' && commitResult && (
             <div className="space-y-5">
-              <div className="rounded-2xl border border-green-200 bg-green-50 p-5 text-center">
-                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-green-100 text-green-600">
-                  <CheckCircle2 className="h-6 w-6" />
+              <div className={`rounded-2xl border p-5 text-center ${commitHasChanges ? 'border-green-200 bg-green-50' : 'border-amber-200 bg-amber-50'}`}>
+                <div className={`mx-auto flex h-12 w-12 items-center justify-center rounded-full ${commitHasChanges ? 'bg-green-100 text-green-600' : 'bg-amber-100 text-amber-600'}`}>
+                  {commitHasChanges ? <CheckCircle2 className="h-6 w-6" /> : <AlertCircle className="h-6 w-6" />}
                 </div>
                 <h3 className="mt-3 text-lg font-bold text-slate-900">
-                  Import committed successfully
+                  {commitHasChanges ? 'Import committed successfully' : 'No students were imported'}
                 </h3>
                 <p className="mt-1 text-sm text-slate-600">
                   {commitResult.insertedCount} new inserted, {commitResult.updatedCount} updated, {commitResult.skippedCount} skipped.
@@ -339,6 +353,23 @@ export default function ImportStudentsModal({
                 <SummaryCard label="Updated" value={commitResult.updatedCount} tone="neutral" />
                 <SummaryCard label="Skipped" value={commitResult.skippedCount} tone="danger" />
               </div>
+
+              {commitResult.errors?.length > 0 && (
+                <div className="overflow-hidden rounded-xl border border-amber-200 bg-amber-50">
+                  <div className="border-b border-amber-200 px-4 py-3 text-sm font-semibold text-amber-900">
+                    Rows skipped because data changed after preview
+                  </div>
+                  <div className="max-h-52 divide-y divide-amber-100 overflow-y-auto">
+                    {commitResult.errors.map((error: any) => (
+                      <div key={`${error.rowNumber}-${error.studentCode}`} className="grid gap-1 px-4 py-3 text-xs sm:grid-cols-[5rem_8rem_1fr]">
+                        <span className="font-semibold text-amber-900">Row {error.rowNumber}</span>
+                        <span className="font-mono text-slate-700">{error.studentCode}</span>
+                        <span className="text-slate-600">{error.errorMessage}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </main>

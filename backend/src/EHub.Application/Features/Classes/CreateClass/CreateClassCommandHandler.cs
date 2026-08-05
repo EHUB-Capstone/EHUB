@@ -130,7 +130,8 @@ public sealed class CreateClassCommandHandler : ICreateClassCommandHandler
             CourseId = request.CourseId,
             PrimaryLecturerId = targetLecturerId,
             Room = request.Room?.Trim(),
-            Status = ClassStatus.Active,
+            // Activation is automatic only after lecturer and schedule are present.
+            Status = ClassStatus.Draft,
             CreatedById = currentUserId
         };
 
@@ -142,6 +143,7 @@ public sealed class CreateClassCommandHandler : ICreateClassCommandHandler
             {
                 ClassId = newClass.Id,
                 LecturerId = targetLecturerId.Value,
+                IsPrimary = true,
                 AssignedAt = DateTime.UtcNow
             });
         }

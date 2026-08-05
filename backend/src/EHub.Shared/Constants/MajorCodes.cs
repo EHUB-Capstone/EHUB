@@ -5,6 +5,10 @@ namespace EHub.Shared.Constants;
 
 public static class MajorCodes
 {
+    // Import-only placeholder for source files that do not contain major data.
+    // It is deliberately excluded from All so manual/API input still requires a real major.
+    public const string Undeclared = "UNDECLARED";
+
     public const string BBA_HM = "BBA_HM";
     public const string BBA_IB = "BBA_IB";
     public const string BBA_MC = "BBA_MC";
@@ -65,4 +69,7 @@ public static class MajorCodes
         return !string.IsNullOrWhiteSpace(majorCode) &&
                All.Contains(majorCode.Trim(), StringComparer.OrdinalIgnoreCase);
     }
+
+    public static bool IsUndeclared(string? majorCode) =>
+        string.Equals(majorCode?.Trim(), Undeclared, StringComparison.OrdinalIgnoreCase);
 }
