@@ -12,6 +12,7 @@ using EHub.Infrastructure.Services.Email;
 using EHub.Infrastructure.Services.Auth;
 using EHub.Application.Common.Models.Identity;
 using EHub.Infrastructure.Options;
+using EHub.Infrastructure.BackgroundJobs;
 
 namespace EHub.Infrastructure;
 
@@ -28,6 +29,9 @@ public static class DependencyInjection
                 b => b.MigrationsAssembly(typeof(AppDbContext).Assembly.FullName)));
 
         services.AddScoped<IApplicationDbContext>(provider => provider.GetRequiredService<AppDbContext>());
+        services.AddHostedService<ClassImportSessionCleanupService>();
+        services.AddScoped<IOutboxEventDispatcher, NotificationOutboxEventDispatcher>();
+        services.AddHostedService<OutboxProcessorBackgroundService>();
 
         // Repositories & Persistence
         services.AddScoped<IUserRepository, UserRepository>();

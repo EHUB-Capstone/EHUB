@@ -175,6 +175,36 @@ public sealed class GetClassesQueryHandler : IGetClassesQueryHandler
             })
             .ToListAsync(cancellationToken);
 
+        var pageClassIds = projectedItems.Select(item => item.Id).ToArray();
+        var mentorRows = await _context.MentorAssignments
+            .AsNoTracking()
+            .Where(assignment =>
+                pageClassIds.Contains(assignment.Team.ClassId) &&
+                assignment.Team.Status == TeamStatus.Active &&
+                assignment.Status == MentorAssignmentStatus.Active &&
+                assignment.EndedAt == null)
+            .Select(assignment => new
+            {
+                ClassId = assignment.Team.ClassId,
+                assignment.MentorProfileId,
+                assignment.MentorProfile.UserId,
+                assignment.MentorProfile.User.FullName,
+                assignment.MentorProfile.User.Email
+            })
+            .Distinct()
+            .ToListAsync(cancellationToken);
+        var mentorsByClass = mentorRows
+            .GroupBy(item => item.ClassId)
+            .ToDictionary(
+                group => group.Key,
+                group => group.Select(item => new ClassMentorSummaryDto
+                {
+                    MentorProfileId = item.MentorProfileId,
+                    UserId = item.UserId,
+                    FullName = item.FullName,
+                    Email = item.Email
+                }).ToArray());
+
         var items = projectedItems.Select(c => new ClassResponse
         {
             Id = c.Id,
@@ -191,10 +221,11 @@ public sealed class GetClassesQueryHandler : IGetClassesQueryHandler
             PrimaryLecturerEmail = c.PrimaryLecturerEmail,
             Room = c.Room,
             Schedules = ClassScheduleRules.Deserialize(c.ScheduleJson),
-            IsEnrollmentMajorLocked = c.IsEnrollmentMajorLocked,
+            IsEnrollmentMajorLocked = c.Status != ClassStatus.Archived && c.IsEnrollmentMajorLocked,
             Status = c.Status.ToString(),
             StudentCount = c.StudentCount,
             TeamCount = c.TeamCount,
+            Mentors = mentorsByClass.GetValueOrDefault(c.Id) ?? Array.Empty<ClassMentorSummaryDto>(),
             CreatedAtUtc = c.CreatedAt,
             RowVersion = c.Version.ToString()
         }).ToArray();

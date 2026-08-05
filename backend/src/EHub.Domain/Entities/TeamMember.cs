@@ -13,6 +13,7 @@ public class TeamMember
     public virtual ClassStudent ClassStudent { get; set; } = null!;
 
     public TeamMemberRole RoleInTeam { get; set; } = TeamMemberRole.Member;
+    public bool CountsTowardActiveTeam { get; set; } = true;
     public DateTime JoinedAt { get; set; } = DateTime.UtcNow;
 
     public Guid? CreatedById { get; set; }

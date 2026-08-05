@@ -7,12 +7,17 @@ import {
 } from '../src/config/classFeatureFlags.ts';
 import { canAccessClassRoute, classRouteAccess } from '../src/config/classAccessPolicy.ts';
 
-test('keeps unfinished class features disabled and enables hardened lecturer import', () => {
+test('enables completed class workflow features while keeping unrelated unfinished features disabled', () => {
   const flags = createClassFeatureFlags({});
 
   assert.equal(flags.lecturerStudentImport, true);
+  assert.equal(flags.majorVerification, true);
+  assert.equal(flags.teamManagement, true);
+  assert.equal(flags.mentorAssignment, true);
+  assert.equal(flags.projectDirection, true);
+  assert.equal(flags.studentSelfService, true);
   assert.equal(Object.entries(flags)
-    .filter(([name]) => name !== 'lecturerStudentImport')
+    .filter(([name]) => !['lecturerStudentImport', 'majorVerification', 'teamManagement', 'mentorAssignment', 'projectDirection', 'studentSelfService'].includes(name))
     .every(([, enabled]) => enabled === false), true);
 });
 
@@ -21,7 +26,7 @@ test('shows unavailable class controls in local development without enabling the
 
   assert.equal(flags.showDevelopmentControls, true);
   assert.equal(flags.rename, false);
-  assert.equal(flags.teamManagement, false);
+  assert.equal(flags.teamManagement, true);
 });
 
 test('allows lecturer import to be disabled explicitly', () => {

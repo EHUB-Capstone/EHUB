@@ -60,11 +60,10 @@ public sealed class PreviewImportStudentsCommandHandler : IPreviewImportStudents
             return Failure("Classes.FileTooLarge", "Excel file size exceeds the 10 MB limit.");
         }
 
-        var extension = Path.GetExtension(file.FileName);
-        if (!string.Equals(extension, ".xlsx", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(extension, ".xls", StringComparison.OrdinalIgnoreCase))
+        var fileValidation = ExcelWorkbookSecurity.Validate(file);
+        if (fileValidation.IsFailure)
         {
-            return Failure("Classes.InvalidFileType", "Only Excel files (.xlsx or .xls) are allowed.");
+            return Result.Failure<ImportStudentsPreviewResponse>(fileValidation.Error);
         }
 
         var targetClass = await _context.Classes
@@ -100,15 +99,6 @@ public sealed class PreviewImportStudentsCommandHandler : IPreviewImportStudents
 
         if (validRows.Length > 0)
         {
-            var cleanupAt = DateTime.UtcNow;
-            var consumedRetentionCutoff = cleanupAt.AddDays(-1);
-            await _context.ClassImportSessions
-                .Where(session =>
-                    session.ExpiresAtUtc <= cleanupAt ||
-                    (session.Status == ClassImportSessionStatus.Consumed &&
-                     session.ConsumedAtUtc <= consumedRetentionCutoff))
-                .ExecuteDeleteAsync(cancellationToken);
-
             sessionId = Guid.NewGuid();
             _context.ClassImportSessions.Add(new ClassImportSession
             {
@@ -439,10 +429,10 @@ public sealed class PreviewImportStudentsCommandHandler : IPreviewImportStudents
                 .Include(enrollment => enrollment.Class)
                 .Where(enrollment =>
                     profileIds.Contains(enrollment.StudentId) &&
-                    enrollment.CountsTowardCourseSemesterLimit &&
-                    enrollment.SemesterId == targetClass.SemesterId &&
-                    enrollment.CourseId == targetClass.CourseId &&
-                    enrollment.Class.Status != ClassStatus.Archived)
+                    (enrollment.ClassId == targetClass.Id ||
+                     (enrollment.CountsTowardCourseSemesterLimit &&
+                      enrollment.SemesterId == targetClass.SemesterId &&
+                      enrollment.CourseId == targetClass.CourseId)))
                 .ToListAsync(cancellationToken);
 
         for (var index = 0; index < rows.Count; index++)
@@ -471,14 +461,26 @@ public sealed class PreviewImportStudentsCommandHandler : IPreviewImportStudents
             else
             {
                 var profile = profileByCode ?? profileByEmail;
-                var conflict = profile == null
+                var currentEnrollment = profile == null
                     ? null
-                    : enrollments.FirstOrDefault(enrollment => enrollment.StudentId == profile.Id);
-                if (conflict != null)
+                    : enrollments.FirstOrDefault(enrollment =>
+                        enrollment.StudentId == profile.Id && enrollment.ClassId == targetClass.Id);
+                if (currentEnrollment != null)
                 {
-                    error = conflict.ClassId == targetClass.Id
-                        ? $"Student '{row.StudentCode}' is already enrolled in this class."
-                        : $"Student '{row.StudentCode}' is already enrolled in class '{conflict.Class.ClassCode}' for the same course and semester.";
+                    error = currentEnrollment.EnrollmentStatus == EnrollmentStatus.Dropped
+                        ? $"Student '{row.StudentCode}' has a dropped enrollment. Use the explicit re-enroll action."
+                        : $"Student '{row.StudentCode}' already has an enrollment in this class.";
+                }
+                else
+                {
+                    var conflict = profile == null
+                        ? null
+                        : enrollments.FirstOrDefault(enrollment =>
+                            enrollment.StudentId == profile.Id && enrollment.CountsTowardCourseSemesterLimit);
+                    if (conflict != null)
+                    {
+                        error = $"Student '{row.StudentCode}' is already enrolled in class '{conflict.Class.ClassCode}' for the same course and semester.";
+                    }
                 }
             }
 

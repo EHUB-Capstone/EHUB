@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import { X, Loader2 } from 'lucide-react';
 import { classApi } from '../../api/classApi';
 import { PROGRAM_GROUPS } from '../../constants/majors';
+import { parseApiError } from '../../utils/apiError';
 
 export default function AddStudentModal({ classId, onClose, onAdded }) {
   const [form, setForm] = useState({
@@ -27,7 +28,7 @@ export default function AddStudentModal({ classId, onClose, onAdded }) {
       toast.success('Thêm sinh viên thành công');
       onAdded();
     } catch (err) {
-      toast.error(err?.response?.data?.message || 'Thêm sinh viên thất bại');
+      toast.error(parseApiError(err, 'Thêm sinh viên thất bại').message);
     } finally {
       setSubmitting(false);
     }

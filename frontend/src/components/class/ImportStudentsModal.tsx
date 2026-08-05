@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import Button from '../ui/Button';
 import { classApi } from '../../api/classApi';
+import { parseApiError } from '../../utils/apiError';
 
 interface ImportStudentsModalProps {
   classId?: string;
@@ -110,8 +111,8 @@ export default function ImportStudentsModal({
 
       setPreviewData(data);
       setPhase('review');
-    } catch (error: any) {
-      setFileError(error?.response?.data?.message || error?.message || 'The file could not be read. Please check its format.');
+    } catch (error: unknown) {
+      setFileError(parseApiError(error, 'The file could not be read. Please check its format.').message);
     } finally {
       setAnalyzing(false);
     }
@@ -168,8 +169,8 @@ export default function ImportStudentsModal({
       } else {
         toast.error('No students were imported. Preview the file again and verify its rows.');
       }
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || err?.message || 'Failed to commit student import.');
+    } catch (err: unknown) {
+      toast.error(parseApiError(err, 'Failed to commit student import.').message);
     } finally {
       setImporting(false);
     }

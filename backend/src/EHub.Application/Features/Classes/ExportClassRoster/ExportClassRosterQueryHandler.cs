@@ -5,6 +5,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using ClosedXML.Excel;
 using EHub.Application.Common.Interfaces.Persistence;
+using EHub.Application.Features.Classes.Common;
+using EHub.Contracts.Classes;
 using EHub.Domain.Enums;
 using EHub.Shared.Constants;
 using EHub.Shared.Errors;
@@ -24,6 +26,7 @@ public sealed class ExportClassRosterQueryHandler : IExportClassRosterQueryHandl
 
     public async Task<Result<(byte[] FileBytes, string ContentType, string FileName)>> HandleAsync(
         Guid classId,
+        ExportClassRosterRequest request,
         Guid currentUserId,
         string currentUserRole,
         CancellationToken cancellationToken = default)
@@ -56,12 +59,41 @@ public sealed class ExportClassRosterQueryHandler : IExportClassRosterQueryHandl
             }
         }
 
-        var roster = await _context.ClassStudents
+        var normalizedScope = request.Scope.Trim();
+        if (!string.Equals(normalizedScope, "Active", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(normalizedScope, "History", StringComparison.OrdinalIgnoreCase))
+        {
+            return Result.Failure<(byte[], string, string)>(
+                new Error(ErrorCodes.ClassValidationError, "Export scope must be Active or History."));
+        }
+
+        EnrollmentStatus? status;
+        if (string.Equals(normalizedScope, "Active", StringComparison.OrdinalIgnoreCase))
+        {
+            status = EnrollmentStatus.Active;
+            if (!string.IsNullOrWhiteSpace(request.Status) &&
+                !string.Equals(request.Status, nameof(EnrollmentStatus.Active), StringComparison.OrdinalIgnoreCase))
+            {
+                return Result.Failure<(byte[], string, string)>(
+                    new Error(ErrorCodes.ClassValidationError, "Active export scope only accepts Active enrollment status."));
+            }
+        }
+        else if (!ClassRosterFilters.TryParseStatus(request.Status, out status))
+        {
+            return Result.Failure<(byte[], string, string)>(
+                new Error(ErrorCodes.ClassValidationError, "Enrollment status must be Active, Dropped, or Completed."));
+        }
+
+        var rosterQuery = _context.ClassStudents
             .AsNoTracking()
             .Include(cs => cs.Student)
             .Include(cs => cs.TeamMembers)
             .ThenInclude(tm => tm.Team)
-            .Where(cs => cs.ClassId == classId)
+            .Where(cs => cs.ClassId == classId);
+
+        rosterQuery = ClassRosterFilters.Apply(rosterQuery, request.Search, request.MajorCode, status);
+
+        var roster = await rosterQuery
             .OrderBy(cs => cs.Student.RollNumber)
             .ThenBy(cs => cs.Student.FullName)
             .ToListAsync(cancellationToken);
@@ -89,7 +121,7 @@ public sealed class ExportClassRosterQueryHandler : IExportClassRosterQueryHandl
 
         foreach (var cs in roster)
         {
-            var activeTeamMember = cs.TeamMembers.FirstOrDefault(tm => tm.Team != null && tm.Team.Status == TeamStatus.Active);
+            var activeTeamMember = cs.TeamMembers.FirstOrDefault(tm => tm.CountsTowardActiveTeam && tm.Team != null && tm.Team.Status == TeamStatus.Active);
 
             worksheet.Cell(rowIndex, 1).Value = stt++;
             worksheet.Cell(rowIndex, 2).Value = cs.Student.RollNumber ?? string.Empty;
@@ -110,7 +142,10 @@ public sealed class ExportClassRosterQueryHandler : IExportClassRosterQueryHandl
         workbook.SaveAs(ms);
         var bytes = ms.ToArray();
 
-        var fileName = $"{targetClass.ClassCode}_students.xlsx";
+        var scopeSuffix = string.Equals(normalizedScope, "Active", StringComparison.OrdinalIgnoreCase)
+            ? "active"
+            : "history";
+        var fileName = $"{targetClass.ClassCode}_students_{scopeSuffix}.xlsx";
         var contentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
         return Result.Success((bytes, contentType, fileName));

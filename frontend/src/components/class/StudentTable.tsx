@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { useState, useMemo, useEffect } from 'react';
 import toast from 'react-hot-toast';
-import { Search, Users, AlertTriangle, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, Users, AlertTriangle, UserMinus, RotateCcw, ChevronLeft, ChevronRight } from 'lucide-react';
 import EmptyState from '../ui/EmptyState';
 import { getMajorName, TEAM_MAJOR_GROUPS } from '../../constants/majors';
 import { getDisplayGroupName } from '../../utils/teamDisplay';
@@ -45,6 +45,7 @@ export default function StudentTable({
   selected,
   onSelectionChange,
   onDeleteStudent,
+  onReEnrollStudent,
   toolbarAction,
   selectionDisabled = false,
   maxSelection = 6,
@@ -133,7 +134,9 @@ export default function StudentTable({
 
   const toggleAll = () => {
     if (selectionDisabled) return;
-    const unassigned = filtered.filter(s => !s.teamId).map(s => s._id);
+    const unassigned = filtered
+      .filter(s => !s.teamId && s.enrollmentStatus === 'Active')
+      .map(s => s._id);
     const allSelected = unassigned.length > 0 && unassigned.every(id => selected.includes(id));
     if (allSelected) {
       onSelectionChange(prev => prev.filter(id => !unassigned.includes(id)));
@@ -154,7 +157,7 @@ export default function StudentTable({
     }
   };
 
-  const canSelect = (s) => !selectionDisabled && !s.teamId;
+  const canSelect = (s) => !selectionDisabled && !s.teamId && s.enrollmentStatus === 'Active';
 
   return (
     <div className="overflow-hidden rounded-xl border border-slate-200/70 bg-white shadow-xs">
@@ -236,7 +239,7 @@ export default function StudentTable({
                     <input
                       type="checkbox"
                       className="rounded"
-                      checked={filtered.filter(s => !s.teamId).length > 0 && filtered.filter(s => !s.teamId).every(s => selected.includes(s._id))}
+                      checked={filtered.filter(s => !s.teamId && s.enrollmentStatus === 'Active').length > 0 && filtered.filter(s => !s.teamId && s.enrollmentStatus === 'Active').every(s => selected.includes(s._id))}
                       onChange={toggleAll}
                     />
                   </th>
@@ -250,7 +253,8 @@ export default function StudentTable({
                 )}
                 <th className="hidden w-1/4 px-3 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-slate-500 2xl:table-cell">Description</th>
                 <th className="px-3 py-2.5 text-center text-[10px] font-bold uppercase tracking-wider text-slate-500">Team Status</th>
-                {onDeleteStudent && (
+                <th className="px-3 py-2.5 text-center text-[10px] font-bold uppercase tracking-wider text-slate-500">Enrollment</th>
+                {(onDeleteStudent || onReEnrollStudent) && (
                   <th className="px-3 py-2.5 text-center text-[10px] font-bold uppercase tracking-wider text-slate-500">Action</th>
                 )}
               </tr>
@@ -299,9 +303,14 @@ export default function StudentTable({
 
                     <td className="px-3 py-2.5">
                       {mLabel ? (
-                        <span className={`rounded-full px-1.5 py-0.5 text-[11px] font-semibold ${majorColor(s.major)}`} title={mTooltip}>
-                          {mLabel}
-                        </span>
+                        <div className="flex flex-col items-start gap-1">
+                          <span className={`rounded-full px-1.5 py-0.5 text-[11px] font-semibold ${majorColor(s.major)}`} title={mTooltip}>
+                            {mLabel}
+                          </span>
+                          <span className="text-[10px] font-medium text-slate-400">
+                            {s.majorVerificationStatus || 'Unverified'}
+                          </span>
+                        </div>
                       ) : (
                         <span className="flex w-fit items-center gap-1 rounded-full bg-amber-100 px-1.5 py-0.5 text-[11px] font-semibold text-amber-700" title="Missing major">
                           <AlertTriangle className="h-2.5 w-2.5" /> Missing
@@ -342,16 +351,38 @@ export default function StudentTable({
                         )
                       ) : ''}
                     </td>
+
+                    <td className="px-3 py-2.5 text-center">
+                      <span className={`rounded-full px-1.5 py-0.5 text-[11px] font-semibold ${
+                        s.enrollmentStatus === 'Active'
+                          ? 'bg-green-100 text-green-700'
+                          : s.enrollmentStatus === 'Dropped'
+                            ? 'bg-red-100 text-red-700'
+                            : 'bg-blue-100 text-blue-700'
+                      }`}>
+                        {s.enrollmentStatus || 'Active'}
+                      </span>
+                    </td>
                     
-                    {onDeleteStudent && (
+                    {(onDeleteStudent || onReEnrollStudent) && (
                       <td className="px-3 py-2.5 text-center">
-                        <button
-                          onClick={(e) => { e.stopPropagation(); onDeleteStudent(s); }}
-                          className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600"
-                          title="Xóa sinh viên"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
+                        {s.enrollmentStatus === 'Active' && onDeleteStudent ? (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); onDeleteStudent(s); }}
+                            className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600"
+                            title="Drop enrollment"
+                          >
+                            <UserMinus className="h-3.5 w-3.5" />
+                          </button>
+                        ) : s.enrollmentStatus === 'Dropped' && onReEnrollStudent ? (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); onReEnrollStudent(s); }}
+                            className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-green-50 hover:text-green-700"
+                            title="Re-enroll student"
+                          >
+                            <RotateCcw className="h-3.5 w-3.5" />
+                          </button>
+                        ) : null}
                       </td>
                     )}
                   </tr>

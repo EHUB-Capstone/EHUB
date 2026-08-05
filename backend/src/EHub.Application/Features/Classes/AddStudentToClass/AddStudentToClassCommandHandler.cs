@@ -103,11 +103,17 @@ public sealed class AddStudentToClassCommandHandler : IAddStudentToClassCommandH
                     enrollment => enrollment.ClassId == classId && enrollment.StudentId == studentProfile.Id,
                     cancellationToken);
 
-            if (existingEnrollment?.CountsTowardCourseSemesterLimit == true)
+            if (existingEnrollment != null)
             {
+                var code = existingEnrollment.EnrollmentStatus == EnrollmentStatus.Dropped
+                    ? ErrorCodes.ClassStudentReEnrollmentRequired
+                    : ErrorCodes.ClassStudentAlreadyEnrolled;
+                var message = existingEnrollment.EnrollmentStatus == EnrollmentStatus.Dropped
+                    ? $"Student '{studentCode}' has a dropped enrollment. Use the explicit re-enroll action."
+                    : $"Student '{studentCode}' already has an enrollment in this class.";
                 return Failure(
-                    ErrorCodes.ClassStudentAlreadyEnrolled,
-                    $"Student '{studentCode}' is already actively enrolled in this class.");
+                    code,
+                    message);
             }
 
             var conflictEnrollment = await _context.ClassStudents
@@ -118,7 +124,6 @@ public sealed class AddStudentToClassCommandHandler : IAddStudentToClassCommandH
                     enrollment.ClassId != classId &&
                     enrollment.Class.CourseId == targetClass.CourseId &&
                     enrollment.Class.SemesterId == targetClass.SemesterId &&
-                    enrollment.Class.Status != ClassStatus.Archived &&
                     enrollment.CountsTowardCourseSemesterLimit,
                     cancellationToken);
 
@@ -148,35 +153,40 @@ public sealed class AddStudentToClassCommandHandler : IAddStudentToClassCommandH
         // Existing Student profile data remains the global source of truth.
         // Enrolling a student must not let a lecturer overwrite that profile.
 
-        if (existingEnrollment == null)
+        existingEnrollment = new ClassStudent
         {
-            existingEnrollment = new ClassStudent
+            ClassId = classId,
+            StudentId = studentProfile.Id,
+            SemesterId = targetClass.SemesterId,
+            CourseId = targetClass.CourseId,
+            EnrollmentStatus = EnrollmentStatus.Active,
+            CountsTowardCourseSemesterLimit = true,
+            MajorCodeAtEnrollment = majorCode,
+            MajorVerificationStatus = EnrollmentMajorVerificationStatus.Unverified,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+        await _context.ClassStudents.AddAsync(existingEnrollment, cancellationToken);
+
+        _context.ClassAuditLogs.Add(new ClassAuditLog
+        {
+            ClassId = classId,
+            Action = "STUDENT_ENROLLMENT_ADDED",
+            PerformedByUserId = currentUserId,
+            OccurredAtUtc = DateTime.UtcNow,
+            DetailsJson = System.Text.Json.JsonSerializer.Serialize(new
             {
-                ClassId = classId,
-                StudentId = studentProfile.Id,
-                SemesterId = targetClass.SemesterId,
-                CourseId = targetClass.CourseId,
-                EnrollmentStatus = EnrollmentStatus.Active,
-                CountsTowardCourseSemesterLimit = true,
+                studentProfile.Id,
+                StudentCode = studentCode,
                 MajorCodeAtEnrollment = majorCode,
-                MajorVerificationStatus = EnrollmentMajorVerificationStatus.Unverified,
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow
-            };
-            await _context.ClassStudents.AddAsync(existingEnrollment, cancellationToken);
-        }
-        else
+                Source = "Manual"
+            })
+        });
+        ClassOutbox.Enqueue(_context, "Class.StudentEnrollmentAdded.v1", classId, new
         {
-            existingEnrollment.EnrollmentStatus = EnrollmentStatus.Active;
-            existingEnrollment.CountsTowardCourseSemesterLimit = true;
-            existingEnrollment.SemesterId = targetClass.SemesterId;
-            existingEnrollment.CourseId = targetClass.CourseId;
-            existingEnrollment.MajorCodeAtEnrollment = majorCode;
-            existingEnrollment.MajorVerificationStatus = EnrollmentMajorVerificationStatus.Unverified;
-            existingEnrollment.MajorVerifiedAtUtc = null;
-            existingEnrollment.MajorVerifiedByUserId = null;
-            existingEnrollment.UpdatedAt = DateTime.UtcNow;
-        }
+            StudentId = studentProfile.Id,
+            Source = "Manual"
+        });
 
         try
         {

@@ -9,6 +9,11 @@ import StudentTable from '../../components/class/StudentTable';
 import StudentTeamGeneratePanel from '../../components/class/StudentTeamGeneratePanel';
 import TeamSuggestionTooltip from '../../components/class/TeamSuggestionTooltip';
 import { useAuth } from '../../hooks/useAuth';
+import { unwrapApiData } from '../../utils/classMappers';
+import { normalizeManagedTeam, normalizeTeamProposal, getTeamMemberIds } from '../../utils/teamManagement';
+import ProjectDirectionModal from '../../components/class/ProjectDirectionModal';
+import { teamApi } from '../../api/teamApi';
+import { parseApiError } from '../../utils/apiError';
 
 const semesterLabel = (sem) => {
   if (sem === 'SP') return 'Spring';
@@ -25,11 +30,27 @@ export default function StudentClassDetail() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('classmates');
   const [selected, setSelected] = useState([]);
+  const [proposals, setProposals] = useState([]);
+  const [proposalToRevise, setProposalToRevise] = useState(null);
+  const [directionTeam, setDirectionTeam] = useState(null);
 
   const fetchClassDetail = useCallback(async () => {
     try {
-      const res = await classApi.getMyClassDetail(id);
-      setData(res?.data || res || null);
+      const [detailResponse, proposalResponse] = await Promise.all([
+        classApi.getMyClassDetail(id),
+        classApi.getTeamProposals(id),
+      ]);
+      const detail = unwrapApiData(detailResponse);
+      const normalizedStudents = (detail?.students || []).map(student => ({
+        ...student,
+        _id: student.studentId,
+        major: student.majorCode,
+        classId: id,
+      }));
+      const normalizedTeams = (detail?.teams || []).map(normalizeManagedTeam);
+      setData({ ...detail, students: normalizedStudents, teams: normalizedTeams });
+      const proposalData = unwrapApiData(proposalResponse);
+      setProposals((Array.isArray(proposalData) ? proposalData : []).map(normalizeTeamProposal));
     } catch (err) {
       toast.error(err?.message || 'Failed to load class details');
       navigate('/student/classes');
@@ -66,8 +87,21 @@ export default function StudentClassDetail() {
 
   const handleTeamCreated = async () => {
     setSelected([]);
+    setProposalToRevise(null);
     await fetchClassDetail();
     setActiveTab('classmates');
+  };
+
+  const cancelProposal = async (proposal) => {
+    const reason = window.prompt('Why do you want to cancel this proposal?');
+    if (!reason) return;
+    try {
+      await teamApi.cancelProposal(proposal._id, proposal.rowVersion, reason);
+      toast.success('Team proposal cancelled.');
+      await fetchClassDetail();
+    } catch (error) {
+      toast.error(parseApiError(error, 'Failed to cancel team proposal.').message);
+    }
   };
 
   return (
@@ -114,14 +148,14 @@ export default function StudentClassDetail() {
           )}
 
           {/* Mentors card */}
-          {cls?.mentorIds && cls.mentorIds.length > 0 && (
+          {cls?.mentors && cls.mentors.length > 0 && (
             <div className="bg-slate-50 rounded-xl p-4 border border-slate-100 min-w-[220px] max-w-[280px]">
               <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Mentors</p>
               <p className="font-bold text-slate-800 text-sm mt-1 truncate">
-                {cls.mentorIds.map(m => m.name || 'Unknown').join(', ')}
+                {cls.mentors.map(m => m.fullName || 'Unknown').join(', ')}
               </p>
               <p className="text-xs text-slate-400 mt-0.5">
-                {cls.mentorIds.length} assigned to class
+                {cls.mentors.length} assigned to class
               </p>
             </div>
           )}
@@ -136,6 +170,7 @@ export default function StudentClassDetail() {
             students={students}
             onTeamCreated={handleTeamCreated}
             currentStudentId={currentStudent?._id}
+            proposal={proposalToRevise}
           />
         </div>
       )}
@@ -173,7 +208,7 @@ export default function StudentClassDetail() {
           selected={selected}
           onSelectionChange={setSelected}
           onRefresh={fetchClassDetail}
-          maxSelection={7}
+          maxSelection={6}
           selectionDisabled={hasTeam}
           toolbarAction={!hasTeam && selected.length === 0 ? (
             <TeamSuggestionTooltip label="Xem hướng dẫn tạo nhóm">
@@ -189,11 +224,28 @@ export default function StudentClassDetail() {
         />
       ) : (
         <TeamList
-          teams={teams}
+          teams={[...teams, ...proposals]}
           onRefresh={fetchClassDetail}
           canDelete={false}
           canManageInfo={false}
           currentStudentId={currentStudent?._id}
+          onRevise={(proposal) => {
+            setProposalToRevise(proposal);
+            setSelected(getTeamMemberIds(proposal));
+            setActiveTab('classmates');
+          }}
+          onProjectDirection={setDirectionTeam}
+          onCancelProposal={cancelProposal}
+        />
+      )}
+
+      {directionTeam && (
+        <ProjectDirectionModal
+          team={directionTeam}
+          role="STUDENT"
+          currentStudentId={currentStudent?._id}
+          onClose={() => setDirectionTeam(null)}
+          onChanged={fetchClassDetail}
         />
       )}
     </div>

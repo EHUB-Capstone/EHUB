@@ -17,10 +17,16 @@ public interface IApplicationDbContext
     DbSet<ClassLecturer> ClassLecturers { get; }
     DbSet<ClassAuditLog> ClassAuditLogs { get; }
     DbSet<ClassImportSession> ClassImportSessions { get; }
+    DbSet<OutboxMessage> OutboxMessages { get; }
     DbSet<Student> Students { get; }
     DbSet<ClassStudent> ClassStudents { get; }
     DbSet<Team> Teams { get; }
     DbSet<TeamMember> TeamMembers { get; }
+    DbSet<TeamProposal> TeamProposals { get; }
+    DbSet<TeamProposalMember> TeamProposalMembers { get; }
+    DbSet<TeamProposalHistory> TeamProposalHistory { get; }
+    DbSet<ProjectDirection> ProjectDirections { get; }
+    DbSet<ProjectDirectionReview> ProjectDirectionReviews { get; }
     DbSet<Project> Projects { get; }
     DbSet<ProjectTag> ProjectTags { get; }
     DbSet<Checkpoint> Checkpoints { get; }

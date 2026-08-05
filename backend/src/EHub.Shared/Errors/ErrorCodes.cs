@@ -56,11 +56,30 @@ public static class ErrorCodes
     public const string ClassStudentIsTeamLeader = "STUDENT_IS_TEAM_LEADER";
     public const string ClassStudentInActiveTeam = "STUDENT_IN_ACTIVE_TEAM";
     public const string ClassStudentEnrollmentConflict = "STUDENT_ENROLLMENT_CONFLICT";
+    public const string ClassStudentReEnrollmentRequired = "STUDENT_RE_ENROLLMENT_REQUIRED";
+    public const string ClassStudentNotDropped = "STUDENT_NOT_DROPPED";
     public const string ClassEnrollmentMajorLocked = "MAJOR_LOCKED";
     public const string ClassImportSessionInvalid = "IMPORT_SESSION_INVALID";
     public const string ClassImportSessionExpired = "IMPORT_SESSION_EXPIRED";
     public const string ClassImportSessionAlreadyProcessing = "IMPORT_SESSION_ALREADY_PROCESSING";
     public const string ClassImportNoValidRows = "IMPORT_NO_VALID_ROWS";
+
+    // Team, mentor assignment, and project direction error codes
+    public const string TeamNotFound = "TEAM_NOT_FOUND";
+    public const string TeamInactive = "TEAM_INACTIVE";
+    public const string TeamNameDuplicated = "TEAM_NAME_DUPLICATED";
+    public const string TeamMembershipConflict = "TEAM_MEMBERSHIP_CONFLICT";
+    public const string TeamMajorCompositionInvalid = "TEAM_MAJOR_COMPOSITION_INVALID";
+    public const string TeamProposalNotFound = "TEAM_PROPOSAL_NOT_FOUND";
+    public const string TeamProposalInvalid = "TEAM_PROPOSAL_INVALID";
+    public const string TeamProposalStateInvalid = "TEAM_PROPOSAL_STATE_INVALID";
+    public const string TeamProposalMembershipConflict = "TEAM_PROPOSAL_MEMBERSHIP_CONFLICT";
+    public const string TeamApprovalConflict = "TEAM_APPROVAL_CONFLICT";
+    public const string MentorNotAvailable = "MENTOR_NOT_AVAILABLE";
+    public const string MentorCapacityReached = "MENTOR_CAPACITY_REACHED";
+    public const string MentorAssignmentConflict = "MENTOR_ASSIGNMENT_CONFLICT";
+    public const string ProjectDirectionNotFound = "PROJECT_DIRECTION_NOT_FOUND";
+    public const string ProjectDirectionStateInvalid = "PROJECT_DIRECTION_STATE_INVALID";
 
     // Password reset error codes
     public const string AuthPasswordResetTokenInvalid = "AUTH_PASSWORD_RESET_TOKEN_INVALID";

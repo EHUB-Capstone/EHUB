@@ -1,5 +1,6 @@
 using System.Text.Json;
 using EHub.Application.Common.Interfaces.Persistence;
+using EHub.Application.Features.Classes.Common;
 using EHub.Contracts.Classes;
 using EHub.Domain.Entities;
 using EHub.Domain.Enums;
@@ -179,8 +180,7 @@ public sealed class CommitImportStudentsCommandHandler : ICommitImportStudentsCo
                     (enrollment.ClassId == targetClass.Id ||
                      (enrollment.CountsTowardCourseSemesterLimit &&
                       enrollment.SemesterId == targetClass.SemesterId &&
-                      enrollment.CourseId == targetClass.CourseId &&
-                      enrollment.Class.Status != ClassStatus.Archived)))
+                      enrollment.CourseId == targetClass.CourseId)))
                 .ToListAsync(cancellationToken);
 
         var profilesByCode = profiles
@@ -215,22 +215,33 @@ public sealed class CommitImportStudentsCommandHandler : ICommitImportStudentsCo
             }
 
             var profile = profileByCode ?? profileByEmail;
+            var currentEnrollment = profile == null
+                ? null
+                : enrollments.FirstOrDefault(enrollment =>
+                    enrollment.StudentId == profile.Id && enrollment.ClassId == targetClass.Id);
+            if (currentEnrollment != null)
+            {
+                errors.Add(RowError(
+                    row,
+                    currentEnrollment.EnrollmentStatus == EnrollmentStatus.Dropped
+                        ? ErrorCodes.ClassStudentReEnrollmentRequired
+                        : ErrorCodes.ClassStudentAlreadyEnrolled,
+                    currentEnrollment.EnrollmentStatus == EnrollmentStatus.Dropped
+                        ? "Student has a dropped enrollment. Use the explicit re-enroll action."
+                        : "Student already has an enrollment in this class."));
+                continue;
+            }
+
             var conflict = profile == null
                 ? null
                 : enrollments.FirstOrDefault(enrollment =>
-                    enrollment.StudentId == profile.Id &&
-                    enrollment.CountsTowardCourseSemesterLimit);
-
+                    enrollment.StudentId == profile.Id && enrollment.CountsTowardCourseSemesterLimit);
             if (conflict != null)
             {
                 errors.Add(RowError(
                     row,
-                    conflict.ClassId == targetClass.Id
-                        ? ErrorCodes.ClassStudentAlreadyEnrolled
-                        : ErrorCodes.ClassStudentEnrollmentConflict,
-                    conflict.ClassId == targetClass.Id
-                        ? "Student is already enrolled in this class."
-                        : $"Student is already enrolled in class '{conflict.Class.ClassCode}' for the same course and semester."));
+                    ErrorCodes.ClassStudentEnrollmentConflict,
+                    $"Student is already enrolled in class '{conflict.Class.ClassCode}' for the same course and semester."));
                 continue;
             }
 
@@ -251,39 +262,22 @@ public sealed class CommitImportStudentsCommandHandler : ICommitImportStudentsCo
                 profilesByEmail[row.Email] = [profile];
             }
 
-            var currentEnrollment = enrollments.FirstOrDefault(enrollment =>
-                enrollment.StudentId == profile.Id && enrollment.ClassId == targetClass.Id);
-
-            if (currentEnrollment == null)
+            currentEnrollment = new ClassStudent
             {
-                currentEnrollment = new ClassStudent
-                {
-                    ClassId = targetClass.Id,
-                    StudentId = profile.Id,
-                    SemesterId = targetClass.SemesterId,
-                    CourseId = targetClass.CourseId,
-                    EnrollmentStatus = EnrollmentStatus.Active,
-                    CountsTowardCourseSemesterLimit = true,
-                    MajorCodeAtEnrollment = row.MajorCode,
-                    MajorVerificationStatus = EnrollmentMajorVerificationStatus.Unverified,
-                    CreatedAt = DateTime.UtcNow,
-                    UpdatedAt = DateTime.UtcNow
-                };
-                _context.ClassStudents.Add(currentEnrollment);
-                enrollments.Add(currentEnrollment);
-                insertedCount++;
-            }
-            else
-            {
-                currentEnrollment.EnrollmentStatus = EnrollmentStatus.Active;
-                currentEnrollment.CountsTowardCourseSemesterLimit = true;
-                currentEnrollment.MajorCodeAtEnrollment = row.MajorCode;
-                currentEnrollment.MajorVerificationStatus = EnrollmentMajorVerificationStatus.Unverified;
-                currentEnrollment.MajorVerifiedAtUtc = null;
-                currentEnrollment.MajorVerifiedByUserId = null;
-                currentEnrollment.UpdatedAt = DateTime.UtcNow;
-                updatedCount++;
-            }
+                ClassId = targetClass.Id,
+                StudentId = profile.Id,
+                SemesterId = targetClass.SemesterId,
+                CourseId = targetClass.CourseId,
+                EnrollmentStatus = EnrollmentStatus.Active,
+                CountsTowardCourseSemesterLimit = true,
+                MajorCodeAtEnrollment = row.MajorCode,
+                MajorVerificationStatus = EnrollmentMajorVerificationStatus.Unverified,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
+            _context.ClassStudents.Add(currentEnrollment);
+            enrollments.Add(currentEnrollment);
+            insertedCount++;
         }
 
         session.Status = ClassImportSessionStatus.Consumed;
@@ -303,6 +297,12 @@ public sealed class CommitImportStudentsCommandHandler : ICommitImportStudentsCo
                 UpdatedCount = updatedCount,
                 ErrorCount = errors.Count
             }, JsonOptions)
+        });
+        ClassOutbox.Enqueue(_context, "Class.StudentRosterImported.v1", targetClass.Id, new
+        {
+            SessionId = session.Id,
+            InsertedCount = insertedCount,
+            ErrorCount = errors.Count
         });
 
         await _context.SaveChangesAsync(cancellationToken);

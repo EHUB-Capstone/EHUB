@@ -5,21 +5,20 @@ import toast from 'react-hot-toast';
 import { motion } from 'framer-motion';
 import {
   ArrowLeft, GraduationCap, Users, BookOpen,
-  Upload, Download, UserPlus, Loader2, Calendar, Pencil, ShieldCheck, Lock, Unlock, Trash2, UserRoundCheck, AlertTriangle,
+  Upload, Download, UserPlus, Loader2, Calendar, Pencil, ShieldCheck, Lock, Unlock, Trash2, AlertTriangle,
   Database, MessagesSquare
 } from 'lucide-react';
 import { AuthContext } from '../../context/AuthContext';
 import { classApi } from '../../api/classApi';
-import { userApi } from '../../api/userApi';
 import LoadingSkeleton from '../../components/ui/LoadingSkeleton';
 import StudentTable from '../../components/class/StudentTable';
 import TeamList from '../../components/class/TeamList';
 import TeamManagementModal from '../../components/class/TeamManagementModal';
-import StudentAssignmentModal from '../../components/class/StudentAssignmentModal';
 import ImportStudentsModal from '../../components/class/ImportStudentsModal';
 import StudentTeamGeneratePanel from '../../components/class/StudentTeamGeneratePanel';
 import TeamSuggestionTooltip from '../../components/class/TeamSuggestionTooltip';
 import ReviewTeamProposalModal from '../../components/class/ReviewTeamProposalModal';
+import ProjectDirectionModal from '../../components/class/ProjectDirectionModal';
 import EditScheduleModal from '../../components/class/EditScheduleModal';
 import AssignLectureModal from '../../components/class/AssignLectureModal';
 import AssignMentorsModal from '../../components/class/AssignMentorsModal';
@@ -27,13 +26,7 @@ import RenameClassModal from '../../components/class/RenameClassModal';
 import VerifyMajorModal from '../../components/class/VerifyMajorModal';
 import AddStudentModal from '../../components/class/AddStudentModal';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
-import { entityId, getTeamMemberIds } from '../../utils/teamManagement';
-import {
-  directoryRecordToStudent,
-  mergeAssignmentCandidates,
-  normalizeClassStudents,
-  studentBelongsToClass,
-} from '../../utils/studentAssignment';
+import { entityId, getTeamMemberIds, normalizeManagedTeam, normalizeTeamProposal } from '../../utils/teamManagement';
 import { classFeatureFlags } from '../../config/classFeatureFlags';
 import { parseApiError } from '../../utils/apiError';
 import { toClassViewModel, unwrapApiData } from '../../utils/classMappers';
@@ -68,6 +61,7 @@ export default function ClassDetail() {
   const [cls,      setCls]      = useState(null);
   const [students, setStudents] = useState([]);
   const [teams,    setTeams]    = useState([]);
+  const [teamProposals, setTeamProposals] = useState([]);
   const [loading,  setLoading]  = useState(true);
   const [rosterLoadError, setRosterLoadError] = useState('');
   const [rosterPage, setRosterPage] = useState(1);
@@ -86,11 +80,6 @@ export default function ClassDetail() {
   const [showTeamManagement, setShowTeamManagement] = useState(false);
   const [teamToEdit, setTeamToEdit] = useState(null);
   const [teamFormMemberIds, setTeamFormMemberIds] = useState([]);
-  const [showStudentAssignment, setShowStudentAssignment] = useState(false);
-  const [assignmentMode, setAssignmentMode] = useState('CLASS');
-  const [assignmentInitialStudentIds, setAssignmentInitialStudentIds] = useState([]);
-  const [assignmentCandidates, setAssignmentCandidates] = useState([]);
-  const [loadingAssignmentCandidates, setLoadingAssignmentCandidates] = useState(false);
   const [showAddStudent, setShowAddStudent] = useState(false);
   const [showEditSchedule, setShowEditSchedule] = useState(false);
   const [showAssignLecturer, setShowAssignLecturer] = useState(false);
@@ -98,11 +87,14 @@ export default function ClassDetail() {
   const [showRename, setShowRename] = useState(false);
   const [showVerify, setShowVerify] = useState(false);
   const [reviewTeam, setReviewTeam] = useState(null);
+  const [directionTeam, setDirectionTeam] = useState(null);
   const [studentToDelete, setStudentToDelete] = useState(null);
+  const [studentToReEnroll, setStudentToReEnroll] = useState(null);
   const [backfilling, setBackfilling] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [togglingLock, setTogglingLock] = useState(false);
   const [removingStudent, setRemovingStudent] = useState(false);
+  const [reEnrollingStudent, setReEnrollingStudent] = useState(false);
   const [showDeleteClass, setShowDeleteClass] = useState(false);
   const [deletingClass, setDeletingClass] = useState(false);
 
@@ -167,6 +159,7 @@ export default function ClassDetail() {
         email: s.email,
         major: s.majorCode || s.major,
         majorCode: s.majorCode || s.major,
+        majorVerificationStatus: s.majorVerificationStatus || 'Unverified',
         enrollmentStatus: s.enrollmentStatus || 'Active',
         classId: currentClassId,
         teamId: s.teamId || null,
@@ -176,22 +169,25 @@ export default function ClassDetail() {
 
       setStudents(mappedStudents);
 
-      let rawTeams = classFeatureFlags.teamManagement ? (rawClass.teams || []) : [];
-      if (classFeatureFlags.teamManagement && rawTeams.length === 0) {
+      let rawTeams = [];
+      let rawProposals = [];
+      if (classFeatureFlags.teamManagement) {
         try {
-          const teamRes = await classApi.getTeams(id);
-          const tData = teamRes?.data || teamRes;
-          rawTeams = tData.teams || tData.items || (Array.isArray(tData) ? tData : []);
+          const [teamRes, proposalRes] = await Promise.all([
+            classApi.getTeams(id),
+            classApi.getTeamProposals(id),
+          ]);
+          const tData = unwrapApiData(teamRes);
+          const pData = unwrapApiData(proposalRes);
+          rawTeams = Array.isArray(tData) ? tData : [];
+          rawProposals = Array.isArray(pData) ? pData : [];
         } catch {
-          // ignore
+          // Class and roster remain usable if team data cannot be loaded.
         }
       }
 
-      setTeams(rawTeams.map(team => ({
-        ...team,
-        _id: team.id || team._id,
-        classId: entityId(team.classId) || currentClassId,
-      })));
+      setTeams(rawTeams.map(normalizeManagedTeam));
+      setTeamProposals(rawProposals.map(normalizeTeamProposal));
 
       return classData;
     } catch (err) {
@@ -230,48 +226,6 @@ export default function ClassDetail() {
     setTeamFormMemberIds([]);
   };
 
-  const closeStudentAssignment = () => {
-    setShowStudentAssignment(false);
-    setAssignmentInitialStudentIds([]);
-  };
-
-  const openStudentAssignment = async (mode = 'CLASS', studentIds = []) => {
-    const currentClassId = String(id || cls?._id || '');
-    const currentStudents = normalizeClassStudents(students, currentClassId);
-    setAssignmentMode(mode);
-    setAssignmentInitialStudentIds(studentIds);
-    setAssignmentCandidates(currentStudents);
-    setShowStudentAssignment(true);
-    setLoadingAssignmentCandidates(true);
-
-    try {
-      const response = await userApi.getAll({ page: 1, limit: 200, role: 'STUDENT', status: 'APPROVED' });
-      const payload = response?.data || response;
-      const records = payload?.users || payload?.data?.users || payload?.data || [];
-      const directoryStudents = (Array.isArray(records) ? records : [])
-        .map(directoryRecordToStudent)
-        .filter(Boolean);
-      setAssignmentCandidates(mergeAssignmentCandidates(currentStudents, directoryStudents));
-    } catch {
-      // The current class roster remains fully usable if the user directory is not accessible.
-    } finally {
-      setLoadingAssignmentCandidates(false);
-    }
-  };
-
-  const handleStudentsAssigned = (result) => {
-    const currentClassId = String(id || cls?._id || result.classId);
-    const nextClassStudents = result.students
-      .filter(student => studentBelongsToClass(student, currentClassId))
-      .map(student => ({ ...student, source: student.source || 'CLASS_ROSTER' }));
-    setStudents(nextClassStudents);
-    setTeams(result.teams);
-    setAssignmentCandidates(result.students);
-    setSelected([]);
-    setTab(result.mode === 'TEAM' ? 'teams' : 'students');
-    closeStudentAssignment();
-  };
-
   const handleTeamSaved = (savedTeam) => {
     const memberIds = new Set(getTeamMemberIds(savedTeam));
     setTeams(current => (
@@ -286,18 +240,6 @@ export default function ClassDetail() {
     }));
     setSelected([]);
     closeTeamManagement();
-  };
-
-  const handleTeamDeleted = (deletedTeam) => {
-    const deletedMemberIds = new Set(getTeamMemberIds(deletedTeam));
-    setTeams(current => current.filter(team => team._id !== deletedTeam._id));
-    setStudents(current => current.map(student => (
-      deletedMemberIds.has(student._id) || entityId(student.teamId) === deletedTeam._id
-        ? { ...student, teamId: null }
-        : student
-    )));
-    setSelected(current => current.filter(studentId => !deletedMemberIds.has(studentId)));
-    toast.success('Team deleted');
   };
 
   const handleBackfillChats = async () => {
@@ -319,11 +261,13 @@ export default function ClassDetail() {
   const handleToggleMajorLock = async () => {
     setTogglingLock(true);
     try {
-      const res = await classApi.toggleMajorLock(id);
-      setCls(prev => ({ ...prev, isMajorLocked: res.data.isMajorLocked }));
+      const res = cls.isMajorLocked
+        ? await classApi.unlockMajors(id)
+        : await classApi.lockMajors(id);
+      setCls(prev => ({ ...prev, isMajorLocked: res.data.isLocked }));
       toast.success(res.message || 'Đã thay đổi trạng thái cập nhật chuyên ngành');
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Lỗi khi thay đổi trạng thái');
+      toast.error(parseApiError(err, 'Lỗi khi thay đổi trạng thái').message);
     } finally {
       setTogglingLock(false);
     }
@@ -332,7 +276,12 @@ export default function ClassDetail() {
   const handleExportExcel = async () => {
     setExporting(true);
     try {
-      const response = await classApi.exportClassExcel(id);
+      const response = await classApi.exportClassExcel(id, {
+        scope: rosterStatus === 'Active' ? 'Active' : 'History',
+        search: rosterSearch || undefined,
+        majorCode: rosterMajor || undefined,
+        status: rosterStatus || undefined,
+      });
       const blob = new Blob([response.data || response], {
         type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
       });
@@ -344,8 +293,7 @@ export default function ClassDetail() {
       window.URL.revokeObjectURL(url);
       toast.success('Export successful');
     } catch (e) {
-      console.error(e);
-      toast.error('Failed to export students');
+      toast.error(parseApiError(e, 'Failed to export students').message);
     } finally {
       setExporting(false);
     }
@@ -358,12 +306,12 @@ export default function ClassDetail() {
     if (!studentToDelete?._id) return;
     setRemovingStudent(true);
     try {
-      await classApi.removeStudent(id, studentToDelete._id);
-      toast.success('Xóa sinh viên thành công');
+      await classApi.dropStudent(id, studentToDelete._id);
+      toast.success('Enrollment dropped successfully');
       setStudentToDelete(null);
       await fetchData();
     } catch (err) {
-      toast.error(err?.response?.data?.message || 'Xóa sinh viên thất bại');
+      toast.error(parseApiError(err, 'Failed to drop enrollment').message);
     } finally {
       setRemovingStudent(false);
     }
@@ -399,8 +347,10 @@ export default function ClassDetail() {
   );
 
   const getUniqueMentors = () => {
-    const classMentors = cls?.mentorIds || [];
-    const teamMentors = safeTeams.map(t => t.mentorId).filter(Boolean);
+    const teamMentors = safeTeams
+      .map(team => team.currentMentorAssignment?.mentor)
+      .filter(Boolean)
+      .map(mentor => ({ _id: mentor.mentorProfileId, name: mentor.fullName, email: mentor.email }));
     const seen = new Set();
     const unique = [];
 
@@ -413,7 +363,6 @@ export default function ClassDetail() {
       }
     };
 
-    classMentors.forEach(addMentor);
     teamMentors.forEach(addMentor);
     return unique;
   };
@@ -431,6 +380,21 @@ export default function ClassDetail() {
     }
 
     action();
+  };
+
+  const confirmReEnrollStudent = async () => {
+    if (!studentToReEnroll?._id) return;
+    setReEnrollingStudent(true);
+    try {
+      await classApi.reEnrollStudent(id, studentToReEnroll._id);
+      toast.success('Student re-enrolled successfully');
+      setStudentToReEnroll(null);
+      await fetchData();
+    } catch (error) {
+      toast.error(parseApiError(error, 'Failed to re-enroll student').message);
+    } finally {
+      setReEnrollingStudent(false);
+    }
   };
   const teamControlsVisible = isFeatureVisible(classFeatureFlags.teamManagement);
 
@@ -510,16 +474,6 @@ export default function ClassDetail() {
                 Thêm 1 SV
               </ClassActionButton>
 
-              {isAdminOrLecturer && (
-                <ClassActionButton
-                  id="btn-assign-students"
-                  icon={UserRoundCheck}
-                  tone="secondary"
-                  onClick={() => runFeatureAction(classFeatureFlags.teamManagement, 'Student assignment', () => openStudentAssignment('CLASS'))}
-                >
-                  Assign students
-                </ClassActionButton>
-              )}
             </>
           )}
 
@@ -529,7 +483,7 @@ export default function ClassDetail() {
             </ClassActionButton>
           )}
 
-          {isFeatureVisible(classFeatureFlags.majorVerification) && (user?.role === 'ADMIN' || user?.role === 'LECTURER') && (
+          {isFeatureVisible(classFeatureFlags.majorVerification) && user?.role === 'ADMIN' && (
             <ClassActionButton
               id="btn-verify-majors"
               icon={ShieldCheck}
@@ -540,7 +494,7 @@ export default function ClassDetail() {
             </ClassActionButton>
           )}
 
-          {(user?.role === 'ADMIN' || user?.role === 'LECTURER') && (
+          {user?.role === 'ADMIN' && (
             <ClassActionButton
               icon={cls.isMajorLocked ? Lock : Unlock}
               tone={cls.isMajorLocked ? 'danger' : 'success'}
@@ -696,9 +650,6 @@ export default function ClassDetail() {
                 </div>
               </div>
               <div className="flex flex-col gap-1.5 sm:flex-row">
-                <button onClick={() => runFeatureAction(classFeatureFlags.teamManagement, 'Team assignment', () => openStudentAssignment('TEAM', selected))} className="inline-flex min-h-8 items-center justify-center gap-1.5 rounded-lg border border-primary-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-primary hover:bg-primary-50">
-                  <UserRoundCheck className="h-3.5 w-3.5" /> Assign to team
-                </button>
                 <button onClick={() => runFeatureAction(classFeatureFlags.teamManagement, 'Team management', () => openCreateTeam(selected))} className="inline-flex min-h-8 items-center justify-center gap-1.5 rounded-lg bg-gradient-primary px-2.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:shadow-sm">
                   <UserPlus className="h-3.5 w-3.5" /> Create team with selected
                 </button>
@@ -747,6 +698,7 @@ export default function ClassDetail() {
             onSelectionChange={teamControlsVisible ? setSelected : undefined}
             onRefresh={fetchData}
             onDeleteStudent={isAdminOrLecturer ? handleRemoveStudent : undefined}
+            onReEnrollStudent={isAdminOrLecturer ? setStudentToReEnroll : undefined}
             serverQuery={{
               search: rosterSearch,
               majorCode: rosterMajor,
@@ -785,15 +737,15 @@ export default function ClassDetail() {
           />
         ) : (
           <TeamList
-            teams={safeTeams}
+            teams={[...safeTeams, ...teamProposals]}
             onReview={(team) => setReviewTeam(team)}
             canDelete={isAdminOrLecturer}
             canManageInfo={isAdminOrLecturer}
             classStudents={safeStudents}
             onCreate={isAdminOrLecturer ? () => runFeatureAction(classFeatureFlags.teamManagement, 'Team management', () => openCreateTeam()) : undefined}
-            onAssign={isAdminOrLecturer ? () => runFeatureAction(classFeatureFlags.teamManagement, 'Team assignment', () => openStudentAssignment('TEAM')) : undefined}
-            onEdit={isAdminOrLecturer ? (team) => runFeatureAction(classFeatureFlags.teamManagement, 'Team management', () => openEditTeam(team)) : undefined}
-            onDelete={isAdminOrLecturer ? handleTeamDeleted : undefined}
+            onEdit={isAdminOrLecturer ? (team) => !team.isProposal && runFeatureAction(classFeatureFlags.teamManagement, 'Team management', () => openEditTeam(team)) : undefined}
+            onDelete={undefined}
+            onProjectDirection={classFeatureFlags.projectDirection ? setDirectionTeam : undefined}
           />
         )}
       </motion.div>
@@ -822,23 +774,6 @@ export default function ClassDetail() {
           initialMemberIds={teamFormMemberIds}
           onClose={closeTeamManagement}
           onSave={handleTeamSaved}
-        />
-      )}
-
-      {showStudentAssignment && isAdminOrLecturer && (
-        <StudentAssignmentModal
-          classInfo={{
-            id: id || cls._id,
-            code: cls.classCode || 'Class',
-            name: cls.subjectName || cls.subjectCode || '',
-          }}
-          students={assignmentCandidates}
-          teams={safeTeams}
-          initialMode={assignmentMode}
-          initialStudentIds={assignmentInitialStudentIds}
-          loadingCandidates={loadingAssignmentCandidates}
-          onClose={closeStudentAssignment}
-          onSave={handleStudentsAssigned}
         />
       )}
 
@@ -923,19 +858,39 @@ export default function ClassDetail() {
         />
       )}
 
+      {classFeatureFlags.projectDirection && directionTeam && (
+        <ProjectDirectionModal
+          team={directionTeam}
+          role={user?.role}
+          onClose={() => setDirectionTeam(null)}
+          onChanged={fetchData}
+        />
+      )}
+
       <ConfirmDialog
         isOpen={!!studentToDelete}
         onClose={() => setStudentToDelete(null)}
         onConfirm={confirmRemoveStudent}
         isSubmitting={removingStudent}
-        title="Xóa sinh viên khỏi lớp?"
+        title="Drop this enrollment?"
         description={
           studentToDelete
-            ? `Sinh viên "${studentToDelete.fullName}" sẽ bị xóa khỏi lớp và gỡ khỏi nhóm hiện tại nếu có.`
+            ? `"${studentToDelete.fullName}" will move to Dropped history. This does not delete the global student profile.`
             : ''
         }
-        confirmText="Xóa sinh viên"
-        cancelText="Hủy"
+        confirmText="Drop enrollment"
+        cancelText="Cancel"
+      />
+
+      <ConfirmDialog
+        isOpen={!!studentToReEnroll}
+        onClose={() => setStudentToReEnroll(null)}
+        onConfirm={confirmReEnrollStudent}
+        isSubmitting={reEnrollingStudent}
+        title="Re-enroll this student?"
+        description={studentToReEnroll ? `Restore "${studentToReEnroll.fullName}" as an Active enrollment in this class.` : ''}
+        confirmText="Re-enroll"
+        cancelText="Cancel"
       />
 
       {classFeatureFlags.lifecycle && <ConfirmDialog

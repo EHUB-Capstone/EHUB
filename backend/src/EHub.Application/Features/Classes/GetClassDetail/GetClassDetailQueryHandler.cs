@@ -71,6 +71,21 @@ public sealed class GetClassDetailQueryHandler : IGetClassDetailQueryHandler
         }
         var studentCount = await _context.ClassStudents.CountAsync(cs => cs.ClassId == targetClass.Id && cs.EnrollmentStatus == EnrollmentStatus.Active, cancellationToken);
         var teamCount = await _context.Teams.CountAsync(t => t.ClassId == targetClass.Id && t.Status == TeamStatus.Active, cancellationToken);
+        var mentors = await _context.MentorAssignments.AsNoTracking()
+            .Where(assignment =>
+                assignment.Team.ClassId == targetClass.Id &&
+                assignment.Team.Status == TeamStatus.Active &&
+                assignment.Status == MentorAssignmentStatus.Active &&
+                assignment.EndedAt == null)
+            .Select(assignment => new ClassMentorSummaryDto
+            {
+                MentorProfileId = assignment.MentorProfileId,
+                UserId = assignment.MentorProfile.UserId,
+                FullName = assignment.MentorProfile.User.FullName,
+                Email = assignment.MentorProfile.User.Email
+            })
+            .Distinct()
+            .ToListAsync(cancellationToken);
 
         var response = new ClassResponse
         {
@@ -88,10 +103,11 @@ public sealed class GetClassDetailQueryHandler : IGetClassDetailQueryHandler
             PrimaryLecturerEmail = targetClass.PrimaryLecturer?.Email,
             Room = targetClass.Room,
             Schedules = ClassScheduleRules.Deserialize(targetClass.ScheduleJson),
-            IsEnrollmentMajorLocked = targetClass.IsEnrollmentMajorLocked,
+            IsEnrollmentMajorLocked = targetClass.Status != ClassStatus.Archived && targetClass.IsEnrollmentMajorLocked,
             Status = targetClass.Status.ToString(),
             StudentCount = studentCount,
             TeamCount = teamCount,
+            Mentors = mentors,
             CreatedAtUtc = targetClass.CreatedAt,
             RowVersion = targetClass.Version.ToString()
         };

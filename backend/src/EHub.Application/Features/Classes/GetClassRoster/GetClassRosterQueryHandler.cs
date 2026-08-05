@@ -3,6 +3,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using EHub.Application.Common.Interfaces.Persistence;
+using EHub.Application.Features.Classes.Common;
 using EHub.Contracts.Classes;
 using EHub.Domain.Enums;
 using EHub.Shared.Constants;
@@ -70,6 +71,12 @@ public sealed class GetClassRosterQueryHandler : IGetClassRosterQueryHandler
         var page = request.Page;
         var pageSize = request.PageSize;
 
+        if (!ClassRosterFilters.TryParseStatus(request.Status, out var status))
+        {
+            return Result.Failure<ClassRosterListResponse>(
+                new Error(ErrorCodes.ClassValidationError, "Enrollment status must be Active, Dropped, or Completed."));
+        }
+
         var query = _context.ClassStudents
             .AsNoTracking()
             .Include(cs => cs.Student)
@@ -77,38 +84,7 @@ public sealed class GetClassRosterQueryHandler : IGetClassRosterQueryHandler
             .ThenInclude(tm => tm.Team)
             .Where(cs => cs.ClassId == classId);
 
-        // Search filter
-        if (!string.IsNullOrWhiteSpace(request.Search))
-        {
-            var searchTerm = request.Search.Trim().ToLowerInvariant();
-            if (searchTerm.Length > 100)
-            {
-                searchTerm = searchTerm[..100];
-            }
-            query = query.Where(cs =>
-                (cs.Student.RollNumber != null && cs.Student.RollNumber.ToLower().Contains(searchTerm)) ||
-                (cs.Student.FullName != null && cs.Student.FullName.ToLower().Contains(searchTerm)) ||
-                (cs.Student.Email != null && cs.Student.Email.ToLower().Contains(searchTerm)));
-        }
-
-        // Major filter
-        if (!string.IsNullOrWhiteSpace(request.MajorCode))
-        {
-            var major = request.MajorCode.Trim().ToUpper();
-            query = query.Where(cs => cs.MajorCodeAtEnrollment.ToUpper() == major);
-        }
-
-        // Status filter
-        if (!string.IsNullOrWhiteSpace(request.Status))
-        {
-            if (!Enum.TryParse<EnrollmentStatus>(request.Status, true, out var statusEnum))
-            {
-                return Result.Failure<ClassRosterListResponse>(
-                    new Error(ErrorCodes.ClassValidationError, "Enrollment status must be Active, Dropped, or Completed."));
-            }
-
-            query = query.Where(cs => cs.EnrollmentStatus == statusEnum);
-        }
+        query = ClassRosterFilters.Apply(query, request.Search, request.MajorCode, status);
 
         var totalCount = await query.CountAsync(cancellationToken);
         var totalPages = Math.Max(1, (int)Math.Ceiling((double)totalCount / pageSize));
@@ -122,7 +98,7 @@ public sealed class GetClassRosterQueryHandler : IGetClassRosterQueryHandler
 
         var items = classStudents.Select(cs =>
         {
-            var activeTeamMember = cs.TeamMembers.FirstOrDefault(tm => tm.Team != null && tm.Team.Status == TeamStatus.Active);
+            var activeTeamMember = cs.TeamMembers.FirstOrDefault(tm => tm.CountsTowardActiveTeam && tm.Team != null && tm.Team.Status == TeamStatus.Active);
             return new ClassStudentDto
             {
                 StudentId = cs.StudentId,

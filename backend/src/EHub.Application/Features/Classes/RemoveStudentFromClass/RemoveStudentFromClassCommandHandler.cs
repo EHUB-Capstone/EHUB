@@ -3,6 +3,8 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using EHub.Application.Common.Interfaces.Persistence;
+using EHub.Application.Features.Classes.Common;
+using EHub.Domain.Entities;
 using EHub.Domain.Enums;
 using EHub.Shared.Constants;
 using EHub.Shared.Errors;
@@ -71,9 +73,15 @@ public sealed class RemoveStudentFromClassCommandHandler : IRemoveStudentFromCla
                 new Error(ErrorCodes.ClassStudentNotFound, "Student is not enrolled in this class."));
         }
 
+        if (classStudent.EnrollmentStatus != EnrollmentStatus.Active)
+        {
+            return Result.Failure(
+                new Error(ErrorCodes.ClassValidationError, "Only an active enrollment can be dropped."));
+        }
+
         // Team Safety Rule 1: Check if student is Team Leader of an active team
         var activeLeaderTeam = classStudent.TeamMembers
-            .FirstOrDefault(tm => tm.Team != null && tm.Team.Status == TeamStatus.Active && tm.RoleInTeam == TeamMemberRole.Leader);
+            .FirstOrDefault(tm => tm.CountsTowardActiveTeam && tm.Team != null && tm.Team.Status == TeamStatus.Active && tm.RoleInTeam == TeamMemberRole.Leader);
 
         if (activeLeaderTeam != null)
         {
@@ -84,7 +92,7 @@ public sealed class RemoveStudentFromClassCommandHandler : IRemoveStudentFromCla
 
         // Team Safety Rule 2: Check if student is a member of an active team
         var activeMemberTeam = classStudent.TeamMembers
-            .FirstOrDefault(tm => tm.Team != null && tm.Team.Status == TeamStatus.Active);
+            .FirstOrDefault(tm => tm.CountsTowardActiveTeam && tm.Team != null && tm.Team.Status == TeamStatus.Active);
 
         if (activeMemberTeam != null)
         {
@@ -98,7 +106,28 @@ public sealed class RemoveStudentFromClassCommandHandler : IRemoveStudentFromCla
         classStudent.CountsTowardCourseSemesterLimit = false;
         classStudent.UpdatedAt = DateTime.UtcNow;
 
-        await _context.SaveChangesAsync(cancellationToken);
+        _context.ClassAuditLogs.Add(new ClassAuditLog
+        {
+            ClassId = classId,
+            Action = "STUDENT_ENROLLMENT_DROPPED",
+            PerformedByUserId = currentUserId,
+            OccurredAtUtc = DateTime.UtcNow,
+            DetailsJson = System.Text.Json.JsonSerializer.Serialize(new { StudentId = studentId })
+        });
+        ClassOutbox.Enqueue(_context, "Class.StudentEnrollmentDropped.v1", classId, new
+        {
+            StudentId = studentId
+        });
+
+        try
+        {
+            await _context.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return Result.Failure(
+                new Error(ErrorCodes.ClassConcurrencyConflict, "The enrollment changed concurrently. Refresh the roster and try again."));
+        }
 
         return Result.Success();
     }

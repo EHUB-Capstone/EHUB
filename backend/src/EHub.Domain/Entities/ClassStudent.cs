@@ -5,6 +5,8 @@ namespace EHub.Domain.Entities;
 
 public class ClassStudent
 {
+    public uint Version { get; set; }
+
     public Guid ClassId { get; set; }
     public virtual Class Class { get; set; } = null!;
 

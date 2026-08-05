@@ -5,6 +5,7 @@ import type {
   CreateBulkClassesRequest,
   GetClassesParams,
   GetClassRosterParams,
+  ExportClassRosterParams,
 } from '../types/classes';
 
 export const classApi = {
@@ -23,8 +24,10 @@ export const classApi = {
     axiosClient.delete(`/classes/${id}`)),
 
   // ─── Lecturer Assignment & Schedule ──────────────────────────────────────────
-  assignMentors: (id, mentorIds) => runClassFeatureRequest(classFeatureFlags.mentorAssignment, 'Class mentor assignment', () =>
-    axiosClient.put(`/classes/${id}/assign-mentors`, { mentorIds })),
+  getClassMentors: (id: string) => runClassFeatureRequest(classFeatureFlags.mentorAssignment, 'Class mentor assignment', () =>
+    axiosClient.get(`/classes/${id}/mentors`)),
+  getMentorCandidates: (id: string) => runClassFeatureRequest(classFeatureFlags.mentorAssignment, 'Class mentor assignment', () =>
+    axiosClient.get(`/classes/${id}/mentor-candidates`)),
   updateSchedule: (id: string, schedule: unknown) => axiosClient.put(`/classes/${id}/schedule`, schedule),
   updateTeachingAssignment: (id: string, data: unknown) => axiosClient.put(`/classes/${id}/teaching-assignment`, data),
   backfillChats: (id) => runClassFeatureRequest(classFeatureFlags.chatBackfill, 'Class chat backfill', () =>
@@ -44,36 +47,45 @@ export const classApi = {
     }),
   getImportTemplate: () =>
     axiosClient.get('/classes/import-template', { responseType: 'blob' }),
-  exportClassExcel: (classId) => 
-    axiosClient.get(`/classes/${classId}/export-excel`, { responseType: 'blob' }),
+  exportClassExcel: (classId: string, params: ExportClassRosterParams) =>
+    axiosClient.get(`/classes/${classId}/export-excel`, { params, responseType: 'blob' }),
 
   // Verify student majors against lecturer's Excel file
   verifyMajors: (classId, formData) =>
     runClassFeatureRequest(classFeatureFlags.majorVerification, 'Class major verification', () =>
-      axiosClient.post(`/classes/${classId}/verify-majors`, formData, {
+      axiosClient.post(`/classes/${classId}/major-verification`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       })),
-  // Manually update one student's major
-  updateStudentMajor: (classId, studentId, newMajor) =>
+  getMajorVerificationTemplate: () =>
+    axiosClient.get('/classes/major-verification-template', { responseType: 'blob' }),
+  // Manually update one enrollment's major snapshot
+  updateStudentMajor: (classId, studentId, majorCode, reason) =>
     runClassFeatureRequest(classFeatureFlags.majorVerification, 'Class major verification', () =>
-      axiosClient.patch(`/classes/${classId}/students/${studentId}/major`, { newMajor })),
-  // Lock/Unlock major changes for a class
-  toggleMajorLock: (classId) =>
+      axiosClient.put(`/classes/${classId}/students/${studentId}/major`, { majorCode, reason })),
+  // Explicit, idempotent lock and unlock operations
+  lockMajors: (classId) =>
     runClassFeatureRequest(classFeatureFlags.majorVerification, 'Class major verification', () =>
-      axiosClient.patch(`/classes/${classId}/toggle-major-lock`)),
+      axiosClient.post(`/classes/${classId}/major-lock`)),
+  unlockMajors: (classId) =>
+    runClassFeatureRequest(classFeatureFlags.majorVerification, 'Class major verification', () =>
+      axiosClient.delete(`/classes/${classId}/major-lock`)),
   addStudent: (classId, data) =>
     axiosClient.post(`/classes/${classId}/students`, data),
-  removeStudent: (classId, studentId) =>
-    axiosClient.delete(`/classes/${classId}/students/${studentId}`),
+  dropStudent: (classId, studentId) =>
+    axiosClient.post(`/classes/${classId}/students/${studentId}/drop`),
+  reEnrollStudent: (classId, studentId) =>
+    axiosClient.post(`/classes/${classId}/students/${studentId}/re-enroll`),
 
   // ─── Teams ───────────────────────────────────────────────────────────────
   getTeams:      (classId) => runClassFeatureRequest(classFeatureFlags.teamManagement, 'Class team management', () =>
     axiosClient.get(`/classes/${classId}/teams`)),
-  generateTeam:  (classId, data) => runClassFeatureRequest(classFeatureFlags.teamManagement, 'Class team management', () =>
-    axiosClient.post(`/classes/${classId}/teams/generate`, data)),
+  createTeam:  (classId, data) => runClassFeatureRequest(classFeatureFlags.teamManagement, 'Class team management', () =>
+    axiosClient.post(`/classes/${classId}/teams`, data)),
+  getTeamProposals: (classId) => runClassFeatureRequest(classFeatureFlags.teamManagement, 'Class team management', () =>
+    axiosClient.get(`/classes/${classId}/team-proposals`)),
   studentProposeTeam: (classId, payload) =>
     runClassFeatureRequest(classFeatureFlags.teamManagement, 'Class team management', () =>
-      axiosClient.post(`/classes/${classId}/teams/student-proposal`, payload)),
+      axiosClient.post(`/classes/${classId}/team-proposals`, payload)),
 
   // ─── Student/User side ───────────────────────────────────────────────────
   getMyClasses: () => runClassFeatureRequest(classFeatureFlags.studentSelfService, 'Student class self-service', () =>

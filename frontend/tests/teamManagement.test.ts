@@ -9,15 +9,16 @@ import {
 } from '../src/utils/teamManagement.ts';
 
 const students: TeamStudent[] = [
-  { _id: 'student-1', fullName: 'Nguyen Van An', rollNumber: 'SE170001', email: 'an@fpt.edu.vn' },
-  { _id: 'student-2', fullName: 'Tran Thi B', rollNumber: 'SE170002', email: 'b@fpt.edu.vn' },
-  { _id: 'student-3', fullName: 'Le Van C', rollNumber: 'SE170003', email: 'c@fpt.edu.vn' },
+  { _id: 'student-1', fullName: 'Nguyen Van An', rollNumber: 'SE170001', email: 'an@fpt.edu.vn', major: 'BEN' },
+  { _id: 'student-2', fullName: 'Tran Thi B', rollNumber: 'SE170002', email: 'b@fpt.edu.vn', major: 'BIT_SE' },
+  { _id: 'student-3', fullName: 'Le Van C', rollNumber: 'SE170003', email: 'c@fpt.edu.vn', major: 'BIT_AI' },
+  { _id: 'student-4', fullName: 'Pham Thi D', rollNumber: 'SE170004', email: 'd@fpt.edu.vn', major: 'BIT_IS' },
 ];
 
 const validDraft: TeamDraft = {
   teamName: 'Nova Founders',
   classId: 'class-1',
-  memberIds: ['student-1', 'student-2'],
+  memberIds: ['student-1', 'student-2', 'student-3', 'student-4'],
   leaderId: 'student-1',
   description: 'A cross-functional startup team.',
   projectName: 'EcoTrack',
@@ -46,7 +47,7 @@ test('reports missing required team information', () => {
   assert.equal(result.isValid, false);
   assert.equal(result.errors.teamName, 'Team name must be between 3 and 60 characters.');
   assert.equal(result.errors.classId, 'A class is required.');
-  assert.equal(result.errors.memberIds, 'Select at least one student.');
+  assert.equal(result.errors.memberIds, 'A team must have at least 4 students.');
 });
 
 test('prevents duplicate team assignment in the same class', () => {
@@ -92,7 +93,7 @@ test('applies member changes and linked project information', () => {
   const team = applyTeamDraft(validDraft, students, null, 'CLS01_TEAM_01', 'team-new');
 
   assert.equal(team.teamName, 'Nova Founders');
-  assert.deepEqual(getTeamMemberIds(team), ['student-1', 'student-2']);
+  assert.deepEqual(getTeamMemberIds(team), ['student-1', 'student-2', 'student-3', 'student-4']);
   assert.equal(team.members?.[0].roleInTeam, 'LEADER');
   assert.equal(team.members?.[1].roleInTeam, 'MEMBER');
   assert.deepEqual(getTeamProject(team), {

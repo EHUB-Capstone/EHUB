@@ -377,15 +377,15 @@ export default function ClassManagement() {
                   )}
 
                   {/* Mentors */}
-                  {cls.mentorIds && cls.mentorIds.length > 0 ? (
+                  {cls.mentors && cls.mentors.length > 0 ? (
                     <div className="flex items-center gap-2 mb-2 p-2 bg-slate-50 rounded-xl">
                       <div className="w-7 h-7 rounded-lg bg-amber-100 flex items-center justify-center shrink-0">
                         <Users className="w-4 h-4 text-amber-500" />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="text-xs text-slate-400">Mentors ({cls.mentorIds.length})</p>
+                        <p className="text-xs text-slate-400">Mentors ({cls.mentors.length})</p>
                         <p className="text-sm font-medium text-slate-800 truncate">
-                          {cls.mentorIds.map(m => m.name || 'Unknown').join(', ')}
+                          {cls.mentors.map(m => m.fullName || 'Unknown').join(', ')}
                         </p>
                       </div>
                     </div>

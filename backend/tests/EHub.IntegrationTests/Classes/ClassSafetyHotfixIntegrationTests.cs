@@ -5,12 +5,14 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.IO;
+using System.Text.Json;
 using System.Threading.Tasks;
 using ClosedXML.Excel;
 using EHub.Application.Common.Interfaces.Identity;
 using EHub.Application.Common.Interfaces.Persistence;
 using EHub.Application.Features.Classes.AddStudentToClass;
 using EHub.Application.Features.Classes.CreateClass;
+using EHub.Application.Features.Classes.ImportStudents;
 using EHub.Application.Features.Classes.UpdateClass;
 using EHub.Application.Features.Classes.UpdateClassSchedule;
 using EHub.Contracts.Classes;
@@ -23,6 +25,7 @@ using EHub.Shared.Constants;
 using EHub.Shared.Errors;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -554,6 +557,120 @@ public sealed class ClassSafetyHotfixIntegrationTests
         unchangedStudent.MajorCode.Should().Be(MajorCodes.BIT_SE);
     }
 
+    [Fact]
+    public async Task ImportSystemFailure_RollsBackProfilesEnrollmentsAuditAndOutbox()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var seedContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateClassSeedAsync(seedContext, "import-rollback");
+        var studentCode = "SE" + Guid.NewGuid().ToString("N")[..8].ToUpperInvariant();
+        var email = $"rollback-{Guid.NewGuid():N}@example.com";
+        var session = new ClassImportSession
+        {
+            Id = Guid.NewGuid(),
+            ClassId = seed.ClassId,
+            UserId = seed.AdminId,
+            Status = ClassImportSessionStatus.Available,
+            CreatedAtUtc = DateTime.UtcNow,
+            ExpiresAtUtc = DateTime.UtcNow.AddMinutes(30),
+            ValidRowsJson = JsonSerializer.Serialize(new[]
+            {
+                new ImportStudentRowPreviewDto
+                {
+                    RowNumber = 2,
+                    StudentCode = studentCode,
+                    FullName = "Rollback Student",
+                    Email = email,
+                    MajorCode = MajorCodes.BIT_SE,
+                    IsValid = true,
+                    Status = "Valid"
+                }
+            }, new JsonSerializerOptions(JsonSerializerDefaults.Web))
+        };
+        seedContext.ClassImportSessions.Add(session);
+        await seedContext.SaveChangesAsync();
+        seedContext.ChangeTracker.Clear();
+
+        var options = new DbContextOptionsBuilder<AppDbContext>()
+            .UseNpgsql(seedContext.Database.GetConnectionString())
+            .AddInterceptors(new ThrowWhenEnrollmentIsInsertedInterceptor())
+            .Options;
+        await using var failingContext = new AppDbContext(options);
+        var handler = new CommitImportStudentsCommandHandler(
+            failingContext,
+            new EHub.Infrastructure.Persistence.UnitOfWork(failingContext));
+
+        var result = await handler.HandleAsync(
+            seed.ClassId,
+            new CommitImportStudentsRequest { SessionId = session.Id },
+            seed.AdminId,
+            SystemRoles.Admin);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be(ErrorCodes.ClassStudentEnrollmentConflict);
+        seedContext.ChangeTracker.Clear();
+        (await seedContext.Students.AsNoTracking().AnyAsync(student => student.NormalizedRollNumber == studentCode))
+            .Should().BeFalse();
+        (await seedContext.ClassStudents.AsNoTracking().AnyAsync(enrollment => enrollment.ClassId == seed.ClassId))
+            .Should().BeFalse();
+        (await seedContext.ClassAuditLogs.AsNoTracking().AnyAsync(log =>
+            log.ClassId == seed.ClassId && log.Action == "STUDENT_IMPORT_COMMITTED"))
+            .Should().BeFalse();
+        (await seedContext.OutboxMessages.AsNoTracking().AnyAsync(message => message.AggregateId == seed.ClassId))
+            .Should().BeFalse();
+        (await seedContext.ClassImportSessions.AsNoTracking().SingleAsync(item => item.Id == session.Id))
+            .Status.Should().Be(ClassImportSessionStatus.Available);
+    }
+
+    [Fact]
+    public async Task ConcurrentEnrollment_OnlyOneClassCanCountForTheCourseAndSemester()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var seedContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateClassSeedAsync(seedContext, "concurrent-enrollment");
+        var siblingClassId = await CreateSiblingClassAsync(seedContext, seed);
+        var studentCode = "SE" + Guid.NewGuid().ToString("N")[..8].ToUpperInvariant();
+        var student = new Student
+        {
+            RollNumber = studentCode,
+            NormalizedRollNumber = studentCode,
+            FullName = "Concurrent Student",
+            Email = $"concurrent-{Guid.NewGuid():N}@example.com",
+            MajorCode = MajorCodes.BIT_SE,
+            Status = StudentStatus.Active,
+            CreatedBy = seed.AdminId
+        };
+        seedContext.Students.Add(student);
+        await seedContext.SaveChangesAsync();
+        seedContext.ChangeTracker.Clear();
+
+        var connectionString = seedContext.Database.GetConnectionString();
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseNpgsql(connectionString).Options;
+        await using var firstContext = new AppDbContext(options);
+        await using var secondContext = new AppDbContext(options);
+        var request = new AddStudentToClassRequest
+        {
+            StudentCode = studentCode,
+            FullName = student.FullName,
+            Email = student.Email!,
+            MajorCode = MajorCodes.BIT_SE
+        };
+
+        var results = await Task.WhenAll(
+            new AddStudentToClassCommandHandler(firstContext).HandleAsync(
+                seed.ClassId, request, seed.AdminId, SystemRoles.Admin),
+            new AddStudentToClassCommandHandler(secondContext).HandleAsync(
+                siblingClassId, request, seed.AdminId, SystemRoles.Admin));
+
+        results.Count(result => result.IsSuccess).Should().Be(1);
+        results.Count(result => result.IsFailure && result.Error.Code == ErrorCodes.ClassStudentEnrollmentConflict)
+            .Should().Be(1);
+        seedContext.ChangeTracker.Clear();
+        (await seedContext.ClassStudents.AsNoTracking().CountAsync(enrollment =>
+            enrollment.StudentId == student.Id && enrollment.CountsTowardCourseSemesterLimit))
+            .Should().Be(1);
+    }
+
     private static async Task<ClassSeed> CreateClassSeedAsync(AppDbContext context, string suffix)
     {
         var admin = await context.Users
@@ -672,6 +789,34 @@ public sealed class ClassSafetyHotfixIntegrationTests
         await context.SaveChangesAsync();
     }
 
+    private static async Task<Guid> CreateSiblingClassAsync(AppDbContext context, ClassSeed seed)
+    {
+        var targetClass = await context.Classes.AsNoTracking()
+            .SingleAsync(@class => @class.Id == seed.ClassId);
+        var sibling = new Class
+        {
+            ClassCode = $"{targetClass.ClassCode}_S{Guid.NewGuid():N}"[..Math.Min(50, targetClass.ClassCode.Length + 10)],
+            ClassIndex = targetClass.ClassIndex + 100,
+            CourseId = targetClass.CourseId,
+            SemesterId = targetClass.SemesterId,
+            PrimaryLecturerId = seed.LecturerId,
+            ScheduleJson = "[]",
+            Status = ClassStatus.Active,
+            CreatedById = seed.AdminId,
+            CreatedBy = seed.AdminId
+        };
+        context.Classes.Add(sibling);
+        context.ClassLecturers.Add(new ClassLecturer
+        {
+            ClassId = sibling.Id,
+            LecturerId = seed.LecturerId,
+            IsPrimary = true,
+            AssignedById = seed.AdminId
+        });
+        await context.SaveChangesAsync();
+        return sibling.Id;
+    }
+
     private static string GenerateToken(IServiceProvider services, User user, string role) =>
         services.GetRequiredService<IJwtTokenService>()
             .GenerateAccessToken(user, [role])
@@ -706,4 +851,21 @@ public sealed class ClassSafetyHotfixIntegrationTests
     }
 
     private sealed record ClassSeed(Guid ClassId, Guid AdminId, Guid LecturerId, string ScheduleJson);
+
+    private sealed class ThrowWhenEnrollmentIsInsertedInterceptor : SaveChangesInterceptor
+    {
+        public override ValueTask<InterceptionResult<int>> SavingChangesAsync(
+            DbContextEventData eventData,
+            InterceptionResult<int> result,
+            CancellationToken cancellationToken = default)
+        {
+            if (eventData.Context?.ChangeTracker.Entries<ClassStudent>()
+                .Any(entry => entry.State == EntityState.Added) == true)
+            {
+                throw new DbUpdateException("Simulated system failure while persisting an enrollment.");
+            }
+
+            return base.SavingChangesAsync(eventData, result, cancellationToken);
+        }
+    }
 }

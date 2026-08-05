@@ -67,7 +67,7 @@ export default function MyClasses() {
 
             return (
               <div
-                key={cls._id}
+                key={cls.id || cls._id}
                 className="bg-white rounded-2xl border border-slate-200/60 shadow-sm hover:shadow-md hover:border-slate-300 transition-all flex flex-col justify-between overflow-hidden group"
               >
                 {/* Header Gradient Accent */}
@@ -120,10 +120,10 @@ export default function MyClasses() {
                   </div>
 
                   {/* Mentors List */}
-                  {cls.mentorIds && cls.mentorIds.length > 0 && (
+                  {cls.mentors && cls.mentors.length > 0 && (
                     <div className="pt-2 border-t border-slate-100 flex items-center gap-2 text-xs text-slate-500">
                       <span className="font-semibold text-slate-400 shrink-0">Mentors:</span>
-                      <span className="truncate font-medium">{cls.mentorIds.map(m => m.name || 'Unknown').join(', ')}</span>
+                      <span className="truncate font-medium">{cls.mentors.map(m => m.fullName || 'Unknown').join(', ')}</span>
                     </div>
                   )}
                 </div>

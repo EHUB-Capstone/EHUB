@@ -39,8 +39,17 @@ public sealed class ClassResponse
     public string Status { get; init; } = string.Empty;
     public int StudentCount { get; init; }
     public int TeamCount { get; init; }
+    public IReadOnlyCollection<ClassMentorSummaryDto> Mentors { get; init; } = Array.Empty<ClassMentorSummaryDto>();
     public DateTime CreatedAtUtc { get; init; }
     public string RowVersion { get; init; } = string.Empty;
+}
+
+public sealed class ClassMentorSummaryDto
+{
+    public Guid MentorProfileId { get; init; }
+    public Guid UserId { get; init; }
+    public string FullName { get; init; } = string.Empty;
+    public string Email { get; init; } = string.Empty;
 }
 
 public sealed class ClassListResponse
@@ -194,7 +203,42 @@ public sealed class AddStudentToClassRequest
 public sealed class UpdateClassStudentRequest
 {
     public string MajorCode { get; init; } = string.Empty;
-    public string? EnrollmentStatus { get; init; }
+    public string Reason { get; init; } = string.Empty;
+}
+
+public sealed class ExportClassRosterRequest
+{
+    public string Scope { get; init; } = "Active";
+    public string? Search { get; init; }
+    public string? MajorCode { get; init; }
+    public string? Status { get; init; }
+}
+
+public sealed class EnrollmentMajorLockResponse
+{
+    public Guid ClassId { get; init; }
+    public bool IsLocked { get; init; }
+}
+
+public sealed class MajorVerificationRowDto
+{
+    public int? RowNumber { get; init; }
+    public Guid? StudentId { get; init; }
+    public string RollNumber { get; init; } = string.Empty;
+    public string FullName { get; init; } = string.Empty;
+    public string Email { get; init; } = string.Empty;
+    public string? MajorInFile { get; init; }
+    public string? MajorInDb { get; init; }
+    public string Status { get; init; } = string.Empty;
+    public string? Message { get; init; }
+}
+
+public sealed class VerifyClassMajorsResponse
+{
+    public IReadOnlyCollection<MajorVerificationRowDto> Matched { get; init; } = Array.Empty<MajorVerificationRowDto>();
+    public IReadOnlyCollection<MajorVerificationRowDto> Mismatched { get; init; } = Array.Empty<MajorVerificationRowDto>();
+    public IReadOnlyCollection<MajorVerificationRowDto> Missing { get; init; } = Array.Empty<MajorVerificationRowDto>();
+    public IReadOnlyCollection<MajorVerificationRowDto> NotFound { get; init; } = Array.Empty<MajorVerificationRowDto>();
 }
 
 // ─── GIAI ĐOẠN 5: EXCEL IMPORT & EXPORT CONTRACTS ──────────────────────────────

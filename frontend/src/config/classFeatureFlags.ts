@@ -8,13 +8,23 @@ export const createClassFeatureFlags = (environment: FeatureEnvironment) => Obje
     isEnabled(environment.VITE_SHOW_UNAVAILABLE_CLASS_FEATURES),
   rename: isEnabled(environment.VITE_FEATURE_CLASS_RENAME),
   lifecycle: isEnabled(environment.VITE_FEATURE_CLASS_LIFECYCLE),
-  majorVerification: isEnabled(environment.VITE_FEATURE_CLASS_MAJOR_VERIFICATION),
-  mentorAssignment: isEnabled(environment.VITE_FEATURE_CLASS_MENTOR_ASSIGNMENT),
-  teamManagement: isEnabled(environment.VITE_FEATURE_CLASS_TEAM_MANAGEMENT),
+  majorVerification: environment.VITE_FEATURE_CLASS_MAJOR_VERIFICATION === undefined
+    ? true
+    : isEnabled(environment.VITE_FEATURE_CLASS_MAJOR_VERIFICATION),
+  mentorAssignment: environment.VITE_FEATURE_CLASS_MENTOR_ASSIGNMENT === undefined
+    ? true
+    : isEnabled(environment.VITE_FEATURE_CLASS_MENTOR_ASSIGNMENT),
+  teamManagement: environment.VITE_FEATURE_CLASS_TEAM_MANAGEMENT === undefined
+    ? true
+    : isEnabled(environment.VITE_FEATURE_CLASS_TEAM_MANAGEMENT),
   chatBackfill: isEnabled(environment.VITE_FEATURE_CLASS_CHAT_BACKFILL),
   codeConflictReport: isEnabled(environment.VITE_FEATURE_CLASS_CODE_CONFLICT_REPORT),
-  projectDirection: isEnabled(environment.VITE_FEATURE_CLASS_PROJECT_DIRECTION),
-  studentSelfService: isEnabled(environment.VITE_FEATURE_CLASS_STUDENT_SELF_SERVICE),
+  projectDirection: environment.VITE_FEATURE_CLASS_PROJECT_DIRECTION === undefined
+    ? true
+    : isEnabled(environment.VITE_FEATURE_CLASS_PROJECT_DIRECTION),
+  studentSelfService: environment.VITE_FEATURE_CLASS_STUDENT_SELF_SERVICE === undefined
+    ? true
+    : isEnabled(environment.VITE_FEATURE_CLASS_STUDENT_SELF_SERVICE),
   lecturerStudentImport: environment.VITE_FEATURE_CLASS_LECTURER_STUDENT_IMPORT === undefined
     ? true
     : isEnabled(environment.VITE_FEATURE_CLASS_LECTURER_STUDENT_IMPORT),

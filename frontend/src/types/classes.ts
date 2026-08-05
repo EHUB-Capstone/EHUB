@@ -12,6 +12,13 @@ export interface ClassLecturerSummary {
   email?: string | null;
 }
 
+export interface ClassMentorSummary {
+  mentorProfileId: string;
+  userId: string;
+  fullName: string;
+  email: string;
+}
+
 export interface ClassDto {
   id: string;
   classCode: string;
@@ -31,6 +38,7 @@ export interface ClassDto {
   status: ClassStatus;
   studentCount: number;
   teamCount: number;
+  mentors: ClassMentorSummary[];
   createdAtUtc: string;
   rowVersion: string;
   // Transitional input only. New backend responses use schedules[].
@@ -41,8 +49,6 @@ export interface ClassViewModel extends ClassDto {
   _id: string;
   semester: string;
   lectureId: ClassLecturerSummary | null;
-  // Transitional UI-only data until mentor management has a backend contract.
-  mentorIds?: ClassLecturerSummary[];
 }
 
 export interface ClassListResponse {
@@ -94,6 +100,13 @@ export interface GetClassRosterParams {
   status?: string;
   page?: number;
   pageSize?: number;
+}
+
+export interface ExportClassRosterParams {
+  scope: 'Active' | 'History';
+  search?: string;
+  majorCode?: string;
+  status?: 'Active' | 'Dropped' | 'Completed' | '';
 }
 
 export interface CreateBulkClassesRequest {

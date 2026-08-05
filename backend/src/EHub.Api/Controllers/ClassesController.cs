@@ -13,11 +13,15 @@ using EHub.Application.Features.Classes.GetClassDetail;
 using EHub.Application.Features.Classes.GetClasses;
 using EHub.Application.Features.Classes.GetClassRoster;
 using EHub.Application.Features.Classes.GetImportTemplate;
+using EHub.Application.Features.Classes.GetMajorVerificationTemplate;
 using EHub.Application.Features.Classes.ImportStudents;
 using EHub.Application.Features.Classes.RemoveStudentFromClass;
+using EHub.Application.Features.Classes.ReEnrollStudent;
+using EHub.Application.Features.Classes.SetEnrollmentMajorLock;
 using EHub.Application.Features.Classes.UpdateClass;
 using EHub.Application.Features.Classes.UpdateClassSchedule;
 using EHub.Application.Features.Classes.UpdateClassStudent;
+using EHub.Application.Features.Classes.VerifyClassMajors;
 using EHub.Contracts.Classes;
 using EHub.Contracts.Common;
 using EHub.Shared.Constants;
@@ -318,7 +322,7 @@ public sealed class ClassesController : ControllerBase
             "Student added to class successfully."));
     }
 
-    [HttpPut("{id:guid}/students/{studentId:guid}")]
+    [HttpPut("{id:guid}/students/{studentId:guid}/major")]
     public async Task<IActionResult> UpdateClassStudent(
         Guid id,
         Guid studentId,
@@ -347,7 +351,53 @@ public sealed class ClassesController : ControllerBase
             "Class student updated successfully."));
     }
 
-    [HttpDelete("{id:guid}/students/{studentId:guid}")]
+    [HttpPost("{id:guid}/major-verification")]
+    public async Task<IActionResult> VerifyClassMajors(
+        Guid id,
+        IFormFile file,
+        [FromServices] IVerifyClassMajorsCommandHandler commandHandler,
+        CancellationToken cancellationToken)
+    {
+        var result = await commandHandler.HandleAsync(
+            id,
+            file,
+            _currentUserService.UserId ?? Guid.Empty,
+            GetCurrentUserRole(),
+            cancellationToken);
+
+        if (result.IsFailure)
+        {
+            return ToClassErrorResponse(result.Error);
+        }
+
+        return Ok(ApiResponse<VerifyClassMajorsResponse>.SuccessResponse(
+            result.Value,
+            "Enrollment majors verified successfully."));
+    }
+
+    [HttpGet("major-verification-template")]
+    public IActionResult GetMajorVerificationTemplate(
+        [FromServices] IGetMajorVerificationTemplateQueryHandler queryHandler)
+    {
+        var result = queryHandler.Handle();
+        return File(result.Value.FileBytes, result.Value.ContentType, result.Value.FileName);
+    }
+
+    [HttpPost("{id:guid}/major-lock")]
+    public Task<IActionResult> LockEnrollmentMajors(
+        Guid id,
+        [FromServices] ISetEnrollmentMajorLockCommandHandler commandHandler,
+        CancellationToken cancellationToken) =>
+        SetEnrollmentMajorLock(id, true, commandHandler, cancellationToken);
+
+    [HttpDelete("{id:guid}/major-lock")]
+    public Task<IActionResult> UnlockEnrollmentMajors(
+        Guid id,
+        [FromServices] ISetEnrollmentMajorLockCommandHandler commandHandler,
+        CancellationToken cancellationToken) =>
+        SetEnrollmentMajorLock(id, false, commandHandler, cancellationToken);
+
+    [HttpPost("{id:guid}/students/{studentId:guid}/drop")]
     public async Task<IActionResult> RemoveStudentFromClass(
         Guid id,
         Guid studentId,
@@ -369,7 +419,29 @@ public sealed class ClassesController : ControllerBase
             return ToClassErrorResponse(result.Error);
         }
 
-        return Ok(ApiResponse<object?>.SuccessResponse(null, "Student removed from class successfully."));
+        return Ok(ApiResponse<object?>.SuccessResponse(null, "Student enrollment dropped successfully."));
+    }
+
+    [HttpPost("{id:guid}/students/{studentId:guid}/re-enroll")]
+    public async Task<IActionResult> ReEnrollStudent(
+        Guid id,
+        Guid studentId,
+        [FromServices] IReEnrollStudentCommandHandler commandHandler,
+        CancellationToken cancellationToken)
+    {
+        var result = await commandHandler.HandleAsync(
+            id,
+            studentId,
+            _currentUserService.UserId ?? Guid.Empty,
+            GetCurrentUserRole(),
+            cancellationToken);
+
+        if (result.IsFailure)
+        {
+            return ToClassErrorResponse(result.Error);
+        }
+
+        return Ok(ApiResponse<ClassStudentDto>.SuccessResponse(result.Value, "Student re-enrolled successfully."));
     }
 
     // ─── GIAI ĐOẠN 5: EXCEL IMPORT & EXPORT ENDPOINTS ─────────────────────────
@@ -432,6 +504,7 @@ public sealed class ClassesController : ControllerBase
     [HttpGet("{id:guid}/export-excel")]
     public async Task<IActionResult> ExportClassRoster(
         Guid id,
+        [FromQuery] ExportClassRosterRequest request,
         [FromServices] IExportClassRosterQueryHandler queryHandler,
         CancellationToken cancellationToken)
     {
@@ -440,6 +513,7 @@ public sealed class ClassesController : ControllerBase
 
         var result = await queryHandler.HandleAsync(
             id,
+            request,
             currentUserId,
             currentUserRole,
             cancellationToken);
@@ -473,12 +547,36 @@ public sealed class ClassesController : ControllerBase
             ErrorCodes.ClassStudentIsTeamLeader or
             ErrorCodes.ClassStudentInActiveTeam or
             ErrorCodes.ClassStudentEnrollmentConflict or
+            ErrorCodes.ClassStudentReEnrollmentRequired or
+            ErrorCodes.ClassStudentNotDropped or
             ErrorCodes.ClassEnrollmentMajorLocked or
             ErrorCodes.ClassImportSessionInvalid or
             ErrorCodes.ClassImportSessionExpired or
             ErrorCodes.ClassImportSessionAlreadyProcessing => Conflict(response),
             _ => BadRequest(response)
         };
+    }
+
+    private async Task<IActionResult> SetEnrollmentMajorLock(
+        Guid id,
+        bool shouldLock,
+        ISetEnrollmentMajorLockCommandHandler commandHandler,
+        CancellationToken cancellationToken)
+    {
+        var result = await commandHandler.HandleAsync(
+            id,
+            shouldLock,
+            _currentUserService.UserId ?? Guid.Empty,
+            GetCurrentUserRole(),
+            cancellationToken);
+        if (result.IsFailure)
+        {
+            return ToClassErrorResponse(result.Error);
+        }
+
+        return Ok(ApiResponse<EnrollmentMajorLockResponse>.SuccessResponse(
+            result.Value,
+            shouldLock ? "Enrollment majors locked." : "Enrollment majors unlocked."));
     }
 
     private string GetCurrentUserRole()

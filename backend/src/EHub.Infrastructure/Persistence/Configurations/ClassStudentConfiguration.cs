@@ -12,6 +12,10 @@ public class ClassStudentConfiguration : IEntityTypeConfiguration<ClassStudent>
 
         builder.HasKey(cs => new { cs.ClassId, cs.StudentId });
 
+        builder.Property(cs => cs.Version)
+            .IsRowVersion()
+            .HasColumnName("xmin");
+
         builder.Property(cs => cs.ClassId)
             .HasColumnName("class_id")
             .IsRequired();
