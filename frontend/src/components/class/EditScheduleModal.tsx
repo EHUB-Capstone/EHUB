@@ -5,6 +5,7 @@ import { classApi } from '../../api/classApi';
 import { DAY_OF_WEEK_OPTIONS, SLOT_OPTIONS } from '../../constants/classSchedule';
 import { parseApiError } from '../../utils/apiError';
 import type { ClassScheduleSlot } from '../../types/classes';
+import { buildScheduleUpdatePayload, type EditableSchedule } from '../../utils/classComponentPolicy';
 
 interface EditScheduleModalProps {
   classId: string;
@@ -13,12 +14,6 @@ interface EditScheduleModalProps {
   onClose: () => void;
   onUpdated: () => Promise<void> | void;
 }
-
-type EditableSchedule = {
-  dayOfWeek: number | '';
-  slotNumber: number | '';
-  room: string;
-};
 
 const emptySchedule = (): EditableSchedule => ({ dayOfWeek: '', slotNumber: '', room: '' });
 
@@ -91,14 +86,7 @@ export default function EditScheduleModal({
 
     setSubmitting(true);
     try {
-      await classApi.updateSchedule(classId, {
-        schedules: schedules.map(schedule => ({
-          dayOfWeek: Number(schedule.dayOfWeek),
-          slotNumber: Number(schedule.slotNumber),
-          room: schedule.room.trim() || null,
-        })),
-        rowVersion,
-      });
+      await classApi.updateSchedule(classId, buildScheduleUpdatePayload(schedules, rowVersion));
       toast.success('Schedule updated successfully');
       await onUpdated();
     } catch (error) {

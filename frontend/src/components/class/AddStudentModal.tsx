@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { useState } from 'react';
 import toast from 'react-hot-toast';
 import { X, Loader2 } from 'lucide-react';

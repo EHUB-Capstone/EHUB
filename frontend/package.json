@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "test": "node --experimental-strip-types --test tests/studentImport.test.ts tests/teamManagement.test.ts tests/studentAssignment.test.ts tests/accountApproval.test.ts tests/classFeatureFlags.test.ts tests/classMappers.test.ts",
+    "test": "node --experimental-strip-types --test tests/studentImport.test.ts tests/teamManagement.test.ts tests/studentAssignment.test.ts tests/accountApproval.test.ts tests/classFeatureFlags.test.ts tests/classMappers.test.ts tests/classComponents.test.ts",
     "type-check": "tsc -b",
     "build": "tsc -b && vite build",
     "lint": "oxlint",

@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { useState, useRef, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import {
@@ -115,7 +114,7 @@ export default function VerifyMajorModal({ classId, onClose }) {
     try {
       const fd = new FormData();
       fd.append('file', file);
-      const res  = await classApi.verifyMajors(classId, fd);
+      const res: any = await classApi.verifyMajors(classId, fd);
       const data = res?.data || res;
       setReport(data);
       // Default to first tab that has data

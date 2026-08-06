@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import { CheckCircle2, FilePenLine, Loader2, Send, X } from 'lucide-react';
@@ -7,7 +6,7 @@ import { unwrapApiData } from '../../utils/classMappers';
 import { parseApiError } from '../../utils/apiError';
 import { entityId } from '../../utils/teamManagement';
 
-export default function ProjectDirectionModal({ team, role, currentStudentId, onClose, onChanged }) {
+export default function ProjectDirectionModal({ team, role, currentStudentId = '', onClose, onChanged }) {
   const [direction, setDirection] = useState(null);
   const [title, setTitle] = useState('');
   const [summary, setSummary] = useState('');
@@ -24,7 +23,7 @@ export default function ProjectDirectionModal({ team, role, currentStudentId, on
     const load = async () => {
       try {
         const response = await teamApi.getProjectDirection(team._id);
-        const value = unwrapApiData(response);
+        const value = unwrapApiData<any>(response as any);
         if (!active) return;
         setDirection(value);
         setTitle(value.title || '');

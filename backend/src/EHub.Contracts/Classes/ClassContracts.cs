@@ -220,6 +220,49 @@ public sealed class EnrollmentMajorLockResponse
     public bool IsLocked { get; init; }
 }
 
+public sealed class ChangeClassLifecycleRequest
+{
+    public string RowVersion { get; init; } = string.Empty;
+    public string Reason { get; init; } = string.Empty;
+}
+
+public sealed class ClassLifecycleResponse
+{
+    public Guid ClassId { get; init; }
+    public string Status { get; init; } = string.Empty;
+    public DateTime? ArchivedAtUtc { get; init; }
+    public string RowVersion { get; init; } = string.Empty;
+}
+
+public sealed class ClassAuditLogDto
+{
+    public Guid Id { get; init; }
+    public string Action { get; init; } = string.Empty;
+    public Guid PerformedByUserId { get; init; }
+    public string PerformedByName { get; init; } = string.Empty;
+    public DateTime OccurredAtUtc { get; init; }
+    public string? DetailsJson { get; init; }
+}
+
+public sealed class ClassAuditLogListResponse
+{
+    public IReadOnlyCollection<ClassAuditLogDto> Items { get; init; } = Array.Empty<ClassAuditLogDto>();
+    public int TotalCount { get; init; }
+    public int Page { get; init; }
+    public int PageSize { get; init; }
+    public int TotalPages { get; init; }
+}
+
+public sealed class ChatMembershipSyncResponse
+{
+    public Guid ClassId { get; init; }
+    public int GroupsCreated { get; init; }
+    public int MembershipsAdded { get; init; }
+    public int MembershipsReactivated { get; init; }
+    public int MembershipsEnded { get; init; }
+    public bool IsReadOnly { get; init; }
+}
+
 public sealed class MajorVerificationRowDto
 {
     public int? RowNumber { get; init; }

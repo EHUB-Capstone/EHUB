@@ -11,13 +11,16 @@ namespace EHub.Infrastructure.BackgroundJobs;
 internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
 {
     private readonly AppDbContext _context;
+    private readonly IClassChatMembershipSynchronizer _chatMembershipSynchronizer;
     private readonly ILogger<NotificationOutboxEventDispatcher> _logger;
 
     public NotificationOutboxEventDispatcher(
         AppDbContext context,
+        IClassChatMembershipSynchronizer chatMembershipSynchronizer,
         ILogger<NotificationOutboxEventDispatcher> logger)
     {
         _context = context;
+        _chatMembershipSynchronizer = chatMembershipSynchronizer;
         _logger = logger;
     }
 
@@ -68,8 +71,25 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
                 break;
         }
 
+        if (RequiresChatSynchronization(message.Type))
+            await _chatMembershipSynchronizer.SynchronizeAsync(message.AggregateId, cancellationToken: cancellationToken);
+
         await _context.SaveChangesAsync(cancellationToken);
     }
+
+    private static bool RequiresChatSynchronization(string eventType) => eventType is
+        "Class.Created.v1" or
+        "Class.TeachingAssignmentChanged.v1" or
+        "Class.StudentEnrollmentAdded.v1" or
+        "Class.StudentEnrollmentDropped.v1" or
+        "Class.StudentReEnrolled.v1" or
+        "Class.StudentRosterImported.v1" or
+        "Team.Created.v1" or
+        "Team.MembersUpdated.v1" or
+        "Team.LeaderAssigned.v1" or
+        "Team.MentorAssignmentChanged.v1" or
+        "Class.Archived.v1" or
+        "Class.Restored.v1";
 
     private async Task AddForOptionalUserAsync(
         OutboxMessage message,

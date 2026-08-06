@@ -5,7 +5,7 @@ import type {
   ClassViewModel,
 } from '../types/classes';
 
-export const unwrapApiData = <T>(response: ApiEnvelope<T> | T): T => {
+export const unwrapApiData = <T = any>(response: ApiEnvelope<T> | T): T => {
   if (response && typeof response === 'object' && 'data' in response) {
     return (response as ApiEnvelope<T>).data;
   }

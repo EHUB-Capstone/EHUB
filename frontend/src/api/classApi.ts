@@ -15,13 +15,17 @@ export const classApi = {
   create:            (data: unknown) => axiosClient.post('/classes', data),
   previewBulkCreate: (data: CreateBulkClassesRequest) => axiosClient.post('/classes/bulk/preview', data),
   commitBulkCreate:  (data: CreateBulkClassesRequest) => axiosClient.post('/classes/bulk/commit', data),
-  reportCodeConflict: (data) => runClassFeatureRequest(classFeatureFlags.codeConflictReport, 'Class code conflict reporting', () =>
-    axiosClient.post('/classes/report-code-conflict', data)),
   update:      (id: string, data: unknown) => axiosClient.put(`/classes/${id}`, data),
   rename:      (id, classCode) => runClassFeatureRequest(classFeatureFlags.rename, 'Class rename', () =>
     axiosClient.put(`/classes/${id}/rename`, { classCode })),
-  delete:      (id) => runClassFeatureRequest(classFeatureFlags.lifecycle, 'Class lifecycle management', () =>
-    axiosClient.delete(`/classes/${id}`)),
+  archive: (id: string, data: { rowVersion: string; reason: string }) =>
+    runClassFeatureRequest(classFeatureFlags.lifecycle, 'Class lifecycle management', () =>
+      axiosClient.post(`/classes/${id}/archive`, data)),
+  restore: (id: string, data: { rowVersion: string; reason: string }) =>
+    runClassFeatureRequest(classFeatureFlags.lifecycle, 'Class lifecycle management', () =>
+      axiosClient.post(`/classes/${id}/restore`, data)),
+  getAudit: (id: string, params: { page?: number; pageSize?: number } = {}) =>
+    axiosClient.get(`/classes/${id}/audit`, { params }),
 
   // ─── Lecturer Assignment & Schedule ──────────────────────────────────────────
   getClassMentors: (id: string) => runClassFeatureRequest(classFeatureFlags.mentorAssignment, 'Class mentor assignment', () =>
@@ -30,8 +34,8 @@ export const classApi = {
     axiosClient.get(`/classes/${id}/mentor-candidates`)),
   updateSchedule: (id: string, schedule: unknown) => axiosClient.put(`/classes/${id}/schedule`, schedule),
   updateTeachingAssignment: (id: string, data: unknown) => axiosClient.put(`/classes/${id}/teaching-assignment`, data),
-  backfillChats: (id) => runClassFeatureRequest(classFeatureFlags.chatBackfill, 'Class chat backfill', () =>
-    axiosClient.post(`/classes/${id}/backfill-chats`)),
+  repairChatMemberships: (id: string) => runClassFeatureRequest(classFeatureFlags.chatBackfill, 'Class chat repair', () =>
+    axiosClient.post(`/classes/${id}/repair-chat-memberships`)),
 
   // ─── Students ────────────────────────────────────────────────────────────
   getStudents: (classId: string, params: GetClassRosterParams) => axiosClient.get(`/classes/${classId}/students`, { params }),

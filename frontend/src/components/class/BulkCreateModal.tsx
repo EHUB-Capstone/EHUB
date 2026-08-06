@@ -345,26 +345,6 @@ export default function BulkCreateModal({ lecturers: initialLecturers = [], isLe
     toast('Please check and enter your assigned class number again.');
   };
 
-  const handleConflictOtherLecturer = async () => {
-    if (!classConflict) return;
-
-    setSubmitting(true);
-    try {
-      await classApi.reportCodeConflict({
-        classCode: classConflict.classCode,
-        semester: classConflict.semester,
-        year: classConflict.year,
-        reason: 'other_lecturer_may_have_created_wrong_class',
-      });
-      toast.success('The lecturer has been notified to verify this class code.');
-      setClassConflict(null);
-    } catch (e: any) {
-      toast.error(e?.message || 'Failed to send conflict report');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
@@ -759,14 +739,6 @@ export default function BulkCreateModal({ lecturers: initialLecturers = [], isLe
                 >
                   Issue is on my side
                 </button>
-                {classFeatureFlags.codeConflictReport && <button
-                  type="button"
-                  onClick={handleConflictOtherLecturer}
-                  disabled={submitting}
-                  className="px-4 py-2.5 bg-amber-500 text-white rounded-xl text-sm font-medium hover:bg-amber-600 disabled:opacity-50 transition-all"
-                >
-                  Issue is on the other lecturer side
-                </button>}
               </div>
             </div>
           </div>

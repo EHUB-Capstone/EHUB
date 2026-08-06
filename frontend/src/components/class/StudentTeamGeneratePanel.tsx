@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import { Users, AlertTriangle, CheckCircle2, Loader2, AlertCircle, Send } from 'lucide-react';
@@ -176,10 +175,10 @@ export default function StudentTeamGeneratePanel({ classId, selected: rawSelecte
         leaderStudentId: selectedLeaderId,
       };
       
-      const res = proposal
+      const res: any = proposal
         ? await teamApi.updateProposal(proposal._id, { ...payload, rowVersion: proposal.rowVersion })
         : await classApi.studentProposeTeam(classId, payload);
-      const draft = unwrapApiData(res);
+      const draft = unwrapApiData<any>(res);
       await teamApi.submitProposal(draft.id, draft.rowVersion);
       res.message = 'Team proposal submitted for review.';
       toast.success(res.message || 'Tạo nhóm thành công!');

@@ -63,6 +63,7 @@ public static class ErrorCodes
     public const string ClassImportSessionExpired = "IMPORT_SESSION_EXPIRED";
     public const string ClassImportSessionAlreadyProcessing = "IMPORT_SESSION_ALREADY_PROCESSING";
     public const string ClassImportNoValidRows = "IMPORT_NO_VALID_ROWS";
+    public const string ClassRestoreInvalid = "CLASS_RESTORE_INVALID";
 
     // Team, mentor assignment, and project direction error codes
     public const string TeamNotFound = "TEAM_NOT_FOUND";

@@ -173,9 +173,11 @@ public sealed class UpdateClassCommandHandler : IUpdateClassCommandHandler
         string currentUserRole,
         CancellationToken cancellationToken = default)
     {
-        if (!string.Equals(currentUserRole, SystemRoles.Admin, StringComparison.OrdinalIgnoreCase))
+        var isStaff = string.Equals(currentUserRole, SystemRoles.Admin, StringComparison.OrdinalIgnoreCase) ||
+                      string.Equals(currentUserRole, SystemRoles.Lecturer, StringComparison.OrdinalIgnoreCase);
+        if (!isStaff)
         {
-            return Failure(ErrorCodes.ClassAccessDenied, "Only Admin can update teaching assignments.");
+            return Failure(ErrorCodes.ClassAccessDenied, "Only Admin or Lecturer can update teaching assignments.");
         }
 
         if (!uint.TryParse(request.RowVersion, out var expectedVersion))
@@ -328,6 +330,11 @@ public sealed class UpdateClassCommandHandler : IUpdateClassCommandHandler
                 PreviousPrimaryLecturerId = previousLecturerId,
                 NewPrimaryLecturerId = newLecturer?.Id
             })
+        });
+        ClassOutbox.Enqueue(_context, "Class.TeachingAssignmentChanged.v1", targetClass.Id, new
+        {
+            PreviousPrimaryLecturerId = previousLecturerId,
+            NewPrimaryLecturerId = newLecturer?.Id
         });
 
         await _context.SaveChangesAsync(cancellationToken);

@@ -26,9 +26,11 @@ public sealed class SetEnrollmentMajorLockCommandHandler : ISetEnrollmentMajorLo
         string currentUserRole,
         CancellationToken cancellationToken = default)
     {
-        if (!string.Equals(currentUserRole, SystemRoles.Admin, StringComparison.OrdinalIgnoreCase))
+        var isStaff = string.Equals(currentUserRole, SystemRoles.Admin, StringComparison.OrdinalIgnoreCase) ||
+                      string.Equals(currentUserRole, SystemRoles.Lecturer, StringComparison.OrdinalIgnoreCase);
+        if (!isStaff)
         {
-            return Failure(ErrorCodes.ClassAccessDenied, "Only an administrator can lock or unlock enrollment majors.");
+            return Failure(ErrorCodes.ClassAccessDenied, "Only an administrator or lecturer can lock or unlock enrollment majors.");
         }
 
         var targetClass = await _context.Classes

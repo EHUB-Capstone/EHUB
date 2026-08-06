@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { useEffect, useState } from 'react';
 import { CheckCircle2, FileText, Loader2, MessageSquareText, RefreshCw, XCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -78,7 +77,7 @@ export default function ClassDirectionOverview({ semester, year }) {
         return {
           ...team,
           leaderId: leader?.studentId || team.leaderId,
-          leaderName: leader?.studentId?.fullName || 'Not assigned',
+          leaderName: typeof leader?.studentId === 'object' ? leader.studentId.fullName : 'Not assigned',
           projectDirection: direction?.summary || '',
           projectDirectionTitle: direction?.title || '',
           projectDirectionStatus: status,

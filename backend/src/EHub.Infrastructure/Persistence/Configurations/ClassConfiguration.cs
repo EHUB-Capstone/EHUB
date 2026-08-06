@@ -61,6 +61,11 @@ public class ClassConfiguration : IEntityTypeConfiguration<Class>
         builder.Property(c => c.ArchivedByUserId)
             .HasColumnName("archived_by_user_id");
 
+        builder.Property(c => c.StatusBeforeArchive)
+            .HasColumnName("status_before_archive")
+            .HasConversion<string>()
+            .HasMaxLength(20);
+
         builder.Property(c => c.CreatedById)
             .HasColumnName("created_by_id");
 

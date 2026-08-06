@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { QueryClientProvider } from '@tanstack/react-query';
@@ -8,48 +9,49 @@ import { queryClient } from './lib/queryClient';
 import DashboardLayout from './components/layout/DashboardLayout';
 import ErrorBoundary from './components/ui/ErrorBoundary';
 
-import Home from './pages/Home';
-import Login from './pages/auth/Login';
-import Register from './pages/auth/Register';
-import ForgotPassword from './pages/auth/ForgotPassword';
-import ResetPassword from './pages/auth/ResetPassword';
-
-import AdminDashboard from './pages/admin/AdminDashboard';
-import ClassManagement from './pages/admin/ClassManagement';
-import SubjectManagement from './pages/admin/SubjectManagement';
-import SubjectDetail from './pages/admin/SubjectDetail';
-import UserManagement from './pages/admin/UserManagement';
-import AccountApprovals from './pages/admin/AccountApprovals';
-
-import LecturerDashboard from './pages/lecturer/LecturerDashboard';
-import LecturerClasses from './pages/lecturer/LecturerClasses';
-import MentorDashboard from './pages/mentor/MentorDashboard';
-
-import StudentDashboard from './pages/student/StudentDashboard';
-import IdeaForm from './pages/student/IdeaForm';
-import MyClasses from './pages/student/MyClasses';
-import MyTeam from './pages/student/MyTeam';
-import StudentClassDetail from './pages/student/StudentClassDetail';
-
-import AIAnalysis from './pages/common/AIAnalysis';
-import ExecutionBoard from './pages/common/ExecutionBoard';
-import GroupChat from './pages/common/GroupChat';
-import IdeaDetail from './pages/common/IdeaDetail';
-import MentoringSessions from './pages/common/MentoringSessions';
-import Rankings from './pages/common/Rankings';
-
-import StartupWorkspaceHub from './pages/workspace/StartupWorkspaceHub';
-import TeamWorkspace from './pages/workspace/TeamWorkspace';
-import ProposalEditor from './pages/workspace/ProposalEditor';
-import Workshops from './pages/workshops/Workshops';
-import DataBankPage from './features/data-bank/DataBankPage';
-
-import ClassDetail from './pages/shared/ClassDetail';
-import Forbidden from './pages/shared/Forbidden';
-import NotFound from './pages/shared/NotFound';
-import ProfileSettings from './pages/shared/ProfileSettings';
 import { classFeatureFlags } from './config/classFeatureFlags';
 import { classRouteAccess } from './config/classAccessPolicy';
+
+const Home = lazy(() => import('./pages/Home'));
+const Login = lazy(() => import('./pages/auth/Login'));
+const Register = lazy(() => import('./pages/auth/Register'));
+const ForgotPassword = lazy(() => import('./pages/auth/ForgotPassword'));
+const ResetPassword = lazy(() => import('./pages/auth/ResetPassword'));
+const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'));
+const ClassManagement = lazy(() => import('./pages/admin/ClassManagement'));
+const SubjectManagement = lazy(() => import('./pages/admin/SubjectManagement'));
+const SubjectDetail = lazy(() => import('./pages/admin/SubjectDetail'));
+const UserManagement = lazy(() => import('./pages/admin/UserManagement'));
+const AccountApprovals = lazy(() => import('./pages/admin/AccountApprovals'));
+const LecturerDashboard = lazy(() => import('./pages/lecturer/LecturerDashboard'));
+const LecturerClasses = lazy(() => import('./pages/lecturer/LecturerClasses'));
+const MentorDashboard = lazy(() => import('./pages/mentor/MentorDashboard'));
+const StudentDashboard = lazy(() => import('./pages/student/StudentDashboard'));
+const IdeaForm = lazy(() => import('./pages/student/IdeaForm'));
+const MyClasses = lazy(() => import('./pages/student/MyClasses'));
+const MyTeam = lazy(() => import('./pages/student/MyTeam'));
+const StudentClassDetail = lazy(() => import('./pages/student/StudentClassDetail'));
+const AIAnalysis = lazy(() => import('./pages/common/AIAnalysis'));
+const ExecutionBoard = lazy(() => import('./pages/common/ExecutionBoard'));
+const GroupChat = lazy(() => import('./pages/common/GroupChat'));
+const IdeaDetail = lazy(() => import('./pages/common/IdeaDetail'));
+const MentoringSessions = lazy(() => import('./pages/common/MentoringSessions'));
+const Rankings = lazy(() => import('./pages/common/Rankings'));
+const StartupWorkspaceHub = lazy(() => import('./pages/workspace/StartupWorkspaceHub'));
+const TeamWorkspace = lazy(() => import('./pages/workspace/TeamWorkspace'));
+const ProposalEditor = lazy(() => import('./pages/workspace/ProposalEditor'));
+const Workshops = lazy(() => import('./pages/workshops/Workshops'));
+const DataBankPage = lazy(() => import('./features/data-bank/DataBankPage'));
+const ClassDetail = lazy(() => import('./pages/shared/ClassDetail'));
+const Forbidden = lazy(() => import('./pages/shared/Forbidden'));
+const NotFound = lazy(() => import('./pages/shared/NotFound'));
+const ProfileSettings = lazy(() => import('./pages/shared/ProfileSettings'));
+
+const PageFallback = () => (
+  <div className="flex min-h-56 items-center justify-center" role="status" aria-label="Loading page">
+    <div className="h-8 w-8 animate-spin rounded-full border-2 border-slate-200 border-t-primary" />
+  </div>
+);
 
 function App(): React.ReactElement {
   return (
@@ -77,6 +79,7 @@ function App(): React.ReactElement {
                 }}
               />
 
+              <Suspense fallback={<PageFallback />}>
               <Routes>
                 <Route path="/" element={<Home />} />
                 <Route path="/login" element={<Login />} />
@@ -133,6 +136,7 @@ function App(): React.ReactElement {
                 <Route path="/unauthorized" element={<Forbidden />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
+              </Suspense>
             </Router>
           </AuthProvider>
         </QueryClientProvider>

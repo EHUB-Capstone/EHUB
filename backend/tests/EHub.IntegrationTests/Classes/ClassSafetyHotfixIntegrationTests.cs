@@ -12,6 +12,7 @@ using EHub.Application.Common.Interfaces.Identity;
 using EHub.Application.Common.Interfaces.Persistence;
 using EHub.Application.Features.Classes.AddStudentToClass;
 using EHub.Application.Features.Classes.CreateClass;
+using EHub.Application.Features.Classes.Common;
 using EHub.Application.Features.Classes.ImportStudents;
 using EHub.Application.Features.Classes.UpdateClass;
 using EHub.Application.Features.Classes.UpdateClassSchedule;
@@ -671,6 +672,117 @@ public sealed class ClassSafetyHotfixIntegrationTests
             .Should().Be(1);
     }
 
+    [Fact]
+    public async Task ArchiveAndRestore_PreserveData_WriteAudit_AndAreIdempotent()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateClassSeedAsync(context, "lifecycle-roundtrip");
+        context.ChangeTracker.Clear();
+        var admin = await context.Users.SingleAsync(user => user.Id == seed.AdminId);
+        var token = GenerateToken(scope.ServiceProvider, admin, SystemRoles.Admin);
+        var version = (await context.Classes.AsNoTracking().SingleAsync(item => item.Id == seed.ClassId)).Version.ToString();
+        var archivePayload = new ChangeClassLifecycleRequest { RowVersion = version, Reason = "End of local test cycle" };
+
+        using var archiveRequest = CreateAuthorizedPostRequest($"/api/classes/{seed.ClassId}/archive", token, archivePayload);
+        var archiveResponse = await _client.SendAsync(archiveRequest);
+        archiveResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        using var repeatedArchiveRequest = CreateAuthorizedPostRequest($"/api/classes/{seed.ClassId}/archive", token, archivePayload);
+        (await _client.SendAsync(repeatedArchiveRequest)).StatusCode.Should().Be(HttpStatusCode.OK);
+
+        context.ChangeTracker.Clear();
+        var archived = await context.Classes.AsNoTracking().SingleAsync(item => item.Id == seed.ClassId);
+        archived.Status.Should().Be(ClassStatus.Archived);
+        ClassScheduleRules.Deserialize(archived.ScheduleJson).Should().BeEquivalentTo(
+            ClassScheduleRules.Deserialize(seed.ScheduleJson));
+        archived.StatusBeforeArchive.Should().Be(ClassStatus.Active);
+        (await context.ClassAuditLogs.CountAsync(item => item.ClassId == seed.ClassId && item.Action == "CLASS_ARCHIVED")).Should().Be(1);
+
+        using var restoreRequest = CreateAuthorizedPostRequest($"/api/classes/{seed.ClassId}/restore", token,
+            new ChangeClassLifecycleRequest { RowVersion = archived.Version.ToString(), Reason = "Continue the class" });
+        (await _client.SendAsync(restoreRequest)).StatusCode.Should().Be(HttpStatusCode.OK);
+
+        context.ChangeTracker.Clear();
+        var restored = await context.Classes.AsNoTracking().SingleAsync(item => item.Id == seed.ClassId);
+        restored.Status.Should().Be(ClassStatus.Active);
+        restored.ArchivedAtUtc.Should().BeNull();
+        restored.StatusBeforeArchive.Should().BeNull();
+        (await context.ClassAuditLogs.CountAsync(item => item.ClassId == seed.ClassId && item.Action == "CLASS_RESTORED")).Should().Be(1);
+    }
+
+    [Fact]
+    public async Task ConcurrentRestore_ProducesOneStateTransitionAndOneAuditRecord()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateClassSeedAsync(context, "lifecycle-concurrency");
+        context.ChangeTracker.Clear();
+        var admin = await context.Users.SingleAsync(user => user.Id == seed.AdminId);
+        var token = GenerateToken(scope.ServiceProvider, admin, SystemRoles.Admin);
+        var initialVersion = (await context.Classes.AsNoTracking().SingleAsync(item => item.Id == seed.ClassId)).Version.ToString();
+        using var archiveRequest = CreateAuthorizedPostRequest($"/api/classes/{seed.ClassId}/archive", token,
+            new ChangeClassLifecycleRequest { RowVersion = initialVersion, Reason = "Prepare restore concurrency test" });
+        (await _client.SendAsync(archiveRequest)).StatusCode.Should().Be(HttpStatusCode.OK);
+        context.ChangeTracker.Clear();
+        var archivedVersion = (await context.Classes.AsNoTracking().SingleAsync(item => item.Id == seed.ClassId)).Version.ToString();
+        var payload = new ChangeClassLifecycleRequest { RowVersion = archivedVersion, Reason = "Concurrent restore request" };
+
+        using var firstRequest = CreateAuthorizedPostRequest($"/api/classes/{seed.ClassId}/restore", token, payload);
+        using var secondRequest = CreateAuthorizedPostRequest($"/api/classes/{seed.ClassId}/restore", token, payload);
+        var responses = await Task.WhenAll(_client.SendAsync(firstRequest), _client.SendAsync(secondRequest));
+        var responseBodies = await Task.WhenAll(responses.Select(response => response.Content.ReadAsStringAsync()));
+
+        responses.Should().OnlyContain(response =>
+            response.StatusCode == HttpStatusCode.OK || response.StatusCode == HttpStatusCode.Conflict,
+            "lifecycle concurrency must be mapped to a safe response; bodies were: {0}", string.Join(" | ", responseBodies));
+        context.ChangeTracker.Clear();
+        (await context.Classes.AsNoTracking().SingleAsync(item => item.Id == seed.ClassId)).Status.Should().Be(ClassStatus.Active);
+        (await context.ClassAuditLogs.CountAsync(item => item.ClassId == seed.ClassId && item.Action == "CLASS_RESTORED")).Should().Be(1);
+    }
+
+    [Fact]
+    public async Task ChatRepair_IsAdminOnly_Idempotent_AndFollowsArchiveReadOnlyState()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateClassSeedAsync(context, "chat-repair");
+        context.ChangeTracker.Clear();
+        var admin = await context.Users.SingleAsync(user => user.Id == seed.AdminId);
+        var lecturer = await context.Users.SingleAsync(user => user.Id == seed.LecturerId);
+        var adminToken = GenerateToken(scope.ServiceProvider, admin, SystemRoles.Admin);
+        var lecturerToken = GenerateToken(scope.ServiceProvider, lecturer, SystemRoles.Lecturer);
+
+        using var forbiddenRequest = CreateAuthorizedPostRequest(
+            $"/api/classes/{seed.ClassId}/repair-chat-memberships", lecturerToken, new { });
+        (await _client.SendAsync(forbiddenRequest)).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        using var repairRequest = CreateAuthorizedPostRequest(
+            $"/api/classes/{seed.ClassId}/repair-chat-memberships", adminToken, new { });
+        (await _client.SendAsync(repairRequest)).StatusCode.Should().Be(HttpStatusCode.OK);
+        using var repeatedRepairRequest = CreateAuthorizedPostRequest(
+            $"/api/classes/{seed.ClassId}/repair-chat-memberships", adminToken, new { });
+        (await _client.SendAsync(repeatedRepairRequest)).StatusCode.Should().Be(HttpStatusCode.OK);
+
+        context.ChangeTracker.Clear();
+        var group = await context.ChatGroups.AsNoTracking()
+            .SingleAsync(item => item.ClassId == seed.ClassId && item.GroupType == ChatGroupType.ClassGroup);
+        (await context.ChatGroupMembers.AsNoTracking().CountAsync(item =>
+            item.ChatGroupId == group.Id && item.UserId == seed.LecturerId && item.IsActive)).Should().Be(1);
+        group.IsReadOnly.Should().BeFalse();
+
+        var version = (await context.Classes.AsNoTracking().SingleAsync(item => item.Id == seed.ClassId)).Version.ToString();
+        using var archiveRequest = CreateAuthorizedPostRequest($"/api/classes/{seed.ClassId}/archive", adminToken,
+            new ChangeClassLifecycleRequest { RowVersion = version, Reason = "Verify archived chat read-only state" });
+        (await _client.SendAsync(archiveRequest)).StatusCode.Should().Be(HttpStatusCode.OK);
+        using var archivedRepairRequest = CreateAuthorizedPostRequest(
+            $"/api/classes/{seed.ClassId}/repair-chat-memberships", adminToken, new { });
+        (await _client.SendAsync(archivedRepairRequest)).StatusCode.Should().Be(HttpStatusCode.OK);
+
+        context.ChangeTracker.Clear();
+        (await context.ChatGroups.AsNoTracking().SingleAsync(item => item.Id == group.Id)).IsReadOnly.Should().BeTrue();
+    }
+
     private static async Task<ClassSeed> CreateClassSeedAsync(AppDbContext context, string suffix)
     {
         var admin = await context.Users
@@ -825,6 +937,16 @@ public sealed class ClassSafetyHotfixIntegrationTests
     private static HttpRequestMessage CreateAuthorizedPutRequest(string url, string token, object payload)
     {
         var request = new HttpRequestMessage(HttpMethod.Put, url)
+        {
+            Content = JsonContent.Create(payload)
+        };
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        return request;
+    }
+
+    private static HttpRequestMessage CreateAuthorizedPostRequest(string url, string token, object payload)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, url)
         {
             Content = JsonContent.Create(payload)
         };

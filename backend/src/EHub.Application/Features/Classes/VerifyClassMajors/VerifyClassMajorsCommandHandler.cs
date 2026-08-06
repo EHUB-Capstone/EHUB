@@ -37,9 +37,11 @@ public sealed class VerifyClassMajorsCommandHandler : IVerifyClassMajorsCommandH
         string currentUserRole,
         CancellationToken cancellationToken = default)
     {
-        if (!string.Equals(currentUserRole, SystemRoles.Admin, StringComparison.OrdinalIgnoreCase))
+        var isStaff = string.Equals(currentUserRole, SystemRoles.Admin, StringComparison.OrdinalIgnoreCase) ||
+                      string.Equals(currentUserRole, SystemRoles.Lecturer, StringComparison.OrdinalIgnoreCase);
+        if (!isStaff)
         {
-            return Failure(ErrorCodes.ClassAccessDenied, "Only an administrator can verify enrollment majors.");
+            return Failure(ErrorCodes.ClassAccessDenied, "Only an administrator or lecturer can verify enrollment majors.");
         }
 
         if (file == null || file.Length == 0)

@@ -189,6 +189,11 @@ public sealed class CreateClassCommandHandler : ICreateClassCommandHandler
                 newClass.PrimaryLecturerId
             })
         });
+        ClassOutbox.Enqueue(_context, "Class.Created.v1", newClass.Id, new
+        {
+            newClass.ClassCode,
+            newClass.PrimaryLecturerId
+        });
 
         try
         {

@@ -42,9 +42,8 @@ public sealed class GetClassDetailQueryHandler : IGetClassDetailQueryHandler
             .Include(c => c.Course)
             .Include(c => c.Semester)
             .Include(c => c.PrimaryLecturer)
-            .Include(c => c.ClassStudents)
-            .ThenInclude(cs => cs.Student)
             .FirstOrDefaultAsync(c => c.Id == classId, cancellationToken);
+
 
         if (targetClass == null)
         {
@@ -52,17 +51,13 @@ public sealed class GetClassDetailQueryHandler : IGetClassDetailQueryHandler
                 new Error(ErrorCodes.ClassNotFound, "The requested class was not found."));
         }
 
-        if (isLecturer)
+        if (isStudent)
         {
-            if (targetClass.PrimaryLecturerId != currentUserId)
-            {
-                return Result.Failure<ClassResponse>(
-                    new Error(ErrorCodes.ClassAccessDenied, "You do not have permission to view details of this class."));
-            }
-        }
-        else if (isStudent)
-        {
-            var isEnrolled = targetClass.ClassStudents.Any(cs => cs.Student.UserId == currentUserId && cs.EnrollmentStatus == EnrollmentStatus.Active);
+            var isEnrolled = await _context.ClassStudents.AsNoTracking().AnyAsync(
+                cs => cs.ClassId == classId &&
+                    cs.Student.UserId == currentUserId &&
+                    cs.EnrollmentStatus == EnrollmentStatus.Active,
+                cancellationToken);
             if (!isEnrolled)
             {
                 return Result.Failure<ClassResponse>(

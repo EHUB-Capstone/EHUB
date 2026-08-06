@@ -4,7 +4,7 @@ import toast from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Plus, RefreshCw, Search, Filter, GraduationCap,
-  Users, BookOpen, ChevronRight, ChevronLeft, Upload, Eye, Calendar, LayoutGrid, ClipboardCheck, AlertCircle,
+  Users, BookOpen, ChevronRight, ChevronLeft, Upload, Eye, Calendar, LayoutGrid, ClipboardCheck, AlertCircle, RotateCcw,
 } from 'lucide-react';
 import { AuthContext } from '../../context/AuthContext';
 import { classApi } from '../../api/classApi';
@@ -15,9 +15,11 @@ import EmptyState from '../../components/ui/EmptyState';
 import BulkCreateModal from '../../components/class/BulkCreateModal';
 import ImportStudentsModal from '../../components/class/ImportStudentsModal';
 import ClassDirectionOverview from '../../components/class/ClassDirectionOverview';
+import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import { classFeatureFlags } from '../../config/classFeatureFlags';
 import { parseApiError } from '../../utils/apiError';
 import { toClassViewModel, unwrapApiData } from '../../utils/classMappers';
+import { getClassLifecyclePresentation } from '../../utils/classComponentPolicy';
 import type { ClassListResponse, ClassStatus, ClassViewModel } from '../../types/classes';
 
 const SEMESTERS = ['SP', 'SU', 'FA'];
@@ -82,6 +84,9 @@ export default function ClassManagement() {
   // Modals
   const [showBulk,   setShowBulk]   = useState(false);
   const [importTarget, setImportTarget] = useState<string | null>(null);
+  const [restoreTarget, setRestoreTarget] = useState<ClassViewModel | null>(null);
+  const [restoreReason, setRestoreReason] = useState('');
+  const [restoring, setRestoring] = useState(false);
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
@@ -105,7 +110,7 @@ export default function ClassManagement() {
 
       const [clsRes, usrRes] = await Promise.all([
         classApi.getAll(params),
-        isAdmin ? userApi.getAll({ page: 1, limit: 100, role: 'LECTURER', status: 'APPROVED' }) : Promise.resolve({ users: [] }),
+        (isAdmin || isLecturer) ? userApi.getAll({ page: 1, limit: 100, role: 'LECTURER', status: 'APPROVED' }) : Promise.resolve({ users: [] }),
       ]);
 
       const classList = unwrapApiData<ClassListResponse>(clsRes);
@@ -179,6 +184,25 @@ export default function ClassManagement() {
 
   const handleImported = () => {
     void fetchAll();
+  };
+
+  const handleRestore = async () => {
+    if (!restoreTarget) return;
+    setRestoring(true);
+    try {
+      await classApi.restore(restoreTarget._id, {
+        rowVersion: restoreTarget.rowVersion,
+        reason: restoreReason.trim(),
+      });
+      toast.success(`${restoreTarget.classCode} restored successfully.`);
+      setRestoreTarget(null);
+      setRestoreReason('');
+      await fetchAll();
+    } catch (requestError) {
+      toast.error(parseApiError(requestError, 'Failed to restore class').message);
+    } finally {
+      setRestoring(false);
+    }
   };
 
   const sortedClasses = useMemo(() => sortClasses(classes), [classes]);
@@ -277,7 +301,7 @@ export default function ClassManagement() {
             <option value="Draft">Draft</option>
             <option value="Active">Active</option>
             <option value="Inactive">Inactive</option>
-            {isAdmin && <option value="Archived">Archived</option>}
+            {(isAdmin || isLecturer) && <option value="Archived">Archived</option>}
           </select>
           <select
             value={sort}
@@ -442,7 +466,14 @@ export default function ClassManagement() {
                   >
                     <Eye className="w-3.5 h-3.5" /> View Detail
                   </button>
-                  {(isAdmin || (isLecturer && classFeatureFlags.lecturerStudentImport)) && (
+                  {(isAdmin || isLecturer) && getClassLifecyclePresentation(cls.status).action === 'restore' ? (
+                    <button
+                      onClick={(event) => { event.stopPropagation(); setRestoreTarget(cls); }}
+                      className="flex-1 flex items-center justify-center gap-1.5 text-xs text-green-700 hover:text-green-800 font-medium transition-colors border-l border-slate-100"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" /> Restore
+                    </button>
+                  ) : (isAdmin || (isLecturer && classFeatureFlags.lecturerStudentImport)) && (
                     <button
                       onClick={(e) => { e.stopPropagation(); setImportTarget(cls._id); }}
                       className="flex-1 flex items-center justify-center gap-1.5 text-xs text-primary hover:text-primary-dark font-medium transition-colors border-l border-slate-100"
@@ -490,6 +521,19 @@ export default function ClassManagement() {
           onImported={handleImported}
         />
       )}
+      <ConfirmDialog
+        isOpen={!!restoreTarget}
+        onClose={() => { setRestoreTarget(null); setRestoreReason(''); }}
+        onConfirm={handleRestore}
+        isSubmitting={restoring}
+        title="Restore this class?"
+        description={restoreTarget ? `${restoreTarget.classCode} will be revalidated for lecturer, schedule, subject, semester and conflicts before activation.` : ''}
+        confirmText="Restore class"
+        confirmVariant="primary"
+        reason={restoreReason}
+        onReasonChange={setRestoreReason}
+        reasonRequired
+      />
     </div>
   );
 }

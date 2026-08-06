@@ -16,6 +16,7 @@ import {
 import Button from '../ui/Button';
 import { classApi } from '../../api/classApi';
 import { parseApiError } from '../../utils/apiError';
+import { validateImportFileSelection } from '../../utils/classComponentPolicy';
 
 interface ImportStudentsModalProps {
   classId?: string;
@@ -82,18 +83,11 @@ export default function ImportStudentsModal({
   const inspectFile = async (selectedFile?: File) => {
     if (!selectedFile) return;
 
-    const extension = selectedFile.name.split('.').pop()?.toLowerCase();
-    if (extension !== 'xlsx' && extension !== 'xls') {
+    const validationError = validateImportFileSelection(selectedFile);
+    if (validationError) {
       setFile(null);
       setPreviewData(null);
-      setFileError('Unsupported file type. Please choose an .xlsx or .xls file.');
-      return;
-    }
-
-    if (selectedFile.size > 10 * 1024 * 1024) {
-      setFile(null);
-      setPreviewData(null);
-      setFileError('The file is larger than 10 MB. Please upload a smaller student list.');
+      setFileError(validationError);
       return;
     }
 

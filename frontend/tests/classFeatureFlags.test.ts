@@ -16,8 +16,10 @@ test('enables completed class workflow features while keeping unrelated unfinish
   assert.equal(flags.mentorAssignment, true);
   assert.equal(flags.projectDirection, true);
   assert.equal(flags.studentSelfService, true);
+  assert.equal(flags.lifecycle, true);
+  assert.equal(flags.chatBackfill, true);
   assert.equal(Object.entries(flags)
-    .filter(([name]) => !['lecturerStudentImport', 'majorVerification', 'teamManagement', 'mentorAssignment', 'projectDirection', 'studentSelfService'].includes(name))
+    .filter(([name]) => !['lecturerStudentImport', 'majorVerification', 'teamManagement', 'mentorAssignment', 'projectDirection', 'studentSelfService', 'lifecycle', 'chatBackfill'].includes(name))
     .every(([, enabled]) => enabled === false), true);
 });
 

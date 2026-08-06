@@ -7,7 +7,9 @@ export const createClassFeatureFlags = (environment: FeatureEnvironment) => Obje
   showDevelopmentControls: isEnabled(environment.DEV) ||
     isEnabled(environment.VITE_SHOW_UNAVAILABLE_CLASS_FEATURES),
   rename: isEnabled(environment.VITE_FEATURE_CLASS_RENAME),
-  lifecycle: isEnabled(environment.VITE_FEATURE_CLASS_LIFECYCLE),
+  lifecycle: environment.VITE_FEATURE_CLASS_LIFECYCLE === undefined
+    ? true
+    : isEnabled(environment.VITE_FEATURE_CLASS_LIFECYCLE),
   majorVerification: environment.VITE_FEATURE_CLASS_MAJOR_VERIFICATION === undefined
     ? true
     : isEnabled(environment.VITE_FEATURE_CLASS_MAJOR_VERIFICATION),
@@ -17,8 +19,9 @@ export const createClassFeatureFlags = (environment: FeatureEnvironment) => Obje
   teamManagement: environment.VITE_FEATURE_CLASS_TEAM_MANAGEMENT === undefined
     ? true
     : isEnabled(environment.VITE_FEATURE_CLASS_TEAM_MANAGEMENT),
-  chatBackfill: isEnabled(environment.VITE_FEATURE_CLASS_CHAT_BACKFILL),
-  codeConflictReport: isEnabled(environment.VITE_FEATURE_CLASS_CODE_CONFLICT_REPORT),
+  chatBackfill: environment.VITE_FEATURE_CLASS_CHAT_BACKFILL === undefined
+    ? true
+    : isEnabled(environment.VITE_FEATURE_CLASS_CHAT_BACKFILL),
   projectDirection: environment.VITE_FEATURE_CLASS_PROJECT_DIRECTION === undefined
     ? true
     : isEnabled(environment.VITE_FEATURE_CLASS_PROJECT_DIRECTION),

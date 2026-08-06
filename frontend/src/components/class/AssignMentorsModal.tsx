@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { X, Loader2, Star, Search, Check, Users } from 'lucide-react';
@@ -8,7 +7,7 @@ import { unwrapApiData } from '../../utils/classMappers';
 import { parseApiError } from '../../utils/apiError';
 import { normalizeManagedTeam } from '../../utils/teamManagement';
 
-export default function AssignMentorsModal({ classId, onClose, onAssigned }) {
+export default function AssignMentorsModal({ classId, currentMentors: _currentMentors = [], onClose, onAssigned }) {
   const [mentors, setMentors] = useState([]);
   const [teams, setTeams] = useState([]);
   const [selectedMentorId, setSelectedMentorId] = useState('');
@@ -27,7 +26,7 @@ export default function AssignMentorsModal({ classId, onClose, onAssigned }) {
           classApi.getTeams(classId),
         ]);
 
-        const mentorCandidates = unwrapApiData(mentorRes) || [];
+        const mentorCandidates = unwrapApiData<any[]>(mentorRes as any) || [];
         const teamData = unwrapApiData(teamRes) || [];
         const mentorList = mentorCandidates.map(candidate => ({
           _id: candidate.mentor.mentorProfileId,

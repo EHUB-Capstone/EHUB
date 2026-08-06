@@ -1,4 +1,3 @@
-// @ts-nocheck
 // src/api/teamApi.js — Module 2 Team Management API
 import axiosClient from './axiosClient';
 import { classFeatureFlags, runClassFeatureRequest } from '../config/classFeatureFlags';
@@ -6,7 +5,7 @@ import { classFeatureFlags, runClassFeatureRequest } from '../config/classFeatur
 export const teamApi = {
   // ─── Team CRUD ───────────────────────────────────────────────────────────
   getAll:      (params) => runClassFeatureRequest(classFeatureFlags.teamManagement, 'Class team management', () => axiosClient.get('/teams', { params })),
-  getById:     (id, options = {}) => runClassFeatureRequest(classFeatureFlags.teamManagement, 'Class team management', () => axiosClient.get(`/teams/${id}`, { signal: options.signal })),
+  getById:     (id, options: { signal?: AbortSignal } = {}) => runClassFeatureRequest(classFeatureFlags.teamManagement, 'Class team management', () => axiosClient.get(`/teams/${id}`, { signal: options.signal })),
 
   // ─── Assignment ──────────────────────────────────────────────────────────
   getMentorAssignments: (teamId) => runClassFeatureRequest(classFeatureFlags.mentorAssignment, 'Class mentor assignment', () => axiosClient.get(`/teams/${teamId}/mentor-assignments`)),

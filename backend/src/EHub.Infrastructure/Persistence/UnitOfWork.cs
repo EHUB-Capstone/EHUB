@@ -72,7 +72,7 @@ public class UnitOfWork : IUnitOfWork
             await transaction.CommitAsync(cancellationToken);
             return result;
         }
-        catch (PostgresException exception) when (exception.SqlState == PostgresErrorCodes.SerializationFailure)
+        catch (Exception exception) when (ContainsSerializationFailure(exception))
         {
             await transaction.RollbackAsync(cancellationToken);
             throw new SerializableTransactionConflictException(
@@ -84,5 +84,17 @@ public class UnitOfWork : IUnitOfWork
             await transaction.RollbackAsync(cancellationToken);
             throw;
         }
+    }
+
+    private static bool ContainsSerializationFailure(Exception exception)
+    {
+        for (var current = exception; current != null; current = current.InnerException)
+        {
+            if (current is PostgresException postgresException &&
+                postgresException.SqlState == PostgresErrorCodes.SerializationFailure)
+                return true;
+        }
+
+        return false;
     }
 }

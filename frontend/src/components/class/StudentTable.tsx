@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { useState, useMemo, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { Search, Users, AlertTriangle, UserMinus, RotateCcw, ChevronLeft, ChevronRight } from 'lucide-react';
@@ -42,15 +41,17 @@ const majorColor = (major) => {
 export default function StudentTable({
   students: rawStudents,
   teams: rawTeams,
-  selected,
-  onSelectionChange,
-  onDeleteStudent,
-  onReEnrollStudent,
-  toolbarAction,
+  cls: _cls,
+  selected = [],
+  onSelectionChange = undefined,
+  onRefresh: _onRefresh = undefined,
+  onDeleteStudent = undefined,
+  onReEnrollStudent = undefined,
+  toolbarAction = null,
   selectionDisabled = false,
   maxSelection = 6,
-  serverQuery,
-  onServerQueryChange,
+  serverQuery = undefined,
+  onServerQueryChange = undefined,
 }) {
   const students = useMemo(() => (Array.isArray(rawStudents) ? rawStudents : []), [rawStudents]);
   const teams = useMemo(() => (Array.isArray(rawTeams) ? rawTeams : []), [rawTeams]);

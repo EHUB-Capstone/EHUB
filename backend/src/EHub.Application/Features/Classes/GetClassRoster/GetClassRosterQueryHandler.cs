@@ -79,9 +79,6 @@ public sealed class GetClassRosterQueryHandler : IGetClassRosterQueryHandler
 
         var query = _context.ClassStudents
             .AsNoTracking()
-            .Include(cs => cs.Student)
-            .Include(cs => cs.TeamMembers)
-            .ThenInclude(tm => tm.Team)
             .Where(cs => cs.ClassId == classId);
 
         query = ClassRosterFilters.Apply(query, request.Search, request.MajorCode, status);
@@ -89,17 +86,12 @@ public sealed class GetClassRosterQueryHandler : IGetClassRosterQueryHandler
         var totalCount = await query.CountAsync(cancellationToken);
         var totalPages = Math.Max(1, (int)Math.Ceiling((double)totalCount / pageSize));
 
-        var classStudents = await query
+        var items = await query
             .OrderBy(cs => cs.Student.RollNumber)
             .ThenBy(cs => cs.Student.FullName)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
-            .ToListAsync(cancellationToken);
-
-        var items = classStudents.Select(cs =>
-        {
-            var activeTeamMember = cs.TeamMembers.FirstOrDefault(tm => tm.CountsTowardActiveTeam && tm.Team != null && tm.Team.Status == TeamStatus.Active);
-            return new ClassStudentDto
+            .Select(cs => new ClassStudentDto
             {
                 StudentId = cs.StudentId,
                 RollNumber = cs.Student.RollNumber ?? string.Empty,
@@ -110,12 +102,21 @@ public sealed class GetClassRosterQueryHandler : IGetClassRosterQueryHandler
                 MajorVerificationStatus = cs.MajorVerificationStatus.ToString(),
                 MemberCode = cs.MemberCode,
                 EnrollmentStatus = cs.EnrollmentStatus.ToString(),
-                TeamId = activeTeamMember?.TeamId,
-                TeamName = activeTeamMember?.Team?.TeamName,
-                IsTeamLeader = activeTeamMember?.RoleInTeam == TeamMemberRole.Leader,
+                TeamId = cs.TeamMembers
+                    .Where(tm => tm.CountsTowardActiveTeam && tm.Team.Status == TeamStatus.Active)
+                    .Select(tm => (Guid?)tm.TeamId)
+                    .FirstOrDefault(),
+                TeamName = cs.TeamMembers
+                    .Where(tm => tm.CountsTowardActiveTeam && tm.Team.Status == TeamStatus.Active)
+                    .Select(tm => tm.Team.TeamName)
+                    .FirstOrDefault(),
+                IsTeamLeader = cs.TeamMembers.Any(tm =>
+                    tm.CountsTowardActiveTeam &&
+                    tm.Team.Status == TeamStatus.Active &&
+                    tm.RoleInTeam == TeamMemberRole.Leader),
                 JoinedAtUtc = cs.CreatedAt
-            };
-        }).ToList();
+            })
+            .ToListAsync(cancellationToken);
 
         var response = new ClassRosterListResponse
         {

@@ -8,6 +8,9 @@ using EHub.Application.Common.Interfaces.Identity;
 using EHub.Application.Features.Classes.AddStudentToClass;
 using EHub.Application.Features.Classes.CreateBulkClasses;
 using EHub.Application.Features.Classes.CreateClass;
+using EHub.Application.Features.Classes.ClassAudit;
+using EHub.Application.Features.Classes.ClassLifecycle;
+using EHub.Application.Common.Interfaces.Services;
 using EHub.Application.Features.Classes.ExportClassRoster;
 using EHub.Application.Features.Classes.GetClassDetail;
 using EHub.Application.Features.Classes.GetClasses;
@@ -29,6 +32,7 @@ using EHub.Shared.Errors;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace EHub.Api.Controllers;
 
@@ -239,7 +243,6 @@ public sealed class ClassesController : ControllerBase
     }
 
     [HttpPut("{id:guid}/teaching-assignment")]
-    [Authorize(Policy = SystemPolicies.AdminOnly)]
     public async Task<IActionResult> UpdateTeachingAssignment(
         Guid id,
         [FromBody] UpdateTeachingAssignmentRequest request,
@@ -349,6 +352,61 @@ public sealed class ClassesController : ControllerBase
         return Ok(ApiResponse<ClassStudentDto>.SuccessResponse(
             result.Value,
             "Class student updated successfully."));
+    }
+
+    [HttpPost("{id:guid}/archive")]
+    public async Task<IActionResult> ArchiveClass(
+        Guid id,
+        [FromBody] ChangeClassLifecycleRequest request,
+        [FromServices] IClassLifecycleCommandHandler commandHandler,
+        CancellationToken cancellationToken)
+    {
+        var result = await commandHandler.ArchiveAsync(
+            id, request, _currentUserService.UserId ?? Guid.Empty, GetCurrentUserRole(), cancellationToken);
+        if (result.IsFailure) return ToClassErrorResponse(result.Error);
+        return Ok(ApiResponse<ClassLifecycleResponse>.SuccessResponse(result.Value, "Class archived successfully."));
+    }
+
+    [HttpPost("{id:guid}/restore")]
+    public async Task<IActionResult> RestoreClass(
+        Guid id,
+        [FromBody] ChangeClassLifecycleRequest request,
+        [FromServices] IClassLifecycleCommandHandler commandHandler,
+        CancellationToken cancellationToken)
+    {
+        var result = await commandHandler.RestoreAsync(
+            id, request, _currentUserService.UserId ?? Guid.Empty, GetCurrentUserRole(), cancellationToken);
+        if (result.IsFailure) return ToClassErrorResponse(result.Error);
+        return Ok(ApiResponse<ClassLifecycleResponse>.SuccessResponse(result.Value, "Class restored successfully."));
+    }
+
+    [HttpPost("{id:guid}/repair-chat-memberships")]
+    public async Task<IActionResult> RepairChatMemberships(
+        Guid id,
+        [FromServices] IClassChatMembershipSynchronizer synchronizer,
+        CancellationToken cancellationToken)
+    {
+        if (!await ClassExistsAsync(id, cancellationToken))
+            return ToClassErrorResponse(new Error(ErrorCodes.ClassNotFound, "The requested class was not found."));
+
+        var result = await synchronizer.SynchronizeAsync(
+            id, _currentUserService.UserId ?? Guid.Empty, cancellationToken);
+        return Ok(ApiResponse<ChatMembershipSyncResponse>.SuccessResponse(result, "Class chat memberships repaired successfully."));
+    }
+
+    [HttpGet("{id:guid}/audit")]
+    public async Task<IActionResult> GetClassAudit(
+        Guid id,
+        [FromQuery] int page,
+        [FromQuery] int pageSize,
+        [FromServices] IGetClassAuditQueryHandler queryHandler,
+        CancellationToken cancellationToken)
+    {
+        var result = await queryHandler.HandleAsync(
+            id, page == 0 ? 1 : page, pageSize == 0 ? 25 : pageSize,
+            _currentUserService.UserId ?? Guid.Empty, GetCurrentUserRole(), cancellationToken);
+        if (result.IsFailure) return ToClassErrorResponse(result.Error);
+        return Ok(ApiResponse<ClassAuditLogListResponse>.SuccessResponse(result.Value, "Class audit trail retrieved successfully."));
     }
 
     [HttpPost("{id:guid}/major-verification")]
@@ -553,8 +611,16 @@ public sealed class ClassesController : ControllerBase
             ErrorCodes.ClassImportSessionInvalid or
             ErrorCodes.ClassImportSessionExpired or
             ErrorCodes.ClassImportSessionAlreadyProcessing => Conflict(response),
+            ErrorCodes.ClassRestoreInvalid => Conflict(response),
             _ => BadRequest(response)
         };
+    }
+
+    private async Task<bool> ClassExistsAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var handler = HttpContext.RequestServices.GetRequiredService<IGetClassDetailQueryHandler>();
+        var result = await handler.HandleAsync(id, _currentUserService.UserId ?? Guid.Empty, GetCurrentUserRole(), cancellationToken);
+        return result.IsSuccess;
     }
 
     private async Task<IActionResult> SetEnrollmentMajorLock(

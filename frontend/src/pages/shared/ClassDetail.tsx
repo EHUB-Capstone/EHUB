@@ -1,12 +1,11 @@
-// @ts-nocheck
 import { useState, useEffect, useContext, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { motion } from 'framer-motion';
 import {
   ArrowLeft, GraduationCap, Users, BookOpen,
-  Upload, Download, UserPlus, Loader2, Calendar, Pencil, ShieldCheck, Lock, Unlock, Trash2, AlertTriangle,
-  Database, MessagesSquare
+  Upload, Download, UserPlus, Loader2, Calendar, Pencil, ShieldCheck, Lock, Unlock, AlertTriangle,
+  Database, MessagesSquare, Archive, RotateCcw
 } from 'lucide-react';
 import { AuthContext } from '../../context/AuthContext';
 import { classApi } from '../../api/classApi';
@@ -30,6 +29,7 @@ import { entityId, getTeamMemberIds, normalizeManagedTeam, normalizeTeamProposal
 import { classFeatureFlags } from '../../config/classFeatureFlags';
 import { parseApiError } from '../../utils/apiError';
 import { toClassViewModel, unwrapApiData } from '../../utils/classMappers';
+import { getClassLifecyclePresentation, isClassReadOnly } from '../../utils/classComponentPolicy';
 
 const classActionTone = {
   neutral: 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-800',
@@ -97,6 +97,7 @@ export default function ClassDetail() {
   const [reEnrollingStudent, setReEnrollingStudent] = useState(false);
   const [showDeleteClass, setShowDeleteClass] = useState(false);
   const [deletingClass, setDeletingClass] = useState(false);
+  const [lifecycleReason, setLifecycleReason] = useState('');
 
   const fetchData = useCallback(async () => {
     if (!id || id === 'undefined') {
@@ -245,14 +246,14 @@ export default function ClassDetail() {
   const handleBackfillChats = async () => {
     setBackfilling(true);
     try {
-      const res = await classApi.backfillChats(id);
+      const res: any = await classApi.repairChatMemberships(id);
       const summary = res?.data || res;
       toast.success(
-        `Backfill complete: Created ${summary.createdCount || 0}, Linked ${summary.attachedExistingCount || 0} chats.`
+        `Repair complete: ${summary.groupsCreated || 0} groups created, ${summary.membershipsAdded || 0} members added, ${summary.membershipsEnded || 0} stale memberships ended.`
       );
       await fetchData();
     } catch (e) {
-      toast.error(e?.message || 'Failed to backfill chat groups');
+      toast.error(parseApiError(e, 'Failed to repair chat memberships').message);
     } finally {
       setBackfilling(false);
     }
@@ -261,7 +262,7 @@ export default function ClassDetail() {
   const handleToggleMajorLock = async () => {
     setTogglingLock(true);
     try {
-      const res = cls.isMajorLocked
+      const res: any = cls.isMajorLocked
         ? await classApi.unlockMajors(id)
         : await classApi.lockMajors(id);
       setCls(prev => ({ ...prev, isMajorLocked: res.data.isLocked }));
@@ -280,7 +281,7 @@ export default function ClassDetail() {
         scope: rosterStatus === 'Active' ? 'Active' : 'History',
         search: rosterSearch || undefined,
         majorCode: rosterMajor || undefined,
-        status: rosterStatus || undefined,
+        status: (rosterStatus || '') as '' | 'Active' | 'Dropped' | 'Completed',
       });
       const blob = new Blob([response.data || response], {
         type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
@@ -320,14 +321,22 @@ export default function ClassDetail() {
   const confirmDeleteClass = async () => {
     setDeletingClass(true);
     try {
-      await classApi.delete(id);
-      toast.success('Class deleted successfully');
-      navigate(user?.role === 'ADMIN' ? '/admin/classes' : '/lecturer/classes');
+      const isCurrentlyArchived = cls.status === 'Archived';
+      if (isCurrentlyArchived) {
+        await classApi.restore(id, { rowVersion: cls.rowVersion, reason: lifecycleReason.trim() });
+        toast.success('Class restored successfully');
+        await fetchData();
+      } else {
+        await classApi.archive(id, { rowVersion: cls.rowVersion, reason: lifecycleReason.trim() });
+        toast.success('Class archived successfully');
+        navigate('/admin/classes');
+      }
     } catch (err) {
-      toast.error(err?.message || 'Failed to delete class');
+      toast.error(parseApiError(err, 'Failed to change class lifecycle').message);
     } finally {
       setDeletingClass(false);
       setShowDeleteClass(false);
+      setLifecycleReason('');
     }
   };
 
@@ -338,13 +347,10 @@ export default function ClassDetail() {
   const safeTeams    = Array.isArray(teams) ? teams : [];
   const unassignedCount = safeStudents.filter(s => !s.teamId).length;
   
-  const createdById = cls.createdBy?._id?.toString() || cls.createdBy?.toString();
-  const lecturerId = cls.lectureId?._id?.toString() || cls.lectureId?.toString();
-  const isAdminOrLecturer = user?.role === 'ADMIN' || (user?.role === 'LECTURER' && lecturerId === user._id);
-  const canDeleteClass = user?.role === 'ADMIN' || (
-    user?.role === 'LECTURER' &&
-    (createdById === user._id || (!createdById && lecturerId === user._id))
-  );
+  const isAdminOrLecturer = user?.role === 'ADMIN' || user?.role === 'LECTURER';
+  const canDeleteClass = user?.role === 'ADMIN' || user?.role === 'LECTURER';
+  const isArchived = isClassReadOnly(cls.status);
+  const lifecyclePresentation = getClassLifecyclePresentation(cls.status);
 
   const getUniqueMentors = () => {
     const teamMentors = safeTeams
@@ -414,8 +420,7 @@ export default function ClassDetail() {
           <div className="min-w-0">
             <div className="flex items-center gap-1.5">
               <h1 className="truncate text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">{cls.classCode}</h1>
-              {isFeatureVisible(classFeatureFlags.rename) && (user?.role === 'ADMIN' ||
-                (user?.role === 'LECTURER' && cls.lectureId?._id?.toString() === user._id)) && (
+              {isFeatureVisible(classFeatureFlags.rename) && (user?.role === 'ADMIN' || user?.role === 'LECTURER') && (
                 <button
                   type="button"
                   id="btn-rename-class"
@@ -439,20 +444,20 @@ export default function ClassDetail() {
             <ClassActionButton
               icon={MessagesSquare}
               loading={backfilling}
-              onClick={() => runFeatureAction(classFeatureFlags.chatBackfill, 'Chat backfill', handleBackfillChats)}
+              onClick={() => runFeatureAction(classFeatureFlags.chatBackfill, 'Chat membership repair', handleBackfillChats)}
               disabled={backfilling}
             >
-              {backfilling ? 'Backfilling...' : 'Backfill Chats'}
+              {backfilling ? 'Repairing...' : 'Repair Chats'}
             </ClassActionButton>
           )}
 
-          {(user?.role === 'ADMIN' || user?.role === 'LECTURER') && (
+          {!isArchived && (user?.role === 'ADMIN' || user?.role === 'LECTURER') && (
             <ClassActionButton icon={Download} loading={exporting} onClick={handleExportExcel} disabled={exporting}>
               Export
             </ClassActionButton>
           )}
 
-          {(user?.role === 'ADMIN' || user?.role === 'LECTURER') && (
+          {!isArchived && (user?.role === 'ADMIN' || user?.role === 'LECTURER') && (
             <>
               <ClassActionButton
                 icon={Database}
@@ -477,13 +482,13 @@ export default function ClassDetail() {
             </>
           )}
 
-          {(user?.role === 'ADMIN' || (isAdminOrLecturer && classFeatureFlags.lecturerStudentImport)) && (
+          {!isArchived && (user?.role === 'ADMIN' || (isAdminOrLecturer && classFeatureFlags.lecturerStudentImport)) && (
             <ClassActionButton icon={Upload} tone="primary" onClick={() => setShowImport(true)}>
               Import Excel
             </ClassActionButton>
           )}
 
-          {isFeatureVisible(classFeatureFlags.majorVerification) && user?.role === 'ADMIN' && (
+          {!isArchived && isFeatureVisible(classFeatureFlags.majorVerification) && (user?.role === 'ADMIN' || user?.role === 'LECTURER') && (
             <ClassActionButton
               id="btn-verify-majors"
               icon={ShieldCheck}
@@ -494,7 +499,7 @@ export default function ClassDetail() {
             </ClassActionButton>
           )}
 
-          {user?.role === 'ADMIN' && (
+          {!isArchived && (user?.role === 'ADMIN' || user?.role === 'LECTURER') && (
             <ClassActionButton
               icon={cls.isMajorLocked ? Lock : Unlock}
               tone={cls.isMajorLocked ? 'danger' : 'success'}
@@ -508,15 +513,25 @@ export default function ClassDetail() {
 
           {isFeatureVisible(classFeatureFlags.lifecycle) && canDeleteClass && (
             <ClassActionButton
-              icon={Trash2}
-              tone="danger"
+              icon={isArchived ? RotateCcw : Archive}
+              tone={isArchived ? 'success' : 'danger'}
               onClick={() => runFeatureAction(classFeatureFlags.lifecycle, 'Class lifecycle management', () => setShowDeleteClass(true))}
             >
-              Delete Class
+              {lifecyclePresentation.label}
             </ClassActionButton>
           )}
         </div>
       </section>
+
+      {isArchived && (
+        <div className="flex items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-3 text-sm text-amber-800">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          <div>
+            <p className="font-semibold">Archived class — read-only</p>
+            <p className="mt-0.5 text-xs text-amber-700">Roster, teams, chat membership and history are retained. Restore the class before changing operational data.</p>
+          </div>
+        </div>
+      )}
 
       {/* ── Info Cards Grid ── */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -532,7 +547,7 @@ export default function ClassDetail() {
               {cls.lectureId?.email && <p className="text-[11px] text-slate-400 truncate">{cls.lectureId.email}</p>}
             </div>
           </div>
-          {user?.role === 'ADMIN' && (
+          {!isArchived && (user?.role === 'ADMIN' || user?.role === 'LECTURER') && (
             <button
               onClick={() => setShowAssignLecturer(true)}
               className="shrink-0 cursor-pointer rounded-md border border-primary-100 bg-primary-50 px-2 py-1 text-[11px] font-semibold text-primary transition-colors hover:border-primary-200 hover:bg-primary-100"
@@ -565,7 +580,7 @@ export default function ClassDetail() {
               )}
             </div>
           </div>
-          {isAdminOrLecturer && (
+          {!isArchived && isAdminOrLecturer && (
             <button
               onClick={() => setShowEditSchedule(true)}
               className="shrink-0 cursor-pointer rounded-md border border-primary-100 bg-primary-50 px-2 py-1 text-[11px] font-semibold text-primary transition-colors hover:border-primary-200 hover:bg-primary-100"
@@ -595,7 +610,7 @@ export default function ClassDetail() {
               )}
             </div>
           </div>
-          {isFeatureVisible(classFeatureFlags.mentorAssignment) && user?.role === 'ADMIN' && (
+          {!isArchived && isFeatureVisible(classFeatureFlags.mentorAssignment) && (user?.role === 'ADMIN' || user?.role === 'LECTURER') && (
             <button
               onClick={() => runFeatureAction(classFeatureFlags.mentorAssignment, 'Mentor assignment', () => setShowAssignMentors(true))}
               className="shrink-0 cursor-pointer rounded-md border border-primary-100 bg-primary-50 px-2 py-1 text-[11px] font-semibold text-primary transition-colors hover:border-primary-200 hover:bg-primary-100"
@@ -697,8 +712,8 @@ export default function ClassDetail() {
             selected={teamControlsVisible ? selected : []}
             onSelectionChange={teamControlsVisible ? setSelected : undefined}
             onRefresh={fetchData}
-            onDeleteStudent={isAdminOrLecturer ? handleRemoveStudent : undefined}
-            onReEnrollStudent={isAdminOrLecturer ? setStudentToReEnroll : undefined}
+            onDeleteStudent={!isArchived && isAdminOrLecturer ? handleRemoveStudent : undefined}
+            onReEnrollStudent={!isArchived && isAdminOrLecturer ? setStudentToReEnroll : undefined}
             serverQuery={{
               search: rosterSearch,
               majorCode: rosterMajor,
@@ -715,7 +730,7 @@ export default function ClassDetail() {
               if (Object.prototype.hasOwnProperty.call(next, 'page')) setRosterPage(next.page);
               if (!Object.prototype.hasOwnProperty.call(next, 'page')) setRosterPage(1);
             }}
-            toolbarAction={teamControlsVisible && selected.length === 0 ? (
+            toolbarAction={!isArchived && teamControlsVisible && selected.length === 0 ? (
               user?.role === 'STUDENT' ? (
                 <TeamSuggestionTooltip label="Xem hướng dẫn tạo nhóm">
                   <div className="space-y-2">
@@ -738,20 +753,20 @@ export default function ClassDetail() {
         ) : (
           <TeamList
             teams={[...safeTeams, ...teamProposals]}
-            onReview={(team) => setReviewTeam(team)}
-            canDelete={isAdminOrLecturer}
-            canManageInfo={isAdminOrLecturer}
+            onReview={!isArchived ? (team) => setReviewTeam(team) : undefined}
+            canDelete={!isArchived && isAdminOrLecturer}
+            canManageInfo={!isArchived && isAdminOrLecturer}
             classStudents={safeStudents}
-            onCreate={isAdminOrLecturer ? () => runFeatureAction(classFeatureFlags.teamManagement, 'Team management', () => openCreateTeam()) : undefined}
-            onEdit={isAdminOrLecturer ? (team) => !team.isProposal && runFeatureAction(classFeatureFlags.teamManagement, 'Team management', () => openEditTeam(team)) : undefined}
+            onCreate={!isArchived && isAdminOrLecturer ? () => runFeatureAction(classFeatureFlags.teamManagement, 'Team management', () => openCreateTeam()) : undefined}
+            onEdit={!isArchived && isAdminOrLecturer ? (team) => !team.isProposal && runFeatureAction(classFeatureFlags.teamManagement, 'Team management', () => openEditTeam(team)) : undefined}
             onDelete={undefined}
-            onProjectDirection={classFeatureFlags.projectDirection ? setDirectionTeam : undefined}
+            onProjectDirection={!isArchived && classFeatureFlags.projectDirection ? setDirectionTeam : undefined}
           />
         )}
       </motion.div>
 
       {/* ── Modals ── */}
-      {showImport && (
+      {!isArchived && showImport && (
         <ImportStudentsModal
           classId={id || cls?._id}
           onClose={() => setShowImport(false)}
@@ -761,7 +776,7 @@ export default function ClassDetail() {
         />
       )}
 
-      {classFeatureFlags.teamManagement && showTeamManagement && isAdminOrLecturer && (
+      {!isArchived && classFeatureFlags.teamManagement && showTeamManagement && isAdminOrLecturer && (
         <TeamManagementModal
           classInfo={{
             id: id || cls._id,
@@ -777,7 +792,7 @@ export default function ClassDetail() {
         />
       )}
 
-      {showEditSchedule && (
+      {!isArchived && showEditSchedule && (
         <EditScheduleModal
           classId={id}
           currentSchedule={cls.schedule}
@@ -790,7 +805,7 @@ export default function ClassDetail() {
         />
       )}
 
-      {showAssignLecturer && user?.role === 'ADMIN' && (
+      {!isArchived && showAssignLecturer && user?.role === 'ADMIN' && (
         <AssignLectureModal
           classId={id}
           currentLecture={cls.lectureId}
@@ -804,7 +819,7 @@ export default function ClassDetail() {
         />
       )}
 
-      {classFeatureFlags.mentorAssignment && showAssignMentors && (
+      {!isArchived && classFeatureFlags.mentorAssignment && showAssignMentors && (
         <AssignMentorsModal
           classId={id}
           currentMentors={activeMentors}
@@ -838,7 +853,7 @@ export default function ClassDetail() {
       )}
 
       {/* ── Add Student Modal ── */}
-      {showAddStudent && (
+      {!isArchived && showAddStudent && (
         <AddStudentModal
           classId={id}
           onClose={() => setShowAddStudent(false)}
@@ -898,10 +913,16 @@ export default function ClassDetail() {
         onClose={() => setShowDeleteClass(false)}
         onConfirm={confirmDeleteClass}
         isSubmitting={deletingClass}
-        title="Delete this class?"
-        description={`Class "${cls.classCode}" will be removed from active class lists. Student and team data will remain in the system.`}
-        confirmText="Delete class"
+        title={isArchived ? 'Restore this class?' : 'Archive this class?'}
+        description={isArchived
+          ? `Class "${cls.classCode}" will be validated again for subject, semester, lecturer, schedule, and conflicts before becoming editable.`
+          : `Class "${cls.classCode}" will become read-only and leave active lists. Roster, teams, chats, and history are retained.`}
+        confirmText={lifecyclePresentation.confirmLabel}
         cancelText="Cancel"
+        confirmVariant={isArchived ? 'primary' : 'danger'}
+        reason={lifecycleReason}
+        onReasonChange={setLifecycleReason}
+        reasonRequired
       />}
     </div>
   );

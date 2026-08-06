@@ -9,6 +9,7 @@ using FluentAssertions;
 using NSubstitute;
 using Xunit;
 
+
 namespace EHub.ApplicationTests.Features.Classes.UpdateClass;
 
 public class UpdateClassCommandHandlerTests
@@ -42,7 +43,7 @@ public class UpdateClassCommandHandlerTests
     }
 
     [Fact]
-    public async Task UpdateTeachingAssignmentAsync_WhenUserIsLecturer_ReturnsAccessDeniedError()
+    public async Task UpdateTeachingAssignmentAsync_WhenUserIsStudent_ReturnsAccessDeniedError()
     {
         // Arrange
         var request = new UpdateTeachingAssignmentRequest
@@ -51,7 +52,7 @@ public class UpdateClassCommandHandlerTests
         };
 
         // Act
-        var result = await _handler.UpdateTeachingAssignmentAsync(Guid.NewGuid(), request, Guid.NewGuid(), SystemRoles.Lecturer);
+        var result = await _handler.UpdateTeachingAssignmentAsync(Guid.NewGuid(), request, Guid.NewGuid(), SystemRoles.Student);
 
         // Assert
         result.IsFailure.Should().BeTrue();

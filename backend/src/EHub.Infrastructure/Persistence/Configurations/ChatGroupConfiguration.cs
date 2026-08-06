@@ -31,6 +31,11 @@ public class ChatGroupConfiguration : IEntityTypeConfiguration<ChatGroup>
             .HasMaxLength(50)
             .IsRequired();
 
+        builder.Property(g => g.IsReadOnly)
+            .HasColumnName("is_read_only")
+            .HasDefaultValue(false)
+            .IsRequired();
+
         builder.Property(g => g.CreatedById)
             .HasColumnName("created_by_id")
             .IsRequired();
@@ -40,8 +45,12 @@ public class ChatGroupConfiguration : IEntityTypeConfiguration<ChatGroup>
         builder.HasIndex(g => g.TeamId);
         builder.HasIndex(g => g.GroupType);
         builder.HasIndex(g => g.CreatedById);
-        builder.HasIndex(g => new { g.ClassId, g.GroupType });
-        builder.HasIndex(g => new { g.TeamId, g.GroupType });
+        builder.HasIndex(g => new { g.ClassId, g.GroupType })
+            .IsUnique()
+            .HasFilter("team_id IS NULL AND group_type = 'ClassGroup' AND is_deleted = false");
+        builder.HasIndex(g => new { g.TeamId, g.GroupType })
+            .IsUnique()
+            .HasFilter("team_id IS NOT NULL AND group_type = 'TeamGroup' AND is_deleted = false");
 
         // Audit & Soft Delete properties configuration
         builder.Property(g => g.CreatedAt).HasColumnName("created_at").IsRequired();

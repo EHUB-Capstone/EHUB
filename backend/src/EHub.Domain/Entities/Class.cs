@@ -28,6 +28,7 @@ public class Class : AuditableEntity
     public DateTime? ArchivedAtUtc { get; set; }
     public Guid? ArchivedByUserId { get; set; }
     public virtual User? ArchivedByUser { get; set; }
+    public ClassStatus? StatusBeforeArchive { get; set; }
 
     public Guid? CreatedById { get; set; }
     public virtual User? Creator { get; set; }

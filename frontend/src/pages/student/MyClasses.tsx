@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { GraduationCap, User, Mail, Calendar, ArrowRight, Loader2 } from 'lucide-react';
@@ -21,7 +20,7 @@ export default function MyClasses() {
   useEffect(() => {
     const fetchClasses = async () => {
       try {
-        const res = await classApi.getMyClasses();
+        const res: any = await classApi.getMyClasses();
         const data = res?.data?.classes || res?.classes || [];
         setClasses(data);
       } catch (err) {

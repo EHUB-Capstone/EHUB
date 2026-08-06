@@ -55,12 +55,7 @@ public sealed class GetClassesQueryHandler : IGetClassesQueryHandler
 
         var query = _context.Classes.AsNoTracking();
 
-        if (isLecturer)
-        {
-            // PrimaryLecturerId is the only source of truth for current ownership.
-            // Historical/auxiliary assignment rows must never grant access.
-            query = query.Where(c => c.PrimaryLecturerId == currentUserId);
-        }
+
 
         // 3. Status Filter (Mặc định là Active)
         if (string.IsNullOrWhiteSpace(request.Status))

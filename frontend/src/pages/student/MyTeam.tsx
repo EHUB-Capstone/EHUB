@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Users, Shield, MessageSquare, AlertCircle, Calendar, Star, Loader2, Sparkles } from 'lucide-react';
@@ -32,7 +31,7 @@ export default function MyTeam() {
     const fetchTeam = async () => {
       try {
         const res = await classApi.getMyTeam();
-        const payload = unwrapApiData(res);
+        const payload = unwrapApiData<any>(res as any);
         if (!payload?.team) {
           setData(payload || null);
         } else {

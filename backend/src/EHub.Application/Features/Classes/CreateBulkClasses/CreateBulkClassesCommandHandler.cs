@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using EHub.Application.Common.Interfaces.Persistence;
+using EHub.Application.Features.Classes.Common;
 using EHub.Contracts.Classes;
 using EHub.Domain.Entities;
 using EHub.Domain.Enums;
@@ -105,6 +106,12 @@ public sealed class CreateBulkClassesCommandHandler : ICreateBulkClassesCommandH
                     newClass.PrimaryLecturerId,
                     Batch = true
                 })
+            });
+            ClassOutbox.Enqueue(_context, "Class.Created.v1", newClass.Id, new
+            {
+                newClass.ClassCode,
+                newClass.PrimaryLecturerId,
+                Batch = true
             });
         }
 

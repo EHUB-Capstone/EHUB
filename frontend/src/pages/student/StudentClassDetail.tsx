@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ChevronLeft, GraduationCap, Users, Mail, Loader2, LayoutGrid } from 'lucide-react';
@@ -40,7 +39,7 @@ export default function StudentClassDetail() {
         classApi.getMyClassDetail(id),
         classApi.getTeamProposals(id),
       ]);
-      const detail = unwrapApiData(detailResponse);
+      const detail = unwrapApiData<any>(detailResponse as any);
       const normalizedStudents = (detail?.students || []).map(student => ({
         ...student,
         _id: student.studentId,
