@@ -40,8 +40,12 @@ public sealed class ChatController : ControllerBase
         var currentUserId = _currentUserService.UserId ?? Guid.Empty;
         var currentUserRole = GetCurrentUserRole();
 
+        var currentUserEmail = User.Claims.FirstOrDefault(c => c.Type == System.Security.Claims.ClaimTypes.Email)?.Value
+            ?? User.Claims.FirstOrDefault(c => c.Type == "email")?.Value;
+
         var currentStudentId = await _context.Students.AsNoTracking()
-            .Where(s => s.UserId == currentUserId)
+            .Where(s => s.UserId == currentUserId ||
+                (!string.IsNullOrEmpty(currentUserEmail) && s.Email != null && s.Email.ToLower() == currentUserEmail.ToLower()))
             .Select(s => (Guid?)s.Id)
             .FirstOrDefaultAsync(cancellationToken);
 
@@ -52,13 +56,25 @@ public sealed class ChatController : ControllerBase
                  (currentStudentId.HasValue && m.StudentId.HasValue && m.StudentId == currentStudentId)))
             .Select(m => m.ChatGroupId);
 
-        // Nếu là Admin, cho phép xem tất cả các chat group của hệ thống nếu chưa nằm trong group
+        // Nếu là Admin hoặc Lecturer, cho phép xem tất cả các chat group của hệ thống hoặc các lớp mình quản lý
         var isAdmin = string.Equals(currentUserRole, SystemRoles.Admin, StringComparison.OrdinalIgnoreCase);
+        var isLecturer = string.Equals(currentUserRole, SystemRoles.Lecturer, StringComparison.OrdinalIgnoreCase);
 
         var groupsQuery = _context.ChatGroups.AsNoTracking();
         if (!isAdmin)
         {
-            groupsQuery = groupsQuery.Where(g => myGroupIdsQuery.Contains(g.Id));
+            if (isLecturer)
+            {
+                var myClassIds = _context.Classes.AsNoTracking()
+                    .Where(c => c.PrimaryLecturerId == currentUserId)
+                    .Select(c => c.Id);
+
+                groupsQuery = groupsQuery.Where(g => myGroupIdsQuery.Contains(g.Id) || myClassIds.Contains(g.ClassId));
+            }
+            else
+            {
+                groupsQuery = groupsQuery.Where(g => myGroupIdsQuery.Contains(g.Id));
+            }
         }
 
         var groups = await groupsQuery
@@ -73,7 +89,8 @@ public sealed class ChatController : ControllerBase
                 classId = g.ClassId,
                 teamId = g.TeamId,
                 isReadOnly = g.IsReadOnly,
-                unreadCount = 0
+                unreadCount = 0,
+                memberCount = g.Members.Count(m => m.IsActive && !m.IsDeleted)
             })
             .ToListAsync(cancellationToken);
 
@@ -92,6 +109,8 @@ public sealed class ChatController : ControllerBase
         }
 
         var members = await _context.ChatGroupMembers.AsNoTracking()
+            .Include(m => m.User)
+            .Include(m => m.Student)
             .Where(m => m.ChatGroupId == chatGroupId && m.IsActive)
             .Select(m => new
             {
@@ -100,8 +119,9 @@ public sealed class ChatController : ControllerBase
                 chatGroupId = m.ChatGroupId,
                 userId = m.UserId ?? (m.Student != null ? m.Student.UserId : (Guid?)null),
                 studentId = m.StudentId,
-                displayName = m.User != null ? m.User.FullName : (m.Student != null ? m.Student.FullName : "Member"),
-                email = m.User != null ? m.User.Email : (m.Student != null ? m.Student.Email : string.Empty),
+                studentCode = m.Student != null ? m.Student.RollNumber : null,
+                displayName = m.Student != null ? m.Student.FullName : (m.User != null ? m.User.FullName : "Member"),
+                email = m.Student != null ? m.Student.Email : (m.User != null ? m.User.Email : string.Empty),
                 role = m.Role.ToString().ToUpperInvariant(),
                 nickname = m.Nickname
             })

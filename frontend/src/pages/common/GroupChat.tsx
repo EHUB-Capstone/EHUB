@@ -384,40 +384,56 @@ export default function GroupChat() {
 
   // ─── Socket.io ───────────────────────────────────────────────────────────
   useEffect(() => {
-    const socket = io(SOCKET_URL, {
-      withCredentials: true,
-      transports: ['websocket', 'polling'],
-    });
-    socketRef.current = socket;
-
-    socket.on('connect', () => {
-      // Re-join room after connect/reconnect
-      if (selectedChannelRef.current) {
-        socket.emit('join_room', selectedChannelRef.current._id);
-      }
-    });
-
-    socket.on('receive_message', (msg) => {
-      setMessages(prev => {
-        if (prev.some(m => m._id === msg._id)) return prev;
-        return [...prev, msg];
+    let socket = null;
+    try {
+      socket = io(SOCKET_URL, {
+        withCredentials: true,
+        transports: ['websocket', 'polling'],
+        autoConnect: false,
+        reconnectionAttempts: 2,
+        timeout: 2000,
       });
-      setTimeout(scrollToBottom, 100);
-    });
+      socketRef.current = socket;
 
-    socket.on('message_updated', (msg) => {
-      setMessages(prev => prev.map(m => (m._id === msg._id ? msg : m)));
-    });
+      socket.on('connect_error', () => {
+        // Silently catch connection refusal without spamming global errors
+      });
 
-    socket.on('message_revoked', (msg) => {
-      setMessages(prev => prev.map(m => (m._id === msg._id ? msg : m)));
-    });
+      socket.on('connect', () => {
+        if (selectedChannelRef.current) {
+          socket.emit('join_room', selectedChannelRef.current._id);
+        }
+      });
 
-    socket.on('message_reaction_updated', (msg) => {
-      setMessages(prev => prev.map(m => (m._id === msg._id ? msg : m)));
-    });
+      socket.on('receive_message', (msg) => {
+        setMessages(prev => {
+          if (prev.some(m => m._id === msg._id)) return prev;
+          return [...prev, msg];
+        });
+        setTimeout(scrollToBottom, 100);
+      });
 
-    return () => socket.disconnect();
+      socket.on('message_updated', (msg) => {
+        setMessages(prev => prev.map(m => (m._id === msg._id ? msg : m)));
+      });
+
+      socket.on('message_revoked', (msg) => {
+        setMessages(prev => prev.map(m => (m._id === msg._id ? msg : m)));
+      });
+
+      socket.on('message_reaction_updated', (msg) => {
+        setMessages(prev => prev.map(m => (m._id === msg._id ? msg : m)));
+      });
+
+      // Try connecting safely
+      socket.connect();
+    } catch {
+      // Ignore socket setup errors gracefully
+    }
+
+    return () => {
+      if (socket) socket.disconnect();
+    };
   }, []);
 
   // ─── Load Channels ────────────────────────────────────────────────────────
@@ -727,7 +743,7 @@ export default function GroupChat() {
                       {c.groupName}
                     </p>
                     <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mt-0.5">
-                      {c.class?.classCode || 'Startup Group'}
+                      {c.class?.classCode || 'Startup Group'} • {c.memberCount ?? 0} members
                     </p>
                     <p className="text-xs text-slate-400 truncate mt-1">
                       <span className="font-semibold">{lastMsgSender}</span>{lastMsgText}
@@ -763,7 +779,7 @@ export default function GroupChat() {
                     {selectedChannel.groupName}
                   </h2>
                   <p className="mt-0.5 truncate font-mono text-[11px] text-slate-400 sm:text-xs">
-                    Class: {selectedChannel.class?.classCode || '—'} · {selectedChannel.team?.teamCode || 'General'}
+                    Class: {selectedChannel.class?.classCode || '—'} · {selectedChannel.team?.teamCode || 'General'} · {channelMembers.length || selectedChannel.memberCount || 0} members
                   </p>
                 </div>
               </div>
@@ -780,6 +796,11 @@ export default function GroupChat() {
               >
                 <Users className="w-4 h-4" />
                 <span className="hidden sm:inline">Members</span>
+                {(channelMembers.length > 0 || (selectedChannel?.memberCount ?? 0) > 0) && (
+                  <span className="text-xs font-bold px-1.5 py-0.5 rounded-md bg-white/20">
+                    {channelMembers.length || selectedChannel?.memberCount}
+                  </span>
+                )}
                 <ChevronRight className={`w-3.5 h-3.5 transition-transform ${showMembers ? 'rotate-180' : ''}`} />
               </button>
             </div>

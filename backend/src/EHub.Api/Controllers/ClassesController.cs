@@ -389,9 +389,17 @@ public sealed class ClassesController : ControllerBase
         if (!await ClassExistsAsync(id, cancellationToken))
             return ToClassErrorResponse(new Error(ErrorCodes.ClassNotFound, "The requested class was not found."));
 
-        var result = await synchronizer.SynchronizeAsync(
-            id, _currentUserService.UserId ?? Guid.Empty, cancellationToken);
-        return Ok(ApiResponse<ChatMembershipSyncResponse>.SuccessResponse(result, "Class chat memberships repaired successfully."));
+        try
+        {
+            var result = await synchronizer.SynchronizeAsync(
+                id, _currentUserService.UserId ?? Guid.Empty, cancellationToken);
+            return Ok(ApiResponse<ChatMembershipSyncResponse>.SuccessResponse(result, "Class chat memberships repaired successfully."));
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, ApiResponse<ChatMembershipSyncResponse>.FailureResponse(
+                $"Could not repair chat memberships: {ex.Message}", ErrorCodes.ClassValidationError));
+        }
     }
 
     [HttpGet("{id:guid}/audit")]

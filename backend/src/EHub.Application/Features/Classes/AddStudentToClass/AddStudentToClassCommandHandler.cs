@@ -85,14 +85,29 @@ public sealed class AddStudentToClassCommandHandler : IAddStudentToClassCommandH
         }
 
         var studentProfile = studentByCode ?? studentByEmail;
-        var profileCode = studentProfile?.NormalizedRollNumber ?? studentProfile?.RollNumber;
-        if (studentProfile != null &&
-            (!string.Equals(profileCode, studentCode, StringComparison.OrdinalIgnoreCase) ||
-             !string.Equals(studentProfile.Email, email, StringComparison.OrdinalIgnoreCase)))
+        if (studentProfile != null)
         {
-            return Failure(
-                ErrorCodes.ClassStudentIdentityConflict,
-                "Student code and email must exactly match the existing student profile.");
+            if (!string.IsNullOrEmpty(studentProfile.Email) &&
+                !string.Equals(studentProfile.Email, email, StringComparison.OrdinalIgnoreCase))
+            {
+                return Failure(
+                    ErrorCodes.ClassStudentIdentityConflict,
+                    "Student email must match the existing student profile.");
+            }
+
+            var profileCode = studentProfile.NormalizedRollNumber ?? studentProfile.RollNumber;
+            if (string.IsNullOrWhiteSpace(profileCode))
+            {
+                studentProfile.RollNumber = studentCode;
+                studentProfile.NormalizedRollNumber = studentCode;
+                studentProfile.UpdatedAt = DateTime.UtcNow;
+            }
+            else if (!string.Equals(profileCode, studentCode, StringComparison.OrdinalIgnoreCase))
+            {
+                return Failure(
+                    ErrorCodes.ClassStudentIdentityConflict,
+                    $"Student code '{studentCode}' does not match existing profile code '{profileCode}'.");
+            }
         }
 
         ClassStudent? existingEnrollment = null;
@@ -138,17 +153,31 @@ public sealed class AddStudentToClassCommandHandler : IAddStudentToClassCommandH
         // No mutation occurs before all identity and enrollment validation has succeeded.
         if (studentProfile == null)
         {
+            var matchingUser = await _context.Users.AsNoTracking()
+                .FirstOrDefaultAsync(u => u.Email != null && u.Email.ToLower() == email, cancellationToken);
+
             studentProfile = new Student
             {
                 RollNumber = studentCode,
                 NormalizedRollNumber = studentCode,
                 FullName = fullName,
                 Email = email,
+                UserId = matchingUser?.Id,
                 MajorCode = majorCode,
                 Status = StudentStatus.Active,
                 CreatedBy = currentUserId
             };
             await _context.Students.AddAsync(studentProfile, cancellationToken);
+        }
+        else if (!studentProfile.UserId.HasValue && !string.IsNullOrWhiteSpace(email))
+        {
+            var matchingUser = await _context.Users.AsNoTracking()
+                .FirstOrDefaultAsync(u => u.Email != null && u.Email.ToLower() == email, cancellationToken);
+            if (matchingUser != null)
+            {
+                studentProfile.UserId = matchingUser.Id;
+                studentProfile.UpdatedAt = DateTime.UtcNow;
+            }
         }
         // Existing Student profile data remains the global source of truth.
         // Enrolling a student must not let a lecturer overwrite that profile.
