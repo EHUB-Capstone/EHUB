@@ -8,22 +8,31 @@ using EHub.Application.Common.Interfaces.Identity;
 using EHub.Application.Features.Classes.AddStudentToClass;
 using EHub.Application.Features.Classes.CreateBulkClasses;
 using EHub.Application.Features.Classes.CreateClass;
+using EHub.Application.Features.Classes.ClassAudit;
+using EHub.Application.Features.Classes.ClassLifecycle;
+using EHub.Application.Common.Interfaces.Services;
 using EHub.Application.Features.Classes.ExportClassRoster;
 using EHub.Application.Features.Classes.GetClassDetail;
 using EHub.Application.Features.Classes.GetClasses;
 using EHub.Application.Features.Classes.GetClassRoster;
 using EHub.Application.Features.Classes.GetImportTemplate;
+using EHub.Application.Features.Classes.GetMajorVerificationTemplate;
 using EHub.Application.Features.Classes.ImportStudents;
 using EHub.Application.Features.Classes.RemoveStudentFromClass;
+using EHub.Application.Features.Classes.ReEnrollStudent;
+using EHub.Application.Features.Classes.SetEnrollmentMajorLock;
 using EHub.Application.Features.Classes.UpdateClass;
 using EHub.Application.Features.Classes.UpdateClassSchedule;
 using EHub.Application.Features.Classes.UpdateClassStudent;
+using EHub.Application.Features.Classes.VerifyClassMajors;
 using EHub.Contracts.Classes;
 using EHub.Contracts.Common;
 using EHub.Shared.Constants;
+using EHub.Shared.Errors;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace EHub.Api.Controllers;
 
@@ -56,12 +65,7 @@ public sealed class ClassesController : ControllerBase
 
         if (result.IsFailure)
         {
-            if (result.Error.Code.Contains("AccessDenied", StringComparison.OrdinalIgnoreCase))
-            {
-                return StatusCode(403, ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
-            }
-
-            return BadRequest(ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
+            return ToClassErrorResponse(result.Error);
         }
 
         return Ok(ApiResponse<ClassListResponse>.SuccessResponse(
@@ -100,17 +104,7 @@ public sealed class ClassesController : ControllerBase
 
         if (result.IsFailure)
         {
-            if (result.Error.Code.Contains("AccessDenied", StringComparison.OrdinalIgnoreCase))
-            {
-                return StatusCode(403, ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
-            }
-
-            if (result.Error.Code.Contains("NotFound", StringComparison.OrdinalIgnoreCase))
-            {
-                return NotFound(ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
-            }
-
-            return BadRequest(ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
+            return ToClassErrorResponse(result.Error);
         }
 
         return Ok(ApiResponse<ClassResponse>.SuccessResponse(
@@ -135,16 +129,11 @@ public sealed class ClassesController : ControllerBase
 
         if (result.IsFailure)
         {
-            if (result.Error.Code.Contains("AccessDenied", StringComparison.OrdinalIgnoreCase))
-            {
-                return StatusCode(403, ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
-            }
-
-            return BadRequest(ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
+            return ToClassErrorResponse(result.Error);
         }
 
         return CreatedAtAction(
-            nameof(GetClasses),
+            nameof(GetClassDetail),
             new { id = result.Value.Id },
             ApiResponse<ClassResponse>.SuccessResponse(result.Value, "Class created successfully."));
     }
@@ -166,12 +155,7 @@ public sealed class ClassesController : ControllerBase
 
         if (result.IsFailure)
         {
-            if (result.Error.Code.Contains("AccessDenied", StringComparison.OrdinalIgnoreCase))
-            {
-                return StatusCode(403, ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
-            }
-
-            return BadRequest(ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
+            return ToClassErrorResponse(result.Error);
         }
 
         return Ok(ApiResponse<BulkClassPreviewResponse>.SuccessResponse(
@@ -196,12 +180,7 @@ public sealed class ClassesController : ControllerBase
 
         if (result.IsFailure)
         {
-            if (result.Error.Code.Contains("AccessDenied", StringComparison.OrdinalIgnoreCase))
-            {
-                return StatusCode(403, ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
-            }
-
-            return BadRequest(ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
+            return ToClassErrorResponse(result.Error);
         }
 
         return Ok(ApiResponse<IReadOnlyCollection<ClassResponse>>.SuccessResponse(
@@ -228,12 +207,7 @@ public sealed class ClassesController : ControllerBase
 
         if (result.IsFailure)
         {
-            if (result.Error.Code.Contains("AccessDenied", StringComparison.OrdinalIgnoreCase))
-            {
-                return StatusCode(403, ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
-            }
-
-            return BadRequest(ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
+            return ToClassErrorResponse(result.Error);
         }
 
         return Ok(ApiResponse<ClassResponse>.SuccessResponse(
@@ -260,17 +234,7 @@ public sealed class ClassesController : ControllerBase
 
         if (result.IsFailure)
         {
-            if (result.Error.Code.Contains("AccessDenied", StringComparison.OrdinalIgnoreCase))
-            {
-                return StatusCode(403, ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
-            }
-
-            if (result.Error.Code.Contains("ScheduleConflict", StringComparison.OrdinalIgnoreCase))
-            {
-                return Conflict(ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
-            }
-
-            return BadRequest(ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
+            return ToClassErrorResponse(result.Error);
         }
 
         return Ok(ApiResponse<ClassResponse>.SuccessResponse(
@@ -279,7 +243,6 @@ public sealed class ClassesController : ControllerBase
     }
 
     [HttpPut("{id:guid}/teaching-assignment")]
-    [Authorize(Policy = SystemPolicies.AdminOnly)]
     public async Task<IActionResult> UpdateTeachingAssignment(
         Guid id,
         [FromBody] UpdateTeachingAssignmentRequest request,
@@ -298,12 +261,7 @@ public sealed class ClassesController : ControllerBase
 
         if (result.IsFailure)
         {
-            if (result.Error.Code.Contains("AccessDenied", StringComparison.OrdinalIgnoreCase))
-            {
-                return StatusCode(403, ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
-            }
-
-            return BadRequest(ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
+            return ToClassErrorResponse(result.Error);
         }
 
         return Ok(ApiResponse<ClassResponse>.SuccessResponse(
@@ -332,12 +290,7 @@ public sealed class ClassesController : ControllerBase
 
         if (result.IsFailure)
         {
-            if (result.Error.Code.Contains("AccessDenied", StringComparison.OrdinalIgnoreCase))
-            {
-                return StatusCode(403, ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
-            }
-
-            return BadRequest(ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
+            return ToClassErrorResponse(result.Error);
         }
 
         return Ok(ApiResponse<ClassRosterListResponse>.SuccessResponse(
@@ -364,18 +317,7 @@ public sealed class ClassesController : ControllerBase
 
         if (result.IsFailure)
         {
-            if (result.Error.Code.Contains("AccessDenied", StringComparison.OrdinalIgnoreCase))
-            {
-                return StatusCode(403, ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
-            }
-
-            if (result.Error.Code.Contains("AlreadyEnrolled", StringComparison.OrdinalIgnoreCase) ||
-                result.Error.Code.Contains("ConflictSameSubjectSemester", StringComparison.OrdinalIgnoreCase))
-            {
-                return Conflict(ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
-            }
-
-            return BadRequest(ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
+            return ToClassErrorResponse(result.Error);
         }
 
         return Ok(ApiResponse<ClassStudentDto>.SuccessResponse(
@@ -383,7 +325,7 @@ public sealed class ClassesController : ControllerBase
             "Student added to class successfully."));
     }
 
-    [HttpPut("{id:guid}/students/{studentId:guid}")]
+    [HttpPut("{id:guid}/students/{studentId:guid}/major")]
     public async Task<IActionResult> UpdateClassStudent(
         Guid id,
         Guid studentId,
@@ -404,12 +346,7 @@ public sealed class ClassesController : ControllerBase
 
         if (result.IsFailure)
         {
-            if (result.Error.Code.Contains("AccessDenied", StringComparison.OrdinalIgnoreCase))
-            {
-                return StatusCode(403, ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
-            }
-
-            return BadRequest(ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
+            return ToClassErrorResponse(result.Error);
         }
 
         return Ok(ApiResponse<ClassStudentDto>.SuccessResponse(
@@ -417,7 +354,116 @@ public sealed class ClassesController : ControllerBase
             "Class student updated successfully."));
     }
 
-    [HttpDelete("{id:guid}/students/{studentId:guid}")]
+    [HttpPost("{id:guid}/archive")]
+    public async Task<IActionResult> ArchiveClass(
+        Guid id,
+        [FromBody] ChangeClassLifecycleRequest request,
+        [FromServices] IClassLifecycleCommandHandler commandHandler,
+        CancellationToken cancellationToken)
+    {
+        var result = await commandHandler.ArchiveAsync(
+            id, request, _currentUserService.UserId ?? Guid.Empty, GetCurrentUserRole(), cancellationToken);
+        if (result.IsFailure) return ToClassErrorResponse(result.Error);
+        return Ok(ApiResponse<ClassLifecycleResponse>.SuccessResponse(result.Value, "Class archived successfully."));
+    }
+
+    [HttpPost("{id:guid}/restore")]
+    public async Task<IActionResult> RestoreClass(
+        Guid id,
+        [FromBody] ChangeClassLifecycleRequest request,
+        [FromServices] IClassLifecycleCommandHandler commandHandler,
+        CancellationToken cancellationToken)
+    {
+        var result = await commandHandler.RestoreAsync(
+            id, request, _currentUserService.UserId ?? Guid.Empty, GetCurrentUserRole(), cancellationToken);
+        if (result.IsFailure) return ToClassErrorResponse(result.Error);
+        return Ok(ApiResponse<ClassLifecycleResponse>.SuccessResponse(result.Value, "Class restored successfully."));
+    }
+
+    [HttpPost("{id:guid}/repair-chat-memberships")]
+    public async Task<IActionResult> RepairChatMemberships(
+        Guid id,
+        [FromServices] IClassChatMembershipSynchronizer synchronizer,
+        CancellationToken cancellationToken)
+    {
+        if (!await ClassExistsAsync(id, cancellationToken))
+            return ToClassErrorResponse(new Error(ErrorCodes.ClassNotFound, "The requested class was not found."));
+
+        try
+        {
+            var result = await synchronizer.SynchronizeAsync(
+                id, _currentUserService.UserId ?? Guid.Empty, cancellationToken);
+            return Ok(ApiResponse<ChatMembershipSyncResponse>.SuccessResponse(result, "Class chat memberships repaired successfully."));
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, ApiResponse<ChatMembershipSyncResponse>.FailureResponse(
+                $"Could not repair chat memberships: {ex.Message}", ErrorCodes.ClassValidationError));
+        }
+    }
+
+    [HttpGet("{id:guid}/audit")]
+    public async Task<IActionResult> GetClassAudit(
+        Guid id,
+        [FromQuery] int page,
+        [FromQuery] int pageSize,
+        [FromServices] IGetClassAuditQueryHandler queryHandler,
+        CancellationToken cancellationToken)
+    {
+        var result = await queryHandler.HandleAsync(
+            id, page == 0 ? 1 : page, pageSize == 0 ? 25 : pageSize,
+            _currentUserService.UserId ?? Guid.Empty, GetCurrentUserRole(), cancellationToken);
+        if (result.IsFailure) return ToClassErrorResponse(result.Error);
+        return Ok(ApiResponse<ClassAuditLogListResponse>.SuccessResponse(result.Value, "Class audit trail retrieved successfully."));
+    }
+
+    [HttpPost("{id:guid}/major-verification")]
+    public async Task<IActionResult> VerifyClassMajors(
+        Guid id,
+        IFormFile file,
+        [FromServices] IVerifyClassMajorsCommandHandler commandHandler,
+        CancellationToken cancellationToken)
+    {
+        var result = await commandHandler.HandleAsync(
+            id,
+            file,
+            _currentUserService.UserId ?? Guid.Empty,
+            GetCurrentUserRole(),
+            cancellationToken);
+
+        if (result.IsFailure)
+        {
+            return ToClassErrorResponse(result.Error);
+        }
+
+        return Ok(ApiResponse<VerifyClassMajorsResponse>.SuccessResponse(
+            result.Value,
+            "Enrollment majors verified successfully."));
+    }
+
+    [HttpGet("major-verification-template")]
+    public IActionResult GetMajorVerificationTemplate(
+        [FromServices] IGetMajorVerificationTemplateQueryHandler queryHandler)
+    {
+        var result = queryHandler.Handle();
+        return File(result.Value.FileBytes, result.Value.ContentType, result.Value.FileName);
+    }
+
+    [HttpPost("{id:guid}/major-lock")]
+    public Task<IActionResult> LockEnrollmentMajors(
+        Guid id,
+        [FromServices] ISetEnrollmentMajorLockCommandHandler commandHandler,
+        CancellationToken cancellationToken) =>
+        SetEnrollmentMajorLock(id, true, commandHandler, cancellationToken);
+
+    [HttpDelete("{id:guid}/major-lock")]
+    public Task<IActionResult> UnlockEnrollmentMajors(
+        Guid id,
+        [FromServices] ISetEnrollmentMajorLockCommandHandler commandHandler,
+        CancellationToken cancellationToken) =>
+        SetEnrollmentMajorLock(id, false, commandHandler, cancellationToken);
+
+    [HttpPost("{id:guid}/students/{studentId:guid}/drop")]
     public async Task<IActionResult> RemoveStudentFromClass(
         Guid id,
         Guid studentId,
@@ -436,21 +482,32 @@ public sealed class ClassesController : ControllerBase
 
         if (result.IsFailure)
         {
-            if (result.Error.Code.Contains("AccessDenied", StringComparison.OrdinalIgnoreCase))
-            {
-                return StatusCode(403, ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
-            }
-
-            if (result.Error.Code.Contains("StudentInActiveTeam", StringComparison.OrdinalIgnoreCase) ||
-                result.Error.Code.Contains("StudentIsTeamLeader", StringComparison.OrdinalIgnoreCase))
-            {
-                return Conflict(ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
-            }
-
-            return BadRequest(ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
+            return ToClassErrorResponse(result.Error);
         }
 
-        return Ok(ApiResponse<object?>.SuccessResponse(null, "Student removed from class successfully."));
+        return Ok(ApiResponse<object?>.SuccessResponse(null, "Student enrollment dropped successfully."));
+    }
+
+    [HttpPost("{id:guid}/students/{studentId:guid}/re-enroll")]
+    public async Task<IActionResult> ReEnrollStudent(
+        Guid id,
+        Guid studentId,
+        [FromServices] IReEnrollStudentCommandHandler commandHandler,
+        CancellationToken cancellationToken)
+    {
+        var result = await commandHandler.HandleAsync(
+            id,
+            studentId,
+            _currentUserService.UserId ?? Guid.Empty,
+            GetCurrentUserRole(),
+            cancellationToken);
+
+        if (result.IsFailure)
+        {
+            return ToClassErrorResponse(result.Error);
+        }
+
+        return Ok(ApiResponse<ClassStudentDto>.SuccessResponse(result.Value, "Student re-enrolled successfully."));
     }
 
     // ─── GIAI ĐOẠN 5: EXCEL IMPORT & EXPORT ENDPOINTS ─────────────────────────
@@ -474,12 +531,7 @@ public sealed class ClassesController : ControllerBase
 
         if (result.IsFailure)
         {
-            if (result.Error.Code.Contains("AccessDenied", StringComparison.OrdinalIgnoreCase))
-            {
-                return StatusCode(403, ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
-            }
-
-            return BadRequest(ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
+            return ToClassErrorResponse(result.Error);
         }
 
         return Ok(ApiResponse<ImportStudentsPreviewResponse>.SuccessResponse(
@@ -506,17 +558,7 @@ public sealed class ClassesController : ControllerBase
 
         if (result.IsFailure)
         {
-            if (result.Error.Code.Contains("AccessDenied", StringComparison.OrdinalIgnoreCase))
-            {
-                return StatusCode(403, ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
-            }
-
-            if (result.Error.Code.Contains("ExpiredOrProcessed", StringComparison.OrdinalIgnoreCase))
-            {
-                return Conflict(ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
-            }
-
-            return BadRequest(ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
+            return ToClassErrorResponse(result.Error);
         }
 
         return Ok(ApiResponse<ImportStudentsCommitResponse>.SuccessResponse(
@@ -528,6 +570,7 @@ public sealed class ClassesController : ControllerBase
     [HttpGet("{id:guid}/export-excel")]
     public async Task<IActionResult> ExportClassRoster(
         Guid id,
+        [FromQuery] ExportClassRosterRequest request,
         [FromServices] IExportClassRosterQueryHandler queryHandler,
         CancellationToken cancellationToken)
     {
@@ -536,28 +579,95 @@ public sealed class ClassesController : ControllerBase
 
         var result = await queryHandler.HandleAsync(
             id,
+            request,
             currentUserId,
             currentUserRole,
             cancellationToken);
 
         if (result.IsFailure)
         {
-            if (result.Error.Code.Contains("AccessDenied", StringComparison.OrdinalIgnoreCase))
-            {
-                return StatusCode(403, ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
-            }
-
-            return BadRequest(ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
+            return ToClassErrorResponse(result.Error);
         }
 
         return File(result.Value.FileBytes, result.Value.ContentType, result.Value.FileName);
     }
 
+    private IActionResult ToClassErrorResponse(Error error)
+    {
+        var response = ApiResponse<object>.FailureResponse(error.Message, error.Code);
+
+        return error.Code switch
+        {
+            ErrorCodes.ClassAccessDenied => StatusCode(StatusCodes.Status403Forbidden, response),
+            ErrorCodes.ClassNotFound or
+            ErrorCodes.ClassStudentNotFound => NotFound(response),
+            ErrorCodes.ClassScheduleConflict or
+            ErrorCodes.ClassConcurrencyConflict or
+            ErrorCodes.ClassCodeDuplicated or
+            ErrorCodes.ClassIndexDuplicated or
+            ErrorCodes.ClassBulkCreateInvalid or
+            ErrorCodes.ClassLecturerRequired or
+            ErrorCodes.ClassArchived or
+            ErrorCodes.ClassStudentIdentityConflict or
+            ErrorCodes.ClassStudentAlreadyEnrolled or
+            ErrorCodes.ClassStudentIsTeamLeader or
+            ErrorCodes.ClassStudentInActiveTeam or
+            ErrorCodes.ClassStudentEnrollmentConflict or
+            ErrorCodes.ClassStudentReEnrollmentRequired or
+            ErrorCodes.ClassStudentNotDropped or
+            ErrorCodes.ClassEnrollmentMajorLocked or
+            ErrorCodes.ClassImportSessionInvalid or
+            ErrorCodes.ClassImportSessionExpired or
+            ErrorCodes.ClassImportSessionAlreadyProcessing => Conflict(response),
+            ErrorCodes.ClassRestoreInvalid => Conflict(response),
+            _ => BadRequest(response)
+        };
+    }
+
+    private async Task<bool> ClassExistsAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var handler = HttpContext.RequestServices.GetRequiredService<IGetClassDetailQueryHandler>();
+        var result = await handler.HandleAsync(id, _currentUserService.UserId ?? Guid.Empty, GetCurrentUserRole(), cancellationToken);
+        return result.IsSuccess;
+    }
+
+    private async Task<IActionResult> SetEnrollmentMajorLock(
+        Guid id,
+        bool shouldLock,
+        ISetEnrollmentMajorLockCommandHandler commandHandler,
+        CancellationToken cancellationToken)
+    {
+        var result = await commandHandler.HandleAsync(
+            id,
+            shouldLock,
+            _currentUserService.UserId ?? Guid.Empty,
+            GetCurrentUserRole(),
+            cancellationToken);
+        if (result.IsFailure)
+        {
+            return ToClassErrorResponse(result.Error);
+        }
+
+        return Ok(ApiResponse<EnrollmentMajorLockResponse>.SuccessResponse(
+            result.Value,
+            shouldLock ? "Enrollment majors locked." : "Enrollment majors unlocked."));
+    }
+
     private string GetCurrentUserRole()
     {
-        return _currentUserService.Roles.FirstOrDefault()
-            ?? User.FindFirstValue(ClaimNames.Role)
+        if (_currentUserService.Roles.Any(role => string.Equals(role, SystemRoles.Admin, StringComparison.OrdinalIgnoreCase)))
+        {
+            return SystemRoles.Admin;
+        }
+
+        if (_currentUserService.Roles.Any(role => string.Equals(role, SystemRoles.Lecturer, StringComparison.OrdinalIgnoreCase)))
+        {
+            return SystemRoles.Lecturer;
+        }
+
+        return User.FindFirstValue(ClaimNames.Role)
             ?? User.FindFirstValue(ClaimTypes.Role)
+            ?? _currentUserService.Roles.FirstOrDefault()
             ?? string.Empty;
     }
 }

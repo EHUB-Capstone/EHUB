@@ -4,6 +4,7 @@ using EHub.Application.Common.Interfaces.Persistence;
 using EHub.Application.Features.Classes.AddStudentToClass;
 using EHub.Contracts.Classes;
 using EHub.Shared.Constants;
+using EHub.Shared.Errors;
 using FluentAssertions;
 using NSubstitute;
 using Xunit;
@@ -38,16 +39,16 @@ public class AddStudentToClassCommandHandlerTests
 
         // Assert
         result.IsFailure.Should().BeTrue();
-        result.Error.Code.Should().Be("Classes.AccessDenied");
+        result.Error.Code.Should().Be(ErrorCodes.ClassAccessDenied);
     }
 
     [Theory]
-    [InlineData("", "Nguyen Van A", "anv@fpt.edu.vn", "BIT_SE", "Classes.InvalidStudentCode")]
-    [InlineData("SE170001", "", "anv@fpt.edu.vn", "BIT_SE", "Classes.InvalidFullName")]
-    [InlineData("SE170001", "Nguyen Van A", "invalid-email", "BIT_SE", "Classes.InvalidEmail")]
-    [InlineData("SE170001", "Nguyen Van A", "anv@fpt.edu.vn", "INVALID_MAJOR", "Classes.InvalidMajorCode")]
+    [InlineData("", "Nguyen Van A", "anv@fpt.edu.vn", "BIT_SE")]
+    [InlineData("SE170001", "", "anv@fpt.edu.vn", "BIT_SE")]
+    [InlineData("SE170001", "Nguyen Van A", "invalid-email", "BIT_SE")]
+    [InlineData("SE170001", "Nguyen Van A", "anv@fpt.edu.vn", "INVALID_MAJOR")]
     public async Task HandleAsync_WhenValidationFails_ReturnsExpectedErrorCode(
-        string code, string name, string email, string major, string expectedErrorCode)
+        string code, string name, string email, string major)
     {
         // Arrange
         var request = new AddStudentToClassRequest
@@ -63,6 +64,6 @@ public class AddStudentToClassCommandHandlerTests
 
         // Assert
         result.IsFailure.Should().BeTrue();
-        result.Error.Code.Should().Be(expectedErrorCode);
+        result.Error.Code.Should().Be(ErrorCodes.ClassValidationError);
     }
 }

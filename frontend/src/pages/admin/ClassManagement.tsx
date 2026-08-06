@@ -1,10 +1,10 @@
-import { useState, useEffect, useContext, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect, useContext, useMemo, useCallback, useRef } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Plus, RefreshCw, Search, Filter, GraduationCap,
-  Users, BookOpen, ChevronRight, Upload, Eye, Calendar, LayoutGrid, ClipboardCheck,
+  Users, BookOpen, ChevronRight, ChevronLeft, Upload, Eye, Calendar, LayoutGrid, ClipboardCheck, AlertCircle, RotateCcw,
 } from 'lucide-react';
 import { AuthContext } from '../../context/AuthContext';
 import { classApi } from '../../api/classApi';
@@ -15,30 +15,34 @@ import EmptyState from '../../components/ui/EmptyState';
 import BulkCreateModal from '../../components/class/BulkCreateModal';
 import ImportStudentsModal from '../../components/class/ImportStudentsModal';
 import ClassDirectionOverview from '../../components/class/ClassDirectionOverview';
+import ConfirmDialog from '../../components/ui/ConfirmDialog';
+import { classFeatureFlags } from '../../config/classFeatureFlags';
+import { parseApiError } from '../../utils/apiError';
+import { toClassViewModel, unwrapApiData } from '../../utils/classMappers';
+import { getClassLifecyclePresentation } from '../../utils/classComponentPolicy';
+import type { ClassListResponse, ClassStatus, ClassViewModel } from '../../types/classes';
 
 const SEMESTERS = ['SP', 'SU', 'FA'];
 const CURRENT_YEAR = new Date().getFullYear();
 const YEARS = Array.from({ length: 5 }, (_, i) => CURRENT_YEAR - 1 + i);
 
-const semesterColor = { SP: 'bg-green-100 text-green-700', SU: 'bg-amber-100 text-amber-700', FA: 'bg-blue-100 text-blue-700' };
-const semesterOrder = { SP: 1, SU: 2, FA: 3 };
+const semesterColor: Record<string, string> = { SP: 'bg-green-100 text-green-700', SU: 'bg-amber-100 text-amber-700', FA: 'bg-blue-100 text-blue-700' };
+const statusColor: Record<ClassStatus, string> = {
+  Draft: 'bg-amber-50 text-amber-700',
+  Active: 'bg-green-50 text-green-700',
+  Inactive: 'bg-slate-100 text-slate-600',
+  Archived: 'bg-red-50 text-red-600',
+};
 const classCodeCollator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
 
-const sortClasses = (list) => [...list].sort((a, b) => {
+const sortClasses = (list: ClassViewModel[]) => [...list].sort((a, b) => {
   const subjectCompare = (a.subjectCode || '').localeCompare(b.subjectCode || '');
   if (subjectCompare !== 0) return subjectCompare;
-
-  if ((b.year || 0) !== (a.year || 0)) return (b.year || 0) - (a.year || 0);
-
-  const semesterCompare = (semesterOrder[a.semester] || 99) - (semesterOrder[b.semester] || 99);
-  if (semesterCompare !== 0) return semesterCompare;
-
   if ((a.classIndex || 0) !== (b.classIndex || 0)) return (a.classIndex || 0) - (b.classIndex || 0);
-
   return classCodeCollator.compare(a.classCode || '', b.classCode || '');
 });
 
-const groupClassesBySubject = (list) => sortClasses(list).reduce((groups, cls) => {
+const groupClassesBySubject = (list: ClassViewModel[]) => sortClasses(list).reduce<Array<{ subjectCode: string; classes: ClassViewModel[] }>>((groups, cls) => {
   const subjectCode = cls.subjectCode || 'Unknown Subject';
   const group = groups.find(item => item.subjectCode === subjectCode);
   if (group) {
@@ -52,65 +56,83 @@ const groupClassesBySubject = (list) => sortClasses(list).reduce((groups, cls) =
 export default function ClassManagement() {
   const { user } = useContext(AuthContext);
   const navigate  = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialSearchParams = useRef(new URLSearchParams(searchParams));
   const isAdmin    = user?.role === 'ADMIN';
   const isLecturer = user?.role === 'LECTURER';
 
-  const [classes,    setClasses]    = useState([]);
+  const [classes, setClasses] = useState<ClassViewModel[]>([]);
   const [loading,    setLoading]    = useState(true);
-  const [lecturers,  setLecturers]  = useState([]);
-  const [subjects,   setSubjects]   = useState([]);
+  const [error, setError] = useState('');
+  const [lecturers, setLecturers] = useState<any[]>([]);
+  const [subjects, setSubjects] = useState<string[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
 
   // Filters
-  const [search,     setSearch]     = useState('');
-  const [filterSem,  setFilterSem]  = useState('');
-  const [filterYear, setFilterYear] = useState('');
-  const [filterSubj, setFilterSubj] = useState('');
+  const [search, setSearch] = useState(searchParams.get('search') || '');
+  const [appliedSearch, setAppliedSearch] = useState(searchParams.get('search') || '');
+  const [filterSem, setFilterSem] = useState(searchParams.get('semester') || '');
+  const [filterYear, setFilterYear] = useState(searchParams.get('year') || '');
+  const [filterSubj, setFilterSubj] = useState(searchParams.get('subject') || '');
+  const [filterStatus, setFilterStatus] = useState<ClassStatus | ''>((searchParams.get('status') as ClassStatus | null) || '');
+  const [sort, setSort] = useState(searchParams.get('sort') || 'code');
+  const [page, setPage] = useState(Math.max(1, Number(searchParams.get('page')) || 1));
+  const pageSize = 12;
   const [viewMode, setViewMode] = useState('classes');
 
   // Modals
   const [showBulk,   setShowBulk]   = useState(false);
-  const [importTarget, setImportTarget] = useState(null); // classId for import
+  const [importTarget, setImportTarget] = useState<string | null>(null);
+  const [restoreTarget, setRestoreTarget] = useState<ClassViewModel | null>(null);
+  const [restoreReason, setRestoreReason] = useState('');
+  const [restoring, setRestoring] = useState(false);
 
-  const fetchAll = async () => {
+  const fetchAll = useCallback(async () => {
     setLoading(true);
+    setError('');
     try {
-      const params: {
-        semester?: string;
-        year?: string;
+      const params = { page, pageSize, sort } as {
+        page: number;
+        pageSize: number;
+        sort: string;
+        semesterCode?: string;
+        year?: number;
         subjectCode?: string;
+        status?: ClassStatus;
         search?: string;
-      } = {};
-      if (filterSem)  params.semester    = filterSem;
-      if (filterYear) params.year        = filterYear;
+      };
+      if (filterSem && filterYear) params.semesterCode = `${filterSem}${filterYear}`;
+      if (filterYear) params.year = Number(filterYear);
       if (filterSubj) params.subjectCode = filterSubj;
-      if (search)     params.search      = search;
+      if (filterStatus) params.status = filterStatus;
+      if (appliedSearch) params.search = appliedSearch.trim();
 
       const [clsRes, usrRes] = await Promise.all([
         classApi.getAll(params),
-        isAdmin ? userApi.getAll({ role: 'LECTURER' }) : Promise.resolve({ users: [] }),
+        (isAdmin || isLecturer) ? userApi.getAll({ page: 1, limit: 100, role: 'LECTURER', status: 'APPROVED' }) : Promise.resolve({ users: [] }),
       ]);
 
-      const rawClasses = clsRes?.data?.items || clsRes?.data?.classes || clsRes?.items || clsRes?.classes || [];
-      const normalizedClasses = rawClasses.map(c => ({
-        ...c,
-        _id: c.id || c._id,
-        semester: c.semesterCode || c.semester,
-        lectureId: c.primaryLecturerName ? {
-          _id: c.primaryLecturerId,
-          name: c.primaryLecturerName,
-          email: c.primaryLecturerEmail
-        } : (c.lectureId || null),
-        schedule: c.scheduleJson ? (typeof c.scheduleJson === 'string' ? JSON.parse(c.scheduleJson) : c.scheduleJson) : c.schedule
-      }));
-      setClasses(normalizedClasses);
+      const classList = unwrapApiData<ClassListResponse>(clsRes);
+      setClasses((classList.items || []).map(toClassViewModel));
+      setTotalCount(classList.totalCount || 0);
+      setTotalPages(Math.max(1, classList.totalPages || 1));
       const lects = usrRes?.data?.users || usrRes?.users || [];
-      setLecturers(lects.filter(u => u.role === 'LECTURER'));
-    } catch {
-      toast.error('Failed to load classes');
+      setLecturers(lects
+        .filter(u => u.role === 'LECTURER')
+        .map(lecturer => ({
+          ...lecturer,
+          _id: lecturer._id || lecturer.id,
+          name: lecturer.name || lecturer.fullName,
+        })));
+    } catch (requestError) {
+      const parsed = parseApiError(requestError, 'Failed to load classes');
+      setError(parsed.message);
+      toast.error(parsed.message);
     } finally {
       setLoading(false);
     }
-  };
+  }, [appliedSearch, filterSem, filterStatus, filterSubj, filterYear, isAdmin, page, sort]);
 
   useEffect(() => {
     const loadInitialConfig = async () => {
@@ -120,10 +142,10 @@ export default function ClassManagement() {
           subjectApi.getCurrentSemester(),
         ]);
         const list = subjRes.data?.subjects || subjRes.subjects || [];
-        setSubjects(list.map(s => s.subjectCode));
+        setSubjects(list.map((s: { subjectCode: string }) => s.subjectCode));
 
         const activeSem = semRes.data?.currentSemester || semRes.currentSemester;
-        if (activeSem) {
+        if (activeSem && !initialSearchParams.current.has('semester') && !initialSearchParams.current.has('year')) {
           setFilterSem(activeSem.semester);
           setFilterYear(String(activeSem.year));
         }
@@ -134,29 +156,58 @@ export default function ClassManagement() {
     loadInitialConfig();
   }, []);
 
-  useEffect(() => { fetchAll(); }, [filterSem, filterYear, filterSubj]); // eslint-disable-line
+  useEffect(() => { void fetchAll(); }, [fetchAll]);
 
-  const handleSearch = (e) => {
+  useEffect(() => {
+    const next = new URLSearchParams();
+    if (appliedSearch) next.set('search', appliedSearch);
+    if (filterSem) next.set('semester', filterSem);
+    if (filterYear) next.set('year', filterYear);
+    if (filterSubj) next.set('subject', filterSubj);
+    if (filterStatus) next.set('status', filterStatus);
+    if (sort !== 'code') next.set('sort', sort);
+    if (page > 1) next.set('page', String(page));
+    setSearchParams(next, { replace: true });
+  }, [appliedSearch, filterSem, filterStatus, filterSubj, filterYear, page, setSearchParams, sort]);
+
+  const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    fetchAll();
+    setPage(1);
+    setAppliedSearch(search.trim());
   };
 
-  const handleBulkCreated = () => {
-    setShowBulk(false);
-    fetchAll();
-    toast.success('Classes created successfully!');
+  const handleBulkCreated = (options: { keepOpen?: boolean; suppressToast?: boolean } = {}) => {
+    if (!options.keepOpen) setShowBulk(false);
+    void fetchAll();
+    if (!options.suppressToast) toast.success('Classes created successfully!');
   };
 
   const handleImported = () => {
-    setImportTarget(null);
-    fetchAll();
+    void fetchAll();
+  };
+
+  const handleRestore = async () => {
+    if (!restoreTarget) return;
+    setRestoring(true);
+    try {
+      await classApi.restore(restoreTarget._id, {
+        rowVersion: restoreTarget.rowVersion,
+        reason: restoreReason.trim(),
+      });
+      toast.success(`${restoreTarget.classCode} restored successfully.`);
+      setRestoreTarget(null);
+      setRestoreReason('');
+      await fetchAll();
+    } catch (requestError) {
+      toast.error(parseApiError(requestError, 'Failed to restore class').message);
+    } finally {
+      setRestoring(false);
+    }
   };
 
   const sortedClasses = useMemo(() => sortClasses(classes), [classes]);
   const subjectGroups = useMemo(() => groupClassesBySubject(classes), [classes]);
   const showSubjectGroups = !filterSubj;
-
-  if (loading) return <LoadingSkeleton />;
 
   return (
     <div className="space-y-6">
@@ -164,11 +215,11 @@ export default function ClassManagement() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">{isLecturer ? 'My Classes' : 'Class Management'}</h1>
-          <p className="text-slate-500 mt-1">{classes.length} class{classes.length !== 1 ? 'es' : ''} found</p>
+          <p className="text-slate-500 mt-1">{totalCount} class{totalCount !== 1 ? 'es' : ''} found</p>
         </div>
         <div className="flex gap-2 flex-wrap">
           <button
-            onClick={fetchAll}
+            onClick={() => void fetchAll()}
             className="flex items-center gap-2 px-3 py-2 text-sm border border-slate-200 rounded-xl text-slate-600 hover:bg-slate-50 transition-all"
           >
             <RefreshCw className="w-4 h-4" /> Refresh
@@ -185,7 +236,7 @@ export default function ClassManagement() {
         </div>
       </div>
 
-      {isLecturer && (
+      {isLecturer && classFeatureFlags.projectDirection && (
         <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1">
           <button
             type="button"
@@ -219,7 +270,7 @@ export default function ClassManagement() {
           </div>
           <select
             value={filterSubj}
-            onChange={(e) => setFilterSubj(e.target.value)}
+            onChange={(e) => { setFilterSubj(e.target.value); setPage(1); }}
             className="border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none bg-white focus:ring-2 focus:ring-primary/20 focus:border-primary"
           >
             <option value="">All Subjects</option>
@@ -227,7 +278,7 @@ export default function ClassManagement() {
           </select>
           <select
             value={filterSem}
-            onChange={(e) => setFilterSem(e.target.value)}
+            onChange={(e) => { setFilterSem(e.target.value); setPage(1); }}
             className="border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none bg-white focus:ring-2 focus:ring-primary/20 focus:border-primary"
           >
             <option value="">All Semesters</option>
@@ -235,30 +286,63 @@ export default function ClassManagement() {
           </select>
           <select
             value={filterYear}
-            onChange={(e) => setFilterYear(e.target.value)}
+            onChange={(e) => { setFilterYear(e.target.value); setPage(1); }}
             className="border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none bg-white focus:ring-2 focus:ring-primary/20 focus:border-primary"
           >
             <option value="">All Years</option>
             {YEARS.map(y => <option key={y}>{y}</option>)}
           </select>
+          <select
+            value={filterStatus}
+            onChange={(e) => { setFilterStatus(e.target.value as ClassStatus | ''); setPage(1); }}
+            className="border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none bg-white focus:ring-2 focus:ring-primary/20 focus:border-primary"
+          >
+            <option value="">Active &amp; Draft</option>
+            <option value="Draft">Draft</option>
+            <option value="Active">Active</option>
+            <option value="Inactive">Inactive</option>
+            {(isAdmin || isLecturer) && <option value="Archived">Archived</option>}
+          </select>
+          <select
+            value={sort}
+            onChange={(e) => { setSort(e.target.value); setPage(1); }}
+            className="border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none bg-white focus:ring-2 focus:ring-primary/20 focus:border-primary"
+            aria-label="Sort classes"
+          >
+            <option value="code">Code A–Z</option>
+            <option value="-code">Code Z–A</option>
+            <option value="classIndex">Class index ↑</option>
+            <option value="-classIndex">Class index ↓</option>
+            <option value="-createdAt">Newest</option>
+            <option value="createdAt">Oldest</option>
+          </select>
           <button type="submit" className="flex items-center gap-2 px-4 py-2 bg-secondary text-white rounded-xl text-sm hover:bg-secondary-700 transition-all">
             <Filter className="w-4 h-4" /> Filter
           </button>
-          <button type="button" onClick={() => { setSearch(''); setFilterSem(''); setFilterYear(''); setFilterSubj(''); setTimeout(() => fetchAll(), 0); }} className="text-sm text-slate-400 hover:text-slate-600 px-2">
+          <button type="button" onClick={() => { setSearch(''); setAppliedSearch(''); setFilterSem(''); setFilterYear(''); setFilterSubj(''); setFilterStatus(''); setSort('code'); setPage(1); }} className="text-sm text-slate-400 hover:text-slate-600 px-2">
             Reset
           </button>
         </form>
       </div>
 
       {/* ── Class Grid ── */}
-      {isLecturer && viewMode === 'overview' ? (
+      {loading ? (
+        <LoadingSkeleton />
+      ) : error ? (
+        <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-center">
+          <AlertCircle className="mx-auto h-7 w-7 text-red-500" />
+          <p className="mt-2 text-sm font-semibold text-red-800">Unable to load classes</p>
+          <p className="mt-1 text-sm text-red-600">{error}</p>
+          <button type="button" onClick={() => void fetchAll()} className="mt-3 rounded-lg border border-red-300 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100">Retry</button>
+        </div>
+      ) : isLecturer && classFeatureFlags.projectDirection && viewMode === 'overview' ? (
         <ClassDirectionOverview semester={filterSem} year={filterYear} />
       ) : classes.length === 0 ? (
         <EmptyState
           icon={GraduationCap}
           title="No classes found"
           description={isAdmin ? 'Use Bulk Create to generate classes by subject code' : 'No classes assigned to you yet'}
-          action={isAdmin ? { label: 'Bulk Create', onClick: () => setShowBulk(true) } : undefined}
+          action={(isAdmin || isLecturer) ? { label: isLecturer ? 'Create class' : 'Bulk Create', onClick: () => setShowBulk(true) } : undefined}
         />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -292,9 +376,7 @@ export default function ClassManagement() {
                         <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-primary-50 text-primary">
                           {cls.subjectCode}
                         </span>
-                        {cls.status === 'disabled' && (
-                          <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-50 text-red-500">Disabled</span>
-                        )}
+                        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${statusColor[cls.status] || 'bg-slate-100 text-slate-600'}`}>{cls.status}</span>
                       </div>
                       <h3 className="text-xl font-bold text-slate-900">{cls.classCode}</h3>
                     </div>
@@ -319,15 +401,15 @@ export default function ClassManagement() {
                   )}
 
                   {/* Mentors */}
-                  {cls.mentorIds && cls.mentorIds.length > 0 ? (
+                  {cls.mentors && cls.mentors.length > 0 ? (
                     <div className="flex items-center gap-2 mb-2 p-2 bg-slate-50 rounded-xl">
                       <div className="w-7 h-7 rounded-lg bg-amber-100 flex items-center justify-center shrink-0">
                         <Users className="w-4 h-4 text-amber-500" />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="text-xs text-slate-400">Mentors ({cls.mentorIds.length})</p>
+                        <p className="text-xs text-slate-400">Mentors ({cls.mentors.length})</p>
                         <p className="text-sm font-medium text-slate-800 truncate">
-                          {cls.mentorIds.map(m => m.name || 'Unknown').join(', ')}
+                          {cls.mentors.map(m => m.fullName || 'Unknown').join(', ')}
                         </p>
                       </div>
                     </div>
@@ -338,15 +420,16 @@ export default function ClassManagement() {
                   )}
 
                   {/* Schedule */}
-                  {cls.schedule && cls.schedule.dayOfWeek ? (
+                  {cls.schedules.length > 0 ? (
                     <div className="flex items-center gap-2 mb-4 p-2 bg-slate-50 rounded-xl">
                       <div className="w-7 h-7 rounded-lg bg-indigo-100 flex items-center justify-center shrink-0">
                         <Calendar className="w-4 h-4 text-indigo-500" />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="text-xs text-slate-400">Schedule (Room: {cls.schedule.room})</p>
+                        <p className="text-xs text-slate-400">{cls.schedules.length} weekly session{cls.schedules.length === 1 ? '' : 's'}</p>
                         <p className="text-sm font-medium text-slate-800 truncate">
-                          {cls.schedule.dayOfWeek}, Slot {cls.schedule.slot} ({cls.schedule.startTime} - {cls.schedule.endTime})
+                          {['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][cls.schedules[0].dayOfWeek]}, Slot {cls.schedules[0].slotNumber} · Room {cls.schedules[0].room || cls.room || 'TBD'}
+                          {cls.schedules.length > 1 ? ` · +${cls.schedules.length - 1} more` : ''}
                         </p>
                       </div>
                     </div>
@@ -383,7 +466,14 @@ export default function ClassManagement() {
                   >
                     <Eye className="w-3.5 h-3.5" /> View Detail
                   </button>
-                  {isAdmin && (
+                  {(isAdmin || isLecturer) && getClassLifecyclePresentation(cls.status).action === 'restore' ? (
+                    <button
+                      onClick={(event) => { event.stopPropagation(); setRestoreTarget(cls); }}
+                      className="flex-1 flex items-center justify-center gap-1.5 text-xs text-green-700 hover:text-green-800 font-medium transition-colors border-l border-slate-100"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" /> Restore
+                    </button>
+                  ) : (isAdmin || (isLecturer && classFeatureFlags.lecturerStudentImport)) && (
                     <button
                       onClick={(e) => { e.stopPropagation(); setImportTarget(cls._id); }}
                       className="flex-1 flex items-center justify-center gap-1.5 text-xs text-primary hover:text-primary-dark font-medium transition-colors border-l border-slate-100"
@@ -399,6 +489,22 @@ export default function ClassManagement() {
         </div>
       )}
 
+      {!loading && !error && viewMode === 'classes' && totalPages > 1 && (
+        <div className="flex flex-col items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 sm:flex-row">
+          <p className="text-sm text-slate-500">
+            Page <span className="font-semibold text-slate-900">{page}</span> of <span className="font-semibold text-slate-900">{totalPages}</span> · {totalCount} classes
+          </p>
+          <div className="flex gap-2">
+            <button type="button" disabled={page <= 1} onClick={() => setPage(current => Math.max(1, current - 1))} className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40">
+              <ChevronLeft className="h-4 w-4" /> Previous
+            </button>
+            <button type="button" disabled={page >= totalPages} onClick={() => setPage(current => Math.min(totalPages, current + 1))} className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40">
+              Next <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* ── Modals ── */}
       {showBulk && (
         <BulkCreateModal
@@ -408,13 +514,26 @@ export default function ClassManagement() {
           onCreated={handleBulkCreated}
         />
       )}
-      {importTarget && (
+      {(isAdmin || (isLecturer && classFeatureFlags.lecturerStudentImport)) && importTarget && (
         <ImportStudentsModal
           classId={importTarget}
           onClose={() => setImportTarget(null)}
           onImported={handleImported}
         />
       )}
+      <ConfirmDialog
+        isOpen={!!restoreTarget}
+        onClose={() => { setRestoreTarget(null); setRestoreReason(''); }}
+        onConfirm={handleRestore}
+        isSubmitting={restoring}
+        title="Restore this class?"
+        description={restoreTarget ? `${restoreTarget.classCode} will be revalidated for lecturer, schedule, subject, semester and conflicts before activation.` : ''}
+        confirmText="Restore class"
+        confirmVariant="primary"
+        reason={restoreReason}
+        onReasonChange={setRestoreReason}
+        reasonRequired
+      />
     </div>
   );
 }

@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { useState } from 'react';
 import toast from 'react-hot-toast';
 import { X, Loader2, Pencil } from 'lucide-react';
@@ -24,7 +23,7 @@ export default function RenameClassModal({ classId, currentCode, onClose, onRena
 
     setSubmitting(true);
     try {
-      const res = await classApi.rename(classId, trimmed);
+      const res: any = await classApi.rename(classId, trimmed);
       const updated = res?.data?.class || res?.class;
       toast.success(`Đã đổi tên lớp thành "${trimmed}"`);
       onRenamed(updated);

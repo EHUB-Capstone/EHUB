@@ -1,12 +1,13 @@
-// @ts-nocheck
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { X, Loader2, Star, Search, Check, Users } from 'lucide-react';
 import { classApi } from '../../api/classApi';
-import { userApi } from '../../api/userApi';
 import { teamApi } from '../../api/teamApi';
+import { unwrapApiData } from '../../utils/classMappers';
+import { parseApiError } from '../../utils/apiError';
+import { normalizeManagedTeam } from '../../utils/teamManagement';
 
-export default function AssignMentorsModal({ classId, currentMentors = [], onClose, onAssigned }) {
+export default function AssignMentorsModal({ classId, currentMentors: _currentMentors = [], onClose, onAssigned }) {
   const [mentors, setMentors] = useState([]);
   const [teams, setTeams] = useState([]);
   const [selectedMentorId, setSelectedMentorId] = useState('');
@@ -15,26 +16,32 @@ export default function AssignMentorsModal({ classId, currentMentors = [], onClo
   const [loading, setLoading] = useState(true);
   const [teamsLoading, setTeamsLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-
-  const mentorOptions = useMemo(
-    () => currentMentors.map(m => (typeof m === 'object' ? m : { _id: m, name: 'Unknown' })).filter(Boolean),
-    [currentMentors]
-  );
+  const [endingTeamId, setEndingTeamId] = useState('');
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         const [mentorRes, teamRes] = await Promise.all([
-          userApi.getAll({ role: 'MENTOR', limit: 200 }),
+          classApi.getMentorCandidates(classId),
           classApi.getTeams(classId),
         ]);
 
-        const mentorList = mentorRes?.data?.users || mentorRes?.users || [];
-        const teamList = teamRes?.data?.teams || teamRes?.teams || [];
+        const mentorCandidates = unwrapApiData<any[]>(mentorRes as any) || [];
+        const teamData = unwrapApiData(teamRes) || [];
+        const mentorList = mentorCandidates.map(candidate => ({
+          _id: candidate.mentor.mentorProfileId,
+          name: candidate.mentor.fullName,
+          email: candidate.mentor.email,
+          organization: candidate.mentor.organization,
+          hasCapacity: candidate.hasCapacity,
+          activeTeamCount: candidate.activeTeamCount,
+          maxTeams: candidate.maxTeams,
+        }));
+        const teamList = (Array.isArray(teamData) ? teamData : []).map(normalizeManagedTeam);
 
         setMentors(mentorList);
         setTeams(teamList);
-      } catch (err) {
+      } catch {
         toast.error('Failed to load mentors or teams');
       } finally {
         setLoading(false);
@@ -52,7 +59,8 @@ export default function AssignMentorsModal({ classId, currentMentors = [], onClo
     setTeamsLoading(true);
     try {
       const res = await classApi.getTeams(classId);
-      const teamList = res?.data?.teams || res?.teams || [];
+      const teamData = unwrapApiData(res) || [];
+      const teamList = (Array.isArray(teamData) ? teamData : []).map(normalizeManagedTeam);
       setTeams(teamList);
     } catch {
       toast.error('Failed to load teams');
@@ -77,9 +85,27 @@ export default function AssignMentorsModal({ classId, currentMentors = [], onClo
       toast.success('Mentor assigned to team successfully!');
       onAssigned();
     } catch (e) {
-      toast.error(e?.response?.data?.message || e?.message || 'Failed to assign mentor to team');
+      toast.error(parseApiError(e, 'Failed to assign mentor to team').message);
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleEndAssignment = async (team) => {
+    const reason = window.prompt(`Reason for ending ${team.currentMentorAssignment?.mentor?.fullName || 'this mentor'}'s assignment?`);
+    if (!reason) return;
+    setEndingTeamId(team._id);
+    try {
+      await teamApi.endMentorAssignment(team._id, reason);
+      toast.success('Mentor assignment ended');
+      setTeams(current => current.map(item => item._id === team._id
+        ? { ...item, currentMentorAssignment: null, mentorId: null }
+        : item));
+      await onAssigned();
+    } catch (error) {
+      toast.error(parseApiError(error, 'Failed to end mentor assignment').message);
+    } finally {
+      setEndingTeamId('');
     }
   };
 
@@ -129,6 +155,21 @@ export default function AssignMentorsModal({ classId, currentMentors = [], onClo
             </div>
           ) : (
             <div className="space-y-4">
+              {teams.some(team => team.currentMentorAssignment) && (
+                <div>
+                  <label className="mb-1.5 block text-xs font-semibold text-slate-600">Current assignments</label>
+                  <div className="space-y-1.5 rounded-xl border border-slate-100 bg-slate-50/50 p-2.5">
+                    {teams.filter(team => team.currentMentorAssignment).map(team => (
+                      <div key={team._id} className="flex items-center justify-between gap-3 rounded-lg bg-white px-3 py-2 text-xs">
+                        <span className="min-w-0 truncate"><strong>{team.teamName}</strong> · {team.currentMentorAssignment.mentor.fullName}</span>
+                        <button type="button" disabled={endingTeamId === team._id} onClick={() => handleEndAssignment(team)} className="shrink-0 font-semibold text-red-600 hover:text-red-700 disabled:opacity-50">
+                          {endingTeamId === team._id ? 'Ending…' : 'End'}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
               <div>
                 <label className="block text-xs font-semibold text-slate-600 mb-1.5">Select Mentor</label>
                 <div className="max-h-56 overflow-y-auto space-y-1.5 border border-slate-100 rounded-xl p-2.5 bg-slate-50/50">
@@ -141,7 +182,8 @@ export default function AssignMentorsModal({ classId, currentMentors = [], onClo
                         <button
                           key={m._id}
                           type="button"
-                          onClick={() => handleMentorChange(m._id)}
+                          onClick={() => m.hasCapacity && handleMentorChange(m._id)}
+                          disabled={!m.hasCapacity}
                           className={`w-full flex items-center justify-between p-2.5 rounded-xl border text-left transition-all ${
                             isChecked
                               ? 'bg-primary-50/40 border-primary/20 shadow-xs'
@@ -154,7 +196,7 @@ export default function AssignMentorsModal({ classId, currentMentors = [], onClo
                             </div>
                             <div className="min-w-0">
                               <p className="text-xs font-semibold text-slate-800 truncate">{m.name}</p>
-                              <p className="text-[10px] text-slate-400 truncate">{m.email}</p>
+                              <p className="text-[10px] text-slate-400 truncate">{m.email} · {m.activeTeamCount}/{m.maxTeams} teams</p>
                             </div>
                           </div>
                           {isChecked && (

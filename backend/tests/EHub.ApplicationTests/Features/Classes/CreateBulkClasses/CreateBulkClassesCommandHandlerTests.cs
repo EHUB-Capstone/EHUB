@@ -4,6 +4,7 @@ using EHub.Application.Common.Interfaces.Persistence;
 using EHub.Application.Features.Classes.CreateBulkClasses;
 using EHub.Contracts.Classes;
 using EHub.Shared.Constants;
+using EHub.Shared.Errors;
 using FluentAssertions;
 using NSubstitute;
 using Xunit;
@@ -40,7 +41,7 @@ public class CreateBulkClassesCommandHandlerTests
 
         // Assert
         result.IsFailure.Should().BeTrue();
-        result.Error.Code.Should().Be("Classes.InvalidQuantity");
+        result.Error.Code.Should().Be(ErrorCodes.ClassValidationError);
     }
 
     [Fact]
@@ -60,6 +61,23 @@ public class CreateBulkClassesCommandHandlerTests
 
         // Assert
         result.IsFailure.Should().BeTrue();
-        result.Error.Code.Should().Be("Classes.AccessDenied");
+        result.Error.Code.Should().Be(ErrorCodes.ClassAccessDenied);
+    }
+
+    [Fact]
+    public async Task PreviewAsync_WhenClassIndicesContainDuplicates_ReturnsValidationError()
+    {
+        var request = new CreateBulkClassesRequest
+        {
+            CourseId = Guid.NewGuid(),
+            SemesterId = Guid.NewGuid(),
+            ClassIndices = new[] { 1, 1, 2 }
+        };
+
+        var result = await _handler.PreviewAsync(request, Guid.NewGuid(), SystemRoles.Admin);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be(ErrorCodes.ClassValidationError);
+        result.Error.Message.Should().Contain("duplicates");
     }
 }

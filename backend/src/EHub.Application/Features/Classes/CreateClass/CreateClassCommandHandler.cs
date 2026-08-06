@@ -1,8 +1,10 @@
 using System;
 using System.Linq;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using EHub.Application.Common.Interfaces.Persistence;
+using EHub.Application.Features.Classes.Common;
 using EHub.Contracts.Classes;
 using EHub.Domain.Entities;
 using EHub.Domain.Enums;
@@ -29,10 +31,17 @@ public sealed class CreateClassCommandHandler : ICreateClassCommandHandler
         CancellationToken cancellationToken = default)
     {
         // 1. Validation Class Index
-        if (request.ClassIndex <= 0)
+        if (request.ClassIndex is < 1 or > 999)
         {
             return Result.Failure<ClassResponse>(
-                new Error("Classes.InvalidClassIndex", "Class index must be greater than 0."));
+                new Error(ErrorCodes.ClassValidationError, "Class index must be between 1 and 999."));
+        }
+
+        var normalizedRoom = string.IsNullOrWhiteSpace(request.Room) ? null : request.Room.Trim();
+        if (normalizedRoom?.Length > 50)
+        {
+            return Result.Failure<ClassResponse>(
+                new Error(ErrorCodes.ClassValidationError, "Room must not exceed 50 characters."));
         }
 
         // 2. Role Security Check
@@ -42,7 +51,7 @@ public sealed class CreateClassCommandHandler : ICreateClassCommandHandler
         if (!isAdmin && !isLecturer)
         {
             return Result.Failure<ClassResponse>(
-                new Error("Classes.AccessDenied", "You do not have permission to create a class."));
+                new Error(ErrorCodes.ClassAccessDenied, "You do not have permission to create a class."));
         }
 
         // 3. Validate Subject (Course)
@@ -53,13 +62,13 @@ public sealed class CreateClassCommandHandler : ICreateClassCommandHandler
         if (course == null)
         {
             return Result.Failure<ClassResponse>(
-                new Error("Classes.SubjectNotFound", "The specified subject does not exist."));
+                new Error(ErrorCodes.ClassValidationError, "The specified subject does not exist."));
         }
 
         if (course.Status != CourseStatus.Active)
         {
             return Result.Failure<ClassResponse>(
-                new Error("Classes.SubjectInactive", "The specified subject is inactive."));
+                new Error(ErrorCodes.ClassValidationError, "The specified subject is inactive."));
         }
 
         // 4. Validate AcademicTerm (Semester)
@@ -70,7 +79,14 @@ public sealed class CreateClassCommandHandler : ICreateClassCommandHandler
         if (semester == null)
         {
             return Result.Failure<ClassResponse>(
-                new Error("Classes.SemesterNotFound", "The specified academic term does not exist."));
+                new Error(ErrorCodes.ClassValidationError, "The specified academic term does not exist."));
+        }
+
+        if (semester.Status is SemesterStatus.Completed or SemesterStatus.Archived ||
+            (isLecturer && semester.Status != SemesterStatus.Active))
+        {
+            return Result.Failure<ClassResponse>(
+                new Error(ErrorCodes.ClassValidationError, "Classes can only be created in an academic term that is open for creation."));
         }
 
         // 5. Lecturer Assignment
@@ -81,7 +97,17 @@ public sealed class CreateClassCommandHandler : ICreateClassCommandHandler
         {
             // Lecturer CHỈ ĐƯỢC tạo cho chính mình (Security rule: Không tin LecturerId từ client)
             targetLecturerId = currentUserId;
-            lecturerUser = await _context.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == currentUserId, cancellationToken);
+            lecturerUser = await _context.Users
+                .AsNoTracking()
+                .Include(u => u.UserRoles)
+                .ThenInclude(ur => ur.Role)
+                .FirstOrDefaultAsync(u => u.Id == currentUserId, cancellationToken);
+            if (lecturerUser == null || lecturerUser.Status != UserStatus.Active ||
+                !lecturerUser.UserRoles.Any(ur => string.Equals(ur.Role.Name, SystemRoles.Lecturer, StringComparison.OrdinalIgnoreCase)))
+            {
+                return Result.Failure<ClassResponse>(
+                    new Error(ErrorCodes.ClassAccessDenied, "The current lecturer account is not active."));
+            }
         }
         else if (isAdmin && request.PrimaryLecturerId.HasValue)
         {
@@ -96,7 +122,7 @@ public sealed class CreateClassCommandHandler : ICreateClassCommandHandler
                 !lecturerUser.UserRoles.Any(ur => string.Equals(ur.Role.Name, SystemRoles.Lecturer, StringComparison.OrdinalIgnoreCase)))
             {
                 return Result.Failure<ClassResponse>(
-                    new Error("Classes.InvalidLecturer", "The specified lecturer does not exist, is inactive, or does not have LECTURER role."));
+                    new Error(ErrorCodes.ClassInvalidLecturer, "The specified lecturer does not exist, is inactive, or does not have LECTURER role."));
             }
         }
 
@@ -109,7 +135,7 @@ public sealed class CreateClassCommandHandler : ICreateClassCommandHandler
         if (isCodeDuplicated)
         {
             return Result.Failure<ClassResponse>(
-                new Error("Classes.ClassCodeDuplicated", $"Class code '{classCode}' already exists in this semester."));
+                new Error(ErrorCodes.ClassCodeDuplicated, $"Class code '{classCode}' already exists in this semester."));
         }
 
         var isIndexDuplicated = await _context.Classes
@@ -118,7 +144,7 @@ public sealed class CreateClassCommandHandler : ICreateClassCommandHandler
         if (isIndexDuplicated)
         {
             return Result.Failure<ClassResponse>(
-                new Error("Classes.ClassIndexDuplicated", $"Class index {request.ClassIndex} for subject '{course.Code}' already exists in this semester."));
+                new Error(ErrorCodes.ClassIndexDuplicated, $"Class index {request.ClassIndex} for subject '{course.Code}' already exists in this semester."));
         }
 
         // 7. Create Entity
@@ -129,8 +155,9 @@ public sealed class CreateClassCommandHandler : ICreateClassCommandHandler
             SemesterId = request.SemesterId,
             CourseId = request.CourseId,
             PrimaryLecturerId = targetLecturerId,
-            Room = request.Room?.Trim(),
-            Status = ClassStatus.Active,
+            Room = normalizedRoom,
+            // Activation is automatic only after lecturer and schedule are present.
+            Status = ClassStatus.Draft,
             CreatedById = currentUserId
         };
 
@@ -142,11 +169,42 @@ public sealed class CreateClassCommandHandler : ICreateClassCommandHandler
             {
                 ClassId = newClass.Id,
                 LecturerId = targetLecturerId.Value,
-                AssignedAt = DateTime.UtcNow
+                IsPrimary = true,
+                AssignedAt = DateTime.UtcNow,
+                AssignedById = currentUserId
             });
         }
 
-        await _context.SaveChangesAsync(cancellationToken);
+        _context.ClassAuditLogs.Add(new ClassAuditLog
+        {
+            ClassId = newClass.Id,
+            Action = "CLASS_CREATED",
+            PerformedByUserId = currentUserId,
+            OccurredAtUtc = DateTime.UtcNow,
+            DetailsJson = JsonSerializer.Serialize(new
+            {
+                newClass.ClassCode,
+                newClass.CourseId,
+                newClass.SemesterId,
+                newClass.PrimaryLecturerId
+            })
+        });
+        ClassOutbox.Enqueue(_context, "Class.Created.v1", newClass.Id, new
+        {
+            newClass.ClassCode,
+            newClass.PrimaryLecturerId
+        });
+
+        try
+        {
+            await _context.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException)
+        {
+            _context.ClearChanges();
+            return Result.Failure<ClassResponse>(
+                new Error(ErrorCodes.ClassCodeDuplicated, "The class conflicts with another class created concurrently in this semester."));
+        }
 
         var response = new ClassResponse
         {
@@ -163,12 +221,13 @@ public sealed class CreateClassCommandHandler : ICreateClassCommandHandler
             PrimaryLecturerName = lecturerUser?.FullName,
             PrimaryLecturerEmail = lecturerUser?.Email,
             Room = newClass.Room,
-            ScheduleJson = newClass.ScheduleJson,
+            Schedules = ClassScheduleRules.Deserialize(newClass.ScheduleJson),
             IsEnrollmentMajorLocked = newClass.IsEnrollmentMajorLocked,
             Status = newClass.Status.ToString(),
             StudentCount = 0,
             TeamCount = 0,
-            CreatedAtUtc = newClass.CreatedAt
+            CreatedAtUtc = newClass.CreatedAt,
+            RowVersion = newClass.Version.ToString()
         };
 
         return Result.Success(response);

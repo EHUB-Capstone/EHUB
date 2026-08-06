@@ -2,6 +2,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import { X, Calendar, Clock, MapPin, Link2, Users, Upload, Image as ImageIcon, FileText, Trash2, Globe, Monitor, Search, ArrowRightLeft } from 'lucide-react';
 import { classApi } from '../../api/classApi';
+import { toClassViewModel, unwrapApiData } from '../../utils/classMappers';
+import { classFeatureFlags } from '../../config/classFeatureFlags';
 import { workshopApi } from '../../api/workshopApi';
 import { userApi } from '../../api/userApi';
 import { chatApi } from '../../api/chatApi';
@@ -98,8 +100,9 @@ const WorkshopForm = ({ isOpen, onClose, workshop, onSave }) => {
           userApi.getAll({ role: 'MENTOR' })
         ]);
 
-        const cList = clsRes.data?.classes || clsRes.classes || clsRes.data || [];
-        setAvailableClasses(Array.isArray(cList) ? cList : []);
+        const classPayload = unwrapApiData(clsRes);
+        const cList = (classPayload?.items || []).map(toClassViewModel);
+        setAvailableClasses(cList);
 
         const uList = userRes.data?.users || userRes.users || userRes.data || [];
         setAvailableMentors(Array.isArray(uList) ? uList : []);
@@ -114,6 +117,11 @@ const WorkshopForm = ({ isOpen, onClose, workshop, onSave }) => {
 
   useEffect(() => {
     const fetchTeams = async () => {
+      if (!classFeatureFlags.teamManagement) {
+        setAvailableTeams([]);
+        return;
+      }
+
       const allSelectedClassIds = [...onlineClassIds, ...offlineClassIds];
       if (allSelectedClassIds.length === 0) {
         setAvailableTeams([]);

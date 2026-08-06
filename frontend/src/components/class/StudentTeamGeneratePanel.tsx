@@ -1,8 +1,9 @@
-// @ts-nocheck
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import { Users, AlertTriangle, CheckCircle2, Loader2, AlertCircle, Send } from 'lucide-react';
 import { classApi } from '../../api/classApi';
+import { teamApi } from '../../api/teamApi';
+import { unwrapApiData } from '../../utils/classMappers';
 import { getTeamGroupFromMajor } from '../../constants/majors';
 import TeamSuggestionTooltip from './TeamSuggestionTooltip';
 
@@ -53,7 +54,7 @@ const getTeamSizeSuggestion = (count) => {
   return `Gợi ý: ${summary.join(', ')}. Mỗi nhóm vẫn cần có đủ 2 nhóm chuyên ngành.`;
 };
 
-export default function StudentTeamGeneratePanel({ classId, selected: rawSelected, students: rawStudents, onTeamCreated, currentStudentId }) {
+export default function StudentTeamGeneratePanel({ classId, selected: rawSelected, students: rawStudents, onTeamCreated, currentStudentId, proposal = null }) {
   const [submitting, setSubmitting] = useState(false);
   const students = useMemo(() => (Array.isArray(rawStudents) ? rawStudents : []), [rawStudents]);
   const selected = useMemo(() => (Array.isArray(rawSelected) ? rawSelected : []), [rawSelected]);
@@ -63,6 +64,15 @@ export default function StudentTeamGeneratePanel({ classId, selected: rawSelecte
   const [description, setDescription] = useState('');
   const [isProjectNameSameAsGroup, setIsProjectNameSameAsGroup] = useState(true);
   const [selectedLeaderId, setSelectedLeaderId] = useState('');
+
+  useEffect(() => {
+    if (!proposal) return;
+    setGroupName(proposal.teamName || '');
+    setProjectName(proposal.projectName || '');
+    setDescription(proposal.description || '');
+    setIsProjectNameSameAsGroup(proposal.projectName === proposal.teamName);
+    setSelectedLeaderId(proposal.leaderId?._id || proposal.leaderId || '');
+  }, [proposal]);
 
   const suggestionInfo = useMemo(() => {
     const unassignedCount = students.filter(s => !s.teamId).length;
@@ -147,7 +157,7 @@ export default function StudentTeamGeneratePanel({ classId, selected: rawSelecte
     hasGroup1, hasGroup2, isFullyValid, canPropose,
     missingMajorCount, isFormValid, hasCurrentUser, hasLeader
   } = validation;
-  const canSubmit = isFormValid && (isFullyValid || canPropose);
+  const canSubmit = isFormValid && isFullyValid;
 
   const handleSubmit = async () => {
     if (!isFormValid) {
@@ -158,15 +168,19 @@ export default function StudentTeamGeneratePanel({ classId, selected: rawSelecte
     setSubmitting(true);
     try {
       const payload = {
-        studentIds: selected,
-        groupName: groupName.trim(),
+        memberIds: selected,
+        teamName: groupName.trim(),
         projectName: isProjectNameSameAsGroup ? groupName.trim() : projectName.trim(),
         description: description.trim(),
-        isProjectNameSameAsGroup,
         leaderStudentId: selectedLeaderId,
       };
       
-      const res = await classApi.studentProposeTeam(classId, payload);
+      const res: any = proposal
+        ? await teamApi.updateProposal(proposal._id, { ...payload, rowVersion: proposal.rowVersion })
+        : await classApi.studentProposeTeam(classId, payload);
+      const draft = unwrapApiData<any>(res);
+      await teamApi.submitProposal(draft.id, draft.rowVersion);
+      res.message = 'Team proposal submitted for review.';
       toast.success(res.message || 'Tạo nhóm thành công!');
       
       // Reset form

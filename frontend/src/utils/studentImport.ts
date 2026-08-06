@@ -29,7 +29,15 @@ export interface StudentImportValidation {
   fileErrors: string[];
 }
 
-type SupportedField = 'studentCode' | 'fullName' | 'email' | 'major';
+export interface StudentWorkbookRecord {
+  studentCode: string;
+  fullName: string;
+  email: string;
+  majorCode?: string | null;
+  classCode?: string | null;
+}
+
+type SupportedField = 'studentCode' | 'fullName' | 'email' | 'major' | 'classCode';
 
 const REQUIRED_FIELDS: SupportedField[] = ['studentCode', 'fullName', 'email'];
 
@@ -38,6 +46,7 @@ const FIELD_LABELS: Record<SupportedField, string> = {
   fullName: 'FullName',
   email: 'Email',
   major: 'Major',
+  classCode: 'ClassCode',
 };
 
 const HEADER_ALIASES: Record<SupportedField, string[]> = {
@@ -45,6 +54,7 @@ const HEADER_ALIASES: Record<SupportedField, string[]> = {
   fullName: ['fullname', 'studentname', 'name', 'hovaten', 'hoten'],
   email: ['email', 'emailaddress', 'studentemail'],
   major: ['major', 'majorcode', 'specialization', 'chuyennganh'],
+  classCode: ['classcode', 'class', 'malop', 'lop', 'classname'],
 };
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -134,9 +144,35 @@ export async function readStudentImportFile(file: File): Promise<unknown[][]> {
   }
 }
 
+export function buildStudentImportWorkbookBlob(rows: StudentWorkbookRecord[]): Blob {
+  const hasClassCode = rows.some(r => !!r.classCode);
+  const headers = ['StudentCode', 'FullName', 'Email', 'MajorCode'];
+  if (hasClassCode) headers.push('ClassCode');
+
+  const worksheet = XLSX.utils.json_to_sheet(
+    rows.map(row => ({
+      StudentCode: row.studentCode,
+      FullName: row.fullName,
+      Email: row.email,
+      // A blank legacy major is intentionally preserved. The backend maps it to UNDECLARED.
+      MajorCode: row.majorCode || '',
+      ...(hasClassCode ? { ClassCode: row.classCode || '' } : {}),
+    })),
+    { header: headers },
+  );
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'Students');
+  const bytes = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+
+  return new Blob([bytes], {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  });
+}
+
 export function validateStudentRows(
   rawRows: unknown[][],
   existingStudents: ExistingStudentRecord[] = [],
+  expectedClassCode?: string,
 ): StudentImportValidation {
   const nonEmptyRows = rawRows
     .map((cells, index) => ({ cells, originalRowNumber: index + 1 }))
@@ -212,7 +248,12 @@ export function validateStudentRows(
     const fullName = readField('fullName');
     const email = normalizeEmail(readField('email'));
     const major = normalizeCode(readField('major'));
+    const classCode = normalizeCode(readField('classCode'));
     const errors: string[] = [];
+
+    if (classCode && expectedClassCode && classCode !== normalizeCode(expectedClassCode)) {
+      errors.push(`Class code '${readField('classCode')}' in file does not match target class '${expectedClassCode}'.`);
+    }
 
     if (!studentCode) {
       errors.push('Student code is required.');

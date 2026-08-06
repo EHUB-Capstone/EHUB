@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import { motion } from 'framer-motion';
 import { rankingApi } from '../../api/rankingApi';
 import { classApi } from '../../api/classApi';
+import { toClassViewModel, unwrapApiData } from '../../utils/classMappers';
 import { useAuth } from '../../hooks/useAuth';
 import RankingTable from '../../components/workspace/RankingTable';
 import LoadingSkeleton from '../../components/ui/LoadingSkeleton';
@@ -46,8 +47,9 @@ const Rankings = () => {
       if (isAdmin || isLecturerOrMentor) {
         try {
           const res = await classApi.getAll();
-          const list = res.data?.classes || res.classes || res.data || [];
-          setClasses(Array.isArray(list) ? list : []);
+          const payload = unwrapApiData(res);
+          const list = (payload?.items || []).map(toClassViewModel);
+          setClasses(list);
         } catch (err) {
           console.error('Failed to load classes', err);
         }

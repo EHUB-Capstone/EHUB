@@ -156,6 +156,12 @@ namespace EHub.Infrastructure.Persistence.Migrations
                         .HasDefaultValue(false)
                         .HasColumnName("is_deleted");
 
+                    b.Property<bool>("IsReadOnly")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("is_read_only");
+
                     b.Property<Guid?>("TeamId")
                         .HasColumnType("uuid")
                         .HasColumnName("team_id");
@@ -178,9 +184,13 @@ namespace EHub.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("TeamId");
 
-                    b.HasIndex("ClassId", "GroupType");
+                    b.HasIndex("ClassId", "GroupType")
+                        .IsUnique()
+                        .HasFilter("team_id IS NULL AND group_type = 'ClassGroup' AND is_deleted = false");
 
-                    b.HasIndex("TeamId", "GroupType");
+                    b.HasIndex("TeamId", "GroupType")
+                        .IsUnique()
+                        .HasFilter("team_id IS NOT NULL AND group_type = 'TeamGroup' AND is_deleted = false");
 
                     b.ToTable("chat_groups", (string)null);
                 });
@@ -271,9 +281,13 @@ namespace EHub.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.HasIndex("ChatGroupId", "StudentId");
+                    b.HasIndex("ChatGroupId", "StudentId")
+                        .IsUnique()
+                        .HasFilter("student_id IS NOT NULL AND is_deleted = false");
 
-                    b.HasIndex("ChatGroupId", "UserId");
+                    b.HasIndex("ChatGroupId", "UserId")
+                        .IsUnique()
+                        .HasFilter("user_id IS NOT NULL AND is_deleted = false");
 
                     b.ToTable("chat_group_members", null, t =>
                         {
@@ -585,6 +599,11 @@ namespace EHub.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(20)")
                         .HasColumnName("status");
 
+                    b.Property<string>("StatusBeforeArchive")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status_before_archive");
+
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("updated_at");
@@ -592,6 +611,12 @@ namespace EHub.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("UpdatedBy")
                         .HasColumnType("uuid")
                         .HasColumnName("updated_by");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
 
                     b.HasKey("Id");
 
@@ -611,7 +636,107 @@ namespace EHub.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("SemesterId", "CourseId", "PrimaryLecturerId", "Status");
 
-                    b.ToTable("classes", (string)null);
+                    b.ToTable("classes", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_classes_active_requires_lecturer_and_schedule", "status <> 'Active' OR (primary_lecturer_id IS NOT NULL AND schedule_json IS NOT NULL AND jsonb_typeof(schedule_json) = 'array' AND jsonb_array_length(schedule_json) > 0)");
+                        });
+                });
+
+            modelBuilder.Entity("EHub.Domain.Entities.ClassAuditLog", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("action");
+
+                    b.Property<Guid>("ClassId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("class_id");
+
+                    b.Property<string>("DetailsJson")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("details_json");
+
+                    b.Property<DateTime>("OccurredAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("occurred_at_utc");
+
+                    b.Property<Guid>("PerformedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("performed_by_user_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PerformedByUserId");
+
+                    b.HasIndex("ClassId", "OccurredAtUtc");
+
+                    b.ToTable("class_audit_logs", (string)null);
+                });
+
+            modelBuilder.Entity("EHub.Domain.Entities.ClassImportSession", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("ClassId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("class_id");
+
+                    b.Property<DateTime?>("ConsumedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("consumed_at_utc");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<DateTime>("ExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at_utc");
+
+                    b.Property<DateTime?>("ProcessingStartedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("processing_started_at_utc");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.Property<string>("ValidRowsJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("valid_rows_json");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExpiresAtUtc");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("ClassId", "UserId", "Status");
+
+                    b.ToTable("class_import_sessions", (string)null);
                 });
 
             modelBuilder.Entity("EHub.Domain.Entities.ClassLecturer", b =>
@@ -642,9 +767,15 @@ namespace EHub.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("AssignedById");
 
+                    b.HasIndex("ClassId")
+                        .IsUnique();
+
                     b.HasIndex("LecturerId");
 
-                    b.ToTable("class_lecturers", (string)null);
+                    b.ToTable("class_lecturers", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_class_lecturers_primary_only", "is_primary = true");
+                        });
                 });
 
             modelBuilder.Entity("EHub.Domain.Entities.ClassStudent", b =>
@@ -656,6 +787,16 @@ namespace EHub.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("StudentId")
                         .HasColumnType("uuid")
                         .HasColumnName("student_id");
+
+                    b.Property<bool>("CountsTowardCourseSemesterLimit")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true)
+                        .HasColumnName("counts_toward_course_semester_limit");
+
+                    b.Property<Guid>("CourseId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("course_id");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
@@ -675,6 +816,26 @@ namespace EHub.Infrastructure.Persistence.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)")
                         .HasColumnName("exam_note");
+
+                    b.Property<string>("MajorCodeAtEnrollment")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("major_code_at_enrollment");
+
+                    b.Property<string>("MajorVerificationStatus")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("major_verification_status");
+
+                    b.Property<DateTime?>("MajorVerifiedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("major_verified_at_utc");
+
+                    b.Property<Guid?>("MajorVerifiedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("major_verified_by_user_id");
 
                     b.Property<string>("MemberCode")
                         .HasMaxLength(50)
@@ -711,17 +872,31 @@ namespace EHub.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(1000)")
                         .HasColumnName("outcome_3_comment");
 
+                    b.Property<Guid>("SemesterId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("semester_id");
+
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("updated_at");
 
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
                     b.HasKey("ClassId", "StudentId");
 
-                    b.HasIndex("StudentId");
+                    b.HasIndex("MajorVerifiedByUserId");
 
                     b.HasIndex("ClassId", "MemberCode")
                         .IsUnique()
                         .HasFilter("member_code IS NOT NULL");
+
+                    b.HasIndex("StudentId", "SemesterId", "CourseId")
+                        .IsUnique()
+                        .HasFilter("counts_toward_course_semester_limit = true");
 
                     b.ToTable("class_students", (string)null);
                 });
@@ -1584,7 +1759,9 @@ namespace EHub.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("Status");
 
-                    b.HasIndex("TeamId");
+                    b.HasIndex("TeamId")
+                        .IsUnique()
+                        .HasFilter("status = 'Active' AND is_deleted = false");
 
                     b.HasIndex("TeamId", "Status");
 
@@ -2142,6 +2319,10 @@ namespace EHub.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("recipient_user_id");
 
+                    b.Property<Guid?>("SourceEventId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("source_event_id");
+
                     b.Property<string>("Title")
                         .IsRequired()
                         .HasMaxLength(300)
@@ -2180,7 +2361,86 @@ namespace EHub.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("RecipientUserId", "Type");
 
+                    b.HasIndex("SourceEventId", "RecipientUserId")
+                        .IsUnique()
+                        .HasFilter("source_event_id IS NOT NULL");
+
                     b.ToTable("notifications", (string)null);
+                });
+
+            modelBuilder.Entity("EHub.Domain.Entities.OutboxMessage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("AggregateId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("aggregate_id");
+
+                    b.Property<string>("AggregateType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("aggregate_type");
+
+                    b.Property<int>("AttemptCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("attempt_count");
+
+                    b.Property<DateTime>("AvailableAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("available_at_utc");
+
+                    b.Property<Guid>("EventId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("event_id");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("last_error");
+
+                    b.Property<DateTime>("OccurredAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("occurred_at_utc");
+
+                    b.Property<string>("PayloadJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("payload_json");
+
+                    b.Property<DateTime?>("ProcessedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("processed_at_utc");
+
+                    b.Property<DateTime?>("ProcessingStartedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("processing_started_at_utc");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("type");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EventId")
+                        .IsUnique();
+
+                    b.HasIndex("AggregateType", "AggregateId");
+
+                    b.HasIndex("Status", "AvailableAtUtc");
+
+                    b.ToTable("outbox_messages", (string)null);
                 });
 
             modelBuilder.Entity("EHub.Domain.Entities.PasswordResetToken", b =>
@@ -2709,6 +2969,139 @@ namespace EHub.Infrastructure.Persistence.Migrations
                     b.HasIndex("ProjectProposalId", "SectionKey");
 
                     b.ToTable("project_comments", (string)null);
+                });
+
+            modelBuilder.Entity("EHub.Domain.Entities.ProjectDirection", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deleted_at");
+
+                    b.Property<Guid?>("DeletedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("deleted_by");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("is_deleted");
+
+                    b.Property<DateTime?>("ReviewedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("reviewed_at_utc");
+
+                    b.Property<Guid?>("ReviewedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("reviewed_by_user_id");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("status");
+
+                    b.Property<DateTime?>("SubmittedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("submitted_at_utc");
+
+                    b.Property<string>("Summary")
+                        .IsRequired()
+                        .HasMaxLength(5000)
+                        .HasColumnType("character varying(5000)")
+                        .HasColumnName("summary");
+
+                    b.Property<Guid>("TeamId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("team_id");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("title");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ReviewedByUserId");
+
+                    b.HasIndex("TeamId")
+                        .IsUnique();
+
+                    b.ToTable("project_directions", (string)null);
+                });
+
+            modelBuilder.Entity("EHub.Domain.Entities.ProjectDirectionReview", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Comment")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("comment");
+
+                    b.Property<string>("FromStatus")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("from_status");
+
+                    b.Property<DateTime>("OccurredAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("occurred_at_utc");
+
+                    b.Property<Guid>("ProjectDirectionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("project_direction_id");
+
+                    b.Property<Guid>("ReviewedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("reviewed_by_user_id");
+
+                    b.Property<string>("ToStatus")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("to_status");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ReviewedByUserId");
+
+                    b.HasIndex("ProjectDirectionId", "OccurredAtUtc");
+
+                    b.ToTable("project_direction_reviews", (string)null);
                 });
 
             modelBuilder.Entity("EHub.Domain.Entities.ProjectProposal", b =>
@@ -4030,19 +4423,16 @@ namespace EHub.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("deleted_by");
 
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("description");
+
                     b.Property<bool>("IsDeleted")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
                         .HasDefaultValue(false)
                         .HasColumnName("is_deleted");
-
-                    b.Property<Guid?>("LeaderId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("leader_id");
-
-                    b.Property<Guid?>("MentorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("mentor_id");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -4070,13 +4460,15 @@ namespace EHub.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("updated_by");
 
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
                     b.HasKey("Id");
 
                     b.HasIndex("CreatedById");
-
-                    b.HasIndex("LeaderId");
-
-                    b.HasIndex("MentorId");
 
                     b.HasIndex("ClassId", "TeamCode")
                         .IsUnique();
@@ -4101,6 +4493,12 @@ namespace EHub.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("class_id");
 
+                    b.Property<bool>("CountsTowardActiveTeam")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true)
+                        .HasColumnName("counts_toward_active_team");
+
                     b.Property<Guid?>("CreatedById")
                         .HasColumnType("uuid")
                         .HasColumnName("created_by_id");
@@ -4119,10 +4517,221 @@ namespace EHub.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("CreatedById");
 
+                    b.HasIndex("TeamId")
+                        .IsUnique()
+                        .HasFilter("role_in_team = 'Leader' AND counts_toward_active_team = true");
+
                     b.HasIndex("ClassId", "StudentId")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("counts_toward_active_team = true");
 
                     b.ToTable("team_members", (string)null);
+                });
+
+            modelBuilder.Entity("EHub.Domain.Entities.TeamProposal", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid?>("ApprovedTeamId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("approved_team_id");
+
+                    b.Property<Guid>("ClassId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("class_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deleted_at");
+
+                    b.Property<Guid?>("DeletedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("deleted_by");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("description");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("is_deleted");
+
+                    b.Property<string>("LatestReviewComment")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("latest_review_comment");
+
+                    b.Property<string>("ProjectName")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("project_name");
+
+                    b.Property<Guid>("ProposedByStudentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("proposed_by_student_id");
+
+                    b.Property<DateTime?>("ReviewedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("reviewed_at_utc");
+
+                    b.Property<Guid?>("ReviewedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("reviewed_by_user_id");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("status");
+
+                    b.Property<DateTime?>("SubmittedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("submitted_at_utc");
+
+                    b.Property<string>("TeamName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("team_name");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ApprovedTeamId")
+                        .IsUnique();
+
+                    b.HasIndex("ProposedByStudentId");
+
+                    b.HasIndex("ReviewedByUserId");
+
+                    b.HasIndex("ClassId", "Status");
+
+                    b.ToTable("team_proposals", (string)null);
+                });
+
+            modelBuilder.Entity("EHub.Domain.Entities.TeamProposalHistory", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("action");
+
+                    b.Property<string>("Comment")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("comment");
+
+                    b.Property<string>("FromStatus")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("from_status");
+
+                    b.Property<DateTime>("OccurredAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("occurred_at_utc");
+
+                    b.Property<Guid>("PerformedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("performed_by_user_id");
+
+                    b.Property<Guid>("ProposalId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("proposal_id");
+
+                    b.Property<string>("SnapshotJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("snapshot_json");
+
+                    b.Property<string>("ToStatus")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("to_status");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PerformedByUserId");
+
+                    b.HasIndex("ProposalId", "OccurredAtUtc");
+
+                    b.ToTable("team_proposal_history", (string)null);
+                });
+
+            modelBuilder.Entity("EHub.Domain.Entities.TeamProposalMember", b =>
+                {
+                    b.Property<Guid>("ProposalId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("proposal_id");
+
+                    b.Property<Guid>("StudentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("student_id");
+
+                    b.Property<Guid>("ClassId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("class_id");
+
+                    b.Property<bool>("CountsTowardOpenProposal")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true)
+                        .HasColumnName("counts_toward_open_proposal");
+
+                    b.Property<bool>("IsIncluded")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true)
+                        .HasColumnName("is_included");
+
+                    b.Property<bool>("IsLeader")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_leader");
+
+                    b.HasKey("ProposalId", "StudentId");
+
+                    b.HasIndex("ProposalId")
+                        .IsUnique()
+                        .HasFilter("is_leader = true");
+
+                    b.HasIndex("ClassId", "StudentId")
+                        .IsUnique()
+                        .HasFilter("counts_toward_open_proposal = true");
+
+                    b.ToTable("team_proposal_members", (string)null);
                 });
 
             modelBuilder.Entity("EHub.Domain.Entities.User", b =>
@@ -4841,6 +5450,44 @@ namespace EHub.Infrastructure.Persistence.Migrations
                     b.Navigation("Semester");
                 });
 
+            modelBuilder.Entity("EHub.Domain.Entities.ClassAuditLog", b =>
+                {
+                    b.HasOne("EHub.Domain.Entities.Class", "Class")
+                        .WithMany("AuditLogs")
+                        .HasForeignKey("ClassId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("EHub.Domain.Entities.User", "PerformedByUser")
+                        .WithMany()
+                        .HasForeignKey("PerformedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Class");
+
+                    b.Navigation("PerformedByUser");
+                });
+
+            modelBuilder.Entity("EHub.Domain.Entities.ClassImportSession", b =>
+                {
+                    b.HasOne("EHub.Domain.Entities.Class", "Class")
+                        .WithMany("ImportSessions")
+                        .HasForeignKey("ClassId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("EHub.Domain.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Class");
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("EHub.Domain.Entities.ClassLecturer", b =>
                 {
                     b.HasOne("EHub.Domain.Entities.User", "AssignedBy")
@@ -4875,6 +5522,11 @@ namespace EHub.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("EHub.Domain.Entities.User", "MajorVerifiedByUser")
+                        .WithMany()
+                        .HasForeignKey("MajorVerifiedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("EHub.Domain.Entities.Student", "Student")
                         .WithMany("ClassStudents")
                         .HasForeignKey("StudentId")
@@ -4882,6 +5534,8 @@ namespace EHub.Infrastructure.Persistence.Migrations
                         .IsRequired();
 
                     b.Navigation("Class");
+
+                    b.Navigation("MajorVerifiedByUser");
 
                     b.Navigation("Student");
                 });
@@ -5328,6 +5982,43 @@ namespace EHub.Infrastructure.Persistence.Migrations
                     b.Navigation("ThreadRoot");
                 });
 
+            modelBuilder.Entity("EHub.Domain.Entities.ProjectDirection", b =>
+                {
+                    b.HasOne("EHub.Domain.Entities.User", "ReviewedByUser")
+                        .WithMany()
+                        .HasForeignKey("ReviewedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("EHub.Domain.Entities.Team", "Team")
+                        .WithOne("ProjectDirection")
+                        .HasForeignKey("EHub.Domain.Entities.ProjectDirection", "TeamId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("ReviewedByUser");
+
+                    b.Navigation("Team");
+                });
+
+            modelBuilder.Entity("EHub.Domain.Entities.ProjectDirectionReview", b =>
+                {
+                    b.HasOne("EHub.Domain.Entities.ProjectDirection", "ProjectDirection")
+                        .WithMany("Reviews")
+                        .HasForeignKey("ProjectDirectionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("EHub.Domain.Entities.User", "ReviewedByUser")
+                        .WithMany()
+                        .HasForeignKey("ReviewedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("ProjectDirection");
+
+                    b.Navigation("ReviewedByUser");
+                });
+
             modelBuilder.Entity("EHub.Domain.Entities.ProjectProposal", b =>
                 {
                     b.HasOne("EHub.Domain.Entities.Class", "Class")
@@ -5674,16 +6365,6 @@ namespace EHub.Infrastructure.Persistence.Migrations
                         .HasForeignKey("CreatedById")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("EHub.Domain.Entities.Student", null)
-                        .WithMany()
-                        .HasForeignKey("LeaderId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("EHub.Domain.Entities.User", null)
-                        .WithMany()
-                        .HasForeignKey("MentorId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
                     b.Navigation("Class");
 
                     b.Navigation("Creator");
@@ -5713,6 +6394,77 @@ namespace EHub.Infrastructure.Persistence.Migrations
                     b.Navigation("CreatedBy");
 
                     b.Navigation("Team");
+                });
+
+            modelBuilder.Entity("EHub.Domain.Entities.TeamProposal", b =>
+                {
+                    b.HasOne("EHub.Domain.Entities.Team", "ApprovedTeam")
+                        .WithMany("ApprovedProposals")
+                        .HasForeignKey("ApprovedTeamId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("EHub.Domain.Entities.Class", "Class")
+                        .WithMany()
+                        .HasForeignKey("ClassId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("EHub.Domain.Entities.Student", "ProposedByStudent")
+                        .WithMany()
+                        .HasForeignKey("ProposedByStudentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("EHub.Domain.Entities.User", "ReviewedByUser")
+                        .WithMany()
+                        .HasForeignKey("ReviewedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("ApprovedTeam");
+
+                    b.Navigation("Class");
+
+                    b.Navigation("ProposedByStudent");
+
+                    b.Navigation("ReviewedByUser");
+                });
+
+            modelBuilder.Entity("EHub.Domain.Entities.TeamProposalHistory", b =>
+                {
+                    b.HasOne("EHub.Domain.Entities.User", "PerformedByUser")
+                        .WithMany()
+                        .HasForeignKey("PerformedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("EHub.Domain.Entities.TeamProposal", "Proposal")
+                        .WithMany("History")
+                        .HasForeignKey("ProposalId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("PerformedByUser");
+
+                    b.Navigation("Proposal");
+                });
+
+            modelBuilder.Entity("EHub.Domain.Entities.TeamProposalMember", b =>
+                {
+                    b.HasOne("EHub.Domain.Entities.TeamProposal", "Proposal")
+                        .WithMany("Members")
+                        .HasForeignKey("ProposalId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("EHub.Domain.Entities.ClassStudent", "ClassStudent")
+                        .WithMany()
+                        .HasForeignKey("ClassId", "StudentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("ClassStudent");
+
+                    b.Navigation("Proposal");
                 });
 
             modelBuilder.Entity("EHub.Domain.Entities.UserRole", b =>
@@ -5853,6 +6605,8 @@ namespace EHub.Infrastructure.Persistence.Migrations
                 {
                     b.Navigation("AcademicDatasets");
 
+                    b.Navigation("AuditLogs");
+
                     b.Navigation("ChatGroups");
 
                     b.Navigation("ClassLecturers");
@@ -5860,6 +6614,8 @@ namespace EHub.Infrastructure.Persistence.Migrations
                     b.Navigation("ClassStudents");
 
                     b.Navigation("DataBankImportBatches");
+
+                    b.Navigation("ImportSessions");
 
                     b.Navigation("Milestones");
 
@@ -5960,6 +6716,11 @@ namespace EHub.Infrastructure.Persistence.Migrations
                     b.Navigation("ThreadReplies");
                 });
 
+            modelBuilder.Entity("EHub.Domain.Entities.ProjectDirection", b =>
+                {
+                    b.Navigation("Reviews");
+                });
+
             modelBuilder.Entity("EHub.Domain.Entities.ProjectProposal", b =>
                 {
                     b.Navigation("Comments");
@@ -6016,6 +6777,8 @@ namespace EHub.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("EHub.Domain.Entities.Team", b =>
                 {
+                    b.Navigation("ApprovedProposals");
+
                     b.Navigation("ChatGroups");
 
                     b.Navigation("MentorAssignments");
@@ -6024,11 +6787,20 @@ namespace EHub.Infrastructure.Persistence.Migrations
 
                     b.Navigation("Project");
 
+                    b.Navigation("ProjectDirection");
+
                     b.Navigation("SprintTasks");
 
                     b.Navigation("TeamMembers");
 
                     b.Navigation("WeeklyTasks");
+                });
+
+            modelBuilder.Entity("EHub.Domain.Entities.TeamProposal", b =>
+                {
+                    b.Navigation("History");
+
+                    b.Navigation("Members");
                 });
 
             modelBuilder.Entity("EHub.Domain.Entities.User", b =>

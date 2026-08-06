@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { Info } from 'lucide-react';
 
 export default function TeamSuggestionTooltip({ children, label = 'Xem gợi ý tạo nhóm' }) {

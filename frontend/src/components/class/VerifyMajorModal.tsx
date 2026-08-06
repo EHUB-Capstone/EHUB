@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { useState, useRef, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import {
@@ -7,19 +6,19 @@ import {
 } from 'lucide-react';
 import { classApi } from '../../api/classApi';
 import { PROGRAM_GROUPS, getMajorName } from '../../constants/majors';
+import { parseApiError } from '../../utils/apiError';
 
-// Flatten all majors for the dropdown
-const ALL_MAJORS = PROGRAM_GROUPS.flatMap(g => g.majors);
-
-const TEMPLATE_HEADERS = 'Class,ID,Email,Chuyên ngành,SubjectCode,Full Name\n';
-const TEMPLATE_ROW     = 'EXE101_10,DS120011,linhlTDS120011@fpt.edu.vn,BIT_SE,EXE101,Nguyễn Văn An\n';
-
-const downloadTemplate = () => {
-  const blob = new Blob(['\uFEFF' + TEMPLATE_HEADERS + TEMPLATE_ROW], { type: 'text/csv;charset=utf-8;' });
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement('a');
-  a.href = url; a.download = 'verify_major_template.csv';
-  a.click(); URL.revokeObjectURL(url);
+const downloadTemplate = async () => {
+  const response = await classApi.getMajorVerificationTemplate();
+  const blob = new Blob([response.data || response], {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = 'Major_Verification_Template.xlsx';
+  anchor.click();
+  URL.revokeObjectURL(url);
 };
 
 // ─── Status badge ──────────────────────────────────────────────────────────────
@@ -34,7 +33,7 @@ const StatusBadge = ({ status }) => {
 };
 
 // ─── MajorSelect dropdown for manual correction ────────────────────────────────
-function MajorSelect({ currentMajor, onSave, saving }) {
+function MajorSelect({ currentMajor, onSave }) {
   const [open, setOpen]     = useState(false);
   const [value, setValue]   = useState(currentMajor || '');
 
@@ -115,7 +114,7 @@ export default function VerifyMajorModal({ classId, onClose }) {
     try {
       const fd = new FormData();
       fd.append('file', file);
-      const res  = await classApi.verifyMajors(classId, fd);
+      const res: any = await classApi.verifyMajors(classId, fd);
       const data = res?.data || res;
       setReport(data);
       // Default to first tab that has data
@@ -123,20 +122,22 @@ export default function VerifyMajorModal({ classId, onClose }) {
       setActiveTab(firstWithData?.key || 'matched');
       toast.success('Kiểm tra hoàn tất!');
     } catch (e) {
-      toast.error(e?.response?.data?.message || e?.message || 'Kiểm tra thất bại');
+      toast.error(parseApiError(e, 'Kiểm tra thất bại').message);
     } finally {
       setLoading(false);
     }
   };
 
   const handleCorrect = useCallback(async (studentId, newMajor) => {
+    const reason = window.prompt('Nhập lý do điều chỉnh chuyên ngành:', 'Corrected after major verification review');
+    if (!reason) return;
     setSavingId(studentId);
     try {
-      await classApi.updateStudentMajor(classId, studentId, newMajor);
+      await classApi.updateStudentMajor(classId, studentId, newMajor, reason);
       setCorrected(prev => ({ ...prev, [studentId]: newMajor }));
       toast.success(`Đã cập nhật chuyên ngành → ${newMajor}`);
     } catch (e) {
-      toast.error(e?.response?.data?.message || 'Cập nhật thất bại');
+      toast.error(parseApiError(e, 'Cập nhật thất bại').message);
     } finally {
       setSavingId(null);
     }
@@ -179,7 +180,7 @@ export default function VerifyMajorModal({ classId, onClose }) {
               </div>
             </div>
             <button
-              onClick={downloadTemplate}
+              onClick={() => void downloadTemplate().catch(error => toast.error(parseApiError(error, 'Không thể tải template').message))}
               className="text-xs px-3 py-1.5 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition-all font-medium"
             >
               Tải xuống
@@ -318,7 +319,6 @@ export default function VerifyMajorModal({ classId, onClose }) {
                                   <MajorSelect
                                     currentMajor={row.majorInDB || ''}
                                     onSave={(m) => handleCorrect(row.studentId, m)}
-                                    saving={isSaving}
                                   />
                                 ) : (
                                   <span className="text-xs text-slate-400">—</span>

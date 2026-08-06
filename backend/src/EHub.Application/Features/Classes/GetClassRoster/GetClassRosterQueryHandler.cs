@@ -3,6 +3,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using EHub.Application.Common.Interfaces.Persistence;
+using EHub.Application.Features.Classes.Common;
 using EHub.Contracts.Classes;
 using EHub.Domain.Enums;
 using EHub.Shared.Constants;
@@ -28,96 +29,94 @@ public sealed class GetClassRosterQueryHandler : IGetClassRosterQueryHandler
         string currentUserRole,
         CancellationToken cancellationToken = default)
     {
+        if (request.Page < 1)
+        {
+            return Result.Failure<ClassRosterListResponse>(
+                new Error(ErrorCodes.ClassValidationError, "Page number must be greater than 0."));
+        }
+
+        if (request.PageSize is < 1 or > 100)
+        {
+            return Result.Failure<ClassRosterListResponse>(
+                new Error(ErrorCodes.ClassValidationError, "Page size must be between 1 and 100."));
+        }
+
+        var isAdmin = string.Equals(currentUserRole, SystemRoles.Admin, StringComparison.OrdinalIgnoreCase);
+        var isLecturer = string.Equals(currentUserRole, SystemRoles.Lecturer, StringComparison.OrdinalIgnoreCase);
+        if (!isAdmin && !isLecturer)
+        {
+            return Result.Failure<ClassRosterListResponse>(
+                new Error(ErrorCodes.ClassAccessDenied, "You do not have permission to view this class roster."));
+        }
+
         var targetClass = await _context.Classes
             .AsNoTracking()
-            .Include(c => c.ClassLecturers)
             .FirstOrDefaultAsync(c => c.Id == classId, cancellationToken);
 
         if (targetClass == null)
         {
             return Result.Failure<ClassRosterListResponse>(
-                new Error("Classes.NotFound", "The requested class was not found."));
+                new Error(ErrorCodes.ClassNotFound, "The requested class was not found."));
         }
-
-        var isAdmin = string.Equals(currentUserRole, SystemRoles.Admin, StringComparison.OrdinalIgnoreCase);
-        var isLecturer = string.Equals(currentUserRole, SystemRoles.Lecturer, StringComparison.OrdinalIgnoreCase);
 
         if (isLecturer)
         {
-            var isAssigned = targetClass.PrimaryLecturerId == currentUserId ||
-                             targetClass.ClassLecturers.Any(cl => cl.LecturerId == currentUserId);
-
-            if (!isAssigned)
+            if (targetClass.PrimaryLecturerId != currentUserId)
             {
                 return Result.Failure<ClassRosterListResponse>(
-                    new Error("Classes.AccessDenied", "You can only view roster for classes assigned to you."));
+                    new Error(ErrorCodes.ClassAccessDenied, "You can only view roster for classes assigned to you."));
             }
         }
 
-        var page = request.Page <= 0 ? 1 : request.Page;
-        var pageSize = request.PageSize <= 0 ? 200 : Math.Min(request.PageSize, 500);
+        var page = request.Page;
+        var pageSize = request.PageSize;
+
+        if (!ClassRosterFilters.TryParseStatus(request.Status, out var status))
+        {
+            return Result.Failure<ClassRosterListResponse>(
+                new Error(ErrorCodes.ClassValidationError, "Enrollment status must be Active, Dropped, or Completed."));
+        }
 
         var query = _context.ClassStudents
             .AsNoTracking()
-            .Include(cs => cs.Student)
-            .Include(cs => cs.TeamMembers)
-            .ThenInclude(tm => tm.Team)
             .Where(cs => cs.ClassId == classId);
 
-        // Search filter
-        if (!string.IsNullOrWhiteSpace(request.Search))
-        {
-            var searchTerm = request.Search.Trim().ToLower();
-            query = query.Where(cs =>
-                (cs.Student.RollNumber != null && cs.Student.RollNumber.ToLower().Contains(searchTerm)) ||
-                (cs.Student.FullName != null && cs.Student.FullName.ToLower().Contains(searchTerm)) ||
-                (cs.Student.Email != null && cs.Student.Email.ToLower().Contains(searchTerm)));
-        }
-
-        // Major filter
-        if (!string.IsNullOrWhiteSpace(request.MajorCode))
-        {
-            var major = request.MajorCode.Trim().ToUpper();
-            query = query.Where(cs => cs.Student.MajorCode != null && cs.Student.MajorCode.ToUpper() == major);
-        }
-
-        // Status filter
-        if (!string.IsNullOrWhiteSpace(request.Status))
-        {
-            if (Enum.TryParse<EnrollmentStatus>(request.Status, true, out var statusEnum))
-            {
-                query = query.Where(cs => cs.EnrollmentStatus == statusEnum);
-            }
-        }
+        query = ClassRosterFilters.Apply(query, request.Search, request.MajorCode, status);
 
         var totalCount = await query.CountAsync(cancellationToken);
-        var totalPages = (int)Math.Ceiling((double)totalCount / pageSize);
+        var totalPages = Math.Max(1, (int)Math.Ceiling((double)totalCount / pageSize));
 
-        var classStudents = await query
+        var items = await query
             .OrderBy(cs => cs.Student.RollNumber)
             .ThenBy(cs => cs.Student.FullName)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
-            .ToListAsync(cancellationToken);
-
-        var items = classStudents.Select(cs =>
-        {
-            var activeTeamMember = cs.TeamMembers.FirstOrDefault(tm => tm.Team != null && tm.Team.Status == TeamStatus.Active);
-            return new ClassStudentDto
+            .Select(cs => new ClassStudentDto
             {
                 StudentId = cs.StudentId,
                 RollNumber = cs.Student.RollNumber ?? string.Empty,
                 FullName = cs.Student.FullName,
                 Email = cs.Student.Email ?? string.Empty,
-                MajorCode = cs.Student.MajorCode,
+                MajorCode = cs.MajorCodeAtEnrollment,
+                ProfileMajorCode = cs.Student.MajorCode,
+                MajorVerificationStatus = cs.MajorVerificationStatus.ToString(),
                 MemberCode = cs.MemberCode,
                 EnrollmentStatus = cs.EnrollmentStatus.ToString(),
-                TeamId = activeTeamMember?.TeamId,
-                TeamName = activeTeamMember?.Team?.TeamName,
-                IsTeamLeader = activeTeamMember?.RoleInTeam == TeamMemberRole.Leader,
+                TeamId = cs.TeamMembers
+                    .Where(tm => tm.CountsTowardActiveTeam && tm.Team.Status == TeamStatus.Active)
+                    .Select(tm => (Guid?)tm.TeamId)
+                    .FirstOrDefault(),
+                TeamName = cs.TeamMembers
+                    .Where(tm => tm.CountsTowardActiveTeam && tm.Team.Status == TeamStatus.Active)
+                    .Select(tm => tm.Team.TeamName)
+                    .FirstOrDefault(),
+                IsTeamLeader = cs.TeamMembers.Any(tm =>
+                    tm.CountsTowardActiveTeam &&
+                    tm.Team.Status == TeamStatus.Active &&
+                    tm.RoleInTeam == TeamMemberRole.Leader),
                 JoinedAtUtc = cs.CreatedAt
-            };
-        }).ToList();
+            })
+            .ToListAsync(cancellationToken);
 
         var response = new ClassRosterListResponse
         {

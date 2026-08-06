@@ -6,6 +6,7 @@ namespace EHub.Domain.Entities;
 
 public class Notification : AuditableEntity
 {
+    public Guid? SourceEventId { get; set; }
     public Guid RecipientUserId { get; set; }
     public virtual User RecipientUser { get; set; } = null!;
 

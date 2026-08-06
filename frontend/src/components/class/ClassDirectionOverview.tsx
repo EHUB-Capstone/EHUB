@@ -1,9 +1,11 @@
-// @ts-nocheck
 import { useEffect, useState } from 'react';
 import { CheckCircle2, FileText, Loader2, MessageSquareText, RefreshCw, XCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { classApi } from '../../api/classApi';
-import { workspaceApi } from '../../api/workspaceApi';
+import { toClassViewModel, unwrapApiData } from '../../utils/classMappers';
+import { teamApi } from '../../api/teamApi';
+import { normalizeManagedTeam } from '../../utils/teamManagement';
+import { parseApiError } from '../../utils/apiError';
 import { getDisplayTeamName } from '../../utils/teamDisplay';
 
 const statusStyles = {
@@ -34,9 +36,10 @@ export default function ClassDirectionOverview({ semester, year }) {
     const loadClasses = async () => {
       setLoadingClasses(true);
       try {
-        const response = await classApi.getAll({ semester, year });
+        const response = await classApi.getAll({ semesterCode: semester && year ? `${semester}${year}` : undefined, year });
         if (!active) return;
-        const list = response?.data?.classes || response?.classes || [];
+        const payload = unwrapApiData(response);
+        const list = (payload?.items || []).map(toClassViewModel);
         setClasses(list);
         setSelectedClassId((current) => list.some((item) => item._id === current) ? current : (list[0]?._id || ''));
       } catch (error) {
@@ -56,8 +59,33 @@ export default function ClassDirectionOverview({ semester, year }) {
     }
     setLoadingTeams(true);
     try {
-      const response = await workspaceApi.getClassProjectDirections(classId);
-      setOverview(response?.data || response || null);
+      const response = await classApi.getTeams(classId);
+      const teamData = unwrapApiData(response);
+      const teams = (Array.isArray(teamData) ? teamData : []).map(normalizeManagedTeam);
+      const directionTeams = await Promise.all(teams.map(async team => {
+        let direction = null;
+        try {
+          direction = unwrapApiData(await teamApi.getProjectDirection(team._id));
+        } catch (error) {
+          if (parseApiError(error, '').code !== 'PROJECT_DIRECTION_NOT_FOUND') throw error;
+        }
+        const status = direction?.status === 'Submitted' ? 'PENDING'
+          : direction?.status === 'Approved' ? 'APPROVED'
+            : direction?.status === 'NeedsRevision' ? 'CHANGES_REQUESTED'
+              : 'NOT_SUBMITTED';
+        const leader = team.members?.find(member => member.roleInTeam?.toUpperCase() === 'LEADER');
+        return {
+          ...team,
+          leaderId: leader?.studentId || team.leaderId,
+          leaderName: typeof leader?.studentId === 'object' ? leader.studentId.fullName : 'Not assigned',
+          projectDirection: direction?.summary || '',
+          projectDirectionTitle: direction?.title || '',
+          projectDirectionStatus: status,
+          projectDirectionReviewComment: direction?.reviews?.[0]?.comment || null,
+          projectDirectionRowVersion: direction?.rowVersion || '',
+        };
+      }));
+      setOverview({ teams: directionTeams });
     } catch (error) {
       toast.error(error?.response?.data?.error || error?.message || 'Failed to load project directions');
     } finally {
@@ -80,7 +108,12 @@ export default function ClassDirectionOverview({ semester, year }) {
     }
     setReviewingTeamId(teamId);
     try {
-      await workspaceApi.reviewProjectDirection(teamId, decision, comment);
+      const team = (overview?.teams || []).find(item => item._id === teamId);
+      await teamApi.reviewProjectDirection(teamId, {
+        decision: decision === 'APPROVED' ? 'Approved' : 'NeedsRevision',
+        comment,
+        rowVersion: team?.projectDirectionRowVersion,
+      });
       toast.success(decision === 'APPROVED' ? 'Project direction approved' : 'Changes requested');
       setComments((current) => ({ ...current, [teamId]: '' }));
       await loadOverview();
@@ -140,7 +173,7 @@ export default function ClassDirectionOverview({ semester, year }) {
                   <div>
                     <h3 className="font-bold text-slate-900">{getDisplayTeamName(team) || team.teamCode}</h3>
                     <p className="mt-0.5 text-xs text-slate-500">
-                      {team.teamCode} · Leader: {team.leaderId?.fullName || 'Not assigned'}
+                      {team.teamCode} · Leader: {team.leaderName}
                     </p>
                   </div>
                   <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${statusStyles[status]}`}>
@@ -173,7 +206,7 @@ export default function ClassDirectionOverview({ semester, year }) {
                         <button
                           type="button"
                           onClick={() => review(team._id, 'CHANGES_REQUESTED')}
-                          disabled={busy}
+                          disabled={busy || status !== 'PENDING'}
                           className="inline-flex items-center gap-2 rounded-lg border border-red-200 px-3 py-2 text-sm font-semibold text-red-600 transition hover:bg-red-50 disabled:opacity-50"
                         >
                           <XCircle className="h-4 w-4" /> Request changes
@@ -181,7 +214,7 @@ export default function ClassDirectionOverview({ semester, year }) {
                         <button
                           type="button"
                           onClick={() => review(team._id, 'APPROVED')}
-                          disabled={busy}
+                          disabled={busy || status !== 'PENDING'}
                           className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-50"
                         >
                           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}

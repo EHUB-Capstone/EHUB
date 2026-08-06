@@ -1,13 +1,13 @@
-// @ts-nocheck
 import { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
-import { X, Loader2, GraduationCap, Search, Check } from 'lucide-react';
+import { X, Loader2, Search, Check } from 'lucide-react';
 import { classApi } from '../../api/classApi';
 import { userApi } from '../../api/userApi';
+import { parseApiError } from '../../utils/apiError';
 
-export default function AssignLectureModal({ classId, currentLecture, onClose, onAssigned }) {
+export default function AssignLectureModal({ classId, currentLecture, rowVersion, allowUnassign = false, onClose, onAssigned }) {
   const [lecturers, setLecturers] = useState([]);
-  const [selectedId, setSelectedId] = useState(currentLecture?._id || '');
+  const [selectedId, setSelectedId] = useState(currentLecture?._id || currentLecture?.id || '');
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -15,10 +15,14 @@ export default function AssignLectureModal({ classId, currentLecture, onClose, o
   useEffect(() => {
     const fetchLecturers = async () => {
       try {
-        const res = await userApi.getAll({ role: 'LECTURER', limit: 200 });
+        const res = await userApi.getAll({ role: 'LECTURER', limit: 100 });
         const list = res?.data?.users || res?.users || [];
-        setLecturers(list);
-      } catch (err) {
+        setLecturers(list.map(lecturer => ({
+          ...lecturer,
+          _id: lecturer._id || lecturer.id,
+          name: lecturer.name || lecturer.fullName,
+        })));
+      } catch {
         toast.error('Failed to load lecturers');
       } finally {
         setLoading(false);
@@ -28,17 +32,20 @@ export default function AssignLectureModal({ classId, currentLecture, onClose, o
   }, []);
 
   const handleSubmit = async () => {
-    if (!selectedId) {
-      toast.error('Please select a lecturer');
+    if (!rowVersion) {
+      toast.error('Class data is stale. Reload the page and try again.');
       return;
     }
     setSubmitting(true);
     try {
-      await classApi.assignLecture(classId, selectedId);
-      toast.success('Lecturer assigned successfully!');
-      onAssigned();
+      await classApi.updateTeachingAssignment(classId, {
+        primaryLecturerId: selectedId || null,
+        rowVersion,
+      });
+      toast.success(selectedId ? 'Lecturer assigned successfully!' : 'Lecturer unassigned successfully!');
+      await onAssigned();
     } catch (e) {
-      toast.error(e?.message || 'Failed to assign lecturer');
+      toast.error(parseApiError(e, 'Failed to assign lecturer').message);
     } finally {
       setSubmitting(false);
     }
@@ -83,6 +90,17 @@ export default function AssignLectureModal({ classId, currentLecture, onClose, o
             </div>
           ) : (
             <div className="max-h-60 overflow-y-auto space-y-1.5 border border-slate-100 rounded-xl p-2.5 bg-slate-50/50">
+              {allowUnassign && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedId('')}
+                  className={`w-full p-2.5 rounded-xl border text-left text-xs font-semibold transition-all ${
+                    selectedId === '' ? 'bg-primary-50/40 border-primary/20 text-primary' : 'bg-white border-slate-200/60 text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  Unassigned (Draft classes only)
+                </button>
+              )}
               {filtered.length === 0 ? (
                 <p className="text-xs text-slate-400 text-center py-6">No lecturers found</p>
               ) : (
@@ -127,10 +145,10 @@ export default function AssignLectureModal({ classId, currentLecture, onClose, o
           </button>
           <button
             onClick={handleSubmit}
-            disabled={submitting || loading || !selectedId}
+            disabled={submitting || loading}
             className="flex-1 px-4 py-2 bg-primary text-white rounded-xl text-xs font-semibold hover:bg-primary-700 disabled:opacity-50 transition-all flex items-center justify-center gap-1.5 shadow-sm"
           >
-            {submitting ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Assigning...</> : 'Assign Lecturer'}
+            {submitting ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Saving...</> : 'Save Assignment'}
           </button>
         </div>
       </div>

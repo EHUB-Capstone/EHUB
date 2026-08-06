@@ -5,6 +5,7 @@ import { mentoringApi } from '../../api/mentoringApi';
 import { dashboardApi } from '../../api/dashboardApi';
 import { teamApi } from '../../api/teamApi';
 import { classApi } from '../../api/classApi';
+import { toClassViewModel, unwrapApiData } from '../../utils/classMappers';
 import { useAuth } from '../../hooks/useAuth';
 import LoadingSkeleton from '../../components/ui/LoadingSkeleton';
 import EmptyState from '../../components/ui/EmptyState';
@@ -12,6 +13,8 @@ import Button from '../../components/ui/Button';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import Modal from '../../components/ui/Modal';
 import { formatSlotTime, SLOT_OPTIONS, TEACHING_DAYS } from '../../constants/classSchedule';
+import { classFeatureFlags } from '../../config/classFeatureFlags';
+import { normalizeManagedTeam } from '../../utils/teamManagement';
 import { Calendar, Plus, Video, Clock, Trash2, Edit, ChevronLeft, ChevronRight, CheckCircle } from 'lucide-react';
 
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
@@ -59,19 +62,16 @@ const MentoringSessions = () => {
     : [];
 
   const loadTeamsForClass = async (classId) => {
-    if (!classId) {
+    if (!classId || !classFeatureFlags.teamManagement) {
       setClassTeams([]);
       return;
     }
 
     try {
       const res = await classApi.getTeams(classId);
-      const teamsData = res.data?.teams || res.teams || res.data || [];
-      const selectedClass = myClasses.find(cls => toId(cls._id) === toId(classId));
-      const isClassMentor = selectedClass && selectedClass.mentorIds && selectedClass.mentorIds.some(m => toId(m) === toId(user?._id));
-      const visibleTeams = user?.role === 'MENTOR'
-        ? teamsData.filter(team => toId(team?.mentorId) === toId(user?._id) || isClassMentor)
-        : teamsData;
+      const rawTeams = unwrapApiData(res) || [];
+      const teamsData = (Array.isArray(rawTeams) ? rawTeams : []).map(normalizeManagedTeam);
+      const visibleTeams = teamsData;
       const seen = new Set();
       setClassTeams((Array.isArray(visibleTeams) ? visibleTeams : []).filter(team => {
         const id = toId(team?._id);
@@ -102,7 +102,7 @@ const MentoringSessions = () => {
           list = mRes.data?.sessions || mRes.sessions || mRes.data || [];
         }
 
-        try {
+        if (classFeatureFlags.studentSelfService) try {
           const classesRes = await classApi.getMyClasses();
           accessibleClasses = classesRes.data?.classes || classesRes.classes || classesRes.data || [];
         } catch (classesErr) {
@@ -113,7 +113,7 @@ const MentoringSessions = () => {
         const [sessionsRes, classesRes, teamsRes] = await Promise.allSettled([
           mentoringApi.getAllSessions(),
           classApi.getAll(),
-          teamApi.getAll()
+          classFeatureFlags.teamManagement ? teamApi.getAll() : Promise.resolve({ data: [] })
         ]);
 
         if (sessionsRes.status === 'fulfilled') {
@@ -122,10 +122,10 @@ const MentoringSessions = () => {
         }
 
         const classesData = classesRes.status === 'fulfilled'
-          ? (classesRes.value.data?.classes || classesRes.value.classes || classesRes.value.data || [])
+          ? (unwrapApiData(classesRes.value)?.items || []).map(toClassViewModel)
           : [];
         const teamsData = teamsRes.status === 'fulfilled'
-          ? (teamsRes.value.data?.teams || teamsRes.value.teams || teamsRes.value.data || [])
+          ? (Array.isArray(unwrapApiData(teamsRes.value)) ? unwrapApiData(teamsRes.value) : []).map(normalizeManagedTeam)
           : [];
 
         if (user?.role === 'LECTURER' || user?.role === 'LECTURE') {
@@ -133,27 +133,18 @@ const MentoringSessions = () => {
           const lecturerClassIds = new Set(accessibleClasses.map(c => toId(c._id)));
           filteredTeams = teamsData.filter(t => lecturerClassIds.has(toId(t.classId)) || toId(t.lectureId) === toId(user?._id));
         } else if (user?.role === 'MENTOR') {
-          const classAssignedClassIds = new Set(
-            classesData
-              .filter(c => c.mentorIds && c.mentorIds.some(m => toId(m) === toId(user?._id)))
-              .map(c => toId(c._id))
-          );
           const teamAssignedClassIds = new Set(
-            teamsData
-              .filter(t => toId(t.mentorId) === toId(user?._id))
-              .map(t => toId(t.classId))
+            teamsData.map(t => toId(t.classId))
           );
-          const allAccessibleClassIds = new Set([...classAssignedClassIds, ...teamAssignedClassIds]);
-
-          accessibleClasses = classesData.filter(c => allAccessibleClassIds.has(toId(c._id)));
+          accessibleClasses = classesData.filter(c => teamAssignedClassIds.has(toId(c._id)));
+          if (accessibleClasses.length === 0) {
+            accessibleClasses = [...teamAssignedClassIds].map(classId => ({ _id: classId, classCode: 'Assigned class' }));
+          }
           const mentorClassIds = new Set(accessibleClasses.map(c => toId(c._id)));
 
-          filteredTeams = teamsData.filter(t =>
-            mentorClassIds.has(toId(t.classId)) ||
-            toId(t.mentorId) === toId(user?._id)
-          );
+          filteredTeams = teamsData.filter(t => mentorClassIds.has(toId(t.classId)));
 
-          if (filteredTeams.length === 0 && mentorClassIds.size > 0) {
+          if (classFeatureFlags.teamManagement && filteredTeams.length === 0 && mentorClassIds.size > 0) {
             const classTeamResults = await Promise.allSettled(
               [...mentorClassIds].map(classId => classApi.getTeams(classId))
             );

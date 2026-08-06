@@ -30,6 +30,11 @@ public class TeamMemberConfiguration : IEntityTypeConfiguration<TeamMember>
             .HasMaxLength(20)
             .IsRequired();
 
+        builder.Property(tm => tm.CountsTowardActiveTeam)
+            .HasColumnName("counts_toward_active_team")
+            .HasDefaultValue(true)
+            .IsRequired();
+
         builder.Property(tm => tm.JoinedAt)
             .HasColumnName("joined_at")
             .IsRequired();
@@ -39,7 +44,12 @@ public class TeamMemberConfiguration : IEntityTypeConfiguration<TeamMember>
 
         // Unique index: Enforce that a ClassStudent (student in a class) can only be in ONE team in that class
         builder.HasIndex(tm => new { tm.ClassId, tm.StudentId })
-            .IsUnique();
+            .IsUnique()
+            .HasFilter("counts_toward_active_team = true");
+
+        builder.HasIndex(tm => tm.TeamId)
+            .IsUnique()
+            .HasFilter("role_in_team = 'Leader' AND counts_toward_active_team = true");
 
         // Relationships configuration
         builder.HasOne(tm => tm.Team)

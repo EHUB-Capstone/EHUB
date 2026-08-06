@@ -54,6 +54,9 @@ public class MentorAssignmentConfiguration : IEntityTypeConfiguration<MentorAssi
         builder.HasIndex(ma => ma.AssignedAt);
         builder.HasIndex(ma => new { ma.MentorProfileId, ma.TeamId, ma.Status });
         builder.HasIndex(ma => new { ma.TeamId, ma.Status });
+        builder.HasIndex(ma => ma.TeamId)
+            .IsUnique()
+            .HasFilter("status = 'Active' AND is_deleted = false");
 
         // Audit & Soft Delete properties configuration
         builder.Property(ma => ma.CreatedAt).HasColumnName("created_at").IsRequired();

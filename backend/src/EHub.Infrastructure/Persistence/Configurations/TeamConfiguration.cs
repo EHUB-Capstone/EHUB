@@ -27,23 +27,25 @@ public class TeamConfiguration : IEntityTypeConfiguration<Team>
             .HasMaxLength(100)
             .IsRequired();
 
+        builder.Property(t => t.Description)
+            .HasColumnName("description")
+            .HasMaxLength(1_000);
+
         builder.Property(t => t.Status)
             .HasColumnName("status")
             .HasConversion<string>()
             .HasMaxLength(20)
             .IsRequired();
 
-        builder.Property(t => t.LeaderId)
-            .HasColumnName("leader_id");
-
-        builder.Property(t => t.MentorId)
-            .HasColumnName("mentor_id");
-
         builder.Property(t => t.CreatedById)
             .HasColumnName("created_by_id");
 
         builder.Property(t => t.ArchivedAt)
             .HasColumnName("archived_at");
+
+        builder.Property(t => t.Version)
+            .IsRowVersion()
+            .HasColumnName("xmin");
 
         // Indexes & Constraints
         builder.HasIndex(t => new { t.ClassId, t.TeamCode })
@@ -75,14 +77,5 @@ public class TeamConfiguration : IEntityTypeConfiguration<Team>
             .HasForeignKey(t => t.CreatedById)
             .OnDelete(DeleteBehavior.Restrict);
 
-        builder.HasOne<User>()
-            .WithMany()
-            .HasForeignKey(t => t.MentorId)
-            .OnDelete(DeleteBehavior.Restrict);
-
-        builder.HasOne<Student>()
-            .WithMany()
-            .HasForeignKey(t => t.LeaderId)
-            .OnDelete(DeleteBehavior.Restrict);
     }
 }

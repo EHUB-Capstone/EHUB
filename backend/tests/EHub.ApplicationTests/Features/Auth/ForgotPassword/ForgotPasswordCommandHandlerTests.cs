@@ -86,8 +86,8 @@ public class ForgotPasswordCommandHandlerTests
         // Assert
         Assert.True(result.IsSuccess);
         await _passwordResetTokenRepository.Received(1).MarkActiveTokensAsUsedByUserIdAsync(user.Id, Arg.Any<DateTime>(), Arg.Any<CancellationToken>());
-        await _passwordResetTokenRepository.Received(1).AddAsync(Arg.Is<PasswordResetToken>(t => t.UserId == user.Id && t.TokenHash == "hashed-token"), Arg.Any<CancellationToken>());
-        await _emailService.Received(1).SendPasswordResetEmailAsync(user.Email, user.FullName, Arg.Any<string>(), Arg.Any<DateTime>(), Arg.Any<CancellationToken>());
+        await _passwordResetTokenRepository.Received(1).AddAsync(Arg.Is<PasswordResetToken>(t => t != null && t.UserId == user.Id && t.TokenHash == "hashed-token"), Arg.Any<CancellationToken>());
+        await _emailService.Received(1).SendPasswordResetEmailAsync(user.Email!, user.FullName, Arg.Any<string>(), Arg.Any<DateTime>(), Arg.Any<CancellationToken>());
         await _unitOfWork.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
     }
 }

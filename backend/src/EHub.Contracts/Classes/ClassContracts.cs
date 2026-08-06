@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Text.Json.Serialization;
 
 namespace EHub.Contracts.Classes;
 
@@ -31,13 +32,24 @@ public sealed class ClassResponse
     public Guid? PrimaryLecturerId { get; init; }
     public string? PrimaryLecturerName { get; init; }
     public string? PrimaryLecturerEmail { get; init; }
+    // Default room. A schedule slot may override it with its own Room value.
     public string? Room { get; init; }
-    public string? ScheduleJson { get; init; }
+    public IReadOnlyCollection<ClassScheduleSlotDto> Schedules { get; init; } = Array.Empty<ClassScheduleSlotDto>();
     public bool IsEnrollmentMajorLocked { get; init; }
     public string Status { get; init; } = string.Empty;
     public int StudentCount { get; init; }
     public int TeamCount { get; init; }
+    public IReadOnlyCollection<ClassMentorSummaryDto> Mentors { get; init; } = Array.Empty<ClassMentorSummaryDto>();
     public DateTime CreatedAtUtc { get; init; }
+    public string RowVersion { get; init; } = string.Empty;
+}
+
+public sealed class ClassMentorSummaryDto
+{
+    public Guid MentorProfileId { get; init; }
+    public Guid UserId { get; init; }
+    public string FullName { get; init; } = string.Empty;
+    public string Email { get; init; } = string.Empty;
 }
 
 public sealed class ClassListResponse
@@ -67,10 +79,8 @@ public sealed class CreateBulkClassesRequest
     public int? Year { get; init; }
     public int StartClassIndex { get; init; } = 1;
     public int Quantity { get; init; } = 1;
-    public int? Count { get; init; }
     public IReadOnlyCollection<int>? ClassIndices { get; init; }
     public Guid? PrimaryLecturerId { get; init; }
-    public IReadOnlyCollection<Guid>? LecturerIds { get; init; }
 }
 
 public sealed class BulkClassPreviewItem
@@ -94,25 +104,57 @@ public sealed class BulkClassPreviewResponse
 
 public sealed class UpdateClassRequest
 {
-    public Guid? PrimaryLecturerId { get; init; }
-    public string? Room { get; init; }
+    private string? _room;
+
+    public string? Room
+    {
+        get => _room;
+        init
+        {
+            _room = value;
+            IsRoomSpecified = true;
+        }
+    }
+
+    [JsonIgnore]
+    public bool IsRoomSpecified { get; private set; }
+
+    public string RowVersion { get; init; } = string.Empty;
 }
 
 public sealed class ClassScheduleSlotDto
 {
     public DayOfWeek DayOfWeek { get; init; }
     public int SlotNumber { get; init; }
+    // Null means use the class default Room.
     public string? Room { get; init; }
 }
 
 public sealed class UpdateClassScheduleRequest
 {
-    public IReadOnlyCollection<ClassScheduleSlotDto> Schedules { get; init; } = Array.Empty<ClassScheduleSlotDto>();
+    // Null/missing is invalid; an explicit empty array intentionally clears the schedule.
+    public IReadOnlyCollection<ClassScheduleSlotDto>? Schedules { get; init; }
+    public string RowVersion { get; init; } = string.Empty;
 }
 
 public sealed class UpdateTeachingAssignmentRequest
 {
-    public Guid? PrimaryLecturerId { get; init; }
+    private Guid? _primaryLecturerId;
+
+    public Guid? PrimaryLecturerId
+    {
+        get => _primaryLecturerId;
+        init
+        {
+            _primaryLecturerId = value;
+            IsPrimaryLecturerIdSpecified = true;
+        }
+    }
+
+    [JsonIgnore]
+    public bool IsPrimaryLecturerIdSpecified { get; private set; }
+
+    public string RowVersion { get; init; } = string.Empty;
 }
 
 public sealed class ClassStudentDto
@@ -122,6 +164,8 @@ public sealed class ClassStudentDto
     public string FullName { get; init; } = string.Empty;
     public string Email { get; init; } = string.Empty;
     public string? MajorCode { get; init; }
+    public string? ProfileMajorCode { get; init; }
+    public string MajorVerificationStatus { get; init; } = "Unverified";
     public string? MemberCode { get; init; }
     public string EnrollmentStatus { get; init; } = string.Empty;
     public Guid? TeamId { get; init; }
@@ -158,10 +202,86 @@ public sealed class AddStudentToClassRequest
 
 public sealed class UpdateClassStudentRequest
 {
+    public string MajorCode { get; init; } = string.Empty;
+    public string Reason { get; init; } = string.Empty;
+}
+
+public sealed class ExportClassRosterRequest
+{
+    public string Scope { get; init; } = "Active";
+    public string? Search { get; init; }
+    public string? MajorCode { get; init; }
+    public string? Status { get; init; }
+}
+
+public sealed class EnrollmentMajorLockResponse
+{
+    public Guid ClassId { get; init; }
+    public bool IsLocked { get; init; }
+}
+
+public sealed class ChangeClassLifecycleRequest
+{
+    public string RowVersion { get; init; } = string.Empty;
+    public string Reason { get; init; } = string.Empty;
+}
+
+public sealed class ClassLifecycleResponse
+{
+    public Guid ClassId { get; init; }
+    public string Status { get; init; } = string.Empty;
+    public DateTime? ArchivedAtUtc { get; init; }
+    public string RowVersion { get; init; } = string.Empty;
+}
+
+public sealed class ClassAuditLogDto
+{
+    public Guid Id { get; init; }
+    public string Action { get; init; } = string.Empty;
+    public Guid PerformedByUserId { get; init; }
+    public string PerformedByName { get; init; } = string.Empty;
+    public DateTime OccurredAtUtc { get; init; }
+    public string? DetailsJson { get; init; }
+}
+
+public sealed class ClassAuditLogListResponse
+{
+    public IReadOnlyCollection<ClassAuditLogDto> Items { get; init; } = Array.Empty<ClassAuditLogDto>();
+    public int TotalCount { get; init; }
+    public int Page { get; init; }
+    public int PageSize { get; init; }
+    public int TotalPages { get; init; }
+}
+
+public sealed class ChatMembershipSyncResponse
+{
+    public Guid ClassId { get; init; }
+    public int GroupsCreated { get; init; }
+    public int MembershipsAdded { get; init; }
+    public int MembershipsReactivated { get; init; }
+    public int MembershipsEnded { get; init; }
+    public bool IsReadOnly { get; init; }
+}
+
+public sealed class MajorVerificationRowDto
+{
+    public int? RowNumber { get; init; }
+    public Guid? StudentId { get; init; }
+    public string RollNumber { get; init; } = string.Empty;
     public string FullName { get; init; } = string.Empty;
     public string Email { get; init; } = string.Empty;
-    public string MajorCode { get; init; } = string.Empty;
-    public string? EnrollmentStatus { get; init; }
+    public string? MajorInFile { get; init; }
+    public string? MajorInDb { get; init; }
+    public string Status { get; init; } = string.Empty;
+    public string? Message { get; init; }
+}
+
+public sealed class VerifyClassMajorsResponse
+{
+    public IReadOnlyCollection<MajorVerificationRowDto> Matched { get; init; } = Array.Empty<MajorVerificationRowDto>();
+    public IReadOnlyCollection<MajorVerificationRowDto> Mismatched { get; init; } = Array.Empty<MajorVerificationRowDto>();
+    public IReadOnlyCollection<MajorVerificationRowDto> Missing { get; init; } = Array.Empty<MajorVerificationRowDto>();
+    public IReadOnlyCollection<MajorVerificationRowDto> NotFound { get; init; } = Array.Empty<MajorVerificationRowDto>();
 }
 
 // ─── GIAI ĐOẠN 5: EXCEL IMPORT & EXPORT CONTRACTS ──────────────────────────────
@@ -198,4 +318,13 @@ public sealed class ImportStudentsCommitResponse
     public int UpdatedCount { get; init; }
     public int SkippedCount { get; init; }
     public int ErrorCount { get; init; }
+    public IReadOnlyCollection<ImportStudentCommitErrorDto> Errors { get; init; } = Array.Empty<ImportStudentCommitErrorDto>();
+}
+
+public sealed class ImportStudentCommitErrorDto
+{
+    public int RowNumber { get; init; }
+    public string StudentCode { get; init; } = string.Empty;
+    public string ErrorCode { get; init; } = string.Empty;
+    public string ErrorMessage { get; init; } = string.Empty;
 }

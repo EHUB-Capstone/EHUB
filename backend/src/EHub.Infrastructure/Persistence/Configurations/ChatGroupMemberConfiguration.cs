@@ -51,8 +51,12 @@ public class ChatGroupMemberConfiguration : IEntityTypeConfiguration<ChatGroupMe
         builder.HasIndex(m => m.StudentId);
         builder.HasIndex(m => m.Role);
         builder.HasIndex(m => m.IsActive);
-        builder.HasIndex(m => new { m.ChatGroupId, m.UserId });
-        builder.HasIndex(m => new { m.ChatGroupId, m.StudentId });
+        builder.HasIndex(m => new { m.ChatGroupId, m.UserId })
+            .IsUnique()
+            .HasFilter("user_id IS NOT NULL AND is_deleted = false");
+        builder.HasIndex(m => new { m.ChatGroupId, m.StudentId })
+            .IsUnique()
+            .HasFilter("student_id IS NOT NULL AND is_deleted = false");
 
         // Check constraints
         builder.ToTable(t => t.HasCheckConstraint("CK_ChatGroupMember_SingleMemberType", 

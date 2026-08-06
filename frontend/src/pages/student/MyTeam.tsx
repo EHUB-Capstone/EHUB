@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Users, Shield, MessageSquare, AlertCircle, Calendar, Star, Loader2, Sparkles } from 'lucide-react';
@@ -6,6 +5,8 @@ import toast from 'react-hot-toast';
 import { classApi } from '../../api/classApi';
 import EmptyState from '../../components/ui/EmptyState';
 import { getDisplayTeamName } from '../../utils/teamDisplay';
+import { unwrapApiData } from '../../utils/classMappers';
+import { getTeamMembers, normalizeManagedTeam } from '../../utils/teamManagement';
 
 const majorColor = (major) => {
   const palette = [
@@ -30,7 +31,13 @@ export default function MyTeam() {
     const fetchTeam = async () => {
       try {
         const res = await classApi.getMyTeam();
-        setData(res?.data || res || null);
+        const payload = unwrapApiData<any>(res as any);
+        if (!payload?.team) {
+          setData(payload || null);
+        } else {
+          const team = normalizeManagedTeam(payload.team);
+          setData({ ...payload, team, members: getTeamMembers(team) });
+        }
       } catch (err) {
         toast.error(err?.message || 'Failed to load your team details');
       } finally {
@@ -54,8 +61,8 @@ export default function MyTeam() {
   const cls       = data?.class;
   const members   = Array.isArray(data?.members) ? data.members : [];
   const chatGroup = data?.chatGroup || data?.team?.chatGroupId || data?.team?.chatGroup;
-  const lecturer  = team?.lectureId;
-  const mentor    = team?.mentorId;
+  const lecturer  = cls?.lectureId;
+  const mentor    = team?.currentMentorAssignment?.mentor;
   const displayTeamName = getDisplayTeamName(team) || 'Unnamed Team';
 
   if (!team) {
@@ -228,10 +235,10 @@ export default function MyTeam() {
             {mentor ? (
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full bg-primary-100 flex items-center justify-center text-primary font-bold text-sm shrink-0">
-                  {mentor.name?.charAt(0)?.toUpperCase() || 'M'}
+                  {mentor.fullName?.charAt(0)?.toUpperCase() || 'M'}
                 </div>
                 <div className="min-w-0">
-                  <p className="font-bold text-slate-800 text-sm truncate">{mentor.name}</p>
+                  <p className="font-bold text-slate-800 text-sm truncate">{mentor.fullName}</p>
                   <p className="text-xs text-slate-400 truncate mt-0.5">{mentor.email}</p>
                 </div>
               </div>

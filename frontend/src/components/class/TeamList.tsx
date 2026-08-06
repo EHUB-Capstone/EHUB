@@ -29,6 +29,9 @@ interface TeamListProps {
   onEdit?: (team: ManagedTeam) => void;
   onDelete?: (team: ManagedTeam) => void;
   onReview?: (team: ManagedTeam) => void;
+  onRevise?: (team: ManagedTeam) => void;
+  onProjectDirection?: (team: ManagedTeam) => void;
+  onCancelProposal?: (team: ManagedTeam) => void;
   onRefresh?: () => void | Promise<void>;
 }
 
@@ -37,6 +40,9 @@ const statusStyles: Record<string, string> = {
   APPROVED: 'bg-green-100 text-green-700',
   PENDING: 'bg-amber-100 text-amber-700',
   NEEDS_REVISION: 'bg-orange-100 text-orange-700',
+  NEEDSREVISION: 'bg-orange-100 text-orange-700',
+  DRAFT: 'bg-slate-100 text-slate-600',
+  CANCELLED: 'bg-slate-100 text-slate-600',
   REJECTED: 'bg-red-100 text-red-700',
   ARCHIVED: 'bg-slate-100 text-slate-600',
 };
@@ -64,6 +70,9 @@ export default function TeamList({
   onEdit,
   onDelete,
   onReview,
+  onRevise,
+  onProjectDirection,
+  onCancelProposal,
 }: TeamListProps) {
   const safeTeams = Array.isArray(teams) ? teams : [];
 
@@ -105,6 +114,9 @@ export default function TeamList({
               onEdit={onEdit}
               onDelete={onDelete}
               onReview={onReview}
+              onRevise={onRevise}
+              onProjectDirection={onProjectDirection}
+              onCancelProposal={onCancelProposal}
             />
           ))}
         </div>
@@ -122,6 +134,9 @@ interface TeamCardProps {
   onEdit?: (team: ManagedTeam) => void;
   onDelete?: (team: ManagedTeam) => void;
   onReview?: (team: ManagedTeam) => void;
+  onRevise?: (team: ManagedTeam) => void;
+  onProjectDirection?: (team: ManagedTeam) => void;
+  onCancelProposal?: (team: ManagedTeam) => void;
 }
 
 function TeamCard({
@@ -133,6 +148,9 @@ function TeamCard({
   onEdit,
   onDelete,
   onReview,
+  onRevise,
+  onProjectDirection,
+  onCancelProposal,
 }: TeamCardProps) {
   const navigate = useNavigate();
   const [expanded, setExpanded] = useState(false);
@@ -141,7 +159,10 @@ function TeamCard({
   const leaderId = entityId(team.leaderId);
   const status = String(team.status || 'ACTIVE').toUpperCase();
   const teamInitial = team.teamName.trim().charAt(0).toUpperCase() || 'T';
-  const isPending = status === 'PENDING' || status === 'NEEDS_REVISION';
+  const isPending = status === 'PENDING';
+  const needsRevision = status === 'NEEDSREVISION' || status === 'NEEDS_REVISION';
+  const currentStudentIsMember = Boolean(currentStudentId && members.some(member => member._id === currentStudentId));
+  const canOpenTeamWorkspace = canManageInfo || currentStudentIsMember;
 
   const requestDelete = () => {
     if (!onDelete) return;
@@ -165,8 +186,10 @@ function TeamCard({
 
           <div className="flex shrink-0 items-center gap-1">
             {isPending && onReview && <button type="button" onClick={() => onReview(team)} className="rounded-lg bg-amber-50 px-2.5 py-1.5 text-xs font-semibold text-amber-700 hover:bg-amber-100">Review</button>}
-            {canManageInfo && onEdit && <button type="button" onClick={() => onEdit(team)} className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-primary-50 hover:text-primary" aria-label={`Edit ${team.teamName}`} title="Edit team"><Pencil className="h-4 w-4" /></button>}
-            {canDelete && onDelete && <button type="button" onClick={requestDelete} className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-300 hover:bg-red-50 hover:text-red-500" aria-label={`Delete ${team.teamName}`} title="Delete team"><Trash2 className="h-4 w-4" /></button>}
+            {needsRevision && onRevise && <button type="button" onClick={() => onRevise(team)} className="rounded-lg bg-orange-50 px-2.5 py-1.5 text-xs font-semibold text-orange-700 hover:bg-orange-100">Revise</button>}
+            {team.isProposal && ['PENDING', 'NEEDSREVISION', 'NEEDS_REVISION', 'DRAFT'].includes(status) && onCancelProposal && <button type="button" onClick={() => onCancelProposal(team)} className="rounded-lg bg-red-50 px-2.5 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-100">Cancel</button>}
+            {!team.isProposal && canManageInfo && onEdit && <button type="button" onClick={() => onEdit(team)} className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-primary-50 hover:text-primary" aria-label={`Edit ${team.teamName}`} title="Edit team"><Pencil className="h-4 w-4" /></button>}
+            {!team.isProposal && canDelete && onDelete && <button type="button" onClick={requestDelete} className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-300 hover:bg-red-50 hover:text-red-500" aria-label={`Delete ${team.teamName}`} title="Delete team"><Trash2 className="h-4 w-4" /></button>}
           </div>
         </div>
 
@@ -197,7 +220,7 @@ function TeamCard({
 
       {expanded && (
         <div className="border-t border-slate-100 bg-slate-50/50 p-4">
-          {team.rejectReason && (status === 'REJECTED' || status === 'NEEDS_REVISION') && (
+          {team.rejectReason && (status === 'REJECTED' || needsRevision) && (
             <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800"><strong>Review note:</strong> {team.rejectReason}</div>
           )}
 
@@ -229,7 +252,8 @@ function TeamCard({
               </div>
             )}
 
-            <button type="button" onClick={() => navigate(`/workspace/teams/${team._id}`)} className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:border-primary hover:text-primary">Open team workspace <ExternalLink className="h-4 w-4" /></button>
+            {!team.isProposal && canOpenTeamWorkspace && onProjectDirection && <button type="button" onClick={() => onProjectDirection(team)} className="flex w-full items-center justify-center gap-2 rounded-xl border border-secondary-200 bg-white px-4 py-2.5 text-sm font-semibold text-secondary hover:bg-secondary-50"><Lightbulb className="h-4 w-4" /> Project direction</button>}
+            {!team.isProposal && canOpenTeamWorkspace && <button type="button" onClick={() => navigate(`/workspace/teams/${team._id}`)} className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:border-primary hover:text-primary">Open team workspace <ExternalLink className="h-4 w-4" /></button>}
           </div>
         </div>
       )}

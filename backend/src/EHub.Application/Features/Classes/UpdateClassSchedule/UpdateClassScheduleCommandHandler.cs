@@ -1,10 +1,11 @@
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using EHub.Application.Common.Exceptions;
 using EHub.Application.Common.Interfaces.Persistence;
+using EHub.Application.Features.Classes.Common;
 using EHub.Contracts.Classes;
 using EHub.Domain.Entities;
 using EHub.Domain.Enums;
@@ -17,11 +18,14 @@ namespace EHub.Application.Features.Classes.UpdateClassSchedule;
 
 public sealed class UpdateClassScheduleCommandHandler : IUpdateClassScheduleCommandHandler
 {
+    private const string ScheduleChanged = "SCHEDULE_CHANGED";
     private readonly IApplicationDbContext _context;
+    private readonly IUnitOfWork _unitOfWork;
 
-    public UpdateClassScheduleCommandHandler(IApplicationDbContext context)
+    public UpdateClassScheduleCommandHandler(IApplicationDbContext context, IUnitOfWork unitOfWork)
     {
         _context = context;
+        _unitOfWork = unitOfWork;
     }
 
     public async Task<Result<ClassResponse>> HandleAsync(
@@ -31,142 +35,162 @@ public sealed class UpdateClassScheduleCommandHandler : IUpdateClassScheduleComm
         string currentUserRole,
         CancellationToken cancellationToken = default)
     {
-        // 1. Role Check
         var isAdmin = string.Equals(currentUserRole, SystemRoles.Admin, StringComparison.OrdinalIgnoreCase);
         var isLecturer = string.Equals(currentUserRole, SystemRoles.Lecturer, StringComparison.OrdinalIgnoreCase);
-
         if (!isAdmin && !isLecturer)
         {
-            return Result.Failure<ClassResponse>(
-                new Error("Classes.AccessDenied", "You do not have permission to update class schedule."));
+            return Failure(ErrorCodes.ClassAccessDenied, "You do not have permission to update class schedule.");
         }
 
-        // 2. Validation Slot Number & Day Of Week
-        foreach (var slot in request.Schedules)
+        var validationError = ClassScheduleRules.Validate(request.Schedules);
+        if (validationError != null)
         {
-            if (slot.SlotNumber is < 1 or > 4)
-            {
-                return Result.Failure<ClassResponse>(
-                    new Error("Classes.InvalidSlotNumber", "Slot number must be between 1 and 4."));
-            }
-
-            if (slot.DayOfWeek == DayOfWeek.Sunday)
-            {
-                return Result.Failure<ClassResponse>(
-                    new Error("Classes.InvalidDayOfWeek", "Classes cannot be scheduled on Sunday."));
-            }
+            return Failure(ErrorCodes.ClassValidationError, validationError);
         }
 
-        // 3. Duplicate Check inside the same request
-        var duplicateInRequest = request.Schedules
-            .GroupBy(s => new { s.DayOfWeek, s.SlotNumber })
-            .FirstOrDefault(g => g.Count() > 1);
-
-        if (duplicateInRequest != null)
+        if (!uint.TryParse(request.RowVersion, out var expectedVersion))
         {
-            return Result.Failure<ClassResponse>(
-                new Error("Classes.DuplicateSlotInRequest", $"Duplicate schedule slot on {duplicateInRequest.Key.DayOfWeek} (Slot {duplicateInRequest.Key.SlotNumber}) in your request."));
+            return Failure(ErrorCodes.ClassValidationError, "A valid rowVersion is required.");
         }
 
-        // 4. Fetch Target Class
+        try
+        {
+            return await _unitOfWork.ExecuteInSerializableTransactionAsync(
+                transactionCancellationToken => UpdateWithinTransactionAsync(
+                    classId,
+                    request,
+                    currentUserId,
+                    isLecturer,
+                    expectedVersion,
+                    transactionCancellationToken),
+                cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return Failure(ErrorCodes.ClassConcurrencyConflict, "The class was changed by another user. Reload and try again.");
+        }
+        catch (DbUpdateException)
+        {
+            return Failure(ErrorCodes.ClassScheduleConflict, "The schedule conflicted with another concurrent update. Reload and try again.");
+        }
+        catch (SerializableTransactionConflictException)
+        {
+            return Failure(ErrorCodes.ClassScheduleConflict, "The schedule conflicted with another concurrent update. Reload and try again.");
+        }
+    }
+
+    private async Task<Result<ClassResponse>> UpdateWithinTransactionAsync(
+        Guid classId,
+        UpdateClassScheduleRequest request,
+        Guid currentUserId,
+        bool isLecturer,
+        uint expectedVersion,
+        CancellationToken cancellationToken)
+    {
         var targetClass = await _context.Classes
-            .Include(c => c.Course)
-            .Include(c => c.Semester)
-            .Include(c => c.PrimaryLecturer)
-            .Include(c => c.ClassLecturers)
-            .FirstOrDefaultAsync(c => c.Id == classId, cancellationToken);
+            .Include(@class => @class.Course)
+            .Include(@class => @class.Semester)
+            .Include(@class => @class.PrimaryLecturer)
+            .FirstOrDefaultAsync(@class => @class.Id == classId, cancellationToken);
 
         if (targetClass == null)
         {
-            return Result.Failure<ClassResponse>(
-                new Error("Classes.NotFound", "The requested class was not found."));
+            return Failure(ErrorCodes.ClassNotFound, "The requested class was not found.");
         }
 
         if (targetClass.Status == ClassStatus.Archived)
         {
-            return Result.Failure<ClassResponse>(
-                new Error("Classes.ClassArchived", "Cannot update schedule of an archived class."));
+            return Failure(ErrorCodes.ClassArchived, "Cannot update schedule of an archived class.");
         }
 
-        if (isLecturer)
+        if (targetClass.Version != expectedVersion)
         {
-            var isAssigned = targetClass.PrimaryLecturerId == currentUserId ||
-                             targetClass.ClassLecturers.Any(cl => cl.LecturerId == currentUserId);
-
-            if (!isAssigned)
-            {
-                return Result.Failure<ClassResponse>(
-                    new Error("Classes.AccessDenied", "You can only update schedule for classes assigned to you."));
-            }
+            return Failure(ErrorCodes.ClassConcurrencyConflict, "The class was changed by another user. Reload and try again.");
         }
 
-        // 5. Query other active classes in the same semester for conflict check
-        var otherActiveClasses = await _context.Classes
+        if (isLecturer && targetClass.PrimaryLecturerId != currentUserId)
+        {
+            return Failure(ErrorCodes.ClassAccessDenied, "You can only update schedule for classes assigned to you.");
+        }
+
+        var normalizedSchedules = ClassScheduleRules.Normalize(request.Schedules!);
+        var otherClasses = await _context.Classes
             .AsNoTracking()
-            .Where(c => c.SemesterId == targetClass.SemesterId &&
-                        c.Id != targetClass.Id &&
-                        c.Status == ClassStatus.Active &&
-                        !string.IsNullOrEmpty(c.ScheduleJson))
+            .Where(@class =>
+                @class.SemesterId == targetClass.SemesterId &&
+                @class.Id != targetClass.Id &&
+                @class.Status != ClassStatus.Archived &&
+                @class.ScheduleJson != null)
+            .Select(@class => new
+            {
+                @class.ClassCode,
+                @class.PrimaryLecturerId,
+                @class.Room,
+                @class.ScheduleJson
+            })
             .ToListAsync(cancellationToken);
 
-        foreach (var slot in request.Schedules)
+        foreach (var slot in normalizedSchedules)
         {
-            var slotRoom = string.IsNullOrWhiteSpace(slot.Room) ? targetClass.Room : slot.Room.Trim();
-
-            foreach (var other in otherActiveClasses)
+            var slotRoom = NormalizeRoom(slot.Room, targetClass.Room);
+            foreach (var otherClass in otherClasses)
             {
-                if (string.IsNullOrEmpty(other.ScheduleJson)) continue;
-
-                List<ClassScheduleSlotDto>? otherSchedules = null;
-                try
+                foreach (var otherSlot in ClassScheduleRules.Deserialize(otherClass.ScheduleJson))
                 {
-                    otherSchedules = JsonSerializer.Deserialize<List<ClassScheduleSlotDto>>(other.ScheduleJson);
-                }
-                catch
-                {
-                    continue;
-                }
-
-                if (otherSchedules == null) continue;
-
-                foreach (var otherSlot in otherSchedules)
-                {
-                    if (otherSlot.DayOfWeek == slot.DayOfWeek && otherSlot.SlotNumber == slot.SlotNumber)
+                    if (otherSlot.DayOfWeek != slot.DayOfWeek || otherSlot.SlotNumber != slot.SlotNumber)
                     {
-                        // Check Lecturer Schedule Conflict
-                        if (targetClass.PrimaryLecturerId.HasValue &&
-                            other.PrimaryLecturerId == targetClass.PrimaryLecturerId)
-                        {
-                            return Result.Failure<ClassResponse>(
-                                new Error("Classes.ScheduleConflictLecturer",
-                                    $"Lecturer schedule conflict: Primary lecturer already teaches class '{other.ClassCode}' on {slot.DayOfWeek} Slot {slot.SlotNumber}."));
-                        }
+                        continue;
+                    }
 
-                        // Check Room Schedule Conflict
-                        var otherSlotRoom = string.IsNullOrWhiteSpace(otherSlot.Room) ? other.Room : otherSlot.Room.Trim();
-                        if (!string.IsNullOrEmpty(slotRoom) &&
-                            !string.IsNullOrEmpty(otherSlotRoom) &&
-                            string.Equals(slotRoom, otherSlotRoom, StringComparison.OrdinalIgnoreCase))
-                        {
-                            return Result.Failure<ClassResponse>(
-                                new Error("Classes.ScheduleConflictRoom",
-                                    $"Room schedule conflict: Room '{slotRoom}' is occupied by class '{other.ClassCode}' on {slot.DayOfWeek} Slot {slot.SlotNumber}."));
-                        }
+                    if (targetClass.PrimaryLecturerId.HasValue &&
+                        otherClass.PrimaryLecturerId == targetClass.PrimaryLecturerId)
+                    {
+                        return Failure(
+                            ErrorCodes.ClassScheduleConflict,
+                            $"Primary lecturer already teaches class '{otherClass.ClassCode}' on {slot.DayOfWeek} Slot {slot.SlotNumber}.");
+                    }
+
+                    var otherRoom = NormalizeRoom(otherSlot.Room, otherClass.Room);
+                    if (!string.IsNullOrEmpty(slotRoom) &&
+                        !string.IsNullOrEmpty(otherRoom) &&
+                        string.Equals(slotRoom, otherRoom, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return Failure(
+                            ErrorCodes.ClassScheduleConflict,
+                            $"Room '{slotRoom}' is occupied by class '{otherClass.ClassCode}' on {slot.DayOfWeek} Slot {slot.SlotNumber}.");
                     }
                 }
             }
         }
 
-        // Save ScheduleJson
-        targetClass.ScheduleJson = JsonSerializer.Serialize(request.Schedules);
+        var previousSchedules = ClassScheduleRules.Deserialize(targetClass.ScheduleJson);
+        targetClass.ScheduleJson = ClassScheduleRules.Serialize(normalizedSchedules);
+        targetClass.Status = ClassScheduleRules.DetermineOperationalStatus(targetClass.PrimaryLecturerId, targetClass.ScheduleJson);
         targetClass.UpdatedBy = currentUserId;
+
+        _context.ClassAuditLogs.Add(new ClassAuditLog
+        {
+            ClassId = targetClass.Id,
+            Action = ScheduleChanged,
+            PerformedByUserId = currentUserId,
+            OccurredAtUtc = DateTime.UtcNow,
+            DetailsJson = JsonSerializer.Serialize(new
+            {
+                PreviousSchedules = previousSchedules,
+                NewSchedules = normalizedSchedules
+            })
+        });
 
         await _context.SaveChangesAsync(cancellationToken);
 
-        var studentCount = await _context.ClassStudents.CountAsync(cs => cs.ClassId == targetClass.Id && cs.EnrollmentStatus == EnrollmentStatus.Active, cancellationToken);
-        var teamCount = await _context.Teams.CountAsync(t => t.ClassId == targetClass.Id && t.Status == TeamStatus.Active, cancellationToken);
+        var studentCount = await _context.ClassStudents.CountAsync(
+            enrollment => enrollment.ClassId == targetClass.Id && enrollment.EnrollmentStatus == EnrollmentStatus.Active,
+            cancellationToken);
+        var teamCount = await _context.Teams.CountAsync(
+            team => team.ClassId == targetClass.Id && team.Status == TeamStatus.Active,
+            cancellationToken);
 
-        var response = new ClassResponse
+        return Result.Success(new ClassResponse
         {
             Id = targetClass.Id,
             ClassCode = targetClass.ClassCode,
@@ -181,14 +205,22 @@ public sealed class UpdateClassScheduleCommandHandler : IUpdateClassScheduleComm
             PrimaryLecturerName = targetClass.PrimaryLecturer?.FullName,
             PrimaryLecturerEmail = targetClass.PrimaryLecturer?.Email,
             Room = targetClass.Room,
-            ScheduleJson = targetClass.ScheduleJson,
+            Schedules = normalizedSchedules,
             IsEnrollmentMajorLocked = targetClass.IsEnrollmentMajorLocked,
             Status = targetClass.Status.ToString(),
             StudentCount = studentCount,
             TeamCount = teamCount,
-            CreatedAtUtc = targetClass.CreatedAt
-        };
-
-        return Result.Success(response);
+            CreatedAtUtc = targetClass.CreatedAt,
+            RowVersion = targetClass.Version.ToString()
+        });
     }
+
+    private static string? NormalizeRoom(string? slotRoom, string? classRoom)
+    {
+        var room = string.IsNullOrWhiteSpace(slotRoom) ? classRoom : slotRoom;
+        return string.IsNullOrWhiteSpace(room) ? null : room.Trim();
+    }
+
+    private static Result<ClassResponse> Failure(string code, string message) =>
+        Result.Failure<ClassResponse>(new Error(code, message));
 }

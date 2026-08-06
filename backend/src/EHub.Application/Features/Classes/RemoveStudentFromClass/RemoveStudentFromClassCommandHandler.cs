@@ -3,6 +3,8 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using EHub.Application.Common.Interfaces.Persistence;
+using EHub.Application.Features.Classes.Common;
+using EHub.Domain.Entities;
 using EHub.Domain.Enums;
 using EHub.Shared.Constants;
 using EHub.Shared.Errors;
@@ -33,34 +35,30 @@ public sealed class RemoveStudentFromClassCommandHandler : IRemoveStudentFromCla
         if (!isAdmin && !isLecturer)
         {
             return Result.Failure(
-                new Error("Classes.AccessDenied", "You do not have permission to remove students from this class."));
+                new Error(ErrorCodes.ClassAccessDenied, "You do not have permission to remove students from this class."));
         }
 
         var targetClass = await _context.Classes
-            .Include(c => c.ClassLecturers)
             .FirstOrDefaultAsync(c => c.Id == classId, cancellationToken);
 
         if (targetClass == null)
         {
             return Result.Failure(
-                new Error("Classes.NotFound", "The requested class was not found."));
+                new Error(ErrorCodes.ClassNotFound, "The requested class was not found."));
         }
 
         if (targetClass.Status == ClassStatus.Archived)
         {
             return Result.Failure(
-                new Error("Classes.ClassArchived", "Cannot remove students from an archived class."));
+                new Error(ErrorCodes.ClassArchived, "Cannot remove students from an archived class."));
         }
 
         if (isLecturer)
         {
-            var isAssigned = targetClass.PrimaryLecturerId == currentUserId ||
-                             targetClass.ClassLecturers.Any(cl => cl.LecturerId == currentUserId);
-
-            if (!isAssigned)
+            if (targetClass.PrimaryLecturerId != currentUserId)
             {
                 return Result.Failure(
-                    new Error("Classes.AccessDenied", "You can only remove students from classes assigned to you."));
+                    new Error(ErrorCodes.ClassAccessDenied, "You can only remove students from classes assigned to you."));
             }
         }
 
@@ -72,36 +70,64 @@ public sealed class RemoveStudentFromClassCommandHandler : IRemoveStudentFromCla
         if (classStudent == null)
         {
             return Result.Failure(
-                new Error("Classes.StudentNotFound", "Student is not enrolled in this class."));
+                new Error(ErrorCodes.ClassStudentNotFound, "Student is not enrolled in this class."));
+        }
+
+        if (classStudent.EnrollmentStatus != EnrollmentStatus.Active)
+        {
+            return Result.Failure(
+                new Error(ErrorCodes.ClassValidationError, "Only an active enrollment can be dropped."));
         }
 
         // Team Safety Rule 1: Check if student is Team Leader of an active team
         var activeLeaderTeam = classStudent.TeamMembers
-            .FirstOrDefault(tm => tm.Team != null && tm.Team.Status == TeamStatus.Active && tm.RoleInTeam == TeamMemberRole.Leader);
+            .FirstOrDefault(tm => tm.CountsTowardActiveTeam && tm.Team != null && tm.Team.Status == TeamStatus.Active && tm.RoleInTeam == TeamMemberRole.Leader);
 
         if (activeLeaderTeam != null)
         {
             return Result.Failure(
-                new Error("Classes.StudentIsTeamLeader",
+                new Error(ErrorCodes.ClassStudentIsTeamLeader,
                     $"Cannot remove student because they are the leader of active team '{activeLeaderTeam.Team.TeamName}'. Please transfer leadership or update the team first."));
         }
 
         // Team Safety Rule 2: Check if student is a member of an active team
         var activeMemberTeam = classStudent.TeamMembers
-            .FirstOrDefault(tm => tm.Team != null && tm.Team.Status == TeamStatus.Active);
+            .FirstOrDefault(tm => tm.CountsTowardActiveTeam && tm.Team != null && tm.Team.Status == TeamStatus.Active);
 
         if (activeMemberTeam != null)
         {
             return Result.Failure(
-                new Error("Classes.StudentInActiveTeam",
+                new Error(ErrorCodes.ClassStudentInActiveTeam,
                     $"Cannot remove student because they are currently a member of active team '{activeMemberTeam.Team.TeamName}'. Please remove the student from the team first."));
         }
 
         // Soft Removal: Mark status as Dropped
         classStudent.EnrollmentStatus = EnrollmentStatus.Dropped;
+        classStudent.CountsTowardCourseSemesterLimit = false;
         classStudent.UpdatedAt = DateTime.UtcNow;
 
-        await _context.SaveChangesAsync(cancellationToken);
+        _context.ClassAuditLogs.Add(new ClassAuditLog
+        {
+            ClassId = classId,
+            Action = "STUDENT_ENROLLMENT_DROPPED",
+            PerformedByUserId = currentUserId,
+            OccurredAtUtc = DateTime.UtcNow,
+            DetailsJson = System.Text.Json.JsonSerializer.Serialize(new { StudentId = studentId })
+        });
+        ClassOutbox.Enqueue(_context, "Class.StudentEnrollmentDropped.v1", classId, new
+        {
+            StudentId = studentId
+        });
+
+        try
+        {
+            await _context.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return Result.Failure(
+                new Error(ErrorCodes.ClassConcurrencyConflict, "The enrollment changed concurrently. Refresh the roster and try again."));
+        }
 
         return Result.Success();
     }

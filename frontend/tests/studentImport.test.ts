@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { parseCsv, validateStudentRows } from '../src/utils/studentImport.ts';
+import {
+  importStudentsIntoCreatedClasses,
+  parseClassIndex,
+} from '../src/utils/bulkClassStudentImport.ts';
 
 const headers = ['StudentCode', 'FullName', 'Email', 'Major'];
 
@@ -63,6 +67,20 @@ test('prevents records that duplicate students already in the class', () => {
   ]);
 });
 
+test('rejects records when ClassCode in file does not match expected target class', () => {
+  const result = validateStudentRows(
+    [
+      ['StudentCode', 'FullName', 'Email', 'Major', 'ClassCode'],
+      ['SE170001', 'Nguyen Van An', 'an@fpt.edu.vn', 'SE', 'EXE101_4'],
+    ],
+    [],
+    'EXE101_2',
+  );
+
+  assert.equal(result.validRows.length, 0);
+  assert.match(result.invalidRows[0].errors[0], /Class code 'EXE101_4' in file does not match target class 'EXE101_2'/);
+});
+
 test('reports missing required template columns', () => {
   const result = validateStudentRows([
     ['StudentCode', 'FullName'],
@@ -79,4 +97,94 @@ test('parses quoted CSV values without shifting columns', () => {
   );
 
   assert.deepEqual(rows[1], ['SE170001', 'Nguyen, Van An', 'an@fpt.edu.vn', 'SE']);
+});
+
+test('parses the trailing class index from imported class codes', () => {
+  assert.equal(parseClassIndex('EXE101_8'), 8);
+  assert.equal(parseClassIndex('EXE101-12'), 12);
+  assert.equal(parseClassIndex('7'), 7);
+  assert.equal(parseClassIndex('EXE101'), null);
+  assert.equal(parseClassIndex(''), null);
+});
+
+test('reports every rejected bulk roster row instead of treating it as a successful import', async () => {
+  let commitCalled = false;
+  const summary = await importStudentsIntoCreatedClasses(
+    [{ id: 'class-8', classCode: 'EXE101_8', classIndex: 8 }],
+    [{
+      sourceRowNumber: 11,
+      classVal: 'EXE101_8',
+      studentCode: 'DE180225',
+      fullName: 'Thai Ngoc Linh',
+      email: 'linhtnde180225@fpt.edu.vn',
+      majorCode: '',
+    }],
+    {
+      previewImportStudents: async (_classId, formData) => {
+        assert.ok((formData.get('file') as Blob).size > 0);
+        return {
+          data: {
+            sessionId: '',
+            validRowsCount: 0,
+            rows: [{
+              rowNumber: 2,
+              studentCode: 'DE180225',
+              isValid: false,
+              errorMessage: "Student 'DE180225' is already enrolled in class 'EXE101_101' for the same course and semester.",
+            }],
+          },
+        };
+      },
+      commitImportStudents: async () => {
+        commitCalled = true;
+        return {};
+      },
+    },
+  );
+
+  assert.equal(commitCalled, false);
+  assert.equal(summary.insertedCount, 0);
+  assert.equal(summary.errorCount, 1);
+  assert.equal(summary.issues[0].rowNumber, 11);
+  assert.match(summary.issues[0].errorMessage, /EXE101_101/);
+});
+
+test('commits valid bulk roster rows through the preview session contract', async () => {
+  const summary = await importStudentsIntoCreatedClasses(
+    [{ id: 'class-8', classCode: 'EXE101_8', classIndex: 8 }],
+    [{
+      sourceRowNumber: 12,
+      classVal: 'EXE101_8',
+      studentCode: 'DE180226',
+      fullName: 'Doan Van B',
+      email: 'bdoan@fpt.edu.vn',
+      majorCode: 'SE',
+    }],
+    {
+      previewImportStudents: async () => ({
+        data: {
+          sessionId: 'session-88',
+          validRowsCount: 1,
+          rows: [{
+            rowNumber: 2,
+            studentCode: 'DE180226',
+            isValid: true,
+          }],
+        },
+      }),
+      commitImportStudents: async (_classId, payload) => {
+        assert.equal(payload.sessionId, 'session-88');
+        return {
+          data: {
+            enrolledCount: 1,
+            skippedCount: 0,
+            results: [{ studentCode: 'DE180226', status: 'Enrolled' }],
+          },
+        };
+      },
+    },
+  );
+
+  assert.equal(summary.insertedCount, 1);
+  assert.equal(summary.errorCount, 0);
 });

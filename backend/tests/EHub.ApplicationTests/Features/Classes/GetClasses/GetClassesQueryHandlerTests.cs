@@ -4,6 +4,7 @@ using EHub.Application.Common.Interfaces.Persistence;
 using EHub.Application.Features.Classes.GetClasses;
 using EHub.Contracts.Classes;
 using EHub.Shared.Constants;
+using EHub.Shared.Errors;
 using FluentAssertions;
 using NSubstitute;
 using Xunit;
@@ -34,7 +35,7 @@ public class GetClassesQueryHandlerTests
 
         // Assert
         result.IsFailure.Should().BeTrue();
-        result.Error.Code.Should().Be("Classes.InvalidPage");
+        result.Error.Code.Should().Be(ErrorCodes.ClassValidationError);
     }
 
     [Theory]
@@ -50,7 +51,7 @@ public class GetClassesQueryHandlerTests
 
         // Assert
         result.IsFailure.Should().BeTrue();
-        result.Error.Code.Should().Be("Classes.InvalidPageSize");
+        result.Error.Code.Should().Be(ErrorCodes.ClassValidationError);
     }
 
     [Fact]
@@ -64,6 +65,6 @@ public class GetClassesQueryHandlerTests
 
         // Assert
         result.IsFailure.Should().BeTrue();
-        result.Error.Code.Should().Be("Classes.AccessDenied");
+        result.Error.Code.Should().Be(ErrorCodes.ClassAccessDenied);
     }
 }

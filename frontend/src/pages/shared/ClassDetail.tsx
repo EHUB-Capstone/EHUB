@@ -1,37 +1,57 @@
-// @ts-nocheck
 import { useState, useEffect, useContext, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { motion } from 'framer-motion';
 import {
   ArrowLeft, GraduationCap, Users, BookOpen,
-  Upload, Download, UserPlus, Loader2, Calendar, Pencil, ShieldCheck, Lock, Unlock, Trash2, UserRoundCheck
+  Upload, Download, UserPlus, Loader2, Calendar, Pencil, ShieldCheck, Lock, Unlock, AlertTriangle,
+  Database, MessagesSquare, Archive, RotateCcw
 } from 'lucide-react';
 import { AuthContext } from '../../context/AuthContext';
 import { classApi } from '../../api/classApi';
-import { userApi } from '../../api/userApi';
 import LoadingSkeleton from '../../components/ui/LoadingSkeleton';
 import StudentTable from '../../components/class/StudentTable';
 import TeamList from '../../components/class/TeamList';
 import TeamManagementModal from '../../components/class/TeamManagementModal';
-import StudentAssignmentModal from '../../components/class/StudentAssignmentModal';
 import ImportStudentsModal from '../../components/class/ImportStudentsModal';
 import StudentTeamGeneratePanel from '../../components/class/StudentTeamGeneratePanel';
 import TeamSuggestionTooltip from '../../components/class/TeamSuggestionTooltip';
 import ReviewTeamProposalModal from '../../components/class/ReviewTeamProposalModal';
+import ProjectDirectionModal from '../../components/class/ProjectDirectionModal';
 import EditScheduleModal from '../../components/class/EditScheduleModal';
+import AssignLectureModal from '../../components/class/AssignLectureModal';
 import AssignMentorsModal from '../../components/class/AssignMentorsModal';
 import RenameClassModal from '../../components/class/RenameClassModal';
 import VerifyMajorModal from '../../components/class/VerifyMajorModal';
 import AddStudentModal from '../../components/class/AddStudentModal';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
-import { entityId, getTeamMemberIds } from '../../utils/teamManagement';
-import {
-  directoryRecordToStudent,
-  mergeAssignmentCandidates,
-  normalizeClassStudents,
-  studentBelongsToClass,
-} from '../../utils/studentAssignment';
+import { entityId, getTeamMemberIds, normalizeManagedTeam, normalizeTeamProposal } from '../../utils/teamManagement';
+import { classFeatureFlags } from '../../config/classFeatureFlags';
+import { parseApiError } from '../../utils/apiError';
+import { toClassViewModel, unwrapApiData } from '../../utils/classMappers';
+import { getClassLifecyclePresentation, isClassReadOnly } from '../../utils/classComponentPolicy';
+
+const classActionTone = {
+  neutral: 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-800',
+  primary: 'border-primary-200 bg-primary-50 text-primary hover:border-primary-300 hover:bg-primary-100',
+  secondary: 'border-secondary-200 bg-secondary-50 text-secondary hover:border-secondary-300 hover:bg-secondary-100 dark:hover:bg-secondary-900/30',
+  indigo: 'border-indigo-200 bg-indigo-50/70 text-indigo-600 hover:border-indigo-300 hover:bg-indigo-50 dark:border-indigo-800 dark:bg-indigo-950/30 dark:text-indigo-300',
+  success: 'border-green-200 bg-green-50 text-green-700 hover:border-green-300 hover:bg-green-100 dark:hover:bg-green-950/30',
+  danger: 'border-red-200 bg-red-50 text-red-600 hover:border-red-300 hover:bg-red-100 dark:hover:bg-red-950/30',
+};
+
+function ClassActionButton({ icon: Icon, tone = 'neutral', loading = false, children, className = '', ...props }) {
+  return (
+    <button
+      {...props}
+      aria-busy={loading || undefined}
+      className={`inline-flex min-h-8 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border px-2.5 py-1.5 text-xs font-semibold shadow-xs transition-all duration-150 hover:-translate-y-px hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/25 disabled:pointer-events-none disabled:opacity-50 ${classActionTone[tone]} ${className}`}
+    >
+      {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : Icon ? <Icon className="h-3.5 w-3.5" /> : null}
+      <span>{children}</span>
+    </button>
+  );
+}
 
 export default function ClassDetail() {
   const { id }    = useParams();
@@ -41,7 +61,15 @@ export default function ClassDetail() {
   const [cls,      setCls]      = useState(null);
   const [students, setStudents] = useState([]);
   const [teams,    setTeams]    = useState([]);
+  const [teamProposals, setTeamProposals] = useState([]);
   const [loading,  setLoading]  = useState(true);
+  const [rosterLoadError, setRosterLoadError] = useState('');
+  const [rosterPage, setRosterPage] = useState(1);
+  const [rosterPageSize] = useState(50);
+  const [rosterSearch, setRosterSearch] = useState('');
+  const [rosterMajor, setRosterMajor] = useState('');
+  const [rosterStatus, setRosterStatus] = useState('Active');
+  const [rosterMeta, setRosterMeta] = useState({ totalCount: 0, page: 1, pageSize: 50, totalPages: 1 });
   const [tab,      setTab]      = useState('students'); // 'students' | 'teams'
 
   // Selected students for team generation
@@ -52,24 +80,24 @@ export default function ClassDetail() {
   const [showTeamManagement, setShowTeamManagement] = useState(false);
   const [teamToEdit, setTeamToEdit] = useState(null);
   const [teamFormMemberIds, setTeamFormMemberIds] = useState([]);
-  const [showStudentAssignment, setShowStudentAssignment] = useState(false);
-  const [assignmentMode, setAssignmentMode] = useState('CLASS');
-  const [assignmentInitialStudentIds, setAssignmentInitialStudentIds] = useState([]);
-  const [assignmentCandidates, setAssignmentCandidates] = useState([]);
-  const [loadingAssignmentCandidates, setLoadingAssignmentCandidates] = useState(false);
   const [showAddStudent, setShowAddStudent] = useState(false);
   const [showEditSchedule, setShowEditSchedule] = useState(false);
+  const [showAssignLecturer, setShowAssignLecturer] = useState(false);
   const [showAssignMentors, setShowAssignMentors] = useState(false);
   const [showRename, setShowRename] = useState(false);
   const [showVerify, setShowVerify] = useState(false);
   const [reviewTeam, setReviewTeam] = useState(null);
+  const [directionTeam, setDirectionTeam] = useState(null);
   const [studentToDelete, setStudentToDelete] = useState(null);
+  const [studentToReEnroll, setStudentToReEnroll] = useState(null);
   const [backfilling, setBackfilling] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [togglingLock, setTogglingLock] = useState(false);
   const [removingStudent, setRemovingStudent] = useState(false);
+  const [reEnrollingStudent, setReEnrollingStudent] = useState(false);
   const [showDeleteClass, setShowDeleteClass] = useState(false);
   const [deletingClass, setDeletingClass] = useState(false);
+  const [lifecycleReason, setLifecycleReason] = useState('');
 
   const fetchData = useCallback(async () => {
     if (!id || id === 'undefined') {
@@ -78,13 +106,20 @@ export default function ClassDetail() {
       return;
     }
     setLoading(true);
+    setRosterLoadError('');
     try {
       const [classRes, studentRes] = await Promise.allSettled([
         classApi.getById(id),
-        classApi.getStudents(id, { pageSize: 200 }),
+        classApi.getStudents(id, {
+          page: rosterPage,
+          pageSize: rosterPageSize,
+          search: rosterSearch || undefined,
+          majorCode: rosterMajor || undefined,
+          status: rosterStatus || undefined,
+        }),
       ]);
 
-      const classData = classRes.status === 'fulfilled' ? (classRes.value?.data || classRes.value) : null;
+      const classData = classRes.status === 'fulfilled' ? unwrapApiData(classRes.value) : null;
       if (!classData) {
         toast.error('Failed to load class');
         return null;
@@ -92,39 +127,29 @@ export default function ClassDetail() {
 
       const rawClass = classData.class || classData;
       const currentClassId = String(id || rawClass.id || rawClass._id || '');
-
-      let parsedSchedule = rawClass.schedule;
-      if (!parsedSchedule && rawClass.scheduleJson) {
-        try {
-          parsedSchedule = typeof rawClass.scheduleJson === 'string' ? JSON.parse(rawClass.scheduleJson) : rawClass.scheduleJson;
-        } catch {
-          parsedSchedule = null;
-        }
-      }
-
+      const classViewModel = toClassViewModel(rawClass);
       const normalizedClass = {
-        ...rawClass,
-        _id: rawClass.id || rawClass._id || currentClassId,
-        classCode: rawClass.classCode,
-        subjectCode: rawClass.subjectCode,
-        subjectName: rawClass.subjectName,
-        semester: rawClass.semesterCode || rawClass.semester,
-        year: rawClass.year,
-        lectureId: rawClass.primaryLecturerId ? {
-          _id: rawClass.primaryLecturerId,
-          name: rawClass.primaryLecturerName,
-          email: rawClass.primaryLecturerEmail
-        } : (rawClass.lectureId || null),
-        schedule: parsedSchedule
+        ...classViewModel,
+        _id: classViewModel._id || currentClassId,
+        schedule: classViewModel.schedules,
+        isMajorLocked: rawClass.isEnrollmentMajorLocked ?? rawClass.isMajorLocked ?? false,
       };
       setCls(normalizedClass);
 
       let rawStudents = [];
       if (studentRes.status === 'fulfilled') {
-        const sData = studentRes.value?.data || studentRes.value;
+        const sData = unwrapApiData(studentRes.value);
         rawStudents = sData.items || sData.students || sData.data || (Array.isArray(sData) ? sData : []);
+        setRosterMeta({
+          totalCount: sData.totalCount ?? rawStudents.length,
+          page: sData.page ?? rosterPage,
+          pageSize: sData.pageSize ?? rosterPageSize,
+          totalPages: Math.max(1, sData.totalPages ?? 1),
+        });
       } else if (rawClass.students) {
         rawStudents = rawClass.students;
+      } else {
+        setRosterLoadError(parseApiError(studentRes.reason, 'Failed to load the class roster.').message);
       }
 
       const mappedStudents = rawStudents.map((s, idx) => ({
@@ -135,6 +160,7 @@ export default function ClassDetail() {
         email: s.email,
         major: s.majorCode || s.major,
         majorCode: s.majorCode || s.major,
+        majorVerificationStatus: s.majorVerificationStatus || 'Unverified',
         enrollmentStatus: s.enrollmentStatus || 'Active',
         classId: currentClassId,
         teamId: s.teamId || null,
@@ -144,22 +170,25 @@ export default function ClassDetail() {
 
       setStudents(mappedStudents);
 
-      let rawTeams = rawClass.teams || [];
-      if (rawTeams.length === 0) {
+      let rawTeams = [];
+      let rawProposals = [];
+      if (classFeatureFlags.teamManagement) {
         try {
-          const teamRes = await classApi.getTeams(id);
-          const tData = teamRes?.data || teamRes;
-          rawTeams = tData.teams || tData.items || (Array.isArray(tData) ? tData : []);
+          const [teamRes, proposalRes] = await Promise.all([
+            classApi.getTeams(id),
+            classApi.getTeamProposals(id),
+          ]);
+          const tData = unwrapApiData(teamRes);
+          const pData = unwrapApiData(proposalRes);
+          rawTeams = Array.isArray(tData) ? tData : [];
+          rawProposals = Array.isArray(pData) ? pData : [];
         } catch {
-          // ignore
+          // Class and roster remain usable if team data cannot be loaded.
         }
       }
 
-      setTeams(rawTeams.map(team => ({
-        ...team,
-        _id: team.id || team._id,
-        classId: entityId(team.classId) || currentClassId,
-      })));
+      setTeams(rawTeams.map(normalizeManagedTeam));
+      setTeamProposals(rawProposals.map(normalizeTeamProposal));
 
       return classData;
     } catch (err) {
@@ -168,27 +197,12 @@ export default function ClassDetail() {
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id, rosterMajor, rosterPage, rosterPageSize, rosterSearch, rosterStatus]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchData();
   }, [fetchData]);
-
-  const handleImported = (importedStudents = []) => {
-    const clientStudents = importedStudents.map((student, index) => ({
-      _id: `frontend-import-${Date.now()}-${index}`,
-      rollNumber: student.studentCode,
-      fullName: student.fullName,
-      email: student.email,
-      major: student.major || null,
-      classId: id,
-      teamId: null,
-      source: 'IMPORTED',
-      importedOnFrontend: true,
-    }));
-    setStudents(current => [...current, ...clientStudents]);
-  };
 
   const handleTeamCreated = async () => {
     setSelected([]);
@@ -213,48 +227,6 @@ export default function ClassDetail() {
     setTeamFormMemberIds([]);
   };
 
-  const closeStudentAssignment = () => {
-    setShowStudentAssignment(false);
-    setAssignmentInitialStudentIds([]);
-  };
-
-  const openStudentAssignment = async (mode = 'CLASS', studentIds = []) => {
-    const currentClassId = String(id || cls?._id || '');
-    const currentStudents = normalizeClassStudents(students, currentClassId);
-    setAssignmentMode(mode);
-    setAssignmentInitialStudentIds(studentIds);
-    setAssignmentCandidates(currentStudents);
-    setShowStudentAssignment(true);
-    setLoadingAssignmentCandidates(true);
-
-    try {
-      const response = await userApi.getAll({ page: 1, limit: 200, role: 'STUDENT', status: 'APPROVED' });
-      const payload = response?.data || response;
-      const records = payload?.users || payload?.data?.users || payload?.data || [];
-      const directoryStudents = (Array.isArray(records) ? records : [])
-        .map(directoryRecordToStudent)
-        .filter(Boolean);
-      setAssignmentCandidates(mergeAssignmentCandidates(currentStudents, directoryStudents));
-    } catch {
-      // The current class roster remains fully usable if the user directory is not accessible.
-    } finally {
-      setLoadingAssignmentCandidates(false);
-    }
-  };
-
-  const handleStudentsAssigned = (result) => {
-    const currentClassId = String(id || cls?._id || result.classId);
-    const nextClassStudents = result.students
-      .filter(student => studentBelongsToClass(student, currentClassId))
-      .map(student => ({ ...student, source: student.source || 'CLASS_ROSTER' }));
-    setStudents(nextClassStudents);
-    setTeams(result.teams);
-    setAssignmentCandidates(result.students);
-    setSelected([]);
-    setTab(result.mode === 'TEAM' ? 'teams' : 'students');
-    closeStudentAssignment();
-  };
-
   const handleTeamSaved = (savedTeam) => {
     const memberIds = new Set(getTeamMemberIds(savedTeam));
     setTeams(current => (
@@ -271,29 +243,17 @@ export default function ClassDetail() {
     closeTeamManagement();
   };
 
-  const handleTeamDeleted = (deletedTeam) => {
-    const deletedMemberIds = new Set(getTeamMemberIds(deletedTeam));
-    setTeams(current => current.filter(team => team._id !== deletedTeam._id));
-    setStudents(current => current.map(student => (
-      deletedMemberIds.has(student._id) || entityId(student.teamId) === deletedTeam._id
-        ? { ...student, teamId: null }
-        : student
-    )));
-    setSelected(current => current.filter(studentId => !deletedMemberIds.has(studentId)));
-    toast.success('Team deleted');
-  };
-
   const handleBackfillChats = async () => {
     setBackfilling(true);
     try {
-      const res = await classApi.backfillChats(id);
+      const res: any = await classApi.repairChatMemberships(id);
       const summary = res?.data || res;
       toast.success(
-        `Backfill complete: Created ${summary.createdCount || 0}, Linked ${summary.attachedExistingCount || 0} chats.`
+        `Repair complete: ${summary.groupsCreated || 0} groups created, ${summary.membershipsAdded || 0} members added, ${summary.membershipsEnded || 0} stale memberships ended.`
       );
       await fetchData();
     } catch (e) {
-      toast.error(e?.message || 'Failed to backfill chat groups');
+      toast.error(parseApiError(e, 'Failed to repair chat memberships').message);
     } finally {
       setBackfilling(false);
     }
@@ -302,11 +262,13 @@ export default function ClassDetail() {
   const handleToggleMajorLock = async () => {
     setTogglingLock(true);
     try {
-      const res = await classApi.toggleMajorLock(id);
-      setCls(prev => ({ ...prev, isMajorLocked: res.data.isMajorLocked }));
+      const res: any = cls.isMajorLocked
+        ? await classApi.unlockMajors(id)
+        : await classApi.lockMajors(id);
+      setCls(prev => ({ ...prev, isMajorLocked: res.data.isLocked }));
       toast.success(res.message || 'Đã thay đổi trạng thái cập nhật chuyên ngành');
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Lỗi khi thay đổi trạng thái');
+      toast.error(parseApiError(err, 'Lỗi khi thay đổi trạng thái').message);
     } finally {
       setTogglingLock(false);
     }
@@ -315,7 +277,12 @@ export default function ClassDetail() {
   const handleExportExcel = async () => {
     setExporting(true);
     try {
-      const response = await classApi.exportClassExcel(id);
+      const response = await classApi.exportClassExcel(id, {
+        scope: rosterStatus === 'Active' ? 'Active' : 'History',
+        search: rosterSearch || undefined,
+        majorCode: rosterMajor || undefined,
+        status: (rosterStatus || '') as '' | 'Active' | 'Dropped' | 'Completed',
+      });
       const blob = new Blob([response.data || response], {
         type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
       });
@@ -327,8 +294,7 @@ export default function ClassDetail() {
       window.URL.revokeObjectURL(url);
       toast.success('Export successful');
     } catch (e) {
-      console.error(e);
-      toast.error('Failed to export students');
+      toast.error(parseApiError(e, 'Failed to export students').message);
     } finally {
       setExporting(false);
     }
@@ -341,12 +307,12 @@ export default function ClassDetail() {
     if (!studentToDelete?._id) return;
     setRemovingStudent(true);
     try {
-      await classApi.removeStudent(id, studentToDelete._id);
-      toast.success('Xóa sinh viên thành công');
+      await classApi.dropStudent(id, studentToDelete._id);
+      toast.success('Enrollment dropped successfully');
       setStudentToDelete(null);
       await fetchData();
     } catch (err) {
-      toast.error(err?.response?.data?.message || 'Xóa sinh viên thất bại');
+      toast.error(parseApiError(err, 'Failed to drop enrollment').message);
     } finally {
       setRemovingStudent(false);
     }
@@ -355,14 +321,23 @@ export default function ClassDetail() {
   const confirmDeleteClass = async () => {
     setDeletingClass(true);
     try {
-      await classApi.delete(id);
-      toast.success('Class deleted successfully');
-      navigate(user?.role === 'ADMIN' ? '/admin/classes' : '/lecturer/classes');
+      const isCurrentlyArchived = cls.status === 'Archived';
+      if (isCurrentlyArchived) {
+        await classApi.restore(id, { rowVersion: cls.rowVersion, reason: lifecycleReason.trim() });
+        toast.success('Class restored successfully');
+        await fetchData();
+      } else {
+        await classApi.archive(id, { rowVersion: cls.rowVersion, reason: lifecycleReason.trim() });
+        toast.success('Class archived successfully');
+        const targetRoute = user?.role === 'LECTURER' ? '/lecturer/classes' : '/admin/classes';
+        navigate(targetRoute);
+      }
     } catch (err) {
-      toast.error(err?.message || 'Failed to delete class');
+      toast.error(parseApiError(err, 'Failed to change class lifecycle').message);
     } finally {
       setDeletingClass(false);
       setShowDeleteClass(false);
+      setLifecycleReason('');
     }
   };
 
@@ -373,17 +348,16 @@ export default function ClassDetail() {
   const safeTeams    = Array.isArray(teams) ? teams : [];
   const unassignedCount = safeStudents.filter(s => !s.teamId).length;
   
-  const createdById = cls.createdBy?._id?.toString() || cls.createdBy?.toString();
-  const lecturerId = cls.lectureId?._id?.toString() || cls.lectureId?.toString();
-  const isAdminOrLecturer = user?.role === 'ADMIN' || (user?.role === 'LECTURER' && lecturerId === user._id);
-  const canDeleteClass = user?.role === 'ADMIN' || (
-    user?.role === 'LECTURER' &&
-    (createdById === user._id || (!createdById && lecturerId === user._id))
-  );
+  const isAdminOrLecturer = user?.role === 'ADMIN' || user?.role === 'LECTURER';
+  const canDeleteClass = user?.role === 'ADMIN' || user?.role === 'LECTURER';
+  const isArchived = isClassReadOnly(cls.status);
+  const lifecyclePresentation = getClassLifecyclePresentation(cls.status);
 
   const getUniqueMentors = () => {
-    const classMentors = cls?.mentorIds || [];
-    const teamMentors = safeTeams.map(t => t.mentorId).filter(Boolean);
+    const teamMentors = safeTeams
+      .map(team => team.currentMentorAssignment?.mentor)
+      .filter(Boolean)
+      .map(mentor => ({ _id: mentor.mentorProfileId, name: mentor.fullName, email: mentor.email }));
     const seen = new Set();
     const unique = [];
 
@@ -396,154 +370,179 @@ export default function ClassDetail() {
       }
     };
 
-    classMentors.forEach(addMentor);
     teamMentors.forEach(addMentor);
     return unique;
   };
 
   const activeMentors = getUniqueMentors();
+  const schedules = Array.isArray(cls.schedule) ? cls.schedule : (cls.schedule ? [cls.schedule] : []);
+  const primarySchedule = schedules[0];
+  const scheduleDayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const showDevelopmentControls = classFeatureFlags.showDevelopmentControls;
+  const isFeatureVisible = (enabled) => enabled || showDevelopmentControls;
+  const runFeatureAction = (enabled, featureName, action) => {
+    if (!enabled) {
+      toast(`${featureName} is visible for local development, but its API is not enabled yet.`);
+      return;
+    }
+
+    action();
+  };
+
+  const confirmReEnrollStudent = async () => {
+    if (!studentToReEnroll?._id) return;
+    setReEnrollingStudent(true);
+    try {
+      await classApi.reEnrollStudent(id, studentToReEnroll._id);
+      toast.success('Student re-enrolled successfully');
+      setStudentToReEnroll(null);
+      await fetchData();
+    } catch (error) {
+      toast.error(parseApiError(error, 'Failed to re-enroll student').message);
+    } finally {
+      setReEnrollingStudent(false);
+    }
+  };
+  const teamControlsVisible = isFeatureVisible(classFeatureFlags.teamManagement);
 
   return (
-    <div className="space-y-6">
-      {/* ── Back + Header ── */}
-      <div className="flex items-center justify-between gap-3 flex-wrap">
+    <div className="space-y-5">
+      {/* ── Class heading + compact actions ── */}
+      <section className="space-y-3">
         <div className="flex items-center gap-3">
           <button
+            type="button"
             onClick={() => navigate(-1)}
-            className="p-2 rounded-xl border border-slate-200 text-slate-400 hover:text-slate-700 hover:border-slate-300 transition-all"
+            aria-label="Go back"
+            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-400 shadow-xs transition-all hover:border-slate-300 hover:bg-slate-50 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/25"
           >
-            <ArrowLeft className="w-5 h-5" />
+            <ArrowLeft className="h-4.5 w-4.5" />
           </button>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-bold text-slate-900">{cls.classCode}</h1>
-              {(user?.role === 'ADMIN' ||
-                (user?.role === 'LECTURER' && cls.lectureId?._id?.toString() === user._id)) && (
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5">
+              <h1 className="truncate text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">{cls.classCode}</h1>
+              {isFeatureVisible(classFeatureFlags.rename) && (user?.role === 'ADMIN' || user?.role === 'LECTURER') && (
                 <button
+                  type="button"
                   id="btn-rename-class"
-                  onClick={() => setShowRename(true)}
+                  onClick={() => runFeatureAction(classFeatureFlags.rename, 'Class rename', () => setShowRename(true))}
                   title="Đổi tên lớp"
-                  className="p-1.5 rounded-lg text-slate-400 hover:text-primary hover:bg-primary-50 transition-all"
+                  aria-label="Đổi tên lớp"
+                  className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-primary-50 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/25"
                 >
-                  <Pencil className="w-4 h-4" />
+                  <Pencil className="h-3.5 w-3.5" />
                 </button>
               )}
             </div>
-            <p className="text-sm text-slate-500">{cls.subjectCode || '—'} · {cls.semester || '—'} {cls.year || ''}</p>
+            <p className="mt-0.5 truncate text-xs font-medium text-slate-500 sm:text-sm">
+              {cls.subjectCode || '—'} · {cls.semester || '—'} {cls.year || ''}
+            </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          {(user?.role === 'ADMIN' || user?.role === 'LECTURER') && (
-            <button
-              onClick={handleBackfillChats}
+
+        <div className="flex flex-wrap items-center gap-1.5">
+          {isFeatureVisible(classFeatureFlags.chatBackfill) && (user?.role === 'ADMIN' || user?.role === 'LECTURER') && (
+            <ClassActionButton
+              icon={MessagesSquare}
+              loading={backfilling}
+              onClick={() => runFeatureAction(classFeatureFlags.chatBackfill, 'Chat membership repair', handleBackfillChats)}
               disabled={backfilling}
-              className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-600 rounded-xl text-sm hover:bg-slate-50 disabled:opacity-50 transition-all font-medium"
             >
-              {backfilling ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" /> Backfilling...
-                </>
-              ) : (
-                'Backfill Chats'
-              )}
-            </button>
+              {backfilling ? 'Repairing...' : 'Repair Chats'}
+            </ClassActionButton>
           )}
-          {(user?.role === 'ADMIN' || user?.role === 'LECTURER' || user?.role === 'MENTOR') && (
-            <button
-              onClick={handleExportExcel}
-              disabled={exporting}
-              className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-700 rounded-xl text-sm hover:bg-slate-50 transition-all font-medium disabled:opacity-50"
-            >
-              {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />} Export
-            </button>
-          )}
-          {(user?.role === 'ADMIN' || user?.role === 'LECTURER') && (
-  <>
-    <button
-      onClick={() =>
-        navigate('/lecturer/data-bank', {
-          state: {
-            classId: cls._id,
-            classCode: cls.classCode,
-            subjectCode: cls.subjectCode,
-            semester: `${cls.semester || ''}${String(cls.year || '').slice(-2)}`,
-          },
-        })
-      }
-      className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-700 rounded-xl text-sm hover:bg-slate-50 transition-all font-medium"
-    >
-      Open Data Bank
-    </button>
 
-    <button
-      onClick={() => setShowAddStudent(true)}
-      className="flex items-center gap-2 px-4 py-2 border border-primary text-primary rounded-xl text-sm hover:bg-primary-50 transition-all font-medium"
-    >
-      <UserPlus className="w-4 h-4" /> Thêm 1 SV
-    </button>
-
-    {isAdminOrLecturer && (
-      <button
-        id="btn-assign-students"
-        onClick={() => openStudentAssignment('CLASS')}
-        className="flex items-center gap-2 rounded-xl bg-gradient-primary px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all hover:shadow-glow-primary"
-      >
-        <UserRoundCheck className="h-4 w-4" /> Assign students
-      </button>
-    )}
-  </>
-)}
-          {user?.role === 'ADMIN' && (
-            <button
-              onClick={() => setShowImport(true)}
-              className="flex items-center gap-2 px-4 py-2 border border-primary text-primary rounded-xl text-sm hover:bg-primary-50 transition-all font-medium"
-            >
-              <Upload className="w-4 h-4" /> Import Excel
-            </button>
+          {!isArchived && (user?.role === 'ADMIN' || user?.role === 'LECTURER') && (
+            <ClassActionButton icon={Download} loading={exporting} onClick={handleExportExcel} disabled={exporting}>
+              Export
+            </ClassActionButton>
           )}
-          {(user?.role === 'ADMIN' || user?.role === 'LECTURER') && (
-            <button
+
+          {!isArchived && (user?.role === 'ADMIN' || user?.role === 'LECTURER') && (
+            <>
+              <ClassActionButton
+                icon={Database}
+                onClick={() =>
+                  navigate('/lecturer/data-bank', {
+                    state: {
+                      classId: cls._id,
+                      classCode: cls.classCode,
+                      subjectCode: cls.subjectCode,
+                      semester: `${cls.semester || ''}${String(cls.year || '').slice(-2)}`,
+                    },
+                  })
+                }
+              >
+                Open Data Bank
+              </ClassActionButton>
+
+              <ClassActionButton icon={UserPlus} tone="primary" onClick={() => setShowAddStudent(true)}>
+                Thêm 1 SV
+              </ClassActionButton>
+
+            </>
+          )}
+
+          {!isArchived && (user?.role === 'ADMIN' || (isAdminOrLecturer && classFeatureFlags.lecturerStudentImport)) && (
+            <ClassActionButton icon={Upload} tone="primary" onClick={() => setShowImport(true)}>
+              Import Excel
+            </ClassActionButton>
+          )}
+
+          {!isArchived && isFeatureVisible(classFeatureFlags.majorVerification) && (user?.role === 'ADMIN' || user?.role === 'LECTURER') && (
+            <ClassActionButton
               id="btn-verify-majors"
-              onClick={() => setShowVerify(true)}
-              className="flex items-center gap-2 px-4 py-2 border border-indigo-300 text-indigo-600 rounded-xl text-sm hover:bg-indigo-50 transition-all font-medium"
+              icon={ShieldCheck}
+              tone="indigo"
+              onClick={() => runFeatureAction(classFeatureFlags.majorVerification, 'Major verification', () => setShowVerify(true))}
             >
-              <ShieldCheck className="w-4 h-4" /> Kiểm tra Chuyên ngành
-            </button>
+              Kiểm tra Chuyên ngành
+            </ClassActionButton>
           )}
-          {(user?.role === 'ADMIN' || user?.role === 'LECTURER') && (
-            <button
-              onClick={handleToggleMajorLock}
+
+          {!isArchived && (user?.role === 'ADMIN' || user?.role === 'LECTURER') && (
+            <ClassActionButton
+              icon={cls.isMajorLocked ? Lock : Unlock}
+              tone={cls.isMajorLocked ? 'danger' : 'success'}
+              loading={togglingLock}
+              onClick={() => runFeatureAction(classFeatureFlags.majorVerification, 'Major locking', handleToggleMajorLock)}
               disabled={togglingLock}
-              className={`flex items-center gap-2 px-4 py-2 border rounded-xl text-sm transition-all font-medium disabled:opacity-50 ${
-                cls.isMajorLocked 
-                  ? 'border-red-300 text-red-600 hover:bg-red-50' 
-                  : 'border-green-300 text-green-600 hover:bg-green-50'
-              }`}
             >
-              {togglingLock ? <Loader2 className="w-4 h-4 animate-spin" /> : (
-                cls.isMajorLocked ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />
-              )}
               {cls.isMajorLocked ? 'Mở khóa cập nhật' : 'Khóa cập nhật CN'}
-            </button>
+            </ClassActionButton>
           )}
-          {canDeleteClass && (
-            <button
-              onClick={() => setShowDeleteClass(true)}
-              className="flex items-center gap-2 px-4 py-2 border border-red-300 text-red-600 rounded-xl text-sm hover:bg-red-50 transition-all font-medium"
+
+          {isFeatureVisible(classFeatureFlags.lifecycle) && canDeleteClass && (
+            <ClassActionButton
+              icon={isArchived ? RotateCcw : Archive}
+              tone={isArchived ? 'success' : 'danger'}
+              onClick={() => runFeatureAction(classFeatureFlags.lifecycle, 'Class lifecycle management', () => setShowDeleteClass(true))}
             >
-              <Trash2 className="w-4 h-4" /> Delete Class
-            </button>
+              {lifecyclePresentation.label}
+            </ClassActionButton>
           )}
         </div>
-      </div>
+      </section>
+
+      {isArchived && (
+        <div className="flex items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-3 text-sm text-amber-800">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          <div>
+            <p className="font-semibold">Archived class — read-only</p>
+            <p className="mt-0.5 text-xs text-amber-700">Roster, teams, chat membership and history are retained. Restore the class before changing operational data.</p>
+          </div>
+        </div>
+      )}
 
       {/* ── Info Cards Grid ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {/* Lecturer Card */}
-        <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-4 flex items-center justify-between gap-3 relative group">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-10 h-10 rounded-xl bg-primary-100 flex items-center justify-center shrink-0">
-              <GraduationCap className="w-5 h-5 text-primary" />
+        <div className="group relative flex min-h-20 items-center justify-between gap-2.5 rounded-xl border border-slate-200/70 bg-white p-3.5 shadow-xs transition-all hover:border-slate-300 hover:shadow-sm">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary-100">
+              <GraduationCap className="h-4.5 w-4.5 text-primary" />
+            </div>
+            <div className="min-w-0">
             </div>
             <div className="min-w-0">
               <p className="text-[10px] text-slate-400 uppercase font-semibold tracking-wider">Lecturer</p>
@@ -551,10 +550,10 @@ export default function ClassDetail() {
               {cls.lectureId?.email && <p className="text-[11px] text-slate-400 truncate">{cls.lectureId.email}</p>}
             </div>
           </div>
-          {user?.role === 'ADMIN' && (
+          {!isArchived && user?.role === 'ADMIN' && (
             <button
-              onClick={() => setShowEditSchedule(true)}
-              className="text-xs font-semibold text-primary hover:text-primary-700 px-2.5 py-1.5 bg-primary-50 rounded-lg transition-all shrink-0 cursor-pointer"
+              onClick={() => setShowAssignLecturer(true)}
+              className="shrink-0 cursor-pointer rounded-md border border-primary-100 bg-primary-50 px-2 py-1 text-[11px] font-semibold text-primary transition-colors hover:border-primary-200 hover:bg-primary-100"
             >
               Edit
             </button>
@@ -562,28 +561,43 @@ export default function ClassDetail() {
         </div>
 
         {/* Schedule Card */}
-        <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-4 flex items-center gap-3 relative group">
-          <div className="w-10 h-10 rounded-xl bg-indigo-100 flex items-center justify-center shrink-0">
-            <Calendar className="w-5 h-5 text-indigo-500" />
+        <div className="group relative flex min-h-20 items-center justify-between gap-2.5 rounded-xl border border-slate-200/70 bg-white p-3.5 shadow-xs transition-all hover:border-slate-300 hover:shadow-sm">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-indigo-100">
+              <Calendar className="h-4.5 w-4.5 text-indigo-500" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[10px] text-slate-400 uppercase font-semibold tracking-wider">Schedule</p>
+              {primarySchedule ? (
+                <div className="space-y-0.5">
+                  {schedules.slice(0, 3).map((schedule, index) => {
+                    const day = schedule.dayOfWeek ?? schedule.DayOfWeek;
+                    const slot = schedule.slotNumber ?? schedule.SlotNumber ?? schedule.slot;
+                    const room = schedule.room ?? schedule.Room ?? cls.room;
+                    return <p key={`${day}-${slot}-${index}`} className="truncate text-xs font-semibold text-slate-700">{typeof day === 'number' ? scheduleDayNames[day] : day}, Slot {slot} · Room {room || 'TBD'}</p>;
+                  })}
+                  {schedules.length > 3 && <p className="text-[11px] font-medium text-primary">+{schedules.length - 3} more sessions</p>}
+                </div>
+              ) : (
+                <p className="font-semibold text-slate-800 text-sm truncate">TBD</p>
+              )}
+            </div>
           </div>
-          <div className="min-w-0">
-            <p className="text-[10px] text-slate-400 uppercase font-semibold tracking-wider">Schedule</p>
-            {cls.schedule && cls.schedule.dayOfWeek ? (
-              <>
-                <p className="font-semibold text-slate-800 text-sm truncate">{cls.schedule.dayOfWeek}, Slot {cls.schedule.slot}</p>
-                <p className="text-[11px] text-slate-400 truncate">Room {cls.schedule.room}</p>
-              </>
-            ) : (
-              <p className="font-semibold text-slate-800 text-sm truncate">TBD</p>
-            )}
-          </div>
+          {!isArchived && isAdminOrLecturer && (
+            <button
+              onClick={() => setShowEditSchedule(true)}
+              className="shrink-0 cursor-pointer rounded-md border border-primary-100 bg-primary-50 px-2 py-1 text-[11px] font-semibold text-primary transition-colors hover:border-primary-200 hover:bg-primary-100"
+            >
+              Edit
+            </button>
+          )}
         </div>
 
         {/* Mentors Card */}
-        <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-4 flex items-center justify-between gap-3 relative group">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center shrink-0">
-              <Users className="w-5 h-5 text-amber-500" />
+        <div className="group relative flex min-h-20 items-center justify-between gap-2.5 rounded-xl border border-slate-200/70 bg-white p-3.5 shadow-xs transition-all hover:border-slate-300 hover:shadow-sm">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-100">
+              <Users className="h-4.5 w-4.5 text-amber-500" />
             </div>
             <div className="min-w-0 flex-1">
               <p className="text-[10px] text-slate-400 uppercase font-semibold tracking-wider">Mentors</p>
@@ -599,10 +613,10 @@ export default function ClassDetail() {
               )}
             </div>
           </div>
-          {user?.role === 'ADMIN' && (
+          {!isArchived && isFeatureVisible(classFeatureFlags.mentorAssignment) && (user?.role === 'ADMIN' || user?.role === 'LECTURER') && (
             <button
-              onClick={() => setShowAssignMentors(true)}
-              className="text-xs font-semibold text-primary hover:text-primary-700 px-2.5 py-1.5 bg-primary-50 rounded-lg transition-all shrink-0 cursor-pointer"
+              onClick={() => runFeatureAction(classFeatureFlags.mentorAssignment, 'Mentor assignment', () => setShowAssignMentors(true))}
+              className="shrink-0 cursor-pointer rounded-md border border-primary-100 bg-primary-50 px-2 py-1 text-[11px] font-semibold text-primary transition-colors hover:border-primary-200 hover:bg-primary-100"
             >
               Manage
             </button>
@@ -610,32 +624,32 @@ export default function ClassDetail() {
         </div>
 
         {/* Students Card */}
-        <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-4 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-secondary-100 flex items-center justify-center shrink-0">
-            <Users className="w-5 h-5 text-secondary" />
+        <div className="flex min-h-20 items-center gap-2.5 rounded-xl border border-slate-200/70 bg-white p-3.5 shadow-xs transition-all hover:border-slate-300 hover:shadow-sm">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-secondary-100">
+            <Users className="h-4.5 w-4.5 text-secondary" />
           </div>
           <div>
             <p className="text-[10px] text-slate-400 uppercase font-semibold tracking-wider">Students</p>
-            <p className="font-bold text-2xl text-slate-900 leading-none mt-1">{safeStudents.length}</p>
-            <p className="text-[11px] text-slate-400 mt-1">{unassignedCount} unassigned</p>
+            <p className="mt-0.5 text-xl font-bold leading-none text-slate-900">{rosterLoadError ? '—' : (cls.studentCount ?? rosterMeta.totalCount)}</p>
+            <p className="mt-1 text-[11px] text-slate-400">{rosterLoadError ? 'Unable to load roster' : `${unassignedCount} unassigned`}</p>
           </div>
         </div>
 
         {/* Teams Card */}
-        <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-4 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-green-100 flex items-center justify-center shrink-0">
-            <BookOpen className="w-5 h-5 text-green-600" />
+        {teamControlsVisible && <div className="flex min-h-20 items-center gap-2.5 rounded-xl border border-slate-200/70 bg-white p-3.5 shadow-xs transition-all hover:border-slate-300 hover:shadow-sm">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-green-100">
+            <BookOpen className="h-4.5 w-4.5 text-green-600" />
           </div>
           <div>
             <p className="text-[10px] text-slate-400 uppercase font-semibold tracking-wider">Teams</p>
-            <p className="font-bold text-2xl text-slate-900 leading-none mt-1">{safeTeams.length}</p>
+            <p className="mt-0.5 text-xl font-bold leading-none text-slate-900">{safeTeams.length}</p>
           </div>
-        </div>
+        </div>}
       </div>
 
       {/* ── Team Generation Panel (always visible when students exist) ── */}
-      {safeStudents.length > 0 && selected.length > 0 && (
-        <div className="sticky top-20 z-40 shadow-xl rounded-2xl bg-white/80 backdrop-blur-md">
+      {teamControlsVisible && safeStudents.length > 0 && selected.length > 0 && (
+        <div className="sticky top-20 z-40 rounded-xl bg-white/85 shadow-elevated backdrop-blur-md">
           {user?.role === 'STUDENT' ? (
             <StudentTeamGeneratePanel
               classId={id}
@@ -645,20 +659,17 @@ export default function ClassDetail() {
               currentStudentId={safeStudents.find(s => s.userId === user._id)?._id}
             />
           ) : (
-            <div className="flex flex-col gap-3 rounded-2xl border border-primary-100 bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-50 text-primary"><Users className="h-5 w-5" /></div>
+            <div className="flex flex-col gap-2.5 rounded-xl border border-primary-100 bg-white p-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-50 text-primary"><Users className="h-4 w-4" /></div>
                 <div>
-                  <p className="font-semibold text-slate-800">{selected.length} student{selected.length === 1 ? '' : 's'} selected</p>
-                  <p className="text-xs text-slate-500">Continue to enter the team name and review members.</p>
+                  <p className="text-sm font-semibold text-slate-800">{selected.length} student{selected.length === 1 ? '' : 's'} selected</p>
+                  <p className="text-[11px] text-slate-500">Continue to enter the team name and review members.</p>
                 </div>
               </div>
-              <div className="flex flex-col gap-2 sm:flex-row">
-                <button onClick={() => openStudentAssignment('TEAM', selected)} className="flex items-center justify-center gap-2 rounded-xl border border-primary px-4 py-2.5 text-sm font-semibold text-primary hover:bg-primary-50">
-                  <UserRoundCheck className="h-4 w-4" /> Assign to team
-                </button>
-                <button onClick={() => openCreateTeam(selected)} className="flex items-center justify-center gap-2 rounded-xl bg-gradient-primary px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:shadow-glow-primary">
-                  <UserPlus className="h-4 w-4" /> Create team with selected
+              <div className="flex flex-col gap-1.5 sm:flex-row">
+                <button onClick={() => runFeatureAction(classFeatureFlags.teamManagement, 'Team management', () => openCreateTeam(selected))} className="inline-flex min-h-8 items-center justify-center gap-1.5 rounded-lg bg-gradient-primary px-2.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:shadow-sm">
+                  <UserPlus className="h-3.5 w-3.5" /> Create team with selected
                 </button>
               </div>
             </div>
@@ -667,32 +678,62 @@ export default function ClassDetail() {
       )}
 
       {/* ── Tabs ── */}
-      <div className="flex gap-1 p-1 bg-slate-100 rounded-xl w-fit">
-        {['students', 'teams'].map(t => (
+      <div className="flex w-fit gap-0.5 rounded-lg bg-slate-100 p-0.5">
+        {(teamControlsVisible ? ['students', 'teams'] : ['students']).map(t => (
           <button
             key={t}
             onClick={() => setTab(t)}
-            className={`px-5 py-2 rounded-lg text-sm font-medium transition-all capitalize cursor-pointer ${
-              tab === t ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-700'
+            className={`cursor-pointer rounded-md px-3.5 py-1.5 text-xs font-semibold capitalize transition-all ${
+              tab === t ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:bg-white/60 hover:text-slate-700'
             }`}
           >
-            {t === 'students' ? `Students (${safeStudents.length})` : `Teams (${safeTeams.length})`}
+            {t === 'students' ? `Students (${rosterLoadError ? '—' : rosterMeta.totalCount})` : `Teams (${safeTeams.length})`}
           </button>
         ))}
       </div>
 
       {/* ── Tab Content ── */}
       <motion.div key={tab} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.2 }}>
-        {tab === 'students' ? (
+        {tab === 'students' && rosterLoadError ? (
+          <div className="rounded-xl border border-red-200 bg-red-50 p-5 text-center">
+            <AlertTriangle className="mx-auto h-6 w-6 text-red-500" />
+            <p className="mt-2 text-sm font-semibold text-red-800">The class roster could not be loaded</p>
+            <p className="mt-1 text-sm text-red-600">{rosterLoadError}</p>
+            <button
+              type="button"
+              onClick={() => void fetchData()}
+              className="mt-3 rounded-lg border border-red-300 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100"
+            >
+              Retry
+            </button>
+          </div>
+        ) : tab === 'students' ? (
           <StudentTable
             students={safeStudents}
-            teams={safeTeams}
+            teams={teamControlsVisible ? safeTeams : []}
             cls={cls}
-            selected={selected}
-            onSelectionChange={setSelected}
+            selected={teamControlsVisible ? selected : []}
+            onSelectionChange={teamControlsVisible ? setSelected : undefined}
             onRefresh={fetchData}
-            onDeleteStudent={isAdminOrLecturer ? handleRemoveStudent : undefined}
-            toolbarAction={selected.length === 0 ? (
+            onDeleteStudent={!isArchived && isAdminOrLecturer ? handleRemoveStudent : undefined}
+            onReEnrollStudent={!isArchived && isAdminOrLecturer ? setStudentToReEnroll : undefined}
+            serverQuery={{
+              search: rosterSearch,
+              majorCode: rosterMajor,
+              status: rosterStatus,
+              page: rosterMeta.page,
+              pageSize: rosterMeta.pageSize,
+              totalCount: rosterMeta.totalCount,
+              totalPages: rosterMeta.totalPages,
+            }}
+            onServerQueryChange={(next) => {
+              if (Object.prototype.hasOwnProperty.call(next, 'search')) setRosterSearch(next.search);
+              if (Object.prototype.hasOwnProperty.call(next, 'majorCode')) setRosterMajor(next.majorCode);
+              if (Object.prototype.hasOwnProperty.call(next, 'status')) setRosterStatus(next.status);
+              if (Object.prototype.hasOwnProperty.call(next, 'page')) setRosterPage(next.page);
+              if (!Object.prototype.hasOwnProperty.call(next, 'page')) setRosterPage(1);
+            }}
+            toolbarAction={!isArchived && teamControlsVisible && selected.length === 0 ? (
               user?.role === 'STUDENT' ? (
                 <TeamSuggestionTooltip label="Xem hướng dẫn tạo nhóm">
                   <div className="space-y-2">
@@ -706,29 +747,29 @@ export default function ClassDetail() {
                   </div>
                 </TeamSuggestionTooltip>
               ) : (
-                <button onClick={() => openCreateTeam()} className="flex items-center gap-2 rounded-xl border border-primary px-3 py-2 text-sm font-semibold text-primary hover:bg-primary-50">
-                  <UserPlus className="h-4 w-4" /> Create team
+                <button onClick={() => runFeatureAction(classFeatureFlags.teamManagement, 'Team management', () => openCreateTeam())} className="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-primary-200 bg-primary-50/60 px-2.5 py-1.5 text-xs font-semibold text-primary hover:bg-primary-50">
+                  <UserPlus className="h-3.5 w-3.5" /> Create team
                 </button>
               )
             ) : null}
           />
         ) : (
           <TeamList
-            teams={safeTeams}
-            onReview={(team) => setReviewTeam(team)}
-            canDelete={isAdminOrLecturer}
-            canManageInfo={isAdminOrLecturer}
+            teams={[...safeTeams, ...teamProposals]}
+            onReview={!isArchived ? (team) => setReviewTeam(team) : undefined}
+            canDelete={!isArchived && isAdminOrLecturer}
+            canManageInfo={!isArchived && isAdminOrLecturer}
             classStudents={safeStudents}
-            onCreate={isAdminOrLecturer ? () => openCreateTeam() : undefined}
-            onAssign={isAdminOrLecturer ? () => openStudentAssignment('TEAM') : undefined}
-            onEdit={isAdminOrLecturer ? openEditTeam : undefined}
-            onDelete={isAdminOrLecturer ? handleTeamDeleted : undefined}
+            onCreate={!isArchived && isAdminOrLecturer ? () => runFeatureAction(classFeatureFlags.teamManagement, 'Team management', () => openCreateTeam()) : undefined}
+            onEdit={!isArchived && isAdminOrLecturer ? (team) => !team.isProposal && runFeatureAction(classFeatureFlags.teamManagement, 'Team management', () => openEditTeam(team)) : undefined}
+            onDelete={undefined}
+            onProjectDirection={!isArchived && classFeatureFlags.projectDirection ? setDirectionTeam : undefined}
           />
         )}
       </motion.div>
 
       {/* ── Modals ── */}
-      {showImport && (
+      {!isArchived && showImport && (
         <ImportStudentsModal
           classId={id || cls?._id}
           onClose={() => setShowImport(false)}
@@ -738,7 +779,7 @@ export default function ClassDetail() {
         />
       )}
 
-      {showTeamManagement && isAdminOrLecturer && (
+      {!isArchived && classFeatureFlags.teamManagement && showTeamManagement && isAdminOrLecturer && (
         <TeamManagementModal
           classInfo={{
             id: id || cls._id,
@@ -754,37 +795,34 @@ export default function ClassDetail() {
         />
       )}
 
-      {showStudentAssignment && isAdminOrLecturer && (
-        <StudentAssignmentModal
-          classInfo={{
-            id: id || cls._id,
-            code: cls.classCode || 'Class',
-            name: cls.subjectName || cls.subjectCode || '',
-          }}
-          students={assignmentCandidates}
-          teams={safeTeams}
-          initialMode={assignmentMode}
-          initialStudentIds={assignmentInitialStudentIds}
-          loadingCandidates={loadingAssignmentCandidates}
-          onClose={closeStudentAssignment}
-          onSave={handleStudentsAssigned}
-        />
-      )}
-
-      {showEditSchedule && (
+      {!isArchived && showEditSchedule && (
         <EditScheduleModal
           classId={id}
-          currentLecture={cls.lectureId}
           currentSchedule={cls.schedule}
+          rowVersion={cls.rowVersion}
           onClose={() => setShowEditSchedule(false)}
-          onAssigned={async () => {
+          onUpdated={async () => {
             setShowEditSchedule(false);
             await fetchData();
           }}
         />
       )}
 
-      {showAssignMentors && (
+      {!isArchived && showAssignLecturer && user?.role === 'ADMIN' && (
+        <AssignLectureModal
+          classId={id}
+          currentLecture={cls.lectureId}
+          rowVersion={cls.rowVersion}
+          allowUnassign={cls.status === 'Draft'}
+          onClose={() => setShowAssignLecturer(false)}
+          onAssigned={async () => {
+            setShowAssignLecturer(false);
+            await fetchData();
+          }}
+        />
+      )}
+
+      {!isArchived && classFeatureFlags.mentorAssignment && showAssignMentors && (
         <AssignMentorsModal
           classId={id}
           currentMentors={activeMentors}
@@ -797,7 +835,7 @@ export default function ClassDetail() {
       )}
 
       {/* ── Rename Class Modal ── */}
-      {showRename && (
+      {classFeatureFlags.rename && showRename && (
         <RenameClassModal
           classId={id}
           currentCode={cls.classCode}
@@ -810,7 +848,7 @@ export default function ClassDetail() {
       )}
 
       {/* ── Verify Majors Modal ── */}
-      {showVerify && (
+      {classFeatureFlags.majorVerification && showVerify && (
         <VerifyMajorModal
           classId={id}
           onClose={() => setShowVerify(false)}
@@ -818,7 +856,7 @@ export default function ClassDetail() {
       )}
 
       {/* ── Add Student Modal ── */}
-      {showAddStudent && (
+      {!isArchived && showAddStudent && (
         <AddStudentModal
           classId={id}
           onClose={() => setShowAddStudent(false)}
@@ -829,7 +867,7 @@ export default function ClassDetail() {
         />
       )}
 
-      {reviewTeam && (
+      {classFeatureFlags.teamManagement && reviewTeam && (
         <ReviewTeamProposalModal
           team={reviewTeam}
           classStudents={safeStudents}
@@ -838,31 +876,57 @@ export default function ClassDetail() {
         />
       )}
 
+      {classFeatureFlags.projectDirection && directionTeam && (
+        <ProjectDirectionModal
+          team={directionTeam}
+          role={user?.role}
+          onClose={() => setDirectionTeam(null)}
+          onChanged={fetchData}
+        />
+      )}
+
       <ConfirmDialog
         isOpen={!!studentToDelete}
         onClose={() => setStudentToDelete(null)}
         onConfirm={confirmRemoveStudent}
         isSubmitting={removingStudent}
-        title="Xóa sinh viên khỏi lớp?"
+        title="Drop this enrollment?"
         description={
           studentToDelete
-            ? `Sinh viên "${studentToDelete.fullName}" sẽ bị xóa khỏi lớp và gỡ khỏi nhóm hiện tại nếu có.`
+            ? `"${studentToDelete.fullName}" will move to Dropped history. This does not delete the global student profile.`
             : ''
         }
-        confirmText="Xóa sinh viên"
-        cancelText="Hủy"
+        confirmText="Drop enrollment"
+        cancelText="Cancel"
       />
 
       <ConfirmDialog
+        isOpen={!!studentToReEnroll}
+        onClose={() => setStudentToReEnroll(null)}
+        onConfirm={confirmReEnrollStudent}
+        isSubmitting={reEnrollingStudent}
+        title="Re-enroll this student?"
+        description={studentToReEnroll ? `Restore "${studentToReEnroll.fullName}" as an Active enrollment in this class.` : ''}
+        confirmText="Re-enroll"
+        cancelText="Cancel"
+      />
+
+      {classFeatureFlags.lifecycle && <ConfirmDialog
         isOpen={showDeleteClass}
         onClose={() => setShowDeleteClass(false)}
         onConfirm={confirmDeleteClass}
         isSubmitting={deletingClass}
-        title="Delete this class?"
-        description={`Class "${cls.classCode}" will be removed from active class lists. Student and team data will remain in the system.`}
-        confirmText="Delete class"
+        title={isArchived ? 'Restore this class?' : 'Archive this class?'}
+        description={isArchived
+          ? `Class "${cls.classCode}" will be validated again for subject, semester, lecturer, schedule, and conflicts before becoming editable.`
+          : `Class "${cls.classCode}" will become read-only and leave active lists. Roster, teams, chats, and history are retained.`}
+        confirmText={lifecyclePresentation.confirmLabel}
         cancelText="Cancel"
-      />
+        confirmVariant={isArchived ? 'primary' : 'danger'}
+        reason={lifecycleReason}
+        onReasonChange={setLifecycleReason}
+        reasonRequired
+      />}
     </div>
   );
 }

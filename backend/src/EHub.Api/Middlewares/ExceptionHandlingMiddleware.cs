@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Net;
 using System.Text.Json;
 using System.Threading.Tasks;
-using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using EHub.Application.Common.Exceptions;
@@ -16,16 +15,13 @@ public sealed class ExceptionHandlingMiddleware
 {
     private readonly RequestDelegate _next;
     private readonly ILogger<ExceptionHandlingMiddleware> _logger;
-    private readonly IWebHostEnvironment _environment;
 
     public ExceptionHandlingMiddleware(
         RequestDelegate next,
-        ILogger<ExceptionHandlingMiddleware> logger,
-        IWebHostEnvironment environment)
+        ILogger<ExceptionHandlingMiddleware> logger)
     {
         _next = next;
         _logger = logger;
-        _environment = environment;
     }
 
     public async Task InvokeAsync(HttpContext context)
@@ -117,12 +113,7 @@ public sealed class ExceptionHandlingMiddleware
             _ => (
                 StatusCodes.Status500InternalServerError,
                 ErrorCodes.InternalServerError,
-                _environment.IsDevelopment() || _environment.IsEnvironment("Testing")
-                    ? $"{exception.GetType().Name}: {exception.Message}" + 
-                      (exception.InnerException != null 
-                          ? $" | INNER: {exception.InnerException.GetType().Name}: {exception.InnerException.Message}" 
-                          : "")
-                    : "An unexpected error occurred.",
+                "An unexpected error occurred.",
                 null)
         };
     }

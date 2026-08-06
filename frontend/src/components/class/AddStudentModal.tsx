@@ -1,22 +1,22 @@
-// @ts-nocheck
 import { useState } from 'react';
 import toast from 'react-hot-toast';
 import { X, Loader2 } from 'lucide-react';
 import { classApi } from '../../api/classApi';
-import { TEAM_MAJOR_GROUPS } from '../../constants/majors';
+import { PROGRAM_GROUPS } from '../../constants/majors';
+import { parseApiError } from '../../utils/apiError';
 
 export default function AddStudentModal({ classId, onClose, onAdded }) {
   const [form, setForm] = useState({
-    rollNumber: '',
+    studentCode: '',
     fullName: '',
     email: '',
-    major: ''
+    majorCode: ''
   });
   const [submitting, setSubmitting] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.rollNumber || !form.fullName || !form.email) {
+    if (!form.studentCode || !form.fullName || !form.email || !form.majorCode) {
       toast.error('Vui lòng điền mã SV, tên và email');
       return;
     }
@@ -27,7 +27,7 @@ export default function AddStudentModal({ classId, onClose, onAdded }) {
       toast.success('Thêm sinh viên thành công');
       onAdded();
     } catch (err) {
-      toast.error(err?.response?.data?.message || 'Thêm sinh viên thất bại');
+      toast.error(parseApiError(err, 'Thêm sinh viên thất bại').message);
     } finally {
       setSubmitting(false);
     }
@@ -52,8 +52,8 @@ export default function AddStudentModal({ classId, onClose, onAdded }) {
             <label className="block text-sm font-medium text-slate-700 mb-1">Mã SV *</label>
             <input
               type="text"
-              value={form.rollNumber}
-              onChange={(e) => setForm({ ...form, rollNumber: e.target.value.toUpperCase() })}
+              value={form.studentCode}
+              onChange={(e) => setForm({ ...form, studentCode: e.target.value.toUpperCase() })}
               placeholder="VD: SE123456"
               className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary uppercase"
               required
@@ -84,13 +84,13 @@ export default function AddStudentModal({ classId, onClose, onAdded }) {
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Chuyên ngành</label>
             <select
-              value={form.major}
-              onChange={(e) => setForm({ ...form, major: e.target.value })}
+              value={form.majorCode}
+              onChange={(e) => setForm({ ...form, majorCode: e.target.value })}
               className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none bg-white focus:ring-2 focus:ring-primary/20 focus:border-primary"
             >
               <option value="">-- Chưa chọn --</option>
-              {TEAM_MAJOR_GROUPS.map(group => (
-                <optgroup key={group.key} label={group.label}>
+              {PROGRAM_GROUPS.map(group => (
+                <optgroup key={group.code} label={`${group.code} - ${group.name}`}>
                   {group.majors.map(m => (
                     <option key={m.code} value={m.code}>{m.code} - {m.name}</option>
                   ))}

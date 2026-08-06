@@ -17,6 +17,7 @@ import QuickShortcuts from '../../components/workspace/shortcuts/QuickShortcuts'
 import CheckpointSection from '../../components/workspace/checkpoints/CheckpointSection';
 import WorkspaceSelector from '../../components/workspace/WorkspaceSelector';
 import ProjectDirectionCard from '../../components/workspace/ProjectDirectionCard';
+import { classFeatureFlags } from '../../config/classFeatureFlags';
 import { getDisplayTeamName } from '../../utils/teamDisplay';
 
 const clearWorkspaceSelectionCache = () => {
@@ -240,12 +241,12 @@ export default function TeamWorkspace() {
           {/* Left Side - Proposal & Checkpoints */}
           <div className="lg:col-span-8 space-y-6">
 
-            <ProjectDirectionCard
+            {classFeatureFlags.projectDirection && <ProjectDirectionCard
               key={`${team._id}-${team.projectDirectionUpdatedAt || ''}`}
               team={team}
               canEdit={!isReadOnly && isTeamLeader}
               onSaved={() => fetchWorkspaceData(team._id)}
-            />
+            />}
 
             {/* Startup Checkpoints */}
             <CheckpointSection 

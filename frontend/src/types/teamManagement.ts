@@ -47,6 +47,25 @@ export interface ManagedTeam {
   mentorId?: EntityReference;
   lectureId?: EntityReference;
   rejectReason?: string | null;
+  rowVersion?: string;
+  isProposal?: boolean;
+  currentMentorAssignment?: MentorAssignment | null;
+}
+
+export interface MentorAssignment {
+  assignmentId: string;
+  teamId: string;
+  mentor: {
+    mentorProfileId: string;
+    userId: string;
+    fullName: string;
+    email: string;
+    organization?: string | null;
+  };
+  status: string;
+  assignedAtUtc: string;
+  endedAtUtc?: string | null;
+  note?: string | null;
 }
 
 export interface TeamClassOption {

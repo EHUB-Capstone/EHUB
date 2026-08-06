@@ -1,9 +1,6 @@
-using System;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
+using System.Text.Json;
 using EHub.Application.Common.Interfaces.Persistence;
-using EHub.Application.Common.Interfaces.Services;
+using EHub.Application.Features.Classes.Common;
 using EHub.Contracts.Classes;
 using EHub.Domain.Entities;
 using EHub.Domain.Enums;
@@ -16,15 +13,18 @@ namespace EHub.Application.Features.Classes.ImportStudents;
 
 public sealed class CommitImportStudentsCommandHandler : ICommitImportStudentsCommandHandler
 {
+    private static readonly TimeSpan ProcessingLease = TimeSpan.FromMinutes(5);
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+
     private readonly IApplicationDbContext _context;
-    private readonly IImportSessionStore _sessionStore;
+    private readonly IUnitOfWork _unitOfWork;
 
     public CommitImportStudentsCommandHandler(
         IApplicationDbContext context,
-        IImportSessionStore sessionStore)
+        IUnitOfWork unitOfWork)
     {
         _context = context;
-        _sessionStore = sessionStore;
+        _unitOfWork = unitOfWork;
     }
 
     public async Task<Result<ImportStudentsCommitResponse>> HandleAsync(
@@ -36,106 +36,325 @@ public sealed class CommitImportStudentsCommandHandler : ICommitImportStudentsCo
     {
         var isAdmin = string.Equals(currentUserRole, SystemRoles.Admin, StringComparison.OrdinalIgnoreCase);
         var isLecturer = string.Equals(currentUserRole, SystemRoles.Lecturer, StringComparison.OrdinalIgnoreCase);
-
         if (!isAdmin && !isLecturer)
         {
-            return Result.Failure<ImportStudentsCommitResponse>(
-                new Error("Classes.AccessDenied", "You do not have permission to commit student import."));
+            return Failure(ErrorCodes.ClassAccessDenied, "You do not have permission to commit student imports.");
         }
 
-        var sessionData = _sessionStore.GetAndConsumeSession(request.SessionId);
-        if (sessionData == null)
+        if (request.SessionId == Guid.Empty)
         {
-            return Result.Failure<ImportStudentsCommitResponse>(
-                new Error("Classes.ImportSessionExpiredOrProcessed", "Import session has expired, is invalid, or has already been committed."));
+            return Failure(ErrorCodes.ClassValidationError, "A valid import sessionId is required.");
         }
 
-        var (targetClassId, sessionUserId, validRows) = sessionData.Value;
+        var session = await _context.ClassImportSessions
+            .FirstOrDefaultAsync(candidate => candidate.Id == request.SessionId, cancellationToken);
 
-        if (targetClassId != classId)
+        if (session == null)
         {
-            return Result.Failure<ImportStudentsCommitResponse>(
-                new Error("Classes.ImportSessionMismatch", "Import session does not match the target class."));
+            return Failure(ErrorCodes.ClassImportSessionInvalid, "Import session is invalid or has already been consumed.");
         }
 
-        if (validRows == null || validRows.Count == 0)
+        if (session.UserId != currentUserId || session.ClassId != classId)
         {
-            return Result.Failure<ImportStudentsCommitResponse>(
-                new Error("Classes.NoValidRowsToImport", "No valid student rows to commit from this session."));
+            return Failure(ErrorCodes.ClassImportSessionInvalid, "Import session does not belong to the current user and class.");
         }
 
-        int insertedCount = 0;
-        int updatedCount = 0;
-        int skippedCount = 0;
-
-        foreach (var row in validRows)
+        var now = DateTime.UtcNow;
+        if (session.ExpiresAtUtc <= now)
         {
-            var studentCode = row.StudentCode.Trim().ToUpperInvariant();
-            var email = row.Email.Trim().ToLowerInvariant();
+            return Failure(ErrorCodes.ClassImportSessionExpired, "Import session has expired. Preview the file again.");
+        }
 
-            var studentProfile = await _context.Students
-                .FirstOrDefaultAsync(s => s.NormalizedRollNumber == studentCode || (s.Email != null && s.Email.ToLower() == email), cancellationToken);
+        if (session.Status == ClassImportSessionStatus.Consumed)
+        {
+            return Failure(ErrorCodes.ClassImportSessionInvalid, "Import session has already been consumed.");
+        }
 
-            if (studentProfile == null)
-            {
-                studentProfile = new Student
-                {
-                    RollNumber = studentCode,
-                    NormalizedRollNumber = studentCode,
-                    FullName = row.FullName.Trim(),
-                    Email = email,
-                    MajorCode = row.MajorCode,
-                    Status = StudentStatus.Active
-                };
-                await _context.Students.AddAsync(studentProfile, cancellationToken);
-                insertedCount++;
-            }
-            else
-            {
-                studentProfile.FullName = row.FullName.Trim();
-                studentProfile.Email = email;
-                studentProfile.MajorCode = row.MajorCode;
-                updatedCount++;
-            }
+        if (session.Status == ClassImportSessionStatus.Processing &&
+            session.ProcessingStartedAtUtc.HasValue &&
+            session.ProcessingStartedAtUtc.Value.Add(ProcessingLease) > now)
+        {
+            return Failure(ErrorCodes.ClassImportSessionAlreadyProcessing, "Import session is already being committed.");
+        }
 
+        session.Status = ClassImportSessionStatus.Processing;
+        session.ProcessingStartedAtUtc = now;
+        try
+        {
             await _context.SaveChangesAsync(cancellationToken);
-
-            var existingEnrollment = await _context.ClassStudents
-                .FirstOrDefaultAsync(cs => cs.ClassId == classId && cs.StudentId == studentProfile.Id, cancellationToken);
-
-            if (existingEnrollment == null)
-            {
-                var newEnrollment = new ClassStudent
-                {
-                    ClassId = classId,
-                    StudentId = studentProfile.Id,
-                    EnrollmentStatus = EnrollmentStatus.Active,
-                    CreatedAt = DateTime.UtcNow,
-                    UpdatedAt = DateTime.UtcNow
-                };
-                await _context.ClassStudents.AddAsync(newEnrollment, cancellationToken);
-            }
-            else if (existingEnrollment.EnrollmentStatus != EnrollmentStatus.Active)
-            {
-                existingEnrollment.EnrollmentStatus = EnrollmentStatus.Active;
-                existingEnrollment.UpdatedAt = DateTime.UtcNow;
-            }
-            else
-            {
-                skippedCount++;
-            }
         }
+        catch (DbUpdateConcurrencyException)
+        {
+            _context.ClearChanges();
+            return Failure(ErrorCodes.ClassImportSessionAlreadyProcessing, "Import session is already being committed.");
+        }
+
+        var targetClass = await _context.Classes
+            .FirstOrDefaultAsync(@class => @class.Id == classId, cancellationToken);
+
+        if (targetClass == null)
+        {
+            await ReleaseAsync(session, cancellationToken);
+            return Failure(ErrorCodes.ClassNotFound, "The requested class was not found.");
+        }
+
+        if (targetClass.Status == ClassStatus.Archived)
+        {
+            await ReleaseAsync(session, cancellationToken);
+            return Failure(ErrorCodes.ClassArchived, "Cannot import students to an archived class.");
+        }
+
+        if (isLecturer && targetClass.PrimaryLecturerId != currentUserId)
+        {
+            await ReleaseAsync(session, cancellationToken);
+            return Failure(ErrorCodes.ClassAccessDenied, "You can only import students to your assigned class.");
+        }
+
+        ImportStudentRowPreviewDto[] rows;
+        try
+        {
+            rows = JsonSerializer.Deserialize<ImportStudentRowPreviewDto[]>(session.ValidRowsJson, JsonOptions) ?? [];
+        }
+        catch (JsonException)
+        {
+            await ReleaseAsync(session, cancellationToken);
+            return Failure(ErrorCodes.ClassImportSessionInvalid, "Import session payload is invalid. Preview the file again.");
+        }
+
+        if (rows.Length == 0)
+        {
+            await ReleaseAsync(session, cancellationToken);
+            return Failure(ErrorCodes.ClassImportNoValidRows, "No valid student rows are available to commit.");
+        }
+
+        try
+        {
+            var response = await _unitOfWork.ExecuteInTransactionAsync(
+                transactionCancellationToken => CommitRowsAsync(
+                    targetClass,
+                    session,
+                    rows,
+                    currentUserId,
+                    transactionCancellationToken),
+                cancellationToken);
+
+            return Result.Success(response);
+        }
+        catch (DbUpdateException)
+        {
+            await ResetAfterFailureAsync(request.SessionId, cancellationToken);
+            return Failure(
+                ErrorCodes.ClassStudentEnrollmentConflict,
+                "The import conflicted with another enrollment update. Preview the file again.");
+        }
+        catch
+        {
+            await ResetAfterFailureAsync(request.SessionId, cancellationToken);
+            throw;
+        }
+    }
+
+    private async Task<ImportStudentsCommitResponse> CommitRowsAsync(
+        Class targetClass,
+        ClassImportSession session,
+        IReadOnlyCollection<ImportStudentRowPreviewDto> rows,
+        Guid currentUserId,
+        CancellationToken cancellationToken)
+    {
+        var codes = rows.Select(row => row.StudentCode).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var emails = rows.Select(row => row.Email).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var profiles = await _context.Students
+            .Where(student =>
+                (student.NormalizedRollNumber != null && codes.Contains(student.NormalizedRollNumber)) ||
+                (student.RollNumber != null && codes.Contains(student.RollNumber)) ||
+                (student.Email != null && emails.Contains(student.Email.ToLower())))
+            .ToListAsync(cancellationToken);
+
+        var profileIds = profiles.Select(student => student.Id).ToArray();
+        var enrollments = profileIds.Length == 0
+            ? []
+            : await _context.ClassStudents
+                .Include(enrollment => enrollment.Class)
+                .Where(enrollment =>
+                    profileIds.Contains(enrollment.StudentId) &&
+                    (enrollment.ClassId == targetClass.Id ||
+                     (enrollment.CountsTowardCourseSemesterLimit &&
+                      enrollment.SemesterId == targetClass.SemesterId &&
+                      enrollment.CourseId == targetClass.CourseId)))
+                .ToListAsync(cancellationToken);
+
+        var profilesByCode = profiles
+            .Where(student => !string.IsNullOrWhiteSpace(student.NormalizedRollNumber ?? student.RollNumber))
+            .GroupBy(student => student.NormalizedRollNumber ?? student.RollNumber!, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.ToList(), StringComparer.OrdinalIgnoreCase);
+        var profilesByEmail = profiles
+            .Where(student => !string.IsNullOrWhiteSpace(student.Email))
+            .GroupBy(student => student.Email!, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.ToList(), StringComparer.OrdinalIgnoreCase);
+
+        var insertedCount = 0;
+        var updatedCount = 0;
+        var errors = new List<ImportStudentCommitErrorDto>();
+
+        foreach (var row in rows)
+        {
+            profilesByCode.TryGetValue(row.StudentCode, out var codeProfiles);
+            var profileByCode = codeProfiles?.Count == 1 ? codeProfiles[0] : null;
+            profilesByEmail.TryGetValue(row.Email, out var emailProfiles);
+            var profileByEmail = emailProfiles?.Count == 1 ? emailProfiles[0] : null;
+
+            if ((codeProfiles?.Count ?? 0) > 1 ||
+                (emailProfiles?.Count ?? 0) > 1 ||
+                (profileByCode != null && profileByEmail != null && profileByCode.Id != profileByEmail.Id) ||
+                (profileByCode != null && !string.Equals(profileByCode.Email, row.Email, StringComparison.OrdinalIgnoreCase)) ||
+                (profileByEmail != null &&
+                 !string.Equals(profileByEmail.NormalizedRollNumber ?? profileByEmail.RollNumber, row.StudentCode, StringComparison.OrdinalIgnoreCase)))
+            {
+                errors.Add(RowError(row, ErrorCodes.ClassStudentIdentityConflict, "Student code and email no longer identify one unique student profile."));
+                continue;
+            }
+
+            var profile = profileByCode ?? profileByEmail;
+            var currentEnrollment = profile == null
+                ? null
+                : enrollments.FirstOrDefault(enrollment =>
+                    enrollment.StudentId == profile.Id && enrollment.ClassId == targetClass.Id);
+            if (currentEnrollment != null)
+            {
+                errors.Add(RowError(
+                    row,
+                    currentEnrollment.EnrollmentStatus == EnrollmentStatus.Dropped
+                        ? ErrorCodes.ClassStudentReEnrollmentRequired
+                        : ErrorCodes.ClassStudentAlreadyEnrolled,
+                    currentEnrollment.EnrollmentStatus == EnrollmentStatus.Dropped
+                        ? "Student has a dropped enrollment. Use the explicit re-enroll action."
+                        : "Student already has an enrollment in this class."));
+                continue;
+            }
+
+            var conflict = profile == null
+                ? null
+                : enrollments.FirstOrDefault(enrollment =>
+                    enrollment.StudentId == profile.Id && enrollment.CountsTowardCourseSemesterLimit);
+            if (conflict != null)
+            {
+                errors.Add(RowError(
+                    row,
+                    ErrorCodes.ClassStudentEnrollmentConflict,
+                    $"Student is already enrolled in class '{conflict.Class.ClassCode}' for the same course and semester."));
+                continue;
+            }
+
+            if (profile == null)
+            {
+                profile = new Student
+                {
+                    RollNumber = row.StudentCode,
+                    NormalizedRollNumber = row.StudentCode,
+                    FullName = row.FullName,
+                    Email = row.Email,
+                    MajorCode = MajorCodes.IsValid(row.MajorCode) ? row.MajorCode : null,
+                    Status = StudentStatus.Active,
+                    CreatedBy = currentUserId
+                };
+                _context.Students.Add(profile);
+                profilesByCode[row.StudentCode] = [profile];
+                profilesByEmail[row.Email] = [profile];
+            }
+
+            currentEnrollment = new ClassStudent
+            {
+                ClassId = targetClass.Id,
+                StudentId = profile.Id,
+                SemesterId = targetClass.SemesterId,
+                CourseId = targetClass.CourseId,
+                EnrollmentStatus = EnrollmentStatus.Active,
+                CountsTowardCourseSemesterLimit = true,
+                MajorCodeAtEnrollment = row.MajorCode,
+                MajorVerificationStatus = EnrollmentMajorVerificationStatus.Unverified,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
+            _context.ClassStudents.Add(currentEnrollment);
+            enrollments.Add(currentEnrollment);
+            insertedCount++;
+        }
+
+        session.Status = ClassImportSessionStatus.Consumed;
+        session.ConsumedAtUtc = DateTime.UtcNow;
+        session.ProcessingStartedAtUtc = null;
+
+        _context.ClassAuditLogs.Add(new ClassAuditLog
+        {
+            ClassId = targetClass.Id,
+            Action = "STUDENT_IMPORT_COMMITTED",
+            PerformedByUserId = currentUserId,
+            OccurredAtUtc = DateTime.UtcNow,
+            DetailsJson = JsonSerializer.Serialize(new
+            {
+                SessionId = session.Id,
+                InsertedCount = insertedCount,
+                UpdatedCount = updatedCount,
+                ErrorCount = errors.Count
+            }, JsonOptions)
+        });
+        ClassOutbox.Enqueue(_context, "Class.StudentRosterImported.v1", targetClass.Id, new
+        {
+            SessionId = session.Id,
+            InsertedCount = insertedCount,
+            ErrorCount = errors.Count
+        });
 
         await _context.SaveChangesAsync(cancellationToken);
 
-        var response = new ImportStudentsCommitResponse
+        return new ImportStudentsCommitResponse
         {
             InsertedCount = insertedCount,
             UpdatedCount = updatedCount,
-            SkippedCount = skippedCount,
-            ErrorCount = 0
+            SkippedCount = errors.Count,
+            ErrorCount = errors.Count,
+            Errors = errors
         };
-
-        return Result.Success(response);
     }
+
+    private async Task ReleaseAsync(ClassImportSession session, CancellationToken cancellationToken)
+    {
+        session.Status = ClassImportSessionStatus.Available;
+        session.ProcessingStartedAtUtc = null;
+        await _context.SaveChangesAsync(cancellationToken);
+    }
+
+    private async Task ResetAfterFailureAsync(Guid sessionId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            _context.ClearChanges();
+            var session = await _context.ClassImportSessions
+                .FirstOrDefaultAsync(candidate => candidate.Id == sessionId, cancellationToken);
+            if (session?.Status == ClassImportSessionStatus.Processing)
+            {
+                session.Status = ClassImportSessionStatus.Available;
+                session.ProcessingStartedAtUtc = null;
+                await _context.SaveChangesAsync(cancellationToken);
+            }
+        }
+        catch
+        {
+            // The lease permits recovery if infrastructure is unavailable here.
+        }
+    }
+
+    private static ImportStudentCommitErrorDto RowError(
+        ImportStudentRowPreviewDto row,
+        string errorCode,
+        string errorMessage) => new()
+    {
+        RowNumber = row.RowNumber,
+        StudentCode = row.StudentCode,
+        ErrorCode = errorCode,
+        ErrorMessage = errorMessage
+    };
+
+    private static Result<ImportStudentsCommitResponse> Failure(string code, string message) =>
+        Result.Failure<ImportStudentsCommitResponse>(new Error(code, message));
 }

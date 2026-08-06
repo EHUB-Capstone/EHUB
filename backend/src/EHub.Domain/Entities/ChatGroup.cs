@@ -15,6 +15,7 @@ public class ChatGroup : AuditableEntity
 
     public string GroupName { get; set; } = string.Empty;
     public ChatGroupType GroupType { get; set; } = ChatGroupType.CustomGroup;
+    public bool IsReadOnly { get; set; }
 
     public Guid CreatedById { get; set; }
     public virtual User Creator { get; set; } = null!;

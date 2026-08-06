@@ -22,10 +22,18 @@ public class AppDbContext : DbContext, IApplicationDbContext
     public DbSet<Course> Courses => Set<Course>();
     public DbSet<Class> Classes => Set<Class>();
     public DbSet<ClassLecturer> ClassLecturers => Set<ClassLecturer>();
+    public DbSet<ClassAuditLog> ClassAuditLogs => Set<ClassAuditLog>();
+    public DbSet<ClassImportSession> ClassImportSessions => Set<ClassImportSession>();
+    public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
     public DbSet<Student> Students => Set<Student>();
     public DbSet<ClassStudent> ClassStudents => Set<ClassStudent>();
     public DbSet<Team> Teams => Set<Team>();
     public DbSet<TeamMember> TeamMembers => Set<TeamMember>();
+    public DbSet<TeamProposal> TeamProposals => Set<TeamProposal>();
+    public DbSet<TeamProposalMember> TeamProposalMembers => Set<TeamProposalMember>();
+    public DbSet<TeamProposalHistory> TeamProposalHistory => Set<TeamProposalHistory>();
+    public DbSet<ProjectDirection> ProjectDirections => Set<ProjectDirection>();
+    public DbSet<ProjectDirectionReview> ProjectDirectionReviews => Set<ProjectDirectionReview>();
     public DbSet<Project> Projects => Set<Project>();
     public DbSet<ProjectTag> ProjectTags => Set<ProjectTag>();
     public DbSet<Checkpoint> Checkpoints => Set<Checkpoint>();
@@ -98,4 +106,6 @@ public class AppDbContext : DbContext, IApplicationDbContext
 
         return await base.SaveChangesAsync(cancellationToken);
     }
+
+    public void ClearChanges() => ChangeTracker.Clear();
 }

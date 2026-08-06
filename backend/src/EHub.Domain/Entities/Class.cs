@@ -23,14 +23,18 @@ public class Class : AuditableEntity
     public string? ScheduleJson { get; set; }
 
     public bool IsEnrollmentMajorLocked { get; set; } = false;
-    public ClassStatus Status { get; set; } = ClassStatus.Active;
+    public ClassStatus Status { get; set; } = ClassStatus.Draft;
 
     public DateTime? ArchivedAtUtc { get; set; }
     public Guid? ArchivedByUserId { get; set; }
     public virtual User? ArchivedByUser { get; set; }
+    public ClassStatus? StatusBeforeArchive { get; set; }
 
     public Guid? CreatedById { get; set; }
     public virtual User? Creator { get; set; }
+
+    // PostgreSQL optimistic concurrency token mapped to the system xmin column.
+    public uint Version { get; set; }
 
     // Navigation properties
     public virtual ICollection<ClassLecturer> ClassLecturers { get; set; } = new List<ClassLecturer>();
@@ -43,4 +47,6 @@ public class Class : AuditableEntity
     public virtual ICollection<WorkshopAttendance> WorkshopAttendances { get; set; } = new List<WorkshopAttendance>();
     public virtual ICollection<Milestone> Milestones { get; set; } = new List<Milestone>();
     public virtual ICollection<WeeklyTask> WeeklyTasks { get; set; } = new List<WeeklyTask>();
+    public virtual ICollection<ClassAuditLog> AuditLogs { get; set; } = new List<ClassAuditLog>();
+    public virtual ICollection<ClassImportSession> ImportSessions { get; set; } = new List<ClassImportSession>();
 }

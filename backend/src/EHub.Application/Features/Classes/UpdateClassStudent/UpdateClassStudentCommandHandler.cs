@@ -1,10 +1,11 @@
 using System;
 using System.Linq;
-using System.Net.Mail;
 using System.Threading;
 using System.Threading.Tasks;
 using EHub.Application.Common.Interfaces.Persistence;
+using EHub.Application.Features.Classes.Common;
 using EHub.Contracts.Classes;
+using EHub.Domain.Entities;
 using EHub.Domain.Enums;
 using EHub.Shared.Constants;
 using EHub.Shared.Errors;
@@ -31,40 +32,31 @@ public sealed class UpdateClassStudentCommandHandler : IUpdateClassStudentComman
         CancellationToken cancellationToken = default)
     {
         var isAdmin = string.Equals(currentUserRole, SystemRoles.Admin, StringComparison.OrdinalIgnoreCase);
-        var isLecturer = string.Equals(currentUserRole, SystemRoles.Lecturer, StringComparison.OrdinalIgnoreCase);
-
-        if (!isAdmin && !isLecturer)
+        if (!isAdmin)
         {
             return Result.Failure<ClassStudentDto>(
-                new Error("Classes.AccessDenied", "You do not have permission to update student information."));
+                new Error(ErrorCodes.ClassAccessDenied, "Only an administrator can correct enrollment major data."));
         }
 
         var targetClass = await _context.Classes
-            .Include(c => c.ClassLecturers)
             .FirstOrDefaultAsync(c => c.Id == classId, cancellationToken);
 
         if (targetClass == null)
         {
             return Result.Failure<ClassStudentDto>(
-                new Error("Classes.NotFound", "The requested class was not found."));
+                new Error(ErrorCodes.ClassNotFound, "The requested class was not found."));
         }
 
         if (targetClass.Status == ClassStatus.Archived)
         {
             return Result.Failure<ClassStudentDto>(
-                new Error("Classes.ClassArchived", "Cannot update student in an archived class."));
+                new Error(ErrorCodes.ClassArchived, "Cannot update student in an archived class."));
         }
 
-        if (isLecturer)
+        if (string.IsNullOrWhiteSpace(request.Reason) || request.Reason.Trim().Length < 5 || request.Reason.Trim().Length > 500)
         {
-            var isAssigned = targetClass.PrimaryLecturerId == currentUserId ||
-                             targetClass.ClassLecturers.Any(cl => cl.LecturerId == currentUserId);
-
-            if (!isAssigned)
-            {
-                return Result.Failure<ClassStudentDto>(
-                    new Error("Classes.AccessDenied", "You can only update students in classes assigned to you."));
-            }
+            return Result.Failure<ClassStudentDto>(
+                new Error(ErrorCodes.ClassValidationError, "A correction reason between 5 and 500 characters is required."));
         }
 
         var classStudent = await _context.ClassStudents
@@ -76,34 +68,85 @@ public sealed class UpdateClassStudentCommandHandler : IUpdateClassStudentComman
         if (classStudent == null)
         {
             return Result.Failure<ClassStudentDto>(
-                new Error("Classes.StudentNotFound", "Student is not enrolled in this class."));
+                new Error(ErrorCodes.ClassStudentNotFound, "Student is not enrolled in this class."));
         }
 
-        if (!string.IsNullOrWhiteSpace(request.FullName))
+        if (string.IsNullOrWhiteSpace(request.MajorCode))
         {
-            classStudent.Student.FullName = request.FullName.Trim();
+            return Result.Failure<ClassStudentDto>(
+                new Error(ErrorCodes.ClassValidationError, "Major code is required."));
         }
 
-        if (!string.IsNullOrWhiteSpace(request.Email) && MailAddress.TryCreate(request.Email.Trim(), out _))
-        {
-            classStudent.Student.Email = request.Email.Trim().ToLowerInvariant();
-        }
-
+        var changed = false;
+        var previousMajorCode = classStudent.MajorCodeAtEnrollment;
         if (!string.IsNullOrWhiteSpace(request.MajorCode))
         {
-            classStudent.Student.MajorCode = request.MajorCode.Trim().ToUpperInvariant();
+            var normalizedMajorCode = request.MajorCode.Trim().ToUpperInvariant();
+            if (!MajorCodes.IsValid(normalizedMajorCode))
+            {
+                return Result.Failure<ClassStudentDto>(
+                    new Error(ErrorCodes.ClassValidationError, $"Major code '{request.MajorCode}' is invalid."));
+            }
+
+            if (targetClass.IsEnrollmentMajorLocked &&
+                !string.Equals(classStudent.MajorCodeAtEnrollment, normalizedMajorCode, StringComparison.OrdinalIgnoreCase))
+            {
+                return Result.Failure<ClassStudentDto>(
+                    new Error(ErrorCodes.ClassEnrollmentMajorLocked, "Enrollment major is locked for this class."));
+            }
+
+            if (!string.Equals(classStudent.MajorCodeAtEnrollment, normalizedMajorCode, StringComparison.OrdinalIgnoreCase))
+            {
+                classStudent.MajorCodeAtEnrollment = normalizedMajorCode;
+                classStudent.MajorVerificationStatus = EnrollmentMajorVerificationStatus.Unverified;
+                classStudent.MajorVerifiedAtUtc = null;
+                classStudent.MajorVerifiedByUserId = null;
+                changed = true;
+            }
         }
 
-        if (!string.IsNullOrWhiteSpace(request.EnrollmentStatus) &&
-            Enum.TryParse<EnrollmentStatus>(request.EnrollmentStatus, true, out var newStatus))
+        if (changed)
         {
-            classStudent.EnrollmentStatus = newStatus;
+            _context.ClassAuditLogs.Add(new ClassAuditLog
+            {
+                ClassId = classId,
+                Action = "ENROLLMENT_MAJOR_CORRECTED",
+                PerformedByUserId = currentUserId,
+                OccurredAtUtc = DateTime.UtcNow,
+                DetailsJson = System.Text.Json.JsonSerializer.Serialize(new
+                {
+                    StudentId = studentId,
+                    PreviousMajorCode = previousMajorCode,
+                    NewMajorCode = classStudent.MajorCodeAtEnrollment,
+                    Reason = request.Reason.Trim()
+                })
+            });
+            ClassOutbox.Enqueue(_context, "Class.EnrollmentMajorCorrected.v1", classId, new
+            {
+                StudentId = studentId,
+                PreviousMajorCode = previousMajorCode,
+                NewMajorCode = classStudent.MajorCodeAtEnrollment,
+                Reason = request.Reason.Trim()
+            });
         }
 
         classStudent.UpdatedAt = DateTime.UtcNow;
-        await _context.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await _context.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return Result.Failure<ClassStudentDto>(
+                new Error(ErrorCodes.ClassConcurrencyConflict, "The enrollment changed concurrently. Refresh the roster and try again."));
+        }
+        catch (DbUpdateException)
+        {
+            return Result.Failure<ClassStudentDto>(
+                new Error(ErrorCodes.ClassStudentEnrollmentConflict, "The student already has an enrollment for this course in the semester."));
+        }
 
-        var activeTeamMember = classStudent.TeamMembers.FirstOrDefault(tm => tm.Team != null && tm.Team.Status == TeamStatus.Active);
+        var activeTeamMember = classStudent.TeamMembers.FirstOrDefault(tm => tm.CountsTowardActiveTeam && tm.Team != null && tm.Team.Status == TeamStatus.Active);
 
         var dto = new ClassStudentDto
         {
@@ -111,7 +154,9 @@ public sealed class UpdateClassStudentCommandHandler : IUpdateClassStudentComman
             RollNumber = classStudent.Student.RollNumber ?? string.Empty,
             FullName = classStudent.Student.FullName,
             Email = classStudent.Student.Email ?? string.Empty,
-            MajorCode = classStudent.Student.MajorCode,
+            MajorCode = classStudent.MajorCodeAtEnrollment,
+            ProfileMajorCode = classStudent.Student.MajorCode,
+            MajorVerificationStatus = classStudent.MajorVerificationStatus.ToString(),
             MemberCode = classStudent.MemberCode,
             EnrollmentStatus = classStudent.EnrollmentStatus.ToString(),
             TeamId = activeTeamMember?.TeamId,

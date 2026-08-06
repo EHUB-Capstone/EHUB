@@ -13,6 +13,10 @@ import {
   X,
 } from 'lucide-react';
 import Button from '../ui/Button';
+import { classApi } from '../../api/classApi';
+import { teamApi } from '../../api/teamApi';
+import { unwrapApiData } from '../../utils/classMappers';
+import { parseApiError } from '../../utils/apiError';
 import type {
   ManagedTeam,
   TeamClassOption,
@@ -20,11 +24,11 @@ import type {
   TeamStudent,
 } from '../../types/teamManagement';
 import {
-  applyTeamDraft,
   buildStudentTeamAssignments,
   entityId,
   getTeamMemberIds,
   getTeamProject,
+  normalizeManagedTeam,
   TEAM_MEMBER_LIMIT,
   validateTeamDraft,
 } from '../../utils/teamManagement';
@@ -71,6 +75,7 @@ export default function TeamManagementModal({
   });
   const [search, setSearch] = useState('');
   const [attemptedSubmit, setAttemptedSubmit] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   const currentTeamId = team?._id || '';
   const validation = useMemo(
@@ -131,21 +136,36 @@ export default function TeamManagementModal({
     });
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     setAttemptedSubmit(true);
     if (!validation.isValid) {
       toast.error('Please correct the highlighted team information.');
       return;
     }
 
-    const generatedId = typeof crypto.randomUUID === 'function'
-      ? crypto.randomUUID()
-      : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-    const teamId = team?._id || `frontend-team-${generatedId}`;
-    const teamCode = team?.teamCode || `${classInfo.code}_TEAM_${String(teams.length + 1).padStart(2, '0')}`;
-    const savedTeam = applyTeamDraft(draft, students, team, teamCode, teamId);
-    onSave(savedTeam);
-    toast.success(team ? 'Team updated successfully' : 'Team created successfully');
+    setSubmitting(true);
+    try {
+      const response = team
+        ? await teamApi.updateMembers(team._id, {
+            teamName: draft.teamName.trim(),
+            description: draft.description.trim(),
+            memberIds: draft.memberIds,
+            leaderStudentId: draft.leaderId,
+            rowVersion: team.rowVersion,
+          })
+        : await classApi.createTeam(classInfo.id, {
+            teamName: draft.teamName.trim(),
+            description: draft.description.trim() || null,
+            memberIds: draft.memberIds,
+            leaderStudentId: draft.leaderId,
+          });
+      onSave(normalizeManagedTeam(unwrapApiData(response)));
+      toast.success(team ? 'Team members updated successfully' : 'Team created successfully');
+    } catch (error) {
+      toast.error(parseApiError(error, team ? 'Failed to update team.' : 'Failed to create team.').message);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -214,12 +234,12 @@ export default function TeamManagementModal({
                 </div>
               </section>
 
-              <section className="space-y-4 rounded-2xl border border-secondary-100 bg-secondary-50/50 p-4">
+              <section className="hidden space-y-4 rounded-2xl border border-secondary-100 bg-secondary-50/50 p-4">
                 <div className="flex items-center gap-2">
                   <FolderKanban className="h-4 w-4 text-secondary" />
                   <div>
-                    <h3 className="text-sm font-bold text-slate-900">Linked project</h3>
-                    <p className="text-xs text-slate-500">Optional project information shown in team detail</p>
+                    <h3 className="text-sm font-bold text-slate-900">Project direction</h3>
+                    <p className="text-xs text-slate-500">Created separately by the team leader after this official team is saved.</p>
                   </div>
                 </div>
 
@@ -323,7 +343,7 @@ export default function TeamManagementModal({
           <p className="text-xs text-slate-500"><strong>{draft.memberIds.length}</strong> member{draft.memberIds.length === 1 ? '' : 's'} · {draft.projectName.trim() ? 'Project linked' : 'No project linked'}</p>
           <div className="flex gap-2">
             <Button variant="outline" onClick={onClose}>Cancel</Button>
-            <Button variant="gradient" icon={team ? UserCheck : UserPlus} onClick={handleSubmit}>{team ? 'Save changes' : 'Create team'}</Button>
+            <Button variant="gradient" icon={team ? UserCheck : UserPlus} isLoading={submitting} onClick={handleSubmit}>{team ? 'Save members' : 'Create team'}</Button>
           </div>
         </footer>
       </div>

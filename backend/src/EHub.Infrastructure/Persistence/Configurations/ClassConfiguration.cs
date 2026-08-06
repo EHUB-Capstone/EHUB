@@ -51,14 +51,27 @@ public class ClassConfiguration : IEntityTypeConfiguration<Class>
             .HasMaxLength(20)
             .IsRequired();
 
+        builder.ToTable(tableBuilder => tableBuilder.HasCheckConstraint(
+            "CK_classes_active_requires_lecturer_and_schedule",
+            "status <> 'Active' OR (primary_lecturer_id IS NOT NULL AND schedule_json IS NOT NULL AND jsonb_typeof(schedule_json) = 'array' AND jsonb_array_length(schedule_json) > 0)"));
+
         builder.Property(c => c.ArchivedAtUtc)
             .HasColumnName("archived_at_utc");
 
         builder.Property(c => c.ArchivedByUserId)
             .HasColumnName("archived_by_user_id");
 
+        builder.Property(c => c.StatusBeforeArchive)
+            .HasColumnName("status_before_archive")
+            .HasConversion<string>()
+            .HasMaxLength(20);
+
         builder.Property(c => c.CreatedById)
             .HasColumnName("created_by_id");
+
+        builder.Property(c => c.Version)
+            .IsRowVersion()
+            .HasColumnName("xmin");
 
         // Composite unique indexes & performance indexes
         builder.HasIndex(c => new { c.ClassCode, c.SemesterId })
