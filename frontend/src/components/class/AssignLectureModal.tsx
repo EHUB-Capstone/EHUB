@@ -15,7 +15,7 @@ export default function AssignLectureModal({ classId, currentLecture, rowVersion
   useEffect(() => {
     const fetchLecturers = async () => {
       try {
-        const res = await userApi.getAll({ role: 'LECTURER', limit: 200 });
+        const res = await userApi.getAll({ role: 'LECTURER', limit: 100 });
         const list = res?.data?.users || res?.users || [];
         setLecturers(list.map(lecturer => ({
           ...lecturer,

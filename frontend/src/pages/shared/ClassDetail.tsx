@@ -329,7 +329,8 @@ export default function ClassDetail() {
       } else {
         await classApi.archive(id, { rowVersion: cls.rowVersion, reason: lifecycleReason.trim() });
         toast.success('Class archived successfully');
-        navigate('/admin/classes');
+        const targetRoute = user?.role === 'LECTURER' ? '/lecturer/classes' : '/admin/classes';
+        navigate(targetRoute);
       }
     } catch (err) {
       toast.error(parseApiError(err, 'Failed to change class lifecycle').message);
@@ -542,12 +543,14 @@ export default function ClassDetail() {
               <GraduationCap className="h-4.5 w-4.5 text-primary" />
             </div>
             <div className="min-w-0">
+            </div>
+            <div className="min-w-0">
               <p className="text-[10px] text-slate-400 uppercase font-semibold tracking-wider">Lecturer</p>
               <p className="font-semibold text-slate-800 text-sm truncate">{cls.lectureId?.name || <span className="text-amber-500">Not assigned</span>}</p>
               {cls.lectureId?.email && <p className="text-[11px] text-slate-400 truncate">{cls.lectureId.email}</p>}
             </div>
           </div>
-          {!isArchived && (user?.role === 'ADMIN' || user?.role === 'LECTURER') && (
+          {!isArchived && user?.role === 'ADMIN' && (
             <button
               onClick={() => setShowAssignLecturer(true)}
               className="shrink-0 cursor-pointer rounded-md border border-primary-100 bg-primary-50 px-2 py-1 text-[11px] font-semibold text-primary transition-colors hover:border-primary-200 hover:bg-primary-100"

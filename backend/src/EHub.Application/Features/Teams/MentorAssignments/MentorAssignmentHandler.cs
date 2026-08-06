@@ -27,10 +27,14 @@ public sealed class MentorAssignmentHandler : IMentorAssignmentHandler
     public async Task<Result<IReadOnlyCollection<MentorCandidateDto>>> GetCandidatesAsync(
         Guid classId, Guid userId, string role, CancellationToken cancellationToken = default)
     {
-        if (!IsRole(role, SystemRoles.Admin))
-            return Result.Failure<IReadOnlyCollection<MentorCandidateDto>>(new Error(ErrorCodes.ClassAccessDenied, "Only an administrator can view mentor candidates."));
-        if (!await _context.Classes.AsNoTracking().AnyAsync(item => item.Id == classId, cancellationToken))
+        var targetClass = await _context.Classes.AsNoTracking().FirstOrDefaultAsync(item => item.Id == classId, cancellationToken);
+        if (targetClass == null)
             return Result.Failure<IReadOnlyCollection<MentorCandidateDto>>(new Error(ErrorCodes.ClassNotFound, "The requested class was not found."));
+
+        var isAdmin = IsRole(role, SystemRoles.Admin);
+        var isAssignedLecturer = IsRole(role, SystemRoles.Lecturer) && targetClass.PrimaryLecturerId == userId;
+        if (!isAdmin && !isAssignedLecturer)
+            return Result.Failure<IReadOnlyCollection<MentorCandidateDto>>(new Error(ErrorCodes.ClassAccessDenied, "You cannot view mentor candidates for this class."));
 
         var candidates = await _context.MentorProfiles.AsNoTracking()
             .Where(profile => profile.Status == MentorProfileStatus.Active && profile.User.Status == UserStatus.Active)
@@ -107,8 +111,6 @@ public sealed class MentorAssignmentHandler : IMentorAssignmentHandler
     public async Task<Result<MentorAssignmentDto>> AssignAsync(
         Guid teamId, AssignMentorRequest request, Guid userId, string role, CancellationToken cancellationToken = default)
     {
-        if (!IsRole(role, SystemRoles.Admin))
-            return Failure(ErrorCodes.ClassAccessDenied, "Only an administrator can assign or reassign a mentor.");
         if (request.MentorProfileId == Guid.Empty)
             return Failure(ErrorCodes.ClassValidationError, "Mentor profile id is required.");
         if ((request.Note?.Length ?? 0) > 1_000)
@@ -121,6 +123,12 @@ public sealed class MentorAssignmentHandler : IMentorAssignmentHandler
                 var team = await _context.Teams.Include(item => item.Class)
                     .FirstOrDefaultAsync(item => item.Id == teamId, transactionCancellationToken);
                 if (team == null) return Failure(ErrorCodes.TeamNotFound, "The requested team was not found.");
+
+                var isAdmin = IsRole(role, SystemRoles.Admin);
+                var isAssignedLecturer = IsRole(role, SystemRoles.Lecturer) && team.Class.PrimaryLecturerId == userId;
+                if (!isAdmin && !isAssignedLecturer)
+                    return Failure(ErrorCodes.ClassAccessDenied, "Only an administrator or assigned lecturer can assign a mentor.");
+
                 if (team.Status != TeamStatus.Active || team.Class.Status == ClassStatus.Archived)
                     return Failure(ErrorCodes.TeamInactive, "A mentor can only be assigned to an active team in a non-archived class.");
 
@@ -193,14 +201,17 @@ public sealed class MentorAssignmentHandler : IMentorAssignmentHandler
     public async Task<Result> EndAsync(
         Guid teamId, EndMentorAssignmentRequest request, Guid userId, string role, CancellationToken cancellationToken = default)
     {
-        if (!IsRole(role, SystemRoles.Admin))
-            return Result.Failure(new Error(ErrorCodes.ClassAccessDenied, "Only an administrator can end a mentor assignment."));
         if (string.IsNullOrWhiteSpace(request.Reason) || request.Reason.Trim().Length is < 3 or > 1_000)
             return Result.Failure(new Error(ErrorCodes.ClassValidationError, "A reason between 3 and 1000 characters is required."));
 
-        var current = await _context.MentorAssignments.Include(item => item.Team)
+        var current = await _context.MentorAssignments.Include(item => item.Team).ThenInclude(item => item.Class)
             .FirstOrDefaultAsync(item => item.TeamId == teamId && item.Status == MentorAssignmentStatus.Active && item.EndedAt == null, cancellationToken);
         if (current == null) return Result.Success();
+
+        var isAdmin = IsRole(role, SystemRoles.Admin);
+        var isAssignedLecturer = IsRole(role, SystemRoles.Lecturer) && current.Team.Class.PrimaryLecturerId == userId;
+        if (!isAdmin && !isAssignedLecturer)
+            return Result.Failure(new Error(ErrorCodes.ClassAccessDenied, "Only an administrator or assigned lecturer can end a mentor assignment."));
         var now = DateTime.UtcNow;
         current.Status = MentorAssignmentStatus.Ended;
         current.EndedAt = now;
