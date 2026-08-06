@@ -148,7 +148,13 @@ export async function importStudentsIntoCreatedClasses(
     }
 
     try {
-      const workbook = buildStudentImportWorkbookBlob(matchingRows);
+      const workbook = buildStudentImportWorkbookBlob(matchingRows.map(r => ({
+        studentCode: r.studentCode,
+        fullName: r.fullName,
+        email: r.email,
+        majorCode: r.majorCode,
+        classCode: targetClass.classCode,
+      })));
       const formData = new FormData();
       formData.append('file', workbook, `${targetClass.classCode}-students.xlsx`);
 
@@ -194,7 +200,7 @@ export async function importStudentsIntoCreatedClasses(
       const committed = unwrapData<ImportCommitResponse>(
         await api.commitImportStudents(classId, { sessionId: preview.sessionId }),
       );
-      summary.insertedCount += committed.insertedCount ?? 0;
+      summary.insertedCount += committed.insertedCount ?? (committed as any).enrolledCount ?? 0;
       summary.updatedCount += committed.updatedCount ?? 0;
 
       for (const row of committed.errors ?? []) {

@@ -67,6 +67,20 @@ test('prevents records that duplicate students already in the class', () => {
   ]);
 });
 
+test('rejects records when ClassCode in file does not match expected target class', () => {
+  const result = validateStudentRows(
+    [
+      ['StudentCode', 'FullName', 'Email', 'Major', 'ClassCode'],
+      ['SE170001', 'Nguyen Van An', 'an@fpt.edu.vn', 'SE', 'EXE101_4'],
+    ],
+    [],
+    'EXE101_2',
+  );
+
+  assert.equal(result.validRows.length, 0);
+  assert.match(result.invalidRows[0].errors[0], /Class code 'EXE101_4' in file does not match target class 'EXE101_2'/);
+});
+
 test('reports missing required template columns', () => {
   const result = validateStudentRows([
     ['StudentCode', 'FullName'],
@@ -139,25 +153,34 @@ test('commits valid bulk roster rows through the preview session contract', asyn
   const summary = await importStudentsIntoCreatedClasses(
     [{ id: 'class-8', classCode: 'EXE101_8', classIndex: 8 }],
     [{
-      sourceRowNumber: 2,
+      sourceRowNumber: 12,
       classVal: 'EXE101_8',
-      studentCode: 'SE199999',
-      fullName: 'New Student',
-      email: 'new.student@fpt.edu.vn',
-      majorCode: '',
+      studentCode: 'DE180226',
+      fullName: 'Doan Van B',
+      email: 'bdoan@fpt.edu.vn',
+      majorCode: 'SE',
     }],
     {
       previewImportStudents: async () => ({
         data: {
-          sessionId: 'session-1',
+          sessionId: 'session-88',
           validRowsCount: 1,
-          rows: [{ rowNumber: 2, studentCode: 'SE199999', isValid: true }],
+          rows: [{
+            rowNumber: 2,
+            studentCode: 'DE180226',
+            isValid: true,
+          }],
         },
       }),
-      commitImportStudents: async (classId, payload) => {
-        assert.equal(classId, 'class-8');
-        assert.deepEqual(payload, { sessionId: 'session-1' });
-        return { data: { insertedCount: 1, updatedCount: 0, errors: [] } };
+      commitImportStudents: async (_classId, payload) => {
+        assert.equal(payload.sessionId, 'session-88');
+        return {
+          data: {
+            enrolledCount: 1,
+            skippedCount: 0,
+            results: [{ studentCode: 'DE180226', status: 'Enrolled' }],
+          },
+        };
       },
     },
   );

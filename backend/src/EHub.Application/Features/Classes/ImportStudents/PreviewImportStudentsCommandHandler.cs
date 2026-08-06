@@ -85,7 +85,7 @@ public sealed class PreviewImportStudentsCommandHandler : IPreviewImportStudents
             return Failure(ErrorCodes.ClassAccessDenied, "You can only import students to your assigned class.");
         }
 
-        var parseResult = ParseWorkbook(file);
+        var parseResult = ParseWorkbook(file, targetClass.ClassCode);
         if (parseResult.IsFailure)
         {
             return Result.Failure<ImportStudentsPreviewResponse>(parseResult.Error);
@@ -124,7 +124,7 @@ public sealed class PreviewImportStudentsCommandHandler : IPreviewImportStudents
         });
     }
 
-    internal static Result<List<ImportStudentRowPreviewDto>> ParseWorkbook(IFormFile file)
+    internal static Result<List<ImportStudentRowPreviewDto>> ParseWorkbook(IFormFile file, string? expectedClassCode = null)
     {
         try
         {
@@ -135,12 +135,12 @@ public sealed class PreviewImportStudentsCommandHandler : IPreviewImportStudents
 
             if (LooksLikeXml(content))
             {
-                return ParseSpreadsheetMl(content);
+                return ParseSpreadsheetMl(content, expectedClassCode);
             }
 
             content.Position = 0;
             using var reader = ExcelReaderFactory.CreateReader(content);
-            return ParseWorksheet(reader);
+            return ParseWorksheet(reader, expectedClassCode);
         }
         catch
         {
@@ -193,7 +193,7 @@ public sealed class PreviewImportStudentsCommandHandler : IPreviewImportStudents
         return false;
     }
 
-    private static Result<List<ImportStudentRowPreviewDto>> ParseSpreadsheetMl(Stream stream)
+    private static Result<List<ImportStudentRowPreviewDto>> ParseSpreadsheetMl(Stream stream, string? expectedClassCode = null)
     {
         stream.Position = 0;
         var settings = new XmlReaderSettings
@@ -243,7 +243,7 @@ public sealed class PreviewImportStudentsCommandHandler : IPreviewImportStudents
             rows.Add(new SpreadsheetRow(rowNumber, ReadSpreadsheetMlCells(rowElement, spreadsheet)));
         }
 
-        return ParseRows(rows);
+        return ParseRows(rows, expectedClassCode);
     }
 
     private static IReadOnlyList<string> ReadSpreadsheetMlCells(XElement row, XNamespace spreadsheet)
@@ -279,7 +279,7 @@ public sealed class PreviewImportStudentsCommandHandler : IPreviewImportStudents
     private static int? ParsePositiveIndex(string? value) =>
         int.TryParse(value, out var parsed) && parsed > 0 ? parsed : null;
 
-    private static Result<List<ImportStudentRowPreviewDto>> ParseWorksheet(IExcelDataReader reader)
+    private static Result<List<ImportStudentRowPreviewDto>> ParseWorksheet(IExcelDataReader reader, string? expectedClassCode = null)
     {
         if (!reader.Read() || reader.FieldCount == 0)
         {
@@ -317,10 +317,12 @@ public sealed class PreviewImportStudentsCommandHandler : IPreviewImportStudents
                     .ToArray()));
         }
 
-        return ParseRows(rows);
+        return ParseRows(rows, expectedClassCode);
     }
 
-    private static Result<List<ImportStudentRowPreviewDto>> ParseRows(IReadOnlyList<SpreadsheetRow> sourceRows)
+    private static Result<List<ImportStudentRowPreviewDto>> ParseRows(
+        IReadOnlyList<SpreadsheetRow> sourceRows,
+        string? expectedClassCode = null)
     {
         if (sourceRows.Count == 0)
         {
@@ -347,13 +349,18 @@ public sealed class PreviewImportStudentsCommandHandler : IPreviewImportStudents
             var rawMajor = columns.MajorCode >= 0
                 ? GetCellText(sourceRow.Cells, columns.MajorCode)
                 : MajorCodes.Undeclared;
+            var rawClassCode = columns.ClassCode >= 0
+                ? GetCellText(sourceRow.Cells, columns.ClassCode)
+                : string.Empty;
+
             if (string.IsNullOrWhiteSpace(rawMajor))
             {
                 rawMajor = MajorCodes.Undeclared;
             }
 
             if (string.IsNullOrWhiteSpace(rawCode) && string.IsNullOrWhiteSpace(rawName) &&
-                string.IsNullOrWhiteSpace(rawEmail) && string.IsNullOrWhiteSpace(rawMajor))
+                string.IsNullOrWhiteSpace(rawEmail) && string.IsNullOrWhiteSpace(rawMajor) &&
+                string.IsNullOrWhiteSpace(rawClassCode))
             {
                 continue;
             }
@@ -365,6 +372,14 @@ public sealed class PreviewImportStudentsCommandHandler : IPreviewImportStudents
                 rawMajor,
                 out var input,
                 allowUndeclaredMajor: true);
+
+            if (validationError == null &&
+                !string.IsNullOrWhiteSpace(rawClassCode) &&
+                !string.IsNullOrWhiteSpace(expectedClassCode) &&
+                !string.Equals(rawClassCode.Trim(), expectedClassCode.Trim(), StringComparison.OrdinalIgnoreCase))
+            {
+                validationError = $"Class code '{rawClassCode}' in file does not match target class '{expectedClassCode}'.";
+            }
 
             if (validationError == null && !seenCodes.Add(input.StudentCode))
             {
@@ -509,24 +524,26 @@ public sealed class PreviewImportStudentsCommandHandler : IPreviewImportStudents
     private static string GetCellText(IReadOnlyList<string> values, int columnIndex) =>
         columnIndex >= 0 && columnIndex < values.Count ? values[columnIndex].Trim() : string.Empty;
 
-    private static (int StudentCode, int FullName, int Email, int MajorCode) FindColumns(
+    private static (int StudentCode, int FullName, int Email, int MajorCode, int ClassCode) FindColumns(
         IReadOnlyList<string> header)
     {
         var studentCode = -1;
         var fullName = -1;
         var email = -1;
         var majorCode = -1;
+        var classCode = -1;
 
         for (var column = 0; column < header.Count; column++)
         {
             var value = header[column].Replace(" ", string.Empty).ToLowerInvariant();
-            if (value is "studentcode" or "rollnumber" or "mssv") studentCode = column;
-            else if (value is "fullname" or "name") fullName = column;
+            if (value is "studentcode" or "rollnumber" or "mssv" or "masv" or "masinhvien") studentCode = column;
+            else if (value is "fullname" or "name" or "hoten" or "hovaten") fullName = column;
             else if (value == "email") email = column;
-            else if (value is "majorcode" or "major") majorCode = column;
+            else if (value is "majorcode" or "major" or "chuyennganh" or "nganh") majorCode = column;
+            else if (value is "classcode" or "class" or "malop" or "lop" or "classname") classCode = column;
         }
 
-        return (studentCode, fullName, email, majorCode);
+        return (studentCode, fullName, email, majorCode, classCode);
     }
 
     private sealed record SpreadsheetRow(int RowNumber, IReadOnlyList<string> Cells);
