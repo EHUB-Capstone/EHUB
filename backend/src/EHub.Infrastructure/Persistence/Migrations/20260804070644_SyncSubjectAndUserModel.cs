@@ -10,27 +10,24 @@ namespace EHub.Infrastructure.Persistence.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.AddColumn<string>(
-                name: "key",
-                table: "rubric_criteria",
-                type: "character varying(100)",
-                maxLength: 100,
-                nullable: false,
-                defaultValue: "");
+            // Some existing development databases applied the now-removed
+            // AddSubjectCheckpointRubricConfiguration migration, which already
+            // created these columns without recording this migration ID. Keep
+            // this migration safe for both those databases and a clean database.
+            migrationBuilder.Sql("""
+                ALTER TABLE rubric_criteria
+                ADD COLUMN IF NOT EXISTS key character varying(100) NOT NULL DEFAULT '';
+                """);
 
-            migrationBuilder.AddColumn<string>(
-                name: "levels_json",
-                table: "rubric_criteria",
-                type: "text",
-                nullable: false,
-                defaultValue: "[]");
+            migrationBuilder.Sql("""
+                ALTER TABLE rubric_criteria
+                ADD COLUMN IF NOT EXISTS levels_json text NOT NULL DEFAULT '[]';
+                """);
 
-            migrationBuilder.AddColumn<string>(
-                name: "requirements_json",
-                table: "checkpoints",
-                type: "text",
-                nullable: false,
-                defaultValue: "[]");
+            migrationBuilder.Sql("""
+                ALTER TABLE checkpoints
+                ADD COLUMN IF NOT EXISTS requirements_json text NOT NULL DEFAULT '[]';
+                """);
         }
 
         /// <inheritdoc />
