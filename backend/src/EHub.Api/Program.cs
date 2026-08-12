@@ -97,7 +97,8 @@ if (app.Environment.IsDevelopment())
     catch (Exception ex)
     {
         var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-        logger.LogError(ex, "An error occurred while migrating or seeding the database.");
+        logger.LogCritical(ex, "Database migration or seeding failed. The API will not start with a partial schema.");
+        throw;
     }
 }
 
