@@ -210,6 +210,8 @@ public sealed class StudentClassSummaryDto
     public string SubjectName { get; init; } = string.Empty;
     public string Semester { get; init; } = string.Empty;
     public int Year { get; init; }
+    public string ClassStatus { get; init; } = string.Empty;
+    public string EnrollmentStatus { get; init; } = string.Empty;
     public StudentClassLecturerDto? LectureId { get; init; }
     public IReadOnlyCollection<MentorSummaryDto> Mentors { get; init; } = Array.Empty<MentorSummaryDto>();
 }

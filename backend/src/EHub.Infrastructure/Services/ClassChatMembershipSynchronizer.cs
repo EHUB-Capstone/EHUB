@@ -31,10 +31,13 @@ internal sealed class ClassChatMembershipSynchronizer : IClassChatMembershipSync
             ?? throw new InvalidOperationException($"Class '{classId}' no longer exists.");
 
         var creatorId = await ResolveCreatorIdAsync(targetClass, requestedByUserId, cancellationToken);
+        var usesCompletedRoster = targetClass.Status == ClassStatus.Completed ||
+            targetClass.Status == ClassStatus.Archived && targetClass.StatusBeforeArchive == ClassStatus.Completed;
+        var rosterStatus = usesCompletedRoster ? EnrollmentStatus.Completed : EnrollmentStatus.Active;
 
         // Auto-link missing UserId for students if a matching User account exists by email
         var activeClassStudents = await _context.ClassStudents.AsNoTracking()
-            .Where(cs => cs.ClassId == classId && cs.EnrollmentStatus == EnrollmentStatus.Active)
+            .Where(cs => cs.ClassId == classId && cs.EnrollmentStatus == rosterStatus)
             .Select(cs => new { cs.StudentId, cs.Student.UserId, cs.Student.Email })
             .Distinct()
             .ToListAsync(cancellationToken);
@@ -72,7 +75,7 @@ internal sealed class ClassChatMembershipSynchronizer : IClassChatMembershipSync
         }
 
         var activeStudentMap = await _context.ClassStudents.AsNoTracking()
-            .Where(cs => cs.ClassId == classId && cs.EnrollmentStatus == EnrollmentStatus.Active)
+            .Where(cs => cs.ClassId == classId && cs.EnrollmentStatus == rosterStatus)
             .Select(cs => new StudentIdentity(cs.StudentId, cs.Student != null ? cs.Student.UserId : (Guid?)null))
             .Distinct()
             .ToListAsync(cancellationToken);
@@ -90,7 +93,8 @@ internal sealed class ClassChatMembershipSynchronizer : IClassChatMembershipSync
 
         var mentors = await _context.MentorAssignments.AsNoTracking()
             .Where(item => teamIds.Contains(item.TeamId) &&
-                item.Status == MentorAssignmentStatus.Active && item.EndedAt == null)
+                (usesCompletedRoster ||
+                 item.Status == MentorAssignmentStatus.Active && item.EndedAt == null))
             .Select(item => new { item.TeamId, UserId = item.MentorProfile != null ? item.MentorProfile.UserId : Guid.Empty })
             .Where(item => item.UserId != Guid.Empty)
             .ToListAsync(cancellationToken);
@@ -124,7 +128,7 @@ internal sealed class ClassChatMembershipSynchronizer : IClassChatMembershipSync
         var added = 0;
         var reactivated = 0;
         var ended = 0;
-        var isReadOnly = targetClass.Status == ClassStatus.Archived;
+        var isReadOnly = targetClass.Status is ClassStatus.Completed or ClassStatus.Archived;
 
         var classGroup = groups.FirstOrDefault(item => item.GroupType == ChatGroupType.ClassGroup && item.TeamId == null);
         if (classGroup == null)

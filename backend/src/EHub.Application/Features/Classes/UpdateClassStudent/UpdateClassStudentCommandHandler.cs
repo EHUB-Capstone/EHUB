@@ -55,10 +55,10 @@ public sealed class UpdateClassStudentCommandHandler : IUpdateClassStudentComman
                 new Error(ErrorCodes.ClassAccessDenied, "You can only correct enrollment major data for classes assigned to you."));
         }
 
-        if (targetClass.Status == ClassStatus.Archived)
+        var mutationError = ClassStateRules.GetMutationError(targetClass.Status);
+        if (mutationError != null)
         {
-            return Result.Failure<ClassStudentDto>(
-                new Error(ErrorCodes.ClassArchived, "Cannot update student in an archived class."));
+            return Result.Failure<ClassStudentDto>(mutationError);
         }
 
         if (string.IsNullOrWhiteSpace(request.Reason) || request.Reason.Trim().Length < 5 || request.Reason.Trim().Length > 500)

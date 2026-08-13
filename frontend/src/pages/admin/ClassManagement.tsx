@@ -32,6 +32,7 @@ const statusColor: Record<ClassStatus, string> = {
   Draft: 'bg-amber-50 text-amber-700',
   Active: 'bg-green-50 text-green-700',
   Inactive: 'bg-slate-100 text-slate-600',
+  Completed: 'bg-blue-50 text-blue-700',
   Archived: 'bg-red-50 text-red-600',
 };
 const classCodeCollator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
@@ -303,6 +304,7 @@ export default function ClassManagement() {
             <option value="Draft">Draft</option>
             <option value="Active">Active</option>
             <option value="Inactive">Inactive</option>
+            <option value="Completed">Completed</option>
             {(isAdmin || isLecturer) && <option value="Archived">Archived</option>}
           </select>
           <select
@@ -475,7 +477,7 @@ export default function ClassManagement() {
                     >
                       <RotateCcw className="w-3.5 h-3.5" /> Restore
                     </button>
-                  ) : canManageClassRecord(cls) && (isAdmin || classFeatureFlags.lecturerStudentImport) && (
+                  ) : cls.status !== 'Completed' && canManageClassRecord(cls) && (isAdmin || classFeatureFlags.lecturerStudentImport) && (
                     <button
                       onClick={(e) => { e.stopPropagation(); setImportTarget(cls._id); }}
                       className="flex-1 flex items-center justify-center gap-1.5 text-xs text-primary hover:text-primary-dark font-medium transition-colors border-l border-slate-100"

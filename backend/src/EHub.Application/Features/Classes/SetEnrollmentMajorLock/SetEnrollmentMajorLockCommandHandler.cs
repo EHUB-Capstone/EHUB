@@ -45,9 +45,10 @@ public sealed class SetEnrollmentMajorLockCommandHandler : ISetEnrollmentMajorLo
             return Failure(ErrorCodes.ClassAccessDenied, "You can only lock or unlock enrollment majors for classes assigned to you.");
         }
 
-        if (targetClass.Status == ClassStatus.Archived)
+        var mutationError = ClassStateRules.GetMutationError(targetClass.Status);
+        if (mutationError != null)
         {
-            return Failure(ErrorCodes.ClassArchived, "Enrollment major settings cannot be changed for an archived class.");
+            return Failure(mutationError.Code, mutationError.Message);
         }
 
         var effectiveTarget = shouldLock;

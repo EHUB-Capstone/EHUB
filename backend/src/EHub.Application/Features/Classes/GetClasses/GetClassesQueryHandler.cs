@@ -72,7 +72,7 @@ public sealed class GetClassesQueryHandler : IGetClassesQueryHandler
         else
         {
             return Result.Failure<ClassListResponse>(
-                new Error(ErrorCodes.ClassValidationError, "Status filter must be Draft, Active, Inactive, or Archived."));
+                new Error(ErrorCodes.ClassValidationError, "Status filter must be Draft, Active, Inactive, Completed, or Archived."));
         }
 
         // 4. AcademicTerm Filter
@@ -166,9 +166,16 @@ public sealed class GetClassesQueryHandler : IGetClassesQueryHandler
                 c.ScheduleJson,
                 c.IsEnrollmentMajorLocked,
                 c.Status,
-                StudentCount = c.ClassStudents.Count(cs => cs.EnrollmentStatus == EnrollmentStatus.Active),
+                c.StatusBeforeArchive,
+                StudentCount = c.ClassStudents.Count(cs =>
+                    c.Status == ClassStatus.Completed ||
+                    c.Status == ClassStatus.Archived && c.StatusBeforeArchive == ClassStatus.Completed
+                        ? cs.EnrollmentStatus == EnrollmentStatus.Completed
+                        : cs.EnrollmentStatus == EnrollmentStatus.Active),
                 TeamCount = c.Teams.Count(t => t.Status == TeamStatus.Active),
                 c.CreatedAt,
+                c.CompletedAtUtc,
+                c.CompletionReason,
                 c.Version
             })
             .ToListAsync(cancellationToken);
@@ -179,8 +186,10 @@ public sealed class GetClassesQueryHandler : IGetClassesQueryHandler
             .Where(assignment =>
                 pageClassIds.Contains(assignment.Team.ClassId) &&
                 assignment.Team.Status == TeamStatus.Active &&
-                assignment.Status == MentorAssignmentStatus.Active &&
-                assignment.EndedAt == null)
+                (assignment.Team.Class.Status == ClassStatus.Completed ||
+                 assignment.Team.Class.Status == ClassStatus.Archived &&
+                 assignment.Team.Class.StatusBeforeArchive == ClassStatus.Completed ||
+                 assignment.Status == MentorAssignmentStatus.Active && assignment.EndedAt == null))
             .Select(assignment => new
             {
                 ClassId = assignment.Team.ClassId,
@@ -219,12 +228,15 @@ public sealed class GetClassesQueryHandler : IGetClassesQueryHandler
             PrimaryLecturerEmail = c.PrimaryLecturerEmail,
             Room = c.Room,
             Schedules = ClassScheduleRules.Deserialize(c.ScheduleJson),
-            IsEnrollmentMajorLocked = c.Status != ClassStatus.Archived && c.IsEnrollmentMajorLocked,
+            IsEnrollmentMajorLocked = !ClassStateRules.IsReadOnly(c.Status) && c.IsEnrollmentMajorLocked,
             Status = c.Status.ToString(),
+            StatusBeforeArchive = c.StatusBeforeArchive?.ToString(),
             StudentCount = c.StudentCount,
             TeamCount = c.TeamCount,
             Mentors = mentorsByClass.GetValueOrDefault(c.Id) ?? Array.Empty<ClassMentorSummaryDto>(),
             CreatedAtUtc = c.CreatedAt,
+            CompletedAtUtc = c.CompletedAtUtc,
+            CompletionReason = c.CompletionReason,
             RowVersion = c.Version.ToString()
         }).ToArray();
 

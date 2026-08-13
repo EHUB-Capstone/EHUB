@@ -89,7 +89,9 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
         "Team.LeaderAssigned.v1" or
         "Team.MentorAssignmentChanged.v1" or
         "Class.Archived.v1" or
-        "Class.Restored.v1";
+        "Class.Restored.v1" or
+        "Class.Completed.v1" or
+        "Class.Reopened.v1";
 
     private async Task AddForOptionalUserAsync(
         OutboxMessage message,

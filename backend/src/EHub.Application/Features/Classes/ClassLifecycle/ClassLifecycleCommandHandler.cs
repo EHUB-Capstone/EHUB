@@ -124,6 +124,11 @@ public sealed class ClassLifecycleCommandHandler : IClassLifecycleCommandHandler
         var now = DateTime.UtcNow;
         if (shouldArchive)
         {
+            if (await _context.ClassImportSessions.AsNoTracking().AnyAsync(
+                    item => item.ClassId == targetClass.Id && item.Status == ClassImportSessionStatus.Processing,
+                    cancellationToken))
+                return Failure(ErrorCodes.ClassRestoreInvalid, "Wait for the active import operation to finish before archiving the class.");
+
             var previousStatus = targetClass.Status;
             targetClass.StatusBeforeArchive = previousStatus;
             targetClass.Status = ClassStatus.Archived;
@@ -131,6 +136,12 @@ public sealed class ClassLifecycleCommandHandler : IClassLifecycleCommandHandler
             targetClass.ArchivedByUserId = currentUserId;
             targetClass.IsEnrollmentMajorLocked = false;
             targetClass.UpdatedBy = currentUserId;
+
+            var availableSessions = await _context.ClassImportSessions
+                .Where(item => item.ClassId == targetClass.Id && item.Status == ClassImportSessionStatus.Available)
+                .ToListAsync(cancellationToken);
+            foreach (var session in availableSessions)
+                session.ExpiresAtUtc = now;
 
             AddAuditAndEvent(targetClass, ArchivedAction, "Class.Archived.v1", previousStatus, ClassStatus.Archived, reason, currentUserId, now);
         }
@@ -167,10 +178,14 @@ public sealed class ClassLifecycleCommandHandler : IClassLifecycleCommandHandler
 
     private async Task<string?> ValidateRestoreAsync(Class targetClass, CancellationToken cancellationToken)
     {
+        var intendedStatus = targetClass.StatusBeforeArchive ??
+            ClassScheduleRules.DetermineOperationalStatus(targetClass.PrimaryLecturerId, targetClass.ScheduleJson);
+
         if (targetClass.Course.Status != CourseStatus.Active)
             return "The subject is inactive and must be activated before this class can be restored.";
 
-        if (targetClass.Semester.Status is SemesterStatus.Completed or SemesterStatus.Archived)
+        if (targetClass.Semester.Status == SemesterStatus.Archived ||
+            intendedStatus != ClassStatus.Completed && targetClass.Semester.Status != SemesterStatus.Active)
             return "The semester is completed or archived and cannot accept a restored class.";
 
         if (await _context.Classes.AsNoTracking().AnyAsync(item =>
@@ -180,8 +195,6 @@ public sealed class ClassLifecycleCommandHandler : IClassLifecycleCommandHandler
                  item.CourseId == targetClass.CourseId && item.ClassIndex == targetClass.ClassIndex), cancellationToken))
             return "The class code or class index is already used in this semester.";
 
-        var intendedStatus = targetClass.StatusBeforeArchive ??
-            ClassScheduleRules.DetermineOperationalStatus(targetClass.PrimaryLecturerId, targetClass.ScheduleJson);
         var schedules = ClassScheduleRules.Deserialize(targetClass.ScheduleJson);
         var scheduleValidation = ClassScheduleRules.Validate(schedules);
         if (scheduleValidation != null)
@@ -210,10 +223,13 @@ public sealed class ClassLifecycleCommandHandler : IClassLifecycleCommandHandler
             return "An active class must have one active primary lecturer before it can be restored.";
         }
 
+        if (intendedStatus == ClassStatus.Completed)
+            return null;
+
         var otherClasses = await _context.Classes.AsNoTracking()
             .Where(item => item.Id != targetClass.Id &&
                 item.SemesterId == targetClass.SemesterId &&
-                item.Status != ClassStatus.Archived &&
+                (item.Status == ClassStatus.Draft || item.Status == ClassStatus.Active) &&
                 item.ScheduleJson != null)
             .Select(item => new { item.ClassCode, item.PrimaryLecturerId, item.Room, item.ScheduleJson })
             .ToListAsync(cancellationToken);
@@ -270,6 +286,7 @@ public sealed class ClassLifecycleCommandHandler : IClassLifecycleCommandHandler
     {
         ClassId = targetClass.Id,
         Status = targetClass.Status.ToString(),
+        CompletedAtUtc = targetClass.CompletedAtUtc,
         ArchivedAtUtc = targetClass.ArchivedAtUtc,
         RowVersion = targetClass.Version.ToString()
     };

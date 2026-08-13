@@ -37,10 +37,13 @@ public sealed class ClassResponse
     public IReadOnlyCollection<ClassScheduleSlotDto> Schedules { get; init; } = Array.Empty<ClassScheduleSlotDto>();
     public bool IsEnrollmentMajorLocked { get; init; }
     public string Status { get; init; } = string.Empty;
+    public string? StatusBeforeArchive { get; init; }
     public int StudentCount { get; init; }
     public int TeamCount { get; init; }
     public IReadOnlyCollection<ClassMentorSummaryDto> Mentors { get; init; } = Array.Empty<ClassMentorSummaryDto>();
     public DateTime CreatedAtUtc { get; init; }
+    public DateTime? CompletedAtUtc { get; init; }
+    public string? CompletionReason { get; init; }
     public string RowVersion { get; init; } = string.Empty;
 }
 
@@ -230,7 +233,25 @@ public sealed class ClassLifecycleResponse
 {
     public Guid ClassId { get; init; }
     public string Status { get; init; } = string.Empty;
+    public DateTime? CompletedAtUtc { get; init; }
     public DateTime? ArchivedAtUtc { get; init; }
+    public string RowVersion { get; init; } = string.Empty;
+}
+
+public sealed class ClassCompletionPreviewResponse
+{
+    public Guid ClassId { get; init; }
+    public string ClassCode { get; init; } = string.Empty;
+    public string Status { get; init; } = string.Empty;
+    public int ActiveEnrollmentCount { get; init; }
+    public int DroppedEnrollmentCount { get; init; }
+    public int ActiveMentorAssignmentCount { get; init; }
+    public int OpenTeamProposalCount { get; init; }
+    public int OpenProjectDirectionCount { get; init; }
+    public int ProcessingImportSessionCount { get; init; }
+    public int ScheduledMentoringSessionCount { get; init; }
+    public IReadOnlyCollection<string> Blockers { get; init; } = Array.Empty<string>();
+    public IReadOnlyCollection<string> Warnings { get; init; } = Array.Empty<string>();
     public string RowVersion { get; init; } = string.Empty;
 }
 

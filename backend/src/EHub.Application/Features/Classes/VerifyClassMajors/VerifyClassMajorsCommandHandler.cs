@@ -58,9 +58,10 @@ public sealed class VerifyClassMajorsCommandHandler : IVerifyClassMajorsCommandH
             return Failure(ErrorCodes.ClassAccessDenied, "You can only verify enrollment majors for classes assigned to you.");
         }
 
-        if (targetClass.Status == ClassStatus.Archived)
+        var mutationError = ClassStateRules.GetMutationError(targetClass.Status);
+        if (mutationError != null)
         {
-            return Failure(ErrorCodes.ClassArchived, "Cannot verify enrollment majors for an archived class.");
+            return Failure(mutationError.Code, mutationError.Message);
         }
 
         if (file == null || file.Length == 0)

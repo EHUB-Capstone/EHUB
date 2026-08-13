@@ -10,6 +10,7 @@ using EHub.Application.Features.Classes.CreateBulkClasses;
 using EHub.Application.Features.Classes.CreateClass;
 using EHub.Application.Features.Classes.ClassAudit;
 using EHub.Application.Features.Classes.ClassLifecycle;
+using EHub.Application.Features.Classes.ClassCompletion;
 using EHub.Application.Common.Interfaces.Services;
 using EHub.Application.Features.Classes.ExportClassRoster;
 using EHub.Application.Features.Classes.GetClassDetail;
@@ -381,6 +382,54 @@ public sealed class ClassesController : ControllerBase
         return Ok(ApiResponse<ClassLifecycleResponse>.SuccessResponse(result.Value, "Class restored successfully."));
     }
 
+    [HttpGet("{id:guid}/completion-preview")]
+    public async Task<IActionResult> PreviewClassCompletion(
+        Guid id,
+        [FromServices] IClassCompletionCommandHandler commandHandler,
+        CancellationToken cancellationToken)
+    {
+        var result = await commandHandler.PreviewAsync(
+            id, _currentUserService.UserId ?? Guid.Empty, GetCurrentUserRole(), cancellationToken);
+        if (result.IsFailure) return ToClassErrorResponse(result.Error);
+
+        return Ok(ApiResponse<ClassCompletionPreviewResponse>.SuccessResponse(
+            result.Value,
+            "Class completion preview generated successfully."));
+    }
+
+    [HttpPost("{id:guid}/complete")]
+    public async Task<IActionResult> CompleteClass(
+        Guid id,
+        [FromBody] ChangeClassLifecycleRequest request,
+        [FromServices] IClassCompletionCommandHandler commandHandler,
+        CancellationToken cancellationToken)
+    {
+        var result = await commandHandler.CompleteAsync(
+            id, request, _currentUserService.UserId ?? Guid.Empty, GetCurrentUserRole(), cancellationToken);
+        if (result.IsFailure) return ToClassErrorResponse(result.Error);
+
+        return Ok(ApiResponse<ClassLifecycleResponse>.SuccessResponse(
+            result.Value,
+            "Class completed successfully."));
+    }
+
+    [HttpPost("{id:guid}/reopen")]
+    [Authorize(Policy = SystemPolicies.AdminOnly)]
+    public async Task<IActionResult> ReopenClass(
+        Guid id,
+        [FromBody] ChangeClassLifecycleRequest request,
+        [FromServices] IClassCompletionCommandHandler commandHandler,
+        CancellationToken cancellationToken)
+    {
+        var result = await commandHandler.ReopenAsync(
+            id, request, _currentUserService.UserId ?? Guid.Empty, GetCurrentUserRole(), cancellationToken);
+        if (result.IsFailure) return ToClassErrorResponse(result.Error);
+
+        return Ok(ApiResponse<ClassLifecycleResponse>.SuccessResponse(
+            result.Value,
+            "Class reopened successfully."));
+    }
+
     [HttpPost("{id:guid}/repair-chat-memberships")]
     public async Task<IActionResult> RepairChatMemberships(
         Guid id,
@@ -605,6 +654,8 @@ public sealed class ClassesController : ControllerBase
             ErrorCodes.ClassIndexDuplicated or
             ErrorCodes.ClassBulkCreateInvalid or
             ErrorCodes.ClassLecturerRequired or
+            ErrorCodes.ClassCompleted or
+            ErrorCodes.ClassCompletionBlocked or
             ErrorCodes.ClassArchived or
             ErrorCodes.ClassStudentIdentityConflict or
             ErrorCodes.ClassStudentAlreadyEnrolled or

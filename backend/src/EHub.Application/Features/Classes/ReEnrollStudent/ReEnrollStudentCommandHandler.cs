@@ -40,9 +40,10 @@ public sealed class ReEnrollStudentCommandHandler : IReEnrollStudentCommandHandl
             return Failure(ErrorCodes.ClassNotFound, "The requested class was not found.");
         }
 
-        if (targetClass.Status == ClassStatus.Archived)
+        var mutationError = ClassStateRules.GetMutationError(targetClass.Status);
+        if (mutationError != null)
         {
-            return Failure(ErrorCodes.ClassArchived, "Cannot re-enroll students in an archived class.");
+            return Failure(mutationError.Code, mutationError.Message);
         }
 
         if (isLecturer && targetClass.PrimaryLecturerId != currentUserId)

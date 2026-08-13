@@ -129,8 +129,10 @@ public sealed class MentorAssignmentHandler : IMentorAssignmentHandler
                 if (!isAdmin && !isAssignedLecturer)
                     return Failure(ErrorCodes.ClassAccessDenied, "Only an administrator or assigned lecturer can assign a mentor.");
 
-                if (team.Status != TeamStatus.Active || team.Class.Status == ClassStatus.Archived)
-                    return Failure(ErrorCodes.TeamInactive, "A mentor can only be assigned to an active team in a non-archived class.");
+                if (team.Status != TeamStatus.Active)
+                    return Failure(ErrorCodes.TeamInactive, "A mentor can only be assigned to an active team.");
+                var mutationError = ClassStateRules.GetMutationError(team.Class.Status);
+                if (mutationError != null) return Failure(mutationError.Code, mutationError.Message);
 
                 var mentor = await _context.MentorProfiles.Include(profile => profile.User)
                     .FirstOrDefaultAsync(profile => profile.Id == request.MentorProfileId, transactionCancellationToken);
@@ -212,6 +214,9 @@ public sealed class MentorAssignmentHandler : IMentorAssignmentHandler
         var isAssignedLecturer = IsRole(role, SystemRoles.Lecturer) && current.Team.Class.PrimaryLecturerId == userId;
         if (!isAdmin && !isAssignedLecturer)
             return Result.Failure(new Error(ErrorCodes.ClassAccessDenied, "Only an administrator or assigned lecturer can end a mentor assignment."));
+        var mutationError = ClassStateRules.GetMutationError(current.Team.Class.Status);
+        if (mutationError != null)
+            return Result.Failure(mutationError);
         var now = DateTime.UtcNow;
         current.Status = MentorAssignmentStatus.Ended;
         current.EndedAt = now;

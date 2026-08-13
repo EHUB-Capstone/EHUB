@@ -20,22 +20,39 @@ public sealed class StudentClassSelfServiceHandler : IStudentClassSelfServiceHan
     }
 
     public async Task<Result<MyClassesResponse>> GetMyClassesAsync(
-        Guid userId, string role, CancellationToken cancellationToken = default)
+        Guid userId, string role, string scope = "Current", CancellationToken cancellationToken = default)
     {
         var studentId = await ResolveStudentIdAsync(userId, role, cancellationToken);
         if (studentId.IsFailure) return Result.Failure<MyClassesResponse>(studentId.Error);
-        var classes = await _context.ClassStudents.AsNoTracking()
+        var normalizedScope = scope.Trim();
+        if (!string.Equals(normalizedScope, "Current", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(normalizedScope, "History", StringComparison.OrdinalIgnoreCase))
+            return Result.Failure<MyClassesResponse>(new Error(ErrorCodes.ClassValidationError, "Scope must be Current or History."));
+        var isHistory = string.Equals(normalizedScope, "History", StringComparison.OrdinalIgnoreCase);
+
+        var enrollmentQuery = _context.ClassStudents.AsNoTracking()
             .Include(item => item.Class).ThenInclude(item => item.Course)
             .Include(item => item.Class).ThenInclude(item => item.Semester)
             .Include(item => item.Class).ThenInclude(item => item.PrimaryLecturer)
-            .Where(item => item.StudentId == studentId.Value && item.EnrollmentStatus == EnrollmentStatus.Active && item.Class.Status != ClassStatus.Archived)
+            .Where(item => item.StudentId == studentId.Value);
+        enrollmentQuery = isHistory
+            ? enrollmentQuery.Where(item =>
+                item.EnrollmentStatus == EnrollmentStatus.Completed &&
+                (item.Class.Status == ClassStatus.Completed || item.Class.Status == ClassStatus.Archived))
+            : enrollmentQuery.Where(item =>
+                item.EnrollmentStatus == EnrollmentStatus.Active &&
+                (item.Class.Status == ClassStatus.Draft || item.Class.Status == ClassStatus.Active));
+
+        var enrollments = await enrollmentQuery
             .OrderByDescending(item => item.Class.Semester.Year)
             .ThenBy(item => item.Class.ClassCode)
-            .Select(item => item.Class)
             .ToListAsync(cancellationToken);
-        var mentorsByClass = await LoadMentorsByClassAsync(classes.Select(item => item.Id).ToArray(), cancellationToken);
-        var result = classes
-            .Select(item => MapClass(item, mentorsByClass.GetValueOrDefault(item.Id) ?? Array.Empty<MentorSummaryDto>()))
+        var mentorsByClass = await LoadMentorsByClassAsync(enrollments.Select(item => item.ClassId).ToArray(), cancellationToken);
+        var result = enrollments
+            .Select(item => MapClass(
+                item.Class,
+                mentorsByClass.GetValueOrDefault(item.ClassId) ?? Array.Empty<MentorSummaryDto>(),
+                item.EnrollmentStatus))
             .ToArray();
         return Result.Success(new MyClassesResponse { Classes = result });
     }
@@ -45,16 +62,24 @@ public sealed class StudentClassSelfServiceHandler : IStudentClassSelfServiceHan
     {
         var studentId = await ResolveStudentIdAsync(userId, role, cancellationToken);
         if (studentId.IsFailure) return Result.Failure<StudentClassDetailResponse>(studentId.Error);
-        var enrolled = await _context.ClassStudents.AsNoTracking().AnyAsync(item =>
-            item.ClassId == classId && item.StudentId == studentId.Value && item.EnrollmentStatus == EnrollmentStatus.Active, cancellationToken);
-        if (!enrolled) return Result.Failure<StudentClassDetailResponse>(new Error(ErrorCodes.ClassAccessDenied, "You are not actively enrolled in this class."));
+        var enrollmentStatus = await _context.ClassStudents.AsNoTracking()
+            .Where(item => item.ClassId == classId && item.StudentId == studentId.Value &&
+                (item.EnrollmentStatus == EnrollmentStatus.Active || item.EnrollmentStatus == EnrollmentStatus.Completed))
+            .Select(item => (EnrollmentStatus?)item.EnrollmentStatus)
+            .FirstOrDefaultAsync(cancellationToken);
+        if (!enrollmentStatus.HasValue)
+            return Result.Failure<StudentClassDetailResponse>(new Error(ErrorCodes.ClassAccessDenied, "You do not have an active or completed enrollment in this class."));
         var targetClass = await _context.Classes.AsNoTracking()
             .Include(item => item.Course).Include(item => item.Semester).Include(item => item.PrimaryLecturer)
             .FirstOrDefaultAsync(item => item.Id == classId, cancellationToken);
-        if (targetClass == null || targetClass.Status == ClassStatus.Archived)
+        if (targetClass == null ||
+            targetClass.Status == ClassStatus.Archived && enrollmentStatus != EnrollmentStatus.Completed)
             return Result.Failure<StudentClassDetailResponse>(new Error(ErrorCodes.ClassAccessDenied, "This class is not available."));
+        var rosterStatus = enrollmentStatus == EnrollmentStatus.Completed
+            ? EnrollmentStatus.Completed
+            : EnrollmentStatus.Active;
         var members = await _context.ClassStudents.AsNoTracking().Include(item => item.Student)
-            .Where(item => item.ClassId == classId && item.EnrollmentStatus == EnrollmentStatus.Active)
+            .Where(item => item.ClassId == classId && item.EnrollmentStatus == rosterStatus)
             .OrderBy(item => item.Student.RollNumber)
             .Select(item => new StudentClassMemberDto
             {
@@ -66,7 +91,7 @@ public sealed class StudentClassSelfServiceHandler : IStudentClassSelfServiceHan
         var mentorsByClass = await LoadMentorsByClassAsync([classId], cancellationToken);
         return Result.Success(new StudentClassDetailResponse
         {
-            Class = MapClass(targetClass, mentorsByClass.GetValueOrDefault(classId) ?? Array.Empty<MentorSummaryDto>()),
+            Class = MapClass(targetClass, mentorsByClass.GetValueOrDefault(classId) ?? Array.Empty<MentorSummaryDto>(), enrollmentStatus.Value),
             Students = members,
             Teams = teams.Select(TeamMappings.ToDto).ToArray()
         });
@@ -79,7 +104,9 @@ public sealed class StudentClassSelfServiceHandler : IStudentClassSelfServiceHan
         if (studentId.IsFailure) return Result.Failure<MyTeamResponse>(studentId.Error);
         var team = await TeamQuery()
             .Where(item => item.Status == TeamStatus.Active && item.TeamMembers.Any(member =>
-                member.StudentId == studentId.Value && member.CountsTowardActiveTeam))
+                member.StudentId == studentId.Value && member.CountsTowardActiveTeam &&
+                member.ClassStudent.EnrollmentStatus == EnrollmentStatus.Active) &&
+                (item.Class.Status == ClassStatus.Draft || item.Class.Status == ClassStatus.Active))
             .OrderByDescending(item => item.Class.Semester.Status == SemesterStatus.Active)
             .ThenByDescending(item => item.Class.Semester.Year)
             .FirstOrDefaultAsync(cancellationToken);
@@ -89,7 +116,7 @@ public sealed class StudentClassSelfServiceHandler : IStudentClassSelfServiceHan
         return Result.Success(new MyTeamResponse
         {
             Team = dto,
-            Class = MapClass(team.Class, mentorsByClass.GetValueOrDefault(team.ClassId) ?? Array.Empty<MentorSummaryDto>()),
+            Class = MapClass(team.Class, mentorsByClass.GetValueOrDefault(team.ClassId) ?? Array.Empty<MentorSummaryDto>(), EnrollmentStatus.Active),
             Members = dto.Members
         });
     }
@@ -113,8 +140,9 @@ public sealed class StudentClassSelfServiceHandler : IStudentClassSelfServiceHan
             .Where(assignment =>
                 classIds.Contains(assignment.Team.ClassId) &&
                 assignment.Team.Status == TeamStatus.Active &&
-                assignment.Status == MentorAssignmentStatus.Active &&
-                assignment.EndedAt == null)
+                (assignment.Team.Class.Status == ClassStatus.Completed ||
+                 assignment.Team.Class.Status == ClassStatus.Archived ||
+                 assignment.Status == MentorAssignmentStatus.Active && assignment.EndedAt == null))
             .Select(assignment => new
             {
                 ClassId = assignment.Team.ClassId,
@@ -138,12 +166,17 @@ public sealed class StudentClassSelfServiceHandler : IStudentClassSelfServiceHan
                     .ToArray());
     }
 
-    private static StudentClassSummaryDto MapClass(Class item, IReadOnlyCollection<MentorSummaryDto> mentors)
+    private static StudentClassSummaryDto MapClass(
+        Class item,
+        IReadOnlyCollection<MentorSummaryDto> mentors,
+        EnrollmentStatus enrollmentStatus)
     {
         return new StudentClassSummaryDto
         {
             Id = item.Id, ClassCode = item.ClassCode, SubjectCode = item.Course.Code, SubjectName = item.Course.Name,
             Semester = item.Semester.Code, Year = item.Semester.Year,
+            ClassStatus = item.Status.ToString(),
+            EnrollmentStatus = enrollmentStatus.ToString(),
             LectureId = item.PrimaryLecturer == null ? null : new StudentClassLecturerDto
             {
                 Id = item.PrimaryLecturer.Id, Name = item.PrimaryLecturer.FullName, Email = item.PrimaryLecturer.Email

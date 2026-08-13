@@ -20,15 +20,44 @@ public sealed class SubjectListResponse
 
 public sealed class SemesterResponse
 {
+    public Guid Id { get; init; }
     public string Semester { get; init; } = string.Empty;
     public int Year { get; init; }
+    public string Status { get; init; } = string.Empty;
+    public DateOnly? StartDate { get; init; }
+    public DateOnly? EndDate { get; init; }
+    public DateTime? CompletedAtUtc { get; init; }
+    public string? CompletionReason { get; init; }
+    public string RowVersion { get; init; } = string.Empty;
 }
 
 public sealed class CurrentSemesterResponse
 {
-    public SemesterResponse CurrentSemester { get; init; } = new();
+    public SemesterResponse? CurrentSemester { get; init; }
     public IReadOnlyCollection<int> AvailableYears { get; init; } = Array.Empty<int>();
     public bool IsDecember { get; init; }
+}
+
+public sealed class SemesterListResponse
+{
+    public IReadOnlyCollection<SemesterResponse> Semesters { get; init; } = Array.Empty<SemesterResponse>();
+}
+
+public sealed class SemesterCompletionPreviewResponse
+{
+    public Guid SemesterId { get; init; }
+    public string Semester { get; init; } = string.Empty;
+    public int Year { get; init; }
+    public string Status { get; init; } = string.Empty;
+    public int DraftClassCount { get; init; }
+    public int ActiveClassCount { get; init; }
+    public int InactiveClassCount { get; init; }
+    public int CompletedClassCount { get; init; }
+    public int ArchivedClassCount { get; init; }
+    public int ActiveEnrollmentCount { get; init; }
+    public int ProcessingImportSessionCount { get; init; }
+    public IReadOnlyCollection<string> Blockers { get; init; } = Array.Empty<string>();
+    public string RowVersion { get; init; } = string.Empty;
 }
 
 public sealed class TeachingAssignmentResponse

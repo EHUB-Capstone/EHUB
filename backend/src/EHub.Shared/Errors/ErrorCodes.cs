@@ -42,6 +42,8 @@ public static class ErrorCodes
     public const string ClassAccessDenied = "CLASS_ACCESS_DENIED";
     public const string ClassNotFound = "CLASS_NOT_FOUND";
     public const string ClassArchived = "CLASS_ARCHIVED";
+    public const string ClassCompleted = "CLASS_COMPLETED";
+    public const string ClassCompletionBlocked = "CLASS_COMPLETION_BLOCKED";
     public const string ClassValidationError = "VALIDATION_ERROR";
     public const string ClassScheduleConflict = "SCHEDULE_CONFLICT";
     public const string ClassConcurrencyConflict = "CLASS_CONCURRENCY_CONFLICT";
@@ -65,6 +67,13 @@ public static class ErrorCodes
     public const string ClassImportNoValidRows = "IMPORT_NO_VALID_ROWS";
     public const string ClassRestoreInvalid = "CLASS_RESTORE_INVALID";
     public const string ClassChatMembershipRepairFailed = "CHAT_MEMBERSHIP_REPAIR_FAILED";
+
+    // Semester lifecycle error codes
+    public const string SemesterNotFound = "SEMESTER_NOT_FOUND";
+    public const string SemesterInvalidState = "SEMESTER_INVALID_STATE";
+    public const string SemesterActivationBlocked = "SEMESTER_ACTIVATION_BLOCKED";
+    public const string SemesterCompletionBlocked = "SEMESTER_COMPLETION_BLOCKED";
+    public const string SemesterConcurrencyConflict = "SEMESTER_CONCURRENCY_CONFLICT";
 
     // Team, mentor assignment, and project direction error codes
     public const string TeamNotFound = "TEAM_NOT_FOUND";

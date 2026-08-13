@@ -97,9 +97,10 @@ public sealed class UpdateClassCommandHandler : IUpdateClassCommandHandler
             return Failure(ErrorCodes.ClassNotFound, "The requested class was not found.");
         }
 
-        if (targetClass.Status == ClassStatus.Archived)
+        var mutationError = ClassStateRules.GetMutationError(targetClass.Status);
+        if (mutationError != null)
         {
-            return Failure(ErrorCodes.ClassArchived, "Cannot update information of an archived class.");
+            return Failure(mutationError.Code, mutationError.Message);
         }
 
         if (targetClass.Version != expectedVersion)
@@ -227,9 +228,10 @@ public sealed class UpdateClassCommandHandler : IUpdateClassCommandHandler
             return Failure(ErrorCodes.ClassNotFound, "The requested class was not found.");
         }
 
-        if (targetClass.Status == ClassStatus.Archived)
+        var mutationError = ClassStateRules.GetMutationError(targetClass.Status);
+        if (mutationError != null)
         {
-            return Failure(ErrorCodes.ClassArchived, "Cannot update an archived class.");
+            return Failure(mutationError.Code, mutationError.Message);
         }
 
         if (targetClass.Version != expectedVersion)
@@ -368,7 +370,7 @@ public sealed class UpdateClassCommandHandler : IUpdateClassCommandHandler
                 @class.Id != targetClass.Id &&
                 @class.SemesterId == targetClass.SemesterId &&
                 @class.PrimaryLecturerId == lecturerId &&
-                @class.Status != ClassStatus.Archived &&
+                (@class.Status == ClassStatus.Draft || @class.Status == ClassStatus.Active) &&
                 @class.ScheduleJson != null)
             .Select(@class => new { @class.ClassCode, @class.ScheduleJson })
             .ToListAsync(cancellationToken);
@@ -410,7 +412,7 @@ public sealed class UpdateClassCommandHandler : IUpdateClassCommandHandler
             .Where(@class =>
                 @class.Id != targetClass.Id &&
                 @class.SemesterId == targetClass.SemesterId &&
-                @class.Status != ClassStatus.Archived &&
+                (@class.Status == ClassStatus.Draft || @class.Status == ClassStatus.Active) &&
                 @class.ScheduleJson != null)
             .Select(@class => new { @class.ClassCode, @class.Room, @class.ScheduleJson })
             .ToListAsync(cancellationToken);

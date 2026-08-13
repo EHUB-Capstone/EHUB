@@ -6,10 +6,13 @@ export type EditableSchedule = {
   room: string;
 };
 
-export const isClassReadOnly = (status: ClassStatus | string | undefined): boolean => status === 'Archived';
+export const isClassReadOnly = (status: ClassStatus | string | undefined): boolean =>
+  status === 'Completed' || status === 'Archived';
+
+export const isArchivedClass = (status: ClassStatus | string | undefined): boolean => status === 'Archived';
 
 export const getClassLifecyclePresentation = (status: ClassStatus | string | undefined) => (
-  isClassReadOnly(status)
+  isArchivedClass(status)
     ? { action: 'restore' as const, label: 'Restore Class', confirmLabel: 'Restore class' }
     : { action: 'archive' as const, label: 'Archive Class', confirmLabel: 'Archive class' }
 );

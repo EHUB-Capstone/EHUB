@@ -21,6 +21,9 @@ public class SemesterConfiguration : IEntityTypeConfiguration<Semester>
         builder.HasIndex(s => s.Code)
             .IsUnique();
 
+        builder.HasIndex(s => new { s.Term, s.Year })
+            .IsUnique();
+
         builder.Property(s => s.Name)
             .HasColumnName("name")
             .HasMaxLength(100)
@@ -48,6 +51,34 @@ public class SemesterConfiguration : IEntityTypeConfiguration<Semester>
             .HasMaxLength(20)
             .IsRequired();
 
+        builder.Property(s => s.CompletedAtUtc)
+            .HasColumnName("completed_at_utc");
+
+        builder.Property(s => s.CompletedByUserId)
+            .HasColumnName("completed_by_user_id");
+
+        builder.Property(s => s.CompletionReason)
+            .HasColumnName("completion_reason")
+            .HasMaxLength(500);
+
+        builder.Property(s => s.Version)
+            .IsRowVersion()
+            .HasColumnName("xmin");
+
+        builder.HasIndex(s => s.Status)
+            .IsUnique()
+            .HasFilter("status = 'Active' AND is_deleted = false");
+
+        builder.ToTable(table =>
+        {
+            table.HasCheckConstraint(
+                "CK_semesters_date_range",
+                "start_date IS NULL OR end_date IS NULL OR start_date <= end_date");
+            table.HasCheckConstraint(
+                "CK_semesters_completion_metadata",
+                "status <> 'Completed' OR (completed_at_utc IS NOT NULL AND completion_reason IS NOT NULL)");
+        });
+
         // Audit & Soft Delete properties configuration
         builder.Property(s => s.CreatedAt).HasColumnName("created_at").IsRequired();
         builder.Property(s => s.CreatedBy).HasColumnName("created_by");
@@ -59,5 +90,10 @@ public class SemesterConfiguration : IEntityTypeConfiguration<Semester>
 
         // Global query filter for soft delete
         builder.HasQueryFilter(s => !s.IsDeleted);
+
+        builder.HasOne(s => s.CompletedByUser)
+            .WithMany()
+            .HasForeignKey(s => s.CompletedByUserId)
+            .OnDelete(DeleteBehavior.SetNull);
     }
 }
