@@ -31,11 +31,10 @@ public sealed class UpdateClassStudentCommandHandler : IUpdateClassStudentComman
         string currentUserRole,
         CancellationToken cancellationToken = default)
     {
-        var isAdmin = string.Equals(currentUserRole, SystemRoles.Admin, StringComparison.OrdinalIgnoreCase);
-        if (!isAdmin)
+        if (!ClassAuthorizationRules.IsStaff(currentUserRole))
         {
             return Result.Failure<ClassStudentDto>(
-                new Error(ErrorCodes.ClassAccessDenied, "Only an administrator can correct enrollment major data."));
+                new Error(ErrorCodes.ClassAccessDenied, "Only an administrator or assigned lecturer can correct enrollment major data."));
         }
 
         var targetClass = await _context.Classes
@@ -45,6 +44,15 @@ public sealed class UpdateClassStudentCommandHandler : IUpdateClassStudentComman
         {
             return Result.Failure<ClassStudentDto>(
                 new Error(ErrorCodes.ClassNotFound, "The requested class was not found."));
+        }
+
+        if (!ClassAuthorizationRules.CanManageClass(
+                targetClass.PrimaryLecturerId,
+                currentUserId,
+                currentUserRole))
+        {
+            return Result.Failure<ClassStudentDto>(
+                new Error(ErrorCodes.ClassAccessDenied, "You can only correct enrollment major data for classes assigned to you."));
         }
 
         if (targetClass.Status == ClassStatus.Archived)

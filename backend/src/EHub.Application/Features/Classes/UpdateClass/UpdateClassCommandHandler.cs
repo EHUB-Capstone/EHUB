@@ -173,11 +173,9 @@ public sealed class UpdateClassCommandHandler : IUpdateClassCommandHandler
         string currentUserRole,
         CancellationToken cancellationToken = default)
     {
-        var isStaff = string.Equals(currentUserRole, SystemRoles.Admin, StringComparison.OrdinalIgnoreCase) ||
-                      string.Equals(currentUserRole, SystemRoles.Lecturer, StringComparison.OrdinalIgnoreCase);
-        if (!isStaff)
+        if (!ClassAuthorizationRules.IsAdmin(currentUserRole))
         {
-            return Failure(ErrorCodes.ClassAccessDenied, "Only Admin or Lecturer can update teaching assignments.");
+            return Failure(ErrorCodes.ClassAccessDenied, "Only an administrator can update teaching assignments.");
         }
 
         if (!uint.TryParse(request.RowVersion, out var expectedVersion))

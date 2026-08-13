@@ -37,11 +37,30 @@ public sealed class VerifyClassMajorsCommandHandler : IVerifyClassMajorsCommandH
         string currentUserRole,
         CancellationToken cancellationToken = default)
     {
-        var isStaff = string.Equals(currentUserRole, SystemRoles.Admin, StringComparison.OrdinalIgnoreCase) ||
-                      string.Equals(currentUserRole, SystemRoles.Lecturer, StringComparison.OrdinalIgnoreCase);
-        if (!isStaff)
+        if (!ClassAuthorizationRules.IsStaff(currentUserRole))
         {
-            return Failure(ErrorCodes.ClassAccessDenied, "Only an administrator or lecturer can verify enrollment majors.");
+            return Failure(ErrorCodes.ClassAccessDenied, "Only an administrator or assigned lecturer can verify enrollment majors.");
+        }
+
+        var targetClass = await _context.Classes
+            .AsNoTracking()
+            .FirstOrDefaultAsync(@class => @class.Id == classId, cancellationToken);
+        if (targetClass == null)
+        {
+            return Failure(ErrorCodes.ClassNotFound, "The requested class was not found.");
+        }
+
+        if (!ClassAuthorizationRules.CanManageClass(
+                targetClass.PrimaryLecturerId,
+                currentUserId,
+                currentUserRole))
+        {
+            return Failure(ErrorCodes.ClassAccessDenied, "You can only verify enrollment majors for classes assigned to you.");
+        }
+
+        if (targetClass.Status == ClassStatus.Archived)
+        {
+            return Failure(ErrorCodes.ClassArchived, "Cannot verify enrollment majors for an archived class.");
         }
 
         if (file == null || file.Length == 0)
@@ -58,19 +77,6 @@ public sealed class VerifyClassMajorsCommandHandler : IVerifyClassMajorsCommandH
         if (fileValidation.IsFailure)
         {
             return Result.Failure<VerifyClassMajorsResponse>(fileValidation.Error);
-        }
-
-        var targetClass = await _context.Classes
-            .AsNoTracking()
-            .FirstOrDefaultAsync(@class => @class.Id == classId, cancellationToken);
-        if (targetClass == null)
-        {
-            return Failure(ErrorCodes.ClassNotFound, "The requested class was not found.");
-        }
-
-        if (targetClass.Status == ClassStatus.Archived)
-        {
-            return Failure(ErrorCodes.ClassArchived, "Cannot verify enrollment majors for an archived class.");
         }
 
         var parsed = Parse(file);

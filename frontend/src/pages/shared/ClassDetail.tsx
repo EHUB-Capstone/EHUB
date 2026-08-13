@@ -30,6 +30,7 @@ import { classFeatureFlags } from '../../config/classFeatureFlags';
 import { parseApiError } from '../../utils/apiError';
 import { toClassViewModel, unwrapApiData } from '../../utils/classMappers';
 import { getClassLifecyclePresentation, isClassReadOnly } from '../../utils/classComponentPolicy';
+import { canManageClass as canManageClassPermission, hasClassRole } from '../../utils/classPermissions';
 
 const classActionTone = {
   neutral: 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-800',
@@ -348,8 +349,8 @@ export default function ClassDetail() {
   const safeTeams    = Array.isArray(teams) ? teams : [];
   const unassignedCount = safeStudents.filter(s => !s.teamId).length;
   
-  const isAdminOrLecturer = user?.role === 'ADMIN' || user?.role === 'LECTURER';
-  const canDeleteClass = user?.role === 'ADMIN' || user?.role === 'LECTURER';
+  const isAdmin = hasClassRole(user, 'ADMIN');
+  const canManageClass = canManageClassPermission(user, cls);
   const isArchived = isClassReadOnly(cls.status);
   const lifecyclePresentation = getClassLifecyclePresentation(cls.status);
 
@@ -421,7 +422,7 @@ export default function ClassDetail() {
           <div className="min-w-0">
             <div className="flex items-center gap-1.5">
               <h1 className="truncate text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">{cls.classCode}</h1>
-              {isFeatureVisible(classFeatureFlags.rename) && (user?.role === 'ADMIN' || user?.role === 'LECTURER') && (
+              {isFeatureVisible(classFeatureFlags.rename) && canManageClass && (
                 <button
                   type="button"
                   id="btn-rename-class"
@@ -441,7 +442,7 @@ export default function ClassDetail() {
         </div>
 
         <div className="flex flex-wrap items-center gap-1.5">
-          {isFeatureVisible(classFeatureFlags.chatBackfill) && (user?.role === 'ADMIN' || user?.role === 'LECTURER') && (
+          {isFeatureVisible(classFeatureFlags.chatBackfill) && canManageClass && (
             <ClassActionButton
               icon={MessagesSquare}
               loading={backfilling}
@@ -452,13 +453,13 @@ export default function ClassDetail() {
             </ClassActionButton>
           )}
 
-          {!isArchived && (user?.role === 'ADMIN' || user?.role === 'LECTURER') && (
+          {!isArchived && canManageClass && (
             <ClassActionButton icon={Download} loading={exporting} onClick={handleExportExcel} disabled={exporting}>
               Export
             </ClassActionButton>
           )}
 
-          {!isArchived && (user?.role === 'ADMIN' || user?.role === 'LECTURER') && (
+          {!isArchived && canManageClass && (
             <>
               <ClassActionButton
                 icon={Database}
@@ -483,13 +484,13 @@ export default function ClassDetail() {
             </>
           )}
 
-          {!isArchived && (user?.role === 'ADMIN' || (isAdminOrLecturer && classFeatureFlags.lecturerStudentImport)) && (
+          {!isArchived && canManageClass && (isAdmin || classFeatureFlags.lecturerStudentImport) && (
             <ClassActionButton icon={Upload} tone="primary" onClick={() => setShowImport(true)}>
               Import Excel
             </ClassActionButton>
           )}
 
-          {!isArchived && isFeatureVisible(classFeatureFlags.majorVerification) && (user?.role === 'ADMIN' || user?.role === 'LECTURER') && (
+          {!isArchived && isFeatureVisible(classFeatureFlags.majorVerification) && canManageClass && (
             <ClassActionButton
               id="btn-verify-majors"
               icon={ShieldCheck}
@@ -500,7 +501,7 @@ export default function ClassDetail() {
             </ClassActionButton>
           )}
 
-          {!isArchived && (user?.role === 'ADMIN' || user?.role === 'LECTURER') && (
+          {!isArchived && canManageClass && (
             <ClassActionButton
               icon={cls.isMajorLocked ? Lock : Unlock}
               tone={cls.isMajorLocked ? 'danger' : 'success'}
@@ -512,7 +513,7 @@ export default function ClassDetail() {
             </ClassActionButton>
           )}
 
-          {isFeatureVisible(classFeatureFlags.lifecycle) && canDeleteClass && (
+          {isFeatureVisible(classFeatureFlags.lifecycle) && canManageClass && (
             <ClassActionButton
               icon={isArchived ? RotateCcw : Archive}
               tone={isArchived ? 'success' : 'danger'}
@@ -583,7 +584,7 @@ export default function ClassDetail() {
               )}
             </div>
           </div>
-          {!isArchived && isAdminOrLecturer && (
+          {!isArchived && canManageClass && (
             <button
               onClick={() => setShowEditSchedule(true)}
               className="shrink-0 cursor-pointer rounded-md border border-primary-100 bg-primary-50 px-2 py-1 text-[11px] font-semibold text-primary transition-colors hover:border-primary-200 hover:bg-primary-100"
@@ -613,7 +614,7 @@ export default function ClassDetail() {
               )}
             </div>
           </div>
-          {!isArchived && isFeatureVisible(classFeatureFlags.mentorAssignment) && (user?.role === 'ADMIN' || user?.role === 'LECTURER') && (
+          {!isArchived && isFeatureVisible(classFeatureFlags.mentorAssignment) && canManageClass && (
             <button
               onClick={() => runFeatureAction(classFeatureFlags.mentorAssignment, 'Mentor assignment', () => setShowAssignMentors(true))}
               className="shrink-0 cursor-pointer rounded-md border border-primary-100 bg-primary-50 px-2 py-1 text-[11px] font-semibold text-primary transition-colors hover:border-primary-200 hover:bg-primary-100"
@@ -715,8 +716,8 @@ export default function ClassDetail() {
             selected={teamControlsVisible ? selected : []}
             onSelectionChange={teamControlsVisible ? setSelected : undefined}
             onRefresh={fetchData}
-            onDeleteStudent={!isArchived && isAdminOrLecturer ? handleRemoveStudent : undefined}
-            onReEnrollStudent={!isArchived && isAdminOrLecturer ? setStudentToReEnroll : undefined}
+            onDeleteStudent={!isArchived && canManageClass ? handleRemoveStudent : undefined}
+            onReEnrollStudent={!isArchived && canManageClass ? setStudentToReEnroll : undefined}
             serverQuery={{
               search: rosterSearch,
               majorCode: rosterMajor,
@@ -756,12 +757,12 @@ export default function ClassDetail() {
         ) : (
           <TeamList
             teams={[...safeTeams, ...teamProposals]}
-            onReview={!isArchived ? (team) => setReviewTeam(team) : undefined}
-            canDelete={!isArchived && isAdminOrLecturer}
-            canManageInfo={!isArchived && isAdminOrLecturer}
+            onReview={!isArchived && canManageClass ? (team) => setReviewTeam(team) : undefined}
+            canDelete={!isArchived && canManageClass}
+            canManageInfo={!isArchived && canManageClass}
             classStudents={safeStudents}
-            onCreate={!isArchived && isAdminOrLecturer ? () => runFeatureAction(classFeatureFlags.teamManagement, 'Team management', () => openCreateTeam()) : undefined}
-            onEdit={!isArchived && isAdminOrLecturer ? (team) => !team.isProposal && runFeatureAction(classFeatureFlags.teamManagement, 'Team management', () => openEditTeam(team)) : undefined}
+            onCreate={!isArchived && canManageClass ? () => runFeatureAction(classFeatureFlags.teamManagement, 'Team management', () => openCreateTeam()) : undefined}
+            onEdit={!isArchived && canManageClass ? (team) => !team.isProposal && runFeatureAction(classFeatureFlags.teamManagement, 'Team management', () => openEditTeam(team)) : undefined}
             onDelete={undefined}
             onProjectDirection={!isArchived && classFeatureFlags.projectDirection ? setDirectionTeam : undefined}
           />
@@ -769,7 +770,7 @@ export default function ClassDetail() {
       </motion.div>
 
       {/* ── Modals ── */}
-      {!isArchived && showImport && (
+      {!isArchived && showImport && canManageClass && (
         <ImportStudentsModal
           classId={id || cls?._id}
           onClose={() => setShowImport(false)}
@@ -779,7 +780,7 @@ export default function ClassDetail() {
         />
       )}
 
-      {!isArchived && classFeatureFlags.teamManagement && showTeamManagement && isAdminOrLecturer && (
+      {!isArchived && classFeatureFlags.teamManagement && showTeamManagement && canManageClass && (
         <TeamManagementModal
           classInfo={{
             id: id || cls._id,
@@ -795,7 +796,7 @@ export default function ClassDetail() {
         />
       )}
 
-      {!isArchived && showEditSchedule && (
+      {!isArchived && showEditSchedule && canManageClass && (
         <EditScheduleModal
           classId={id}
           currentSchedule={cls.schedule}
@@ -822,7 +823,7 @@ export default function ClassDetail() {
         />
       )}
 
-      {!isArchived && classFeatureFlags.mentorAssignment && showAssignMentors && (
+      {!isArchived && classFeatureFlags.mentorAssignment && showAssignMentors && canManageClass && (
         <AssignMentorsModal
           classId={id}
           currentMentors={activeMentors}
@@ -848,7 +849,7 @@ export default function ClassDetail() {
       )}
 
       {/* ── Verify Majors Modal ── */}
-      {classFeatureFlags.majorVerification && showVerify && (
+      {classFeatureFlags.majorVerification && showVerify && canManageClass && (
         <VerifyMajorModal
           classId={id}
           onClose={() => setShowVerify(false)}
@@ -856,7 +857,7 @@ export default function ClassDetail() {
       )}
 
       {/* ── Add Student Modal ── */}
-      {!isArchived && showAddStudent && (
+      {!isArchived && showAddStudent && canManageClass && (
         <AddStudentModal
           classId={id}
           onClose={() => setShowAddStudent(false)}
@@ -867,7 +868,7 @@ export default function ClassDetail() {
         />
       )}
 
-      {classFeatureFlags.teamManagement && reviewTeam && (
+      {classFeatureFlags.teamManagement && reviewTeam && canManageClass && (
         <ReviewTeamProposalModal
           team={reviewTeam}
           classStudents={safeStudents}
@@ -911,7 +912,7 @@ export default function ClassDetail() {
         cancelText="Cancel"
       />
 
-      {classFeatureFlags.lifecycle && <ConfirmDialog
+      {classFeatureFlags.lifecycle && canManageClass && <ConfirmDialog
         isOpen={showDeleteClass}
         onClose={() => setShowDeleteClass(false)}
         onConfirm={confirmDeleteClass}

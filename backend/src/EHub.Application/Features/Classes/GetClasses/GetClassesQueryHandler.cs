@@ -8,7 +8,6 @@ using EHub.Application.Features.Classes.Common;
 using EHub.Contracts.Classes;
 using EHub.Domain.Entities;
 using EHub.Domain.Enums;
-using EHub.Shared.Constants;
 using EHub.Shared.Errors;
 using EHub.Shared.Results;
 using Microsoft.EntityFrameworkCore;
@@ -44,8 +43,8 @@ public sealed class GetClassesQueryHandler : IGetClassesQueryHandler
         }
 
         // 2. Ownership & Authorization Filter
-        var isAdmin = string.Equals(currentUserRole, SystemRoles.Admin, StringComparison.OrdinalIgnoreCase);
-        var isLecturer = string.Equals(currentUserRole, SystemRoles.Lecturer, StringComparison.OrdinalIgnoreCase);
+        var isAdmin = ClassAuthorizationRules.IsAdmin(currentUserRole);
+        var isLecturer = ClassAuthorizationRules.IsLecturer(currentUserRole);
 
         if (!isAdmin && !isLecturer)
         {
@@ -54,6 +53,10 @@ public sealed class GetClassesQueryHandler : IGetClassesQueryHandler
         }
 
         var query = _context.Classes.AsNoTracking();
+        if (isLecturer)
+        {
+            query = query.Where(@class => @class.PrimaryLecturerId == currentUserId);
+        }
 
 
 

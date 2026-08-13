@@ -20,6 +20,7 @@ using EHub.Application.Features.Classes.GetMajorVerificationTemplate;
 using EHub.Application.Features.Classes.ImportStudents;
 using EHub.Application.Features.Classes.RemoveStudentFromClass;
 using EHub.Application.Features.Classes.ReEnrollStudent;
+using EHub.Application.Features.Classes.RepairChatMemberships;
 using EHub.Application.Features.Classes.SetEnrollmentMajorLock;
 using EHub.Application.Features.Classes.UpdateClass;
 using EHub.Application.Features.Classes.UpdateClassSchedule;
@@ -32,7 +33,6 @@ using EHub.Shared.Errors;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace EHub.Api.Controllers;
 
@@ -243,6 +243,7 @@ public sealed class ClassesController : ControllerBase
     }
 
     [HttpPut("{id:guid}/teaching-assignment")]
+    [Authorize(Policy = SystemPolicies.AdminOnly)]
     public async Task<IActionResult> UpdateTeachingAssignment(
         Guid id,
         [FromBody] UpdateTeachingAssignmentRequest request,
@@ -383,23 +384,19 @@ public sealed class ClassesController : ControllerBase
     [HttpPost("{id:guid}/repair-chat-memberships")]
     public async Task<IActionResult> RepairChatMemberships(
         Guid id,
-        [FromServices] IClassChatMembershipSynchronizer synchronizer,
+        [FromServices] IRepairClassChatMembershipsCommandHandler commandHandler,
         CancellationToken cancellationToken)
     {
-        if (!await ClassExistsAsync(id, cancellationToken))
-            return ToClassErrorResponse(new Error(ErrorCodes.ClassNotFound, "The requested class was not found."));
+        var result = await commandHandler.HandleAsync(
+            id,
+            _currentUserService.UserId ?? Guid.Empty,
+            GetCurrentUserRole(),
+            cancellationToken);
+        if (result.IsFailure) return ToClassErrorResponse(result.Error);
 
-        try
-        {
-            var result = await synchronizer.SynchronizeAsync(
-                id, _currentUserService.UserId ?? Guid.Empty, cancellationToken);
-            return Ok(ApiResponse<ChatMembershipSyncResponse>.SuccessResponse(result, "Class chat memberships repaired successfully."));
-        }
-        catch (Exception ex)
-        {
-            return StatusCode(500, ApiResponse<ChatMembershipSyncResponse>.FailureResponse(
-                $"Could not repair chat memberships: {ex.Message}", ErrorCodes.ClassValidationError));
-        }
+        return Ok(ApiResponse<ChatMembershipSyncResponse>.SuccessResponse(
+            result.Value,
+            "Class chat memberships repaired successfully."));
     }
 
     [HttpGet("{id:guid}/audit")]
@@ -599,6 +596,7 @@ public sealed class ClassesController : ControllerBase
         return error.Code switch
         {
             ErrorCodes.ClassAccessDenied => StatusCode(StatusCodes.Status403Forbidden, response),
+            ErrorCodes.ClassChatMembershipRepairFailed => StatusCode(StatusCodes.Status500InternalServerError, response),
             ErrorCodes.ClassNotFound or
             ErrorCodes.ClassStudentNotFound => NotFound(response),
             ErrorCodes.ClassScheduleConflict or
@@ -622,13 +620,6 @@ public sealed class ClassesController : ControllerBase
             ErrorCodes.ClassRestoreInvalid => Conflict(response),
             _ => BadRequest(response)
         };
-    }
-
-    private async Task<bool> ClassExistsAsync(Guid id, CancellationToken cancellationToken)
-    {
-        var handler = HttpContext.RequestServices.GetRequiredService<IGetClassDetailQueryHandler>();
-        var result = await handler.HandleAsync(id, _currentUserService.UserId ?? Guid.Empty, GetCurrentUserRole(), cancellationToken);
-        return result.IsSuccess;
     }
 
     private async Task<IActionResult> SetEnrollmentMajorLock(

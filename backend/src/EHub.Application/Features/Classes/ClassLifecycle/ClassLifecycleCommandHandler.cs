@@ -55,10 +55,8 @@ public sealed class ClassLifecycleCommandHandler : IClassLifecycleCommandHandler
         bool shouldArchive,
         CancellationToken cancellationToken)
     {
-        var isStaff = string.Equals(currentUserRole, SystemRoles.Admin, StringComparison.OrdinalIgnoreCase) ||
-                      string.Equals(currentUserRole, SystemRoles.Lecturer, StringComparison.OrdinalIgnoreCase);
-        if (!isStaff)
-            return Failure(ErrorCodes.ClassAccessDenied, "Only Admin or Lecturer can archive or restore classes.");
+        if (!ClassAuthorizationRules.IsStaff(currentUserRole))
+            return Failure(ErrorCodes.ClassAccessDenied, "Only an administrator or assigned lecturer can archive or restore classes.");
 
         if (!uint.TryParse(request.RowVersion, out var expectedVersion))
             return Failure(ErrorCodes.ClassValidationError, "A valid rowVersion is required.");
@@ -71,7 +69,7 @@ public sealed class ClassLifecycleCommandHandler : IClassLifecycleCommandHandler
         {
             return await _unitOfWork.ExecuteInSerializableTransactionAsync(
                 transactionToken => ChangeWithinTransactionAsync(
-                    classId, expectedVersion, reason, currentUserId, shouldArchive, transactionToken),
+                    classId, expectedVersion, reason, currentUserId, currentUserRole, shouldArchive, transactionToken),
                 cancellationToken);
         }
         catch (DbUpdateConcurrencyException)
@@ -94,6 +92,7 @@ public sealed class ClassLifecycleCommandHandler : IClassLifecycleCommandHandler
         uint expectedVersion,
         string reason,
         Guid currentUserId,
+        string currentUserRole,
         bool shouldArchive,
         CancellationToken cancellationToken)
     {
@@ -107,6 +106,12 @@ public sealed class ClassLifecycleCommandHandler : IClassLifecycleCommandHandler
 
         if (targetClass == null)
             return Failure(ErrorCodes.ClassNotFound, "The requested class was not found.");
+
+        if (!ClassAuthorizationRules.CanManageClass(
+                targetClass.PrimaryLecturerId,
+                currentUserId,
+                currentUserRole))
+            return Failure(ErrorCodes.ClassAccessDenied, "You can only archive or restore classes assigned to you.");
 
         // Both lifecycle commands are idempotent. A retry after a lost HTTP response is a no-op.
         if (shouldArchive && targetClass.Status == ClassStatus.Archived ||

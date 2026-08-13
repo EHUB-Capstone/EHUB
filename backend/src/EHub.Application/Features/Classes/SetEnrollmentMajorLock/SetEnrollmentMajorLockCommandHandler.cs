@@ -3,7 +3,6 @@ using EHub.Application.Features.Classes.Common;
 using EHub.Contracts.Classes;
 using EHub.Domain.Entities;
 using EHub.Domain.Enums;
-using EHub.Shared.Constants;
 using EHub.Shared.Errors;
 using EHub.Shared.Results;
 using Microsoft.EntityFrameworkCore;
@@ -26,11 +25,9 @@ public sealed class SetEnrollmentMajorLockCommandHandler : ISetEnrollmentMajorLo
         string currentUserRole,
         CancellationToken cancellationToken = default)
     {
-        var isStaff = string.Equals(currentUserRole, SystemRoles.Admin, StringComparison.OrdinalIgnoreCase) ||
-                      string.Equals(currentUserRole, SystemRoles.Lecturer, StringComparison.OrdinalIgnoreCase);
-        if (!isStaff)
+        if (!ClassAuthorizationRules.IsStaff(currentUserRole))
         {
-            return Failure(ErrorCodes.ClassAccessDenied, "Only an administrator or lecturer can lock or unlock enrollment majors.");
+            return Failure(ErrorCodes.ClassAccessDenied, "Only an administrator or assigned lecturer can lock or unlock enrollment majors.");
         }
 
         var targetClass = await _context.Classes
@@ -40,12 +37,20 @@ public sealed class SetEnrollmentMajorLockCommandHandler : ISetEnrollmentMajorLo
             return Failure(ErrorCodes.ClassNotFound, "The requested class was not found.");
         }
 
-        if (targetClass.Status == ClassStatus.Archived && shouldLock)
+        if (!ClassAuthorizationRules.CanManageClass(
+                targetClass.PrimaryLecturerId,
+                currentUserId,
+                currentUserRole))
         {
-            return Failure(ErrorCodes.ClassArchived, "An archived class cannot enforce an enrollment major lock.");
+            return Failure(ErrorCodes.ClassAccessDenied, "You can only lock or unlock enrollment majors for classes assigned to you.");
         }
 
-        var effectiveTarget = targetClass.Status == ClassStatus.Archived ? false : shouldLock;
+        if (targetClass.Status == ClassStatus.Archived)
+        {
+            return Failure(ErrorCodes.ClassArchived, "Enrollment major settings cannot be changed for an archived class.");
+        }
+
+        var effectiveTarget = shouldLock;
         if (targetClass.IsEnrollmentMajorLocked == effectiveTarget)
         {
             return Result.Success(new EnrollmentMajorLockResponse

@@ -64,6 +64,7 @@ public static class ErrorCodes
     public const string ClassImportSessionAlreadyProcessing = "IMPORT_SESSION_ALREADY_PROCESSING";
     public const string ClassImportNoValidRows = "IMPORT_NO_VALID_ROWS";
     public const string ClassRestoreInvalid = "CLASS_RESTORE_INVALID";
+    public const string ClassChatMembershipRepairFailed = "CHAT_MEMBERSHIP_REPAIR_FAILED";
 
     // Team, mentor assignment, and project direction error codes
     public const string TeamNotFound = "TEAM_NOT_FOUND";
