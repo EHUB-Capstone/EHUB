@@ -55,6 +55,8 @@ const projectStatusStyles: Record<string, string> = {
 };
 
 const readableStatus = (status?: string | null) => (status || 'ACTIVE')
+  .replace(/^NEEDSREVISION$/i, 'NEEDS REVISION')
+  .replace(/([a-z])([A-Z])/g, '$1 $2')
   .replaceAll('_', ' ')
   .toLowerCase()
   .replace(/^./, (character) => character.toUpperCase());
@@ -186,8 +188,8 @@ function TeamCard({
 
           <div className="flex shrink-0 items-center gap-1">
             {isPending && onReview && <button type="button" onClick={() => onReview(team)} className="rounded-lg bg-amber-50 px-2.5 py-1.5 text-xs font-semibold text-amber-700 hover:bg-amber-100">Review</button>}
-            {needsRevision && onRevise && <button type="button" onClick={() => onRevise(team)} className="rounded-lg bg-orange-50 px-2.5 py-1.5 text-xs font-semibold text-orange-700 hover:bg-orange-100">Revise</button>}
-            {team.isProposal && ['PENDING', 'NEEDSREVISION', 'NEEDS_REVISION', 'DRAFT'].includes(status) && onCancelProposal && <button type="button" onClick={() => onCancelProposal(team)} className="rounded-lg bg-red-50 px-2.5 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-100">Cancel</button>}
+            {currentStudentIsMember && needsRevision && onRevise && <button type="button" onClick={() => onRevise(team)} className="rounded-lg bg-orange-50 px-2.5 py-1.5 text-xs font-semibold text-orange-700 hover:bg-orange-100">Revise</button>}
+            {currentStudentIsMember && team.isProposal && ['PENDING', 'NEEDSREVISION', 'NEEDS_REVISION', 'DRAFT'].includes(status) && onCancelProposal && <button type="button" onClick={() => onCancelProposal(team)} className="rounded-lg bg-red-50 px-2.5 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-100">Cancel</button>}
             {!team.isProposal && canManageInfo && onEdit && <button type="button" onClick={() => onEdit(team)} className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-primary-50 hover:text-primary" aria-label={`Edit ${team.teamName}`} title="Edit team"><Pencil className="h-4 w-4" /></button>}
             {!team.isProposal && canDelete && onDelete && <button type="button" onClick={requestDelete} className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-300 hover:bg-red-50 hover:text-red-500" aria-label={`Delete ${team.teamName}`} title="Delete team"><Trash2 className="h-4 w-4" /></button>}
           </div>
