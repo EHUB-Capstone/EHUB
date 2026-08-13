@@ -469,7 +469,7 @@ public sealed class ClassSafetyHotfixIntegrationTests
     }
 
     [Fact]
-    public async Task AddingExistingStudent_StoresEnrollmentMajorSnapshotWithoutChangingProfileMajor()
+    public async Task AddingExistingStudent_WithoutMajor_UsesRegisteredProfileMajor()
     {
         using var scope = _factory.Services.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -497,13 +497,13 @@ public sealed class ClassSafetyHotfixIntegrationTests
                 StudentCode = studentCode,
                 FullName = "Attempted Profile Overwrite",
                 Email = student.Email!,
-                MajorCode = MajorCodes.BIT_SE
+                MajorCode = null
             },
             seed.LecturerId,
             SystemRoles.Lecturer);
 
         result.IsSuccess.Should().BeTrue();
-        result.Value.MajorCode.Should().Be(MajorCodes.BIT_SE);
+        result.Value.MajorCode.Should().Be(MajorCodes.BIT_AI);
         result.Value.ProfileMajorCode.Should().Be(MajorCodes.BIT_AI);
         context.ChangeTracker.Clear();
 
@@ -512,8 +512,132 @@ public sealed class ClassSafetyHotfixIntegrationTests
             .SingleAsync(item => item.ClassId == seed.ClassId && item.StudentId == student.Id);
         persistedProfile.FullName.Should().Be("Profile Source Of Truth");
         persistedProfile.MajorCode.Should().Be(MajorCodes.BIT_AI);
-        enrollment.MajorCodeAtEnrollment.Should().Be(MajorCodes.BIT_SE);
+        enrollment.MajorCodeAtEnrollment.Should().Be(MajorCodes.BIT_AI);
         enrollment.MajorVerificationStatus.Should().Be(EnrollmentMajorVerificationStatus.Unverified);
+    }
+
+    [Fact]
+    public async Task AddingExistingStudent_WithDifferentMajor_ReturnsSpecificMismatchWithoutEnrollment()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateClassSeedAsync(context, "major-mismatch");
+        var studentCode = "SE" + Guid.NewGuid().ToString("N")[..8].ToUpperInvariant();
+        var student = new Student
+        {
+            RollNumber = studentCode,
+            NormalizedRollNumber = studentCode,
+            FullName = "Registered Major Student",
+            Email = $"major-mismatch-{Guid.NewGuid():N}@example.com",
+            MajorCode = MajorCodes.BIT_AI,
+            Status = StudentStatus.Active,
+            CreatedBy = seed.AdminId
+        };
+        context.Students.Add(student);
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        var result = await new AddStudentToClassCommandHandler(context).HandleAsync(
+            seed.ClassId,
+            new AddStudentToClassRequest
+            {
+                StudentCode = studentCode,
+                FullName = student.FullName,
+                Email = student.Email!,
+                MajorCode = MajorCodes.BIT_SE
+            },
+            seed.LecturerId,
+            SystemRoles.Lecturer);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be(ErrorCodes.ClassStudentMajorMismatch);
+        result.Error.Message.Should().Contain(MajorCodes.BIT_AI);
+        context.ChangeTracker.Clear();
+        (await context.ClassStudents.AsNoTracking().AnyAsync(item =>
+            item.ClassId == seed.ClassId && item.StudentId == student.Id)).Should().BeFalse();
+        (await context.Students.AsNoTracking().SingleAsync(item => item.Id == student.Id)).MajorCode
+            .Should().Be(MajorCodes.BIT_AI);
+    }
+
+    [Fact]
+    public async Task AddingStudent_WhenCodeAndEmailBelongToDifferentProfiles_ReturnsSpecificIdentityConflict()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateClassSeedAsync(context, "student-identity-conflict");
+        var codeOwnerCode = "SE" + Guid.NewGuid().ToString("N")[..8].ToUpperInvariant();
+        var emailOwnerCode = "SE" + Guid.NewGuid().ToString("N")[..8].ToUpperInvariant();
+        var codeOwner = new Student
+        {
+            RollNumber = codeOwnerCode,
+            NormalizedRollNumber = codeOwnerCode,
+            FullName = "Code Owner",
+            Email = $"code-owner-{Guid.NewGuid():N}@example.com",
+            MajorCode = MajorCodes.BIT_AI,
+            Status = StudentStatus.Active,
+            CreatedBy = seed.AdminId
+        };
+        var emailOwner = new Student
+        {
+            RollNumber = emailOwnerCode,
+            NormalizedRollNumber = emailOwnerCode,
+            FullName = "Email Owner",
+            Email = $"email-owner-{Guid.NewGuid():N}@example.com",
+            MajorCode = MajorCodes.BIT_SE,
+            Status = StudentStatus.Active,
+            CreatedBy = seed.AdminId
+        };
+        context.Students.AddRange(codeOwner, emailOwner);
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        var result = await new AddStudentToClassCommandHandler(context).HandleAsync(
+            seed.ClassId,
+            new AddStudentToClassRequest
+            {
+                StudentCode = codeOwnerCode,
+                FullName = codeOwner.FullName,
+                Email = emailOwner.Email!,
+                MajorCode = null
+            },
+            seed.LecturerId,
+            SystemRoles.Lecturer);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be(ErrorCodes.ClassStudentIdentityConflict);
+        result.Error.Message.Should().Contain(codeOwnerCode);
+        result.Error.Message.Should().Contain(emailOwner.Email!);
+        context.ChangeTracker.Clear();
+        (await context.ClassStudents.AsNoTracking().AnyAsync(item => item.ClassId == seed.ClassId))
+            .Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task AddingNewStudent_WithoutMajor_ReturnsValidationErrorWithoutCreatingProfile()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateClassSeedAsync(context, "new-student-major-required");
+        var studentCode = "SE" + Guid.NewGuid().ToString("N")[..8].ToUpperInvariant();
+        var email = $"new-student-{Guid.NewGuid():N}@example.com";
+
+        var result = await new AddStudentToClassCommandHandler(context).HandleAsync(
+            seed.ClassId,
+            new AddStudentToClassRequest
+            {
+                StudentCode = studentCode,
+                FullName = "New Student",
+                Email = email,
+                MajorCode = null
+            },
+            seed.LecturerId,
+            SystemRoles.Lecturer);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be(ErrorCodes.ClassValidationError);
+        result.Error.Message.Should().Be("Major is required when creating a new student profile.");
+        context.ChangeTracker.Clear();
+        (await context.Students.AsNoTracking().AnyAsync(item => item.NormalizedRollNumber == studentCode)).Should().BeFalse();
     }
 
     [Fact]

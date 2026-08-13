@@ -148,6 +148,13 @@ export interface ApiEnvelope<T> {
   data: T;
 }
 
+export interface AddStudentToClassPayload {
+  studentCode: string;
+  fullName: string;
+  email: string;
+  majorCode: string | null;
+}
+
 export interface ClassCompletionPreview {
   classId: string;
   status: ClassStatus;

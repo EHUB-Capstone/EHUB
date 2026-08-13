@@ -200,7 +200,9 @@ public sealed class AddStudentToClassRequest
     public string StudentCode { get; init; } = string.Empty;
     public string FullName { get; init; } = string.Empty;
     public string Email { get; init; } = string.Empty;
-    public string MajorCode { get; init; } = string.Empty;
+    // Optional for an existing student profile. When omitted, the enrollment
+    // uses the major already stored on that profile.
+    public string? MajorCode { get; init; }
 }
 
 public sealed class UpdateClassStudentRequest

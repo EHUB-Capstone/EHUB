@@ -6,6 +6,7 @@ import type {
   GetClassesParams,
   GetClassRosterParams,
   ExportClassRosterParams,
+  AddStudentToClassPayload,
 } from '../types/classes';
 
 export const classApi = {
@@ -78,7 +79,7 @@ export const classApi = {
   unlockMajors: (classId) =>
     runClassFeatureRequest(classFeatureFlags.majorVerification, 'Class major verification', () =>
       axiosClient.delete(`/classes/${classId}/major-lock`)),
-  addStudent: (classId, data) =>
+  addStudent: (classId: string, data: AddStudentToClassPayload) =>
     axiosClient.post(`/classes/${classId}/students`, data),
   dropStudent: (classId, studentId) =>
     axiosClient.post(`/classes/${classId}/students/${studentId}/drop`),

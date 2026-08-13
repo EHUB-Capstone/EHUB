@@ -276,9 +276,9 @@ export default function ClassDetail() {
         ? await classApi.unlockMajors(id)
         : await classApi.lockMajors(id);
       setCls(prev => ({ ...prev, isMajorLocked: res.data.isLocked }));
-      toast.success(res.message || 'Đã thay đổi trạng thái cập nhật chuyên ngành');
+      toast.success(res.message || 'Major update lock status changed successfully.');
     } catch (err) {
-      toast.error(parseApiError(err, 'Lỗi khi thay đổi trạng thái').message);
+      toast.error(parseApiError(err, 'Failed to change the major update lock status.').message);
     } finally {
       setTogglingLock(false);
     }
@@ -479,8 +479,8 @@ export default function ClassDetail() {
                   type="button"
                   id="btn-rename-class"
                   onClick={() => runFeatureAction(classFeatureFlags.rename, 'Class rename', () => setShowRename(true))}
-                  title="Đổi tên lớp"
-                  aria-label="Đổi tên lớp"
+                  title="Rename class"
+                  aria-label="Rename class"
                   className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-primary-50 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/25"
                 >
                   <Pencil className="h-3.5 w-3.5" />
@@ -530,7 +530,7 @@ export default function ClassDetail() {
               </ClassActionButton>
 
               <ClassActionButton icon={UserPlus} tone="primary" onClick={() => setShowAddStudent(true)}>
-                Thêm 1 SV
+                Add student
               </ClassActionButton>
 
             </>
@@ -549,7 +549,7 @@ export default function ClassDetail() {
               tone="indigo"
               onClick={() => runFeatureAction(classFeatureFlags.majorVerification, 'Major verification', () => setShowVerify(true))}
             >
-              Kiểm tra Chuyên ngành
+              Verify majors
             </ClassActionButton>
           )}
 
@@ -561,7 +561,7 @@ export default function ClassDetail() {
               onClick={() => runFeatureAction(classFeatureFlags.majorVerification, 'Major locking', handleToggleMajorLock)}
               disabled={togglingLock}
             >
-              {cls.isMajorLocked ? 'Mở khóa cập nhật' : 'Khóa cập nhật CN'}
+              {cls.isMajorLocked ? 'Unlock major updates' : 'Lock major updates'}
             </ClassActionButton>
           )}
 
@@ -804,14 +804,14 @@ export default function ClassDetail() {
             }}
             toolbarAction={!isReadOnly && teamControlsVisible && selected.length === 0 ? (
               user?.role === 'STUDENT' ? (
-                <TeamSuggestionTooltip label="Xem hướng dẫn tạo nhóm">
+                <TeamSuggestionTooltip label="View team creation guidance">
                   <div className="space-y-2">
                     <p className="font-semibold text-white">
-                      {unassignedCount} sinh viên chưa có nhóm
+                      {unassignedCount} students are not assigned to a team
                     </p>
                     <p className="text-slate-200">
-                      Chọn chính bạn và các thành viên trong bảng để bắt đầu tạo nhóm.
-                      Nhóm cần 4–6 thành viên, có ít nhất một sinh viên nhóm BBA và một sinh viên nhóm BIT.
+                      Select yourself and the other members in the table to start a team proposal.
+                      A team requires 4–6 members, including at least one BBA student and one BIT student.
                     </p>
                   </div>
                 </TeamSuggestionTooltip>

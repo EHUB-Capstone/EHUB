@@ -223,12 +223,12 @@ export default function StudentClassDetail() {
           maxSelection={6}
           selectionDisabled={hasTeam || isReadOnly}
           toolbarAction={!isReadOnly && !hasTeam && selected.length === 0 ? (
-            <TeamSuggestionTooltip label="Xem hướng dẫn tạo nhóm">
+            <TeamSuggestionTooltip label="View team creation guidance">
               <div className="space-y-2">
-                <p className="font-semibold text-white">Hướng dẫn tạo nhóm</p>
+                <p className="font-semibold text-white">Team creation guidance</p>
                 <p className="text-slate-200">
-                  Chọn chính bạn và các thành viên trong bảng để bắt đầu. Nhóm cần 4–6 thành viên,
-                  có ít nhất một sinh viên nhóm BBA và một sinh viên nhóm BIT.
+                  Select yourself and the other members in the table to begin. A team requires 4–6 members,
+                  including at least one BBA student and one BIT student.
                 </p>
               </div>
             </TeamSuggestionTooltip>

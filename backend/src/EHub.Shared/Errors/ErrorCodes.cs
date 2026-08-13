@@ -53,6 +53,7 @@ public static class ErrorCodes
     public const string ClassIndexDuplicated = "CLASS_INDEX_DUPLICATED";
     public const string ClassBulkCreateInvalid = "CLASS_BULK_CREATE_INVALID";
     public const string ClassStudentIdentityConflict = "STUDENT_IDENTITY_CONFLICT";
+    public const string ClassStudentMajorMismatch = "STUDENT_MAJOR_MISMATCH";
     public const string ClassStudentAlreadyEnrolled = "STUDENT_ALREADY_ENROLLED";
     public const string ClassStudentNotFound = "CLASS_STUDENT_NOT_FOUND";
     public const string ClassStudentIsTeamLeader = "STUDENT_IS_TEAM_LEADER";

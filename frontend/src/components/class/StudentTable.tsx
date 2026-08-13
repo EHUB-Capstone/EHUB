@@ -181,7 +181,7 @@ export default function StudentTable({
             : setLocalFilterMajor(e.target.value)}
           className="min-h-8 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15 sm:text-sm"
         >
-          <option value="">Tất cả chuyên ngành</option>
+          <option value="">All majors</option>
           {TEAM_MAJOR_GROUPS.map(group => {
             const presentInGroup = serverQuery ? group.majors : group.majors.filter(m => majors.includes(m.code));
             if (presentInGroup.length === 0) return null;
@@ -198,7 +198,7 @@ export default function StudentTable({
             const others = majors.filter(m => !teamMajorCodes.includes(m));
             if (others.length === 0) return null;
             return (
-              <optgroup label="Khác">
+              <optgroup label="Other">
                 {others.map(m => (
                   <option key={m} value={m}>{m}{getMajorName(m) ? ` — ${getMajorName(m)}` : ''}</option>
                 ))}

@@ -233,7 +233,7 @@ export default function ClassManagement() {
               onClick={() => setShowBulk(true)}
               className="flex items-center gap-2 px-4 py-2 text-sm bg-primary text-white rounded-xl hover:bg-primary-700 transition-all shadow-sm hover:shadow-md"
             >
-              <Plus className="w-4 h-4" /> {isLecturer ? 'Tạo lớp' : 'Bulk Create'}
+              <Plus className="w-4 h-4" /> {isLecturer ? 'Create Class' : 'Bulk Create'}
             </button>
           )}
         </div>

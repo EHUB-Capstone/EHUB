@@ -658,6 +658,7 @@ public sealed class ClassesController : ControllerBase
             ErrorCodes.ClassCompletionBlocked or
             ErrorCodes.ClassArchived or
             ErrorCodes.ClassStudentIdentityConflict or
+            ErrorCodes.ClassStudentMajorMismatch or
             ErrorCodes.ClassStudentAlreadyEnrolled or
             ErrorCodes.ClassStudentIsTeamLeader or
             ErrorCodes.ClassStudentInActiveTeam or

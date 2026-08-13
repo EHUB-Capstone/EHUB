@@ -17,7 +17,8 @@ public static class StudentEnrollmentRules
         string? emailValue,
         string? majorCodeValue,
         out NormalizedStudentEnrollmentInput input,
-        bool allowUndeclaredMajor = false)
+        bool allowUndeclaredMajor = false,
+        bool allowMissingMajor = false)
     {
         input = new NormalizedStudentEnrollmentInput(
             studentCodeValue?.Trim().ToUpperInvariant() ?? string.Empty,
@@ -40,8 +41,15 @@ public static class StudentEnrollmentRules
             return "A valid student email address is required.";
         }
 
-        if (!MajorCodes.IsValid(input.MajorCode) &&
-            !(allowUndeclaredMajor && MajorCodes.IsUndeclared(input.MajorCode)))
+        if (string.IsNullOrWhiteSpace(input.MajorCode))
+        {
+            if (!allowMissingMajor)
+            {
+                return "Major code is required.";
+            }
+        }
+        else if (!MajorCodes.IsValid(input.MajorCode) &&
+                 !(allowUndeclaredMajor && MajorCodes.IsUndeclared(input.MajorCode)))
         {
             return $"Major code '{majorCodeValue}' is invalid.";
         }

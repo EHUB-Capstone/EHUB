@@ -10,13 +10,13 @@ import TeamSuggestionTooltip from './TeamSuggestionTooltip';
 const getTeamSizeSuggestion = (count) => {
   if (count === 0) return '';
   if (count === 1 || count === 2) {
-    return `Còn ${count} sinh viên, chưa đủ để tạo nhóm. Cần điều chỉnh thành viên từ các nhóm khác.`;
+    return `${count} students remain, which is not enough to form a team. Rebalance members from other teams.`;
   }
   if (count === 3) {
-    return 'Còn 3 sinh viên. Có thể gửi đề xuất nhóm ngoại lệ để giảng viên duyệt.';
+    return 'Three students remain. Rebalance members from other teams before submitting a proposal.';
   }
   if (count === 7) {
-    return 'Không thể chia đều thành nhóm 4-6 người. Có thể điều chỉnh thành nhóm 4 và bổ sung 3 sinh viên vào các nhóm khác, hoặc gửi đề xuất ngoại lệ.';
+    return 'The remaining students cannot be divided into teams of 4–6. Rebalance them across existing teams.';
   }
 
   const candidates = [];
@@ -42,16 +42,16 @@ const getTeamSizeSuggestion = (count) => {
 
   const best = candidates[0];
   if (!best) {
-    return 'Không thể chia đều thành nhóm 4-6 người. Cần điều chỉnh thành viên giữa các nhóm.';
+    return 'The remaining students cannot be divided evenly into teams of 4–6. Rebalance members between teams.';
   }
 
   const summary = [
-    best.sixes && `${best.sixes} nhóm x 6 sinh viên`,
-    best.fives && `${best.fives} nhóm x 5 sinh viên`,
-    best.fours && `${best.fours} nhóm x 4 sinh viên`,
+    best.sixes && `${best.sixes} teams × 6 students`,
+    best.fives && `${best.fives} teams × 5 students`,
+    best.fours && `${best.fours} teams × 4 students`,
   ].filter(Boolean);
 
-  return `Gợi ý: ${summary.join(', ')}. Mỗi nhóm vẫn cần có đủ 2 nhóm chuyên ngành.`;
+  return `Suggestion: ${summary.join(', ')}. Each team must still include both required major groups.`;
 };
 
 export default function StudentTeamGeneratePanel({ classId, selected: rawSelected, students: rawStudents, onTeamCreated, currentStudentId, proposal = null }) {
@@ -115,7 +115,7 @@ export default function StudentTeamGeneratePanel({ classId, selected: rawSelecte
     const isValidGroups = hasBothGroups;
     
     const isFullyValid = isValidSize && isValidGroups && studentCount > 0;
-    // Cho phép gửi đề xuất nếu count > 0 nhưng không FullyValid
+    // Keep the review state explicit when the current selection is incomplete.
     const canPropose = (studentCount === 3 || studentCount === 7) && isValidGroups;
 
     const uniqueMajors = [...new Set(
@@ -161,7 +161,7 @@ export default function StudentTeamGeneratePanel({ classId, selected: rawSelecte
 
   const handleSubmit = async () => {
     if (!isFormValid) {
-      toast.error('Vui lòng nhập đầy đủ tên nhóm, tên dự án và mô tả dự án hợp lệ.');
+      toast.error('Please enter valid team and project information.');
       return;
     }
 
@@ -181,7 +181,7 @@ export default function StudentTeamGeneratePanel({ classId, selected: rawSelecte
       const draft = unwrapApiData<any>(res);
       await teamApi.submitProposal(draft.id, draft.rowVersion);
       res.message = 'Team proposal submitted for review.';
-      toast.success(res.message || 'Tạo nhóm thành công!');
+      toast.success(res.message || 'Team proposal created successfully.');
       
       // Reset form
       setGroupName('');
@@ -191,7 +191,7 @@ export default function StudentTeamGeneratePanel({ classId, selected: rawSelecte
       setSelectedLeaderId('');
       onTeamCreated();
     } catch (e) {
-      toast.error(e?.response?.data?.message || e?.message || 'Lỗi khi tạo nhóm');
+      toast.error(e?.response?.data?.message || e?.message || 'Failed to create the team proposal.');
     } finally {
       setSubmitting(false);
     }
@@ -200,10 +200,10 @@ export default function StudentTeamGeneratePanel({ classId, selected: rawSelecte
   return (
     <div className="bg-white rounded-2xl border p-4 shadow-sm">
       <div className="mb-4 flex items-center justify-between gap-3 border-b border-slate-100 pb-4">
-        <h3 className="font-bold text-lg text-slate-800">Tạo nhóm</h3>
+        <h3 className="font-bold text-lg text-slate-800">Create Team Proposal</h3>
         {suggestionInfo && (
           <TeamSuggestionTooltip>
-              Lớp có {suggestionInfo.unassigned} SV chưa có nhóm. {suggestionInfo.suggestion}
+              This class has {suggestionInfo.unassigned} unassigned students. {suggestionInfo.suggestion}
           </TeamSuggestionTooltip>
         )}
       </div>
@@ -213,20 +213,20 @@ export default function StudentTeamGeneratePanel({ classId, selected: rawSelecte
         <div className="space-y-4">
           <div>
             <label className="block text-sm font-semibold text-slate-700 mb-1">
-              Tên nhóm <span className="text-red-500">*</span>
+              Team name <span className="text-red-500">*</span>
             </label>
             <input
               type="text"
               value={groupName}
               onChange={e => setGroupName(e.target.value)}
-              placeholder="VD: Nhóm 1, Alpha Team..."
+              placeholder="Example: Alpha Team"
               className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
               required
               minLength={3}
               maxLength={60}
             />
             {groupName.length > 0 && groupName.trim().length < 3 && (
-              <p className="text-xs text-red-500 mt-1">Tên nhóm phải từ 3-60 ký tự</p>
+              <p className="text-xs text-red-500 mt-1">Team name must contain 3–60 characters.</p>
             )}
           </div>
 
@@ -254,26 +254,26 @@ export default function StudentTeamGeneratePanel({ classId, selected: rawSelecte
                 onChange={e => setIsProjectNameSameAsGroup(e.target.checked)}
                 className="rounded border-slate-300 text-primary focus:ring-primary"
               />
-              Dùng tên nhóm làm tên dự án
+              Use the team name as the project name
             </label>
 
             {!isProjectNameSameAsGroup && (
               <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-1">
-                  Tên dự án <span className="text-red-500">*</span>
+                  Project name <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
                   value={projectName}
                   onChange={e => setProjectName(e.target.value)}
-                  placeholder="Nhập tên dự án..."
+                  placeholder="Enter a project name..."
                   className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
                   required
                   minLength={3}
                   maxLength={60}
                 />
                 {projectName.length > 0 && projectName.trim().length < 3 && (
-                  <p className="text-xs text-red-500 mt-1">Tên dự án phải từ 3-60 ký tự</p>
+                  <p className="text-xs text-red-500 mt-1">Project name must contain 3–60 characters.</p>
                 )}
               </div>
             )}
@@ -281,12 +281,12 @@ export default function StudentTeamGeneratePanel({ classId, selected: rawSelecte
 
           <div>
             <label className="block text-sm font-semibold text-slate-700 mb-1">
-              Mô tả dự án <span className="text-red-500">*</span>
+              Project description <span className="text-red-500">*</span>
             </label>
             <textarea
               value={description}
               onChange={e => setDescription(e.target.value)}
-              placeholder="Mô tả ngắn về ý tưởng dự án..."
+              placeholder="Briefly describe the project idea..."
               className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none resize-none h-20"
               required
               minLength={20}
@@ -295,7 +295,7 @@ export default function StudentTeamGeneratePanel({ classId, selected: rawSelecte
             <div className="mt-1 flex items-center justify-between gap-3">
               <span>
                 {description.length > 0 && description.trim().length < 20 && (
-                  <span className="text-xs text-red-500">Mô tả phải từ 20-500 ký tự</span>
+                  <span className="text-xs text-red-500">Description must contain 20–500 characters.</span>
                 )}
               </span>
               <span className="text-xs text-slate-400">{description.length}/500</span>
@@ -307,7 +307,7 @@ export default function StudentTeamGeneratePanel({ classId, selected: rawSelecte
         <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 flex flex-col justify-between">
           <div>
             <h4 className="font-semibold text-slate-700 mb-3 text-sm flex items-center gap-2">
-              <Users className="w-4 h-4" /> Thành viên đã chọn ({studentCount})
+              <Users className="w-4 h-4" /> Selected members ({studentCount})
             </h4>
             
             <div className="mb-4 flex flex-wrap gap-x-4 gap-y-2 text-xs">
@@ -315,41 +315,41 @@ export default function StudentTeamGeneratePanel({ classId, selected: rawSelecte
                 <span className={`w-4 h-4 rounded-full flex items-center justify-center text-white text-[10px] ${(studentCount >= 4 && studentCount <= 6) ? 'bg-green-500' : studentCount > 0 ? 'bg-red-400' : 'bg-slate-300'}`}>
                   {(studentCount >= 4 && studentCount <= 6) ? '✓' : '✗'}
                 </span>
-                4–6 thành viên ({studentCount}/6)
+                4–6 members ({studentCount}/6)
               </span>
 
               <span className={`flex items-center gap-1.5 font-medium ${hasGroup1 ? 'text-green-600' : studentCount > 0 ? 'text-red-500' : 'text-slate-400'}`}>
                 <span className={`w-4 h-4 rounded-full flex items-center justify-center text-white text-[10px] shrink-0 ${hasGroup1 ? 'bg-green-500' : studentCount > 0 ? 'bg-red-400' : 'bg-slate-300'}`}>
                   {hasGroup1 ? '✓' : '✗'}
                 </span>
-                <span>Ít nhất 1 SV Nhóm 1 (BBA)</span>
+                <span>At least one Group 1 (BBA) student</span>
               </span>
 
               <span className={`flex items-center gap-1.5 font-medium ${hasGroup2 ? 'text-green-600' : studentCount > 0 ? 'text-red-500' : 'text-slate-400'}`}>
                 <span className={`w-4 h-4 rounded-full flex items-center justify-center text-white text-[10px] shrink-0 ${hasGroup2 ? 'bg-green-500' : studentCount > 0 ? 'bg-red-400' : 'bg-slate-300'}`}>
                   {hasGroup2 ? '✓' : '✗'}
                 </span>
-                <span>Ít nhất 1 SV Nhóm 2 (BIT)</span>
+                <span>At least one Group 2 (BIT) student</span>
               </span>
               
               <span className={`flex items-center gap-1.5 font-medium ${hasCurrentUser ? 'text-green-600' : 'text-red-500'}`}>
                 <span className={`w-4 h-4 rounded-full flex items-center justify-center text-white text-[10px] shrink-0 ${hasCurrentUser ? 'bg-green-500' : 'bg-red-400'}`}>
                   {hasCurrentUser ? '✓' : '✗'}
                 </span>
-                <span>Bạn phải nằm trong danh sách nhóm</span>
+                <span>You must be included in the team</span>
               </span>
 
               <span className={`flex items-center gap-1.5 font-medium ${hasLeader ? 'text-green-600' : 'text-red-500'}`}>
                 <span className={`w-4 h-4 rounded-full flex items-center justify-center text-white text-[10px] shrink-0 ${hasLeader ? 'bg-green-500' : 'bg-red-400'}`}>
                   {hasLeader ? '✓' : '×'}
                 </span>
-                <span>Đã chọn Team Leader</span>
+                <span>A team leader has been selected</span>
               </span>
             </div>
 
             {uniqueMajors.length > 0 && (
               <p className="text-xs text-slate-500 mb-3">
-                Chuyên ngành: {uniqueMajors.join(', ')}
+                Majors: {uniqueMajors.join(', ')}
               </p>
             )}
 
@@ -357,7 +357,7 @@ export default function StudentTeamGeneratePanel({ classId, selected: rawSelecte
               <div className="flex items-start gap-2 bg-amber-50 rounded-xl p-2 border border-amber-200 mb-3">
                 <AlertCircle className="w-4 h-4 text-amber-500 shrink-0" />
                 <p className="text-xs text-amber-700">
-                  Có {missingMajorCount} SV chưa có chuyên ngành.
+                  {missingMajorCount} students do not have a major.
                 </p>
               </div>
             )}
@@ -366,7 +366,7 @@ export default function StudentTeamGeneratePanel({ classId, selected: rawSelecte
               <div className="flex items-start gap-2 bg-orange-50 rounded-xl p-2 border border-orange-200 mb-3">
                 <AlertTriangle className="w-4 h-4 text-orange-500 shrink-0" />
                 <p className="text-xs text-orange-700 font-medium">
-                  Nhóm chưa đạt chuẩn 4-6 thành viên. Chỉ nhóm 3 hoặc 7 thành viên, có đủ 2 nhóm ngành, mới được gửi đề xuất ngoại lệ.
+                  The proposal does not meet the 4–6 member requirement. Rebalance the selected members before submitting it.
                 </p>
               </div>
             )}
@@ -388,10 +388,10 @@ export default function StudentTeamGeneratePanel({ classId, selected: rawSelecte
                 (isFullyValid ? <CheckCircle2 className="w-4 h-4" /> : <Send className="w-4 h-4" />)
               }
               {isFullyValid
-                ? 'Tạo nhóm'
+                ? 'Create team proposal'
                 : canPropose
-                  ? 'Gửi đề xuất duyệt'
-                  : 'Chưa đủ điều kiện tạo nhóm'}
+                  ? 'Submit for review'
+                  : 'Team requirements are not met'}
             </button>
           </div>
         </div>
