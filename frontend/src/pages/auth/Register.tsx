@@ -11,7 +11,17 @@ import toast from 'react-hot-toast';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../hooks/useAuth';
 import { AUTH_ERROR_CODES } from '../../types/auth';
-import { TEAM_MAJOR_GROUPS } from '../../constants/majors';
+import { PROGRAM_GROUPS } from '../../constants/majors';
+import { parseApiError } from '../../utils/apiError';
+import {
+  AUTH_FIELD_LIMITS,
+  REGISTER_FIELDS,
+  mapApiFieldErrors,
+  normalizeRegisterPayload,
+  toFieldErrorMap,
+  validateRegisterPayload,
+} from '../../utils/authValidation';
+import type { AuthFieldErrors, RegisterField } from '../../utils/authValidation';
 import logo from '../../assets/logo.png';
 
 const OTP_EXPIRE_SECONDS = 5 * 60;
@@ -26,41 +36,44 @@ const BACKEND_ROLE_BY_FORM_ROLE: Record<Role, string> = {
   MENTOR: 'Mentor',
 };
 
-interface ApiErrorBody {
-  code?: string | null;
-  errorCode?: string | null;
-  message?: string;
-}
-
-function getApiError(err: unknown): { code: string; message: string } {
-  const apiError = (err as { response?: { data?: ApiErrorBody } }).response?.data;
-  return {
-    code: apiError?.code ?? apiError?.errorCode ?? '',
-    message: apiError?.message ?? 'Registration failed.',
-  };
-}
-
 // Approval pending screen shown to LECTURER/MENTOR after register
-const PendingApprovalScreen: React.FC<{ email: string; onBack: () => void }> = ({ email, onBack }) => (
-  <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-[420px] text-center">
-    <div className="w-[72px] h-[72px] rounded-[24px] bg-blue-500/15 border border-blue-500/30 flex items-center justify-center mx-auto mb-6">
-      <ShieldCheck size={34} className="text-blue-400" />
-    </div>
-    <h1 className="text-[24px] font-extrabold text-slate-900 dark:text-slate-50 mb-2">Account Pending Approval</h1>
-    <p className="text-slate-500 dark:text-slate-400 text-[14px] mb-2">Your registration was submitted successfully.</p>
-    <p className="text-blue-400 text-[14px] font-bold mb-6">{email}</p>
-    <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-4 mb-6 text-left">
-      <p className="text-[13px] text-slate-600 dark:text-slate-300 leading-[1.7]">
-        An admin will review and approve your <strong>Mentor / Lecturer</strong> account shortly.
-        You will be able to sign in once approved.
-      </p>
-    </div>
-    <button onClick={onBack}
-      className="w-full h-12 rounded-[14px] border border-[#E5E7EB] dark:border-white/10 bg-white dark:bg-white/5 text-slate-700 dark:text-slate-300 font-semibold text-[14px] cursor-pointer hover:bg-slate-50 dark:hover:bg-white/10 transition-colors">
-      ← Back to Register
-    </button>
-  </motion.div>
-);
+const PendingApprovalScreen: React.FC<{ email: string; onBack: () => void }> = ({ email, onBack }) => {
+  const statusRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    statusRef.current?.focus();
+  }, []);
+
+  return (
+    <motion.div
+      ref={statusRef}
+      role="status"
+      aria-live="polite"
+      aria-atomic="true"
+      tabIndex={-1}
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="w-full max-w-[420px] text-center outline-none"
+    >
+      <div className="w-[72px] h-[72px] rounded-[24px] bg-blue-500/15 border border-blue-500/30 flex items-center justify-center mx-auto mb-6">
+        <ShieldCheck size={34} className="text-blue-400" />
+      </div>
+      <h1 className="text-[24px] font-extrabold text-slate-900 dark:text-slate-50 mb-2">Account Pending Approval</h1>
+      <p className="text-slate-500 dark:text-slate-400 text-[14px] mb-2">Your registration was submitted successfully.</p>
+      <p className="text-blue-400 text-[14px] font-bold mb-6">{email}</p>
+      <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-4 mb-6 text-left">
+        <p className="text-[13px] text-slate-600 dark:text-slate-300 leading-[1.7]">
+          An admin will review and approve your <strong>Mentor / Lecturer</strong> account shortly.
+          You will be able to sign in once approved.
+        </p>
+      </div>
+      <button onClick={onBack}
+        className="w-full h-12 rounded-[14px] border border-[#E5E7EB] dark:border-white/10 bg-white dark:bg-white/5 text-slate-700 dark:text-slate-300 font-semibold text-[14px] cursor-pointer hover:bg-slate-50 dark:hover:bg-white/10 transition-colors">
+        ← Back to Register
+      </button>
+    </motion.div>
+  );
+};
 
 const Register: React.FC = () => {
   const { isDark, toggleTheme } = useTheme();
@@ -78,6 +91,8 @@ const Register: React.FC = () => {
   const [showConfirm,     setShowConfirm]     = useState<boolean>(false);
   const [emailTakenError, setEmailTakenError] = useState<boolean>(false);
   const [pendingApproval, setPendingApproval] = useState<boolean>(false);
+  const [fieldErrors,     setFieldErrors]     = useState<AuthFieldErrors<RegisterField>>({});
+  const [formError,       setFormError]       = useState<string>('');
 
   /* Step 2 OTP */
   const [step,           setStep]           = useState<1 | 2>(1);
@@ -113,24 +128,66 @@ const Register: React.FC = () => {
 
   const fmt = (s: number) => `${Math.floor(s/60).toString().padStart(2,'0')}:${(s%60).toString().padStart(2,'0')}`;
 
+  const currentRegisterPayload = () => ({
+    fullName: name,
+    email,
+    password,
+    confirmPassword,
+    role: BACKEND_ROLE_BY_FORM_ROLE[role],
+    majorCode: role === 'STUDENT' ? major : undefined,
+  });
+
+  const clearFieldError = (field: RegisterField) => {
+    setFieldErrors(current => {
+      if (!current[field]) return current;
+      const next = { ...current };
+      delete next[field];
+      return next;
+    });
+    setFormError('');
+  };
+
+  const validateField = (field: RegisterField) => {
+    const error = validateRegisterPayload(currentRegisterPayload()).find(item => item.field === field);
+    setFieldErrors(current => {
+      const next = { ...current };
+      if (error) next[field] = error.message;
+      else delete next[field];
+      return next;
+    });
+  };
+
+  const focusFirstError = (errors: AuthFieldErrors<RegisterField>) => {
+    const firstField = REGISTER_FIELDS.find(field => errors[field]);
+    const elementIdByField: Record<RegisterField, string> = {
+      fullName: 'reg-name',
+      email: 'reg-email',
+      password: 'reg-password',
+      confirmPassword: 'reg-confirm',
+      role: 'reg-role-student',
+      majorCode: 'reg-major',
+    };
+    if (firstField) requestAnimationFrame(() => document.getElementById(elementIdByField[firstField])?.focus());
+  };
+
   /* ─── Handlers ─────────────────────────────────── */
   const handleRegister = async (e: FormEvent) => {
     e.preventDefault();
-    if (!name.trim())                                  return void toast.error('Enter your full name.');
-    if (!email.trim() || !/\S+@\S+\.\S+/.test(email)) return void toast.error('Enter a valid email.');
-    if (password.length < 6)                          return void toast.error('Password must be at least 6 characters.');
-    if (password !== confirmPassword)                 return void toast.error('Passwords do not match.');
-    if (role === 'STUDENT' && !major)                 return void toast.error('Please select your major.');
+    const payload = currentRegisterPayload();
+    const nextFieldErrors = toFieldErrorMap(validateRegisterPayload(payload));
+    setFieldErrors(nextFieldErrors);
+    setFormError('');
+    if (Object.keys(nextFieldErrors).length > 0) {
+      focusFirstError(nextFieldErrors);
+      return;
+    }
+
+    const normalizedPayload = normalizeRegisterPayload(payload);
+    if (normalizedPayload.fullName !== name) setName(normalizedPayload.fullName);
+    if (normalizedPayload.email !== email) setEmail(normalizedPayload.email);
     setLoading(true); setEmailTakenError(false);
     try {
-      const { requiresApproval, message } = await register({
-        fullName: name.trim(),
-        email: email.trim(),
-        password,
-        confirmPassword,
-        role: BACKEND_ROLE_BY_FORM_ROLE[role],
-        majorCode: role === 'STUDENT' ? major : undefined,
-      });
+      const { requiresApproval, message } = await register(normalizedPayload);
 
       if (requiresApproval) {
         // LECTURER or MENTOR → show pending screen
@@ -142,19 +199,22 @@ const Register: React.FC = () => {
         navigate('/student');
       }
     } catch (err: unknown) {
-      const { code, message } = getApiError(err);
+      const { code, message, fieldErrors: apiFieldErrors } = parseApiError(err, 'Registration failed.');
+      const mappedFieldErrors = mapApiFieldErrors(apiFieldErrors, REGISTER_FIELDS);
 
       if (code === AUTH_ERROR_CODES.EMAIL_ALREADY_EXISTS) {
         setEmailTakenError(true);
+        mappedFieldErrors.email = message;
       } else if (code === AUTH_ERROR_CODES.INVALID_ROLE) {
-        toast.error('Invalid role selected.');
+        mappedFieldErrors.role = message;
       } else if (code === AUTH_ERROR_CODES.INVALID_MAJOR) {
-        toast.error('Invalid major code.');
+        mappedFieldErrors.majorCode = message;
       } else if (code === AUTH_ERROR_CODES.STUDENT_MAJOR_REQUIRED) {
-        toast.error('Major is required for Student role.');
-      } else {
-        toast.error(message);
+        mappedFieldErrors.majorCode = message;
       }
+      setFieldErrors(mappedFieldErrors);
+      focusFirstError(mappedFieldErrors);
+      if (Object.keys(mappedFieldErrors).length === 0) setFormError(message);
     } finally { setLoading(false); }
   };
 
@@ -306,70 +366,100 @@ const Register: React.FC = () => {
                 )}
               </AnimatePresence>
 
-              <form onSubmit={handleRegister} className="flex flex-col gap-3.5">
+              {formError && (
+                <div id="register-form-error" role="alert"
+                  className="bg-red-500/10 border border-red-500/30 rounded-xl p-3.5 flex gap-3 mb-4.5">
+                  <AlertTriangle size={18} className="text-red-500 shrink-0 mt-0.5" />
+                  <p className="text-[13px] text-red-500 dark:text-red-400">{formError}</p>
+                </div>
+              )}
+
+              <form onSubmit={handleRegister} className="flex flex-col gap-3.5" noValidate aria-describedby={formError ? 'register-form-error' : undefined}>
                 {/* Name */}
                 <div>
-                  <label className="block text-[13px] font-semibold text-slate-900 dark:text-slate-50 mb-1.5">Full Name</label>
+                  <label htmlFor="reg-name" className="block text-[13px] font-semibold text-slate-900 dark:text-slate-50 mb-1.5">Full Name</label>
                   <div className="relative">
                     <User size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-                    <input id="reg-name" type="text" value={name} onChange={(e: ChangeEvent<HTMLInputElement>) => setName(e.target.value)}
-                      placeholder="Nguyen Van A" required
-                      className="w-full py-2.5 pr-3.5 pl-10 rounded-[14px] border border-[#E5E7EB] dark:border-white/10 bg-[#F8FAFC] dark:bg-white/5 text-[#0F172A] dark:text-slate-100 text-[14px] outline-none transition-colors focus:border-[#EA6A12] dark:focus:border-[#EA6A12]"
+                    <input id="reg-name" type="text" value={name}
+                      onChange={(e: ChangeEvent<HTMLInputElement>) => { setName(e.target.value); clearFieldError('fullName'); }}
+                      onBlur={() => validateField('fullName')}
+                      placeholder="Nguyen Van A" autoComplete="name" required maxLength={AUTH_FIELD_LIMITS.fullNameMax}
+                      aria-invalid={Boolean(fieldErrors.fullName)} aria-describedby={fieldErrors.fullName ? 'reg-name-error' : undefined}
+                      className={`w-full py-2.5 pr-3.5 pl-10 rounded-[14px] border bg-[#F8FAFC] dark:bg-white/5 text-[#0F172A] dark:text-slate-100 text-[14px] outline-none transition-colors ${fieldErrors.fullName ? 'border-red-500 focus:border-red-500' : 'border-[#E5E7EB] dark:border-white/10 focus:border-[#EA6A12] dark:focus:border-[#EA6A12]'}`}
                     />
                   </div>
+                  {fieldErrors.fullName && <p id="reg-name-error" role="alert" className="mt-1.5 text-[12px] text-red-500 dark:text-red-400">{fieldErrors.fullName}</p>}
                 </div>
 
                 {/* Email */}
                 <div>
-                  <label className="block text-[13px] font-semibold text-slate-900 dark:text-slate-50 mb-1.5">Email</label>
+                  <label htmlFor="reg-email" className="block text-[13px] font-semibold text-slate-900 dark:text-slate-50 mb-1.5">Email</label>
                   <div className="relative">
                     <Mail size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-                    <input id="reg-email" type="email" value={email} onChange={(e: ChangeEvent<HTMLInputElement>) => { setEmail(e.target.value); setEmailTakenError(false); }}
-                      placeholder="you@example.com" required
-                      className="w-full py-2.5 pr-3.5 pl-10 rounded-[14px] border border-[#E5E7EB] dark:border-white/10 bg-[#F8FAFC] dark:bg-white/5 text-[#0F172A] dark:text-slate-100 text-[14px] outline-none transition-colors focus:border-[#EA6A12] dark:focus:border-[#EA6A12]"
+                    <input id="reg-email" type="email" value={email} onChange={(e: ChangeEvent<HTMLInputElement>) => { setEmail(e.target.value); setEmailTakenError(false); clearFieldError('email'); }}
+                      onBlur={() => validateField('email')}
+                      placeholder="you@example.com" autoComplete="email" required maxLength={AUTH_FIELD_LIMITS.emailMax}
+                      aria-invalid={Boolean(fieldErrors.email)} aria-describedby={fieldErrors.email ? 'reg-email-error' : undefined}
+                      className={`w-full py-2.5 pr-3.5 pl-10 rounded-[14px] border bg-[#F8FAFC] dark:bg-white/5 text-[#0F172A] dark:text-slate-100 text-[14px] outline-none transition-colors ${fieldErrors.email ? 'border-red-500 focus:border-red-500' : 'border-[#E5E7EB] dark:border-white/10 focus:border-[#EA6A12] dark:focus:border-[#EA6A12]'}`}
                     />
                   </div>
+                  {fieldErrors.email && <p id="reg-email-error" role="alert" className="mt-1.5 text-[12px] text-red-500 dark:text-red-400">{fieldErrors.email}</p>}
                 </div>
 
                 {/* Password */}
                 <div>
-                  <label className="block text-[13px] font-semibold text-slate-900 dark:text-slate-50 mb-1.5">Password</label>
+                  <label htmlFor="reg-password" className="block text-[13px] font-semibold text-slate-900 dark:text-slate-50 mb-1.5">Password</label>
                   <div className="relative">
                     <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-                    <input id="reg-password" type={showPass ? 'text' : 'password'} value={password} onChange={(e: ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
-                      placeholder="Min. 6 characters" required
-                      className="w-full py-2.5 pr-11 pl-10 rounded-[14px] border border-[#E5E7EB] dark:border-white/10 bg-[#F8FAFC] dark:bg-white/5 text-[#0F172A] dark:text-slate-100 text-[14px] outline-none transition-colors focus:border-[#EA6A12] dark:focus:border-[#EA6A12]"
+                    <input id="reg-password" type={showPass ? 'text' : 'password'} value={password}
+                      onChange={(e: ChangeEvent<HTMLInputElement>) => { setPassword(e.target.value); clearFieldError('password'); clearFieldError('confirmPassword'); }}
+                      onBlur={() => { validateField('password'); if (confirmPassword) validateField('confirmPassword'); }}
+                      placeholder="6–100 characters" autoComplete="new-password" required maxLength={AUTH_FIELD_LIMITS.passwordMax}
+                      aria-invalid={Boolean(fieldErrors.password)} aria-describedby={fieldErrors.password ? 'reg-password-error' : 'reg-password-help'}
+                      className={`w-full py-2.5 pr-11 pl-10 rounded-[14px] border bg-[#F8FAFC] dark:bg-white/5 text-[#0F172A] dark:text-slate-100 text-[14px] outline-none transition-colors ${fieldErrors.password ? 'border-red-500 focus:border-red-500' : 'border-[#E5E7EB] dark:border-white/10 focus:border-[#EA6A12] dark:focus:border-[#EA6A12]'}`}
                     />
                     <button type="button" onClick={() => setShowPass(p => !p)}
+                      aria-label={showPass ? 'Hide password' : 'Show password'}
                       className="absolute right-3.5 top-1/2 -translate-y-1/2 bg-transparent border-none cursor-pointer text-slate-400 p-0">
                       {showPass ? <EyeOff size={15} /> : <Eye size={15} />}
                     </button>
                   </div>
+                  {fieldErrors.password
+                    ? <p id="reg-password-error" role="alert" className="mt-1.5 text-[12px] text-red-500 dark:text-red-400">{fieldErrors.password}</p>
+                    : <p id="reg-password-help" className="mt-1.5 text-[11px] text-slate-500 dark:text-slate-400">Use 6–100 characters.</p>}
                 </div>
 
                 {/* Confirm Password */}
                 <div>
-                  <label className="block text-[13px] font-semibold text-slate-900 dark:text-slate-50 mb-1.5">Confirm Password</label>
+                  <label htmlFor="reg-confirm" className="block text-[13px] font-semibold text-slate-900 dark:text-slate-50 mb-1.5">Confirm Password</label>
                   <div className="relative">
                     <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-                    <input id="reg-confirm" type={showConfirm ? 'text' : 'password'} value={confirmPassword} onChange={(e: ChangeEvent<HTMLInputElement>) => setConfirmPassword(e.target.value)}
-                      placeholder="Re-enter password" required
-                      className="w-full py-2.5 pr-11 pl-10 rounded-[14px] border border-[#E5E7EB] dark:border-white/10 bg-[#F8FAFC] dark:bg-white/5 text-[#0F172A] dark:text-slate-100 text-[14px] outline-none transition-colors focus:border-[#EA6A12] dark:focus:border-[#EA6A12]"
+                    <input id="reg-confirm" type={showConfirm ? 'text' : 'password'} value={confirmPassword}
+                      onChange={(e: ChangeEvent<HTMLInputElement>) => { setConfirmPassword(e.target.value); clearFieldError('confirmPassword'); }}
+                      onBlur={() => validateField('confirmPassword')}
+                      placeholder="Re-enter password" autoComplete="new-password" required
+                      aria-invalid={Boolean(fieldErrors.confirmPassword)} aria-describedby={fieldErrors.confirmPassword ? 'reg-confirm-error' : undefined}
+                      className={`w-full py-2.5 pr-11 pl-10 rounded-[14px] border bg-[#F8FAFC] dark:bg-white/5 text-[#0F172A] dark:text-slate-100 text-[14px] outline-none transition-colors ${fieldErrors.confirmPassword ? 'border-red-500 focus:border-red-500' : 'border-[#E5E7EB] dark:border-white/10 focus:border-[#EA6A12] dark:focus:border-[#EA6A12]'}`}
                     />
                     <button type="button" onClick={() => setShowConfirm(p => !p)}
+                      aria-label={showConfirm ? 'Hide confirm password' : 'Show confirm password'}
                       className="absolute right-3.5 top-1/2 -translate-y-1/2 bg-transparent border-none cursor-pointer text-slate-400 p-0">
                       {showConfirm ? <EyeOff size={15} /> : <Eye size={15} />}
                     </button>
                   </div>
+                  {fieldErrors.confirmPassword && <p id="reg-confirm-error" role="alert" className="mt-1.5 text-[12px] text-red-500 dark:text-red-400">{fieldErrors.confirmPassword}</p>}
                 </div>
 
                 {/* Role */}
                 <div>
-                  <label className="block text-[13px] font-semibold text-slate-900 dark:text-slate-50 mb-2">Role</label>
-                  <div className="grid grid-cols-3 gap-2 p-1 rounded-[14px] border border-[#E5E7EB] dark:border-white/10 bg-[#F8FAFC] dark:bg-white/5">
+                  <span id="reg-role-label" className="block text-[13px] font-semibold text-slate-900 dark:text-slate-50 mb-2">Role</span>
+                  <div role="radiogroup" aria-labelledby="reg-role-label" aria-invalid={Boolean(fieldErrors.role)} aria-describedby={fieldErrors.role ? 'reg-role-error' : undefined}
+                    className={`grid grid-cols-3 gap-2 p-1 rounded-[14px] border bg-[#F8FAFC] dark:bg-white/5 ${fieldErrors.role ? 'border-red-500' : 'border-[#E5E7EB] dark:border-white/10'}`}>
                     {(['STUDENT','LECTURER','MENTOR'] as Role[]).map(r => (
                       <label key={r} className="cursor-pointer">
-                        <input type="radio" name="role" value={r} checked={role === r} onChange={() => setRole(r)} className="hidden" />
+                        <input id={`reg-role-${r.toLowerCase()}`} type="radio" name="role" value={r} checked={role === r}
+                          onChange={() => { setRole(r); if (r !== 'STUDENT') setMajor(''); clearFieldError('role'); clearFieldError('majorCode'); }}
+                          className="sr-only" />
                         <div className={`text-center py-[9px] px-1 rounded-[9px] text-[13px] font-semibold transition-all ${
                           role === r 
                             ? 'bg-white text-[#EA6A12] border border-[#EA6A12]/30 shadow-[0_10px_24px_rgba(234,106,18,0.12)] dark:bg-[#EA6A12]/15'
@@ -380,22 +470,26 @@ const Register: React.FC = () => {
                       </label>
                     ))}
                   </div>
+                  {fieldErrors.role && <p id="reg-role-error" role="alert" className="mt-1.5 text-[12px] text-red-500 dark:text-red-400">{fieldErrors.role}</p>}
                 </div>
 
                 {/* Major (STUDENT only) */}
                 {role === 'STUDENT' && (
                   <div>
-                    <label className="block text-[13px] font-semibold text-slate-900 dark:text-slate-50 mb-1.5">Major</label>
-                    <select id="reg-major" value={major} onChange={(e: ChangeEvent<HTMLSelectElement>) => setMajor(e.target.value)} required
-                      className="w-full py-2.5 px-3.5 rounded-[14px] border border-[#E5E7EB] dark:border-white/10 bg-[#F8FAFC] dark:bg-white/5 text-[14px] outline-none transition-colors focus:border-[#EA6A12] dark:focus:border-[#EA6A12] text-[#0F172A] dark:text-slate-100"
+                    <label htmlFor="reg-major" className="block text-[13px] font-semibold text-slate-900 dark:text-slate-50 mb-1.5">Major</label>
+                    <select id="reg-major" value={major} onChange={(e: ChangeEvent<HTMLSelectElement>) => { setMajor(e.target.value); clearFieldError('majorCode'); }}
+                      onBlur={() => validateField('majorCode')} required
+                      aria-invalid={Boolean(fieldErrors.majorCode)} aria-describedby={fieldErrors.majorCode ? 'reg-major-error' : undefined}
+                      className={`w-full py-2.5 px-3.5 rounded-[14px] border bg-[#F8FAFC] dark:bg-white/5 text-[14px] outline-none transition-colors text-[#0F172A] dark:text-slate-100 ${fieldErrors.majorCode ? 'border-red-500 focus:border-red-500' : 'border-[#E5E7EB] dark:border-white/10 focus:border-[#EA6A12] dark:focus:border-[#EA6A12]'}`}
                     >
                       <option value="" className="text-slate-500">-- Select Major --</option>
-                      {TEAM_MAJOR_GROUPS.map(g => (
-                        <optgroup key={g.key} label={g.label} className="text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800">
+                      {PROGRAM_GROUPS.map(g => (
+                        <optgroup key={g.code} label={`${g.code} — ${g.name}`} className="text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800">
                           {g.majors.map(m => <option key={m.code} value={m.code}>{m.code} — {m.name}</option>)}
                         </optgroup>
                       ))}
                     </select>
+                    {fieldErrors.majorCode && <p id="reg-major-error" role="alert" className="mt-1.5 text-[12px] text-red-500 dark:text-red-400">{fieldErrors.majorCode}</p>}
                   </div>
                 )}
 

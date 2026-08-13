@@ -8,10 +8,19 @@ import App from './App.tsx'
 // Example: VITE_GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
 const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID ?? '';
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <GoogleOAuthProvider clientId={googleClientId}>
-      <App />
-    </GoogleOAuthProvider>
-  </StrictMode>,
-)
+async function bootstrap() {
+  if (import.meta.env.VITE_ENABLE_API_MOCKS === 'true') {
+    const { enableApiMocks } = await import('./mocks/mockApi.ts');
+    enableApiMocks();
+  }
+
+  createRoot(document.getElementById('root')!).render(
+    <StrictMode>
+      <GoogleOAuthProvider clientId={googleClientId}>
+        <App />
+      </GoogleOAuthProvider>
+    </StrictMode>,
+  );
+}
+
+void bootstrap();

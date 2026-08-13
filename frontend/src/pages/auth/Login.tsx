@@ -12,6 +12,16 @@ import type { CredentialResponse } from '@react-oauth/google';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../hooks/useAuth';
 import { AUTH_ERROR_CODES } from '../../types/auth';
+import { parseApiError } from '../../utils/apiError';
+import {
+  AUTH_FIELD_LIMITS,
+  LOGIN_FIELDS,
+  mapApiFieldErrors,
+  normalizeLoginPayload,
+  toFieldErrorMap,
+  validateLoginPayload,
+} from '../../utils/authValidation';
+import type { AuthFieldErrors, LoginField } from '../../utils/authValidation';
 import logo from '../../assets/logo.png';
 
 /* ─── Google icon ─────────────────────────────────── */
@@ -40,20 +50,6 @@ interface LocationState {
 }
 
 /* ─── Component ───────────────────────────────────── */
-interface ApiErrorBody {
-  code?: string | null;
-  errorCode?: string | null;
-  message?: string;
-}
-
-function getApiError(err: unknown): { code: string; message: string } {
-  const apiError = (err as { response?: { data?: ApiErrorBody } }).response?.data;
-  return {
-    code: apiError?.code ?? apiError?.errorCode ?? '',
-    message: apiError?.message ?? 'Login failed.',
-  };
-}
-
 function normalizeRole(role: string): string {
   return role.trim().toUpperCase();
 }
@@ -69,6 +65,9 @@ const Login: React.FC = () => {
   const [googleLoading, setGoogleLoading]     = useState<boolean>(false);
   const [pendingApproval, setPendingApproval] = useState<boolean>(false);
   const [rejectedStatus, setRejectedStatus]   = useState<boolean>(false);
+  const [blockedStatus, setBlockedStatus]     = useState<boolean>(false);
+  const [fieldErrors, setFieldErrors]         = useState<AuthFieldErrors<LoginField>>({});
+  const [formError, setFormError]             = useState<string>('');
 
   const navigate  = useNavigate();
   const location  = useLocation();
@@ -90,23 +89,66 @@ const Login: React.FC = () => {
     else                                           navigate('/student');
   };
 
+  const clearFieldError = (field: LoginField) => {
+    setFieldErrors(current => {
+      if (!current[field]) return current;
+      const next = { ...current };
+      delete next[field];
+      return next;
+    });
+    setFormError('');
+    setPendingApproval(false);
+    setRejectedStatus(false);
+    setBlockedStatus(false);
+  };
+
+  const validateField = (field: LoginField) => {
+    const error = validateLoginPayload({ email, password }).find(item => item.field === field);
+    setFieldErrors(current => {
+      const next = { ...current };
+      if (error) next[field] = error.message;
+      else delete next[field];
+      return next;
+    });
+  };
+
+  const focusFirstError = (errors: AuthFieldErrors<LoginField>) => {
+    const firstField = LOGIN_FIELDS.find(field => errors[field]);
+    if (firstField) requestAnimationFrame(() => document.getElementById(`login-${firstField}`)?.focus());
+  };
+
   /* ── Email / password login ─────────────────────── */
   const handleLogin = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!email || !password) return void toast.error('Please fill in all fields.');
+    setPendingApproval(false);
+    setRejectedStatus(false);
+    setBlockedStatus(false);
+    const payload = { email, password };
+    const nextFieldErrors = toFieldErrorMap(validateLoginPayload(payload));
+    setFieldErrors(nextFieldErrors);
+    setFormError('');
+    if (Object.keys(nextFieldErrors).length > 0) {
+      focusFirstError(nextFieldErrors);
+      return;
+    }
+
+    const normalizedPayload = normalizeLoginPayload(payload);
+    if (normalizedPayload.email !== email) setEmail(normalizedPayload.email);
     setLoading(true);
-    setPendingApproval(false); setRejectedStatus(false);
     try {
-      const user = await loginWithEmail({ email, password });
+      const user = await loginWithEmail(normalizedPayload);
       toast.success('Login successful!');
       redirectByRole(user.roles as string[]);
     } catch (err: unknown) {
-      const { code, message } = getApiError(err);
+      const { code, message, fieldErrors: apiFieldErrors } = parseApiError(err, 'Login failed.');
+      const mappedFieldErrors = mapApiFieldErrors(apiFieldErrors, LOGIN_FIELDS);
+      setFieldErrors(mappedFieldErrors);
+      focusFirstError(mappedFieldErrors);
       if (code === AUTH_ERROR_CODES.ACCOUNT_PENDING_APPROVAL) setPendingApproval(true);
       else if (code === AUTH_ERROR_CODES.ACCOUNT_REJECTED)    setRejectedStatus(true);
-      else if (code === AUTH_ERROR_CODES.USER_BLOCKED)        setRejectedStatus(true);
-      else if (code === AUTH_ERROR_CODES.USER_INACTIVE)       toast.error('Your account is inactive. Contact support.');
-      else toast.error(message);
+      else if (code === AUTH_ERROR_CODES.USER_BLOCKED)        setBlockedStatus(true);
+      else if (code === AUTH_ERROR_CODES.USER_INACTIVE)       setFormError('Your account is inactive. Contact support.');
+      else if (Object.keys(mappedFieldErrors).length === 0)    setFormError(message);
     } finally { setLoading(false); }
   };
 
@@ -120,19 +162,24 @@ const Login: React.FC = () => {
     setGoogleLoading(true);
     setPendingApproval(false);
     setRejectedStatus(false);
+    setBlockedStatus(false);
+    setFieldErrors({});
+    setFormError('');
 
     try {
       const user = await loginWithGoogle(credentialResponse.credential);
       toast.success('Signed in with Google!');
       redirectByRole(user.roles as string[]);
     } catch (err: unknown) {
-      const { code, message } = getApiError(err);
+      const { code, message } = parseApiError(err, 'Google sign-in failed.');
       if (code === AUTH_ERROR_CODES.ACCOUNT_NOT_REGISTERED) {
         toast.error('No account found for this Google email. Please register first.');
       } else if (code === AUTH_ERROR_CODES.ACCOUNT_PENDING_APPROVAL) {
         setPendingApproval(true);
-      } else if (code === AUTH_ERROR_CODES.ACCOUNT_REJECTED || code === AUTH_ERROR_CODES.USER_BLOCKED) {
+      } else if (code === AUTH_ERROR_CODES.ACCOUNT_REJECTED) {
         setRejectedStatus(true);
+      } else if (code === AUTH_ERROR_CODES.USER_BLOCKED) {
+        setBlockedStatus(true);
       } else if (code === AUTH_ERROR_CODES.USER_INACTIVE) {
         toast.error('Your account is inactive. Contact support.');
       } else {
@@ -226,7 +273,7 @@ const Login: React.FC = () => {
 
           {/* Alert banners */}
           {pendingApproval && (
-            <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-3.5 flex gap-3 mb-5">
+            <div role="alert" aria-live="assertive" className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-3.5 flex gap-3 mb-5">
               <AlertCircle size={18} className="text-blue-400 shrink-0 mt-0.5" />
               <div>
                 <p className="text-[13px] font-semibold text-blue-400 mb-1">Pending Approval</p>
@@ -235,7 +282,7 @@ const Login: React.FC = () => {
             </div>
           )}
           {rejectedStatus && (
-            <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3.5 flex gap-3 mb-5">
+            <div role="alert" aria-live="assertive" className="bg-red-500/10 border border-red-500/30 rounded-xl p-3.5 flex gap-3 mb-5">
               <AlertCircle size={18} className="text-red-400 shrink-0 mt-0.5" />
               <div>
                 <p className="text-[13px] font-semibold text-red-400 mb-1">Account Rejected</p>
@@ -282,18 +329,40 @@ const Login: React.FC = () => {
             <div className="flex-1 h-px bg-[#E5E7EB] dark:bg-white/10" />
           </div>
 
+          {formError && (
+            <div id="login-form-error" role="alert"
+              className="bg-red-500/10 border border-red-500/30 rounded-xl p-3.5 flex gap-3 mb-5">
+              <AlertCircle size={18} className="text-red-500 shrink-0 mt-0.5" />
+              <p className="text-[13px] text-red-500 dark:text-red-400">{formError}</p>
+            </div>
+          )}
+          {blockedStatus && (
+            <div role="alert" aria-live="assertive" className="bg-red-500/10 border border-red-500/30 rounded-xl p-3.5 flex gap-3 mb-5">
+              <AlertCircle size={18} className="text-red-400 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-[13px] font-semibold text-red-400 mb-1">Account Blocked</p>
+                <p className="text-[12px] text-slate-500 dark:text-slate-400">Your account has been blocked. Contact support for assistance.</p>
+              </div>
+            </div>
+          )}
+
           {/* Form */}
-          <form onSubmit={handleLogin} className="flex flex-col gap-4">
+          <form onSubmit={handleLogin} className="flex flex-col gap-4" noValidate aria-describedby={formError ? 'login-form-error' : undefined}>
             {/* Email */}
             <div>
-              <label className="block text-[13px] font-semibold text-slate-900 dark:text-slate-50 mb-1.5">Email</label>
+              <label htmlFor="login-email" className="block text-[13px] font-semibold text-slate-900 dark:text-slate-50 mb-1.5">Email</label>
               <div className="relative">
                 <Mail size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-                <input id="login-email" type="email" value={email} onChange={e => setEmail(e.target.value)}
-                  placeholder="you@example.com" required
-                  className="w-full py-2.5 pr-3.5 pl-10 rounded-[14px] border border-[#E5E7EB] dark:border-white/10 bg-[#F8FAFC] dark:bg-white/5 text-[#0F172A] dark:text-slate-100 text-[14px] outline-none transition-colors focus:border-[#EA6A12] dark:focus:border-[#EA6A12]"
+                <input id="login-email" type="email" value={email}
+                  onChange={e => { setEmail(e.target.value); clearFieldError('email'); }}
+                  onBlur={() => validateField('email')}
+                  placeholder="you@example.com" autoComplete="email" required maxLength={AUTH_FIELD_LIMITS.emailMax}
+                  aria-invalid={Boolean(fieldErrors.email)}
+                  aria-describedby={fieldErrors.email ? 'login-email-error' : undefined}
+                  className={`w-full py-2.5 pr-3.5 pl-10 rounded-[14px] border bg-[#F8FAFC] dark:bg-white/5 text-[#0F172A] dark:text-slate-100 text-[14px] outline-none transition-colors ${fieldErrors.email ? 'border-red-500 focus:border-red-500' : 'border-[#E5E7EB] dark:border-white/10 focus:border-[#EA6A12] dark:focus:border-[#EA6A12]'}`}
                 />
               </div>
+              {fieldErrors.email && <p id="login-email-error" role="alert" className="mt-1.5 text-[12px] text-red-500 dark:text-red-400">{fieldErrors.email}</p>}
             </div>
 
             {/* Password */}
@@ -301,15 +370,21 @@ const Login: React.FC = () => {
               <label htmlFor="login-password" className="block text-[13px] font-semibold text-slate-900 dark:text-slate-50 mb-1.5">Password</label>
               <div className="relative">
                 <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-                <input id="login-password" type={showPass ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)}
-                  placeholder="••••••••" required
-                  className="w-full py-2.5 pr-11 pl-10 rounded-[14px] border border-[#E5E7EB] dark:border-white/10 bg-[#F8FAFC] dark:bg-white/5 text-[#0F172A] dark:text-slate-100 text-[14px] outline-none transition-colors focus:border-[#EA6A12] dark:focus:border-[#EA6A12]"
+                <input id="login-password" type={showPass ? 'text' : 'password'} value={password}
+                  onChange={e => { setPassword(e.target.value); clearFieldError('password'); }}
+                  onBlur={() => validateField('password')}
+                  placeholder="••••••••" autoComplete="current-password" required maxLength={AUTH_FIELD_LIMITS.passwordMax}
+                  aria-invalid={Boolean(fieldErrors.password)}
+                  aria-describedby={fieldErrors.password ? 'login-password-error' : undefined}
+                  className={`w-full py-2.5 pr-11 pl-10 rounded-[14px] border bg-[#F8FAFC] dark:bg-white/5 text-[#0F172A] dark:text-slate-100 text-[14px] outline-none transition-colors ${fieldErrors.password ? 'border-red-500 focus:border-red-500' : 'border-[#E5E7EB] dark:border-white/10 focus:border-[#EA6A12] dark:focus:border-[#EA6A12]'}`}
                 />
                 <button type="button" onClick={() => setShowPass(p => !p)}
+                  aria-label={showPass ? 'Hide password' : 'Show password'}
                   className="absolute right-3.5 top-1/2 -translate-y-1/2 bg-transparent border-none cursor-pointer text-slate-400 p-0">
                   {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
               </div>
+              {fieldErrors.password && <p id="login-password-error" role="alert" className="mt-1.5 text-[12px] text-red-500 dark:text-red-400">{fieldErrors.password}</p>}
               <div className="mt-2 text-right">
                 <Link to="/forgot-password" className="text-[12px] text-[#EA6A12] no-underline font-semibold hover:underline">
                   Forgot password?
