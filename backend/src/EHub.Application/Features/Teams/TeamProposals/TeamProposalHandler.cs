@@ -36,9 +36,12 @@ public sealed class TeamProposalHandler : ITeamProposalHandler
         else if (IsRole(role, SystemRoles.Student))
         {
             var studentId = await GetStudentIdAsync(userId, cancellationToken);
-            if (!studentId.HasValue || targetClass.Status == ClassStatus.Archived || !await _context.ClassStudents.AsNoTracking().AnyAsync(item =>
-                    item.ClassId == classId && item.StudentId == studentId && item.EnrollmentStatus == EnrollmentStatus.Active, cancellationToken))
-                return FailureList(ErrorCodes.ClassAccessDenied, "You are not actively enrolled in this class.");
+            var expectedStatus = ClassStateRules.IsReadOnly(targetClass.Status)
+                ? EnrollmentStatus.Completed
+                : EnrollmentStatus.Active;
+            if (!studentId.HasValue || !await _context.ClassStudents.AsNoTracking().AnyAsync(item =>
+                    item.ClassId == classId && item.StudentId == studentId && item.EnrollmentStatus == expectedStatus, cancellationToken))
+                return FailureList(ErrorCodes.ClassAccessDenied, "You do not have access to this class proposal history.");
             query = query.Where(item => item.Members.Any(member => member.StudentId == studentId && member.IsIncluded));
         }
         else if (!IsRole(role, SystemRoles.Admin)) return FailureList(ErrorCodes.ClassAccessDenied, "You cannot view these proposals.");
@@ -203,8 +206,8 @@ public sealed class TeamProposalHandler : ITeamProposalHandler
                     return Failure(ErrorCodes.ClassAccessDenied, "Only an administrator or assigned lecturer can review this proposal.");
                 if (proposal.Status != TeamProposalStatus.Pending) return Failure(ErrorCodes.TeamProposalStateInvalid, "Only a Pending proposal can be reviewed.");
                 if (proposal.Version != version) return Failure(ErrorCodes.ClassConcurrencyConflict, "The proposal changed concurrently. Refresh and try again.");
-                if (proposal.Class.Status == ClassStatus.Archived)
-                    return Failure(ErrorCodes.ClassArchived, "An archived class cannot review team proposals.");
+                var mutationError = ClassStateRules.GetMutationError(proposal.Class.Status);
+                if (mutationError != null) return Failure(mutationError.Code, mutationError.Message);
 
                 var now = DateTime.UtcNow;
                 var previous = proposal.Status;
@@ -323,7 +326,8 @@ public sealed class TeamProposalHandler : ITeamProposalHandler
         if (!ids.Contains(leaderId)) return CompositionFailure("The proposed leader must be one of the members.");
         var targetClass = await _context.Classes.AsNoTracking().FirstOrDefaultAsync(item => item.Id == classId, cancellationToken);
         if (targetClass == null) return Result.Failure<List<ClassStudent>>(new Error(ErrorCodes.ClassNotFound, "The requested class was not found."));
-        if (targetClass.Status == ClassStatus.Archived) return Result.Failure<List<ClassStudent>>(new Error(ErrorCodes.ClassArchived, "Cannot manage proposals in an archived class."));
+        var mutationError = ClassStateRules.GetMutationError(targetClass.Status);
+        if (mutationError != null) return Result.Failure<List<ClassStudent>>(mutationError);
         var enrollments = await _context.ClassStudents.Include(item => item.Student)
             .Where(item => item.ClassId == classId && ids.Contains(item.StudentId) && item.EnrollmentStatus == EnrollmentStatus.Active)
             .ToListAsync(cancellationToken);

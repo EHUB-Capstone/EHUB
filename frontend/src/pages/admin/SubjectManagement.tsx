@@ -17,7 +17,15 @@ import { parseApiError } from '../../utils/apiError';
 type SemesterCode = 'SP' | 'SU' | 'FA';
 type SubjectStatus = 'active' | 'disabled';
 type Subject = { _id: string; subjectCode: string; subjectName: string; status: SubjectStatus };
-type Semester = { semester: SemesterCode; year: number };
+type Semester = {
+  id: string;
+  semester: SemesterCode;
+  year: number;
+  status: 'Planned' | 'Active' | 'Completed' | 'Archived';
+  rowVersion: string;
+  completedAtUtc?: string | null;
+  completionReason?: string | null;
+};
 type Assignment = { _id: string; classCode: string; subjectCode: string };
 type TeachingStaff = {
   _id: string;
@@ -54,7 +62,8 @@ const SubjectManagement = () => {
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | SubjectStatus>('ALL');
-  const [currentSemester, setCurrentSemester] = useState<Semester>({ semester: 'SP', year: currentYear });
+  const [currentSemester, setCurrentSemester] = useState<Semester | null>(null);
+  const [semesters, setSemesters] = useState<Semester[]>([]);
   const [selectedSemester, setSelectedSemester] = useState<SemesterCode>('SP');
   const [selectedYear, setSelectedYear] = useState(currentYear);
   const [availableYears, setAvailableYears] = useState<number[]>([currentYear]);
@@ -71,6 +80,9 @@ const SubjectManagement = () => {
   const [savingSubject, setSavingSubject] = useState(false);
   const [disableTarget, setDisableTarget] = useState<Subject | null>(null);
   const [disabling, setDisabling] = useState(false);
+  const [semesterLifecycleTarget, setSemesterLifecycleTarget] = useState<{ semester: Semester; action: 'complete' | 'reopen'; preview?: any } | null>(null);
+  const [semesterLifecycleReason, setSemesterLifecycleReason] = useState('');
+  const [semesterLifecycleBusy, setSemesterLifecycleBusy] = useState(false);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => setDebouncedSearch(search), 500);
@@ -94,7 +106,12 @@ const SubjectManagement = () => {
 
   const loadSemester = async () => {
     try {
-      const payload = responseData(await subjectApi.getCurrentSemester());
+      const [currentResponse, listResponse] = await Promise.all([
+        subjectApi.getCurrentSemester(),
+        subjectApi.getSemesters(),
+      ]);
+      const payload = responseData(currentResponse);
+      const listPayload = responseData(listResponse);
       const semester = payload.currentSemester as Semester | undefined;
       const years = Array.isArray(payload.availableYears) && payload.availableYears.length
         ? payload.availableYears.map(Number)
@@ -104,6 +121,10 @@ const SubjectManagement = () => {
         setSelectedSemester(semester.semester);
         setSelectedYear(Number(semester.year));
       }
+      else {
+        setCurrentSemester(null);
+      }
+      setSemesters(listPayload.semesters ?? []);
       setAvailableYears(years);
       setCanPlanNextYear(Boolean(payload.isDecember || payload.canPlanNextYear));
     } catch (error) {
@@ -192,13 +213,53 @@ const SubjectManagement = () => {
     setSavingSemester(true);
     try {
       const payload = responseData(await subjectApi.updateCurrentSemester(selectedSemester, selectedYear));
-      const nextSemester = payload.currentSemester ?? { semester: selectedSemester, year: selectedYear };
+      const nextSemester = payload.currentSemester;
       setCurrentSemester(nextSemester);
       toast.success(`Active semester set to ${semesterLabel(nextSemester)}`);
+      await loadSemester();
     } catch (error) {
       toast.error(parseApiError(error, 'Failed to update active semester').message);
     } finally {
       setSavingSemester(false);
+    }
+  };
+
+  const openCompleteSemester = async () => {
+    if (!currentSemester) return;
+    setSemesterLifecycleBusy(true);
+    try {
+      const preview = responseData(await subjectApi.getSemesterCompletionPreview(currentSemester.id));
+      setSemesterLifecycleTarget({ semester: currentSemester, action: 'complete', preview });
+    } catch (error) {
+      toast.error(parseApiError(error, 'Failed to preview semester completion').message);
+    } finally {
+      setSemesterLifecycleBusy(false);
+    }
+  };
+
+  const confirmSemesterLifecycle = async () => {
+    if (!semesterLifecycleTarget) return;
+    setSemesterLifecycleBusy(true);
+    try {
+      const { semester, action, preview } = semesterLifecycleTarget;
+      const payload = {
+        rowVersion: preview?.rowVersion ?? semester.rowVersion,
+        reason: semesterLifecycleReason.trim(),
+      };
+      if (action === 'complete') {
+        await subjectApi.completeSemester(semester.id, payload);
+        toast.success(`${semesterLabel(semester)} completed successfully`);
+      } else {
+        await subjectApi.reopenSemester(semester.id, payload);
+        toast.success(`${semesterLabel(semester)} reopened successfully`);
+      }
+      setSemesterLifecycleTarget(null);
+      setSemesterLifecycleReason('');
+      await loadSemester();
+    } catch (error) {
+      toast.error(parseApiError(error, 'Failed to change semester lifecycle').message);
+    } finally {
+      setSemesterLifecycleBusy(false);
     }
   };
 
@@ -269,8 +330,38 @@ const SubjectManagement = () => {
           </div>
           <aside className="rounded-2xl border border-slate-200/70 bg-white p-5 shadow-sm">
             <div className="flex items-center gap-2 border-b border-slate-100 pb-3"><Calendar className="h-5 w-5 text-primary" /><h2 className="font-bold text-slate-800">Active Semester</h2></div>
-            <div className="mt-4 rounded-xl border border-slate-100 bg-slate-50 p-3"><p className="text-xs font-medium text-slate-400">Current Setting</p><p className="mt-1 text-lg font-bold text-slate-900">{semesterLabel(currentSemester)}</p></div>
+            <div className="mt-4 rounded-xl border border-slate-100 bg-slate-50 p-3">
+              <p className="text-xs font-medium text-slate-400">Current Setting</p>
+              <p className="mt-1 text-lg font-bold text-slate-900">{currentSemester ? semesterLabel(currentSemester) : 'No active semester'}</p>
+              {currentSemester && <p className="mt-1 text-xs font-medium text-green-700">Active</p>}
+            </div>
             <div className="mt-4 space-y-3"><label className="block text-xs font-semibold uppercase text-slate-400">Semester<select value={selectedSemester} onChange={(event) => setSelectedSemester(event.target.value as SemesterCode)} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-normal text-slate-700 outline-none focus:border-primary"><option value="SP">SP (Spring)</option><option value="SU">SU (Summer)</option><option value="FA">FA (Fall)</option></select></label><label className="block text-xs font-semibold uppercase text-slate-400">Year<select value={selectedYear} onChange={(event) => setSelectedYear(Number(event.target.value))} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-normal text-slate-700 outline-none focus:border-primary">{availableYears.map((year) => <option key={year} value={year}>{year}</option>)}</select></label><Button className="w-full" onClick={() => void saveSemester()} isLoading={savingSemester}>{savingSemester ? 'Saving...' : 'Set Active Semester'}</Button></div>
+            {currentSemester && (
+              <Button variant="outline" className="mt-2 w-full" onClick={() => void openCompleteSemester()} isLoading={semesterLifecycleBusy}>
+                Complete Active Semester
+              </Button>
+            )}
+            {semesters.some(item => item.status === 'Completed') && (
+              <div className="mt-4 border-t border-slate-100 pt-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Completed history</p>
+                <div className="mt-2 space-y-2">
+                  {semesters.filter(item => item.status === 'Completed').slice(0, 4).map(item => (
+                    <div key={item.id} className="flex items-center justify-between rounded-lg bg-blue-50 px-2.5 py-2 text-xs">
+                      <span className="font-semibold text-blue-800">{semesterLabel(item)}</span>
+                      <button
+                        type="button"
+                        disabled={Boolean(currentSemester)}
+                        onClick={() => setSemesterLifecycleTarget({ semester: item, action: 'reopen' })}
+                        className="font-semibold text-primary disabled:cursor-not-allowed disabled:opacity-40"
+                        title={currentSemester ? 'Complete the active semester before reopening another one' : 'Reopen semester'}
+                      >
+                        Reopen
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             {canPlanNextYear && <p className="mt-3 rounded-xl border border-success-light bg-success-50 p-3 text-xs font-medium text-success-dark">December planning is available for next year.</p>}
             <p className="mt-3 flex gap-2 rounded-xl border border-warning-light bg-warning-50 p-3 text-xs leading-5 text-warning-dark"><Sparkles className="mt-0.5 h-4 w-4 shrink-0" />Changing the active semester limits new class creation to the selected semester.</p>
           </aside>
@@ -288,6 +379,24 @@ const SubjectManagement = () => {
         <div className="space-y-4"><label className="block text-sm font-medium text-slate-700">Subject Code *<input disabled={Boolean(editingSubject)} value={form.subjectCode} onChange={(event) => setForm({ ...form, subjectCode: event.target.value })} placeholder="e.g. EXE301" className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 font-mono text-sm outline-none focus:border-primary disabled:bg-slate-50" /></label><label className="block text-sm font-medium text-slate-700">Subject Name *<input value={form.subjectName} onChange={(event) => setForm({ ...form, subjectName: event.target.value })} placeholder="e.g. Experiential Entrepreneurship 3" className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-primary" /></label><label className="block text-sm font-medium text-slate-700">Status<select value={form.status} onChange={(event) => setForm({ ...form, status: event.target.value as SubjectStatus })} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-primary"><option value="active">Active</option><option value="disabled">Disabled</option></select></label></div>
       </Modal>
       <ConfirmDialog isOpen={Boolean(disableTarget)} onClose={() => setDisableTarget(null)} onConfirm={disableSubject} title="Disable Subject" description="Existing class data will be kept, but this subject can no longer be used when creating new classes." confirmText="Disable Subject" isSubmitting={disabling} />
+      <ConfirmDialog
+        isOpen={Boolean(semesterLifecycleTarget)}
+        onClose={() => { setSemesterLifecycleTarget(null); setSemesterLifecycleReason(''); }}
+        onConfirm={confirmSemesterLifecycle}
+        title={semesterLifecycleTarget?.action === 'reopen' ? 'Reopen this semester?' : 'Complete this semester?'}
+        description={semesterLifecycleTarget?.action === 'reopen'
+          ? 'The semester will become Active again. Completed classes remain read-only until an administrator reopens each class explicitly.'
+          : semesterLifecycleTarget?.preview?.blockers?.length
+            ? `Completion is blocked: ${semesterLifecycleTarget.preview.blockers.join(' ')}`
+            : 'The semester will become Completed and no longer accept operational classes. This action is available only after every class is completed or archived.'}
+        confirmText={semesterLifecycleTarget?.action === 'reopen' ? 'Reopen semester' : 'Complete semester'}
+        confirmVariant="primary"
+        isSubmitting={semesterLifecycleBusy}
+        reason={semesterLifecycleReason}
+        onReasonChange={setSemesterLifecycleReason}
+        reasonRequired
+        confirmDisabled={semesterLifecycleTarget?.action === 'complete' && (semesterLifecycleTarget.preview?.blockers?.length ?? 0) > 0}
+      />
     </div>
   );
 };

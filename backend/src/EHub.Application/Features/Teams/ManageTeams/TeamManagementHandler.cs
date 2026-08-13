@@ -38,11 +38,12 @@ public sealed class TeamManagementHandler : ITeamManagementHandler
         else if (IsRole(role, SystemRoles.Student))
         {
             var studentId = await GetStudentIdAsync(userId, cancellationToken);
+            var expectedStatus = ClassStateRules.IsReadOnly(targetClass.Status)
+                ? EnrollmentStatus.Completed
+                : EnrollmentStatus.Active;
             if (!studentId.HasValue || !await _context.ClassStudents.AsNoTracking().AnyAsync(item =>
-                    item.ClassId == classId && item.StudentId == studentId && item.EnrollmentStatus == EnrollmentStatus.Active, cancellationToken))
-                return FailureList(ErrorCodes.ClassAccessDenied, "You are not actively enrolled in this class.");
-            if (targetClass.Status == ClassStatus.Archived)
-                return FailureList(ErrorCodes.ClassAccessDenied, "This class is not available.");
+                    item.ClassId == classId && item.StudentId == studentId && item.EnrollmentStatus == expectedStatus, cancellationToken))
+                return FailureList(ErrorCodes.ClassAccessDenied, "You do not have access to this class team history.");
         }
         else if (IsRole(role, SystemRoles.Mentor))
         {
@@ -61,7 +62,8 @@ public sealed class TeamManagementHandler : ITeamManagementHandler
     public async Task<Result<IReadOnlyCollection<TeamDto>>> GetAccessibleAsync(
         Guid userId, string role, CancellationToken cancellationToken = default)
     {
-        var query = TeamQuery().Where(team => team.Status == TeamStatus.Active && team.Class.Status != ClassStatus.Archived);
+        var query = TeamQuery().Where(team => team.Status == TeamStatus.Active &&
+            (team.Class.Status == ClassStatus.Draft || team.Class.Status == ClassStatus.Active));
         if (IsRole(role, SystemRoles.Lecturer))
             query = query.Where(team => team.Class.PrimaryLecturerId == userId);
         else if (IsRole(role, SystemRoles.Mentor))
@@ -100,7 +102,8 @@ public sealed class TeamManagementHandler : ITeamManagementHandler
                 if (targetClass == null) return Failure(ErrorCodes.ClassNotFound, "The requested class was not found.");
                 var permission = ValidateManager(targetClass, userId, role);
                 if (permission != null) return Failure(permission.Value.Code, permission.Value.Message);
-                if (targetClass.Status == ClassStatus.Archived) return Failure(ErrorCodes.ClassArchived, "Cannot create teams in an archived class.");
+                var mutationError = ClassStateRules.GetMutationError(targetClass.Status);
+                if (mutationError != null) return Failure(mutationError.Code, mutationError.Message);
 
                 var composition = await LoadAndValidateCompositionAsync(
                     classId, request.MemberIds, request.LeaderStudentId, null, transactionCancellationToken);
@@ -165,8 +168,10 @@ public sealed class TeamManagementHandler : ITeamManagementHandler
                 if (team == null) return Failure(ErrorCodes.TeamNotFound, "The requested team was not found.");
                 var permission = ValidateManager(team.Class, userId, role);
                 if (permission != null) return Failure(permission.Value.Code, permission.Value.Message);
-                if (team.Status != TeamStatus.Active || team.Class.Status == ClassStatus.Archived)
-                    return Failure(ErrorCodes.TeamInactive, "Members cannot be changed for an inactive team or archived class.");
+                if (team.Status != TeamStatus.Active)
+                    return Failure(ErrorCodes.TeamInactive, "Members cannot be changed for an inactive team.");
+                var mutationError = ClassStateRules.GetMutationError(team.Class.Status);
+                if (mutationError != null) return Failure(mutationError.Code, mutationError.Message);
                 if (team.Version != version) return Failure(ErrorCodes.ClassConcurrencyConflict, "The team changed concurrently. Refresh and try again.");
 
                 if (request.TeamName != null)
@@ -242,8 +247,10 @@ public sealed class TeamManagementHandler : ITeamManagementHandler
                 if (team == null) return Failure(ErrorCodes.TeamNotFound, "The requested team was not found.");
                 var permission = ValidateManager(team.Class, userId, role);
                 if (permission != null) return Failure(permission.Value.Code, permission.Value.Message);
-                if (team.Status != TeamStatus.Active || team.Class.Status == ClassStatus.Archived)
-                    return Failure(ErrorCodes.TeamInactive, "The leader cannot be changed for an inactive team or archived class.");
+                if (team.Status != TeamStatus.Active)
+                    return Failure(ErrorCodes.TeamInactive, "The leader cannot be changed for an inactive team.");
+                var mutationError = ClassStateRules.GetMutationError(team.Class.Status);
+                if (mutationError != null) return Failure(mutationError.Code, mutationError.Message);
                 if (team.Version != version) return Failure(ErrorCodes.ClassConcurrencyConflict, "The team changed concurrently. Refresh and try again.");
                 var activeMembers = team.TeamMembers.Where(member => member.CountsTowardActiveTeam).ToArray();
                 if (!activeMembers.Any(member => member.StudentId == request.StudentId))

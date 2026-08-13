@@ -1,6 +1,6 @@
 import { Info } from 'lucide-react';
 
-export default function TeamSuggestionTooltip({ children, label = 'Xem gợi ý tạo nhóm' }) {
+export default function TeamSuggestionTooltip({ children, label = 'View team suggestions' }) {
   return (
     <div className="group/tooltip relative inline-flex shrink-0">
       <button

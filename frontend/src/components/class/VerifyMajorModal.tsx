@@ -24,12 +24,12 @@ const downloadTemplate = async () => {
 // ─── Status badge ──────────────────────────────────────────────────────────────
 const StatusBadge = ({ status }) => {
   if (status === 'matched')
-    return <span className="flex items-center gap-1 px-2 py-0.5 text-xs font-semibold bg-green-100 text-green-700 rounded-full"><CheckCircle2 className="w-3 h-3" />Đúng</span>;
+    return <span className="flex items-center gap-1 px-2 py-0.5 text-xs font-semibold bg-green-100 text-green-700 rounded-full"><CheckCircle2 className="w-3 h-3" />Matched</span>;
   if (status === 'mismatched')
     return <span className="flex items-center gap-1 px-2 py-0.5 text-xs font-semibold bg-red-100 text-red-600 rounded-full"><AlertTriangle className="w-3 h-3" />Sai</span>;
   if (status === 'missing')
-    return <span className="flex items-center gap-1 px-2 py-0.5 text-xs font-semibold bg-amber-100 text-amber-700 rounded-full"><AlertTriangle className="w-3 h-3" />Chưa chọn</span>;
-  return <span className="flex items-center gap-1 px-2 py-0.5 text-xs font-semibold bg-slate-100 text-slate-500 rounded-full"><HelpCircle className="w-3 h-3" />Không tìm thấy</span>;
+    return <span className="flex items-center gap-1 px-2 py-0.5 text-xs font-semibold bg-amber-100 text-amber-700 rounded-full"><AlertTriangle className="w-3 h-3" />Missing</span>;
+  return <span className="flex items-center gap-1 px-2 py-0.5 text-xs font-semibold bg-slate-100 text-slate-500 rounded-full"><HelpCircle className="w-3 h-3" />Not found</span>;
 };
 
 // ─── MajorSelect dropdown for manual correction ────────────────────────────────
@@ -43,7 +43,7 @@ function MajorSelect({ currentMajor, onSave }) {
         onClick={() => setOpen(o => !o)}
         className="flex items-center gap-1 text-xs px-2.5 py-1.5 border border-primary rounded-lg text-primary hover:bg-primary-50 transition-all font-medium"
       >
-        {value || 'Chọn lại'} <ChevronDown className="w-3 h-3" />
+        {value || 'Select major'} <ChevronDown className="w-3 h-3" />
       </button>
       {open && (
         <div className="absolute z-50 right-0 mt-1 w-52 bg-white rounded-xl border border-slate-200 shadow-lg max-h-60 overflow-y-auto">
@@ -77,9 +77,9 @@ function MajorSelect({ currentMajor, onSave }) {
 // ─── Tab labels ────────────────────────────────────────────────────────────────
 const TABS = [
   { key: 'mismatched', label: 'Sai',         color: 'text-red-600',    bg: 'bg-red-50',    border: 'border-red-200' },
-  { key: 'missing',    label: 'Chưa chọn',   color: 'text-amber-600',  bg: 'bg-amber-50',  border: 'border-amber-200' },
-  { key: 'matched',    label: 'Đúng',        color: 'text-green-600',  bg: 'bg-green-50',  border: 'border-green-200' },
-  { key: 'notFound',   label: 'Không có',    color: 'text-slate-500',  bg: 'bg-slate-50',  border: 'border-slate-200' },
+  { key: 'missing',    label: 'Missing',      color: 'text-amber-600',  bg: 'bg-amber-50',  border: 'border-amber-200' },
+  { key: 'matched',    label: 'Matched',      color: 'text-green-600',  bg: 'bg-green-50',  border: 'border-green-200' },
+  { key: 'notFound',   label: 'Not found',    color: 'text-slate-500',  bg: 'bg-slate-50',  border: 'border-slate-200' },
 ];
 
 // ─── Main Component ────────────────────────────────────────────────────────────
@@ -100,7 +100,7 @@ export default function VerifyMajorModal({ classId, onClose }) {
     const dropped = e.dataTransfer?.files[0] || e.target.files[0];
     if (!dropped) return;
     if (!/\.(xlsx|xls)$/i.test(dropped.name)) {
-      toast.error('Chỉ chấp nhận file .xlsx hoặc .xls');
+      toast.error('Only .xlsx or .xls files are supported.');
       return;
     }
     setFile(dropped);
@@ -109,7 +109,7 @@ export default function VerifyMajorModal({ classId, onClose }) {
   };
 
   const handleVerify = async () => {
-    if (!file) { toast.error('Vui lòng chọn file'); return; }
+    if (!file) { toast.error('Please select a file.'); return; }
     setLoading(true);
     try {
       const fd = new FormData();
@@ -120,24 +120,24 @@ export default function VerifyMajorModal({ classId, onClose }) {
       // Default to first tab that has data
       const firstWithData = TABS.find(t => (data[t.key] || []).length > 0);
       setActiveTab(firstWithData?.key || 'matched');
-      toast.success('Kiểm tra hoàn tất!');
+      toast.success('Major verification completed.');
     } catch (e) {
-      toast.error(parseApiError(e, 'Kiểm tra thất bại').message);
+      toast.error(parseApiError(e, 'Major verification failed.').message);
     } finally {
       setLoading(false);
     }
   };
 
   const handleCorrect = useCallback(async (studentId, newMajor) => {
-    const reason = window.prompt('Nhập lý do điều chỉnh chuyên ngành:', 'Corrected after major verification review');
+    const reason = window.prompt('Enter the reason for this major correction:', 'Corrected after major verification review');
     if (!reason) return;
     setSavingId(studentId);
     try {
       await classApi.updateStudentMajor(classId, studentId, newMajor, reason);
       setCorrected(prev => ({ ...prev, [studentId]: newMajor }));
-      toast.success(`Đã cập nhật chuyên ngành → ${newMajor}`);
+      toast.success(`Major updated to ${newMajor}.`);
     } catch (e) {
-      toast.error(parseApiError(e, 'Cập nhật thất bại').message);
+      toast.error(parseApiError(e, 'Failed to update the major.').message);
     } finally {
       setSavingId(null);
     }
@@ -161,8 +161,8 @@ export default function VerifyMajorModal({ classId, onClose }) {
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-slate-100">
           <div>
-            <h2 className="text-xl font-bold text-slate-900">Kiểm tra Chuyên ngành</h2>
-            <p className="text-sm text-slate-400 mt-0.5">Upload file Excel của giảng viên để đối chiếu chuyên ngành từng sinh viên</p>
+            <h2 className="text-xl font-bold text-slate-900">Verify Majors</h2>
+            <p className="text-sm text-slate-400 mt-0.5">Upload an Excel file to compare each student's enrollment major</p>
           </div>
           <button onClick={onClose} className="p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-all">
             <X className="w-5 h-5" />
@@ -175,15 +175,15 @@ export default function VerifyMajorModal({ classId, onClose }) {
             <div className="flex items-center gap-2">
               <FileSpreadsheet className="w-5 h-5 text-indigo-500" />
               <div>
-                <p className="text-sm font-medium text-indigo-700">Tải template mẫu</p>
-                <p className="text-xs text-slate-400">Cột cần thiết: ID, Email, Chuyên ngành</p>
+                <p className="text-sm font-medium text-indigo-700">Download verification template</p>
+                <p className="text-xs text-slate-400">Required columns: StudentCode and MajorCode</p>
               </div>
             </div>
             <button
-              onClick={() => void downloadTemplate().catch(error => toast.error(parseApiError(error, 'Không thể tải template').message))}
+              onClick={() => void downloadTemplate().catch(error => toast.error(parseApiError(error, 'Unable to download the template.').message))}
               className="text-xs px-3 py-1.5 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition-all font-medium"
             >
-              Tải xuống
+              Download
             </button>
           </div>
 
@@ -201,12 +201,12 @@ export default function VerifyMajorModal({ classId, onClose }) {
             {file ? (
               <div>
                 <p className="font-semibold text-slate-800">{file.name}</p>
-                <p className="text-xs text-slate-400 mt-1">{(file.size / 1024).toFixed(1)} KB · Click để đổi file</p>
+                <p className="text-xs text-slate-400 mt-1">{(file.size / 1024).toFixed(1)} KB · Click to choose another file</p>
               </div>
             ) : (
               <div>
-                <p className="font-medium text-slate-500">Kéo thả file Excel vào đây</p>
-                <p className="text-xs text-slate-400 mt-1">hoặc click để chọn file</p>
+                <p className="font-medium text-slate-500">Drop an Excel file here</p>
+                <p className="text-xs text-slate-400 mt-1">or click to select a file</p>
               </div>
             )}
           </div>
@@ -240,7 +240,7 @@ export default function VerifyMajorModal({ classId, onClose }) {
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                 <input
                   type="text"
-                  placeholder="Tìm theo tên, mã SV, email..."
+                  placeholder="Search by name, student code, or email..."
                   value={search}
                   onChange={e => setSearch(e.target.value)}
                   className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
@@ -250,20 +250,20 @@ export default function VerifyMajorModal({ classId, onClose }) {
               {/* Results table */}
               {filteredRows.length === 0 ? (
                 <div className="text-center py-8 text-slate-400 text-sm">
-                  {activeRows.length === 0 ? `Không có sinh viên nào trong nhóm "${TABS.find(t=>t.key===activeTab)?.label}"` : 'Không tìm thấy'}
+                  {activeRows.length === 0 ? `No students in the "${TABS.find(t=>t.key===activeTab)?.label}" group` : 'No results found'}
                 </div>
               ) : (
                 <div className="overflow-x-auto rounded-xl border border-slate-100">
                   <table className="w-full text-sm">
                     <thead className="bg-slate-50 border-b border-slate-100">
                       <tr>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Sinh viên</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Mã SV</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Student</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Student code</th>
                         <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Trong file</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Trong hệ thống</th>
-                        <th className="px-4 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">Trạng thái</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Enrollment major</th>
+                        <th className="px-4 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
                         {activeTab === 'mismatched' && (
-                          <th className="px-4 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">Sửa</th>
+                          <th className="px-4 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">Correct</th>
                         )}
                       </tr>
                     </thead>
@@ -301,11 +301,11 @@ export default function VerifyMajorModal({ classId, onClose }) {
                                     <span className="font-normal text-slate-400 ml-1">— {getMajorName(dbMajorDisplay)}</span>
                                   )}
                                 </span>
-                              ) : <span className="text-xs text-amber-500 font-medium">Chưa chọn</span>}
+                              ) : <span className="text-xs text-amber-500 font-medium">Missing</span>}
                             </td>
                             <td className="px-4 py-3 text-center">
                               {isCorrected
-                                ? <span className="flex items-center justify-center gap-1 px-2 py-0.5 text-xs font-semibold bg-green-100 text-green-700 rounded-full"><CheckCircle2 className="w-3 h-3" />Đã sửa</span>
+                                ? <span className="flex items-center justify-center gap-1 px-2 py-0.5 text-xs font-semibold bg-green-100 text-green-700 rounded-full"><CheckCircle2 className="w-3 h-3" />Corrected</span>
                                 : <StatusBadge status={activeTab} />
                               }
                             </td>
@@ -339,7 +339,7 @@ export default function VerifyMajorModal({ classId, onClose }) {
         {/* Footer */}
         <div className="flex gap-3 p-6 pt-0 border-t border-slate-100">
           <button onClick={onClose} className="flex-1 px-4 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-600 hover:bg-slate-50 transition-all">
-            Đóng
+            Close
           </button>
           {!report && (
             <button
@@ -347,7 +347,7 @@ export default function VerifyMajorModal({ classId, onClose }) {
               disabled={!file || loading}
               className="flex-1 px-4 py-2.5 bg-indigo-500 text-white rounded-xl text-sm font-medium hover:bg-indigo-600 disabled:opacity-50 transition-all flex items-center justify-center gap-2"
             >
-              {loading ? <><Loader2 className="w-4 h-4 animate-spin" /> Đang kiểm tra...</> : <>Kiểm tra chuyên ngành</>}
+              {loading ? <><Loader2 className="w-4 h-4 animate-spin" /> Verifying...</> : <>Verify majors</>}
             </button>
           )}
           {report && (
@@ -355,7 +355,7 @@ export default function VerifyMajorModal({ classId, onClose }) {
               onClick={() => { setReport(null); setFile(null); setCorrected({}); }}
               className="flex-1 px-4 py-2.5 bg-indigo-500 text-white rounded-xl text-sm font-medium hover:bg-indigo-600 transition-all"
             >
-              Kiểm tra lại
+              Verify again
             </button>
           )}
         </div>

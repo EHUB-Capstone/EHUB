@@ -47,6 +47,12 @@ public class ClassStudentConfiguration : IEntityTypeConfiguration<ClassStudent>
             .HasDefaultValue(true)
             .IsRequired();
 
+        builder.Property(cs => cs.CompletedAtUtc)
+            .HasColumnName("completed_at_utc");
+
+        builder.Property(cs => cs.CompletedByUserId)
+            .HasColumnName("completed_by_user_id");
+
         builder.Property(cs => cs.MajorCodeAtEnrollment)
             .HasColumnName("major_code_at_enrollment")
             .HasMaxLength(20)
@@ -115,6 +121,16 @@ public class ClassStudentConfiguration : IEntityTypeConfiguration<ClassStudent>
             .IsUnique()
             .HasFilter("counts_toward_course_semester_limit = true");
 
+        builder.ToTable(table =>
+        {
+            table.HasCheckConstraint(
+                "CK_class_students_status_counting",
+                "(enrollment_status = 'Dropped' AND counts_toward_course_semester_limit = false) OR (enrollment_status IN ('Active', 'Completed') AND counts_toward_course_semester_limit = true)");
+            table.HasCheckConstraint(
+                "CK_class_students_completion_metadata",
+                "(enrollment_status = 'Completed' AND completed_at_utc IS NOT NULL) OR (enrollment_status <> 'Completed' AND completed_at_utc IS NULL)");
+        });
+
         // Relationships configuration
         builder.HasOne(cs => cs.Class)
             .WithMany(c => c.ClassStudents)
@@ -129,6 +145,11 @@ public class ClassStudentConfiguration : IEntityTypeConfiguration<ClassStudent>
         builder.HasOne(cs => cs.MajorVerifiedByUser)
             .WithMany()
             .HasForeignKey(cs => cs.MajorVerifiedByUserId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        builder.HasOne(cs => cs.CompletedByUser)
+            .WithMany()
+            .HasForeignKey(cs => cs.CompletedByUserId)
             .OnDelete(DeleteBehavior.SetNull);
     }
 }

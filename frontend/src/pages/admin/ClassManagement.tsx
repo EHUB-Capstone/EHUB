@@ -21,6 +21,7 @@ import { parseApiError } from '../../utils/apiError';
 import { toClassViewModel, unwrapApiData } from '../../utils/classMappers';
 import { getClassLifecyclePresentation } from '../../utils/classComponentPolicy';
 import type { ClassListResponse, ClassStatus, ClassViewModel } from '../../types/classes';
+import { canManageClass } from '../../utils/classPermissions';
 
 const SEMESTERS = ['SP', 'SU', 'FA'];
 const CURRENT_YEAR = new Date().getFullYear();
@@ -31,6 +32,7 @@ const statusColor: Record<ClassStatus, string> = {
   Draft: 'bg-amber-50 text-amber-700',
   Active: 'bg-green-50 text-green-700',
   Inactive: 'bg-slate-100 text-slate-600',
+  Completed: 'bg-blue-50 text-blue-700',
   Archived: 'bg-red-50 text-red-600',
 };
 const classCodeCollator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
@@ -60,6 +62,7 @@ export default function ClassManagement() {
   const initialSearchParams = useRef(new URLSearchParams(searchParams));
   const isAdmin    = user?.role === 'ADMIN';
   const isLecturer = user?.role === 'LECTURER';
+  const canManageClassRecord = (classItem: ClassViewModel) => canManageClass(user, classItem);
 
   const [classes, setClasses] = useState<ClassViewModel[]>([]);
   const [loading,    setLoading]    = useState(true);
@@ -110,7 +113,7 @@ export default function ClassManagement() {
 
       const [clsRes, usrRes] = await Promise.all([
         classApi.getAll(params),
-        (isAdmin || isLecturer) ? userApi.getAll({ page: 1, limit: 100, role: 'LECTURER', status: 'APPROVED' }) : Promise.resolve({ users: [] }),
+        isAdmin ? userApi.getAll({ page: 1, limit: 100, role: 'LECTURER', status: 'APPROVED' }) : Promise.resolve({ users: [] }),
       ]);
 
       const classList = unwrapApiData<ClassListResponse>(clsRes);
@@ -230,7 +233,7 @@ export default function ClassManagement() {
               onClick={() => setShowBulk(true)}
               className="flex items-center gap-2 px-4 py-2 text-sm bg-primary text-white rounded-xl hover:bg-primary-700 transition-all shadow-sm hover:shadow-md"
             >
-              <Plus className="w-4 h-4" /> {isLecturer ? 'Tạo lớp' : 'Bulk Create'}
+              <Plus className="w-4 h-4" /> {isLecturer ? 'Create Class' : 'Bulk Create'}
             </button>
           )}
         </div>
@@ -301,6 +304,7 @@ export default function ClassManagement() {
             <option value="Draft">Draft</option>
             <option value="Active">Active</option>
             <option value="Inactive">Inactive</option>
+            <option value="Completed">Completed</option>
             {(isAdmin || isLecturer) && <option value="Archived">Archived</option>}
           </select>
           <select
@@ -466,14 +470,14 @@ export default function ClassManagement() {
                   >
                     <Eye className="w-3.5 h-3.5" /> View Detail
                   </button>
-                  {(isAdmin || isLecturer) && getClassLifecyclePresentation(cls.status).action === 'restore' ? (
+                  {canManageClassRecord(cls) && getClassLifecyclePresentation(cls.status).action === 'restore' ? (
                     <button
                       onClick={(event) => { event.stopPropagation(); setRestoreTarget(cls); }}
                       className="flex-1 flex items-center justify-center gap-1.5 text-xs text-green-700 hover:text-green-800 font-medium transition-colors border-l border-slate-100"
                     >
                       <RotateCcw className="w-3.5 h-3.5" /> Restore
                     </button>
-                  ) : (isAdmin || (isLecturer && classFeatureFlags.lecturerStudentImport)) && (
+                  ) : cls.status !== 'Completed' && canManageClassRecord(cls) && (isAdmin || classFeatureFlags.lecturerStudentImport) && (
                     <button
                       onClick={(e) => { e.stopPropagation(); setImportTarget(cls._id); }}
                       className="flex-1 flex items-center justify-center gap-1.5 text-xs text-primary hover:text-primary-dark font-medium transition-colors border-l border-slate-100"

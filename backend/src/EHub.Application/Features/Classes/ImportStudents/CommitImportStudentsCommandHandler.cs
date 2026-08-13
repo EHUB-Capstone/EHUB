@@ -98,10 +98,11 @@ public sealed class CommitImportStudentsCommandHandler : ICommitImportStudentsCo
             return Failure(ErrorCodes.ClassNotFound, "The requested class was not found.");
         }
 
-        if (targetClass.Status == ClassStatus.Archived)
+        var mutationError = ClassStateRules.GetMutationError(targetClass.Status);
+        if (mutationError != null)
         {
             await ReleaseAsync(session, cancellationToken);
-            return Failure(ErrorCodes.ClassArchived, "Cannot import students to an archived class.");
+            return Failure(mutationError.Code, mutationError.Message);
         }
 
         if (isLecturer && targetClass.PrimaryLecturerId != currentUserId)

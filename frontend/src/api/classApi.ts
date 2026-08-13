@@ -6,6 +6,7 @@ import type {
   GetClassesParams,
   GetClassRosterParams,
   ExportClassRosterParams,
+  AddStudentToClassPayload,
 } from '../types/classes';
 
 export const classApi = {
@@ -24,6 +25,11 @@ export const classApi = {
   restore: (id: string, data: { rowVersion: string; reason: string }) =>
     runClassFeatureRequest(classFeatureFlags.lifecycle, 'Class lifecycle management', () =>
       axiosClient.post(`/classes/${id}/restore`, data)),
+  getCompletionPreview: (id: string) => axiosClient.get(`/classes/${id}/completion-preview`),
+  complete: (id: string, data: { rowVersion: string; reason: string }) =>
+    axiosClient.post(`/classes/${id}/complete`, data),
+  reopen: (id: string, data: { rowVersion: string; reason: string }) =>
+    axiosClient.post(`/classes/${id}/reopen`, data),
   getAudit: (id: string, params: { page?: number; pageSize?: number } = {}) =>
     axiosClient.get(`/classes/${id}/audit`, { params }),
 
@@ -73,7 +79,7 @@ export const classApi = {
   unlockMajors: (classId) =>
     runClassFeatureRequest(classFeatureFlags.majorVerification, 'Class major verification', () =>
       axiosClient.delete(`/classes/${classId}/major-lock`)),
-  addStudent: (classId, data) =>
+  addStudent: (classId: string, data: AddStudentToClassPayload) =>
     axiosClient.post(`/classes/${classId}/students`, data),
   dropStudent: (classId, studentId) =>
     axiosClient.post(`/classes/${classId}/students/${studentId}/drop`),
@@ -92,8 +98,8 @@ export const classApi = {
       axiosClient.post(`/classes/${classId}/team-proposals`, payload)),
 
   // ─── Student/User side ───────────────────────────────────────────────────
-  getMyClasses: () => runClassFeatureRequest(classFeatureFlags.studentSelfService, 'Student class self-service', () =>
-    axiosClient.get('/classes/my-classes')),
+  getMyClasses: (scope: 'Current' | 'History' = 'Current') => runClassFeatureRequest(classFeatureFlags.studentSelfService, 'Student class self-service', () =>
+    axiosClient.get('/classes/my-classes', { params: { scope } })),
   getMyTeam: () => runClassFeatureRequest(classFeatureFlags.studentSelfService, 'Student class self-service', () =>
     axiosClient.get('/classes/my-team')),
   getMyClassDetail: (classId) => runClassFeatureRequest(classFeatureFlags.studentSelfService, 'Student class self-service', () =>

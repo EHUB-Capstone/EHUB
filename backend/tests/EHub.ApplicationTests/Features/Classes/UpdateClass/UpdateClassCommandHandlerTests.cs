@@ -60,6 +60,25 @@ public class UpdateClassCommandHandlerTests
     }
 
     [Fact]
+    public async Task UpdateTeachingAssignmentAsync_WhenUserIsLecturer_ReturnsAccessDeniedError()
+    {
+        var request = new UpdateTeachingAssignmentRequest
+        {
+            PrimaryLecturerId = Guid.NewGuid(),
+            RowVersion = "1"
+        };
+
+        var result = await _handler.UpdateTeachingAssignmentAsync(
+            Guid.NewGuid(),
+            request,
+            Guid.NewGuid(),
+            SystemRoles.Lecturer);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be(ErrorCodes.ClassAccessDenied);
+    }
+
+    [Fact]
     public async Task UpdateTeachingAssignmentAsync_WhenLecturerPropertyIsMissing_ReturnsValidationError()
     {
         var request = new UpdateTeachingAssignmentRequest { RowVersion = "1" };

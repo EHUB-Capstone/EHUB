@@ -47,10 +47,10 @@ public sealed class RemoveStudentFromClassCommandHandler : IRemoveStudentFromCla
                 new Error(ErrorCodes.ClassNotFound, "The requested class was not found."));
         }
 
-        if (targetClass.Status == ClassStatus.Archived)
+        var mutationError = ClassStateRules.GetMutationError(targetClass.Status);
+        if (mutationError != null)
         {
-            return Result.Failure(
-                new Error(ErrorCodes.ClassArchived, "Cannot remove students from an archived class."));
+            return Result.Failure(mutationError);
         }
 
         if (isLecturer)

@@ -1,25 +1,26 @@
 # Ma trận phân quyền quản lý lớp học
 
-Phân quyền ở Backend là nguồn dữ liệu chuẩn duy nhất (source of truth). Việc ẩn nút trên giao diện chỉ là biện pháp hỗ trợ trải nghiệm người dùng và không bao giờ thay thế cho việc kiểm tra quyền tại API.
+Backend là nguồn sự thật duy nhất về phân quyền. Việc ẩn hoặc hiện thao tác trên giao diện chỉ hỗ trợ trải nghiệm và không thay thế kiểm tra quyền tại API.
 
-| Thao tác | Admin | Giảng viên | Sinh viên | Cố vấn được phân công |
-|---|---:|---:|---:|---:|
-| Xem danh sách tất cả các lớp, bao gồm lớp Đã lưu trữ | Có | Có | Không | Không |
-| Xem chi tiết vận hành lớp học | Có | Có | Lớp đang học thông qua các endpoint sinh viên | Không có route giảng viên |
-| Tạo/Import một lớp học | Có | Có | Không | Không |
-| Thay đổi lịch học | Có | Có (lớp chưa lưu trữ) | Không | Không |
-| Phân công/Thay đổi giảng viên phụ trách | Có | Có (lớp chưa lưu trữ) | Không | Không |
-| Thêm/Import/Cho rời/Ghi danh lại sinh viên | Có | Có (lớp chưa lưu trữ) | Không | Không |
-| Xác minh/Khoá chuyên ngành ghi danh | Có | Có (lớp chưa lưu trữ) | Không | Không |
-| Tạo/Quản lý một nhóm (team) chính thức | Có | Có (lớp chưa lưu trữ) | Chỉ gửi đề xuất | Không |
-| Duyệt đề xuất nhóm | Có | Có | Không | Không |
-| Phân công/Kết thúc phân công cố vấn | Có | Có (lớp chưa lưu trữ) | Không | Chỉ xem phân công của mình |
-| Gửi định hướng dự án | Không | Chỉ duyệt cho lớp được phân công | Trưởng nhóm | Không |
-| Lưu trữ/Khôi phục lớp học | Có | Có | Không | Không |
-| Kiểm tra nhật ký audit của lớp học | Có | Có | Không | Không |
-| Sửa chữa thành viên nhóm chat | Có | Có | Không | Không |
-| Xóa vĩnh viễn lớp học ở môi trường production | Không vai trò nào | Không vai trò nào | Không vai trò nào | Không vai trò nào |
+Trong bảng dưới đây, “Lecturer phụ trách” là giảng viên có `UserId` trùng với `PrimaryLecturerId` hiện tại của lớp. Lecturer khác không có quyền quản lý lớp đó.
 
-Các lớp học đã lưu trữ vẫn giữ nguyên danh sách sinh viên, các nhóm, định hướng dự án, lịch sử cố vấn, nhật ký audit và lịch sử chat. Mỗi API thay đổi dữ liệu (mutation API) phải độc lập từ chối các thao tác trên lớp đã lưu trữ ngay cả khi client tự gọi trực tiếp.
+| Thao tác | Admin | Lecturer phụ trách | Lecturer khác | Student | Mentor được phân công |
+|---|---:|---:|---:|---:|---:|
+| Xem danh sách và chi tiết lớp | Tất cả lớp | Lớp được phân công | Không | Qua API dành cho Student | Qua API dành cho Mentor |
+| Tạo hoặc import lớp | Có | Có | Có | Không | Không |
+| Thay đổi lịch học | Có | Có, khi lớp đang hoạt động | Không | Không | Không |
+| Phân công, thay đổi hoặc gỡ Lecturer phụ trách | Có | Không | Không | Không | Không |
+| Thêm, import, drop hoặc ghi danh lại Student | Có | Có, khi lớp đang hoạt động | Không | Không | Không |
+| Verify, sửa, lock hoặc unlock major tại enrollment | Có | Có, khi lớp đang hoạt động | Không | Không | Không |
+| Tạo và quản lý Team chính thức | Có | Có, khi lớp đang hoạt động | Không | Chỉ gửi Team Proposal | Không |
+| Duyệt Team Proposal | Có | Có, khi lớp đang hoạt động | Không | Không | Không |
+| Assign, reassign hoặc end Mentor assignment | Có | Có, khi lớp đang hoạt động | Không | Không | Chỉ xem assignment của mình |
+| Duyệt Project Direction | Có | Có, đối với lớp được phân công | Không | Leader gửi nội dung | Không |
+| Archive hoặc restore lớp | Có | Có | Không | Không | Không |
+| Xem audit log của lớp | Có | Có | Không | Không | Không |
+| Repair Chat Memberships của lớp | Có | Có | Không | Không | Không |
+| Xóa vĩnh viễn lớp trong production | Không | Không | Không | Không | Không |
 
-Cố vấn không bao giờ được cấp quyền truy cập vào `/lecturer` hoặc `/classes/:id`. Dữ liệu sử dụng của cố vấn phải được trích xuất từ các bản ghi `MentorAssignment` đang hoạt động và chỉ áp dụng cho nhóm được phân công.
+Các lớp đã archive vẫn giữ roster, team, project direction, lịch sử mentor, audit và chat. Các API thay đổi dữ liệu phải từ chối thao tác trên lớp đã archive, ngoại trừ các nghiệp vụ được thiết kế riêng cho trạng thái này như restore và Repair Chat Memberships.
+
+Khi Admin thay đổi Lecturer phụ trách, Lecturer cũ mất quyền quản lý ngay và Lecturer mới nhận quyền theo `PrimaryLecturerId`. Mentor không được truy cập route `/lecturer` hoặc màn hình quản lý lớp; dữ liệu của Mentor chỉ lấy từ `MentorAssignment` đang hoạt động và giới hạn trong Team được phân công.
