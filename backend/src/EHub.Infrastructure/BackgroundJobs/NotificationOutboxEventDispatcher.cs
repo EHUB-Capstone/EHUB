@@ -3,6 +3,7 @@ using EHub.Application.Common.Interfaces.Services;
 using EHub.Domain.Entities;
 using EHub.Domain.Enums;
 using EHub.Infrastructure.Persistence;
+using EHub.Shared.Constants;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
@@ -36,14 +37,90 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
         switch (message.Type)
         {
             case "TeamProposal.Submitted.v1":
-                await AddForOptionalUserAsync(message, data, "lecturerUserId", NotificationType.ProposalSubmitted,
-                    "Team proposal awaiting review", "A student team proposal is ready for your review.", cancellationToken);
+                if (ReadBoolean(data, "adminReviewRequired"))
+                {
+                    await AddForAdministratorsAsync(
+                        message,
+                        NotificationType.ProposalSubmitted,
+                        "Exception team proposal awaiting review",
+                        "A 3- or 7-member team proposal requires administrator review.",
+                        cancellationToken);
+                }
+                else
+                {
+                    await AddForOptionalUserAsync(
+                        message,
+                        data,
+                        "lecturerUserId",
+                        NotificationType.ProposalSubmitted,
+                        "Team proposal awaiting review",
+                        "A student team proposal is ready for your review.",
+                        cancellationToken);
+                }
                 break;
             case "TeamProposal.Reviewed.v1":
                 var proposalDecision = ReadString(data, "decision");
-                await AddForOptionalUserAsync(message, data, "studentUserId",
-                    proposalDecision == "Approved" ? NotificationType.ProposalApproved : NotificationType.ProposalNeedsRevision,
-                    "Team proposal reviewed", $"Your team proposal was reviewed: {proposalDecision}.", cancellationToken);
+                var notificationType = proposalDecision == "Approved"
+                    ? NotificationType.ProposalApproved
+                    : NotificationType.ProposalNeedsRevision;
+                var notificationTitle = proposalDecision == "Rejected"
+                    ? "Team proposal rejected"
+                    : "Team proposal reviewed";
+                var notificationBody = proposalDecision == "Rejected"
+                    ? "Your team proposal was rejected. Read the review comment for details."
+                    : $"Your team proposal was reviewed: {proposalDecision}.";
+                if (proposalDecision == "NeedsRevision")
+                {
+                    await AddForOptionalUserAsync(
+                        message,
+                        data,
+                        "teamLeaderUserId",
+                        notificationType,
+                        notificationTitle,
+                        notificationBody,
+                        cancellationToken);
+                }
+                else
+                {
+                    await AddForUsersAsync(
+                        message,
+                        data,
+                        "studentUserIds",
+                        notificationType,
+                        notificationTitle,
+                        notificationBody,
+                        cancellationToken);
+                }
+                break;
+            case "Team.MembersUpdated.v1":
+                await AddForUsersAsync(
+                    message,
+                    data,
+                    "memberUserIds",
+                    NotificationType.SystemAnnouncement,
+                    "Team membership updated",
+                    "Your team membership or leader assignment was updated.",
+                    cancellationToken);
+                break;
+            case "Team.LeaderAssigned.v1":
+                await AddForUsersAsync(
+                    message,
+                    data,
+                    "memberUserIds",
+                    NotificationType.SystemAnnouncement,
+                    "Team leader updated",
+                    "Your team leader has been updated.",
+                    cancellationToken);
+                break;
+            case "Team.Archived.v1":
+                await AddForUsersAsync(
+                    message,
+                    data,
+                    "memberUserIds",
+                    NotificationType.SystemAnnouncement,
+                    "Team archived",
+                    "Your team was archived and you are no longer assigned to it.",
+                    cancellationToken);
                 break;
             case "ProjectDirection.Submitted.v1":
                 await AddForOptionalUserAsync(message, data, "lecturerUserId", NotificationType.ProjectDirectionSubmitted,
@@ -88,6 +165,8 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
         "Team.MembersUpdated.v1" or
         "Team.LeaderAssigned.v1" or
         "Team.MentorAssignmentChanged.v1" or
+        "Team.Archived.v1" or
+        "TeamProposal.Reviewed.v1" or
         "Class.Archived.v1" or
         "Class.Restored.v1";
 
@@ -102,6 +181,48 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
     {
         if (data.TryGetProperty(propertyName, out var property) && property.ValueKind != JsonValueKind.Null && property.TryGetGuid(out var userId))
             await AddAsync(message, userId, type, title, body, cancellationToken);
+    }
+
+    private async Task AddForUsersAsync(
+        OutboxMessage message,
+        JsonElement data,
+        string propertyName,
+        NotificationType type,
+        string title,
+        string body,
+        CancellationToken cancellationToken)
+    {
+        if (!data.TryGetProperty(propertyName, out var recipients) || recipients.ValueKind != JsonValueKind.Array)
+        {
+            return;
+        }
+
+        foreach (var recipient in recipients.EnumerateArray())
+        {
+            if (recipient.TryGetGuid(out var userId))
+            {
+                await AddAsync(message, userId, type, title, body, cancellationToken);
+            }
+        }
+    }
+
+    private async Task AddForAdministratorsAsync(
+        OutboxMessage message,
+        NotificationType type,
+        string title,
+        string body,
+        CancellationToken cancellationToken)
+    {
+        var administratorIds = await _context.Users
+            .AsNoTracking()
+            .Where(user => user.Status == UserStatus.Active && user.UserRoles.Any(userRole => userRole.Role.Name == SystemRoles.Admin))
+            .Select(user => user.Id)
+            .ToArrayAsync(cancellationToken);
+
+        foreach (var administratorId in administratorIds)
+        {
+            await AddAsync(message, administratorId, type, title, body, cancellationToken);
+        }
     }
 
     private async Task AddAsync(
@@ -141,4 +262,7 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
         data.TryGetProperty(propertyName, out var value) && value.ValueKind == JsonValueKind.String
             ? value.GetString() ?? string.Empty
             : string.Empty;
+
+    private static bool ReadBoolean(JsonElement data, string propertyName) =>
+        data.TryGetProperty(propertyName, out var value) && value.ValueKind is JsonValueKind.True or JsonValueKind.False && value.GetBoolean();
 }

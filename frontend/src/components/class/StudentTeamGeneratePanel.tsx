@@ -5,6 +5,7 @@ import { classApi } from '../../api/classApi';
 import { teamApi } from '../../api/teamApi';
 import { unwrapApiData } from '../../utils/classMappers';
 import { getTeamGroupFromMajor } from '../../constants/majors';
+import { isMissingTeamMajor } from '../../utils/teamManagement';
 import TeamSuggestionTooltip from './TeamSuggestionTooltip';
 
 const getTeamSizeSuggestion = (count) => {
@@ -13,10 +14,10 @@ const getTeamSizeSuggestion = (count) => {
     return `Còn ${count} sinh viên, chưa đủ để tạo nhóm. Cần điều chỉnh thành viên từ các nhóm khác.`;
   }
   if (count === 3) {
-    return 'Còn 3 sinh viên. Có thể gửi đề xuất nhóm ngoại lệ để giảng viên duyệt.';
+    return 'Còn 3 sinh viên, chưa đủ để tạo nhóm. Cần phân bổ lại vào các nhóm 4-6 người.';
   }
   if (count === 7) {
-    return 'Không thể chia đều thành nhóm 4-6 người. Có thể điều chỉnh thành nhóm 4 và bổ sung 3 sinh viên vào các nhóm khác, hoặc gửi đề xuất ngoại lệ.';
+    return 'Còn 7 sinh viên. Hãy tạo 1 nhóm 4 và phân bổ 3 sinh viên còn lại vào các nhóm khác.';
   }
 
   const candidates = [];
@@ -90,9 +91,7 @@ export default function StudentTeamGeneratePanel({ classId, selected: rawSelecte
     const selectedStudents = students.filter(s => selected.includes(s._id));
     const studentCount = selectedStudents.length;
 
-    const missingMajorCount = selectedStudents.filter(
-      s => !s.major || typeof s.major !== 'string' || !s.major.trim()
-    ).length;
+    const missingMajorCount = selectedStudents.filter(s => isMissingTeamMajor(s.major)).length;
 
     const groupsPresent = new Set();
     const studentsByGroup = { GROUP_1: [], GROUP_2: [] };
@@ -115,13 +114,10 @@ export default function StudentTeamGeneratePanel({ classId, selected: rawSelecte
     const isValidGroups = hasBothGroups;
     
     const isFullyValid = isValidSize && isValidGroups && studentCount > 0;
-    // Cho phép gửi đề xuất nếu count > 0 nhưng không FullyValid
-    const canPropose = (studentCount === 3 || studentCount === 7) && isValidGroups;
-
     const uniqueMajors = [...new Set(
       selectedStudents
         .map(s => s.major)
-        .filter(m => typeof m === 'string' && m.trim())
+        .filter(m => !isMissingTeamMajor(m))
         .map(m => m.trim().toUpperCase())
     )];
 
@@ -144,7 +140,6 @@ export default function StudentTeamGeneratePanel({ classId, selected: rawSelecte
       hasGroup2,
       hasBothGroups,
       isFullyValid,
-      canPropose,
       missingMajorCount,
       isFormValid,
       hasCurrentUser,
@@ -154,7 +149,7 @@ export default function StudentTeamGeneratePanel({ classId, selected: rawSelecte
 
   const {
     selectedStudents, studentCount, uniqueMajors,
-    hasGroup1, hasGroup2, isFullyValid, canPropose,
+    hasGroup1, hasGroup2, isFullyValid,
     missingMajorCount, isFormValid, hasCurrentUser, hasLeader
   } = validation;
   const canSubmit = isFormValid && isFullyValid;
@@ -167,21 +162,31 @@ export default function StudentTeamGeneratePanel({ classId, selected: rawSelecte
 
     setSubmitting(true);
     try {
-      const payload = {
-        memberIds: selected,
-        teamName: groupName.trim(),
-        projectName: isProjectNameSameAsGroup ? groupName.trim() : projectName.trim(),
-        description: description.trim(),
-        leaderStudentId: selectedLeaderId,
-      };
-      
-      const res: any = proposal
-        ? await teamApi.updateProposal(proposal._id, { ...payload, rowVersion: proposal.rowVersion })
-        : await classApi.studentProposeTeam(classId, payload);
-      const draft = unwrapApiData<any>(res);
-      await teamApi.submitProposal(draft.id, draft.rowVersion);
-      res.message = 'Team proposal submitted for review.';
-      toast.success(res.message || 'Tạo nhóm thành công!');
+      if (proposal) {
+        const response = await teamApi.updateProposal(proposal._id, {
+          memberIds: selected,
+          teamName: groupName.trim(),
+          projectName: isProjectNameSameAsGroup ? groupName.trim() : projectName.trim(),
+          description: description.trim(),
+          leaderStudentId: selectedLeaderId,
+          rowVersion: proposal.rowVersion,
+        });
+        const draft = unwrapApiData<any>(response);
+        await teamApi.submitProposal(draft.id, draft.rowVersion);
+      } else {
+        await classApi.studentProposeTeam(classId, {
+          studentIds: selected,
+          leaderStudentId: selectedLeaderId,
+          groupName: groupName.trim(),
+          projectName: isProjectNameSameAsGroup ? groupName.trim() : projectName.trim(),
+          isProjectNameSameAsGroup,
+          description: description.trim(),
+        });
+      }
+
+      toast.success(
+        'Team proposal submitted for review.',
+      );
       
       // Reset form
       setGroupName('');
@@ -366,7 +371,7 @@ export default function StudentTeamGeneratePanel({ classId, selected: rawSelecte
               <div className="flex items-start gap-2 bg-orange-50 rounded-xl p-2 border border-orange-200 mb-3">
                 <AlertTriangle className="w-4 h-4 text-orange-500 shrink-0" />
                 <p className="text-xs text-orange-700 font-medium">
-                  Nhóm chưa đạt chuẩn 4-6 thành viên. Chỉ nhóm 3 hoặc 7 thành viên, có đủ 2 nhóm ngành, mới được gửi đề xuất ngoại lệ.
+                  Nhóm chưa đạt chuẩn. Nhóm hợp lệ phải có 4-6 thành viên và đủ GROUP_1/GROUP_2.
                 </p>
               </div>
             )}
@@ -379,9 +384,7 @@ export default function StudentTeamGeneratePanel({ classId, selected: rawSelecte
               className={`w-full py-2.5 rounded-xl text-sm font-bold flex justify-center items-center gap-2 transition-all
                 ${!canSubmit
                   ? 'cursor-not-allowed bg-slate-200 text-slate-500'
-                  : isFullyValid
-                    ? 'bg-green-500 text-white hover:bg-green-600'
-                    : 'bg-orange-500 text-white hover:bg-orange-600'
+                  : 'bg-green-500 text-white hover:bg-green-600'
                 }`}
             >
               {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 
@@ -389,9 +392,7 @@ export default function StudentTeamGeneratePanel({ classId, selected: rawSelecte
               }
               {isFullyValid
                 ? 'Tạo nhóm'
-                : canPropose
-                  ? 'Gửi đề xuất duyệt'
-                  : 'Chưa đủ điều kiện tạo nhóm'}
+                : 'Chưa đủ điều kiện tạo nhóm'}
             </button>
           </div>
         </div>

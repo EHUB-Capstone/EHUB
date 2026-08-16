@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import Badge from '../ui/Badge';
 import NotificationDropdown from './NotificationDropdown';
 import { useTheme } from '../../context/ThemeContext';
-import { notificationApi } from '../../api/notificationApi';
+import { getNotificationId, normalizeNotification, notificationApi } from '../../api/notificationApi';
 
 const Navbar = ({ onMenuClick }) => {
   const { user, logout } = useAuth();
@@ -52,8 +52,9 @@ const Navbar = ({ onMenuClick }) => {
       try {
         const res = await notificationApi.getAll();
         const list = res.data || res || [];
-        const alert = Array.isArray(list)
-          ? list.find(n => !n.isRead && n.data?.action === 'CLASS_CODE_CONFLICT_REVIEW')
+        const notifications = Array.isArray(list) ? list.map(normalizeNotification) : [];
+        const alert = notifications.length > 0
+          ? notifications.find(n => !n.isRead && n.data?.action === 'CLASS_CODE_CONFLICT_REVIEW')
           : null;
         if (alert) setClassConflictAlert(alert);
       } catch (err) {
@@ -68,9 +69,11 @@ const Navbar = ({ onMenuClick }) => {
     const alert = classConflictAlert;
     setClassConflictAlert(null);
 
-    if (alert?._id) {
+    const notificationId = getNotificationId(alert);
+
+    if (notificationId) {
       try {
-        await notificationApi.markRead(alert._id);
+        await notificationApi.markRead(notificationId);
       } catch (err) {
         console.error('Failed to mark class conflict alert as read:', err);
       }

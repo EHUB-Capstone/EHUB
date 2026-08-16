@@ -164,11 +164,6 @@ function TeamCard({
   const currentStudentIsMember = Boolean(currentStudentId && members.some(member => member._id === currentStudentId));
   const canOpenTeamWorkspace = canManageInfo || currentStudentIsMember;
 
-  const requestDelete = () => {
-    if (!onDelete) return;
-    if (window.confirm(`Delete “${team.teamName}”? Students will become unassigned.`)) onDelete(team);
-  };
-
   return (
     <article className={`overflow-hidden rounded-2xl border bg-white shadow-sm transition-shadow hover:shadow-card ${isPending ? 'border-amber-200' : 'border-slate-200/70'}`}>
       <div className="p-4">
@@ -189,7 +184,7 @@ function TeamCard({
             {needsRevision && onRevise && <button type="button" onClick={() => onRevise(team)} className="rounded-lg bg-orange-50 px-2.5 py-1.5 text-xs font-semibold text-orange-700 hover:bg-orange-100">Revise</button>}
             {team.isProposal && ['PENDING', 'NEEDSREVISION', 'NEEDS_REVISION', 'DRAFT'].includes(status) && onCancelProposal && <button type="button" onClick={() => onCancelProposal(team)} className="rounded-lg bg-red-50 px-2.5 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-100">Cancel</button>}
             {!team.isProposal && canManageInfo && onEdit && <button type="button" onClick={() => onEdit(team)} className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-primary-50 hover:text-primary" aria-label={`Edit ${team.teamName}`} title="Edit team"><Pencil className="h-4 w-4" /></button>}
-            {!team.isProposal && canDelete && onDelete && <button type="button" onClick={requestDelete} className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-300 hover:bg-red-50 hover:text-red-500" aria-label={`Delete ${team.teamName}`} title="Delete team"><Trash2 className="h-4 w-4" /></button>}
+            {!team.isProposal && canDelete && onDelete && <button type="button" onClick={() => onDelete(team)} className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-300 hover:bg-red-50 hover:text-red-500" aria-label={`Delete ${team.teamName}`} title="Delete team"><Trash2 className="h-4 w-4" /></button>}
           </div>
         </div>
 
@@ -203,6 +198,8 @@ function TeamCard({
             <p className={`mt-1 truncate text-sm font-bold ${project ? 'text-secondary-dark' : 'text-slate-400'}`}>{project?.name || 'Not linked'}</p>
           </div>
         </div>
+
+        <p className="mt-3 text-xs font-medium text-slate-500">Chat: {team.hasChatGroup ? 'Chat' : 'No Chat'}</p>
 
         <div className="mt-4 flex items-center justify-between gap-3">
           <div className="flex -space-x-2">

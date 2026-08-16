@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Bell, Check, Calendar, Award, Kanban, Brain, MessageSquare, ShieldAlert } from 'lucide-react';
-import { notificationApi } from '../../api/notificationApi';
+import { getNotificationId, normalizeNotification, notificationApi } from '../../api/notificationApi';
 import toast from 'react-hot-toast';
 
 const NotificationDropdown = () => {
@@ -15,7 +15,7 @@ const NotificationDropdown = () => {
     try {
       const res = await notificationApi.getAll();
       const list = res.data || res || [];
-      setNotifications(Array.isArray(list) ? list : []);
+      setNotifications(Array.isArray(list) ? list.map(normalizeNotification) : []);
 
       const countRes = await notificationApi.getUnreadCount();
       setUnreadCount(countRes.data?.count ?? countRes.count ?? 0);
@@ -56,10 +56,12 @@ const NotificationDropdown = () => {
 
   const handleNotificationClick = async (n) => {
     setIsOpen(false);
+    const notificationId = getNotificationId(n);
+
     if (!n.isRead) {
       try {
-        await notificationApi.markRead(n._id);
-        setNotifications(prev => prev.map(item => item._id === n._id ? { ...item, isRead: true } : item));
+        await notificationApi.markRead(notificationId);
+        setNotifications(prev => prev.map(item => getNotificationId(item) === notificationId ? { ...item, isRead: true } : item));
         setUnreadCount(prev => Math.max(0, prev - 1));
       } catch (err) {
         console.error('Failed to mark notification as read:', err);
@@ -140,7 +142,7 @@ const NotificationDropdown = () => {
             ) : (
               notifications.map((n) => (
                 <div
-                  key={n._id}
+                  key={getNotificationId(n)}
                   onClick={() => handleNotificationClick(n)}
                   className={`flex gap-3 px-4 py-3.5 hover:bg-slate-50/80 cursor-pointer transition-colors relative group ${!n.isRead ? 'bg-primary-50/20' : ''}`}
                 >

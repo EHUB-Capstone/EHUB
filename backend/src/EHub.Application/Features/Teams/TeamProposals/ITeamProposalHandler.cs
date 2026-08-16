@@ -7,6 +7,7 @@ public interface ITeamProposalHandler
 {
     Task<Result<IReadOnlyCollection<TeamProposalDto>>> GetForClassAsync(Guid classId, Guid userId, string role, CancellationToken cancellationToken = default);
     Task<Result<TeamProposalDto>> CreateAsync(Guid classId, CreateTeamProposalRequest request, Guid userId, string role, CancellationToken cancellationToken = default);
+    Task<Result<TeamProposalDto>> SubmitStudentProposalAsync(Guid classId, SubmitStudentTeamProposalRequest request, Guid userId, string role, CancellationToken cancellationToken = default);
     Task<Result<TeamProposalDto>> UpdateAsync(Guid proposalId, UpdateTeamProposalRequest request, Guid userId, string role, CancellationToken cancellationToken = default);
     Task<Result<TeamProposalDto>> SubmitAsync(Guid proposalId, SubmitTeamProposalRequest request, Guid userId, string role, CancellationToken cancellationToken = default);
     Task<Result<TeamProposalDto>> CancelAsync(Guid proposalId, CancelTeamProposalRequest request, Guid userId, string role, CancellationToken cancellationToken = default);

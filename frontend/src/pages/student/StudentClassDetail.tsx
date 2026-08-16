@@ -83,6 +83,17 @@ export default function StudentClassDetail() {
       || (user?.email && s.email?.toLowerCase() === user.email.toLowerCase());
   });
   const hasTeam = Boolean(currentStudent?.teamId);
+  const reservedProposal = proposals.find((proposal) => {
+    const status = String(proposal.status || '').toUpperCase();
+    return ['DRAFT', 'PENDING', 'NEEDS_REVISION', 'NEEDSREVISION'].includes(status)
+      && getTeamMemberIds(proposal).includes(currentStudent?._id || '');
+  });
+  const canEditReservedProposal = Boolean(
+    proposalToRevise
+    && reservedProposal?._id === proposalToRevise._id
+    && ['NEEDS_REVISION', 'NEEDSREVISION'].includes(String(reservedProposal.status || '').toUpperCase()),
+  );
+  const selectionDisabled = hasTeam || Boolean(reservedProposal && !canEditReservedProposal);
 
   const handleTeamCreated = async () => {
     setSelected([]);
@@ -161,7 +172,7 @@ export default function StudentClassDetail() {
         </div>
       </div>
 
-      {students.length > 0 && !hasTeam && selected.length > 0 && (
+      {students.length > 0 && !selectionDisabled && selected.length > 0 && (
         <div className="sticky top-20 z-30 rounded-2xl bg-white/80 shadow-xl backdrop-blur-md">
           <StudentTeamGeneratePanel
             classId={id}
@@ -207,9 +218,9 @@ export default function StudentClassDetail() {
           selected={selected}
           onSelectionChange={setSelected}
           onRefresh={fetchClassDetail}
-          maxSelection={6}
-          selectionDisabled={hasTeam}
-          toolbarAction={!hasTeam && selected.length === 0 ? (
+          maxSelection={7}
+          selectionDisabled={selectionDisabled}
+          toolbarAction={!selectionDisabled && selected.length === 0 ? (
             <TeamSuggestionTooltip label="Xem hướng dẫn tạo nhóm">
               <div className="space-y-2">
                 <p className="font-semibold text-white">Hướng dẫn tạo nhóm</p>

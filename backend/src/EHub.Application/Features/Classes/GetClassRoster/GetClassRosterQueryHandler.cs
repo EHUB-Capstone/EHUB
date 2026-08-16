@@ -86,18 +86,18 @@ public sealed class GetClassRosterQueryHandler : IGetClassRosterQueryHandler
         var totalCount = await query.CountAsync(cancellationToken);
         var totalPages = Math.Max(1, (int)Math.Ceiling((double)totalCount / pageSize));
 
-        var items = await query
+        var rosterRows = await query
             .OrderBy(cs => cs.Student.RollNumber)
             .ThenBy(cs => cs.Student.FullName)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
-            .Select(cs => new ClassStudentDto
+            .Select(cs => new ClassRosterStudentProjection
             {
                 StudentId = cs.StudentId,
                 RollNumber = cs.Student.RollNumber ?? string.Empty,
                 FullName = cs.Student.FullName,
                 Email = cs.Student.Email ?? string.Empty,
-                MajorCode = cs.MajorCodeAtEnrollment,
+                MajorCodeAtEnrollment = cs.MajorCodeAtEnrollment,
                 ProfileMajorCode = cs.Student.MajorCode,
                 MajorVerificationStatus = cs.MajorVerificationStatus.ToString(),
                 MemberCode = cs.MemberCode,
@@ -118,6 +118,27 @@ public sealed class GetClassRosterQueryHandler : IGetClassRosterQueryHandler
             })
             .ToListAsync(cancellationToken);
 
+        var items = rosterRows
+            .Select(row => new ClassStudentDto
+            {
+                StudentId = row.StudentId,
+                RollNumber = row.RollNumber,
+                FullName = row.FullName,
+                Email = row.Email,
+                MajorCode = ResolveEffectiveMajorCode(
+                    row.MajorCodeAtEnrollment,
+                    row.ProfileMajorCode),
+                ProfileMajorCode = NormalizeMajorCode(row.ProfileMajorCode),
+                MajorVerificationStatus = row.MajorVerificationStatus,
+                MemberCode = row.MemberCode,
+                EnrollmentStatus = row.EnrollmentStatus,
+                TeamId = row.TeamId,
+                TeamName = row.TeamName,
+                IsTeamLeader = row.IsTeamLeader,
+                JoinedAtUtc = row.JoinedAtUtc
+            })
+            .ToList();
+
         var response = new ClassRosterListResponse
         {
             Items = items,
@@ -128,5 +149,54 @@ public sealed class GetClassRosterQueryHandler : IGetClassRosterQueryHandler
         };
 
         return Result.Success(response);
+    }
+
+    private static string? ResolveEffectiveMajorCode(
+        string? enrollmentMajorCode,
+        string? profileMajorCode)
+    {
+        var normalizedEnrollmentMajor = NormalizeMajorCode(enrollmentMajorCode);
+        if (!IsMissingMajorCode(normalizedEnrollmentMajor))
+        {
+            return normalizedEnrollmentMajor;
+        }
+
+        var normalizedProfileMajor = NormalizeMajorCode(profileMajorCode);
+        if (!IsMissingMajorCode(normalizedProfileMajor))
+        {
+            return normalizedProfileMajor;
+        }
+
+        return normalizedEnrollmentMajor;
+    }
+
+    private static string? NormalizeMajorCode(string? majorCode)
+    {
+        return string.IsNullOrWhiteSpace(majorCode)
+            ? null
+            : majorCode.Trim().ToUpperInvariant();
+    }
+
+    private static bool IsMissingMajorCode(string? majorCode)
+    {
+        return string.IsNullOrWhiteSpace(majorCode) ||
+            MajorCodes.IsUndeclared(majorCode);
+    }
+
+    private sealed class ClassRosterStudentProjection
+    {
+        public Guid StudentId { get; init; }
+        public string RollNumber { get; init; } = string.Empty;
+        public string FullName { get; init; } = string.Empty;
+        public string Email { get; init; } = string.Empty;
+        public string? MajorCodeAtEnrollment { get; init; }
+        public string? ProfileMajorCode { get; init; }
+        public string MajorVerificationStatus { get; init; } = string.Empty;
+        public string? MemberCode { get; init; }
+        public string EnrollmentStatus { get; init; } = string.Empty;
+        public Guid? TeamId { get; init; }
+        public string? TeamName { get; init; }
+        public bool IsTeamLeader { get; init; }
+        public DateTime JoinedAtUtc { get; init; }
     }
 }

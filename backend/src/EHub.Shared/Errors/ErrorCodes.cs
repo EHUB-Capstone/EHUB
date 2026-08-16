@@ -69,6 +69,7 @@ public static class ErrorCodes
     public const string TeamNotFound = "TEAM_NOT_FOUND";
     public const string TeamInactive = "TEAM_INACTIVE";
     public const string TeamNameDuplicated = "TEAM_NAME_DUPLICATED";
+    public const string TeamDeletionBlocked = "TEAM_DELETION_BLOCKED";
     public const string TeamMembershipConflict = "TEAM_MEMBERSHIP_CONFLICT";
     public const string TeamMajorCompositionInvalid = "TEAM_MAJOR_COMPOSITION_INVALID";
     public const string TeamProposalNotFound = "TEAM_PROPOSAL_NOT_FOUND";
@@ -81,6 +82,7 @@ public static class ErrorCodes
     public const string MentorAssignmentConflict = "MENTOR_ASSIGNMENT_CONFLICT";
     public const string ProjectDirectionNotFound = "PROJECT_DIRECTION_NOT_FOUND";
     public const string ProjectDirectionStateInvalid = "PROJECT_DIRECTION_STATE_INVALID";
+    public const string NotificationNotFound = "NOTIFICATION_NOT_FOUND";
 
     // Password reset error codes
     public const string AuthPasswordResetTokenInvalid = "AUTH_PASSWORD_RESET_TOKEN_INVALID";

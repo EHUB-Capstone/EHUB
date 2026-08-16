@@ -377,6 +377,92 @@ public sealed class TeamWorkflowIntegrationTests
             .Should().BeTrue();
     }
 
+    [Fact]
+    public async Task LecturerGeneratedThreeMemberTeam_IsRejected()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateSeedAsync(context, createProposal: false, createTeam: false);
+        context.ChangeTracker.Clear();
+        var handler = new TeamManagementHandler(
+            context,
+            scope.ServiceProvider.GetRequiredService<EHub.Application.Common.Interfaces.Persistence.IUnitOfWork>());
+
+        var result = await handler.GenerateAsync(
+            seed.ClassId,
+            new GenerateClassTeamRequest
+            {
+                StudentIds = seed.StudentIds.Take(3).ToArray(),
+                LeaderStudentId = seed.StudentIds[0],
+                TeamName = "Three Member Team"
+            },
+            seed.LecturerId,
+            SystemRoles.Lecturer);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be(ErrorCodes.ClassValidationError);
+        context.ChangeTracker.Clear();
+        (await context.Teams.AsNoTracking().CountAsync(team => team.ClassId == seed.ClassId)).Should().Be(0);
+        (await context.TeamProposals.AsNoTracking().CountAsync(item => item.ClassId == seed.ClassId)).Should().Be(0);
+    }
+
+    [Fact]
+    public async Task ReviewingThreeMemberProposal_IsRejectedByValidation()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateSeedAsync(context, createProposal: true, createTeam: false);
+        var proposal = await context.TeamProposals
+            .Include(item => item.Members)
+            .SingleAsync(item => item.Id == seed.ProposalId);
+        proposal.Members.Last().IsIncluded = false;
+        proposal.Members.Last().CountsTowardOpenProposal = false;
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+        proposal = await context.TeamProposals.AsNoTracking().SingleAsync(item => item.Id == seed.ProposalId);
+        var handler = new TeamProposalHandler(
+            context,
+            scope.ServiceProvider.GetRequiredService<EHub.Application.Common.Interfaces.Persistence.IUnitOfWork>());
+
+        var result = await handler.ReviewAsync(
+            proposal.Id,
+            new ReviewTeamProposalRequest
+            {
+                Decision = "Approved",
+                RowVersion = proposal.Version.ToString()
+            },
+            seed.LecturerId,
+            SystemRoles.Lecturer);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be(ErrorCodes.TeamProposalInvalid);
+    }
+
+    [Fact]
+    public async Task DeletingAnEmptyHistoryTeam_ArchivesTheTeamAndReleasesMembers()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateSeedAsync(context, createProposal: false, createTeam: true);
+        context.ChangeTracker.Clear();
+        var handler = new TeamManagementHandler(
+            context,
+            scope.ServiceProvider.GetRequiredService<EHub.Application.Common.Interfaces.Persistence.IUnitOfWork>());
+
+        var result = await handler.DeleteAsync(
+            seed.TeamId!.Value,
+            seed.LecturerId,
+            SystemRoles.Lecturer);
+
+        result.IsSuccess.Should().BeTrue();
+        context.ChangeTracker.Clear();
+        (await context.Teams.AsNoTracking().SingleAsync(item => item.Id == seed.TeamId)).Status
+            .Should().Be(TeamStatus.Archived);
+        (await context.TeamMembers.AsNoTracking()
+            .AnyAsync(member => member.TeamId == seed.TeamId && member.CountsTowardActiveTeam))
+            .Should().BeFalse();
+    }
+
     private static async Task<WorkflowSeed> CreateSeedAsync(AppDbContext context, bool createProposal, bool createTeam)
     {
         var admin = await context.Users.Include(user => user.UserRoles).ThenInclude(userRole => userRole.Role)
