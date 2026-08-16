@@ -14,6 +14,24 @@ namespace EHub.Application.Features.Teams.TeamProposals;
 
 public sealed class TeamProposalHandler : ITeamProposalHandler
 {
+    private static readonly HashSet<string> GroupOneMajorCodes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "BBA_HM",
+        "BBA_IB",
+        "BBA_MC",
+        "BBA_MKT",
+        "BEN",
+        "BBA_TM"
+    };
+
+    private static readonly HashSet<string> GroupTwoMajorCodes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "BIT_AI",
+        "BIT_GD",
+        "BIT_IA",
+        "BIT_SE"
+    };
+
     private readonly IApplicationDbContext _context;
     private readonly IUnitOfWork _unitOfWork;
 
@@ -57,9 +75,17 @@ public sealed class TeamProposalHandler : ITeamProposalHandler
         if (!studentId.HasValue) return Failure(ErrorCodes.ClassAccessDenied, "The current account is not linked to a student profile.");
         if (!request.MemberIds.Contains(studentId.Value)) return Failure(ErrorCodes.ClassAccessDenied, "The proposing student must be included in the proposal.");
 
-        var composition = await LoadAndValidateCompositionAsync(classId, request.MemberIds, request.LeaderStudentId, null, cancellationToken);
+        var composition = await LoadAndValidateCompositionAsync(
+            classId,
+            request.MemberIds,
+            request.LeaderStudentId,
+            null,
+            cancellationToken);
         if (composition.IsFailure) return Failure(composition.Error.Code, composition.Error.Message);
-        var nameError = ValidateText(request.TeamName, request.Description, request.ProjectName);
+        var nameError = ValidateStudentSubmissionText(
+            request.TeamName,
+            request.ProjectName ?? string.Empty,
+            request.Description ?? string.Empty);
         if (nameError != null) return Failure(nameError.Value.Code, nameError.Value.Message);
         var now = DateTime.UtcNow;
         var proposal = new TeamProposal
@@ -94,6 +120,158 @@ public sealed class TeamProposalHandler : ITeamProposalHandler
         return Result.Success(ToDto(proposal));
     }
 
+    public async Task<Result<TeamProposalDto>> SubmitStudentProposalAsync(
+        Guid classId,
+        SubmitStudentTeamProposalRequest request,
+        Guid userId,
+        string role,
+        CancellationToken cancellationToken = default)
+    {
+        if (!IsRole(role, SystemRoles.Student))
+        {
+            return Failure(ErrorCodes.ClassAccessDenied, "Only a student can submit a team proposal.");
+        }
+
+        var studentId = await GetStudentIdAsync(userId, cancellationToken);
+        if (!studentId.HasValue)
+        {
+            return Failure(ErrorCodes.ClassAccessDenied, "The current account is not linked to a student profile.");
+        }
+
+        if (!request.StudentIds.Contains(studentId.Value))
+        {
+            return Failure(
+                ErrorCodes.ClassAccessDenied,
+                "The proposing student must be included in the proposal.");
+        }
+
+        var projectName = request.IsProjectNameSameAsGroup
+            ? request.GroupName.Trim()
+            : request.ProjectName.Trim();
+        var textError = ValidateStudentSubmissionText(
+            request.GroupName,
+            projectName,
+            request.Description);
+        if (textError != null)
+        {
+            return Failure(textError.Value.Code, textError.Value.Message);
+        }
+
+        var memberCount = request.StudentIds.Distinct().Count();
+        if (memberCount is < 4 or > 6)
+        {
+            return Failure(
+                ErrorCodes.TeamProposalInvalid,
+                "A proposal must contain 4 to 6 members.");
+        }
+
+        try
+        {
+            return await _unitOfWork.ExecuteInSerializableTransactionAsync(async transactionCancellationToken =>
+            {
+                var targetClass = await _context.Classes
+                    .FirstOrDefaultAsync(item => item.Id == classId, transactionCancellationToken);
+                if (targetClass == null)
+                {
+                    return Failure(ErrorCodes.ClassNotFound, "The requested class was not found.");
+                }
+
+                var composition = await LoadAndValidateCompositionAsync(
+                    classId,
+                    request.StudentIds,
+                    request.LeaderStudentId,
+                    null,
+                    transactionCancellationToken);
+                if (composition.IsFailure)
+                {
+                    return Failure(composition.Error.Code, composition.Error.Message);
+                }
+
+                var groupName = request.GroupName.Trim();
+                var hasExistingProposalName = await _context.TeamProposals.AnyAsync(item =>
+                    item.ClassId == classId &&
+                    item.TeamName.ToLower() == groupName.ToLower() &&
+                    item.Status != TeamProposalStatus.Rejected &&
+                    item.Status != TeamProposalStatus.Cancelled,
+                    transactionCancellationToken);
+                if (hasExistingProposalName)
+                {
+                    return Failure(
+                        ErrorCodes.TeamNameDuplicated,
+                        "A non-rejected proposal with this group name already exists in the class.");
+                }
+
+                var hasExistingTeamName = await _context.Teams.AnyAsync(item =>
+                    item.ClassId == classId && item.TeamName.ToLower() == groupName.ToLower(),
+                    transactionCancellationToken);
+                if (hasExistingTeamName)
+                {
+                    return Failure(
+                        ErrorCodes.TeamNameDuplicated,
+                        "A team with this group name already exists in the class.");
+                }
+
+                var now = DateTime.UtcNow;
+                var proposal = new TeamProposal
+                {
+                    ClassId = classId,
+                    ProposedByStudentId = studentId.Value,
+                    TeamName = groupName,
+                    ProjectName = projectName,
+                    Description = request.Description.Trim(),
+                    Status = TeamProposalStatus.Pending,
+                    SubmittedAtUtc = now,
+                    CreatedBy = userId
+                };
+                foreach (var enrollment in composition.Value)
+                {
+                    proposal.Members.Add(new TeamProposalMember
+                    {
+                        ProposalId = proposal.Id,
+                        Proposal = proposal,
+                        ClassId = classId,
+                        StudentId = enrollment.StudentId,
+                        ClassStudent = enrollment,
+                        IsLeader = enrollment.StudentId == request.LeaderStudentId,
+                        IsIncluded = true,
+                        CountsTowardOpenProposal = true
+                    });
+                }
+
+                AddHistory(
+                    proposal,
+                    null,
+                    TeamProposalStatus.Pending,
+                    "Submitted",
+                    null,
+                    userId,
+                    now);
+                _context.TeamProposals.Add(proposal);
+                ClassOutbox.Enqueue(_context, "TeamProposal.Submitted.v1", classId, new
+                {
+                    ProposalId = proposal.Id,
+                    LecturerUserId = targetClass.PrimaryLecturerId,
+                    AdminReviewRequired = false,
+                    StudentUserIds = GetMemberUserIds(composition.Value)
+                }, now);
+                await _context.SaveChangesAsync(transactionCancellationToken);
+                return Result.Success(ToDto(proposal));
+            }, cancellationToken);
+        }
+        catch (DbUpdateException)
+        {
+            return Failure(
+                ErrorCodes.TeamProposalMembershipConflict,
+                "A selected student is already reserved by another team proposal or team.");
+        }
+        catch (SerializableTransactionConflictException)
+        {
+            return Failure(
+                ErrorCodes.ClassConcurrencyConflict,
+                "The proposal conflicted with another request. Refresh and try again.");
+        }
+    }
+
     public async Task<Result<TeamProposalDto>> UpdateAsync(
         Guid proposalId, UpdateTeamProposalRequest request, Guid userId, string role, CancellationToken cancellationToken = default)
     {
@@ -110,10 +288,52 @@ public sealed class TeamProposalHandler : ITeamProposalHandler
                 if (proposal.Status is not (TeamProposalStatus.Draft or TeamProposalStatus.NeedsRevision)) return Failure(ErrorCodes.TeamProposalStateInvalid, "Only Draft or NeedsRevision proposals can be updated.");
                 if (proposal.Version != version) return Failure(ErrorCodes.ClassConcurrencyConflict, "The proposal changed concurrently. Refresh and try again.");
                 if (!request.MemberIds.Contains(studentId.Value)) return Failure(ErrorCodes.ClassAccessDenied, "The proposing student must remain included in the proposal.");
-                var composition = await LoadAndValidateCompositionAsync(proposal.ClassId, request.MemberIds, request.LeaderStudentId, proposal.Id, transactionCancellationToken);
+                var updateMemberCount = request.MemberIds.Distinct().Count();
+                if (updateMemberCount is < 4 or > 6)
+                {
+                    return Failure(
+                        ErrorCodes.TeamProposalInvalid,
+                        "A proposal must contain 4 to 6 members.");
+                }
+
+                var composition = await LoadAndValidateCompositionAsync(
+                    proposal.ClassId,
+                    request.MemberIds,
+                    request.LeaderStudentId,
+                    proposal.Id,
+                    transactionCancellationToken);
                 if (composition.IsFailure) return Failure(composition.Error.Code, composition.Error.Message);
-                var textError = ValidateText(request.TeamName, request.Description, request.ProjectName);
+                var textError = ValidateStudentSubmissionText(
+                    request.TeamName,
+                    request.ProjectName ?? string.Empty,
+                    request.Description ?? string.Empty);
                 if (textError != null) return Failure(textError.Value.Code, textError.Value.Message);
+
+                var normalizedTeamName = request.TeamName.Trim().ToLower();
+                var hasDuplicateProposalName = await _context.TeamProposals.AnyAsync(item =>
+                    item.ClassId == proposal.ClassId &&
+                    item.Id != proposal.Id &&
+                    item.TeamName.ToLower() == normalizedTeamName &&
+                    item.Status != TeamProposalStatus.Rejected &&
+                    item.Status != TeamProposalStatus.Cancelled,
+                    transactionCancellationToken);
+                if (hasDuplicateProposalName)
+                {
+                    return Failure(
+                        ErrorCodes.TeamNameDuplicated,
+                        "A non-rejected proposal with this group name already exists in the class.");
+                }
+
+                var hasDuplicateTeamName = await _context.Teams.AnyAsync(item =>
+                    item.ClassId == proposal.ClassId &&
+                    item.TeamName.ToLower() == normalizedTeamName,
+                    transactionCancellationToken);
+                if (hasDuplicateTeamName)
+                {
+                    return Failure(
+                        ErrorCodes.TeamNameDuplicated,
+                        "A team with this group name already exists in the class.");
+                }
 
                 var previousLeader = proposal.Members.FirstOrDefault(member =>
                     member.IsLeader && member.StudentId != request.LeaderStudentId);
@@ -167,8 +387,29 @@ public sealed class TeamProposalHandler : ITeamProposalHandler
         if (proposal.Status is not (TeamProposalStatus.Draft or TeamProposalStatus.NeedsRevision)) return Failure(ErrorCodes.TeamProposalStateInvalid, "Only Draft or NeedsRevision proposals can be submitted.");
         if (proposal.Version != version) return Failure(ErrorCodes.ClassConcurrencyConflict, "The proposal changed concurrently. Refresh and try again.");
         var members = proposal.Members.Where(member => member.IsIncluded).ToArray();
-        var composition = await LoadAndValidateCompositionAsync(proposal.ClassId, members.Select(item => item.StudentId).ToArray(), members.SingleOrDefault(item => item.IsLeader)?.StudentId ?? Guid.Empty, proposal.Id, cancellationToken);
+        if (members.Length is < 4 or > 6)
+        {
+            return Failure(
+                ErrorCodes.TeamProposalInvalid,
+                "A proposal must contain 4 to 6 members.");
+        }
+
+        var composition = await LoadAndValidateCompositionAsync(
+            proposal.ClassId,
+            members.Select(item => item.StudentId).ToArray(),
+            members.SingleOrDefault(item => item.IsLeader)?.StudentId ?? Guid.Empty,
+            proposal.Id,
+            cancellationToken);
         if (composition.IsFailure) return Failure(composition.Error.Code, composition.Error.Message);
+        var textError = ValidateStudentSubmissionText(
+            proposal.TeamName,
+            proposal.ProjectName ?? string.Empty,
+            proposal.Description ?? string.Empty);
+        if (textError != null)
+        {
+            return Failure(textError.Value.Code, textError.Value.Message);
+        }
+
         var previous = proposal.Status;
         proposal.Status = TeamProposalStatus.Pending;
         proposal.SubmittedAtUtc = DateTime.UtcNow;
@@ -177,7 +418,9 @@ public sealed class TeamProposalHandler : ITeamProposalHandler
         ClassOutbox.Enqueue(_context, "TeamProposal.Submitted.v1", proposal.ClassId, new
         {
             ProposalId = proposal.Id,
-            LecturerUserId = proposal.Class.PrimaryLecturerId
+            LecturerUserId = proposal.Class.PrimaryLecturerId,
+            AdminReviewRequired = false,
+            StudentUserIds = GetMemberUserIds(members)
         }, DateTime.UtcNow);
         try { await _context.SaveChangesAsync(cancellationToken); }
         catch (DbUpdateConcurrencyException) { return Failure(ErrorCodes.ClassConcurrencyConflict, "The proposal changed concurrently. Refresh and try again."); }
@@ -188,7 +431,10 @@ public sealed class TeamProposalHandler : ITeamProposalHandler
         Guid proposalId, ReviewTeamProposalRequest request, Guid userId, string role, CancellationToken cancellationToken = default)
     {
         if (!uint.TryParse(request.RowVersion, out var version)) return Failure(ErrorCodes.ClassValidationError, "A valid rowVersion is required.");
-        if (!Enum.TryParse<TeamProposalStatus>(request.Decision, true, out var decision) || decision is not (TeamProposalStatus.Approved or TeamProposalStatus.NeedsRevision or TeamProposalStatus.Rejected))
+        var decisionInput = string.IsNullOrWhiteSpace(request.Status)
+            ? request.Decision
+            : request.Status;
+        if (!Enum.TryParse<TeamProposalStatus>(decisionInput, true, out var decision) || decision is not (TeamProposalStatus.Approved or TeamProposalStatus.NeedsRevision or TeamProposalStatus.Rejected))
             return Failure(ErrorCodes.ClassValidationError, "Decision must be Approved, NeedsRevision, or Rejected.");
         var comment = request.Comment?.Trim();
         if (decision != TeamProposalStatus.Approved && (string.IsNullOrWhiteSpace(comment) || comment.Length is < 3 or > 1_000))
@@ -202,27 +448,43 @@ public sealed class TeamProposalHandler : ITeamProposalHandler
             {
                 var proposal = await ProposalQuery(tracking: true).FirstOrDefaultAsync(item => item.Id == proposalId, transactionCancellationToken);
                 if (proposal == null) return Failure(ErrorCodes.TeamProposalNotFound, "The requested proposal was not found.");
-                if (!IsRole(role, SystemRoles.Admin) && !(IsRole(role, SystemRoles.Lecturer) && proposal.Class.PrimaryLecturerId == userId))
-                    return Failure(ErrorCodes.ClassAccessDenied, "Only an administrator or assigned lecturer can review this proposal.");
                 if (proposal.Status != TeamProposalStatus.Pending) return Failure(ErrorCodes.TeamProposalStateInvalid, "Only a Pending proposal can be reviewed.");
                 if (proposal.Version != version) return Failure(ErrorCodes.ClassConcurrencyConflict, "The proposal changed concurrently. Refresh and try again.");
                 var mutationError = ClassStateRules.GetMutationError(proposal.Class.Status);
                 if (mutationError != null) return Failure(mutationError.Code, mutationError.Message);
 
+                var included = proposal.Members.Where(member => member.IsIncluded).ToArray();
+                if (included.Length is < 4 or > 6)
+                {
+                    return Failure(
+                        ErrorCodes.TeamProposalInvalid,
+                        "A proposal must contain 4 to 6 members.");
+                }
+
+                var isAdmin = IsRole(role, SystemRoles.Admin);
+                var isAssignedLecturer = IsRole(role, SystemRoles.Lecturer) && proposal.Class.PrimaryLecturerId == userId;
+                if (!isAdmin && !isAssignedLecturer)
+                {
+                    return Failure(ErrorCodes.ClassAccessDenied, "Only an administrator or assigned lecturer can review this proposal.");
+                }
+
                 var now = DateTime.UtcNow;
                 var previous = proposal.Status;
                 if (decision == TeamProposalStatus.Approved)
                 {
-                    var included = proposal.Members.Where(member => member.IsIncluded).ToArray();
                     var leaderId = included.SingleOrDefault(member => member.IsLeader)?.StudentId ?? Guid.Empty;
-                    var composition = await LoadAndValidateCompositionAsync(proposal.ClassId, included.Select(member => member.StudentId).ToArray(), leaderId, proposal.Id, transactionCancellationToken);
+                    var composition = await LoadAndValidateCompositionAsync(
+                        proposal.ClassId,
+                        included.Select(member => member.StudentId).ToArray(),
+                        leaderId,
+                        proposal.Id,
+                        transactionCancellationToken);
                     if (composition.IsFailure) return Failure(composition.Error.Code, composition.Error.Message);
-                    var teamCodeSuffix = $"_T_{Guid.NewGuid():N}";
-                    var teamCodePrefix = proposal.Class.ClassCode[..Math.Min(proposal.Class.ClassCode.Length, 50 - teamCodeSuffix.Length)];
+                    var teamCode = await CreateNextTeamCodeAsync(proposal.Class, transactionCancellationToken);
                     var team = new Team
                     {
                         ClassId = proposal.ClassId,
-                        TeamCode = $"{teamCodePrefix}{teamCodeSuffix}",
+                        TeamCode = teamCode,
                         TeamName = proposal.TeamName,
                         Description = proposal.Description,
                         Status = TeamStatus.Active,
@@ -239,6 +501,16 @@ public sealed class TeamProposalHandler : ITeamProposalHandler
                         });
                     }
                     _context.Teams.Add(team);
+                    _context.Projects.Add(new Project
+                    {
+                        TeamId = team.Id,
+                        Team = team,
+                        Name = proposal.ProjectName ?? proposal.TeamName,
+                        Description = proposal.Description,
+                        Status = ProjectStatus.Draft,
+                        CreatedById = userId,
+                        CreatedBy = userId
+                    });
                     proposal.ApprovedTeamId = team.Id;
                     proposal.ApprovedTeam = team;
                 }
@@ -251,15 +523,15 @@ public sealed class TeamProposalHandler : ITeamProposalHandler
                 foreach (var member in proposal.Members)
                     member.CountsTowardOpenProposal = decision == TeamProposalStatus.NeedsRevision && member.IsIncluded;
                 AddHistory(proposal, previous, decision, "Reviewed", comment, userId, now);
-                var proposerUserId = proposal.Members
-                    .FirstOrDefault(member => member.StudentId == proposal.ProposedByStudentId)?
-                    .ClassStudent.Student.UserId;
                 ClassOutbox.Enqueue(_context, "TeamProposal.Reviewed.v1", proposal.ClassId, new
                 {
                     ProposalId = proposal.Id,
                     Decision = decision.ToString(),
                     proposal.ApprovedTeamId,
-                    StudentUserId = proposerUserId
+                    StudentUserIds = GetMemberUserIds(included),
+                    TeamLeaderUserId = included
+                        .SingleOrDefault(member => member.IsLeader)?
+                        .ClassStudent.Student.UserId
                 }, now);
                 await _context.SaveChangesAsync(transactionCancellationToken);
                 return Result.Success(ToDto(proposal));
@@ -319,10 +591,22 @@ public sealed class TeamProposalHandler : ITeamProposalHandler
     }
 
     private async Task<Result<List<ClassStudent>>> LoadAndValidateCompositionAsync(
-        Guid classId, IReadOnlyCollection<Guid> idsInput, Guid leaderId, Guid? currentProposalId, CancellationToken cancellationToken)
+        Guid classId,
+        IReadOnlyCollection<Guid> idsInput,
+        Guid leaderId,
+        Guid? currentProposalId,
+        CancellationToken cancellationToken)
     {
         var ids = idsInput.Distinct().ToArray();
-        if (ids.Length is < 4 or > 6) return CompositionFailure("A proposal must contain 4 to 6 unique members.");
+        if (ids.Length != idsInput.Count)
+        {
+            return CompositionFailure("Student IDs must be unique.", ErrorCodes.ClassValidationError);
+        }
+
+        if (ids.Length is < 4 or > 6)
+        {
+            return CompositionFailure("A proposal must contain 4 to 6 unique members.");
+        }
         if (!ids.Contains(leaderId)) return CompositionFailure("The proposed leader must be one of the members.");
         var targetClass = await _context.Classes.AsNoTracking().FirstOrDefaultAsync(item => item.Id == classId, cancellationToken);
         if (targetClass == null) return Result.Failure<List<ClassStudent>>(new Error(ErrorCodes.ClassNotFound, "The requested class was not found."));
@@ -340,7 +624,7 @@ public sealed class TeamProposalHandler : ITeamProposalHandler
             return CompositionFailure("A proposed member already belongs to another open proposal.", ErrorCodes.TeamProposalMembershipConflict);
         var majors = enrollments.Select(item => item.MajorCodeAtEnrollment).ToArray();
         if (!majors.Any(IsBusinessMajor) || !majors.Any(IsTechnologyMajor))
-            return CompositionFailure("A team must include at least one business-major and one technology-major student.", ErrorCodes.TeamMajorCompositionInvalid);
+            return CompositionFailure("A team must include at least one GROUP_1 major and one GROUP_2 major.", ErrorCodes.TeamMajorCompositionInvalid);
         return Result.Success(enrollments);
     }
 
@@ -384,10 +668,88 @@ public sealed class TeamProposalHandler : ITeamProposalHandler
         if ((projectName?.Trim().Length ?? 0) > 200) return (ErrorCodes.ClassValidationError, "Project name cannot exceed 200 characters.");
         return null;
     }
+
+    private static (string Code, string Message)? ValidateStudentSubmissionText(
+        string groupName,
+        string projectName,
+        string description)
+    {
+        if (groupName.Trim().Length is < 3 or > 60)
+        {
+            return (ErrorCodes.ClassValidationError, "Group name must be between 3 and 60 characters.");
+        }
+
+        if (projectName.Trim().Length is < 3 or > 60)
+        {
+            return (ErrorCodes.ClassValidationError, "Project name must be between 3 and 60 characters.");
+        }
+
+        if (description.Trim().Length is < 20 or > 500)
+        {
+            return (ErrorCodes.ClassValidationError, "Project description must be between 20 and 500 characters.");
+        }
+
+        return null;
+    }
+
+    private async Task<string> CreateNextTeamCodeAsync(Class targetClass, CancellationToken cancellationToken)
+    {
+        const int maximumTeamCodeLength = 50;
+        const string suffixPrefix = "_TEAM_";
+        var maximumClassCodeLength = maximumTeamCodeLength - suffixPrefix.Length - 10;
+        var classCode = targetClass.ClassCode.Trim();
+        if (classCode.Length > maximumClassCodeLength)
+        {
+            classCode = classCode[..maximumClassCodeLength];
+        }
+
+        var prefix = $"{classCode}{suffixPrefix}";
+        var existingCodes = await _context.Teams
+            .IgnoreQueryFilters()
+            .Where(team => team.ClassId == targetClass.Id && team.TeamCode.StartsWith(prefix))
+            .Select(team => team.TeamCode)
+            .ToListAsync(cancellationToken);
+
+        var highestSequence = 0;
+        foreach (var code in existingCodes)
+        {
+            var suffix = code[prefix.Length..];
+            if (int.TryParse(suffix, out var sequence) && sequence > highestSequence)
+            {
+                highestSequence = sequence;
+            }
+        }
+
+        return $"{prefix}{highestSequence + 1}";
+    }
+
+    private static IReadOnlyCollection<Guid> GetMemberUserIds(IEnumerable<ClassStudent> enrollments)
+    {
+        return enrollments
+            .Where(enrollment => enrollment.Student.UserId.HasValue)
+            .Select(enrollment => enrollment.Student.UserId!.Value)
+            .Distinct()
+            .ToArray();
+    }
+
+    private static IReadOnlyCollection<Guid> GetMemberUserIds(IEnumerable<TeamProposalMember> members)
+    {
+        return members
+            .Where(member => member.ClassStudent.Student.UserId.HasValue)
+            .Select(member => member.ClassStudent.Student.UserId!.Value)
+            .Distinct()
+            .ToArray();
+    }
+
     private static Result<List<ClassStudent>> CompositionFailure(string message, string code = ErrorCodes.TeamProposalInvalid) => Result.Failure<List<ClassStudent>>(new Error(code, message));
-    private static bool IsBusinessMajor(string? code) => code?.StartsWith("BBA_", StringComparison.OrdinalIgnoreCase) == true || string.Equals(code, MajorCodes.BEN, StringComparison.OrdinalIgnoreCase);
-    private static bool IsTechnologyMajor(string? code) => code?.StartsWith("BIT_", StringComparison.OrdinalIgnoreCase) == true;
+    private static bool IsBusinessMajor(string? code) =>
+        !string.IsNullOrWhiteSpace(code) && GroupOneMajorCodes.Contains(code.Trim());
+
+    private static bool IsTechnologyMajor(string? code) =>
+        !string.IsNullOrWhiteSpace(code) && GroupTwoMajorCodes.Contains(code.Trim());
+
     private static bool IsRole(string role, string expected) => string.Equals(role, expected, StringComparison.OrdinalIgnoreCase);
     private static Result<TeamProposalDto> Failure(string code, string message) => Result.Failure<TeamProposalDto>(new Error(code, message));
     private static Result<IReadOnlyCollection<TeamProposalDto>> FailureList(string code, string message) => Result.Failure<IReadOnlyCollection<TeamProposalDto>>(new Error(code, message));
+
 }

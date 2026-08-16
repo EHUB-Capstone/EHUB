@@ -7,9 +7,133 @@ import type {
   TeamProject,
   TeamStudent,
 } from '../types/teamManagement';
+import { getTeamGroupFromMajor, TEAM_MAJOR_GROUPS } from '../constants/majors.ts';
 
 export const TEAM_MEMBER_LIMIT = 6;
 export const TEAM_MEMBER_MINIMUM = 4;
+
+const MISSING_MAJOR_CODES = new Set(['UNDECLARED', 'MISSING', 'UNKNOWN', 'N/A', 'NA', 'NONE', 'NULL']);
+
+type TeamMajorGroupKey = 'GROUP_1' | 'GROUP_2';
+
+export interface TeamSelectionValidation {
+  memberCount: number;
+  minMembers: number;
+  maxMembers: number;
+  majorCount: number;
+  minMajors: number;
+  majorCodes: string[];
+  groupMajorCodes: Record<TeamMajorGroupKey, string[]>;
+  missingMajorStudents: TeamStudent[];
+  unclassifiedMajorCodes: string[];
+  leaderStudent: TeamStudent | null;
+  hasGroupOne: boolean;
+  hasGroupTwo: boolean;
+  isMemberCountValid: boolean;
+  isMajorRequirementValid: boolean;
+  isTeamLeaderValid: boolean;
+  canCreateTeam: boolean;
+  warnings: string[];
+  errors: string[];
+}
+
+export function normalizeTeamMajorCode(major: string | null | undefined): string {
+  if (!major || typeof major !== 'string') return '';
+  return major.trim().toUpperCase();
+}
+
+export function isMissingTeamMajor(major: string | null | undefined): boolean {
+  const code = normalizeTeamMajorCode(major);
+  return !code || MISSING_MAJOR_CODES.has(code);
+}
+
+export function validateTeamSelection(
+  selectedStudents: TeamStudent[],
+  leaderStudentId = '',
+): TeamSelectionValidation {
+  const uniqueStudents = Array.from(
+    new Map(selectedStudents.map((student) => [student._id, student])).values(),
+  );
+  const memberCount = uniqueStudents.length;
+  const missingMajorStudents = uniqueStudents.filter((student) => isMissingTeamMajor(student.major));
+  const majorCodes = [...new Set(
+    uniqueStudents
+      .map((student) => normalizeTeamMajorCode(student.major))
+      .filter(Boolean)
+      .filter((code) => !MISSING_MAJOR_CODES.has(code)),
+  )].sort();
+  const groupMajorCodes: Record<TeamMajorGroupKey, string[]> = {
+    GROUP_1: [],
+    GROUP_2: [],
+  };
+
+  majorCodes.forEach((code) => {
+    const group = getTeamGroupFromMajor(code) as TeamMajorGroupKey | null;
+    if (group === 'GROUP_1' || group === 'GROUP_2') {
+      groupMajorCodes[group].push(code);
+    }
+  });
+
+  const validTeamMajorCodes = new Set(
+    TEAM_MAJOR_GROUPS.flatMap((group) => group.majors.map((major) => major.code)),
+  );
+  const unclassifiedMajorCodes = majorCodes.filter((code) => !validTeamMajorCodes.has(code));
+  const leaderStudent = uniqueStudents.find((student) => student._id === leaderStudentId) || null;
+  const hasGroupOne = groupMajorCodes.GROUP_1.length > 0;
+  const hasGroupTwo = groupMajorCodes.GROUP_2.length > 0;
+  const isMemberCountValid = memberCount >= TEAM_MEMBER_MINIMUM && memberCount <= TEAM_MEMBER_LIMIT;
+  const isMajorRequirementValid = hasGroupOne && hasGroupTwo;
+  const isTeamLeaderValid = Boolean(leaderStudentId && leaderStudent);
+  const errors: string[] = [];
+  const warnings: string[] = [];
+
+  if (memberCount < TEAM_MEMBER_MINIMUM) {
+    errors.push(`Select at least ${TEAM_MEMBER_MINIMUM} students.`);
+  } else if (memberCount > TEAM_MEMBER_LIMIT) {
+    errors.push(`Select no more than ${TEAM_MEMBER_LIMIT} students.`);
+  }
+
+  if (!hasGroupOne) {
+    errors.push('Team must include at least one GROUP_1 major.');
+  }
+
+  if (!hasGroupTwo) {
+    errors.push('Team must include at least one GROUP_2 major.');
+  }
+
+  if (!isTeamLeaderValid) {
+    errors.push('Team Leader is required.');
+  }
+
+  if (missingMajorStudents.length > 0) {
+    warnings.push(`${missingMajorStudents.length} selected student(s) have no declared major.`);
+  }
+
+  if (unclassifiedMajorCodes.length > 0) {
+    warnings.push(`${unclassifiedMajorCodes.join(', ')} does not satisfy GROUP_1/GROUP_2.`);
+  }
+
+  return {
+    memberCount,
+    minMembers: TEAM_MEMBER_MINIMUM,
+    maxMembers: TEAM_MEMBER_LIMIT,
+    majorCount: majorCodes.length,
+    minMajors: 2,
+    majorCodes,
+    groupMajorCodes,
+    missingMajorStudents,
+    unclassifiedMajorCodes,
+    leaderStudent,
+    hasGroupOne,
+    hasGroupTwo,
+    isMemberCountValid,
+    isMajorRequirementValid,
+    isTeamLeaderValid,
+    canCreateTeam: isMemberCountValid && isMajorRequirementValid && isTeamLeaderValid,
+    warnings,
+    errors,
+  };
+}
 
 export function normalizeManagedTeam(source: any): ManagedTeam {
   const members: TeamMember[] = (Array.isArray(source?.members) ? source.members : []).map((member: any) => ({
@@ -29,6 +153,10 @@ export function normalizeManagedTeam(source: any): ManagedTeam {
     classId: source?.classId,
     teamName: source?.teamName || source?.groupName || 'Unnamed team',
     leaderId: source?.leaderId || null,
+    projectName: source?.projectName || null,
+    projectDescription: source?.projectDescription || null,
+    projectStatus: source?.projectStatus || null,
+    hasChatGroup: Boolean(source?.hasChatGroup),
     members,
     teamMembers: members,
     memberIds: members.map(teamMemberStudentId),
@@ -50,6 +178,7 @@ export function normalizeTeamProposal(source: any): ManagedTeam {
     ...proposal,
     teamCode: 'TEAM PROPOSAL',
     status: source?.status || 'Draft',
+    hasChatGroup: false,
     projectName: source?.projectName || null,
     rejectReason: source?.latestReviewComment || null,
     isProposal: true,
@@ -112,7 +241,6 @@ export function getTeamProject(team: ManagedTeam): TeamProject | null {
     status: team.projectStatus || 'DRAFT',
   };
 }
-
 export function buildStudentTeamAssignments(
   teams: ManagedTeam[],
   students: TeamStudent[] = [],
@@ -149,9 +277,11 @@ export function validateTeamDraft(
   const teamName = draft.teamName.trim();
   const uniqueMemberIds = [...new Set(draft.memberIds)];
 
-  if (teamName.length < 3 || teamName.length > 60) {
+  if (teamName.length === 0 && !currentTeamId) {
+    // The backend generates the next sequential name when managers leave this blank.
+  } else if (teamName.length < 3 || teamName.length > 60) {
     errors.teamName = 'Team name must be between 3 and 60 characters.';
-  } else {
+  } else if (teamName.length > 0) {
     const duplicateName = teams.some((team) => (
       team._id !== currentTeamId
       && (!entityId(team.classId) || entityId(team.classId) === draft.classId)
@@ -162,10 +292,9 @@ export function validateTeamDraft(
 
   if (!draft.classId) errors.classId = 'A class is required.';
 
-  if (uniqueMemberIds.length < TEAM_MEMBER_MINIMUM) {
-    errors.memberIds = `A team must have at least ${TEAM_MEMBER_MINIMUM} students.`;
-  } else if (uniqueMemberIds.length > TEAM_MEMBER_LIMIT) {
-    errors.memberIds = `A team can have up to ${TEAM_MEMBER_LIMIT} students.`;
+  const hasAllowedSize = uniqueMemberIds.length >= TEAM_MEMBER_MINIMUM && uniqueMemberIds.length <= TEAM_MEMBER_LIMIT;
+  if (!hasAllowedSize) {
+    errors.memberIds = 'A team must have 4-6 students.';
   }
 
   const knownStudentIds = new Set(students.map((student) => student._id));
@@ -176,10 +305,10 @@ export function validateTeamDraft(
   const selectedStudents = uniqueMemberIds
     .map((studentId) => students.find((student) => student._id === studentId))
     .filter((student): student is TeamStudent => Boolean(student));
-  const hasBusinessMajor = selectedStudents.some((student) => /^(BBA_|BEN$)/i.test(student.major || ''));
-  const hasTechnologyMajor = selectedStudents.some((student) => /^BIT_/i.test(student.major || ''));
-  if (uniqueMemberIds.length >= TEAM_MEMBER_MINIMUM && (!hasBusinessMajor || !hasTechnologyMajor)) {
-    errors.memberIds = 'A team must include at least one business-major and one technology-major student.';
+  const hasBusinessMajor = selectedStudents.some((student) => getTeamGroupFromMajor(student.major) === 'GROUP_1');
+  const hasTechnologyMajor = selectedStudents.some((student) => getTeamGroupFromMajor(student.major) === 'GROUP_2');
+  if (hasAllowedSize && (!hasBusinessMajor || !hasTechnologyMajor)) {
+    errors.memberIds = 'A team must include at least one GROUP_1 major and one GROUP_2 major.';
   }
 
   const teamsInClass = teams.filter((team) => !entityId(team.classId) || entityId(team.classId) === draft.classId);
@@ -209,48 +338,4 @@ export function validateTeamDraft(
   }
 
   return { isValid: Object.keys(errors).length === 0, errors, conflicts };
-}
-
-export function applyTeamDraft(
-  draft: TeamDraft,
-  students: TeamStudent[],
-  existingTeam: ManagedTeam | null,
-  teamCode: string,
-  teamId: string,
-): ManagedTeam {
-  const studentMap = new Map(students.map((student) => [student._id, student]));
-  const now = new Date().toISOString();
-  const members: TeamMember[] = draft.memberIds.map((studentId) => ({
-    studentId: studentMap.get(studentId) || { _id: studentId, fullName: 'Unknown student' },
-    roleInTeam: studentId === draft.leaderId ? 'LEADER' : 'MEMBER',
-    joinedAt: now,
-  }));
-  const projectName = draft.projectName.trim();
-  const project: TeamProject | null = projectName ? {
-    ...(existingTeam?.project || {}),
-    _id: existingTeam?.project?._id || `frontend-project-${teamId}`,
-    name: projectName,
-    description: draft.projectDescription.trim() || null,
-    status: draft.projectStatus || 'DRAFT',
-    startupField: draft.startupField.trim() || null,
-  } : null;
-
-  return {
-    ...(existingTeam || {}),
-    _id: teamId,
-    classId: draft.classId,
-    teamCode,
-    teamName: draft.teamName.trim(),
-    groupName: draft.teamName.trim(),
-    description: draft.description.trim() || null,
-    status: existingTeam?.status || 'ACTIVE',
-    leaderId: draft.leaderId || null,
-    members,
-    teamMembers: members,
-    memberIds: [...draft.memberIds],
-    project,
-    projectName: project?.name || null,
-    projectDescription: project?.description || null,
-    projectStatus: project?.status || null,
-  };
 }

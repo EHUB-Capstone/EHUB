@@ -4,6 +4,7 @@ import { Search, Users, AlertTriangle, UserMinus, RotateCcw, ChevronLeft, Chevro
 import EmptyState from '../ui/EmptyState';
 import { getMajorName, TEAM_MAJOR_GROUPS } from '../../constants/majors';
 import { getDisplayGroupName } from '../../utils/teamDisplay';
+import { isMissingTeamMajor } from '../../utils/teamManagement';
 
 /**
  * Get display label for a major code.
@@ -12,12 +13,12 @@ import { getDisplayGroupName } from '../../utils/teamDisplay';
  * Returns "-" if major is null/empty.
  */
 const majorLabel = (major) => {
-  if (!major || typeof major !== 'string' || !major.trim()) return null;
+  if (isMissingTeamMajor(major)) return null;
   return major.trim().toUpperCase();
 };
 
 const majorTooltip = (major) => {
-  if (!major || typeof major !== 'string' || !major.trim()) return '';
+  if (isMissingTeamMajor(major)) return '';
   const code = major.trim().toUpperCase();
   return getMajorName(code) || code;
 };
@@ -159,6 +160,12 @@ export default function StudentTable({
   };
 
   const canSelect = (s) => !selectionDisabled && !s.teamId && s.enrollmentStatus === 'Active';
+  const getSelectionBlockReason = (s) => {
+    if (selectionDisabled) return 'Selection is disabled.';
+    if (s.teamId) return 'This student is already assigned or reserved by another team.';
+    if (s.enrollmentStatus !== 'Active') return 'Only active enrollments can be selected.';
+    return '';
+  };
 
   return (
     <div className="overflow-hidden rounded-xl border border-slate-200/70 bg-white shadow-xs">
@@ -267,6 +274,7 @@ export default function StudentTable({
                 const mLabel = majorLabel(s.major);
                 const mTooltip = majorTooltip(s.major);
                 const team = s.teamId ? teamMap.get(s.teamId.toString()) : null;
+                const selectionBlockReason = selectable ? '' : getSelectionBlockReason(s);
 
                 const prevStudent = index > 0 ? filtered[index - 1] : null;
                 const isFirstInTeam = s.teamId && (!prevStudent || prevStudent.teamId?.toString() !== s.teamId.toString());
@@ -275,7 +283,7 @@ export default function StudentTable({
                 const rowClass = `transition-colors ${selectable ? 'cursor-pointer hover:bg-slate-50' : ''} ${isSelected ? 'bg-primary-50' : ''} ${isFirstInTeam ? 'border-t-2 border-slate-200' : ''}`;
 
                 return (
-                  <tr key={s._id} onClick={() => selectable && toggleSelect(s._id)} className={rowClass}>
+                  <tr key={s._id} onClick={() => selectable && toggleSelect(s._id)} className={rowClass} title={selectionBlockReason}>
                     {!selectionDisabled && (
                       <td className="px-3 py-2.5">
                         <div className={`flex h-4.5 w-4.5 items-center justify-center rounded-full border-2 transition-all ${isSelected ? 'border-primary bg-primary' : 'border-slate-300'} ${!selectable ? 'opacity-30' : ''}`}>
@@ -372,6 +380,7 @@ export default function StudentTable({
                             onClick={(e) => { e.stopPropagation(); onDeleteStudent(s); }}
                             className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600"
                             title="Drop enrollment"
+                            aria-label={`Drop enrollment for ${s.fullName || 'student'}`}
                           >
                             <UserMinus className="h-3.5 w-3.5" />
                           </button>
@@ -380,6 +389,7 @@ export default function StudentTable({
                             onClick={(e) => { e.stopPropagation(); onReEnrollStudent(s); }}
                             className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-green-50 hover:text-green-700"
                             title="Re-enroll student"
+                            aria-label={`Re-enroll ${s.fullName || 'student'}`}
                           >
                             <RotateCcw className="h-3.5 w-3.5" />
                           </button>

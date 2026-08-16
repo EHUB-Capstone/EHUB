@@ -48,7 +48,10 @@ public sealed class TeamDto
     public string TeamCode { get; init; } = string.Empty;
     public string TeamName { get; init; } = string.Empty;
     public string? Description { get; init; }
+    public string? ProjectName { get; init; }
+    public string? ProjectDescription { get; init; }
     public string Status { get; init; } = string.Empty;
+    public bool HasChatGroup { get; init; }
     public Guid? LeaderId { get; init; }
     public IReadOnlyCollection<TeamMemberDto> Members { get; init; } = Array.Empty<TeamMemberDto>();
     public MentorAssignmentDto? CurrentMentorAssignment { get; init; }
@@ -63,12 +66,29 @@ public sealed class CreateTeamRequest
     public Guid LeaderStudentId { get; init; }
 }
 
+public sealed class GenerateClassTeamRequest
+{
+    public IReadOnlyCollection<Guid> StudentIds { get; init; } = Array.Empty<Guid>();
+    public Guid LeaderStudentId { get; init; }
+    public Guid? MentorId { get; init; }
+    public string Mode { get; init; } = "standard";
+    public string? TeamName { get; init; }
+    public string? Description { get; init; }
+}
+
+public sealed class GenerateClassTeamResponse
+{
+    public TeamDto? Team { get; init; }
+    public TeamProposalDto? Proposal { get; init; }
+}
+
 public sealed class UpdateTeamMembersRequest
 {
     public string? TeamName { get; init; }
     public string? Description { get; init; }
     public IReadOnlyCollection<Guid> MemberIds { get; init; } = Array.Empty<Guid>();
     public Guid LeaderStudentId { get; init; }
+    public string Mode { get; init; } = "standard";
     public string RowVersion { get; init; } = string.Empty;
 }
 
@@ -121,6 +141,16 @@ public sealed class CreateTeamProposalRequest
     public Guid LeaderStudentId { get; init; }
 }
 
+public sealed class SubmitStudentTeamProposalRequest
+{
+    public IReadOnlyCollection<Guid> StudentIds { get; init; } = Array.Empty<Guid>();
+    public Guid LeaderStudentId { get; init; }
+    public string GroupName { get; init; } = string.Empty;
+    public string ProjectName { get; init; } = string.Empty;
+    public bool IsProjectNameSameAsGroup { get; init; }
+    public string Description { get; init; } = string.Empty;
+}
+
 public sealed class SubmitTeamProposalRequest
 {
     public string RowVersion { get; init; } = string.Empty;
@@ -145,6 +175,7 @@ public sealed class UpdateTeamProposalRequest
 public sealed class ReviewTeamProposalRequest
 {
     public string Decision { get; init; } = string.Empty;
+    public string? Status { get; init; }
     public string? Comment { get; init; }
     public string RowVersion { get; init; } = string.Empty;
 }

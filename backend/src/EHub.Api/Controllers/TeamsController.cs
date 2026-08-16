@@ -36,6 +36,14 @@ public sealed class TeamsController : ControllerBase
     public async Task<IActionResult> CreateTeam(Guid classId, [FromBody] CreateTeamRequest request, [FromServices] ITeamManagementHandler handler, CancellationToken cancellationToken) =>
         ToResponse(await handler.CreateAsync(classId, request, UserId, Role, cancellationToken), "Team created.");
 
+    [HttpPost("classes/{classId:guid}/teams/generate")]
+    public async Task<IActionResult> GenerateTeam(Guid classId, [FromBody] GenerateClassTeamRequest request, [FromServices] ITeamManagementHandler handler, CancellationToken cancellationToken) =>
+        ToResponse(await handler.GenerateAsync(classId, request, UserId, Role, cancellationToken), "Team request processed.");
+
+    [HttpPost("classes/{classId:guid}/teams/student-proposal")]
+    public async Task<IActionResult> SubmitStudentProposal(Guid classId, [FromBody] SubmitStudentTeamProposalRequest request, [FromServices] ITeamProposalHandler handler, CancellationToken cancellationToken) =>
+        ToResponse(await handler.SubmitStudentProposalAsync(classId, request, UserId, Role, cancellationToken), "Team proposal submitted.");
+
     [HttpGet("teams/{teamId:guid}")]
     public async Task<IActionResult> GetTeam(Guid teamId, [FromServices] ITeamManagementHandler handler, CancellationToken cancellationToken) =>
         ToResponse(await handler.GetAsync(teamId, UserId, Role, cancellationToken), "Team retrieved.");
@@ -47,6 +55,10 @@ public sealed class TeamsController : ControllerBase
     [HttpPut("teams/{teamId:guid}/leader")]
     public async Task<IActionResult> AssignLeader(Guid teamId, [FromBody] AssignTeamLeaderRequest request, [FromServices] ITeamManagementHandler handler, CancellationToken cancellationToken) =>
         ToResponse(await handler.AssignLeaderAsync(teamId, request, UserId, Role, cancellationToken), "Team leader assigned.");
+
+    [HttpDelete("teams/{teamId:guid}")]
+    public async Task<IActionResult> DeleteTeam(Guid teamId, [FromServices] ITeamManagementHandler handler, CancellationToken cancellationToken) =>
+        ToResponse(await handler.DeleteAsync(teamId, UserId, Role, cancellationToken), "Team archived and members unassigned.");
 
     [HttpGet("classes/{classId:guid}/mentors")]
     public async Task<IActionResult> GetClassMentors(Guid classId, [FromServices] IMentorAssignmentHandler handler, CancellationToken cancellationToken) =>
@@ -91,6 +103,10 @@ public sealed class TeamsController : ControllerBase
     [HttpPost("team-proposals/{proposalId:guid}/review")]
     public async Task<IActionResult> ReviewProposal(Guid proposalId, [FromBody] ReviewTeamProposalRequest request, [FromServices] ITeamProposalHandler handler, CancellationToken cancellationToken) =>
         ToResponse(await handler.ReviewAsync(proposalId, request, UserId, Role, cancellationToken), "Team proposal reviewed.");
+
+    [HttpPut("teams/{teamId:guid}/review")]
+    public async Task<IActionResult> ReviewTeam(Guid teamId, [FromBody] ReviewTeamProposalRequest request, [FromServices] ITeamProposalHandler handler, CancellationToken cancellationToken) =>
+        ToResponse(await handler.ReviewAsync(teamId, request, UserId, Role, cancellationToken), "Team proposal reviewed.");
 
     [HttpGet("team-proposals/{proposalId:guid}/history")]
     public async Task<IActionResult> GetProposalHistory(Guid proposalId, [FromServices] ITeamProposalHandler handler, CancellationToken cancellationToken) =>

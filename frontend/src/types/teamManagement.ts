@@ -43,6 +43,7 @@ export interface ManagedTeam {
   projectName?: string | null;
   projectDescription?: string | null;
   projectStatus?: string | null;
+  hasChatGroup?: boolean;
   chatGroupId?: EntityReference;
   mentorId?: EntityReference;
   lectureId?: EntityReference;

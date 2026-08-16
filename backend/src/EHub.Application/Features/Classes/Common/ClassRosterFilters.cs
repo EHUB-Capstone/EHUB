@@ -1,5 +1,6 @@
 using EHub.Domain.Entities;
 using EHub.Domain.Enums;
+using EHub.Shared.Constants;
 
 namespace EHub.Application.Features.Classes.Common;
 
@@ -45,7 +46,17 @@ internal static class ClassRosterFilters
         if (!string.IsNullOrWhiteSpace(majorCode))
         {
             var normalizedMajor = majorCode.Trim().ToUpperInvariant();
-            query = query.Where(enrollment => enrollment.MajorCodeAtEnrollment.ToUpper() == normalizedMajor);
+            query = query.Where(enrollment =>
+                enrollment.MajorCodeAtEnrollment.ToUpper() == normalizedMajor ||
+                (
+                    (
+                        enrollment.MajorCodeAtEnrollment == null ||
+                        enrollment.MajorCodeAtEnrollment == string.Empty ||
+                        enrollment.MajorCodeAtEnrollment.ToUpper() == MajorCodes.Undeclared
+                    ) &&
+                    enrollment.Student.MajorCode != null &&
+                    enrollment.Student.MajorCode.ToUpper() == normalizedMajor
+                ));
         }
 
         if (status.HasValue)

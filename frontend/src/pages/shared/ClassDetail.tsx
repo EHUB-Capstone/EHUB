@@ -9,10 +9,12 @@ import {
 } from 'lucide-react';
 import { AuthContext } from '../../context/AuthContext';
 import { classApi } from '../../api/classApi';
+import { teamApi } from '../../api/teamApi';
 import LoadingSkeleton from '../../components/ui/LoadingSkeleton';
 import StudentTable from '../../components/class/StudentTable';
 import TeamList from '../../components/class/TeamList';
 import TeamManagementModal from '../../components/class/TeamManagementModal';
+import TeamCreationSummary from '../../components/class/TeamCreationSummary';
 import ImportStudentsModal from '../../components/class/ImportStudentsModal';
 import StudentTeamGeneratePanel from '../../components/class/StudentTeamGeneratePanel';
 import TeamSuggestionTooltip from '../../components/class/TeamSuggestionTooltip';
@@ -25,7 +27,7 @@ import RenameClassModal from '../../components/class/RenameClassModal';
 import VerifyMajorModal from '../../components/class/VerifyMajorModal';
 import AddStudentModal from '../../components/class/AddStudentModal';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
-import { entityId, getTeamMemberIds, normalizeManagedTeam, normalizeTeamProposal } from '../../utils/teamManagement';
+import { getTeamMemberIds, isMissingTeamMajor, normalizeManagedTeam, normalizeTeamProposal } from '../../utils/teamManagement';
 import { classFeatureFlags } from '../../config/classFeatureFlags';
 import { parseApiError } from '../../utils/apiError';
 import { toClassViewModel, unwrapApiData } from '../../utils/classMappers';
@@ -75,12 +77,15 @@ export default function ClassDetail() {
 
   // Selected students for team generation
   const [selected, setSelected] = useState([]);
+  const [selectedStudentSnapshots, setSelectedStudentSnapshots] = useState([]);
+  const [selectedLeaderId, setSelectedLeaderId] = useState('');
 
   // Modals & Actions
   const [showImport, setShowImport] = useState(false);
   const [showTeamManagement, setShowTeamManagement] = useState(false);
   const [teamToEdit, setTeamToEdit] = useState(null);
   const [teamFormMemberIds, setTeamFormMemberIds] = useState([]);
+  const [teamFormLeaderId, setTeamFormLeaderId] = useState('');
   const [showAddStudent, setShowAddStudent] = useState(false);
   const [showEditSchedule, setShowEditSchedule] = useState(false);
   const [showAssignLecturer, setShowAssignLecturer] = useState(false);
@@ -88,6 +93,7 @@ export default function ClassDetail() {
   const [showRename, setShowRename] = useState(false);
   const [showVerify, setShowVerify] = useState(false);
   const [reviewTeam, setReviewTeam] = useState(null);
+  const [teamToDelete, setTeamToDelete] = useState(null);
   const [directionTeam, setDirectionTeam] = useState(null);
   const [studentToDelete, setStudentToDelete] = useState(null);
   const [studentToReEnroll, setStudentToReEnroll] = useState(null);
@@ -98,6 +104,7 @@ export default function ClassDetail() {
   const [reEnrollingStudent, setReEnrollingStudent] = useState(false);
   const [showDeleteClass, setShowDeleteClass] = useState(false);
   const [deletingClass, setDeletingClass] = useState(false);
+  const [deletingTeam, setDeletingTeam] = useState(false);
   const [lifecycleReason, setLifecycleReason] = useState('');
   const [showCompletion, setShowCompletion] = useState(false);
   const [completionReason, setCompletionReason] = useState('');
@@ -168,8 +175,8 @@ export default function ClassDetail() {
         rollNumber: s.rollNumber || s.studentCode,
         fullName: s.fullName,
         email: s.email,
-        major: s.majorCode || s.major,
-        majorCode: s.majorCode || s.major,
+        major: isMissingTeamMajor(s.majorCode) ? (s.profileMajorCode || s.major) : s.majorCode,
+        majorCode: isMissingTeamMajor(s.majorCode) ? (s.profileMajorCode || s.major) : s.majorCode,
         majorVerificationStatus: s.majorVerificationStatus || 'Unverified',
         enrollmentStatus: s.enrollmentStatus || 'Active',
         classId: currentClassId,
@@ -177,8 +184,6 @@ export default function ClassDetail() {
         teamName: s.teamName || null,
         isTeamLeader: s.isTeamLeader || false
       }));
-
-      setStudents(mappedStudents);
 
       let rawTeams = [];
       let rawProposals = [];
@@ -197,8 +202,21 @@ export default function ClassDetail() {
         }
       }
 
-      setTeams(rawTeams.map(normalizeManagedTeam));
-      setTeamProposals(rawProposals.map(normalizeTeamProposal));
+      const normalizedTeams = rawTeams.map(normalizeManagedTeam);
+      const normalizedProposals = rawProposals.map(normalizeTeamProposal);
+      const reservedTeamIds = new Map();
+      normalizedProposals.forEach((proposal) => {
+        const proposalStatus = String(proposal.status || '').toUpperCase();
+        if (!['DRAFT', 'PENDING', 'NEEDS_REVISION', 'NEEDSREVISION'].includes(proposalStatus)) return;
+        getTeamMemberIds(proposal).forEach((studentId) => reservedTeamIds.set(studentId, proposal._id));
+      });
+
+      setStudents(mappedStudents.map((student) => ({
+        ...student,
+        teamId: student.teamId || reservedTeamIds.get(student._id) || null,
+      })));
+      setTeams(normalizedTeams);
+      setTeamProposals(normalizedProposals);
 
       return classData;
     } catch (err) {
@@ -214,20 +232,44 @@ export default function ClassDetail() {
     fetchData();
   }, [fetchData]);
 
+  useEffect(() => {
+    if (selectedLeaderId && !selected.includes(selectedLeaderId)) {
+      setSelectedLeaderId('');
+    }
+  }, [selected, selectedLeaderId]);
+
+  useEffect(() => {
+    setSelectedStudentSnapshots((current) => {
+      const snapshots = new Map(current.map((student) => [student._id, student]));
+      students.forEach((student) => {
+        if (selected.includes(student._id)) {
+          snapshots.set(student._id, student);
+        }
+      });
+
+      return selected
+        .map((studentId) => snapshots.get(studentId))
+        .filter(Boolean);
+    });
+  }, [selected, students]);
+
   const handleTeamCreated = async () => {
     setSelected([]);
+    setSelectedLeaderId('');
     await fetchData();
   };
 
-  const openCreateTeam = (memberIds = []) => {
+  const openCreateTeam = (memberIds = [], leaderId = '') => {
     setTeamToEdit(null);
     setTeamFormMemberIds(memberIds);
+    setTeamFormLeaderId(leaderId);
     setShowTeamManagement(true);
   };
 
   const openEditTeam = (team) => {
     setTeamToEdit(team);
     setTeamFormMemberIds([]);
+    setTeamFormLeaderId('');
     setShowTeamManagement(true);
   };
 
@@ -235,22 +277,29 @@ export default function ClassDetail() {
     setShowTeamManagement(false);
     setTeamToEdit(null);
     setTeamFormMemberIds([]);
+    setTeamFormLeaderId('');
   };
 
-  const handleTeamSaved = (savedTeam) => {
-    const memberIds = new Set(getTeamMemberIds(savedTeam));
-    setTeams(current => (
-      current.some(team => team._id === savedTeam._id)
-        ? current.map(team => team._id === savedTeam._id ? savedTeam : team)
-        : [...current, savedTeam]
-    ));
-    setStudents(current => current.map(student => {
-      if (memberIds.has(student._id)) return { ...student, classId: id, teamId: savedTeam._id };
-      if (entityId(student.teamId) === savedTeam._id) return { ...student, teamId: null };
-      return student;
-    }));
+  const handleTeamSaved = () => {
     setSelected([]);
+    setSelectedLeaderId('');
     closeTeamManagement();
+    void fetchData();
+  };
+
+  const confirmDeleteTeam = async () => {
+    if (!teamToDelete?._id) return;
+    setDeletingTeam(true);
+    try {
+      await teamApi.deleteTeam(teamToDelete._id);
+      toast.success('Team archived and members were unassigned.');
+      setTeamToDelete(null);
+      await fetchData();
+    } catch (error) {
+      toast.error(parseApiError(error, 'Failed to delete the team.').message);
+    } finally {
+      setDeletingTeam(false);
+    }
   };
 
   const handleBackfillChats = async () => {
@@ -397,6 +446,7 @@ export default function ClassDetail() {
 
   const safeStudents = Array.isArray(students) ? students : [];
   const safeTeams    = Array.isArray(teams) ? teams : [];
+  const selectedTeamStudents = selectedStudentSnapshots.filter(student => selected.includes(student._id));
   const unassignedCount = safeStudents.filter(s => !s.teamId).length;
   
   const isAdmin = hasClassRole(user, 'ADMIN');
@@ -404,7 +454,10 @@ export default function ClassDetail() {
   const isReadOnly = isClassReadOnly(cls.status);
   const isArchived = isArchivedClass(cls.status);
   const isCompleted = cls.status === 'Completed';
-  const lifecyclePresentation = getClassLifecyclePresentation(cls.status);
+
+  const canSelectTeamMembers =
+    !isReadOnly && (canManageClass || hasClassRole(user, 'STUDENT'));
+    const lifecyclePresentation = getClassLifecyclePresentation(cls.status);
 
   const getUniqueMentors = () => {
     const teamMentors = safeTeams
@@ -717,9 +770,9 @@ export default function ClassDetail() {
       </div>
 
       {/* ── Team Generation Panel (always visible when students exist) ── */}
-      {teamControlsVisible && safeStudents.length > 0 && selected.length > 0 && (
+      {teamControlsVisible && safeStudents.length > 0 && tab === 'students' && canSelectTeamMembers && (
         <div className="sticky top-20 z-40 rounded-xl bg-white/85 shadow-elevated backdrop-blur-md">
-          {user?.role === 'STUDENT' ? (
+          {user?.role === 'STUDENT' ? selected.length > 0 ? (
             <StudentTeamGeneratePanel
               classId={id}
               selected={selected}
@@ -727,22 +780,20 @@ export default function ClassDetail() {
               onTeamCreated={handleTeamCreated}
               currentStudentId={safeStudents.find(s => s.userId === user._id)?._id}
             />
-          ) : (
-            <div className="flex flex-col gap-2.5 rounded-xl border border-primary-100 bg-white p-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-50 text-primary"><Users className="h-4 w-4" /></div>
-                <div>
-                  <p className="text-sm font-semibold text-slate-800">{selected.length} student{selected.length === 1 ? '' : 's'} selected</p>
-                  <p className="text-[11px] text-slate-500">Continue to enter the team name and review members.</p>
-                </div>
-              </div>
-              <div className="flex flex-col gap-1.5 sm:flex-row">
-                <button onClick={() => runFeatureAction(classFeatureFlags.teamManagement, 'Team management', () => openCreateTeam(selected))} className="inline-flex min-h-8 items-center justify-center gap-1.5 rounded-lg bg-gradient-primary px-2.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:shadow-sm">
-                  <UserPlus className="h-3.5 w-3.5" /> Create team with selected
-                </button>
-              </div>
-            </div>
-          )}
+          ) : null : isAdminOrLecturer ? (
+            <TeamCreationSummary
+              totalStudents={rosterMeta.totalCount || cls.studentCount || safeStudents.length}
+              unassignedStudents={unassignedCount}
+              selectedStudents={selectedTeamStudents}
+              selectedLeaderId={selectedLeaderId}
+              onLeaderChange={setSelectedLeaderId}
+              onCreateTeam={() => runFeatureAction(
+                classFeatureFlags.teamManagement,
+                'Team management',
+                () => openCreateTeam(selected, selectedLeaderId),
+              )}
+            />
+          ) : null}
         </div>
       )}
 
@@ -779,10 +830,11 @@ export default function ClassDetail() {
         ) : tab === 'students' ? (
           <StudentTable
             students={safeStudents}
-            teams={teamControlsVisible ? safeTeams : []}
+            teams={teamControlsVisible ? [...safeTeams, ...teamProposals] : []}
             cls={cls}
-            selected={teamControlsVisible ? selected : []}
-            onSelectionChange={teamControlsVisible ? setSelected : undefined}
+            selected={teamControlsVisible && canSelectTeamMembers ? selected : []}
+            onSelectionChange={teamControlsVisible && canSelectTeamMembers ? setSelected : undefined}
+            maxSelection={6}
             onRefresh={fetchData}
             onDeleteStudent={!isReadOnly && canManageClass ? handleRemoveStudent : undefined}
             onReEnrollStudent={!isReadOnly && canManageClass ? setStudentToReEnroll : undefined}
@@ -802,7 +854,7 @@ export default function ClassDetail() {
               if (Object.prototype.hasOwnProperty.call(next, 'page')) setRosterPage(next.page);
               if (!Object.prototype.hasOwnProperty.call(next, 'page')) setRosterPage(1);
             }}
-            toolbarAction={!isReadOnly && teamControlsVisible && selected.length === 0 ? (
+            toolbarAction={canSelectTeamMembers && teamControlsVisible && selected.length === 0 ? (
               user?.role === 'STUDENT' ? (
                 <TeamSuggestionTooltip label="View team creation guidance">
                   <div className="space-y-2">
@@ -825,14 +877,14 @@ export default function ClassDetail() {
         ) : (
           <TeamList
             teams={[...safeTeams, ...teamProposals]}
-            onReview={!isReadOnly && canManageClass ? (team) => setReviewTeam(team) : undefined}
-            canDelete={!isReadOnly && canManageClass}
-            canManageInfo={!isReadOnly && canManageClass}
-            classStudents={safeStudents}
-            onCreate={!isReadOnly && canManageClass ? () => runFeatureAction(classFeatureFlags.teamManagement, 'Team management', () => openCreateTeam()) : undefined}
-            onEdit={!isReadOnly && canManageClass ? (team) => !team.isProposal && runFeatureAction(classFeatureFlags.teamManagement, 'Team management', () => openEditTeam(team)) : undefined}
-            onDelete={undefined}
-            onProjectDirection={!isReadOnly && classFeatureFlags.projectDirection ? setDirectionTeam : undefined}
+  onReview={!isReadOnly && canManageClass ? (team) => setReviewTeam(team) : undefined}
+  canDelete={!isReadOnly && canManageClass}
+  canManageInfo={!isReadOnly && canManageClass}
+  classStudents={safeStudents}
+  onCreate={!isReadOnly && canManageClass ? () => runFeatureAction(classFeatureFlags.teamManagement, 'Team management', () => openCreateTeam()) : undefined}
+  onEdit={!isReadOnly && canManageClass ? (team) => !team.isProposal && runFeatureAction(classFeatureFlags.teamManagement, 'Team management', () => openEditTeam(team)) : undefined}
+  onDelete={!isReadOnly && canManageClass ? setTeamToDelete : undefined}
+  onProjectDirection={!isReadOnly && classFeatureFlags.projectDirection ? setDirectionTeam : undefined}
           />
         )}
       </motion.div>
@@ -859,6 +911,7 @@ export default function ClassDetail() {
           teams={safeTeams}
           team={teamToEdit}
           initialMemberIds={teamFormMemberIds}
+          initialLeaderId={teamFormLeaderId}
           onClose={closeTeamManagement}
           onSave={handleTeamSaved}
         />
@@ -953,6 +1006,17 @@ export default function ClassDetail() {
           onChanged={fetchData}
         />
       )}
+
+      <ConfirmDialog
+        isOpen={!!teamToDelete}
+        onClose={() => setTeamToDelete(null)}
+        onConfirm={confirmDeleteTeam}
+        isSubmitting={deletingTeam}
+        title={`Delete ${teamToDelete?.teamName || 'this team'}?`}
+        description="This will archive the team, remove the team chat group, and unassign all members. Teams with project, proposal, evaluation, checkpoint, or task data cannot be deleted."
+        confirmText="Delete team"
+        cancelText="Cancel"
+      />
 
       <ConfirmDialog
         isOpen={!!studentToDelete}

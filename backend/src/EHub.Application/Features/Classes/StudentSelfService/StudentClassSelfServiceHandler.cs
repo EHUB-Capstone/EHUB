@@ -190,5 +190,7 @@ public sealed class StudentClassSelfServiceHandler : IStudentClassSelfServiceHan
         .Include(item => item.Class).ThenInclude(item => item.Semester)
         .Include(item => item.Class).ThenInclude(item => item.PrimaryLecturer)
         .Include(item => item.TeamMembers).ThenInclude(member => member.ClassStudent).ThenInclude(enrollment => enrollment.Student)
-        .Include(item => item.MentorAssignments).ThenInclude(assignment => assignment.MentorProfile).ThenInclude(profile => profile.User);
+        .Include(item => item.MentorAssignments).ThenInclude(assignment => assignment.MentorProfile).ThenInclude(profile => profile.User)
+        .Include(item => item.Project)
+        .Include(item => item.ChatGroups);
 }

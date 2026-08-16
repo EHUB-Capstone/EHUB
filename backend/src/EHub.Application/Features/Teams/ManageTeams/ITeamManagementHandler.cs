@@ -9,6 +9,8 @@ public interface ITeamManagementHandler
     Task<Result<IReadOnlyCollection<TeamDto>>> GetForClassAsync(Guid classId, Guid userId, string role, CancellationToken cancellationToken = default);
     Task<Result<TeamDto>> GetAsync(Guid teamId, Guid userId, string role, CancellationToken cancellationToken = default);
     Task<Result<TeamDto>> CreateAsync(Guid classId, CreateTeamRequest request, Guid userId, string role, CancellationToken cancellationToken = default);
+    Task<Result<GenerateClassTeamResponse>> GenerateAsync(Guid classId, GenerateClassTeamRequest request, Guid userId, string role, CancellationToken cancellationToken = default);
     Task<Result<TeamDto>> UpdateMembersAsync(Guid teamId, UpdateTeamMembersRequest request, Guid userId, string role, CancellationToken cancellationToken = default);
     Task<Result<TeamDto>> AssignLeaderAsync(Guid teamId, AssignTeamLeaderRequest request, Guid userId, string role, CancellationToken cancellationToken = default);
+    Task<Result> DeleteAsync(Guid teamId, Guid userId, string role, CancellationToken cancellationToken = default);
 }

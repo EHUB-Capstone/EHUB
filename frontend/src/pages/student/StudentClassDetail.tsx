@@ -84,6 +84,19 @@ export default function StudentClassDetail() {
       || (user?.email && s.email?.toLowerCase() === user.email.toLowerCase());
   });
   const hasTeam = Boolean(currentStudent?.teamId);
+  const reservedProposal = proposals.find((proposal) => {
+    const status = String(proposal.status || '').toUpperCase();
+    return ['DRAFT', 'PENDING', 'NEEDS_REVISION', 'NEEDSREVISION'].includes(status)
+      && getTeamMemberIds(proposal).includes(currentStudent?._id || '');
+  });
+  const canEditReservedProposal = Boolean(
+    proposalToRevise
+    && reservedProposal?._id === proposalToRevise._id
+    && ['NEEDS_REVISION', 'NEEDSREVISION'].includes(String(reservedProposal.status || '').toUpperCase()),
+  );
+  const selectionDisabled = isReadOnly
+    || (hasTeam && !canEditReservedProposal)
+    || Boolean(reservedProposal && !canEditReservedProposal);
 
   const handleTeamCreated = async () => {
     setSelected([]);
@@ -169,12 +182,14 @@ export default function StudentClassDetail() {
             <p className="font-semibold">
               {cls?.classStatus === 'Archived' ? 'Archived class' : 'Completed class'} — history is read-only
             </p>
-            <p className="mt-0.5 text-xs text-blue-700">You can review classmates, teams and proposals, but cannot create or change academic data.</p>
+            <p className="mt-0.5 text-xs text-blue-700">
+              You can review classmates, teams and proposals, but cannot create or change academic data.
+            </p>
           </div>
         </div>
       )}
 
-      {!isReadOnly && students.length > 0 && !hasTeam && selected.length > 0 && (
+      {students.length > 0 && !selectionDisabled && selected.length > 0 && (
         <div className="sticky top-20 z-30 rounded-2xl bg-white/80 shadow-xl backdrop-blur-md">
           <StudentTeamGeneratePanel
             classId={id}
@@ -221,14 +236,14 @@ export default function StudentClassDetail() {
           onSelectionChange={setSelected}
           onRefresh={fetchClassDetail}
           maxSelection={6}
-          selectionDisabled={hasTeam || isReadOnly}
-          toolbarAction={!isReadOnly && !hasTeam && selected.length === 0 ? (
-            <TeamSuggestionTooltip label="View team creation guidance">
+          selectionDisabled={selectionDisabled}
+          toolbarAction={!selectionDisabled && selected.length === 0 ? (
+            <TeamSuggestionTooltip label="Xem hướng dẫn tạo nhóm">
               <div className="space-y-2">
-                <p className="font-semibold text-white">Team creation guidance</p>
+                <p className="font-semibold text-white">Hướng dẫn tạo nhóm</p>
                 <p className="text-slate-200">
-                  Select yourself and the other members in the table to begin. A team requires 4–6 members,
-                  including at least one BBA student and one BIT student.
+                  Chọn chính bạn và các thành viên trong bảng để bắt đầu. Nhóm cần 4–6 thành viên,
+                  có ít nhất một sinh viên nhóm BBA và một sinh viên nhóm BIT.
                 </p>
               </div>
             </TeamSuggestionTooltip>
@@ -241,13 +256,13 @@ export default function StudentClassDetail() {
           canDelete={false}
           canManageInfo={false}
           currentStudentId={currentStudent?._id}
-          onRevise={isReadOnly ? undefined : (proposal) => {
+          onRevise={(proposal) => {
             setProposalToRevise(proposal);
             setSelected(getTeamMemberIds(proposal));
             setActiveTab('classmates');
           }}
-          onProjectDirection={isReadOnly ? undefined : setDirectionTeam}
-          onCancelProposal={isReadOnly ? undefined : cancelProposal}
+          onProjectDirection={setDirectionTeam}
+          onCancelProposal={cancelProposal}
         />
       )}
 
