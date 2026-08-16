@@ -12,6 +12,7 @@ public sealed class GetClassesRequest
     public string? SubjectCode { get; init; }
     public int? Year { get; init; }
     public string? Status { get; init; }
+    public string? AssignmentStatus { get; init; }
     public string? Search { get; init; }
     public int Page { get; init; } = 1;
     public int PageSize { get; init; } = 10;

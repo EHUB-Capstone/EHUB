@@ -268,7 +268,7 @@ public sealed class ClassSafetyHotfixIntegrationTests
     }
 
     [Fact]
-    public async Task LecturerCreatedClass_StaysDraftUntilScheduleMakesItActive()
+    public async Task AdminCreatedAssignedClass_StaysDraftUntilAssignedLecturerAddsSchedule()
     {
         using var scope = _factory.Services.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -289,10 +289,11 @@ public sealed class ClassSafetyHotfixIntegrationTests
             {
                 CourseId = sourceClass.CourseId,
                 SemesterId = sourceClass.SemesterId,
-                ClassIndex = nextIndex
+                ClassIndex = nextIndex,
+                PrimaryLecturerId = seed.LecturerId
             },
-            seed.LecturerId,
-            SystemRoles.Lecturer);
+            seed.AdminId,
+            SystemRoles.Admin);
 
         createResult.IsSuccess.Should().BeTrue();
         createResult.Value.Status.Should().Be(nameof(ClassStatus.Draft));
@@ -323,6 +324,113 @@ public sealed class ClassSafetyHotfixIntegrationTests
 
         scheduleResult.IsSuccess.Should().BeTrue();
         scheduleResult.Value.Status.Should().Be(nameof(ClassStatus.Active));
+    }
+
+    [Fact]
+    public async Task AdminCanCreateUnassignedClassThenAssignItToLecturer()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateClassSeedAsync(context, "create-then-assign");
+        var sourceClass = await context.Classes.AsNoTracking().SingleAsync(@class => @class.Id == seed.ClassId);
+        var nextIndex = 2;
+        while (await context.Classes.AnyAsync(@class =>
+                   @class.SemesterId == sourceClass.SemesterId &&
+                   @class.CourseId == sourceClass.CourseId &&
+                   @class.ClassIndex == nextIndex))
+        {
+            nextIndex++;
+        }
+
+        var createResult = await new CreateClassCommandHandler(context).HandleAsync(
+            new CreateClassRequest
+            {
+                CourseId = sourceClass.CourseId,
+                SemesterId = sourceClass.SemesterId,
+                ClassIndex = nextIndex,
+                PrimaryLecturerId = null
+            },
+            seed.AdminId,
+            SystemRoles.Admin);
+
+        createResult.IsSuccess.Should().BeTrue();
+        createResult.Value.Status.Should().Be(nameof(ClassStatus.Draft));
+        createResult.Value.PrimaryLecturerId.Should().BeNull();
+        context.ChangeTracker.Clear();
+
+        var assignResult = await new UpdateClassCommandHandler(
+                context,
+                scope.ServiceProvider.GetRequiredService<IUnitOfWork>())
+            .UpdateTeachingAssignmentAsync(
+                createResult.Value.Id,
+                new UpdateTeachingAssignmentRequest
+                {
+                    PrimaryLecturerId = seed.LecturerId,
+                    RowVersion = createResult.Value.RowVersion
+                },
+                seed.AdminId,
+                SystemRoles.Admin);
+
+        assignResult.IsSuccess.Should().BeTrue();
+        assignResult.Value.PrimaryLecturerId.Should().Be(seed.LecturerId);
+        assignResult.Value.Status.Should().Be(nameof(ClassStatus.Draft));
+        context.ChangeTracker.Clear();
+        var persistedClass = await context.Classes.AsNoTracking()
+            .SingleAsync(@class => @class.Id == createResult.Value.Id);
+        persistedClass.PrimaryLecturerId.Should().Be(seed.LecturerId);
+        (await context.ClassLecturers.AsNoTracking().CountAsync(assignment =>
+            assignment.ClassId == createResult.Value.Id &&
+            assignment.LecturerId == seed.LecturerId &&
+            assignment.IsPrimary)).Should().Be(1);
+    }
+
+    [Fact]
+    public async Task LecturerCannotCreateClassesThroughSingleOrBulkEndpoints()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateClassSeedAsync(context, "admin-only-create");
+        var sourceClass = await context.Classes.AsNoTracking().SingleAsync(@class => @class.Id == seed.ClassId);
+        var lecturer = await context.Users.SingleAsync(user => user.Id == seed.LecturerId);
+        var token = GenerateToken(scope.ServiceProvider, lecturer, SystemRoles.Lecturer);
+        var nextIndex = 2;
+        while (await context.Classes.AnyAsync(@class =>
+                   @class.SemesterId == sourceClass.SemesterId &&
+                   @class.CourseId == sourceClass.CourseId &&
+                   @class.ClassIndex == nextIndex))
+        {
+            nextIndex++;
+        }
+
+        using var singleRequest = CreateAuthorizedPostRequest(
+            "/api/classes",
+            token,
+            new CreateClassRequest
+            {
+                CourseId = sourceClass.CourseId,
+                SemesterId = sourceClass.SemesterId,
+                ClassIndex = nextIndex
+            });
+        var singleResponse = await _client.SendAsync(singleRequest);
+
+        using var bulkPreviewRequest = CreateAuthorizedPostRequest(
+            "/api/classes/bulk/preview",
+            token,
+            new CreateBulkClassesRequest
+            {
+                CourseId = sourceClass.CourseId,
+                SemesterId = sourceClass.SemesterId,
+                ClassIndices = [nextIndex]
+            });
+        var bulkPreviewResponse = await _client.SendAsync(bulkPreviewRequest);
+
+        singleResponse.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        bulkPreviewResponse.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        context.ChangeTracker.Clear();
+        (await context.Classes.AsNoTracking().AnyAsync(@class =>
+            @class.SemesterId == sourceClass.SemesterId &&
+            @class.CourseId == sourceClass.CourseId &&
+            @class.ClassIndex == nextIndex)).Should().BeFalse();
     }
 
     [Fact]

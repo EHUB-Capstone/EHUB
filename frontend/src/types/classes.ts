@@ -67,6 +67,7 @@ export interface GetClassesParams {
   year?: number;
   subjectCode?: string;
   status?: ClassStatus | '';
+  assignmentStatus?: 'Assigned' | 'Unassigned' | '';
   search?: string;
   page?: number;
   pageSize?: number;

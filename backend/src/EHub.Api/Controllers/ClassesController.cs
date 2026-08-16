@@ -114,6 +114,7 @@ public sealed class ClassesController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Policy = SystemPolicies.AdminOnly)]
     public async Task<IActionResult> CreateClass(
         [FromBody] CreateClassRequest request,
         [FromServices] ICreateClassCommandHandler commandHandler,
@@ -140,6 +141,7 @@ public sealed class ClassesController : ControllerBase
     }
 
     [HttpPost("bulk/preview")]
+    [Authorize(Policy = SystemPolicies.AdminOnly)]
     public async Task<IActionResult> PreviewBulkClasses(
         [FromBody] CreateBulkClassesRequest request,
         [FromServices] ICreateBulkClassesCommandHandler commandHandler,
@@ -165,6 +167,7 @@ public sealed class ClassesController : ControllerBase
     }
 
     [HttpPost("bulk/commit")]
+    [Authorize(Policy = SystemPolicies.AdminOnly)]
     public async Task<IActionResult> CreateBulkClasses(
         [FromBody] CreateBulkClassesRequest request,
         [FromServices] ICreateBulkClassesCommandHandler commandHandler,
