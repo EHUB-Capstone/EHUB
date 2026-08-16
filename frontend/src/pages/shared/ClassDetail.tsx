@@ -457,7 +457,7 @@ export default function ClassDetail() {
 
   const canSelectTeamMembers =
     !isReadOnly && (canManageClass || hasClassRole(user, 'STUDENT'));
-    const lifecyclePresentation = getClassLifecyclePresentation(cls.status);
+  const lifecyclePresentation = getClassLifecyclePresentation(cls.status);
 
   const getUniqueMentors = () => {
     const teamMentors = safeTeams
@@ -780,7 +780,7 @@ export default function ClassDetail() {
               onTeamCreated={handleTeamCreated}
               currentStudentId={safeStudents.find(s => s.userId === user._id)?._id}
             />
-          ) : null : isAdminOrLecturer ? (
+          ) : null : canManageClass ? (
             <TeamCreationSummary
               totalStudents={rosterMeta.totalCount || cls.studentCount || safeStudents.length}
               unassignedStudents={unassignedCount}
@@ -877,14 +877,14 @@ export default function ClassDetail() {
         ) : (
           <TeamList
             teams={[...safeTeams, ...teamProposals]}
-  onReview={!isReadOnly && canManageClass ? (team) => setReviewTeam(team) : undefined}
-  canDelete={!isReadOnly && canManageClass}
-  canManageInfo={!isReadOnly && canManageClass}
-  classStudents={safeStudents}
-  onCreate={!isReadOnly && canManageClass ? () => runFeatureAction(classFeatureFlags.teamManagement, 'Team management', () => openCreateTeam()) : undefined}
-  onEdit={!isReadOnly && canManageClass ? (team) => !team.isProposal && runFeatureAction(classFeatureFlags.teamManagement, 'Team management', () => openEditTeam(team)) : undefined}
-  onDelete={!isReadOnly && canManageClass ? setTeamToDelete : undefined}
-  onProjectDirection={!isReadOnly && classFeatureFlags.projectDirection ? setDirectionTeam : undefined}
+            onReview={!isReadOnly && canManageClass ? (team) => setReviewTeam(team) : undefined}
+            canDelete={!isReadOnly && canManageClass}
+            canManageInfo={!isReadOnly && canManageClass}
+            classStudents={safeStudents}
+            onCreate={!isReadOnly && canManageClass ? () => runFeatureAction(classFeatureFlags.teamManagement, 'Team management', () => openCreateTeam()) : undefined}
+            onEdit={!isReadOnly && canManageClass ? (team) => !team.isProposal && runFeatureAction(classFeatureFlags.teamManagement, 'Team management', () => openEditTeam(team)) : undefined}
+            onDelete={!isReadOnly && canManageClass ? setTeamToDelete : undefined}
+            onProjectDirection={!isReadOnly && classFeatureFlags.projectDirection ? setDirectionTeam : undefined}
           />
         )}
       </motion.div>
