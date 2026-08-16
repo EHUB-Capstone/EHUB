@@ -4,6 +4,7 @@ import { useSearchParams } from 'react-router-dom';
 import io from 'socket.io-client';
 import { AuthContext } from '../../context/AuthContext';
 import { chatApi } from '../../api/chatApi';
+import { runtimeConfig } from '../../config/runtimeConfig';
 import {
   MessageSquare, Send, Users, Shield, GraduationCap, Star,
   Search, Loader2, Clock, User, Paperclip, Pencil, X,
@@ -11,8 +12,6 @@ import {
   ThumbsUp, PartyPopper, Lightbulb, Heart, Sparkles
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-
-const SOCKET_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace(/\/api$/, '');
 // ─── Role helpers ────────────────────────────────────────────────────────────
 const roleConfig = {
   ADMIN:    { color: 'bg-red-50 text-red-700 border-red-200',     icon: <Shield       className="w-3 h-3 text-red-500 shrink-0" />,     label: 'Admin' },
@@ -384,9 +383,14 @@ export default function GroupChat() {
 
   // ─── Socket.io ───────────────────────────────────────────────────────────
   useEffect(() => {
+    if (!runtimeConfig.realtime.enabled) {
+      socketRef.current = null;
+      return;
+    }
+
     let socket = null;
     try {
-      socket = io(SOCKET_URL, {
+      socket = io(runtimeConfig.realtime.origin, {
         withCredentials: true,
         transports: ['websocket', 'polling'],
         autoConnect: false,
@@ -458,7 +462,7 @@ export default function GroupChat() {
 
   // ─── Join Room, Load History & build Nickname Map ───────────────────────────
   useEffect(() => {
-    if (!selectedChannel || !socketRef.current) return;
+    if (!selectedChannel) return;
     selectedChannelRef.current = selectedChannel; // track for reconnect
     const joinAndLoad = async () => {
       setLoadingMessages(true);
@@ -470,9 +474,9 @@ export default function GroupChat() {
       setActiveStickerCategory('popular');
       setReactionPickerMessageId(null);
       try {
-        socketRef.current.emit('leave_room', selectedChannel._id);
+        socketRef.current?.emit('leave_room', selectedChannel._id);
         // Only join if socket is already connected; connect handler handles the rest
-        if (socketRef.current.connected) {
+        if (socketRef.current?.connected) {
           socketRef.current.emit('join_room', selectedChannel._id);
         }
 
@@ -543,8 +547,13 @@ export default function GroupChat() {
   // ─── Send Message ─────────────────────────────────────────────────────────
   const handleSendMessage = async (e) => {
     e.preventDefault();
-    if (!selectedChannel || !socketRef.current) return;
+    if (!selectedChannel) return;
     if (!inputText.trim() && !selectedFile) return;
+
+    if (!runtimeConfig.realtime.enabled || !socketRef.current) {
+      toast.error('Real-time chat is not enabled in this environment.');
+      return;
+    }
 
     if (editingMessage) {
       socketRef.current.emit('edit_message', {
@@ -582,12 +591,12 @@ export default function GroupChat() {
     const senderRole = validRoles.includes(rawRole) ? rawRole : 'STUDENT';
 
     if (!currentUserIdString) {
-      toast.error('Không thể gửi tin nhắn: chưa xác thực người dùng.');
+      toast.error('Unable to send the message because the user is not authenticated.');
       return;
     }
 
     if (!socketRef.current?.connected) {
-      toast.error('Mất kết nối real-time. Đang thử kết nối lại...');
+      toast.error('The real-time connection was lost. Please try again shortly.');
       return;
     }
 

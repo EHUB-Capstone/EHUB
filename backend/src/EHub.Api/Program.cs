@@ -5,15 +5,14 @@ using EHub.Api.Filters;
 using EHub.Application;
 using EHub.Contracts.Common;
 using EHub.Infrastructure;
-using EHub.Infrastructure.Persistence;
-using EHub.Infrastructure.Persistence.Seed;
 using EHub.Shared.Errors;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Configuration.ValidateRuntimeConfiguration(builder.Environment);
 
 // Configure Serilog
 Log.Logger = new LoggerConfiguration()
@@ -74,32 +73,47 @@ static string ConvertToCamelCase(string s)
 
 // Setup infrastructure extensions
 builder.Services.AddSwaggerDocumentation();
-builder.Services.AddCorsPolicy(builder.Configuration);
+builder.Services.AddCorsPolicy(builder.Configuration, builder.Environment);
 builder.Services.AddApplicationHealthChecks();
 
+if (builder.Configuration.GetValue<bool>("ReverseProxy:Enabled"))
+{
+    builder.Services.Configure<ForwardedHeadersOptions>(options =>
+    {
+        options.ForwardedHeaders =
+            ForwardedHeaders.XForwardedFor |
+            ForwardedHeaders.XForwardedProto;
+        options.ForwardLimit = 1;
+
+        // Render terminates public TLS at its managed reverse proxy. Only
+        // enable this setting when the app is reachable exclusively through a
+        // trusted hosting reverse proxy, as it is in the staging topology.
+        options.KnownIPNetworks.Clear();
+        options.KnownProxies.Clear();
+    });
+}
+
 var app = builder.Build();
+
+if (builder.Configuration.GetValue<bool>("ReverseProxy:Enabled"))
+{
+    // Must run before HTTPS redirection, authentication, and URL generation.
+    app.UseForwardedHeaders();
+}
 
 // Global Exception Handling at the beginning
 app.UseGlobalExceptionHandling();
 
+if (DatabaseInitializationExtensions.IsInitializationRequested(args))
+{
+    await app.Services.InitializeDatabaseAsync();
+    return;
+}
+
 // Auto-migrate and seed in Development environment
 if (app.Environment.IsDevelopment())
 {
-    using var scope = app.Services.CreateScope();
-    var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    var configuration = scope.ServiceProvider.GetRequiredService<Microsoft.Extensions.Configuration.IConfiguration>();
-    var passwordHasher = scope.ServiceProvider.GetRequiredService<EHub.Application.Common.Interfaces.Identity.IPasswordHasher>();
-    try
-    {
-        await context.Database.MigrateAsync();
-        await DatabaseSeeder.SeedAllAsync(context, configuration, passwordHasher);
-    }
-    catch (Exception ex)
-    {
-        var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-        logger.LogCritical(ex, "Database migration or seeding failed. The API will not start with a partial schema.");
-        throw;
-    }
+    await app.Services.InitializeDatabaseAsync();
 }
 
 // Configure the HTTP request pipeline.
