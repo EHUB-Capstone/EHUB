@@ -1,89 +1,48 @@
 // @ts-nocheck
 // frontend/src/api/evaluationApi.js
-import axios from 'axios';
-
-const getBaseUrl = () => {
-  const envUrl = import.meta.env.VITE_API_URL;
-  if (!envUrl) return 'http://localhost:5000/api';
-  return envUrl.endsWith('/api') ? envUrl : `${envUrl}/api`;
-};
-const API_URL = getBaseUrl();
-
-const getAuthHeaders = () => {
-  const token = localStorage.getItem('token');
-  return {
-    headers: {
-      Authorization: `Bearer ${token}`
-    }
-  };
-};
+import axiosClient from './axiosClient';
 
 export const evaluationApi = {
   // Legacy Module 1 Methods
   getByStartup: async (startupIdeaId) => {
-    const res = await axios.get(`${API_URL}/evaluations/startup/${startupIdeaId}`, getAuthHeaders());
-    return res.data;
+    return axiosClient.get(`/evaluations/startup/${startupIdeaId}`);
   },
   create: async (evaluationData) => {
-    const response = await axios.post(`${API_URL}/evaluations`, evaluationData, getAuthHeaders());
-    return response.data;
+    return axiosClient.post('/evaluations', evaluationData);
   },
 
   // Module 4 Methods
   getTeamEvaluations: async (teamId) => {
-    const response = await axios.get(`${API_URL}/evaluations/team/${teamId}`, getAuthHeaders());
-    return response.data;
+    return axiosClient.get(`/evaluations/team/${teamId}`);
   },
   createTeamEvaluation: async (teamId, evaluationData) => {
-    const response = await axios.post(`${API_URL}/evaluations/team/${teamId}`, evaluationData, getAuthHeaders());
-    return response.data;
+    return axiosClient.post(`/evaluations/team/${teamId}`, evaluationData);
   },
   updateTeamEvaluation: async (evaluationId, evaluationData) => {
-    const response = await axios.put(`${API_URL}/evaluations/team/${evaluationId}`, evaluationData, getAuthHeaders());
-    return response.data;
+    return axiosClient.put(`/evaluations/team/${evaluationId}`, evaluationData);
   },
   submitTeamEvaluation: async (evaluationId) => {
-    const response = await axios.put(`${API_URL}/evaluations/team/${evaluationId}/submit`, {}, getAuthHeaders());
-    return response.data;
+    return axiosClient.put(`/evaluations/team/${evaluationId}/submit`, {});
   },
 
   // Checkpoint-specific Methods
   getCheckpointEvaluations: async (teamId, checkpointNumber) => {
-    const response = await axios.get(
-      `${API_URL}/evaluations/team/${teamId}/checkpoints/${checkpointNumber}`,
-      getAuthHeaders()
-    );
-    return response.data;
+    return axiosClient.get(`/evaluations/team/${teamId}/checkpoints/${checkpointNumber}`);
   },
   getCheckpointSummary: async (teamId, checkpointNumber) => {
-    const response = await axios.get(
-      `${API_URL}/evaluations/team/${teamId}/checkpoints/${checkpointNumber}/summary`,
-      getAuthHeaders()
-    );
-    return response.data;
+    return axiosClient.get(`/evaluations/team/${teamId}/checkpoints/${checkpointNumber}/summary`);
   },
   getCheckpointHistory: async (teamId, checkpointNumber) => {
-    const response = await axios.get(
-      `${API_URL}/evaluations/team/${teamId}/checkpoints/${checkpointNumber}/history`,
-      getAuthHeaders()
-    );
-    return response.data;
+    return axiosClient.get(`/evaluations/team/${teamId}/checkpoints/${checkpointNumber}/history`);
   },
   createCheckpointEvaluation: async (teamId, checkpointNumber, evaluationData) => {
-    const response = await axios.post(
-      `${API_URL}/evaluations/team/${teamId}/checkpoints/${checkpointNumber}`,
-      evaluationData,
-      getAuthHeaders()
-    );
-    return response.data;
+    return axiosClient.post(`/evaluations/team/${teamId}/checkpoints/${checkpointNumber}`, evaluationData);
   },
   updateCheckpointEvaluation: async (evaluationId, evaluationData) => {
-    const response = await axios.put(`${API_URL}/evaluations/team/${evaluationId}`, evaluationData, getAuthHeaders());
-    return response.data;
+    return axiosClient.put(`/evaluations/team/${evaluationId}`, evaluationData);
   },
   submitCheckpointEvaluation: async (evaluationId) => {
-    const response = await axios.put(`${API_URL}/evaluations/team/${evaluationId}/submit`, {}, getAuthHeaders());
-    return response.data;
+    return axiosClient.put(`/evaluations/team/${evaluationId}/submit`, {});
   },
 };
 

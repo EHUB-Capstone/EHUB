@@ -18,6 +18,7 @@ import EmptyState from '../../components/ui/EmptyState';
 import ErrorState from '../../components/ui/ErrorState';
 import LoadingSkeleton from '../../components/ui/LoadingSkeleton';
 import StatCard from '../../components/ui/StatCard';
+import { runtimeConfig } from '../../config/runtimeConfig';
 
 type AnyRecord = Record<string, any>;
 const roleColors: Record<string, string> = { ADMIN: '#dc2626', LECTURER: '#7c3aed', MENTOR: '#d97706', STUDENT: '#2563eb' };
@@ -85,8 +86,12 @@ export default function AdminDashboard() {
   useEffect(() => { void loadTracking(); }, [loadTracking]);
   useEffect(() => { void loadOnline(); const timer = window.setInterval(() => void loadOnline(), 30000); return () => window.clearInterval(timer); }, [loadOnline]);
   useEffect(() => {
-    const url = (import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api').replace(/\/api$/, '');
-    const socket = io(url, { withCredentials: true, transports: ['websocket', 'polling'], reconnection: true });
+    if (!runtimeConfig.realtime.enabled) {
+      setSocketConnected(false);
+      return;
+    }
+
+    const socket = io(runtimeConfig.realtime.origin, { withCredentials: true, transports: ['websocket', 'polling'], reconnection: true });
     socket.on('connect', () => setSocketConnected(true));
     socket.on('disconnect', () => setSocketConnected(false));
     const refreshPresence = () => void onlineLoaderRef.current();

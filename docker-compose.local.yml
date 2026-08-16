@@ -63,8 +63,8 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        VITE_API_BASE_URL: /api
         VITE_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+        VITE_ENABLE_REALTIME: "false"
     ports:
       - "3000:80"
     depends_on:
