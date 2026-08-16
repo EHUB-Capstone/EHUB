@@ -78,7 +78,9 @@ public static class DependencyInjection
         services.AddScoped<EHub.Application.Features.Classes.VerifyClassMajors.IVerifyClassMajorsCommandHandler, EHub.Application.Features.Classes.VerifyClassMajors.VerifyClassMajorsCommandHandler>();
         services.AddScoped<EHub.Application.Features.Classes.SetEnrollmentMajorLock.ISetEnrollmentMajorLockCommandHandler, EHub.Application.Features.Classes.SetEnrollmentMajorLock.SetEnrollmentMajorLockCommandHandler>();
         services.AddScoped<EHub.Application.Features.Classes.ClassLifecycle.IClassLifecycleCommandHandler, EHub.Application.Features.Classes.ClassLifecycle.ClassLifecycleCommandHandler>();
+        services.AddScoped<EHub.Application.Features.Classes.ClassCompletion.IClassCompletionCommandHandler, EHub.Application.Features.Classes.ClassCompletion.ClassCompletionCommandHandler>();
         services.AddScoped<EHub.Application.Features.Classes.ClassAudit.IGetClassAuditQueryHandler, EHub.Application.Features.Classes.ClassAudit.GetClassAuditQueryHandler>();
+        services.AddScoped<EHub.Application.Features.Classes.RepairChatMemberships.IRepairClassChatMembershipsCommandHandler, EHub.Application.Features.Classes.RepairChatMemberships.RepairClassChatMembershipsCommandHandler>();
         services.AddScoped<EHub.Application.Features.Teams.ManageTeams.ITeamManagementHandler, EHub.Application.Features.Teams.ManageTeams.TeamManagementHandler>();
         services.AddScoped<EHub.Application.Features.Teams.MentorAssignments.IMentorAssignmentHandler, EHub.Application.Features.Teams.MentorAssignments.MentorAssignmentHandler>();
         services.AddScoped<EHub.Application.Features.Teams.TeamProposals.ITeamProposalHandler, EHub.Application.Features.Teams.TeamProposals.TeamProposalHandler>();

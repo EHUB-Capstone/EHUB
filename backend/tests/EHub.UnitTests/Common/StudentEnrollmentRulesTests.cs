@@ -37,6 +37,34 @@ public sealed class StudentEnrollmentRulesTests
     }
 
     [Fact]
+    public void ValidateAndNormalize_WithMissingMajor_AllowsExplicitDeferredResolution()
+    {
+        var error = StudentEnrollmentRules.ValidateAndNormalize(
+            "SE123456",
+            "Nguyen Van A",
+            "a@fpt.edu.vn",
+            null,
+            out var input,
+            allowMissingMajor: true);
+
+        error.Should().BeNull();
+        input.MajorCode.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void ValidateAndNormalize_WithMissingMajor_RejectsItByDefault()
+    {
+        var error = StudentEnrollmentRules.ValidateAndNormalize(
+            "SE123456",
+            "Nguyen Van A",
+            "a@fpt.edu.vn",
+            null,
+            out _);
+
+        error.Should().Be("Major code is required.");
+    }
+
+    [Fact]
     public void ValidateAndNormalize_WithUndeclaredMajor_RequiresExplicitImportOptIn()
     {
         var defaultError = StudentEnrollmentRules.ValidateAndNormalize(

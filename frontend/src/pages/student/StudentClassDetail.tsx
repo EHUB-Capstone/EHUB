@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ChevronLeft, GraduationCap, Users, Mail, Loader2, LayoutGrid } from 'lucide-react';
+import { ChevronLeft, GraduationCap, Users, Mail, Loader2, LayoutGrid, Lock } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { classApi } from '../../api/classApi';
 import TeamList from '../../components/class/TeamList';
@@ -76,6 +76,7 @@ export default function StudentClassDetail() {
   const students = Array.isArray(data?.students) ? data.students : [];
   const teams    = Array.isArray(data?.teams) ? data.teams : [];
   const lecturer = cls?.lectureId;
+  const isReadOnly = cls?.classStatus === 'Completed' || cls?.classStatus === 'Archived';
   const currentUserId = (user?._id || user?.id || '').toString();
   const currentStudent = students.find(s => {
     const studentUserId = (s.userId?._id || s.userId || '').toString();
@@ -93,7 +94,9 @@ export default function StudentClassDetail() {
     && reservedProposal?._id === proposalToRevise._id
     && ['NEEDS_REVISION', 'NEEDSREVISION'].includes(String(reservedProposal.status || '').toUpperCase()),
   );
-  const selectionDisabled = hasTeam || Boolean(reservedProposal && !canEditReservedProposal);
+  const selectionDisabled = isReadOnly
+    || (hasTeam && !canEditReservedProposal)
+    || Boolean(reservedProposal && !canEditReservedProposal);
 
   const handleTeamCreated = async () => {
     setSelected([]);
@@ -172,6 +175,20 @@ export default function StudentClassDetail() {
         </div>
       </div>
 
+      {isReadOnly && (
+        <div className="flex items-start gap-2.5 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+          <Lock className="mt-0.5 h-4 w-4 shrink-0" />
+          <div>
+            <p className="font-semibold">
+              {cls?.classStatus === 'Archived' ? 'Archived class' : 'Completed class'} — history is read-only
+            </p>
+            <p className="mt-0.5 text-xs text-blue-700">
+              You can review classmates, teams and proposals, but cannot create or change academic data.
+            </p>
+          </div>
+        </div>
+      )}
+
       {students.length > 0 && !selectionDisabled && selected.length > 0 && (
         <div className="sticky top-20 z-30 rounded-2xl bg-white/80 shadow-xl backdrop-blur-md">
           <StudentTeamGeneratePanel
@@ -218,7 +235,7 @@ export default function StudentClassDetail() {
           selected={selected}
           onSelectionChange={setSelected}
           onRefresh={fetchClassDetail}
-          maxSelection={7}
+          maxSelection={6}
           selectionDisabled={selectionDisabled}
           toolbarAction={!selectionDisabled && selected.length === 0 ? (
             <TeamSuggestionTooltip label="Xem hướng dẫn tạo nhóm">

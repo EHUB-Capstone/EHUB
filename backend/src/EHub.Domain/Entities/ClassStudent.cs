@@ -22,6 +22,9 @@ public class ClassStudent
 
     public EnrollmentStatus EnrollmentStatus { get; set; } = EnrollmentStatus.Active;
     public bool CountsTowardCourseSemesterLimit { get; set; } = true;
+    public DateTime? CompletedAtUtc { get; set; }
+    public Guid? CompletedByUserId { get; set; }
+    public virtual User? CompletedByUser { get; set; }
 
     // Enrollment snapshot: lecturers may correct/verify this value without
     // mutating the student's global profile major.

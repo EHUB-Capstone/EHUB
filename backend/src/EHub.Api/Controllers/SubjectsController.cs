@@ -7,6 +7,7 @@ using EHub.Application.Features.Subjects.Rubrics;
 using EHub.Contracts.Common;
 using EHub.Contracts.Subjects;
 using EHub.Shared.Constants;
+using EHub.Shared.Errors;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -116,10 +117,56 @@ public sealed class SubjectsController : ControllerBase
     {
         var result = await _semesterHandler.SetAsync(request, cancellationToken);
         return result.IsFailure
-            ? BadRequest(ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code))
+            ? ToSemesterErrorResponse(result.Error)
             : Ok(ApiResponse<CurrentSemesterResponse>.SuccessResponse(
                 result.Value!,
                 "Active semester updated successfully."));
+    }
+
+    [HttpGet("semesters")]
+    public async Task<IActionResult> GetSemesters(CancellationToken cancellationToken)
+    {
+        var result = await _semesterHandler.GetAllAsync(cancellationToken);
+        return result.IsFailure
+            ? ToSemesterErrorResponse(result.Error)
+            : Ok(ApiResponse<SemesterListResponse>.SuccessResponse(result.Value!, "Semesters retrieved successfully."));
+    }
+
+    [HttpGet("semesters/{id:guid}/completion-preview")]
+    [Authorize(Policy = SystemPolicies.AdminOnly)]
+    public async Task<IActionResult> PreviewSemesterCompletion(Guid id, CancellationToken cancellationToken)
+    {
+        var result = await _semesterHandler.PreviewCompletionAsync(id, cancellationToken);
+        return result.IsFailure
+            ? ToSemesterErrorResponse(result.Error)
+            : Ok(ApiResponse<SemesterCompletionPreviewResponse>.SuccessResponse(
+                result.Value!, "Semester completion preview generated successfully."));
+    }
+
+    [HttpPost("semesters/{id:guid}/complete")]
+    [Authorize(Policy = SystemPolicies.AdminOnly)]
+    public async Task<IActionResult> CompleteSemester(
+        Guid id,
+        [FromBody] ChangeSemesterLifecycleRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await _semesterHandler.CompleteAsync(id, request, cancellationToken);
+        return result.IsFailure
+            ? ToSemesterErrorResponse(result.Error)
+            : Ok(ApiResponse<SemesterResponse>.SuccessResponse(result.Value!, "Semester completed successfully."));
+    }
+
+    [HttpPost("semesters/{id:guid}/reopen")]
+    [Authorize(Policy = SystemPolicies.AdminOnly)]
+    public async Task<IActionResult> ReopenSemester(
+        Guid id,
+        [FromBody] ChangeSemesterLifecycleRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await _semesterHandler.ReopenAsync(id, request, cancellationToken);
+        return result.IsFailure
+            ? ToSemesterErrorResponse(result.Error)
+            : Ok(ApiResponse<SemesterResponse>.SuccessResponse(result.Value!, "Semester reopened successfully."));
     }
 
     [HttpGet("teaching-staff")]
@@ -274,6 +321,21 @@ public sealed class SubjectsController : ControllerBase
         return result.Error.Code == "NOT_FOUND"
             ? NotFound(ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code))
             : BadRequest(ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
+    }
+
+    private IActionResult ToSemesterErrorResponse(Error error)
+    {
+        var response = ApiResponse<object>.FailureResponse(error.Message, error.Code);
+        return error.Code switch
+        {
+            ErrorCodes.ClassAccessDenied => StatusCode(StatusCodes.Status403Forbidden, response),
+            ErrorCodes.SemesterNotFound => NotFound(response),
+            ErrorCodes.SemesterConcurrencyConflict or
+            ErrorCodes.SemesterActivationBlocked or
+            ErrorCodes.SemesterCompletionBlocked or
+            ErrorCodes.SemesterInvalidState => Conflict(response),
+            _ => BadRequest(response),
+        };
     }
 
 }

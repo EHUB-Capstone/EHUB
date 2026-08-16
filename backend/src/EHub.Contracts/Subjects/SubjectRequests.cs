@@ -19,6 +19,12 @@ public sealed class SetCurrentSemesterRequest
     public int Year { get; init; }
 }
 
+public sealed class ChangeSemesterLifecycleRequest
+{
+    public string RowVersion { get; init; } = string.Empty;
+    public string Reason { get; init; } = string.Empty;
+}
+
 public sealed class SaveRoadmapItemRequest
 {
     public string Title { get; init; } = string.Empty;

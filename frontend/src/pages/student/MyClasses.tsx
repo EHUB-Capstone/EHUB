@@ -15,12 +15,13 @@ const semesterLabel = (sem) => {
 export default function MyClasses() {
   const [classes, setClasses] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [scope, setScope] = useState<'Current' | 'History'>('Current');
   const navigate = useNavigate();
 
   useEffect(() => {
     const fetchClasses = async () => {
       try {
-        const res: any = await classApi.getMyClasses();
+        const res: any = await classApi.getMyClasses(scope);
         const data = res?.data?.classes || res?.classes || [];
         setClasses(data);
       } catch (err) {
@@ -30,7 +31,7 @@ export default function MyClasses() {
       }
     };
     fetchClasses();
-  }, []);
+  }, [scope]);
 
   if (loading) {
     return (
@@ -44,17 +45,33 @@ export default function MyClasses() {
   return (
     <div className="space-y-6 max-w-6xl mx-auto">
       {/* Page Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900 tracking-tight">My Classes</h1>
-        <p className="text-sm text-slate-500 mt-1">View the startup classes you are currently enrolled in.</p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">My Classes</h1>
+          <p className="text-sm text-slate-500 mt-1">View current enrollments or completed academic history.</p>
+        </div>
+        <div className="inline-flex self-start rounded-xl border border-slate-200 bg-slate-50 p-1">
+          {(['Current', 'History'] as const).map(item => (
+            <button
+              key={item}
+              type="button"
+              onClick={() => { setLoading(true); setScope(item); }}
+              className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${scope === item ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+            >
+              {item}
+            </button>
+          ))}
+        </div>
       </div>
 
       {classes.length === 0 ? (
         <div className="bg-white rounded-2xl border border-slate-200/60 p-8 shadow-sm">
           <EmptyState
             icon={GraduationCap}
-            title="You are not enrolled in any class yet"
-            description="Please contact your lecturer or administrator if you think this is a mistake."
+            title={scope === 'Current' ? 'You are not enrolled in any current class' : 'No completed classes yet'}
+            description={scope === 'Current'
+              ? 'Please contact your lecturer or administrator if you think this is a mistake.'
+              : 'Completed classes will appear here after the lecturer closes the class.'}
           />
         </div>
       ) : (
@@ -88,6 +105,12 @@ export default function MyClasses() {
                       <span>{semesterLabel(cls.semester)} {cls.year}</span>
                     </div>
                   </div>
+
+                  {cls.classStatus === 'Completed' && (
+                    <span className="inline-flex rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700">
+                      Completed
+                    </span>
+                  )}
 
                   <p className="text-sm text-slate-400 font-medium">
                     {cls.description || 'No description provided.'}

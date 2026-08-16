@@ -43,13 +43,14 @@ public sealed class AddStudentToClassCommandHandler : IAddStudentToClassCommandH
             request.FullName,
             request.Email,
             request.MajorCode,
-            out var input);
+            out var input,
+            allowMissingMajor: true);
         if (validationError != null)
         {
             return Failure(ErrorCodes.ClassValidationError, validationError);
         }
 
-        var (studentCode, fullName, email, majorCode) = input;
+        var (studentCode, fullName, email, requestedMajorCode) = input;
 
         var targetClass = await _context.Classes
             .FirstOrDefaultAsync(@class => @class.Id == classId, cancellationToken);
@@ -59,9 +60,10 @@ public sealed class AddStudentToClassCommandHandler : IAddStudentToClassCommandH
             return Failure(ErrorCodes.ClassNotFound, "The requested class was not found.");
         }
 
-        if (targetClass.Status == ClassStatus.Archived)
+        var mutationError = ClassStateRules.GetMutationError(targetClass.Status);
+        if (mutationError != null)
         {
-            return Failure(ErrorCodes.ClassArchived, "Cannot add students to an archived class.");
+            return Failure(mutationError.Code, mutationError.Message);
         }
 
         if (isLecturer && targetClass.PrimaryLecturerId != currentUserId)
@@ -81,10 +83,11 @@ public sealed class AddStudentToClassCommandHandler : IAddStudentToClassCommandH
         {
             return Failure(
                 ErrorCodes.ClassStudentIdentityConflict,
-                "Student code and email belong to different student profiles.");
+                $"Student code '{studentCode}' and email '{email}' are registered to different student profiles. Enter the code and email of the same student.");
         }
 
         var studentProfile = studentByCode ?? studentByEmail;
+        var shouldAssignProfileCode = false;
         if (studentProfile != null)
         {
             if (!string.IsNullOrEmpty(studentProfile.Email) &&
@@ -92,22 +95,51 @@ public sealed class AddStudentToClassCommandHandler : IAddStudentToClassCommandH
             {
                 return Failure(
                     ErrorCodes.ClassStudentIdentityConflict,
-                    "Student email must match the existing student profile.");
+                    $"Student code '{studentCode}' is registered with email '{studentProfile.Email}'. Enter that registered email address.");
             }
 
             var profileCode = studentProfile.NormalizedRollNumber ?? studentProfile.RollNumber;
             if (string.IsNullOrWhiteSpace(profileCode))
             {
-                studentProfile.RollNumber = studentCode;
-                studentProfile.NormalizedRollNumber = studentCode;
-                studentProfile.UpdatedAt = DateTime.UtcNow;
+                shouldAssignProfileCode = true;
             }
             else if (!string.Equals(profileCode, studentCode, StringComparison.OrdinalIgnoreCase))
             {
                 return Failure(
                     ErrorCodes.ClassStudentIdentityConflict,
-                    $"Student code '{studentCode}' does not match existing profile code '{profileCode}'.");
+                    $"Email '{email}' is registered with student code '{profileCode}'. Enter that registered student code.");
             }
+        }
+
+        var profileMajorCode = studentProfile?.MajorCode?.Trim().ToUpperInvariant();
+        string enrollmentMajorCode;
+        string majorSource;
+        if (studentProfile != null && MajorCodes.IsValid(profileMajorCode))
+        {
+            if (!string.IsNullOrWhiteSpace(requestedMajorCode) &&
+                !string.Equals(requestedMajorCode, profileMajorCode, StringComparison.OrdinalIgnoreCase))
+            {
+                return Failure(
+                    ErrorCodes.ClassStudentMajorMismatch,
+                    $"Selected major '{requestedMajorCode}' does not match the student's registered major '{profileMajorCode}'. Leave Major blank to use the registered major, or select '{profileMajorCode}'.");
+            }
+
+            enrollmentMajorCode = profileMajorCode!;
+            majorSource = "StudentProfile";
+        }
+        else
+        {
+            if (string.IsNullOrWhiteSpace(requestedMajorCode))
+            {
+                return Failure(
+                    ErrorCodes.ClassValidationError,
+                    studentProfile == null
+                        ? "Major is required when creating a new student profile."
+                        : "The existing student profile has no valid registered major. Select a major for this enrollment.");
+            }
+
+            enrollmentMajorCode = requestedMajorCode;
+            majorSource = studentProfile == null ? "ManualNewProfile" : "ManualEnrollment";
         }
 
         ClassStudent? existingEnrollment = null;
@@ -163,20 +195,30 @@ public sealed class AddStudentToClassCommandHandler : IAddStudentToClassCommandH
                 FullName = fullName,
                 Email = email,
                 UserId = matchingUser?.Id,
-                MajorCode = majorCode,
+                MajorCode = enrollmentMajorCode,
                 Status = StudentStatus.Active,
                 CreatedBy = currentUserId
             };
             await _context.Students.AddAsync(studentProfile, cancellationToken);
         }
-        else if (!studentProfile.UserId.HasValue && !string.IsNullOrWhiteSpace(email))
+        else
         {
-            var matchingUser = await _context.Users.AsNoTracking()
-                .FirstOrDefaultAsync(u => u.Email != null && u.Email.ToLower() == email, cancellationToken);
-            if (matchingUser != null)
+            if (shouldAssignProfileCode)
             {
-                studentProfile.UserId = matchingUser.Id;
+                studentProfile.RollNumber = studentCode;
+                studentProfile.NormalizedRollNumber = studentCode;
                 studentProfile.UpdatedAt = DateTime.UtcNow;
+            }
+
+            if (!studentProfile.UserId.HasValue && !string.IsNullOrWhiteSpace(email))
+            {
+                var matchingUser = await _context.Users.AsNoTracking()
+                    .FirstOrDefaultAsync(u => u.Email != null && u.Email.ToLower() == email, cancellationToken);
+                if (matchingUser != null)
+                {
+                    studentProfile.UserId = matchingUser.Id;
+                    studentProfile.UpdatedAt = DateTime.UtcNow;
+                }
             }
         }
         // Existing Student profile data remains the global source of truth.
@@ -190,7 +232,7 @@ public sealed class AddStudentToClassCommandHandler : IAddStudentToClassCommandH
             CourseId = targetClass.CourseId,
             EnrollmentStatus = EnrollmentStatus.Active,
             CountsTowardCourseSemesterLimit = true,
-            MajorCodeAtEnrollment = majorCode,
+            MajorCodeAtEnrollment = enrollmentMajorCode,
             MajorVerificationStatus = EnrollmentMajorVerificationStatus.Unverified,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
@@ -207,7 +249,8 @@ public sealed class AddStudentToClassCommandHandler : IAddStudentToClassCommandH
             {
                 studentProfile.Id,
                 StudentCode = studentCode,
-                MajorCodeAtEnrollment = majorCode,
+                MajorCodeAtEnrollment = enrollmentMajorCode,
+                MajorSource = majorSource,
                 Source = "Manual"
             })
         });

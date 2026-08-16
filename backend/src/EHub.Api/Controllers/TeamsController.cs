@@ -129,8 +129,21 @@ public sealed class TeamsController : ControllerBase
         ToResponse(await handler.ReviewAsync(teamId, request, UserId, Role, cancellationToken), "Project direction reviewed.");
 
     private Guid UserId => _currentUser.UserId ?? Guid.Empty;
-    private string Role => _currentUser.Roles.FirstOrDefault(role =>
-        role is SystemRoles.Admin or SystemRoles.Lecturer or SystemRoles.Mentor or SystemRoles.Student) ?? string.Empty;
+    private string Role
+    {
+        get
+        {
+            if (_currentUser.Roles.Any(role => string.Equals(role, SystemRoles.Admin, StringComparison.OrdinalIgnoreCase)))
+                return SystemRoles.Admin;
+            if (_currentUser.Roles.Any(role => string.Equals(role, SystemRoles.Lecturer, StringComparison.OrdinalIgnoreCase)))
+                return SystemRoles.Lecturer;
+            if (_currentUser.Roles.Any(role => string.Equals(role, SystemRoles.Mentor, StringComparison.OrdinalIgnoreCase)))
+                return SystemRoles.Mentor;
+            if (_currentUser.Roles.Any(role => string.Equals(role, SystemRoles.Student, StringComparison.OrdinalIgnoreCase)))
+                return SystemRoles.Student;
+            return string.Empty;
+        }
+    }
 
     private IActionResult ToResponse<T>(EHub.Shared.Results.Result<T> result, string message)
     {

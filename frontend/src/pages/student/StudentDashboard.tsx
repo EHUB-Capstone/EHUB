@@ -18,7 +18,8 @@ import {
 } from 'lucide-react';
 
 
-const statusColor = { DRAFT: 'Draft', SUBMITTED: 'Submitted', REVIEWED: 'Reviewed', APPROVED: 'Approved' };
+const statusColor = { DRAFT: 'Draft', SUBMITTED: 'Submitted', REVIEWED: 'Reviewed', APPROVED: 'Approved', NEEDSREVISION: 'Improving', NEEDS_REVISION: 'Improving' };
+const statusLabel = { NEEDSREVISION: 'Needs revision', NEEDS_REVISION: 'Needs revision' };
 const milestoneStatus = { TODO: 'bg-slate-100 text-slate-500', IN_PROGRESS: 'bg-blue-100 text-blue-600', DONE: 'bg-green-100 text-green-600', OVERDUE: 'bg-red-100 text-red-600' };
 
 const StudentDashboard = () => {
@@ -121,7 +122,7 @@ const StudentDashboard = () => {
               <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.14 }} className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-6">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-lg font-semibold text-slate-900 flex items-center gap-2"><Rocket className="w-5 h-5 text-primary" />My Startup Idea</h3>
-                  {startupIdea && <Badge variant={statusColor[startupIdea.status]} size="sm">{startupIdea.status}</Badge>}
+                  {startupIdea && <Badge variant={statusColor[startupIdea.status]} size="sm">{statusLabel[startupIdea.status] || startupIdea.status}</Badge>}
                 </div>
 
                 {!startupIdea ? (

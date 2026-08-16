@@ -1,4 +1,4 @@
-export type ClassStatus = 'Draft' | 'Active' | 'Inactive' | 'Archived';
+export type ClassStatus = 'Draft' | 'Active' | 'Inactive' | 'Completed' | 'Archived';
 
 export interface ClassScheduleSlot {
   dayOfWeek: number;
@@ -36,10 +36,13 @@ export interface ClassDto {
   schedules: ClassScheduleSlot[];
   isEnrollmentMajorLocked: boolean;
   status: ClassStatus;
+  statusBeforeArchive?: ClassStatus | null;
   studentCount: number;
   teamCount: number;
   mentors: ClassMentorSummary[];
   createdAtUtc: string;
+  completedAtUtc?: string | null;
+  completionReason?: string | null;
   rowVersion: string;
   // Transitional input only. New backend responses use schedules[].
   scheduleJson?: string | null;
@@ -143,4 +146,26 @@ export interface ApiEnvelope<T> {
   message: string;
   code?: string | null;
   data: T;
+}
+
+export interface AddStudentToClassPayload {
+  studentCode: string;
+  fullName: string;
+  email: string;
+  majorCode: string | null;
+}
+
+export interface ClassCompletionPreview {
+  classId: string;
+  status: ClassStatus;
+  activeEnrollmentCount: number;
+  droppedEnrollmentCount: number;
+  activeMentorAssignmentCount: number;
+  openTeamProposalCount: number;
+  openProjectDirectionCount: number;
+  processingImportSessionCount: number;
+  scheduledMentoringSessionCount: number;
+  blockers: string[];
+  warnings: string[];
+  rowVersion: string;
 }

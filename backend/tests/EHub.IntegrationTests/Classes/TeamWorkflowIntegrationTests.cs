@@ -482,7 +482,7 @@ public sealed class TeamWorkflowIntegrationTests
 
         var unique = Guid.NewGuid().ToString("N")[..8].ToUpperInvariant();
         var course = new Course { Code = $"TW{unique}", Name = $"Team Workflow {unique}", Status = CourseStatus.Active, CreatedBy = admin.Id };
-        var semester = new Semester { Code = $"TW{unique}", Name = $"Team Semester {unique}", Term = SemesterTerm.Fall, Year = 2032, Status = SemesterStatus.Active, CreatedBy = admin.Id };
+        var semester = await context.Semesters.FirstAsync(item => item.Status == SemesterStatus.Active);
         var targetClass = new Class
         {
             ClassCode = $"TW{unique}_1",
@@ -494,12 +494,11 @@ public sealed class TeamWorkflowIntegrationTests
             PrimaryLecturerId = lecturer.Id,
             PrimaryLecturer = lecturer,
             Status = ClassStatus.Active,
-            ScheduleJson = "[]",
+            ScheduleJson = "[{\"dayOfWeek\":2,\"slotNumber\":4,\"room\":\"TW-401\"}]",
             CreatedById = admin.Id,
             CreatedBy = admin.Id
         };
         context.Courses.Add(course);
-        context.Semesters.Add(semester);
         context.Classes.Add(targetClass);
         context.ClassLecturers.Add(new ClassLecturer { ClassId = targetClass.Id, LecturerId = lecturer.Id, IsPrimary = true, AssignedById = admin.Id });
 

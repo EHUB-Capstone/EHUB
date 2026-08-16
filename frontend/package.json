@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "test": "node --experimental-strip-types --test tests/studentImport.test.ts tests/teamManagement.test.ts tests/studentAssignment.test.ts tests/accountApproval.test.ts tests/classFeatureFlags.test.ts tests/classMappers.test.ts tests/classComponents.test.ts",
+    "test": "node --experimental-strip-types --test tests/studentImport.test.ts tests/addStudent.test.ts tests/teamManagement.test.ts tests/studentAssignment.test.ts tests/accountApproval.test.ts tests/classFeatureFlags.test.ts tests/classMappers.test.ts tests/classComponents.test.ts tests/classPermissions.test.ts tests/authValidation.test.ts tests/mockApi.test.ts",
     "type-check": "tsc -b",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
@@ -42,6 +42,7 @@
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.3",
+    "axios-mock-adapter": "^2.1.0",
     "oxlint": "^1.71.0",
     "typescript": "~6.0.2",
     "vite": "^8.1.1"

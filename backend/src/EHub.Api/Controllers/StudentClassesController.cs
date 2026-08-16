@@ -21,8 +21,11 @@ public sealed class StudentClassesController : ControllerBase
     }
 
     [HttpGet("my-classes")]
-    public async Task<IActionResult> GetMyClasses([FromServices] IStudentClassSelfServiceHandler handler, CancellationToken cancellationToken) =>
-        ToResponse(await handler.GetMyClassesAsync(UserId, Role, cancellationToken), "Student classes retrieved.");
+    public async Task<IActionResult> GetMyClasses(
+        [FromQuery] string scope,
+        [FromServices] IStudentClassSelfServiceHandler handler,
+        CancellationToken cancellationToken) =>
+        ToResponse(await handler.GetMyClassesAsync(UserId, Role, string.IsNullOrWhiteSpace(scope) ? "Current" : scope, cancellationToken), "Student classes retrieved.");
 
     [HttpGet("my-team")]
     public async Task<IActionResult> GetMyTeam([FromServices] IStudentClassSelfServiceHandler handler, CancellationToken cancellationToken) =>

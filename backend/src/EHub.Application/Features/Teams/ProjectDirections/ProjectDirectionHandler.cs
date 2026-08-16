@@ -38,7 +38,9 @@ public sealed class ProjectDirectionHandler : IProjectDirectionHandler
         var team = await TeamAccessQuery().FirstOrDefaultAsync(item => item.Id == teamId, cancellationToken);
         if (team == null) return Failure(ErrorCodes.TeamNotFound, "The requested team was not found.");
         if (!await IsLeaderAsync(team, userId, role, cancellationToken)) return Failure(ErrorCodes.ClassAccessDenied, "Only the team leader can edit the project direction.");
-        if (team.Status != TeamStatus.Active || team.Class.Status == ClassStatus.Archived) return Failure(ErrorCodes.TeamInactive, "Project direction cannot be changed for this team.");
+        if (team.Status != TeamStatus.Active) return Failure(ErrorCodes.TeamInactive, "Project direction cannot be changed for this team.");
+        var classError = ClassStateRules.GetMutationError(team.Class.Status);
+        if (classError != null) return Failure(classError.Code, classError.Message);
 
         var direction = await DirectionQuery(tracking: true).FirstOrDefaultAsync(item => item.TeamId == teamId, cancellationToken);
         if (direction == null)
@@ -80,8 +82,10 @@ public sealed class ProjectDirectionHandler : IProjectDirectionHandler
         var team = await TeamAccessQuery().FirstOrDefaultAsync(item => item.Id == teamId, cancellationToken);
         if (team == null) return Failure(ErrorCodes.TeamNotFound, "The requested team was not found.");
         if (!await IsLeaderAsync(team, userId, role, cancellationToken)) return Failure(ErrorCodes.ClassAccessDenied, "Only the team leader can submit the project direction.");
-        if (team.Status != TeamStatus.Active || team.Class.Status == ClassStatus.Archived)
-            return Failure(ErrorCodes.TeamInactive, "Project direction cannot be submitted for an inactive team or archived class.");
+        if (team.Status != TeamStatus.Active)
+            return Failure(ErrorCodes.TeamInactive, "Project direction cannot be submitted for an inactive team.");
+        var classError = ClassStateRules.GetMutationError(team.Class.Status);
+        if (classError != null) return Failure(classError.Code, classError.Message);
         var direction = await DirectionQuery(tracking: true).FirstOrDefaultAsync(item => item.TeamId == teamId, cancellationToken);
         if (direction == null) return Failure(ErrorCodes.ProjectDirectionNotFound, "Create the project direction before submitting it.");
         if (direction.Version != version) return Failure(ErrorCodes.ClassConcurrencyConflict, "The project direction changed concurrently. Refresh and try again.");
@@ -114,8 +118,10 @@ public sealed class ProjectDirectionHandler : IProjectDirectionHandler
         var team = await TeamAccessQuery().FirstOrDefaultAsync(item => item.Id == teamId, cancellationToken);
         if (team == null) return Failure(ErrorCodes.TeamNotFound, "The requested team was not found.");
         if (team.Class.PrimaryLecturerId != userId) return Failure(ErrorCodes.ClassAccessDenied, "A lecturer cannot review project directions outside assigned classes.");
-        if (team.Status != TeamStatus.Active || team.Class.Status == ClassStatus.Archived)
-            return Failure(ErrorCodes.TeamInactive, "Project direction cannot be reviewed for an inactive team or archived class.");
+        if (team.Status != TeamStatus.Active)
+            return Failure(ErrorCodes.TeamInactive, "Project direction cannot be reviewed for an inactive team.");
+        var classError = ClassStateRules.GetMutationError(team.Class.Status);
+        if (classError != null) return Failure(classError.Code, classError.Message);
         var direction = await DirectionQuery(tracking: true).FirstOrDefaultAsync(item => item.TeamId == teamId, cancellationToken);
         if (direction == null) return Failure(ErrorCodes.ProjectDirectionNotFound, "The project direction was not found.");
         if (direction.Version != version) return Failure(ErrorCodes.ClassConcurrencyConflict, "The project direction changed concurrently. Refresh and try again.");

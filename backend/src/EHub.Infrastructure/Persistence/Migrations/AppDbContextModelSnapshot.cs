@@ -540,6 +540,19 @@ namespace EHub.Infrastructure.Persistence.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("class_index");
 
+                    b.Property<DateTime?>("CompletedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("completed_at_utc");
+
+                    b.Property<Guid?>("CompletedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("completed_by_user_id");
+
+                    b.Property<string>("CompletionReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("completion_reason");
+
                     b.Property<Guid>("CourseId")
                         .HasColumnType("uuid")
                         .HasColumnName("course_id");
@@ -622,6 +635,8 @@ namespace EHub.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("ArchivedByUserId");
 
+                    b.HasIndex("CompletedByUserId");
+
                     b.HasIndex("CourseId");
 
                     b.HasIndex("CreatedById");
@@ -639,6 +654,8 @@ namespace EHub.Infrastructure.Persistence.Migrations
                     b.ToTable("classes", null, t =>
                         {
                             t.HasCheckConstraint("CK_classes_active_requires_lecturer_and_schedule", "status <> 'Active' OR (primary_lecturer_id IS NOT NULL AND schedule_json IS NOT NULL AND jsonb_typeof(schedule_json) = 'array' AND jsonb_array_length(schedule_json) > 0)");
+
+                            t.HasCheckConstraint("CK_classes_completion_metadata", "status <> 'Completed' OR (completed_at_utc IS NOT NULL AND completion_reason IS NOT NULL)");
                         });
                 });
 
@@ -788,6 +805,14 @@ namespace EHub.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("student_id");
 
+                    b.Property<DateTime?>("CompletedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("completed_at_utc");
+
+                    b.Property<Guid?>("CompletedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("completed_by_user_id");
+
                     b.Property<bool>("CountsTowardCourseSemesterLimit")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
@@ -888,6 +913,8 @@ namespace EHub.Infrastructure.Persistence.Migrations
 
                     b.HasKey("ClassId", "StudentId");
 
+                    b.HasIndex("CompletedByUserId");
+
                     b.HasIndex("MajorVerifiedByUserId");
 
                     b.HasIndex("ClassId", "MemberCode")
@@ -898,7 +925,12 @@ namespace EHub.Infrastructure.Persistence.Migrations
                         .IsUnique()
                         .HasFilter("counts_toward_course_semester_limit = true");
 
-                    b.ToTable("class_students", (string)null);
+                    b.ToTable("class_students", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_class_students_completion_metadata", "(enrollment_status = 'Completed' AND completed_at_utc IS NOT NULL) OR (enrollment_status <> 'Completed' AND completed_at_utc IS NULL)");
+
+                            t.HasCheckConstraint("CK_class_students_status_counting", "(enrollment_status = 'Dropped' AND counts_toward_course_semester_limit = false) OR (enrollment_status IN ('Active', 'Completed') AND counts_toward_course_semester_limit = true)");
+                        });
                 });
 
             modelBuilder.Entity("EHub.Domain.Entities.Course", b =>
@@ -3737,6 +3769,19 @@ namespace EHub.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(20)")
                         .HasColumnName("code");
 
+                    b.Property<DateTime?>("CompletedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("completed_at_utc");
+
+                    b.Property<Guid?>("CompletedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("completed_by_user_id");
+
+                    b.Property<string>("CompletionReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("completion_reason");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
@@ -3793,6 +3838,12 @@ namespace EHub.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("updated_by");
 
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
                     b.Property<int>("Year")
                         .HasColumnType("integer")
                         .HasColumnName("year");
@@ -3802,7 +3853,59 @@ namespace EHub.Infrastructure.Persistence.Migrations
                     b.HasIndex("Code")
                         .IsUnique();
 
-                    b.ToTable("semesters", (string)null);
+                    b.HasIndex("CompletedByUserId");
+
+                    b.HasIndex("Status")
+                        .IsUnique()
+                        .HasFilter("status = 'Active' AND is_deleted = false");
+
+                    b.HasIndex("Term", "Year")
+                        .IsUnique();
+
+                    b.ToTable("semesters", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_semesters_completion_metadata", "status <> 'Completed' OR (completed_at_utc IS NOT NULL AND completion_reason IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_semesters_date_range", "start_date IS NULL OR end_date IS NULL OR start_date <= end_date");
+                        });
+                });
+
+            modelBuilder.Entity("EHub.Domain.Entities.SemesterAuditLog", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("action");
+
+                    b.Property<string>("DetailsJson")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("details_json");
+
+                    b.Property<DateTime>("OccurredAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("occurred_at_utc");
+
+                    b.Property<Guid>("PerformedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("performed_by_user_id");
+
+                    b.Property<Guid>("SemesterId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("semester_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PerformedByUserId");
+
+                    b.HasIndex("SemesterId", "OccurredAtUtc");
+
+                    b.ToTable("semester_audit_logs", (string)null);
                 });
 
             modelBuilder.Entity("EHub.Domain.Entities.SprintTask", b =>
@@ -5417,6 +5520,11 @@ namespace EHub.Infrastructure.Persistence.Migrations
                         .HasForeignKey("ArchivedByUserId")
                         .OnDelete(DeleteBehavior.SetNull);
 
+                    b.HasOne("EHub.Domain.Entities.User", "CompletedByUser")
+                        .WithMany()
+                        .HasForeignKey("CompletedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("EHub.Domain.Entities.Course", "Course")
                         .WithMany("Classes")
                         .HasForeignKey("CourseId")
@@ -5440,6 +5548,8 @@ namespace EHub.Infrastructure.Persistence.Migrations
                         .IsRequired();
 
                     b.Navigation("ArchivedByUser");
+
+                    b.Navigation("CompletedByUser");
 
                     b.Navigation("Course");
 
@@ -5522,6 +5632,11 @@ namespace EHub.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("EHub.Domain.Entities.User", "CompletedByUser")
+                        .WithMany()
+                        .HasForeignKey("CompletedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("EHub.Domain.Entities.User", "MajorVerifiedByUser")
                         .WithMany()
                         .HasForeignKey("MajorVerifiedByUserId")
@@ -5534,6 +5649,8 @@ namespace EHub.Infrastructure.Persistence.Migrations
                         .IsRequired();
 
                     b.Navigation("Class");
+
+                    b.Navigation("CompletedByUser");
 
                     b.Navigation("MajorVerifiedByUser");
 
@@ -6177,6 +6294,35 @@ namespace EHub.Infrastructure.Persistence.Migrations
                     b.Navigation("Rubric");
                 });
 
+            modelBuilder.Entity("EHub.Domain.Entities.Semester", b =>
+                {
+                    b.HasOne("EHub.Domain.Entities.User", "CompletedByUser")
+                        .WithMany()
+                        .HasForeignKey("CompletedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("CompletedByUser");
+                });
+
+            modelBuilder.Entity("EHub.Domain.Entities.SemesterAuditLog", b =>
+                {
+                    b.HasOne("EHub.Domain.Entities.User", "PerformedByUser")
+                        .WithMany()
+                        .HasForeignKey("PerformedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("EHub.Domain.Entities.Semester", "Semester")
+                        .WithMany("AuditLogs")
+                        .HasForeignKey("SemesterId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("PerformedByUser");
+
+                    b.Navigation("Semester");
+                });
+
             modelBuilder.Entity("EHub.Domain.Entities.SprintTask", b =>
                 {
                     b.HasOne("EHub.Domain.Entities.Student", "AssigneeStudent")
@@ -6744,6 +6890,8 @@ namespace EHub.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("EHub.Domain.Entities.Semester", b =>
                 {
+                    b.Navigation("AuditLogs");
+
                     b.Navigation("Classes");
                 });
 

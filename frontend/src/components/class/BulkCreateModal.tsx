@@ -321,7 +321,7 @@ export default function BulkCreateModal({ lecturers: initialLecturers = [], isLe
           onCreated({ suppressToast: true });
         }
       } else {
-        // Luồng nhập số lớp thủ công
+        // Manual class-count workflow.
         const count = committedClasses.length;
         toast.success(`${count} classes created successfully!`);
         onCreated({ suppressToast: true });
@@ -353,11 +353,11 @@ export default function BulkCreateModal({ lecturers: initialLecturers = [], isLe
         <div className="flex items-center justify-between p-6 border-b border-slate-100">
           <div>
             <h2 className="text-xl font-bold text-slate-900">
-              {isLecturer ? 'Tạo lớp học' : 'Bulk Create Classes'}
+              {isLecturer ? 'Create Classes' : 'Bulk Create Classes'}
             </h2>
             <p className="text-sm text-slate-400 mt-0.5">
               {isLecturer
-                ? 'Tạo nhiều lớp cùng lúc — tự động gán cho bạn'
+                ? 'Create multiple classes at once — automatically assigned to you'
                 : 'Generate multiple classes at once'}
             </p>
           </div>
@@ -522,7 +522,7 @@ export default function BulkCreateModal({ lecturers: initialLecturers = [], isLe
                   {isLecturer && (
                     <div className="flex items-center gap-2 p-3 bg-primary-50 border border-primary-100 rounded-xl">
                       <span className="text-lg">👤</span>
-                      <p className="text-xs text-primary font-medium">Lớp sẽ được tự động gán cho bạn.</p>
+                      <p className="text-xs text-primary font-medium">The class will be assigned to you automatically.</p>
                     </div>
                   )}
                 </>

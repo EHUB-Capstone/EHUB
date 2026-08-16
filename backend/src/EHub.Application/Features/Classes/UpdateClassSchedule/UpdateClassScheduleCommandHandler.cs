@@ -98,9 +98,10 @@ public sealed class UpdateClassScheduleCommandHandler : IUpdateClassScheduleComm
             return Failure(ErrorCodes.ClassNotFound, "The requested class was not found.");
         }
 
-        if (targetClass.Status == ClassStatus.Archived)
+        var mutationError = ClassStateRules.GetMutationError(targetClass.Status);
+        if (mutationError != null)
         {
-            return Failure(ErrorCodes.ClassArchived, "Cannot update schedule of an archived class.");
+            return Failure(mutationError.Code, mutationError.Message);
         }
 
         if (targetClass.Version != expectedVersion)
@@ -119,7 +120,7 @@ public sealed class UpdateClassScheduleCommandHandler : IUpdateClassScheduleComm
             .Where(@class =>
                 @class.SemesterId == targetClass.SemesterId &&
                 @class.Id != targetClass.Id &&
-                @class.Status != ClassStatus.Archived &&
+                (@class.Status == ClassStatus.Draft || @class.Status == ClassStatus.Active) &&
                 @class.ScheduleJson != null)
             .Select(@class => new
             {

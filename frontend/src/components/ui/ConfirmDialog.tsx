@@ -16,6 +16,7 @@ interface ConfirmDialogProps {
   onReasonChange?: (value: string) => void;
   reasonLabel?: string;
   reasonRequired?: boolean;
+  confirmDisabled?: boolean;
 }
 
 const ConfirmDialog = ({
@@ -32,6 +33,7 @@ const ConfirmDialog = ({
   onReasonChange,
   reasonLabel = 'Reason',
   reasonRequired = false,
+  confirmDisabled = false,
 }: ConfirmDialogProps) => {
   const reasonInvalid = reasonRequired && (reason?.trim().length ?? 0) < 3;
   return (
@@ -66,7 +68,7 @@ const ConfirmDialog = ({
             className="flex-1"
             onClick={onConfirm}
             isLoading={isSubmitting}
-            disabled={isSubmitting || reasonInvalid}
+            disabled={isSubmitting || reasonInvalid || confirmDisabled}
           >
             {confirmText}
           </Button>

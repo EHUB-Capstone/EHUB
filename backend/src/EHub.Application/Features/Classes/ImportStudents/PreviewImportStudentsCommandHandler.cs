@@ -75,9 +75,10 @@ public sealed class PreviewImportStudentsCommandHandler : IPreviewImportStudents
             return Failure(ErrorCodes.ClassNotFound, "The requested class was not found.");
         }
 
-        if (targetClass.Status == ClassStatus.Archived)
+        var mutationError = ClassStateRules.GetMutationError(targetClass.Status);
+        if (mutationError != null)
         {
-            return Failure(ErrorCodes.ClassArchived, "Cannot import students to an archived class.");
+            return Failure(mutationError.Code, mutationError.Message);
         }
 
         if (isLecturer && targetClass.PrimaryLecturerId != currentUserId)

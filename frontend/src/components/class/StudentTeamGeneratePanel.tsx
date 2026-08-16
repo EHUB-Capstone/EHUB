@@ -14,10 +14,10 @@ const getTeamSizeSuggestion = (count) => {
     return `Còn ${count} sinh viên, chưa đủ để tạo nhóm. Cần điều chỉnh thành viên từ các nhóm khác.`;
   }
   if (count === 3) {
-    return 'Còn 3 sinh viên, chưa đủ để tạo nhóm. Cần phân bổ lại vào các nhóm 4-6 người.';
+    return 'Three students remain. Rebalance members from other teams before submitting a proposal.';
   }
   if (count === 7) {
-    return 'Còn 7 sinh viên. Hãy tạo 1 nhóm 4 và phân bổ 3 sinh viên còn lại vào các nhóm khác.';
+    return 'The remaining students cannot be divided into teams of 4–6. Rebalance them across existing teams.';
   }
 
   const candidates = [];

@@ -30,7 +30,9 @@ export const AuthContext = createContext<AuthContextValue | null>(null);
 
 function toWorkspaceUser(user: CurrentUser): WorkspaceUser {
   const roles = Array.isArray(user.roles) ? user.roles : [];
-  const role = roles[0]?.trim().toUpperCase() || 'STUDENT';
+  const normalizedRoles = roles.map(role => role.trim().toUpperCase());
+  const role = ['ADMIN', 'LECTURER', 'MENTOR', 'STUDENT']
+    .find(candidate => normalizedRoles.includes(candidate)) || 'STUDENT';
 
   return {
     ...user,
