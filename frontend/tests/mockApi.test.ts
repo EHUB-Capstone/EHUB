@@ -331,6 +331,36 @@ test('mock API returns ApiResponse envelopes and applies class filters', async (
   const archivedResponse = await axiosClient.get('/classes', { params: { status: 'Archived' } });
   assert.equal(archivedResponse.data.items.length, 1);
   assert.equal(archivedResponse.data.items[0].status, 'Archived');
+
+  const unassignedResponse = await axiosClient.get('/classes', { params: { assignmentStatus: 'Unassigned' } });
+  assert.ok(unassignedResponse.data.items.every((item: { primaryLecturerId: string | null }) => item.primaryLecturerId === null));
+});
+
+test('mock API enforces admin-only class creation', async () => {
+  resetMockState();
+  await axiosClient.post('/auth/login', { email: 'giang.lecturer@ehub.local', password: 'Mock123!' });
+
+  await assert.rejects(
+    axiosClient.post('/classes/bulk/preview', {
+      subjectCode: 'EXE101',
+      semesterId: 'mock-semester-FA2026',
+      startClassIndex: 20,
+      quantity: 1,
+    }),
+    (error: unknown) => {
+      const response = (error as { response?: { status?: number; data?: { code?: string } } }).response;
+      return response?.status === 403 && response.data?.code === 'CLASS_ACCESS_DENIED';
+    },
+  );
+
+  await axiosClient.post('/auth/login', { email: 'admin@ehub.local', password: 'Mock123!' });
+  const preview = await axiosClient.post('/classes/bulk/preview', {
+    subjectCode: 'EXE101',
+    semesterId: 'mock-semester-FA2026',
+    startClassIndex: 20,
+    quantity: 1,
+  });
+  assert.equal(preview.data.validCount, 1);
 });
 
 test('mock API keeps static spreadsheet downloads ahead of class detail routes', async () => {

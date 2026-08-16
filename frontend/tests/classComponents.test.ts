@@ -6,6 +6,11 @@ import {
   isClassReadOnly,
   validateImportFileSelection,
 } from '../src/utils/classComponentPolicy.ts';
+import {
+  buildApprovedLecturerQuery,
+  normalizeLecturerOptions,
+  USER_DIRECTORY_MAX_PAGE_SIZE,
+} from '../src/utils/lecturerDirectory.ts';
 
 test('ClassDetail presents Archive for an active class and Restore for an archived class', () => {
   assert.deepEqual(getClassLifecyclePresentation('Active'), {
@@ -41,4 +46,25 @@ test('ImportStudentsModal accepts xls/xlsx and rejects unsupported or oversized 
   assert.equal(validateImportFileSelection({ name: 'students.XLSX', size: 1_024 }), '');
   assert.match(validateImportFileSelection({ name: 'students.csv', size: 1_024 }), /Unsupported/);
   assert.match(validateImportFileSelection({ name: 'students.xls', size: 11 * 1024 * 1024 }), /10 MB/);
+});
+
+test('lecturer directory query respects the backend page-size contract', () => {
+  assert.equal(USER_DIRECTORY_MAX_PAGE_SIZE, 100);
+  assert.deepEqual(buildApprovedLecturerQuery(), {
+    page: 1,
+    limit: 100,
+    role: 'LECTURER',
+    status: 'APPROVED',
+  });
+});
+
+test('lecturer directory normalizes backend identifiers and ignores incomplete records', () => {
+  assert.deepEqual(normalizeLecturerOptions([
+    { id: 'lecturer-1', fullName: 'Lecturer One', email: 'one@example.com' },
+    { _id: 'lecturer-2', name: 'Lecturer Two', email: 'two@example.com' },
+    { id: 'invalid' },
+  ]), [
+    { id: 'lecturer-1', fullName: 'Lecturer One', email: 'one@example.com', _id: 'lecturer-1', name: 'Lecturer One' },
+    { _id: 'lecturer-2', name: 'Lecturer Two', email: 'two@example.com' },
+  ]);
 });

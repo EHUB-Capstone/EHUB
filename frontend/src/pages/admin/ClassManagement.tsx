@@ -13,6 +13,7 @@ import { subjectApi } from '../../api/subjectApi';
 import LoadingSkeleton from '../../components/ui/LoadingSkeleton';
 import EmptyState from '../../components/ui/EmptyState';
 import BulkCreateModal from '../../components/class/BulkCreateModal';
+import AssignLectureModal from '../../components/class/AssignLectureModal';
 import ImportStudentsModal from '../../components/class/ImportStudentsModal';
 import ClassDirectionOverview from '../../components/class/ClassDirectionOverview';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
@@ -21,7 +22,8 @@ import { parseApiError } from '../../utils/apiError';
 import { toClassViewModel, unwrapApiData } from '../../utils/classMappers';
 import { getClassLifecyclePresentation } from '../../utils/classComponentPolicy';
 import type { ClassListResponse, ClassStatus, ClassViewModel } from '../../types/classes';
-import { canManageClass } from '../../utils/classPermissions';
+import { canCreateClasses, canManageClass, hasClassRole } from '../../utils/classPermissions';
+import { buildApprovedLecturerQuery } from '../../utils/lecturerDirectory';
 
 const SEMESTERS = ['SP', 'SU', 'FA'];
 const CURRENT_YEAR = new Date().getFullYear();
@@ -60,8 +62,9 @@ export default function ClassManagement() {
   const navigate  = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const initialSearchParams = useRef(new URLSearchParams(searchParams));
-  const isAdmin    = user?.role === 'ADMIN';
-  const isLecturer = user?.role === 'LECTURER';
+  const isAdmin = hasClassRole(user, 'ADMIN');
+  const isLecturer = !isAdmin && hasClassRole(user, 'LECTURER');
+  const canCreate = canCreateClasses(user);
   const canManageClassRecord = (classItem: ClassViewModel) => canManageClass(user, classItem);
 
   const [classes, setClasses] = useState<ClassViewModel[]>([]);
@@ -79,6 +82,7 @@ export default function ClassManagement() {
   const [filterYear, setFilterYear] = useState(searchParams.get('year') || '');
   const [filterSubj, setFilterSubj] = useState(searchParams.get('subject') || '');
   const [filterStatus, setFilterStatus] = useState<ClassStatus | ''>((searchParams.get('status') as ClassStatus | null) || '');
+  const [filterAssignment, setFilterAssignment] = useState<'Assigned' | 'Unassigned' | ''>((searchParams.get('assignment') as 'Assigned' | 'Unassigned' | null) || '');
   const [sort, setSort] = useState(searchParams.get('sort') || 'code');
   const [page, setPage] = useState(Math.max(1, Number(searchParams.get('page')) || 1));
   const pageSize = 12;
@@ -88,6 +92,7 @@ export default function ClassManagement() {
   const [showBulk,   setShowBulk]   = useState(false);
   const [importTarget, setImportTarget] = useState<string | null>(null);
   const [restoreTarget, setRestoreTarget] = useState<ClassViewModel | null>(null);
+  const [assignTarget, setAssignTarget] = useState<ClassViewModel | null>(null);
   const [restoreReason, setRestoreReason] = useState('');
   const [restoring, setRestoring] = useState(false);
 
@@ -103,17 +108,19 @@ export default function ClassManagement() {
         year?: number;
         subjectCode?: string;
         status?: ClassStatus;
+        assignmentStatus?: 'Assigned' | 'Unassigned';
         search?: string;
       };
       if (filterSem && filterYear) params.semesterCode = `${filterSem}${filterYear}`;
       if (filterYear) params.year = Number(filterYear);
       if (filterSubj) params.subjectCode = filterSubj;
       if (filterStatus) params.status = filterStatus;
+      if (isAdmin && filterAssignment) params.assignmentStatus = filterAssignment;
       if (appliedSearch) params.search = appliedSearch.trim();
 
       const [clsRes, usrRes] = await Promise.all([
         classApi.getAll(params),
-        isAdmin ? userApi.getAll({ page: 1, limit: 100, role: 'LECTURER', status: 'APPROVED' }) : Promise.resolve({ users: [] }),
+        isAdmin ? userApi.getAll(buildApprovedLecturerQuery()) : Promise.resolve({ users: [] }),
       ]);
 
       const classList = unwrapApiData<ClassListResponse>(clsRes);
@@ -135,7 +142,7 @@ export default function ClassManagement() {
     } finally {
       setLoading(false);
     }
-  }, [appliedSearch, filterSem, filterStatus, filterSubj, filterYear, isAdmin, page, sort]);
+  }, [appliedSearch, filterAssignment, filterSem, filterStatus, filterSubj, filterYear, isAdmin, page, sort]);
 
   useEffect(() => {
     const loadInitialConfig = async () => {
@@ -168,10 +175,11 @@ export default function ClassManagement() {
     if (filterYear) next.set('year', filterYear);
     if (filterSubj) next.set('subject', filterSubj);
     if (filterStatus) next.set('status', filterStatus);
+    if (isAdmin && filterAssignment) next.set('assignment', filterAssignment);
     if (sort !== 'code') next.set('sort', sort);
     if (page > 1) next.set('page', String(page));
     setSearchParams(next, { replace: true });
-  }, [appliedSearch, filterSem, filterStatus, filterSubj, filterYear, page, setSearchParams, sort]);
+  }, [appliedSearch, filterAssignment, filterSem, filterStatus, filterSubj, filterYear, isAdmin, page, setSearchParams, sort]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -227,13 +235,13 @@ export default function ClassManagement() {
           >
             <RefreshCw className="w-4 h-4" /> Refresh
           </button>
-          {(isAdmin || isLecturer) && (
+          {canCreate && (
             <button
               id="btn-bulk-create"
               onClick={() => setShowBulk(true)}
               className="flex items-center gap-2 px-4 py-2 text-sm bg-primary text-white rounded-xl hover:bg-primary-700 transition-all shadow-sm hover:shadow-md"
             >
-              <Plus className="w-4 h-4" /> {isLecturer ? 'Create Class' : 'Bulk Create'}
+              <Plus className="w-4 h-4" /> Create Classes
             </button>
           )}
         </div>
@@ -307,6 +315,18 @@ export default function ClassManagement() {
             <option value="Completed">Completed</option>
             {(isAdmin || isLecturer) && <option value="Archived">Archived</option>}
           </select>
+          {isAdmin && (
+            <select
+              value={filterAssignment}
+              onChange={(event) => { setFilterAssignment(event.target.value as 'Assigned' | 'Unassigned' | ''); setPage(1); }}
+              className="border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none bg-white focus:ring-2 focus:ring-primary/20 focus:border-primary"
+              aria-label="Filter by lecturer assignment"
+            >
+              <option value="">All assignments</option>
+              <option value="Assigned">Assigned</option>
+              <option value="Unassigned">Unassigned</option>
+            </select>
+          )}
           <select
             value={sort}
             onChange={(e) => { setSort(e.target.value); setPage(1); }}
@@ -323,7 +343,7 @@ export default function ClassManagement() {
           <button type="submit" className="flex items-center gap-2 px-4 py-2 bg-secondary text-white rounded-xl text-sm hover:bg-secondary-700 transition-all">
             <Filter className="w-4 h-4" /> Filter
           </button>
-          <button type="button" onClick={() => { setSearch(''); setAppliedSearch(''); setFilterSem(''); setFilterYear(''); setFilterSubj(''); setFilterStatus(''); setSort('code'); setPage(1); }} className="text-sm text-slate-400 hover:text-slate-600 px-2">
+          <button type="button" onClick={() => { setSearch(''); setAppliedSearch(''); setFilterSem(''); setFilterYear(''); setFilterSubj(''); setFilterStatus(''); setFilterAssignment(''); setSort('code'); setPage(1); }} className="text-sm text-slate-400 hover:text-slate-600 px-2">
             Reset
           </button>
         </form>
@@ -345,8 +365,8 @@ export default function ClassManagement() {
         <EmptyState
           icon={GraduationCap}
           title="No classes found"
-          description={isAdmin ? 'Use Bulk Create to generate classes by subject code' : 'No classes assigned to you yet'}
-          action={(isAdmin || isLecturer) ? { label: isLecturer ? 'Create class' : 'Bulk Create', onClick: () => setShowBulk(true) } : undefined}
+          description={isAdmin ? 'Use Create Classes to generate classes by subject and index' : 'No classes assigned to you yet'}
+          action={canCreate ? { label: 'Create Classes', onClick: () => setShowBulk(true) } : undefined}
         />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -393,14 +413,20 @@ export default function ClassManagement() {
                       <div className="w-7 h-7 rounded-lg bg-primary-100 flex items-center justify-center shrink-0">
                         <GraduationCap className="w-4 h-4 text-primary" />
                       </div>
-                      <div className="min-w-0">
+                      <div className="min-w-0 flex-1">
                         <p className="text-xs text-slate-400">Lecturer</p>
                         <p className="text-sm font-medium text-slate-800 truncate">{cls.lectureId?.name || 'Unknown'}</p>
                       </div>
+                      {isAdmin && cls.status !== 'Completed' && cls.status !== 'Archived' && (
+                        <button type="button" onClick={(event) => { event.stopPropagation(); setAssignTarget(cls); }} className="rounded-lg px-2 py-1 text-[11px] font-semibold text-primary hover:bg-primary-50">Change</button>
+                      )}
                     </div>
                   ) : (
-                    <div className="mb-2 p-2 bg-amber-50 rounded-xl border border-amber-100">
-                      <p className="text-xs text-amber-600 font-medium">⚠ No lecturer assigned</p>
+                    <div className="mb-2 flex items-center justify-between gap-2 rounded-xl border border-amber-100 bg-amber-50 p-2">
+                      <p className="text-xs font-medium text-amber-700">⚠ Unassigned Draft</p>
+                      {isAdmin && cls.status === 'Draft' && (
+                        <button type="button" onClick={(event) => { event.stopPropagation(); setAssignTarget(cls); }} className="rounded-lg bg-white px-2 py-1 text-[11px] font-semibold text-amber-700 shadow-xs hover:bg-amber-100">Assign Lecturer</button>
+                      )}
                     </div>
                   )}
 
@@ -510,12 +536,25 @@ export default function ClassManagement() {
       )}
 
       {/* ── Modals ── */}
-      {showBulk && (
+      {canCreate && showBulk && (
         <BulkCreateModal
           lecturers={lecturers}
-          isLecturer={isLecturer}
           onClose={() => setShowBulk(false)}
           onCreated={handleBulkCreated}
+        />
+      )}
+      {isAdmin && assignTarget && (
+        <AssignLectureModal
+          classId={assignTarget._id}
+          currentLecture={assignTarget.lectureId}
+          rowVersion={assignTarget.rowVersion}
+          allowUnassign={assignTarget.status === 'Draft'}
+          initialLecturers={lecturers}
+          onClose={() => setAssignTarget(null)}
+          onAssigned={async () => {
+            setAssignTarget(null);
+            await fetchAll();
+          }}
         />
       )}
       {(isAdmin || (isLecturer && classFeatureFlags.lecturerStudentImport)) && importTarget && (

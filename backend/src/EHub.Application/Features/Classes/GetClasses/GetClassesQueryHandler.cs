@@ -52,13 +52,37 @@ public sealed class GetClassesQueryHandler : IGetClassesQueryHandler
                 new Error(ErrorCodes.ClassAccessDenied, "You do not have permission to view class list."));
         }
 
+        bool? mustBeAssigned = null;
+        if (!string.IsNullOrWhiteSpace(request.AssignmentStatus))
+        {
+            var assignmentStatus = request.AssignmentStatus.Trim();
+            if (assignmentStatus.Equals("Assigned", StringComparison.OrdinalIgnoreCase))
+            {
+                mustBeAssigned = true;
+            }
+            else if (assignmentStatus.Equals("Unassigned", StringComparison.OrdinalIgnoreCase))
+            {
+                mustBeAssigned = false;
+            }
+            else
+            {
+                return Result.Failure<ClassListResponse>(
+                    new Error(ErrorCodes.ClassValidationError, "Assignment status must be Assigned or Unassigned."));
+            }
+        }
+
         var query = _context.Classes.AsNoTracking();
         if (isLecturer)
         {
             query = query.Where(@class => @class.PrimaryLecturerId == currentUserId);
         }
 
-
+        if (mustBeAssigned.HasValue)
+        {
+            query = mustBeAssigned.Value
+                ? query.Where(@class => @class.PrimaryLecturerId != null)
+                : query.Where(@class => @class.PrimaryLecturerId == null);
+        }
 
         // 3. Status Filter (Mặc định là Active)
         if (string.IsNullOrWhiteSpace(request.Status))

@@ -30,7 +30,15 @@ public sealed class CreateClassCommandHandler : ICreateClassCommandHandler
         string currentUserRole,
         CancellationToken cancellationToken = default)
     {
-        // 1. Validation Class Index
+        // Authorization is enforced here as well as at the controller boundary so
+        // callers cannot bypass the business rule by invoking the handler directly.
+        if (!ClassAuthorizationRules.IsAdmin(currentUserRole))
+        {
+            return Result.Failure<ClassResponse>(
+                new Error(ErrorCodes.ClassAccessDenied, "Only an administrator can create classes."));
+        }
+
+        // Validate the generated class index before reading reference data.
         if (request.ClassIndex is < 1 or > 999)
         {
             return Result.Failure<ClassResponse>(
@@ -44,17 +52,7 @@ public sealed class CreateClassCommandHandler : ICreateClassCommandHandler
                 new Error(ErrorCodes.ClassValidationError, "Room must not exceed 50 characters."));
         }
 
-        // 2. Role Security Check
-        var isAdmin = string.Equals(currentUserRole, SystemRoles.Admin, StringComparison.OrdinalIgnoreCase);
-        var isLecturer = string.Equals(currentUserRole, SystemRoles.Lecturer, StringComparison.OrdinalIgnoreCase);
-
-        if (!isAdmin && !isLecturer)
-        {
-            return Result.Failure<ClassResponse>(
-                new Error(ErrorCodes.ClassAccessDenied, "You do not have permission to create a class."));
-        }
-
-        // 3. Validate Subject (Course)
+        // Validate the subject selected by the administrator.
         var course = await _context.Courses
             .AsNoTracking()
             .FirstOrDefaultAsync(c => c.Id == request.CourseId, cancellationToken);
@@ -71,7 +69,7 @@ public sealed class CreateClassCommandHandler : ICreateClassCommandHandler
                 new Error(ErrorCodes.ClassValidationError, "The specified subject is inactive."));
         }
 
-        // 4. Validate AcademicTerm (Semester)
+        // Validate the semester selected by the administrator.
         var semester = await _context.Semesters
             .AsNoTracking()
             .FirstOrDefaultAsync(s => s.Id == request.SemesterId, cancellationToken);
@@ -82,34 +80,17 @@ public sealed class CreateClassCommandHandler : ICreateClassCommandHandler
                 new Error(ErrorCodes.ClassValidationError, "The specified academic term does not exist."));
         }
 
-        if (semester.Status is SemesterStatus.Completed or SemesterStatus.Archived ||
-            (isLecturer && semester.Status != SemesterStatus.Active))
+        if (semester.Status is SemesterStatus.Completed or SemesterStatus.Archived)
         {
             return Result.Failure<ClassResponse>(
                 new Error(ErrorCodes.ClassValidationError, "Classes can only be created in an academic term that is open for creation."));
         }
 
-        // 5. Lecturer Assignment
+        // Lecturer assignment is optional so an administrator can assign it later.
         Guid? targetLecturerId = null;
         User? lecturerUser = null;
 
-        if (isLecturer)
-        {
-            // Lecturer CHỈ ĐƯỢC tạo cho chính mình (Security rule: Không tin LecturerId từ client)
-            targetLecturerId = currentUserId;
-            lecturerUser = await _context.Users
-                .AsNoTracking()
-                .Include(u => u.UserRoles)
-                .ThenInclude(ur => ur.Role)
-                .FirstOrDefaultAsync(u => u.Id == currentUserId, cancellationToken);
-            if (lecturerUser == null || lecturerUser.Status != UserStatus.Active ||
-                !lecturerUser.UserRoles.Any(ur => string.Equals(ur.Role.Name, SystemRoles.Lecturer, StringComparison.OrdinalIgnoreCase)))
-            {
-                return Result.Failure<ClassResponse>(
-                    new Error(ErrorCodes.ClassAccessDenied, "The current lecturer account is not active."));
-            }
-        }
-        else if (isAdmin && request.PrimaryLecturerId.HasValue)
+        if (request.PrimaryLecturerId.HasValue)
         {
             targetLecturerId = request.PrimaryLecturerId.Value;
             lecturerUser = await _context.Users

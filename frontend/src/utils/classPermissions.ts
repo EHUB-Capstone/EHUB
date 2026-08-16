@@ -37,3 +37,7 @@ export const canManageClass = (
   const lecturerId = entityId(targetClass?.primaryLecturerId || targetClass?.lectureId);
   return Boolean(userId && lecturerId && userId === lecturerId);
 };
+
+export const canCreateClasses = (
+  user: ClassPermissionUser | null | undefined,
+): boolean => hasClassRole(user, 'ADMIN');

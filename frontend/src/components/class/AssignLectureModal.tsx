@@ -4,34 +4,51 @@ import { X, Loader2, Search, Check } from 'lucide-react';
 import { classApi } from '../../api/classApi';
 import { userApi } from '../../api/userApi';
 import { parseApiError } from '../../utils/apiError';
+import { buildApprovedLecturerQuery, normalizeLecturerOptions } from '../../utils/lecturerDirectory';
 
-export default function AssignLectureModal({ classId, currentLecture, rowVersion, allowUnassign = false, onClose, onAssigned }) {
-  const [lecturers, setLecturers] = useState([]);
+const EMPTY_LECTURERS = [];
+
+export default function AssignLectureModal({ classId, currentLecture, rowVersion, allowUnassign = false, initialLecturers = EMPTY_LECTURERS, onClose, onAssigned }) {
+  const [lecturers, setLecturers] = useState(() => normalizeLecturerOptions(initialLecturers));
   const [selectedId, setSelectedId] = useState(currentLecture?._id || currentLecture?.id || '');
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
+    if (initialLecturers.length > 0) {
+      setLecturers(normalizeLecturerOptions(initialLecturers));
+      setLoading(false);
+      return undefined;
+    }
+
+    const controller = new AbortController();
+    let active = true;
     const fetchLecturers = async () => {
       try {
-        const res = await userApi.getAll({ role: 'LECTURER', limit: 100 });
+        const res = await userApi.getAll(buildApprovedLecturerQuery(), { signal: controller.signal });
         const list = res?.data?.users || res?.users || [];
-        setLecturers(list.map(lecturer => ({
-          ...lecturer,
-          _id: lecturer._id || lecturer.id,
-          name: lecturer.name || lecturer.fullName,
-        })));
-      } catch {
-        toast.error('Failed to load lecturers');
+        if (active) setLecturers(normalizeLecturerOptions(list));
+      } catch (error) {
+        if (active && !controller.signal.aborted) {
+          toast.error(parseApiError(error, 'Failed to load lecturers.').message);
+        }
       } finally {
-        setLoading(false);
+        if (active) setLoading(false);
       }
     };
-    fetchLecturers();
-  }, []);
+    void fetchLecturers();
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [initialLecturers]);
 
   const handleSubmit = async () => {
+    if (!selectedId && !currentLecture) {
+      toast.error('Select an active lecturer before saving.');
+      return;
+    }
     if (!rowVersion) {
       toast.error('Class data is stale. Reload the page and try again.');
       return;

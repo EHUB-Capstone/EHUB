@@ -33,7 +33,7 @@ public sealed class CreateBulkClassesCommandHandler : ICreateBulkClassesCommandH
         string currentUserRole,
         CancellationToken cancellationToken = default)
     {
-        var validation = await ValidateCommonAsync(request, currentUserId, currentUserRole, cancellationToken);
+        var validation = await ValidateCommonAsync(request, currentUserRole, cancellationToken);
         if (validation.IsFailure)
         {
             return Result.Failure<BulkClassPreviewResponse>(validation.Error);
@@ -48,7 +48,7 @@ public sealed class CreateBulkClassesCommandHandler : ICreateBulkClassesCommandH
         string currentUserRole,
         CancellationToken cancellationToken = default)
     {
-        var validation = await ValidateCommonAsync(request, currentUserId, currentUserRole, cancellationToken);
+        var validation = await ValidateCommonAsync(request, currentUserRole, cancellationToken);
         if (validation.IsFailure)
         {
             return Result.Failure<IReadOnlyCollection<ClassResponse>>(validation.Error);
@@ -201,15 +201,12 @@ public sealed class CreateBulkClassesCommandHandler : ICreateBulkClassesCommandH
 
     private async Task<Result<(Course Course, Semester Semester, User? Lecturer, List<int> TargetIndices)>> ValidateCommonAsync(
         CreateBulkClassesRequest request,
-        Guid currentUserId,
         string currentUserRole,
         CancellationToken cancellationToken)
     {
-        var isAdmin = string.Equals(currentUserRole, SystemRoles.Admin, StringComparison.OrdinalIgnoreCase);
-        var isLecturer = string.Equals(currentUserRole, SystemRoles.Lecturer, StringComparison.OrdinalIgnoreCase);
-        if (!isAdmin && !isLecturer)
+        if (!ClassAuthorizationRules.IsAdmin(currentUserRole))
         {
-            return Failure(ErrorCodes.ClassAccessDenied, "You do not have permission to bulk create classes.");
+            return Failure(ErrorCodes.ClassAccessDenied, "Only an administrator can create classes.");
         }
 
         var targetIndicesResult = BuildTargetIndices(request);
@@ -256,14 +253,13 @@ public sealed class CreateBulkClassesCommandHandler : ICreateBulkClassesCommandH
         {
             return Failure(ErrorCodes.ClassValidationError, "semesterId, semester, and year must identify the same academic term.");
         }
-        if (semester.Status is SemesterStatus.Completed or SemesterStatus.Archived ||
-            (isLecturer && semester.Status != SemesterStatus.Active))
+        if (semester.Status is SemesterStatus.Completed or SemesterStatus.Archived)
         {
             return Failure(ErrorCodes.ClassValidationError, "Classes can only be created in an academic term that is open for creation.");
         }
 
         User? lecturer = null;
-        var lecturerId = isLecturer ? currentUserId : request.PrimaryLecturerId;
+        var lecturerId = request.PrimaryLecturerId;
         if (lecturerId.HasValue && lecturerId.Value != Guid.Empty)
         {
             lecturer = await _context.Users

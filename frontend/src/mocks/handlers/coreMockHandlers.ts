@@ -403,6 +403,19 @@ function registerSubjectHandlers(mock: MockAdapter): void {
     return ok({ currentSemester, availableYears: [2025, 2026, 2027], isDecember: false }, 'Current semester retrieved successfully.');
   });
 
+  mock.onGet('/subjects/semesters').reply(() => {
+    const current = getMockState().currentSemester;
+    return ok({
+      semesters: [{
+        id: `mock-semester-${current.semester}${current.year}`,
+        semester: current.semester,
+        year: current.year,
+        status: 'Active',
+        rowVersion: '1',
+      }],
+    }, 'Semesters retrieved successfully.');
+  });
+
   mock.onPost('/subjects/current-semester').reply((config) => {
     const body = parseBody(config);
     const semester = asString(body.semester, 'FA').toUpperCase();

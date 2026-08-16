@@ -65,6 +65,24 @@ public class CreateBulkClassesCommandHandlerTests
     }
 
     [Fact]
+    public async Task PreviewAsync_WhenUserIsLecturer_ReturnsAccessDeniedError()
+    {
+        var request = new CreateBulkClassesRequest
+        {
+            CourseId = Guid.NewGuid(),
+            SemesterId = Guid.NewGuid(),
+            StartClassIndex = 1,
+            Quantity = 5
+        };
+
+        var result = await _handler.PreviewAsync(request, Guid.NewGuid(), SystemRoles.Lecturer);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be(ErrorCodes.ClassAccessDenied);
+        result.Error.Message.Should().Be("Only an administrator can create classes.");
+    }
+
+    [Fact]
     public async Task PreviewAsync_WhenClassIndicesContainDuplicates_ReturnsValidationError()
     {
         var request = new CreateBulkClassesRequest

@@ -40,6 +40,14 @@ function addAudit(classId: string, action: string, details: Record<string, unkno
   });
 }
 
+function adminOnlyGuard() {
+  const state = getMockState();
+  const user = state.users.find((candidate) => candidate.id === state.sessionUserId);
+  return user?.role === 'ADMIN'
+    ? null
+    : failure(403, 'CLASS_ACCESS_DENIED', 'Only an administrator can create or assign classes.');
+}
+
 function createClassFromBulk(body: Record<string, unknown>, classIndex: number): MockClass | null {
   const state = getMockState();
   const subjectCode = asString(body.subjectCode).toUpperCase();
@@ -52,7 +60,7 @@ function createClassFromBulk(body: Record<string, unknown>, classIndex: number):
   const primaryLecturer = state.users.find((user) => user.id === asString(body.primaryLecturerId) && user.role === 'LECTURER');
   return {
     id: allocateId(),
-    classCode: `${subject.subjectCode}-${semester}${String(year).slice(-2)}-${String(classIndex).padStart(2, '0')}`,
+    classCode: `${subject.subjectCode}_${classIndex}`,
     classIndex,
     courseId: subject._id,
     subjectCode: subject.subjectCode,
@@ -82,7 +90,7 @@ function bulkIndices(body: Record<string, unknown>): number[] {
     : [];
   if (explicit.length) return explicit;
   const start = Math.max(1, asNumber(body.startClassIndex, 1));
-  const quantity = Math.min(50, Math.max(1, asNumber(body.quantity, 1)));
+  const quantity = Math.min(100, Math.max(1, asNumber(body.quantity, 1)));
   return Array.from({ length: quantity }, (_, index) => start + index);
 }
 
@@ -90,6 +98,7 @@ function registerClassQueries(mock: MockAdapter): void {
   mock.onGet('/classes').reply((config) => {
     const params = requestParams(config);
     const status = asString(params.status) as ClassStatus | '';
+    const assignmentStatus = asString(params.assignmentStatus);
     const query = asString(params.search).trim().toLowerCase();
     const page = Math.max(1, asNumber(params.page, 1));
     const pageSize = Math.min(100, Math.max(1, asNumber(params.pageSize, 10)));
@@ -98,6 +107,8 @@ function registerClassQueries(mock: MockAdapter): void {
     let classes = state.classes.filter((cls) =>
       (status ? cls.status === status : cls.status === 'Active' || cls.status === 'Draft')
       && (sessionUser?.role !== 'LECTURER' || cls.primaryLecturerId === sessionUser.id)
+      && (assignmentStatus !== 'Assigned' || cls.primaryLecturerId !== null)
+      && (assignmentStatus !== 'Unassigned' || cls.primaryLecturerId === null)
       && (!params.semesterCode || cls.semesterCode.toUpperCase() === asString(params.semesterCode).toUpperCase())
       && (!params.year || cls.year === asNumber(params.year, cls.year))
       && (!params.subjectCode || cls.subjectCode.toUpperCase() === asString(params.subjectCode).toUpperCase())
@@ -185,6 +196,8 @@ function registerClassQueries(mock: MockAdapter): void {
 
 function registerClassCrud(mock: MockAdapter): void {
   mock.onPost('/classes').reply((config) => {
+    const permissionError = adminOnlyGuard();
+    if (permissionError) return permissionError;
     const body = parseBody(config);
     const cls = createClassFromBulk(body, Math.max(1, asNumber(body.classIndex, 1)));
     if (!cls) return failure(400, 'CLASS_COURSE_NOT_FOUND', 'The selected subject does not exist.');
@@ -196,6 +209,8 @@ function registerClassCrud(mock: MockAdapter): void {
   });
 
   mock.onPost('/classes/bulk/preview').reply((config) => {
+    const permissionError = adminOnlyGuard();
+    if (permissionError) return permissionError;
     const body = parseBody(config);
     const items = bulkIndices(body).map((index) => {
       const candidate = createClassFromBulk(body, index);
@@ -207,6 +222,8 @@ function registerClassCrud(mock: MockAdapter): void {
   });
 
   mock.onPost('/classes/bulk/commit').reply((config) => {
+    const permissionError = adminOnlyGuard();
+    if (permissionError) return permissionError;
     const body = parseBody(config);
     const createdClasses: ClassDto[] = [];
     for (const index of bulkIndices(body)) {
@@ -266,6 +283,8 @@ function registerClassCrud(mock: MockAdapter): void {
   });
 
   mock.onPut(/^\/classes\/[^/]+\/teaching-assignment$/).reply((config) => {
+    const permissionError = adminOnlyGuard();
+    if (permissionError) return permissionError;
     const classId = routeId(config, /^\/classes\/([^/]+)\/teaching-assignment$/);
     const body = parseBody(config);
     const guard = classMutationGuard(classId, body.rowVersion);
