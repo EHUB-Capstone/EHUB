@@ -158,6 +158,38 @@ public sealed class TeamWorkflowIntegrationTests
     }
 
     [Fact]
+    public async Task CreateTeam_WhenImportedMajorIsMissing_UsesRegisteredProfileMajor()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateSeedAsync(context, createProposal: false, createTeam: false);
+        var enrollments = await context.ClassStudents
+            .Where(item => item.ClassId == seed.ClassId)
+            .ToListAsync();
+        enrollments.ForEach(item => item.MajorCodeAtEnrollment = MajorCodes.Undeclared);
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        var handler = new TeamManagementHandler(
+            context,
+            scope.ServiceProvider.GetRequiredService<EHub.Application.Common.Interfaces.Persistence.IUnitOfWork>());
+        var result = await handler.CreateAsync(
+            seed.ClassId,
+            new CreateTeamRequest
+            {
+                TeamName = "Profile Major Fallback",
+                MemberIds = seed.StudentIds,
+                LeaderStudentId = seed.StudentIds[0]
+            },
+            seed.LecturerId,
+            SystemRoles.Lecturer);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.Members.Should().Contain(member => member.MajorCode == MajorCodes.BEN);
+        result.Value.Members.Should().Contain(member => member.MajorCode == MajorCodes.BIT_SE);
+    }
+
+    [Fact]
     public async Task ReassigningMentor_EndsThePreviousAssignmentAndKeepsOneActiveSource()
     {
         using var scope = _factory.Services.CreateScope();

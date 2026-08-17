@@ -11,6 +11,25 @@ public sealed record NormalizedStudentEnrollmentInput(
 
 public static class StudentEnrollmentRules
 {
+    public static string? ResolveEffectiveMajorCode(
+        string? enrollmentMajorCode,
+        string? profileMajorCode)
+    {
+        var normalizedEnrollmentMajor = NormalizeMajorCode(enrollmentMajorCode);
+        if (!IsMissingMajorCode(normalizedEnrollmentMajor))
+        {
+            return normalizedEnrollmentMajor;
+        }
+
+        var normalizedProfileMajor = NormalizeMajorCode(profileMajorCode);
+        if (!IsMissingMajorCode(normalizedProfileMajor))
+        {
+            return normalizedProfileMajor;
+        }
+
+        return normalizedEnrollmentMajor;
+    }
+
     public static string? ValidateAndNormalize(
         string? studentCodeValue,
         string? fullNameValue,
@@ -55,5 +74,17 @@ public static class StudentEnrollmentRules
         }
 
         return null;
+    }
+
+    private static string? NormalizeMajorCode(string? majorCode)
+    {
+        return string.IsNullOrWhiteSpace(majorCode)
+            ? null
+            : majorCode.Trim().ToUpperInvariant();
+    }
+
+    private static bool IsMissingMajorCode(string? majorCode)
+    {
+        return string.IsNullOrWhiteSpace(majorCode) || MajorCodes.IsUndeclared(majorCode);
     }
 }

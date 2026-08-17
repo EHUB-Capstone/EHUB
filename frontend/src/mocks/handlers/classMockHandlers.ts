@@ -2,6 +2,7 @@ import type MockAdapter from 'axios-mock-adapter';
 import type { AxiosRequestConfig } from 'axios';
 import type { ClassDto, ClassStatus } from '../../types/classes.ts';
 import type { MockClass, MockRosterStudent } from '../mockState.ts';
+import { PROGRAM_GROUPS } from '../../constants/majors.ts';
 import {
   allocateId,
   allocateRowVersion,
@@ -21,10 +22,16 @@ import {
   touchClass,
 } from '../mockHelpers.ts';
 
+const validMajorCodes = new Set<string>(PROGRAM_GROUPS.flatMap((group) =>
+  group.majors.map((major) => major.code.toUpperCase())));
+
 function classResponse(cls: MockClass): ClassDto {
   refreshClassCounts(cls.id);
   const { previousStatus: _previousStatus, ...response } = cls;
-  return response;
+  return {
+    ...response,
+    statusBeforeArchive: cls.status === 'Archived' ? cls.previousStatus : null,
+  };
 }
 
 function addAudit(classId: string, action: string, details: Record<string, unknown>): void {
@@ -48,14 +55,63 @@ function adminOnlyGuard() {
     : failure(403, 'CLASS_ACCESS_DENIED', 'Only an administrator can create or assign classes.');
 }
 
+function studentClassSummary(cls: MockClass, enrollmentStatus: string) {
+  return {
+    id: cls.id,
+    classCode: cls.classCode,
+    subjectCode: cls.subjectCode,
+    subjectName: cls.subjectName,
+    semester: cls.semesterCode.slice(0, 2),
+    year: cls.year,
+    classStatus: cls.status,
+    enrollmentStatus,
+    lectureId: cls.primaryLecturerId
+      ? { id: cls.primaryLecturerId, name: cls.primaryLecturerName, email: cls.primaryLecturerEmail }
+      : null,
+    mentors: cls.mentors,
+  };
+}
+
+function completionPreview(cls: MockClass) {
+  const state = getMockState();
+  const roster = state.rosters[cls.id] || [];
+  const classTeams = state.teams.filter((team) => team.classId === cls.id);
+  const teamIds = new Set(classTeams.map((team) => team.id));
+  const openProposals = state.proposals.filter((proposal) =>
+    proposal.classId === cls.id && ['Draft', 'Pending', 'NeedsRevision'].includes(proposal.status));
+  const openDirections = state.directions.filter((direction) =>
+    teamIds.has(direction.teamId) && direction.status !== 'Approved');
+  const activeMentors = classTeams.filter((team) => team.currentMentorAssignment?.status === 'Active');
+  const warnings: string[] = [];
+  if (openProposals.length) warnings.push(`${openProposals.length} open team proposal(s) will be cancelled.`);
+  if (openDirections.length) warnings.push(`${openDirections.length} project direction(s) will be retained as read-only in their current state.`);
+  if (activeMentors.length) warnings.push(`${activeMentors.length} active mentor assignment(s) will be ended.`);
+
+  return {
+    classId: cls.id,
+    classCode: cls.classCode,
+    status: cls.status,
+    activeEnrollmentCount: roster.filter((student) => student.enrollmentStatus === 'Active').length,
+    droppedEnrollmentCount: roster.filter((student) => student.enrollmentStatus === 'Dropped').length,
+    activeMentorAssignmentCount: activeMentors.length,
+    openTeamProposalCount: openProposals.length,
+    openProjectDirectionCount: openDirections.length,
+    processingImportSessionCount: 0,
+    scheduledMentoringSessionCount: 0,
+    blockers: cls.status === 'Active' || cls.status === 'Completed' ? [] : ['Only an active class can be completed.'],
+    warnings,
+    rowVersion: cls.rowVersion,
+  };
+}
+
 function createClassFromBulk(body: Record<string, unknown>, classIndex: number): MockClass | null {
   const state = getMockState();
   const subjectCode = asString(body.subjectCode).toUpperCase();
   const subject = state.subjects.find((item) =>
     item._id === asString(body.courseId) || item.subjectCode === subjectCode);
   if (!subject) return null;
-  const semester = asString(body.semester, state.currentSemester.semester).toUpperCase();
-  const year = asNumber(body.year, state.currentSemester.year);
+  const semester = asString(body.semester, state.currentSemester?.semester ?? 'FA').toUpperCase();
+  const year = asNumber(body.year, state.currentSemester?.year ?? new Date().getFullYear());
   const semesterCode = `${semester}${year}`;
   const primaryLecturer = state.users.find((user) => user.id === asString(body.primaryLecturerId) && user.role === 'LECTURER');
   return {
@@ -124,20 +180,22 @@ function registerClassQueries(mock: MockAdapter): void {
     return ok({ items, totalCount, page, pageSize, totalPages: Math.max(1, Math.ceil(totalCount / pageSize)) }, 'Classes retrieved successfully.');
   });
 
-  mock.onGet('/classes/my-classes').reply(() => {
+  mock.onGet('/classes/my-classes').reply((config) => {
     const state = getMockState();
     const sessionUser = state.users.find((user) => user.id === state.sessionUserId && user.role === 'STUDENT');
     const studentId = sessionUser?.id;
-    const classes = state.classes.filter((cls) => state.rosters[cls.id]?.some((student) => student.userId === studentId && student.enrollmentStatus === 'Active')).map((cls) => ({
-      id: cls.id,
-      classCode: cls.classCode,
-      subjectCode: cls.subjectCode,
-      subjectName: cls.subjectName,
-      semester: cls.semesterCode.slice(0, 2),
-      year: cls.year,
-      lectureId: cls.primaryLecturerId ? { id: cls.primaryLecturerId, name: cls.primaryLecturerName, email: cls.primaryLecturerEmail } : null,
-      mentors: cls.mentors,
-    }));
+    const history = asString(requestParams(config).scope, 'Current').toLowerCase() === 'history';
+    const expectedEnrollment = history ? 'Completed' : 'Active';
+    const classes = state.classes.flatMap((cls) => {
+      const enrollment = state.rosters[cls.id]?.find((student) =>
+        student.userId === studentId && student.enrollmentStatus === expectedEnrollment);
+      const inExpectedClassState = history
+        ? cls.status === 'Completed' || cls.status === 'Archived'
+        : cls.status === 'Draft' || cls.status === 'Active';
+      return enrollment && inExpectedClassState
+        ? [studentClassSummary(cls, enrollment.enrollmentStatus)]
+        : [];
+    });
     return ok({ classes }, 'Student classes retrieved.');
   });
 
@@ -146,7 +204,7 @@ function registerClassQueries(mock: MockAdapter): void {
     const studentId = state.users.find((user) => user.id === state.sessionUserId && user.role === 'STUDENT')?.id;
     const team = state.teams.find((item) => item.members.some((member) => member.studentId === studentId)) || null;
     const cls = team ? findClass(team.classId) : undefined;
-    const classSummary = cls ? { id: cls.id, classCode: cls.classCode, subjectCode: cls.subjectCode, subjectName: cls.subjectName, semester: cls.semesterCode.slice(0, 2), year: cls.year, lectureId: cls.primaryLecturerId ? { id: cls.primaryLecturerId, name: cls.primaryLecturerName, email: cls.primaryLecturerEmail } : null, mentors: cls.mentors } : null;
+    const classSummary = cls ? studentClassSummary(cls, 'Active') : null;
     return ok({ team, class: classSummary, members: team?.members || [] }, 'Student team retrieved.');
   });
 
@@ -154,8 +212,12 @@ function registerClassQueries(mock: MockAdapter): void {
     const classId = routeId(config, /^\/classes\/my-class-detail\/([^/]+)$/);
     const cls = findClass(classId);
     if (!cls) return failure(404, 'CLASS_NOT_FOUND', 'Class not found.');
-    const classSummary = { id: cls.id, classCode: cls.classCode, subjectCode: cls.subjectCode, subjectName: cls.subjectName, semester: cls.semesterCode.slice(0, 2), year: cls.year, lectureId: cls.primaryLecturerId ? { id: cls.primaryLecturerId, name: cls.primaryLecturerName, email: cls.primaryLecturerEmail } : null, mentors: cls.mentors };
-    const students = (getMockState().rosters[classId] || []).filter((student) => student.enrollmentStatus === 'Active').map((student) => ({ studentId: student.studentId, userId: student.userId, rollNumber: student.rollNumber, fullName: student.fullName, email: student.email, majorCode: student.majorCode, teamId: student.teamId }));
+    const state = getMockState();
+    const sessionUserId = state.users.find((user) => user.id === state.sessionUserId && user.role === 'STUDENT')?.id;
+    const currentEnrollment = (state.rosters[classId] || []).find((student) => student.userId === sessionUserId);
+    const rosterStatus = currentEnrollment?.enrollmentStatus === 'Completed' ? 'Completed' : 'Active';
+    const classSummary = studentClassSummary(cls, rosterStatus);
+    const students = (state.rosters[classId] || []).filter((student) => student.enrollmentStatus === rosterStatus).map((student) => ({ studentId: student.studentId, userId: student.userId, rollNumber: student.rollNumber, fullName: student.fullName, email: student.email, majorCode: student.majorCode, teamId: student.teamId }));
     const teams = getMockState().teams.filter((team) => team.classId === classId);
     return ok({ class: classSummary, students, teams }, 'Student class detail retrieved.');
   });
@@ -186,6 +248,13 @@ function registerClassQueries(mock: MockAdapter): void {
     const pageSize = Math.min(100, Math.max(1, asNumber(params.pageSize, 25)));
     const entries = getMockState().audits[classId] || [];
     return ok({ items: entries.slice((page - 1) * pageSize, page * pageSize), totalCount: entries.length, page, pageSize, totalPages: Math.max(1, Math.ceil(entries.length / pageSize)) }, 'Class audit trail retrieved successfully.');
+  });
+
+  mock.onGet(/^\/classes\/[^/]+\/completion-preview$/).reply((config) => {
+    const cls = findClass(routeId(config, /^\/classes\/([^/]+)\/completion-preview$/));
+    return cls
+      ? ok(completionPreview(cls), 'Class completion preview generated successfully.')
+      : failure(404, 'CLASS_NOT_FOUND', 'Class not found.');
   });
 
   mock.onGet(/^\/classes\/[^/]+$/).reply((config) => {
@@ -305,17 +374,102 @@ function registerClassCrud(mock: MockAdapter): void {
 
   mock.onPost(/^\/classes\/[^/]+\/archive$/).reply((config) => changeLifecycle(config, 'Archived'));
   mock.onPost(/^\/classes\/[^/]+\/restore$/).reply((config) => changeLifecycle(config, 'Restore'));
+  mock.onPost(/^\/classes\/[^/]+\/complete$/).reply((config) => changeCompletion(config, false));
+  mock.onPost(/^\/classes\/[^/]+\/reopen$/).reply((config) => changeCompletion(config, true));
 
   mock.onPost(/^\/classes\/[^/]+\/repair-chat-memberships$/).reply((config) => {
     const classId = routeId(config, /^\/classes\/([^/]+)\/repair-chat-memberships$/);
     const cls = findClass(classId);
     if (!cls) return failure(404, 'CLASS_NOT_FOUND', 'Class not found.');
     const repairedBefore = (getMockState().audits[classId] || []).some((entry) => entry.action === 'CHAT_MEMBERSHIPS_REPAIRED');
-    const result = { classId, groupsCreated: repairedBefore ? 0 : Math.max(1, cls.teamCount), membershipsAdded: repairedBefore ? 0 : cls.studentCount + cls.teamCount, membershipsReactivated: 0, membershipsEnded: 0, isReadOnly: cls.status === 'Archived' };
+    const result = { classId, groupsCreated: repairedBefore ? 0 : Math.max(1, cls.teamCount), membershipsAdded: repairedBefore ? 0 : cls.studentCount + cls.teamCount, membershipsReactivated: 0, membershipsEnded: 0, isReadOnly: cls.status === 'Completed' || cls.status === 'Archived' };
     if (!repairedBefore) addAudit(classId, 'CHAT_MEMBERSHIPS_REPAIRED', result);
     persistMockState();
     return ok(result, 'Class chat memberships repaired successfully.');
   });
+}
+
+function changeCompletion(config: AxiosRequestConfig, reopen: boolean) {
+  const classId = routeId(config, /^\/classes\/([^/]+)\/(complete|reopen)$/);
+  const cls = findClass(classId);
+  if (!cls) return failure(404, 'CLASS_NOT_FOUND', 'Class not found.');
+  const body = parseBody(config);
+  const reason = asString(body.reason).trim();
+  if (reason.length < 3 || reason.length > 500)
+    return failure(400, 'CLASS_VALIDATION_ERROR', 'Reason must contain between 3 and 500 characters.');
+
+  if (reopen && cls.status === 'Active' || !reopen && cls.status === 'Completed') {
+    return ok({ classId, status: cls.status, completedAtUtc: cls.completedAtUtc ?? null, archivedAtUtc: null, rowVersion: cls.rowVersion });
+  }
+  if (asString(body.rowVersion) !== cls.rowVersion)
+    return failure(409, 'CLASS_CONCURRENCY_CONFLICT', 'The class was changed by another request. Refresh and try again.');
+
+  const state = getMockState();
+  const now = new Date().toISOString();
+  if (reopen) {
+    if (cls.status !== 'Completed')
+      return failure(409, 'CLASS_COMPLETION_BLOCKED', 'Only a completed class can be reopened.');
+    const semester = state.semesters.find((item) => item.id === cls.semesterId);
+    const subject = state.subjects.find((item) => item._id === cls.courseId);
+    if (semester?.status !== 'Active')
+      return failure(409, 'CLASS_COMPLETION_BLOCKED', 'The semester must be active before this class can be reopened.');
+    if (subject?.status !== 'active')
+      return failure(409, 'CLASS_COMPLETION_BLOCKED', 'The subject must be active before this class can be reopened.');
+    if (!cls.primaryLecturerId || cls.schedules.length === 0)
+      return failure(409, 'CLASS_COMPLETION_BLOCKED', 'A reopened class requires an active lecturer and schedule.');
+
+    (state.rosters[classId] || []).forEach((student) => {
+      if (student.enrollmentStatus === 'Completed') student.enrollmentStatus = 'Active';
+    });
+    cls.status = 'Active';
+    cls.completedAtUtc = null;
+    cls.completionReason = null;
+    cls.rowVersion = allocateRowVersion();
+    addAudit(classId, 'CLASS_REOPENED', { reason });
+  } else {
+    if (cls.status !== 'Active')
+      return failure(409, 'CLASS_COMPLETION_BLOCKED', 'Only an active class can be completed.');
+    const preview = completionPreview(cls);
+    if (preview.blockers.length)
+      return failure(409, 'CLASS_COMPLETION_BLOCKED', preview.blockers.join(' '));
+
+    (state.rosters[classId] || []).forEach((student) => {
+      if (student.enrollmentStatus === 'Active') student.enrollmentStatus = 'Completed';
+    });
+    state.proposals.filter((proposal) =>
+      proposal.classId === classId && ['Draft', 'Pending', 'NeedsRevision'].includes(proposal.status))
+      .forEach((proposal) => {
+        const previousStatus = proposal.status;
+        proposal.status = 'Cancelled';
+        proposal.history.unshift({
+          id: allocateId(), fromStatus: previousStatus, toStatus: 'Cancelled',
+          action: 'CancelledByClassCompletion', comment: reason,
+          performedByUserId: state.sessionUserId || state.users[0].id, occurredAtUtc: now,
+        });
+      });
+    state.teams.filter((team) => team.classId === classId).forEach((team) => {
+      if (team.currentMentorAssignment?.status === 'Active') {
+        team.currentMentorAssignment.status = 'Ended';
+        team.currentMentorAssignment.endedAtUtc = now;
+      }
+    });
+    cls.status = 'Completed';
+    cls.completedAtUtc = now;
+    cls.completionReason = reason;
+    cls.isEnrollmentMajorLocked = false;
+    cls.rowVersion = allocateRowVersion();
+    addAudit(classId, 'CLASS_COMPLETED', { reason });
+  }
+
+  refreshClassCounts(classId);
+  persistMockState();
+  return ok({
+    classId,
+    status: cls.status,
+    completedAtUtc: cls.completedAtUtc ?? null,
+    archivedAtUtc: null,
+    rowVersion: cls.rowVersion,
+  }, `Class ${reopen ? 'reopened' : 'completed'} successfully.`);
 }
 
 function changeLifecycle(config: AxiosRequestConfig, target: 'Archived' | 'Restore') {
@@ -348,20 +502,75 @@ function registerRosterHandlers(mock: MockAdapter): void {
     if (guard) return guard;
     const body = parseBody(config);
     const code = asString(body.studentCode).trim().toUpperCase();
+    const fullName = asString(body.fullName).trim();
     const email = asString(body.email).trim().toLowerCase();
-    const roster = getMockState().rosters[classId] ||= [];
-    const existing = roster.find((student) => student.rollNumber.toUpperCase() === code || student.email.toLowerCase() === email);
-    if (existing?.enrollmentStatus === 'Active') return failure(409, 'CLASS_STUDENT_EXISTS', 'Student is already enrolled in this class.');
-    if (existing) {
-      existing.enrollmentStatus = 'Active';
-      existing.joinedAtUtc = new Date().toISOString();
-      refreshClassCounts(classId);
-      persistMockState();
-      return ok(existing, 'Student re-enrolled successfully.');
+    const requestedMajor = asString(body.majorCode).trim().toUpperCase();
+    if (!code || code.length > 20 || !fullName || fullName.length > 150 ||
+        !email || email.length > 150 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return failure(400, 'CLASS_VALIDATION_ERROR', 'Student code, full name, and a valid email are required.');
     }
-    const user = getMockState().users.find((item) => item.email.toLowerCase() === email || item.studentId?.toUpperCase() === code);
+    if (requestedMajor && !validMajorCodes.has(requestedMajor))
+      return failure(400, 'CLASS_VALIDATION_ERROR', `Major code '${requestedMajor}' is invalid.`);
+
+    const state = getMockState();
+    const roster = state.rosters[classId] ||= [];
+    const allProfiles = Object.values(state.rosters).flat();
+    const userByCode = state.users.find((item) => item.studentId?.toUpperCase() === code);
+    const userByEmail = state.users.find((item) => item.email.toLowerCase() === email);
+    const profileByCode = allProfiles.find((item) => item.rollNumber.toUpperCase() === code);
+    const profileByEmail = allProfiles.find((item) => item.email.toLowerCase() === email);
+    const codeIdentity = userByCode?.id || profileByCode?.studentId;
+    const emailIdentity = userByEmail?.id || profileByEmail?.studentId;
+    if (codeIdentity && emailIdentity && codeIdentity !== emailIdentity) {
+      return failure(409, 'STUDENT_IDENTITY_CONFLICT', `Student code '${code}' and email '${email}' belong to different student profiles.`);
+    }
+
+    const user = userByCode || userByEmail;
+    const profile = profileByCode || profileByEmail;
+    const profileId = user?.id || profile?.studentId;
+    const profileEmail = user?.email || profile?.email;
+    const profileCode = user?.studentId || profile?.rollNumber;
+    if (profileEmail && profileEmail.toLowerCase() !== email) {
+      return failure(409, 'STUDENT_IDENTITY_CONFLICT', `Student code '${code}' is registered with email '${profileEmail}'.`);
+    }
+    if (profileCode && profileCode.toUpperCase() !== code) {
+      return failure(409, 'STUDENT_IDENTITY_CONFLICT', `Email '${email}' is registered with student code '${profileCode}'.`);
+    }
+
+    const profileMajor = (user?.major || profile?.profileMajorCode || '').toUpperCase();
+    if (profileMajor && requestedMajor && profileMajor !== requestedMajor) {
+      return failure(409, 'STUDENT_MAJOR_MISMATCH', `Selected major '${requestedMajor}' does not match the registered major '${profileMajor}'.`);
+    }
+    const enrollmentMajor = profileMajor || requestedMajor;
+    if (!enrollmentMajor) {
+      return failure(400, 'CLASS_VALIDATION_ERROR', profileId
+        ? 'The existing student profile has no valid registered major. Select a major for this enrollment.'
+        : 'Major is required when creating a new student profile.');
+    }
+
+    const existing = roster.find((student) =>
+      student.studentId === profileId || student.rollNumber.toUpperCase() === code || student.email.toLowerCase() === email);
+    if (existing) {
+      return existing.enrollmentStatus === 'Dropped'
+        ? failure(409, 'STUDENT_RE_ENROLLMENT_REQUIRED', `Student '${code}' has a dropped enrollment. Use the explicit re-enroll action.`)
+        : failure(409, 'STUDENT_ALREADY_ENROLLED', `Student '${code}' already has an enrollment in this class.`);
+    }
+
+    const targetClass = findClass(classId)!;
+    const conflictingClass = state.classes.find((candidate) =>
+      candidate.id !== classId && candidate.courseId === targetClass.courseId && candidate.semesterId === targetClass.semesterId &&
+      (state.rosters[candidate.id] || []).some((student) =>
+        student.studentId === profileId && ['Active', 'Completed'].includes(student.enrollmentStatus)));
+    if (conflictingClass) {
+      return failure(409, 'STUDENT_ENROLLMENT_CONFLICT', `Student '${code}' is already enrolled in active class '${conflictingClass.classCode}' for the same subject and academic term.`);
+    }
+
     const student: MockRosterStudent = {
-      studentId: user?.id || allocateId(), userId: user?.id || null, rollNumber: code, fullName: asString(body.fullName).trim(), email, majorCode: asString(body.majorCode).toUpperCase(), profileMajorCode: user?.major || null, majorVerificationStatus: 'Unverified', memberCode: `MEM-${getMockState().sequence}`, enrollmentStatus: 'Active', teamId: null, teamName: null, isTeamLeader: false, joinedAtUtc: new Date().toISOString(),
+      studentId: profileId || allocateId(), userId: user?.id || null, rollNumber: code, fullName, email,
+      majorCode: enrollmentMajor, profileMajorCode: profileMajor || enrollmentMajor,
+      majorVerificationStatus: 'Unverified', memberCode: `MEM-${state.sequence}`,
+      enrollmentStatus: 'Active', teamId: null, teamName: null, isTeamLeader: false,
+      joinedAtUtc: new Date().toISOString(),
     };
     roster.push(student);
     refreshClassCounts(classId);

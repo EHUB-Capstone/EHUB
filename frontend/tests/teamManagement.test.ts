@@ -4,9 +4,19 @@ import type { ManagedTeam, TeamDraft, TeamStudent } from '../src/types/teamManag
 import {
   getTeamMemberIds,
   getTeamProject,
+  resolveEffectiveTeamMajor,
   validateTeamDraft,
   validateTeamSelection,
 } from '../src/utils/teamManagement.ts';
+
+test('uses imported enrollment major before the temporary profile major', () => {
+  assert.equal(resolveEffectiveTeamMajor(' bba_mkt ', 'BIT_SE'), 'BBA_MKT');
+});
+
+test('falls back to the registration profile major while enrollment major is missing', () => {
+  assert.equal(resolveEffectiveTeamMajor('UNDECLARED', ' bit_se '), 'BIT_SE');
+  assert.equal(resolveEffectiveTeamMajor('', 'BEN'), 'BEN');
+});
 
 const students: TeamStudent[] = [
   { _id: 'student-1', fullName: 'Nguyen Van An', rollNumber: 'SE170001', email: 'an@fpt.edu.vn', major: 'BEN' },

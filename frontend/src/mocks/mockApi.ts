@@ -3,6 +3,7 @@ import axiosClient from '../api/axiosClient.ts';
 import { registerClassMockHandlers } from './handlers/classMockHandlers.ts';
 import { registerCoreMockHandlers } from './handlers/coreMockHandlers.ts';
 import { registerTeamMockHandlers } from './handlers/teamMockHandlers.ts';
+import { registerWorkspaceMockHandlers } from './handlers/workspaceMockHandlers.ts';
 import { resetMockState } from './mockHelpers.ts';
 
 declare global {
@@ -26,6 +27,7 @@ export function enableApiMocks(): void {
   registerCoreMockHandlers(activeMock);
   registerClassMockHandlers(activeMock);
   registerTeamMockHandlers(activeMock);
+  registerWorkspaceMockHandlers(activeMock);
 
   if (typeof window !== 'undefined') {
     window.__EHUB_MOCK_API__ = {

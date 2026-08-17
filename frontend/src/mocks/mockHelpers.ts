@@ -10,7 +10,7 @@ export interface MockValidationError {
   code: string;
 }
 
-const STORAGE_KEY = 'ehub_mock_api_state_v3';
+const STORAGE_KEY = 'ehub_mock_api_state_v4';
 
 function loadState(): MockApiState {
   if (typeof window === 'undefined') return createInitialMockState();
@@ -96,6 +96,7 @@ export function findClass(classId: string): MockClass | undefined {
 export function classMutationGuard(classId: string, rowVersion?: unknown): MockReply | null {
   const cls = findClass(classId);
   if (!cls) return failure(404, 'CLASS_NOT_FOUND', 'The requested class was not found.');
+  if (cls.status === 'Completed') return failure(409, 'CLASS_COMPLETED', 'Completed classes are read-only.');
   if (cls.status === 'Archived') return failure(409, 'CLASS_ARCHIVED', 'Archived classes are read-only.');
   if (typeof rowVersion === 'string' && rowVersion && rowVersion !== cls.rowVersion) {
     return failure(409, 'CLASS_CONCURRENCY_CONFLICT', 'The class was changed by another request. Refresh and try again.');
@@ -113,12 +114,15 @@ export function touchClass(cls: MockClass): void {
 export function refreshClassCounts(classId: string): void {
   const cls = findClass(classId);
   if (!cls) return;
-  cls.studentCount = (state.rosters[classId] || []).filter((student) => student.enrollmentStatus === 'Active').length;
+  const usesCompletedRoster = cls.status === 'Completed' ||
+    (cls.status === 'Archived' && cls.previousStatus === 'Completed');
+  const rosterStatus = usesCompletedRoster ? 'Completed' : 'Active';
+  cls.studentCount = (state.rosters[classId] || []).filter((student) => student.enrollmentStatus === rosterStatus).length;
   cls.teamCount = state.teams.filter((team) => team.classId === classId && team.status.toLowerCase() === 'active').length;
   const mentors = state.teams
     .filter((team) => team.classId === classId)
     .map((team) => team.currentMentorAssignment)
-    .filter((assignment) => assignment?.status === 'Active')
+    .filter((assignment) => assignment && (usesCompletedRoster || assignment.status === 'Active'))
     .map((assignment) => assignment!.mentor);
   cls.mentors = [...new Map(mentors.map((mentor) => [mentor.mentorProfileId, mentor])).values()];
 }

@@ -9,8 +9,6 @@ import {
 import { workspaceApi } from '../../api/workspaceApi';
 import { teamWorkspaceApi } from '../../api/teamWorkspaceApi';
 import { useAuth } from '../../hooks/useAuth';
-import EvaluationPanel from '../../components/workspace/EvaluationPanel';
-import MentoringPanel from '../../components/workspace/MentoringPanel';
 import SprintPanel from '../../components/workspace/SprintPanel';
 import WeeklyRoadmapPlanner from '../../components/workspace/WeeklyRoadmapPlanner';
 import QuickShortcuts from '../../components/workspace/shortcuts/QuickShortcuts';
@@ -19,6 +17,7 @@ import WorkspaceSelector from '../../components/workspace/WorkspaceSelector';
 import ProjectDirectionCard from '../../components/workspace/ProjectDirectionCard';
 import { classFeatureFlags } from '../../config/classFeatureFlags';
 import { getDisplayTeamName } from '../../utils/teamDisplay';
+import { resolveWorkspaceTab } from '../../utils/workspaceNavigation';
 
 const clearWorkspaceSelectionCache = () => {
   [
@@ -46,17 +45,12 @@ export default function TeamWorkspace() {
   const [workspaceContext, setWorkspaceContext] = useState(null);
 
   // Initialise active tab from URL query param (?tab=roadmap)
-  const [activeTab, setActiveTab] = useState(() => {
-    const params = new URLSearchParams(location.search);
-    return params.get('tab') || 'overview';
-  });
+  const [activeTab, setActiveTab] = useState(() => resolveWorkspaceTab(location.search));
 
   // Sync tab when query param changes externally
   useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    const tab = params.get('tab');
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (tab) setActiveTab(tab);
+    setActiveTab(resolveWorkspaceTab(location.search));
   }, [location.search]);
 
   const fetchWorkspaceData = useCallback(async (targetTeamId = teamId || null) => {
@@ -216,8 +210,6 @@ export default function TeamWorkspace() {
         {[
           { key: 'overview', label: 'Workspace Overview' },
           { key: 'roadmap', label: 'Weekly Roadmap' },
-          { key: 'evaluation', label: 'Evaluation' },
-          { key: 'mentoring', label: 'Mentoring Sessions' },
           { key: 'shortcut', label: 'Quick Shortcuts' },
         ].map(({ key, label, icon: Icon }) => (
           <button
@@ -252,6 +244,9 @@ export default function TeamWorkspace() {
             <CheckpointSection 
               teamId={String(team._id)} 
               isEditable={isEditable}
+              isReadOnly={isReadOnly}
+              proposalId={proposal?._id}
+              pitchDeckId={latestDeck?._id}
             />
           </div>
 
@@ -348,19 +343,6 @@ export default function TeamWorkspace() {
           />
         );
       })()}
-
-      {activeTab === 'evaluation' && (
-        <EvaluationPanel
-          teamId={team._id}
-          proposalId={proposal?._id}
-          pitchDeckId={latestDeck?._id}
-          isReadOnly={isReadOnly}
-        />
-      )}
-
-      {activeTab === 'mentoring' && (
-        <MentoringPanel teamId={team._id} isReadOnly={isReadOnly} />
-      )}
 
       {activeTab === 'sprint' && (
         <SprintPanel teamId={team._id} members={members} isEditable={isEditable} isReadOnly={isReadOnly} />

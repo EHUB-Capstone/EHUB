@@ -125,10 +125,12 @@ public sealed class GetClassRosterQueryHandler : IGetClassRosterQueryHandler
                 RollNumber = row.RollNumber,
                 FullName = row.FullName,
                 Email = row.Email,
-                MajorCode = ResolveEffectiveMajorCode(
+                MajorCode = StudentEnrollmentRules.ResolveEffectiveMajorCode(
                     row.MajorCodeAtEnrollment,
                     row.ProfileMajorCode),
-                ProfileMajorCode = NormalizeMajorCode(row.ProfileMajorCode),
+                ProfileMajorCode = string.IsNullOrWhiteSpace(row.ProfileMajorCode)
+                    ? null
+                    : row.ProfileMajorCode.Trim().ToUpperInvariant(),
                 MajorVerificationStatus = row.MajorVerificationStatus,
                 MemberCode = row.MemberCode,
                 EnrollmentStatus = row.EnrollmentStatus,
@@ -149,38 +151,6 @@ public sealed class GetClassRosterQueryHandler : IGetClassRosterQueryHandler
         };
 
         return Result.Success(response);
-    }
-
-    private static string? ResolveEffectiveMajorCode(
-        string? enrollmentMajorCode,
-        string? profileMajorCode)
-    {
-        var normalizedEnrollmentMajor = NormalizeMajorCode(enrollmentMajorCode);
-        if (!IsMissingMajorCode(normalizedEnrollmentMajor))
-        {
-            return normalizedEnrollmentMajor;
-        }
-
-        var normalizedProfileMajor = NormalizeMajorCode(profileMajorCode);
-        if (!IsMissingMajorCode(normalizedProfileMajor))
-        {
-            return normalizedProfileMajor;
-        }
-
-        return normalizedEnrollmentMajor;
-    }
-
-    private static string? NormalizeMajorCode(string? majorCode)
-    {
-        return string.IsNullOrWhiteSpace(majorCode)
-            ? null
-            : majorCode.Trim().ToUpperInvariant();
-    }
-
-    private static bool IsMissingMajorCode(string? majorCode)
-    {
-        return string.IsNullOrWhiteSpace(majorCode) ||
-            MajorCodes.IsUndeclared(majorCode);
     }
 
     private sealed class ClassRosterStudentProjection

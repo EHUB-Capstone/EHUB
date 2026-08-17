@@ -158,6 +158,7 @@ export interface AddStudentToClassPayload {
 
 export interface ClassCompletionPreview {
   classId: string;
+  classCode: string;
   status: ClassStatus;
   activeEnrollmentCount: number;
   droppedEnrollmentCount: number;
