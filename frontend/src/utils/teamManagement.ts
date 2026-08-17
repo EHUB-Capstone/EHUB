@@ -47,6 +47,21 @@ export function isMissingTeamMajor(major: string | null | undefined): boolean {
   return !code || MISSING_MAJOR_CODES.has(code);
 }
 
+export function resolveEffectiveTeamMajor(
+  enrollmentMajor: string | null | undefined,
+  profileMajor: string | null | undefined,
+  legacyMajor?: string | null,
+): string {
+  const normalizedEnrollmentMajor = normalizeTeamMajorCode(enrollmentMajor);
+  if (!isMissingTeamMajor(normalizedEnrollmentMajor)) return normalizedEnrollmentMajor;
+
+  const normalizedProfileMajor = normalizeTeamMajorCode(profileMajor);
+  if (!isMissingTeamMajor(normalizedProfileMajor)) return normalizedProfileMajor;
+
+  const normalizedLegacyMajor = normalizeTeamMajorCode(legacyMajor);
+  return normalizedLegacyMajor || normalizedEnrollmentMajor;
+}
+
 export function validateTeamSelection(
   selectedStudents: TeamStudent[],
   leaderStudentId = '',

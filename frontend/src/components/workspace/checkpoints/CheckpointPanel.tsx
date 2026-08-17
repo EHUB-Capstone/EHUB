@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom';
 import {
   X, CheckCircle2, Award, FileText, Download, Trash2, Loader2,
   MessageSquare, ArrowLeft, Users, BarChart2, Layers, TrendingUp, Upload, Save,
-  ClipboardList, Eye,
+  ClipboardList, Eye, ClipboardCheck, PanelRightOpen, PanelRightClose,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { checkpointApi } from '../../../api/checkpointApi';
@@ -13,6 +13,7 @@ import { useAuth } from '../../../hooks/useAuth';
 import Button from '../../ui/Button';
 import FileUploadZone from './FileUploadZone';
 import FeedbackThread from './FeedbackThread';
+import EvaluationPanel from '../EvaluationPanel';
 
 const ICONS = { Users, BarChart2, Layers, TrendingUp };
 
@@ -53,6 +54,9 @@ export default function CheckpointPanel({
   checkpoint,
   teamId,
   isEditable,
+  isReadOnly = false,
+  proposalId,
+  pitchDeckId,
   onClose,
   onRequirementsSaved,
 }) {
@@ -64,6 +68,8 @@ export default function CheckpointPanel({
   const [loading, setLoading] = useState(true);
   const [downloadingId, setDownloadingId] = useState(null);
   const isStudent = user?.role?.toUpperCase() === 'STUDENT';
+  const isLecturer = user?.role?.toUpperCase() === 'LECTURER';
+  const [showEvaluation, setShowEvaluation] = useState(isLecturer);
   const canEditRequirements = isStudent && isEditable;
   const Icon = ICONS[checkpoint?.icon] || FileText;
 
@@ -248,14 +254,24 @@ export default function CheckpointPanel({
                   ? '…'
                   : `${reqFilledCount}/${checkpoint.requirements.length} requirements`}
               </span>
+              <button
+                type="button"
+                onClick={() => setShowEvaluation((current) => !current)}
+                aria-expanded={showEvaluation}
+                aria-controls="checkpoint-evaluation-panel"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-white/25 bg-white/15 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-white/25"
+              >
+                {showEvaluation ? <PanelRightClose className="h-3.5 w-3.5" /> : <PanelRightOpen className="h-3.5 w-3.5" />}
+                {showEvaluation ? 'Hide evaluation' : isLecturer ? 'Open grading' : 'Show evaluation'}
+              </button>
             </div>
           </div>
         </header>
 
         {/* Body */}
-        <div className="flex-1 flex flex-col lg:flex-row min-h-0 overflow-hidden">
+        <div className="relative flex-1 flex flex-col lg:flex-row min-h-0 overflow-hidden">
           {/* Requirements sidebar */}
-          <aside className="lg:w-[380px] xl:w-[420px] shrink-0 flex flex-col bg-white border-b lg:border-b-0 lg:border-r border-slate-200/80 min-h-0">
+          <aside className={`lg:w-[380px] xl:w-[420px] shrink-0 flex flex-col bg-white border-b lg:border-b-0 lg:border-r border-slate-200/80 min-h-0 ${showEvaluation ? 'lg:hidden' : ''}`}>
             <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/80">
               <SectionTitle
                 icon={canEditRequirements ? ClipboardList : Eye}
@@ -526,6 +542,50 @@ export default function CheckpointPanel({
               </section>
             </div>
           </main>
+
+          {showEvaluation && (
+            <button
+              type="button"
+              className="absolute inset-0 z-10 bg-slate-950/30 backdrop-blur-[1px] lg:hidden"
+              aria-label="Close evaluation panel"
+              onClick={() => setShowEvaluation(false)}
+            />
+          )}
+
+          {showEvaluation && <aside
+            id="checkpoint-evaluation-panel"
+            className="absolute inset-y-0 right-0 z-20 flex w-full max-w-[580px] flex-col border-l border-slate-200 bg-slate-100 shadow-2xl lg:static lg:z-auto lg:w-[420px] lg:max-w-none lg:shrink-0 lg:shadow-none xl:w-[500px] 2xl:w-[560px]"
+          >
+            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3">
+              <div className="flex min-w-0 items-center gap-2">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-primary-100 bg-primary-50 text-primary">
+                  <ClipboardCheck className="h-4 w-4" />
+                </span>
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-bold text-slate-900">Evaluation & grading</p>
+                  <p className="truncate text-xs text-slate-500">Checkpoint {checkpoint.number} · {checkpoint.title}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowEvaluation(false)}
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-800"
+                aria-label="Hide evaluation panel"
+              >
+                <PanelRightClose className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin">
+              <EvaluationPanel
+                teamId={teamId}
+                proposalId={proposalId}
+                pitchDeckId={pitchDeckId}
+                isReadOnly={isReadOnly}
+                checkpointNumber={checkpoint.number}
+                embedded
+              />
+            </div>
+          </aside>}
         </div>
       </div>
     </div>

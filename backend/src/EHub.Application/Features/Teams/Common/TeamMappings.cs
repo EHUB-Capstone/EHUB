@@ -1,4 +1,5 @@
 using EHub.Contracts.Teams;
+using EHub.Application.Features.Classes.Common;
 using EHub.Domain.Entities;
 using EHub.Domain.Enums;
 
@@ -43,7 +44,9 @@ internal static class TeamMappings
         RollNumber = member.ClassStudent.Student.RollNumber ?? string.Empty,
         FullName = member.ClassStudent.Student.FullName,
         Email = member.ClassStudent.Student.Email,
-        MajorCode = member.ClassStudent.MajorCodeAtEnrollment,
+        MajorCode = StudentEnrollmentRules.ResolveEffectiveMajorCode(
+            member.ClassStudent.MajorCodeAtEnrollment,
+            member.ClassStudent.Student.MajorCode) ?? string.Empty,
         RoleInTeam = member.RoleInTeam.ToString(),
         JoinedAtUtc = member.JoinedAt
     };

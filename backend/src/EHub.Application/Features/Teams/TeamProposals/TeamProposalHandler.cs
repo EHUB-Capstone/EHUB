@@ -622,7 +622,11 @@ public sealed class TeamProposalHandler : ITeamProposalHandler
                 item.ClassId == classId && ids.Contains(item.StudentId) && item.CountsTowardOpenProposal &&
                 (!currentProposalId.HasValue || item.ProposalId != currentProposalId.Value), cancellationToken))
             return CompositionFailure("A proposed member already belongs to another open proposal.", ErrorCodes.TeamProposalMembershipConflict);
-        var majors = enrollments.Select(item => item.MajorCodeAtEnrollment).ToArray();
+        var majors = enrollments
+            .Select(item => StudentEnrollmentRules.ResolveEffectiveMajorCode(
+                item.MajorCodeAtEnrollment,
+                item.Student.MajorCode))
+            .ToArray();
         if (!majors.Any(IsBusinessMajor) || !majors.Any(IsTechnologyMajor))
             return CompositionFailure("A team must include at least one GROUP_1 major and one GROUP_2 major.", ErrorCodes.TeamMajorCompositionInvalid);
         return Result.Success(enrollments);
@@ -644,7 +648,10 @@ public sealed class TeamProposalHandler : ITeamProposalHandler
         Members = proposal.Members.Where(member => member.IsIncluded).Select(member => new TeamProposalMemberDto
         {
             StudentId = member.StudentId, RollNumber = member.ClassStudent.Student.RollNumber ?? string.Empty,
-            FullName = member.ClassStudent.Student.FullName, MajorCode = member.ClassStudent.MajorCodeAtEnrollment,
+            FullName = member.ClassStudent.Student.FullName,
+            MajorCode = StudentEnrollmentRules.ResolveEffectiveMajorCode(
+                member.ClassStudent.MajorCodeAtEnrollment,
+                member.ClassStudent.Student.MajorCode) ?? string.Empty,
             IsLeader = member.IsLeader
         }).ToArray()
     };

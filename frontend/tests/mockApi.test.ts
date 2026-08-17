@@ -395,3 +395,140 @@ test('mock API enforces archived class read-only behavior', async () => {
     },
   );
 });
+
+test('mock API mirrors class completion, read-only state, and audit side effects', async () => {
+  resetMockState();
+  await axiosClient.post('/auth/login', { email: 'admin@ehub.local', password: 'Mock123!' });
+  const list = await axiosClient.get('/classes', { params: { status: 'Active', pageSize: 20 } });
+  const active = list.data.items[0];
+  assert.ok(active);
+
+  const preview = await axiosClient.get(`/classes/${active.id}/completion-preview`);
+  assert.equal(preview.data.rowVersion, active.rowVersion);
+  assert.equal(preview.data.blockers.length, 0);
+  assert.ok(preview.data.warnings.length > 0);
+
+  const completed = await axiosClient.post(`/classes/${active.id}/complete`, {
+    rowVersion: preview.data.rowVersion,
+    reason: 'Finished all academic work',
+  });
+  assert.equal(completed.data.status, 'Completed');
+  assert.notEqual(completed.data.rowVersion, active.rowVersion);
+
+  const detail = await axiosClient.get(`/classes/${active.id}`);
+  assert.equal(detail.data.status, 'Completed');
+  assert.equal(detail.data.completionReason, 'Finished all academic work');
+  assert.ok(detail.data.completedAtUtc);
+  assert.ok(getMockState().rosters[active.id].every((student) => student.enrollmentStatus === 'Completed'));
+  assert.ok(getMockState().proposals.filter((proposal) => proposal.classId === active.id)
+    .every((proposal) => proposal.status === 'Cancelled'));
+  assert.ok(getMockState().teams.filter((team) => team.classId === active.id)
+    .every((team) => team.currentMentorAssignment?.status !== 'Active'));
+
+  await assert.rejects(
+    axiosClient.post(`/classes/${active.id}/students`, {
+      studentCode: 'MOCK999', fullName: 'Read Only Student',
+      email: 'readonly@fpt.edu.vn', majorCode: 'BIT_SE',
+    }),
+    (error: unknown) => {
+      const response = (error as { response?: { status?: number; data?: { code?: string } } }).response;
+      return response?.status === 409 && response.data?.code === 'CLASS_COMPLETED';
+    },
+  );
+});
+
+test('mock student self-service separates current classes from completed history', async () => {
+  resetMockState();
+  await axiosClient.post('/auth/login', { email: 'se200001@fpt.edu.vn', password: 'Mock123!' });
+
+  const current = await axiosClient.get('/classes/my-classes', { params: { scope: 'Current' } });
+  assert.ok(current.data.classes.some((cls: { classStatus: string; enrollmentStatus: string }) =>
+    cls.classStatus === 'Active' && cls.enrollmentStatus === 'Active'));
+
+  const history = await axiosClient.get('/classes/my-classes', { params: { scope: 'History' } });
+  assert.ok(history.data.classes.some((cls: { classStatus: string; enrollmentStatus: string }) =>
+    cls.classStatus === 'Archived' && cls.enrollmentStatus === 'Completed'));
+});
+
+test('mock semester lifecycle returns typed records and backend-style blockers', async () => {
+  resetMockState();
+  await axiosClient.post('/auth/login', { email: 'admin@ehub.local', password: 'Mock123!' });
+
+  const current = await axiosClient.get('/subjects/current-semester');
+  assert.equal(current.data.currentSemester.status, 'Active');
+  assert.ok(current.data.currentSemester.id);
+  assert.ok(current.data.currentSemester.rowVersion);
+
+  const semesters = await axiosClient.get('/subjects/semesters');
+  assert.equal(semesters.data.semesters.length, 2);
+  const preview = await axiosClient.get(`/subjects/semesters/${current.data.currentSemester.id}/completion-preview`);
+  assert.ok(preview.data.blockers.length > 0);
+  assert.ok(preview.data.activeClassCount > 0);
+
+  await assert.rejects(
+    axiosClient.post(`/subjects/semesters/${current.data.currentSemester.id}/complete`, {
+      rowVersion: preview.data.rowVersion,
+      reason: 'Close academic semester',
+    }),
+    (error: unknown) => {
+      const response = (error as { response?: { status?: number; data?: { code?: string } } }).response;
+      return response?.status === 409 && response.data?.code === 'SEMESTER_COMPLETION_BLOCKED';
+    },
+  );
+});
+
+test('mock manual enrollment preserves backend identity and explicit re-enroll rules', async () => {
+  resetMockState();
+  await axiosClient.post('/auth/login', { email: 'admin@ehub.local', password: 'Mock123!' });
+  const list = await axiosClient.get('/classes', { params: { status: 'Active', pageSize: 20 } });
+  const active = list.data.items[0];
+
+  await assert.rejects(
+    axiosClient.post(`/classes/${active.id}/students`, {
+      studentCode: 'NEW200099', fullName: 'Invalid Major',
+      email: 'invalid-major@fpt.edu.vn', majorCode: 'UNKNOWN',
+    }),
+    (error: unknown) => {
+      const response = (error as { response?: { status?: number; data?: { code?: string } } }).response;
+      return response?.status === 400 && response.data?.code === 'CLASS_VALIDATION_ERROR';
+    },
+  );
+
+  const added = await axiosClient.post(`/classes/${active.id}/students`, {
+    studentCode: 'SE200011',
+    fullName: 'Existing Student',
+    email: 'se200011@fpt.edu.vn',
+    majorCode: null,
+  });
+  assert.equal(added.data.majorCode, 'BIT_SE');
+
+  await assert.rejects(
+    axiosClient.post(`/classes/${active.id}/students`, {
+      studentCode: 'SE200011',
+      fullName: 'Existing Student',
+      email: 'mk200012@fpt.edu.vn',
+      majorCode: null,
+    }),
+    (error: unknown) => {
+      const response = (error as { response?: { status?: number; data?: { code?: string } } }).response;
+      return response?.status === 409 && response.data?.code === 'STUDENT_IDENTITY_CONFLICT';
+    },
+  );
+
+  added.data.enrollmentStatus = 'Dropped';
+  const stored = getMockState().rosters[active.id].find((student) => student.studentId === added.data.studentId);
+  assert.ok(stored);
+  stored.enrollmentStatus = 'Dropped';
+  await assert.rejects(
+    axiosClient.post(`/classes/${active.id}/students`, {
+      studentCode: 'SE200011',
+      fullName: 'Existing Student',
+      email: 'se200011@fpt.edu.vn',
+      majorCode: null,
+    }),
+    (error: unknown) => {
+      const response = (error as { response?: { status?: number; data?: { code?: string } } }).response;
+      return response?.status === 409 && response.data?.code === 'STUDENT_RE_ENROLLMENT_REQUIRED';
+    },
+  );
+});

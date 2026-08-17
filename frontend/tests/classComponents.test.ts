@@ -11,6 +11,14 @@ import {
   normalizeLecturerOptions,
   USER_DIRECTORY_MAX_PAGE_SIZE,
 } from '../src/utils/lecturerDirectory.ts';
+import { resolveWorkspaceTab, WORKSPACE_TABS } from '../src/utils/workspaceNavigation.ts';
+
+test('workspace keeps evaluation inside checkpoints and removes standalone evaluation and mentoring tabs', () => {
+  assert.deepEqual(WORKSPACE_TABS, ['overview', 'roadmap', 'shortcut']);
+  assert.equal(resolveWorkspaceTab('?tab=roadmap'), 'roadmap');
+  assert.equal(resolveWorkspaceTab('?tab=evaluation'), 'overview');
+  assert.equal(resolveWorkspaceTab('?tab=mentoring'), 'overview');
+});
 
 test('ClassDetail presents Archive for an active class and Restore for an archived class', () => {
   assert.deepEqual(getClassLifecyclePresentation('Active'), {

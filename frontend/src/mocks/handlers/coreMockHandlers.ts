@@ -11,6 +11,7 @@ import type { MockCurriculum, MockUser } from '../mockState.ts';
 import type { MockReply } from '../mockHelpers.ts';
 import {
   allocateId,
+  allocateRowVersion,
   asNumber,
   asString,
   asStringArray,
@@ -347,6 +348,41 @@ function subjectCodeFrom(config: AxiosRequestConfig, pattern: RegExp): string {
   return decodeURIComponent(routeId(config, pattern)).toUpperCase();
 }
 
+function semesterCompletionPreview(semesterId: string) {
+  const state = getMockState();
+  const semester = state.semesters.find((item) => item.id === semesterId);
+  if (!semester) return null;
+  const classes = state.classes.filter((item) => item.semesterId === semesterId);
+  const countStatus = (status: string) => classes.filter((item) => item.status === status).length;
+  const activeEnrollmentCount = classes.reduce((count, cls) =>
+    count + (state.rosters[cls.id] || []).filter((student) => student.enrollmentStatus === 'Active').length, 0);
+  const draftClassCount = countStatus('Draft');
+  const activeClassCount = countStatus('Active');
+  const inactiveClassCount = countStatus('Inactive');
+  const unfinishedClassCount = draftClassCount + activeClassCount + inactiveClassCount;
+  const blockers: string[] = [];
+  if (unfinishedClassCount)
+    blockers.push(`Complete or archive the remaining ${unfinishedClassCount} non-completed class(es).`);
+  if (activeEnrollmentCount)
+    blockers.push(`Resolve ${activeEnrollmentCount} active enrollment(s).`);
+
+  return {
+    semesterId: semester.id,
+    semester: semester.semester,
+    year: semester.year,
+    status: semester.status,
+    draftClassCount,
+    activeClassCount,
+    inactiveClassCount,
+    completedClassCount: countStatus('Completed'),
+    archivedClassCount: countStatus('Archived'),
+    activeEnrollmentCount,
+    processingImportSessionCount: 0,
+    blockers,
+    rowVersion: semester.rowVersion,
+  };
+}
+
 function registerSubjectHandlers(mock: MockAdapter): void {
   mock.onGet('/subjects').reply((config) => {
     const params = requestParams(config);
@@ -399,8 +435,11 @@ function registerSubjectHandlers(mock: MockAdapter): void {
   });
 
   mock.onGet('/subjects/current-semester').reply(() => {
-    const currentSemester = getMockState().currentSemester;
-    return ok({ currentSemester, availableYears: [2025, 2026, 2027], isDecember: false }, 'Current semester retrieved successfully.');
+    const state = getMockState();
+    const currentSemester = state.semesters.find((item) => item.status === 'Active') || null;
+    const availableYears = [...new Set([new Date().getFullYear(), ...state.semesters.map((item) => item.year)])]
+      .sort((left, right) => right - left);
+    return ok({ currentSemester, availableYears, isDecember: new Date().getMonth() === 11 }, 'Current semester retrieved successfully.');
   });
 
   mock.onGet('/subjects/semesters').reply(() => {
@@ -418,11 +457,87 @@ function registerSubjectHandlers(mock: MockAdapter): void {
 
   mock.onPost('/subjects/current-semester').reply((config) => {
     const body = parseBody(config);
-    const semester = asString(body.semester, 'FA').toUpperCase();
-    if (!['SP', 'SU', 'FA'].includes(semester)) return failure(400, 'SEMESTER_INVALID', 'Semester must be SP, SU, or FA.');
-    getMockState().currentSemester = { semester: semester as 'SP' | 'SU' | 'FA', year: asNumber(body.year, 2026) };
+    const semesterCode = asString(body.semester, 'FA').toUpperCase();
+    const year = asNumber(body.year, new Date().getFullYear());
+    if (!['SP', 'SU', 'FA'].includes(semesterCode))
+      return failure(400, 'CLASS_VALIDATION_ERROR', 'Semester must be SP, SU, or FA.');
+    const state = getMockState();
+    const active = state.semesters.find((item) => item.status === 'Active');
+    let semester = state.semesters.find((item) => item.semester === semesterCode && item.year === year);
+    if (semester?.status === 'Active')
+      return ok({ currentSemester: semester, availableYears: [...new Set(state.semesters.map((item) => item.year))], isDecember: false }, 'Active semester updated successfully.');
+    if (active)
+      return failure(409, 'SEMESTER_ACTIVATION_BLOCKED', `Complete ${active.semester} ${active.year} before activating another semester.`);
+    if (semester?.status === 'Completed' || semester?.status === 'Archived')
+      return failure(409, 'SEMESTER_INVALID_STATE', 'A completed or archived semester must be explicitly reopened before activation.');
+
+    if (!semester) {
+      semester = {
+        id: allocateId(), semester: semesterCode as 'SP' | 'SU' | 'FA', year, status: 'Planned',
+        startDate: null, endDate: null, completedAtUtc: null, completionReason: null,
+        rowVersion: allocateRowVersion(),
+      };
+      state.semesters.push(semester);
+    }
+    semester.status = 'Active';
+    semester.rowVersion = allocateRowVersion();
+    state.currentSemester = { semester: semester.semester, year: semester.year };
     persistMockState();
-    return ok({ currentSemester: getMockState().currentSemester }, 'Current semester updated successfully.');
+    return ok({ currentSemester: semester, availableYears: [...new Set(state.semesters.map((item) => item.year))], isDecember: false }, 'Active semester updated successfully.');
+  });
+
+  mock.onGet('/subjects/semesters').reply(() => {
+    const semesters = [...getMockState().semesters]
+      .sort((left, right) => right.year - left.year || right.semester.localeCompare(left.semester));
+    return ok({ semesters }, 'Semesters retrieved successfully.');
+  });
+
+  mock.onGet(/^\/subjects\/semesters\/[^/]+\/completion-preview$/).reply((config) => {
+    const semesterId = routeId(config, /^\/subjects\/semesters\/([^/]+)\/completion-preview$/);
+    const preview = semesterCompletionPreview(semesterId);
+    return preview
+      ? ok(preview, 'Semester completion preview generated successfully.')
+      : failure(404, 'SEMESTER_NOT_FOUND', 'The requested semester was not found.');
+  });
+
+  mock.onPost(/^\/subjects\/semesters\/[^/]+\/(complete|reopen)$/).reply((config) => {
+    const match = config.url?.match(/^\/subjects\/semesters\/([^/]+)\/(complete|reopen)$/);
+    const semester = getMockState().semesters.find((item) => item.id === match?.[1]);
+    if (!semester) return failure(404, 'SEMESTER_NOT_FOUND', 'The requested semester was not found.');
+    const reopen = match?.[2] === 'reopen';
+    const body = parseBody(config);
+    const reason = asString(body.reason).trim();
+    if (reason.length < 3 || reason.length > 500)
+      return failure(400, 'CLASS_VALIDATION_ERROR', 'Reason must contain between 3 and 500 characters.');
+    if (reopen && semester.status === 'Active' || !reopen && semester.status === 'Completed')
+      return ok(semester, `Semester ${reopen ? 'reopened' : 'completed'} successfully.`);
+    if (asString(body.rowVersion) !== semester.rowVersion)
+      return failure(409, 'SEMESTER_CONCURRENCY_CONFLICT', 'The semester changed concurrently. Reload and try again.');
+
+    const state = getMockState();
+    if (reopen) {
+      if (semester.status !== 'Completed')
+        return failure(409, 'SEMESTER_INVALID_STATE', 'Only a completed semester can be reopened.');
+      if (state.semesters.some((item) => item.id !== semester.id && item.status === 'Active'))
+        return failure(409, 'SEMESTER_ACTIVATION_BLOCKED', 'Complete the active semester before reopening this semester.');
+      semester.status = 'Active';
+      semester.completedAtUtc = null;
+      semester.completionReason = null;
+      state.currentSemester = { semester: semester.semester, year: semester.year };
+    } else {
+      if (semester.status !== 'Active')
+        return failure(409, 'SEMESTER_INVALID_STATE', 'Only the active semester can be completed.');
+      const preview = semesterCompletionPreview(semester.id)!;
+      if (preview.blockers.length)
+        return failure(409, 'SEMESTER_COMPLETION_BLOCKED', preview.blockers.join(' '));
+      semester.status = 'Completed';
+      semester.completedAtUtc = new Date().toISOString();
+      semester.completionReason = reason;
+      state.currentSemester = null;
+    }
+    semester.rowVersion = allocateRowVersion();
+    persistMockState();
+    return ok(semester, `Semester ${reopen ? 'reopened' : 'completed'} successfully.`);
   });
 
   mock.onGet('/subjects/teaching-staff').reply(() => {

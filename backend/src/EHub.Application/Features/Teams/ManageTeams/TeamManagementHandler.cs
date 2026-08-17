@@ -568,7 +568,11 @@ public sealed class TeamManagementHandler : ITeamManagementHandler
         if (await _context.TeamProposalMembers.AsNoTracking().AnyAsync(member =>
                 member.ClassId == classId && ids.Contains(member.StudentId) && member.CountsTowardOpenProposal, cancellationToken))
             return Result.Failure<List<ClassStudent>>(new Error(ErrorCodes.TeamProposalMembershipConflict, "A selected student belongs to an open team proposal."));
-        var majors = enrollments.Select(item => item.MajorCodeAtEnrollment).ToArray();
+        var majors = enrollments
+            .Select(item => StudentEnrollmentRules.ResolveEffectiveMajorCode(
+                item.MajorCodeAtEnrollment,
+                item.Student.MajorCode))
+            .ToArray();
         if (!majors.Any(IsBusinessMajor) || !majors.Any(IsTechnologyMajor))
             return Result.Failure<List<ClassStudent>>(new Error(ErrorCodes.TeamMajorCompositionInvalid, "A team must include at least one GROUP_1 major and one GROUP_2 major."));
         return Result.Success(enrollments);

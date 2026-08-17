@@ -6,7 +6,13 @@ import { checkpointApi } from '../../../api/checkpointApi';
 import CheckpointCard from './CheckpointCard';
 import CheckpointPanel from './CheckpointPanel';
 
-export default function CheckpointSection({ teamId, isEditable }) {
+export default function CheckpointSection({
+  teamId,
+  isEditable,
+  isReadOnly = false,
+  proposalId,
+  pitchDeckId,
+}) {
   const [configs, setConfigs] = useState([]);
   const [stats, setStats] = useState({});
   const [loading, setLoading] = useState(true);
@@ -129,6 +135,9 @@ export default function CheckpointSection({ teamId, isEditable }) {
           checkpoint={selected}
           teamId={teamId}
           isEditable={isEditable}
+          isReadOnly={isReadOnly}
+          proposalId={proposalId}
+          pitchDeckId={pitchDeckId}
           onRequirementsSaved={fetchStats}
           onClose={() => {
             setSelected(null);

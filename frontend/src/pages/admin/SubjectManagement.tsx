@@ -13,33 +13,17 @@ import EmptyState from '../../components/ui/EmptyState';
 import LoadingSkeleton from '../../components/ui/LoadingSkeleton';
 import Modal from '../../components/ui/Modal';
 import { parseApiError } from '../../utils/apiError';
+import type {
+  SemesterCode,
+  SemesterCompletionPreview,
+  SemesterDto,
+  SubjectDto,
+  SubjectStatus,
+  TeachingStaffDto,
+  TeachingStaffSummary,
+} from '../../types/subjects';
 
-type SemesterCode = 'SP' | 'SU' | 'FA';
-type SubjectStatus = 'active' | 'disabled';
-type Subject = { _id: string; subjectCode: string; subjectName: string; status: SubjectStatus };
-type Semester = {
-  id: string;
-  semester: SemesterCode;
-  year: number;
-  status: 'Planned' | 'Active' | 'Completed' | 'Archived';
-  rowVersion: string;
-  completedAtUtc?: string | null;
-  completionReason?: string | null;
-};
-type Assignment = { _id: string; classCode: string; subjectCode: string };
-type TeachingStaff = {
-  _id: string;
-  name: string;
-  email: string;
-  avatar?: string;
-  role: 'LECTURER' | 'MENTOR';
-  status: string;
-  classCount: number;
-  assignments: Assignment[];
-};
-type StaffSummary = { lecturers: number; mentors: number; assigned: number; unassigned: number; classes: number };
-
-const emptySummary: StaffSummary = { lecturers: 0, mentors: 0, assigned: 0, unassigned: 0, classes: 0 };
+const emptySummary: TeachingStaffSummary = { lecturers: 0, mentors: 0, assigned: 0, unassigned: 0, classes: 0 };
 const currentYear = new Date().getFullYear();
 
 function responseData(response: any) {
@@ -50,37 +34,41 @@ function initials(name: string) {
   return name.split(' ').filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase() || '?';
 }
 
-function semesterLabel({ semester, year }: Semester) {
+function semesterLabel({ semester, year }: SemesterDto) {
   return `${semester} ${year}`;
 }
 
 const SubjectManagement = () => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'subjects' | 'staff'>('subjects');
-  const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [subjects, setSubjects] = useState<SubjectDto[]>([]);
   const [subjectsLoading, setSubjectsLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | SubjectStatus>('ALL');
-  const [currentSemester, setCurrentSemester] = useState<Semester | null>(null);
-  const [semesters, setSemesters] = useState<Semester[]>([]);
+  const [currentSemester, setCurrentSemester] = useState<SemesterDto | null>(null);
+  const [semesters, setSemesters] = useState<SemesterDto[]>([]);
   const [selectedSemester, setSelectedSemester] = useState<SemesterCode>('SP');
   const [selectedYear, setSelectedYear] = useState(currentYear);
   const [availableYears, setAvailableYears] = useState<number[]>([currentYear]);
   const [canPlanNextYear, setCanPlanNextYear] = useState(false);
   const [savingSemester, setSavingSemester] = useState(false);
-  const [staff, setStaff] = useState<TeachingStaff[]>([]);
-  const [staffSummary, setStaffSummary] = useState<StaffSummary>(emptySummary);
+  const [staff, setStaff] = useState<TeachingStaffDto[]>([]);
+  const [staffSummary, setStaffSummary] = useState<TeachingStaffSummary>(emptySummary);
   const [staffLoading, setStaffLoading] = useState(false);
   const [staffSearch, setStaffSearch] = useState('');
-  const [staffRole, setStaffRole] = useState<'ALL' | TeachingStaff['role']>('ALL');
+  const [staffRole, setStaffRole] = useState<'ALL' | TeachingStaffDto['role']>('ALL');
   const [modalOpen, setModalOpen] = useState(false);
-  const [editingSubject, setEditingSubject] = useState<Subject | null>(null);
+  const [editingSubject, setEditingSubject] = useState<SubjectDto | null>(null);
   const [form, setForm] = useState({ subjectCode: '', subjectName: '', status: 'active' as SubjectStatus });
   const [savingSubject, setSavingSubject] = useState(false);
-  const [disableTarget, setDisableTarget] = useState<Subject | null>(null);
+  const [disableTarget, setDisableTarget] = useState<SubjectDto | null>(null);
   const [disabling, setDisabling] = useState(false);
-  const [semesterLifecycleTarget, setSemesterLifecycleTarget] = useState<{ semester: Semester; action: 'complete' | 'reopen'; preview?: any } | null>(null);
+  const [semesterLifecycleTarget, setSemesterLifecycleTarget] = useState<{
+    semester: SemesterDto;
+    action: 'complete' | 'reopen';
+    preview?: SemesterCompletionPreview;
+  } | null>(null);
   const [semesterLifecycleReason, setSemesterLifecycleReason] = useState('');
   const [semesterLifecycleBusy, setSemesterLifecycleBusy] = useState(false);
 
@@ -112,7 +100,7 @@ const SubjectManagement = () => {
       ]);
       const payload = responseData(currentResponse);
       const listPayload = responseData(listResponse);
-      const semester = payload.currentSemester as Semester | undefined;
+      const semester = payload.currentSemester as SemesterDto | undefined;
       const years = Array.isArray(payload.availableYears) && payload.availableYears.length
         ? payload.availableYears.map(Number)
         : [currentYear];
@@ -165,7 +153,7 @@ const SubjectManagement = () => {
     setModalOpen(true);
   };
 
-  const openEdit = (subject: Subject) => {
+  const openEdit = (subject: SubjectDto) => {
     setEditingSubject(subject);
     setForm({ subjectCode: subject.subjectCode, subjectName: subject.subjectName, status: subject.status });
     setModalOpen(true);
@@ -273,6 +261,8 @@ const SubjectManagement = () => {
     });
   }, [staff, staffRole, staffSearch]);
 
+  const activeSemesterBlocksActivation = Boolean(currentSemester);
+
   const staffStats = [
     { label: 'Lecturers', value: staffSummary.lecturers, icon: GraduationCap, style: 'text-primary bg-primary-50' },
     { label: 'Mentors', value: staffSummary.mentors, icon: Users, style: 'text-secondary bg-secondary-50' },
@@ -335,7 +325,10 @@ const SubjectManagement = () => {
               <p className="mt-1 text-lg font-bold text-slate-900">{currentSemester ? semesterLabel(currentSemester) : 'No active semester'}</p>
               {currentSemester && <p className="mt-1 text-xs font-medium text-green-700">Active</p>}
             </div>
-            <div className="mt-4 space-y-3"><label className="block text-xs font-semibold uppercase text-slate-400">Semester<select value={selectedSemester} onChange={(event) => setSelectedSemester(event.target.value as SemesterCode)} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-normal text-slate-700 outline-none focus:border-primary"><option value="SP">SP (Spring)</option><option value="SU">SU (Summer)</option><option value="FA">FA (Fall)</option></select></label><label className="block text-xs font-semibold uppercase text-slate-400">Year<select value={selectedYear} onChange={(event) => setSelectedYear(Number(event.target.value))} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-normal text-slate-700 outline-none focus:border-primary">{availableYears.map((year) => <option key={year} value={year}>{year}</option>)}</select></label><Button className="w-full" onClick={() => void saveSemester()} isLoading={savingSemester}>{savingSemester ? 'Saving...' : 'Set Active Semester'}</Button></div>
+            <div className="mt-4 space-y-3"><label className="block text-xs font-semibold uppercase text-slate-400">Semester<select value={selectedSemester} onChange={(event) => setSelectedSemester(event.target.value as SemesterCode)} disabled={activeSemesterBlocksActivation} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-normal text-slate-700 outline-none focus:border-primary disabled:cursor-not-allowed disabled:bg-slate-100"><option value="SP">SP (Spring)</option><option value="SU">SU (Summer)</option><option value="FA">FA (Fall)</option></select></label><label className="block text-xs font-semibold uppercase text-slate-400">Year<select value={selectedYear} onChange={(event) => setSelectedYear(Number(event.target.value))} disabled={activeSemesterBlocksActivation} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-normal text-slate-700 outline-none focus:border-primary disabled:cursor-not-allowed disabled:bg-slate-100">{availableYears.map((year) => <option key={year} value={year}>{year}</option>)}</select></label><Button className="w-full" onClick={() => void saveSemester()} isLoading={savingSemester} disabled={activeSemesterBlocksActivation}>{savingSemester ? 'Saving...' : activeSemesterBlocksActivation ? 'Semester is active' : 'Set Active Semester'}</Button></div>
+            {activeSemesterBlocksActivation && (
+              <p className="mt-2 text-xs leading-5 text-slate-500">Complete the active semester before activating another one.</p>
+            )}
             {currentSemester && (
               <Button variant="outline" className="mt-2 w-full" onClick={() => void openCompleteSemester()} isLoading={semesterLifecycleBusy}>
                 Complete Active Semester
@@ -346,8 +339,11 @@ const SubjectManagement = () => {
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Completed history</p>
                 <div className="mt-2 space-y-2">
                   {semesters.filter(item => item.status === 'Completed').slice(0, 4).map(item => (
-                    <div key={item.id} className="flex items-center justify-between rounded-lg bg-blue-50 px-2.5 py-2 text-xs">
-                      <span className="font-semibold text-blue-800">{semesterLabel(item)}</span>
+                    <div key={item.id} className="flex items-center justify-between gap-2 rounded-lg bg-blue-50 px-2.5 py-2 text-xs">
+                      <span className="min-w-0 font-semibold text-blue-800">
+                        <span className="block">{semesterLabel(item)}</span>
+                        {item.completionReason && <span className="block truncate font-normal text-blue-600" title={item.completionReason}>{item.completionReason}</span>}
+                      </span>
                       <button
                         type="button"
                         disabled={Boolean(currentSemester)}

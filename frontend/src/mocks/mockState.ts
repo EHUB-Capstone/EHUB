@@ -23,6 +23,18 @@ export interface MockSubject {
   status: 'active' | 'disabled';
 }
 
+export interface MockSemester {
+  id: string;
+  semester: 'SP' | 'SU' | 'FA';
+  year: number;
+  status: 'Planned' | 'Active' | 'Completed' | 'Archived';
+  startDate: string | null;
+  endDate: string | null;
+  completedAtUtc: string | null;
+  completionReason: string | null;
+  rowVersion: string;
+}
+
 export interface MockRoadmapItem {
   _id: string;
   title: string;
@@ -200,7 +212,8 @@ export interface MockApiState {
   sequence: number;
   sessionUserId: string | null;
   authPasswords: Record<string, string>;
-  currentSemester: { semester: 'SP' | 'SU' | 'FA'; year: number };
+  currentSemester: { semester: 'SP' | 'SU' | 'FA'; year: number } | null;
+  semesters: MockSemester[];
   users: MockUser[];
   subjects: MockSubject[];
   curricula: Record<string, MockCurriculum>;
@@ -295,7 +308,7 @@ const classIds = { active: id(401), draft: id(402), archived: id(403) };
 const classes: MockClass[] = [
   { id: classIds.active, classCode: 'EXE101-FA26-01', classIndex: 1, courseId: id(101), subjectCode: 'EXE101', subjectName: 'Experiential Entrepreneurship', semesterId: id(501), semesterCode: 'FA2026', year: 2026, primaryLecturerId: id(2), primaryLecturerName: 'Trần Thu Giang', primaryLecturerEmail: 'giang.lecturer@ehub.local', room: 'P.301', schedules: [{ dayOfWeek: 2, slotNumber: 2, room: 'P.301' }, { dayOfWeek: 5, slotNumber: 3, room: 'P.305' }], isEnrollmentMajorLocked: false, status: 'Active', previousStatus: 'Active', studentCount: 10, teamCount: 2, mentors: [{ mentorProfileId: id(4), userId: id(4), fullName: 'Phạm Anh Khoa', email: 'khoa.mentor@ehub.local' }], createdAtUtc: isoAgo(45), rowVersion: 'rv-1' },
   { id: classIds.draft, classCode: 'SSG104-FA26-02', classIndex: 2, courseId: id(102), subjectCode: 'SSG104', subjectName: 'Startup Project Development', semesterId: id(501), semesterCode: 'FA2026', year: 2026, primaryLecturerId: null, primaryLecturerName: null, primaryLecturerEmail: null, room: 'P.204', schedules: [], isEnrollmentMajorLocked: false, status: 'Draft', previousStatus: 'Draft', studentCount: 4, teamCount: 0, mentors: [], createdAtUtc: isoAgo(30), rowVersion: 'rv-2' },
-  { id: classIds.archived, classCode: 'BUS101-SP26-01', classIndex: 1, courseId: id(103), subjectCode: 'BUS101', subjectName: 'Business Fundamentals', semesterId: id(502), semesterCode: 'SP2026', year: 2026, primaryLecturerId: id(3), primaryLecturerName: 'Lê Hoàng Nam', primaryLecturerEmail: 'nam.lecturer@ehub.local', room: 'P.102', schedules: [{ dayOfWeek: 3, slotNumber: 1, room: null }], isEnrollmentMajorLocked: false, status: 'Archived', previousStatus: 'Active', studentCount: 3, teamCount: 0, mentors: [], createdAtUtc: isoAgo(160), rowVersion: 'rv-3' },
+  { id: classIds.archived, classCode: 'BUS101-SP26-01', classIndex: 1, courseId: id(103), subjectCode: 'BUS101', subjectName: 'Business Fundamentals', semesterId: id(502), semesterCode: 'SP2026', year: 2026, primaryLecturerId: id(3), primaryLecturerName: 'Lê Hoàng Nam', primaryLecturerEmail: 'nam.lecturer@ehub.local', room: 'P.102', schedules: [{ dayOfWeek: 3, slotNumber: 1, room: null }], isEnrollmentMajorLocked: false, status: 'Archived', previousStatus: 'Completed', studentCount: 3, teamCount: 0, mentors: [], createdAtUtc: isoAgo(160), completedAtUtc: isoAgo(105), completionReason: 'Spring term completed', rowVersion: 'rv-3' },
 ];
 
 const rosterStudent = (user: MockUser, index: number, teamId: string | null): MockRosterStudent => ({
@@ -319,7 +332,23 @@ const studentUsers = users.filter((user) => user.role === 'STUDENT');
 const activeRoster = studentUsers.slice(0, 10).map((user, index) =>
   rosterStudent(user, index + 1, index < 4 ? id(601) : index < 8 ? id(602) : null));
 const draftRoster = studentUsers.slice(8, 12).map((user, index) => rosterStudent(user, index + 20, null));
-const archivedRoster = studentUsers.slice(0, 3).map((user, index) => rosterStudent(user, index + 30, null));
+const archivedRoster = studentUsers.slice(0, 3).map((user, index) => ({
+  ...rosterStudent(user, index + 30, null),
+  enrollmentStatus: 'Completed',
+}));
+
+const semesters: MockSemester[] = [
+  {
+    id: id(501), semester: 'FA', year: 2026, status: 'Active',
+    startDate: '2026-09-01', endDate: '2026-12-31',
+    completedAtUtc: null, completionReason: null, rowVersion: 'rv-semester-1',
+  },
+  {
+    id: id(502), semester: 'SP', year: 2026, status: 'Completed',
+    startDate: '2026-01-01', endDate: '2026-04-30',
+    completedAtUtc: isoAgo(100), completionReason: 'Academic term completed', rowVersion: 'rv-semester-2',
+  },
+];
 
 const memberFromRoster = (student: MockRosterStudent, leaderId: string): MockTeamMember => ({
   studentId: student.studentId,
@@ -342,6 +371,7 @@ const initialMockState: MockApiState = {
     sessionUserId: null,
     authPasswords: {},
     currentSemester: { semester: 'FA', year: 2026 },
+    semesters,
     users,
     subjects,
     curricula: Object.fromEntries(subjects.map((subject) => [subject.subjectCode, curriculumFor(subject)])),

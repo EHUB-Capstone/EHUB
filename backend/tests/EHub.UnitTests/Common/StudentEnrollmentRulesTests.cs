@@ -7,6 +7,23 @@ namespace EHub.UnitTests.Common;
 public sealed class StudentEnrollmentRulesTests
 {
     [Fact]
+    public void ResolveEffectiveMajorCode_WithImportedMajor_PrefersEnrollmentSnapshot()
+    {
+        StudentEnrollmentRules.ResolveEffectiveMajorCode(" bba_mkt ", MajorCodes.BIT_SE)
+            .Should().Be(MajorCodes.BBA_MKT);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("UNDECLARED")]
+    public void ResolveEffectiveMajorCode_WithMissingImportedMajor_UsesProfileMajor(string? enrollmentMajor)
+    {
+        StudentEnrollmentRules.ResolveEffectiveMajorCode(enrollmentMajor, " bit_se ")
+            .Should().Be(MajorCodes.BIT_SE);
+    }
+
+    [Fact]
     public void ValidateAndNormalize_WithValidContract_NormalizesAllIdentityFields()
     {
         var error = StudentEnrollmentRules.ValidateAndNormalize(

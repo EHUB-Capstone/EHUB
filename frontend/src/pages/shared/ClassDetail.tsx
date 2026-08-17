@@ -27,12 +27,13 @@ import RenameClassModal from '../../components/class/RenameClassModal';
 import VerifyMajorModal from '../../components/class/VerifyMajorModal';
 import AddStudentModal from '../../components/class/AddStudentModal';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
-import { getTeamMemberIds, isMissingTeamMajor, normalizeManagedTeam, normalizeTeamProposal } from '../../utils/teamManagement';
+import { getTeamMemberIds, normalizeManagedTeam, normalizeTeamProposal, resolveEffectiveTeamMajor } from '../../utils/teamManagement';
 import { classFeatureFlags } from '../../config/classFeatureFlags';
 import { parseApiError } from '../../utils/apiError';
 import { toClassViewModel, unwrapApiData } from '../../utils/classMappers';
 import { getClassLifecyclePresentation, isArchivedClass, isClassReadOnly } from '../../utils/classComponentPolicy';
 import { canManageClass as canManageClassPermission, hasClassRole } from '../../utils/classPermissions';
+import type { ClassCompletionPreview } from '../../types/classes';
 
 const classActionTone = {
   neutral: 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-800',
@@ -108,7 +109,7 @@ export default function ClassDetail() {
   const [lifecycleReason, setLifecycleReason] = useState('');
   const [showCompletion, setShowCompletion] = useState(false);
   const [completionReason, setCompletionReason] = useState('');
-  const [completionPreview, setCompletionPreview] = useState(null);
+  const [completionPreview, setCompletionPreview] = useState<ClassCompletionPreview | null>(null);
   const [completionLoading, setCompletionLoading] = useState(false);
 
   const fetchData = useCallback(async () => {
@@ -169,21 +170,24 @@ export default function ClassDetail() {
         setRosterLoadError(parseApiError(studentRes.reason, 'Failed to load the class roster.').message);
       }
 
-      const mappedStudents = rawStudents.map((s, idx) => ({
-        _id: s.studentId || s.id || s._id || `student-${idx}`,
-        studentCode: s.rollNumber || s.studentCode,
-        rollNumber: s.rollNumber || s.studentCode,
-        fullName: s.fullName,
-        email: s.email,
-        major: isMissingTeamMajor(s.majorCode) ? (s.profileMajorCode || s.major) : s.majorCode,
-        majorCode: isMissingTeamMajor(s.majorCode) ? (s.profileMajorCode || s.major) : s.majorCode,
-        majorVerificationStatus: s.majorVerificationStatus || 'Unverified',
-        enrollmentStatus: s.enrollmentStatus || 'Active',
-        classId: currentClassId,
-        teamId: s.teamId || null,
-        teamName: s.teamName || null,
-        isTeamLeader: s.isTeamLeader || false
-      }));
+      const mappedStudents = rawStudents.map((s, idx) => {
+        const effectiveMajor = resolveEffectiveTeamMajor(s.majorCode, s.profileMajorCode, s.major);
+        return {
+          _id: s.studentId || s.id || s._id || `student-${idx}`,
+          studentCode: s.rollNumber || s.studentCode,
+          rollNumber: s.rollNumber || s.studentCode,
+          fullName: s.fullName,
+          email: s.email,
+          major: effectiveMajor,
+          majorCode: effectiveMajor,
+          majorVerificationStatus: s.majorVerificationStatus || 'Unverified',
+          enrollmentStatus: s.enrollmentStatus || 'Active',
+          classId: currentClassId,
+          teamId: s.teamId || null,
+          teamName: s.teamName || null,
+          isTeamLeader: s.isTeamLeader || false
+        };
+      });
 
       let rawTeams = [];
       let rawProposals = [];
@@ -421,7 +425,12 @@ export default function ClassDetail() {
   const confirmCompletion = async () => {
     setCompletionLoading(true);
     try {
-      const payload = { rowVersion: cls.rowVersion, reason: completionReason.trim() };
+      const payload = {
+        rowVersion: cls.status === 'Completed'
+          ? cls.rowVersion
+          : completionPreview?.rowVersion ?? cls.rowVersion,
+        reason: completionReason.trim(),
+      };
       if (cls.status === 'Completed') {
         await classApi.reopen(id, payload);
         toast.success('Class reopened successfully');
@@ -652,6 +661,13 @@ export default function ClassDetail() {
                 ? 'Roster, teams, chat membership and history are retained. Restore the class before changing operational data.'
                 : 'Academic data and history are retained. Only an administrator can reopen the class; archive remains a separate lifecycle action.'}
             </p>
+            {cls.completedAtUtc && (
+              <p className="mt-2 text-xs text-amber-800">
+                <span className="font-semibold">Completed:</span>{' '}
+                {new Date(cls.completedAtUtc).toLocaleString()}
+                {cls.completionReason ? ` — ${cls.completionReason}` : ''}
+              </p>
+            )}
           </div>
         </div>
       )}
