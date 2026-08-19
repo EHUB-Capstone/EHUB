@@ -2,6 +2,8 @@ using System;
 using System.Threading.Tasks;
 using EHub.Application.Common.Interfaces.Persistence;
 using EHub.Application.Features.Classes.ImportStudents;
+using EHub.Contracts.Classes;
+using EHub.Domain.Entities;
 using EHub.Shared.Constants;
 using EHub.Shared.Errors;
 using FluentAssertions;
@@ -32,6 +34,56 @@ public class PreviewImportStudentsCommandHandlerTests
         result.IsFailure.Should().BeTrue();
         result.Error.Code.Should().Be(ErrorCodes.ClassAccessDenied);
     }
+
+    [Fact]
+    public void MajorComparison_WhenImportedProfileHasNoAccount_WaitsForRegistration()
+    {
+        var row = ValidRow(MajorCodes.BBA_MKT);
+        var importedProfile = new Student
+        {
+            Email = row.Email,
+            FullName = row.FullName,
+            MajorCode = MajorCodes.BIT_SE,
+            UserId = null
+        };
+
+        var result = PreviewImportStudentsCommandHandler.WithMajorComparison(row, importedProfile);
+
+        result.MajorComparisonStatus.Should().Be("AwaitingRegistration");
+        result.RegisteredMajorCode.Should().BeNull();
+        result.NeedsMajorSync.Should().BeFalse();
+    }
+
+    [Fact]
+    public void MajorComparison_WhenRegisteredMajorDiffers_FlagsSynchronization()
+    {
+        var row = ValidRow(MajorCodes.BBA_MKT);
+        var registeredProfile = new Student
+        {
+            UserId = Guid.NewGuid(),
+            Email = row.Email,
+            FullName = row.FullName,
+            MajorCode = MajorCodes.BIT_SE
+        };
+
+        var result = PreviewImportStudentsCommandHandler.WithMajorComparison(row, registeredProfile);
+
+        result.MajorComparisonStatus.Should().Be("Mismatched");
+        result.RegisteredMajorCode.Should().Be(MajorCodes.BIT_SE);
+        result.NeedsMajorSync.Should().BeTrue();
+        result.MajorWarningMessage.Should().Contain(MajorCodes.BBA_MKT);
+    }
+
+    private static ImportStudentRowPreviewDto ValidRow(string majorCode) => new()
+    {
+        RowNumber = 2,
+        StudentCode = "DE180225",
+        FullName = "Nguyen Van A",
+        Email = "student@fpt.edu.vn",
+        MajorCode = majorCode,
+        IsValid = true,
+        Status = "Valid"
+    };
 
     [Fact]
     public async Task HandleAsync_WhenUserIsLecturerAndFileIsNull_ReachesFileValidation()

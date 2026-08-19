@@ -101,6 +101,7 @@ export default function ClassDetail() {
   const [backfilling, setBackfilling] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [togglingLock, setTogglingLock] = useState(false);
+  const [synchronizingMajors, setSynchronizingMajors] = useState(false);
   const [removingStudent, setRemovingStudent] = useState(false);
   const [reEnrollingStudent, setReEnrollingStudent] = useState(false);
   const [showDeleteClass, setShowDeleteClass] = useState(false);
@@ -172,6 +173,16 @@ export default function ClassDetail() {
 
       const mappedStudents = rawStudents.map((s, idx) => {
         const effectiveMajor = resolveEffectiveTeamMajor(s.majorCode, s.profileMajorCode, s.major);
+        const registeredMajor = typeof s.profileMajorCode === 'string'
+          ? s.profileMajorCode.trim().toUpperCase()
+          : '';
+        const hasMajorMismatch = Boolean(
+          effectiveMajor &&
+          registeredMajor &&
+          effectiveMajor !== 'UNDECLARED' &&
+          registeredMajor !== 'UNDECLARED' &&
+          effectiveMajor !== registeredMajor,
+        );
         return {
           _id: s.studentId || s.id || s._id || `student-${idx}`,
           studentCode: s.rollNumber || s.studentCode,
@@ -180,6 +191,8 @@ export default function ClassDetail() {
           email: s.email,
           major: effectiveMajor,
           majorCode: effectiveMajor,
+          profileMajorCode: registeredMajor || null,
+          hasMajorMismatch,
           majorVerificationStatus: s.majorVerificationStatus || 'Unverified',
           enrollmentStatus: s.enrollmentStatus || 'Active',
           classId: currentClassId,
@@ -334,6 +347,25 @@ export default function ClassDetail() {
       toast.error(parseApiError(err, 'Failed to change the major update lock status.').message);
     } finally {
       setTogglingLock(false);
+    }
+  };
+
+  const handleSynchronizeMajors = async () => {
+    const mismatchCount = safeStudents.filter(student => student.hasMajorMismatch).length;
+    if (mismatchCount === 0 || !window.confirm(
+      `Synchronize registered majors from the official class enrollment for ${mismatchCount} student${mismatchCount > 1 ? 's' : ''}?`,
+    )) return;
+
+    setSynchronizingMajors(true);
+    try {
+      const response: any = await classApi.synchronizeProfileMajors(id);
+      const result = unwrapApiData(response);
+      toast.success(`Synchronized ${result.synchronizedCount ?? 0} registered major${result.synchronizedCount === 1 ? '' : 's'}.`);
+      await fetchData();
+    } catch (error) {
+      toast.error(parseApiError(error, 'Failed to synchronize registered majors.').message);
+    } finally {
+      setSynchronizingMajors(false);
     }
   };
 
@@ -854,6 +886,8 @@ export default function ClassDetail() {
             onRefresh={fetchData}
             onDeleteStudent={!isReadOnly && canManageClass ? handleRemoveStudent : undefined}
             onReEnrollStudent={!isReadOnly && canManageClass ? setStudentToReEnroll : undefined}
+            onSynchronizeMajors={!isReadOnly && canManageClass ? handleSynchronizeMajors : undefined}
+            synchronizingMajors={synchronizingMajors}
             serverQuery={{
               search: rosterSearch,
               majorCode: rosterMajor,

@@ -622,11 +622,27 @@ public sealed class TeamProposalHandler : ITeamProposalHandler
                 item.ClassId == classId && ids.Contains(item.StudentId) && item.CountsTowardOpenProposal &&
                 (!currentProposalId.HasValue || item.ProposalId != currentProposalId.Value), cancellationToken))
             return CompositionFailure("A proposed member already belongs to another open proposal.", ErrorCodes.TeamProposalMembershipConflict);
-        var majors = enrollments
-            .Select(item => StudentEnrollmentRules.ResolveEffectiveMajorCode(
+        var registeredMajors = await RegisteredStudentMajorResolver.LoadByEmailAsync(
+            _context,
+            enrollments.Select(item => item.Student.Email),
+            cancellationToken);
+        var majors = enrollments.Select(item =>
+        {
+            var major = StudentEnrollmentRules.ResolveEffectiveMajorCode(
                 item.MajorCodeAtEnrollment,
-                item.Student.MajorCode))
-            .ToArray();
+                item.Student.MajorCode);
+            if (!MajorCodes.IsValid(major) &&
+                !string.IsNullOrWhiteSpace(item.Student.Email) &&
+                registeredMajors.TryGetValue(item.Student.Email, out var registeredMajor))
+            {
+                major = registeredMajor;
+                item.MajorCodeAtEnrollment = registeredMajor;
+                item.MajorVerificationStatus = EnrollmentMajorVerificationStatus.Unverified;
+                item.UpdatedAt = DateTime.UtcNow;
+            }
+
+            return major;
+        }).ToArray();
         if (!majors.Any(IsBusinessMajor) || !majors.Any(IsTechnologyMajor))
             return CompositionFailure("A team must include at least one GROUP_1 major and one GROUP_2 major.", ErrorCodes.TeamMajorCompositionInvalid);
         return Result.Success(enrollments);

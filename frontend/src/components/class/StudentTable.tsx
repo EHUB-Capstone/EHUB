@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import toast from 'react-hot-toast';
-import { Search, Users, AlertTriangle, UserMinus, RotateCcw, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, Users, AlertTriangle, UserMinus, RotateCcw, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
 import EmptyState from '../ui/EmptyState';
 import { getMajorName, TEAM_MAJOR_GROUPS } from '../../constants/majors';
 import { getDisplayGroupName } from '../../utils/teamDisplay';
@@ -48,6 +48,8 @@ export default function StudentTable({
   onRefresh: _onRefresh = undefined,
   onDeleteStudent = undefined,
   onReEnrollStudent = undefined,
+  onSynchronizeMajors = undefined,
+  synchronizingMajors = false,
   toolbarAction = null,
   selectionDisabled = false,
   maxSelection = 6,
@@ -79,6 +81,10 @@ export default function StudentTable({
       .map(m => m.trim().toUpperCase());
     return [...new Set(codes)].sort();
   }, [students]);
+  const majorMismatchCount = useMemo(
+    () => students.filter(student => student.hasMajorMismatch).length,
+    [students],
+  );
 
   const filtered = useMemo(() => {
     let result = students.filter(s => {
@@ -230,6 +236,18 @@ export default function StudentTable({
             {selected.length} selected
           </span>
         )}
+        {majorMismatchCount > 0 && onSynchronizeMajors && (
+          <button
+            type="button"
+            onClick={onSynchronizeMajors}
+            disabled={synchronizingMajors}
+            className="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-orange-200 bg-orange-50 px-2.5 py-1.5 text-xs font-semibold text-orange-700 transition hover:bg-orange-100 disabled:opacity-50"
+            title="Use the official major imported for this class to correct registered profiles"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${synchronizingMajors ? 'animate-spin' : ''}`} />
+            Synchronize majors ({majorMismatchCount})
+          </button>
+        )}
         {toolbarAction}
       </div>
 
@@ -319,6 +337,14 @@ export default function StudentTable({
                           <span className="text-[10px] font-medium text-slate-400">
                             {s.majorVerificationStatus || 'Unverified'}
                           </span>
+                          {s.hasMajorMismatch && (
+                            <span
+                              className="flex items-center gap-1 rounded bg-orange-50 px-1.5 py-0.5 text-[10px] font-semibold text-orange-700"
+                              title={`Registered major: ${s.profileMajorCode}. Official imported major: ${s.major}.`}
+                            >
+                              <AlertTriangle className="h-2.5 w-2.5" /> Registered as {s.profileMajorCode}
+                            </span>
+                          )}
                         </div>
                       ) : (
                         <span className="flex w-fit items-center gap-1 rounded-full bg-amber-100 px-1.5 py-0.5 text-[11px] font-semibold text-amber-700" title="Missing major">

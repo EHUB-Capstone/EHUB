@@ -593,6 +593,20 @@ function registerRosterHandlers(mock: MockAdapter): void {
   mock.onPost(/^\/classes\/[^/]+\/major-lock$/).reply((config) => setMajorLock(config, true));
   mock.onDelete(/^\/classes\/[^/]+\/major-lock$/).reply((config) => setMajorLock(config, false));
 
+  mock.onPost(/^\/classes\/[^/]+\/students\/synchronize-profile-majors$/).reply((config) => {
+    const classId = routeId(config, /^\/classes\/([^/]+)\/students\/synchronize-profile-majors$/);
+    const guard = classMutationGuard(classId);
+    if (guard) return guard;
+    let synchronizedCount = 0;
+    for (const student of getMockState().rosters[classId] || []) {
+      if (!student.userId || !student.majorCode || student.majorCode === 'UNDECLARED' || student.profileMajorCode === student.majorCode) continue;
+      student.profileMajorCode = student.majorCode;
+      synchronizedCount++;
+    }
+    persistMockState();
+    return ok({ mismatchCount: synchronizedCount, synchronizedCount }, `Synchronized ${synchronizedCount} registered major(s).`);
+  });
+
   mock.onPost(/^\/classes\/[^/]+\/students\/[^/]+\/drop$/).reply((config) => changeEnrollment(config, 'Dropped'));
   mock.onPost(/^\/classes\/[^/]+\/students\/[^/]+\/re-enroll$/).reply((config) => changeEnrollment(config, 'Active'));
 
@@ -619,7 +633,7 @@ function registerRosterHandlers(mock: MockAdapter): void {
     ];
     getMockState().imports[sessionId] = { classId, consumed: false, rows };
     persistMockState();
-    return ok({ sessionId, totalRows: rows.length, validRowsCount: 1, errorRowsCount: 1, rows }, 'Student import preview generated.');
+    return ok({ sessionId, totalRows: rows.length, validRowsCount: 1, errorRowsCount: 1, majorMismatchCount: 0, rows }, 'Student import preview generated.');
   });
 
   mock.onPost(/^\/classes\/[^/]+\/import-students\/commit$/).reply((config) => {
@@ -637,7 +651,7 @@ function registerRosterHandlers(mock: MockAdapter): void {
     session.consumed = true;
     refreshClassCounts(classId);
     persistMockState();
-    return ok({ insertedCount: validRows.length, updatedCount: 0, skippedCount: 0, errorCount: 0, errors: [] }, 'Students imported successfully.');
+    return ok({ insertedCount: validRows.length, updatedCount: 0, synchronizedMajorCount: 0, skippedCount: 0, errorCount: 0, errors: [] }, 'Students imported successfully.');
   });
 }
 

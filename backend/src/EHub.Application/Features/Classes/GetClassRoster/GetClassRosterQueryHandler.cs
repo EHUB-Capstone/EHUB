@@ -118,26 +118,45 @@ public sealed class GetClassRosterQueryHandler : IGetClassRosterQueryHandler
             })
             .ToListAsync(cancellationToken);
 
+        // Older class imports could create an unlinked Student row before the
+        // student registered. Until those rows are naturally reconciled, use the
+        // registered profile with the same normalized email as a safe major
+        // fallback so existing rosters do not remain permanently "Missing".
+        var registeredMajorByEmail = await RegisteredStudentMajorResolver.LoadByEmailAsync(
+            _context,
+            rosterRows.Select(row => row.Email),
+            cancellationToken);
+
         var items = rosterRows
-            .Select(row => new ClassStudentDto
+            .Select(row =>
             {
-                StudentId = row.StudentId,
-                RollNumber = row.RollNumber,
-                FullName = row.FullName,
-                Email = row.Email,
-                MajorCode = StudentEnrollmentRules.ResolveEffectiveMajorCode(
-                    row.MajorCodeAtEnrollment,
-                    row.ProfileMajorCode),
-                ProfileMajorCode = string.IsNullOrWhiteSpace(row.ProfileMajorCode)
+                var profileMajorCode = string.IsNullOrWhiteSpace(row.ProfileMajorCode)
                     ? null
-                    : row.ProfileMajorCode.Trim().ToUpperInvariant(),
-                MajorVerificationStatus = row.MajorVerificationStatus,
-                MemberCode = row.MemberCode,
-                EnrollmentStatus = row.EnrollmentStatus,
-                TeamId = row.TeamId,
-                TeamName = row.TeamName,
-                IsTeamLeader = row.IsTeamLeader,
-                JoinedAtUtc = row.JoinedAtUtc
+                    : row.ProfileMajorCode.Trim().ToUpperInvariant();
+                if (!MajorCodes.IsValid(profileMajorCode) &&
+                    registeredMajorByEmail.TryGetValue(row.Email, out var registeredMajorCode))
+                {
+                    profileMajorCode = registeredMajorCode;
+                }
+
+                return new ClassStudentDto
+                {
+                    StudentId = row.StudentId,
+                    RollNumber = row.RollNumber,
+                    FullName = row.FullName,
+                    Email = row.Email,
+                    MajorCode = StudentEnrollmentRules.ResolveEffectiveMajorCode(
+                        row.MajorCodeAtEnrollment,
+                        profileMajorCode),
+                    ProfileMajorCode = profileMajorCode,
+                    MajorVerificationStatus = row.MajorVerificationStatus,
+                    MemberCode = row.MemberCode,
+                    EnrollmentStatus = row.EnrollmentStatus,
+                    TeamId = row.TeamId,
+                    TeamName = row.TeamName,
+                    IsTeamLeader = row.IsTeamLeader,
+                    JoinedAtUtc = row.JoinedAtUtc
+                };
             })
             .ToList();
 

@@ -141,12 +141,15 @@ export default function ImportStudentsModal({
     }
   };
 
-  const handleImport = async () => {
+  const handleImport = async (synchronizeProfileMajors: boolean) => {
     if (!previewData || !previewData.sessionId || previewData.validRowsCount === 0) return;
 
     setImporting(true);
     try {
-      const res = await classApi.commitImportStudents(classId, { sessionId: previewData.sessionId });
+      const res = await classApi.commitImportStudents(classId, {
+        sessionId: previewData.sessionId,
+        synchronizeProfileMajors,
+      });
       const result = res?.data || res;
       setCommitResult(result);
       setPhase('result');
@@ -154,9 +157,11 @@ export default function ImportStudentsModal({
       const committedCount = result.insertedCount + result.updatedCount;
       if (committedCount > 0) {
         toast.success(
-          result.errorCount > 0
-            ? `Imported ${committedCount} students; ${result.errorCount} rows require attention.`
-            : `Successfully imported ${committedCount} students.`,
+          result.synchronizedMajorCount > 0
+            ? `Imported ${committedCount} students and synchronized ${result.synchronizedMajorCount} registered major${result.synchronizedMajorCount > 1 ? 's' : ''}.`
+            : result.errorCount > 0
+              ? `Imported ${committedCount} students; ${result.errorCount} rows require attention.`
+              : `Successfully imported ${committedCount} students.`,
         );
       } else if (result.errorCount > 0) {
         toast.error(`No students were imported. ${result.errorCount} rows require attention.`);
@@ -174,6 +179,7 @@ export default function ImportStudentsModal({
   const totalRows = previewData?.totalRows ?? 0;
   const successCount = previewData?.validRowsCount ?? 0;
   const failedCount = previewData?.errorRowsCount ?? 0;
+  const majorMismatchCount = previewData?.majorMismatchCount ?? 0;
   const committedCount = (commitResult?.insertedCount ?? 0) + (commitResult?.updatedCount ?? 0);
   const commitHasChanges = committedCount > 0;
 
@@ -312,11 +318,22 @@ export default function ImportStudentsModal({
                 </button>
               </div>
 
-              <div className="grid grid-cols-3 gap-2.5">
+              <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
                 <SummaryCard label="Total rows" value={totalRows} tone="neutral" />
                 <SummaryCard label="Valid &amp; Ready" value={successCount} tone="success" />
                 <SummaryCard label="Errors / Skip" value={failedCount} tone="danger" />
+                <SummaryCard label="Major mismatches" value={majorMismatchCount} tone={majorMismatchCount > 0 ? 'warning' : 'success'} />
               </div>
+
+              {majorMismatchCount > 0 && (
+                <div className="flex items-start gap-2.5 rounded-xl border border-orange-200 bg-orange-50 p-3.5 text-sm text-orange-900">
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                  <div>
+                    <p className="font-semibold">{majorMismatchCount} student{majorMismatchCount > 1 ? 's registered' : ' registered'} the wrong major.</p>
+                    <p className="mt-0.5 text-xs text-orange-800">Review the registered and imported values below. Majors are synchronized from the file only after you confirm the import.</p>
+                  </div>
+                </div>
+              )}
 
               {failedCount > 0 && (
                 <div className="flex items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50 p-3.5 text-sm text-amber-800">
@@ -343,9 +360,10 @@ export default function ImportStudentsModal({
                 </p>
               </div>
 
-              <div className="grid grid-cols-3 gap-2.5">
+              <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
                 <SummaryCard label="Inserted" value={commitResult.insertedCount} tone="success" />
                 <SummaryCard label="Updated" value={commitResult.updatedCount} tone="neutral" />
+                <SummaryCard label="Majors synced" value={commitResult.synchronizedMajorCount ?? 0} tone="success" />
                 <SummaryCard label="Skipped" value={commitResult.skippedCount} tone="danger" />
               </div>
 
@@ -382,9 +400,13 @@ export default function ImportStudentsModal({
                 icon={Upload}
                 isLoading={importing}
                 disabled={successCount === 0}
-                onClick={() => void handleImport()}
+                onClick={() => void handleImport(majorMismatchCount > 0)}
               >
-                {successCount === 0 ? 'No valid rows to commit' : `Commit ${successCount} valid student${successCount > 1 ? 's' : ''}`}
+                {successCount === 0
+                  ? 'No valid rows to commit'
+                  : majorMismatchCount > 0
+                    ? `Import & synchronize ${majorMismatchCount} major${majorMismatchCount > 1 ? 's' : ''}`
+                    : `Commit ${successCount} valid student${successCount > 1 ? 's' : ''}`}
               </Button>
             </>
           )}
@@ -400,11 +422,12 @@ export default function ImportStudentsModal({
   );
 }
 
-function SummaryCard({ label, value, tone }: { label: string; value: number; tone: 'neutral' | 'success' | 'danger' }) {
+function SummaryCard({ label, value, tone }: { label: string; value: number; tone: 'neutral' | 'success' | 'danger' | 'warning' }) {
   const styles = {
     neutral: 'border-slate-200 bg-slate-50 text-slate-900',
     success: 'border-green-200 bg-green-50 text-green-700',
     danger: 'border-red-200 bg-red-50 text-red-600',
+    warning: 'border-orange-200 bg-orange-50 text-orange-700',
   };
 
   return (
@@ -419,15 +442,16 @@ function StudentRowsTable({ rows, compact = false }: { rows: any[]; compact?: bo
   return (
     <div className="overflow-hidden rounded-xl border border-slate-200">
       <div className={`${compact ? 'max-h-52' : 'max-h-72'} overflow-auto`}>
-        <table className="w-full min-w-[720px] text-left text-xs">
+        <table className="w-full min-w-[900px] text-left text-xs">
           <thead className="sticky top-0 z-10 bg-slate-50 text-slate-500">
             <tr>
               <th className="w-16 px-3 py-2.5 font-semibold">Row</th>
               <th className="px-3 py-2.5 font-semibold">Student code</th>
               <th className="px-3 py-2.5 font-semibold">Full name</th>
               <th className="px-3 py-2.5 font-semibold">Email</th>
-              <th className="px-3 py-2.5 font-semibold">Major</th>
-              <th className="w-40 px-3 py-2.5 font-semibold">Validation</th>
+              <th className="px-3 py-2.5 font-semibold">Registered major</th>
+              <th className="px-3 py-2.5 font-semibold">Major in file</th>
+              <th className="w-52 px-3 py-2.5 font-semibold">Validation</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 bg-white">
@@ -437,15 +461,29 @@ function StudentRowsTable({ rows, compact = false }: { rows: any[]; compact?: bo
                 <td className="px-3 py-3 font-semibold text-slate-700">{row.studentCode || '—'}</td>
                 <td className="px-3 py-3 text-slate-700">{row.fullName || '—'}</td>
                 <td className="px-3 py-3 text-slate-600">{row.email || '—'}</td>
-                <td className="px-3 py-3 text-slate-600">{row.majorCode || '—'}</td>
+                <td className={`px-3 py-3 font-mono ${row.needsMajorSync ? 'font-semibold text-red-600' : 'text-slate-600'}`}>
+                  {row.registeredMajorCode || '—'}
+                </td>
+                <td className={`px-3 py-3 font-mono ${row.needsMajorSync ? 'font-semibold text-primary' : 'text-slate-600'}`}>
+                  {row.majorCode && row.majorCode !== 'UNDECLARED' ? row.majorCode : '—'}
+                </td>
                 <td className="px-3 py-3">
-                  {row.isValid ? (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-1 font-semibold text-green-700">
-                      <CheckCircle2 className="h-3 w-3" /> Ready
+                  {!row.isValid ? (
+                    <span className="font-medium text-red-600">• {row.errorMessage}</span>
+                  ) : row.needsMajorSync ? (
+                    <div>
+                      <span className="inline-flex items-center gap-1 rounded-full bg-orange-100 px-2 py-1 font-semibold text-orange-700">
+                        <AlertCircle className="h-3 w-3" /> Needs synchronization
+                      </span>
+                      <p className="mt-1 max-w-xs text-[11px] leading-4 text-orange-700">{row.majorWarningMessage}</p>
+                    </div>
+                  ) : row.majorComparisonStatus?.startsWith('AwaitingRegistration') ? (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-1 font-semibold text-slate-600">
+                      <Info className="h-3 w-3" /> Awaiting registration
                     </span>
                   ) : (
-                    <span className="text-red-600 font-medium">
-                      • {row.errorMessage}
+                    <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-1 font-semibold text-green-700">
+                      <CheckCircle2 className="h-3 w-3" /> Ready
                     </span>
                   )}
                 </td>
