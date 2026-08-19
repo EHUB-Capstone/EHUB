@@ -121,6 +121,7 @@ public sealed class PreviewImportStudentsCommandHandler : IPreviewImportStudents
             TotalRows = rows.Count,
             ValidRowsCount = validRows.Length,
             ErrorRowsCount = rows.Count - validRows.Length,
+            MajorMismatchCount = validRows.Count(row => row.NeedsMajorSync),
             Rows = rows
         });
     }
@@ -477,6 +478,8 @@ public sealed class PreviewImportStudentsCommandHandler : IPreviewImportStudents
             else
             {
                 var profile = profileByCode ?? profileByEmail;
+                row = WithMajorComparison(row, profile);
+                rows[index] = row;
                 var currentEnrollment = profile == null
                     ? null
                     : enrollments.FirstOrDefault(enrollment =>
@@ -507,6 +510,59 @@ public sealed class PreviewImportStudentsCommandHandler : IPreviewImportStudents
         }
     }
 
+    internal static ImportStudentRowPreviewDto WithMajorComparison(
+        ImportStudentRowPreviewDto row,
+        Student? profile)
+    {
+        var fileMajor = MajorCodes.IsValid(row.MajorCode)
+            ? row.MajorCode.Trim().ToUpperInvariant()
+            : null;
+        var hasRegisteredAccount = profile?.UserId.HasValue == true;
+        var registeredMajor = hasRegisteredAccount && MajorCodes.IsValid(profile?.MajorCode)
+            ? profile!.MajorCode!.Trim().ToUpperInvariant()
+            : null;
+        var status = "Matched";
+        string? warning = null;
+        var needsSync = false;
+
+        if (!hasRegisteredAccount)
+        {
+            status = fileMajor == null ? "AwaitingRegistrationWithoutMajor" : "AwaitingRegistration";
+        }
+        else if (fileMajor == null)
+        {
+            status = "UsesRegisteredMajor";
+        }
+        else if (registeredMajor == null)
+        {
+            status = "MissingRegisteredMajor";
+            warning = $"The registered profile has no valid major. Synchronize it to '{fileMajor}' from the import file.";
+            needsSync = true;
+        }
+        else if (!string.Equals(fileMajor, registeredMajor, StringComparison.OrdinalIgnoreCase))
+        {
+            status = "Mismatched";
+            warning = $"Registered as '{registeredMajor}', but the import file says '{fileMajor}'. Review and synchronize before applying.";
+            needsSync = true;
+        }
+
+        return new ImportStudentRowPreviewDto
+        {
+            RowNumber = row.RowNumber,
+            StudentCode = row.StudentCode,
+            FullName = row.FullName,
+            Email = row.Email,
+            MajorCode = row.MajorCode,
+            RegisteredMajorCode = registeredMajor,
+            MajorComparisonStatus = status,
+            MajorWarningMessage = warning,
+            NeedsMajorSync = needsSync,
+            IsValid = row.IsValid,
+            Status = row.Status,
+            ErrorMessage = row.ErrorMessage
+        };
+    }
+
     private static ImportStudentRowPreviewDto Invalid(ImportStudentRowPreviewDto row, string error) => new()
     {
         RowNumber = row.RowNumber,
@@ -514,6 +570,10 @@ public sealed class PreviewImportStudentsCommandHandler : IPreviewImportStudents
         FullName = row.FullName,
         Email = row.Email,
         MajorCode = row.MajorCode,
+        RegisteredMajorCode = row.RegisteredMajorCode,
+        MajorComparisonStatus = row.MajorComparisonStatus,
+        MajorWarningMessage = row.MajorWarningMessage,
+        NeedsMajorSync = row.NeedsMajorSync,
         IsValid = false,
         Status = "Error",
         ErrorMessage = error

@@ -154,6 +154,56 @@ public class RegisterCommandHandlerTests
     }
 
     [Fact]
+    public async Task Should_Link_Imported_Student_Profile_Instead_Of_Creating_Duplicate()
+    {
+        var request = new RegisterRequest
+        {
+            FullName = "Nguyen Van A",
+            Email = "STUDENT@fpt.edu.vn",
+            Password = "Password123",
+            ConfirmPassword = "Password123",
+            Role = SystemRoles.Student,
+            MajorCode = MajorCodes.BIT_SE
+        };
+        var role = new Role { Name = SystemRoles.Student };
+        SetId(role, Guid.NewGuid());
+        var importedProfile = new Student
+        {
+            FullName = "Imported Student",
+            Email = "student@fpt.edu.vn",
+            RollNumber = "DE180225",
+            NormalizedRollNumber = "DE180225",
+            MajorCode = null,
+            UserId = null
+        };
+
+        _userRepository.ExistsByEmailAsync("student@fpt.edu.vn", Arg.Any<CancellationToken>()).Returns(false);
+        _roleRepository.GetByNameAsync(SystemRoles.Student, Arg.Any<CancellationToken>()).Returns(role);
+        _studentRepository.GetUnlinkedByEmailAsync("student@fpt.edu.vn", Arg.Any<CancellationToken>()).Returns(importedProfile);
+        _passwordHasher.Hash("Password123").Returns("hashed_password");
+        _jwtTokenService.GenerateAccessToken(Arg.Any<User>(), Arg.Any<string[]>()).Returns(new AccessTokenResult
+        {
+            Token = "access_token",
+            ExpiresAt = DateTime.UtcNow.AddMinutes(60)
+        });
+        _refreshTokenService.GenerateRefreshToken().Returns(new RefreshTokenResult
+        {
+            RawToken = "raw_refresh_token",
+            TokenHash = "token_hash",
+            ExpiresAt = DateTime.UtcNow.AddDays(7)
+        });
+
+        var result = await _handler.HandleAsync(request, CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.NotNull(importedProfile.UserId);
+        Assert.Equal(MajorCodes.BIT_SE, importedProfile.MajorCode);
+        Assert.Equal("DE180225", importedProfile.RollNumber);
+        _studentRepository.Received(1).Update(importedProfile);
+        await _studentRepository.DidNotReceive().AddAsync(Arg.Any<Student>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task Should_Register_Lecturer_Successfully_Without_Token()
     {
         var request = new RegisterRequest

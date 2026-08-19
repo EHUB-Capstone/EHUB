@@ -308,6 +308,12 @@ public sealed class VerifyClassMajorsResponse
     public IReadOnlyCollection<MajorVerificationRowDto> NotFound { get; init; } = Array.Empty<MajorVerificationRowDto>();
 }
 
+public sealed class SynchronizeProfileMajorsResponse
+{
+    public int MismatchCount { get; init; }
+    public int SynchronizedCount { get; init; }
+}
+
 // ─── GIAI ĐOẠN 5: EXCEL IMPORT & EXPORT CONTRACTS ──────────────────────────────
 
 public sealed class ImportStudentRowPreviewDto
@@ -317,6 +323,10 @@ public sealed class ImportStudentRowPreviewDto
     public string FullName { get; init; } = string.Empty;
     public string Email { get; init; } = string.Empty;
     public string MajorCode { get; init; } = string.Empty;
+    public string? RegisteredMajorCode { get; init; }
+    public string MajorComparisonStatus { get; init; } = "NotCompared";
+    public string? MajorWarningMessage { get; init; }
+    public bool NeedsMajorSync { get; init; }
     public bool IsValid { get; init; }
     public string Status { get; init; } = "Valid";
     public string? ErrorMessage { get; init; }
@@ -328,12 +338,14 @@ public sealed class ImportStudentsPreviewResponse
     public int TotalRows { get; init; }
     public int ValidRowsCount { get; init; }
     public int ErrorRowsCount { get; init; }
+    public int MajorMismatchCount { get; init; }
     public IReadOnlyCollection<ImportStudentRowPreviewDto> Rows { get; init; } = Array.Empty<ImportStudentRowPreviewDto>();
 }
 
 public sealed class CommitImportStudentsRequest
 {
     public Guid SessionId { get; init; }
+    public bool SynchronizeProfileMajors { get; init; }
 }
 
 public sealed class ImportStudentsCommitResponse
@@ -342,6 +354,7 @@ public sealed class ImportStudentsCommitResponse
     public int UpdatedCount { get; init; }
     public int SkippedCount { get; init; }
     public int ErrorCount { get; init; }
+    public int SynchronizedMajorCount { get; init; }
     public IReadOnlyCollection<ImportStudentCommitErrorDto> Errors { get; init; } = Array.Empty<ImportStudentCommitErrorDto>();
 }
 

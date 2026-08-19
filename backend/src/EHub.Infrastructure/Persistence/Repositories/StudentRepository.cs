@@ -25,6 +25,18 @@ public class StudentRepository : IStudentRepository
             .FirstOrDefaultAsync(s => s.UserId == userId, cancellationToken);
     }
 
+    public async Task<Student?> GetUnlinkedByEmailAsync(
+        string normalizedEmail,
+        CancellationToken cancellationToken = default)
+    {
+        return await _context.Students
+            .FirstOrDefaultAsync(
+                student => student.UserId == null &&
+                    student.Email != null &&
+                    student.Email.ToLower() == normalizedEmail,
+                cancellationToken);
+    }
+
     public async Task AddAsync(
         Student student,
         CancellationToken cancellationToken = default)

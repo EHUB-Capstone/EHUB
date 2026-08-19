@@ -136,14 +136,32 @@ public sealed class RegisterCommandHandler : IRegisterCommandHandler
 
             if (roleName == SystemRoles.Student)
             {
-                var student = new Student
+                var student = await _studentRepository.GetUnlinkedByEmailAsync(normalizedEmail, ct);
+                if (student is null)
                 {
-                    UserId = user.Id,
-                    FullName = user.FullName,
-                    Email = user.Email,
-                    MajorCode = request.MajorCode!.Trim().ToUpperInvariant()
-                };
-                await _studentRepository.AddAsync(student, ct);
+                    student = new Student
+                    {
+                        UserId = user.Id,
+                        FullName = user.FullName,
+                        Email = user.Email,
+                        MajorCode = request.MajorCode!.Trim().ToUpperInvariant()
+                    };
+                    await _studentRepository.AddAsync(student, ct);
+                }
+                else
+                {
+                    // A class import may have created the roster profile before the
+                    // student registered. Reuse it so enrollments, teams, and the
+                    // account all point at the same Student row.
+                    student.UserId = user.Id;
+                    student.FullName = user.FullName;
+                    student.Email = user.Email;
+                    student.MajorCode = request.MajorCode!.Trim().ToUpperInvariant();
+                    student.Status = StudentStatus.Active;
+                    student.UpdatedAt = DateTime.UtcNow;
+                    student.UpdatedBy = user.Id;
+                    _studentRepository.Update(student);
+                }
 
                 // Auto-login: Generate and save tokens
                 var roles = new[] { SystemRoles.Student };

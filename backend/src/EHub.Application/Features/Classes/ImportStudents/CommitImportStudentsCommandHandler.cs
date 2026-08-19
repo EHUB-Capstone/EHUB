@@ -135,6 +135,7 @@ public sealed class CommitImportStudentsCommandHandler : ICommitImportStudentsCo
                     targetClass,
                     session,
                     rows,
+                    request.SynchronizeProfileMajors,
                     currentUserId,
                     transactionCancellationToken),
                 cancellationToken);
@@ -159,6 +160,7 @@ public sealed class CommitImportStudentsCommandHandler : ICommitImportStudentsCo
         Class targetClass,
         ClassImportSession session,
         IReadOnlyCollection<ImportStudentRowPreviewDto> rows,
+        bool synchronizeProfileMajors,
         Guid currentUserId,
         CancellationToken cancellationToken)
     {
@@ -195,6 +197,7 @@ public sealed class CommitImportStudentsCommandHandler : ICommitImportStudentsCo
 
         var insertedCount = 0;
         var updatedCount = 0;
+        var synchronizedMajorCount = 0;
         var errors = new List<ImportStudentCommitErrorDto>();
 
         foreach (var row in rows)
@@ -262,6 +265,20 @@ public sealed class CommitImportStudentsCommandHandler : ICommitImportStudentsCo
                 profilesByCode[row.StudentCode] = [profile];
                 profilesByEmail[row.Email] = [profile];
             }
+            else if (synchronizeProfileMajors &&
+                     profile.UserId.HasValue &&
+                     MajorCodes.IsValid(row.MajorCode))
+            {
+                var importedMajor = row.MajorCode.Trim().ToUpperInvariant();
+                var registeredMajor = profile.MajorCode?.Trim().ToUpperInvariant();
+                if (!string.Equals(importedMajor, registeredMajor, StringComparison.OrdinalIgnoreCase))
+                {
+                    profile.MajorCode = importedMajor;
+                    profile.UpdatedAt = DateTime.UtcNow;
+                    profile.UpdatedBy = currentUserId;
+                    synchronizedMajorCount++;
+                }
+            }
 
             currentEnrollment = new ClassStudent
             {
@@ -296,6 +313,8 @@ public sealed class CommitImportStudentsCommandHandler : ICommitImportStudentsCo
                 SessionId = session.Id,
                 InsertedCount = insertedCount,
                 UpdatedCount = updatedCount,
+                SynchronizedMajorCount = synchronizedMajorCount,
+                SynchronizeProfileMajors = synchronizeProfileMajors,
                 ErrorCount = errors.Count
             }, JsonOptions)
         });
@@ -312,6 +331,7 @@ public sealed class CommitImportStudentsCommandHandler : ICommitImportStudentsCo
         {
             InsertedCount = insertedCount,
             UpdatedCount = updatedCount,
+            SynchronizedMajorCount = synchronizedMajorCount,
             SkippedCount = errors.Count,
             ErrorCount = errors.Count,
             Errors = errors

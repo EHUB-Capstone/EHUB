@@ -72,6 +72,8 @@ export const classApi = {
   updateStudentMajor: (classId, studentId, majorCode, reason) =>
     runClassFeatureRequest(classFeatureFlags.majorVerification, 'Class major verification', () =>
       axiosClient.put(`/classes/${classId}/students/${studentId}/major`, { majorCode, reason })),
+  synchronizeProfileMajors: (classId: string) =>
+    axiosClient.post(`/classes/${classId}/students/synchronize-profile-majors`),
   // Explicit, idempotent lock and unlock operations
   lockMajors: (classId) =>
     runClassFeatureRequest(classFeatureFlags.majorVerification, 'Class major verification', () =>

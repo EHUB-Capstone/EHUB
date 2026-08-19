@@ -23,6 +23,7 @@ using EHub.Application.Features.Classes.RemoveStudentFromClass;
 using EHub.Application.Features.Classes.ReEnrollStudent;
 using EHub.Application.Features.Classes.RepairChatMemberships;
 using EHub.Application.Features.Classes.SetEnrollmentMajorLock;
+using EHub.Application.Features.Classes.SynchronizeProfileMajors;
 using EHub.Application.Features.Classes.UpdateClass;
 using EHub.Application.Features.Classes.UpdateClassSchedule;
 using EHub.Application.Features.Classes.UpdateClassStudent;
@@ -496,6 +497,24 @@ public sealed class ClassesController : ControllerBase
     {
         var result = queryHandler.Handle();
         return File(result.Value.FileBytes, result.Value.ContentType, result.Value.FileName);
+    }
+
+    [HttpPost("{id:guid}/students/synchronize-profile-majors")]
+    public async Task<IActionResult> SynchronizeProfileMajors(
+        Guid id,
+        [FromServices] ISynchronizeProfileMajorsCommandHandler commandHandler,
+        CancellationToken cancellationToken)
+    {
+        var result = await commandHandler.HandleAsync(
+            id,
+            _currentUserService.UserId ?? Guid.Empty,
+            GetCurrentUserRole(),
+            cancellationToken);
+        if (result.IsFailure) return ToClassErrorResponse(result.Error);
+
+        return Ok(ApiResponse<SynchronizeProfileMajorsResponse>.SuccessResponse(
+            result.Value,
+            $"Synchronized {result.Value.SynchronizedCount} registered major(s)."));
     }
 
     [HttpPost("{id:guid}/major-lock")]
