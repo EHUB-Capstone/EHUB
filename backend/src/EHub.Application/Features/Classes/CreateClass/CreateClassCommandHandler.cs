@@ -80,10 +80,19 @@ public sealed class CreateClassCommandHandler : ICreateClassCommandHandler
                 new Error(ErrorCodes.ClassValidationError, "The specified academic term does not exist."));
         }
 
-        if (semester.Status is SemesterStatus.Completed or SemesterStatus.Archived)
+        var creationSemesters = await _context.Semesters.AsNoTracking()
+            .Where(item => item.Status == SemesterStatus.Active || item.Status == SemesterStatus.Planned)
+            .ToListAsync(cancellationToken);
+        var isAvailableForCreation = ClassCreationSemesterPolicy.SelectAvailable(
+                creationSemesters,
+                DateOnly.FromDateTime(DateTime.UtcNow))
+            .Any(item => item.Id == semester.Id);
+        if (!isAvailableForCreation)
         {
             return Result.Failure<ClassResponse>(
-                new Error(ErrorCodes.ClassValidationError, "Classes can only be created in an academic term that is open for creation."));
+                new Error(
+                    ErrorCodes.ClassValidationError,
+                    "Classes can only be created in the current active semester or its immediate planned successor."));
         }
 
         // Lecturer assignment is optional so an administrator can assign it later.

@@ -110,10 +110,17 @@ function createClassFromBulk(body: Record<string, unknown>, classIndex: number):
   const subject = state.subjects.find((item) =>
     item._id === asString(body.courseId) || item.subjectCode === subjectCode);
   if (!subject) return null;
-  const semester = asString(body.semester, state.currentSemester?.semester ?? 'FA').toUpperCase();
-  const year = asNumber(body.year, state.currentSemester?.year ?? new Date().getFullYear());
+  const selectedSemester = state.semesters.find((item) => item.id === asString(body.semesterId));
+  const semester = asString(body.semester, selectedSemester?.semester ?? state.currentSemester?.semester ?? 'FA').toUpperCase();
+  const year = asNumber(body.year, selectedSemester?.year ?? state.currentSemester?.year ?? new Date().getFullYear());
   const semesterCode = `${semester}${year}`;
-  const primaryLecturer = state.users.find((user) => user.id === asString(body.primaryLecturerId) && user.role === 'LECTURER');
+  const explicitAssignment = Array.isArray(body.lecturerAssignments)
+    ? body.lecturerAssignments
+      .map(item => item as Record<string, unknown>)
+      .find(item => Array.isArray(item.classIndices) && item.classIndices.map(Number).includes(classIndex))
+    : undefined;
+  const lecturerId = asString(explicitAssignment?.lecturerId, asString(body.primaryLecturerId));
+  const primaryLecturer = state.users.find((user) => user.id === lecturerId && user.role === 'LECTURER');
   return {
     id: allocateId(),
     slug: `${semesterCode}-${subject.subjectCode}-${classIndex}`.toLowerCase(),
@@ -284,9 +291,9 @@ function registerClassCrud(mock: MockAdapter): void {
     const body = parseBody(config);
     const items = bulkIndices(body).map((index) => {
       const candidate = createClassFromBulk(body, index);
-      if (!candidate) return { classCode: '-', classIndex: index, subjectCode: asString(body.subjectCode), semesterCode: '-', primaryLecturerName: null, isValid: false, errorMessage: 'Subject not found.' };
+      if (!candidate) return { classCode: '-', classIndex: index, subjectCode: asString(body.subjectCode), semesterCode: '-', primaryLecturerId: null, primaryLecturerName: null, isValid: false, errorMessage: 'Subject not found.' };
       const duplicate = getMockState().classes.some((cls) => cls.courseId === candidate.courseId && cls.semesterCode === candidate.semesterCode && cls.classIndex === index);
-      return { classCode: candidate.classCode, classIndex: index, subjectCode: candidate.subjectCode, semesterCode: candidate.semesterCode, primaryLecturerName: candidate.primaryLecturerName, isValid: !duplicate, errorMessage: duplicate ? 'Class index already exists for this subject and semester.' : null };
+      return { classCode: candidate.classCode, classIndex: index, subjectCode: candidate.subjectCode, semesterCode: candidate.semesterCode, primaryLecturerId: candidate.primaryLecturerId, primaryLecturerName: candidate.primaryLecturerName, isValid: !duplicate, errorMessage: duplicate ? 'Class index already exists for this subject and semester.' : null };
     });
     return ok({ items, totalCount: items.length, validCount: items.filter((item) => item.isValid).length, invalidCount: items.filter((item) => !item.isValid).length }, 'Bulk class preview generated.');
   });

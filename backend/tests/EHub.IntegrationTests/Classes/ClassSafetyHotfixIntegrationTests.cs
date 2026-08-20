@@ -19,6 +19,7 @@ using EHub.Application.Features.Classes.UpdateClass;
 using EHub.Application.Features.Classes.UpdateClassSchedule;
 using EHub.Contracts.Classes;
 using EHub.Contracts.Common;
+using EHub.Contracts.Subjects;
 using EHub.Domain.Entities;
 using EHub.Domain.Enums;
 using EHub.IntegrationTests.Common;
@@ -1427,6 +1428,180 @@ public sealed class ClassSafetyHotfixIntegrationTests
         reopenedEnrollment.CompletedAtUtc.Should().BeNull();
         (await context.ChatGroups.AsNoTracking().SingleAsync(item =>
             item.ClassId == seed.ClassId && item.GroupType == ChatGroupType.ClassGroup)).IsReadOnly.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task BulkCreate_AssignsDifferentLecturersToExplicitClassIndices()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateClassSeedAsync(context, "bulk-multi-assignment");
+        var secondLecturer = await CreateLecturerAsync(context, "bulk-multi-assignment-second");
+        var sourceClass = await context.Classes.SingleAsync(item => item.Id == seed.ClassId);
+        var semester = await context.Semesters.SingleAsync(item => item.Id == sourceClass.SemesterId);
+        semester.Status = SemesterStatus.Active;
+        semester.StartDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-30));
+        semester.EndDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(30));
+        await context.SaveChangesAsync();
+
+        var firstIndex = await context.Classes
+            .Where(item => item.CourseId == sourceClass.CourseId && item.SemesterId == sourceClass.SemesterId)
+            .MaxAsync(item => item.ClassIndex) + 1;
+        var indices = new[] { firstIndex, firstIndex + 1, firstIndex + 2 };
+        var admin = await context.Users.SingleAsync(user => user.Id == seed.AdminId);
+        var token = GenerateToken(scope.ServiceProvider, admin, SystemRoles.Admin);
+
+        using var request = CreateAuthorizedPostRequest(
+            "/api/classes/bulk/commit",
+            token,
+            new CreateBulkClassesRequest
+            {
+                CourseId = sourceClass.CourseId,
+                SemesterId = sourceClass.SemesterId,
+                ClassIndices = indices,
+                LecturerAssignments =
+                [
+                    new BulkClassLecturerAssignmentRequest
+                    {
+                        LecturerId = seed.LecturerId,
+                        ClassIndices = [indices[0], indices[2]]
+                    },
+                    new BulkClassLecturerAssignmentRequest
+                    {
+                        LecturerId = secondLecturer.Id,
+                        ClassIndices = [indices[1]]
+                    }
+                ]
+            });
+
+        var response = await _client.SendAsync(request);
+        var body = await response.Content.ReadFromJsonAsync<ApiResponse<ClassResponse[]>>();
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        body.Should().NotBeNull();
+        body!.Data.Should().HaveCount(3);
+        body.Data!.Single(item => item.ClassIndex == indices[0]).PrimaryLecturerId.Should().Be(seed.LecturerId);
+        body.Data.Single(item => item.ClassIndex == indices[1]).PrimaryLecturerId.Should().Be(secondLecturer.Id);
+        body.Data.Single(item => item.ClassIndex == indices[2]).PrimaryLecturerId.Should().Be(seed.LecturerId);
+
+        context.ChangeTracker.Clear();
+        var created = await context.Classes.AsNoTracking()
+            .Where(item => item.CourseId == sourceClass.CourseId && indices.Contains(item.ClassIndex))
+            .ToListAsync();
+        created.Should().HaveCount(3);
+        created.Single(item => item.ClassIndex == indices[1]).PrimaryLecturerId.Should().Be(secondLecturer.Id);
+        (await context.ClassLecturers.AsNoTracking()
+            .CountAsync(item => created.Select(createdClass => createdClass.Id).Contains(item.ClassId) && item.IsPrimary))
+            .Should().Be(3);
+    }
+
+    [Fact]
+    public async Task BulkPreview_WhenAssignmentsOverlap_Returns400WithoutCreatingClasses()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateClassSeedAsync(context, "bulk-overlap");
+        var secondLecturer = await CreateLecturerAsync(context, "bulk-overlap-second");
+        var sourceClass = await context.Classes.SingleAsync(item => item.Id == seed.ClassId);
+        var semester = await context.Semesters.SingleAsync(item => item.Id == sourceClass.SemesterId);
+        semester.Status = SemesterStatus.Active;
+        semester.StartDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-30));
+        semester.EndDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(30));
+        await context.SaveChangesAsync();
+        var classIndex = await context.Classes
+            .Where(item => item.CourseId == sourceClass.CourseId && item.SemesterId == sourceClass.SemesterId)
+            .MaxAsync(item => item.ClassIndex) + 1;
+        var admin = await context.Users.SingleAsync(user => user.Id == seed.AdminId);
+        var token = GenerateToken(scope.ServiceProvider, admin, SystemRoles.Admin);
+
+        using var request = CreateAuthorizedPostRequest(
+            "/api/classes/bulk/preview",
+            token,
+            new CreateBulkClassesRequest
+            {
+                CourseId = sourceClass.CourseId,
+                SemesterId = sourceClass.SemesterId,
+                ClassIndices = [classIndex],
+                LecturerAssignments =
+                [
+                    new BulkClassLecturerAssignmentRequest { LecturerId = seed.LecturerId, ClassIndices = [classIndex] },
+                    new BulkClassLecturerAssignmentRequest { LecturerId = secondLecturer.Id, ClassIndices = [classIndex] }
+                ]
+            });
+
+        var response = await _client.SendAsync(request);
+        var body = await response.Content.ReadFromJsonAsync<ApiResponse<object>>();
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        body!.Code.Should().Be(ErrorCodes.ClassValidationError);
+        body.Message.Should().Contain("more than one lecturer");
+        (await context.Classes.AsNoTracking().AnyAsync(item =>
+            item.CourseId == sourceClass.CourseId &&
+            item.SemesterId == sourceClass.SemesterId &&
+            item.ClassIndex == classIndex)).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task AdminCanPlanAndCorrectSemesterDates_WithAuditAndConcurrency()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var admin = await context.Users
+            .Include(user => user.UserRoles)
+            .ThenInclude(userRole => userRole.Role)
+            .FirstAsync(user => user.UserRoles.Any(userRole => userRole.Role.Name == SystemRoles.Admin));
+        var token = GenerateToken(scope.ServiceProvider, admin, SystemRoles.Admin);
+        var year = DateTime.UtcNow.Year + 2;
+        var startDate = new DateOnly(year, 1, 5);
+        var endDate = new DateOnly(year, 4, 20);
+
+        using var planRequest = CreateAuthorizedPostRequest(
+            "/api/subjects/semesters",
+            token,
+            new PlanSemesterRequest
+            {
+                Semester = "SP",
+                Year = year,
+                StartDate = startDate,
+                EndDate = endDate
+            });
+        var planResponse = await _client.SendAsync(planRequest);
+        var plannedBody = await planResponse.Content.ReadFromJsonAsync<ApiResponse<SemesterResponse>>();
+
+        planResponse.StatusCode.Should().Be(HttpStatusCode.Created);
+        plannedBody!.Data!.Status.Should().Be(nameof(SemesterStatus.Planned));
+        plannedBody.Data.StartDate.Should().Be(startDate);
+
+        var correctedStart = startDate.AddDays(2);
+        var correctedEnd = endDate.AddDays(2);
+        using var updateRequest = new HttpRequestMessage(
+            HttpMethod.Put,
+            $"/api/subjects/semesters/{plannedBody.Data.Id}/dates")
+        {
+            Content = JsonContent.Create(new UpdateSemesterDatesRequest
+            {
+                StartDate = correctedStart,
+                EndDate = correctedEnd,
+                RowVersion = plannedBody.Data.RowVersion,
+                Reason = "Academic calendar correction"
+            })
+        };
+        updateRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        var updateResponse = await _client.SendAsync(updateRequest);
+        var updatedBody = await updateResponse.Content.ReadFromJsonAsync<ApiResponse<SemesterResponse>>();
+
+        updateResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        updatedBody!.Data!.StartDate.Should().Be(correctedStart);
+        updatedBody.Data.EndDate.Should().Be(correctedEnd);
+        updatedBody.Data.RowVersion.Should().NotBe(plannedBody.Data.RowVersion);
+
+        context.ChangeTracker.Clear();
+        var auditActions = await context.SemesterAuditLogs.AsNoTracking()
+            .Where(item => item.SemesterId == plannedBody.Data.Id)
+            .Select(item => item.Action)
+            .ToListAsync();
+        auditActions.Should().Contain("SEMESTER_PLANNED");
+        auditActions.Should().Contain("SEMESTER_DATES_UPDATED");
     }
 
     private static async Task<ClassSeed> CreateClassSeedAsync(AppDbContext context, string suffix)
