@@ -442,17 +442,21 @@ function registerSubjectHandlers(mock: MockAdapter): void {
     return ok({ currentSemester, availableYears, isDecember: new Date().getMonth() === 11 }, 'Current semester retrieved successfully.');
   });
 
-  mock.onGet('/subjects/semesters').reply(() => {
-    const current = getMockState().currentSemester;
-    return ok({
-      semesters: [{
-        id: `mock-semester-${current.semester}${current.year}`,
-        semester: current.semester,
-        year: current.year,
-        status: 'Active',
-        rowVersion: '1',
-      }],
-    }, 'Semesters retrieved successfully.');
+  mock.onGet('/subjects/semesters/class-creation-options').reply(() => {
+    const today = new Date().toISOString().slice(0, 10);
+    const candidates = [...getMockState().semesters]
+      .filter(item =>
+        item.status === 'Active'
+          ? !item.endDate || item.endDate >= today
+          : item.status === 'Planned' && Boolean(item.startDate && item.startDate > today) && (!item.endDate || item.endDate >= today))
+      .sort((left, right) => (left.startDate || `${left.year}-01-01`).localeCompare(right.startDate || `${right.year}-01-01`));
+    const active = candidates.find(item => item.status === 'Active');
+    const planned = candidates.find(item => item.status === 'Planned' && (!active || (item.startDate || '') > (active.startDate || '')));
+    const semesters = [active, planned].filter(Boolean).map(item => ({
+      ...item!,
+      availability: item!.status === 'Active' ? 'Current' : 'Next',
+    }));
+    return ok({ semesters }, 'Class creation semester options retrieved successfully.');
   });
 
   mock.onPost('/subjects/current-semester').reply((config) => {
@@ -463,7 +467,7 @@ function registerSubjectHandlers(mock: MockAdapter): void {
       return failure(400, 'CLASS_VALIDATION_ERROR', 'Semester must be SP, SU, or FA.');
     const state = getMockState();
     const active = state.semesters.find((item) => item.status === 'Active');
-    let semester = state.semesters.find((item) => item.semester === semesterCode && item.year === year);
+    const semester = state.semesters.find((item) => item.semester === semesterCode && item.year === year);
     if (semester?.status === 'Active')
       return ok({ currentSemester: semester, availableYears: [...new Set(state.semesters.map((item) => item.year))], isDecember: false }, 'Active semester updated successfully.');
     if (active)
@@ -471,19 +475,62 @@ function registerSubjectHandlers(mock: MockAdapter): void {
     if (semester?.status === 'Completed' || semester?.status === 'Archived')
       return failure(409, 'SEMESTER_INVALID_STATE', 'A completed or archived semester must be explicitly reopened before activation.');
 
-    if (!semester) {
-      semester = {
-        id: allocateId(), semester: semesterCode as 'SP' | 'SU' | 'FA', year, status: 'Planned',
-        startDate: null, endDate: null, completedAtUtc: null, completionReason: null,
-        rowVersion: allocateRowVersion(),
-      };
-      state.semesters.push(semester);
-    }
+    if (!semester) return failure(404, 'SEMESTER_NOT_FOUND', 'Plan the semester and configure its dates before activation.');
+    if (!semester.startDate || !semester.endDate)
+      return failure(409, 'SEMESTER_ACTIVATION_BLOCKED', 'Configure semester start and end dates before activation.');
+    const today = new Date().toISOString().slice(0, 10);
+    if (today < semester.startDate || today > semester.endDate)
+      return failure(409, 'SEMESTER_ACTIVATION_BLOCKED', 'A semester can only be activated between its configured start and end dates.');
     semester.status = 'Active';
     semester.rowVersion = allocateRowVersion();
     state.currentSemester = { semester: semester.semester, year: semester.year };
     persistMockState();
     return ok({ currentSemester: semester, availableYears: [...new Set(state.semesters.map((item) => item.year))], isDecember: false }, 'Active semester updated successfully.');
+  });
+
+  mock.onPost('/subjects/semesters').reply((config) => {
+    const body = parseBody(config);
+    const semesterCode = asString(body.semester).toUpperCase() as 'SP' | 'SU' | 'FA';
+    const year = asNumber(body.year, new Date().getFullYear());
+    const startDate = asString(body.startDate);
+    const endDate = asString(body.endDate);
+    const state = getMockState();
+    if (!['SP', 'SU', 'FA'].includes(semesterCode) || !startDate || !endDate || endDate <= startDate)
+      return failure(400, 'CLASS_VALIDATION_ERROR', 'Provide a valid semester and date range.');
+    if (state.semesters.some((item) => item.semester === semesterCode && item.year === year))
+      return failure(409, 'SEMESTER_INVALID_STATE', 'This semester already exists. Edit its dates instead.');
+    if (state.semesters.some((item) => item.status !== 'Archived' && item.startDate && item.endDate && item.startDate <= endDate && item.endDate >= startDate))
+      return failure(409, 'SEMESTER_INVALID_STATE', 'The semester date range overlaps another semester.');
+    const semester = {
+      id: allocateId(), semester: semesterCode, year, status: 'Planned' as const,
+      startDate, endDate, completedAtUtc: null, completionReason: null,
+      rowVersion: allocateRowVersion(),
+    };
+    state.semesters.push(semester);
+    persistMockState();
+    return created(semester, 'Semester planned successfully.');
+  });
+
+  mock.onPut(/^\/subjects\/semesters\/[^/]+\/dates$/).reply((config) => {
+    const semesterId = routeId(config, /^\/subjects\/semesters\/([^/]+)\/dates$/);
+    const semester = getMockState().semesters.find((item) => item.id === semesterId);
+    if (!semester) return failure(404, 'SEMESTER_NOT_FOUND', 'The requested semester was not found.');
+    if (semester.status === 'Completed' || semester.status === 'Archived')
+      return failure(409, 'SEMESTER_INVALID_STATE', 'Dates of a completed or archived semester cannot be changed.');
+    const body = parseBody(config);
+    if (asString(body.rowVersion) !== semester.rowVersion)
+      return failure(409, 'SEMESTER_CONCURRENCY_CONFLICT', 'The semester changed concurrently. Reload and try again.');
+    const startDate = asString(body.startDate);
+    const endDate = asString(body.endDate);
+    if (!startDate || !endDate || endDate <= startDate || asString(body.reason).trim().length < 3)
+      return failure(400, 'CLASS_VALIDATION_ERROR', 'Provide a valid date range, rowVersion, and reason.');
+    if (getMockState().semesters.some((item) => item.id !== semester.id && item.status !== 'Archived' && item.startDate && item.endDate && item.startDate <= endDate && item.endDate >= startDate))
+      return failure(409, 'SEMESTER_INVALID_STATE', 'The semester date range overlaps another semester.');
+    semester.startDate = startDate;
+    semester.endDate = endDate;
+    semester.rowVersion = allocateRowVersion();
+    persistMockState();
+    return ok(semester, 'Semester dates updated successfully.');
   });
 
   mock.onGet('/subjects/semesters').reply(() => {

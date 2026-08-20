@@ -1,8 +1,10 @@
 import axiosClient from './axiosClient';
 import type {
+  PlanSemesterPayload,
   SemesterCode,
   SemesterLifecyclePayload,
   SubjectStatus,
+  UpdateSemesterDatesPayload,
 } from '../types/subjects';
 
 interface GetSubjectsParams {
@@ -24,6 +26,10 @@ export const subjectApi = {
   delete: (id: string) => axiosClient.delete(`/subjects/${id}`),
   getCurrentSemester: () => axiosClient.get('/subjects/current-semester'),
   getSemesters: () => axiosClient.get('/subjects/semesters'),
+  getClassCreationSemesterOptions: () => axiosClient.get('/subjects/semesters/class-creation-options'),
+  planSemester: (data: PlanSemesterPayload) => axiosClient.post('/subjects/semesters', data),
+  updateSemesterDates: (id: string, data: UpdateSemesterDatesPayload) =>
+    axiosClient.put(`/subjects/semesters/${id}/dates`, data),
   updateCurrentSemester: (semester: SemesterCode, year: number) =>
     axiosClient.post('/subjects/current-semester', { semester, year }),
   getSemesterCompletionPreview: (id: string) => axiosClient.get(`/subjects/semesters/${id}/completion-preview`),

@@ -477,6 +477,34 @@ test('mock semester lifecycle returns typed records and backend-style blockers',
   );
 });
 
+test('mock semester schedule supports admin planning and date correction', async () => {
+  resetMockState();
+  await axiosClient.post('/auth/login', { email: 'admin@ehub.local', password: 'Mock123!' });
+
+  const planned = await axiosClient.post('/subjects/semesters', {
+    semester: 'SP', year: 2027, startDate: '2027-01-05', endDate: '2027-04-25',
+  });
+  assert.equal(planned.data.status, 'Planned');
+  assert.equal(planned.data.startDate, '2027-01-05');
+
+  const updated = await axiosClient.put(`/subjects/semesters/${planned.data.id}/dates`, {
+    startDate: '2027-01-08', endDate: '2027-04-28',
+    rowVersion: planned.data.rowVersion, reason: 'Academic calendar correction',
+  });
+  assert.equal(updated.data.startDate, '2027-01-08');
+  assert.notEqual(updated.data.rowVersion, planned.data.rowVersion);
+
+  await assert.rejects(
+    axiosClient.post('/subjects/semesters', {
+      semester: 'SU', year: 2027, startDate: '2027-04-20', endDate: '2027-08-20',
+    }),
+    (error: unknown) => {
+      const response = (error as { response?: { status?: number; data?: { code?: string } } }).response;
+      return response?.status === 409 && response.data?.code === 'SEMESTER_INVALID_STATE';
+    },
+  );
+});
+
 test('mock manual enrollment preserves backend identity and explicit re-enroll rules', async () => {
   resetMockState();
   await axiosClient.post('/auth/login', { email: 'admin@ehub.local', password: 'Mock123!' });

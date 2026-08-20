@@ -43,6 +43,23 @@ public sealed class SemesterListResponse
     public IReadOnlyCollection<SemesterResponse> Semesters { get; init; } = Array.Empty<SemesterResponse>();
 }
 
+public sealed class ClassCreationSemesterOptionResponse
+{
+    public Guid Id { get; init; }
+    public string Semester { get; init; } = string.Empty;
+    public int Year { get; init; }
+    public string Status { get; init; } = string.Empty;
+    public string Availability { get; init; } = string.Empty;
+    public DateOnly? StartDate { get; init; }
+    public DateOnly? EndDate { get; init; }
+}
+
+public sealed class ClassCreationSemesterOptionsResponse
+{
+    public IReadOnlyCollection<ClassCreationSemesterOptionResponse> Semesters { get; init; } =
+        Array.Empty<ClassCreationSemesterOptionResponse>();
+}
+
 public sealed class SemesterCompletionPreviewResponse
 {
     public Guid SemesterId { get; init; }

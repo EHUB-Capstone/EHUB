@@ -84,7 +84,15 @@ public sealed class CreateBulkClassesRequest
     public int StartClassIndex { get; init; } = 1;
     public int Quantity { get; init; } = 1;
     public IReadOnlyCollection<int>? ClassIndices { get; init; }
+    // Backward-compatible shortcut: assign one lecturer to the whole batch.
     public Guid? PrimaryLecturerId { get; init; }
+    public IReadOnlyCollection<BulkClassLecturerAssignmentRequest>? LecturerAssignments { get; init; }
+}
+
+public sealed class BulkClassLecturerAssignmentRequest
+{
+    public Guid LecturerId { get; init; }
+    public IReadOnlyCollection<int> ClassIndices { get; init; } = Array.Empty<int>();
 }
 
 public sealed class BulkClassPreviewItem
@@ -93,6 +101,7 @@ public sealed class BulkClassPreviewItem
     public int ClassIndex { get; init; }
     public string SubjectCode { get; init; } = string.Empty;
     public string SemesterCode { get; init; } = string.Empty;
+    public Guid? PrimaryLecturerId { get; init; }
     public string? PrimaryLecturerName { get; init; }
     public bool IsValid { get; init; }
     public string? ErrorMessage { get; init; }
