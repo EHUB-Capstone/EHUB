@@ -2,6 +2,7 @@ using System.Text.Json;
 using EHub.Application.Common.Exceptions;
 using EHub.Application.Common.Interfaces.Identity;
 using EHub.Application.Common.Interfaces.Persistence;
+using EHub.Application.Features.Classes.Common;
 using EHub.Contracts.Subjects;
 using EHub.Domain.Entities;
 using EHub.Domain.Enums;
@@ -59,6 +60,144 @@ public sealed class CurrentSemesterHandler : ICurrentSemesterHandler
         return Result.Success(new SemesterListResponse { Semesters = semesters.Select(ToResponse).ToArray() });
     }
 
+    public async Task<Result<ClassCreationSemesterOptionsResponse>> GetClassCreationOptionsAsync(
+        CancellationToken token = default)
+    {
+        var semesters = await _context.Semesters.AsNoTracking()
+            .Where(item => item.Status == SemesterStatus.Active || item.Status == SemesterStatus.Planned)
+            .ToListAsync(token);
+        var available = ClassCreationSemesterPolicy.SelectAvailable(
+            semesters,
+            DateOnly.FromDateTime(DateTime.UtcNow));
+
+        return Result.Success(new ClassCreationSemesterOptionsResponse
+        {
+            Semesters = available.Select(item => new ClassCreationSemesterOptionResponse
+            {
+                Id = item.Id,
+                Semester = ToTermCode(item.Term),
+                Year = item.Year,
+                Status = item.Status.ToString(),
+                Availability = item.Status == SemesterStatus.Active ? "Current" : "Next",
+                StartDate = item.StartDate,
+                EndDate = item.EndDate
+            }).ToArray()
+        });
+    }
+
+    public async Task<Result<SemesterResponse>> PlanAsync(
+        PlanSemesterRequest request,
+        CancellationToken token = default)
+    {
+        if (!IsAdmin())
+            return Failure<SemesterResponse>(ErrorCodes.ClassAccessDenied, "Only an administrator can plan a semester.");
+        if (!TryParseTerm(request.Semester, out var term))
+            return Failure<SemesterResponse>(ErrorCodes.ClassValidationError, "Semester must be SP, SU, or FA.");
+        var now = DateTime.UtcNow;
+        if (request.Year < now.Year || request.Year > now.Year + 2)
+            return Failure<SemesterResponse>(ErrorCodes.ClassValidationError, "A semester can only be planned for the current year or the next two years.");
+        var dateValidation = ValidateDateRange(request.Year, request.StartDate, request.EndDate);
+        if (dateValidation != null)
+            return Failure<SemesterResponse>(ErrorCodes.ClassValidationError, dateValidation);
+        if (request.EndDate < DateOnly.FromDateTime(now))
+            return Failure<SemesterResponse>(ErrorCodes.ClassValidationError, "A newly planned semester cannot end in the past.");
+
+        try
+        {
+            return await _unitOfWork.ExecuteInSerializableTransactionAsync(async cancellationToken =>
+            {
+                if (await _context.Semesters.AnyAsync(
+                        item => item.Term == term && item.Year == request.Year,
+                        cancellationToken))
+                    return Failure<SemesterResponse>(ErrorCodes.SemesterInvalidState, "This semester already exists. Edit its dates instead.");
+                if (await HasOverlappingSemesterAsync(null, request.StartDate, request.EndDate, cancellationToken))
+                    return Failure<SemesterResponse>(ErrorCodes.SemesterInvalidState, "The semester date range overlaps another semester.");
+
+                var semester = new Semester
+                {
+                    Code = $"{ToTermCode(term)}{request.Year}",
+                    Name = $"{GetTermName(term)} {request.Year}",
+                    Term = term,
+                    Year = request.Year,
+                    StartDate = request.StartDate,
+                    EndDate = request.EndDate,
+                    Status = SemesterStatus.Planned,
+                    CreatedBy = _currentUser.UserId,
+                };
+                await _context.Semesters.AddAsync(semester, cancellationToken);
+                AddAuditAndOutbox(semester, "SEMESTER_PLANNED", "Semester.Planned.v1", null);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
+                return Result.Success(ToResponse(semester));
+            }, token);
+        }
+        catch (DbUpdateException exception)
+        {
+            _logger.LogWarning(exception, "Could not plan semester {Term} {Year}", request.Semester, request.Year);
+            return Failure<SemesterResponse>(ErrorCodes.SemesterInvalidState, "The semester conflicts with existing academic data. Reload and try again.");
+        }
+        catch (SerializableTransactionConflictException)
+        {
+            return Failure<SemesterResponse>(ErrorCodes.SemesterConcurrencyConflict, "Another semester operation completed first. Reload and try again.");
+        }
+    }
+
+    public async Task<Result<SemesterResponse>> UpdateDatesAsync(
+        Guid semesterId,
+        UpdateSemesterDatesRequest request,
+        CancellationToken token = default)
+    {
+        if (!IsAdmin())
+            return Failure<SemesterResponse>(ErrorCodes.ClassAccessDenied, "Only an administrator can update semester dates.");
+        if (!uint.TryParse(request.RowVersion, out var expectedVersion))
+            return Failure<SemesterResponse>(ErrorCodes.ClassValidationError, "A valid rowVersion is required.");
+        var reason = request.Reason?.Trim();
+        if (string.IsNullOrWhiteSpace(reason) || reason.Length is < 3 or > 500)
+            return Failure<SemesterResponse>(ErrorCodes.ClassValidationError, "Reason must contain between 3 and 500 characters.");
+
+        try
+        {
+            return await _unitOfWork.ExecuteInSerializableTransactionAsync(async cancellationToken =>
+            {
+                var semester = await _context.Semesters
+                    .FirstOrDefaultAsync(item => item.Id == semesterId, cancellationToken);
+                if (semester == null)
+                    return Failure<SemesterResponse>(ErrorCodes.SemesterNotFound, "The requested semester was not found.");
+                if (semester.Status is SemesterStatus.Completed or SemesterStatus.Archived)
+                    return Failure<SemesterResponse>(ErrorCodes.SemesterInvalidState, "Dates of a completed or archived semester cannot be changed.");
+                if (semester.Version != expectedVersion)
+                    return Failure<SemesterResponse>(ErrorCodes.SemesterConcurrencyConflict, "The semester changed concurrently. Reload and try again.");
+
+                var dateValidation = ValidateDateRange(semester.Year, request.StartDate, request.EndDate);
+                if (dateValidation != null)
+                    return Failure<SemesterResponse>(ErrorCodes.ClassValidationError, dateValidation);
+                if (await HasOverlappingSemesterAsync(semester.Id, request.StartDate, request.EndDate, cancellationToken))
+                    return Failure<SemesterResponse>(ErrorCodes.SemesterInvalidState, "The semester date range overlaps another semester.");
+                if (semester.StartDate == request.StartDate && semester.EndDate == request.EndDate)
+                    return Result.Success(ToResponse(semester));
+
+                semester.StartDate = request.StartDate;
+                semester.EndDate = request.EndDate;
+                semester.UpdatedBy = _currentUser.UserId;
+                AddAuditAndOutbox(semester, "SEMESTER_DATES_UPDATED", "Semester.DatesUpdated.v1", reason);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
+                return Result.Success(ToResponse(semester));
+            }, token);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return Failure<SemesterResponse>(ErrorCodes.SemesterConcurrencyConflict, "The semester changed concurrently. Reload and try again.");
+        }
+        catch (DbUpdateException exception)
+        {
+            _logger.LogWarning(exception, "Could not update dates for semester {SemesterId}", semesterId);
+            return Failure<SemesterResponse>(ErrorCodes.SemesterInvalidState, "The semester dates conflict with existing academic data. Reload and try again.");
+        }
+        catch (SerializableTransactionConflictException)
+        {
+            return Failure<SemesterResponse>(ErrorCodes.SemesterConcurrencyConflict, "Another semester operation completed first. Reload and try again.");
+        }
+    }
+
     public async Task<Result<CurrentSemesterResponse>> SetAsync(
         SetCurrentSemesterRequest request,
         CancellationToken token = default)
@@ -69,10 +208,8 @@ public sealed class CurrentSemesterHandler : ICurrentSemesterHandler
             return Failure<CurrentSemesterResponse>(ErrorCodes.ClassValidationError, "Semester must be SP, SU, or FA.");
 
         var now = DateTime.UtcNow;
-        if (request.Year < 2000 || request.Year > now.Year + 1)
+        if (request.Year < 2000 || request.Year > now.Year + 2)
             return Failure<CurrentSemesterResponse>(ErrorCodes.ClassValidationError, "Semester year is outside the supported range.");
-        if (request.Year > now.Year && !(now.Month == 12 && request.Year == now.Year + 1))
-            return Failure<CurrentSemesterResponse>(ErrorCodes.SemesterActivationBlocked, "Next-year activation is only available in December.");
 
         try
         {
@@ -96,21 +233,14 @@ public sealed class CurrentSemesterHandler : ICurrentSemesterHandler
                         "A completed or archived semester must be explicitly reopened before activation.");
 
                 if (semester == null)
-                {
-                    var (startDate, endDate) = GetDefaultDates(term, request.Year);
-                    semester = new Semester
-                    {
-                        Code = $"{ToTermCode(term)}{request.Year}",
-                        Name = $"{GetTermName(term)} {request.Year}",
-                        Term = term,
-                        Year = request.Year,
-                        StartDate = startDate,
-                        EndDate = endDate,
-                        Status = SemesterStatus.Planned,
-                        CreatedBy = _currentUser.UserId,
-                    };
-                    await _context.Semesters.AddAsync(semester, cancellationToken);
-                }
+                    return Failure<CurrentSemesterResponse>(ErrorCodes.SemesterNotFound, "Plan the semester and configure its dates before activation.");
+                if (!semester.StartDate.HasValue || !semester.EndDate.HasValue)
+                    return Failure<CurrentSemesterResponse>(ErrorCodes.SemesterActivationBlocked, "Configure semester start and end dates before activation.");
+                var today = DateOnly.FromDateTime(now);
+                if (today < semester.StartDate.Value || today > semester.EndDate.Value)
+                    return Failure<CurrentSemesterResponse>(
+                        ErrorCodes.SemesterActivationBlocked,
+                        "A semester can only be activated between its configured start and end dates.");
 
                 semester.Status = SemesterStatus.Active;
                 semester.UpdatedBy = _currentUser.UserId;
@@ -289,7 +419,7 @@ public sealed class CurrentSemesterHandler : ICurrentSemesterHandler
             Action = action,
             PerformedByUserId = _currentUser.UserId ?? Guid.Empty,
             OccurredAtUtc = occurredAtUtc,
-            DetailsJson = JsonSerializer.Serialize(new { reason, semester.Status }),
+            DetailsJson = JsonSerializer.Serialize(new { reason, semester.Status, semester.StartDate, semester.EndDate }),
         });
         _context.OutboxMessages.Add(new OutboxMessage
         {
@@ -312,6 +442,8 @@ public sealed class CurrentSemesterHandler : ICurrentSemesterHandler
                     Term = ToTermCode(semester.Term),
                     semester.Year,
                     Status = semester.Status.ToString(),
+                    semester.StartDate,
+                    semester.EndDate,
                     Reason = reason,
                 },
             }, JsonOptions),
@@ -345,13 +477,28 @@ public sealed class CurrentSemesterHandler : ICurrentSemesterHandler
         return value != null && term is SemesterTerm.Spring or SemesterTerm.Summer or SemesterTerm.Fall;
     }
 
-    private static (DateOnly Start, DateOnly End) GetDefaultDates(SemesterTerm term, int year) => term switch
+    private async Task<bool> HasOverlappingSemesterAsync(
+        Guid? excludedSemesterId,
+        DateOnly startDate,
+        DateOnly endDate,
+        CancellationToken token) =>
+        await _context.Semesters.AsNoTracking().AnyAsync(item =>
+            (!excludedSemesterId.HasValue || item.Id != excludedSemesterId.Value) &&
+            item.Status != SemesterStatus.Archived &&
+            item.StartDate.HasValue && item.EndDate.HasValue &&
+            item.StartDate.Value <= endDate && item.EndDate.Value >= startDate,
+            token);
+
+    private static string? ValidateDateRange(int year, DateOnly startDate, DateOnly endDate)
     {
-        SemesterTerm.Spring => (new DateOnly(year, 1, 1), new DateOnly(year, 4, 30)),
-        SemesterTerm.Summer => (new DateOnly(year, 5, 1), new DateOnly(year, 8, 31)),
-        SemesterTerm.Fall => (new DateOnly(year, 9, 1), new DateOnly(year, 12, 31)),
-        _ => throw new ArgumentOutOfRangeException(nameof(term)),
-    };
+        if (startDate == default || endDate == default)
+            return "Start date and end date are required.";
+        if (endDate <= startDate)
+            return "End date must be after start date.";
+        if (startDate.Year != year || endDate.Year != year)
+            return "Start date and end date must belong to the semester year.";
+        return null;
+    }
 
     private static string GetTermName(SemesterTerm term) => term switch
     {

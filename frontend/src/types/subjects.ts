@@ -31,6 +31,20 @@ export interface SemesterListResponse {
   semesters: SemesterDto[];
 }
 
+export interface ClassCreationSemesterOption {
+  id: string;
+  semester: SemesterCode;
+  year: number;
+  status: 'Active' | 'Planned';
+  availability: 'Current' | 'Next';
+  startDate: string | null;
+  endDate: string | null;
+}
+
+export interface ClassCreationSemesterOptionsResponse {
+  semesters: ClassCreationSemesterOption[];
+}
+
 export interface SemesterCompletionPreview {
   semesterId: string;
   semester: SemesterCode;
@@ -48,6 +62,20 @@ export interface SemesterCompletionPreview {
 }
 
 export interface SemesterLifecyclePayload {
+  rowVersion: string;
+  reason: string;
+}
+
+export interface PlanSemesterPayload {
+  semester: SemesterCode;
+  year: number;
+  startDate: string;
+  endDate: string;
+}
+
+export interface UpdateSemesterDatesPayload {
+  startDate: string;
+  endDate: string;
   rowVersion: string;
   reason: string;
 }

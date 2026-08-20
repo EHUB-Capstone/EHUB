@@ -42,6 +42,37 @@ public sealed class SetCurrentSemesterRequestValidator : AbstractValidator<SetCu
     }
 }
 
+public sealed class PlanSemesterRequestValidator : AbstractValidator<PlanSemesterRequest>
+{
+    public PlanSemesterRequestValidator()
+    {
+        RuleFor(x => x.Semester).Must(IsSemesterCode).WithMessage("Semester must be SP, SU, or FA.");
+        RuleFor(x => x.Year).InclusiveBetween(2000, 2100);
+        RuleFor(x => x.StartDate).NotEmpty();
+        RuleFor(x => x.EndDate).NotEmpty().GreaterThan(x => x.StartDate)
+            .WithMessage("End date must be after start date.");
+        RuleFor(x => x).Must(x => x.StartDate.Year == x.Year && x.EndDate.Year == x.Year)
+            .WithMessage("Start date and end date must belong to the semester year.");
+    }
+
+    private static bool IsSemesterCode(string value) =>
+        value.Equals("SP", StringComparison.OrdinalIgnoreCase) ||
+        value.Equals("SU", StringComparison.OrdinalIgnoreCase) ||
+        value.Equals("FA", StringComparison.OrdinalIgnoreCase);
+}
+
+public sealed class UpdateSemesterDatesRequestValidator : AbstractValidator<UpdateSemesterDatesRequest>
+{
+    public UpdateSemesterDatesRequestValidator()
+    {
+        RuleFor(x => x.StartDate).NotEmpty();
+        RuleFor(x => x.EndDate).NotEmpty().GreaterThan(x => x.StartDate)
+            .WithMessage("End date must be after start date.");
+        RuleFor(x => x.RowVersion).NotEmpty();
+        RuleFor(x => x.Reason).NotEmpty().MinimumLength(3).MaximumLength(500);
+    }
+}
+
 public sealed class SaveRoadmapItemRequestValidator : AbstractValidator<SaveRoadmapItemRequest>
 {
     public SaveRoadmapItemRequestValidator()

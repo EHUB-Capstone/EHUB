@@ -123,6 +123,12 @@ export interface CreateBulkClassesRequest {
   quantity?: number;
   classIndices?: number[];
   primaryLecturerId?: string;
+  lecturerAssignments?: BulkClassLecturerAssignment[];
+}
+
+export interface BulkClassLecturerAssignment {
+  lecturerId: string;
+  classIndices: number[];
 }
 
 export interface BulkClassPreviewItem {
@@ -130,6 +136,7 @@ export interface BulkClassPreviewItem {
   classIndex: number;
   subjectCode: string;
   semesterCode: string;
+  primaryLecturerId: string | null;
   primaryLecturerName: string | null;
   isValid: boolean;
   errorMessage: string | null;

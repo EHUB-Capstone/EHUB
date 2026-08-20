@@ -132,6 +132,43 @@ public sealed class SubjectsController : ControllerBase
             : Ok(ApiResponse<SemesterListResponse>.SuccessResponse(result.Value!, "Semesters retrieved successfully."));
     }
 
+    [HttpPost("semesters")]
+    [Authorize(Policy = SystemPolicies.AdminOnly)]
+    public async Task<IActionResult> PlanSemester(
+        [FromBody] PlanSemesterRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await _semesterHandler.PlanAsync(request, cancellationToken);
+        return result.IsFailure
+            ? ToSemesterErrorResponse(result.Error)
+            : StatusCode(StatusCodes.Status201Created,
+                ApiResponse<SemesterResponse>.SuccessResponse(result.Value!, "Semester planned successfully."));
+    }
+
+    [HttpPut("semesters/{id:guid}/dates")]
+    [Authorize(Policy = SystemPolicies.AdminOnly)]
+    public async Task<IActionResult> UpdateSemesterDates(
+        Guid id,
+        [FromBody] UpdateSemesterDatesRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await _semesterHandler.UpdateDatesAsync(id, request, cancellationToken);
+        return result.IsFailure
+            ? ToSemesterErrorResponse(result.Error)
+            : Ok(ApiResponse<SemesterResponse>.SuccessResponse(result.Value!, "Semester dates updated successfully."));
+    }
+
+    [HttpGet("semesters/class-creation-options")]
+    [Authorize(Policy = SystemPolicies.AdminOnly)]
+    public async Task<IActionResult> GetClassCreationSemesterOptions(CancellationToken cancellationToken)
+    {
+        var result = await _semesterHandler.GetClassCreationOptionsAsync(cancellationToken);
+        return result.IsFailure
+            ? ToSemesterErrorResponse(result.Error)
+            : Ok(ApiResponse<ClassCreationSemesterOptionsResponse>.SuccessResponse(
+                result.Value!, "Class creation semester options retrieved successfully."));
+    }
+
     [HttpGet("semesters/{id:guid}/completion-preview")]
     [Authorize(Policy = SystemPolicies.AdminOnly)]
     public async Task<IActionResult> PreviewSemesterCompletion(Guid id, CancellationToken cancellationToken)
