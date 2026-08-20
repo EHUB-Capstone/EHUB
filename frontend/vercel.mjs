@@ -1,3 +1,5 @@
+import { routes } from '@vercel/config/v1';
+
 const readHttpsOrigin = (value) => {
   try {
     const url = new URL(value.trim());
@@ -23,14 +25,8 @@ export const config = {
   buildCommand: 'npm run build',
   outputDirectory: 'dist',
   rewrites: [
-    {
-      source: '/api/:path*',
-      destination: `${apiProxyOrigin}/api/:path*`,
-    },
-    {
-      source: '/(.*)',
-      destination: '/index.html',
-    },
+    routes.rewrite('/api/(.*)', `${apiProxyOrigin}/api/$1`),
+    routes.rewrite('/(.*)', '/index.html'),
   ],
   headers: [
     {
