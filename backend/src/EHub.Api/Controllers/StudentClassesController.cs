@@ -31,9 +31,9 @@ public sealed class StudentClassesController : ControllerBase
     public async Task<IActionResult> GetMyTeam([FromServices] IStudentClassSelfServiceHandler handler, CancellationToken cancellationToken) =>
         ToResponse(await handler.GetMyTeamAsync(UserId, Role, cancellationToken), "Student team retrieved.");
 
-    [HttpGet("my-class-detail/{classId:guid}")]
-    public async Task<IActionResult> GetMyClassDetail(Guid classId, [FromServices] IStudentClassSelfServiceHandler handler, CancellationToken cancellationToken) =>
-        ToResponse(await handler.GetClassDetailAsync(classId, UserId, Role, cancellationToken), "Student class detail retrieved.");
+    [HttpGet("my-class-detail/{classIdentifier}")]
+    public async Task<IActionResult> GetMyClassDetail(string classIdentifier, [FromServices] IStudentClassSelfServiceHandler handler, CancellationToken cancellationToken) =>
+        ToResponse(await handler.GetClassDetailByIdentifierAsync(classIdentifier, UserId, Role, cancellationToken), "Student class detail retrieved.");
 
     private Guid UserId => _currentUser.UserId ?? Guid.Empty;
     private string Role => _currentUser.Roles.FirstOrDefault(role => role == SystemRoles.Student) ?? string.Empty;
@@ -42,8 +42,11 @@ public sealed class StudentClassesController : ControllerBase
     {
         if (result.IsSuccess) return Ok(ApiResponse<T>.SuccessResponse(result.Value, message));
         var response = ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code);
-        return result.Error.Code == EHub.Shared.Errors.ErrorCodes.ClassAccessDenied
-            ? StatusCode(StatusCodes.Status403Forbidden, response)
-            : BadRequest(response);
+        return result.Error.Code switch
+        {
+            EHub.Shared.Errors.ErrorCodes.ClassAccessDenied => StatusCode(StatusCodes.Status403Forbidden, response),
+            EHub.Shared.Errors.ErrorCodes.ClassNotFound => NotFound(response),
+            _ => BadRequest(response)
+        };
     }
 }

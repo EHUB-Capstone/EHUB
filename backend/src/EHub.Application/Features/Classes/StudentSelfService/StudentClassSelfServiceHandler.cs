@@ -1,4 +1,5 @@
 using EHub.Application.Common.Interfaces.Persistence;
+using EHub.Application.Features.Classes.Common;
 using EHub.Application.Features.Teams.Common;
 using EHub.Contracts.Teams;
 using EHub.Domain.Entities;
@@ -55,6 +56,21 @@ public sealed class StudentClassSelfServiceHandler : IStudentClassSelfServiceHan
                 item.EnrollmentStatus))
             .ToArray();
         return Result.Success(new MyClassesResponse { Classes = result });
+    }
+
+    public async Task<Result<StudentClassDetailResponse>> GetClassDetailByIdentifierAsync(
+        string classIdentifier,
+        Guid userId,
+        string role,
+        CancellationToken cancellationToken = default)
+    {
+        var classId = await ResolveClassIdAsync(classIdentifier, cancellationToken);
+        if (classId.IsFailure)
+        {
+            return Result.Failure<StudentClassDetailResponse>(classId.Error);
+        }
+
+        return await GetClassDetailAsync(classId.Value, userId, role, cancellationToken);
     }
 
     public async Task<Result<StudentClassDetailResponse>> GetClassDetailAsync(
@@ -121,6 +137,29 @@ public sealed class StudentClassSelfServiceHandler : IStudentClassSelfServiceHan
         });
     }
 
+    private async Task<Result<Guid>> ResolveClassIdAsync(string classIdentifier, CancellationToken cancellationToken)
+    {
+        if (Guid.TryParse(classIdentifier, out var classId))
+        {
+            return Result.Success(classId);
+        }
+
+        if (!ClassSlugRules.TryNormalizeRouteSlug(classIdentifier, out var slug))
+        {
+            return Result.Failure<Guid>(new Error(ErrorCodes.ClassValidationError, "Class identifier must be a UUID or a valid class slug."));
+        }
+
+        var resolvedClassId = await _context.Classes
+            .AsNoTracking()
+            .Where(item => item.Slug == slug)
+            .Select(item => (Guid?)item.Id)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        return resolvedClassId.HasValue
+            ? Result.Success(resolvedClassId.Value)
+            : Result.Failure<Guid>(new Error(ErrorCodes.ClassNotFound, "The requested class was not found."));
+    }
+
     private async Task<Result<Guid>> ResolveStudentIdAsync(Guid userId, string role, CancellationToken cancellationToken)
     {
         if (!string.Equals(role, SystemRoles.Student, StringComparison.OrdinalIgnoreCase))
@@ -173,13 +212,20 @@ public sealed class StudentClassSelfServiceHandler : IStudentClassSelfServiceHan
     {
         return new StudentClassSummaryDto
         {
-            Id = item.Id, ClassCode = item.ClassCode, SubjectCode = item.Course.Code, SubjectName = item.Course.Name,
-            Semester = item.Semester.Code, Year = item.Semester.Year,
+            Id = item.Id,
+            Slug = item.Slug,
+            ClassCode = item.ClassCode,
+            SubjectCode = item.Course.Code,
+            SubjectName = item.Course.Name,
+            Semester = item.Semester.Code,
+            Year = item.Semester.Year,
             ClassStatus = item.Status.ToString(),
             EnrollmentStatus = enrollmentStatus.ToString(),
             LectureId = item.PrimaryLecturer == null ? null : new StudentClassLecturerDto
             {
-                Id = item.PrimaryLecturer.Id, Name = item.PrimaryLecturer.FullName, Email = item.PrimaryLecturer.Email
+                Id = item.PrimaryLecturer.Id,
+                Name = item.PrimaryLecturer.FullName,
+                Email = item.PrimaryLecturer.Email
             },
             Mentors = mentors
         };

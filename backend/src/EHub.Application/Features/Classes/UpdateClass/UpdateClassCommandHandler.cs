@@ -451,6 +451,7 @@ public sealed class UpdateClassCommandHandler : IUpdateClassCommandHandler
         return new ClassResponse
         {
             Id = targetClass.Id,
+            Slug = targetClass.Slug,
             ClassCode = targetClass.ClassCode,
             ClassIndex = targetClass.ClassIndex,
             CourseId = targetClass.CourseId,

@@ -58,7 +58,7 @@ function ClassActionButton({ icon: Icon, tone = 'neutral', loading = false, chil
 }
 
 export default function ClassDetail() {
-  const { id }    = useParams();
+  const { slug: id } = useParams();
   const navigate  = useNavigate();
   const { user }  = useContext(AuthContext);
 
@@ -115,33 +115,31 @@ export default function ClassDetail() {
 
   const fetchData = useCallback(async () => {
     if (!id || id === 'undefined') {
-      toast.error('Invalid class ID');
+      toast.error('Invalid class identifier');
       setLoading(false);
-      return;
+      return null;
     }
+
     setLoading(true);
     setRosterLoadError('');
-    try {
-      const [classRes, studentRes] = await Promise.allSettled([
-        classApi.getById(id),
-        classApi.getStudents(id, {
-          page: rosterPage,
-          pageSize: rosterPageSize,
-          search: rosterSearch || undefined,
-          majorCode: rosterMajor || undefined,
-          status: rosterStatus || undefined,
-        }),
-      ]);
 
-      const classData = classRes.status === 'fulfilled' ? unwrapApiData(classRes.value) : null;
+    try {
+      const classRes = await classApi.getById(id);
+      const classData = unwrapApiData(classRes);
       if (!classData) {
         toast.error('Failed to load class');
         return null;
       }
 
       const rawClass = classData.class || classData;
-      const currentClassId = String(id || rawClass.id || rawClass._id || '');
       const classViewModel = toClassViewModel(rawClass);
+      const currentClassId = String(classViewModel.id || classViewModel._id || rawClass.id || rawClass._id || '');
+      const canonicalSlug = String(classViewModel.slug || rawClass.slug || '').trim();
+
+      if (canonicalSlug && id !== canonicalSlug) {
+        navigate(`/classes/${canonicalSlug}`, { replace: true });
+      }
+
       const normalizedClass = {
         ...classViewModel,
         _id: classViewModel._id || currentClassId,
@@ -149,11 +147,23 @@ export default function ClassDetail() {
         isMajorLocked: rawClass.isEnrollmentMajorLocked ?? rawClass.isMajorLocked ?? false,
       };
       setCls(normalizedClass);
+
       const usesCompletedRoster = normalizedClass.status === 'Completed' ||
         (normalizedClass.status === 'Archived' && normalizedClass.statusBeforeArchive === 'Completed');
       if (usesCompletedRoster && rosterStatus !== 'Completed') {
         setRosterStatus('Completed');
       }
+
+      const studentRes = await Promise.resolve(classApi.getStudents(currentClassId, {
+        page: rosterPage,
+        pageSize: rosterPageSize,
+        search: rosterSearch || undefined,
+        majorCode: rosterMajor || undefined,
+        status: rosterStatus || undefined,
+      })).then(
+        value => ({ status: 'fulfilled' as const, value }),
+        reason => ({ status: 'rejected' as const, reason }),
+      );
 
       let rawStudents = [];
       if (studentRes.status === 'fulfilled') {
@@ -207,8 +217,8 @@ export default function ClassDetail() {
       if (classFeatureFlags.teamManagement) {
         try {
           const [teamRes, proposalRes] = await Promise.all([
-            classApi.getTeams(id),
-            classApi.getTeamProposals(id),
+            classApi.getTeams(currentClassId),
+            classApi.getTeamProposals(currentClassId),
           ]);
           const tData = unwrapApiData(teamRes);
           const pData = unwrapApiData(proposalRes);
@@ -242,7 +252,7 @@ export default function ClassDetail() {
     } finally {
       setLoading(false);
     }
-  }, [id, rosterMajor, rosterPage, rosterPageSize, rosterSearch, rosterStatus]);
+  }, [id, navigate, rosterMajor, rosterPage, rosterPageSize, rosterSearch, rosterStatus]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -322,7 +332,7 @@ export default function ClassDetail() {
   const handleBackfillChats = async () => {
     setBackfilling(true);
     try {
-      const res: any = await classApi.repairChatMemberships(id);
+      const res: any = await classApi.repairChatMemberships(loadedClassId);
       const summary = res?.data || res;
       toast.success(
         `Repair complete: ${summary.groupsCreated || 0} groups created, ${summary.membershipsAdded || 0} members added, ${summary.membershipsEnded || 0} stale memberships ended.`
@@ -339,8 +349,8 @@ export default function ClassDetail() {
     setTogglingLock(true);
     try {
       const res: any = cls.isMajorLocked
-        ? await classApi.unlockMajors(id)
-        : await classApi.lockMajors(id);
+        ? await classApi.unlockMajors(loadedClassId)
+        : await classApi.lockMajors(loadedClassId);
       setCls(prev => ({ ...prev, isMajorLocked: res.data.isLocked }));
       toast.success(res.message || 'Major update lock status changed successfully.');
     } catch (err) {
@@ -358,7 +368,7 @@ export default function ClassDetail() {
 
     setSynchronizingMajors(true);
     try {
-      const response: any = await classApi.synchronizeProfileMajors(id);
+      const response: any = await classApi.synchronizeProfileMajors(loadedClassId);
       const result = unwrapApiData(response);
       toast.success(`Synchronized ${result.synchronizedCount ?? 0} registered major${result.synchronizedCount === 1 ? '' : 's'}.`);
       await fetchData();
@@ -372,7 +382,7 @@ export default function ClassDetail() {
   const handleExportExcel = async () => {
     setExporting(true);
     try {
-      const response = await classApi.exportClassExcel(id, {
+      const response = await classApi.exportClassExcel(loadedClassId, {
         scope: rosterStatus === 'Active' ? 'Active' : 'History',
         search: rosterSearch || undefined,
         majorCode: rosterMajor || undefined,
@@ -402,7 +412,7 @@ export default function ClassDetail() {
     if (!studentToDelete?._id) return;
     setRemovingStudent(true);
     try {
-      await classApi.dropStudent(id, studentToDelete._id);
+      await classApi.dropStudent(loadedClassId, studentToDelete._id);
       toast.success('Enrollment dropped successfully');
       setStudentToDelete(null);
       await fetchData();
@@ -418,11 +428,11 @@ export default function ClassDetail() {
     try {
       const isCurrentlyArchived = cls.status === 'Archived';
       if (isCurrentlyArchived) {
-        await classApi.restore(id, { rowVersion: cls.rowVersion, reason: lifecycleReason.trim() });
+        await classApi.restore(loadedClassId, { rowVersion: cls.rowVersion, reason: lifecycleReason.trim() });
         toast.success('Class restored successfully');
         await fetchData();
       } else {
-        await classApi.archive(id, { rowVersion: cls.rowVersion, reason: lifecycleReason.trim() });
+        await classApi.archive(loadedClassId, { rowVersion: cls.rowVersion, reason: lifecycleReason.trim() });
         toast.success('Class archived successfully');
         const targetRoute = user?.role === 'LECTURER' ? '/lecturer/classes' : '/admin/classes';
         navigate(targetRoute);
@@ -444,7 +454,7 @@ export default function ClassDetail() {
         setShowCompletion(true);
         return;
       }
-      const response = await classApi.getCompletionPreview(id);
+      const response = await classApi.getCompletionPreview(loadedClassId);
       setCompletionPreview(unwrapApiData(response));
       setShowCompletion(true);
     } catch (err) {
@@ -464,10 +474,10 @@ export default function ClassDetail() {
         reason: completionReason.trim(),
       };
       if (cls.status === 'Completed') {
-        await classApi.reopen(id, payload);
+        await classApi.reopen(loadedClassId, payload);
         toast.success('Class reopened successfully');
       } else {
-        await classApi.complete(id, payload);
+        await classApi.complete(loadedClassId, payload);
         toast.success('Class completed successfully');
         setRosterStatus('Completed');
       }
@@ -499,6 +509,7 @@ export default function ClassDetail() {
   const canSelectTeamMembers =
     !isReadOnly && (canManageClass || hasClassRole(user, 'STUDENT'));
   const lifecyclePresentation = getClassLifecyclePresentation(cls.status);
+  const loadedClassId = cls?._id || cls?.id || id;
 
   const getUniqueMentors = () => {
     const teamMentors = safeTeams
@@ -540,7 +551,7 @@ export default function ClassDetail() {
     if (!studentToReEnroll?._id) return;
     setReEnrollingStudent(true);
     try {
-      await classApi.reEnrollStudent(id, studentToReEnroll._id);
+      await classApi.reEnrollStudent(loadedClassId, studentToReEnroll._id);
       toast.success('Student re-enrolled successfully');
       setStudentToReEnroll(null);
       await fetchData();
@@ -822,7 +833,7 @@ export default function ClassDetail() {
         <div className="sticky top-20 z-40 rounded-xl bg-white/85 shadow-elevated backdrop-blur-md">
           {user?.role === 'STUDENT' ? selected.length > 0 ? (
             <StudentTeamGeneratePanel
-              classId={id}
+              classId={loadedClassId}
               selected={selected}
               students={safeStudents}
               onTeamCreated={handleTeamCreated}
@@ -942,7 +953,7 @@ export default function ClassDetail() {
       {/* ── Modals ── */}
       {!isReadOnly && showImport && canManageClass && (
         <ImportStudentsModal
-          classId={id || cls?._id}
+          classId={loadedClassId}
           onClose={() => setShowImport(false)}
           onImported={() => {
             fetchData();
@@ -953,7 +964,7 @@ export default function ClassDetail() {
       {!isReadOnly && classFeatureFlags.teamManagement && showTeamManagement && canManageClass && (
         <TeamManagementModal
           classInfo={{
-            id: id || cls._id,
+            id: loadedClassId,
             code: cls.classCode || 'Class',
             name: cls.subjectName || cls.subjectCode || '',
           }}
@@ -969,7 +980,7 @@ export default function ClassDetail() {
 
       {!isReadOnly && showEditSchedule && canManageClass && (
         <EditScheduleModal
-          classId={id}
+          classId={loadedClassId}
           currentSchedule={cls.schedule}
           rowVersion={cls.rowVersion}
           onClose={() => setShowEditSchedule(false)}
@@ -982,7 +993,7 @@ export default function ClassDetail() {
 
       {!isReadOnly && showAssignLecturer && user?.role === 'ADMIN' && (
         <AssignLectureModal
-          classId={id}
+          classId={loadedClassId}
           currentLecture={cls.lectureId}
           rowVersion={cls.rowVersion}
           allowUnassign={cls.status === 'Draft'}
@@ -996,7 +1007,7 @@ export default function ClassDetail() {
 
       {!isReadOnly && classFeatureFlags.mentorAssignment && showAssignMentors && canManageClass && (
         <AssignMentorsModal
-          classId={id}
+          classId={loadedClassId}
           currentMentors={activeMentors}
           onClose={() => setShowAssignMentors(false)}
           onAssigned={async () => {
@@ -1009,7 +1020,7 @@ export default function ClassDetail() {
       {/* ── Rename Class Modal ── */}
       {!isReadOnly && classFeatureFlags.rename && showRename && (
         <RenameClassModal
-          classId={id}
+          classId={loadedClassId}
           currentCode={cls.classCode}
           onClose={() => setShowRename(false)}
           onRenamed={(updated) => {
@@ -1022,7 +1033,7 @@ export default function ClassDetail() {
       {/* ── Verify Majors Modal ── */}
       {classFeatureFlags.majorVerification && showVerify && canManageClass && (
         <VerifyMajorModal
-          classId={id}
+          classId={loadedClassId}
           onClose={() => setShowVerify(false)}
         />
       )}
@@ -1030,7 +1041,7 @@ export default function ClassDetail() {
       {/* ── Add Student Modal ── */}
       {!isReadOnly && showAddStudent && canManageClass && (
         <AddStudentModal
-          classId={id}
+          classId={loadedClassId}
           onClose={() => setShowAddStudent(false)}
           onAdded={() => {
             setShowAddStudent(false);

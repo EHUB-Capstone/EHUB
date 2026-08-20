@@ -101,7 +101,7 @@ function App(): React.ReactElement {
                   <Route path="/lecturer/data-bank" element={<ProtectedRoute allowedRoles={['ADMIN', 'LECTURER']}><DataBankPage /></ProtectedRoute>} />
                   <Route path="/mentor" element={<ProtectedRoute allowedRoles={['MENTOR']}><MentorDashboard /></ProtectedRoute>} />
 
-                  <Route path="/classes/:id" element={<ProtectedRoute allowedRoles={[...classRouteAccess.classDetail]}><ClassDetail /></ProtectedRoute>} />
+                  <Route path="/classes/:slug" element={<ProtectedRoute allowedRoles={[...classRouteAccess.classDetail]}><ClassDetail /></ProtectedRoute>} />
 
                   <Route path="/student" element={<ProtectedRoute allowedRoles={['STUDENT']}><StudentDashboard /></ProtectedRoute>} />
                   <Route path="/student/idea/new" element={<ProtectedRoute allowedRoles={['STUDENT']}><IdeaForm /></ProtectedRoute>} />
@@ -112,7 +112,7 @@ function App(): React.ReactElement {
                   {classFeatureFlags.studentSelfService && (
                     <>
                       <Route path="/student/classes" element={<ProtectedRoute allowedRoles={['STUDENT']}><MyClasses /></ProtectedRoute>} />
-                      <Route path="/student/classes/:id" element={<ProtectedRoute allowedRoles={['STUDENT']}><StudentClassDetail /></ProtectedRoute>} />
+                      <Route path="/student/classes/:slug" element={<ProtectedRoute allowedRoles={['STUDENT']}><StudentClassDetail /></ProtectedRoute>} />
                       <Route path="/student/team" element={<ProtectedRoute allowedRoles={['STUDENT']}><MyTeam /></ProtectedRoute>} />
                     </>
                   )}

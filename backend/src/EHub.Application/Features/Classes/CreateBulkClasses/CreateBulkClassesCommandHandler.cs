@@ -63,12 +63,22 @@ public sealed class CreateBulkClassesCommandHandler : ICreateBulkClassesCommandH
         }
 
         var (course, semester, lecturer, targetIndices) = validation.Value;
+        var existingSlugs = await _context.Classes
+            .AsNoTracking()
+            .Select(@class => @class.Slug)
+            .ToListAsync(cancellationToken);
+        var reservedSlugs = existingSlugs.ToHashSet(StringComparer.OrdinalIgnoreCase);
         var createdClasses = new List<Class>(targetIndices.Count);
         foreach (var classIndex in targetIndices)
         {
+            var slugBase = ClassSlugRules.BuildBaseSlug(semester.Code, course.Code, classIndex);
+            var slug = ClassSlugRules.MakeUnique(slugBase, reservedSlugs);
+            reservedSlugs.Add(slug);
+
             var newClass = new Class
             {
                 ClassCode = BuildClassCode(course.Code, classIndex),
+                Slug = slug,
                 ClassIndex = classIndex,
                 SemesterId = semester.Id,
                 CourseId = course.Id,
@@ -130,6 +140,7 @@ public sealed class CreateBulkClassesCommandHandler : ICreateBulkClassesCommandH
         var responses = createdClasses.Select(newClass => new ClassResponse
         {
             Id = newClass.Id,
+            Slug = newClass.Slug,
             ClassCode = newClass.ClassCode,
             ClassIndex = newClass.ClassIndex,
             CourseId = newClass.CourseId,

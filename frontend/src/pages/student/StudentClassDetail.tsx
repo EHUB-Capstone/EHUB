@@ -22,7 +22,7 @@ const semesterLabel = (sem) => {
 };
 
 export default function StudentClassDetail() {
-  const { id } = useParams();
+  const { slug: id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
   const [data, setData] = useState(null);
@@ -35,16 +35,22 @@ export default function StudentClassDetail() {
 
   const fetchClassDetail = useCallback(async () => {
     try {
-      const [detailResponse, proposalResponse] = await Promise.all([
-        classApi.getMyClassDetail(id),
-        classApi.getTeamProposals(id),
-      ]);
+      const detailResponse = await classApi.getMyClassDetail(id);
       const detail = unwrapApiData<any>(detailResponse as any);
+      const classInfo = detail?.class || {};
+      const currentClassId = String(classInfo.id || classInfo._id || id || '');
+      const canonicalSlug = String(classInfo.slug || '').trim();
+
+      if (canonicalSlug && id !== canonicalSlug) {
+        navigate(`/student/classes/${canonicalSlug}`, { replace: true });
+      }
+
+      const proposalResponse = await classApi.getTeamProposals(currentClassId);
       const normalizedStudents = (detail?.students || []).map(student => ({
         ...student,
         _id: student.studentId,
         major: student.majorCode,
-        classId: id,
+        classId: currentClassId,
       }));
       const normalizedTeams = (detail?.teams || []).map(normalizeManagedTeam);
       setData({ ...detail, students: normalizedStudents, teams: normalizedTeams });
@@ -73,6 +79,7 @@ export default function StudentClassDetail() {
   }
 
   const cls      = data?.class;
+  const loadedClassId = cls?.id || cls?._id || id;
   const students = Array.isArray(data?.students) ? data.students : [];
   const teams    = Array.isArray(data?.teams) ? data.teams : [];
   const lecturer = cls?.lectureId;
@@ -192,7 +199,7 @@ export default function StudentClassDetail() {
       {students.length > 0 && !selectionDisabled && selected.length > 0 && (
         <div className="sticky top-20 z-30 rounded-2xl bg-white/80 shadow-xl backdrop-blur-md">
           <StudentTeamGeneratePanel
-            classId={id}
+            classId={loadedClassId}
             selected={selected}
             students={students}
             onTeamCreated={handleTeamCreated}

@@ -1,3 +1,4 @@
+using EHub.Application.Features.Classes.Common;
 using EHub.Application.Features.Classes.GetClassRoster;
 using EHub.Application.Features.Classes.RemoveStudentFromClass;
 using EHub.Application.Features.Classes.StudentSelfService;
@@ -518,6 +519,7 @@ public sealed class TeamWorkflowIntegrationTests
         var targetClass = new Class
         {
             ClassCode = $"TW{unique}_1",
+            Slug = ClassSlugRules.BuildBaseSlug(semester.Code, course.Code, 1),
             ClassIndex = 1,
             CourseId = course.Id,
             Course = course,

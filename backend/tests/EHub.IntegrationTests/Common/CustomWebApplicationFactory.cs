@@ -17,7 +17,8 @@ public sealed class CustomWebApplicationFactory
     : WebApplicationFactory<Program>, Xunit.IAsyncLifetime
 {
     private readonly PostgreSqlContainer _postgresContainer =
-        new PostgreSqlBuilder("postgres:16-alpine")
+        new PostgreSqlBuilder()
+            .WithImage("postgres:16-alpine")
             .WithDatabase("ehub_test_db")
             .WithUsername("ehub_test_user")
             .WithPassword("ehub_test_password")

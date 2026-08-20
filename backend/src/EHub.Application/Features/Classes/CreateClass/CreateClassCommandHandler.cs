@@ -128,10 +128,18 @@ public sealed class CreateClassCommandHandler : ICreateClassCommandHandler
                 new Error(ErrorCodes.ClassIndexDuplicated, $"Class index {request.ClassIndex} for subject '{course.Code}' already exists in this semester."));
         }
 
+        var slugBase = ClassSlugRules.BuildBaseSlug(semester.Code, course.Code, request.ClassIndex);
+        var existingSlugs = await _context.Classes
+            .AsNoTracking()
+            .Where(c => c.Slug.StartsWith(slugBase))
+            .Select(c => c.Slug)
+            .ToListAsync(cancellationToken);
+        var slug = ClassSlugRules.MakeUnique(slugBase, existingSlugs);
         // 7. Create Entity
         var newClass = new Class
         {
             ClassCode = classCode,
+            Slug = slug,
             ClassIndex = request.ClassIndex,
             SemesterId = request.SemesterId,
             CourseId = request.CourseId,
@@ -190,6 +198,7 @@ public sealed class CreateClassCommandHandler : ICreateClassCommandHandler
         var response = new ClassResponse
         {
             Id = newClass.Id,
+            Slug = newClass.Slug,
             ClassCode = newClass.ClassCode,
             ClassIndex = newClass.ClassIndex,
             CourseId = newClass.CourseId,

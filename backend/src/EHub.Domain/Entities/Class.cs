@@ -8,6 +8,7 @@ namespace EHub.Domain.Entities;
 public class Class : AuditableEntity
 {
     public string ClassCode { get; set; } = string.Empty;
+    public string Slug { get; set; } = string.Empty;
     public int ClassIndex { get; set; }
 
     public Guid SemesterId { get; set; }

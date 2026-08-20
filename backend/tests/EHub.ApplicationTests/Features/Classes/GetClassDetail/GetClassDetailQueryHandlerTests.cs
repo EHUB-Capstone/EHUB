@@ -21,4 +21,16 @@ public sealed class GetClassDetailQueryHandlerTests
         result.IsFailure.Should().BeTrue();
         result.Error.Code.Should().Be(ErrorCodes.ClassAccessDenied);
     }
+
+    [Fact]
+    public async Task HandleAsync_WhenClassIdentifierIsInvalidSlug_ReturnsValidationError()
+    {
+        var context = Substitute.For<IApplicationDbContext>();
+        var handler = new GetClassDetailQueryHandler(context);
+
+        var result = await handler.HandleAsync("su2026 exe101 8", Guid.NewGuid(), SystemRoles.Admin);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be(ErrorCodes.ClassValidationError);
+    }
 }

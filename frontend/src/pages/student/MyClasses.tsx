@@ -154,7 +154,7 @@ export default function MyClasses() {
                 <div className="px-6 py-4 bg-slate-50/50 border-t border-slate-100 flex justify-between items-center group-hover:bg-slate-50 transition-colors">
                   <span className="text-xs text-slate-400 font-medium">Click to see your team or classmates</span>
                   <button
-                    onClick={() => navigate(`/student/classes/${cls._id || cls.id}`)}
+                    onClick={() => navigate(`/student/classes/${cls.slug || cls._id || cls.id}`)}
                     className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 text-slate-700 rounded-xl text-xs font-semibold hover:bg-slate-50 shadow-xs active:scale-[0.98] transition-all"
                   >
                     Enter Class <ArrowRight className="w-3.5 h-3.5" />
