@@ -21,6 +21,7 @@ export interface ClassMentorSummary {
 
 export interface ClassDto {
   id: string;
+  slug: string;
   classCode: string;
   classIndex: number;
   courseId: string;

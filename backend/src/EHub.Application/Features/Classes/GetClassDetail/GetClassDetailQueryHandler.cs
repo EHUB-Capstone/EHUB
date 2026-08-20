@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using EHub.Application.Common.Interfaces.Persistence;
 using EHub.Application.Features.Classes.Common;
 using EHub.Contracts.Classes;
+using EHub.Domain.Entities;
 using EHub.Domain.Enums;
 using EHub.Shared.Constants;
 using EHub.Shared.Errors;
@@ -22,11 +23,39 @@ public sealed class GetClassDetailQueryHandler : IGetClassDetailQueryHandler
         _context = context;
     }
 
-    public async Task<Result<ClassResponse>> HandleAsync(
+    public Task<Result<ClassResponse>> HandleAsync(
         Guid classId,
         Guid currentUserId,
         string currentUserRole,
+        CancellationToken cancellationToken = default) =>
+        HandleCoreAsync(classId, null, currentUserId, currentUserRole, cancellationToken);
+
+    public Task<Result<ClassResponse>> HandleAsync(
+        string classIdentifier,
+        Guid currentUserId,
+        string currentUserRole,
         CancellationToken cancellationToken = default)
+    {
+        if (Guid.TryParse(classIdentifier, out var classId))
+        {
+            return HandleCoreAsync(classId, null, currentUserId, currentUserRole, cancellationToken);
+        }
+
+        if (!ClassSlugRules.TryNormalizeRouteSlug(classIdentifier, out var slug))
+        {
+            return Task.FromResult(Result.Failure<ClassResponse>(
+                new Error(ErrorCodes.ClassValidationError, "Class identifier must be a UUID or a valid class slug.")));
+        }
+
+        return HandleCoreAsync(null, slug, currentUserId, currentUserRole, cancellationToken);
+    }
+
+    private async Task<Result<ClassResponse>> HandleCoreAsync(
+        Guid? classId,
+        string? slug,
+        Guid currentUserId,
+        string currentUserRole,
+        CancellationToken cancellationToken)
     {
         var isAdmin = string.Equals(currentUserRole, SystemRoles.Admin, StringComparison.OrdinalIgnoreCase);
         var isLecturer = string.Equals(currentUserRole, SystemRoles.Lecturer, StringComparison.OrdinalIgnoreCase);
@@ -37,14 +66,7 @@ public sealed class GetClassDetailQueryHandler : IGetClassDetailQueryHandler
                 new Error(ErrorCodes.ClassAccessDenied, "You do not have permission to view details of this class."));
         }
 
-        var targetClass = await _context.Classes
-            .AsNoTracking()
-            .Include(c => c.Course)
-            .Include(c => c.Semester)
-            .Include(c => c.PrimaryLecturer)
-            .FirstOrDefaultAsync(c => c.Id == classId, cancellationToken);
-
-
+        var targetClass = await LoadClassAsync(classId, slug, cancellationToken);
         if (targetClass == null)
         {
             return Result.Failure<ClassResponse>(
@@ -60,7 +82,7 @@ public sealed class GetClassDetailQueryHandler : IGetClassDetailQueryHandler
         if (isStudent)
         {
             var isEnrolled = await _context.ClassStudents.AsNoTracking().AnyAsync(
-                cs => cs.ClassId == classId &&
+                cs => cs.ClassId == targetClass.Id &&
                     cs.Student.UserId == currentUserId &&
                     (cs.EnrollmentStatus == EnrollmentStatus.Active ||
                      cs.EnrollmentStatus == EnrollmentStatus.Completed),
@@ -71,6 +93,7 @@ public sealed class GetClassDetailQueryHandler : IGetClassDetailQueryHandler
                     new Error(ErrorCodes.ClassAccessDenied, "You are not enrolled in this class."));
             }
         }
+
         var usesCompletedRoster = targetClass.Status == ClassStatus.Completed ||
             targetClass.Status == ClassStatus.Archived && targetClass.StatusBeforeArchive == ClassStatus.Completed;
         var expectedEnrollmentStatus = usesCompletedRoster
@@ -79,7 +102,9 @@ public sealed class GetClassDetailQueryHandler : IGetClassDetailQueryHandler
         var studentCount = await _context.ClassStudents.CountAsync(
             cs => cs.ClassId == targetClass.Id && cs.EnrollmentStatus == expectedEnrollmentStatus,
             cancellationToken);
-        var teamCount = await _context.Teams.CountAsync(t => t.ClassId == targetClass.Id && t.Status == TeamStatus.Active, cancellationToken);
+        var teamCount = await _context.Teams.CountAsync(
+            t => t.ClassId == targetClass.Id && t.Status == TeamStatus.Active,
+            cancellationToken);
         var mentors = await _context.MentorAssignments.AsNoTracking()
             .Where(assignment =>
                 assignment.Team.ClassId == targetClass.Id &&
@@ -99,6 +124,7 @@ public sealed class GetClassDetailQueryHandler : IGetClassDetailQueryHandler
         var response = new ClassResponse
         {
             Id = targetClass.Id,
+            Slug = targetClass.Slug,
             ClassCode = targetClass.ClassCode,
             ClassIndex = targetClass.ClassIndex,
             CourseId = targetClass.CourseId,
@@ -125,5 +151,18 @@ public sealed class GetClassDetailQueryHandler : IGetClassDetailQueryHandler
         };
 
         return Result.Success(response);
+    }
+
+    private Task<Class?> LoadClassAsync(Guid? classId, string? slug, CancellationToken cancellationToken)
+    {
+        var query = _context.Classes
+            .AsNoTracking()
+            .Include(c => c.Course)
+            .Include(c => c.Semester)
+            .Include(c => c.PrimaryLecturer);
+
+        return classId.HasValue
+            ? query.FirstOrDefaultAsync(c => c.Id == classId.Value, cancellationToken)
+            : query.FirstOrDefaultAsync(c => c.Slug == slug, cancellationToken);
     }
 }

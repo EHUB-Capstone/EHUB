@@ -194,6 +194,7 @@ public sealed class UpdateClassScheduleCommandHandler : IUpdateClassScheduleComm
         return Result.Success(new ClassResponse
         {
             Id = targetClass.Id,
+            Slug = targetClass.Slug,
             ClassCode = targetClass.ClassCode,
             ClassIndex = targetClass.ClassIndex,
             CourseId = targetClass.CourseId,

@@ -236,6 +236,7 @@ public sealed class ProjectDirectionReviewDto
 public sealed class StudentClassSummaryDto
 {
     public Guid Id { get; init; }
+    public string Slug { get; init; } = string.Empty;
     public string ClassCode { get; init; } = string.Empty;
     public string SubjectCode { get; init; } = string.Empty;
     public string SubjectName { get; init; } = string.Empty;

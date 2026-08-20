@@ -114,6 +114,30 @@ public sealed class ClassesController : ControllerBase
             "Class details retrieved successfully."));
     }
 
+    [HttpGet("{slug}")]
+    public async Task<IActionResult> GetClassDetailBySlug(
+        string slug,
+        [FromServices] IGetClassDetailQueryHandler queryHandler,
+        CancellationToken cancellationToken)
+    {
+        var currentUserId = _currentUserService.UserId ?? Guid.Empty;
+        var currentUserRole = GetCurrentUserRole();
+
+        var result = await queryHandler.HandleAsync(
+            slug,
+            currentUserId,
+            currentUserRole,
+            cancellationToken);
+
+        if (result.IsFailure)
+        {
+            return ToClassErrorResponse(result.Error);
+        }
+
+        return Ok(ApiResponse<ClassResponse>.SuccessResponse(
+            result.Value,
+            "Class details retrieved successfully."));
+    }
     [HttpPost]
     [Authorize(Policy = SystemPolicies.AdminOnly)]
     public async Task<IActionResult> CreateClass(

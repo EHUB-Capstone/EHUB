@@ -83,6 +83,49 @@ public sealed class ClassSafetyHotfixIntegrationTests
     }
 
     [Fact]
+    public async Task GetClassDetail_BySlug_ReturnsMatchingClass()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateClassSeedAsync(context, "slug-detail");
+        var admin = await context.Users.SingleAsync(user => user.Id == seed.AdminId);
+        var token = GenerateToken(scope.ServiceProvider, admin, SystemRoles.Admin);
+
+        using var request = CreateAuthorizedGetRequest($"/api/classes/{seed.Slug}", token);
+
+        var response = await _client.SendAsync(request);
+        var body = await response.Content.ReadFromJsonAsync<ApiResponse<ClassResponse>>();
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        body.Should().NotBeNull();
+        body!.Data.Should().NotBeNull();
+        body.Data!.Id.Should().Be(seed.ClassId);
+        body.Data.Slug.Should().Be(seed.Slug);
+    }
+
+    [Fact]
+    public async Task GetClassDetail_ByMissingSlug_Returns404()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var admin = await context.Users
+            .Include(user => user.UserRoles)
+            .ThenInclude(userRole => userRole.Role)
+            .FirstAsync(user => user.UserRoles.Any(userRole => userRole.Role.Name == SystemRoles.Admin));
+        var token = GenerateToken(scope.ServiceProvider, admin, SystemRoles.Admin);
+        var missingSlug = $"missing-class-{Guid.NewGuid():N}"[..28].ToLowerInvariant();
+
+        using var request = CreateAuthorizedGetRequest($"/api/classes/{missingSlug}", token);
+
+        var response = await _client.SendAsync(request);
+        var body = await response.Content.ReadFromJsonAsync<ApiResponse<object>>();
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        body.Should().NotBeNull();
+        body!.Code.Should().Be(ErrorCodes.ClassNotFound);
+    }
+
+    [Fact]
     public async Task UnassignedLecturerUpdatingSchedule_Returns403ClassAccessDenied()
     {
         using var scope = _factory.Services.CreateScope();
@@ -132,6 +175,7 @@ public sealed class ClassSafetyHotfixIntegrationTests
         var otherClass = new Class
         {
             ClassCode = $"{sourceClass.ClassCode}_2",
+            Slug = UniqueSlug(sourceClass.Slug, "owner"),
             ClassIndex = sourceClass.ClassIndex + 1,
             CourseId = sourceClass.CourseId,
             SemesterId = sourceClass.SemesterId,
@@ -444,6 +488,7 @@ public sealed class ClassSafetyHotfixIntegrationTests
         var secondClass = new Class
         {
             ClassCode = $"{sourceClass.ClassCode}_ALT_{Guid.NewGuid():N}"[..Math.Min(50, sourceClass.ClassCode.Length + 13)],
+            Slug = UniqueSlug(sourceClass.Slug, "alt"),
             ClassIndex = 99,
             CourseId = sourceClass.CourseId,
             SemesterId = sourceClass.SemesterId,
@@ -1579,6 +1624,7 @@ public sealed class ClassSafetyHotfixIntegrationTests
         var @class = new Class
         {
             ClassCode = $"{course.Code}_1",
+            Slug = ClassSlugRules.BuildBaseSlug(semester.Code, course.Code, 1),
             ClassIndex = 1,
             CourseId = course.Id,
             Course = course,
@@ -1603,7 +1649,7 @@ public sealed class ClassSafetyHotfixIntegrationTests
         });
         await context.SaveChangesAsync();
 
-        return new ClassSeed(@class.Id, admin.Id, lecturer.Id, scheduleJson);
+        return new ClassSeed(@class.Id, @class.Slug, admin.Id, lecturer.Id, scheduleJson);
     }
 
     private static async Task<User> CreateLecturerAsync(AppDbContext context, string suffix)
@@ -1646,6 +1692,7 @@ public sealed class ClassSafetyHotfixIntegrationTests
         var conflictingClass = new Class
         {
             ClassCode = $"{course.Code}_1",
+            Slug = UniqueSlug(course.Code, "conflict"),
             ClassIndex = 1,
             CourseId = course.Id,
             Course = course,
@@ -1675,6 +1722,7 @@ public sealed class ClassSafetyHotfixIntegrationTests
         var sibling = new Class
         {
             ClassCode = $"{targetClass.ClassCode}_S{Guid.NewGuid():N}"[..Math.Min(50, targetClass.ClassCode.Length + 10)],
+            Slug = UniqueSlug(targetClass.Slug, "sibling"),
             ClassIndex = targetClass.ClassIndex + 100,
             CourseId = targetClass.CourseId,
             SemesterId = targetClass.SemesterId,
@@ -1701,6 +1749,13 @@ public sealed class ClassSafetyHotfixIntegrationTests
             .GenerateAccessToken(user, [role])
             .Token;
 
+    private static HttpRequestMessage CreateAuthorizedGetRequest(string url, string token)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Get, url);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        return request;
+    }
+
     private static HttpRequestMessage CreateAuthorizedPutRequest(string url, string token, object payload)
     {
         var request = new HttpRequestMessage(HttpMethod.Put, url)
@@ -1721,6 +1776,15 @@ public sealed class ClassSafetyHotfixIntegrationTests
         return request;
     }
 
+    private static string UniqueSlug(string prefix, string suffix)
+    {
+        var unique = Guid.NewGuid().ToString("N")[..8].ToLowerInvariant();
+        var slug = ClassSlugRules.NormalizeSegment($"{prefix}-{suffix}-{unique}");
+        return slug.Length <= ClassSlugRules.MaxLength
+            ? slug
+            : slug[..ClassSlugRules.MaxLength].Trim('-');
+    }
+
     private static byte[] CreateImportWorkbook(string studentCode, string email, string majorCode)
     {
         using var workbook = new XLWorkbook();
@@ -1739,7 +1803,12 @@ public sealed class ClassSafetyHotfixIntegrationTests
         return stream.ToArray();
     }
 
-    private sealed record ClassSeed(Guid ClassId, Guid AdminId, Guid LecturerId, string ScheduleJson);
+    private sealed record ClassSeed(
+        Guid ClassId,
+        string Slug,
+        Guid AdminId,
+        Guid LecturerId,
+        string ScheduleJson);
 
     private sealed class ThrowWhenEnrollmentIsInsertedInterceptor : SaveChangesInterceptor
     {

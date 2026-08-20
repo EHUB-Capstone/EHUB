@@ -175,6 +175,7 @@ public sealed class GetClassesQueryHandler : IGetClassesQueryHandler
             .Select(c => new
             {
                 c.Id,
+                c.Slug,
                 c.ClassCode,
                 c.ClassIndex,
                 c.CourseId,
@@ -239,6 +240,7 @@ public sealed class GetClassesQueryHandler : IGetClassesQueryHandler
         var items = projectedItems.Select(c => new ClassResponse
         {
             Id = c.Id,
+            Slug = c.Slug,
             ClassCode = c.ClassCode,
             ClassIndex = c.ClassIndex,
             CourseId = c.CourseId,

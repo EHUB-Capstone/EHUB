@@ -13,4 +13,10 @@ public interface IGetClassDetailQueryHandler
         Guid currentUserId,
         string currentUserRole,
         CancellationToken cancellationToken = default);
+
+    Task<Result<ClassResponse>> HandleAsync(
+        string classIdentifier,
+        Guid currentUserId,
+        string currentUserRole,
+        CancellationToken cancellationToken = default);
 }

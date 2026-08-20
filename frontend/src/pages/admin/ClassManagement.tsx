@@ -581,7 +581,7 @@ export default function ClassManagement() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.04 }}
                 className={`bg-white rounded-2xl border shadow-sm hover:shadow-elevated hover:-translate-y-1 transition-all group cursor-pointer ${selectedClassIds.has(cls._id) ? 'border-primary ring-2 ring-primary/15' : 'border-slate-200/60'}`}
-                onClick={() => navigate(`/classes/${cls._id || cls.id}`)}
+                onClick={() => navigate(`/classes/${cls.slug || cls._id || cls.id}`)}
               >
                 <div className="p-5">
                   {/* Top row */}
@@ -698,7 +698,7 @@ export default function ClassManagement() {
                 {/* Footer actions */}
                 <div className="border-t border-slate-100 px-5 py-3 flex gap-2">
                   <button
-                    onClick={(e) => { e.stopPropagation(); navigate(`/classes/${cls._id || cls.id}`); }}
+                    onClick={(e) => { e.stopPropagation(); navigate(`/classes/${cls.slug || cls._id || cls.id}`); }}
                     className="flex-1 flex items-center justify-center gap-1.5 text-xs text-secondary hover:text-secondary-dark font-medium transition-colors"
                   >
                     <Eye className="w-3.5 h-3.5" /> View Detail

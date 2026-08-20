@@ -123,6 +123,7 @@ function createClassFromBulk(body: Record<string, unknown>, classIndex: number):
   const primaryLecturer = state.users.find((user) => user.id === lecturerId && user.role === 'LECTURER');
   return {
     id: allocateId(),
+    slug: `${semesterCode}-${subject.subjectCode}-${classIndex}`.toLowerCase(),
     classCode: `${subject.subjectCode}_${classIndex}`,
     classIndex,
     courseId: subject._id,

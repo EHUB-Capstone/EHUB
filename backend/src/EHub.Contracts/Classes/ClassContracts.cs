@@ -22,6 +22,7 @@ public sealed class GetClassesRequest
 public sealed class ClassResponse
 {
     public Guid Id { get; init; }
+    public string Slug { get; init; } = string.Empty;
     public string ClassCode { get; init; } = string.Empty;
     public int ClassIndex { get; init; }
     public Guid CourseId { get; init; }

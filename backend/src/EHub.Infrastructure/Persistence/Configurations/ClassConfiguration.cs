@@ -18,6 +18,11 @@ public class ClassConfiguration : IEntityTypeConfiguration<Class>
             .HasMaxLength(50)
             .IsRequired();
 
+        builder.Property(c => c.Slug)
+            .HasColumnName("slug")
+            .HasMaxLength(160)
+            .IsRequired();
+
         builder.Property(c => c.ClassIndex)
             .HasColumnName("class_index")
             .IsRequired();
@@ -91,6 +96,9 @@ public class ClassConfiguration : IEntityTypeConfiguration<Class>
             .IsUnique();
 
         builder.HasIndex(c => new { c.SemesterId, c.CourseId, c.ClassIndex })
+            .IsUnique();
+
+        builder.HasIndex(c => c.Slug)
             .IsUnique();
 
         builder.HasIndex(c => new { c.SemesterId, c.CourseId, c.PrimaryLecturerId, c.Status });
