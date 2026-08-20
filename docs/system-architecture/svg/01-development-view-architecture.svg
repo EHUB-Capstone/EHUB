@@ -1,0 +1,170 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1680" height="1050" viewBox="0 0 1680 1050" role="img" aria-labelledby="title desc">
+  <title id="title">EHub Development and CI/CD Architecture</title>
+  <desc id="desc">Target software delivery workflow from source change to verified deployment</desc>
+  <defs>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="strokeWidth"><path d="M 0 0 L 8 4 L 0 8 z" fill="#64748B"/></marker>
+    <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0F172A" flood-opacity="0.08"/></filter>
+  </defs>
+  <style>
+    text { font-family: Inter, Segoe UI, Arial, sans-serif; }
+    .page-title { font-size: 24px; font-weight: 600; fill: #0F172A; }
+    .node-title { font-size: 13px; font-weight: 600; text-anchor: middle; }
+    .group-title { font-size: 14px; font-weight: 600; fill: #0F172A; }
+    .edge-label rect { fill: #F8FAFC; fill-opacity: 0.96; }
+    .edge-label text { font-size: 11px; fill: #475569; text-anchor: middle; }
+  </style>
+  <rect width="1680" height="1050" fill="#F8FAFC"/>
+  <text x="42" y="52" class="page-title">EHub Development and CI/CD Architecture</text>
+  <g id="ci-boundary" class="diagram-group">
+    <rect x="640" y="160" width="430" height="520" rx="4" fill="none" stroke="#0891B2" stroke-width="1.25" stroke-dasharray="6 5"/>
+    <rect x="658" y="147" width="328.4" height="28" rx="8" fill="#F8FAFC"/>
+    <text x="669" y="167" class="group-title">GitHub Actions — CI Quality Gate</text>
+  </g>
+<g id="env-boundary" class="diagram-group">
+    <rect x="1110" y="145" width="510" height="780" rx="4" fill="none" stroke="#64748B" stroke-width="1.25" stroke-dasharray="6 5"/>
+    <rect x="1128" y="132" width="245.6" height="28" rx="8" fill="#F8FAFC"/>
+    <text x="1139" y="152" class="group-title">Deployment Environments</text>
+  </g>
+  <g id="d1" class="diagram-edge">
+    <path d="M 151.5 402 L 226.25 402 L 301 402" fill="none" stroke="#64748B" stroke-width="1.8"  marker-end="url(#arrow)"/>
+    <g class="edge-label">
+    <rect x="167.675" y="382" width="42.4" height="20" rx="6"/>
+    <text x="188.875" y="397">Push</text>
+  </g>
+  </g>
+<g id="d2" class="diagram-edge">
+    <path d="M 359 402 L 431.25 402 L 503.5 402" fill="none" stroke="#64748B" stroke-width="1.8"  marker-end="url(#arrow)"/>
+    <g class="edge-label">
+    <rect x="374.125" y="382" width="42" height="20" rx="6"/>
+    <text x="395.125" y="397">PR</text>
+  </g>
+  </g>
+<g id="d3" class="diagram-edge">
+    <path d="M 561.5 402 L 693.75 402 L 693.75 242 L 826 242" fill="none" stroke="#64748B" stroke-width="1.8"  marker-end="url(#arrow)"/>
+    <g class="edge-label">
+    <rect x="672.75" y="302" width="42" height="20" rx="6"/>
+    <text x="693.75" y="317">CI</text>
+  </g>
+  </g>
+<g id="d4" class="diagram-edge">
+    <path d="M 826 242 L 790 242 L 790 310 L 760 310 L 760 338" fill="none" stroke="#64748B" stroke-width="1.8"  marker-end="url(#arrow)"/>
+    
+  </g>
+<g id="d5" class="diagram-edge">
+    <path d="M 884 242 L 920 242 L 920 310 L 950 310 L 950 338" fill="none" stroke="#64748B" stroke-width="1.8"  marker-end="url(#arrow)"/>
+    
+  </g>
+<g id="d6" class="diagram-edge">
+    <path d="M 760 465 L 760 490 L 805 490 L 805 547 L 826 547" fill="none" stroke="#64748B" stroke-width="1.8"  marker-end="url(#arrow)"/>
+    
+  </g>
+<g id="d7" class="diagram-edge">
+    <path d="M 950 465 L 950 490 L 905 490 L 905 547 L 884 547" fill="none" stroke="#64748B" stroke-width="1.8"  marker-end="url(#arrow)"/>
+    
+  </g>
+<g id="d8" class="diagram-edge">
+    <path d="M 884 547 L 1031.25 547 L 1031.25 382 L 1178.5 382" fill="none" stroke="#64748B" stroke-width="1.8"  marker-end="url(#arrow)"/>
+    <g class="edge-label">
+    <rect x="1003.45" y="444.5" width="55.599999999999994" height="20" rx="6"/>
+    <text x="1031.25" y="459.5">Passed</text>
+  </g>
+  </g>
+<g id="d9" class="diagram-edge">
+    <path d="M 1236.5 382 L 1333.75 382 L 1333.75 252 L 1431 252" fill="none" stroke="#64748B" stroke-width="1.8"  marker-end="url(#arrow)"/>
+    <g class="edge-label">
+    <rect x="1302.65" y="297" width="62.199999999999996" height="20" rx="6"/>
+    <text x="1333.75" y="312">Staging</text>
+  </g>
+  </g>
+<g id="d10" class="diagram-edge">
+    <path d="M 1207.5 450 L 1207.5 489 L 1207.5 528" fill="none" stroke="#64748B" stroke-width="1.8"  marker-end="url(#arrow)"/>
+    <g class="edge-label">
+    <rect x="1176.4" y="449.5" width="62.199999999999996" height="20" rx="6"/>
+    <text x="1207.5" y="464.5">Release</text>
+  </g>
+  </g>
+<g id="d11" class="diagram-edge">
+    <path d="M 1236.5 557 L 1333.75 557 L 1333.75 507 L 1431 507" fill="none" stroke="#64748B" stroke-width="1.8"  marker-end="url(#arrow)"/>
+    <g class="edge-label">
+    <rect x="1254.025" y="537" width="62.199999999999996" height="20" rx="6"/>
+    <text x="1285.125" y="552">Publish</text>
+  </g>
+  </g>
+<g id="d12" class="diagram-edge">
+    <path d="M 1460 585 L 1460 626.5 L 1460 668" fill="none" stroke="#64748B" stroke-width="1.8"  marker-end="url(#arrow)"/>
+    <g class="edge-label">
+    <rect x="1438.8" y="585.75" width="42.4" height="20" rx="6"/>
+    <text x="1460" y="600.75">Pull</text>
+  </g>
+  </g>
+<g id="d13" class="diagram-edge">
+    <path d="M 1431 697 L 1330 697 L 1330 735 L 1207.5 735 L 1207.5 768" fill="none" stroke="#64748B" stroke-width="1.8"  marker-end="url(#arrow)"/>
+    <g class="edge-label">
+    <rect x="1237.2" y="711" width="55.599999999999994" height="20" rx="6"/>
+    <text x="1265" y="726">Verify</text>
+  </g>
+  </g>
+<g id="d14" class="diagram-edge">
+    <path d="M 1236.5 797 L 1305 797 L 1305 830 L 1460 830 L 1460 785" fill="none" stroke="#64748B" stroke-width="1.8" stroke-dasharray="7 6" marker-end="url(#arrow)"/>
+    <g class="edge-label">
+    <rect x="1350.6" y="808" width="68.8" height="20" rx="6"/>
+    <text x="1385" y="823">Rollback</text>
+  </g>
+  </g>
+  <g id="developer" class="diagram-node">
+    <g transform="translate(93.5 373) scale(2.4166666666666665)" aria-hidden="true"><g fill="none" stroke="#38BDF8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m8 9-4 3 4 3M16 9l4 3-4 3M14 5l-4 14"/></g></g>
+    <text x="122.5" y="453" class="node-title" fill="#0F172A">Developer</text>
+  </g>
+<g id="repository" class="diagram-node">
+    <g transform="translate(301 373) scale(2.4166666666666665)" aria-hidden="true"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12" fill="#181717"/></g>
+    <text x="330" y="453" class="node-title" fill="#0F172A">GitHub Repository</text>
+  </g>
+<g id="pull-request" class="diagram-node">
+    <g transform="translate(503.5 373) scale(2.4166666666666665)" aria-hidden="true"><g fill="none" stroke="#06B6D4" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="5" r="2"/><circle cx="18" cy="7" r="2"/><circle cx="6" cy="19" r="2"/><path d="M6 7v10M8 7h6a4 4 0 0 1 4 4v0"/></g></g>
+    <text x="532.5" y="453" class="node-title" fill="#0F172A">Pull Request</text>
+  </g>
+<g id="ci-orchestrator" class="diagram-node">
+    <g transform="translate(826 213) scale(2.4166666666666665)" aria-hidden="true"><path d="M10.984 13.836a.5.5 0 0 1-.353-.146l-.745-.743a.5.5 0 1 1 .706-.708l.392.391 1.181-1.18a.5.5 0 0 1 .708.707l-1.535 1.533a.504.504 0 0 1-.354.146zm9.353-.147l1.534-1.532a.5.5 0 0 0-.707-.707l-1.181 1.18-.392-.391a.5.5 0 1 0-.706.708l.746.743a.497.497 0 0 0 .706-.001zM4.527 7.452l2.557-1.585A1 1 0 0 0 7.09 4.17L4.533 2.56A1 1 0 0 0 3 3.406v3.196a1.001 1.001 0 0 0 1.527.85zm2.03-2.436L4 6.602V3.406l2.557 1.61zM24 12.5c0 1.93-1.57 3.5-3.5 3.5a3.503 3.503 0 0 1-3.46-3h-2.08a3.503 3.503 0 0 1-3.46 3 3.502 3.502 0 0 1-3.46-3h-.558c-.972 0-1.85-.399-2.482-1.042V17c0 1.654 1.346 3 3 3h.04c.244-1.693 1.7-3 3.46-3 1.93 0 3.5 1.57 3.5 3.5S13.43 24 11.5 24a3.502 3.502 0 0 1-3.46-3H8c-2.206 0-4-1.794-4-4V9.899A5.008 5.008 0 0 1 0 5c0-2.757 2.243-5 5-5s5 2.243 5 5a5.005 5.005 0 0 1-4.952 4.998A2.482 2.482 0 0 0 7.482 12h.558c.244-1.693 1.7-3 3.46-3a3.502 3.502 0 0 1 3.46 3h2.08a3.503 3.503 0 0 1 3.46-3c1.93 0 3.5 1.57 3.5 3.5zm-15 8c0 1.378 1.122 2.5 2.5 2.5s2.5-1.122 2.5-2.5-1.122-2.5-2.5-2.5S9 19.122 9 20.5zM5 9c2.206 0 4-1.794 4-4S7.206 1 5 1 1 2.794 1 5s1.794 4 4 4zm9 3.5c0-1.378-1.122-2.5-2.5-2.5S9 11.122 9 12.5s1.122 2.5 2.5 2.5 2.5-1.122 2.5-2.5zm9 0c0-1.378-1.122-2.5-2.5-2.5S18 11.122 18 12.5s1.122 2.5 2.5 2.5 2.5-1.122 2.5-2.5zm-13 8a.5.5 0 1 0 1 0 .5.5 0 0 0-1 0zm2 0a.5.5 0 1 0 1 0 .5.5 0 0 0-1 0zm12 0c0 1.93-1.57 3.5-3.5 3.5a3.503 3.503 0 0 1-3.46-3.002c-.007.001-.013.005-.021.005l-.506.017h-.017a.5.5 0 0 1-.016-.999l.506-.017c.018-.002.035.006.052.007A3.503 3.503 0 0 1 20.5 17c1.93 0 3.5 1.57 3.5 3.5zm-1 0c0-1.378-1.122-2.5-2.5-2.5S18 19.122 18 20.5s1.122 2.5 2.5 2.5 2.5-1.122 2.5-2.5z" fill="#2088FF"/></g>
+    <text x="855" y="293" class="node-title" fill="#0F172A">GitHub Actions</text>
+  </g>
+<g id="frontend-checks" class="diagram-node">
+    <g transform="translate(731 338) scale(2.4166666666666665)" aria-hidden="true"><path d="M14.23 12.004a2.236 2.236 0 0 1-2.235 2.236 2.236 2.236 0 0 1-2.236-2.236 2.236 2.236 0 0 1 2.235-2.236 2.236 2.236 0 0 1 2.236 2.236zm2.648-10.69c-1.346 0-3.107.96-4.888 2.622-1.78-1.653-3.542-2.602-4.887-2.602-.41 0-.783.093-1.106.278-1.375.793-1.683 3.264-.973 6.365C1.98 8.917 0 10.42 0 12.004c0 1.59 1.99 3.097 5.043 4.03-.704 3.113-.39 5.588.988 6.38.32.187.69.275 1.102.275 1.345 0 3.107-.96 4.888-2.624 1.78 1.654 3.542 2.603 4.887 2.603.41 0 .783-.09 1.106-.275 1.374-.792 1.683-3.263.973-6.365C22.02 15.096 24 13.59 24 12.004c0-1.59-1.99-3.097-5.043-4.032.704-3.11.39-5.587-.988-6.38-.318-.184-.688-.277-1.092-.278zm-.005 1.09v.006c.225 0 .406.044.558.127.666.382.955 1.835.73 3.704-.054.46-.142.945-.25 1.44-.96-.236-2.006-.417-3.107-.534-.66-.905-1.345-1.727-2.035-2.447 1.592-1.48 3.087-2.292 4.105-2.295zm-9.77.02c1.012 0 2.514.808 4.11 2.28-.686.72-1.37 1.537-2.02 2.442-1.107.117-2.154.298-3.113.538-.112-.49-.195-.964-.254-1.42-.23-1.868.054-3.32.714-3.707.19-.09.4-.127.563-.132zm4.882 3.05c.455.468.91.992 1.36 1.564-.44-.02-.89-.034-1.345-.034-.46 0-.915.01-1.36.034.44-.572.895-1.096 1.345-1.565zM12 8.1c.74 0 1.477.034 2.202.093.406.582.802 1.203 1.183 1.86.372.64.71 1.29 1.018 1.946-.308.655-.646 1.31-1.013 1.95-.38.66-.773 1.288-1.18 1.87-.728.063-1.466.098-2.21.098-.74 0-1.477-.035-2.202-.093-.406-.582-.802-1.204-1.183-1.86-.372-.64-.71-1.29-1.018-1.946.303-.657.646-1.313 1.013-1.954.38-.66.773-1.286 1.18-1.868.728-.064 1.466-.098 2.21-.098zm-3.635.254c-.24.377-.48.763-.704 1.16-.225.39-.435.782-.635 1.174-.265-.656-.49-1.31-.676-1.947.64-.15 1.315-.283 2.015-.386zm7.26 0c.695.103 1.365.23 2.006.387-.18.632-.405 1.282-.66 1.933-.2-.39-.41-.783-.64-1.174-.225-.392-.465-.774-.705-1.146zm3.063.675c.484.15.944.317 1.375.498 1.732.74 2.852 1.708 2.852 2.476-.005.768-1.125 1.74-2.857 2.475-.42.18-.88.342-1.355.493-.28-.958-.646-1.956-1.1-2.98.45-1.017.81-2.01 1.085-2.964zm-13.395.004c.278.96.645 1.957 1.1 2.98-.45 1.017-.812 2.01-1.086 2.964-.484-.15-.944-.318-1.37-.5-1.732-.737-2.852-1.706-2.852-2.474 0-.768 1.12-1.742 2.852-2.476.42-.18.88-.342 1.356-.494zm11.678 4.28c.265.657.49 1.312.676 1.948-.64.157-1.316.29-2.016.39.24-.375.48-.762.705-1.158.225-.39.435-.788.636-1.18zm-9.945.02c.2.392.41.783.64 1.175.23.39.465.772.705 1.143-.695-.102-1.365-.23-2.006-.386.18-.63.406-1.282.66-1.933zM17.92 16.32c.112.493.2.968.254 1.423.23 1.868-.054 3.32-.714 3.708-.147.09-.338.128-.563.128-1.012 0-2.514-.807-4.11-2.28.686-.72 1.37-1.536 2.02-2.44 1.107-.118 2.154-.3 3.113-.54zm-11.83.01c.96.234 2.006.415 3.107.532.66.905 1.345 1.727 2.035 2.446-1.595 1.483-3.092 2.295-4.11 2.295-.22-.005-.406-.05-.553-.132-.666-.38-.955-1.834-.73-3.703.054-.46.142-.944.25-1.438zm4.56.64c.44.02.89.034 1.345.034.46 0 .915-.01 1.36-.034-.44.572-.895 1.095-1.345 1.565-.455-.47-.91-.993-1.36-1.565z" fill="#149ECA"/></g>
+    <text x="760" y="418" class="node-title" fill="#0F172A">Frontend Checks</text>
+  </g>
+<g id="backend-checks" class="diagram-node">
+    <g transform="translate(921 338) scale(2.4166666666666665)" aria-hidden="true"><path d="M24 8.77h-2.468v7.565h-1.425V8.77h-2.462V7.53H24zm-6.852 7.565h-4.821V7.53h4.63v1.24h-3.205v2.494h2.953v1.234h-2.953v2.604h3.396zm-6.708 0H8.882L4.78 9.863a2.896 2.896 0 0 1-.258-.51h-.036c.032.189.048.592.048 1.21v5.772H3.157V7.53h1.659l3.965 6.32c.167.261.275.442.323.54h.024c-.04-.233-.06-.629-.06-1.185V7.529h1.372zm-8.703-.693a.868.829 0 0 1-.869.829.868.829 0 0 1-.868-.83.868.829 0 0 1 .868-.828.868.829 0 0 1 .869.829Z" fill="#512BD4"/></g>
+    <text x="950" y="418" class="node-title" fill="#0F172A">Backend Checks</text>
+  </g>
+<g id="supply-chain" class="diagram-node">
+    <g transform="translate(826 518) scale(2.4166666666666665)" aria-hidden="true"><path d="M13.983 11.078h2.119a.186.186 0 00.186-.185V9.006a.186.186 0 00-.186-.186h-2.119a.185.185 0 00-.185.185v1.888c0 .102.083.185.185.185m-2.954-5.43h2.118a.186.186 0 00.186-.186V3.574a.186.186 0 00-.186-.185h-2.118a.185.185 0 00-.185.185v1.888c0 .102.082.185.185.185m0 2.716h2.118a.187.187 0 00.186-.186V6.29a.186.186 0 00-.186-.185h-2.118a.185.185 0 00-.185.185v1.887c0 .102.082.185.185.186m-2.93 0h2.12a.186.186 0 00.184-.186V6.29a.185.185 0 00-.185-.185H8.1a.185.185 0 00-.185.185v1.887c0 .102.083.185.185.186m-2.964 0h2.119a.186.186 0 00.185-.186V6.29a.185.185 0 00-.185-.185H5.136a.186.186 0 00-.186.185v1.887c0 .102.084.185.186.186m5.893 2.715h2.118a.186.186 0 00.186-.185V9.006a.186.186 0 00-.186-.186h-2.118a.185.185 0 00-.185.185v1.888c0 .102.082.185.185.185m-2.93 0h2.12a.185.185 0 00.184-.185V9.006a.185.185 0 00-.184-.186h-2.12a.185.185 0 00-.184.185v1.888c0 .102.083.185.185.185m-2.964 0h2.119a.185.185 0 00.185-.185V9.006a.185.185 0 00-.184-.186h-2.12a.186.186 0 00-.186.186v1.887c0 .102.084.185.186.185m-2.92 0h2.12a.185.185 0 00.184-.185V9.006a.185.185 0 00-.184-.186h-2.12a.185.185 0 00-.184.185v1.888c0 .102.082.185.185.185M23.763 9.89c-.065-.051-.672-.51-1.954-.51-.338.001-.676.03-1.01.087-.248-1.7-1.653-2.53-1.716-2.566l-.344-.199-.226.327c-.284.438-.49.922-.612 1.43-.23.97-.09 1.882.403 2.661-.595.332-1.55.413-1.744.42H.751a.751.751 0 00-.75.748 11.376 11.376 0 00.692 4.062c.545 1.428 1.355 2.48 2.41 3.124 1.18.723 3.1 1.137 5.275 1.137.983.003 1.963-.086 2.93-.266a12.248 12.248 0 003.823-1.389c.98-.567 1.86-1.288 2.61-2.136 1.252-1.418 1.998-2.997 2.553-4.4h.221c1.372 0 2.215-.549 2.68-1.009.309-.293.55-.65.707-1.046l.098-.288Z" fill="#2496ED"/></g>
+    <text x="855" y="598" class="node-title" fill="#0F172A">Delivery Checks</text>
+  </g>
+<g id="merge" class="diagram-node">
+    <g transform="translate(1178.5 353) scale(2.4166666666666665)" aria-hidden="true"><g fill="none" stroke="#10B981" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></g></g>
+    <text x="1207.5" y="433" class="node-title" fill="#0F172A">Review and Merge</text>
+  </g>
+<g id="staging" class="diagram-node">
+    <g transform="translate(1431 223) scale(2.4166666666666665)" aria-hidden="true"><g fill="none" stroke="#3B82F6" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></g></g>
+    <text x="1460" y="303" class="node-title" fill="#0F172A">Staging Environment</text>
+  </g>
+<g id="release-gate" class="diagram-node">
+    <g transform="translate(1178.5 528) scale(2.4166666666666665)" aria-hidden="true"><g fill="none" stroke="#EAB308" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/></g></g>
+    <text x="1207.5" y="608" class="node-title" fill="#0F172A">Release Approval</text>
+  </g>
+<g id="registry" class="diagram-node">
+    <g transform="translate(1431 478) scale(2.4166666666666665)" aria-hidden="true"><g fill="none" stroke="#06B6D4" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m21 8-9-5-9 5 9 5 9-5Z"/><path d="m3 8 9 5v9l9-5V8M12 13v9"/></g></g>
+    <text x="1460" y="558" class="node-title" fill="#0F172A">Container Registry</text>
+  </g>
+<g id="production" class="diagram-node">
+    <g transform="translate(1431 668) scale(2.4166666666666665)" aria-hidden="true"><path d="M13.983 11.078h2.119a.186.186 0 00.186-.185V9.006a.186.186 0 00-.186-.186h-2.119a.185.185 0 00-.185.185v1.888c0 .102.083.185.185.185m-2.954-5.43h2.118a.186.186 0 00.186-.186V3.574a.186.186 0 00-.186-.185h-2.118a.185.185 0 00-.185.185v1.888c0 .102.082.185.185.185m0 2.716h2.118a.187.187 0 00.186-.186V6.29a.186.186 0 00-.186-.185h-2.118a.185.185 0 00-.185.185v1.887c0 .102.082.185.185.186m-2.93 0h2.12a.186.186 0 00.184-.186V6.29a.185.185 0 00-.185-.185H8.1a.185.185 0 00-.185.185v1.887c0 .102.083.185.185.186m-2.964 0h2.119a.186.186 0 00.185-.186V6.29a.185.185 0 00-.185-.185H5.136a.186.186 0 00-.186.185v1.887c0 .102.084.185.186.186m5.893 2.715h2.118a.186.186 0 00.186-.185V9.006a.186.186 0 00-.186-.186h-2.118a.185.185 0 00-.185.185v1.888c0 .102.082.185.185.185m-2.93 0h2.12a.185.185 0 00.184-.185V9.006a.185.185 0 00-.184-.186h-2.12a.185.185 0 00-.184.185v1.888c0 .102.083.185.185.185m-2.964 0h2.119a.185.185 0 00.185-.185V9.006a.185.185 0 00-.184-.186h-2.12a.186.186 0 00-.186.186v1.887c0 .102.084.185.186.185m-2.92 0h2.12a.185.185 0 00.184-.185V9.006a.185.185 0 00-.184-.186h-2.12a.185.185 0 00-.184.185v1.888c0 .102.082.185.185.185M23.763 9.89c-.065-.051-.672-.51-1.954-.51-.338.001-.676.03-1.01.087-.248-1.7-1.653-2.53-1.716-2.566l-.344-.199-.226.327c-.284.438-.49.922-.612 1.43-.23.97-.09 1.882.403 2.661-.595.332-1.55.413-1.744.42H.751a.751.751 0 00-.75.748 11.376 11.376 0 00.692 4.062c.545 1.428 1.355 2.48 2.41 3.124 1.18.723 3.1 1.137 5.275 1.137.983.003 1.963-.086 2.93-.266a12.248 12.248 0 003.823-1.389c.98-.567 1.86-1.288 2.61-2.136 1.252-1.418 1.998-2.997 2.553-4.4h.221c1.372 0 2.215-.549 2.68-1.009.309-.293.55-.65.707-1.046l.098-.288Z" fill="#2496ED"/></g>
+    <text x="1460" y="748" class="node-title" fill="#0F172A">Production VPS</text>
+  </g>
+<g id="verification" class="diagram-node">
+    <g transform="translate(1178.5 768) scale(2.4166666666666665)" aria-hidden="true"><g fill="none" stroke="#10B981" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></g></g>
+    <text x="1207.5" y="848" class="node-title" fill="#0F172A">Release Verification</text>
+  </g>
+<g id="secrets" class="diagram-node">
+    <g transform="translate(831 743) scale(2.4166666666666665)" aria-hidden="true"><g fill="none" stroke="#EAB308" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="15" r="4"/><path d="m11 12 9-9M15 7l2 2M18 4l2 2"/></g></g>
+    <text x="860" y="823" class="node-title" fill="#0F172A">Security Controls</text>
+  </g>
+</svg>

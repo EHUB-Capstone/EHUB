@@ -1,0 +1,176 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1680" height="1050" viewBox="0 0 1680 1050" role="img" aria-labelledby="title desc">
+  <title id="title">EHub Target Production Deployment Architecture</title>
+  <desc id="desc">Single-VPS production baseline with isolated containers, durable data and external integrations</desc>
+  <defs>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="strokeWidth"><path d="M 0 0 L 8 4 L 0 8 z" fill="#64748B"/></marker>
+    <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0F172A" flood-opacity="0.08"/></filter>
+  </defs>
+  <style>
+    text { font-family: Inter, Segoe UI, Arial, sans-serif; }
+    .page-title { font-size: 24px; font-weight: 600; fill: #0F172A; }
+    .node-title { font-size: 13px; font-weight: 600; text-anchor: middle; }
+    .group-title { font-size: 14px; font-weight: 600; fill: #0F172A; }
+    .edge-label rect { fill: #F8FAFC; fill-opacity: 0.96; }
+    .edge-label text { font-size: 11px; fill: #475569; text-anchor: middle; }
+  </style>
+  <rect width="1680" height="1050" fill="#F8FAFC"/>
+  <text x="42" y="52" class="page-title">EHub Target Production Deployment Architecture</text>
+  <g id="internet-boundary" class="diagram-group">
+    <rect x="25" y="145" width="270" height="760" rx="4" fill="none" stroke="#64748B" stroke-width="1.25" stroke-dasharray="6 5"/>
+    <rect x="43" y="132" width="172" height="28" rx="8" fill="#F8FAFC"/>
+    <text x="54" y="152" class="group-title">Public Internet</text>
+  </g>
+<g id="vps-boundary" class="diagram-group">
+    <rect x="325" y="115" width="990" height="820" rx="4" fill="none" stroke="#EA580C" stroke-width="1.25" stroke-dasharray="6 5"/>
+    <rect x="343" y="102" width="438.79999999999995" height="28" rx="8" fill="#F8FAFC"/>
+    <text x="354" y="122" class="group-title">Production VPS — Ubuntu LTS / Docker Compose</text>
+  </g>
+<g id="private-network" class="diagram-group">
+    <rect x="360" y="205" width="915" height="665" rx="4" fill="none" stroke="#64748B" stroke-width="1.25" stroke-dasharray="6 5"/>
+    <rect x="378" y="192" width="236.39999999999998" height="28" rx="8" fill="#F8FAFC"/>
+    <text x="389" y="212" class="group-title">Private Docker Network</text>
+  </g>
+<g id="external-boundary" class="diagram-group">
+    <rect x="1340" y="115" width="315" height="820" rx="4" fill="none" stroke="#9333EA" stroke-width="1.25" stroke-dasharray="6 5"/>
+    <rect x="1358" y="102" width="264" height="28" rx="8" fill="#F8FAFC"/>
+    <text x="1369" y="122" class="group-title">Managed External Services</text>
+  </g>
+  <g id="p1" class="diagram-edge">
+    <path d="M 160 475 L 160 519 L 160 563" fill="none" stroke="#64748B" stroke-width="1.8"  marker-end="url(#arrow)"/>
+    
+  </g>
+<g id="p2" class="diagram-edge">
+    <path d="M 189 592 L 340 592 L 340 327 L 491 327" fill="none" stroke="#64748B" stroke-width="1.8"  marker-end="url(#arrow)"/>
+    <g class="edge-label">
+    <rect x="315.5" y="439.5" width="49" height="20" rx="6"/>
+    <text x="340" y="454.5">HTTPS</text>
+  </g>
+  </g>
+<g id="p3" class="diagram-edge">
+    <path d="M 549 327 L 672.5 327 L 672.5 302 L 796 302" fill="none" stroke="#64748B" stroke-width="1.8"  marker-end="url(#arrow)"/>
+    <g class="edge-label">
+    <rect x="559.85" y="307" width="101.8" height="20" rx="6"/>
+    <text x="610.75" y="322">API / SignalR</text>
+  </g>
+  </g>
+<g id="p4" class="diagram-edge">
+    <path d="M 854 302 L 977.5 302 L 977.5 427 L 1101 427" fill="none" stroke="#64748B" stroke-width="1.8"  marker-end="url(#arrow)"/>
+    <g class="edge-label">
+    <rect x="946.4" y="344.5" width="62.199999999999996" height="20" rx="6"/>
+    <text x="977.5" y="359.5">EF Core</text>
+  </g>
+  </g>
+<g id="p5" class="diagram-edge">
+    <path d="M 854 622 L 977.5 622 L 977.5 427 L 1101 427" fill="none" stroke="#64748B" stroke-width="1.8"  marker-end="url(#arrow)"/>
+    <g class="edge-label">
+    <rect x="956.3" y="504.5" width="42.4" height="20" rx="6"/>
+    <text x="977.5" y="519.5">Jobs</text>
+  </g>
+  </g>
+<g id="p6" class="diagram-edge">
+    <path d="M 1130 555 L 1130 689 L 1120 689 L 1120 823" fill="none" stroke="#64748B" stroke-width="1.8"  marker-end="url(#arrow)"/>
+    <g class="edge-label">
+    <rect x="1102.2" y="602" width="55.599999999999994" height="20" rx="6"/>
+    <text x="1130" y="617">Volume</text>
+  </g>
+  </g>
+<g id="p7" class="diagram-edge">
+    <path d="M 854 302 L 1161.25 302 L 1161.25 212 L 1468.5 212" fill="none" stroke="#64748B" stroke-width="1.8"  marker-end="url(#arrow)"/>
+    <g class="edge-label">
+    <rect x="983.125" y="282" width="49" height="20" rx="6"/>
+    <text x="1007.625" y="297">OAuth</text>
+  </g>
+  </g>
+<g id="p8" class="diagram-edge">
+    <path d="M 854 302 L 1161.25 302 L 1161.25 352 L 1468.5 352" fill="none" stroke="#64748B" stroke-width="1.8"  marker-end="url(#arrow)"/>
+    <g class="edge-label">
+    <rect x="976.525" y="282" width="62.199999999999996" height="20" rx="6"/>
+    <text x="1007.625" y="297">Storage</text>
+  </g>
+  </g>
+<g id="p9" class="diagram-edge">
+    <path d="M 854 622 L 1161.25 622 L 1161.25 512 L 1468.5 512" fill="none" stroke="#64748B" stroke-width="1.8"  marker-end="url(#arrow)"/>
+    <g class="edge-label">
+    <rect x="986.625" y="602" width="42" height="20" rx="6"/>
+    <text x="1007.625" y="617">AI</text>
+  </g>
+  </g>
+<g id="p10" class="diagram-edge">
+    <path d="M 854 622 L 1161.25 622 L 1161.25 672 L 1468.5 672" fill="none" stroke="#64748B" stroke-width="1.8"  marker-end="url(#arrow)"/>
+    <g class="edge-label">
+    <rect x="983.125" y="602" width="49" height="20" rx="6"/>
+    <text x="1007.625" y="617">Email</text>
+  </g>
+  </g>
+<g id="p11" class="diagram-edge">
+    <path d="M 1130 555 L 1299.25 555 L 1299.25 827 L 1468.5 827" fill="none" stroke="#64748B" stroke-width="1.8" stroke-dasharray="7 6" marker-end="url(#arrow)"/>
+    <g class="edge-label">
+    <rect x="1271.45" y="671" width="55.599999999999994" height="20" rx="6"/>
+    <text x="1299.25" y="686">Backup</text>
+  </g>
+  </g>
+<g id="p12" class="diagram-edge">
+    <path d="M 1120 658 L 972.5 658 L 972.5 455 L 825 455" fill="none" stroke="#64748B" stroke-width="1.8" stroke-dasharray="7 6" marker-end="url(#arrow)"/>
+    
+  </g>
+<g id="p13" class="diagram-edge">
+    <path d="M 1091 687 L 972.5 687 L 972.5 622 L 854 622" fill="none" stroke="#64748B" stroke-width="1.8" stroke-dasharray="7 6" marker-end="url(#arrow)"/>
+    
+  </g>
+  <g id="end-users" class="diagram-node">
+    <g transform="translate(131 338) scale(2.4166666666666665)" aria-hidden="true"><g fill="none" stroke="#38BDF8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></g></g>
+    <text x="160" y="418" class="node-title" fill="#0F172A">EHub Users</text>
+  </g>
+<g id="dns" class="diagram-node">
+    <g transform="translate(131 563) scale(2.4166666666666665)" aria-hidden="true"><g fill="none" stroke="#06B6D4" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 0 20M12 2a15.3 15.3 0 0 0 0 20"/></g></g>
+    <text x="160" y="643" class="node-title" fill="#0F172A">Domain / DNS</text>
+  </g>
+<g id="web-gateway" class="diagram-node">
+    <g transform="translate(491 298) scale(2.4166666666666665)" aria-hidden="true"><path d="M12 0L1.605 6v12L12 24l10.395-6V6L12 0zm6 16.59c0 .705-.646 1.29-1.529 1.29-.631 0-1.351-.255-1.801-.81l-6-7.141v6.66c0 .721-.57 1.29-1.274 1.29H7.32c-.721 0-1.29-.6-1.29-1.29V7.41c0-.705.63-1.29 1.5-1.29.646 0 1.38.255 1.83.81l5.97 7.141V7.41c0-.721.6-1.29 1.29-1.29h.075c.72 0 1.29.6 1.29 1.29v9.18H18z" fill="#009639"/></g>
+    <text x="520" y="378" class="node-title" fill="#0F172A">Nginx Gateway</text>
+  </g>
+<g id="api-container" class="diagram-node">
+    <g transform="translate(796 273) scale(2.4166666666666665)" aria-hidden="true"><path d="M24 8.77h-2.468v7.565h-1.425V8.77h-2.462V7.53H24zm-6.852 7.565h-4.821V7.53h4.63v1.24h-3.205v2.494h2.953v1.234h-2.953v2.604h3.396zm-6.708 0H8.882L4.78 9.863a2.896 2.896 0 0 1-.258-.51h-.036c.032.189.048.592.048 1.21v5.772H3.157V7.53h1.659l3.965 6.32c.167.261.275.442.323.54h.024c-.04-.233-.06-.629-.06-1.185V7.529h1.372zm-8.703-.693a.868.829 0 0 1-.869.829.868.829 0 0 1-.868-.83.868.829 0 0 1 .868-.828.868.829 0 0 1 .869.829Z" fill="#512BD4"/></g>
+    <text x="825" y="353" class="node-title" fill="#0F172A">EHub API</text>
+  </g>
+<g id="worker-container" class="diagram-node">
+    <g transform="translate(796 593) scale(2.4166666666666665)" aria-hidden="true"><g fill="none" stroke="#F97316" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1A1.7 1.7 0 0 0 9 4.6 1.7 1.7 0 0 0 10 3V2.8h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z"/></g></g>
+    <text x="825" y="673" class="node-title" fill="#0F172A">Background Worker</text>
+  </g>
+<g id="postgres" class="diagram-node">
+    <g transform="translate(1101 398) scale(2.4166666666666665)" aria-hidden="true"><path d="M23.5594 14.7228a.5269.5269 0 0 0-.0563-.1191c-.139-.2632-.4768-.3418-1.0074-.2321-1.6533.3411-2.2935.1312-2.5256-.0191 1.342-2.0482 2.445-4.522 3.0411-6.8297.2714-1.0507.7982-3.5237.1222-4.7316a1.5641 1.5641 0 0 0-.1509-.235C21.6931.9086 19.8007.0248 17.5099.0005c-1.4947-.0158-2.7705.3461-3.1161.4794a9.449 9.449 0 0 0-.5159-.0816 8.044 8.044 0 0 0-1.3114-.1278c-1.1822-.0184-2.2038.2642-3.0498.8406-.8573-.3211-4.7888-1.645-7.2219.0788C.9359 2.1526.3086 3.8733.4302 6.3043c.0409.818.5069 3.334 1.2423 5.7436.4598 1.5065.9387 2.7019 1.4334 3.582.553.9942 1.1259 1.5933 1.7143 1.7895.4474.1491 1.1327.1441 1.8581-.7279.8012-.9635 1.5903-1.8258 1.9446-2.2069.4351.2355.9064.3625 1.39.3772a.0569.0569 0 0 0 .0004.0041 11.0312 11.0312 0 0 0-.2472.3054c-.3389.4302-.4094.5197-1.5002.7443-.3102.064-1.1344.2339-1.1464.8115-.0025.1224.0329.2309.0919.3268.2269.4231.9216.6097 1.015.6331 1.3345.3335 2.5044.092 3.3714-.6787-.017 2.231.0775 4.4174.3454 5.0874.2212.5529.7618 1.9045 2.4692 1.9043.2505 0 .5263-.0291.8296-.0941 1.7819-.3821 2.5557-1.1696 2.855-2.9059.1503-.8707.4016-2.8753.5388-4.1012.0169-.0703.0357-.1207.057-.1362.0007-.0005.0697-.0471.4272.0307a.3673.3673 0 0 0 .0443.0068l.2539.0223.0149.001c.8468.0384 1.9114-.1426 2.5312-.4308.6438-.2988 1.8057-1.0323 1.5951-1.6698zM2.371 11.8765c-.7435-2.4358-1.1779-4.8851-1.2123-5.5719-.1086-2.1714.4171-3.6829 1.5623-4.4927 1.8367-1.2986 4.8398-.5408 6.108-.13-.0032.0032-.0066.0061-.0098.0094-2.0238 2.044-1.9758 5.536-1.9708 5.7495-.0002.0823.0066.1989.0162.3593.0348.5873.0996 1.6804-.0735 2.9184-.1609 1.1504.1937 2.2764.9728 3.0892.0806.0841.1648.1631.2518.2374-.3468.3714-1.1004 1.1926-1.9025 2.1576-.5677.6825-.9597.5517-1.0886.5087-.3919-.1307-.813-.5871-1.2381-1.3223-.4796-.839-.9635-2.0317-1.4155-3.5126zm6.0072 5.0871c-.1711-.0428-.3271-.1132-.4322-.1772.0889-.0394.2374-.0902.4833-.1409 1.2833-.2641 1.4815-.4506 1.9143-1.0002.0992-.126.2116-.2687.3673-.4426a.3549.3549 0 0 0 .0737-.1298c.1708-.1513.2724-.1099.4369-.0417.156.0646.3078.26.3695.4752.0291.1016.0619.2945-.0452.4444-.9043 1.2658-2.2216 1.2494-3.1676 1.0128zm2.094-3.988-.0525.141c-.133.3566-.2567.6881-.3334 1.003-.6674-.0021-1.3168-.2872-1.8105-.8024-.6279-.6551-.9131-1.5664-.7825-2.5004.1828-1.3079.1153-2.4468.079-3.0586-.005-.0857-.0095-.1607-.0122-.2199.2957-.2621 1.6659-.9962 2.6429-.7724.4459.1022.7176.4057.8305.928.5846 2.7038.0774 3.8307-.3302 4.7363-.084.1866-.1633.3629-.2311.5454zm7.3637 4.5725c-.0169.1768-.0358.376-.0618.5959l-.146.4383a.3547.3547 0 0 0-.0182.1077c-.0059.4747-.054.6489-.115.8693-.0634.2292-.1353.4891-.1794 1.0575-.11 1.4143-.8782 2.2267-2.4172 2.5565-1.5155.3251-1.7843-.4968-2.0212-1.2217a6.5824 6.5824 0 0 0-.0769-.2266c-.2154-.5858-.1911-1.4119-.1574-2.5551.0165-.5612-.0249-1.9013-.3302-2.6462.0044-.2932.0106-.5909.019-.8918a.3529.3529 0 0 0-.0153-.1126 1.4927 1.4927 0 0 0-.0439-.208c-.1226-.4283-.4213-.7866-.7797-.9351-.1424-.059-.4038-.1672-.7178-.0869.067-.276.1831-.5875.309-.9249l.0529-.142c.0595-.16.134-.3257.213-.5012.4265-.9476 1.0106-2.2453.3766-5.1772-.2374-1.0981-1.0304-1.6343-2.2324-1.5098-.7207.0746-1.3799.3654-1.7088.5321a5.6716 5.6716 0 0 0-.1958.1041c.0918-1.1064.4386-3.1741 1.7357-4.4823a4.0306 4.0306 0 0 1 .3033-.276.3532.3532 0 0 0 .1447-.0644c.7524-.5706 1.6945-.8506 2.802-.8325.4091.0067.8017.0339 1.1742.081 1.939.3544 3.2439 1.4468 4.0359 2.3827.8143.9623 1.2552 1.9315 1.4312 2.4543-1.3232-.1346-2.2234.1268-2.6797.779-.9926 1.4189.543 4.1729 1.2811 5.4964.1353.2426.2522.4522.2889.5413.2403.5825.5515.9713.7787 1.2552.0696.087.1372.1714.1885.245-.4008.1155-1.1208.3825-1.0552 1.717-.0123.1563-.0423.4469-.0834.8148-.0461.2077-.0702.4603-.0994.7662zm.8905-1.6211c-.0405-.8316.2691-.9185.5967-1.0105a2.8566 2.8566 0 0 0 .135-.0406 1.202 1.202 0 0 0 .1342.103c.5703.3765 1.5823.4213 3.0068.1344-.2016.1769-.5189.3994-.9533.6011-.4098.1903-1.0957.333-1.7473.3636-.7197.0336-1.0859-.0807-1.1721-.151zm.5695-9.2712c-.0059.3508-.0542.6692-.1054 1.0017-.055.3576-.112.7274-.1264 1.1762-.0142.4368.0404.8909.0932 1.3301.1066.887.216 1.8003-.2075 2.7014a3.5272 3.5272 0 0 1-.1876-.3856c-.0527-.1276-.1669-.3326-.3251-.6162-.6156-1.1041-2.0574-3.6896-1.3193-4.7446.3795-.5427 1.3408-.5661 2.1781-.463zm.2284 7.0137a12.3762 12.3762 0 0 0-.0853-.1074l-.0355-.0444c.7262-1.1995.5842-2.3862.4578-3.4385-.0519-.4318-.1009-.8396-.0885-1.2226.0129-.4061.0666-.7543.1185-1.0911.0639-.415.1288-.8443.1109-1.3505.0134-.0531.0188-.1158.0118-.1902-.0457-.4855-.5999-1.938-1.7294-3.253-.6076-.7073-1.4896-1.4972-2.6889-2.0395.5251-.1066 1.2328-.2035 2.0244-.1859 2.0515.0456 3.6746.8135 4.8242 2.2824a.908.908 0 0 1 .0667.1002c.7231 1.3556-.2762 6.2751-2.9867 10.5405zm-8.8166-6.1162c-.025.1794-.3089.4225-.6211.4225a.5821.5821 0 0 1-.0809-.0056c-.1873-.026-.3765-.144-.5059-.3156-.0458-.0605-.1203-.178-.1055-.2844.0055-.0401.0261-.0985.0925-.1488.1182-.0894.3518-.1226.6096-.0867.3163.0441.6426.1938.6113.4186zm7.9305-.4114c.0111.0792-.049.201-.1531.3102-.0683.0717-.212.1961-.4079.2232a.5456.5456 0 0 1-.075.0052c-.2935 0-.5414-.2344-.5607-.3717-.024-.1765.2641-.3106.5611-.352.297-.0414.6111.0088.6356.1851z" fill="#4169E1"/></g>
+    <text x="1130" y="478" class="node-title" fill="#0F172A">PostgreSQL</text>
+  </g>
+<g id="monitoring" class="diagram-node">
+    <g transform="translate(1091 658) scale(2.4166666666666665)" aria-hidden="true"><g fill="none" stroke="#94A3B8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l3-9 4 18 3-9h4"/></g></g>
+    <text x="1120" y="738" class="node-title" fill="#0F172A">Observability</text>
+  </g>
+<g id="persistent-volume" class="diagram-node">
+    <g transform="translate(1091 823) scale(2.4166666666666665)" aria-hidden="true"><g fill="none" stroke="#22C55E" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12H2l3-8h14l3 8Z"/><path d="M2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6M6 16h.01M10 16h.01"/></g></g>
+    <text x="1120" y="903" class="node-title" fill="#0F172A">Persistent Volume</text>
+  </g>
+<g id="google" class="diagram-node">
+    <g transform="translate(1468.5 183) scale(2.4166666666666665)" aria-hidden="true"><path d="M12.48 10.92v3.28h7.84c-.24 1.84-.853 3.187-1.787 4.133-1.147 1.147-2.933 2.4-6.053 2.4-4.827 0-8.6-3.893-8.6-8.72s3.773-8.72 8.6-8.72c2.6 0 4.507 1.027 5.907 2.347l2.307-2.307C18.747 1.44 16.133 0 12.48 0 5.867 0 .307 5.387.307 12s5.56 12 12.173 12c3.573 0 6.267-1.173 8.373-3.36 2.16-2.16 2.84-5.213 2.84-7.667 0-.76-.053-1.467-.173-2.053H12.48z" fill="#4285F4"/></g>
+    <text x="1497.5" y="263" class="node-title" fill="#0F172A">Google OAuth</text>
+  </g>
+<g id="cloudinary" class="diagram-node">
+    <g transform="translate(1468.5 323) scale(2.4166666666666665)" aria-hidden="true"><path d="M24 14.8598c0 2.1729-1.3757 3.974-3.5903 4.6996l-.0995.0318V17.989c1.3777-.5805 2.1869-1.7275 2.1869-3.1291-.0072-2-1.6087-3.6288-3.6082-3.6699h-.5964l-.1432-.5686c-.7025-2.8996-3.2886-4.9489-6.2721-4.97a6.3915 6.3915 0 0 0-5.811 3.664l-.1828.3757-.4175.0437a4.4311 4.4311 0 0 0-3.3052 2.088c-1.2803 2.0856-.6274 4.8143 1.4583 6.0947v1.6897h-.01l-.149-.0675a5.9402 5.9402 0 0 1-3.3658-4.3494c-.5787-3.2291 1.57-6.3161 4.7991-6.8948a7.8766 7.8766 0 0 1 6.9839-4.149c3.4724.025 6.535 2.28 7.5901 5.5883 2.5789.3366 4.5138 2.5245 4.5327 5.1251zm-15.3176-1.322h.5647a.0656.0656 0 0 0 .0457-.1113L7.084 11.2158l-.0007-.0007a.0656.0656 0 0 0-.0927.0007L4.78 13.4265a.0656.0656 0 0 0 .0477.1113h.5566a.0656.0656 0 0 1 .0657.0656v5.0574c0 .6588.534 1.1928 1.1928 1.1928H9.247a.0656.0656 0 0 0 .0457-.1113l-.33-.33a1.1928 1.1928 0 0 1-.348-.839v-4.97a.0676.0676 0 0 1 .0676-.0655zm9.769 2.5466h.5667a.0655.0655 0 0 0 .0457-.1133l-2.2107-2.2087-.0015-.0015a.0636.0636 0 0 0-.0899.0015L14.551 15.971a.0657.0657 0 0 0 .0457.1133h.5567a.0656.0656 0 0 1 .0656.0656v2.5108c0 .6588.534 1.1928 1.1928 1.1928h2.6063a.0655.0655 0 0 0 .0457-.1113l-.33-.33a1.1928 1.1928 0 0 1-.348-.839V16.15a.0656.0656 0 0 1 .0657-.0656zm-4.8844-1.2743h.5646a.0656.0656 0 0 0 .0477-.1114l-2.2107-2.2027-.0006-.0006a.0656.0656 0 0 0-.0928.0006l-2.2087 2.2068a.0656.0656 0 0 0 .0457.1113h.5626a.0676.0676 0 0 1 .0657.0676v3.7791c0 .6588.534 1.1928 1.1928 1.1928h2.5983a.0656.0656 0 0 0 .0477-.1113l-.332-.33a1.193 1.193 0 0 1-.346-.839v-3.6956c0-.0366.0291-.0665.0657-.0676z" fill="#3448C5"/></g>
+    <text x="1497.5" y="403" class="node-title" fill="#0F172A">Cloudinary</text>
+  </g>
+<g id="ai-provider" class="diagram-node">
+    <g transform="translate(1468.5 483) scale(2.4166666666666665)" aria-hidden="true"><g fill="none" stroke="#A855F7" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 4a3 3 0 0 0-5 2.2A3.5 3.5 0 0 0 5 13a3 3 0 0 0 4.5 3M14.5 4a3 3 0 0 1 5 2.2A3.5 3.5 0 0 1 19 13a3 3 0 0 1-4.5 3M9.5 4v16M14.5 4v16M7 8h2.5M14.5 8H17M7 15h2.5M14.5 15H17"/></g></g>
+    <text x="1497.5" y="563" class="node-title" fill="#0F172A">AI Provider</text>
+  </g>
+<g id="email-provider" class="diagram-node">
+    <g transform="translate(1468.5 643) scale(2.4166666666666665)" aria-hidden="true"><g fill="none" stroke="#A855F7" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 6L2 7"/></g></g>
+    <text x="1497.5" y="723" class="node-title" fill="#0F172A">Email Provider</text>
+  </g>
+<g id="backup" class="diagram-node">
+    <g transform="translate(1468.5 798) scale(2.4166666666666665)" aria-hidden="true"><g fill="none" stroke="#A855F7" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v11h14V9M9 13h6"/></g></g>
+    <text x="1497.5" y="878" class="node-title" fill="#0F172A">Off-site Backup</text>
+  </g>
+<g id="firewall" class="diagram-node">
+    <g transform="translate(491 513) scale(2.4166666666666665)" aria-hidden="true"><g fill="none" stroke="#EAB308" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/></g></g>
+    <text x="520" y="593" class="node-title" fill="#0F172A">HTTPS Boundary</text>
+  </g>
+</svg>
