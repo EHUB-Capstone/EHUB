@@ -14,6 +14,7 @@ public sealed class EmailPasswordLoginRequestValidator : AbstractValidator<Email
 
         RuleFor(x => x.Password)
             .NotEmpty().WithMessage("Password is required.")
+            .MinimumLength(6).WithMessage("Password must be at least 6 characters.")
             .MaximumLength(100).WithMessage("Password must not exceed 100 characters.");
     }
 }

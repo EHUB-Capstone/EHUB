@@ -11,6 +11,7 @@ public interface IApplicationDbContext
     DbSet<Role> Roles { get; }
     DbSet<UserRole> UserRoles { get; }
     DbSet<RefreshToken> RefreshTokens { get; }
+    DbSet<PendingRegistration> PendingRegistrations { get; }
     DbSet<Semester> Semesters { get; }
     DbSet<SemesterAuditLog> SemesterAuditLogs { get; }
     DbSet<Course> Courses { get; }
@@ -67,6 +68,7 @@ public interface IApplicationDbContext
     DbSet<SprintTask> SprintTasks { get; }
     DbSet<WeeklyTask> WeeklyTasks { get; }
     DbSet<ProjectAnalysis> ProjectAnalyses { get; }
+    DbSet<PasswordResetToken> PasswordResetTokens { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
     void ClearChanges();

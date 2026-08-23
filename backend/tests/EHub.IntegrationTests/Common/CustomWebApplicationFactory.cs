@@ -17,8 +17,7 @@ public sealed class CustomWebApplicationFactory
     : WebApplicationFactory<Program>, Xunit.IAsyncLifetime
 {
     private readonly PostgreSqlContainer _postgresContainer =
-        new PostgreSqlBuilder()
-            .WithImage("postgres:16-alpine")
+        new PostgreSqlBuilder("postgres:16-alpine")
             .WithDatabase("ehub_test_db")
             .WithUsername("ehub_test_user")
             .WithPassword("ehub_test_password")
@@ -87,6 +86,20 @@ public class FakeEmailService : IEmailService
 {
     public static string? LastResetUrl { get; set; }
     public static string? LastRawToken { get; set; }
+    public static string? LastRegistrationOtp { get; set; }
+    public static string? LastRegistrationEmail { get; set; }
+
+    public Task SendRegistrationOtpAsync(
+        string toEmail,
+        string fullName,
+        string otp,
+        DateTime expiresAtUtc,
+        CancellationToken cancellationToken = default)
+    {
+        LastRegistrationEmail = toEmail;
+        LastRegistrationOtp = otp;
+        return Task.CompletedTask;
+    }
 
     public Task SendPasswordResetEmailAsync(
         string toEmail,

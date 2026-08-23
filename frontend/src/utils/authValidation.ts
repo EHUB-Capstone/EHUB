@@ -5,7 +5,7 @@ export const AUTH_FIELD_LIMITS = {
   fullNameMin: 2,
   fullNameMax: 150,
   emailMax: 320,
-  registerPasswordMin: 6,
+  passwordMin: 6,
   passwordMax: 100,
 } as const;
 
@@ -83,6 +83,9 @@ export function validateLoginPayload(payload: LoginPayload): AuthValidationError
   if (isEmpty(payload.password)) {
     errors.push({ field: 'password', message: 'Password is required.', code: 'NotEmptyValidator' });
   }
+  if (payload.password.length < AUTH_FIELD_LIMITS.passwordMin) {
+    errors.push({ field: 'password', message: 'Password must be at least 6 characters.', code: 'MinimumLengthValidator' });
+  }
   if (payload.password.length > AUTH_FIELD_LIMITS.passwordMax) {
     errors.push({ field: 'password', message: 'Password must not exceed 100 characters.', code: 'MaximumLengthValidator' });
   }
@@ -117,7 +120,7 @@ export function validateRegisterPayload(payload: RegisterPayload): AuthValidatio
   if (isEmpty(payload.password)) {
     errors.push({ field: 'password', message: 'Password is required.', code: 'NotEmptyValidator' });
   }
-  if (payload.password.length < AUTH_FIELD_LIMITS.registerPasswordMin) {
+  if (payload.password.length < AUTH_FIELD_LIMITS.passwordMin) {
     errors.push({ field: 'password', message: 'Password must be at least 6 characters.', code: 'MinimumLengthValidator' });
   }
   if (payload.password.length > AUTH_FIELD_LIMITS.passwordMax) {

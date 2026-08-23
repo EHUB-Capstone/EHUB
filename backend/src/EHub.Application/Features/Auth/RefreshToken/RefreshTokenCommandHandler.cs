@@ -88,6 +88,11 @@ public sealed class RefreshTokenCommandHandler : IRefreshTokenCommandHandler
             return Result.Failure<AuthSessionResult>(AuthErrors.RefreshTokenInvalid);
         }
 
+        if (!user.IsEmailVerified)
+        {
+            return Result.Failure<AuthSessionResult>(AuthErrors.EmailVerificationRequired);
+        }
+
         // 6. Validate user status
         if (user.Status == UserStatus.PendingApproval)
         {

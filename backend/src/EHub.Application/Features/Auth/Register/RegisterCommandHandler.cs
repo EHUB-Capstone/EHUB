@@ -1,9 +1,7 @@
-using System;
-using System.Threading;
-using System.Threading.Tasks;
 using EHub.Application.Common.Interfaces.Identity;
 using EHub.Application.Common.Interfaces.Persistence;
-using EHub.Application.Features.Auth;
+using EHub.Application.Common.Interfaces.Services;
+using EHub.Application.Common.Models.Identity;
 using EHub.Contracts.Auth;
 using EHub.Domain.Entities;
 using EHub.Domain.Enums;
@@ -11,6 +9,7 @@ using EHub.Shared.Constants;
 using EHub.Shared.Results;
 using EHub.Shared.Security;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace EHub.Application.Features.Auth.Register;
 
@@ -18,39 +17,36 @@ public sealed class RegisterCommandHandler : IRegisterCommandHandler
 {
     private readonly IUserRepository _userRepository;
     private readonly IRoleRepository _roleRepository;
-    private readonly IUserRoleRepository _userRoleRepository;
-    private readonly IStudentRepository _studentRepository;
-    private readonly IMentorProfileRepository _mentorProfileRepository;
-    private readonly IRefreshTokenRepository _refreshTokenRepository;
+    private readonly IPendingRegistrationRepository _pendingRegistrationRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IPasswordHasher _passwordHasher;
-    private readonly IJwtTokenService _jwtTokenService;
-    private readonly IRefreshTokenService _refreshTokenService;
+    private readonly IRegistrationOtpService _otpService;
+    private readonly IEmailService _emailService;
+    private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly RegistrationOtpOptions _otpOptions;
     private readonly ILogger<RegisterCommandHandler> _logger;
 
     public RegisterCommandHandler(
         IUserRepository userRepository,
         IRoleRepository roleRepository,
-        IUserRoleRepository userRoleRepository,
-        IStudentRepository studentRepository,
-        IMentorProfileRepository mentorProfileRepository,
-        IRefreshTokenRepository refreshTokenRepository,
+        IPendingRegistrationRepository pendingRegistrationRepository,
         IUnitOfWork unitOfWork,
         IPasswordHasher passwordHasher,
-        IJwtTokenService jwtTokenService,
-        IRefreshTokenService refreshTokenService,
+        IRegistrationOtpService otpService,
+        IEmailService emailService,
+        IDateTimeProvider dateTimeProvider,
+        IOptions<RegistrationOtpOptions> otpOptions,
         ILogger<RegisterCommandHandler> logger)
     {
         _userRepository = userRepository;
         _roleRepository = roleRepository;
-        _userRoleRepository = userRoleRepository;
-        _studentRepository = studentRepository;
-        _mentorProfileRepository = mentorProfileRepository;
-        _refreshTokenRepository = refreshTokenRepository;
+        _pendingRegistrationRepository = pendingRegistrationRepository;
         _unitOfWork = unitOfWork;
         _passwordHasher = passwordHasher;
-        _jwtTokenService = jwtTokenService;
-        _refreshTokenService = refreshTokenService;
+        _otpService = otpService;
+        _emailService = emailService;
+        _dateTimeProvider = dateTimeProvider;
+        _otpOptions = otpOptions.Value;
         _logger = logger;
     }
 
@@ -59,183 +55,153 @@ public sealed class RegisterCommandHandler : IRegisterCommandHandler
         CancellationToken cancellationToken = default)
     {
         var normalizedEmail = request.Email.Trim().ToLowerInvariant();
-
-        // 1. Check duplicate email
-        var isEmailDuplicate = await _userRepository.ExistsByEmailAsync(
-            normalizedEmail,
-            cancellationToken);
-
-        if (isEmailDuplicate)
+        if (await _userRepository.ExistsByEmailAsync(normalizedEmail, cancellationToken))
         {
             _logger.LogWarning(
-                "Register failed. Reason: email already exists. Email: {Email}.",
+                "Registration rejected because the email already belongs to an account. Email: {Email}",
                 SensitiveDataMasker.MaskEmail(request.Email));
             return Result.Failure<RegisterResult>(AuthErrors.EmailAlreadyExists);
         }
 
-        // 2. Validate role
         var roleName = request.Role.Trim();
-        if (roleName != SystemRoles.Student &&
-            roleName != SystemRoles.Lecturer &&
-            roleName != SystemRoles.Mentor)
+        if (!SystemRoles.PublicRegisterRoles.Contains(roleName) ||
+            await _roleRepository.GetByNameAsync(roleName, cancellationToken) is null)
         {
-            _logger.LogWarning(
-                "Register failed. Reason: invalid role '{Role}'.",
-                roleName);
             return Result.Failure<RegisterResult>(AuthErrors.InvalidRole);
         }
 
-        var role = await _roleRepository.GetByNameAsync(roleName, cancellationToken);
-        if (role is null)
-        {
-            _logger.LogWarning("Register failed. Reason: role '{Role}' not found in database.", roleName);
-            return Result.Failure<RegisterResult>(AuthErrors.InvalidRole);
-        }
-
-        // 3. Validate Student specific constraints
         if (roleName == SystemRoles.Student)
         {
             if (string.IsNullOrWhiteSpace(request.MajorCode))
             {
-                _logger.LogWarning("Register failed. Reason: student major code is required.");
                 return Result.Failure<RegisterResult>(AuthErrors.StudentMajorRequired);
             }
 
-            var isValidMajor = MajorCodes.IsValid(request.MajorCode);
-            if (!isValidMajor)
+            if (!MajorCodes.IsValid(request.MajorCode))
             {
-                _logger.LogWarning(
-                    "Register failed. Reason: invalid student major code '{Major}'.",
-                    request.MajorCode);
                 return Result.Failure<RegisterResult>(AuthErrors.InvalidMajor);
             }
         }
 
-        // 4. Create user
-        var user = new User
+        var now = _dateTimeProvider.UtcNow;
+        var registration = await _pendingRegistrationRepository.GetByNormalizedEmailAsync(
+            normalizedEmail,
+            cancellationToken);
+
+        if (registration is not null)
         {
-            FullName = request.FullName.Trim(),
-            Email = normalizedEmail,
-            NormalizedEmail = normalizedEmail,
-            PasswordHash = _passwordHasher.Hash(request.Password),
-            Status = roleName == SystemRoles.Student ? UserStatus.Active : UserStatus.PendingApproval
-        };
-
-        RegisterResult response = null!;
-
-        await _unitOfWork.ExecuteInTransactionAsync(async (ct) =>
-        {
-            await _userRepository.AddAsync(user, ct);
-
-            var userRole = new UserRole
+            if (registration.Status == PendingRegistrationStatus.Completed)
             {
-                UserId = user.Id,
-                RoleId = role.Id
-            };
-            await _userRoleRepository.AddAsync(userRole, ct);
+                return Result.Failure<RegisterResult>(AuthErrors.EmailAlreadyExists);
+            }
 
-            if (roleName == SystemRoles.Student)
+            var activeChallenge = registration.OtpExpiresAtUtc > now;
+            if (activeChallenge && !_passwordHasher.Verify(request.Password, registration.PasswordHash))
             {
-                var student = await _studentRepository.GetUnlinkedByEmailAsync(normalizedEmail, ct);
-                if (student is null)
-                {
-                    student = new Student
-                    {
-                        UserId = user.Id,
-                        FullName = user.FullName,
-                        Email = user.Email,
-                        MajorCode = request.MajorCode!.Trim().ToUpperInvariant()
-                    };
-                    await _studentRepository.AddAsync(student, ct);
-                }
-                else
-                {
-                    // A class import may have created the roster profile before the
-                    // student registered. Reuse it so enrollments, teams, and the
-                    // account all point at the same Student row.
-                    student.UserId = user.Id;
-                    student.FullName = user.FullName;
-                    student.Email = user.Email;
-                    student.MajorCode = request.MajorCode!.Trim().ToUpperInvariant();
-                    student.Status = StudentStatus.Active;
-                    student.UpdatedAt = DateTime.UtcNow;
-                    student.UpdatedBy = user.Id;
-                    _studentRepository.Update(student);
-                }
+                return Result.Failure<RegisterResult>(AuthErrors.EmailAlreadyExists);
+            }
 
-                // Auto-login: Generate and save tokens
-                var roles = new[] { SystemRoles.Student };
-                var accessToken = _jwtTokenService.GenerateAccessToken(user, roles);
-                var refreshToken = _refreshTokenService.GenerateRefreshToken();
+            if (activeChallenge && registration.FailedAttemptCount >= _otpOptions.MaximumAttempts)
+            {
+                return Result.Failure<RegisterResult>(AuthErrors.VerificationAttemptsExceeded);
+            }
 
-                var refreshTokenEntity = new EHub.Domain.Entities.RefreshToken
-                {
-                    UserId = user.Id,
-                    TokenHash = refreshToken.TokenHash,
-                    ExpiresAt = refreshToken.ExpiresAt
-                };
+            if (activeChallenge && registration.LastSentAtUtc.HasValue &&
+                registration.LastSentAtUtc.Value.AddSeconds(_otpOptions.ResendCooldownSeconds) > now)
+            {
+                return Result.Failure<RegisterResult>(AuthErrors.VerificationResendTooSoon);
+            }
 
-                await _refreshTokenRepository.AddAsync(refreshTokenEntity, ct);
+            if (activeChallenge && registration.ResendCount >= _otpOptions.MaximumResends)
+            {
+                return Result.Failure<RegisterResult>(AuthErrors.VerificationRateLimited);
+            }
 
-                response = new RegisterResult
-                {
-                    Status = UserStatus.Active.ToString(),
-                    RequiresApproval = false,
-                    Message = "Register successfully",
-                    AccessToken = accessToken.Token,
-                    RefreshToken = refreshToken.RawToken,
-                    ExpiresAt = accessToken.ExpiresAt,
-                    User = new UserSummaryResponse
-                    {
-                        Id = user.Id,
-                        FullName = user.FullName,
-                        Email = user.Email,
-                        Roles = roles,
-                        Status = UserStatus.Active.ToString(),
-                        MajorCode = student.MajorCode
-                    }
-                };
+            if (!activeChallenge)
+            {
+                registration.FailedAttemptCount = 0;
+                registration.ResendCount = 0;
             }
             else
             {
-                if (roleName == SystemRoles.Mentor)
-                {
-                    var mentorProfile = new MentorProfile
-                    {
-                        UserId = user.Id,
-                        Status = MentorProfileStatus.Active,
-                        MaxTeams = 3
-                    };
-
-                    await _mentorProfileRepository.AddAsync(mentorProfile, ct);
-                }
-
-                response = new RegisterResult
-                {
-                    Status = UserStatus.PendingApproval.ToString(),
-                    RequiresApproval = true,
-                    Message = "Your account has been registered and is pending admin approval.",
-                    User = new UserSummaryResponse
-                    {
-                        Id = user.Id,
-                        FullName = user.FullName,
-                        Email = user.Email,
-                        Roles = new[] { roleName },
-                        Status = UserStatus.PendingApproval.ToString(),
-                        MajorCode = null
-                    }
-                };
+                registration.ResendCount++;
             }
 
-            await _unitOfWork.SaveChangesAsync(ct);
-        }, cancellationToken);
+            registration.FullName = request.FullName.Trim();
+            registration.Email = normalizedEmail;
+            registration.PasswordHash = _passwordHasher.Hash(request.Password);
+            registration.RoleName = roleName;
+            registration.MajorCode = roleName == SystemRoles.Student
+                ? request.MajorCode!.Trim().ToUpperInvariant()
+                : null;
+            registration.Status = PendingRegistrationStatus.Pending;
+            registration.CompletedAtUtc = null;
+            registration.CompletedUserId = null;
+        }
+        else
+        {
+            registration = new PendingRegistration
+            {
+                FullName = request.FullName.Trim(),
+                Email = normalizedEmail,
+                NormalizedEmail = normalizedEmail,
+                PasswordHash = _passwordHasher.Hash(request.Password),
+                RoleName = roleName,
+                MajorCode = roleName == SystemRoles.Student
+                    ? request.MajorCode!.Trim().ToUpperInvariant()
+                    : null
+            };
+            await _pendingRegistrationRepository.AddAsync(registration, cancellationToken);
+        }
+
+        var otp = _otpService.GenerateCode();
+        registration.OtpHash = _otpService.HashCode(registration.Id, otp);
+        registration.OtpExpiresAtUtc = now.AddMinutes(_otpOptions.ExpirationMinutes);
+        registration.LastSentAtUtc = now;
+
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        try
+        {
+            await _emailService.SendRegistrationOtpAsync(
+                registration.Email,
+                registration.FullName,
+                otp,
+                registration.OtpExpiresAtUtc,
+                cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            registration.LastSentAtUtc = null;
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+            _logger.LogError(
+                exception,
+                "Registration verification email delivery failed for registration {RegistrationId}",
+                registration.Id);
+            return Result.Failure<RegisterResult>(AuthErrors.EmailDeliveryFailed);
+        }
 
         _logger.LogInformation(
-            "Register succeeded for user {UserId}. Role: {Role}. Status: {Status}.",
-            response.User?.Id,
-            roleName,
-            response.Status);
+            "Pending registration {RegistrationId} created for role {Role}",
+            registration.Id,
+            roleName);
 
-        return Result.Success(response);
+        return Result.Success(CreatePendingResult(registration));
+    }
+
+    private RegisterResult CreatePendingResult(PendingRegistration registration)
+    {
+        return new RegisterResult
+        {
+            Status = "PendingEmailVerification",
+            RequiresEmailVerification = true,
+            RequiresApproval = false,
+            Message = "A verification code has been sent to your email address.",
+            RegistrationId = registration.Id,
+            MaskedEmail = SensitiveDataMasker.MaskEmail(registration.Email),
+            VerificationExpiresAtUtc = registration.OtpExpiresAtUtc,
+            ResendAvailableAtUtc = registration.LastSentAtUtc?.AddSeconds(
+                _otpOptions.ResendCooldownSeconds)
+        };
     }
 }

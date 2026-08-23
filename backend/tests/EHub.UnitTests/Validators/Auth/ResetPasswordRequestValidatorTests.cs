@@ -40,6 +40,23 @@ public class ResetPasswordRequestValidatorTests
         Assert.Contains(result.Errors, x => x.PropertyName == nameof(ResetPasswordRequest.NewPassword));
     }
 
+    [Theory]
+    [InlineData("12345", false)]
+    [InlineData("123456", true)]
+    public void Should_Enforce_Six_Character_Minimum_NewPassword(string password, bool expectedValid)
+    {
+        var request = new ResetPasswordRequest
+        {
+            Token = "valid-token",
+            NewPassword = password,
+            ConfirmPassword = password
+        };
+
+        var result = _validator.Validate(request);
+
+        Assert.Equal(expectedValid, result.IsValid);
+    }
+
     [Fact]
     public void Should_Have_Error_When_ConfirmPassword_Does_Not_Match()
     {

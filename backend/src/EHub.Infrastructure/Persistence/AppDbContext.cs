@@ -18,6 +18,7 @@ public class AppDbContext : DbContext, IApplicationDbContext
     public DbSet<Role> Roles => Set<Role>();
     public DbSet<UserRole> UserRoles => Set<UserRole>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
+    public DbSet<PendingRegistration> PendingRegistrations => Set<PendingRegistration>();
     public DbSet<Semester> Semesters => Set<Semester>();
     public DbSet<SemesterAuditLog> SemesterAuditLogs => Set<SemesterAuditLog>();
     public DbSet<Course> Courses => Set<Course>();

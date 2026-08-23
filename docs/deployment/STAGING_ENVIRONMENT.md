@@ -26,7 +26,17 @@ Google__ClientId=<google-web-client-id>
 Cors__AllowedOrigins__0=https://<stable-vercel-domain>
 Frontend__BaseUrl=https://<stable-vercel-domain>
 PasswordReset__TokenExpirationMinutes=15
-Email__Provider=Console
+Email__Provider=Smtp
+Email__FromName=EHUB
+Email__FromEmail=<verified-sender-email>
+Email__SmtpHost=<smtp-host>
+Email__SmtpPort=587
+Email__SecureSocketOption=StartTls
+RegistrationOtp__ExpirationMinutes=5
+RegistrationOtp__MaximumAttempts=5
+RegistrationOtp__ResendCooldownSeconds=60
+RegistrationOtp__MaximumResends=5
+RegistrationOtp__CleanupRetentionHours=24
 ```
 
 Secrets:
@@ -34,6 +44,9 @@ Secrets:
 ```text
 ConnectionStrings__DefaultConnection=<neon-pooled-npgsql-connection-string>
 Jwt__Secret=<random-secret-at-least-32-characters>
+RegistrationOtp__HashKey=<separate-random-secret-at-least-32-characters>
+Email__Username=<smtp-username>
+Email__Password=<smtp-password-or-api-key>
 ```
 
 Use the direct Neon connection string when applying migrations and the pooled

@@ -74,6 +74,7 @@ test('mock auth validation returns the backend field-error envelope in validator
         { field: 'email', code: 'NotEmptyValidator' },
         { field: 'email', code: 'EmailValidator' },
         { field: 'password', code: 'NotEmptyValidator' },
+        { field: 'password', code: 'MinimumLengthValidator' },
       ]);
       return true;
     },
@@ -111,7 +112,7 @@ test('mock register enforces exact backend role and major values', async () => {
   );
 });
 
-test('mock register accepts the complete backend major list and stores normalized user state', async () => {
+test('mock register verifies OTP before storing normalized user state', async () => {
   const email = 'new-bla-student@ehub.local';
   const registration = await axiosClient.post('/auth/register', {
     fullName: '  New BLA Student  ',
@@ -123,13 +124,22 @@ test('mock register accepts the complete backend major list and stores normalize
   });
 
   assert.equal(registration.success, true);
-  assert.equal(registration.message, 'Register successfully');
-  assert.equal(registration.data.status, 'Active');
+  assert.equal(registration.data.status, 'PendingEmailVerification');
+  assert.equal(registration.data.requiresEmailVerification, true);
   assert.equal(registration.data.requiresApproval, false);
-  assert.deepEqual(registration.data.user.roles, ['Student']);
-  assert.equal(registration.data.user.majorCode, 'BLA_CN');
-  assert.ok(registration.data.accessToken);
-  assert.ok(registration.data.expiresAt);
+  assert.equal(registration.data.user, null);
+  assert.equal(getMockState().users.some((user) => user.email === email), false);
+
+  const verification = await axiosClient.post('/auth/register/verify-otp', {
+    registrationId: registration.data.registrationId,
+    otp: '123456',
+  });
+  assert.equal(verification.data.status, 'Active');
+  assert.equal(verification.data.requiresEmailVerification, false);
+  assert.deepEqual(verification.data.user.roles, ['Student']);
+  assert.equal(verification.data.user.majorCode, 'BLA_CN');
+  assert.ok(verification.data.accessToken);
+  assert.ok(verification.data.expiresAt);
 
   const stored = getMockState().users.find((user) => user.email === email);
   assert.equal(stored?.name, 'New BLA Student');
@@ -303,13 +313,17 @@ test('reset restores pristine mock fixtures after mutable auth operations', asyn
   const fixtureRoom = getMockState().classes[0].room;
   const email = 'reset-proof@ehub.local';
 
-  await axiosClient.post('/auth/register', {
+  const registration = await axiosClient.post('/auth/register', {
     fullName: 'Reset Proof',
     email,
     password: 'Secret123!',
     confirmPassword: 'Secret123!',
     role: 'Student',
     majorCode: 'BIT_SE',
+  });
+  await axiosClient.post('/auth/register/verify-otp', {
+    registrationId: registration.data.registrationId,
+    otp: '123456',
   });
   getMockState().classes[0].room = 'MUTATED';
   assert.ok(getMockState().users.some((user) => user.email === email));
@@ -319,6 +333,7 @@ test('reset restores pristine mock fixtures after mutable auth operations', asyn
   assert.equal(getMockState().users.some((user) => user.email === email), false);
   assert.equal(getMockState().classes[0].room, fixtureRoom);
   assert.deepEqual(getMockState().authPasswords, {});
+  assert.deepEqual(getMockState().pendingRegistrations, []);
   assert.equal(getMockState().sessionUserId, null);
 });
 

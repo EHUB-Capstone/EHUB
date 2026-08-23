@@ -29,6 +29,15 @@ public static class ErrorCodes
     public const string AuthPasswordConfirmationMismatch = "AUTH_PASSWORD_CONFIRMATION_MISMATCH";
     public const string AuthStudentMajorRequired = "AUTH_STUDENT_MAJOR_REQUIRED";
     public const string AuthInvalidMajor = "AUTH_INVALID_MAJOR";
+    public const string AuthEmailVerificationRequired = "AUTH_EMAIL_VERIFICATION_REQUIRED";
+    public const string AuthRegistrationNotFound = "AUTH_REGISTRATION_NOT_FOUND";
+    public const string AuthVerificationCodeInvalid = "AUTH_VERIFICATION_CODE_INVALID";
+    public const string AuthVerificationCodeExpired = "AUTH_VERIFICATION_CODE_EXPIRED";
+    public const string AuthVerificationAttemptsExceeded = "AUTH_VERIFICATION_ATTEMPTS_EXCEEDED";
+    public const string AuthVerificationResendTooSoon = "AUTH_VERIFICATION_RESEND_TOO_SOON";
+    public const string AuthVerificationRateLimited = "AUTH_VERIFICATION_RATE_LIMITED";
+    public const string AuthEmailDeliveryFailed = "AUTH_EMAIL_DELIVERY_FAILED";
+    public const string AuthRegistrationAlreadyCompleted = "AUTH_REGISTRATION_ALREADY_COMPLETED";
 
     // System error codes
     public const string InternalServerError = "COMMON_INTERNAL_SERVER_ERROR";
@@ -37,6 +46,7 @@ public static class ErrorCodes
     public const string UserNotFound = "USER_NOT_FOUND";
     public const string ApprovalUserNotPending = "APPROVAL_USER_NOT_PENDING";
     public const string ApprovalInvalidTargetRole = "APPROVAL_INVALID_TARGET_ROLE";
+    public const string ApprovalEmailNotVerified = "APPROVAL_EMAIL_NOT_VERIFIED";
 
     // Class management error codes
     public const string ClassAccessDenied = "CLASS_ACCESS_DENIED";

@@ -14,7 +14,10 @@ public class User : AuditableEntity
     public string? Phone { get; set; }
     public string? AvatarUrl { get; set; }
     public UserStatus Status { get; set; } = UserStatus.Active;
-    public bool IsEmailVerified { get; set; }
+    // User entities are created only by trusted internal/admin flows or after
+    // an external identity/OTP has verified the address. Public registration
+    // stores an isolated PendingRegistration and does not construct a User.
+    public bool IsEmailVerified { get; set; } = true;
     public DateTime? LastLoginAt { get; set; }
 
     // Navigation properties

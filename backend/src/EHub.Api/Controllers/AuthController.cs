@@ -12,12 +12,15 @@ using EHub.Application.Features.Auth.RefreshToken;
 using EHub.Application.Features.Auth.Logout;
 using EHub.Application.Features.Auth.ForgotPassword;
 using EHub.Application.Features.Auth.ResetPassword;
+using EHub.Application.Features.Auth.ResendRegistrationOtp;
+using EHub.Application.Features.Auth.VerifyRegistrationOtp;
 using EHub.Application.Features.Auth.Common;
 using EHub.Api.Extensions;
 using EHub.Contracts.Auth;
 using EHub.Contracts.Common;
 using EHub.Shared.Errors;
 using EHub.Shared.Constants;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace EHub.Api.Controllers;
 
@@ -52,6 +55,7 @@ public sealed class AuthController : ControllerBase
     }
 
     [HttpPost("register")]
+    [EnableRateLimiting(AuthRateLimitPolicies.Registration)]
     public async Task<IActionResult> Register(
         [FromBody] RegisterRequest request,
         CancellationToken cancellationToken)
@@ -74,15 +78,63 @@ public sealed class AuthController : ControllerBase
                 ErrorCodes.AuthStudentMajorRequired => BadRequest(
                     ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code)),
 
+                ErrorCodes.AuthVerificationResendTooSoon => StatusCode(
+                    StatusCodes.Status429TooManyRequests,
+                    ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code)),
+
+                ErrorCodes.AuthVerificationRateLimited => StatusCode(
+                    StatusCodes.Status429TooManyRequests,
+                    ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code)),
+
+                ErrorCodes.AuthVerificationAttemptsExceeded => StatusCode(
+                    StatusCodes.Status429TooManyRequests,
+                    ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code)),
+
+                ErrorCodes.AuthEmailDeliveryFailed => StatusCode(
+                    StatusCodes.Status503ServiceUnavailable,
+                    ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code)),
+
                 _ => BadRequest(
                     ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code))
             };
         }
 
-        // Auto-login if registration returned access token (Student)
-        if (!string.IsNullOrWhiteSpace(result.Value.AccessToken) && 
-            !string.IsNullOrWhiteSpace(result.Value.RefreshToken) && 
-            result.Value.ExpiresAt.HasValue)
+        var publicResponse = ToRegisterResponse(result.Value);
+        return Accepted(ApiResponse<RegisterResponse>.SuccessResponse(
+            publicResponse,
+            result.Value.Message));
+    }
+
+    [HttpPost("register/verify-otp")]
+    [EnableRateLimiting(AuthRateLimitPolicies.OtpVerification)]
+    public async Task<IActionResult> VerifyRegistrationOtp(
+        [FromBody] VerifyRegistrationOtpRequest request,
+        [FromServices] IVerifyRegistrationOtpCommandHandler handler,
+        CancellationToken cancellationToken)
+    {
+        var result = await handler.HandleAsync(request, cancellationToken);
+        if (result.IsFailure)
+        {
+            return result.Error.Code switch
+            {
+                ErrorCodes.AuthRegistrationNotFound => NotFound(
+                    ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code)),
+                ErrorCodes.AuthVerificationCodeExpired => StatusCode(
+                    StatusCodes.Status410Gone,
+                    ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code)),
+                ErrorCodes.AuthVerificationAttemptsExceeded => StatusCode(
+                    StatusCodes.Status429TooManyRequests,
+                    ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code)),
+                ErrorCodes.AuthRegistrationAlreadyCompleted => Conflict(
+                    ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code)),
+                ErrorCodes.AuthEmailAlreadyExists => Conflict(
+                    ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code)),
+                _ => BadRequest(
+                    ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code))
+            };
+        }
+
+        if (!string.IsNullOrWhiteSpace(result.Value.RefreshToken) && result.Value.ExpiresAt.HasValue)
         {
             Response.SetRefreshTokenCookie(
                 result.Value.RefreshToken,
@@ -90,18 +142,46 @@ public sealed class AuthController : ControllerBase
                 _environment);
         }
 
-        var publicResponse = new RegisterResponse
-        {
-            Status = result.Value.Status,
-            RequiresApproval = result.Value.RequiresApproval,
-            Message = result.Value.Message,
-            User = result.Value.User,
-            AccessToken = result.Value.AccessToken,
-            ExpiresAt = result.Value.ExpiresAt
-        };
-
         return Ok(ApiResponse<RegisterResponse>.SuccessResponse(
-            publicResponse,
+            ToRegisterResponse(result.Value),
+            result.Value.Message));
+    }
+
+    [HttpPost("register/resend-otp")]
+    [EnableRateLimiting(AuthRateLimitPolicies.OtpResend)]
+    public async Task<IActionResult> ResendRegistrationOtp(
+        [FromBody] ResendRegistrationOtpRequest request,
+        [FromServices] IResendRegistrationOtpCommandHandler handler,
+        CancellationToken cancellationToken)
+    {
+        var result = await handler.HandleAsync(request, cancellationToken);
+        if (result.IsFailure)
+        {
+            return result.Error.Code switch
+            {
+                ErrorCodes.AuthRegistrationNotFound => NotFound(
+                    ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code)),
+                ErrorCodes.AuthRegistrationAlreadyCompleted => Conflict(
+                    ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code)),
+                ErrorCodes.AuthVerificationResendTooSoon => StatusCode(
+                    StatusCodes.Status429TooManyRequests,
+                    ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code)),
+                ErrorCodes.AuthVerificationRateLimited => StatusCode(
+                    StatusCodes.Status429TooManyRequests,
+                    ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code)),
+                ErrorCodes.AuthVerificationAttemptsExceeded => StatusCode(
+                    StatusCodes.Status429TooManyRequests,
+                    ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code)),
+                ErrorCodes.AuthEmailDeliveryFailed => StatusCode(
+                    StatusCodes.Status503ServiceUnavailable,
+                    ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code)),
+                _ => BadRequest(
+                    ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code))
+            };
+        }
+
+        return Accepted(ApiResponse<RegisterResponse>.SuccessResponse(
+            ToRegisterResponse(result.Value),
             result.Value.Message));
     }
 
@@ -117,6 +197,12 @@ public sealed class AuthController : ControllerBase
             return result.Error.Code switch
             {
                 ErrorCodes.AuthInvalidCredentials => Unauthorized(
+                    ApiResponse<object>.FailureResponse(
+                        result.Error.Message,
+                        result.Error.Code)),
+
+                ErrorCodes.AuthEmailVerificationRequired => StatusCode(
+                    StatusCodes.Status403Forbidden,
                     ApiResponse<object>.FailureResponse(
                         result.Error.Message,
                         result.Error.Code)),
@@ -257,6 +343,12 @@ public sealed class AuthController : ControllerBase
         {
             return result.Error.Code switch
             {
+                ErrorCodes.AuthEmailVerificationRequired => StatusCode(
+                    StatusCodes.Status403Forbidden,
+                    ApiResponse<object>.FailureResponse(
+                        result.Error.Message,
+                        result.Error.Code)),
+
                 ErrorCodes.AuthAccountPendingApproval => StatusCode(
                     StatusCodes.Status403Forbidden,
                     ApiResponse<object>.FailureResponse(
@@ -333,6 +425,12 @@ public sealed class AuthController : ControllerBase
                         result.Error.Code)),
 
                 ErrorCodes.AuthRefreshTokenRevoked => Unauthorized(
+                    ApiResponse<object>.FailureResponse(
+                        result.Error.Message,
+                        result.Error.Code)),
+
+                ErrorCodes.AuthEmailVerificationRequired => StatusCode(
+                    StatusCodes.Status403Forbidden,
                     ApiResponse<object>.FailureResponse(
                         result.Error.Message,
                         result.Error.Code)),
@@ -449,5 +547,23 @@ public sealed class AuthController : ControllerBase
         return Ok(ApiResponse<object?>.SuccessResponse(
             null,
             "Password has been reset successfully. Please login again."));
+    }
+
+    private static RegisterResponse ToRegisterResponse(RegisterResult value)
+    {
+        return new RegisterResponse
+        {
+            Status = value.Status,
+            RequiresEmailVerification = value.RequiresEmailVerification,
+            RequiresApproval = value.RequiresApproval,
+            Message = value.Message,
+            RegistrationId = value.RegistrationId,
+            MaskedEmail = value.MaskedEmail,
+            VerificationExpiresAtUtc = value.VerificationExpiresAtUtc,
+            ResendAvailableAtUtc = value.ResendAvailableAtUtc,
+            User = value.User,
+            AccessToken = value.AccessToken,
+            ExpiresAt = value.ExpiresAt
+        };
     }
 }

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import type { ChangeEvent, ClipboardEvent, FormEvent, KeyboardEvent } from 'react';
-import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   User, Mail, Lock, ArrowRight, Eye, EyeOff,
@@ -8,6 +8,7 @@ import {
   Sun, Moon, CheckCircle,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { resendRegistrationOtp } from '../../api/authApi';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../hooks/useAuth';
 import { AUTH_ERROR_CODES } from '../../types/auth';
@@ -26,9 +27,22 @@ import logo from '../../assets/logo.png';
 
 const OTP_EXPIRE_SECONDS = 5 * 60;
 const RESEND_COOLDOWN    = 60;
+const PENDING_OTP_STORAGE_KEY = 'ehub_pending_registration_otp';
 
 type Role = 'STUDENT' | 'LECTURER' | 'MENTOR';
-interface LocationState { step?: string; email?: string; }
+interface StoredOtpSession {
+  registrationId: string;
+  maskedEmail: string;
+  verificationExpiresAtUtc: string | null;
+  resendAvailableAtUtc: string | null;
+}
+
+const secondsUntil = (value: string | null | undefined, fallback = 0) => {
+  if (!value) return fallback;
+  const timestamp = Date.parse(value);
+  if (Number.isNaN(timestamp)) return fallback;
+  return Math.max(0, Math.ceil((timestamp - Date.now()) / 1000));
+};
 
 const BACKEND_ROLE_BY_FORM_ROLE: Record<Role, string> = {
   STUDENT: 'Student',
@@ -77,7 +91,7 @@ const PendingApprovalScreen: React.FC<{ email: string; onBack: () => void }> = (
 
 const Register: React.FC = () => {
   const { isDark, toggleTheme } = useTheme();
-  const { register } = useAuth();
+  const { register, verifyRegistrationOtp } = useAuth();
 
   /* Step 1 */
   const [name,            setName]            = useState<string>('');
@@ -101,16 +115,29 @@ const Register: React.FC = () => {
   const [countdown,      setCountdown]      = useState<number>(OTP_EXPIRE_SECONDS);
   const [resendCooldown, setResendCooldown] = useState<number>(0);
   const [resendLoading,  setResendLoading]  = useState<boolean>(false);
+  const [registrationId, setRegistrationId] = useState<string | null>(null);
+  const [maskedEmail,     setMaskedEmail]     = useState<string>('');
   const otpRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   const navigate = useNavigate();
-  const location = useLocation();
-  const locState = location.state as LocationState | null;
 
   useEffect(() => {
-    if (locState?.step === 'otp' && locState?.email) {
-      setEmail(locState.email); setStep(2); setCountdown(OTP_EXPIRE_SECONDS);
+    try {
+      const rawSession = sessionStorage.getItem(PENDING_OTP_STORAGE_KEY);
+      if (!rawSession) return;
+      const stored = JSON.parse(rawSession) as StoredOtpSession;
+      if (!stored.registrationId || !stored.maskedEmail) return;
+
+      setRegistrationId(stored.registrationId);
+      setMaskedEmail(stored.maskedEmail);
+      setCountdown(secondsUntil(stored.verificationExpiresAtUtc));
+      setResendCooldown(secondsUntil(stored.resendAvailableAtUtc));
+      setStep(2);
+      requestAnimationFrame(() => otpRefs.current[0]?.focus());
+    } catch {
+      sessionStorage.removeItem(PENDING_OTP_STORAGE_KEY);
     }
+  // Restore the server-issued challenge once when the page is opened.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -187,17 +214,25 @@ const Register: React.FC = () => {
     if (normalizedPayload.email !== email) setEmail(normalizedPayload.email);
     setLoading(true); setEmailTakenError(false);
     try {
-      const { requiresApproval, message } = await register(normalizedPayload);
-
-      if (requiresApproval) {
-        // LECTURER or MENTOR → show pending screen
-        setPendingApproval(true);
-        toast.success(message);
-      } else {
-        // STUDENT → auto-logged in, redirect
-        toast.success('Account created! Welcome to EHub 🎉');
-        navigate('/student');
+      const result = await register(normalizedPayload);
+      if (!result.requiresEmailVerification || !result.registrationId) {
+        throw new Error('The server did not create an email verification challenge.');
       }
+
+      setRegistrationId(result.registrationId);
+      setMaskedEmail(result.maskedEmail || normalizedPayload.email);
+      setOtpValues(['','','','','','']);
+      setCountdown(secondsUntil(result.verificationExpiresAtUtc, OTP_EXPIRE_SECONDS));
+      setResendCooldown(secondsUntil(result.resendAvailableAtUtc, RESEND_COOLDOWN));
+      sessionStorage.setItem(PENDING_OTP_STORAGE_KEY, JSON.stringify({
+        registrationId: result.registrationId,
+        maskedEmail: result.maskedEmail || normalizedPayload.email,
+        verificationExpiresAtUtc: result.verificationExpiresAtUtc,
+        resendAvailableAtUtc: result.resendAvailableAtUtc,
+      } satisfies StoredOtpSession));
+      setStep(2);
+      toast.success(result.message);
+      requestAnimationFrame(() => otpRefs.current[0]?.focus());
     } catch (err: unknown) {
       const { code, message, fieldErrors: apiFieldErrors } = parseApiError(err, 'Registration failed.');
       const mappedFieldErrors = mapApiFieldErrors(apiFieldErrors, REGISTER_FIELDS);
@@ -239,31 +274,45 @@ const Register: React.FC = () => {
   const handleVerifyOtp = async (e: FormEvent) => {
     e.preventDefault();
     const otp = otpValues.join('');
+    if (!registrationId) return void toast.error('Registration session not found. Please register again.');
     if (otp.length !== 6) return void toast.error('Enter all 6 digits.');
     if (countdown <= 0)   return void toast.error('OTP expired. Request a new one.');
     setOtpLoading(true);
     try {
-      // TODO: const { user, isPending } = await verifyOtp(email, otp);
-      toast.success('Verified! Welcome 🎉');
-      navigate('/student');
+      const result = await verifyRegistrationOtp({ registrationId, otp });
+      sessionStorage.removeItem(PENDING_OTP_STORAGE_KEY);
+      toast.success(result.message);
+      if (result.requiresApproval) {
+        setPendingApproval(true);
+      } else {
+        navigate('/student');
+      }
     } catch (err: unknown) {
-      const error = err as { message?: string };
-      toast.error(error.message ?? 'Invalid OTP.');
+      const { code, message } = parseApiError(err, 'Verification failed.');
+      if (code === AUTH_ERROR_CODES.VERIFICATION_CODE_EXPIRED) setCountdown(0);
+      toast.error(message);
       setOtpValues(['','','','','','']); otpRefs.current[0]?.focus();
     } finally { setOtpLoading(false); }
   };
 
   const handleResend = async () => {
-    if (resendCooldown > 0) return;
+    if (resendCooldown > 0 || !registrationId) return;
     setResendLoading(true);
     try {
-      // TODO: await resendOtp(email);
-      toast.success('New OTP sent!');
-      setOtpValues(['','','','','','']); setCountdown(OTP_EXPIRE_SECONDS); setResendCooldown(RESEND_COOLDOWN);
+      const result = await resendRegistrationOtp({ registrationId });
+      toast.success(result.message);
+      setOtpValues(['','','','','','']);
+      setCountdown(secondsUntil(result.verificationExpiresAtUtc, OTP_EXPIRE_SECONDS));
+      setResendCooldown(secondsUntil(result.resendAvailableAtUtc, RESEND_COOLDOWN));
+      sessionStorage.setItem(PENDING_OTP_STORAGE_KEY, JSON.stringify({
+        registrationId,
+        maskedEmail: result.maskedEmail || maskedEmail,
+        verificationExpiresAtUtc: result.verificationExpiresAtUtc,
+        resendAvailableAtUtc: result.resendAvailableAtUtc,
+      } satisfies StoredOtpSession));
       otpRefs.current[0]?.focus();
     } catch (err: unknown) {
-      const error = err as { response?: { data?: { message?: string } } };
-      toast.error(error.response?.data?.message ?? 'Failed to resend OTP.');
+      toast.error(parseApiError(err, 'Failed to resend OTP.').message);
     } finally { setResendLoading(false); }
   };
 
@@ -323,8 +372,14 @@ const Register: React.FC = () => {
           {pendingApproval && (
             <PendingApprovalScreen
               key="pending"
-              email={email}
-              onBack={() => { setPendingApproval(false); }}
+              email={maskedEmail || email}
+              onBack={() => {
+                setPendingApproval(false);
+                setStep(1);
+                setRegistrationId(null);
+                setMaskedEmail('');
+                setOtpValues(['','','','','','']);
+              }}
             />
           )}
 
@@ -414,7 +469,8 @@ const Register: React.FC = () => {
                     <input id="reg-password" type={showPass ? 'text' : 'password'} value={password}
                       onChange={(e: ChangeEvent<HTMLInputElement>) => { setPassword(e.target.value); clearFieldError('password'); clearFieldError('confirmPassword'); }}
                       onBlur={() => { validateField('password'); if (confirmPassword) validateField('confirmPassword'); }}
-                      placeholder="6–100 characters" autoComplete="new-password" required maxLength={AUTH_FIELD_LIMITS.passwordMax}
+                      placeholder="6–100 characters" autoComplete="new-password" required
+                      minLength={AUTH_FIELD_LIMITS.passwordMin} maxLength={AUTH_FIELD_LIMITS.passwordMax}
                       aria-invalid={Boolean(fieldErrors.password)} aria-describedby={fieldErrors.password ? 'reg-password-error' : 'reg-password-help'}
                       className={`w-full py-2.5 pr-11 pl-10 rounded-[14px] border bg-[#F8FAFC] dark:bg-white/5 text-[#0F172A] dark:text-slate-100 text-[14px] outline-none transition-colors ${fieldErrors.password ? 'border-red-500 focus:border-red-500' : 'border-[#E5E7EB] dark:border-white/10 focus:border-[#EA6A12] dark:focus:border-[#EA6A12]'}`}
                     />
@@ -525,7 +581,7 @@ const Register: React.FC = () => {
 
               <h1 className="text-[24px] font-extrabold text-slate-900 dark:text-slate-50 mb-2">Verify your email</h1>
               <p className="text-slate-500 dark:text-slate-400 text-[14px] mb-1">OTP code sent to</p>
-              <p className="text-[#EA6A12] text-[14px] font-bold mb-6">{email}</p>
+              <p className="text-[#EA6A12] text-[14px] font-bold mb-6">{maskedEmail || email}</p>
 
               {/* Countdown */}
               <div className={`inline-flex items-center gap-2 px-4.5 py-2 rounded-full mb-7 text-[13px] font-bold border ${countdown > 60 ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-500' : countdown > 0 ? 'bg-amber-500/10 border-amber-500/30 text-amber-500' : 'bg-red-500/10 border-red-500/30 text-red-500'}`}>
@@ -579,9 +635,15 @@ const Register: React.FC = () => {
                 </button>
               </div>
 
-              <button onClick={() => { setStep(1); setOtpValues(['','','','','','']); }}
+              <button onClick={() => {
+                setStep(1);
+                setOtpValues(['','','','','','']);
+                setRegistrationId(null);
+                setMaskedEmail('');
+                sessionStorage.removeItem(PENDING_OTP_STORAGE_KEY);
+              }}
                 className="mt-4 bg-transparent border-none cursor-pointer text-[13px] text-slate-500 dark:text-slate-400 w-full hover:text-slate-700 dark:hover:text-slate-300 transition-colors">
-                ← Back to edit your details
+                ← Use a different email address
               </button>
             </motion.div>
           )}

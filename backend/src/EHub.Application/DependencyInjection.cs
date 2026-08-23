@@ -11,6 +11,8 @@ using EHub.Application.Features.Auth.Logout;
 using EHub.Application.Features.Auth.RefreshToken;
 using EHub.Application.Features.Auth.Register;
 using EHub.Application.Features.Auth.ResetPassword;
+using EHub.Application.Features.Auth.ResendRegistrationOtp;
+using EHub.Application.Features.Auth.VerifyRegistrationOtp;
 using EHub.Application.Features.Dashboard.GetAdminDashboard;
 using EHub.Application.Features.Notifications.GetNotifications;
 using EHub.Application.Features.Notifications.MarkNotificationRead;
@@ -40,6 +42,8 @@ public static class DependencyInjection
         services.AddScoped<ILogoutCommandHandler, LogoutCommandHandler>();
         services.AddScoped<IForgotPasswordCommandHandler, ForgotPasswordCommandHandler>();
         services.AddScoped<IResetPasswordCommandHandler, ResetPasswordCommandHandler>();
+        services.AddScoped<IVerifyRegistrationOtpCommandHandler, VerifyRegistrationOtpCommandHandler>();
+        services.AddScoped<IResendRegistrationOtpCommandHandler, ResendRegistrationOtpCommandHandler>();
 
         services.AddScoped<IGetPendingApprovalUsersQueryHandler, GetPendingApprovalUsersQueryHandler>();
         services.AddScoped<IApproveUserCommandHandler, ApproveUserCommandHandler>();

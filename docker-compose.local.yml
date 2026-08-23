@@ -47,6 +47,12 @@ services:
       Email__SecureSocketOption: StartTls
       Frontend__BaseUrl: http://localhost:5173
       PasswordReset__TokenExpirationMinutes: 15
+      RegistrationOtp__HashKey: ${REGISTRATION_OTP_HASH_KEY}
+      RegistrationOtp__ExpirationMinutes: 5
+      RegistrationOtp__MaximumAttempts: 5
+      RegistrationOtp__ResendCooldownSeconds: 60
+      RegistrationOtp__MaximumResends: 5
+      RegistrationOtp__CleanupRetentionHours: 24
     ports:
       - "5226:8080"
     depends_on:

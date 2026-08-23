@@ -6,6 +6,13 @@ namespace EHub.Application.Common.Interfaces.Services;
 
 public interface IEmailService
 {
+    Task SendRegistrationOtpAsync(
+        string toEmail,
+        string fullName,
+        string otp,
+        DateTime expiresAtUtc,
+        CancellationToken cancellationToken = default);
+
     Task SendPasswordResetEmailAsync(
         string toEmail,
         string fullName,

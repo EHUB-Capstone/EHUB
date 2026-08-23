@@ -15,6 +15,20 @@ public sealed class ConsoleEmailService : IEmailService
         _logger = logger;
     }
 
+    public Task SendRegistrationOtpAsync(
+        string toEmail,
+        string fullName,
+        string otp,
+        DateTime expiresAtUtc,
+        CancellationToken cancellationToken = default)
+    {
+        _logger.LogWarning(
+            "Registration email dispatch was suppressed by the Console provider. Configure SMTP to receive verification codes. Expires: {ExpiresAtUtc}",
+            expiresAtUtc);
+
+        return Task.CompletedTask;
+    }
+
     public Task SendPasswordResetEmailAsync(
         string toEmail,
         string fullName,
