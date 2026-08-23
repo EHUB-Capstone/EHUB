@@ -373,7 +373,8 @@ const Login: React.FC = () => {
                 <input id="login-password" type={showPass ? 'text' : 'password'} value={password}
                   onChange={e => { setPassword(e.target.value); clearFieldError('password'); }}
                   onBlur={() => validateField('password')}
-                  placeholder="••••••••" autoComplete="current-password" required maxLength={AUTH_FIELD_LIMITS.passwordMax}
+                  placeholder="••••••" autoComplete="current-password" required
+                  minLength={AUTH_FIELD_LIMITS.passwordMin} maxLength={AUTH_FIELD_LIMITS.passwordMax}
                   aria-invalid={Boolean(fieldErrors.password)}
                   aria-describedby={fieldErrors.password ? 'login-password-error' : undefined}
                   className={`w-full py-2.5 pr-11 pl-10 rounded-[14px] border bg-[#F8FAFC] dark:bg-white/5 text-[#0F172A] dark:text-slate-100 text-[14px] outline-none transition-colors ${fieldErrors.password ? 'border-red-500 focus:border-red-500' : 'border-[#E5E7EB] dark:border-white/10 focus:border-[#EA6A12] dark:focus:border-[#EA6A12]'}`}

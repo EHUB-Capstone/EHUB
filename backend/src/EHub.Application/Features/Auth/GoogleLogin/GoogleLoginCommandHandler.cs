@@ -87,6 +87,13 @@ public class GoogleLoginCommandHandler : IGoogleLoginCommandHandler
             return Result.Failure<AuthSessionResult>(AuthErrors.AccountNotRegistered);
         }
 
+        if (!user.IsEmailVerified)
+        {
+            user.IsEmailVerified = true;
+            _userRepository.Update(user);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+
         // 4. Validate user status
         if (user.Status == UserStatus.PendingApproval)
         {

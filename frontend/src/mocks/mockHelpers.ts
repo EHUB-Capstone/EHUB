@@ -19,7 +19,11 @@ function loadState(): MockApiState {
     const stored = window.localStorage.getItem(STORAGE_KEY);
     if (!stored) return createInitialMockState();
     const parsed = JSON.parse(stored) as MockApiState;
-    return { ...parsed, authPasswords: parsed.authPasswords ?? {} };
+    return {
+      ...parsed,
+      authPasswords: parsed.authPasswords ?? {},
+      pendingRegistrations: parsed.pendingRegistrations ?? [],
+    };
   } catch {
     window.localStorage.removeItem(STORAGE_KEY);
     return createInitialMockState();
@@ -68,6 +72,10 @@ export function ok<T>(data: T, message = 'Success'): MockReply {
 
 export function created<T>(data: T, message: string): MockReply {
   return [201, { success: true, message, code: null, data, errors: null }];
+}
+
+export function accepted<T>(data: T, message: string): MockReply {
+  return [202, { success: true, message, code: null, data, errors: null }];
 }
 
 export function failure(

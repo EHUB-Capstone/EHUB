@@ -30,6 +30,7 @@ public static class DependencyInjection
 
         services.AddScoped<IApplicationDbContext>(provider => provider.GetRequiredService<AppDbContext>());
         services.AddHostedService<ClassImportSessionCleanupService>();
+        services.AddHostedService<PendingRegistrationCleanupService>();
         services.AddScoped<IOutboxEventDispatcher, NotificationOutboxEventDispatcher>();
         services.AddScoped<IClassChatMembershipSynchronizer, ClassChatMembershipSynchronizer>();
         services.AddHostedService<OutboxProcessorBackgroundService>();
@@ -42,6 +43,7 @@ public static class DependencyInjection
         services.AddScoped<IStudentRepository, StudentRepository>();
         services.AddScoped<IMentorProfileRepository, MentorProfileRepository>();
         services.AddScoped<IPasswordResetTokenRepository, PasswordResetTokenRepository>();
+        services.AddScoped<IPendingRegistrationRepository, PendingRegistrationRepository>();
         services.AddScoped<IUnitOfWork, UnitOfWork>();
 
         // Identity Services
@@ -54,6 +56,7 @@ public static class DependencyInjection
         // Common Services
         services.AddScoped<IDateTimeProvider, DateTimeProvider>();
         services.AddScoped<IPasswordResetTokenService, PasswordResetTokenService>();
+        services.AddSingleton<IRegistrationOtpService, RegistrationOtpService>();
         
         services.Configure<EmailOptions>(configuration.GetSection(EmailOptions.SectionName));
         var emailProvider = configuration["Email:Provider"];
@@ -74,6 +77,19 @@ public static class DependencyInjection
         services.Configure<GoogleOptions>(configuration.GetSection(GoogleOptions.SectionName));
         services.Configure<FrontendOptions>(configuration.GetSection(FrontendOptions.SectionName));
         services.Configure<PasswordResetOptions>(configuration.GetSection(PasswordResetOptions.SectionName));
+        services.AddOptions<RegistrationOtpOptions>()
+            .Bind(configuration.GetSection(RegistrationOtpOptions.SectionName))
+            .Validate(options => options.ExpirationMinutes is >= 1 and <= 15,
+                "RegistrationOtp:ExpirationMinutes must be between 1 and 15.")
+            .Validate(options => options.MaximumAttempts is >= 3 and <= 10,
+                "RegistrationOtp:MaximumAttempts must be between 3 and 10.")
+            .Validate(options => options.ResendCooldownSeconds is >= 30 and <= 300,
+                "RegistrationOtp:ResendCooldownSeconds must be between 30 and 300.")
+            .Validate(options => options.MaximumResends is >= 1 and <= 10,
+                "RegistrationOtp:MaximumResends must be between 1 and 10.")
+            .Validate(options => options.CleanupRetentionHours is >= 1 and <= 168,
+                "RegistrationOtp:CleanupRetentionHours must be between 1 and 168.")
+            .ValidateOnStart();
 
         return services;
     }

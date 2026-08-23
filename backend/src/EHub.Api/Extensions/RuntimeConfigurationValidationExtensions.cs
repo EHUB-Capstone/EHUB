@@ -43,5 +43,33 @@ public static class RuntimeConfigurationValidationExtensions
             throw new InvalidOperationException(
                 "Google:ClientId must be configured outside Development.");
         }
+
+        var otpHashKey = configuration["RegistrationOtp:HashKey"];
+        if (string.IsNullOrWhiteSpace(otpHashKey) || otpHashKey.Length < 32)
+        {
+            throw new InvalidOperationException(
+                "RegistrationOtp:HashKey must contain at least 32 characters outside Development.");
+        }
+
+        if (!string.Equals(configuration["Email:Provider"], "Smtp", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                "Email:Provider must be Smtp outside Development so registration codes can be delivered.");
+        }
+
+        var requiredEmailKeys = new[]
+        {
+            "Email:FromEmail",
+            "Email:SmtpHost",
+            "Email:Username",
+            "Email:Password"
+        };
+        foreach (var key in requiredEmailKeys)
+        {
+            if (string.IsNullOrWhiteSpace(configuration[key]))
+            {
+                throw new InvalidOperationException($"{key} is required when Email:Provider is Smtp.");
+            }
+        }
     }
 }

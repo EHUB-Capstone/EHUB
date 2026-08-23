@@ -50,6 +50,11 @@ public sealed class GetCurrentUserQueryHandler : IGetCurrentUserQueryHandler
             return Result.Failure<CurrentUserResponse>(CommonErrors.Unauthorized);
         }
 
+        if (!user.IsEmailVerified)
+        {
+            return Result.Failure<CurrentUserResponse>(AuthErrors.EmailVerificationRequired);
+        }
+
         // 3. Validate user status
         if (user.Status == UserStatus.PendingApproval)
         {

@@ -32,6 +32,7 @@ builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddAuth(builder.Configuration);
 builder.Services.AddApplicationAuthorization();
+builder.Services.AddAuthRateLimiting();
 
 // Customize Model State Binding validation response format
 builder.Services.Configure<ApiBehaviorOptions>(options =>
@@ -127,6 +128,7 @@ app.UseSerilogRequestLogging();
 
 // CORS must be configured before Authentication & Authorization middleware
 app.UseCors(CorsExtensions.FrontendPolicy);
+app.UseRateLimiter();
 
 app.UseAuthentication();
 app.UseAuthorization();

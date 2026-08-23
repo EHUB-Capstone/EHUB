@@ -1,7 +1,14 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { TOKEN_KEYS, setAccessToken } from '../api/axiosClient';
 import * as authApi from '../api/authApi';
-import type { CurrentUser, LoginPayload, RegisterPayload, WorkspaceUser } from '../types/auth';
+import type {
+  CurrentUser,
+  LoginPayload,
+  RegisterPayload,
+  RegisterResult,
+  VerifyRegistrationOtpPayload,
+  WorkspaceUser,
+} from '../types/auth';
 
 // ─── Context shape ───────────────────────────────────────────────────────────
 
@@ -16,7 +23,8 @@ interface AuthState {
 interface AuthActions {
   loginWithEmail: (payload: LoginPayload) => Promise<WorkspaceUser>;
   loginWithGoogle: (idToken: string) => Promise<WorkspaceUser>;
-  register: (payload: RegisterPayload) => Promise<{ requiresApproval: boolean; message: string }>;
+  register: (payload: RegisterPayload) => Promise<RegisterResult>;
+  verifyRegistrationOtp: (payload: VerifyRegistrationOtpPayload) => Promise<RegisterResult>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
   updateUser: (changes: Partial<WorkspaceUser>) => void;
@@ -92,16 +100,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // ── register ────────────────────────────────────────────────────────────
   const register = useCallback(async (
     payload: RegisterPayload,
-  ): Promise<{ requiresApproval: boolean; message: string }> => {
+  ): Promise<RegisterResult> => {
     const result = await authApi.register(payload);
+    return result;
+  }, []);
 
-    // Student → auto-login (backend returns tokens)
+  const verifyRegistrationOtp = useCallback(async (
+    payload: VerifyRegistrationOtpPayload,
+  ): Promise<RegisterResult> => {
+    const result = await authApi.verifyRegistrationOtp(payload);
+
+    // Only a verified Student is signed in immediately. Lecturer and Mentor
+    // accounts remain pending until an administrator approves them.
     if (!result.requiresApproval && result.accessToken && result.user) {
       setAccessToken(result.accessToken);
       setUser(toWorkspaceUser(result.user as CurrentUser));
     }
 
-    return { requiresApproval: result.requiresApproval, message: result.message };
+    return result;
   }, []);
 
   // ── logout ──────────────────────────────────────────────────────────────
@@ -133,6 +149,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       loginWithEmail,
       loginWithGoogle,
       register,
+      verifyRegistrationOtp,
       logout,
       refreshUser,
       updateUser,

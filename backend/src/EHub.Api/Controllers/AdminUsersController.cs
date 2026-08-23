@@ -110,6 +110,11 @@ public sealed class AdminUsersController : ControllerBase
                     error.Message,
                     error.Code)),
 
+            ErrorCodes.ApprovalEmailNotVerified => Conflict(
+                ApiResponse<object>.FailureResponse(
+                    error.Message,
+                    error.Code)),
+
             _ => BadRequest(
                 ApiResponse<object>.FailureResponse(
                     error.Message,

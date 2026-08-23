@@ -16,6 +16,19 @@ export interface MockUser {
   lastSeen: string | null;
 }
 
+export interface MockPendingRegistration {
+  id: string;
+  fullName: string;
+  email: string;
+  password: string;
+  role: 'LECTURER' | 'MENTOR' | 'STUDENT';
+  major: string | null;
+  otp: string;
+  expiresAtUtc: string;
+  resendAvailableAtUtc: string;
+  failedAttempts: number;
+}
+
 export interface MockSubject {
   _id: string;
   subjectCode: string;
@@ -212,6 +225,7 @@ export interface MockApiState {
   sequence: number;
   sessionUserId: string | null;
   authPasswords: Record<string, string>;
+  pendingRegistrations: MockPendingRegistration[];
   currentSemester: { semester: 'SP' | 'SU' | 'FA'; year: number } | null;
   semesters: MockSemester[];
   users: MockUser[];
@@ -370,6 +384,7 @@ const initialMockState: MockApiState = {
     sequence: 1_000,
     sessionUserId: null,
     authPasswords: {},
+    pendingRegistrations: [],
     currentSemester: { semester: 'FA', year: 2026 },
     semesters,
     users,

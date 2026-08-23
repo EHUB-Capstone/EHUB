@@ -1,112 +1,147 @@
-using System;
-using System.Threading;
-using System.Threading.Tasks;
-using Xunit;
-using NSubstitute;
-using EHub.Application.Features.Auth.Register;
 using EHub.Application.Common.Interfaces.Identity;
 using EHub.Application.Common.Interfaces.Persistence;
-using EHub.Contracts.Auth;
-using EHub.Domain.Entities;
-using EHub.Domain.Enums;
-using EHub.Domain.Common;
-using EHub.Shared.Constants;
-using EHub.Shared.Results;
+using EHub.Application.Common.Interfaces.Services;
 using EHub.Application.Common.Models.Identity;
 using EHub.Application.Features.Auth;
+using EHub.Application.Features.Auth.Register;
+using EHub.Contracts.Auth;
+using EHub.Domain.Entities;
+using EHub.Shared.Constants;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using NSubstitute;
 
 namespace EHub.ApplicationTests.Features.Auth.Register;
 
-public class RegisterCommandHandlerTests
+public sealed class RegisterCommandHandlerTests
 {
+    private static readonly DateTime UtcNow = new(2026, 8, 23, 8, 0, 0, DateTimeKind.Utc);
+
     private readonly IUserRepository _userRepository = Substitute.For<IUserRepository>();
     private readonly IRoleRepository _roleRepository = Substitute.For<IRoleRepository>();
-    private readonly IUserRoleRepository _userRoleRepository = Substitute.For<IUserRoleRepository>();
-    private readonly IStudentRepository _studentRepository = Substitute.For<IStudentRepository>();
-    private readonly IMentorProfileRepository _mentorProfileRepository = Substitute.For<IMentorProfileRepository>();
-    private readonly IRefreshTokenRepository _refreshTokenRepository = Substitute.For<IRefreshTokenRepository>();
+    private readonly IPendingRegistrationRepository _pendingRegistrationRepository =
+        Substitute.For<IPendingRegistrationRepository>();
     private readonly IUnitOfWork _unitOfWork = Substitute.For<IUnitOfWork>();
     private readonly IPasswordHasher _passwordHasher = Substitute.For<IPasswordHasher>();
-    private readonly IJwtTokenService _jwtTokenService = Substitute.For<IJwtTokenService>();
-    private readonly IRefreshTokenService _refreshTokenService = Substitute.For<IRefreshTokenService>();
-    private readonly ILogger<RegisterCommandHandler> _logger = Substitute.For<ILogger<RegisterCommandHandler>>();
-
+    private readonly IRegistrationOtpService _otpService = Substitute.For<IRegistrationOtpService>();
+    private readonly IEmailService _emailService = Substitute.For<IEmailService>();
+    private readonly IDateTimeProvider _dateTimeProvider = Substitute.For<IDateTimeProvider>();
     private readonly RegisterCommandHandler _handler;
 
     public RegisterCommandHandlerTests()
     {
+        var options = Options.Create(new RegistrationOtpOptions
+        {
+            ExpirationMinutes = 5,
+            MaximumAttempts = 5,
+            ResendCooldownSeconds = 60,
+            MaximumResends = 5
+        });
+
+        _dateTimeProvider.UtcNow.Returns(UtcNow);
+        _passwordHasher.Hash(Arg.Any<string>()).Returns("hashed-password");
+        _otpService.GenerateCode().Returns("123456");
+        _otpService.HashCode(Arg.Any<Guid>(), "123456").Returns("hashed-otp");
+
         _handler = new RegisterCommandHandler(
             _userRepository,
             _roleRepository,
-            _userRoleRepository,
-            _studentRepository,
-            _mentorProfileRepository,
-            _refreshTokenRepository,
+            _pendingRegistrationRepository,
             _unitOfWork,
             _passwordHasher,
-            _jwtTokenService,
-            _refreshTokenService,
-            _logger);
-
-        // Setup common UnitOfWork mocks to execute actions directly
-        _unitOfWork.ExecuteInTransactionAsync(Arg.Any<Func<CancellationToken, Task>>(), Arg.Any<CancellationToken>())
-            .Returns(x =>
-            {
-                var action = x.Arg<Func<CancellationToken, Task>>();
-                var ct = x.Arg<CancellationToken>();
-                return action?.Invoke(ct) ?? Task.CompletedTask;
-            });
-    }
-
-    private static void SetId(BaseEntity entity, Guid id)
-    {
-        var property = typeof(BaseEntity).GetProperty(nameof(BaseEntity.Id));
-        property?.SetValue(entity, id);
+            _otpService,
+            _emailService,
+            _dateTimeProvider,
+            options,
+            Substitute.For<ILogger<RegisterCommandHandler>>());
     }
 
     [Fact]
-    public async Task Should_Have_Error_When_Register_With_Invalid_Role()
+    public async Task HandleAsync_WithValidStudent_CreatesPendingRegistrationAndSendsOtp()
     {
-        var request = new RegisterRequest
-        {
-            FullName = "Nguyen Van A",
-            Email = "student@fpt.edu.vn",
-            Password = "Password123",
-            ConfirmPassword = "Password123",
-            Role = "Admin",
-            MajorCode = MajorCodes.BIT_SE
-        };
+        var request = CreateStudentRequest();
+        _roleRepository.GetByNameAsync(SystemRoles.Student, Arg.Any<CancellationToken>())
+            .Returns(new Role { Name = SystemRoles.Student });
 
         var result = await _handler.HandleAsync(request, CancellationToken.None);
 
-        Assert.False(result.IsSuccess);
-        Assert.Equal(AuthErrors.InvalidRole.Code, result.Error.Code);
+        Assert.True(result.IsSuccess);
+        Assert.NotNull(result.Value);
+        Assert.True(result.Value.RequiresEmailVerification);
+        Assert.False(result.Value.RequiresApproval);
+        Assert.Equal("PendingEmailVerification", result.Value.Status);
+        Assert.Null(result.Value.AccessToken);
+        Assert.Null(result.Value.RefreshToken);
+        Assert.Equal(UtcNow.AddMinutes(5), result.Value.VerificationExpiresAtUtc);
+
+        await _pendingRegistrationRepository.Received(1).AddAsync(
+            Arg.Is<PendingRegistration>(registration =>
+                registration != null &&
+                registration.Email == "student@fpt.edu.vn" &&
+                registration.NormalizedEmail == "student@fpt.edu.vn" &&
+                registration.RoleName == SystemRoles.Student &&
+                registration.MajorCode == MajorCodes.BIT_SE &&
+                registration.OtpHash == "hashed-otp"),
+            Arg.Any<CancellationToken>());
+        await _emailService.Received(1).SendRegistrationOtpAsync(
+            "student@fpt.edu.vn",
+            "Nguyen Van A",
+            "123456",
+            UtcNow.AddMinutes(5),
+            Arg.Any<CancellationToken>());
+        await _userRepository.DidNotReceive().AddAsync(
+            Arg.Any<User>(),
+            Arg.Any<CancellationToken>());
     }
 
     [Fact]
-    public async Task Should_Have_Error_When_Student_Register_With_Duplicate_Email()
+    public async Task HandleAsync_WhenUserAlreadyExists_ReturnsEmailAlreadyExists()
     {
-        var request = new RegisterRequest
-        {
-            FullName = "Nguyen Van A",
-            Email = "student@fpt.edu.vn",
-            Password = "Password123",
-            ConfirmPassword = "Password123",
-            Role = SystemRoles.Student,
-            MajorCode = MajorCodes.BIT_SE
-        };
+        _userRepository.ExistsByEmailAsync(
+                "student@fpt.edu.vn",
+                Arg.Any<CancellationToken>())
+            .Returns(true);
 
-        _userRepository.ExistsByEmailAsync("student@fpt.edu.vn", Arg.Any<CancellationToken>()).Returns(true);
-
-        var result = await _handler.HandleAsync(request, CancellationToken.None);
+        var result = await _handler.HandleAsync(CreateStudentRequest(), CancellationToken.None);
 
         Assert.False(result.IsSuccess);
         Assert.Equal(AuthErrors.EmailAlreadyExists.Code, result.Error.Code);
+        await _emailService.DidNotReceiveWithAnyArgs().SendRegistrationOtpAsync(
+            default!, default!, default!, default, default);
     }
 
     [Fact]
-    public async Task Should_Register_Student_Successfully_With_Token()
+    public async Task HandleAsync_WhenActiveChallengeIsCoolingDown_ReturnsResendTooSoon()
+    {
+        var pending = new PendingRegistration
+        {
+            Email = "student@fpt.edu.vn",
+            NormalizedEmail = "student@fpt.edu.vn",
+            PasswordHash = "hashed-password",
+            RoleName = SystemRoles.Student,
+            OtpHash = "old-hash",
+            OtpExpiresAtUtc = UtcNow.AddMinutes(3),
+            LastSentAtUtc = UtcNow.AddSeconds(-10)
+        };
+
+        _roleRepository.GetByNameAsync(SystemRoles.Student, Arg.Any<CancellationToken>())
+            .Returns(new Role { Name = SystemRoles.Student });
+        _pendingRegistrationRepository.GetByNormalizedEmailAsync(
+                "student@fpt.edu.vn",
+                Arg.Any<CancellationToken>())
+            .Returns(pending);
+        _passwordHasher.Verify("Password123", "hashed-password").Returns(true);
+
+        var result = await _handler.HandleAsync(CreateStudentRequest(), CancellationToken.None);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(AuthErrors.VerificationResendTooSoon.Code, result.Error.Code);
+        await _emailService.DidNotReceiveWithAnyArgs().SendRegistrationOtpAsync(
+            default!, default!, default!, default, default);
+    }
+
+    [Fact]
+    public async Task HandleAsync_WithInvalidStudentMajor_ReturnsInvalidMajor()
     {
         var request = new RegisterRequest
         {
@@ -115,163 +150,24 @@ public class RegisterCommandHandlerTests
             Password = "Password123",
             ConfirmPassword = "Password123",
             Role = SystemRoles.Student,
-            MajorCode = MajorCodes.BIT_SE
+            MajorCode = "UNKNOWN"
         };
-
-        var roleId = Guid.NewGuid();
-        var role = new Role { Name = SystemRoles.Student };
-        SetId(role, roleId);
-
-        _userRepository.ExistsByEmailAsync("student@fpt.edu.vn", Arg.Any<CancellationToken>()).Returns(false);
-        _roleRepository.GetByNameAsync(SystemRoles.Student, Arg.Any<CancellationToken>()).Returns(role);
-        _passwordHasher.Hash("Password123").Returns("hashed_password");
-        _jwtTokenService.GenerateAccessToken(Arg.Any<User>(), Arg.Any<string[]>()).Returns(new AccessTokenResult
-        {
-            Token = "access_token",
-            ExpiresAt = DateTime.UtcNow.AddMinutes(60)
-        });
-        _refreshTokenService.GenerateRefreshToken().Returns(new RefreshTokenResult
-        {
-            RawToken = "raw_refresh_token",
-            TokenHash = "token_hash",
-            ExpiresAt = DateTime.UtcNow.AddDays(7)
-        });
+        _roleRepository.GetByNameAsync(SystemRoles.Student, Arg.Any<CancellationToken>())
+            .Returns(new Role { Name = SystemRoles.Student });
 
         var result = await _handler.HandleAsync(request, CancellationToken.None);
 
-        Assert.True(result.IsSuccess);
-        Assert.NotNull(result.Value.AccessToken);
-        Assert.NotNull(result.Value.RefreshToken);
-        Assert.Equal(UserStatus.Active.ToString(), result.Value.Status);
-        Assert.False(result.Value.RequiresApproval);
-        Assert.Equal(MajorCodes.BIT_SE, result.Value.User?.MajorCode);
-
-        await _userRepository.Received(1).AddAsync(Arg.Any<User>(), Arg.Any<CancellationToken>());
-        await _userRoleRepository.Received(1).AddAsync(Arg.Any<UserRole>(), Arg.Any<CancellationToken>());
-        await _studentRepository.Received(1).AddAsync(Arg.Any<Student>(), Arg.Any<CancellationToken>());
-        await _refreshTokenRepository.Received(1).AddAsync(Arg.Any<EHub.Domain.Entities.RefreshToken>(), Arg.Any<CancellationToken>());
-        await _unitOfWork.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+        Assert.False(result.IsSuccess);
+        Assert.Equal(AuthErrors.InvalidMajor.Code, result.Error.Code);
     }
 
-    [Fact]
-    public async Task Should_Link_Imported_Student_Profile_Instead_Of_Creating_Duplicate()
+    private static RegisterRequest CreateStudentRequest() => new()
     {
-        var request = new RegisterRequest
-        {
-            FullName = "Nguyen Van A",
-            Email = "STUDENT@fpt.edu.vn",
-            Password = "Password123",
-            ConfirmPassword = "Password123",
-            Role = SystemRoles.Student,
-            MajorCode = MajorCodes.BIT_SE
-        };
-        var role = new Role { Name = SystemRoles.Student };
-        SetId(role, Guid.NewGuid());
-        var importedProfile = new Student
-        {
-            FullName = "Imported Student",
-            Email = "student@fpt.edu.vn",
-            RollNumber = "DE180225",
-            NormalizedRollNumber = "DE180225",
-            MajorCode = null,
-            UserId = null
-        };
-
-        _userRepository.ExistsByEmailAsync("student@fpt.edu.vn", Arg.Any<CancellationToken>()).Returns(false);
-        _roleRepository.GetByNameAsync(SystemRoles.Student, Arg.Any<CancellationToken>()).Returns(role);
-        _studentRepository.GetUnlinkedByEmailAsync("student@fpt.edu.vn", Arg.Any<CancellationToken>()).Returns(importedProfile);
-        _passwordHasher.Hash("Password123").Returns("hashed_password");
-        _jwtTokenService.GenerateAccessToken(Arg.Any<User>(), Arg.Any<string[]>()).Returns(new AccessTokenResult
-        {
-            Token = "access_token",
-            ExpiresAt = DateTime.UtcNow.AddMinutes(60)
-        });
-        _refreshTokenService.GenerateRefreshToken().Returns(new RefreshTokenResult
-        {
-            RawToken = "raw_refresh_token",
-            TokenHash = "token_hash",
-            ExpiresAt = DateTime.UtcNow.AddDays(7)
-        });
-
-        var result = await _handler.HandleAsync(request, CancellationToken.None);
-
-        Assert.True(result.IsSuccess);
-        Assert.NotNull(importedProfile.UserId);
-        Assert.Equal(MajorCodes.BIT_SE, importedProfile.MajorCode);
-        Assert.Equal("DE180225", importedProfile.RollNumber);
-        _studentRepository.Received(1).Update(importedProfile);
-        await _studentRepository.DidNotReceive().AddAsync(Arg.Any<Student>(), Arg.Any<CancellationToken>());
-    }
-
-    [Fact]
-    public async Task Should_Register_Lecturer_Successfully_Without_Token()
-    {
-        var request = new RegisterRequest
-        {
-            FullName = "Tran Van B",
-            Email = "lecturer@fpt.edu.vn",
-            Password = "Password123",
-            ConfirmPassword = "Password123",
-            Role = SystemRoles.Lecturer,
-            MajorCode = null
-        };
-
-        var roleId = Guid.NewGuid();
-        var role = new Role { Name = SystemRoles.Lecturer };
-        SetId(role, roleId);
-
-        _userRepository.ExistsByEmailAsync("lecturer@fpt.edu.vn", Arg.Any<CancellationToken>()).Returns(false);
-        _roleRepository.GetByNameAsync(SystemRoles.Lecturer, Arg.Any<CancellationToken>()).Returns(role);
-        _passwordHasher.Hash("Password123").Returns("hashed_password");
-
-        var result = await _handler.HandleAsync(request, CancellationToken.None);
-
-        Assert.True(result.IsSuccess);
-        Assert.Null(result.Value.AccessToken);
-        Assert.Null(result.Value.RefreshToken);
-        Assert.Equal(UserStatus.PendingApproval.ToString(), result.Value.Status);
-        Assert.True(result.Value.RequiresApproval);
-
-        await _userRepository.Received(1).AddAsync(Arg.Any<User>(), Arg.Any<CancellationToken>());
-        await _userRoleRepository.Received(1).AddAsync(Arg.Any<UserRole>(), Arg.Any<CancellationToken>());
-        await _studentRepository.DidNotReceive().AddAsync(Arg.Any<Student>(), Arg.Any<CancellationToken>());
-        await _refreshTokenRepository.DidNotReceive().AddAsync(Arg.Any<EHub.Domain.Entities.RefreshToken>(), Arg.Any<CancellationToken>());
-        await _unitOfWork.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
-    }
-
-    [Fact]
-    public async Task Should_Register_Mentor_Successfully_Without_Token_But_With_MentorProfile()
-    {
-        var request = new RegisterRequest
-        {
-            FullName = "Le Van C",
-            Email = "mentor@fpt.edu.vn",
-            Password = "Password123",
-            ConfirmPassword = "Password123",
-            Role = SystemRoles.Mentor,
-            MajorCode = null
-        };
-
-        var roleId = Guid.NewGuid();
-        var role = new Role { Name = SystemRoles.Mentor };
-        SetId(role, roleId);
-
-        _userRepository.ExistsByEmailAsync("mentor@fpt.edu.vn", Arg.Any<CancellationToken>()).Returns(false);
-        _roleRepository.GetByNameAsync(SystemRoles.Mentor, Arg.Any<CancellationToken>()).Returns(role);
-        _passwordHasher.Hash("Password123").Returns("hashed_password");
-
-        var result = await _handler.HandleAsync(request, CancellationToken.None);
-
-        Assert.True(result.IsSuccess);
-        Assert.Null(result.Value.AccessToken);
-        Assert.Null(result.Value.RefreshToken);
-        Assert.Equal(UserStatus.PendingApproval.ToString(), result.Value.Status);
-        Assert.True(result.Value.RequiresApproval);
-
-        await _userRepository.Received(1).AddAsync(Arg.Any<User>(), Arg.Any<CancellationToken>());
-        await _userRoleRepository.Received(1).AddAsync(Arg.Any<UserRole>(), Arg.Any<CancellationToken>());
-        await _mentorProfileRepository.Received(1).AddAsync(Arg.Any<MentorProfile>(), Arg.Any<CancellationToken>());
-        await _studentRepository.DidNotReceive().AddAsync(Arg.Any<Student>(), Arg.Any<CancellationToken>());
-        await _unitOfWork.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
-    }
+        FullName = "Nguyen Van A",
+        Email = "student@fpt.edu.vn",
+        Password = "Password123",
+        ConfirmPassword = "Password123",
+        Role = SystemRoles.Student,
+        MajorCode = MajorCodes.BIT_SE
+    };
 }

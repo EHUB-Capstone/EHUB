@@ -47,6 +47,7 @@ test('login mirrors backend required and ASP.NET-compatible email rules', () => 
   ]);
   assert.deepEqual(errorsFor(emptyErrors, 'password'), [
     { field: 'password', message: 'Password is required.', code: 'NotEmptyValidator' },
+    { field: 'password', message: 'Password must be at least 6 characters.', code: 'MinimumLengthValidator' },
   ]);
 
   for (const email of ['plain-address', '@domain', 'local@', 'one@two@three']) {
@@ -59,7 +60,7 @@ test('login mirrors backend required and ASP.NET-compatible email rules', () => 
   assert.equal(errorsFor(validateLoginPayload(validLogin({ email: 'a@b' })), 'email').length, 0);
 });
 
-test('login enforces backend email and password maximum boundaries', () => {
+test('login enforces backend email and password 6..100 boundaries', () => {
   const emailAtLimit = `${'a'.repeat(AUTH_FIELD_LIMITS.emailMax - 2)}@b`;
   const emailOverLimit = `${'a'.repeat(AUTH_FIELD_LIMITS.emailMax - 1)}@b`;
 
@@ -67,6 +68,10 @@ test('login enforces backend email and password maximum boundaries', () => {
   assert.deepEqual(errorsFor(validateLoginPayload(validLogin({ email: emailOverLimit })), 'email'), [
     { field: 'email', message: 'Email must not exceed 320 characters.', code: 'MaximumLengthValidator' },
   ]);
+  assert.deepEqual(errorsFor(validateLoginPayload(validLogin({ password: '12345' })), 'password'), [
+    { field: 'password', message: 'Password must be at least 6 characters.', code: 'MinimumLengthValidator' },
+  ]);
+  assert.equal(errorsFor(validateLoginPayload(validLogin({ password: '123456' })), 'password').length, 0);
   assert.equal(
     errorsFor(validateLoginPayload(validLogin({ password: 'p'.repeat(AUTH_FIELD_LIMITS.passwordMax) })), 'password').length,
     0,

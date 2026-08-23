@@ -12,6 +12,7 @@ import type { MockReply } from '../mockHelpers.ts';
 import {
   allocateId,
   allocateRowVersion,
+  accepted,
   asNumber,
   asString,
   asStringArray,
@@ -224,31 +225,128 @@ function registerAuthHandlers(mock: MockAdapter): void {
     if (getMockState().users.some((user) => user.email.toLowerCase() === email)) {
       return failure(409, 'AUTH_EMAIL_ALREADY_EXISTS', 'Email already exists.');
     }
-    const role = payload.role.toUpperCase() as MockUser['role'];
+    const role = payload.role.toUpperCase() as Exclude<MockUser['role'], 'ADMIN'>;
     const major = role === 'STUDENT' ? payload.majorCode ?? null : null;
+    const now = Date.now();
+    const registrationId = allocateId();
+    getMockState().pendingRegistrations = getMockState().pendingRegistrations
+      .filter((registration) => registration.email !== email);
+    getMockState().pendingRegistrations.push({
+      id: registrationId,
+      fullName: payload.fullName,
+      email,
+      password: payload.password,
+      role,
+      major,
+      otp: '123456',
+      expiresAtUtc: new Date(now + 5 * 60_000).toISOString(),
+      resendAvailableAtUtc: new Date(now + 60_000).toISOString(),
+      failedAttempts: 0,
+    });
+    persistMockState();
+    const message = 'Mock verification code sent. Use 123456.';
+    return accepted({
+      status: 'PendingEmailVerification',
+      requiresEmailVerification: true,
+      requiresApproval: false,
+      message,
+      registrationId,
+      maskedEmail: email.replace(/^(.).+(@.+)$/, '$1***$2'),
+      verificationExpiresAtUtc: new Date(now + 5 * 60_000).toISOString(),
+      resendAvailableAtUtc: new Date(now + 60_000).toISOString(),
+      user: null,
+      accessToken: null,
+      expiresAt: null,
+    }, message);
+  });
+
+  mock.onPost('/auth/register/verify-otp').reply((config) => {
+    const body = parseBody(config);
+    const registrationId = asString(body.registrationId);
+    const otp = asString(body.otp);
+    if (!registrationId || !/^\d{6}$/.test(otp)) {
+      return failure(400, 'COMMON_VALIDATION_ERROR', 'Validation failed');
+    }
+
+    const registration = getMockState().pendingRegistrations
+      .find((item) => item.id === registrationId);
+    if (!registration) {
+      return failure(404, 'AUTH_REGISTRATION_NOT_FOUND', 'Registration is invalid or no longer available.');
+    }
+    if (Date.parse(registration.expiresAtUtc) <= Date.now()) {
+      return failure(410, 'AUTH_VERIFICATION_CODE_EXPIRED', 'The verification code has expired. Request a new code.');
+    }
+    if (registration.otp !== otp) {
+      registration.failedAttempts += 1;
+      persistMockState();
+      return registration.failedAttempts >= 5
+        ? failure(429, 'AUTH_VERIFICATION_ATTEMPTS_EXCEEDED', 'Too many invalid verification attempts. Start a new registration.')
+        : failure(400, 'AUTH_VERIFICATION_CODE_INVALID', 'The verification code is invalid.');
+    }
+
     const id = allocateId();
     const user: MockUser = {
-      id, _id: id, name: payload.fullName, email, avatar: null, role,
-      status: role === 'STUDENT' ? 'APPROVED' : 'PENDING',
-      studentId: null, programGroup: major?.split('_')[0] ?? null,
-      major,
+      id, _id: id, name: registration.fullName, email: registration.email, avatar: null,
+      role: registration.role,
+      status: registration.role === 'STUDENT' ? 'APPROVED' : 'PENDING',
+      studentId: null, programGroup: registration.major?.split('_')[0] ?? null,
+      major: registration.major,
       phone: null, createdAt: new Date().toISOString(), lastSeen: null,
     };
     getMockState().users.unshift(user);
-    getMockState().authPasswords[user.id] = payload.password;
+    getMockState().authPasswords[user.id] = registration.password;
+    getMockState().pendingRegistrations = getMockState().pendingRegistrations
+      .filter((item) => item.id !== registrationId);
     if (user.status === 'APPROVED') getMockState().sessionUserId = user.id;
     persistMockState();
     const session = user.status === 'APPROVED' ? authResponse(user) : null;
     const message = user.status === 'APPROVED'
-      ? 'Register successfully'
-      : 'Your account has been registered and is pending admin approval.';
+      ? 'Your email has been verified and your account is ready.'
+      : 'Your email has been verified. Your account is pending admin approval.';
     return ok({
       status: user.status === 'APPROVED' ? 'Active' : 'PendingApproval',
+      requiresEmailVerification: false,
       requiresApproval: user.status !== 'APPROVED',
       message,
+      registrationId: null,
+      maskedEmail: null,
+      verificationExpiresAtUtc: null,
+      resendAvailableAtUtc: null,
       user: authUser(user),
       accessToken: session?.accessToken ?? null,
       expiresAt: session?.expiresAt ?? null,
+    }, message);
+  });
+
+  mock.onPost('/auth/register/resend-otp').reply((config) => {
+    const registrationId = asString(parseBody(config).registrationId);
+    const registration = getMockState().pendingRegistrations
+      .find((item) => item.id === registrationId);
+    if (!registration) {
+      return failure(404, 'AUTH_REGISTRATION_NOT_FOUND', 'Registration is invalid or no longer available.');
+    }
+    if (Date.parse(registration.resendAvailableAtUtc) > Date.now()) {
+      return failure(429, 'AUTH_VERIFICATION_RESEND_TOO_SOON', 'Please wait before requesting another verification code.');
+    }
+
+    const now = Date.now();
+    registration.otp = '123456';
+    registration.expiresAtUtc = new Date(now + 5 * 60_000).toISOString();
+    registration.resendAvailableAtUtc = new Date(now + 60_000).toISOString();
+    persistMockState();
+    const message = 'Mock verification code resent. Use 123456.';
+    return accepted({
+      status: 'PendingEmailVerification',
+      requiresEmailVerification: true,
+      requiresApproval: false,
+      message,
+      registrationId,
+      maskedEmail: registration.email.replace(/^(.).+(@.+)$/, '$1***$2'),
+      verificationExpiresAtUtc: registration.expiresAtUtc,
+      resendAvailableAtUtc: registration.resendAvailableAtUtc,
+      user: null,
+      accessToken: null,
+      expiresAt: null,
     }, message);
   });
 

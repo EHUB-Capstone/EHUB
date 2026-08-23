@@ -7,12 +7,30 @@ import type {
   LoginPayload,
   RegisterPayload,
   RegisterResult,
+  ResendRegistrationOtpPayload,
   ResetPasswordPayload,
+  VerifyRegistrationOtpPayload,
 } from '../types/auth';
 
 // ─── POST /api/auth/register ──────────────────────────────────────────────
 export async function register(payload: RegisterPayload): Promise<RegisterResult> {
   const data = await axiosClient.post('/auth/register', payload);
+  return data.data;
+}
+
+// ─── POST /api/auth/register/verify-otp ──────────────────────────────────
+export async function verifyRegistrationOtp(
+  payload: VerifyRegistrationOtpPayload,
+): Promise<RegisterResult> {
+  const data = await axiosClient.post('/auth/register/verify-otp', payload);
+  return data.data;
+}
+
+// ─── POST /api/auth/register/resend-otp ──────────────────────────────────
+export async function resendRegistrationOtp(
+  payload: ResendRegistrationOtpPayload,
+): Promise<RegisterResult> {
+  const data = await axiosClient.post('/auth/register/resend-otp', payload);
   return data.data;
 }
 
