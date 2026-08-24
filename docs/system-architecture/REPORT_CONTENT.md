@@ -52,7 +52,21 @@ Reading conventions: solid arrows represent request, runtime or primary data flo
 
 ### Figure 3. EHub Overall Logical Architecture
 
-The Overall Logical View shows the principal actors, presentation components, business modules, Clean Architecture layers and external dependencies. Admin, Lecturer, Mentor and Student users access role-specific portals in the React application. The web client communicates with the backend through REST/JSON and SignalR. The API layer handles transport concerns and delegates commands and queries to application use cases. Business rules remain in the Domain layer, while the Infrastructure layer implements database and external-service adapters. EHub remains a modular monolith: modules are cohesive logical boundaries inside one backend deployment and are not represented as independent microservices.
+The Overall Logical View shows the principal actors, presentation components, inbound adapters, modular business capabilities, Clean Architecture dependency direction and outbound integrations. Admin, Lecturer, Mentor and Student users access role-specific portals in the React application. Its REST and SignalR clients communicate with the API layer, while the background worker provides a second internal entry point for scheduled work, outbox events and long-running jobs. Both entry points invoke application use cases rather than addressing individual modules directly.
+
+The Application layer organizes EHub into cohesive business capabilities and depends on the Domain model for entities, invariants and domain events. Infrastructure adapters implement ports declared by the Application layer; this dependency points inward even though runtime data flows continue outward to PostgreSQL and managed providers. PostgreSQL is separated from external services because it is EHub's authoritative application data store, whereas Google Identity, Cloudinary, the AI provider and the email provider remain replaceable integrations. EHub remains a modular monolith: the modules are logical ownership boundaries inside one backend, not independent microservices, deployment units or databases.
+
+Main logical components:
+
+- **System Actors:** Admin, Lecturer, Mentor and Student users interact only through authorized role-based portals.
+- **Presentation Layer:** the React application provides routing, server-state management, forms, REST/JSON calls and the authenticated SignalR client.
+- **API Layer:** exposes transport contracts, performs authentication and authorization, and translates synchronous requests into application commands and queries.
+- **Background Worker:** invokes the same application use cases for scheduled jobs, outbox events and long-running work without duplicating business rules.
+- **Application Layer:** coordinates use cases, transactions and module boundaries and declares the ports required from infrastructure.
+- **Domain Model:** owns entities, invariants and domain events independently of transport, database and provider technology.
+- **Infrastructure Adapters:** implement persistence, identity, media, AI and email ports and are composed at the application boundary.
+- **Application Data:** PostgreSQL remains the authoritative store shared by the modular monolith while module ownership is enforced logically.
+- **External Services:** Google Identity, Cloudinary, the AI provider and the email provider are accessed only through replaceable adapters.
 
 Business modules:
 
@@ -64,6 +78,10 @@ Business modules:
 - **Mentoring and Data:** mentoring sessions, workshops, academic datasets and the data bank.
 - **Communication:** chat, realtime presence and notifications.
 - **AI Assistance:** human-reviewed project proposal analysis and recommendations.
+
+Reading conventions: solid arrows represent primary invocation or runtime data access. The dashed `Implements Ports` arrow represents a source-code dependency required by Dependency Inversion: Infrastructure depends on Application abstractions, not the reverse. A connector ending at a boundary summarizes access to the components inside that boundary and intentionally avoids repetitive crossing lines.
+
+Architectural constraints: actors and presentation code must not access PostgreSQL or providers directly; API controllers and worker processes must not duplicate domain decisions; application modules collaborate through explicit use cases, contracts or domain events; and provider-specific SDK types must remain behind Infrastructure adapters. In the current implementation, outbox processing and import-session cleanup still run as hosted services in the API process, while the separate Worker host and SignalR route shown here remain target-production items to verify before the final as-built submission.
 
 ### Figure 4. AI-assisted Project Proposal Analysis Architecture
 
