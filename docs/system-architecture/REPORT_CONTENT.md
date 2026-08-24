@@ -4,20 +4,26 @@ EHub is designed as a role-based web platform using a React single-page applicat
 
 ## A. Development View Architecture
 
-### Figure 1. EHub Development and CI/CD Architecture
+### Figure 1. EHub Development and Delivery Architecture
 
-The Development View describes how a source-code change moves through review, automated verification, artifact publication and controlled deployment. Developers work on feature branches and submit pull requests to the GitHub repository. GitHub Actions executes frontend checks, backend tests, integration tests, migration validation, container builds and supply-chain checks. A change can be merged only after the quality gate succeeds. The `develop` branch deploys to the staging environment for mentor verification, while a protected release tag requires manual production approval. Versioned container images are published to GitHub Container Registry and pulled by the production VPS. Health checks and smoke tests verify the release and allow rollback to the previous immutable image tag.
+The Development View describes the target path from a reviewed source change to a verified and recoverable production release. A developer works on a feature branch and opens a pull request in the GitHub repository. GitHub Actions then runs three independent check streams: frontend quality checks, backend build and automated tests, and security and delivery checks covering migration validation, dependency or image scanning, and container construction. These streams enter the CI quality gate through separate paths; the change may be merged into the protected `develop` branch only when every required check and review succeeds.
+
+Merging into `develop` automatically deploys the integrated application to a shared staging environment. The team and mentor perform staging acceptance before the same reviewed commit is promoted to `main` and assigned a version tag such as `vX.Y.Z`. The release workflow builds immutable versioned images and publishes them to GitHub Container Registry. Deployment to the protected production environment requires explicit approval. Before the production VPS is updated, the workflow creates a recoverable database backup and applies the approved migration. Post-deployment health and smoke tests verify the release; if verification fails, the operator can roll back to the previous immutable image and restore data according to the migration rollback plan.
 
 Main components:
 
-- **GitHub Repository:** stores source code and version history and applies protected-branch rules.
-- **Pull Request:** provides peer review and triggers the automated quality gate.
-- **GitHub Actions:** runs reproducible frontend, backend, integration and delivery checks.
-- **Container Registry:** stores immutable, versioned application images.
-- **Staging Environment:** validates merged work before a production release.
-- **Release Approval:** prevents an unreviewed release from reaching production.
-- **Production VPS:** runs the approved image set with Docker Compose.
-- **Release Verification:** performs health checks, smoke tests and rollback when necessary.
+- **GitHub Repository and Pull Request:** retain version history, isolate feature work, provide peer review and enforce protected-branch rules.
+- **GitHub Actions:** orchestrates reproducible CI and release workflows without storing deployment secrets in source control.
+- **Frontend Checks:** validate code quality, types, automated tests and the production web build.
+- **Backend Checks:** compile the .NET solution and run unit and integration tests.
+- **Security and Delivery Checks:** validate database migrations, inspect dependencies and images, and prove that deployable containers can be built.
+- **CI Quality Gate:** blocks merging until every required review and automated check succeeds.
+- **Staging Environment and Verification:** deploy the integrated `develop` branch and support team and mentor acceptance before release promotion.
+- **Versioned Release Build and Registry:** create immutable images from the approved `main` commit and version tag and store them in GitHub Container Registry.
+- **Production Approval:** protects the production environment with an explicit authorization gate.
+- **Backup and Migration:** creates a recovery point and applies the reviewed database change before application rollout.
+- **Production VPS:** pulls the approved image set and runs the EHub services with Docker Compose.
+- **Release Verification and Rollback:** execute health and smoke tests and restore the previous known-good release when necessary.
 
 ## B. Physical View Architecture
 

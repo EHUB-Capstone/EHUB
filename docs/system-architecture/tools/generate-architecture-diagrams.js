@@ -84,8 +84,9 @@ const GENERIC_ICONS = {
 
 const ICON_ASSIGNMENTS = {
   developer: 'code', repository: 'github', 'pull-request': 'branch', 'ci-orchestrator': 'githubactions',
-  'frontend-checks': 'react', 'backend-checks': 'dotnet', 'supply-chain': 'docker', merge: 'review',
-  staging: 'monitor', 'release-gate': 'shield', registry: 'package', production: 'docker', verification: 'review', secrets: 'key',
+  'frontend-checks': 'react', 'backend-checks': 'dotnet', 'security-checks': 'shield', 'quality-gate': 'review',
+  'merge-develop': 'branch', staging: 'monitor', 'staging-verification': 'review', 'release-build': 'docker',
+  registry: 'package', 'release-gate': 'shield', 'database-gate': 'database', production: 'docker', verification: 'review',
   'end-users': 'users', dns: 'globe', 'web-gateway': 'nginx', 'api-container': 'dotnet', 'worker-container': 'settings',
   postgres: 'postgresql', monitoring: 'activity', 'persistent-volume': 'drive', google: 'google', cloudinary: 'cloudinary',
   'ai-provider': 'brain', 'email-provider': 'mail', backup: 'archive', firewall: 'shield',
@@ -138,60 +139,83 @@ const diagrams = [
     id: 'development-view',
     page: '01 - Development View',
     file: '01-development-view-architecture',
-    title: 'EHub Development and CI/CD Architecture',
-    subtitle: 'Target software delivery workflow from source change to verified deployment',
+    title: 'EHub Development and Delivery Architecture',
+    subtitle: 'Target workflow from reviewed source change to verified and recoverable production release',
     groups: [
-      group('ci-boundary', 640, 160, 430, 520, 'GitHub Actions — CI Quality Gate', 'delivery'),
-      group('env-boundary', 1110, 145, 510, 780, 'Deployment Environments', 'infra'),
+      group('source-boundary', 25, 160, 400, 330, 'Source and Review', 'infra', { compactTitleGap: true }),
+      group('ci-boundary', 450, 120, 650, 590, 'Continuous Integration', 'delivery', { compactTitleGap: true }),
+      group('staging-boundary', 1125, 120, 525, 360, 'Staging Verification', 'frontend', { compactTitleGap: true }),
+      group('release-boundary', 1125, 520, 525, 440, 'Controlled Production Release', 'backend', { compactTitleGap: true, titleOffsetX: 250 }),
     ],
     nodes: [
-      node('developer', 45, 365, 155, 110, 'Developer', ['Feature branch', 'Signed commit'], 'actor'),
-      node('repository', 245, 365, 170, 110, 'GitHub Repository', ['Source code', 'Version history'], 'delivery'),
-      node('pull-request', 460, 365, 145, 110, 'Pull Request', ['Peer review', 'Branch protection'], 'delivery'),
-      node('ci-orchestrator', 745, 205, 220, 80, 'CI Orchestrator', ['Reproducible pipeline'], 'delivery'),
-      node('frontend-checks', 675, 330, 170, 135, 'Frontend Checks', ['Lint and type-check', 'Component tests', 'Production build'], 'frontend'),
-      node('backend-checks', 865, 330, 170, 135, 'Backend Checks', ['Build and test', 'Integration tests', 'Migration validation'], 'backend'),
-      node('supply-chain', 770, 510, 170, 125, 'Delivery Checks', ['Docker build', 'Dependency scan', 'Versioned artifact'], 'security'),
-      node('merge', 1125, 345, 165, 105, 'Review and Merge', ['Protected branch'], 'success'),
-      node('staging', 1350, 215, 220, 120, 'Staging Environment', ['develop branch', 'Mentor verification'], 'frontend'),
-      node('release-gate', 1125, 520, 165, 115, 'Release Approval', ['main / release tag', 'Manual production gate'], 'security'),
-      node('registry', 1350, 470, 220, 115, 'Container Registry', ['GHCR', 'Immutable image tags'], 'delivery'),
-      node('production', 1350, 660, 220, 125, 'Production VPS', ['Docker Compose', 'Controlled migration'], 'backend'),
-      node('verification', 1125, 760, 165, 125, 'Release Verification', ['Health checks', 'Smoke tests', 'Rollback on failure'], 'success'),
-      note('secrets', 680, 735, 360, 120, 'Security controls', ['Secrets remain in GitHub Environments and VPS configuration.', 'No production credential is stored in source control.']),
+      node('developer', 45, 270, 105, 100, 'Developer', ['Feature branch'], 'actor'),
+      node('repository', 175, 270, 120, 100, 'GitHub Repository', ['Protected source'], 'delivery'),
+      node('pull-request', 320, 270, 90, 100, 'Pull Request', ['Peer review'], 'delivery'),
+
+      node('ci-orchestrator', 710, 170, 170, 110, 'GitHub Actions', ['Reproducible pipeline'], 'delivery'),
+      node('frontend-checks', 505, 345, 170, 115, 'Frontend Checks', ['Lint, test and build'], 'frontend'),
+      node('backend-checks', 710, 345, 170, 115, 'Backend Checks', ['Build and tests'], 'backend'),
+      node('security-checks', 925, 345, 150, 115, 'Security and Delivery Checks', ['Migrations, scans and containers'], 'security'),
+      node('quality-gate', 715, 555, 160, 110, 'CI Quality Gate', ['All required checks pass'], 'success'),
+
+      node('merge-develop', 1150, 175, 135, 110, 'Merge to develop', ['Protected branch'], 'success'),
+      node('staging', 1330, 175, 160, 110, 'Staging Environment', ['Automatic deployment'], 'frontend'),
+      node('staging-verification', 1325, 335, 170, 110, 'Staging Verification', ['Mentor and team acceptance'], 'success'),
+
+      node('release-build', 1150, 580, 140, 110, 'Versioned Release Build', ['main and vX.Y.Z'], 'delivery'),
+      node('registry', 1330, 580, 150, 110, 'GitHub Container Registry', ['Immutable image tags'], 'delivery'),
+      node('release-gate', 1500, 580, 140, 110, 'Production Approval', ['Protected environment'], 'security'),
+      node('database-gate', 1500, 745, 140, 110, 'Backup and Migration', ['Pre-deployment gate'], 'security'),
+      node('production', 1320, 745, 140, 110, 'Production VPS', ['Docker Compose'], 'backend'),
+      node('verification', 1140, 745, 140, 110, 'Release Verification', ['Health and smoke tests'], 'success'),
     ],
     edges: [
-      edge('d1', 'developer', 'repository', 'push'),
-      edge('d2', 'repository', 'pull-request', 'open PR'),
-      edge('d3', 'pull-request', 'ci-orchestrator', 'trigger', { targetSide: 'left' }),
+      edge('d1', 'developer', 'repository', 'push', { sourceSide: 'right', targetSide: 'left' }),
+      edge('d2', 'repository', 'pull-request', 'open PR', { sourceSide: 'right', targetSide: 'left' }),
+      edge('d3', 'pull-request', 'ci-orchestrator', 'trigger', {
+        sourceSide: 'right', targetSide: 'top', labelX: 455, labelY: 296,
+        points: [{ x: 430, y: 302 }, { x: 430, y: 145 }, { x: 795, y: 145 }],
+      }),
       edge('d4', 'ci-orchestrator', 'frontend-checks', '', {
         sourceSide: 'left', targetSide: 'top',
-        points: [{ x: 790, y: 242 }, { x: 790, y: 310 }, { x: 760, y: 310 }],
+        points: [{ x: 590, y: 207 }],
       }),
       edge('d5', 'ci-orchestrator', 'backend-checks', '', {
+        sourceSide: 'bottom', targetSide: 'top',
+      }),
+      edge('d6', 'ci-orchestrator', 'security-checks', '', {
         sourceSide: 'right', targetSide: 'top',
-        points: [{ x: 920, y: 242 }, { x: 920, y: 310 }, { x: 950, y: 310 }],
+        points: [{ x: 1000, y: 207 }],
       }),
-      edge('d6', 'frontend-checks', 'supply-chain', '', {
+      edge('d7', 'frontend-checks', 'quality-gate', '', {
         sourceSide: 'bottom', targetSide: 'left',
-        points: [{ x: 760, y: 490 }, { x: 805, y: 490 }, { x: 805, y: 547 }],
+        points: [{ x: 590, y: 592 }],
       }),
-      edge('d7', 'backend-checks', 'supply-chain', '', {
-        sourceSide: 'bottom', targetSide: 'right',
-        points: [{ x: 950, y: 490 }, { x: 905, y: 490 }, { x: 905, y: 547 }],
+      edge('d8', 'backend-checks', 'quality-gate', '', {
+        sourceSide: 'bottom', targetSide: 'top',
       }),
-      edge('d8', 'supply-chain', 'merge', 'quality gate passed'),
-      edge('d9', 'merge', 'staging', 'develop', { sourceSide: 'right', targetSide: 'left' }),
-      edge('d10', 'merge', 'release-gate', 'release tag', { sourceSide: 'bottom', targetSide: 'top' }),
-      edge('d11', 'release-gate', 'registry', 'publish images'),
-      edge('d12', 'registry', 'production', 'pull by version', { sourceSide: 'bottom', targetSide: 'top' }),
-      edge('d13', 'production', 'verification', 'verify', {
-        sourceSide: 'left', targetSide: 'top', labelX: 1265, labelY: 724,
-        points: [{ x: 1330, y: 697 }, { x: 1330, y: 735 }, { x: 1207.5, y: 735 }],
+      edge('d9', 'security-checks', 'quality-gate', '', {
+        sourceSide: 'bottom', targetSide: 'right', targetRatio: 0.28,
+        points: [{ x: 1000, y: 579.24 }],
       }),
-      edge('d14', 'verification', 'production', 'rollback tag', {
-        sourceSide: 'right', targetSide: 'bottom', dashed: true, labelX: 1385, labelY: 821,
-        points: [{ x: 1305, y: 797 }, { x: 1305, y: 830 }, { x: 1460, y: 830 }],
+      edge('d10', 'quality-gate', 'merge-develop', 'quality gate passed', {
+        sourceSide: 'right', sourceRatio: 0.72, targetSide: 'left', labelX: 1085, labelY: 470,
+        points: [{ x: 1085, y: 604.76 }, { x: 1085, y: 212 }],
+      }),
+      edge('d11', 'merge-develop', 'staging', 'deploy develop', { sourceSide: 'right', targetSide: 'left' }),
+      edge('d12', 'staging', 'staging-verification', 'verify', { sourceSide: 'bottom', targetSide: 'top' }),
+      edge('d13', 'staging-verification', 'release-build', 'promote release', {
+        sourceSide: 'bottom', targetSide: 'top', labelX: 1315, labelY: 494,
+        points: [{ x: 1410, y: 485 }, { x: 1220, y: 485 }, { x: 1220, y: 555 }],
+      }),
+      edge('d14', 'release-build', 'registry', 'publish images', { sourceSide: 'right', targetSide: 'left' }),
+      edge('d15', 'registry', 'release-gate', 'request deployment', { sourceSide: 'right', targetSide: 'left' }),
+      edge('d16', 'release-gate', 'database-gate', 'approved', { sourceSide: 'bottom', targetSide: 'top' }),
+      edge('d17', 'database-gate', 'production', 'backup and migrate', { sourceSide: 'left', targetSide: 'right' }),
+      edge('d18', 'production', 'verification', 'deploy and verify', { sourceSide: 'left', targetSide: 'right' }),
+      edge('d19', 'verification', 'production', 'rollback image', {
+        sourceSide: 'bottom', targetSide: 'bottom', dashed: true, labelX: 1300, labelY: 914,
+        points: [{ x: 1210, y: 910 }, { x: 1390, y: 910 }],
       }),
     ],
   },
@@ -403,19 +427,22 @@ const diagrams = [
 // architecture at a glance. Detailed responsibilities remain in REPORT_CONTENT.md.
 const COMPACT_BODIES = {
   developer: '',
-  repository: 'Source repository',
+  repository: 'Feature branch',
   'pull-request': 'Review gate',
   'ci-orchestrator': '',
   'frontend-checks': 'Lint • Test • Build',
-  'backend-checks': 'Build • Test • Migrate',
-  'supply-chain': 'Docker • Scan • Artifact',
-  merge: '',
-  staging: 'Mentor verification',
-  'release-gate': '',
+  'backend-checks': 'Build • Unit • Integration',
+  'security-checks': 'Migrate • Scan • Container',
+  'quality-gate': 'Required checks pass',
+  'merge-develop': 'Protected develop',
+  staging: 'Automatic deployment',
+  'staging-verification': 'Mentor • Team acceptance',
+  'release-build': 'main • vX.Y.Z',
   registry: 'GHCR',
+  'release-gate': 'Protected environment',
+  'database-gate': 'Backup • Apply migration',
   production: 'Docker Compose',
   verification: 'Health • Smoke • Rollback',
-  secrets: 'Secrets outside source control',
 
   'end-users': 'Admin • Lecturer • Mentor • Student',
   dns: 'Public domain',
@@ -488,8 +515,9 @@ const COMPACT_BODIES = {
 };
 
 const COMPACT_EDGE_LABELS = {
-  d1: 'Push', d2: 'PR', d3: 'CI', d8: 'Passed', d9: 'Staging', d10: 'Release',
-  d11: 'Publish', d12: 'Pull', d13: 'Verify', d14: 'Rollback',
+  d1: 'Push', d2: 'PR', d3: 'CI', d10: 'Passed', d11: 'Deploy', d12: 'Verify',
+  d13: 'Promote', d14: 'Publish', d15: 'Deploy', d16: 'Approve',
+  d17: 'DB ready', d18: 'Verify', d19: 'Rollback',
   p1: '', p2: 'HTTPS', p3: 'API / SignalR', p4: 'EF Core', p5: 'Jobs', p6: 'Volume',
   p7: 'OAuth', p8: 'Storage', p9: 'AI', p10: 'Email', p11: 'Backup', p12: '', p13: '',
   l7: 'REST / SignalR', l8: 'Use cases', l9: '', l10: 'Ports', l11: 'Persistence',
@@ -504,9 +532,15 @@ const COMPACT_EDGE_LABELS = {
 const SHORT_TITLES = {
   repository: 'GitHub Repository',
   'ci-orchestrator': 'GitHub Actions',
-  'supply-chain': 'Delivery Checks',
+  'security-checks': 'Security & Delivery',
+  'quality-gate': 'CI Quality Gate',
+  'merge-develop': 'Merge to develop',
+  'staging-verification': 'Staging Verification',
+  'release-build': 'Versioned Release',
+  registry: 'GitHub Container Registry',
+  'release-gate': 'Production Approval',
+  'database-gate': 'Backup & Migration',
   verification: 'Release Verification',
-  secrets: 'Security Controls',
   'end-users': 'EHub Users',
   dns: 'Domain / DNS',
   'web-gateway': 'Nginx Gateway',
@@ -578,7 +612,7 @@ function nodeVisualBox(n) {
   return { iconSize, iconX, iconY, cx: n.x + n.w / 2 };
 }
 
-function sidePoint(item, side = 'auto', toward = null) {
+function sidePoint(item, side = 'auto', toward = null, ratio = 0.5) {
   const bounds = item.kind === 'node'
     ? (() => {
       const visual = nodeVisualBox(item);
@@ -595,20 +629,20 @@ function sidePoint(item, side = 'auto', toward = null) {
       ? ((toward.x + toward.w / 2) >= (item.x + item.w / 2) ? 'right' : 'left')
       : ((toward.y + toward.h / 2) >= (item.y + item.h / 2) ? 'bottom' : 'top'))
     : side;
-  if (selected === 'left') return { x: bounds.x, y: bounds.y + bounds.h / 2 };
-  if (selected === 'right') return { x: bounds.x + bounds.w, y: bounds.y + bounds.h / 2 };
-  if (selected === 'top') return { x: bounds.x + bounds.w / 2, y: bounds.y };
+  if (selected === 'left') return { x: bounds.x, y: bounds.y + bounds.h * ratio };
+  if (selected === 'right') return { x: bounds.x + bounds.w, y: bounds.y + bounds.h * ratio };
+  if (selected === 'top') return { x: bounds.x + bounds.w * ratio, y: bounds.y };
   return item.kind === 'node'
-    ? { x: item.x + item.w / 2, y: item.y + item.h }
-    : { x: bounds.x + bounds.w / 2, y: bounds.y + bounds.h };
+    ? { x: item.x + item.w * ratio, y: item.y + item.h }
+    : { x: bounds.x + bounds.w * ratio, y: bounds.y + bounds.h };
 }
 
 function pathForEdge(e, lookup) {
   const s = lookup.get(e.source);
   const t = lookup.get(e.target);
   if (!s || !t) return null;
-  const start = sidePoint(s, e.sourceSide || 'auto', t);
-  const end = sidePoint(t, e.targetSide || 'auto', s);
+  const start = sidePoint(s, e.sourceSide || 'auto', t, e.sourceRatio ?? 0.5);
+  const end = sidePoint(t, e.targetSide || 'auto', s, e.targetRatio ?? 0.5);
   const offset = e.offset || 0;
   let points;
   if (e.points) {
@@ -691,10 +725,14 @@ function svgNode(n) {
 
 function svgGroup(g) {
   const p = palette[g.type] || palette.infra;
+  const titleOffsetX = g.titleOffsetX ?? 18;
+  const titleGapWidth = g.compactTitleGap
+    ? Math.max(100, Math.min(g.w - titleOffsetX - 12, g.title.length * 7.2 + 28))
+    : Math.max(170, Math.min(g.w - 36, g.title.length * 9.2 + 34));
   return `<g id="${esc(g.id)}" class="diagram-group">
     <rect x="${g.x}" y="${g.y}" width="${g.w}" height="${g.h}" rx="4" fill="none" stroke="${p.stroke}" stroke-width="1.25" stroke-dasharray="6 5"/>
-    <rect x="${g.x + 18}" y="${g.y - 13}" width="${Math.max(170, Math.min(g.w - 36, g.title.length * 9.2 + 34))}" height="28" rx="8" fill="${palette.canvas}"/>
-    <text x="${g.x + 29}" y="${g.y + 7}" class="group-title">${esc(g.title)}</text>
+    <rect x="${g.x + titleOffsetX}" y="${g.y - 13}" width="${titleGapWidth}" height="28" rx="8" fill="${palette.canvas}"/>
+    <text x="${g.x + titleOffsetX + 11}" y="${g.y + 7}" class="group-title">${esc(g.title)}</text>
   </g>`;
 }
 
@@ -786,13 +824,21 @@ function drawioLabel(n) {
 
 function drawioGroup(g) {
   const p = palette[g.type] || palette.infra;
+  const titleOffsetX = g.titleOffsetX ?? 0;
   const style = [
     'rounded=0', 'whiteSpace=wrap', 'html=1', 'dashed=1', 'dashPattern=6 5',
     'fillColor=none', `strokeColor=${p.stroke}`, 'strokeWidth=1.25',
     `fontColor=${palette.ink}`, 'fontSize=14', 'fontStyle=1', 'align=left', 'verticalAlign=top',
-    'spacingTop=8', 'spacingLeft=12',
+    'spacingTop=8', `spacingLeft=${12 + titleOffsetX}`,
   ].join(';');
   return `<mxCell id="${esc(g.id)}" value="${esc(g.title)}" style="${style}" vertex="1" parent="1"><mxGeometry x="${g.x}" y="${g.y}" width="${g.w}" height="${g.h}" as="geometry"/></mxCell>`;
+}
+
+function drawioPortStyle(prefix, side, ratio = 0.5) {
+  if (!side) return '';
+  const x = side === 'left' ? 0 : side === 'right' ? 1 : ratio;
+  const y = side === 'top' ? 0 : side === 'bottom' ? 1 : ratio;
+  return `${prefix}X=${x};${prefix}Y=${y}`;
 }
 
 function drawioEdge(e) {
@@ -801,8 +847,8 @@ function drawioEdge(e) {
     'html=1', 'endArrow=block', 'endFill=1', `strokeColor=${palette.line}`, 'strokeWidth=1.5',
     `fontColor=${palette.muted}`, 'fontSize=12', `labelBackgroundColor=${palette.canvas}`,
     e.dashed ? 'dashed=1;dashPattern=7 6' : '',
-    e.sourceSide ? `exitX=${e.sourceSide === 'left' ? 0 : e.sourceSide === 'right' ? 1 : 0.5};exitY=${e.sourceSide === 'top' ? 0 : e.sourceSide === 'bottom' ? 1 : 0.5}` : '',
-    e.targetSide ? `entryX=${e.targetSide === 'left' ? 0 : e.targetSide === 'right' ? 1 : 0.5};entryY=${e.targetSide === 'top' ? 0 : e.targetSide === 'bottom' ? 1 : 0.5}` : '',
+    drawioPortStyle('exit', e.sourceSide, e.sourceRatio ?? 0.5),
+    drawioPortStyle('entry', e.targetSide, e.targetRatio ?? 0.5),
   ].filter(Boolean).join(';');
   const waypoints = e.points?.length
     ? `<Array as="points">${e.points.map((point) => `<mxPoint x="${point.x}" y="${point.y}"/>`).join('')}</Array>`

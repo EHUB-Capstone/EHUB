@@ -4,7 +4,7 @@ This directory contains the target architecture baseline for the final EHub grad
 
 ## Diagram inventory
 
-1. **Development View Architecture** — source change, CI quality gate, container publishing and controlled deployment.
+1. **Development and Delivery View Architecture** — reviewed source change, parallel CI checks, staging acceptance, versioned releases and controlled production deployment.
 2. **Physical View Architecture** — target production deployment on a single VPS with external managed services.
 3. **Overall Logical View Architecture** — actors, presentation layer, modular-monolith business modules, Clean Architecture layers and external systems.
 4. **AI Proposal Analysis Architecture** — provider-neutral asynchronous AI workflow with structured validation and human governance.
@@ -35,7 +35,7 @@ This directory contains the target architecture baseline for the final EHub grad
 1.1 System Architecture
 
 A. Development View Architecture
-   Figure 1. EHub Development and CI/CD Architecture
+   Figure 1. EHub Development and Delivery Architecture
 
 B. Physical View Architecture
    Figure 2. EHub Target Production Deployment Architecture
