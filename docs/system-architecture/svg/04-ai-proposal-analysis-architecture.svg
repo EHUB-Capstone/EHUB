@@ -76,10 +76,10 @@
   </g>
   </g>
 <g id="a6" class="diagram-edge">
-    <path d="M 906.5 657 L 1017 657 L 1017 267 L 1176 267" fill="none" stroke="#64748B" stroke-width="1.8"  marker-end="url(#arrow)"/>
+    <path d="M 877.5 628 L 877.5 267 L 1176 267" fill="none" stroke="#64748B" stroke-width="1.8"  marker-end="url(#arrow)"/>
     <g class="edge-label">
-    <rect x="966.1" y="417" width="101.8" height="20" rx="6"/>
-    <text x="1017" y="432">6 Claimed Job</text>
+    <rect x="899.1" y="417" width="101.8" height="20" rx="6"/>
+    <text x="950" y="432">6 Claimed Job</text>
   </g>
   </g>
 <g id="a7" class="diagram-edge">

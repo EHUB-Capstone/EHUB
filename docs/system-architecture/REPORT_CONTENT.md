@@ -122,7 +122,42 @@ Implementation alignment note: the current domain already provides proposal vers
 
 ### Figure 5. Realtime Communication and Asynchronous Processing Architecture
 
-The final logical view separates low-latency communication from reliable business-event delivery. A React SignalR client establishes an authenticated connection to the EHub hub. The backend verifies active class or team membership before allowing a connection to join a group or send a command. Chat content is validated and persisted before it is broadcast to authorized group members. In parallel, class, team and mentor transactions save both business state and an `OutboxMessage` in the same PostgreSQL transaction. The worker claims pending events and dispatches them idempotently to chat-membership synchronization, in-app notification, SignalR and email channels. Repeated failures are recorded for operational investigation rather than silently discarded.
+The final logical view separates low-latency communication from reliable business-event delivery. A React SignalR client establishes an authenticated connection to the EHub hub. The backend verifies active class or team membership for group joins and commands, validates chat content and persists the message before performing a best-effort broadcast to authorized clients. SignalR is not treated as durable storage or guaranteed delivery; reconnecting clients retrieve missed state through the normal API and PostgreSQL source of truth.
+
+In parallel, class, team and mentor operations commit business state and a pending outbox row in one PostgreSQL transaction. The worker leases pending rows with `FOR UPDATE SKIP LOCKED`, applies bounded retry and dispatches each versioned event idempotently. Consumers update chat-membership and notification projections, optionally request email delivery and publish access or unread-count changes through a single SignalR push adapter. Events that exhaust the retry limit remain in a terminal failed state and trigger operational investigation rather than disappearing silently.
 
 At the single-VPS baseline, one API instance handles SignalR connections and does not require a Redis backplane. Redis should be introduced only if the SignalR/API tier is scaled horizontally across multiple instances.
+
+Main logical components:
+
+- **React SignalR Client:** authenticates the connection, reconnects with backoff and reloads missed durable state after reconnect.
+- **SignalR Hub:** terminates realtime connections and accepts only authenticated group joins and commands.
+- **Membership Authorization:** checks active class, team, lecturer and mentor scope on every protected operation; client-supplied group identifiers are never trusted by themselves.
+- **Chat Message Service:** validates content, applies a server timestamp and persists the message before broadcasting.
+- **PostgreSQL:** remains the source of truth for chat messages, memberships, notifications and outbox state.
+- **Group Broadcast:** performs a low-latency, best-effort push after the database commit; it does not replace durable message history.
+- **Atomic State and Outbox:** writes business changes and the pending event within one PostgreSQL transaction, preventing committed state without a corresponding event.
+- **Outbox Worker:** claims rows with a lease, recovers stale work and applies exponential backoff and a maximum-attempt policy.
+- **Event Dispatcher:** routes versioned events to idempotent consumers and records success or failure.
+- **Chat Membership Sync:** projects class, team, lecturer and mentor changes into active chat-group access.
+- **Notification Projection:** creates at most one in-app notification for each source event and recipient.
+- **SignalR Push:** publishes access changes and unread-count updates without coupling domain handlers directly to live connections.
+- **Email Channel:** provides optional external delivery; an email failure must not roll back the original business transaction.
+- **Failure Monitoring:** exposes terminal failed events, the last sanitized error and retry metadata for operational repair.
+- **Optional Redis Backplane:** is introduced only when multiple SignalR/API instances must share group broadcasts.
+
+Reliability and security rules:
+
+- Chat authorization is enforced by the backend for history reads, joins, sends and membership changes, not by hidden frontend controls.
+- A message is broadcast only after its database transaction commits successfully.
+- Realtime push is best effort; durable state is recovered through API queries after reconnect.
+- Outbox delivery is at least once, so every consumer must be idempotent by event and recipient or aggregate key.
+- Worker leases recover events left in `Processing` when a process terminates unexpectedly.
+- Retryable errors use bounded exponential backoff; terminal failures remain queryable and alertable.
+- Sensitive payloads and raw exception details are not exposed to clients or external notifications.
+- Membership revocation must affect both durable membership and active realtime access.
+
+Reading conventions: solid arrows denote synchronous commands, durable writes or primary event dispatch. Dashed arrows denote best-effort push, optional scale-out infrastructure and failure/recovery paths. The two PostgreSQL representations in this logical view refer to the same production database: the upper node emphasizes chat persistence, while `Atomic State and Outbox` emphasizes transaction semantics rather than a second datastore.
+
+Implementation alignment note: the current source already contains PostgreSQL chat entities, class/team membership synchronization, `OutboxMessage`, lease-based claiming, exponential retry, terminal `Failed` status and idempotent notification projection. SignalR Hub/client integration, active-connection revocation, Redis scale-out, external email dispatch from outbox events and operational alerting remain target-production work. The current chat endpoints must also enforce active membership consistently for group lists, member lists and message history before the final as-built submission.
 
