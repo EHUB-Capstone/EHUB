@@ -85,7 +85,21 @@ Architectural constraints: actors and presentation code must not access PostgreS
 
 ### Figure 4. AI-assisted Project Proposal Analysis Architecture
 
-The AI logical view describes an asynchronous, provider-neutral and human-governed analysis workflow. A team or lecturer submits proposal data through the EHub web application. The API authorizes the caller, validates the request, minimizes personal data and selects a versioned prompt. The request and job record are stored atomically before an accepted response is returned. The worker claims the job idempotently, invokes the configured AI provider through the `IAiProvider` abstraction and validates the structured result against both a JSON schema and business constraints. The validated analysis, model metadata and prompt version are stored in PostgreSQL, after which EHub sends an in-app notification and a SignalR update. AI output is advisory; Lecturer or Admin users retain decision authority.
+The AI logical view describes an asynchronous, provider-neutral and human-governed proposal-analysis workflow. A Team or Lecturer submits proposal data through the EHub web application. The API authorizes class, team and proposal ownership, validates request limits and sends only normalized, necessary context into a versioned prompt. EHub atomically stores the immutable proposal snapshot, analysis request, pending job and outbox state in PostgreSQL before returning an accepted response with a status identifier. The external model provider and the internal human-governance role are shown as separate trust boundaries: the provider generates advisory content, while Lecturer or Admin users retain academic and operational decision authority.
+
+The worker leases a pending job with idempotency and retry controls, invokes the configured model through an `IAiProvider` port and treats the provider response as untrusted input. Output guardrails validate the JSON schema, allowed fields, lengths, score ranges and business consistency before any `ProjectAnalysis` is stored. The validated result, prompt version, provider/model metadata and completion event are committed before result delivery creates an in-app notification, SignalR update and optional email. Lecturer or Admin users review the result inside EHub and retain all approval, rejection and grading authority.
+
+Main logical components:
+
+- **Proposal Analysis API:** enforces authentication, ownership, request validation, rate limits and analysis eligibility.
+- **Context and Prompt Controls:** minimize personal data, normalize proposal sections and bind the request to a versioned prompt and output schema.
+- **Persist Request and Job:** commits the proposal snapshot, analysis request, pending job and outbox data atomically and returns only after durable acceptance.
+- **PostgreSQL Analysis State:** stores request status, attempts, leases, prompt/model metadata, validated results and completion events.
+- **Job Claim and Retry:** prevents duplicate concurrent execution and applies bounded retry with a terminal failed state.
+- **AI Orchestrator:** selects the configured provider/model and applies timeout, cancellation and token/cost limits behind the `IAiProvider` abstraction.
+- **Output Guardrails:** reject malformed, oversized or inconsistent provider output and prevent raw AI content from driving privileged state changes.
+- **Result Delivery:** publishes a durable result notification through in-app, SignalR and optional email channels.
+- **Human Review:** presents AI recommendations to Lecturer or Admin users without delegating academic or governance decisions to the model.
 
 Quality and safety controls:
 
@@ -94,7 +108,17 @@ Quality and safety controls:
 - Prompt and model versions are recorded for traceability.
 - Jobs use timeouts, retries and idempotency controls.
 - Structured output is validated before persistence.
+- Proposal snapshots make an analysis reproducible even if the editable proposal changes later.
+- Rate, token and cost limits prevent unbounded provider usage.
+- Sensitive prompt contents and provider credentials must not be written to application logs.
+- Failed jobs remain observable and may be retried explicitly rather than disappearing silently.
 - AI does not automatically approve, reject or grade a project.
+
+Reading conventions: the numbered solid arrows show the accepted request and successful processing path; the dashed completion-event arrow denotes durable asynchronous delivery. PostgreSQL is a shared durable state boundary rather than a processing step. Provider responses are deliberately routed through Output Guardrails before they can be persisted or shown to a reviewer.
+
+Cross-view responsibility: secret injection, encrypted transport, container isolation, database backup and platform observability are defined by the Physical View; dead-letter handling, dispatcher retries and realtime delivery mechanics are expanded in the Realtime and Asynchronous Processing View. They are intentionally not duplicated here so that Figure 4 remains focused on AI safety, durable analysis state and human decision governance.
+
+Implementation alignment note: the current domain already provides proposal versions, `ProjectAnalysis`, PostgreSQL persistence and the outbox/notification foundation. Before the final as-built submission, the dedicated analysis-request/job lifecycle, provider abstraction, prompt/schema version metadata, output-validation pipeline and result-delivery integration must be implemented and verified against this target view.
 
 ### Figure 5. Realtime Communication and Asynchronous Processing Architecture
 
