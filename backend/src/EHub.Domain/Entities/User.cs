@@ -25,4 +25,5 @@ public class User : AuditableEntity
     public virtual ICollection<RefreshToken> RefreshTokens { get; set; } = new List<RefreshToken>();
     public virtual MentorProfile? MentorProfile { get; set; }
     public virtual Student? Student { get; set; }
+    public virtual ICollection<SemesterStaffAssignment> SemesterStaffAssignments { get; set; } = new List<SemesterStaffAssignment>();
 }

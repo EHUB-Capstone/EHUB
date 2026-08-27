@@ -58,6 +58,9 @@ public static class ErrorCodes
     public const string ClassScheduleConflict = "SCHEDULE_CONFLICT";
     public const string ClassConcurrencyConflict = "CLASS_CONCURRENCY_CONFLICT";
     public const string ClassInvalidLecturer = "CLASS_INVALID_LECTURER";
+    public const string SemesterStaffNotFound = "SEMESTER_STAFF_NOT_FOUND";
+    public const string SemesterStaffConflict = "SEMESTER_STAFF_CONFLICT";
+    public const string SemesterStaffInUse = "SEMESTER_STAFF_IN_USE";
     public const string ClassLecturerRequired = "CLASS_LECTURER_REQUIRED";
     public const string ClassCodeDuplicated = "CLASS_CODE_DUPLICATED";
     public const string ClassIndexDuplicated = "CLASS_INDEX_DUPLICATED";

@@ -41,6 +41,20 @@ public sealed class ChangeSemesterLifecycleRequest
     public string Reason { get; init; } = string.Empty;
 }
 
+public sealed class AddSemesterTeachingStaffRequest
+{
+    public string Semester { get; init; } = string.Empty;
+    public int Year { get; init; }
+    public Guid UserId { get; init; }
+    public string Role { get; init; } = string.Empty;
+}
+
+public sealed class UpdateSemesterTeachingStaffRequest
+{
+    public string Status { get; init; } = string.Empty;
+    public string RowVersion { get; init; } = string.Empty;
+}
+
 public sealed class SaveRoadmapItemRequest
 {
     public string Title { get; init; } = string.Empty;

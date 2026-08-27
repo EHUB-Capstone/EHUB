@@ -9,7 +9,6 @@ import {
 } from 'lucide-react';
 import { AuthContext } from '../../context/AuthContext';
 import { classApi } from '../../api/classApi';
-import { userApi } from '../../api/userApi';
 import { subjectApi } from '../../api/subjectApi';
 import LoadingSkeleton from '../../components/ui/LoadingSkeleton';
 import EmptyState from '../../components/ui/EmptyState';
@@ -27,7 +26,6 @@ import { toClassViewModel, unwrapApiData } from '../../utils/classMappers';
 import { getClassLifecyclePresentation } from '../../utils/classComponentPolicy';
 import type { ClassListResponse, ClassStatus, ClassViewModel } from '../../types/classes';
 import { canCreateClasses, canManageClass, hasClassRole } from '../../utils/classPermissions';
-import { buildApprovedLecturerQuery } from '../../utils/lecturerDirectory';
 import { executeBulkClassAction, type BulkClassActionResult } from '../../utils/bulkClassActions';
 
 const SEMESTERS = ['SP', 'SU', 'FA'];
@@ -75,7 +73,6 @@ export default function ClassManagement() {
   const [classes, setClasses] = useState<ClassViewModel[]>([]);
   const [loading,    setLoading]    = useState(true);
   const [error, setError] = useState('');
-  const [lecturers, setLecturers] = useState<any[]>([]);
   const [subjects, setSubjects] = useState<string[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
@@ -131,23 +128,12 @@ export default function ClassManagement() {
       if (isAdmin && filterAssignment) params.assignmentStatus = filterAssignment;
       if (appliedSearch) params.search = appliedSearch.trim();
 
-      const [clsRes, usrRes] = await Promise.all([
-        classApi.getAll(params),
-        isAdmin ? userApi.getAll(buildApprovedLecturerQuery()) : Promise.resolve({ users: [] }),
-      ]);
+      const clsRes = await classApi.getAll(params);
 
       const classList = unwrapApiData<ClassListResponse>(clsRes);
       setClasses((classList.items || []).map(toClassViewModel));
       setTotalCount(classList.totalCount || 0);
       setTotalPages(Math.max(1, classList.totalPages || 1));
-      const lects = usrRes?.data?.users || usrRes?.users || [];
-      setLecturers(lects
-        .filter(u => u.role === 'LECTURER')
-        .map(lecturer => ({
-          ...lecturer,
-          _id: lecturer._id || lecturer.id,
-          name: lecturer.name || lecturer.fullName,
-        })));
     } catch (requestError) {
       const parsed = parseApiError(requestError, 'Failed to load classes');
       setError(parsed.message);
@@ -746,7 +732,6 @@ export default function ClassManagement() {
       {/* ── Modals ── */}
       {canCreate && showBulk && (
         <BulkCreateModal
-          lecturers={lecturers}
           onClose={() => setShowBulk(false)}
           onCreated={handleBulkCreated}
         />
@@ -754,10 +739,11 @@ export default function ClassManagement() {
       {isAdmin && assignTarget && (
         <AssignLectureModal
           classId={assignTarget._id}
+          semester={assignTarget.semester as 'SP' | 'SU' | 'FA'}
+          year={assignTarget.year}
           currentLecture={assignTarget.lectureId}
           rowVersion={assignTarget.rowVersion}
           allowUnassign={assignTarget.status === 'Draft'}
-          initialLecturers={lecturers}
           onClose={() => setAssignTarget(null)}
           onAssigned={async () => {
             setAssignTarget(null);
@@ -769,7 +755,6 @@ export default function ClassManagement() {
         <BulkAssignLecturerModal
           isOpen={bulkAssignOpen}
           classes={assignableSelectedClasses}
-          lecturers={lecturers}
           isSubmitting={bulkBusy}
           onClose={() => { if (!bulkBusy) setBulkAssignOpen(false); }}
           onAssign={handleBulkAssign}

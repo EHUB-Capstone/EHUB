@@ -1,5 +1,6 @@
 using EHub.Application.Features.Subjects.ManageSubjects;
 using EHub.Application.Features.Subjects.ManageSemester;
+using EHub.Application.Features.Subjects.ManageTeachingStaff;
 using EHub.Application.Features.Subjects.TeachingStaff;
 using EHub.Application.Features.Subjects.Curriculum;
 using EHub.Application.Features.Subjects.Roadmap;
@@ -21,6 +22,7 @@ public sealed class SubjectsController : ControllerBase
     private readonly ISubjectManagementHandler _subjectHandler;
     private readonly ICurrentSemesterHandler _semesterHandler;
     private readonly ITeachingStaffQueryHandler _teachingStaffHandler;
+    private readonly ISemesterTeachingStaffCommandHandler _semesterTeachingStaffHandler;
     private readonly IGetSubjectCurriculumQueryHandler _curriculumHandler;
     private readonly ISynchronizeSubjectCheckpointsHandler _checkpointHandler;
     private readonly ISubjectRoadmapHandler _roadmapHandler;
@@ -30,6 +32,7 @@ public sealed class SubjectsController : ControllerBase
         ISubjectManagementHandler subjectHandler,
         ICurrentSemesterHandler semesterHandler,
         ITeachingStaffQueryHandler teachingStaffHandler,
+        ISemesterTeachingStaffCommandHandler semesterTeachingStaffHandler,
         IGetSubjectCurriculumQueryHandler curriculumHandler,
         ISynchronizeSubjectCheckpointsHandler checkpointHandler,
         ISubjectRoadmapHandler roadmapHandler,
@@ -38,6 +41,7 @@ public sealed class SubjectsController : ControllerBase
         _subjectHandler = subjectHandler;
         _semesterHandler = semesterHandler;
         _teachingStaffHandler = teachingStaffHandler;
+        _semesterTeachingStaffHandler = semesterTeachingStaffHandler;
         _curriculumHandler = curriculumHandler;
         _checkpointHandler = checkpointHandler;
         _roadmapHandler = roadmapHandler;
@@ -220,6 +224,52 @@ public sealed class SubjectsController : ControllerBase
                 "Teaching staff retrieved successfully."));
     }
 
+    [HttpGet("teaching-staff/candidates")]
+    [Authorize(Policy = SystemPolicies.AdminOnly)]
+    public async Task<IActionResult> GetTeachingStaffCandidates(CancellationToken cancellationToken)
+    {
+        var result = await _teachingStaffHandler.GetCandidatesAsync(cancellationToken);
+        return result.IsFailure
+            ? ToSemesterErrorResponse(result.Error)
+            : Ok(ApiResponse<TeachingStaffCandidateListResponse>.SuccessResponse(
+                result.Value!,
+                "Teaching staff candidates retrieved successfully."));
+    }
+
+    [HttpPost("teaching-staff")]
+    [Authorize(Policy = SystemPolicies.AdminOnly)]
+    public async Task<IActionResult> AddTeachingStaff(
+        [FromBody] AddSemesterTeachingStaffRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await _semesterTeachingStaffHandler.AddAsync(request, cancellationToken);
+        return result.IsFailure
+            ? ToSemesterErrorResponse(result.Error)
+            : StatusCode(
+                StatusCodes.Status201Created,
+                ApiResponse<TeachingStaffResponse>.SuccessResponse(
+                    result.Value!,
+                    "Teaching staff member added to the semester successfully."));
+    }
+
+    [HttpPut("teaching-staff/{assignmentId:guid}")]
+    [Authorize(Policy = SystemPolicies.AdminOnly)]
+    public async Task<IActionResult> UpdateTeachingStaff(
+        Guid assignmentId,
+        [FromBody] UpdateSemesterTeachingStaffRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await _semesterTeachingStaffHandler.UpdateAsync(
+            assignmentId,
+            request,
+            cancellationToken);
+        return result.IsFailure
+            ? ToSemesterErrorResponse(result.Error)
+            : Ok(ApiResponse<TeachingStaffResponse>.SuccessResponse(
+                result.Value!,
+                "Semester teaching staff entry updated successfully."));
+    }
+
     [HttpGet("{subjectCode}")]
     public async Task<IActionResult> GetCurriculum(string subjectCode, CancellationToken cancellationToken)
     {
@@ -367,10 +417,13 @@ public sealed class SubjectsController : ControllerBase
         {
             ErrorCodes.ClassAccessDenied => StatusCode(StatusCodes.Status403Forbidden, response),
             ErrorCodes.SemesterNotFound => NotFound(response),
+            ErrorCodes.SemesterStaffNotFound => NotFound(response),
             ErrorCodes.SemesterConcurrencyConflict or
             ErrorCodes.SemesterActivationBlocked or
             ErrorCodes.SemesterCompletionBlocked or
             ErrorCodes.SemesterInvalidState => Conflict(response),
+            ErrorCodes.SemesterStaffConflict or
+            ErrorCodes.SemesterStaffInUse => Conflict(response),
             _ => BadRequest(response),
         };
     }

@@ -256,6 +256,23 @@ public sealed class UpdateClassCommandHandler : IUpdateClassCommandHandler
                     ErrorCodes.ClassInvalidLecturer,
                     "The specified lecturer does not exist, is inactive, or does not have LECTURER role.");
             }
+
+
+            var isListedForSemester = await _context.SemesterStaffAssignments
+                .AsNoTracking()
+                .AnyAsync(
+                    item =>
+                        item.SemesterId == targetClass.SemesterId &&
+                        item.UserId == newLecturer.Id &&
+                        item.Role == SemesterStaffRole.Lecturer &&
+                        item.Status == SemesterStaffStatus.Active,
+                    cancellationToken);
+            if (!isListedForSemester)
+            {
+                return Failure(
+                    ErrorCodes.ClassInvalidLecturer,
+                    "The specified lecturer is not active in this semester's teaching staff list.");
+            }
         }
 
         if (newLecturer == null && targetClass.Status == ClassStatus.Active)

@@ -37,7 +37,14 @@ public sealed class MentorAssignmentHandler : IMentorAssignmentHandler
             return Result.Failure<IReadOnlyCollection<MentorCandidateDto>>(new Error(ErrorCodes.ClassAccessDenied, "You cannot view mentor candidates for this class."));
 
         var candidates = await _context.MentorProfiles.AsNoTracking()
-            .Where(profile => profile.Status == MentorProfileStatus.Active && profile.User.Status == UserStatus.Active)
+            .Where(profile =>
+                profile.Status == MentorProfileStatus.Active &&
+                profile.User.Status == UserStatus.Active &&
+                _context.SemesterStaffAssignments.Any(staff =>
+                    staff.SemesterId == targetClass.SemesterId &&
+                    staff.UserId == profile.UserId &&
+                    staff.Role == SemesterStaffRole.Mentor &&
+                    staff.Status == SemesterStaffStatus.Active))
             .OrderBy(profile => profile.User.FullName)
             .Select(profile => new MentorCandidateDto
             {
@@ -138,6 +145,22 @@ public sealed class MentorAssignmentHandler : IMentorAssignmentHandler
                     .FirstOrDefaultAsync(profile => profile.Id == request.MentorProfileId, transactionCancellationToken);
                 if (mentor == null || mentor.Status != MentorProfileStatus.Active || mentor.User.Status != UserStatus.Active)
                     return Failure(ErrorCodes.MentorNotAvailable, "The selected mentor is not available.");
+
+                var isListedForSemester = await _context.SemesterStaffAssignments
+                    .AsNoTracking()
+                    .AnyAsync(
+                        item =>
+                            item.SemesterId == team.Class.SemesterId &&
+                            item.UserId == mentor.UserId &&
+                            item.Role == SemesterStaffRole.Mentor &&
+                            item.Status == SemesterStaffStatus.Active,
+                        transactionCancellationToken);
+                if (!isListedForSemester)
+                {
+                    return Failure(
+                        ErrorCodes.MentorNotAvailable,
+                        "The selected mentor is not active in this semester's teaching staff list.");
+                }
 
                 var current = await _context.MentorAssignments
                     .Include(item => item.Team).Include(item => item.MentorProfile).ThenInclude(profile => profile.User)
