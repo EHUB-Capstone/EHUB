@@ -1,9 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Check, GraduationCap, Search } from 'lucide-react';
+import { Check, GraduationCap, Loader2, Search } from 'lucide-react';
+import toast from 'react-hot-toast';
 import Modal from '../ui/Modal';
 import Button from '../ui/Button';
 import type { ClassViewModel } from '../../types/classes';
 import { normalizeLecturerOptions } from '../../utils/lecturerDirectory';
+import { subjectApi } from '../../api/subjectApi';
+import { unwrapApiData } from '../../utils/classMappers';
+import { parseApiError } from '../../utils/apiError';
 
 interface LecturerOption {
   _id: string;
@@ -14,7 +18,6 @@ interface LecturerOption {
 interface BulkAssignLecturerModalProps {
   isOpen: boolean;
   classes: ClassViewModel[];
-  lecturers: LecturerOption[];
   isSubmitting: boolean;
   onClose: () => void;
   onAssign: (lecturerId: string) => void | Promise<void>;
@@ -23,19 +26,67 @@ interface BulkAssignLecturerModalProps {
 const BulkAssignLecturerModal = ({
   isOpen,
   classes,
-  lecturers,
   isSubmitting,
   onClose,
   onAssign,
 }: BulkAssignLecturerModalProps) => {
   const [selectedId, setSelectedId] = useState('');
   const [search, setSearch] = useState('');
+  const [lecturers, setLecturers] = useState<LecturerOption[]>([]);
+  const [loadingLecturers, setLoadingLecturers] = useState(false);
   useEffect(() => {
     if (isOpen) {
       setSelectedId('');
       setSearch('');
     }
   }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen || classes.length === 0) return;
+
+    let active = true;
+    const semesters = Array.from(new Map(classes.map(item => [
+      `${item.semester}:${item.year}`,
+      {
+        semester: item.semester as 'SP' | 'SU' | 'FA',
+        year: item.year,
+      },
+    ])).values());
+
+    setLoadingLecturers(true);
+    Promise.all(semesters.map(item => subjectApi.getTeachingStaff(item)))
+      .then(responses => {
+        if (!active) return;
+        const semesterOptions = responses.map(response => {
+          const payload = unwrapApiData<any>(response);
+          return (payload?.staff || [])
+            .filter((member: any) => member.role === 'LECTURER' && member.status === 'Active' && member.userStatus === 'Active')
+            .map((member: any) => ({
+              _id: member.userId,
+              name: member.name,
+              email: member.email,
+            }));
+        });
+        const firstSemester = semesterOptions[0] || [];
+        const sharedLecturers = firstSemester.filter(lecturer =>
+          semesterOptions.every(optionsForSemester =>
+            optionsForSemester.some(candidate => candidate._id === lecturer._id)));
+        setLecturers(sharedLecturers);
+      })
+      .catch(error => {
+        if (active) {
+          setLecturers([]);
+          toast.error(parseApiError(error, 'Failed to load semester lecturers.').message);
+        }
+      })
+      .finally(() => {
+        if (active) setLoadingLecturers(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [classes, isOpen]);
   const options = useMemo(
     () => normalizeLecturerOptions(lecturers).filter((lecturer) => {
       const query = search.trim().toLowerCase();
@@ -72,8 +123,10 @@ const BulkAssignLecturerModal = ({
         </div>
 
         <div className="max-h-72 space-y-2 overflow-y-auto rounded-xl border border-slate-100 bg-slate-50/60 p-2.5">
-          {options.length === 0 ? (
-            <p className="py-8 text-center text-sm text-slate-400">No active lecturers found</p>
+          {loadingLecturers ? (
+            <div className="flex items-center justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-primary" /></div>
+          ) : options.length === 0 ? (
+            <p className="py-8 text-center text-sm text-slate-400">No active lecturer is listed for every selected semester</p>
           ) : options.map((lecturer) => {
             const selected = lecturer._id === selectedId;
             return (
@@ -102,7 +155,7 @@ const BulkAssignLecturerModal = ({
             variant="gradient"
             className="flex-1"
             onClick={() => void onAssign(selectedId)}
-            disabled={!selectedId || isSubmitting}
+            disabled={!selectedId || isSubmitting || loadingLecturers}
             isLoading={isSubmitting}
           >
             Assign to {classes.length} classes

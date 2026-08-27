@@ -14,6 +14,7 @@ public interface IApplicationDbContext
     DbSet<PendingRegistration> PendingRegistrations { get; }
     DbSet<Semester> Semesters { get; }
     DbSet<SemesterAuditLog> SemesterAuditLogs { get; }
+    DbSet<SemesterStaffAssignment> SemesterStaffAssignments { get; }
     DbSet<Course> Courses { get; }
     DbSet<Class> Classes { get; }
     DbSet<ClassLecturer> ClassLecturers { get; }

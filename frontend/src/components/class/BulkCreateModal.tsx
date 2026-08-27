@@ -10,10 +10,8 @@ import {
 } from 'lucide-react';
 import { classApi } from '../../api/classApi';
 import { subjectApi } from '../../api/subjectApi';
-import { userApi } from '../../api/userApi';
 import { parseApiError } from '../../utils/apiError';
 import { unwrapApiData } from '../../utils/classMappers';
-import { buildApprovedLecturerQuery, normalizeLecturerOptions } from '../../utils/lecturerDirectory';
 import { parseClassPositions } from '../../utils/bulkClassAssignments';
 import type {
   BulkClassPreviewResponse,
@@ -36,7 +34,6 @@ interface SubjectOption {
 }
 
 interface BulkCreateModalProps {
-  lecturers?: LecturerOption[];
   onClose: () => void;
   onCreated: (options?: { keepOpen?: boolean; suppressToast?: boolean }) => void;
 }
@@ -52,14 +49,14 @@ const LECTURER_COLORS = [
 ] as const;
 
 export default function BulkCreateModal({
-  lecturers: initialLecturers = [],
   onClose,
   onCreated,
 }: BulkCreateModalProps) {
   const [subjects, setSubjects] = useState<SubjectOption[]>([]);
   const [semesters, setSemesters] = useState<ClassCreationSemesterOption[]>([]);
-  const [lecturers, setLecturers] = useState<LecturerOption[]>(() => normalizeLecturerOptions(initialLecturers));
+  const [lecturers, setLecturers] = useState<LecturerOption[]>([]);
   const [loadingOptions, setLoadingOptions] = useState(true);
+  const [loadingLecturers, setLoadingLecturers] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [lecturerSearch, setLecturerSearch] = useState('');
   const [assignmentMode, setAssignmentMode] = useState<AssignmentMode>('assign');
@@ -78,12 +75,9 @@ export default function BulkCreateModal({
     const loadOptions = async () => {
       setLoadingOptions(true);
       try {
-        const [subjectsResponse, semestersResponse, lecturersResponse] = await Promise.all([
+        const [subjectsResponse, semestersResponse] = await Promise.all([
           subjectApi.getActive(),
           subjectApi.getClassCreationSemesterOptions(),
-          initialLecturers.length === 0
-            ? userApi.getAll(buildApprovedLecturerQuery(), { signal: controller.signal })
-            : Promise.resolve(null),
         ]);
 
         if (!active) return;
@@ -95,11 +89,6 @@ export default function BulkCreateModal({
 
         setSubjects(subjectList);
         setSemesters(semesterList);
-        if (lecturersResponse) {
-          const lecturerPayload = unwrapApiData<any>(lecturersResponse);
-          setLecturers(normalizeLecturerOptions(lecturerPayload?.users || []));
-        }
-
         const defaultSemester = semesterList.find(semester => semester.status === 'Active') || semesterList[0];
         setForm(current => ({
           ...current,
@@ -120,9 +109,46 @@ export default function BulkCreateModal({
       active = false;
       controller.abort();
     };
-  }, [initialLecturers.length]);
+  }, []);
 
   const selectedSemester = semesters.find(semester => semester.id === form.semesterId);
+  useEffect(() => {
+    if (!selectedSemester) {
+      setLecturers([]);
+      return;
+    }
+
+    let active = true;
+    setLoadingLecturers(true);
+    subjectApi.getTeachingStaff({
+      semester: selectedSemester.semester,
+      year: selectedSemester.year,
+    }).then(response => {
+      if (!active) return;
+      const payload = unwrapApiData<any>(response);
+      const options = (payload?.staff || [])
+        .filter((member: any) => member.role === 'LECTURER' && member.status === 'Active' && member.userStatus === 'Active')
+        .map((member: any) => ({
+          _id: member.userId,
+          name: member.name,
+          email: member.email,
+        }));
+      setLecturers(options);
+      setLecturerPositionInputs({});
+      setServerPreview(null);
+    }).catch(error => {
+      if (active) {
+        setLecturers([]);
+        toast.error(parseApiError(error, 'Failed to load semester lecturers.').message);
+      }
+    }).finally(() => {
+      if (active) setLoadingLecturers(false);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [selectedSemester?.semester, selectedSemester?.year]);
   const filteredLecturers = useMemo(() => {
     const search = lecturerSearch.trim().toLowerCase();
     if (!search) return lecturers;
@@ -161,6 +187,9 @@ export default function BulkCreateModal({
 
   const updateForm = (field: keyof typeof form, value: string) => {
     setForm(current => ({ ...current, [field]: value }));
+    if (field === 'semesterId') {
+      setLecturerPositionInputs({});
+    }
     setServerPreview(null);
   };
 
@@ -188,6 +217,8 @@ export default function BulkCreateModal({
     }
     if (startIndex + quantity - 1 > 999) return 'Generated class indices must not exceed 999.';
     if (assignmentMode === 'assign') {
+      if (loadingLecturers) return 'Wait for the semester lecturer list to finish loading.';
+      if (lecturers.length === 0) return 'Add an active lecturer to this semester before assigning classes.';
       const assignmentError = lecturerAssignments.find(item => item.error);
       if (assignmentError?.error) return `${assignmentError.lecturer.name}: ${assignmentError.error}`;
       if (positionAssignments.conflicts.size > 0) {

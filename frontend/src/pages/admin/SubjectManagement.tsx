@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   BookOpen, Calendar, CheckCircle2, Edit3, Filter, GraduationCap, Plus,
-  LockKeyhole, RefreshCw, Search, ShieldAlert, Sparkles, Users,
+  LockKeyhole, RefreshCw, Search, ShieldAlert, Sparkles, UserPlus, Users,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { subjectApi } from '../../api/subjectApi';
@@ -20,6 +20,7 @@ import type {
   SubjectDto,
   SubjectStatus,
   TeachingStaffDto,
+  TeachingStaffCandidateDto,
   TeachingStaffSummary,
 } from '../../types/subjects';
 
@@ -63,6 +64,7 @@ const SubjectManagement = () => {
   const [semesters, setSemesters] = useState<SemesterDto[]>([]);
   const [selectedSemester, setSelectedSemester] = useState<SemesterCode>('SP');
   const [selectedYear, setSelectedYear] = useState(currentYear);
+  const [semesterContextReady, setSemesterContextReady] = useState(false);
   const [availableYears, setAvailableYears] = useState<number[]>([currentYear]);
   const [canPlanNextYear, setCanPlanNextYear] = useState(false);
   const [savingSemester, setSavingSemester] = useState(false);
@@ -80,6 +82,13 @@ const SubjectManagement = () => {
   const [staffLoading, setStaffLoading] = useState(false);
   const [staffSearch, setStaffSearch] = useState('');
   const [staffRole, setStaffRole] = useState<'ALL' | TeachingStaffDto['role']>('ALL');
+  const [staffModalOpen, setStaffModalOpen] = useState(false);
+  const [editingStaff, setEditingStaff] = useState<TeachingStaffDto | null>(null);
+  const [staffCandidates, setStaffCandidates] = useState<TeachingStaffCandidateDto[]>([]);
+  const [staffCandidateKey, setStaffCandidateKey] = useState('');
+  const [staffEntryStatus, setStaffEntryStatus] = useState<'Active' | 'Inactive'>('Active');
+  const [staffSaving, setStaffSaving] = useState(false);
+  const [staffCandidatesLoading, setStaffCandidatesLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingSubject, setEditingSubject] = useState<SubjectDto | null>(null);
   const [form, setForm] = useState({ subjectCode: '', subjectName: '', status: 'active' as SubjectStatus });
@@ -93,6 +102,7 @@ const SubjectManagement = () => {
   } | null>(null);
   const [semesterLifecycleReason, setSemesterLifecycleReason] = useState('');
   const [semesterLifecycleBusy, setSemesterLifecycleBusy] = useState(false);
+  const staffRequestId = useRef(0);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => setDebouncedSearch(search), 500);
@@ -114,7 +124,7 @@ const SubjectManagement = () => {
     }
   };
 
-  const loadSemester = async () => {
+  const loadSemester = async (): Promise<SemesterDto | null> => {
     try {
       const [currentResponse, listResponse] = await Promise.all([
         subjectApi.getCurrentSemester(),
@@ -137,36 +147,127 @@ const SubjectManagement = () => {
       setSemesters(listPayload.semesters ?? []);
       setAvailableYears(years);
       setCanPlanNextYear(Boolean(payload.isDecember || payload.canPlanNextYear));
+      setSemesterContextReady(true);
+      return semester ?? null;
     } catch (error) {
       toast.error(parseApiError(error, 'Failed to load the active semester').message);
+      return null;
     }
   };
 
-  const loadStaff = async () => {
+  const loadStaff = async (
+    semester: SemesterCode = selectedSemester,
+    year: number = selectedYear,
+  ) => {
+    const requestId = ++staffRequestId.current;
     setStaffLoading(true);
     try {
-      const payload = responseData(await subjectApi.getTeachingStaff({ semester: selectedSemester, year: selectedYear }));
+      const payload = responseData(await subjectApi.getTeachingStaff({ semester, year }));
+      if (requestId !== staffRequestId.current) return;
       setStaff(payload.staff ?? payload.teachingStaff ?? []);
       setStaffSummary({ ...emptySummary, ...(payload.summary ?? {}) });
     } catch (error) {
+      if (requestId !== staffRequestId.current) return;
       toast.error(parseApiError(error, 'Failed to load teaching staff').message);
       setStaff([]);
       setStaffSummary(emptySummary);
     } finally {
-      setStaffLoading(false);
+      if (requestId === staffRequestId.current) setStaffLoading(false);
     }
   };
 
   useEffect(() => { void loadSemester(); }, []);
   useEffect(() => { void loadSubjects(); }, [debouncedSearch, statusFilter]);
   useEffect(() => {
-    if (activeTab === 'staff') void loadStaff();
-  }, [activeTab, selectedSemester, selectedYear]);
+    if (activeTab === 'staff' && semesterContextReady) void loadStaff();
+  }, [activeTab, selectedSemester, selectedYear, semesterContextReady]);
 
   const refresh = async () => {
-    await loadSemester();
-    if (activeTab === 'subjects') await loadSubjects();
-    else await loadStaff();
+    const activeSemester = await loadSemester();
+    if (activeTab === 'subjects') {
+      await loadSubjects();
+      return;
+    }
+    if (activeSemester) {
+      await loadStaff(activeSemester.semester, Number(activeSemester.year));
+      return;
+    }
+    await loadStaff();
+  };
+
+  const openStaffTab = () => {
+    if (currentSemester) {
+      setSelectedSemester(currentSemester.semester);
+      setSelectedYear(Number(currentSemester.year));
+    }
+    setActiveTab('staff');
+  };
+
+  const openAddStaff = async () => {
+    const targetSemester = semesters.find(item =>
+      item.semester === selectedSemester && item.year === selectedYear);
+    if (!targetSemester) {
+      toast.error(`Plan ${selectedSemester} ${selectedYear} before adding teaching staff.`);
+      return;
+    }
+    if (targetSemester.status === 'Completed' || targetSemester.status === 'Archived') {
+      toast.error('Teaching staff cannot be changed for a completed or archived semester.');
+      return;
+    }
+
+    setEditingStaff(null);
+    setStaffCandidateKey('');
+    setStaffEntryStatus('Active');
+    setStaffModalOpen(true);
+    setStaffCandidatesLoading(true);
+    try {
+      const payload = responseData(await subjectApi.getTeachingStaffCandidates());
+      setStaffCandidates(payload.candidates ?? []);
+    } catch (error) {
+      toast.error(parseApiError(error, 'Failed to load eligible lecturers and mentors').message);
+      setStaffCandidates([]);
+    } finally {
+      setStaffCandidatesLoading(false);
+    }
+  };
+
+  const openEditStaff = (member: TeachingStaffDto) => {
+    setEditingStaff(member);
+    setStaffEntryStatus(member.status);
+    setStaffModalOpen(true);
+  };
+
+  const saveTeachingStaff = async () => {
+    setStaffSaving(true);
+    try {
+      if (editingStaff) {
+        await subjectApi.updateTeachingStaff(editingStaff._id, {
+          status: staffEntryStatus,
+          rowVersion: editingStaff.rowVersion,
+        });
+        toast.success(`${editingStaff.name} updated for ${selectedSemester} ${selectedYear}.`);
+      } else {
+        const candidate = staffCandidates.find(item => `${item.userId}:${item.role}` === staffCandidateKey);
+        if (!candidate) {
+          toast.error('Select an eligible lecturer or mentor.');
+          return;
+        }
+        await subjectApi.addTeachingStaff({
+          semester: selectedSemester,
+          year: selectedYear,
+          userId: candidate.userId,
+          role: candidate.role,
+        });
+        toast.success(`${candidate.name} added to ${selectedSemester} ${selectedYear}.`);
+      }
+
+      setStaffModalOpen(false);
+      await loadStaff();
+    } catch (error) {
+      toast.error(parseApiError(error, 'Failed to update semester teaching staff').message);
+    } finally {
+      setStaffSaving(false);
+    }
   };
 
   const openAdd = () => {
@@ -246,8 +347,25 @@ const SubjectManagement = () => {
       toast.error('End date must be after start date.');
       return;
     }
-    if (new Date(`${semesterScheduleForm.startDate}T00:00:00`).getFullYear() !== semesterScheduleForm.year ||
-        new Date(`${semesterScheduleForm.endDate}T00:00:00`).getFullYear() !== semesterScheduleForm.year) {
+    const startYear = new Date(`${semesterScheduleForm.startDate}T00:00:00`).getFullYear();
+    const endDate = new Date(`${semesterScheduleForm.endDate}T00:00:00`);
+    const endYear = endDate.getFullYear();
+    const endMonth = endDate.getMonth() + 1; // JS month is 0-indexed
+
+    if (startYear !== semesterScheduleForm.year) {
+      toast.error('Start date must belong to the selected semester year.');
+      return;
+    }
+
+    if (semesterScheduleForm.semester === 'FA') {
+      // Fall may spill into January of the following year (e.g. FA2026: Sep 2026 - Jan 2027)
+      const validEndInSameYear = endYear === semesterScheduleForm.year;
+      const validEndInJanuaryNextYear = endYear === semesterScheduleForm.year + 1 && endMonth === 1;
+      if (!validEndInSameYear && !validEndInJanuaryNextYear) {
+        toast.error('For Fall, end date must belong to the semester year or fall within January of the following year.');
+        return;
+      }
+    } else if (endYear !== semesterScheduleForm.year) {
       toast.error('Both dates must belong to the selected semester year.');
       return;
     }
@@ -290,6 +408,8 @@ const SubjectManagement = () => {
       const payload = responseData(await subjectApi.updateCurrentSemester(semester.semester, semester.year));
       const nextSemester = payload.currentSemester;
       setCurrentSemester(nextSemester);
+      setSelectedSemester(nextSemester.semester);
+      setSelectedYear(Number(nextSemester.year));
       toast.success(`Active semester set to ${semesterLabel(nextSemester)}`);
       await loadSemester();
     } catch (error) {
@@ -348,6 +468,11 @@ const SubjectManagement = () => {
     });
   }, [staff, staffRole, staffSearch]);
 
+  const availableStaffCandidates = useMemo(() => {
+    const existingKeys = new Set(staff.map(member => `${member.userId}:${member.role}`));
+    return staffCandidates.filter(candidate => !existingKeys.has(`${candidate.userId}:${candidate.role}`));
+  }, [staff, staffCandidates]);
+
   const staffStats = [
     { label: 'Lecturers', value: staffSummary.lecturers, icon: GraduationCap, style: 'text-primary bg-primary-50' },
     { label: 'Mentors', value: staffSummary.mentors, icon: Users, style: 'text-secondary bg-secondary-50' },
@@ -370,6 +495,7 @@ const SubjectManagement = () => {
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" icon={RefreshCw} onClick={() => void refresh()}>Refresh</Button>
           {activeTab === 'subjects' && <Button icon={Plus} onClick={openAdd}>Add Subject</Button>}
+          {activeTab === 'staff' && <Button icon={UserPlus} onClick={() => void openAddStaff()}>Add Teaching Staff</Button>}
         </div>
       </div>
 
@@ -377,7 +503,7 @@ const SubjectManagement = () => {
         <button type="button" onClick={() => setActiveTab('subjects')} className={`inline-flex shrink-0 items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition ${activeTab === 'subjects' ? 'bg-white text-primary shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
           <BookOpen className="h-4 w-4" /> Subject & Semester
         </button>
-        <button type="button" onClick={() => setActiveTab('staff')} className={`inline-flex shrink-0 items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition ${activeTab === 'staff' ? 'bg-white text-primary shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+        <button type="button" onClick={openStaffTab} className={`inline-flex shrink-0 items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition ${activeTab === 'staff' ? 'bg-white text-primary shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
           <Users className="h-4 w-4" /> Lecturers & Mentors by Semester
         </button>
       </div>
@@ -500,9 +626,137 @@ const SubjectManagement = () => {
           <div className="flex flex-col gap-3 rounded-2xl border border-slate-200/70 bg-white p-4 shadow-sm md:flex-row md:items-end md:justify-between"><div className="flex flex-col gap-3 sm:flex-row"><label className="text-xs font-semibold uppercase text-slate-400">Semester<select value={selectedSemester} onChange={(event) => setSelectedSemester(event.target.value as SemesterCode)} className="mt-1.5 block rounded-xl border border-slate-200 px-3 py-2 text-sm font-normal text-slate-700 outline-none"><option value="SP">SP (Spring)</option><option value="SU">SU (Summer)</option><option value="FA">FA (Fall)</option></select></label><label className="text-xs font-semibold uppercase text-slate-400">Year<select value={selectedYear} onChange={(event) => setSelectedYear(Number(event.target.value))} className="mt-1.5 block rounded-xl border border-slate-200 px-3 py-2 text-sm font-normal text-slate-700 outline-none">{availableYears.map((year) => <option key={year} value={year}>{year}</option>)}</select></label></div><Button variant="outline" icon={Users} onClick={() => navigate('/admin/classes')}>Manage Assignments</Button></div>
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">{staffStats.map(({ label, value, icon: Icon, style }) => <div key={label} className="rounded-xl border border-slate-200/70 bg-white p-4 shadow-sm"><div className={`flex h-9 w-9 items-center justify-center rounded-lg ${style}`}><Icon className="h-4 w-4" /></div><p className="mt-3 text-2xl font-bold text-slate-900">{value}</p><p className="text-sm text-slate-500">{label}</p></div>)}</div>
           <div className="flex flex-col gap-3 sm:flex-row"><div className="relative flex-1"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input value={staffSearch} onChange={(event) => setStaffSearch(event.target.value)} placeholder="Search name, email, class or subject code..." className="w-full rounded-xl border border-slate-200 bg-white py-2 pl-10 pr-4 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20" /></div><select value={staffRole} onChange={(event) => setStaffRole(event.target.value as typeof staffRole)} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none"><option value="ALL">All roles</option><option value="LECTURER">Lecturers only</option><option value="MENTOR">Mentors only</option></select></div>
-          <div className="overflow-hidden rounded-2xl border border-slate-200/70 bg-white shadow-sm">{staffLoading ? <LoadingSkeleton variant="table" lines={6} className="p-4" /> : visibleStaff.length === 0 ? <EmptyState icon={Users} title="No teaching staff found" description="Try another semester, role, or search term." /> : <div className="divide-y divide-slate-100">{visibleStaff.map((member) => <article key={member._id} className="flex flex-col gap-4 p-5 lg:flex-row lg:items-center"><div className="flex min-w-0 flex-1 items-center gap-3">{member.avatar ? <img src={member.avatar} alt="" className="h-10 w-10 rounded-full object-cover" /> : <span className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-600">{initials(member.name)}</span>}<div className="min-w-0"><p className="truncate font-semibold text-slate-900">{member.name}</p><p className="truncate text-sm text-slate-500">{member.email}</p></div></div><div className="flex items-center gap-2"><Badge variant={member.role === 'LECTURER' ? 'Submitted' : 'Reviewed'}>{member.role === 'LECTURER' ? 'Lecturer' : 'Mentor'}</Badge><Badge variant={member.status.toLowerCase() === 'active' ? 'Active' : 'Inactive'}>{member.status}</Badge><span className="text-sm font-medium text-slate-600">{member.classCount} classes</span></div><div className="flex flex-1 flex-wrap gap-1.5 lg:justify-end">{member.assignments.length ? member.assignments.map((assignment) => <span key={assignment._id} className="rounded-full border border-primary-100 bg-primary-50 px-2 py-1 text-xs font-semibold text-primary">{assignment.classCode} · {assignment.subjectCode}</span>) : <span className="rounded-full border border-danger-light bg-danger-50 px-2 py-1 text-xs font-semibold text-danger">Not assigned in {selectedSemester} {selectedYear}</span>}</div></article>)}</div>}</div>
+          <div className="overflow-hidden rounded-2xl border border-slate-200/70 bg-white shadow-sm">
+            {staffLoading ? (
+              <LoadingSkeleton variant="table" lines={6} className="p-4" />
+            ) : visibleStaff.length === 0 ? (
+              <EmptyState
+                icon={Users}
+                title="No teaching staff found"
+                description={`Add lecturers or mentors to ${selectedSemester} ${selectedYear}, or adjust the current filters.`}
+                action={{ label: 'Add Teaching Staff', onClick: () => void openAddStaff() }}
+              />
+            ) : (
+              <div className="divide-y divide-slate-100">
+                {visibleStaff.map((member) => (
+                  <article key={member._id} className="flex flex-col gap-4 p-5 lg:flex-row lg:items-center">
+                    <div className="flex min-w-0 flex-1 items-center gap-3">
+                      {member.avatar ? (
+                        <img src={member.avatar} alt="" className="h-10 w-10 rounded-full object-cover" />
+                      ) : (
+                        <span className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-600">
+                          {initials(member.name)}
+                        </span>
+                      )}
+                      <div className="min-w-0">
+                        <p className="truncate font-semibold text-slate-900">{member.name}</p>
+                        <p className="truncate text-sm text-slate-500">{member.email}</p>
+                        {member.userStatus !== 'Active' && (
+                          <p className="mt-0.5 text-xs font-medium text-red-600">User account: {member.userStatus}</p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant={member.role === 'LECTURER' ? 'Submitted' : 'Reviewed'}>
+                        {member.role === 'LECTURER' ? 'Lecturer' : 'Mentor'}
+                      </Badge>
+                      <Badge variant={member.status === 'Active' ? 'Active' : 'Inactive'}>{member.status}</Badge>
+                      <span className="text-sm font-medium text-slate-600">{member.classCount} classes</span>
+                    </div>
+                    <div className="flex flex-1 flex-wrap gap-1.5 lg:justify-end">
+                      {member.assignments.length ? member.assignments.map((assignment) => (
+                        <span key={assignment._id} className="rounded-full border border-primary-100 bg-primary-50 px-2 py-1 text-xs font-semibold text-primary">
+                          {assignment.classCode} · {assignment.subjectCode}
+                        </span>
+                      )) : (
+                        <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-semibold text-slate-500">
+                          Not assigned in {selectedSemester} {selectedYear}
+                        </span>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => openEditStaff(member)}
+                      className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-primary-50 hover:text-primary"
+                      aria-label={`Edit ${member.name} semester status`}
+                      title="Edit semester status"
+                    >
+                      <Edit3 className="h-4 w-4" />
+                    </button>
+                  </article>
+                ))}
+              </div>
+            )}
+          </div>
         </section>
       )}
+
+      <Modal
+        isOpen={staffModalOpen}
+        onClose={() => setStaffModalOpen(false)}
+        title={editingStaff ? `Edit ${editingStaff.name}` : `Add Teaching Staff · ${selectedSemester} ${selectedYear}`}
+        submitText={staffSaving ? 'Saving...' : editingStaff ? 'Update Status' : 'Add to Semester'}
+        isSubmitting={staffSaving}
+        onSubmit={saveTeachingStaff}
+      >
+        <div className="space-y-4">
+          {editingStaff ? (
+            <>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <p className="font-semibold text-slate-900">{editingStaff.name}</p>
+                <p className="text-sm text-slate-500">{editingStaff.email}</p>
+                <p className="mt-1 text-xs font-semibold text-primary">
+                  {editingStaff.role === 'LECTURER' ? 'Lecturer' : 'Mentor'} · {selectedSemester} {selectedYear}
+                </p>
+              </div>
+              <label className="block text-sm font-medium text-slate-700">
+                Semester status
+                <select
+                  value={staffEntryStatus}
+                  onChange={(event) => setStaffEntryStatus(event.target.value as 'Active' | 'Inactive')}
+                  className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-primary"
+                >
+                  <option value="Active">Active — available for new assignments</option>
+                  <option value="Inactive">Inactive — hidden from assignment lists</option>
+                </select>
+              </label>
+              {editingStaff.classCount > 0 && staffEntryStatus === 'Inactive' && (
+                <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-700">
+                  This member still has {editingStaff.classCount} class assignment(s). Reassign or end them before deactivation.
+                </p>
+              )}
+            </>
+          ) : staffCandidatesLoading ? (
+            <LoadingSkeleton variant="text" lines={4} />
+          ) : (
+            <>
+              <label className="block text-sm font-medium text-slate-700">
+                Eligible lecturer or mentor *
+                <select
+                  value={staffCandidateKey}
+                  onChange={(event) => setStaffCandidateKey(event.target.value)}
+                  className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-primary"
+                >
+                  <option value="">Select a staff member</option>
+                  {availableStaffCandidates.map(candidate => (
+                    <option key={`${candidate.userId}:${candidate.role}`} value={`${candidate.userId}:${candidate.role}`}>
+                      {candidate.name} — {candidate.role === 'LECTURER' ? 'Lecturer' : 'Mentor'} ({candidate.email})
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {availableStaffCandidates.length === 0 && (
+                <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                  No additional active Lecturer or Mentor accounts are available. Create or activate the user account first.
+                </p>
+              )}
+            </>
+          )}
+          <p className="rounded-xl bg-blue-50 px-3 py-2 text-xs leading-5 text-blue-700">
+            Only active lecturers in this semester list appear when classes are created or reassigned. Mentor candidates use the same semester rule.
+          </p>
+        </div>
+      </Modal>
 
       <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title={editingSubject ? 'Edit Subject' : 'Add Subject'} submitText={savingSubject ? 'Saving...' : 'Save Subject'} isSubmitting={savingSubject} onSubmit={saveSubject}>
         <div className="space-y-4"><label className="block text-sm font-medium text-slate-700">Subject Code *<input disabled={Boolean(editingSubject)} value={form.subjectCode} onChange={(event) => setForm({ ...form, subjectCode: event.target.value })} placeholder="e.g. EXE301" className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 font-mono text-sm outline-none focus:border-primary disabled:bg-slate-50" /></label><label className="block text-sm font-medium text-slate-700">Subject Name *<input value={form.subjectName} onChange={(event) => setForm({ ...form, subjectName: event.target.value })} placeholder="e.g. Experiential Entrepreneurship 3" className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-primary" /></label><label className="block text-sm font-medium text-slate-700">Status<select value={form.status} onChange={(event) => setForm({ ...form, status: event.target.value as SubjectStatus })} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-primary"><option value="active">Active</option><option value="disabled">Disabled</option></select></label></div>
@@ -539,7 +793,10 @@ const SubjectManagement = () => {
               <textarea rows={3} maxLength={500} value={semesterScheduleForm.reason} onChange={(event) => setSemesterScheduleForm(current => ({ ...current, reason: event.target.value }))} placeholder="Explain why the semester dates are being corrected" className="mt-1.5 w-full resize-none rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-primary" />
             </label>
           )}
-          <p className="rounded-xl bg-blue-50 px-3 py-2 text-xs leading-5 text-blue-700">Semester dates are configured by Admin. Planning does not activate the semester automatically.</p>
+          <p className="rounded-xl bg-blue-50 px-3 py-2 text-xs leading-5 text-blue-700">
+          Semester dates are configured by Admin. Planning does not activate the semester automatically.
+          {semesterScheduleForm.semester === 'FA' && ' Fall semesters may end in January of the following year (e.g. Sep 2026 – Jan 2027).'}
+          </p>
         </div>
       </Modal>
       <ConfirmDialog isOpen={Boolean(disableTarget)} onClose={() => setDisableTarget(null)} onConfirm={disableSubject} title="Disable Subject" description="Existing class data will be kept, but this subject can no longer be used when creating new classes." confirmText="Disable Subject" isSubmitting={disabling} />

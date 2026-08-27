@@ -291,6 +291,7 @@ public sealed class CreateBulkClassesCommandHandler : ICreateBulkClassesCommandH
 
         var assignmentsResult = await ResolveLecturerAssignmentsAsync(
             request,
+            semester.Id,
             targetIndicesResult.Value,
             cancellationToken);
         if (assignmentsResult.IsFailure)
@@ -304,6 +305,7 @@ public sealed class CreateBulkClassesCommandHandler : ICreateBulkClassesCommandH
 
     private async Task<Result<IReadOnlyDictionary<int, User>>> ResolveLecturerAssignmentsAsync(
         CreateBulkClassesRequest request,
+        Guid semesterId,
         IReadOnlyCollection<int> targetIndices,
         CancellationToken cancellationToken)
     {
@@ -384,6 +386,24 @@ public sealed class CreateBulkClassesCommandHandler : ICreateBulkClassesCommandH
             return Result.Failure<IReadOnlyDictionary<int, User>>(new Error(
                 ErrorCodes.ClassInvalidLecturer,
                 "One or more lecturers do not exist, are inactive, or do not have LECTURER role."));
+        }
+
+
+        var listedLecturerIds = await _context.SemesterStaffAssignments
+            .AsNoTracking()
+            .Where(item =>
+                item.SemesterId == semesterId &&
+                lecturerIds.Contains(item.UserId) &&
+                item.Role == SemesterStaffRole.Lecturer &&
+                item.Status == SemesterStaffStatus.Active)
+            .Select(item => item.UserId)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+        if (listedLecturerIds.Count != lecturerIds.Length)
+        {
+            return Result.Failure<IReadOnlyDictionary<int, User>>(new Error(
+                ErrorCodes.ClassInvalidLecturer,
+                "One or more lecturers are not active in this semester's teaching staff list."));
         }
 
         var byClassIndex = new Dictionary<int, User>();

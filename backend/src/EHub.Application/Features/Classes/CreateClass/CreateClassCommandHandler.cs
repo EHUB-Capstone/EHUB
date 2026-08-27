@@ -114,6 +114,23 @@ public sealed class CreateClassCommandHandler : ICreateClassCommandHandler
                 return Result.Failure<ClassResponse>(
                     new Error(ErrorCodes.ClassInvalidLecturer, "The specified lecturer does not exist, is inactive, or does not have LECTURER role."));
             }
+
+            var isListedForSemester = await _context.SemesterStaffAssignments
+                .AsNoTracking()
+                .AnyAsync(
+                    item =>
+                        item.SemesterId == semester.Id &&
+                        item.UserId == lecturerUser.Id &&
+                        item.Role == SemesterStaffRole.Lecturer &&
+                        item.Status == SemesterStaffStatus.Active,
+                    cancellationToken);
+            if (!isListedForSemester)
+            {
+                return Result.Failure<ClassResponse>(
+                    new Error(
+                        ErrorCodes.ClassInvalidLecturer,
+                        "The specified lecturer is not active in this semester's teaching staff list."));
+            }
         }
 
         // 6. Generate ClassCode & Uniqueness Check

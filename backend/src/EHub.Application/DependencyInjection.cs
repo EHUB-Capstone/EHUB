@@ -19,6 +19,7 @@ using EHub.Application.Features.Notifications.MarkNotificationRead;
 using EHub.Application.Features.Subjects.Curriculum;
 using EHub.Application.Features.Subjects.ManageSemester;
 using EHub.Application.Features.Subjects.ManageSubjects;
+using EHub.Application.Features.Subjects.ManageTeachingStaff;
 using EHub.Application.Features.Subjects.Roadmap;
 using EHub.Application.Features.Subjects.Rubrics;
 using EHub.Application.Features.Subjects.TeachingStaff;
@@ -58,6 +59,7 @@ public static class DependencyInjection
         services.AddScoped<ISubjectManagementHandler, SubjectManagementHandler>();
         services.AddScoped<ICurrentSemesterHandler, CurrentSemesterHandler>();
         services.AddScoped<ITeachingStaffQueryHandler, TeachingStaffQueryHandler>();
+        services.AddScoped<ISemesterTeachingStaffCommandHandler, SemesterTeachingStaffCommandHandler>();
         services.AddScoped<IGetSubjectCurriculumQueryHandler, GetSubjectCurriculumQueryHandler>();
         services.AddScoped<ISynchronizeSubjectCheckpointsHandler, SynchronizeSubjectCheckpointsHandler>();
         services.AddScoped<ISubjectRoadmapHandler, SubjectRoadmapHandler>();

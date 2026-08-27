@@ -88,13 +88,24 @@ export interface TeachingAssignmentDto {
 
 export interface TeachingStaffDto {
   _id: string;
+  userId: string;
   name: string;
   email: string;
   avatar?: string | null;
   role: 'LECTURER' | 'MENTOR';
-  status: string;
+  status: 'Active' | 'Inactive';
+  userStatus: string;
   classCount: number;
   assignments: TeachingAssignmentDto[];
+  rowVersion: string;
+}
+
+export interface TeachingStaffCandidateDto {
+  userId: string;
+  name: string;
+  email: string;
+  avatar?: string | null;
+  role: 'LECTURER' | 'MENTOR';
 }
 
 export interface TeachingStaffSummary {

@@ -994,6 +994,8 @@ export default function ClassDetail() {
       {!isReadOnly && showAssignLecturer && user?.role === 'ADMIN' && (
         <AssignLectureModal
           classId={loadedClassId}
+          semester={cls.semester}
+          year={cls.year}
           currentLecture={cls.lectureId}
           rowVersion={cls.rowVersion}
           allowUnassign={cls.status === 'Draft'}

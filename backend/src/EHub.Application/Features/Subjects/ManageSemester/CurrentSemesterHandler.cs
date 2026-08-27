@@ -96,7 +96,7 @@ public sealed class CurrentSemesterHandler : ICurrentSemesterHandler
         var now = DateTime.UtcNow;
         if (request.Year < now.Year || request.Year > now.Year + 2)
             return Failure<SemesterResponse>(ErrorCodes.ClassValidationError, "A semester can only be planned for the current year or the next two years.");
-        var dateValidation = ValidateDateRange(request.Year, request.StartDate, request.EndDate);
+        var dateValidation = ValidateDateRange(term, request.Year, request.StartDate, request.EndDate);
         if (dateValidation != null)
             return Failure<SemesterResponse>(ErrorCodes.ClassValidationError, dateValidation);
         if (request.EndDate < DateOnly.FromDateTime(now))
@@ -167,7 +167,7 @@ public sealed class CurrentSemesterHandler : ICurrentSemesterHandler
                 if (semester.Version != expectedVersion)
                     return Failure<SemesterResponse>(ErrorCodes.SemesterConcurrencyConflict, "The semester changed concurrently. Reload and try again.");
 
-                var dateValidation = ValidateDateRange(semester.Year, request.StartDate, request.EndDate);
+                var dateValidation = ValidateDateRange(semester.Term, semester.Year, request.StartDate, request.EndDate);
                 if (dateValidation != null)
                     return Failure<SemesterResponse>(ErrorCodes.ClassValidationError, dateValidation);
                 if (await HasOverlappingSemesterAsync(semester.Id, request.StartDate, request.EndDate, cancellationToken))
@@ -467,14 +467,15 @@ public sealed class CurrentSemesterHandler : ICurrentSemesterHandler
 
     private static bool TryParseTerm(string? value, out SemesterTerm term)
     {
-        term = value?.Trim().ToUpperInvariant() switch
+        var normalized = value?.Trim().ToUpperInvariant();
+        term = normalized switch
         {
             "SP" => SemesterTerm.Spring,
             "SU" => SemesterTerm.Summer,
             "FA" => SemesterTerm.Fall,
             _ => default,
         };
-        return value != null && term is SemesterTerm.Spring or SemesterTerm.Summer or SemesterTerm.Fall;
+        return normalized is "SP" or "SU" or "FA";
     }
 
     private async Task<bool> HasOverlappingSemesterAsync(
@@ -489,14 +490,30 @@ public sealed class CurrentSemesterHandler : ICurrentSemesterHandler
             item.StartDate.Value <= endDate && item.EndDate.Value >= startDate,
             token);
 
-    private static string? ValidateDateRange(int year, DateOnly startDate, DateOnly endDate)
+    private static string? ValidateDateRange(SemesterTerm term, int year, DateOnly startDate, DateOnly endDate)
     {
         if (startDate == default || endDate == default)
             return "Start date and end date are required.";
         if (endDate <= startDate)
             return "End date must be after start date.";
-        if (startDate.Year != year || endDate.Year != year)
-            return "Start date and end date must belong to the semester year.";
+        if (startDate.Year != year)
+            return "Start date must belong to the semester year.";
+
+        // Fall semesters may spill into January of the following year
+        // (e.g. FA2026: 07/09/2026 - 02/01/2027). Other terms must stay within the same year.
+        if (term == SemesterTerm.Fall)
+        {
+            var validEndInSameYear = endDate.Year == year;
+            var validEndInJanuaryNextYear = endDate.Year == year + 1 && endDate.Month == 1;
+            if (!validEndInSameYear && !validEndInJanuaryNextYear)
+                return "For Fall, end date must belong to the semester year or fall within January of the following year.";
+        }
+        else
+        {
+            if (endDate.Year != year)
+                return "Start date and end date must belong to the semester year.";
+        }
+
         return null;
     }
 

@@ -29,4 +29,5 @@ public class Semester : AuditableEntity
     // Navigation properties
     public virtual ICollection<Class> Classes { get; set; } = new List<Class>();
     public virtual ICollection<SemesterAuditLog> AuditLogs { get; set; } = new List<SemesterAuditLog>();
+    public virtual ICollection<SemesterStaffAssignment> StaffAssignments { get; set; } = new List<SemesterStaffAssignment>();
 }

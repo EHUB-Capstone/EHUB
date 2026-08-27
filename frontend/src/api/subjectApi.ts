@@ -39,6 +39,11 @@ export const subjectApi = {
     axiosClient.post(`/subjects/semesters/${id}/reopen`, data),
   getTeachingStaff: (params: { semester: SemesterCode; year: number }) =>
     axiosClient.get('/subjects/teaching-staff', { params }),
+  getTeachingStaffCandidates: () => axiosClient.get('/subjects/teaching-staff/candidates'),
+  addTeachingStaff: (data: { semester: SemesterCode; year: number; userId: string; role: 'LECTURER' | 'MENTOR' }) =>
+    axiosClient.post('/subjects/teaching-staff', data),
+  updateTeachingStaff: (id: string, data: { status: 'Active' | 'Inactive'; rowVersion: string }) =>
+    axiosClient.put(`/subjects/teaching-staff/${id}`, data),
   getCurriculum: (subjectCode: string) => axiosClient.get(`/subjects/${subjectCode}/curriculum`),
   synchronizeCheckpoints: (subjectCode: string, data: unknown) => axiosClient.put(`/subjects/${subjectCode}/checkpoints`, data),
   createRoadmapItem: (subjectCode: string, data: unknown) => axiosClient.post(`/subjects/${subjectCode}/roadmap`, data),

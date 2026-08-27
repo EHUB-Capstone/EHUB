@@ -89,13 +89,25 @@ public sealed class TeachingStaffResponse
 {
     [JsonPropertyName("_id")]
     public Guid Id { get; init; }
+    public Guid UserId { get; init; }
     public string Name { get; init; } = string.Empty;
     public string Email { get; init; } = string.Empty;
     public string? Avatar { get; init; }
     public string Role { get; init; } = string.Empty;
     public string Status { get; init; } = string.Empty;
+    public string UserStatus { get; init; } = string.Empty;
     public int ClassCount { get; init; }
     public IReadOnlyCollection<TeachingAssignmentResponse> Assignments { get; init; } = Array.Empty<TeachingAssignmentResponse>();
+    public string RowVersion { get; init; } = string.Empty;
+}
+
+public sealed class TeachingStaffCandidateResponse
+{
+    public Guid UserId { get; init; }
+    public string Name { get; init; } = string.Empty;
+    public string Email { get; init; } = string.Empty;
+    public string? Avatar { get; init; }
+    public string Role { get; init; } = string.Empty;
 }
 
 public sealed class TeachingStaffSummaryResponse
@@ -111,6 +123,12 @@ public sealed class TeachingStaffListResponse
 {
     public IReadOnlyCollection<TeachingStaffResponse> Staff { get; init; } = Array.Empty<TeachingStaffResponse>();
     public TeachingStaffSummaryResponse Summary { get; init; } = new();
+}
+
+public sealed class TeachingStaffCandidateListResponse
+{
+    public IReadOnlyCollection<TeachingStaffCandidateResponse> Candidates { get; init; } =
+        Array.Empty<TeachingStaffCandidateResponse>();
 }
 
 public sealed class RoadmapItemResponse

@@ -2,35 +2,33 @@ import { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { X, Loader2, Search, Check } from 'lucide-react';
 import { classApi } from '../../api/classApi';
-import { userApi } from '../../api/userApi';
+import { subjectApi } from '../../api/subjectApi';
 import { parseApiError } from '../../utils/apiError';
-import { buildApprovedLecturerQuery, normalizeLecturerOptions } from '../../utils/lecturerDirectory';
+import { unwrapApiData } from '../../utils/classMappers';
 
-const EMPTY_LECTURERS = [];
-
-export default function AssignLectureModal({ classId, currentLecture, rowVersion, allowUnassign = false, initialLecturers = EMPTY_LECTURERS, onClose, onAssigned }) {
-  const [lecturers, setLecturers] = useState(() => normalizeLecturerOptions(initialLecturers));
+export default function AssignLectureModal({ classId, semester, year, currentLecture, rowVersion, allowUnassign = false, onClose, onAssigned }) {
+  const [lecturers, setLecturers] = useState([]);
   const [selectedId, setSelectedId] = useState(currentLecture?._id || currentLecture?.id || '');
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    if (initialLecturers.length > 0) {
-      setLecturers(normalizeLecturerOptions(initialLecturers));
-      setLoading(false);
-      return undefined;
-    }
-
-    const controller = new AbortController();
     let active = true;
     const fetchLecturers = async () => {
       try {
-        const res = await userApi.getAll(buildApprovedLecturerQuery(), { signal: controller.signal });
-        const list = res?.data?.users || res?.users || [];
-        if (active) setLecturers(normalizeLecturerOptions(list));
+        const response = await subjectApi.getTeachingStaff({ semester, year });
+        const payload = unwrapApiData(response) || {};
+        const list = (payload.staff || [])
+          .filter(member => member.role === 'LECTURER' && member.status === 'Active' && member.userStatus === 'Active')
+          .map(member => ({
+            _id: member.userId,
+            name: member.name,
+            email: member.email,
+          }));
+        if (active) setLecturers(list);
       } catch (error) {
-        if (active && !controller.signal.aborted) {
+        if (active) {
           toast.error(parseApiError(error, 'Failed to load lecturers.').message);
         }
       } finally {
@@ -40,9 +38,8 @@ export default function AssignLectureModal({ classId, currentLecture, rowVersion
     void fetchLecturers();
     return () => {
       active = false;
-      controller.abort();
     };
-  }, [initialLecturers]);
+  }, [semester, year]);
 
   const handleSubmit = async () => {
     if (!selectedId && !currentLecture) {
@@ -119,7 +116,7 @@ export default function AssignLectureModal({ classId, currentLecture, rowVersion
                 </button>
               )}
               {filtered.length === 0 ? (
-                <p className="text-xs text-slate-400 text-center py-6">No lecturers found</p>
+                <p className="text-xs text-slate-400 text-center py-6">No active lecturers are listed for this semester</p>
               ) : (
                 filtered.map(l => {
                   const isSelected = selectedId === l._id;
