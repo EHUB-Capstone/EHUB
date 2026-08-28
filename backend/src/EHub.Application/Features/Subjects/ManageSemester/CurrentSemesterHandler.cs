@@ -170,6 +170,12 @@ public sealed class CurrentSemesterHandler : ICurrentSemesterHandler
                 var dateValidation = ValidateDateRange(semester.Term, semester.Year, request.StartDate, request.EndDate);
                 if (dateValidation != null)
                     return Failure<SemesterResponse>(ErrorCodes.ClassValidationError, dateValidation);
+                var today = DateOnly.FromDateTime(DateTime.UtcNow);
+                if (semester.Status == SemesterStatus.Active &&
+                    (today < request.StartDate || today > request.EndDate))
+                    return Failure<SemesterResponse>(
+                        ErrorCodes.SemesterInvalidState,
+                        "The active semester date range must include today. Correct the active semester before moving it outside the current date.");
                 if (await HasOverlappingSemesterAsync(semester.Id, request.StartDate, request.EndDate, cancellationToken))
                     return Failure<SemesterResponse>(ErrorCodes.SemesterInvalidState, "The semester date range overlaps another semester.");
                 if (semester.StartDate == request.StartDate && semester.EndDate == request.EndDate)
@@ -257,6 +263,131 @@ public sealed class CurrentSemesterHandler : ICurrentSemesterHandler
         catch (SerializableTransactionConflictException)
         {
             return Failure<CurrentSemesterResponse>(ErrorCodes.SemesterConcurrencyConflict, "Another semester operation completed first. Reload and try again.");
+        }
+    }
+
+    public async Task<Result<CurrentSemesterResponse>> CorrectAsync(
+        CorrectActiveSemesterRequest request,
+        CancellationToken token = default)
+    {
+        if (!IsAdmin())
+            return Failure<CurrentSemesterResponse>(
+                ErrorCodes.ClassAccessDenied,
+                "Only an administrator can correct the active semester.");
+        if (request.CurrentSemesterId == Guid.Empty || request.TargetSemesterId == Guid.Empty)
+            return Failure<CurrentSemesterResponse>(
+                ErrorCodes.ClassValidationError,
+                "Current semester and target semester are required.");
+        if (request.CurrentSemesterId == request.TargetSemesterId)
+            return Failure<CurrentSemesterResponse>(
+                ErrorCodes.ClassValidationError,
+                "The target semester must be different from the current semester.");
+        if (!uint.TryParse(request.CurrentRowVersion, out var expectedCurrentVersion) ||
+            !uint.TryParse(request.TargetRowVersion, out var expectedTargetVersion))
+            return Failure<CurrentSemesterResponse>(
+                ErrorCodes.ClassValidationError,
+                "Valid row versions are required for both semesters.");
+
+        var reason = request.Reason?.Trim();
+        if (string.IsNullOrWhiteSpace(reason) || reason.Length is < 3 or > 500)
+            return Failure<CurrentSemesterResponse>(
+                ErrorCodes.ClassValidationError,
+                "Reason must contain between 3 and 500 characters.");
+
+        try
+        {
+            return await _unitOfWork.ExecuteInSerializableTransactionAsync(async cancellationToken =>
+            {
+                var currentSemester = await _context.Semesters
+                    .FirstOrDefaultAsync(
+                        item => item.Id == request.CurrentSemesterId,
+                        cancellationToken);
+                var targetSemester = await _context.Semesters
+                    .FirstOrDefaultAsync(
+                        item => item.Id == request.TargetSemesterId,
+                        cancellationToken);
+
+                if (currentSemester == null || targetSemester == null)
+                    return Failure<CurrentSemesterResponse>(
+                        ErrorCodes.SemesterNotFound,
+                        "The current or target semester was not found.");
+                if (currentSemester.Version != expectedCurrentVersion ||
+                    targetSemester.Version != expectedTargetVersion)
+                    return Failure<CurrentSemesterResponse>(
+                        ErrorCodes.SemesterConcurrencyConflict,
+                        "A semester changed concurrently. Reload and try again.");
+                if (currentSemester.Status != SemesterStatus.Active)
+                    return Failure<CurrentSemesterResponse>(
+                        ErrorCodes.SemesterInvalidState,
+                        "The selected current semester is no longer active.");
+                if (targetSemester.Status != SemesterStatus.Planned)
+                    return Failure<CurrentSemesterResponse>(
+                        ErrorCodes.SemesterInvalidState,
+                        "Only a planned semester can replace an invalid active semester.");
+
+                var now = DateTime.UtcNow;
+                var today = DateOnly.FromDateTime(now);
+                var currentContainsToday = currentSemester.StartDate.HasValue &&
+                    currentSemester.EndDate.HasValue &&
+                    today >= currentSemester.StartDate.Value &&
+                    today <= currentSemester.EndDate.Value;
+                if (currentContainsToday)
+                    return Failure<CurrentSemesterResponse>(
+                        ErrorCodes.SemesterInvalidState,
+                        "The active semester is valid for today. Use the normal completion workflow before activating another semester.");
+
+                var targetContainsToday = targetSemester.StartDate.HasValue &&
+                    targetSemester.EndDate.HasValue &&
+                    today >= targetSemester.StartDate.Value &&
+                    today <= targetSemester.EndDate.Value;
+                if (!targetContainsToday)
+                    return Failure<CurrentSemesterResponse>(
+                        ErrorCodes.SemesterActivationBlocked,
+                        "The replacement semester must include today in its configured date range.");
+
+                currentSemester.Status = SemesterStatus.Planned;
+                currentSemester.UpdatedBy = _currentUser.UserId;
+                AddAuditAndOutbox(
+                    currentSemester,
+                    "SEMESTER_ACTIVE_CORRECTED_TO_PLANNED",
+                    "Semester.ActiveCorrectedToPlanned.v1",
+                    reason);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+                targetSemester.Status = SemesterStatus.Active;
+                targetSemester.UpdatedBy = _currentUser.UserId;
+                AddAuditAndOutbox(
+                    targetSemester,
+                    "SEMESTER_ACTIVATED_BY_CORRECTION",
+                    "Semester.ActivatedByCorrection.v1",
+                    reason);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+                return await BuildCurrentResponseAsync(targetSemester, now, cancellationToken);
+            }, token);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return Failure<CurrentSemesterResponse>(
+                ErrorCodes.SemesterConcurrencyConflict,
+                "A semester changed concurrently. Reload and try again.");
+        }
+        catch (SerializableTransactionConflictException)
+        {
+            return Failure<CurrentSemesterResponse>(
+                ErrorCodes.SemesterConcurrencyConflict,
+                "Another semester operation completed first. Reload and try again.");
+        }
+        catch (DbUpdateException exception)
+        {
+            _logger.LogWarning(
+                exception,
+                "Could not correct active semester {CurrentSemesterId} to {TargetSemesterId}",
+                request.CurrentSemesterId,
+                request.TargetSemesterId);
+            return Failure<CurrentSemesterResponse>(
+                ErrorCodes.SemesterActivationBlocked,
+                "The semester correction conflicts with current academic data. Reload and try again.");
         }
     }
 
