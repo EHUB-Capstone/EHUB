@@ -127,6 +127,20 @@ public sealed class SubjectsController : ControllerBase
                 "Active semester updated successfully."));
     }
 
+    [HttpPost("current-semester/correct")]
+    [Authorize(Policy = SystemPolicies.AdminOnly)]
+    public async Task<IActionResult> CorrectCurrentSemester(
+        [FromBody] CorrectActiveSemesterRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await _semesterHandler.CorrectAsync(request, cancellationToken);
+        return result.IsFailure
+            ? ToSemesterErrorResponse(result.Error)
+            : Ok(ApiResponse<CurrentSemesterResponse>.SuccessResponse(
+                result.Value!,
+                "Active semester corrected successfully."));
+    }
+
     [HttpGet("semesters")]
     public async Task<IActionResult> GetSemesters(CancellationToken cancellationToken)
     {

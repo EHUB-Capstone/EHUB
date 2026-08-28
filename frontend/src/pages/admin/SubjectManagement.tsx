@@ -481,6 +481,25 @@ const SubjectManagement = () => {
     { label: 'Classes', value: staffSummary.classes, icon: BookOpen, style: 'text-cyan-700 bg-cyan-50' },
   ];
 
+  const staffSections = [
+    {
+      role: 'LECTURER' as const,
+      title: 'Lecturers',
+      description: 'Teaching staff available for class assignment in this semester.',
+      icon: GraduationCap,
+      iconStyle: 'bg-primary-50 text-primary',
+      members: visibleStaff.filter(member => member.role === 'LECTURER'),
+    },
+    {
+      role: 'MENTOR' as const,
+      title: 'Mentors',
+      description: 'Mentors available for class and team assignment in this semester.',
+      icon: Users,
+      iconStyle: 'bg-secondary-50 text-secondary',
+      members: visibleStaff.filter(member => member.role === 'MENTOR'),
+    },
+  ].filter(section => staffRole === 'ALL' || section.role === staffRole);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
@@ -626,68 +645,92 @@ const SubjectManagement = () => {
           <div className="flex flex-col gap-3 rounded-2xl border border-slate-200/70 bg-white p-4 shadow-sm md:flex-row md:items-end md:justify-between"><div className="flex flex-col gap-3 sm:flex-row"><label className="text-xs font-semibold uppercase text-slate-400">Semester<select value={selectedSemester} onChange={(event) => setSelectedSemester(event.target.value as SemesterCode)} className="mt-1.5 block rounded-xl border border-slate-200 px-3 py-2 text-sm font-normal text-slate-700 outline-none"><option value="SP">SP (Spring)</option><option value="SU">SU (Summer)</option><option value="FA">FA (Fall)</option></select></label><label className="text-xs font-semibold uppercase text-slate-400">Year<select value={selectedYear} onChange={(event) => setSelectedYear(Number(event.target.value))} className="mt-1.5 block rounded-xl border border-slate-200 px-3 py-2 text-sm font-normal text-slate-700 outline-none">{availableYears.map((year) => <option key={year} value={year}>{year}</option>)}</select></label></div><Button variant="outline" icon={Users} onClick={() => navigate('/admin/classes')}>Manage Assignments</Button></div>
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">{staffStats.map(({ label, value, icon: Icon, style }) => <div key={label} className="rounded-xl border border-slate-200/70 bg-white p-4 shadow-sm"><div className={`flex h-9 w-9 items-center justify-center rounded-lg ${style}`}><Icon className="h-4 w-4" /></div><p className="mt-3 text-2xl font-bold text-slate-900">{value}</p><p className="text-sm text-slate-500">{label}</p></div>)}</div>
           <div className="flex flex-col gap-3 sm:flex-row"><div className="relative flex-1"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input value={staffSearch} onChange={(event) => setStaffSearch(event.target.value)} placeholder="Search name, email, class or subject code..." className="w-full rounded-xl border border-slate-200 bg-white py-2 pl-10 pr-4 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20" /></div><select value={staffRole} onChange={(event) => setStaffRole(event.target.value as typeof staffRole)} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none"><option value="ALL">All roles</option><option value="LECTURER">Lecturers only</option><option value="MENTOR">Mentors only</option></select></div>
-          <div className="overflow-hidden rounded-2xl border border-slate-200/70 bg-white shadow-sm">
-            {staffLoading ? (
+          {staffLoading ? (
+            <div className="overflow-hidden rounded-2xl border border-slate-200/70 bg-white shadow-sm">
               <LoadingSkeleton variant="table" lines={6} className="p-4" />
-            ) : visibleStaff.length === 0 ? (
-              <EmptyState
-                icon={Users}
-                title="No teaching staff found"
-                description={`Add lecturers or mentors to ${selectedSemester} ${selectedYear}, or adjust the current filters.`}
-                action={{ label: 'Add Teaching Staff', onClick: () => void openAddStaff() }}
-              />
-            ) : (
-              <div className="divide-y divide-slate-100">
-                {visibleStaff.map((member) => (
-                  <article key={member._id} className="flex flex-col gap-4 p-5 lg:flex-row lg:items-center">
-                    <div className="flex min-w-0 flex-1 items-center gap-3">
-                      {member.avatar ? (
-                        <img src={member.avatar} alt="" className="h-10 w-10 rounded-full object-cover" />
-                      ) : (
-                        <span className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-600">
-                          {initials(member.name)}
-                        </span>
-                      )}
-                      <div className="min-w-0">
-                        <p className="truncate font-semibold text-slate-900">{member.name}</p>
-                        <p className="truncate text-sm text-slate-500">{member.email}</p>
-                        {member.userStatus !== 'Active' && (
-                          <p className="mt-0.5 text-xs font-medium text-red-600">User account: {member.userStatus}</p>
-                        )}
+            </div>
+          ) : (
+            <div className="space-y-5">
+              {staffSections.map(({ role, title, description, icon: Icon, iconStyle, members }) => (
+                <section key={role} className="overflow-hidden rounded-2xl border border-slate-200/70 bg-white shadow-sm">
+                  <header className="flex flex-col gap-3 border-b border-slate-100 bg-slate-50/70 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex items-center gap-3">
+                      <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${iconStyle}`}>
+                        <Icon className="h-5 w-5" />
+                      </span>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h2 className="font-bold text-slate-900">{title}</h2>
+                          <span className="rounded-full bg-white px-2.5 py-0.5 text-xs font-semibold text-slate-600 shadow-sm">
+                            {members.length}
+                          </span>
+                        </div>
+                        <p className="mt-0.5 text-sm text-slate-500">{description}</p>
                       </div>
                     </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Badge variant={member.role === 'LECTURER' ? 'Submitted' : 'Reviewed'}>
-                        {member.role === 'LECTURER' ? 'Lecturer' : 'Mentor'}
-                      </Badge>
-                      <Badge variant={member.status === 'Active' ? 'Active' : 'Inactive'}>{member.status}</Badge>
-                      <span className="text-sm font-medium text-slate-600">{member.classCount} classes</span>
+                  </header>
+
+                  {members.length === 0 ? (
+                    <div className="px-5 py-8 text-center">
+                      <p className="text-sm font-semibold text-slate-700">No {title.toLowerCase()} found</p>
+                      <p className="mt-1 text-sm text-slate-500">
+                        {staffSearch.trim()
+                          ? 'Try another search term or clear the current filters.'
+                          : `Add ${title.toLowerCase()} to ${selectedSemester} ${selectedYear}.`}
+                      </p>
                     </div>
-                    <div className="flex flex-1 flex-wrap gap-1.5 lg:justify-end">
-                      {member.assignments.length ? member.assignments.map((assignment) => (
-                        <span key={assignment._id} className="rounded-full border border-primary-100 bg-primary-50 px-2 py-1 text-xs font-semibold text-primary">
-                          {assignment.classCode} · {assignment.subjectCode}
-                        </span>
-                      )) : (
-                        <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-semibold text-slate-500">
-                          Not assigned in {selectedSemester} {selectedYear}
-                        </span>
-                      )}
+                  ) : (
+                    <div className="divide-y divide-slate-100">
+                      {members.map((member) => (
+                        <article key={member._id} className="flex flex-col gap-4 p-5 lg:flex-row lg:items-center">
+                          <div className="flex min-w-0 flex-1 items-center gap-3">
+                            {member.avatar ? (
+                              <img src={member.avatar} alt="" className="h-10 w-10 rounded-full object-cover" />
+                            ) : (
+                              <span className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-600">
+                                {initials(member.name)}
+                              </span>
+                            )}
+                            <div className="min-w-0">
+                              <p className="truncate font-semibold text-slate-900">{member.name}</p>
+                              <p className="truncate text-sm text-slate-500">{member.email}</p>
+                              {member.userStatus !== 'Active' && (
+                                <p className="mt-0.5 text-xs font-medium text-red-600">User account: {member.userStatus}</p>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Badge variant={member.status === 'Active' ? 'Active' : 'Inactive'}>{member.status}</Badge>
+                            <span className="text-sm font-medium text-slate-600">{member.classCount} classes</span>
+                          </div>
+                          <div className="flex flex-1 flex-wrap gap-1.5 lg:justify-end">
+                            {member.assignments.length ? member.assignments.map((assignment) => (
+                              <span key={assignment._id} className="rounded-full border border-primary-100 bg-primary-50 px-2 py-1 text-xs font-semibold text-primary">
+                                {assignment.classCode} · {assignment.subjectCode}
+                              </span>
+                            )) : (
+                              <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-semibold text-slate-500">
+                                Not assigned in {selectedSemester} {selectedYear}
+                              </span>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => openEditStaff(member)}
+                            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-primary-50 hover:text-primary"
+                            aria-label={`Edit ${member.name} semester status`}
+                            title="Edit semester status"
+                          >
+                            <Edit3 className="h-4 w-4" />
+                          </button>
+                        </article>
+                      ))}
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => openEditStaff(member)}
-                      className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-primary-50 hover:text-primary"
-                      aria-label={`Edit ${member.name} semester status`}
-                      title="Edit semester status"
-                    >
-                      <Edit3 className="h-4 w-4" />
-                    </button>
-                  </article>
-                ))}
-              </div>
-            )}
-          </div>
+                  )}
+                </section>
+              ))}
+            </div>
+          )}
         </section>
       )}
 
