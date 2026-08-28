@@ -6,7 +6,7 @@ EHub is designed as a role-based web platform using a React single-page applicat
 
 ### Figure 1. EHub Development and Delivery Architecture
 
-The Development View describes the target path from a reviewed source change to a verified and recoverable production release. A developer works on a feature branch and opens a pull request in the GitHub repository. GitHub Actions then runs three independent check streams: frontend quality checks, backend build and automated tests, and security and delivery checks covering migration validation, dependency or image scanning, and container construction. These streams enter the CI quality gate through separate paths; the change may be merged into the protected `develop` branch only when every required check and review succeeds.
+The Development View describes the target path from a reviewed source change to a verified and recoverable production release. A developer works on a feature branch and opens a pull request in the GitHub repository. GitHub Actions then runs three independent check streams: frontend quality checks, backend build and automated tests, and security and delivery checks covering migration validation, dependency or image scanning, and container construction. These streams enter the CI quality gate through separate paths; the change may be merged into the protected `develop` branch only when every required check and review succeeds. A non-blocking GitHub integration also publishes selected push, pull-request and workflow-status events to the team Discord channel so that failures and delivery progress are visible without making Discord part of the quality gate.
 
 Merging into `develop` automatically deploys the integrated application to a shared staging environment. The team and mentor perform staging acceptance before the same reviewed commit is promoted to `main` and assigned a version tag such as `vX.Y.Z`. The release workflow builds immutable versioned images and publishes them to GitHub Container Registry. Deployment to the protected production environment requires explicit approval. Before the production VPS is updated, the workflow creates a recoverable database backup and applies the approved migration. Post-deployment health and smoke tests verify the release; if verification fails, the operator can roll back to the previous immutable image and restore data according to the migration rollback plan.
 
@@ -24,6 +24,9 @@ Main components:
 - **Backup and Migration:** creates a recovery point and applies the reviewed database change before application rollout.
 - **Production VPS:** pulls the approved image set and runs the EHub services with Docker Compose.
 - **Release Verification and Rollback:** execute health and smoke tests and restore the previous known-good release when necessary.
+- **Discord Team Notifications:** receives selected repository, pull-request and CI/CD status events as an external collaboration channel. Notification delivery is non-blocking, and a Discord outage must never prevent review, merge, deployment or rollback.
+
+The Discord path is intentionally dashed and remains outside the critical delivery path. Any webhook or integration credential must be stored in GitHub configuration or encrypted secrets rather than source control, and notifications must exclude secrets, raw environment values and sensitive error payloads.
 
 ## B. Physical View Architecture
 

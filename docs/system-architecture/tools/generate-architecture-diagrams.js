@@ -7,6 +7,9 @@ const SVG_DIR = path.join(ROOT, 'svg');
 const PNG_DIR = path.join(ROOT, 'png');
 const DRAWIO_PATH = path.join(ROOT, 'EHub-System-Architecture.drawio');
 const BRAND_ICONS = JSON.parse(fs.readFileSync(path.join(ROOT, 'assets', 'brand-icons.json'), 'utf8'));
+const CUSTOM_RASTER_ICONS = {
+  discord: `data:image/png;base64,${fs.readFileSync(path.join(ROOT, 'assets', 'logo_discord.png')).toString('base64')}`,
+};
 
 const WIDTH = 1680;
 const HEIGHT = 1050;
@@ -87,6 +90,7 @@ const ICON_ASSIGNMENTS = {
   'frontend-checks': 'react', 'backend-checks': 'dotnet', 'security-checks': 'shield', 'quality-gate': 'review',
   'merge-develop': 'branch', staging: 'monitor', 'staging-verification': 'review', 'release-build': 'docker',
   registry: 'package', 'release-gate': 'shield', 'database-gate': 'database', production: 'docker', verification: 'review',
+  'discord-notifications': 'discord',
   'end-users': 'users', dns: 'globe', 'web-gateway': 'nginx', 'api-container': 'dotnet', 'worker-container': 'settings',
   postgres: 'postgresql', monitoring: 'activity', 'persistent-volume': 'drive', 'backup-agent': 'archive', google: 'google', cloudinary: 'cloudinary',
   'ai-provider': 'brain', 'email-provider': 'mail', backup: 'archive', firewall: 'shield',
@@ -152,6 +156,7 @@ const diagrams = [
       node('developer', 45, 270, 105, 100, 'Developer', ['Feature branch'], 'actor'),
       node('repository', 175, 270, 120, 100, 'GitHub Repository', ['Protected source'], 'delivery'),
       node('pull-request', 320, 270, 90, 100, 'Pull Request', ['Peer review'], 'delivery'),
+      node('discord-notifications', 145, 590, 180, 110, 'Discord Team Notifications', ['Non-blocking repository and delivery alerts'], 'external'),
 
       node('ci-orchestrator', 710, 170, 170, 110, 'GitHub Actions', ['Reproducible pipeline'], 'delivery'),
       node('frontend-checks', 505, 345, 170, 115, 'Frontend Checks', ['Lint, test and build'], 'frontend'),
@@ -217,6 +222,9 @@ const diagrams = [
       edge('d19', 'verification', 'production', 'rollback image', {
         sourceSide: 'bottom', targetSide: 'bottom', dashed: true, labelX: 1300, labelY: 914,
         points: [{ x: 1210, y: 910 }, { x: 1390, y: 910 }],
+      }),
+      edge('d20', 'repository', 'discord-notifications', 'repository, pull request and workflow events', {
+        sourceSide: 'bottom', targetSide: 'top', dashed: true, labelX: 305, labelY: 510,
       }),
     ],
   },
@@ -535,6 +543,7 @@ const COMPACT_BODIES = {
   'database-gate': 'Backup • Apply migration',
   production: 'Docker Compose',
   verification: 'Health • Smoke • Rollback',
+  'discord-notifications': 'Push • PR • CI/CD status',
 
   'end-users': 'Admin • Lecturer • Mentor • Student',
   dns: 'Public domain',
@@ -612,7 +621,7 @@ const COMPACT_BODIES = {
 const COMPACT_EDGE_LABELS = {
   d1: 'Push', d2: 'PR', d3: 'CI', d10: 'Passed', d11: 'Deploy', d12: 'Verify',
   d13: 'Promote', d14: 'Publish', d15: 'Deploy', d16: 'Approve',
-  d17: 'DB ready', d18: 'Verify', d19: 'Rollback',
+  d17: 'DB ready', d18: 'Verify', d19: 'Rollback', d20: 'Push • PR • CI/CD',
   p1: 'Resolve', p2: 'HTTPS :443', p3: 'Allow :443', p4: 'API / SignalR',
   p5: 'EF Core', p6: 'Jobs / Outbox', p7: 'Volume', p8: 'OAuth',
   p9: 'Storage', p10: 'AI', p11: 'Email', p12: 'All-container telemetry', p13: 'Telemetry',
@@ -639,6 +648,7 @@ const SHORT_TITLES = {
   'release-gate': 'Production Approval',
   'database-gate': 'Backup & Migration',
   verification: 'Release Verification',
+  'discord-notifications': 'Discord Team Notifications',
   'end-users': 'EHub Users',
   dns: 'Domain / DNS',
   'web-gateway': 'Nginx Gateway',
@@ -797,6 +807,9 @@ function iconKeyForNode(n) {
 }
 
 function iconArtwork(key, color) {
+  if (CUSTOM_RASTER_ICONS[key]) {
+    return `<image href="${CUSTOM_RASTER_ICONS[key]}" x="0" y="0" width="24" height="24" preserveAspectRatio="xMidYMid meet"/>`;
+  }
   if (BRAND_ICONS[key]) {
     return `<path d="${esc(BRAND_ICONS[key].path)}" fill="${BRAND_COLORS[key] || color}"/>`;
   }
