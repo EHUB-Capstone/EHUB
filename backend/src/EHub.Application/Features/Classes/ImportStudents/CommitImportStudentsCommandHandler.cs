@@ -207,12 +207,13 @@ public sealed class CommitImportStudentsCommandHandler : ICommitImportStudentsCo
             profilesByEmail.TryGetValue(row.Email, out var emailProfiles);
             var profileByEmail = emailProfiles?.Count == 1 ? emailProfiles[0] : null;
 
-            if ((codeProfiles?.Count ?? 0) > 1 ||
-                (emailProfiles?.Count ?? 0) > 1 ||
-                (profileByCode != null && profileByEmail != null && profileByCode.Id != profileByEmail.Id) ||
-                (profileByCode != null && !string.Equals(profileByCode.Email, row.Email, StringComparison.OrdinalIgnoreCase)) ||
-                (profileByEmail != null &&
-                 !string.Equals(profileByEmail.NormalizedRollNumber ?? profileByEmail.RollNumber, row.StudentCode, StringComparison.OrdinalIgnoreCase)))
+            if (StudentImportIdentityRules.HasConflict(
+                    codeProfiles?.Count ?? 0,
+                    emailProfiles?.Count ?? 0,
+                    profileByCode,
+                    profileByEmail,
+                    row.StudentCode,
+                    row.Email))
             {
                 errors.Add(RowError(row, ErrorCodes.ClassStudentIdentityConflict, "Student code and email no longer identify one unique student profile."));
                 continue;
@@ -265,18 +266,30 @@ public sealed class CommitImportStudentsCommandHandler : ICommitImportStudentsCo
                 profilesByCode[row.StudentCode] = [profile];
                 profilesByEmail[row.Email] = [profile];
             }
-            else if (synchronizeProfileMajors &&
-                     profile.UserId.HasValue &&
-                     MajorCodes.IsValid(row.MajorCode))
+            else
             {
-                var importedMajor = row.MajorCode.Trim().ToUpperInvariant();
-                var registeredMajor = profile.MajorCode?.Trim().ToUpperInvariant();
-                if (!string.Equals(importedMajor, registeredMajor, StringComparison.OrdinalIgnoreCase))
+                if (StudentImportIdentityRules.CompleteMissingIdentity(profile, row.StudentCode, row.Email))
                 {
-                    profile.MajorCode = importedMajor;
                     profile.UpdatedAt = DateTime.UtcNow;
                     profile.UpdatedBy = currentUserId;
-                    synchronizedMajorCount++;
+                    profilesByCode[row.StudentCode] = [profile];
+                    profilesByEmail[row.Email] = [profile];
+                    updatedCount++;
+                }
+
+                if (synchronizeProfileMajors &&
+                    profile.UserId.HasValue &&
+                    MajorCodes.IsValid(row.MajorCode))
+                {
+                    var importedMajor = row.MajorCode.Trim().ToUpperInvariant();
+                    var registeredMajor = profile.MajorCode?.Trim().ToUpperInvariant();
+                    if (!string.Equals(importedMajor, registeredMajor, StringComparison.OrdinalIgnoreCase))
+                    {
+                        profile.MajorCode = importedMajor;
+                        profile.UpdatedAt = DateTime.UtcNow;
+                        profile.UpdatedBy = currentUserId;
+                        synchronizedMajorCount++;
+                    }
                 }
             }
 

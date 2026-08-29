@@ -83,6 +83,10 @@ export const classApi = {
       axiosClient.delete(`/classes/${classId}/major-lock`)),
   addStudent: (classId: string, data: AddStudentToClassPayload) =>
     axiosClient.post(`/classes/${classId}/students`, data),
+  assignStudents: (classId: string, data: { studentIds: string[] }) =>
+    axiosClient.post(`/classes/${classId}/students/assign`, data),
+  assignStudentsToTeam: (classId: string, teamId: string, data: { studentIds: string[] }) =>
+    axiosClient.post(`/classes/${classId}/teams/${teamId}/students/assign`, data),
   dropStudent: (classId, studentId) =>
     axiosClient.post(`/classes/${classId}/students/${studentId}/drop`),
   reEnrollStudent: (classId, studentId) =>

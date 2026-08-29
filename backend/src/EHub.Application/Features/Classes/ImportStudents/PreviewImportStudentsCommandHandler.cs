@@ -466,12 +466,13 @@ public sealed class PreviewImportStudentsCommandHandler : IPreviewImportStudents
             var profileByEmail = emailProfiles?.Length == 1 ? emailProfiles[0] : null;
             string? error = null;
 
-            if ((codeProfiles?.Length ?? 0) > 1 ||
-                (emailProfiles?.Length ?? 0) > 1 ||
-                (profileByCode != null && profileByEmail != null && profileByCode.Id != profileByEmail.Id) ||
-                (profileByCode != null && !string.Equals(profileByCode.Email, row.Email, StringComparison.OrdinalIgnoreCase)) ||
-                (profileByEmail != null &&
-                 !string.Equals(profileByEmail.NormalizedRollNumber ?? profileByEmail.RollNumber, row.StudentCode, StringComparison.OrdinalIgnoreCase)))
+            if (StudentImportIdentityRules.HasConflict(
+                    codeProfiles?.Length ?? 0,
+                    emailProfiles?.Length ?? 0,
+                    profileByCode,
+                    profileByEmail,
+                    row.StudentCode,
+                    row.Email))
             {
                 error = "Student code and email do not identify one unique student profile.";
             }

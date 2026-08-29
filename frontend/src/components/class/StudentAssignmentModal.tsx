@@ -24,6 +24,7 @@ import {
   studentBelongsToClass,
   validateStudentAssignment,
 } from '../../utils/studentAssignment';
+import { parseApiError } from '../../utils/apiError';
 import {
   buildStudentTeamAssignments,
   entityId,
@@ -39,7 +40,7 @@ interface StudentAssignmentModalProps {
   initialStudentIds?: string[];
   loadingCandidates?: boolean;
   onClose: () => void;
-  onSave: (result: StudentAssignmentResult) => void;
+  onSave: (result: StudentAssignmentResult) => void | Promise<void>;
 }
 
 const MODES: Array<{
@@ -78,6 +79,7 @@ export default function StudentAssignmentModal({
   });
   const [search, setSearch] = useState('');
   const [attemptedSubmit, setAttemptedSubmit] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   const classTeams = useMemo(
     () => teams.filter((team) => !entityId(team.classId) || entityId(team.classId) === classInfo.id),
@@ -149,7 +151,7 @@ export default function StudentAssignmentModal({
     }));
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     setAttemptedSubmit(true);
     if (!validation.isValid) {
       if (validation.studentsOutsideClass.length > 0) {
@@ -160,13 +162,20 @@ export default function StudentAssignmentModal({
       return;
     }
 
-    const result = applyStudentAssignment(draft, students, classTeams);
-    onSave(result);
-    toast.success(
-      draft.mode === 'CLASS'
-        ? `${draft.studentIds.length} student${draft.studentIds.length === 1 ? '' : 's'} assigned to ${classInfo.code}`
-        : `${draft.studentIds.length} student${draft.studentIds.length === 1 ? '' : 's'} assigned to ${targetTeam?.teamName || 'team'}`,
-    );
+    setSaving(true);
+    try {
+      const result = applyStudentAssignment(draft, students, classTeams);
+      await onSave(result);
+      toast.success(
+        draft.mode === 'CLASS'
+          ? `${draft.studentIds.length} student${draft.studentIds.length === 1 ? '' : 's'} assigned to ${classInfo.code}`
+          : `${draft.studentIds.length} student${draft.studentIds.length === 1 ? '' : 's'} assigned to ${targetTeam?.teamName || 'team'}`,
+      );
+    } catch (error) {
+      toast.error(parseApiError(error, 'Unable to update the student assignment.').message);
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -338,9 +347,9 @@ export default function StudentAssignmentModal({
         <footer className="flex shrink-0 flex-col-reverse gap-2 border-t border-slate-100 bg-slate-50/70 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
           <p className="text-xs text-slate-500">Changes are applied consistently to the class roster and team member list.</p>
           <div className="flex gap-2">
-            <Button variant="outline" onClick={onClose}>Cancel</Button>
-            <Button variant="gradient" icon={UserRoundCheck} onClick={handleSubmit}>
-              {draft.mode === 'CLASS' ? 'Assign to class' : 'Assign to team'}
+            <Button variant="outline" onClick={onClose} disabled={saving}>Cancel</Button>
+            <Button variant="gradient" icon={saving ? Loader2 : UserRoundCheck} onClick={handleSubmit} disabled={saving}>
+              {saving ? 'Saving assignment...' : draft.mode === 'CLASS' ? 'Assign to class' : 'Assign to team'}
             </Button>
           </div>
         </footer>

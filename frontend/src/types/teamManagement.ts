@@ -69,6 +69,13 @@ export interface MentorAssignment {
   note?: string | null;
 }
 
+export interface MentorCandidate {
+  mentor: MentorAssignment['mentor'];
+  activeTeamCount: number;
+  maxTeams: number;
+  hasCapacity: boolean;
+}
+
 export interface TeamClassOption {
   id: string;
   code: string;

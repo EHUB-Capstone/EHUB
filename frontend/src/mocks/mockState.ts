@@ -48,6 +48,14 @@ export interface MockSemester {
   rowVersion: string;
 }
 
+export interface MockSemesterStaffAssignment {
+  id: string;
+  semesterId: string;
+  userId: string;
+  role: 'LECTURER' | 'MENTOR';
+  status: 'ACTIVE' | 'INACTIVE';
+}
+
 export interface MockRoadmapItem {
   _id: string;
   title: string;
@@ -137,6 +145,8 @@ export interface MockTeam {
   teamCode: string;
   teamName: string;
   description: string | null;
+  projectName?: string | null;
+  projectDescription?: string | null;
   status: string;
   leaderId: string | null;
   members: MockTeamMember[];
@@ -228,6 +238,7 @@ export interface MockApiState {
   pendingRegistrations: MockPendingRegistration[];
   currentSemester: { semester: 'SP' | 'SU' | 'FA'; year: number } | null;
   semesters: MockSemester[];
+  semesterStaffAssignments: MockSemesterStaffAssignment[];
   users: MockUser[];
   subjects: MockSubject[];
   curricula: Record<string, MockCurriculum>;
@@ -364,6 +375,12 @@ const semesters: MockSemester[] = [
   },
 ];
 
+const semesterStaffAssignments: MockSemesterStaffAssignment[] = [
+  { id: id(551), semesterId: id(501), userId: id(2), role: 'LECTURER', status: 'ACTIVE' },
+  { id: id(552), semesterId: id(501), userId: id(4), role: 'MENTOR', status: 'ACTIVE' },
+  { id: id(553), semesterId: id(502), userId: id(3), role: 'LECTURER', status: 'ACTIVE' },
+];
+
 const memberFromRoster = (student: MockRosterStudent, leaderId: string): MockTeamMember => ({
   studentId: student.studentId,
   rollNumber: student.rollNumber,
@@ -376,7 +393,7 @@ const memberFromRoster = (student: MockRosterStudent, leaderId: string): MockTea
 
 const mentor: MockMentor = { mentorProfileId: id(4), userId: id(4), fullName: 'Phạm Anh Khoa', email: 'khoa.mentor@ehub.local', organization: 'E-HUB Ventures' };
 const teams: MockTeam[] = [
-  { id: id(601), classId: classIds.active, teamCode: 'EXE-T01', teamName: 'Phoenix Founders', description: 'Marketplace for trusted student services.', status: 'Active', leaderId: activeRoster[0].studentId, members: activeRoster.slice(0, 4).map((student) => memberFromRoster(student, activeRoster[0].studentId)), currentMentorAssignment: { assignmentId: id(701), teamId: id(601), teamName: 'Phoenix Founders', classId: classIds.active, mentor, status: 'Active', assignedAtUtc: isoAgo(20), endedAtUtc: null, note: 'Focus on customer validation.' }, rowVersion: 'rv-10' },
+  { id: id(601), classId: classIds.active, teamCode: 'EXE-T01', teamName: 'Phoenix Founders', description: 'Marketplace for trusted student services.', projectName: 'Campus Connect', projectDescription: 'A trusted marketplace that helps students discover and book verified campus services.', status: 'Active', leaderId: activeRoster[0].studentId, members: activeRoster.slice(0, 4).map((student) => memberFromRoster(student, activeRoster[0].studentId)), currentMentorAssignment: { assignmentId: id(701), teamId: id(601), teamName: 'Phoenix Founders', classId: classIds.active, mentor, status: 'Active', assignedAtUtc: isoAgo(20), endedAtUtc: null, note: 'Focus on customer validation.' }, rowVersion: 'rv-10' },
   { id: id(602), classId: classIds.active, teamCode: 'EXE-T02', teamName: 'GreenByte', description: 'Smart energy insights for small offices.', status: 'Active', leaderId: activeRoster[4].studentId, members: activeRoster.slice(4, 8).map((student) => memberFromRoster(student, activeRoster[4].studentId)), currentMentorAssignment: null, rowVersion: 'rv-11' },
 ];
 
@@ -387,6 +404,7 @@ const initialMockState: MockApiState = {
     pendingRegistrations: [],
     currentSemester: { semester: 'FA', year: 2026 },
     semesters,
+    semesterStaffAssignments,
     users,
     subjects,
     curricula: Object.fromEntries(subjects.map((subject) => [subject.subjectCode, curriculumFor(subject)])),

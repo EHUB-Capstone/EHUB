@@ -19,10 +19,12 @@ function loadState(): MockApiState {
     const stored = window.localStorage.getItem(STORAGE_KEY);
     if (!stored) return createInitialMockState();
     const parsed = JSON.parse(stored) as MockApiState;
+    const defaults = createInitialMockState();
     return {
       ...parsed,
       authPasswords: parsed.authPasswords ?? {},
       pendingRegistrations: parsed.pendingRegistrations ?? [],
+      semesterStaffAssignments: parsed.semesterStaffAssignments ?? defaults.semesterStaffAssignments,
     };
   } catch {
     window.localStorage.removeItem(STORAGE_KEY);
@@ -98,7 +100,7 @@ export function routeId(config: AxiosRequestConfig, pattern: RegExp, group = 1):
 }
 
 export function findClass(classId: string): MockClass | undefined {
-  return state.classes.find((item) => item.id === classId);
+  return state.classes.find((item) => item.id === classId || item.slug === classId);
 }
 
 export function classMutationGuard(classId: string, rowVersion?: unknown): MockReply | null {
