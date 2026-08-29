@@ -856,6 +856,87 @@ public sealed class ClassSafetyHotfixIntegrationTests
     }
 
     [Fact]
+    public async Task ImportRegisteredStudentWithMissingRollNumber_CompletesProfileAndEnrollsStudent()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateClassSeedAsync(context, "import-missing-roll-number");
+        var lecturer = await context.Users.SingleAsync(user => user.Id == seed.LecturerId);
+        var studentRole = await context.Roles.SingleAsync(role => role.Name == SystemRoles.Student);
+        var token = GenerateToken(scope.ServiceProvider, lecturer, SystemRoles.Lecturer);
+        var studentCode = "SE" + Guid.NewGuid().ToString("N")[..8].ToUpperInvariant();
+        var studentEmail = $"missing-roll-{Guid.NewGuid():N}@example.com";
+        var studentUser = new User
+        {
+            FullName = "Registered Student Missing Roll Number",
+            Email = studentEmail,
+            NormalizedEmail = studentEmail.ToLowerInvariant(),
+            PasswordHash = "integration-test-only",
+            Status = UserStatus.Active,
+            IsEmailVerified = true
+        };
+        studentUser.UserRoles.Add(new UserRole
+        {
+            UserId = studentUser.Id,
+            User = studentUser,
+            RoleId = studentRole.Id,
+            Role = studentRole
+        });
+        var student = new Student
+        {
+            UserId = studentUser.Id,
+            User = studentUser,
+            FullName = studentUser.FullName,
+            Email = studentEmail,
+            MajorCode = MajorCodes.BIT_SE,
+            Status = StudentStatus.Active,
+            CreatedBy = seed.AdminId
+        };
+        context.Students.Add(student);
+        await context.SaveChangesAsync();
+        var studentId = student.Id;
+        context.ChangeTracker.Clear();
+
+        using var multipart = new MultipartFormDataContent();
+        var fileContent = new ByteArrayContent(CreateImportWorkbook(studentCode, studentEmail, MajorCodes.BIT_SE));
+        fileContent.Headers.ContentType = new MediaTypeHeaderValue("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        multipart.Add(fileContent, "file", "students.xlsx");
+        using var previewRequest = new HttpRequestMessage(HttpMethod.Post, $"/api/classes/{seed.ClassId}/import-students/preview")
+        {
+            Content = multipart
+        };
+        previewRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var previewResponse = await _client.SendAsync(previewRequest);
+        var previewBody = await previewResponse.Content.ReadFromJsonAsync<ApiResponse<ImportStudentsPreviewResponse>>();
+
+        previewResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        previewBody!.Data!.ValidRowsCount.Should().Be(1);
+        previewBody.Data.ErrorRowsCount.Should().Be(0);
+
+        using var commitRequest = new HttpRequestMessage(HttpMethod.Post, $"/api/classes/{seed.ClassId}/import-students/commit")
+        {
+            Content = JsonContent.Create(new CommitImportStudentsRequest { SessionId = previewBody.Data.SessionId })
+        };
+        commitRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        var commitResponse = await _client.SendAsync(commitRequest);
+        var commitBody = await commitResponse.Content.ReadFromJsonAsync<ApiResponse<ImportStudentsCommitResponse>>();
+
+        commitResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        commitBody!.Data!.InsertedCount.Should().Be(1);
+        commitBody.Data.UpdatedCount.Should().Be(1);
+        commitBody.Data.ErrorCount.Should().Be(0);
+        context.ChangeTracker.Clear();
+
+        var completedProfile = await context.Students.AsNoTracking().SingleAsync(item => item.Id == studentId);
+        completedProfile.RollNumber.Should().Be(studentCode);
+        completedProfile.NormalizedRollNumber.Should().Be(studentCode);
+        completedProfile.UserId.Should().Be(studentUser.Id);
+        (await context.ClassStudents.AsNoTracking().AnyAsync(item =>
+            item.ClassId == seed.ClassId && item.StudentId == studentId)).Should().BeTrue();
+    }
+
+    [Fact]
     public async Task AddingAlreadyEnrolledStudent_DoesNotMutateStudentProfile()
     {
         using var scope = _factory.Services.CreateScope();

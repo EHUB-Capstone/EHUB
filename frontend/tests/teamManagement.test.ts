@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { ManagedTeam, TeamDraft, TeamStudent } from '../src/types/teamManagement.ts';
 import {
-  getTeamMemberIds,
   getTeamProject,
   resolveEffectiveTeamMajor,
   validateTeamDraft,

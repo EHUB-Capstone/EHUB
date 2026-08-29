@@ -4,16 +4,18 @@ import toast from 'react-hot-toast';
 import { motion } from 'framer-motion';
 import {
   ArrowLeft, GraduationCap, Users, BookOpen,
-  Upload, Download, UserPlus, Loader2, Calendar, Pencil, ShieldCheck, Lock, Unlock, AlertTriangle,
+  Upload, Download, UserPlus, UserRoundCheck, Loader2, Calendar, Pencil, ShieldCheck, Lock, Unlock, AlertTriangle,
   Database, MessagesSquare, Archive, RotateCcw, CircleCheck, Play
 } from 'lucide-react';
 import { AuthContext } from '../../context/AuthContext';
 import { classApi } from '../../api/classApi';
 import { teamApi } from '../../api/teamApi';
+import { userApi } from '../../api/userApi';
 import LoadingSkeleton from '../../components/ui/LoadingSkeleton';
 import StudentTable from '../../components/class/StudentTable';
 import TeamList from '../../components/class/TeamList';
 import TeamManagementModal from '../../components/class/TeamManagementModal';
+import StudentAssignmentModal from '../../components/class/StudentAssignmentModal';
 import TeamCreationSummary from '../../components/class/TeamCreationSummary';
 import ImportStudentsModal from '../../components/class/ImportStudentsModal';
 import StudentTeamGeneratePanel from '../../components/class/StudentTeamGeneratePanel';
@@ -28,12 +30,14 @@ import VerifyMajorModal from '../../components/class/VerifyMajorModal';
 import AddStudentModal from '../../components/class/AddStudentModal';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import { getTeamMemberIds, normalizeManagedTeam, normalizeTeamProposal, resolveEffectiveTeamMajor } from '../../utils/teamManagement';
+import { directoryRecordToStudent, mergeAssignmentCandidates, normalizeClassStudents } from '../../utils/studentAssignment';
 import { classFeatureFlags } from '../../config/classFeatureFlags';
 import { parseApiError } from '../../utils/apiError';
 import { toClassViewModel, unwrapApiData } from '../../utils/classMappers';
 import { getClassLifecyclePresentation, isArchivedClass, isClassReadOnly } from '../../utils/classComponentPolicy';
 import { canManageClass as canManageClassPermission, hasClassRole } from '../../utils/classPermissions';
 import type { ClassCompletionPreview } from '../../types/classes';
+import type { StudentAssignmentMode } from '../../types/studentAssignment';
 
 const classActionTone = {
   neutral: 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-800',
@@ -84,6 +88,11 @@ export default function ClassDetail() {
   // Modals & Actions
   const [showImport, setShowImport] = useState(false);
   const [showTeamManagement, setShowTeamManagement] = useState(false);
+  const [showStudentAssignment, setShowStudentAssignment] = useState(false);
+  const [assignmentMode, setAssignmentMode] = useState<StudentAssignmentMode>('CLASS');
+  const [assignmentInitialIds, setAssignmentInitialIds] = useState([]);
+  const [assignmentCandidates, setAssignmentCandidates] = useState([]);
+  const [assignmentCandidatesLoading, setAssignmentCandidatesLoading] = useState(false);
   const [teamToEdit, setTeamToEdit] = useState(null);
   const [teamFormMemberIds, setTeamFormMemberIds] = useState([]);
   const [teamFormLeaderId, setTeamFormLeaderId] = useState('');
@@ -312,6 +321,38 @@ export default function ClassDetail() {
     setSelectedLeaderId('');
     closeTeamManagement();
     void fetchData();
+  };
+
+  const openStudentAssignment = async (mode: StudentAssignmentMode = 'CLASS', initialStudentIds = []) => {
+    setAssignmentMode(mode);
+    setAssignmentInitialIds(initialStudentIds);
+    setShowStudentAssignment(true);
+    setAssignmentCandidatesLoading(true);
+
+    const classCandidates = normalizeClassStudents(students, loadedClassId);
+    setAssignmentCandidates(classCandidates);
+    try {
+      const response = await userApi.getAll({ role: 'STUDENT', status: 'APPROVED', page: 1, limit: 200 });
+      const data = unwrapApiData(response);
+      const records = Array.isArray(data?.users) ? data.users : Array.isArray(data) ? data : [];
+      const directoryCandidates = records.map(directoryRecordToStudent).filter(Boolean);
+      setAssignmentCandidates(mergeAssignmentCandidates(classCandidates, directoryCandidates));
+    } catch (error) {
+      toast.error(parseApiError(error, 'Unable to load the student directory.').message);
+    } finally {
+      setAssignmentCandidatesLoading(false);
+    }
+  };
+
+  const handleStudentAssignment = async (result) => {
+    if (result.mode === 'CLASS') {
+      await classApi.assignStudents(loadedClassId, { studentIds: result.assignedStudentIds });
+    } else {
+      await classApi.assignStudentsToTeam(loadedClassId, result.teamId, { studentIds: result.assignedStudentIds });
+    }
+    setShowStudentAssignment(false);
+    setAssignmentInitialIds([]);
+    await fetchData();
   };
 
   const confirmDeleteTeam = async () => {
@@ -638,6 +679,10 @@ export default function ClassDetail() {
                 Add student
               </ClassActionButton>
 
+              <ClassActionButton icon={UserRoundCheck} tone="secondary" onClick={() => openStudentAssignment('CLASS')}>
+                Assign students
+              </ClassActionButton>
+
             </>
           )}
 
@@ -830,7 +875,7 @@ export default function ClassDetail() {
 
       {/* ── Team Generation Panel (always visible when students exist) ── */}
       {teamControlsVisible && safeStudents.length > 0 && tab === 'students' && canSelectTeamMembers && (
-        <div className="sticky top-20 z-40 rounded-xl bg-white/85 shadow-elevated backdrop-blur-md">
+        <div className="rounded-xl bg-white/85 shadow-elevated backdrop-blur-md">
           {user?.role === 'STUDENT' ? selected.length > 0 ? (
             <StudentTeamGeneratePanel
               classId={loadedClassId}
@@ -841,8 +886,6 @@ export default function ClassDetail() {
             />
           ) : null : canManageClass ? (
             <TeamCreationSummary
-              totalStudents={rosterMeta.totalCount || cls.studentCount || safeStudents.length}
-              unassignedStudents={unassignedCount}
               selectedStudents={selectedTeamStudents}
               selectedLeaderId={selectedLeaderId}
               onLeaderChange={setSelectedLeaderId}
@@ -861,6 +904,7 @@ export default function ClassDetail() {
         {(teamControlsVisible ? ['students', 'teams'] : ['students']).map(t => (
           <button
             key={t}
+            type="button"
             onClick={() => setTab(t)}
             className={`cursor-pointer rounded-md px-3.5 py-1.5 text-xs font-semibold capitalize transition-all ${
               tab === t ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:bg-white/60 hover:text-slate-700'
@@ -975,6 +1019,23 @@ export default function ClassDetail() {
           initialLeaderId={teamFormLeaderId}
           onClose={closeTeamManagement}
           onSave={handleTeamSaved}
+        />
+      )}
+
+      {!isReadOnly && showStudentAssignment && canManageClass && (
+        <StudentAssignmentModal
+          classInfo={{
+            id: loadedClassId,
+            code: cls.classCode || 'Class',
+            name: cls.subjectName || cls.subjectCode || '',
+          }}
+          students={assignmentCandidates}
+          teams={safeTeams}
+          initialMode={assignmentMode}
+          initialStudentIds={assignmentInitialIds}
+          loadingCandidates={assignmentCandidatesLoading}
+          onClose={() => setShowStudentAssignment(false)}
+          onSave={handleStudentAssignment}
         />
       )}
 

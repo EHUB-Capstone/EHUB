@@ -43,8 +43,26 @@ const validationFailure = (
   errors: ReturnType<typeof validateLoginPayload> | ReturnType<typeof validateRegisterPayload>,
 ) => failure(400, 'COMMON_VALIDATION_ERROR', 'Validation failed', errors);
 
-function userResponse(user: MockUser): MockUser {
-  return { ...user, _id: user.id };
+function userResponse(user: MockUser) {
+  const state = getMockState();
+  const enrollment = Object.entries(state.rosters)
+    .flatMap(([classId, roster]) => roster.map((student) => ({ classId, student })))
+    .find(({ student }) => (
+      (student.userId === user.id || student.studentId === user.id)
+      && student.enrollmentStatus === 'Active'
+    ));
+  const assignedClass = enrollment ? state.classes.find((item) => item.id === enrollment.classId) : undefined;
+  return {
+    ...user,
+    _id: user.id,
+    fullName: user.name,
+    rollNumber: user.studentId,
+    majorCode: user.major,
+    classId: assignedClass?.id || null,
+    classCode: assignedClass?.classCode || null,
+    teamId: enrollment?.student.teamId || null,
+    teamName: enrollment?.student.teamName || null,
+  };
 }
 
 function accountStatusFailure(user: MockUser): MockReply | null {

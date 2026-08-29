@@ -45,5 +45,6 @@ export interface StudentDirectoryRecord {
   major?: string | null;
   majorCode?: string | null;
   classId?: TeamStudent['classId'];
+  classCode?: string | null;
   teamId?: TeamStudent['teamId'];
 }

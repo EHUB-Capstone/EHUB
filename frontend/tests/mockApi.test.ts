@@ -383,6 +383,17 @@ test('mock API keeps static spreadsheet downloads ahead of class detail routes',
   assert.ok(template instanceof Blob);
 });
 
+test('mock class detail supports the canonical class slug used by the UI', async () => {
+  resetMockState();
+  await axiosClient.post('/auth/login', { email: 'admin@ehub.local', password: 'Mock123!' });
+  const targetClass = getMockState().classes.find((item) => item.slug === 'fa2026-ssg104-2');
+  assert.ok(targetClass);
+
+  const detail = await axiosClient.get(`/classes/${targetClass.slug}`);
+  assert.equal(detail.data.id, targetClass.id);
+  assert.equal(detail.data.slug, targetClass.slug);
+});
+
 test('mock API persists subject CRUD mutations for later queries', async () => {
   const code = 'MOCK101';
   await axiosClient.post('/subjects', { subjectCode: code, subjectName: 'Mock Contract Testing', status: 'active' });
@@ -463,6 +474,140 @@ test('mock student self-service separates current classes from completed history
   const history = await axiosClient.get('/classes/my-classes', { params: { scope: 'History' } });
   assert.ok(history.data.classes.some((cls: { classStatus: string; enrollmentStatus: string }) =>
     cls.classStatus === 'Archived' && cls.enrollmentStatus === 'Completed'));
+});
+
+test('mock team management supports create, update, duplicate prevention, project detail and delete', async () => {
+  resetMockState();
+  await axiosClient.post('/auth/login', { email: 'admin@ehub.local', password: 'Mock123!' });
+  const state = getMockState();
+  const targetClass = state.classes.find((cls) => cls.subjectCode === 'SSG104');
+  assert.ok(targetClass);
+  const roster = state.rosters[targetClass.id];
+  assert.equal(roster.length, 4);
+  const memberIds = roster.map((student) => student.studentId);
+
+  const created = await axiosClient.post(`/classes/${targetClass.id}/teams/generate`, {
+    studentIds: memberIds,
+    leaderStudentId: memberIds[0],
+    mode: 'standard',
+    teamName: 'Launch Lab',
+    description: 'A balanced mock startup team.',
+    mentorId: null,
+  });
+  assert.equal(created.data.team.teamName, 'Launch Lab');
+  assert.equal(created.data.team.members.length, 4);
+  assert.ok(roster.every((student) => student.teamId === created.data.team.id));
+
+  const outsideSemesterMentor = state.users.find((user) => user.email === 'yen.mentor@ehub.local');
+  assert.ok(outsideSemesterMentor);
+  outsideSemesterMentor.status = 'APPROVED';
+
+  const mentorCandidates = await axiosClient.get(`/classes/${targetClass.id}/mentor-candidates`);
+  assert.deepEqual(
+    mentorCandidates.data.map((candidate: { mentor: { userId: string } }) => candidate.mentor.userId),
+    state.semesterStaffAssignments
+      .filter((assignment) => assignment.semesterId === targetClass.semesterId && assignment.role === 'MENTOR' && assignment.status === 'ACTIVE')
+      .map((assignment) => assignment.userId),
+  );
+
+  const mentorId = mentorCandidates.data[0].mentor.mentorProfileId;
+  const mentorAssignment = await axiosClient.post(`/teams/${created.data.team.id}/mentor-assignments`, {
+    mentorProfileId: mentorId,
+  });
+  assert.equal(mentorAssignment.data.mentor.mentorProfileId, mentorId);
+
+  await assert.rejects(
+    axiosClient.post(`/teams/${created.data.team.id}/mentor-assignments`, {
+      mentorProfileId: outsideSemesterMentor.id,
+    }),
+    (error: unknown) => {
+      const response = (error as { response?: { status?: number; data?: { code?: string } } }).response;
+      return response?.status === 400 && response.data?.code === 'MENTOR_NOT_AVAILABLE';
+    },
+  );
+
+  const updated = await axiosClient.put(`/teams/${created.data.team.id}/members`, {
+    teamName: 'Launch Lab Updated',
+    description: 'Latest team information.',
+    memberIds,
+    leaderStudentId: memberIds[1],
+    rowVersion: created.data.team.rowVersion,
+  });
+  assert.equal(updated.data.teamName, 'Launch Lab Updated');
+  assert.equal(updated.data.description, 'Latest team information.');
+  assert.equal(updated.data.leaderId, memberIds[1]);
+
+  await assert.rejects(
+    axiosClient.post(`/classes/${targetClass.id}/teams/generate`, {
+      studentIds: memberIds,
+      leaderStudentId: memberIds[0],
+      mode: 'standard',
+      teamName: 'Duplicate Assignment',
+    }),
+    (error: unknown) => {
+      const response = (error as { response?: { status?: number; data?: { code?: string } } }).response;
+      return response?.status === 409 && response.data?.code === 'TEAM_MEMBER_CONFLICT';
+    },
+  );
+
+  const projectTeam = state.teams.find((team) => Boolean(team.projectName));
+  assert.ok(projectTeam);
+  const detail = await axiosClient.get(`/teams/${projectTeam.id}`);
+  assert.equal(detail.data.projectName, 'Campus Connect');
+  assert.ok(detail.data.projectDescription);
+
+  await axiosClient.delete(`/teams/${created.data.team.id}`);
+  assert.equal(state.teams.some((team) => team.id === created.data.team.id), false);
+  assert.ok(roster.every((student) => student.teamId === null));
+});
+
+test('mock student assignment keeps class, team and user detail consistent', async () => {
+  resetMockState();
+  await axiosClient.post('/auth/login', { email: 'admin@ehub.local', password: 'Mock123!' });
+  const state = getMockState();
+  const activeClass = state.classes.find((item) => item.status === 'Active');
+  const draftClass = state.classes.find((item) => item.status === 'Draft');
+  const targetTeam = state.teams.find((item) => item.classId === activeClass?.id && item.members.length === 4);
+  assert.ok(activeClass);
+  assert.ok(draftClass);
+  assert.ok(targetTeam);
+
+  const draftOnlyStudent = state.rosters[draftClass.id].find((student) =>
+    !state.rosters[activeClass.id].some((candidate) => candidate.studentId === student.studentId));
+  const otherDraftOnlyStudent = state.rosters[draftClass.id].find((student) =>
+    student.studentId !== draftOnlyStudent?.studentId
+    && !state.rosters[activeClass.id].some((candidate) => candidate.studentId === student.studentId));
+  assert.ok(draftOnlyStudent);
+  assert.ok(otherDraftOnlyStudent);
+
+  await axiosClient.post(`/classes/${activeClass.id}/students/assign`, {
+    studentIds: [draftOnlyStudent.studentId],
+  });
+  assert.ok(getMockState().rosters[activeClass.id].some((student) => student.studentId === draftOnlyStudent.studentId));
+  assert.ok(!getMockState().rosters[draftClass.id].some((student) => student.studentId === draftOnlyStudent.studentId));
+
+  await assert.rejects(
+    axiosClient.post(`/classes/${activeClass.id}/teams/${targetTeam.id}/students/assign`, {
+      studentIds: [otherDraftOnlyStudent.studentId],
+    }),
+    (error: unknown) => {
+      const response = (error as { response?: { status?: number; data?: { code?: string } } }).response;
+      return response?.status === 400 && response.data?.code === 'TEAM_MEMBER_NOT_IN_CLASS';
+    },
+  );
+
+  await axiosClient.post(`/classes/${activeClass.id}/teams/${targetTeam.id}/students/assign`, {
+    studentIds: [draftOnlyStudent.studentId],
+  });
+  const rosterDetail = await axiosClient.get(`/classes/${activeClass.id}/students`, { params: { pageSize: 100, status: 'Active' } });
+  const teamDetail = await axiosClient.get(`/teams/${targetTeam.id}`);
+  const userDetail = await axiosClient.get(`/users/${draftOnlyStudent.userId}`);
+  const assignedRosterStudent = rosterDetail.data.items.find((student: { studentId: string }) => student.studentId === draftOnlyStudent.studentId);
+
+  assert.equal(assignedRosterStudent.teamId, targetTeam.id);
+  assert.ok(teamDetail.data.members.some((member: { studentId: string }) => member.studentId === draftOnlyStudent.studentId));
+  assert.equal(userDetail.data.classId, activeClass.id);
+  assert.equal(userDetail.data.teamId, targetTeam.id);
 });
 
 test('mock semester lifecycle returns typed records and backend-style blockers', async () => {

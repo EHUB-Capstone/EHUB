@@ -18,8 +18,10 @@ import { teamApi } from '../../api/teamApi';
 import { unwrapApiData } from '../../utils/classMappers';
 import { parseApiError } from '../../utils/apiError';
 import { getTeamGroupFromMajor } from '../../constants/majors';
+import type { ApiEnvelope } from '../../types/classes';
 import type {
   ManagedTeam,
+  MentorCandidate,
   TeamClassOption,
   TeamDraft,
   TeamStudent,
@@ -78,11 +80,13 @@ export default function TeamManagementModal({
     startupField: currentProject?.startupField || '',
   });
   const [search, setSearch] = useState('');
-  const [classMentors, setClassMentors] = useState<any[]>([]);
-  const [mentorId, setMentorId] = useState(
-    team?.currentMentorAssignment?.mentor?.mentorProfileId
+  const currentMentorId = team?.currentMentorAssignment?.mentor?.mentorProfileId
     || entityId(team?.mentorId)
-    || '',
+    || '';
+  const [mentorCandidates, setMentorCandidates] = useState<MentorCandidate[]>([]);
+  const [mentorsLoading, setMentorsLoading] = useState(true);
+  const [mentorId, setMentorId] = useState(
+    currentMentorId,
   );
   const [attemptedSubmit, setAttemptedSubmit] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -125,7 +129,7 @@ export default function TeamManagementModal({
       isStandardSize,
       unassignedStudentCount: students.filter((student) => !student.teamId).length,
     };
-  }, [draft.memberIds.length, selectedStudents, students, team]);
+  }, [draft.memberIds.length, selectedStudents, students]);
 
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
@@ -143,23 +147,22 @@ export default function TeamManagementModal({
   useEffect(() => {
     let cancelled = false;
 
-    const loadClassMentors = async () => {
+    const loadMentorCandidates = async () => {
+      setMentorsLoading(true);
       try {
-        const response = await classApi.getClassMentors(classInfo.id);
-        const assignments = unwrapApiData<any>(response);
-        const mentors = new Map<string, any>();
-        (Array.isArray(assignments) ? assignments : []).forEach((assignment) => {
-          const mentor = assignment?.mentor;
-          const id = mentor?.mentorProfileId || mentor?.id;
-          if (id) mentors.set(String(id), mentor);
-        });
-        if (!cancelled) setClassMentors([...mentors.values()]);
+        const response = await classApi.getMentorCandidates(classInfo.id);
+        const payload = unwrapApiData<MentorCandidate[]>(
+          response as ApiEnvelope<MentorCandidate[]> | MentorCandidate[],
+        );
+        if (!cancelled) setMentorCandidates(Array.isArray(payload) ? payload : []);
       } catch {
-        if (!cancelled) setClassMentors([]);
+        if (!cancelled) setMentorCandidates([]);
+      } finally {
+        if (!cancelled) setMentorsLoading(false);
       }
     };
 
-    void loadClassMentors();
+    void loadMentorCandidates();
     return () => {
       cancelled = true;
     };
@@ -212,7 +215,8 @@ export default function TeamManagementModal({
             mode: 'standard',
             teamName: draft.teamName.trim() || null,
             description: draft.description.trim() || null,
-            mentorId: mentorId || null,
+            // Mentor assignment is a separate semester-aware operation.
+            mentorId: null,
           });
       const payload = unwrapApiData<any>(response);
       const savedTeam = team
@@ -220,11 +224,20 @@ export default function TeamManagementModal({
         : payload.team
           ? normalizeManagedTeam(payload.team)
           : normalizeManagedTeam(payload);
-      const currentMentorId = team?.currentMentorAssignment?.mentor?.mentorProfileId
-        || entityId(team?.mentorId)
-        || '';
-      if (team && mentorId && mentorId !== currentMentorId) {
-        await teamApi.assignMentor(savedTeam._id, mentorId);
+      if (mentorId && mentorId !== currentMentorId) {
+        try {
+          await teamApi.assignMentor(savedTeam._id, mentorId);
+        } catch (mentorError) {
+          if (!team) {
+            onSave(savedTeam);
+            toast.error(parseApiError(
+              mentorError,
+              'Team was created, but the mentor could not be assigned.',
+            ).message);
+            return;
+          }
+          throw mentorError;
+        }
       }
       onSave(savedTeam);
       toast.success(
@@ -310,16 +323,26 @@ export default function TeamManagementModal({
                     id="team-mentor"
                     value={mentorId}
                     onChange={(event) => setMentorId(event.target.value)}
-                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:opacity-50"
+                    disabled={mentorsLoading}
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:opacity-60"
                   >
-                    <option value="">No mentor</option>
-                    {classMentors.map((mentor) => (
-                      <option key={mentor.mentorProfileId} value={mentor.mentorProfileId}>
-                        {mentor.fullName} ({mentor.email})
+                    <option value="">{mentorsLoading ? 'Loading mentors…' : 'No mentor'}</option>
+                    {mentorCandidates.map((candidate) => (
+                      <option
+                        key={candidate.mentor.mentorProfileId}
+                        value={candidate.mentor.mentorProfileId}
+                        disabled={!candidate.hasCapacity && candidate.mentor.mentorProfileId !== currentMentorId}
+                      >
+                        {candidate.mentor.fullName} ({candidate.activeTeamCount}/{candidate.maxTeams} teams)
+                        {!candidate.hasCapacity && candidate.mentor.mentorProfileId !== currentMentorId ? ' · Full' : ''}
                       </option>
                     ))}
                   </select>
-                  {!classMentors.length && <p className="mt-1 text-xs text-slate-500">Only mentors already assigned to this class are available.</p>}
+                  {!mentorsLoading && mentorCandidates.length === 0 ? (
+                    <p className="mt-1 text-xs text-amber-700">No active mentor is configured for this semester.</p>
+                  ) : (
+                    <p className="mt-1 text-xs text-slate-500">Only active mentors in this class semester are available.</p>
+                  )}
                 </div>
               </section>
 

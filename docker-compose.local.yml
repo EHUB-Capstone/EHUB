@@ -45,7 +45,7 @@ services:
       Email__Username: ${EMAIL_USERNAME}
       Email__Password: ${EMAIL_PASSWORD}
       Email__SecureSocketOption: StartTls
-      Frontend__BaseUrl: http://localhost:5173
+      Frontend__BaseUrl: http://localhost:3000
       PasswordReset__TokenExpirationMinutes: 15
       RegistrationOtp__HashKey: ${REGISTRATION_OTP_HASH_KEY}
       RegistrationOtp__ExpirationMinutes: 5
@@ -70,6 +70,7 @@ services:
       dockerfile: Dockerfile
       args:
         VITE_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+        VITE_ENABLE_API_MOCKS: "true"
         VITE_ENABLE_REALTIME: "false"
     ports:
       - "3000:80"
