@@ -12,7 +12,12 @@ namespace EHub.Application.Features.Admin.Users.ManageUsers;
 
 public sealed class UserManagementHandler(IApplicationDbContext context, ICurrentUserService currentUser, IPasswordHasher passwordHasher) : IUserManagementHandler
 {
-    private static readonly IReadOnlyDictionary<string, string[]> ValidMajors = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase) { ["BIT"] = ["BIT_SE", "BIT_IA", "BIT_GD", "BIT_AI", "BIT_IS", "BIT_CS", "BIT_CY", "BIT_DS"], ["BBA"] = ["BBA_IB", "BBA_MKT", "BBA_HM", "BBA_MC", "BBA_TM", "BBA_FIN", "BBA_HRM", "BBA_DM", "BBA_BA", "BBA_LOG"], ["BLA"] = ["BLA_ELT", "BLA_BC", "BLA_JP", "BLA_KR", "BLA_CN"] };
+    private static readonly IReadOnlyDictionary<string, string[]> ValidMajors = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
+    {
+        ["BBA"] = [MajorCodes.BBA_HM, MajorCodes.BBA_IB, MajorCodes.BBA_MC, MajorCodes.BBA_MKT, MajorCodes.BBA_TM],
+        ["BEN"] = [MajorCodes.BEN],
+        ["BIT"] = [MajorCodes.BIT_AI, MajorCodes.BIT_GD, MajorCodes.BIT_IA, MajorCodes.BIT_SE]
+    };
     public async Task<Result<ManagedUserListResponse>> GetUsersAsync(int page, int limit, string? search, string? role, string? status, CancellationToken token = default)
     {
         if (page < 1 || limit is < 1 or > 100) return Fail<ManagedUserListResponse>("VALIDATION_ERROR", "Page and limit are invalid.");

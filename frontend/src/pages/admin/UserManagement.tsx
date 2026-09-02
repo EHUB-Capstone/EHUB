@@ -521,7 +521,7 @@ export default function UserManagement() {
                       });
                     }}
                   >
-                    {PROGRAM_GROUPS.filter(g => ['BIT', 'BBA', 'BLA'].includes(g.code)).map(g => (
+                    {PROGRAM_GROUPS.map(g => (
                       <option key={g.code} value={g.code}>{g.name} ({g.code})</option>
                     ))}
                   </select>

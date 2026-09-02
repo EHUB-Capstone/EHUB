@@ -208,13 +208,12 @@ test('student major is required and every non-empty major must be a backend majo
   );
 });
 
-test('frontend major list exactly covers all 24 backend registration majors', () => {
+test('frontend major list exactly covers the 10 supported backend registration majors', () => {
   const backendMajors = [
-    'BBA_HM', 'BBA_IB', 'BBA_MC', 'BBA_MKT', 'BEN', 'BBA_TM', 'BBA_FIN', 'BBA_HRM',
-    'BBA_DM', 'BBA_BA', 'BBA_LOG', 'BIT_AI', 'BIT_GD', 'BIT_IA', 'BIT_SE', 'BIT_IS',
-    'BIT_CS', 'BIT_CY', 'BIT_DS', 'BLA_ELT', 'BLA_BC', 'BLA_JP', 'BLA_KR', 'BLA_CN',
+    'BBA_HM', 'BBA_IB', 'BBA_MC', 'BBA_MKT', 'BEN', 'BBA_TM',
+    'BIT_AI', 'BIT_GD', 'BIT_IA', 'BIT_SE',
   ];
-  assert.equal(BACKEND_MAJOR_CODES.length, 24);
+  assert.equal(BACKEND_MAJOR_CODES.length, 10);
   assert.deepEqual([...BACKEND_MAJOR_CODES].sort(), backendMajors.sort());
 
   for (const majorCode of backendMajors) {
