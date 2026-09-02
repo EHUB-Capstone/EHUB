@@ -113,14 +113,14 @@ test('mock register enforces exact backend role and major values', async () => {
 });
 
 test('mock register verifies OTP before storing normalized user state', async () => {
-  const email = 'new-bla-student@ehub.local';
+  const email = 'new-bba-student@ehub.local';
   const registration = await axiosClient.post('/auth/register', {
-    fullName: '  New BLA Student  ',
+    fullName: '  New BBA Student  ',
     email: `  ${email.toUpperCase()}  `,
     password: 'Secret123!',
     confirmPassword: 'Secret123!',
     role: 'Student',
-    majorCode: 'bla_cn',
+    majorCode: 'bba_mc',
   });
 
   assert.equal(registration.success, true);
@@ -137,15 +137,15 @@ test('mock register verifies OTP before storing normalized user state', async ()
   assert.equal(verification.data.status, 'Active');
   assert.equal(verification.data.requiresEmailVerification, false);
   assert.deepEqual(verification.data.user.roles, ['Student']);
-  assert.equal(verification.data.user.majorCode, 'BLA_CN');
+  assert.equal(verification.data.user.majorCode, 'BBA_MC');
   assert.ok(verification.data.accessToken);
   assert.ok(verification.data.expiresAt);
 
   const stored = getMockState().users.find((user) => user.email === email);
-  assert.equal(stored?.name, 'New BLA Student');
+  assert.equal(stored?.name, 'New BBA Student');
   assert.equal(stored?.role, 'STUDENT');
-  assert.equal(stored?.programGroup, 'BLA');
-  assert.equal(stored?.major, 'BLA_CN');
+  assert.equal(stored?.programGroup, 'BBA');
+  assert.equal(stored?.major, 'BBA_MC');
   assert.equal(getMockState().authPasswords[stored?.id ?? ''], 'Secret123!');
 
   const login = await axiosClient.post('/auth/login', { email, password: 'Secret123!' });
