@@ -5,7 +5,7 @@ This directory contains the target architecture baseline for the final EHub grad
 ## Diagram inventory
 
 1. **Development and Delivery View Architecture** — reviewed source change, parallel CI checks, staging acceptance, versioned releases and controlled production deployment.
-2. **Physical View Architecture** — target production deployment on a single VPS with external managed services.
+2. **Physical View Architecture** — target production deployment behind Cloudflare on a single VPS with an explicit React frontend and external managed services.
 3. **Overall Logical View Architecture** — actors, presentation layer, modular-monolith business modules, Clean Architecture layers and external systems.
 4. **AI Proposal Analysis Architecture** — provider-neutral asynchronous AI workflow with structured validation and human governance.
 5. **Realtime and Asynchronous Processing Architecture** — authorized SignalR communication and transactional PostgreSQL outbox processing.
@@ -22,7 +22,7 @@ This directory contains the target architecture baseline for the final EHub grad
 
 ## Icon system
 
-- Recognizable technology components use their official-style brand marks, including PostgreSQL, React, .NET, Docker, GitHub, Nginx, Google and Cloudinary.
+- Recognizable technology components use their official-style brand marks, including PostgreSQL, React, .NET, Docker, GitHub, Nginx, Cloudflare, Google and Cloudinary.
 - Business and architectural components use a consistent outline icon set embedded by the generator.
 - Every icon is stored inside the generated SVG/Draw.io content, so the diagrams remain fully visible offline and do not depend on external image URLs.
 - Each component is represented by a standalone large icon or logo with its name directly underneath; rectangular component cards are intentionally omitted.
@@ -66,4 +66,5 @@ Items requiring final verification include:
 - Cloudinary access mode for protected documents.
 - Transactional email provider.
 - Production monitoring and off-site backup implementation.
+- Cloudflare proxied DNS, WAF, rate limiting, strict origin TLS and origin access restrictions.
 - GitHub Actions production deployment workflow.

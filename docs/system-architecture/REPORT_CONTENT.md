@@ -32,24 +32,25 @@ The Discord path is intentionally dashed and remains outside the critical delive
 
 ### Figure 2. EHub Target Production Deployment Architecture
 
-The Physical View describes the target single-VPS production topology. Users first resolve the public EHub domain through DNS and then initiate an HTTPS connection to the VPS on port 443. The VPS host firewall admits the request to the Nginx gateway, which terminates TLS, serves the React single-page application and forwards `/api` and `/hubs` traffic to the ASP.NET Core API container. The API, background worker and PostgreSQL communicate on a private Docker network; PostgreSQL has no public port. A host-level observability service receives aggregated logs, health data and metrics from all containers in that network. The worker processes outbox events, AI and email jobs, and expired import sessions independently from interactive API requests.
+The Physical View describes the target single-VPS production topology behind Cloudflare. EHub web traffic resolves through a proxied Cloudflare hostname and reaches Cloudflare Edge Protection before the origin VPS. Cloudflare provides the public DNS proxy, CDN, DDoS mitigation, WAF and rate-limiting layer. Accepted HTTPS traffic is forwarded to the Nginx gateway on port 443. Nginx serves the static React single-page application and routes `/api` and `/hubs` traffic to the ASP.NET Core API container. Cloudflare protects the public web entry point only; backend calls to managed providers remain direct outbound connections.
 
-PostgreSQL data is mounted on a durable host volume that remains outside the lifecycle of an individual database container. A scheduled backup job creates an encrypted logical export and transfers it to off-site storage so that loss of the VPS does not also destroy every recovery copy. API and worker telemetry is collected by the observability service. Provider-neutral external connections supply Google authentication, protected media and document storage, AI inference and transactional email delivery.
+The React frontend, API, background worker and PostgreSQL are isolated within the VPS deployment. PostgreSQL exposes no public port and persists its data on durable VPS storage even though the physical storage device is intentionally not shown as a separate diagram component. A scheduled backup job creates an encrypted logical export and transfers it to off-site storage so that loss of the VPS does not also destroy every recovery copy. The worker processes outbox events, AI and email jobs, and expired import sessions independently from interactive API requests. API and worker telemetry is collected by the observability service. Provider-neutral external connections supply Google authentication, protected media and document storage, AI inference and transactional email delivery.
 
 Main components:
 
-- **Domain and DNS:** resolves the public EHub address without exposing internal container addresses.
-- **Host Firewall:** restricts the public application surface to HTTPS port 443. Any administrative or deployment channel must be separately restricted by an IP allow-list, VPN or equivalent control and is intentionally omitted from this runtime view.
-- **Nginx Web Gateway:** terminates TLS, serves the SPA and proxies `/api` and `/hubs` traffic.
+- **Cloudflare Edge Protection:** provides proxied DNS, CDN delivery, DDoS mitigation, WAF and rate limiting before requests reach the origin VPS.
+- **React Frontend:** provides the role-based single-page web interface as a production static build served through Nginx.
+- **Nginx Web Gateway:** receives protected HTTPS traffic, serves the React SPA and proxies `/api` and `/hubs` traffic.
 - **EHub API Container:** hosts REST endpoints, JWT authorization, SignalR and health checks.
 - **EHub Worker Container:** executes reliable background and long-running work.
 - **PostgreSQL:** stores business data, audit data, chat messages, jobs and outbox events.
-- **PostgreSQL Data Volume:** retains database files when the PostgreSQL container is replaced or restarted.
 - **Observability:** collects API and worker telemetry and monitors health, uptime and host resources.
 - **Backup Job and Off-site Storage:** create scheduled encrypted exports and retain a recovery copy outside the production VPS.
 - **Managed External Services:** provide identity, media, AI and email capabilities.
 
-Reading conventions: solid arrows represent request, runtime or primary data flows; dashed arrows represent operational, scheduled or asynchronous flows. An arrow points toward the invoked destination or toward the receiver of the dominant data flow. Dashed boundaries distinguish the public Internet, the production VPS, its private Docker network and managed systems outside the VPS.
+Reading conventions: solid arrows represent request, runtime or primary data flows; dashed arrows represent operational, scheduled or asynchronous flows. An arrow points toward the invoked destination or toward the receiver of the dominant data flow. Dashed boundaries distinguish the public Internet, Cloudflare Edge Protection, the production VPS, its private Docker network and managed systems outside the VPS.
+
+Origin hardening remains mandatory even though a separate host-firewall icon is intentionally omitted from the figure. The VPS must accept web traffic only through the approved Cloudflare path, keep PostgreSQL and container ports private, restrict administrative access separately, and use strict TLS between Cloudflare and Nginx. Cloudflare protects inbound web traffic; it does not replace operating-system firewall policy or container-network isolation.
 
 ## C. Logical View Architecture
 

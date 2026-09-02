@@ -4,7 +4,7 @@ The architecture figures combine brand marks for recognizable technologies with 
 
 ## Brand marks
 
-The embedded vector paths in `assets/brand-icons.json` were obtained from the open-source [Simple Icons](https://github.com/simple-icons/simple-icons) collection on 20 August 2026.
+The embedded vector paths in `assets/brand-icons.json` were obtained from the open-source [Simple Icons](https://github.com/simple-icons/simple-icons) collection and last updated on 28 August 2026.
 
 Included brands:
 
@@ -15,6 +15,7 @@ Included brands:
 - GitHub Actions
 - GitHub
 - Nginx
+- Cloudflare
 - Google
 - Cloudinary
 
