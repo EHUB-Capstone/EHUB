@@ -39,6 +39,8 @@ Api            -> Application + Infrastructure + Contracts + Shared
 
 Không được để `Domain` phụ thuộc EF Core/API, không để `Application` phụ thuộc `Infrastructure`, và không truy cập `DbContext` trực tiếp trong Controller.
 
+Sơ đồ trên mô tả dependency giữa các project nội bộ. Theo cấu trúc hiện tại, `Application` được phép dùng các API EF Core thông qua `IApplicationDbContext`; còn `AppDbContext`, Npgsql, cấu hình database và migration phải nằm trong `Infrastructure`.
+
 ### Frontend
 
 - `src/pages`: màn hình và điều phối cấp route.
@@ -54,7 +56,7 @@ Không được để `Domain` phụ thuộc EF Core/API, không để `Applicat
 
 ### Controller và API contract
 
-- Controller chỉ nhận request, lấy thông tin người dùng hiện tại, gọi Application handler và trả `ApiResponse<T>`.
+- Controller chỉ nhận request, lấy thông tin người dùng hiện tại và gọi Application handler. Endpoint JSON trả `ApiResponse<T>`; endpoint tải file được phép trả `FileResult` với content type và tên file an toàn.
 - Không đặt business logic hoặc câu truy vấn EF Core trong Controller.
 - Không trả trực tiếp Domain Entity ra API; phải dùng DTO trong `EHub.Contracts`.
 - Khi thay đổi contract phải cập nhật đồng bộ backend contract, frontend type, API client, mock và test liên quan.
@@ -67,10 +69,13 @@ Không được để `Domain` phụ thuộc EF Core/API, không để `Applicat
 - FluentValidation kiểm tra cấu trúc request; quy tắc phụ thuộc database, trạng thái và quyền được kiểm tra trong handler.
 - Truyền `CancellationToken` cho các lời gọi async; dùng `AsNoTracking()` cho truy vấn chỉ đọc khi phù hợp.
 - Handler/service mới phải được đăng ký trong `DependencyInjection.cs` đúng layer.
+- Khi một nghiệp vụ vừa thay đổi database vừa tạo notification/event, dữ liệu nghiệp vụ và Outbox message phải được lưu cùng transaction/`SaveChanges`. Background job phải chịu được retry và không tạo dữ liệu trùng.
+- Thời gian lưu database, token, audit log và Outbox phải dùng UTC; trong Application ưu tiên abstraction thời gian hiện có để code dễ kiểm thử.
 
 ### Xác thực và phân quyền
 
 - Dùng `SystemPolicies`, `SystemRoles` và `ICurrentUserService`; không tin `userId` hoặc role do request tự gửi lên.
+- Mọi Controller/action mới phải có `[Authorize]` hoặc `SystemPolicies` phù hợp. Chỉ dùng `[AllowAnonymous]` cho endpoint thật sự công khai như đăng nhập, đăng ký, OTP và đặt lại mật khẩu; endpoint test/debug phải bị giới hạn trong Development.
 - Frontend ẩn nút không phải là bảo mật. Backend vẫn phải kiểm tra role và quyền trên tài nguyên.
 - Phải chống IDOR: có ID của Class, Team, Project hoặc Submission không có nghĩa là được phép xem/sửa nó.
 - Kiểm tra đúng các quan hệ như Lecturer được phân công, Student thuộc lớp/team, Mentor được gán và chủ sở hữu dữ liệu.
@@ -162,7 +167,6 @@ Trước khi báo hoàn thành, AI và thành viên phải kiểm tra:
 - Backend đã kiểm tra authentication, role và quyền tài nguyên.
 - Không chứa secret, dữ liệu cá nhân hoặc log nhạy cảm.
 - Contract backend/frontend và mock đã đồng bộ nếu API thay đổi.
-- Có test cho success, validation, forbidden và các edge case quan trọng.
+- Có test cho success, validation, unauthenticated (`401`), forbidden (`403`) và các edge case quan trọng phù hợp với endpoint.
 - Nếu đổi schema thì có migration và kế hoạch rollback.
 - Nêu rõ các lệnh đã chạy và kết quả thật; không được nói test pass nếu chưa chạy.
-
