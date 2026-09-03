@@ -42,7 +42,7 @@ public sealed class TeamsController : ControllerBase
 
     [HttpPost("classes/{classId:guid}/teams/student-proposal")]
     public async Task<IActionResult> SubmitStudentProposal(Guid classId, [FromBody] SubmitStudentTeamProposalRequest request, [FromServices] ITeamProposalHandler handler, CancellationToken cancellationToken) =>
-        ToResponse(await handler.SubmitStudentProposalAsync(classId, request, UserId, Role, cancellationToken), "Team proposal submitted.");
+        ToResponse(await handler.SubmitStudentProposalAsync(classId, request, UserId, Role, cancellationToken), "Team created and project proposal submitted for review.");
 
     [HttpGet("teams/{teamId:guid}")]
     public async Task<IActionResult> GetTeam(Guid teamId, [FromServices] ITeamManagementHandler handler, CancellationToken cancellationToken) =>
@@ -58,7 +58,7 @@ public sealed class TeamsController : ControllerBase
 
     [HttpDelete("teams/{teamId:guid}")]
     public async Task<IActionResult> DeleteTeam(Guid teamId, [FromServices] ITeamManagementHandler handler, CancellationToken cancellationToken) =>
-        ToResponse(await handler.DeleteAsync(teamId, UserId, Role, cancellationToken), "Team archived and members unassigned.");
+        ToResponse(await handler.DeleteAsync(teamId, UserId, Role, cancellationToken), "Team permanently deleted; student accounts and class enrollments preserved.");
 
     [HttpGet("classes/{classId:guid}/mentors")]
     public async Task<IActionResult> GetClassMentors(Guid classId, [FromServices] IMentorAssignmentHandler handler, CancellationToken cancellationToken) =>

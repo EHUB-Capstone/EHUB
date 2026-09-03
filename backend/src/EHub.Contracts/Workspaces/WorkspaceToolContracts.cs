@@ -5,11 +5,13 @@ namespace EHub.Contracts.Workspaces;
 public sealed class WeeklyTaskQuery
 {
     public string CourseCode { get; init; } = string.Empty;
-    public int WeekNumber { get; init; } = 1;
+    public int? WeekNumber { get; init; }
     public Guid? ClassId { get; init; }
     public Guid? TeamId { get; init; }
     public string? Status { get; init; }
     public Guid? AssigneeStudentId { get; init; }
+    public string? Priority { get; init; }
+    public string? Search { get; init; }
 }
 
 public sealed class SaveWeeklyTaskRequest

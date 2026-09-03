@@ -50,7 +50,7 @@ public sealed class WorkspaceToolsHandler(
             .Include(item => item.Course)
             .Include(item => item.AssigneeStudent)
             .Include(item => item.Creator)
-            .Where(item => item.WeekNumber == query.WeekNumber)
+            .Where(item => !query.WeekNumber.HasValue || item.WeekNumber == query.WeekNumber)
             .Where(item =>
                 item.Scope == WeeklyTaskScope.Course || item.Scope == WeeklyTaskScope.GlobalTemplate ||
                 effectiveClassId.HasValue && item.Scope == WeeklyTaskScope.Class && item.ClassId == effectiveClassId ||
@@ -59,6 +59,17 @@ public sealed class WorkspaceToolsHandler(
         if (IsRole(role, SystemRoles.Student)) tasks = tasks.Where(item => item.VisibleToStudents);
         if (!string.IsNullOrWhiteSpace(query.Status) && TryStatus(query.Status, out var status)) tasks = tasks.Where(item => item.Status == status);
         if (query.AssigneeStudentId.HasValue) tasks = tasks.Where(item => item.AssigneeStudentId == query.AssigneeStudentId);
+        if (!string.IsNullOrWhiteSpace(query.Priority))
+        {
+            if (!Enum.TryParse<TaskPriority>(query.Priority, true, out var priority) || !Enum.IsDefined(priority))
+                return Fail<WeeklyTaskBoardDto>(ErrorCodes.WorkspaceValidationError, "Task priority is invalid.");
+            tasks = tasks.Where(item => item.Priority == priority);
+        }
+        if (!string.IsNullOrWhiteSpace(query.Search))
+        {
+            var search = query.Search.Trim().ToLower();
+            tasks = tasks.Where(item => item.Title.ToLower().Contains(search) || item.Description != null && item.Description.ToLower().Contains(search));
+        }
 
         var rows = await tasks.OrderBy(item => item.CreatedAt).ToListAsync(cancellationToken);
         var result = new WeeklyTaskBoardDto

@@ -212,6 +212,34 @@ public sealed class TeamProposalHandler : ITeamProposalHandler
                 }
 
                 var now = DateTime.UtcNow;
+                var teamCode = await CreateNextTeamCodeAsync(targetClass, transactionCancellationToken);
+                var team = new Team
+                {
+                    ClassId = classId,
+                    TeamCode = teamCode,
+                    TeamName = groupName,
+                    Status = TeamStatus.Active,
+                    CreatedById = userId,
+                    CreatedBy = userId
+                };
+                foreach (var enrollment in composition.Value)
+                {
+                    team.TeamMembers.Add(new TeamMember
+                    {
+                        TeamId = team.Id,
+                        Team = team,
+                        ClassId = classId,
+                        StudentId = enrollment.StudentId,
+                        ClassStudent = enrollment,
+                        RoleInTeam = enrollment.StudentId == request.LeaderStudentId
+                            ? TeamMemberRole.Leader
+                            : TeamMemberRole.Member,
+                        CountsTowardActiveTeam = true,
+                        JoinedAt = now,
+                        CreatedById = userId
+                    });
+                }
+
                 var proposal = new TeamProposal
                 {
                     ClassId = classId,
@@ -221,6 +249,8 @@ public sealed class TeamProposalHandler : ITeamProposalHandler
                     Description = request.Description.Trim(),
                     Status = TeamProposalStatus.Pending,
                     SubmittedAtUtc = now,
+                    ApprovedTeamId = team.Id,
+                    ApprovedTeam = team,
                     CreatedBy = userId
                 };
                 foreach (var enrollment in composition.Value)
@@ -234,7 +264,7 @@ public sealed class TeamProposalHandler : ITeamProposalHandler
                         ClassStudent = enrollment,
                         IsLeader = enrollment.StudentId == request.LeaderStudentId,
                         IsIncluded = true,
-                        CountsTowardOpenProposal = true
+                        CountsTowardOpenProposal = false
                     });
                 }
 
@@ -246,12 +276,20 @@ public sealed class TeamProposalHandler : ITeamProposalHandler
                     null,
                     userId,
                     now);
+                _context.Teams.Add(team);
                 _context.TeamProposals.Add(proposal);
+                ClassOutbox.Enqueue(_context, "Team.Created.v1", classId, new
+                {
+                    TeamId = team.Id,
+                    StudentUserIds = GetMemberUserIds(composition.Value)
+                }, now);
                 ClassOutbox.Enqueue(_context, "TeamProposal.Submitted.v1", classId, new
                 {
                     ProposalId = proposal.Id,
                     LecturerUserId = targetClass.PrimaryLecturerId,
-                    AdminReviewRequired = false,
+                    ProjectReviewRequired = true,
+                    TeamCreatedImmediately = true,
+                    TeamId = team.Id,
                     StudentUserIds = GetMemberUserIds(composition.Value)
                 }, now);
                 await _context.SaveChangesAsync(transactionCancellationToken);
@@ -326,6 +364,7 @@ public sealed class TeamProposalHandler : ITeamProposalHandler
 
                 var hasDuplicateTeamName = await _context.Teams.AnyAsync(item =>
                     item.ClassId == proposal.ClassId &&
+                    item.Id != proposal.ApprovedTeamId &&
                     item.TeamName.ToLower() == normalizedTeamName,
                     transactionCancellationToken);
                 if (hasDuplicateTeamName)
@@ -353,7 +392,7 @@ public sealed class TeamProposalHandler : ITeamProposalHandler
                 foreach (var existing in proposal.Members)
                 {
                     existing.IsIncluded = desired.ContainsKey(existing.StudentId);
-                    existing.CountsTowardOpenProposal = existing.IsIncluded;
+                    existing.CountsTowardOpenProposal = existing.IsIncluded && !proposal.ApprovedTeamId.HasValue;
                     existing.IsLeader = existing.IsIncluded && existing.StudentId == request.LeaderStudentId;
                 }
                 foreach (var enrollment in composition.Value.Where(item => proposal.Members.All(member => member.StudentId != item.StudentId)))
@@ -362,7 +401,7 @@ public sealed class TeamProposalHandler : ITeamProposalHandler
                     {
                         ProposalId = proposal.Id, Proposal = proposal, ClassId = proposal.ClassId, StudentId = enrollment.StudentId,
                         ClassStudent = enrollment, IsLeader = enrollment.StudentId == request.LeaderStudentId, IsIncluded = true,
-                        CountsTowardOpenProposal = true
+                        CountsTowardOpenProposal = !proposal.ApprovedTeamId.HasValue
                     });
                 }
                 AddHistory(proposal, proposal.Status, proposal.Status, "Updated", null, userId, DateTime.UtcNow);
@@ -472,35 +511,51 @@ public sealed class TeamProposalHandler : ITeamProposalHandler
                 var previous = proposal.Status;
                 if (decision == TeamProposalStatus.Approved)
                 {
-                    var leaderId = included.SingleOrDefault(member => member.IsLeader)?.StudentId ?? Guid.Empty;
-                    var composition = await LoadAndValidateCompositionAsync(
-                        proposal.ClassId,
-                        included.Select(member => member.StudentId).ToArray(),
-                        leaderId,
-                        proposal.Id,
-                        transactionCancellationToken);
-                    if (composition.IsFailure) return Failure(composition.Error.Code, composition.Error.Message);
-                    var teamCode = await CreateNextTeamCodeAsync(proposal.Class, transactionCancellationToken);
-                    var team = new Team
+                    Team team;
+                    if (proposal.ApprovedTeamId.HasValue)
                     {
-                        ClassId = proposal.ClassId,
-                        TeamCode = teamCode,
-                        TeamName = proposal.TeamName,
-                        Description = proposal.Description,
-                        Status = TeamStatus.Active,
-                        CreatedById = userId,
-                        CreatedBy = userId
-                    };
-                    foreach (var enrollment in composition.Value)
-                    {
-                        team.TeamMembers.Add(new TeamMember
-                        {
-                            TeamId = team.Id, Team = team, ClassId = proposal.ClassId, StudentId = enrollment.StudentId,
-                            ClassStudent = enrollment, RoleInTeam = enrollment.StudentId == leaderId ? TeamMemberRole.Leader : TeamMemberRole.Member,
-                            CountsTowardActiveTeam = true, JoinedAt = now, CreatedById = userId
-                        });
+                        var existingTeam = await _context.Teams
+                            .FirstOrDefaultAsync(item => item.Id == proposal.ApprovedTeamId.Value, transactionCancellationToken);
+                        if (existingTeam == null)
+                            return Failure(ErrorCodes.TeamNotFound, "The team linked to this project proposal no longer exists.");
+                        team = existingTeam;
                     }
-                    _context.Teams.Add(team);
+                    else
+                    {
+                        var leaderId = included.SingleOrDefault(member => member.IsLeader)?.StudentId ?? Guid.Empty;
+                        var composition = await LoadAndValidateCompositionAsync(
+                            proposal.ClassId,
+                            included.Select(member => member.StudentId).ToArray(),
+                            leaderId,
+                            proposal.Id,
+                            transactionCancellationToken);
+                        if (composition.IsFailure) return Failure(composition.Error.Code, composition.Error.Message);
+                        var teamCode = await CreateNextTeamCodeAsync(proposal.Class, transactionCancellationToken);
+                        team = new Team
+                        {
+                            ClassId = proposal.ClassId,
+                            TeamCode = teamCode,
+                            TeamName = proposal.TeamName,
+                            Status = TeamStatus.Active,
+                            CreatedById = userId,
+                            CreatedBy = userId
+                        };
+                        foreach (var enrollment in composition.Value)
+                        {
+                            team.TeamMembers.Add(new TeamMember
+                            {
+                                TeamId = team.Id, Team = team, ClassId = proposal.ClassId, StudentId = enrollment.StudentId,
+                                ClassStudent = enrollment, RoleInTeam = enrollment.StudentId == leaderId ? TeamMemberRole.Leader : TeamMemberRole.Member,
+                                CountsTowardActiveTeam = true, JoinedAt = now, CreatedById = userId
+                            });
+                        }
+                        _context.Teams.Add(team);
+                        proposal.ApprovedTeamId = team.Id;
+                        proposal.ApprovedTeam = team;
+                    }
+
+                    if (await _context.Projects.AnyAsync(item => item.TeamId == team.Id, transactionCancellationToken))
+                        return Failure(ErrorCodes.TeamProposalStateInvalid, "This team already has a project.");
                     _context.Projects.Add(new Project
                     {
                         TeamId = team.Id,
@@ -511,8 +566,6 @@ public sealed class TeamProposalHandler : ITeamProposalHandler
                         CreatedById = userId,
                         CreatedBy = userId
                     });
-                    proposal.ApprovedTeamId = team.Id;
-                    proposal.ApprovedTeam = team;
                 }
 
                 proposal.Status = decision;
@@ -521,7 +574,7 @@ public sealed class TeamProposalHandler : ITeamProposalHandler
                 proposal.LatestReviewComment = comment;
                 proposal.UpdatedBy = userId;
                 foreach (var member in proposal.Members)
-                    member.CountsTowardOpenProposal = decision == TeamProposalStatus.NeedsRevision && member.IsIncluded;
+                    member.CountsTowardOpenProposal = !proposal.ApprovedTeamId.HasValue && decision == TeamProposalStatus.NeedsRevision && member.IsIncluded;
                 AddHistory(proposal, previous, decision, "Reviewed", comment, userId, now);
                 ClassOutbox.Enqueue(_context, "TeamProposal.Reviewed.v1", proposal.ClassId, new
                 {
@@ -598,6 +651,20 @@ public sealed class TeamProposalHandler : ITeamProposalHandler
         CancellationToken cancellationToken)
     {
         var ids = idsInput.Distinct().ToArray();
+        var linkedTeamId = currentProposalId.HasValue
+            ? await _context.TeamProposals.AsNoTracking()
+                .Where(item => item.Id == currentProposalId.Value)
+                .Select(item => item.ApprovedTeamId).FirstOrDefaultAsync(cancellationToken)
+            : null;
+        if (linkedTeamId.HasValue)
+        {
+            var teamMembers = await _context.TeamMembers.AsNoTracking()
+                .Where(item => item.TeamId == linkedTeamId.Value && item.CountsTowardActiveTeam)
+                .Select(item => new { item.StudentId, item.RoleInTeam }).ToListAsync(cancellationToken);
+            if (!ids.ToHashSet().SetEquals(teamMembers.Select(item => item.StudentId)) ||
+                !teamMembers.Any(item => item.StudentId == leaderId && item.RoleInTeam == TeamMemberRole.Leader))
+                return CompositionFailure("Project proposals must use the current team members and leader. Manage membership separately.");
+        }
         if (ids.Length != idsInput.Count)
         {
             return CompositionFailure("Student IDs must be unique.", ErrorCodes.ClassValidationError);
@@ -616,7 +683,7 @@ public sealed class TeamProposalHandler : ITeamProposalHandler
             .Where(item => item.ClassId == classId && ids.Contains(item.StudentId) && item.EnrollmentStatus == EnrollmentStatus.Active)
             .ToListAsync(cancellationToken);
         if (enrollments.Count != ids.Length) return CompositionFailure("Every proposed member must be actively enrolled in the class.");
-        if (await _context.TeamMembers.AsNoTracking().AnyAsync(item => item.ClassId == classId && ids.Contains(item.StudentId) && item.CountsTowardActiveTeam, cancellationToken))
+        if (await _context.TeamMembers.AsNoTracking().AnyAsync(item => item.ClassId == classId && ids.Contains(item.StudentId) && item.CountsTowardActiveTeam && (!linkedTeamId.HasValue || item.TeamId != linkedTeamId.Value), cancellationToken))
             return CompositionFailure("A proposed member already belongs to an active team.", ErrorCodes.TeamMembershipConflict);
         if (await _context.TeamProposalMembers.AsNoTracking().AnyAsync(item =>
                 item.ClassId == classId && ids.Contains(item.StudentId) && item.CountsTowardOpenProposal &&

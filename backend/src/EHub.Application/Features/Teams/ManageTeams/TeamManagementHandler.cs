@@ -228,6 +228,9 @@ public sealed class TeamManagementHandler : ITeamManagementHandler
 
                 var sequence = await GetNextTeamSequenceAsync(targetClass, transactionCancellationToken);
                 var teamName = ResolveTeamName(request.TeamName, sequence);
+                var projectName = request.UseTeamNameForProject ? teamName : request.ProjectName?.Trim();
+                if (!string.IsNullOrEmpty(projectName) && projectName.Length is < 3 or > 100)
+                    return GenerateFailure(ErrorCodes.ClassValidationError, "Project name must be between 3 and 100 characters.");
                 if (teamName.Length is < 3 or > 100)
                 {
                     return GenerateFailure(
@@ -276,6 +279,16 @@ public sealed class TeamManagementHandler : ITeamManagementHandler
                 }
 
                 var createdAt = DateTime.UtcNow;
+                if (!string.IsNullOrEmpty(projectName))
+                {
+                    var project = new Project
+                    {
+                        TeamId = team.Id, Team = team, Name = projectName,
+                        Status = ProjectStatus.Draft, CreatedById = userId, CreatedBy = userId
+                    };
+                    team.Project = project;
+                    _context.Projects.Add(project);
+                }
                 RecordTeamActivity(team, "TEAM_CREATED", "Team.Created.v1", userId, createdAt);
                 await _context.SaveChangesAsync(transactionCancellationToken);
 
@@ -457,68 +470,18 @@ public sealed class TeamManagementHandler : ITeamManagementHandler
                     return Result.Failure(new Error(ErrorCodes.TeamNotFound, "The requested team was not found."));
                 }
 
-                var permission = ValidateManager(team.Class, userId, role);
-                if (permission != null)
-                {
-                    return Result.Failure(new Error(permission.Value.Code, permission.Value.Message));
-                }
+                if (!string.Equals(role, SystemRoles.Lecturer, StringComparison.OrdinalIgnoreCase) ||
+                    team.Class.PrimaryLecturerId != userId)
+                    return Result.Failure(new Error(ErrorCodes.ClassAccessDenied, "Only the assigned lecturer can permanently dissolve this team."));
 
-                if (team.Status != TeamStatus.Active)
-                {
-                    return Result.Failure(new Error(ErrorCodes.TeamInactive, "Only an active team can be deleted."));
-                }
+                var stateError = ClassStateRules.GetMutationError(team.Class.Status);
+                if (stateError != null) return Result.Failure(stateError);
 
-                var hasProtectedData = await HasProtectedTeamDataAsync(team.Id, transactionCancellationToken);
-                if (hasProtectedData)
-                {
-                    return Result.Failure(new Error(
-                        ErrorCodes.TeamDeletionBlocked,
-                        "This team has project, proposal, checkpoint, evaluation, or task data and cannot be deleted. Archive the class or preserve the team instead."));
-                }
+                if (await TeamDataDeletion.HasExternalFilesAsync(_context, teamId, transactionCancellationToken))
+                    return Result.Failure(new Error(ErrorCodes.TeamDeletionBlocked,
+                        "This team has externally stored files. Permanent file deletion must be configured before dissolving it. No data has been deleted."));
 
-                var now = DateTime.UtcNow;
-                var memberUserIds = GetMemberUserIds(
-                    team.TeamMembers.Where(member => member.CountsTowardActiveTeam));
-                foreach (var member in team.TeamMembers.Where(item => item.CountsTowardActiveTeam))
-                {
-                    member.CountsTowardActiveTeam = false;
-                    member.RoleInTeam = TeamMemberRole.Member;
-                }
-
-                var activeMentorAssignments = await _context.MentorAssignments
-                    .Where(item => item.TeamId == team.Id &&
-                        item.Status == MentorAssignmentStatus.Active &&
-                        item.EndedAt == null)
-                    .ToListAsync(transactionCancellationToken);
-                foreach (var assignment in activeMentorAssignments)
-                {
-                    assignment.Status = MentorAssignmentStatus.Ended;
-                    assignment.EndedAt = now;
-                }
-
-                var teamChatGroups = await _context.ChatGroups
-                    .IgnoreQueryFilters()
-                    .Where(item => item.TeamId == team.Id && !item.IsDeleted)
-                    .ToListAsync(transactionCancellationToken);
-                foreach (var chatGroup in teamChatGroups)
-                {
-                    chatGroup.IsReadOnly = true;
-                    chatGroup.UpdatedAt = now;
-                    chatGroup.UpdatedBy = userId;
-                }
-
-                team.Status = TeamStatus.Archived;
-                team.ArchivedAt = now;
-                team.UpdatedAt = now;
-                team.UpdatedBy = userId;
-                RecordTeamActivity(
-                    team,
-                    "TEAM_ARCHIVED",
-                    "Team.Archived.v1",
-                    userId,
-                    now,
-                    memberUserIds);
-                await _context.SaveChangesAsync(transactionCancellationToken);
+                await TeamDataDeletion.DeleteAsync(_context, teamId, transactionCancellationToken);
                 return Result.Success();
             }, cancellationToken);
         }

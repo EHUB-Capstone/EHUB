@@ -190,6 +190,8 @@ function registerTeamMutations(mock: MockAdapter): void {
     const leaderId = asString(body.leaderStudentId);
     const requestedTeamName = asString(body.teamName).trim();
     const teamName = requestedTeamName || nextTeamName(classId);
+    const projectName = body.useTeamNameForProject === true ? teamName : asString(body.projectName).trim();
+    if (projectName && (projectName.length < 3 || projectName.length > 100)) return failure(400, 'CLASS_VALIDATION_ERROR', 'Project name must be between 3 and 100 characters.');
     const roster = getMockState().rosters[classId] || [];
     if (teamName.length < 3 || teamName.length > 60) return failure(400, 'TEAM_NAME_INVALID', 'Team name must be between 3 and 60 characters.');
     if (hasDuplicateTeamName(classId, teamName)) return failure(409, 'TEAM_NAME_CONFLICT', 'A team with this name already exists in the class.');
@@ -205,7 +207,7 @@ function registerTeamMutations(mock: MockAdapter): void {
       teamCode: `${findClass(classId)!.subjectCode}-T${String(getMockState().teams.filter((item) => item.classId === classId).length + 1).padStart(2, '0')}`,
       teamName,
       description: asString(body.description) || null,
-      projectName: null,
+      projectName: projectName || null,
       projectDescription: null,
       status: 'Active',
       leaderId,
@@ -262,6 +264,9 @@ function registerTeamMutations(mock: MockAdapter): void {
     const teamIndex = state.teams.findIndex((team) => team.id === teamId);
     if (teamIndex < 0) return failure(404, 'TEAM_NOT_FOUND', 'Team not found.');
     const team = state.teams[teamIndex];
+    const user = state.users.find((item) => item.id === state.sessionUserId);
+    if (user?.role !== 'LECTURER' || findClass(team.classId)?.primaryLecturerId !== user.id)
+      return failure(403, 'CLASS_ACCESS_DENIED', 'Only the assigned lecturer can permanently dissolve this team.');
     const guard = classMutationGuard(team.classId);
     if (guard) return guard;
     const oldMemberIds = team.members.map((member) => member.studentId);
@@ -269,10 +274,11 @@ function registerTeamMutations(mock: MockAdapter): void {
     team.leaderId = null;
     updateRosterTeamLinks(team.classId, team, oldMemberIds);
     state.teams.splice(teamIndex, 1);
+    state.proposals = state.proposals.filter((proposal) => proposal.approvedTeamId !== teamId);
     state.directions = state.directions.filter((direction) => direction.teamId !== teamId);
     refreshClassCounts(team.classId);
     persistMockState();
-    return ok(null, 'Team archived and members unassigned.');
+    return ok(null, 'Team permanently deleted; student accounts and class enrollments preserved.');
   });
 
   mock.onPut(/^\/teams\/[^/]+\/leader$/).reply((config) => {
@@ -411,9 +417,28 @@ function registerProposalHandlers(mock: MockAdapter): void {
         occurredAtUtc: new Date().toISOString(),
       }],
     };
+    const teamId = allocateId();
+    const team: MockTeam = {
+      id: teamId,
+      classId,
+      teamCode: `${findClass(classId)?.subjectCode || 'TEAM'}-T${state.teams.filter((item) => item.classId === classId).length + 1}`,
+      teamName,
+      description: null,
+      projectName: null,
+      projectDescription: null,
+      status: 'Active',
+      leaderId,
+      members: selectedStudents.map((student) => memberFromStudent(student!, leaderId)),
+      currentMentorAssignment: null,
+      rowVersion: allocateRowVersion(),
+    };
+    proposal.approvedTeamId = teamId;
+    state.teams.push(team);
     state.proposals.unshift(proposal);
+    updateRosterTeamLinks(classId, team);
+    refreshClassCounts(classId);
     persistMockState();
-    return ok(proposal, 'Team proposal submitted.');
+    return ok(proposal, 'Team created and project proposal submitted for review.');
   });
 
   mock.onPost(/^\/classes\/[^/]+\/team-proposals$/).reply((config) => {
@@ -437,6 +462,14 @@ function registerProposalHandlers(mock: MockAdapter): void {
     if (asString(body.rowVersion) !== proposal.rowVersion) return failure(409, 'TEAM_PROPOSAL_CONCURRENCY_CONFLICT', 'Proposal data is stale.');
     if (!['Draft', 'NeedsRevision'].includes(proposal.status)) return failure(409, 'TEAM_PROPOSAL_STATE_INVALID', 'Only draft or revision-requested proposals can be edited.');
     const leaderId = asString(body.leaderStudentId);
+    if (proposal.approvedTeamId) {
+      const team = teamById(proposal.approvedTeamId);
+      const requestedMembers = asStringArray(body.memberIds);
+      if (!team || leaderId !== team.leaderId || requestedMembers.length !== team.members.length
+        || !team.members.every((member) => requestedMembers.includes(member.studentId))) {
+        return failure(400, 'TEAM_PROPOSAL_INVALID', 'Project proposals must use the current team members and leader. Manage membership separately.');
+      }
+    }
     proposal.teamName = asString(body.teamName, proposal.teamName).trim();
     proposal.description = asString(body.description, proposal.description || '') || null;
     proposal.projectName = asString(body.projectName, proposal.projectName || '') || null;
@@ -462,13 +495,18 @@ function registerProposalHandlers(mock: MockAdapter): void {
     proposal.status = decision;
     proposal.latestReviewComment = asString(body.comment) || null;
     if (decision === 'Approved') {
-      const id = allocateId();
-      const roster = getMockState().rosters[proposal.classId] || [];
-      const leaderId = proposal.members.find((member) => member.isLeader)?.studentId || proposal.members[0]?.studentId || '';
-      const team: MockTeam = { id, classId: proposal.classId, teamCode: `${findClass(proposal.classId)?.subjectCode || 'TEAM'}-T${getMockState().teams.length + 1}`, teamName: proposal.teamName, description: proposal.description, status: 'Active', leaderId, members: proposal.members.map((member) => roster.find((student) => student.studentId === member.studentId)).filter(Boolean).map((student) => memberFromStudent(student!, leaderId)), currentMentorAssignment: null, rowVersion: allocateRowVersion() };
-      getMockState().teams.push(team);
-      updateRosterTeamLinks(proposal.classId, team);
-      proposal.approvedTeamId = id;
+      let team = proposal.approvedTeamId ? teamById(proposal.approvedTeamId) : undefined;
+      if (!team) {
+        const id = allocateId();
+        const roster = getMockState().rosters[proposal.classId] || [];
+        const leaderId = proposal.members.find((member) => member.isLeader)?.studentId || proposal.members[0]?.studentId || '';
+        team = { id, classId: proposal.classId, teamCode: `${findClass(proposal.classId)?.subjectCode || 'TEAM'}-T${getMockState().teams.length + 1}`, teamName: proposal.teamName, description: null, status: 'Active', leaderId, members: proposal.members.map((member) => roster.find((student) => student.studentId === member.studentId)).filter(Boolean).map((student) => memberFromStudent(student!, leaderId)), currentMentorAssignment: null, rowVersion: allocateRowVersion() };
+        getMockState().teams.push(team);
+        updateRosterTeamLinks(proposal.classId, team);
+        proposal.approvedTeamId = id;
+      }
+      team.projectName = proposal.projectName;
+      team.projectDescription = proposal.description;
       refreshClassCounts(proposal.classId);
     }
     proposal.rowVersion = allocateRowVersion();

@@ -425,7 +425,7 @@ public sealed class TeamWorkflowIntegrationTests
     }
 
     [Fact]
-    public async Task UnassignedStudentCanSubmitBalancedTeamProposalForLecturerApproval()
+    public async Task StudentCreatesTeamImmediatelyAndSubmitsProjectForLecturerApproval()
     {
         using var scope = _factory.Services.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -460,10 +460,71 @@ public sealed class TeamWorkflowIntegrationTests
         result.Value.Members.Should().ContainSingle(member => member.IsLeader)
             .Which.StudentId.Should().Be(seed.StudentIds[1]);
         context.ChangeTracker.Clear();
-        (await context.Teams.AsNoTracking().CountAsync(team => team.ClassId == seed.ClassId)).Should().Be(0);
+        var createdTeam = await context.Teams.AsNoTracking()
+            .Include(team => team.TeamMembers)
+            .SingleAsync(team => team.ClassId == seed.ClassId);
+        createdTeam.TeamName.Should().Be("Student Venture Team");
+        createdTeam.TeamMembers.Should().HaveCount(4);
+        result.Value.ApprovedTeamId.Should().Be(createdTeam.Id);
+        (await context.Projects.AsNoTracking().CountAsync(project => project.TeamId == createdTeam.Id)).Should().Be(0);
         (await context.OutboxMessages.AsNoTracking().AnyAsync(message =>
             message.AggregateId == seed.ClassId && message.Type == "TeamProposal.Submitted.v1"))
             .Should().BeTrue();
+
+        var revision = await handler.ReviewAsync(result.Value.Id, new ReviewTeamProposalRequest
+        {
+            Decision = "NeedsRevision", Comment = "Please clarify the project scope.", RowVersion = result.Value.RowVersion
+        }, seed.LecturerId, SystemRoles.Lecturer);
+        revision.IsSuccess.Should().BeTrue();
+        context.ChangeTracker.Clear();
+        var updated = await handler.UpdateAsync(result.Value.Id, new UpdateTeamProposalRequest
+        {
+            TeamName = "Student Venture Team", ProjectName = "Revised Venture Project",
+            Description = "A clarified project scope for the existing student team.",
+            MemberIds = seed.StudentIds, LeaderStudentId = seed.StudentIds[1], RowVersion = revision.Value.RowVersion
+        }, seed.ProposerUserId, SystemRoles.Student);
+        updated.IsSuccess.Should().BeTrue($"{updated.Error.Code}: {updated.Error.Message}");
+        context.ChangeTracker.Clear();
+        var submitted = await handler.SubmitAsync(result.Value.Id,
+            new SubmitTeamProposalRequest { RowVersion = updated.Value.RowVersion }, seed.ProposerUserId, SystemRoles.Student);
+        submitted.IsSuccess.Should().BeTrue();
+        context.ChangeTracker.Clear();
+        var approved = await handler.ReviewAsync(result.Value.Id,
+            new ReviewTeamProposalRequest { Decision = "Approved", RowVersion = submitted.Value.RowVersion }, seed.LecturerId, SystemRoles.Lecturer);
+        approved.IsSuccess.Should().BeTrue($"{approved.Error.Code}: {approved.Error.Message}");
+        context.ChangeTracker.Clear();
+        (await context.Teams.CountAsync(team => team.ClassId == seed.ClassId)).Should().Be(1);
+        (await context.Projects.SingleAsync(project => project.TeamId == createdTeam.Id)).Name.Should().Be("Revised Venture Project");
+    }
+
+    [Theory]
+    [InlineData("Rejected")]
+    [InlineData("Cancelled")]
+    public async Task ProjectProposalRejectionOrCancellationKeepsCreatedTeam(string decision)
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateSeedAsync(context, createProposal: false, createTeam: false);
+        context.ChangeTracker.Clear();
+        var handler = new TeamProposalHandler(context,
+            scope.ServiceProvider.GetRequiredService<EHub.Application.Common.Interfaces.Persistence.IUnitOfWork>());
+        var created = await handler.SubmitStudentProposalAsync(seed.ClassId, new SubmitStudentTeamProposalRequest
+        {
+            StudentIds = seed.StudentIds, LeaderStudentId = seed.StudentIds[0], GroupName = "Independent Team",
+            ProjectName = "Reviewable Project", Description = "A project whose review must never remove its team."
+        }, seed.ProposerUserId, SystemRoles.Student);
+        created.IsSuccess.Should().BeTrue();
+        context.ChangeTracker.Clear();
+        var reviewed = decision == "Cancelled"
+            ? await handler.CancelAsync(created.Value.Id,
+                new CancelTeamProposalRequest { RowVersion = created.Value.RowVersion, Reason = "Withdraw project for reconsideration." }, seed.ProposerUserId, SystemRoles.Student)
+            : await handler.ReviewAsync(created.Value.Id,
+                new ReviewTeamProposalRequest { Decision = decision, RowVersion = created.Value.RowVersion, Comment = "Project scope is not suitable." }, seed.LecturerId, SystemRoles.Lecturer);
+        reviewed.IsSuccess.Should().BeTrue();
+        context.ChangeTracker.Clear();
+        (await context.Teams.SingleAsync(item => item.Id == created.Value.ApprovedTeamId)).Status.Should().Be(TeamStatus.Active);
+        (await context.TeamMembers.CountAsync(item => item.TeamId == created.Value.ApprovedTeamId && item.CountsTowardActiveTeam)).Should().Be(4);
+        (await context.Projects.AnyAsync(item => item.TeamId == created.Value.ApprovedTeamId)).Should().BeFalse();
     }
 
     [Fact]
@@ -747,6 +808,35 @@ public sealed class TeamWorkflowIntegrationTests
         (await context.TeamProposals.AsNoTracking().CountAsync(item => item.ClassId == seed.ClassId)).Should().Be(0);
     }
 
+    [Theory]
+    [InlineData(true, null)]
+    [InlineData(false, "Independent Project")]
+    [InlineData(false, null)]
+    public async Task LecturerGeneratedTeam_PersistsOptionalDraftProject(bool useTeamName, string? projectName)
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateSeedAsync(context, createProposal: false, createTeam: false);
+        context.ChangeTracker.Clear();
+        var handler = new TeamManagementHandler(context,
+            scope.ServiceProvider.GetRequiredService<EHub.Application.Common.Interfaces.Persistence.IUnitOfWork>());
+        var result = await handler.GenerateAsync(seed.ClassId, new GenerateClassTeamRequest
+        {
+            StudentIds = seed.StudentIds, LeaderStudentId = seed.StudentIds[0],
+            UseTeamNameForProject = useTeamName, ProjectName = projectName
+        }, seed.LecturerId, SystemRoles.Lecturer);
+        result.IsSuccess.Should().BeTrue();
+        context.ChangeTracker.Clear();
+        var savedTeam = await context.Teams.Include(item => item.Project).SingleAsync(item => item.Id == result.Value.Team!.Id);
+        if (!useTeamName && projectName == null) savedTeam.Project.Should().BeNull();
+        else
+        {
+            savedTeam.Project.Should().NotBeNull();
+            savedTeam.Project!.Name.Should().Be(useTeamName ? savedTeam.TeamName : projectName);
+            savedTeam.Project.Status.Should().Be(ProjectStatus.Draft);
+        }
+    }
+
     [Fact]
     public async Task ReviewingThreeMemberProposal_IsRejectedByValidation()
     {
@@ -780,11 +870,13 @@ public sealed class TeamWorkflowIntegrationTests
     }
 
     [Fact]
-    public async Task DeletingAnEmptyHistoryTeam_ArchivesTheTeamAndReleasesMembers()
+    public async Task DissolvingTeam_DeletesProjectAndReleasesNameAndMembers()
     {
         using var scope = _factory.Services.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var seed = await CreateSeedAsync(context, createProposal: false, createTeam: true);
+        context.Projects.Add(new Project { TeamId = seed.TeamId!.Value, Name = "Reusable Project", Status = ProjectStatus.Draft, CreatedById = seed.LecturerId });
+        await context.SaveChangesAsync();
         context.ChangeTracker.Clear();
         var handler = new TeamManagementHandler(
             context,
@@ -797,11 +889,38 @@ public sealed class TeamWorkflowIntegrationTests
 
         result.IsSuccess.Should().BeTrue();
         context.ChangeTracker.Clear();
-        (await context.Teams.AsNoTracking().SingleAsync(item => item.Id == seed.TeamId)).Status
-            .Should().Be(TeamStatus.Archived);
+        (await context.Teams.IgnoreQueryFilters().AnyAsync(item => item.Id == seed.TeamId)).Should().BeFalse();
+        (await context.Projects.IgnoreQueryFilters().AnyAsync(item => item.TeamId == seed.TeamId)).Should().BeFalse();
+        (await context.ClassStudents.CountAsync(item => item.ClassId == seed.ClassId)).Should().Be(4);
+        (await context.Teams.AnyAsync(item => item.Id == seed.OtherTeamId)).Should().BeTrue();
         (await context.TeamMembers.AsNoTracking()
             .AnyAsync(member => member.TeamId == seed.TeamId && member.CountsTowardActiveTeam))
             .Should().BeFalse();
+        var recreated = await handler.GenerateAsync(seed.ClassId, new GenerateClassTeamRequest
+        {
+            TeamName = "Official Team", StudentIds = seed.StudentIds, LeaderStudentId = seed.StudentIds[0],
+            ProjectName = "Reusable Project"
+        }, seed.LecturerId, SystemRoles.Lecturer);
+        recreated.IsSuccess.Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData(SystemRoles.Admin)]
+    [InlineData(SystemRoles.Student)]
+    [InlineData(SystemRoles.Mentor)]
+    [InlineData(SystemRoles.Lecturer)]
+    public async Task DissolvingTeam_DeniesEveryoneExceptAssignedLecturer(string role)
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateSeedAsync(context, createProposal: false, createTeam: true);
+        context.ChangeTracker.Clear();
+        var handler = new TeamManagementHandler(context,
+            scope.ServiceProvider.GetRequiredService<EHub.Application.Common.Interfaces.Persistence.IUnitOfWork>());
+        var result = await handler.DeleteAsync(seed.TeamId!.Value, seed.AdminId, role);
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be(ErrorCodes.ClassAccessDenied);
+        (await context.Teams.AnyAsync(item => item.Id == seed.TeamId)).Should().BeTrue();
     }
 
     [Fact]
@@ -996,6 +1115,42 @@ public sealed class TeamWorkflowIntegrationTests
         wrongClass.Error.Code.Should().Be(ErrorCodes.WorkspaceAccessDenied);
         var wrongCourse = await handler.GetWeeklyTasksAsync(new WeeklyTaskQuery { TeamId = seed.TeamId, CourseCode = "OTHER" }, seed.ProposerUserId, SystemRoles.Student);
         wrongCourse.IsFailure.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task ExecutionBoard_IncludesAllRoadmapSourcesAndWeeks_WithFiltersAndSharedStatus()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateSeedAsync(context, false, true);
+        var course = await context.Classes.Where(x => x.Id == seed.ClassId).Select(x => x.Course).SingleAsync();
+        var handler = new WorkspaceToolsHandler(context, new SaveWeeklyTaskRequestValidator(), new SaveShortcutRequestValidator());
+        foreach (var kind in new[] { "COURSE_TEMPLATE", "CLASS_TASK", "TEAM_TASK" })
+        {
+            var created = await handler.CreateWeeklyTaskAsync(new SaveWeeklyTaskRequest
+            {
+                Title = $"Board {kind}", TaskType = kind,
+                Scope = kind == "COURSE_TEMPLATE" ? "COURSE" : kind == "CLASS_TASK" ? "CLASS" : "TEAM",
+                CourseCode = course.Code, WeekNumber = kind == "TEAM_TASK" ? 2 : 1,
+                ClassId = kind == "COURSE_TEMPLATE" ? null : seed.ClassId,
+                TeamId = kind == "TEAM_TASK" ? seed.TeamId : null, Priority = "HIGH"
+            }, seed.AdminId, SystemRoles.Admin);
+            created.IsSuccess.Should().BeTrue();
+        }
+        var board = await handler.GetWeeklyTasksAsync(new WeeklyTaskQuery { TeamId = seed.TeamId }, seed.ProposerUserId, SystemRoles.Student);
+        board.IsSuccess.Should().BeTrue();
+        board.Value.CourseTasks.Should().ContainSingle();
+        board.Value.ClassTasks.Should().ContainSingle();
+        board.Value.TeamTasks.Should().ContainSingle();
+        var filtered = await handler.GetWeeklyTasksAsync(new WeeklyTaskQuery { TeamId = seed.TeamId, WeekNumber = 2, Search = "TEAM_TASK", Priority = "HIGH" }, seed.ProposerUserId, SystemRoles.Student);
+        filtered.Value.TeamTasks.Should().ContainSingle();
+        filtered.Value.CourseTasks.Should().BeEmpty();
+        var taskId = board.Value.TeamTasks.Single().Id;
+        (await handler.UpdateWeeklyTaskStatusAsync(taskId, new UpdateWeeklyTaskStatusRequest { Status = "COMPLETED" }, seed.ProposerUserId, SystemRoles.Student)).IsSuccess.Should().BeTrue();
+        var roadmap = await handler.GetWeeklyTasksAsync(new WeeklyTaskQuery { TeamId = seed.TeamId, WeekNumber = 2 }, seed.ProposerUserId, SystemRoles.Student);
+        roadmap.Value.TeamTasks.Single().Status.Should().Be("COMPLETED");
+        (await handler.UpdateWeeklyTaskStatusAsync(board.Value.CourseTasks.Single().Id, new UpdateWeeklyTaskStatusRequest { Status = "COMPLETED" }, seed.ProposerUserId, SystemRoles.Student)).IsFailure.Should().BeTrue();
+        (await handler.GetWeeklyTasksAsync(new WeeklyTaskQuery { TeamId = seed.TeamId }, Guid.NewGuid(), SystemRoles.Student)).IsFailure.Should().BeTrue();
     }
 
     [Fact]

@@ -63,7 +63,7 @@ function BoardColumn({
                   task={task}
                   canEdit={permissions.canEditTask(task)}
                   canDelete={permissions.canDeleteTask(task)}
-                  canUpdateStatus={permissions.canUpdateStatus}
+                  canUpdateStatus={permissions.canUpdateTaskStatus(task)}
                   onEdit={onEditTask}
                   onDelete={onDeleteTask}
                   onStatusChange={onStatusChange}

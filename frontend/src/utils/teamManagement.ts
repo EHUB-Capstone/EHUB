@@ -159,7 +159,7 @@ export function normalizeManagedTeam(source: any): ManagedTeam {
       email: member.email || null,
       major: member.majorCode || null,
     },
-    roleInTeam: member.roleInTeam,
+    roleInTeam: member.roleInTeam || (member.isLeader ? 'LEADER' : 'MEMBER'),
     joinedAt: member.joinedAtUtc || member.joinedAt,
   }));
   return {
@@ -191,7 +191,8 @@ export function normalizeTeamProposal(source: any): ManagedTeam {
   const proposal = normalizeManagedTeam(source);
   return {
     ...proposal,
-    teamCode: 'TEAM PROPOSAL',
+    teamCode: source?.approvedTeamId ? 'PROJECT PROPOSAL' : 'TEAM PROPOSAL',
+    leaderId: source?.members?.find((member: { isLeader?: boolean }) => member.isLeader)?.studentId || proposal.leaderId,
     status: source?.status || 'Draft',
     hasChatGroup: false,
     projectName: source?.projectName || null,
