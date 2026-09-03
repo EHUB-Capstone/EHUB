@@ -68,6 +68,8 @@ public sealed class CreateTeamRequest
 
 public sealed class GenerateClassTeamRequest
 {
+    public bool UseTeamNameForProject { get; init; }
+    public string? ProjectName { get; init; }
     public IReadOnlyCollection<Guid> StudentIds { get; init; } = Array.Empty<Guid>();
     public Guid LeaderStudentId { get; init; }
     public Guid? MentorId { get; init; }

@@ -213,7 +213,7 @@ export default function StudentClassDetail() {
           <div>
             <p className="text-sm font-semibold text-slate-800">You do not have a team in this class yet</p>
             <p className="mt-0.5 text-xs text-slate-600">
-              Start a proposal, choose 4–6 eligible classmates and a leader, then send it to your lecturer for approval.
+              Choose 4–6 eligible classmates and a leader. Your team is created immediately; only the project proposal needs lecturer review.
             </p>
           </div>
           <button
@@ -221,15 +221,15 @@ export default function StudentClassDetail() {
             onClick={startTeamProposal}
             className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-primary px-3.5 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-primary-600"
           >
-            <UserPlus className="h-4 w-4" /> Start team proposal
+            <UserPlus className="h-4 w-4" /> Create team
           </button>
         </div>
       )}
 
       {!isReadOnly && reservedProposal && !canEditReservedProposal && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          <p className="font-semibold">Your team proposal is {String(reservedProposal.status || 'pending').replaceAll('_', ' ').toLowerCase()}.</p>
-          <p className="mt-0.5 text-xs text-amber-700">You cannot join another proposal while this one is open. View it in the Class Teams tab.</p>
+          <p className="font-semibold">Your {reservedProposal.approvedTeamId ? 'project' : 'team'} proposal is {String(reservedProposal.status || 'pending').replaceAll('_', ' ').toLowerCase()}.</p>
+          <p className="mt-0.5 text-xs text-amber-700">{reservedProposal.approvedTeamId ? 'Your team is already active. Only the project proposal is awaiting review.' : 'You cannot join another proposal while this one is open.'} View it in the Class Teams tab.</p>
         </div>
       )}
 
@@ -288,7 +288,7 @@ export default function StudentClassDetail() {
                 onClick={startTeamProposal}
                 className="inline-flex min-h-8 items-center gap-1.5 rounded-lg bg-primary px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-primary-600"
               >
-                <UserPlus className="h-3.5 w-3.5" /> Start proposal
+                <UserPlus className="h-3.5 w-3.5" /> Create team
               </button>
               <TeamSuggestionTooltip label="Xem hướng dẫn tạo nhóm">
                 <div className="space-y-2">

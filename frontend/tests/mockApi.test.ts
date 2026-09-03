@@ -556,12 +556,18 @@ test('mock team management supports create, update, duplicate prevention, projec
   assert.equal(detail.data.projectName, 'Campus Connect');
   assert.ok(detail.data.projectDescription);
 
+  await assert.rejects(axiosClient.delete(`/teams/${created.data.team.id}`),
+    (error: unknown) => (error as { response?: { status: number } }).response?.status === 403);
+  const assignedLecturer = state.users.find((user) => user.role === 'LECTURER');
+  assert.ok(assignedLecturer);
+  targetClass.primaryLecturerId = assignedLecturer.id;
+  await axiosClient.post('/auth/login', { email: assignedLecturer.email, password: 'Mock123!' });
   await axiosClient.delete(`/teams/${created.data.team.id}`);
   assert.equal(state.teams.some((team) => team.id === created.data.team.id), false);
   assert.ok(roster.every((student) => student.teamId === null));
 });
 
-test('mock student without a team can submit one balanced team proposal', async () => {
+test('mock student creates a team immediately while its project proposal awaits review', async () => {
   resetMockState();
   const state = getMockState();
   const targetClass = state.classes.find((item) => item.status === 'Draft');
@@ -586,6 +592,10 @@ test('mock student without a team can submit one balanced team proposal', async 
   assert.equal(response.data.members.length, 4);
   assert.equal(response.data.members.find((member: { isLeader: boolean }) => member.isLeader)?.studentId, memberIds[1]);
   assert.ok(state.proposals.some((proposal) => proposal.id === response.data.id));
+  const createdTeam = state.teams.find((team) => team.id === response.data.approvedTeamId);
+  assert.ok(createdTeam);
+  assert.equal(createdTeam.projectName, null);
+  assert.ok(roster.every((student) => student.teamId === createdTeam.id));
 
   await assert.rejects(
     axiosClient.post(`/classes/${targetClass.id}/teams/student-proposal`, {
@@ -598,7 +608,7 @@ test('mock student without a team can submit one balanced team proposal', async 
     }),
     (error: unknown) => {
       const apiError = (error as { response?: { status?: number; data?: { code?: string } } }).response;
-      return apiError?.status === 409 && apiError.data?.code === 'TEAM_PROPOSAL_MEMBERSHIP_CONFLICT';
+      return apiError?.status === 409 && apiError.data?.code === 'TEAM_MEMBERSHIP_CONFLICT';
     },
   );
 });

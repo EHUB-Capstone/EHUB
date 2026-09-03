@@ -21,7 +21,7 @@ public sealed class WorkspaceToolsController(ICurrentUserService currentUser, IW
 
     [HttpGet("weekly-tasks/team/{teamId:guid}/board")]
     public async Task<IActionResult> GetTeamBoard(Guid teamId, [FromQuery] WeeklyTaskQuery query, CancellationToken cancellationToken) =>
-        ToResponse(await handler.GetWeeklyTasksAsync(new WeeklyTaskQuery { CourseCode = query.CourseCode, WeekNumber = query.WeekNumber, ClassId = query.ClassId, TeamId = teamId, Status = query.Status, AssigneeStudentId = query.AssigneeStudentId }, UserId, Role, cancellationToken), "Team task board retrieved.");
+        ToResponse(await handler.GetWeeklyTasksAsync(new WeeklyTaskQuery { CourseCode = query.CourseCode, WeekNumber = query.WeekNumber, ClassId = query.ClassId, TeamId = teamId, Status = query.Status, AssigneeStudentId = query.AssigneeStudentId, Priority = query.Priority, Search = query.Search }, UserId, Role, cancellationToken), "Team task board retrieved.");
 
     [HttpPost("weekly-tasks")]
     public async Task<IActionResult> CreateWeeklyTask([FromBody] SaveWeeklyTaskRequest request, CancellationToken cancellationToken) =>

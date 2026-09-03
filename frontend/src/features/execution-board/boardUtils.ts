@@ -1,12 +1,14 @@
 // @ts-nocheck
-import { EMPTY_GROUPED, STATUSES } from './constants';
+import { EMPTY_GROUPED, STATUSES } from './constants.ts';
+import { taskProgress } from '../../utils/taskProgress.ts';
 
 export const normalizeBoardResponse = (response) => {
   const data = response?.data || response || {};
+  const tasks = data.tasks || [...(data.courseTasks || []), ...(data.classTasks || []), ...(data.teamTasks || [])];
   return {
-    tasks: data.tasks || [],
-    grouped: data.grouped || groupTasks(data.tasks || []),
-    summary: data.summary || summarizeTasks(data.tasks || []),
+    tasks,
+    grouped: groupTasks(tasks),
+    summary: summarizeTasks(tasks),
   };
 };
 
@@ -50,7 +52,7 @@ export const summarizeTasks = (tasks = []) => {
     if (status === 'REVIEW') summary.review += 1;
     if (status === 'COMPLETED') summary.completed += 1;
     if (status === 'OVERDUE') summary.overdue += 1;
-    progress += Number(task.completionPercentage || 0);
+    progress += taskProgress(task);
   });
 
   if (tasks.length > 0) {
@@ -101,10 +103,11 @@ export const moveTaskStatusInBoard = (board, taskId, nextStatus) => {
     ...currentTask,
     status: nextStatus,
     computedStatus: nextStatus,
-    completionPercentage: nextStatus === 'COMPLETED' ? 100 : currentTask.completionPercentage,
-    checklist: nextStatus === 'COMPLETED'
-      ? (currentTask.checklist || []).map((item) => ({ ...item, isCompleted: true }))
-      : currentTask.checklist,
+    completionPercentage: nextStatus === 'COMPLETED' ? 100 : (
+      currentTask.checklist?.length
+        ? Math.round(currentTask.checklist.filter((item) => item.isCompleted).length / currentTask.checklist.length * 100)
+        : 0
+    ),
   };
 
   const tasks = board.tasks.map((task) => (task._id === taskId ? nextTask : task));

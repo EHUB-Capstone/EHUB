@@ -543,6 +543,7 @@ export default function ClassDetail() {
   
   const isAdmin = hasClassRole(user, 'ADMIN');
   const canManageClass = canManageClassPermission(user, cls);
+  const canDissolveTeam = canManageClass && !isAdmin && hasClassRole(user, 'LECTURER');
   const isReadOnly = isClassReadOnly(cls.status);
   const isArchived = isArchivedClass(cls.status);
   const isCompleted = cls.status === 'Completed';
@@ -983,12 +984,12 @@ export default function ClassDetail() {
           <TeamList
             teams={[...safeTeams, ...teamProposals]}
             onReview={!isReadOnly && canManageClass ? (team) => setReviewTeam(team) : undefined}
-            canDelete={!isReadOnly && canManageClass}
+            canDelete={!isReadOnly && canDissolveTeam}
             canManageInfo={!isReadOnly && canManageClass}
             classStudents={safeStudents}
             onCreate={!isReadOnly && canManageClass ? () => runFeatureAction(classFeatureFlags.teamManagement, 'Team management', () => openCreateTeam()) : undefined}
             onEdit={!isReadOnly && canManageClass ? (team) => !team.isProposal && runFeatureAction(classFeatureFlags.teamManagement, 'Team management', () => openEditTeam(team)) : undefined}
-            onDelete={!isReadOnly && canManageClass ? setTeamToDelete : undefined}
+            onDelete={!isReadOnly && canDissolveTeam ? setTeamToDelete : undefined}
             onProjectDirection={!isReadOnly && classFeatureFlags.projectDirection ? setDirectionTeam : undefined}
           />
         )}
@@ -1137,8 +1138,8 @@ export default function ClassDetail() {
         onConfirm={confirmDeleteTeam}
         isSubmitting={deletingTeam}
         title={`Delete ${teamToDelete?.teamName || 'this team'}?`}
-        description="This will archive the team, remove the team chat group, and unassign all members. Teams with project, proposal, evaluation, checkpoint, or task data cannot be deleted."
-        confirmText="Delete team"
+        description="Permanently delete this team and its project, submissions, evaluations, tasks and team chat. This cannot be undone. Student accounts and class enrollments will remain. Teams with externally stored files require storage cleanup support before deletion."
+        confirmText="Permanently dissolve team"
         cancelText="Cancel"
       />
 

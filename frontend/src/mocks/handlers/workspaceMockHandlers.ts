@@ -267,9 +267,21 @@ export function registerWorkspaceMockHandlers(mock: MockAdapter): void {
   mock.onGet(/^\/weekly-tasks\/team\/[^/]+\/board$/).reply((config) => {
     const teamId = routeId(config, /^\/weekly-tasks\/team\/([^/]+)\/board$/);
     if (!canAccessTeam(teamId)) return failure(403, 'WORKSPACE_ACCESS_DENIED', 'You do not have access to this workspace.');
-    const weekNumber = Number(config.params?.weekNumber || 1);
-    const rows = mockWeeklyTasks.filter((task) => task.teamId === teamId && task.weekNumber === weekNumber);
-    return ok({ courseTasks: [], classTasks: [], teamTasks: rows }, 'Team task board retrieved.');
+    const teamClass = classByTeam(teamId);
+    const params = config.params || {};
+    const search = String(params.search || '').trim().toLowerCase();
+    const rows = mockWeeklyTasks.filter((task) =>
+      task.courseCode === teamClass?.subjectCode &&
+      (!params.weekNumber || task.weekNumber === Number(params.weekNumber)) &&
+      (!params.priority || task.priority === params.priority) &&
+      (!params.assigneeStudentId || task.assigneeStudentId === params.assigneeStudentId) &&
+      (!params.status || task.status === params.status) &&
+      (!search || `${task.title} ${task.description || ''}`.toLowerCase().includes(search)));
+    return ok({
+      courseTasks: rows.filter((task) => task.taskType === 'COURSE_TEMPLATE'),
+      classTasks: rows.filter((task) => task.taskType === 'CLASS_TASK' && task.classId === teamClass?.id),
+      teamTasks: rows.filter((task) => task.taskType === 'TEAM_TASK' && task.teamId === teamId),
+    }, 'Team task board retrieved.');
   });
 
   mock.onPost('/weekly-tasks').reply((config) => {

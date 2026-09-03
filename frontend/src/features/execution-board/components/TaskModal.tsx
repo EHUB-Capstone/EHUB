@@ -84,17 +84,18 @@ export default function TaskModal({ isOpen, onClose, onSave, task, teamMembers, 
 
   const handleSubmit = (event) => {
     event.preventDefault();
+    if (loading) return;
 
     if (!form.title.trim()) {
       toast.error('Title is required');
       return;
     }
 
-    if (form.startDate && form.startDate < minDate) {
+    if (!isEdit && form.startDate && form.startDate < minDate) {
       toast.error('Start date cannot be in the past');
       return;
     }
-    if (form.dueDate && form.dueDate < minDate) {
+    if (!isEdit && form.dueDate && form.dueDate < minDate) {
       toast.error('Due date cannot be in the past');
       return;
     }
