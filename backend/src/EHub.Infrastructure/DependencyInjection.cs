@@ -30,6 +30,7 @@ public static class DependencyInjection
 
         services.AddScoped<IApplicationDbContext>(provider => provider.GetRequiredService<AppDbContext>());
         services.AddHostedService<ClassImportSessionCleanupService>();
+        services.AddHostedService<LecturerImportSessionCleanupService>();
         services.AddHostedService<PendingRegistrationCleanupService>();
         services.AddScoped<IOutboxEventDispatcher, NotificationOutboxEventDispatcher>();
         services.AddScoped<IClassChatMembershipSynchronizer, ClassChatMembershipSynchronizer>();

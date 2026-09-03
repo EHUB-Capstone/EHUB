@@ -20,6 +20,7 @@ public interface IApplicationDbContext
     DbSet<ClassLecturer> ClassLecturers { get; }
     DbSet<ClassAuditLog> ClassAuditLogs { get; }
     DbSet<ClassImportSession> ClassImportSessions { get; }
+    DbSet<LecturerImportSession> LecturerImportSessions { get; }
     DbSet<OutboxMessage> OutboxMessages { get; }
     DbSet<Student> Students { get; }
     DbSet<ClassStudent> ClassStudents { get; }

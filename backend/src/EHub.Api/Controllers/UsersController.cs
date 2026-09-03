@@ -1,4 +1,5 @@
 using EHub.Application.Features.Admin.Users.ManageUsers;
+using EHub.Application.Features.Admin.Users.ImportLecturers;
 using EHub.Contracts.Common;
 using EHub.Contracts.Users;
 using EHub.Shared.Constants;
@@ -60,6 +61,31 @@ public sealed class UsersController(IUserManagementHandler handler) : Controller
             : ToError(result.Error);
     }
 
+    [HttpPost("import-lecturers/preview")]
+    [Authorize(Policy = SystemPolicies.AdminOnly)]
+    [Consumes("multipart/form-data")]
+    public async Task<IActionResult> PreviewLecturerImport(
+        [FromForm] IFormFile file,
+        [FromServices] ILecturerImportHandler importHandler,
+        CancellationToken cancellationToken)
+    {
+        var result = await importHandler.PreviewAsync(file, cancellationToken);
+
+        return ToActionResult(result, "Lecturer import preview generated successfully.");
+    }
+
+    [HttpPost("import-lecturers/commit")]
+    [Authorize(Policy = SystemPolicies.AdminOnly)]
+    public async Task<IActionResult> CommitLecturerImport(
+        [FromBody] CommitLecturerImportRequest request,
+        [FromServices] ILecturerImportHandler importHandler,
+        CancellationToken cancellationToken)
+    {
+        var result = await importHandler.CommitAsync(request, cancellationToken);
+
+        return ToActionResult(result, "Lecturer accounts imported successfully.");
+    }
+
     [HttpPut("{id:guid}")]
     [Authorize(Policy = SystemPolicies.AdminOnly)]
     public async Task<IActionResult> UpdateUser(
@@ -109,6 +135,19 @@ public sealed class UsersController(IUserManagementHandler handler) : Controller
                     error.Code)),
 
             "RELATED_DATA_EXISTS" => Conflict(
+                ApiResponse<object>.FailureResponse(
+                    error.Message,
+                    error.Code)),
+
+            EHub.Shared.Errors.ErrorCodes.LecturerImportSessionExpired or
+            EHub.Shared.Errors.ErrorCodes.LecturerImportSessionInvalid or
+            EHub.Shared.Errors.ErrorCodes.LecturerImportSessionAlreadyProcessing or
+            EHub.Shared.Errors.ErrorCodes.LecturerImportConflict => Conflict(
+                ApiResponse<object>.FailureResponse(
+                    error.Message,
+                    error.Code)),
+
+            EHub.Shared.Errors.ErrorCodes.CommonUnauthorizedError => Unauthorized(
                 ApiResponse<object>.FailureResponse(
                     error.Message,
                     error.Code)),
