@@ -27,6 +27,7 @@ public class AppDbContext : DbContext, IApplicationDbContext
     public DbSet<ClassLecturer> ClassLecturers => Set<ClassLecturer>();
     public DbSet<ClassAuditLog> ClassAuditLogs => Set<ClassAuditLog>();
     public DbSet<ClassImportSession> ClassImportSessions => Set<ClassImportSession>();
+    public DbSet<LecturerImportSession> LecturerImportSessions => Set<LecturerImportSession>();
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
     public DbSet<Student> Students => Set<Student>();
     public DbSet<ClassStudent> ClassStudents => Set<ClassStudent>();

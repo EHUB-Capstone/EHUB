@@ -48,6 +48,14 @@ public static class ErrorCodes
     public const string ApprovalInvalidTargetRole = "APPROVAL_INVALID_TARGET_ROLE";
     public const string ApprovalEmailNotVerified = "APPROVAL_EMAIL_NOT_VERIFIED";
 
+    // Lecturer account import error codes
+    public const string LecturerImportFileInvalid = "LECTURER_IMPORT_FILE_INVALID";
+    public const string LecturerImportSessionInvalid = "LECTURER_IMPORT_SESSION_INVALID";
+    public const string LecturerImportSessionExpired = "LECTURER_IMPORT_SESSION_EXPIRED";
+    public const string LecturerImportSessionAlreadyProcessing = "LECTURER_IMPORT_SESSION_ALREADY_PROCESSING";
+    public const string LecturerImportNoActionableRows = "LECTURER_IMPORT_NO_ACTIONABLE_ROWS";
+    public const string LecturerImportConflict = "LECTURER_IMPORT_CONFLICT";
+
     // Class management error codes
     public const string ClassAccessDenied = "CLASS_ACCESS_DENIED";
     public const string ClassNotFound = "CLASS_NOT_FOUND";

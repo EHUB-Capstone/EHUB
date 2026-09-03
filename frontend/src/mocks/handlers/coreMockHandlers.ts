@@ -397,6 +397,61 @@ function registerUserHandlers(mock: MockAdapter): void {
     return user ? ok(userResponse(user), 'User retrieved successfully.') : failure(404, 'USER_NOT_FOUND', 'User not found.');
   });
 
+  mock.onPost('/users/import-lecturers/preview').reply(() => {
+    const email = 'imported.lecturer@example.org';
+    const exists = getMockState().users.some((user) => user.email.toLowerCase() === email);
+    return ok({
+      sessionId: exists ? '' : '00000000-0000-0000-0000-000000000104',
+      totalRows: 1,
+      readyCount: exists ? 0 : 1,
+      willActivateCount: 0,
+      existingCount: exists ? 1 : 0,
+      errorCount: 0,
+      canCommit: !exists,
+      rows: [{
+        rowNumber: 2,
+        fullName: 'Imported Lecturer',
+        position: 'Lecturer',
+        contactEmail: null,
+        googleEmail: email,
+        status: exists ? 'AlreadyExists' : 'Ready',
+        isValid: true,
+        message: exists ? 'An active Lecturer account already exists; this row will be skipped.' : null,
+      }],
+    }, 'Lecturer import preview generated successfully.');
+  });
+
+  mock.onPost('/users/import-lecturers/commit').reply((config) => {
+    const sessionId = asString(parseBody(config).sessionId);
+    if (sessionId !== '00000000-0000-0000-0000-000000000104') {
+      return failure(409, 'LECTURER_IMPORT_SESSION_INVALID', 'The lecturer import session is invalid.');
+    }
+
+    const email = 'imported.lecturer@example.org';
+    if (getMockState().users.some((user) => user.email.toLowerCase() === email)) {
+      return ok({ createdCount: 0, activatedCount: 0, skippedCount: 1, errorCount: 0, errors: [] }, 'Lecturer accounts imported successfully.');
+    }
+
+    const id = allocateId();
+    getMockState().users.unshift({
+      id,
+      _id: id,
+      name: 'Imported Lecturer',
+      email,
+      avatar: null,
+      role: 'LECTURER',
+      status: 'APPROVED',
+      studentId: null,
+      programGroup: null,
+      major: null,
+      phone: null,
+      createdAt: new Date().toISOString(),
+      lastSeen: null,
+    });
+    persistMockState();
+    return ok({ createdCount: 1, activatedCount: 0, skippedCount: 0, errorCount: 0, errors: [] }, 'Lecturer accounts imported successfully.');
+  });
+
   mock.onPost('/users').reply((config) => {
     const body = parseBody(config);
     const email = asString(body.email).trim().toLowerCase();
