@@ -205,7 +205,10 @@ export default function StudentTeamGeneratePanel({ classId, selected: rawSelecte
   return (
     <div className="bg-white rounded-2xl border p-4 shadow-sm">
       <div className="mb-4 flex items-center justify-between gap-3 border-b border-slate-100 pb-4">
-        <h3 className="font-bold text-lg text-slate-800">Tạo nhóm</h3>
+        <div>
+          <h3 className="font-bold text-lg text-slate-800">Đề xuất nhóm</h3>
+          <p className="mt-0.5 text-xs text-slate-500">Nhóm sẽ được tạo chính thức sau khi giảng viên duyệt.</p>
+        </div>
         {suggestionInfo && (
           <TeamSuggestionTooltip>
               Lớp có {suggestionInfo.unassigned} SV chưa có nhóm. {suggestionInfo.suggestion}
@@ -391,8 +394,8 @@ export default function StudentTeamGeneratePanel({ classId, selected: rawSelecte
                 (isFullyValid ? <CheckCircle2 className="w-4 h-4" /> : <Send className="w-4 h-4" />)
               }
               {isFullyValid
-                ? 'Tạo nhóm'
-                : 'Chưa đủ điều kiện tạo nhóm'}
+                ? 'Gửi đề xuất nhóm'
+                : 'Chưa đủ điều kiện gửi'}
             </button>
           </div>
         </div>

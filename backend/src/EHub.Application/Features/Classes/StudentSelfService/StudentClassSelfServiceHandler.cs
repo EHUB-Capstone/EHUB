@@ -101,6 +101,7 @@ public sealed class StudentClassSelfServiceHandler : IStudentClassSelfServiceHan
             {
                 StudentId = item.StudentId, UserId = item.Student.UserId, RollNumber = item.Student.RollNumber ?? string.Empty,
                 FullName = item.Student.FullName, Email = item.Student.Email, MajorCode = item.MajorCodeAtEnrollment,
+                EnrollmentStatus = item.EnrollmentStatus.ToString(),
                 TeamId = item.TeamMembers.Where(member => member.CountsTowardActiveTeam).Select(member => (Guid?)member.TeamId).FirstOrDefault()
             }).ToListAsync(cancellationToken);
         var teams = await TeamQuery().Where(item => item.ClassId == classId && item.Status == TeamStatus.Active).OrderBy(item => item.TeamCode).ToListAsync(cancellationToken);

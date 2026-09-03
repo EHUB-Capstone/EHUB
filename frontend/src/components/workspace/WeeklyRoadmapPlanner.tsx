@@ -1,20 +1,32 @@
-// @ts-nocheck
-// frontend/src/components/workspace/WeeklyRoadmapPlanner.jsx
 import { useState, useEffect, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import {
   BookOpen, ClipboardList, Users, Plus, Pencil, Trash2, CheckCircle2,
-  ChevronDown, Clock, AlertTriangle, Tag, User, Loader2, MapPin,
-  ChevronRight, Star, Shield,
+  ChevronDown, Clock, Tag, User, Loader2, MapPin, Star,
 } from 'lucide-react';
-import {
-  getWeeklyTasks,
-  createWeeklyTask,
-  updateWeeklyTask,
-  deleteWeeklyTask,
-  updateWeeklyTaskStatus,
-} from '../../api/weeklyTaskApi';
 import ConfirmDialog from '../ui/ConfirmDialog';
+import Button from '../ui/Button';
+import Modal from '../ui/Modal';
+import ErrorState from '../ui/ErrorState';
+import { useWeeklyRoadmap } from '../../hooks/useWeeklyRoadmap';
+import { parseApiError } from '../../utils/apiError';
+import type { WeeklyTask, WeeklyTaskKind, WeeklyTaskStatus, SaveWeeklyTaskPayload } from '../../types/workspaceTools';
+
+interface RoadmapMember {
+  _id?: string;
+  fullName?: string;
+  studentId?: { _id: string; fullName?: string };
+  userId?: { _id: string; name?: string };
+}
+interface WeeklyRoadmapPlannerProps {
+  courseCode: string;
+  classId?: string;
+  teamId?: string;
+  currentUser: { _id: string; role: string } | null;
+  roleInTeam?: string;
+  teamMembers?: RoadmapMember[];
+  isReadOnly?: boolean;
+}
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -37,7 +49,7 @@ const PRIORITY_CFG = {
   CRITICAL: { label: 'Critical', bg: 'bg-red-50',     text: 'text-red-600'    },
 };
 
-const LEADER_ROLE_KEYS = ['CEO', 'LEADER', 'TEAM LEADER', 'TEAM_LEADER'];
+const EMPTY_TASKS: WeeklyTask[] = [];
 const DUPLICATE_TASK_MESSAGE = 'Duplicate task: A task with this title already exists in this week.';
 
 const normalizeTaskTitle = (title) =>
@@ -231,7 +243,7 @@ function TaskCard({ task, canEdit, canDelete, canUpdateSts, onEdit, onDelete, on
 
 // ─── SectionPanel ─────────────────────────────────────────────────────────────
 
-function SectionPanel({ icon: Icon, label, sublabel, accentClass, tasks, emptyLabel, renderCard, headerAction }) {
+function SectionPanel({ icon: Icon, label, sublabel, accentClass, tasks, emptyLabel, renderCard, headerAction = null }) {
   return (
     <div className="flex flex-col min-w-0">
       {/* Section header */}
@@ -330,18 +342,19 @@ function WeeklyTaskModal({ isOpen, onClose, onSave, task, fixedTaskType, selecte
     set('checklist', form.checklist.map((c, i) => i === idx ? { ...c, isCompleted: !c.isCompleted } : c));
   };
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
+  const handleSubmit = (e?: { preventDefault: () => void }) => {
+    e?.preventDefault();
+    if (loading) return;
     if (!form.title.trim()) { toast.error('Title is required'); return; }
 
     const today = new Date().toISOString().split('T')[0];
 
-    if (form.startDate && form.startDate < today) {
+    if (!isEdit && form.startDate && form.startDate < today) {
       toast.error('Start date cannot be in the past');
       return;
     }
 
-    if (form.dueDate && form.dueDate < today) {
+    if (!isEdit && form.dueDate && form.dueDate < today) {
       toast.error('Due date cannot be in the past');
       return;
     }
@@ -367,19 +380,7 @@ function WeeklyTaskModal({ isOpen, onClose, onSave, task, fixedTaskType, selecte
   const labelCls = 'block text-xs font-semibold text-slate-600 mb-1';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col">
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
-          <div>
-            <h2 className="text-base font-bold text-slate-900">
-              {isEdit ? 'Edit Task' : `New ${form.taskType === 'CLASS_TASK' ? 'Class Requirement' : 'Team Task'}`}
-            </h2>
-            <p className="text-xs text-slate-400 mt-0.5">Week {selectedWeek}</p>
-          </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-700 p-1">✕</button>
-        </div>
+    <Modal isOpen={isOpen} onClose={() => { if (!loading) onClose(); }} title={`${isEdit ? 'Edit Task' : 'New Task'} · Week ${selectedWeek}`}>
 
         {/* Body */}
         <form onSubmit={handleSubmit} className="overflow-y-auto flex-1 px-6 py-4 space-y-4">
@@ -426,11 +427,11 @@ function WeeklyTaskModal({ isOpen, onClose, onSave, task, fixedTaskType, selecte
           <div className="grid grid-cols-3 gap-3">
             <div>
               <label className={labelCls}>Start Date</label>
-              <input type="date" className={inputCls} min={new Date().toISOString().split('T')[0]} value={form.startDate} onChange={e => set('startDate', e.target.value)} />
+              <input aria-label="Start Date" type="date" className={inputCls} min={isEdit ? undefined : new Date().toISOString().split('T')[0]} value={form.startDate} onChange={e => set('startDate', e.target.value)} />
             </div>
             <div>
               <label className={labelCls}>Due Date</label>
-              <input type="date" className={inputCls} min={form.startDate || new Date().toISOString().split('T')[0]} value={form.dueDate} onChange={e => set('dueDate', e.target.value)} />
+              <input aria-label="Due Date" type="date" className={inputCls} min={form.startDate || (isEdit ? undefined : new Date().toISOString().split('T')[0])} value={form.dueDate} onChange={e => set('dueDate', e.target.value)} />
             </div>
             <div>
               <label className={labelCls}>Estimated Hours</label>
@@ -484,18 +485,14 @@ function WeeklyTaskModal({ isOpen, onClose, onSave, task, fixedTaskType, selecte
 
         {/* Footer */}
         <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-slate-100">
-          <button type="button" onClick={onClose}
-            className="px-4 py-2 text-sm font-semibold text-slate-600 hover:text-slate-800 hover:bg-slate-50 rounded-lg transition-colors">
+          <Button variant="outline" onClick={onClose} disabled={loading}>
             Cancel
-          </button>
-          <button onClick={handleSubmit} disabled={loading}
-            className="flex items-center gap-2 px-5 py-2 text-sm font-semibold bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors shadow-sm">
-            {loading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+          </Button>
+          <Button onClick={() => handleSubmit()} isLoading={loading}>
             {isEdit ? 'Save Changes' : 'Create Task'}
-          </button>
+          </Button>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -506,19 +503,17 @@ export default function WeeklyRoadmapPlanner({
   classId,
   teamId,
   currentUser,
-  roleInTeam = '',
   teamMembers = [],
   isReadOnly = false,
-}) {
+}: WeeklyRoadmapPlannerProps) {
   // ── Permissions ────────────────────────────────────────────
   const role = currentUser?.role?.toUpperCase() || '';
 
   const isAdmin    = role === 'ADMIN';
   const isLecturer = role === 'LECTURER';
-  const isMentor   = role === 'MENTOR';
   const isTeamMemberContext = !!teamId && (role === 'STUDENT' || role === 'USER');
 
-  const canCreateTeamTask  = !isReadOnly && (isAdmin || isLecturer || isMentor || isTeamMemberContext);
+  const canCreateTeamTask  = !isReadOnly && (isAdmin || isLecturer || isTeamMemberContext);
   const canCreateClassTask = !isReadOnly && (isAdmin || isLecturer);
 
   const canEditTask = (task) => {
@@ -526,7 +521,7 @@ export default function WeeklyRoadmapPlanner({
     if (!task) return false;
     if (task.taskType === 'COURSE_TEMPLATE') return isAdmin;
     if (task.taskType === 'CLASS_TASK')      return isAdmin || isLecturer;
-    if (task.taskType === 'TEAM_TASK')       return isAdmin || isLecturer || isMentor || isTeamMemberContext;
+    if (task.taskType === 'TEAM_TASK')       return isAdmin || isLecturer || isTeamMemberContext;
     return false;
   };
   const canDeleteTask = (task) => {
@@ -539,7 +534,7 @@ export default function WeeklyRoadmapPlanner({
     if (task.taskType === 'COURSE_TEMPLATE') return isAdmin;
     if (task.taskType === 'CLASS_TASK')      return isAdmin || isLecturer;
     if (task.taskType === 'TEAM_TASK') {
-      if (isAdmin || isLecturer || isMentor) return true;
+      if (isAdmin || isLecturer) return true;
       if (!isTeamMemberContext) return false;
       return createdById === currentUserId;
     }
@@ -550,7 +545,7 @@ export default function WeeklyRoadmapPlanner({
     if (!task) return false;
     if (task.taskType === 'COURSE_TEMPLATE') return isAdmin;
     if (task.taskType === 'CLASS_TASK')      return isAdmin || isLecturer;
-    if (task.taskType === 'TEAM_TASK')       return isAdmin || isLecturer || isMentor || isTeamMemberContext;
+    if (task.taskType === 'TEAM_TASK')       return isAdmin || isLecturer || isTeamMemberContext;
     return false;
   };
 
@@ -563,49 +558,17 @@ export default function WeeklyRoadmapPlanner({
   const [statusFilter,   setStatusFilter]   = useState('ALL');
   const [assigneeFilter, setAssigneeFilter] = useState('ALL');
 
-  const [courseTasks, setCourseTasks] = useState([]);
-  const [classTasks,  setClassTasks]  = useState([]);
-  const [teamTasks,   setTeamTasks]   = useState([]);
-
-  const [loading,       setLoading]       = useState(true);
-  const [actionLoading, setActionLoading] = useState(false);
-  const [error,         setError]         = useState(null);
+  const roadmapParams = { courseCode, weekNumber: selectedWeek, ...(classId ? { classId } : {}), ...(teamId ? { teamId } : {}) };
+  const { data, isLoading: loading, error, refetch, save, remove, changeStatus, isMutating: actionLoading } = useWeeklyRoadmap(roadmapParams);
+  const courseTasks = data?.courseTasks ?? EMPTY_TASKS;
+  const classTasks = data?.classTasks ?? EMPTY_TASKS;
+  const teamTasks = data?.teamTasks ?? EMPTY_TASKS;
 
   // Modal
   const [modalOpen,    setModalOpen]    = useState(false);
-  const [editingTask,  setEditingTask]  = useState(null);
-  const [modalType,    setModalType]    = useState('TEAM_TASK');
-  const [deleteTarget, setDeleteTarget] = useState(null);
-
-  // ── Fetch ──────────────────────────────────────────────────
-  const fetchTasks = useCallback(async () => {
-    if (!courseCode) return;
-    try {
-      setError(null);
-      const params = { courseCode, weekNumber: selectedWeek };
-      if (classId) params.classId = classId;
-      if (teamId)  params.teamId  = teamId;
-      const res = await getWeeklyTasks(params);
-      // Backend wraps: { success, data: { courseTasks, classTasks, teamTasks } }
-      // Axios may or may not have already unwrapped one layer, so double-unwrap safely.
-      const raw = res?.data ?? res;
-      const d   = raw?.data ?? raw;
-      setCourseTasks(d.courseTasks || []);
-      setClassTasks(d.classTasks   || []);
-      setTeamTasks(d.teamTasks     || []);
-    } catch (err) {
-      const msg = err?.message || 'Failed to load tasks';
-      setError(msg);
-      toast.error(msg);
-    } finally {
-      setLoading(false);
-    }
-  }, [courseCode, classId, teamId, selectedWeek]);
-
-  useEffect(() => {
-    setLoading(true);
-    fetchTasks();
-  }, [fetchTasks]);
+  const [editingTask,  setEditingTask]  = useState<WeeklyTask | null>(null);
+  const [modalType,    setModalType]    = useState<WeeklyTaskKind>('TEAM_TASK');
+  const [deleteTarget, setDeleteTarget] = useState<WeeklyTask | null>(null);
 
   // ── Handlers ───────────────────────────────────────────────
   const handleWeekChange = (w) => {
@@ -614,8 +577,8 @@ export default function WeeklyRoadmapPlanner({
     localStorage.setItem('selectedRoadmapWeek', String(n));
   };
 
-  const openCreate = (type) => { setEditingTask(null); setModalType(type); setModalOpen(true); };
-  const openEdit   = (task)  => { setEditingTask(task); setModalType(task.taskType); setModalOpen(true); };
+  const openCreate = (type: WeeklyTaskKind) => { setEditingTask(null); setModalType(type); setModalOpen(true); };
+  const openEdit   = (task: WeeklyTask)  => { setEditingTask(task); setModalType(task.taskType); setModalOpen(true); };
   const closeModal = ()      => { setModalOpen(false); setEditingTask(null); };
 
   const getTasksByType = useCallback((taskType) => {
@@ -635,10 +598,10 @@ export default function WeeklyRoadmapPlanner({
     });
   }, [getTasksByType, selectedWeek]);
 
-  const handleSave = async (formData) => {
+  const handleSave = async (formData: SaveWeeklyTaskPayload) => {
     const scope = formData.taskType === 'TEAM_TASK' ? 'TEAM'
                 : formData.taskType === 'CLASS_TASK' ? 'CLASS' : 'COURSE';
-    const payload = {
+    const payload: SaveWeeklyTaskPayload = {
       ...formData,
       scope,
       courseCode,
@@ -653,20 +616,11 @@ export default function WeeklyRoadmapPlanner({
     }
 
     try {
-      setActionLoading(true);
-      if (editingTask) {
-        await updateWeeklyTask(editingTask._id, payload);
-        toast.success('Task updated successfully');
-      } else {
-        await createWeeklyTask(payload);
-        toast.success('Task created successfully');
-      }
+      await save.mutateAsync({ task: editingTask, payload });
+      toast.success(editingTask ? 'Task updated successfully' : 'Task created successfully');
       closeModal();
-      await fetchTasks();
     } catch (err) {
       toast.error(getTaskSaveErrorMessage(err));
-    } finally {
-      setActionLoading(false);
     }
   };
 
@@ -677,28 +631,20 @@ export default function WeeklyRoadmapPlanner({
   const handleDeleteConfirm = async () => {
     if (!deleteTarget?._id) return;
     try {
-      setActionLoading(true);
-      await deleteWeeklyTask(deleteTarget._id);
+      await remove.mutateAsync(deleteTarget._id);
       toast.success('Task deleted');
       setDeleteTarget(null);
-      await fetchTasks();
     } catch (err) {
       toast.error(err?.message || 'Failed to delete task');
-    } finally {
-      setActionLoading(false);
     }
   };
 
-  const handleStatusChange = async (taskId, status) => {
+  const handleStatusChange = async (taskId: string, status: WeeklyTaskStatus) => {
     try {
-      setActionLoading(true);
-      await updateWeeklyTaskStatus(taskId, { status });
+      await changeStatus.mutateAsync({ taskId, status });
       toast.success('Status updated');
-      await fetchTasks();
     } catch (err) {
       toast.error(err?.message || 'Failed to update status');
-    } finally {
-      setActionLoading(false);
     }
   };
 
@@ -708,7 +654,7 @@ export default function WeeklyRoadmapPlanner({
   const filteredTeamTasks = teamTasks.filter(t => {
     if (statusFilter !== 'ALL' && t.status !== statusFilter) return false;
     if (assigneeFilter !== 'ALL') {
-      const aid = t.assigneeStudentId?._id || t.assigneeStudentId;
+      const aid = typeof t.assigneeStudentId === 'string' ? t.assigneeStudentId : t.assigneeStudentId?._id;
       if (aid !== assigneeFilter) return false;
     }
     return true;
@@ -750,16 +696,7 @@ export default function WeeklyRoadmapPlanner({
 
   // ─── Error ─────────────────────────────────────────────────
   if (error) {
-    return (
-      <div className="bg-red-50 border border-red-200 rounded-2xl p-8 text-center">
-        <AlertTriangle className="w-8 h-8 text-red-400 mx-auto mb-3" />
-        <p className="text-red-600 font-semibold text-sm">{error}</p>
-        <button onClick={() => { setLoading(true); fetchTasks(); }}
-          className="mt-3 text-sm text-red-600 hover:text-red-800 font-medium underline">
-          Try again
-        </button>
-      </div>
-    );
+    return <ErrorState message={parseApiError(error, 'Unable to load the weekly roadmap.').message} onRetry={() => void refetch()} />;
   }
 
   // ─── Main render ───────────────────────────────────────────

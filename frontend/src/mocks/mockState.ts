@@ -147,6 +147,20 @@ export interface MockTeam {
   description: string | null;
   projectName?: string | null;
   projectDescription?: string | null;
+  startupField?: string | null;
+  technologyStack?: string[];
+  keywords?: string[];
+  projectCreatedAtUtc?: string | null;
+  projectUpdatedAtUtc?: string | null;
+  projectActivities?: Array<{
+    id: string;
+    action: string;
+    summary: string;
+    actorUserId: string | null;
+    actorName: string;
+    changedFields: string[];
+    occurredAtUtc: string;
+  }>;
   status: string;
   leaderId: string | null;
   members: MockTeamMember[];

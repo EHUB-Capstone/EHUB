@@ -216,6 +216,34 @@ public sealed class AddStudentToClassRequest
     public string? MajorCode { get; init; }
 }
 
+/// <summary>
+/// Assigns existing student profiles to a class. Each identifier may be either
+/// the student-profile id or its linked user id, which keeps the API compatible
+/// with staff directory pickers while persisting only student-profile ids.
+/// </summary>
+public sealed class AssignStudentsToClassRequest
+{
+    public IReadOnlyCollection<Guid> StudentIds { get; init; } = Array.Empty<Guid>();
+}
+
+public sealed class AssignStudentsToTeamRequest
+{
+    public IReadOnlyCollection<Guid> StudentIds { get; init; } = Array.Empty<Guid>();
+}
+
+public sealed class ClassStudentAssignmentResponse
+{
+    public Guid ClassId { get; init; }
+    public IReadOnlyCollection<Guid> AssignedStudentIds { get; init; } = Array.Empty<Guid>();
+}
+
+public sealed class TeamStudentAssignmentResponse
+{
+    public Guid ClassId { get; init; }
+    public Guid TeamId { get; init; }
+    public IReadOnlyCollection<Guid> AssignedStudentIds { get; init; } = Array.Empty<Guid>();
+}
+
 public sealed class UpdateClassStudentRequest
 {
     public string MajorCode { get; init; } = string.Empty;

@@ -262,7 +262,7 @@ export default function StudentAssignmentModal({
                 <div className="mt-3 space-y-2 text-xs text-slate-600">
                   <p><strong>{draft.studentIds.length}</strong> student{draft.studentIds.length === 1 ? '' : 's'} selected</p>
                   <p>Destination: <strong>{draft.mode === 'TEAM' ? targetTeam?.teamName || 'Select a team' : classInfo.code}</strong></p>
-                  <p>{draft.mode === 'TEAM' ? 'Only students already in this class can be assigned.' : 'Moving a student from another class clears their previous team.'}</p>
+                  <p>{draft.mode === 'TEAM' ? 'Only students already in this class can be assigned.' : 'A student can have only one active enrollment for the same subject and term.'}</p>
                 </div>
               </section>
             </div>

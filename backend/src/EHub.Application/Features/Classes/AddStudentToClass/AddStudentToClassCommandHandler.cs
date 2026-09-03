@@ -111,6 +111,26 @@ public sealed class AddStudentToClassCommandHandler : IAddStudentToClassCommandH
             }
         }
 
+        ClassStudent? existingEnrollment = null;
+        if (studentProfile != null)
+        {
+            existingEnrollment = await _context.ClassStudents
+                .FirstOrDefaultAsync(
+                    enrollment => enrollment.ClassId == classId && enrollment.StudentId == studentProfile.Id,
+                    cancellationToken);
+
+            if (existingEnrollment != null)
+            {
+                var code = existingEnrollment.EnrollmentStatus == EnrollmentStatus.Dropped
+                    ? ErrorCodes.ClassStudentReEnrollmentRequired
+                    : ErrorCodes.ClassStudentAlreadyEnrolled;
+                var message = existingEnrollment.EnrollmentStatus == EnrollmentStatus.Dropped
+                    ? $"Student '{studentCode}' has a dropped enrollment. Use the explicit re-enroll action."
+                    : $"Student '{studentCode}' already has an enrollment in this class.";
+                return Failure(code, message);
+            }
+        }
+
         var profileMajorCode = studentProfile?.MajorCode?.Trim().ToUpperInvariant();
         string enrollmentMajorCode;
         string majorSource;
@@ -142,27 +162,8 @@ public sealed class AddStudentToClassCommandHandler : IAddStudentToClassCommandH
             majorSource = studentProfile == null ? "ManualNewProfile" : "ManualEnrollment";
         }
 
-        ClassStudent? existingEnrollment = null;
         if (studentProfile != null)
         {
-            existingEnrollment = await _context.ClassStudents
-                .FirstOrDefaultAsync(
-                    enrollment => enrollment.ClassId == classId && enrollment.StudentId == studentProfile.Id,
-                    cancellationToken);
-
-            if (existingEnrollment != null)
-            {
-                var code = existingEnrollment.EnrollmentStatus == EnrollmentStatus.Dropped
-                    ? ErrorCodes.ClassStudentReEnrollmentRequired
-                    : ErrorCodes.ClassStudentAlreadyEnrolled;
-                var message = existingEnrollment.EnrollmentStatus == EnrollmentStatus.Dropped
-                    ? $"Student '{studentCode}' has a dropped enrollment. Use the explicit re-enroll action."
-                    : $"Student '{studentCode}' already has an enrollment in this class.";
-                return Failure(
-                    code,
-                    message);
-            }
-
             var conflictEnrollment = await _context.ClassStudents
                 .Include(enrollment => enrollment.Class)
                 .AsNoTracking()

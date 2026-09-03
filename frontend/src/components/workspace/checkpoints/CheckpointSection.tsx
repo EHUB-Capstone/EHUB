@@ -5,6 +5,7 @@ import { Flag, Loader2, Target } from 'lucide-react';
 import { checkpointApi } from '../../../api/checkpointApi';
 import CheckpointCard from './CheckpointCard';
 import CheckpointPanel from './CheckpointPanel';
+import ErrorState from '../../ui/ErrorState';
 
 export default function CheckpointSection({
   teamId,
@@ -17,19 +18,18 @@ export default function CheckpointSection({
   const [stats, setStats] = useState({});
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState(null);
-
-  useEffect(() => {
-    checkpointApi
-      .getConfig()
-      .then((res) => { if (res.success) setConfigs(res.data); })
-      .catch(console.error);
-  }, []);
+  const [error, setError] = useState('');
 
   const fetchStats = useCallback(async () => {
     if (!teamId) return;
     setLoading(true);
+    setError('');
+    setConfigs([]);
+    setStats({});
     try {
-      const res = await checkpointApi.getCheckpointData(String(teamId));
+      const [config, res] = await Promise.all([checkpointApi.getConfig(), checkpointApi.getCheckpointData(String(teamId))]);
+      if (!config.success || !res.success) throw new Error('Checkpoint request failed');
+      setConfigs(config.data);
       if (res.success) {
         const map = {};
         res.data.submissions.forEach((sub) => {
@@ -49,7 +49,9 @@ export default function CheckpointSection({
         setStats(map);
       }
     } catch (e) {
-      console.error('CheckpointSection fetchStats:', e);
+      setError(e?.response?.status === 404 || e?.status === 404
+        ? 'Checkpoints are not available on this server yet. Submission and feedback are unavailable.'
+        : 'Unable to load checkpoints. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -65,6 +67,8 @@ export default function CheckpointSection({
     const s = stats[cp.number];
     return (s?.count || 0) > 0 || (s?.reqFilled || 0) > 0;
   }).length;
+
+  if (error) return <section className="rounded-2xl border border-slate-200 bg-white p-5"><h2 className="mb-3 text-lg font-bold">Startup Checkpoints</h2><ErrorState message={error} onRetry={fetchStats} /></section>;
 
   return (
     <>

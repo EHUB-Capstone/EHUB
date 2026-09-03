@@ -561,6 +561,109 @@ test('mock team management supports create, update, duplicate prevention, projec
   assert.ok(roster.every((student) => student.teamId === null));
 });
 
+test('mock student without a team can submit one balanced team proposal', async () => {
+  resetMockState();
+  const state = getMockState();
+  const targetClass = state.classes.find((item) => item.status === 'Draft');
+  assert.ok(targetClass);
+  const roster = state.rosters[targetClass.id];
+  assert.equal(roster.length, 4);
+  const proposingStudent = state.users.find((user) => user.id === roster[0].userId);
+  assert.ok(proposingStudent);
+
+  await axiosClient.post('/auth/login', { email: proposingStudent.email, password: 'Mock123!' });
+  const memberIds = roster.map((student) => student.studentId);
+  const response = await axiosClient.post(`/classes/${targetClass.id}/teams/student-proposal`, {
+    studentIds: memberIds,
+    leaderStudentId: memberIds[1],
+    groupName: 'Student Venture Team',
+    projectName: 'Student Venture Project',
+    isProjectNameSameAsGroup: false,
+    description: 'A balanced student-created proposal for lecturer review.',
+  });
+
+  assert.equal(response.data.status, 'Pending');
+  assert.equal(response.data.members.length, 4);
+  assert.equal(response.data.members.find((member: { isLeader: boolean }) => member.isLeader)?.studentId, memberIds[1]);
+  assert.ok(state.proposals.some((proposal) => proposal.id === response.data.id));
+
+  await assert.rejects(
+    axiosClient.post(`/classes/${targetClass.id}/teams/student-proposal`, {
+      studentIds: memberIds,
+      leaderStudentId: memberIds[0],
+      groupName: 'Second Open Proposal',
+      projectName: 'Second Open Project',
+      isProjectNameSameAsGroup: false,
+      description: 'This request must be blocked because the members are reserved.',
+    }),
+    (error: unknown) => {
+      const apiError = (error as { response?: { status?: number; data?: { code?: string } } }).response;
+      return apiError?.status === 409 && apiError.data?.code === 'TEAM_PROPOSAL_MEMBERSHIP_CONFLICT';
+    },
+  );
+});
+
+test('mock team leader creates one project workspace linked to its academic context', async () => {
+  resetMockState();
+  const state = getMockState();
+  const team = state.teams.find((item) => !item.projectName);
+  assert.ok(team?.leaderId);
+  const leader = state.users.find((user) => user.id === team.leaderId);
+  assert.ok(leader);
+  await axiosClient.post('/auth/login', { email: leader.email, password: 'Mock123!' });
+
+  const created = await axiosClient.post(`/workspace/teams/${team.id}`, {
+    projectName: 'Energy Insight Workspace',
+    description: 'A project that helps small offices understand their energy usage.',
+    startupField: 'GreenTech',
+    technologyStack: ['React', '.NET'],
+    keywords: ['energy', 'analytics'],
+  });
+  const cls = state.classes.find((item) => item.id === team.classId);
+  assert.equal(created.data.teamId, team.id);
+  assert.equal(created.data.classId, team.classId);
+  assert.equal(created.data.subjectId, cls?.courseId);
+  assert.equal(created.data.semesterId, cls?.semesterId);
+
+  await axiosClient.put(`/workspace/teams/${team.id}/profile`, {
+    projectName: 'Energy Insight Platform',
+    description: 'The latest project profile helps small offices reduce their energy usage.',
+    startupField: 'ClimateTech',
+    technologyStack: ['React', '.NET', 'PostgreSQL'],
+    keywords: ['energy', 'efficiency'],
+  });
+  const latest = await axiosClient.get(`/workspace/teams/${team.id}`);
+  assert.equal(latest.data.project.projectName, 'Energy Insight Platform');
+  assert.equal(latest.data.class.subjectCode, cls?.subjectCode);
+  assert.equal(latest.data.class.semesterCode, cls?.semesterCode);
+  assert.ok(latest.data.members.length > 0);
+  assert.equal(latest.data.activities[0].action, 'PROJECT_PROFILE_UPDATED');
+  assert.ok(latest.data.activities[0].changedFields.includes('projectName'));
+
+  await assert.rejects(
+    axiosClient.post(`/workspace/teams/${team.id}`, {
+      projectName: 'Duplicate Workspace',
+      description: 'This second project workspace must be rejected by the API.',
+      startupField: 'GreenTech',
+      technologyStack: ['React'],
+      keywords: [],
+    }),
+    (error: unknown) => (error as { response?: { status?: number; data?: { code?: string } } }).response?.data?.code === 'WORKSPACE_ALREADY_EXISTS',
+  );
+
+  const outsider = state.users.find((user) =>
+    user.role === 'STUDENT' && !team.members.some((member) => member.studentId === user.id));
+  assert.ok(outsider);
+  await axiosClient.post('/auth/login', { email: outsider.email, password: 'Mock123!' });
+  await assert.rejects(
+    axiosClient.get(`/workspace/teams/${team.id}`),
+    (error: unknown) => {
+      const response = (error as { response?: { status?: number; data?: { code?: string } } }).response;
+      return response?.status === 403 && response.data?.code === 'WORKSPACE_ACCESS_DENIED';
+    },
+  );
+});
+
 test('mock student assignment keeps class, team and user detail consistent', async () => {
   resetMockState();
   await axiosClient.post('/auth/login', { email: 'admin@ehub.local', password: 'Mock123!' });
@@ -584,7 +687,7 @@ test('mock student assignment keeps class, team and user detail consistent', asy
     studentIds: [draftOnlyStudent.studentId],
   });
   assert.ok(getMockState().rosters[activeClass.id].some((student) => student.studentId === draftOnlyStudent.studentId));
-  assert.ok(!getMockState().rosters[draftClass.id].some((student) => student.studentId === draftOnlyStudent.studentId));
+  assert.ok(getMockState().rosters[draftClass.id].some((student) => student.studentId === draftOnlyStudent.studentId));
 
   await assert.rejects(
     axiosClient.post(`/classes/${activeClass.id}/teams/${targetTeam.id}/students/assign`, {

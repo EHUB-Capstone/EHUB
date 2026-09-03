@@ -275,6 +275,7 @@ public sealed class StudentClassMemberDto
     public string FullName { get; init; } = string.Empty;
     public string? Email { get; init; }
     public string MajorCode { get; init; } = string.Empty;
+    public string EnrollmentStatus { get; init; } = string.Empty;
     public Guid? TeamId { get; init; }
 }
 

@@ -15,9 +15,11 @@ import QuickShortcuts from '../../components/workspace/shortcuts/QuickShortcuts'
 import CheckpointSection from '../../components/workspace/checkpoints/CheckpointSection';
 import WorkspaceSelector from '../../components/workspace/WorkspaceSelector';
 import ProjectDirectionCard from '../../components/workspace/ProjectDirectionCard';
+import CreateProjectWorkspaceForm from '../../components/workspace/CreateProjectWorkspaceForm';
+import ProjectWorkspaceProfile from '../../components/workspace/ProjectWorkspaceProfile';
 import { classFeatureFlags } from '../../config/classFeatureFlags';
 import { getDisplayTeamName } from '../../utils/teamDisplay';
-import { resolveWorkspaceTab } from '../../utils/workspaceNavigation';
+import { resolveWorkspaceTab, workspaceTabSearch } from '../../utils/workspaceNavigation';
 
 const clearWorkspaceSelectionCache = () => {
   [
@@ -45,13 +47,12 @@ export default function TeamWorkspace() {
   const [workspaceContext, setWorkspaceContext] = useState(null);
 
   // Initialise active tab from URL query param (?tab=roadmap)
-  const [activeTab, setActiveTab] = useState(() => resolveWorkspaceTab(location.search));
-
-  // Sync tab when query param changes externally
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setActiveTab(resolveWorkspaceTab(location.search));
-  }, [location.search]);
+  const activeTab = resolveWorkspaceTab(location.search);
+  const setActiveTab = (tab) => navigate({
+    pathname: location.pathname,
+    search: workspaceTabSearch(location.search, tab),
+    hash: location.hash,
+  });
 
   const fetchWorkspaceData = useCallback(async (targetTeamId = teamId || null) => {
     try {
@@ -85,7 +86,17 @@ export default function TeamWorkspace() {
         setData(null);
         setEmptyMessage(res.message || 'You have joined this class but have not been assigned to a team yet.');
       } else {
-        setData(res.data);
+        const payload = res.data;
+        setData({
+          ...payload,
+          team: payload.team ? { ...payload.team, _id: payload.team._id || payload.team.id } : null,
+          class: payload.class ? { ...payload.class, _id: payload.class._id || payload.class.id } : null,
+          project: payload.project ? { ...payload.project, _id: payload.project._id || payload.project.id } : null,
+          members: (payload.members || []).map((member) => ({
+            ...member,
+            _id: member._id || member.studentId,
+          })),
+        });
       }
     } catch (err) {
       console.error(err);
@@ -146,9 +157,10 @@ export default function TeamWorkspace() {
     );
   }
 
-  const { team, class: cls, members, lecturer, mentor, proposal, latestDeck } = data;
+  const { team, class: cls, members, lecturer, mentor, proposal, latestDeck, project, activities } = data;
   const privilegedRoles = ['ADMIN', 'LECTURER', 'MENTOR'];
-  const isTeamMember = members && members.some(m => m.userId?._id === user?._id);
+  const isTeamMember = members && members.some((member) =>
+    String(member.userId?._id || member.userId || '') === String(user?._id || user?.id || ''));
   const accessMode = workspaceContext?.accessMode || workspaceContext?.selectedWorkspace?.accessMode || null;
   const isReadOnly = accessMode === 'READ_ONLY';
   const isEditable = !isReadOnly && (privilegedRoles.includes(user?.role) || isTeamMember);
@@ -161,6 +173,36 @@ export default function TeamWorkspace() {
     currentMember && String(team.leaderId?._id || team.leaderId || '') === String(currentMember._id)
   );
   const displayTeamName = getDisplayTeamName(team) || 'Unnamed Team';
+
+  if (!project) {
+    return (
+      <div className="mx-auto max-w-6xl space-y-6">
+        <div className="flex flex-col items-start justify-between gap-4 rounded-2xl border border-slate-200/60 bg-white p-6 shadow-sm sm:flex-row sm:items-center">
+          <div className="flex items-center gap-4">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-primary-500 to-secondary text-white shadow-sm"><Award className="h-6 w-6" /></div>
+            <div>
+              <span className="rounded-md border border-primary-100 bg-primary-50 px-2 py-0.5 text-xs font-semibold text-primary">{cls?.classCode}</span>
+              <h1 className="mt-1 text-2xl font-bold text-slate-900">{displayTeamName}</h1>
+              <p className="mt-0.5 text-sm text-slate-500">No project workspace has been created for this team.</p>
+            </div>
+          </div>
+          {teamId && <button onClick={() => navigate(-1)} className="flex items-center gap-1.5 rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-500 hover:text-slate-800"><ArrowLeft className="h-4 w-4" /> Back</button>}
+        </div>
+
+        {isTeamLeader && !isReadOnly ? (
+          <CreateProjectWorkspaceForm team={team} classInfo={cls} onCreated={() => fetchWorkspaceData(team._id)} />
+        ) : (
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 p-8 text-center">
+            <Shield className="mx-auto h-8 w-8 text-amber-500" />
+            <h2 className="mt-3 text-lg font-bold text-slate-800">Waiting for the team leader</h2>
+            <p className="mx-auto mt-1 max-w-md text-sm text-slate-600">
+              Only the active team leader can create this project workspace. It will automatically link to the team, class, subject and semester.
+            </p>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto">
@@ -232,6 +274,8 @@ export default function TeamWorkspace() {
 
           {/* Left Side - Proposal & Checkpoints */}
           <div className="lg:col-span-8 space-y-6">
+
+            <ProjectWorkspaceProfile project={project} classInfo={cls} activities={activities || []} />
 
             {classFeatureFlags.projectDirection && <ProjectDirectionCard
               key={`${team._id}-${team.projectDirectionUpdatedAt || ''}`}

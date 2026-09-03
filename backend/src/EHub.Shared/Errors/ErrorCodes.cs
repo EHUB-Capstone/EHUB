@@ -74,6 +74,8 @@ public static class ErrorCodes
     public const string ClassStudentEnrollmentConflict = "STUDENT_ENROLLMENT_CONFLICT";
     public const string ClassStudentReEnrollmentRequired = "STUDENT_RE_ENROLLMENT_REQUIRED";
     public const string ClassStudentNotDropped = "STUDENT_NOT_DROPPED";
+    public const string ClassAssignmentStudentsRequired = "CLASS_ASSIGNMENT_STUDENTS_REQUIRED";
+    public const string ClassAssignmentStudentNotFound = "CLASS_ASSIGNMENT_STUDENT_NOT_FOUND";
     public const string ClassEnrollmentMajorLocked = "MAJOR_LOCKED";
     public const string ClassImportSessionInvalid = "IMPORT_SESSION_INVALID";
     public const string ClassImportSessionExpired = "IMPORT_SESSION_EXPIRED";
@@ -95,6 +97,10 @@ public static class ErrorCodes
     public const string TeamNameDuplicated = "TEAM_NAME_DUPLICATED";
     public const string TeamDeletionBlocked = "TEAM_DELETION_BLOCKED";
     public const string TeamMembershipConflict = "TEAM_MEMBERSHIP_CONFLICT";
+    public const string TeamClassMismatch = "TEAM_CLASS_MISMATCH";
+    public const string TeamAssignmentStudentsRequired = "TEAM_ASSIGNMENT_STUDENTS_REQUIRED";
+    public const string TeamMemberNotInClass = "TEAM_MEMBER_NOT_IN_CLASS";
+    public const string TeamMemberLimitExceeded = "TEAM_MEMBER_LIMIT_EXCEEDED";
     public const string TeamMajorCompositionInvalid = "TEAM_MAJOR_COMPOSITION_INVALID";
     public const string TeamProposalNotFound = "TEAM_PROPOSAL_NOT_FOUND";
     public const string TeamProposalInvalid = "TEAM_PROPOSAL_INVALID";
@@ -107,6 +113,20 @@ public static class ErrorCodes
     public const string ProjectDirectionNotFound = "PROJECT_DIRECTION_NOT_FOUND";
     public const string ProjectDirectionStateInvalid = "PROJECT_DIRECTION_STATE_INVALID";
     public const string NotificationNotFound = "NOTIFICATION_NOT_FOUND";
+
+    // Team project workspace error codes
+    public const string WorkspaceAccessDenied = "WORKSPACE_ACCESS_DENIED";
+    public const string WorkspaceLeaderRequired = "WORKSPACE_LEADER_REQUIRED";
+    public const string WorkspaceAlreadyExists = "WORKSPACE_ALREADY_EXISTS";
+    public const string WorkspaceNotFound = "WORKSPACE_NOT_FOUND";
+    public const string WorkspaceValidationError = "WORKSPACE_VALIDATION_ERROR";
+    public const string WorkspaceTagInvalid = "WORKSPACE_TAG_INVALID";
+    public const string WorkspaceTagDuplicated = "WORKSPACE_TAG_DUPLICATED";
+    public const string WorkspaceConcurrencyConflict = "WORKSPACE_CONCURRENCY_CONFLICT";
+    public const string WeeklyTaskNotFound = "WEEKLY_TASK_NOT_FOUND";
+    public const string WeeklyTaskDuplicated = "WEEKLY_TASK_DUPLICATED";
+    public const string ShortcutNotFound = "SHORTCUT_NOT_FOUND";
+    public const string ShortcutDuplicated = "SHORTCUT_DUPLICATED";
 
     // Password reset error codes
     public const string AuthPasswordResetTokenInvalid = "AUTH_PASSWORD_RESET_TOKEN_INVALID";

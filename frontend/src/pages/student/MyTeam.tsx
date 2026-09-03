@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Users, Shield, MessageSquare, AlertCircle, Calendar, Star, Loader2, Sparkles } from 'lucide-react';
+import { Users, Shield, MessageSquare, AlertCircle, Calendar, Star, Loader2, Sparkles, ArrowRight } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { classApi } from '../../api/classApi';
 import EmptyState from '../../components/ui/EmptyState';
@@ -24,6 +24,7 @@ const majorColor = (major) => {
 
 export default function MyTeam() {
   const [data, setData] = useState(null);
+  const [currentClasses, setCurrentClasses] = useState([]);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
@@ -34,6 +35,9 @@ export default function MyTeam() {
         const payload = unwrapApiData<any>(res as any);
         if (!payload?.team) {
           setData(payload || null);
+          const classesResponse = await classApi.getMyClasses('Current');
+          const classesPayload = unwrapApiData<any>(classesResponse as any);
+          setCurrentClasses(Array.isArray(classesPayload?.classes) ? classesPayload.classes : []);
         } else {
           const team = normalizeManagedTeam(payload.team);
           setData({ ...payload, team, members: getTeamMembers(team) });
@@ -77,8 +81,30 @@ export default function MyTeam() {
           <EmptyState
             icon={Users}
             title="You have not been assigned to a team yet"
-            description="Once your lecturer generates teams or assigns you to one, your team card and members will show up here."
+            description="Choose one of your current classes to create a 4–6 student team proposal for lecturer approval."
+            action={currentClasses.length === 0 ? {
+              label: 'View my classes',
+              onClick: () => navigate('/student/classes'),
+            } : undefined}
           />
+          {currentClasses.length > 0 && (
+            <div className="mx-auto grid max-w-2xl gap-2 sm:grid-cols-2">
+              {currentClasses.map((item) => (
+                <button
+                  key={item.id || item._id}
+                  type="button"
+                  onClick={() => navigate(`/student/classes/${item.slug || item.id || item._id}`)}
+                  className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-left transition hover:border-primary-200 hover:bg-primary-50"
+                >
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-bold text-slate-800">{item.classCode}</span>
+                    <span className="block truncate text-xs text-slate-500">{item.subjectCode} · Create team proposal</span>
+                  </span>
+                  <ArrowRight className="h-4 w-4 shrink-0 text-primary" />
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     );

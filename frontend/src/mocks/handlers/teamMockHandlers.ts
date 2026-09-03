@@ -329,6 +329,93 @@ function registerTeamMutations(mock: MockAdapter): void {
 }
 
 function registerProposalHandlers(mock: MockAdapter): void {
+  mock.onPost(/^\/classes\/[^/]+\/teams\/student-proposal$/).reply((config) => {
+    const classId = routeId(config, /^\/classes\/([^/]+)\/teams\/student-proposal$/);
+    const guard = classMutationGuard(classId);
+    if (guard) return guard;
+
+    const state = getMockState();
+    const currentUser = state.users.find((user) => user.id === state.sessionUserId);
+    if (!currentUser || currentUser.role !== 'STUDENT') {
+      return failure(403, 'CLASS_ACCESS_DENIED', 'Only a student can submit a team proposal.');
+    }
+
+    const body = parseBody(config);
+    const memberIds = [...new Set(asStringArray(body.studentIds))];
+    const leaderId = asString(body.leaderStudentId);
+    const teamName = asString(body.groupName).trim();
+    const projectName = body.isProjectNameSameAsGroup === true
+      ? teamName
+      : asString(body.projectName).trim();
+    const description = asString(body.description).trim();
+    const roster = state.rosters[classId] || [];
+    const currentEnrollment = roster.find((student) =>
+      student.userId === currentUser.id && student.enrollmentStatus === 'Active');
+
+    if (!currentEnrollment || !memberIds.includes(currentEnrollment.studentId)) {
+      return failure(403, 'CLASS_ACCESS_DENIED', 'The proposing student must be actively enrolled and included in the proposal.');
+    }
+    if (memberIds.length < 4 || memberIds.length > 6 || !memberIds.includes(leaderId)) {
+      return failure(400, 'TEAM_PROPOSAL_INVALID', 'A proposal needs 4–6 unique students and a leader selected from its members.');
+    }
+    if (teamName.length < 3 || teamName.length > 60 || projectName.length < 3 || projectName.length > 60 || description.length < 20 || description.length > 500) {
+      return failure(400, 'CLASS_VALIDATION_ERROR', 'Team name, project name, or description is invalid.');
+    }
+
+    const selectedStudents = memberIds
+      .map((studentId) => roster.find((student) => student.studentId === studentId && student.enrollmentStatus === 'Active'));
+    if (selectedStudents.some((student) => !student)) {
+      return failure(400, 'TEAM_PROPOSAL_INVALID', 'Every proposed member must be actively enrolled in this class.');
+    }
+    if (selectedStudents.some((student) => student?.teamId)) {
+      return failure(409, 'TEAM_MEMBERSHIP_CONFLICT', 'A proposed member already belongs to an active team.');
+    }
+    const openStatuses = new Set(['Draft', 'Pending', 'NeedsRevision']);
+    if (state.proposals.some((proposal) => proposal.classId === classId
+      && openStatuses.has(proposal.status)
+      && proposal.members.some((member) => memberIds.includes(member.studentId)))) {
+      return failure(409, 'TEAM_PROPOSAL_MEMBERSHIP_CONFLICT', 'A proposed member already belongs to another open proposal.');
+    }
+
+    const groupOneMajors = new Set(['BBA_HM', 'BBA_IB', 'BBA_MC', 'BBA_MKT', 'BEN', 'BBA_TM']);
+    const groupTwoMajors = new Set(['BIT_AI', 'BIT_GD', 'BIT_IA', 'BIT_SE']);
+    const majors = selectedStudents.map((student) => student?.majorCode?.toUpperCase() || '');
+    if (!majors.some((major) => groupOneMajors.has(major)) || !majors.some((major) => groupTwoMajors.has(major))) {
+      return failure(400, 'TEAM_MAJOR_COMPOSITION_INVALID', 'A team must include at least one GROUP_1 major and one GROUP_2 major.');
+    }
+    if (hasDuplicateTeamName(classId, teamName)
+      || state.proposals.some((proposal) => proposal.classId === classId
+        && proposal.teamName.trim().toLowerCase() === teamName.toLowerCase()
+        && !['Rejected', 'Cancelled'].includes(proposal.status))) {
+      return failure(409, 'TEAM_NAME_DUPLICATED', 'A team or open proposal with this name already exists in the class.');
+    }
+
+    const proposal: MockProposal = {
+      id: allocateId(),
+      classId,
+      teamName,
+      description,
+      projectName,
+      status: 'Pending',
+      latestReviewComment: null,
+      approvedTeamId: null,
+      members: proposalMembers(classId, memberIds, leaderId),
+      rowVersion: allocateRowVersion(),
+      history: [{
+        id: allocateId(),
+        fromStatus: null,
+        toStatus: 'Pending',
+        action: 'SUBMITTED',
+        comment: null,
+        performedByUserId: currentUser.id,
+        occurredAtUtc: new Date().toISOString(),
+      }],
+    };
+    state.proposals.unshift(proposal);
+    persistMockState();
+    return ok(proposal, 'Team proposal submitted.');
+  });
+
   mock.onPost(/^\/classes\/[^/]+\/team-proposals$/).reply((config) => {
     const classId = routeId(config, /^\/classes\/([^/]+)\/team-proposals$/);
     const guard = classMutationGuard(classId);

@@ -73,6 +73,7 @@ public static class DependencyInjection
         services.AddScoped<EHub.Application.Features.Classes.GetClassDetail.IGetClassDetailQueryHandler, EHub.Application.Features.Classes.GetClassDetail.GetClassDetailQueryHandler>();
         services.AddScoped<EHub.Application.Features.Classes.GetClassRoster.IGetClassRosterQueryHandler, EHub.Application.Features.Classes.GetClassRoster.GetClassRosterQueryHandler>();
         services.AddScoped<EHub.Application.Features.Classes.AddStudentToClass.IAddStudentToClassCommandHandler, EHub.Application.Features.Classes.AddStudentToClass.AddStudentToClassCommandHandler>();
+        services.AddScoped<EHub.Application.Features.Classes.AssignStudents.IAssignStudentsCommandHandler, EHub.Application.Features.Classes.AssignStudents.AssignStudentsCommandHandler>();
         services.AddScoped<EHub.Application.Features.Classes.UpdateClassStudent.IUpdateClassStudentCommandHandler, EHub.Application.Features.Classes.UpdateClassStudent.UpdateClassStudentCommandHandler>();
         services.AddScoped<EHub.Application.Features.Classes.RemoveStudentFromClass.IRemoveStudentFromClassCommandHandler, EHub.Application.Features.Classes.RemoveStudentFromClass.RemoveStudentFromClassCommandHandler>();
         services.AddScoped<EHub.Application.Features.Classes.ReEnrollStudent.IReEnrollStudentCommandHandler, EHub.Application.Features.Classes.ReEnrollStudent.ReEnrollStudentCommandHandler>();
@@ -93,6 +94,8 @@ public static class DependencyInjection
         services.AddScoped<EHub.Application.Features.Teams.TeamProposals.ITeamProposalHandler, EHub.Application.Features.Teams.TeamProposals.TeamProposalHandler>();
         services.AddScoped<EHub.Application.Features.Teams.ProjectDirections.IProjectDirectionHandler, EHub.Application.Features.Teams.ProjectDirections.ProjectDirectionHandler>();
         services.AddScoped<EHub.Application.Features.Classes.StudentSelfService.IStudentClassSelfServiceHandler, EHub.Application.Features.Classes.StudentSelfService.StudentClassSelfServiceHandler>();
+        services.AddScoped<EHub.Application.Features.Workspaces.IProjectWorkspaceHandler, EHub.Application.Features.Workspaces.ProjectWorkspaceHandler>();
+        services.AddScoped<EHub.Application.Features.Workspaces.IWorkspaceToolsHandler, EHub.Application.Features.Workspaces.WorkspaceToolsHandler>();
 
         services.AddScoped<EHub.Application.Common.Interfaces.Authorization.IPermissionService, EHub.Application.Common.Services.Authorization.PermissionService>();
 
