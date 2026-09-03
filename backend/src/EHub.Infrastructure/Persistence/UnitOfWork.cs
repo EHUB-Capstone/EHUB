@@ -94,7 +94,8 @@ public class UnitOfWork : IUnitOfWork
                 return true;
 
             if (current is PostgresException postgresException &&
-                postgresException.SqlState == PostgresErrorCodes.SerializationFailure)
+                (postgresException.SqlState == PostgresErrorCodes.SerializationFailure ||
+                 postgresException.SqlState == PostgresErrorCodes.DeadlockDetected))
                 return true;
         }
 

@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using EHub.Application.Common.Interfaces.Identity;
 using EHub.Application.Features.Classes.AddStudentToClass;
+using EHub.Application.Features.Classes.AssignStudents;
 using EHub.Application.Features.Classes.CreateBulkClasses;
 using EHub.Application.Features.Classes.CreateClass;
 using EHub.Application.Features.Classes.ClassAudit;
@@ -355,6 +356,54 @@ public sealed class ClassesController : ControllerBase
             "Student added to class successfully."));
     }
 
+    [HttpPost("{id:guid}/students/assign")]
+    public async Task<IActionResult> AssignStudentsToClass(
+        Guid id,
+        [FromBody] AssignStudentsToClassRequest request,
+        [FromServices] IAssignStudentsCommandHandler commandHandler,
+        CancellationToken cancellationToken)
+    {
+        var result = await commandHandler.AssignToClassAsync(
+            id,
+            request,
+            _currentUserService.UserId ?? Guid.Empty,
+            GetCurrentUserRole(),
+            cancellationToken);
+        if (result.IsFailure)
+        {
+            return ToClassErrorResponse(result.Error);
+        }
+
+        return Ok(ApiResponse<ClassStudentAssignmentResponse>.SuccessResponse(
+            result.Value,
+            "Students assigned to class successfully."));
+    }
+
+    [HttpPost("{id:guid}/teams/{teamId:guid}/students/assign")]
+    public async Task<IActionResult> AssignStudentsToTeam(
+        Guid id,
+        Guid teamId,
+        [FromBody] AssignStudentsToTeamRequest request,
+        [FromServices] IAssignStudentsCommandHandler commandHandler,
+        CancellationToken cancellationToken)
+    {
+        var result = await commandHandler.AssignToTeamAsync(
+            id,
+            teamId,
+            request,
+            _currentUserService.UserId ?? Guid.Empty,
+            GetCurrentUserRole(),
+            cancellationToken);
+        if (result.IsFailure)
+        {
+            return ToClassErrorResponse(result.Error);
+        }
+
+        return Ok(ApiResponse<TeamStudentAssignmentResponse>.SuccessResponse(
+            result.Value,
+            "Students assigned to team successfully."));
+    }
+
     [HttpPut("{id:guid}/students/{studentId:guid}/major")]
     public async Task<IActionResult> UpdateClassStudent(
         Guid id,
@@ -693,7 +742,9 @@ public sealed class ClassesController : ControllerBase
             ErrorCodes.ClassAccessDenied => StatusCode(StatusCodes.Status403Forbidden, response),
             ErrorCodes.ClassChatMembershipRepairFailed => StatusCode(StatusCodes.Status500InternalServerError, response),
             ErrorCodes.ClassNotFound or
-            ErrorCodes.ClassStudentNotFound => NotFound(response),
+            ErrorCodes.ClassStudentNotFound or
+            ErrorCodes.ClassAssignmentStudentNotFound or
+            ErrorCodes.TeamNotFound => NotFound(response),
             ErrorCodes.ClassScheduleConflict or
             ErrorCodes.ClassConcurrencyConflict or
             ErrorCodes.ClassCodeDuplicated or
@@ -711,6 +762,7 @@ public sealed class ClassesController : ControllerBase
             ErrorCodes.ClassStudentEnrollmentConflict or
             ErrorCodes.ClassStudentReEnrollmentRequired or
             ErrorCodes.ClassStudentNotDropped or
+            ErrorCodes.TeamMembershipConflict or
             ErrorCodes.ClassEnrollmentMajorLocked or
             ErrorCodes.ClassImportSessionInvalid or
             ErrorCodes.ClassImportSessionExpired or

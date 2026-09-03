@@ -1,7 +1,26 @@
 import type MockAdapter from 'axios-mock-adapter';
-import { failure, getMockState, ok, routeId } from '../mockHelpers.ts';
+import { failure, getMockState, ok, parseBody, persistMockState, routeId } from '../mockHelpers.ts';
 
 const uuid = (value: number) => `00000000-0000-4000-8000-${String(value).padStart(12, '0')}`;
+
+type MockWeeklyTask = {
+  _id: string;
+  title: string;
+  taskType: string;
+  weekNumber: number;
+  teamId?: unknown;
+  classId?: unknown;
+  [key: string]: unknown;
+};
+
+type MockShortcut = {
+  _id: string;
+  url: string;
+  [key: string]: unknown;
+};
+
+const mockWeeklyTasks: MockWeeklyTask[] = [];
+const mockShortcuts = new Map<string, MockShortcut[]>();
 
 const checkpointConfig = [
   {
@@ -78,6 +97,10 @@ function accessibleTeams() {
   return state.teams.filter((team) => team.members.some((member) => member.studentId === currentUser.id));
 }
 
+function canAccessTeam(teamId: string) {
+  return accessibleTeams().some((team) => team.id === teamId);
+}
+
 function workspaceData(teamId: string) {
   const state = getMockState();
   const team = teamById(teamId)!;
@@ -85,6 +108,7 @@ function workspaceData(teamId: string) {
   const lecturer = state.users.find((user) => user.id === cls.primaryLecturerId) || null;
   const mentorUserId = team.currentMentorAssignment?.mentor.userId;
   const mentor = mentorUserId ? state.users.find((user) => user.id === mentorUserId) || null : null;
+  const projectCreatedAtUtc = team.projectCreatedAtUtc || '2026-08-20T08:00:00.000Z';
   const members = team.members.map((member) => {
     const user = state.users.find((item) => item.id === member.studentId);
     return {
@@ -118,6 +142,30 @@ function workspaceData(teamId: string) {
     members,
     lecturer: lecturer ? { _id: lecturer.id, name: lecturer.name, email: lecturer.email } : null,
     mentor: mentor ? { _id: mentor.id, name: mentor.name, email: mentor.email } : null,
+    project: team.projectName ? {
+      _id: uuid(1000 + Number(team.id.slice(-3))),
+      teamId: team.id,
+      classId: cls.id,
+      subjectId: cls.courseId,
+      semesterId: cls.semesterId,
+      projectName: team.projectName,
+      description: team.projectDescription || team.description || '',
+      startupField: team.startupField || '',
+      technologyStack: team.technologyStack || [],
+      keywords: team.keywords || [],
+      status: 'Draft',
+      createdAtUtc: projectCreatedAtUtc,
+      updatedAtUtc: team.projectUpdatedAtUtc || null,
+    } : null,
+    activities: team.projectActivities || (team.projectName ? [{
+      id: uuid(1700 + Number(team.id.slice(-3))),
+      action: 'WORKSPACE_CREATED',
+      summary: 'Created the project workspace.',
+      actorUserId: team.leaderId,
+      actorName: members.find((member) => member._id === team.leaderId)?.fullName || 'Team leader',
+      changedFields: ['projectName', 'description', 'startupField', 'technologyStack', 'keywords'],
+      occurredAtUtc: projectCreatedAtUtc,
+    }] : []),
     proposal: { _id: uuid(1101), status: 'SUBMITTED', projectName: 'CampusLink' },
     latestDeck: { _id: uuid(1102), originalName: 'Phoenix-Founders-Pitch.pdf' },
   };
@@ -204,6 +252,101 @@ function evaluationSummary(checkpointNumber: number) {
 }
 
 export function registerWorkspaceMockHandlers(mock: MockAdapter): void {
+  mock.onGet('/weekly-tasks').reply((config) => {
+    const weekNumber = Number(config.params?.weekNumber || 1);
+    const teamId = String(config.params?.teamId || '');
+    const classId = String(config.params?.classId || '');
+    const rows = mockWeeklyTasks.filter((task) => Number(task.weekNumber) === weekNumber);
+    return ok({
+      courseTasks: rows.filter((task) => task.taskType === 'COURSE_TEMPLATE'),
+      classTasks: rows.filter((task) => task.taskType === 'CLASS_TASK' && (!classId || task.classId === classId)),
+      teamTasks: rows.filter((task) => task.taskType === 'TEAM_TASK' && (!teamId || task.teamId === teamId)),
+    }, 'Weekly roadmap retrieved.');
+  });
+
+  mock.onGet(/^\/weekly-tasks\/team\/[^/]+\/board$/).reply((config) => {
+    const teamId = routeId(config, /^\/weekly-tasks\/team\/([^/]+)\/board$/);
+    if (!canAccessTeam(teamId)) return failure(403, 'WORKSPACE_ACCESS_DENIED', 'You do not have access to this workspace.');
+    const weekNumber = Number(config.params?.weekNumber || 1);
+    const rows = mockWeeklyTasks.filter((task) => task.teamId === teamId && task.weekNumber === weekNumber);
+    return ok({ courseTasks: [], classTasks: [], teamTasks: rows }, 'Team task board retrieved.');
+  });
+
+  mock.onPost('/weekly-tasks').reply((config) => {
+    const body = parseBody(config);
+    const title = String(body.title || '').trim();
+    const weekNumber = Number(body.weekNumber || 0);
+    if (!title || weekNumber < 1 || weekNumber > 10) return failure(400, 'WORKSPACE_VALIDATION_ERROR', 'Weekly task information is invalid.');
+    const taskType = String(body.taskType || 'TEAM_TASK');
+    const duplicated = mockWeeklyTasks.some((task) => task.taskType === taskType && task.weekNumber === weekNumber && task.teamId === body.teamId && task.classId === body.classId && task.title.toLowerCase() === title.toLowerCase());
+    if (duplicated) return failure(400, 'WORKSPACE_VALIDATION_ERROR', 'A task with this title already exists for the selected week.');
+    const task: MockWeeklyTask = { ...body, _id: uuid(3000 + mockWeeklyTasks.length), title, taskType, weekNumber, status: body.status || 'TODO', priority: body.priority || 'MEDIUM', checklist: body.checklist || [], attachments: body.attachments || [], createdBy: { _id: getMockState().sessionUserId, name: 'Current user' }, createdAt: new Date().toISOString() };
+    mockWeeklyTasks.push(task);
+    return [201, { success: true, message: 'Weekly task created.', data: task, errors: null }];
+  });
+
+  mock.onPut(/^\/weekly-tasks\/[^/]+$/).reply((config) => {
+    const taskId = routeId(config, /^\/weekly-tasks\/([^/]+)$/);
+    const index = mockWeeklyTasks.findIndex((task) => task._id === taskId);
+    if (index < 0) return failure(404, 'WORKSPACE_NOT_FOUND', 'Weekly task was not found.');
+    mockWeeklyTasks[index] = { ...mockWeeklyTasks[index], ...parseBody(config), _id: taskId, updatedAt: new Date().toISOString() };
+    return ok(mockWeeklyTasks[index], 'Weekly task updated.');
+  });
+
+  mock.onPatch(/^\/weekly-tasks\/[^/]+\/status$/).reply((config) => {
+    const taskId = routeId(config, /^\/weekly-tasks\/([^/]+)\/status$/);
+    const task = mockWeeklyTasks.find((item) => item._id === taskId);
+    if (!task) return failure(404, 'WORKSPACE_NOT_FOUND', 'Weekly task was not found.');
+    Object.assign(task, parseBody(config), { updatedAt: new Date().toISOString() });
+    return ok(task, 'Weekly task status updated.');
+  });
+
+  mock.onDelete(/^\/weekly-tasks\/[^/]+$/).reply((config) => {
+    const taskId = routeId(config, /^\/weekly-tasks\/([^/]+)$/);
+    const index = mockWeeklyTasks.findIndex((task) => task._id === taskId);
+    if (index < 0) return failure(404, 'WORKSPACE_NOT_FOUND', 'Weekly task was not found.');
+    mockWeeklyTasks.splice(index, 1);
+    return ok(null, 'Weekly task deleted.');
+  });
+
+  mock.onGet(/^\/teams\/[^/]+\/shortcuts$/).reply((config) => {
+    const teamId = routeId(config, /^\/teams\/([^/]+)\/shortcuts$/);
+    if (!canAccessTeam(teamId)) return failure(403, 'WORKSPACE_ACCESS_DENIED', 'You do not have access to this workspace.');
+    return ok(mockShortcuts.get(teamId) || [], 'Shortcuts retrieved.');
+  });
+
+  mock.onPost(/^\/teams\/[^/]+\/shortcuts$/).reply((config) => {
+    const teamId = routeId(config, /^\/teams\/([^/]+)\/shortcuts$/);
+    if (!canAccessTeam(teamId)) return failure(403, 'WORKSPACE_ACCESS_DENIED', 'You do not have access to this workspace.');
+    const body = parseBody(config);
+    const name = String(body.name || '').trim();
+    const url = String(body.url || '').trim().replace(/\/$/, '');
+    if (!name || !/^https?:\/\//i.test(url)) return failure(400, 'WORKSPACE_VALIDATION_ERROR', 'Shortcut name and a valid URL are required.');
+    const rows = mockShortcuts.get(teamId) || [];
+    if (rows.some((item) => String(item.url).toLowerCase() === url.toLowerCase())) return failure(409, 'WORKSPACE_TAG_DUPLICATED', 'A shortcut with this URL already exists in the team.');
+    const shortcut: MockShortcut = { _id: uuid(4000 + rows.length), teamId, name, url, createdBy: { _id: getMockState().sessionUserId, name: 'Current user' }, createdAt: new Date().toISOString() };
+    rows.unshift(shortcut); mockShortcuts.set(teamId, rows);
+    return [201, { success: true, message: 'Shortcut created.', data: shortcut, errors: null }];
+  });
+
+  mock.onPut(/^\/teams\/[^/]+\/shortcuts\/[^/]+$/).reply((config) => {
+    const match = config.url?.match(/^\/teams\/([^/]+)\/shortcuts\/([^/]+)$/);
+    const rows = mockShortcuts.get(match?.[1] || '') || [];
+    const shortcut = rows.find((item) => item._id === match?.[2]);
+    if (!shortcut) return failure(404, 'WORKSPACE_NOT_FOUND', 'Shortcut was not found.');
+    Object.assign(shortcut, parseBody(config), { _id: shortcut._id, updatedAt: new Date().toISOString() });
+    return ok(shortcut, 'Shortcut updated.');
+  });
+
+  mock.onDelete(/^\/teams\/[^/]+\/shortcuts\/[^/]+$/).reply((config) => {
+    const match = config.url?.match(/^\/teams\/([^/]+)\/shortcuts\/([^/]+)$/);
+    const rows = mockShortcuts.get(match?.[1] || '') || [];
+    const index = rows.findIndex((item) => item._id === match?.[2]);
+    if (index < 0) return failure(404, 'WORKSPACE_NOT_FOUND', 'Shortcut was not found.');
+    rows.splice(index, 1);
+    return ok(null, 'Shortcut deleted.');
+  });
+
   mock.onGet('/workspace/accessible-teams').reply(() => ok(
     accessibleTeams().map((team) => workspaceOption(team.id)),
     'Accessible workspaces retrieved successfully.',
@@ -219,15 +362,116 @@ export function registerWorkspaceMockHandlers(mock: MockAdapter): void {
   mock.onGet(/^\/team-workspaces\/team\/[^/]+\/context$/).reply((config) => {
     const teamId = routeId(config, /^\/team-workspaces\/team\/([^/]+)\/context$/);
     if (!teamById(teamId)) return failure(404, 'TEAM_NOT_FOUND', 'Team not found.');
+    if (!canAccessTeam(teamId)) return failure(403, 'WORKSPACE_ACCESS_DENIED', 'You do not have access to this team workspace.');
     const selectedWorkspace = workspaceOption(teamId);
     return ok({ selectedWorkspace, availableWorkspaces: accessibleTeams().map((team) => workspaceOption(team.id)), accessMode: selectedWorkspace.accessMode });
   });
 
   mock.onGet(/^\/workspace\/teams\/[^/]+$/).reply((config) => {
     const teamId = routeId(config, /^\/workspace\/teams\/([^/]+)$/);
-    return teamById(teamId)
+    if (!teamById(teamId)) return failure(404, 'TEAM_NOT_FOUND', 'Team not found.');
+    return canAccessTeam(teamId)
       ? ok(workspaceData(teamId), 'Workspace retrieved successfully.')
-      : failure(404, 'TEAM_NOT_FOUND', 'Team not found.');
+      : failure(403, 'WORKSPACE_ACCESS_DENIED', 'You do not have access to this team workspace.');
+  });
+
+  mock.onPost(/^\/workspace\/teams\/[^/]+$/).reply((config) => {
+    const teamId = routeId(config, /^\/workspace\/teams\/([^/]+)$/);
+    const team = teamById(teamId);
+    if (!team) return failure(404, 'TEAM_NOT_FOUND', 'Team not found.');
+    const state = getMockState();
+    const currentUser = state.users.find((user) => user.id === state.sessionUserId);
+    if (!currentUser || currentUser.role !== 'STUDENT' || team.leaderId !== currentUser.id) {
+      return failure(403, 'WORKSPACE_LEADER_REQUIRED', 'Only the active team leader can create this project workspace.');
+    }
+    if (team.projectName) return failure(409, 'WORKSPACE_ALREADY_EXISTS', 'This team already has an active project workspace.');
+    const body = parseBody(config);
+    const projectName = String(body.projectName || '').trim();
+    const description = String(body.description || '').trim();
+    const startupField = String(body.startupField || '').trim();
+    const technologyStack = Array.isArray(body.technologyStack) ? body.technologyStack.map(String) : [];
+    const keywords = Array.isArray(body.keywords) ? body.keywords.map(String) : [];
+    if (projectName.length < 3 || description.length < 20 || startupField.length < 2 || technologyStack.length === 0) {
+      return failure(400, 'WORKSPACE_VALIDATION_ERROR', 'Required project workspace information is missing or invalid.');
+    }
+    const hasDuplicate = (values: string[]) => new Set(values.map((value) => value.trim().replace(/\s+/g, ' ').toUpperCase())).size !== values.length;
+    if (hasDuplicate(technologyStack) || hasDuplicate(keywords)) {
+      return failure(409, 'WORKSPACE_TAG_DUPLICATED', 'Duplicate workspace tags are not allowed.');
+    }
+    team.projectName = projectName;
+    team.projectDescription = description;
+    team.startupField = startupField;
+    team.technologyStack = technologyStack;
+    team.keywords = keywords;
+    const createdAtUtc = new Date().toISOString();
+    team.projectCreatedAtUtc = createdAtUtc;
+    team.projectUpdatedAtUtc = null;
+    team.projectActivities = [{
+      id: uuid(1701),
+      action: 'WORKSPACE_CREATED',
+      summary: 'Created the project workspace.',
+      actorUserId: currentUser.id,
+      actorName: currentUser.name,
+      changedFields: ['projectName', 'description', 'startupField', 'technologyStack', 'keywords'],
+      occurredAtUtc: createdAtUtc,
+    }];
+    persistMockState();
+    const project = {
+      _id: uuid(1601), teamId, classId: team.classId, subjectId: classByTeam(teamId)!.courseId,
+      semesterId: classByTeam(teamId)!.semesterId, projectName, description, startupField,
+      technologyStack, keywords, status: 'Draft', createdAtUtc, updatedAtUtc: null,
+    };
+    return ok(project, 'Project workspace created.');
+  });
+
+  mock.onPut(/^\/workspace\/teams\/[^/]+\/profile$/).reply((config) => {
+    const teamId = routeId(config, /^\/workspace\/teams\/([^/]+)\/profile$/);
+    const team = teamById(teamId);
+    if (!team) return failure(404, 'TEAM_NOT_FOUND', 'Team not found.');
+    const state = getMockState();
+    const currentUser = state.users.find((user) => user.id === state.sessionUserId);
+    if (!currentUser || currentUser.role !== 'STUDENT' || team.leaderId !== currentUser.id) {
+      return failure(403, 'WORKSPACE_LEADER_REQUIRED', 'Only the active team leader can update this project profile.');
+    }
+    if (!team.projectName) return failure(404, 'WORKSPACE_NOT_FOUND', 'This team does not have a project workspace.');
+
+    const body = parseBody(config);
+    const projectName = String(body.projectName || '').trim();
+    const description = String(body.description || '').trim();
+    const startupField = String(body.startupField || '').trim();
+    const technologyStack = Array.isArray(body.technologyStack) ? body.technologyStack.map(String) : [];
+    const keywords = Array.isArray(body.keywords) ? body.keywords.map(String) : [];
+    if (projectName.length < 3 || description.length < 20 || startupField.length < 2 || technologyStack.length === 0) {
+      return failure(400, 'WORKSPACE_VALIDATION_ERROR', 'Required project workspace information is missing or invalid.');
+    }
+    const changedFields = [
+      team.projectName !== projectName && 'projectName',
+      (team.projectDescription || '') !== description && 'description',
+      (team.startupField || '') !== startupField && 'startupField',
+      JSON.stringify(team.technologyStack || []) !== JSON.stringify(technologyStack) && 'technologyStack',
+      JSON.stringify(team.keywords || []) !== JSON.stringify(keywords) && 'keywords',
+    ].filter(Boolean) as string[];
+
+    team.projectName = projectName;
+    team.projectDescription = description;
+    team.startupField = startupField;
+    team.technologyStack = technologyStack;
+    team.keywords = keywords;
+    if (changedFields.length > 0) {
+      const occurredAtUtc = new Date().toISOString();
+      team.projectUpdatedAtUtc = occurredAtUtc;
+      team.projectActivities = [{
+        id: uuid(1701 + (team.projectActivities?.length || 0)),
+        action: 'PROJECT_PROFILE_UPDATED',
+        summary: 'Updated ' + changedFields.join(', ') + '.',
+        actorUserId: currentUser.id,
+        actorName: currentUser.name,
+        changedFields,
+        occurredAtUtc,
+      }, ...(team.projectActivities || [])];
+    }
+    persistMockState();
+    return ok(workspaceData(teamId).project, 'Project profile updated.');
   });
 
   mock.onGet('/workspace/checkpoints/config').reply(() => ok(checkpointConfig));

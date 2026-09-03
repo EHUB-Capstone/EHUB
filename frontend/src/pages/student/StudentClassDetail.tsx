@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ChevronLeft, GraduationCap, Users, Mail, Loader2, LayoutGrid, Lock } from 'lucide-react';
+import { ChevronLeft, GraduationCap, Users, Mail, Loader2, LayoutGrid, Lock, UserPlus } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { classApi } from '../../api/classApi';
 import TeamList from '../../components/class/TeamList';
@@ -50,6 +50,7 @@ export default function StudentClassDetail() {
         ...student,
         _id: student.studentId,
         major: student.majorCode,
+        enrollmentStatus: student.enrollmentStatus || classInfo.enrollmentStatus || 'Active',
         classId: currentClassId,
       }));
       const normalizedTeams = (detail?.teams || []).map(normalizeManagedTeam);
@@ -109,6 +110,17 @@ export default function StudentClassDetail() {
     setSelected([]);
     setProposalToRevise(null);
     await fetchClassDetail();
+    setActiveTab('classmates');
+  };
+
+  const startTeamProposal = () => {
+    if (!currentStudent?._id) {
+      toast.error('Your student profile could not be found in this class.');
+      return;
+    }
+
+    setProposalToRevise(null);
+    setSelected([currentStudent._id]);
     setActiveTab('classmates');
   };
 
@@ -196,6 +208,31 @@ export default function StudentClassDetail() {
         </div>
       )}
 
+      {!isReadOnly && !hasTeam && !reservedProposal && selected.length === 0 && (
+        <div className="flex flex-col gap-3 rounded-xl border border-primary-100 bg-primary-50/60 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-semibold text-slate-800">You do not have a team in this class yet</p>
+            <p className="mt-0.5 text-xs text-slate-600">
+              Start a proposal, choose 4–6 eligible classmates and a leader, then send it to your lecturer for approval.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={startTeamProposal}
+            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-primary px-3.5 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-primary-600"
+          >
+            <UserPlus className="h-4 w-4" /> Start team proposal
+          </button>
+        </div>
+      )}
+
+      {!isReadOnly && reservedProposal && !canEditReservedProposal && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <p className="font-semibold">Your team proposal is {String(reservedProposal.status || 'pending').replaceAll('_', ' ').toLowerCase()}.</p>
+          <p className="mt-0.5 text-xs text-amber-700">You cannot join another proposal while this one is open. View it in the Class Teams tab.</p>
+        </div>
+      )}
+
       {students.length > 0 && !selectionDisabled && selected.length > 0 && (
         <div className="sticky top-20 z-30 rounded-2xl bg-white/80 shadow-xl backdrop-blur-md">
           <StudentTeamGeneratePanel
@@ -245,15 +282,24 @@ export default function StudentClassDetail() {
           maxSelection={6}
           selectionDisabled={selectionDisabled}
           toolbarAction={!selectionDisabled && selected.length === 0 ? (
-            <TeamSuggestionTooltip label="Xem hướng dẫn tạo nhóm">
-              <div className="space-y-2">
-                <p className="font-semibold text-white">Hướng dẫn tạo nhóm</p>
-                <p className="text-slate-200">
-                  Chọn chính bạn và các thành viên trong bảng để bắt đầu. Nhóm cần 4–6 thành viên,
-                  có ít nhất một sinh viên nhóm BBA và một sinh viên nhóm BIT.
-                </p>
-              </div>
-            </TeamSuggestionTooltip>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={startTeamProposal}
+                className="inline-flex min-h-8 items-center gap-1.5 rounded-lg bg-primary px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-primary-600"
+              >
+                <UserPlus className="h-3.5 w-3.5" /> Start proposal
+              </button>
+              <TeamSuggestionTooltip label="Xem hướng dẫn tạo nhóm">
+                <div className="space-y-2">
+                  <p className="font-semibold text-white">Hướng dẫn tạo nhóm</p>
+                  <p className="text-slate-200">
+                    Chọn chính bạn và các thành viên trong bảng để bắt đầu. Nhóm cần 4–6 thành viên,
+                    có ít nhất một sinh viên nhóm BBA và một sinh viên nhóm BIT.
+                  </p>
+                </div>
+              </TeamSuggestionTooltip>
+            </div>
           ) : null}
         />
       ) : (

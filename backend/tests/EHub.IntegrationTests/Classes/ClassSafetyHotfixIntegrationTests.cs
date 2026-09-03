@@ -223,7 +223,7 @@ public sealed class ClassSafetyHotfixIntegrationTests
         {
             using var request = new HttpRequestMessage(
                 HttpMethod.Get,
-                $"/api/classes?page=1&pageSize=100&status=Active&semesterId={sourceClass.SemesterId}");
+            $"/api/classes?page=1&pageSize=100&status=Active&semesterId={sourceClass.SemesterId}&courseId={sourceClass.CourseId}");
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
             var response = await _client.SendAsync(request);
             response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -1701,7 +1701,9 @@ public sealed class ClassSafetyHotfixIntegrationTests
             CreatedBy = admin.Id
         };
         var semester = await context.Semesters.FirstAsync(item => item.Status == SemesterStatus.Active);
-        var scheduleJson = "[{\"dayOfWeek\":1,\"slotNumber\":1,\"room\":\"SH-101\"}]";
+        semester.StartDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-30));
+        semester.EndDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(30));
+        var scheduleJson = $"[{{\"dayOfWeek\":1,\"slotNumber\":1,\"room\":\"SH-{unique}\"}}]";
         var @class = new Class
         {
             ClassCode = $"{course.Code}_1",
@@ -1754,6 +1756,19 @@ public sealed class ClassSafetyHotfixIntegrationTests
             Role = lecturerRole
         });
         context.Users.Add(lecturer);
+        await context.SaveChangesAsync();
+
+        var activeSemesterIds = await context.Semesters
+            .Where(semester => semester.Status == SemesterStatus.Active)
+            .Select(semester => semester.Id)
+            .ToListAsync();
+        context.SemesterStaffAssignments.AddRange(activeSemesterIds.Select(semesterId => new SemesterStaffAssignment
+        {
+            SemesterId = semesterId,
+            UserId = lecturer.Id,
+            Role = SemesterStaffRole.Lecturer,
+            Status = SemesterStaffStatus.Active
+        }));
         await context.SaveChangesAsync();
         return lecturer;
     }

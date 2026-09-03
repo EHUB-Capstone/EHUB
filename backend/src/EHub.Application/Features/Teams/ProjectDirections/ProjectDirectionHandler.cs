@@ -133,7 +133,7 @@ public sealed class ProjectDirectionHandler : IProjectDirectionHandler
         direction.ReviewedAtUtc = now;
         direction.ReviewedByUserId = userId;
         direction.UpdatedBy = userId;
-        direction.Reviews.Add(new ProjectDirectionReview
+        _context.ProjectDirectionReviews.Add(new ProjectDirectionReview
         {
             ProjectDirectionId = direction.Id,
             ProjectDirection = direction,

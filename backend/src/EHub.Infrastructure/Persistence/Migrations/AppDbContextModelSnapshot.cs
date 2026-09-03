@@ -2910,6 +2910,51 @@ namespace EHub.Infrastructure.Persistence.Migrations
                     b.ToTable("projects", (string)null);
                 });
 
+            modelBuilder.Entity("EHub.Domain.Entities.ProjectActivityLog", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("action");
+
+                    b.Property<Guid?>("ActorUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("actor_user_id");
+
+                    b.Property<string>("ChangedFieldsJson")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("changed_fields_json");
+
+                    b.Property<DateTime>("OccurredAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("occurred_at_utc");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("project_id");
+
+                    b.Property<string>("Summary")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)")
+                        .HasColumnName("summary");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ActorUserId");
+
+                    b.HasIndex("ProjectId", "OccurredAtUtc")
+                        .HasDatabaseName("ix_project_activity_logs_project_occurred");
+
+                    b.ToTable("project_activity_logs", (string)null);
+                });
+
             modelBuilder.Entity("EHub.Domain.Entities.ProjectAnalysis", b =>
                 {
                     b.Property<Guid>("Id")
@@ -6253,6 +6298,24 @@ namespace EHub.Infrastructure.Persistence.Migrations
                     b.Navigation("Team");
                 });
 
+            modelBuilder.Entity("EHub.Domain.Entities.ProjectActivityLog", b =>
+                {
+                    b.HasOne("EHub.Domain.Entities.User", "ActorUser")
+                        .WithMany()
+                        .HasForeignKey("ActorUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("EHub.Domain.Entities.Project", "Project")
+                        .WithMany("ActivityLogs")
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("ActorUser");
+
+                    b.Navigation("Project");
+                });
+
             modelBuilder.Entity("EHub.Domain.Entities.ProjectAnalysis", b =>
                 {
                     b.HasOne("EHub.Domain.Entities.User", "GeneratedBy")
@@ -7059,6 +7122,8 @@ namespace EHub.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("EHub.Domain.Entities.Project", b =>
                 {
                     b.Navigation("AcademicDatasets");
+
+                    b.Navigation("ActivityLogs");
 
                     b.Navigation("CurrentLineages");
 

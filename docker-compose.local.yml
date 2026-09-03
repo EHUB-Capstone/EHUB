@@ -70,7 +70,9 @@ services:
       dockerfile: Dockerfile
       args:
         VITE_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
-        VITE_ENABLE_API_MOCKS: "true"
+        # Full Docker stack must exercise the real backend. Mock mode remains
+        # available for standalone frontend development and automated mock tests.
+        VITE_ENABLE_API_MOCKS: ${VITE_ENABLE_API_MOCKS:-false}
         VITE_ENABLE_REALTIME: "false"
     ports:
       - "3000:80"

@@ -7,6 +7,10 @@ import {
   validateTeamDraft,
   validateTeamSelection,
 } from '../src/utils/teamManagement.ts';
+import {
+  appendWorkspaceTag,
+  validateProjectWorkspace,
+} from '../src/utils/projectWorkspace.ts';
 
 test('uses imported enrollment major before the temporary profile major', () => {
   assert.equal(resolveEffectiveTeamMajor(' bba_mkt ', 'BIT_SE'), 'BBA_MKT');
@@ -168,4 +172,25 @@ test('reads linked project information from legacy team fields', () => {
     description: 'Existing project information.',
     status: 'VALIDATED',
   });
+});
+
+test('validates required project workspace information', () => {
+  const errors = validateProjectWorkspace({
+    projectName: '',
+    description: 'too short',
+    startupField: '',
+    technologyStack: [],
+    keywords: [],
+  });
+  assert.equal(errors.projectName, 'Project name must be 3–200 characters.');
+  assert.equal(errors.description, 'Description must be 20–2000 characters.');
+  assert.equal(errors.startupField, 'Startup field must be 2–100 characters.');
+  assert.equal(errors.technologyStack, 'Add at least one technology.');
+});
+
+test('normalizes and rejects duplicated or invalid workspace tags', () => {
+  const first = appendWorkspaceTag([], ' React ');
+  assert.deepEqual(first.values, ['React']);
+  assert.equal(appendWorkspaceTag(first.values, '  react  ').error, '“react” is already included.');
+  assert.ok(appendWorkspaceTag(first.values, '<script>').error);
 });

@@ -63,19 +63,7 @@ function assignmentPermissionGuard(classId: string) {
   const user = state.users.find((candidate) => candidate.id === state.sessionUserId);
   return user?.role === 'ADMIN' || (user?.role === 'LECTURER' && cls?.primaryLecturerId === user.id)
     ? null
-    : failure(403, 'CLASS_ASSIGNMENT_ACCESS_DENIED', 'Only an administrator or the assigned lecturer can place students in this class.');
-}
-
-function removeStudentFromTeam(classId: string, studentId: string): void {
-  const state = getMockState();
-  const team = state.teams.find((item) => item.classId === classId && item.members.some((member) => member.studentId === studentId));
-  if (!team) return;
-  team.members = team.members.filter((member) => member.studentId !== studentId);
-  if (team.leaderId === studentId) team.leaderId = team.members[0]?.studentId || null;
-  team.members.forEach((member) => {
-    member.roleInTeam = member.studentId === team.leaderId ? 'LEADER' : 'MEMBER';
-  });
-  team.rowVersion = allocateRowVersion();
+    : failure(403, 'CLASS_ACCESS_DENIED', 'Only an administrator or the assigned lecturer can place students in this class.');
 }
 
 function studentClassSummary(cls: MockClass, enrollmentStatus: string) {
@@ -248,7 +236,7 @@ function registerClassQueries(mock: MockAdapter): void {
     const currentEnrollment = (state.rosters[classId] || []).find((student) => student.userId === sessionUserId);
     const rosterStatus = currentEnrollment?.enrollmentStatus === 'Completed' ? 'Completed' : 'Active';
     const classSummary = studentClassSummary(cls, rosterStatus);
-    const students = (state.rosters[classId] || []).filter((student) => student.enrollmentStatus === rosterStatus).map((student) => ({ studentId: student.studentId, userId: student.userId, rollNumber: student.rollNumber, fullName: student.fullName, email: student.email, majorCode: student.majorCode, teamId: student.teamId }));
+    const students = (state.rosters[classId] || []).filter((student) => student.enrollmentStatus === rosterStatus).map((student) => ({ studentId: student.studentId, userId: student.userId, rollNumber: student.rollNumber, fullName: student.fullName, email: student.email, majorCode: student.majorCode, enrollmentStatus: student.enrollmentStatus, teamId: student.teamId }));
     const teams = getMockState().teams.filter((team) => team.classId === classId);
     return ok({ class: classSummary, students, teams }, 'Student class detail retrieved.');
   });
@@ -539,7 +527,7 @@ function registerRosterHandlers(mock: MockAdapter): void {
     if (selectedUsers.some((user) => !user)) return failure(404, 'CLASS_ASSIGNMENT_STUDENT_NOT_FOUND', 'One or more selected students could not be found.');
 
     const targetRoster = state.rosters[classId] ||= [];
-    const touchedClassIds = new Set([classId]);
+    const targetClass = findClass(classId)!;
     for (const user of selectedUsers) {
       if (!user) continue;
       const existingTarget = targetRoster.find((student) => student.studentId === user.id || student.userId === user.id);
@@ -552,13 +540,14 @@ function registerRosterHandlers(mock: MockAdapter): void {
       for (const [sourceClassId, roster] of Object.entries(state.rosters)) {
         if (sourceClassId === classId) continue;
         const sourceClass = state.classes.find((item) => item.id === sourceClassId);
-        if (!sourceClass || ['Completed', 'Archived'].includes(sourceClass.status)) continue;
-        const sourceIndex = roster.findIndex((student) => student.studentId === user.id || student.userId === user.id);
-        if (sourceIndex < 0) continue;
-        sourceRecord ||= roster[sourceIndex];
-        removeStudentFromTeam(sourceClassId, roster[sourceIndex].studentId);
-        roster.splice(sourceIndex, 1);
-        touchedClassIds.add(sourceClassId);
+        const sourceRecordForUser = roster.find((student) => student.studentId === user.id || student.userId === user.id);
+        if (!sourceClass || !sourceRecordForUser) continue;
+        sourceRecord ||= sourceRecordForUser;
+        if (sourceClass.courseId === targetClass.courseId && sourceClass.semesterId === targetClass.semesterId &&
+            ['Active', 'Completed'].includes(sourceRecordForUser.enrollmentStatus)) {
+          return failure(409, 'STUDENT_ENROLLMENT_CONFLICT',
+            `Student '${sourceRecordForUser.rollNumber}' is already enrolled in '${sourceClass.classCode}' for the same course and semester. Drop that enrollment before assigning the student here.`);
+        }
       }
 
       targetRoster.push({
@@ -579,7 +568,7 @@ function registerRosterHandlers(mock: MockAdapter): void {
       });
     }
 
-    touchedClassIds.forEach(refreshClassCounts);
+    refreshClassCounts(classId);
     persistMockState();
     return ok({ classId, assignedStudentIds: studentIds, students: targetRoster }, `${studentIds.length} student(s) assigned to class successfully.`);
   });
@@ -593,6 +582,7 @@ function registerRosterHandlers(mock: MockAdapter): void {
     const state = getMockState();
     const team = state.teams.find((item) => item.id === teamId);
     if (!team || team.classId !== classId) return failure(400, 'TEAM_CLASS_MISMATCH', 'The selected team does not belong to this class.');
+    if (team.status !== 'Active') return failure(400, 'TEAM_INACTIVE', 'Students cannot be assigned to an inactive team.');
 
     const studentIds = [...new Set(asStringArray(parseBody(config).studentIds))];
     if (studentIds.length === 0) return failure(400, 'TEAM_ASSIGNMENT_STUDENTS_REQUIRED', 'Select at least one student to assign.');
@@ -602,7 +592,7 @@ function registerRosterHandlers(mock: MockAdapter): void {
       return failure(400, 'TEAM_MEMBER_NOT_IN_CLASS', 'Every selected student must belong to this class before team assignment.');
     }
     const conflictingStudent = selectedStudents.find((student) => student?.teamId && student.teamId !== teamId);
-    if (conflictingStudent) return failure(409, 'TEAM_MEMBER_CONFLICT', `${conflictingStudent.fullName} already belongs to another team in this class.`);
+    if (conflictingStudent) return failure(409, 'TEAM_MEMBERSHIP_CONFLICT', `${conflictingStudent.fullName} already belongs to another team in this class.`);
 
     const existingIds = new Set(team.members.map((member) => member.studentId));
     const additions = selectedStudents.filter((student): student is MockRosterStudent => Boolean(student && !existingIds.has(student.studentId)));

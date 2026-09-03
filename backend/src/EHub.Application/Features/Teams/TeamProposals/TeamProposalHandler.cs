@@ -674,12 +674,13 @@ public sealed class TeamProposalHandler : ITeamProposalHandler
 
     private void AddHistory(TeamProposal proposal, TeamProposalStatus? from, TeamProposalStatus to, string action, string? comment, Guid userId, DateTime occurredAt)
     {
-        proposal.History.Add(new TeamProposalHistory
+        var history = new TeamProposalHistory
         {
             ProposalId = proposal.Id, Proposal = proposal, FromStatus = from, ToStatus = to, Action = action,
             Comment = comment, PerformedByUserId = userId, OccurredAtUtc = occurredAt,
             SnapshotJson = JsonSerializer.Serialize(new { proposal.TeamName, proposal.Description, proposal.ProjectName, Members = proposal.Members.Where(item => item.IsIncluded).Select(item => new { item.StudentId, item.IsLeader }) })
-        });
+        };
+        _context.TeamProposalHistory.Add(history);
     }
 
     private async Task<Guid?> GetStudentIdAsync(Guid userId, CancellationToken cancellationToken) =>

@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using EHub.Application.Common.Interfaces.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Hosting;
 using Testcontainers.PostgreSql;
 using EHub.Infrastructure.Persistence;
 using EHub.Infrastructure.Persistence.Seed;
@@ -50,6 +51,16 @@ public sealed class CustomWebApplicationFactory
 
         builder.ConfigureServices(services =>
         {
+            // Background workers race with explicit outbox assertions and serializable
+            // workflow commands. Integration tests invoke those flows directly, so they
+            // must run against a deterministic database without hosted workers.
+            foreach (var hostedService in services
+                         .Where(descriptor => descriptor.ServiceType == typeof(IHostedService))
+                         .ToArray())
+            {
+                services.Remove(hostedService);
+            }
+
             var dbContextDescriptor = services.SingleOrDefault(
                 d => d.ServiceType == typeof(DbContextOptions<AppDbContext>));
 
