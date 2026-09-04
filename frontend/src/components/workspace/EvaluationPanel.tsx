@@ -18,9 +18,16 @@ const roleLabel = (role) => ({
   USER: 'Student',
 }[role] || role || 'User');
 
-export default function EvaluationPanel({ teamId, proposalId, pitchDeckId, isReadOnly = false }) {
+export default function EvaluationPanel({
+  teamId,
+  proposalId,
+  pitchDeckId,
+  isReadOnly = false,
+  checkpointNumber,
+  embedded = false,
+}) {
   const { user } = useAuth();
-  const [selectedCheckpoint, setSelectedCheckpoint] = useState(1);
+  const [selectedCheckpoint, setSelectedCheckpoint] = useState(() => Number(checkpointNumber) || 1);
   const [checkpointData, setCheckpointData] = useState(null);
   const [evaluations, setEvaluations] = useState([]);
   const [history, setHistory] = useState([]);
@@ -36,6 +43,13 @@ export default function EvaluationPanel({ teamId, proposalId, pitchDeckId, isRea
     () => evaluations.find((ev) => ev.lecturerId?._id === user?._id) || null,
     [evaluations, user?._id]
   );
+
+  useEffect(() => {
+    if (!checkpointNumber) return;
+    // Keep the merged grading panel aligned with the checkpoint opened in the workspace.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSelectedCheckpoint(Number(checkpointNumber));
+  }, [checkpointNumber]);
 
   const fetchCheckpointData = useCallback(async () => {
     if (!teamId) return;
@@ -114,6 +128,129 @@ export default function EvaluationPanel({ teamId, proposalId, pitchDeckId, isRea
 
   const checkpointTitle = checkpointData?.title || `Checkpoint ${selectedCheckpoint}`;
   const latestScore = summary?.averageScore ?? (evaluations[0]?.checkpointTotal || evaluations[0]?.weightedScore || 0);
+
+  if (embedded) {
+    return (
+      <div className="space-y-4 p-4 sm:p-5">
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-primary">
+                <ClipboardCheck className="h-4 w-4" /> Checkpoint evaluation
+              </div>
+              <h2 className="mt-1 truncate text-lg font-black text-slate-900">{checkpointTitle}</h2>
+              <p className="mt-1 text-xs leading-5 text-slate-500">
+                {canEdit
+                  ? 'Score this submission without leaving the workspace.'
+                  : isMentor || isStudent
+                    ? 'Review the published performance and feedback.'
+                    : `${roleLabel(user?.role)} access is read-only.`}
+              </p>
+            </div>
+            {activeEvaluation?.status && (
+              <span className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold ${activeEvaluation.status === 'SUBMITTED' || activeEvaluation.status === 'PUBLISHED'
+                ? 'bg-emerald-50 text-emerald-700'
+                : 'bg-amber-50 text-amber-700'
+                }`}>
+                {activeEvaluation.status}
+              </span>
+            )}
+          </div>
+
+          <div className="mt-4 grid grid-cols-2 gap-2">
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Evaluations</p>
+              <p className="mt-1 text-xl font-black text-slate-900">{summary?.evaluationCount ?? evaluations.length}</p>
+            </div>
+            {(isMentor || isStudent) ? (
+              <div className="rounded-xl border border-slate-200 bg-white p-3">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Performance</p>
+                <div className="mt-1">
+                  {summary?.overallPerformance?.level && summary.overallPerformance.level !== 'Unscored'
+                    ? <PerformanceLevelBadge level={summary.overallPerformance.level} label={summary.overallPerformance.label} size="sm" />
+                    : <span className="text-sm font-semibold text-slate-400">Not scored</span>}
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-3">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-500">Average score</p>
+                <p className="mt-1 text-xl font-black text-emerald-700">{Number(latestScore || 0).toFixed(2)} / 10</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {canEdit ? (
+          <RubricForm
+            key={`${selectedCheckpoint}-${activeEvaluation?._id || 'new'}`}
+            initialData={activeEvaluation || {}}
+            onSubmit={saveEvaluation}
+            readOnly={saving}
+            criteria={checkpointData?.rubrics || []}
+            checkpointNumber={selectedCheckpoint}
+            checkpointTitle={checkpointTitle}
+            compact
+          />
+        ) : (
+          <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <h3 className="font-bold text-slate-900">Evaluation summary</h3>
+              <History className="h-4 w-4 text-slate-400" />
+            </div>
+            {evaluations.length === 0 ? (
+              <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-5 text-center text-sm text-slate-500">
+                No evaluation recorded for this checkpoint yet.
+              </p>
+            ) : (isMentor || isStudent) ? (
+              <div className="space-y-3">
+                {evaluations.map((evaluation) => (
+                  <MentorEvaluationCard key={evaluation._id} evaluation={evaluation} />
+                ))}
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {evaluations.map((evaluation) => (
+                  <article key={evaluation._id} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-slate-900">{evaluation.lecturerId?.name || 'Evaluator'}</p>
+                        <p className="text-xs text-slate-400">{evaluation.status || 'DRAFT'}</p>
+                      </div>
+                      <p className="text-xl font-black text-primary">{Number(evaluation.checkpointTotal || evaluation.weightedScore || 0).toFixed(2)}</p>
+                    </div>
+                    {evaluation.overallFeedback && <p className="mt-2 whitespace-pre-wrap text-sm text-slate-600">{evaluation.overallFeedback}</p>}
+                  </article>
+                ))}
+              </div>
+            )}
+          </section>
+        )}
+
+        <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="mb-3 flex items-center gap-2">
+            <History className="h-4 w-4 text-primary" />
+            <h3 className="font-bold text-slate-900">Evaluation history</h3>
+          </div>
+          {history.length === 0 ? (
+            <p className="text-sm text-slate-500">No history available yet.</p>
+          ) : (
+            <div className="space-y-2">
+              {history.map((item) => (
+                <div key={item._id} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <div className="flex items-center justify-between gap-2 text-xs text-slate-400">
+                    <span className="font-bold uppercase tracking-wider">{item.action}</span>
+                    <span>v{item.version}</span>
+                  </div>
+                  <p className="mt-1 text-sm font-semibold text-slate-900">{item.changedBy?.name || 'System'}</p>
+                  <p className="text-xs text-slate-500">{new Date(item.createdAt).toLocaleString()}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

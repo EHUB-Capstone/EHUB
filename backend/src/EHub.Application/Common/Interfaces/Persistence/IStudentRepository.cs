@@ -11,6 +11,10 @@ public interface IStudentRepository
         Guid userId,
         CancellationToken cancellationToken = default);
 
+    Task<Student?> GetUnlinkedByEmailAsync(
+        string normalizedEmail,
+        CancellationToken cancellationToken = default);
+
     Task AddAsync(
         Student student,
         CancellationToken cancellationToken = default);

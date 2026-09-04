@@ -43,6 +43,7 @@ export interface ManagedTeam {
   projectName?: string | null;
   projectDescription?: string | null;
   projectStatus?: string | null;
+  hasChatGroup?: boolean;
   chatGroupId?: EntityReference;
   mentorId?: EntityReference;
   lectureId?: EntityReference;
@@ -66,6 +67,13 @@ export interface MentorAssignment {
   assignedAtUtc: string;
   endedAtUtc?: string | null;
   note?: string | null;
+}
+
+export interface MentorCandidate {
+  mentor: MentorAssignment['mentor'];
+  activeTeamCount: number;
+  maxTeams: number;
+  hasCapacity: boolean;
 }
 
 export interface TeamClassOption {

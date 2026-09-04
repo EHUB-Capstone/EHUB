@@ -1,5 +1,6 @@
 using EHub.Application.Features.Subjects.ManageSubjects;
 using EHub.Application.Features.Subjects.ManageSemester;
+using EHub.Application.Features.Subjects.ManageTeachingStaff;
 using EHub.Application.Features.Subjects.TeachingStaff;
 using EHub.Application.Features.Subjects.Curriculum;
 using EHub.Application.Features.Subjects.Roadmap;
@@ -7,6 +8,7 @@ using EHub.Application.Features.Subjects.Rubrics;
 using EHub.Contracts.Common;
 using EHub.Contracts.Subjects;
 using EHub.Shared.Constants;
+using EHub.Shared.Errors;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -20,6 +22,7 @@ public sealed class SubjectsController : ControllerBase
     private readonly ISubjectManagementHandler _subjectHandler;
     private readonly ICurrentSemesterHandler _semesterHandler;
     private readonly ITeachingStaffQueryHandler _teachingStaffHandler;
+    private readonly ISemesterTeachingStaffCommandHandler _semesterTeachingStaffHandler;
     private readonly IGetSubjectCurriculumQueryHandler _curriculumHandler;
     private readonly ISynchronizeSubjectCheckpointsHandler _checkpointHandler;
     private readonly ISubjectRoadmapHandler _roadmapHandler;
@@ -29,6 +32,7 @@ public sealed class SubjectsController : ControllerBase
         ISubjectManagementHandler subjectHandler,
         ICurrentSemesterHandler semesterHandler,
         ITeachingStaffQueryHandler teachingStaffHandler,
+        ISemesterTeachingStaffCommandHandler semesterTeachingStaffHandler,
         IGetSubjectCurriculumQueryHandler curriculumHandler,
         ISynchronizeSubjectCheckpointsHandler checkpointHandler,
         ISubjectRoadmapHandler roadmapHandler,
@@ -37,6 +41,7 @@ public sealed class SubjectsController : ControllerBase
         _subjectHandler = subjectHandler;
         _semesterHandler = semesterHandler;
         _teachingStaffHandler = teachingStaffHandler;
+        _semesterTeachingStaffHandler = semesterTeachingStaffHandler;
         _curriculumHandler = curriculumHandler;
         _checkpointHandler = checkpointHandler;
         _roadmapHandler = roadmapHandler;
@@ -116,10 +121,107 @@ public sealed class SubjectsController : ControllerBase
     {
         var result = await _semesterHandler.SetAsync(request, cancellationToken);
         return result.IsFailure
-            ? BadRequest(ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code))
+            ? ToSemesterErrorResponse(result.Error)
             : Ok(ApiResponse<CurrentSemesterResponse>.SuccessResponse(
                 result.Value!,
                 "Active semester updated successfully."));
+    }
+
+    [HttpPost("current-semester/correct")]
+    [Authorize(Policy = SystemPolicies.AdminOnly)]
+    public async Task<IActionResult> CorrectCurrentSemester(
+        [FromBody] CorrectActiveSemesterRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await _semesterHandler.CorrectAsync(request, cancellationToken);
+        return result.IsFailure
+            ? ToSemesterErrorResponse(result.Error)
+            : Ok(ApiResponse<CurrentSemesterResponse>.SuccessResponse(
+                result.Value!,
+                "Active semester corrected successfully."));
+    }
+
+    [HttpGet("semesters")]
+    public async Task<IActionResult> GetSemesters(CancellationToken cancellationToken)
+    {
+        var result = await _semesterHandler.GetAllAsync(cancellationToken);
+        return result.IsFailure
+            ? ToSemesterErrorResponse(result.Error)
+            : Ok(ApiResponse<SemesterListResponse>.SuccessResponse(result.Value!, "Semesters retrieved successfully."));
+    }
+
+    [HttpPost("semesters")]
+    [Authorize(Policy = SystemPolicies.AdminOnly)]
+    public async Task<IActionResult> PlanSemester(
+        [FromBody] PlanSemesterRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await _semesterHandler.PlanAsync(request, cancellationToken);
+        return result.IsFailure
+            ? ToSemesterErrorResponse(result.Error)
+            : StatusCode(StatusCodes.Status201Created,
+                ApiResponse<SemesterResponse>.SuccessResponse(result.Value!, "Semester planned successfully."));
+    }
+
+    [HttpPut("semesters/{id:guid}/dates")]
+    [Authorize(Policy = SystemPolicies.AdminOnly)]
+    public async Task<IActionResult> UpdateSemesterDates(
+        Guid id,
+        [FromBody] UpdateSemesterDatesRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await _semesterHandler.UpdateDatesAsync(id, request, cancellationToken);
+        return result.IsFailure
+            ? ToSemesterErrorResponse(result.Error)
+            : Ok(ApiResponse<SemesterResponse>.SuccessResponse(result.Value!, "Semester dates updated successfully."));
+    }
+
+    [HttpGet("semesters/class-creation-options")]
+    [Authorize(Policy = SystemPolicies.AdminOnly)]
+    public async Task<IActionResult> GetClassCreationSemesterOptions(CancellationToken cancellationToken)
+    {
+        var result = await _semesterHandler.GetClassCreationOptionsAsync(cancellationToken);
+        return result.IsFailure
+            ? ToSemesterErrorResponse(result.Error)
+            : Ok(ApiResponse<ClassCreationSemesterOptionsResponse>.SuccessResponse(
+                result.Value!, "Class creation semester options retrieved successfully."));
+    }
+
+    [HttpGet("semesters/{id:guid}/completion-preview")]
+    [Authorize(Policy = SystemPolicies.AdminOnly)]
+    public async Task<IActionResult> PreviewSemesterCompletion(Guid id, CancellationToken cancellationToken)
+    {
+        var result = await _semesterHandler.PreviewCompletionAsync(id, cancellationToken);
+        return result.IsFailure
+            ? ToSemesterErrorResponse(result.Error)
+            : Ok(ApiResponse<SemesterCompletionPreviewResponse>.SuccessResponse(
+                result.Value!, "Semester completion preview generated successfully."));
+    }
+
+    [HttpPost("semesters/{id:guid}/complete")]
+    [Authorize(Policy = SystemPolicies.AdminOnly)]
+    public async Task<IActionResult> CompleteSemester(
+        Guid id,
+        [FromBody] ChangeSemesterLifecycleRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await _semesterHandler.CompleteAsync(id, request, cancellationToken);
+        return result.IsFailure
+            ? ToSemesterErrorResponse(result.Error)
+            : Ok(ApiResponse<SemesterResponse>.SuccessResponse(result.Value!, "Semester completed successfully."));
+    }
+
+    [HttpPost("semesters/{id:guid}/reopen")]
+    [Authorize(Policy = SystemPolicies.AdminOnly)]
+    public async Task<IActionResult> ReopenSemester(
+        Guid id,
+        [FromBody] ChangeSemesterLifecycleRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await _semesterHandler.ReopenAsync(id, request, cancellationToken);
+        return result.IsFailure
+            ? ToSemesterErrorResponse(result.Error)
+            : Ok(ApiResponse<SemesterResponse>.SuccessResponse(result.Value!, "Semester reopened successfully."));
     }
 
     [HttpGet("teaching-staff")]
@@ -134,6 +236,52 @@ public sealed class SubjectsController : ControllerBase
             : Ok(ApiResponse<TeachingStaffListResponse>.SuccessResponse(
                 result.Value!,
                 "Teaching staff retrieved successfully."));
+    }
+
+    [HttpGet("teaching-staff/candidates")]
+    [Authorize(Policy = SystemPolicies.AdminOnly)]
+    public async Task<IActionResult> GetTeachingStaffCandidates(CancellationToken cancellationToken)
+    {
+        var result = await _teachingStaffHandler.GetCandidatesAsync(cancellationToken);
+        return result.IsFailure
+            ? ToSemesterErrorResponse(result.Error)
+            : Ok(ApiResponse<TeachingStaffCandidateListResponse>.SuccessResponse(
+                result.Value!,
+                "Teaching staff candidates retrieved successfully."));
+    }
+
+    [HttpPost("teaching-staff")]
+    [Authorize(Policy = SystemPolicies.AdminOnly)]
+    public async Task<IActionResult> AddTeachingStaff(
+        [FromBody] AddSemesterTeachingStaffRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await _semesterTeachingStaffHandler.AddAsync(request, cancellationToken);
+        return result.IsFailure
+            ? ToSemesterErrorResponse(result.Error)
+            : StatusCode(
+                StatusCodes.Status201Created,
+                ApiResponse<TeachingStaffResponse>.SuccessResponse(
+                    result.Value!,
+                    "Teaching staff member added to the semester successfully."));
+    }
+
+    [HttpPut("teaching-staff/{assignmentId:guid}")]
+    [Authorize(Policy = SystemPolicies.AdminOnly)]
+    public async Task<IActionResult> UpdateTeachingStaff(
+        Guid assignmentId,
+        [FromBody] UpdateSemesterTeachingStaffRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await _semesterTeachingStaffHandler.UpdateAsync(
+            assignmentId,
+            request,
+            cancellationToken);
+        return result.IsFailure
+            ? ToSemesterErrorResponse(result.Error)
+            : Ok(ApiResponse<TeachingStaffResponse>.SuccessResponse(
+                result.Value!,
+                "Semester teaching staff entry updated successfully."));
     }
 
     [HttpGet("{subjectCode}")]
@@ -274,6 +422,24 @@ public sealed class SubjectsController : ControllerBase
         return result.Error.Code == "NOT_FOUND"
             ? NotFound(ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code))
             : BadRequest(ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
+    }
+
+    private IActionResult ToSemesterErrorResponse(Error error)
+    {
+        var response = ApiResponse<object>.FailureResponse(error.Message, error.Code);
+        return error.Code switch
+        {
+            ErrorCodes.ClassAccessDenied => StatusCode(StatusCodes.Status403Forbidden, response),
+            ErrorCodes.SemesterNotFound => NotFound(response),
+            ErrorCodes.SemesterStaffNotFound => NotFound(response),
+            ErrorCodes.SemesterConcurrencyConflict or
+            ErrorCodes.SemesterActivationBlocked or
+            ErrorCodes.SemesterCompletionBlocked or
+            ErrorCodes.SemesterInvalidState => Conflict(response),
+            ErrorCodes.SemesterStaffConflict or
+            ErrorCodes.SemesterStaffInUse => Conflict(response),
+            _ => BadRequest(response),
+        };
     }
 
 }

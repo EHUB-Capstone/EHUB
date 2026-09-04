@@ -62,4 +62,21 @@ public class CreateClassCommandHandlerTests
         result.IsFailure.Should().BeTrue();
         result.Error.Code.Should().Be(ErrorCodes.ClassAccessDenied);
     }
+
+    [Fact]
+    public async Task HandleAsync_WhenUserIsLecturer_ReturnsAccessDeniedError()
+    {
+        var request = new CreateClassRequest
+        {
+            CourseId = Guid.NewGuid(),
+            SemesterId = Guid.NewGuid(),
+            ClassIndex = 1
+        };
+
+        var result = await _handler.HandleAsync(request, Guid.NewGuid(), SystemRoles.Lecturer);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be(ErrorCodes.ClassAccessDenied);
+        result.Error.Message.Should().Be("Only an administrator can create classes.");
+    }
 }

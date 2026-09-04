@@ -94,6 +94,7 @@ export default function RubricForm({
   criteria: customCriteria,
   checkpointNumber,
   checkpointTitle,
+  compact = false,
 }) {
   const criteria = useMemo(() => normalizeCriteria(customCriteria), [customCriteria]);
   const [rubricScores, setRubricScores] = useState(() => initialRows(criteria, initialData));
@@ -245,8 +246,8 @@ export default function RubricForm({
   };
 
   return (
-    <div className="bg-white p-5 sm:p-6 rounded-2xl shadow-sm border border-slate-200/70">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between mb-5">
+    <div className={`bg-white rounded-2xl shadow-sm border border-slate-200/70 ${compact ? 'p-4' : 'p-5 sm:p-6'}`}>
+      <div className={`flex flex-col gap-2 mb-5 ${compact ? '' : 'sm:flex-row sm:items-start sm:justify-between'}`}>
         <div>
           <h3 className="text-lg font-black text-slate-900">Evaluation Rubric</h3>
           <p className="text-sm text-slate-500">
@@ -276,7 +277,7 @@ export default function RubricForm({
         {rubricScores.map((item, index) => (
           <div
             key={`${item.criterionKey}-${index}`}
-            className="bg-slate-50/40 rounded-2xl border border-slate-200/80 p-5 sm:p-6 space-y-5 transition-all hover:shadow-md hover:border-slate-300/60"
+            className={`bg-slate-50/40 rounded-2xl border border-slate-200/80 space-y-5 transition-all hover:shadow-md hover:border-slate-300/60 ${compact ? 'p-4' : 'p-5 sm:p-6'}`}
           >
             {/* Card Header */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200/60">
@@ -300,9 +301,9 @@ export default function RubricForm({
             </div>
 
             {/* Grid Inputs */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+            <div className={`grid grid-cols-1 gap-5 ${compact ? '' : 'lg:grid-cols-12'}`}>
               {/* Level Selection Section */}
-              <div className="lg:col-span-7 space-y-2">
+              <div className={`${compact ? '' : 'lg:col-span-7'} space-y-2`}>
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">
                   Performance Level
                 </label>
@@ -315,7 +316,7 @@ export default function RubricForm({
                     />
                   </div>
                 ) : (
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  <div className={`grid grid-cols-2 gap-2 ${compact ? '' : 'sm:grid-cols-4'}`}>
                     {item.levels.map((level) => {
                       const val = level.value || level.key;
                       const isActive = item.selectedLevel === val;
@@ -342,7 +343,7 @@ export default function RubricForm({
 
               {/* Manual Score Section */}
               {!hideSensitiveScores && (
-                <div className="lg:col-span-5 space-y-2">
+                <div className={`${compact ? '' : 'lg:col-span-5'} space-y-2`}>
                   <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">
                     Manual Score Override
                   </label>
@@ -364,7 +365,7 @@ export default function RubricForm({
               )}
 
               {/* Comment Section */}
-              <div className="lg:col-span-12 space-y-2">
+              <div className={`${compact ? '' : 'lg:col-span-12'} space-y-2`}>
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">
                   Criterion Feedback & Comments
                 </label>

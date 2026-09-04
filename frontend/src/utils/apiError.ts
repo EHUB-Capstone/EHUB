@@ -18,7 +18,9 @@ export function parseApiError(error: unknown, fallbackMessage: string): ParsedAp
   }, {});
 
   return {
-    code: response?.code ?? '',
+    code: response?.code
+      ?? (response as { errorCode?: string | null } | undefined)?.errorCode
+      ?? '',
     message: response?.message || fallbackMessage,
     fieldErrors,
   };

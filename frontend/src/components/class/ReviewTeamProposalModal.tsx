@@ -4,6 +4,7 @@ import { AlertTriangle, CheckCircle2, FilePenLine, Loader2, X, XCircle } from 'l
 import { teamApi } from '../../api/teamApi';
 import { parseApiError } from '../../utils/apiError';
 import { getTeamMembers } from '../../utils/teamManagement';
+import { getTeamGroupFromMajor } from '../../constants/majors';
 
 const decisions = [
   { value: 'Approved', label: 'Approve', icon: CheckCircle2, tone: 'border-green-500 bg-green-50 text-green-700' },
@@ -17,6 +18,11 @@ export default function ReviewTeamProposalModal({ team, classStudents, onClose, 
   const [comment, setComment] = useState('');
   const members = getTeamMembers(team, classStudents);
   const requiresComment = decision !== 'Approved';
+  const hasGroupOne = members.some((member) => getTeamGroupFromMajor(member.major) === 'GROUP_1');
+  const hasGroupTwo = members.some((member) => getTeamGroupFromMajor(member.major) === 'GROUP_2');
+  const leaderId = String(team.leaderId?._id || team.leaderId || '');
+  const hasLeader = Boolean(leaderId && members.some((member) => member._id === leaderId));
+  const standardSize = members.length >= 4 && members.length <= 6;
 
   const handleReview = async () => {
     const cleanComment = comment.trim();
@@ -63,6 +69,16 @@ export default function ReviewTeamProposalModal({ team, classStudents, onClose, 
               <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-700">{team.status}</span>
             </div>
             {team.description && <p className="mt-3 text-sm leading-6 text-slate-600">{team.description}</p>}
+          </section>
+
+          <section>
+            <h4 className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-500">Validation checklist</h4>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <p className={`rounded-lg px-3 py-2 text-xs font-semibold ${standardSize ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>{standardSize ? '4-6 members' : 'Invalid member count'}</p>
+              <p className={`rounded-lg px-3 py-2 text-xs font-semibold ${hasGroupOne ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>Has GROUP_1</p>
+              <p className={`rounded-lg px-3 py-2 text-xs font-semibold ${hasGroupTwo ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>Has GROUP_2</p>
+              <p className={`rounded-lg px-3 py-2 text-xs font-semibold ${hasLeader ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>Leader selected</p>
+            </div>
           </section>
 
           <section>

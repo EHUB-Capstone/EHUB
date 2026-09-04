@@ -12,6 +12,7 @@ public sealed class GetClassesRequest
     public string? SubjectCode { get; init; }
     public int? Year { get; init; }
     public string? Status { get; init; }
+    public string? AssignmentStatus { get; init; }
     public string? Search { get; init; }
     public int Page { get; init; } = 1;
     public int PageSize { get; init; } = 10;
@@ -21,6 +22,7 @@ public sealed class GetClassesRequest
 public sealed class ClassResponse
 {
     public Guid Id { get; init; }
+    public string Slug { get; init; } = string.Empty;
     public string ClassCode { get; init; } = string.Empty;
     public int ClassIndex { get; init; }
     public Guid CourseId { get; init; }
@@ -37,10 +39,13 @@ public sealed class ClassResponse
     public IReadOnlyCollection<ClassScheduleSlotDto> Schedules { get; init; } = Array.Empty<ClassScheduleSlotDto>();
     public bool IsEnrollmentMajorLocked { get; init; }
     public string Status { get; init; } = string.Empty;
+    public string? StatusBeforeArchive { get; init; }
     public int StudentCount { get; init; }
     public int TeamCount { get; init; }
     public IReadOnlyCollection<ClassMentorSummaryDto> Mentors { get; init; } = Array.Empty<ClassMentorSummaryDto>();
     public DateTime CreatedAtUtc { get; init; }
+    public DateTime? CompletedAtUtc { get; init; }
+    public string? CompletionReason { get; init; }
     public string RowVersion { get; init; } = string.Empty;
 }
 
@@ -80,7 +85,15 @@ public sealed class CreateBulkClassesRequest
     public int StartClassIndex { get; init; } = 1;
     public int Quantity { get; init; } = 1;
     public IReadOnlyCollection<int>? ClassIndices { get; init; }
+    // Backward-compatible shortcut: assign one lecturer to the whole batch.
     public Guid? PrimaryLecturerId { get; init; }
+    public IReadOnlyCollection<BulkClassLecturerAssignmentRequest>? LecturerAssignments { get; init; }
+}
+
+public sealed class BulkClassLecturerAssignmentRequest
+{
+    public Guid LecturerId { get; init; }
+    public IReadOnlyCollection<int> ClassIndices { get; init; } = Array.Empty<int>();
 }
 
 public sealed class BulkClassPreviewItem
@@ -89,6 +102,7 @@ public sealed class BulkClassPreviewItem
     public int ClassIndex { get; init; }
     public string SubjectCode { get; init; } = string.Empty;
     public string SemesterCode { get; init; } = string.Empty;
+    public Guid? PrimaryLecturerId { get; init; }
     public string? PrimaryLecturerName { get; init; }
     public bool IsValid { get; init; }
     public string? ErrorMessage { get; init; }
@@ -197,7 +211,37 @@ public sealed class AddStudentToClassRequest
     public string StudentCode { get; init; } = string.Empty;
     public string FullName { get; init; } = string.Empty;
     public string Email { get; init; } = string.Empty;
-    public string MajorCode { get; init; } = string.Empty;
+    // Optional for an existing student profile. When omitted, the enrollment
+    // uses the major already stored on that profile.
+    public string? MajorCode { get; init; }
+}
+
+/// <summary>
+/// Assigns existing student profiles to a class. Each identifier may be either
+/// the student-profile id or its linked user id, which keeps the API compatible
+/// with staff directory pickers while persisting only student-profile ids.
+/// </summary>
+public sealed class AssignStudentsToClassRequest
+{
+    public IReadOnlyCollection<Guid> StudentIds { get; init; } = Array.Empty<Guid>();
+}
+
+public sealed class AssignStudentsToTeamRequest
+{
+    public IReadOnlyCollection<Guid> StudentIds { get; init; } = Array.Empty<Guid>();
+}
+
+public sealed class ClassStudentAssignmentResponse
+{
+    public Guid ClassId { get; init; }
+    public IReadOnlyCollection<Guid> AssignedStudentIds { get; init; } = Array.Empty<Guid>();
+}
+
+public sealed class TeamStudentAssignmentResponse
+{
+    public Guid ClassId { get; init; }
+    public Guid TeamId { get; init; }
+    public IReadOnlyCollection<Guid> AssignedStudentIds { get; init; } = Array.Empty<Guid>();
 }
 
 public sealed class UpdateClassStudentRequest
@@ -230,7 +274,25 @@ public sealed class ClassLifecycleResponse
 {
     public Guid ClassId { get; init; }
     public string Status { get; init; } = string.Empty;
+    public DateTime? CompletedAtUtc { get; init; }
     public DateTime? ArchivedAtUtc { get; init; }
+    public string RowVersion { get; init; } = string.Empty;
+}
+
+public sealed class ClassCompletionPreviewResponse
+{
+    public Guid ClassId { get; init; }
+    public string ClassCode { get; init; } = string.Empty;
+    public string Status { get; init; } = string.Empty;
+    public int ActiveEnrollmentCount { get; init; }
+    public int DroppedEnrollmentCount { get; init; }
+    public int ActiveMentorAssignmentCount { get; init; }
+    public int OpenTeamProposalCount { get; init; }
+    public int OpenProjectDirectionCount { get; init; }
+    public int ProcessingImportSessionCount { get; init; }
+    public int ScheduledMentoringSessionCount { get; init; }
+    public IReadOnlyCollection<string> Blockers { get; init; } = Array.Empty<string>();
+    public IReadOnlyCollection<string> Warnings { get; init; } = Array.Empty<string>();
     public string RowVersion { get; init; } = string.Empty;
 }
 
@@ -284,6 +346,12 @@ public sealed class VerifyClassMajorsResponse
     public IReadOnlyCollection<MajorVerificationRowDto> NotFound { get; init; } = Array.Empty<MajorVerificationRowDto>();
 }
 
+public sealed class SynchronizeProfileMajorsResponse
+{
+    public int MismatchCount { get; init; }
+    public int SynchronizedCount { get; init; }
+}
+
 // ─── GIAI ĐOẠN 5: EXCEL IMPORT & EXPORT CONTRACTS ──────────────────────────────
 
 public sealed class ImportStudentRowPreviewDto
@@ -293,6 +361,10 @@ public sealed class ImportStudentRowPreviewDto
     public string FullName { get; init; } = string.Empty;
     public string Email { get; init; } = string.Empty;
     public string MajorCode { get; init; } = string.Empty;
+    public string? RegisteredMajorCode { get; init; }
+    public string MajorComparisonStatus { get; init; } = "NotCompared";
+    public string? MajorWarningMessage { get; init; }
+    public bool NeedsMajorSync { get; init; }
     public bool IsValid { get; init; }
     public string Status { get; init; } = "Valid";
     public string? ErrorMessage { get; init; }
@@ -304,12 +376,14 @@ public sealed class ImportStudentsPreviewResponse
     public int TotalRows { get; init; }
     public int ValidRowsCount { get; init; }
     public int ErrorRowsCount { get; init; }
+    public int MajorMismatchCount { get; init; }
     public IReadOnlyCollection<ImportStudentRowPreviewDto> Rows { get; init; } = Array.Empty<ImportStudentRowPreviewDto>();
 }
 
 public sealed class CommitImportStudentsRequest
 {
     public Guid SessionId { get; init; }
+    public bool SynchronizeProfileMajors { get; init; }
 }
 
 public sealed class ImportStudentsCommitResponse
@@ -318,6 +392,7 @@ public sealed class ImportStudentsCommitResponse
     public int UpdatedCount { get; init; }
     public int SkippedCount { get; init; }
     public int ErrorCount { get; init; }
+    public int SynchronizedMajorCount { get; init; }
     public IReadOnlyCollection<ImportStudentCommitErrorDto> Errors { get; init; } = Array.Empty<ImportStudentCommitErrorDto>();
 }
 

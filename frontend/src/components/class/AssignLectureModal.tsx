@@ -2,10 +2,11 @@ import { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { X, Loader2, Search, Check } from 'lucide-react';
 import { classApi } from '../../api/classApi';
-import { userApi } from '../../api/userApi';
+import { subjectApi } from '../../api/subjectApi';
 import { parseApiError } from '../../utils/apiError';
+import { unwrapApiData } from '../../utils/classMappers';
 
-export default function AssignLectureModal({ classId, currentLecture, rowVersion, allowUnassign = false, onClose, onAssigned }) {
+export default function AssignLectureModal({ classId, semester, year, currentLecture, rowVersion, allowUnassign = false, onClose, onAssigned }) {
   const [lecturers, setLecturers] = useState([]);
   const [selectedId, setSelectedId] = useState(currentLecture?._id || currentLecture?.id || '');
   const [searchTerm, setSearchTerm] = useState('');
@@ -13,25 +14,38 @@ export default function AssignLectureModal({ classId, currentLecture, rowVersion
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
+    let active = true;
     const fetchLecturers = async () => {
       try {
-        const res = await userApi.getAll({ role: 'LECTURER', limit: 100 });
-        const list = res?.data?.users || res?.users || [];
-        setLecturers(list.map(lecturer => ({
-          ...lecturer,
-          _id: lecturer._id || lecturer.id,
-          name: lecturer.name || lecturer.fullName,
-        })));
-      } catch {
-        toast.error('Failed to load lecturers');
+        const response = await subjectApi.getTeachingStaff({ semester, year });
+        const payload = unwrapApiData(response) || {};
+        const list = (payload.staff || [])
+          .filter(member => member.role === 'LECTURER' && member.status === 'Active' && member.userStatus === 'Active')
+          .map(member => ({
+            _id: member.userId,
+            name: member.name,
+            email: member.email,
+          }));
+        if (active) setLecturers(list);
+      } catch (error) {
+        if (active) {
+          toast.error(parseApiError(error, 'Failed to load lecturers.').message);
+        }
       } finally {
-        setLoading(false);
+        if (active) setLoading(false);
       }
     };
-    fetchLecturers();
-  }, []);
+    void fetchLecturers();
+    return () => {
+      active = false;
+    };
+  }, [semester, year]);
 
   const handleSubmit = async () => {
+    if (!selectedId && !currentLecture) {
+      toast.error('Select an active lecturer before saving.');
+      return;
+    }
     if (!rowVersion) {
       toast.error('Class data is stale. Reload the page and try again.');
       return;
@@ -102,7 +116,7 @@ export default function AssignLectureModal({ classId, currentLecture, rowVersion
                 </button>
               )}
               {filtered.length === 0 ? (
-                <p className="text-xs text-slate-400 text-center py-6">No lecturers found</p>
+                <p className="text-xs text-slate-400 text-center py-6">No active lecturers are listed for this semester</p>
               ) : (
                 filtered.map(l => {
                   const isSelected = selectedId === l._id;

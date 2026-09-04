@@ -5,22 +5,28 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Plus, RefreshCw, Search, Filter, GraduationCap,
   Users, BookOpen, ChevronRight, ChevronLeft, Upload, Eye, Calendar, LayoutGrid, ClipboardCheck, AlertCircle, RotateCcw,
+  Archive, UserRoundCheck, X, CircleCheck,
 } from 'lucide-react';
 import { AuthContext } from '../../context/AuthContext';
 import { classApi } from '../../api/classApi';
-import { userApi } from '../../api/userApi';
 import { subjectApi } from '../../api/subjectApi';
 import LoadingSkeleton from '../../components/ui/LoadingSkeleton';
 import EmptyState from '../../components/ui/EmptyState';
 import BulkCreateModal from '../../components/class/BulkCreateModal';
+import AssignLectureModal from '../../components/class/AssignLectureModal';
 import ImportStudentsModal from '../../components/class/ImportStudentsModal';
 import ClassDirectionOverview from '../../components/class/ClassDirectionOverview';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
+import Modal from '../../components/ui/Modal';
+import Button from '../../components/ui/Button';
+import BulkAssignLecturerModal from '../../components/class/BulkAssignLecturerModal';
 import { classFeatureFlags } from '../../config/classFeatureFlags';
 import { parseApiError } from '../../utils/apiError';
 import { toClassViewModel, unwrapApiData } from '../../utils/classMappers';
 import { getClassLifecyclePresentation } from '../../utils/classComponentPolicy';
 import type { ClassListResponse, ClassStatus, ClassViewModel } from '../../types/classes';
+import { canCreateClasses, canManageClass, hasClassRole } from '../../utils/classPermissions';
+import { executeBulkClassAction, type BulkClassActionResult } from '../../utils/bulkClassActions';
 
 const SEMESTERS = ['SP', 'SU', 'FA'];
 const CURRENT_YEAR = new Date().getFullYear();
@@ -31,6 +37,7 @@ const statusColor: Record<ClassStatus, string> = {
   Draft: 'bg-amber-50 text-amber-700',
   Active: 'bg-green-50 text-green-700',
   Inactive: 'bg-slate-100 text-slate-600',
+  Completed: 'bg-blue-50 text-blue-700',
   Archived: 'bg-red-50 text-red-600',
 };
 const classCodeCollator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
@@ -58,13 +65,14 @@ export default function ClassManagement() {
   const navigate  = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const initialSearchParams = useRef(new URLSearchParams(searchParams));
-  const isAdmin    = user?.role === 'ADMIN';
-  const isLecturer = user?.role === 'LECTURER';
+  const isAdmin = hasClassRole(user, 'ADMIN');
+  const isLecturer = !isAdmin && hasClassRole(user, 'LECTURER');
+  const canCreate = canCreateClasses(user);
+  const canManageClassRecord = (classItem: ClassViewModel) => canManageClass(user, classItem);
 
   const [classes, setClasses] = useState<ClassViewModel[]>([]);
   const [loading,    setLoading]    = useState(true);
   const [error, setError] = useState('');
-  const [lecturers, setLecturers] = useState<any[]>([]);
   const [subjects, setSubjects] = useState<string[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
@@ -76,6 +84,7 @@ export default function ClassManagement() {
   const [filterYear, setFilterYear] = useState(searchParams.get('year') || '');
   const [filterSubj, setFilterSubj] = useState(searchParams.get('subject') || '');
   const [filterStatus, setFilterStatus] = useState<ClassStatus | ''>((searchParams.get('status') as ClassStatus | null) || '');
+  const [filterAssignment, setFilterAssignment] = useState<'Assigned' | 'Unassigned' | ''>((searchParams.get('assignment') as 'Assigned' | 'Unassigned' | null) || '');
   const [sort, setSort] = useState(searchParams.get('sort') || 'code');
   const [page, setPage] = useState(Math.max(1, Number(searchParams.get('page')) || 1));
   const pageSize = 12;
@@ -85,8 +94,17 @@ export default function ClassManagement() {
   const [showBulk,   setShowBulk]   = useState(false);
   const [importTarget, setImportTarget] = useState<string | null>(null);
   const [restoreTarget, setRestoreTarget] = useState<ClassViewModel | null>(null);
+  const [assignTarget, setAssignTarget] = useState<ClassViewModel | null>(null);
   const [restoreReason, setRestoreReason] = useState('');
   const [restoring, setRestoring] = useState(false);
+  const [selectedClassIds, setSelectedClassIds] = useState<Set<string>>(() => new Set());
+  const [bulkAssignOpen, setBulkAssignOpen] = useState(false);
+  const [bulkArchiveOpen, setBulkArchiveOpen] = useState(false);
+  const [bulkCompleteOpen, setBulkCompleteOpen] = useState(false);
+  const [bulkRestoreOpen, setBulkRestoreOpen] = useState(false);
+  const [bulkReason, setBulkReason] = useState('');
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkResult, setBulkResult] = useState<{ title: string; result: BulkClassActionResult } | null>(null);
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
@@ -100,31 +118,22 @@ export default function ClassManagement() {
         year?: number;
         subjectCode?: string;
         status?: ClassStatus;
+        assignmentStatus?: 'Assigned' | 'Unassigned';
         search?: string;
       };
       if (filterSem && filterYear) params.semesterCode = `${filterSem}${filterYear}`;
       if (filterYear) params.year = Number(filterYear);
       if (filterSubj) params.subjectCode = filterSubj;
       if (filterStatus) params.status = filterStatus;
+      if (isAdmin && filterAssignment) params.assignmentStatus = filterAssignment;
       if (appliedSearch) params.search = appliedSearch.trim();
 
-      const [clsRes, usrRes] = await Promise.all([
-        classApi.getAll(params),
-        (isAdmin || isLecturer) ? userApi.getAll({ page: 1, limit: 100, role: 'LECTURER', status: 'APPROVED' }) : Promise.resolve({ users: [] }),
-      ]);
+      const clsRes = await classApi.getAll(params);
 
       const classList = unwrapApiData<ClassListResponse>(clsRes);
       setClasses((classList.items || []).map(toClassViewModel));
       setTotalCount(classList.totalCount || 0);
       setTotalPages(Math.max(1, classList.totalPages || 1));
-      const lects = usrRes?.data?.users || usrRes?.users || [];
-      setLecturers(lects
-        .filter(u => u.role === 'LECTURER')
-        .map(lecturer => ({
-          ...lecturer,
-          _id: lecturer._id || lecturer.id,
-          name: lecturer.name || lecturer.fullName,
-        })));
     } catch (requestError) {
       const parsed = parseApiError(requestError, 'Failed to load classes');
       setError(parsed.message);
@@ -132,7 +141,7 @@ export default function ClassManagement() {
     } finally {
       setLoading(false);
     }
-  }, [appliedSearch, filterSem, filterStatus, filterSubj, filterYear, isAdmin, page, sort]);
+  }, [appliedSearch, filterAssignment, filterSem, filterStatus, filterSubj, filterYear, isAdmin, page, sort]);
 
   useEffect(() => {
     const loadInitialConfig = async () => {
@@ -165,10 +174,15 @@ export default function ClassManagement() {
     if (filterYear) next.set('year', filterYear);
     if (filterSubj) next.set('subject', filterSubj);
     if (filterStatus) next.set('status', filterStatus);
+    if (isAdmin && filterAssignment) next.set('assignment', filterAssignment);
     if (sort !== 'code') next.set('sort', sort);
     if (page > 1) next.set('page', String(page));
     setSearchParams(next, { replace: true });
-  }, [appliedSearch, filterSem, filterStatus, filterSubj, filterYear, page, setSearchParams, sort]);
+  }, [appliedSearch, filterAssignment, filterSem, filterStatus, filterSubj, filterYear, isAdmin, page, setSearchParams, sort]);
+
+  useEffect(() => {
+    setSelectedClassIds(new Set());
+  }, [appliedSearch, filterAssignment, filterSem, filterStatus, filterSubj, filterYear, page, sort]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -208,6 +222,123 @@ export default function ClassManagement() {
   const sortedClasses = useMemo(() => sortClasses(classes), [classes]);
   const subjectGroups = useMemo(() => groupClassesBySubject(classes), [classes]);
   const showSubjectGroups = !filterSubj;
+  const selectableClasses = sortedClasses.filter((item) => canManageClassRecord(item));
+  const selectedClasses = useMemo(
+    () => sortedClasses.filter((item) => selectedClassIds.has(item._id)),
+    [selectedClassIds, sortedClasses],
+  );
+  const assignableSelectedClasses = useMemo(
+    () => selectedClasses.filter((item) => item.status !== 'Completed' && item.status !== 'Archived'),
+    [selectedClasses],
+  );
+  const archivableSelectedClasses = useMemo(
+    () => selectedClasses.filter((item) => item.status !== 'Archived'),
+    [selectedClasses],
+  );
+  const completableSelectedClasses = useMemo(
+    () => selectedClasses.filter((item) => item.status === 'Active'),
+    [selectedClasses],
+  );
+  const restorableSelectedClasses = useMemo(
+    () => selectedClasses.filter((item) => item.status === 'Archived'),
+    [selectedClasses],
+  );
+  const allSelectableSelected = selectableClasses.length > 0 && selectableClasses.every((item) => selectedClassIds.has(item._id));
+
+  const toggleClassSelection = (classId: string) => {
+    setSelectedClassIds((current) => {
+      const next = new Set(current);
+      if (next.has(classId)) next.delete(classId);
+      else next.add(classId);
+      return next;
+    });
+  };
+
+  const toggleSelectPage = () => {
+    setSelectedClassIds(allSelectableSelected ? new Set() : new Set(selectableClasses.map((item) => item._id)));
+  };
+
+  const finishBulkAction = async (title: string, result: BulkClassActionResult) => {
+    setBulkResult({ title, result });
+    setSelectedClassIds(new Set());
+    if (result.failed.length === 0) toast.success(`${result.succeeded.length} classes updated successfully.`);
+    else if (result.succeeded.length > 0) toast.success(`${result.succeeded.length} succeeded; ${result.failed.length} failed.`);
+    else toast.error(`All ${result.failed.length} selected classes failed.`);
+    await fetchAll();
+  };
+
+  const handleBulkAssign = async (lecturerId: string) => {
+    if (!isAdmin || assignableSelectedClasses.length === 0 || !lecturerId) return;
+    setBulkBusy(true);
+    try {
+      const result = await executeBulkClassAction(
+        assignableSelectedClasses,
+        (item) => classApi.updateTeachingAssignment(item._id, {
+          primaryLecturerId: lecturerId,
+          rowVersion: item.rowVersion,
+        }),
+        'Failed to assign lecturer.',
+      );
+      setBulkAssignOpen(false);
+      await finishBulkAction('Bulk Lecturer Assignment', result);
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
+  const handleBulkArchive = async () => {
+    const reason = bulkReason.trim();
+    if (archivableSelectedClasses.length === 0 || reason.length < 3) return;
+    setBulkBusy(true);
+    try {
+      const result = await executeBulkClassAction(
+        archivableSelectedClasses,
+        (item) => classApi.archive(item._id, { rowVersion: item.rowVersion, reason }),
+        'Failed to archive class.',
+      );
+      setBulkArchiveOpen(false);
+      setBulkReason('');
+      await finishBulkAction('Bulk Class Archive', result);
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
+  const handleBulkComplete = async () => {
+    const reason = bulkReason.trim();
+    if (completableSelectedClasses.length === 0 || reason.length < 3) return;
+    setBulkBusy(true);
+    try {
+      const result = await executeBulkClassAction(
+        completableSelectedClasses,
+        (item) => classApi.complete(item._id, { rowVersion: item.rowVersion, reason }),
+        'Failed to complete class.',
+      );
+      setBulkCompleteOpen(false);
+      setBulkReason('');
+      await finishBulkAction('Bulk Class Completion', result);
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
+  const handleBulkRestore = async () => {
+    const reason = bulkReason.trim();
+    if (restorableSelectedClasses.length === 0 || reason.length < 3) return;
+    setBulkBusy(true);
+    try {
+      const result = await executeBulkClassAction(
+        restorableSelectedClasses,
+        (item) => classApi.restore(item._id, { rowVersion: item.rowVersion, reason }),
+        'Failed to restore class.',
+      );
+      setBulkRestoreOpen(false);
+      setBulkReason('');
+      await finishBulkAction('Bulk Class Restore', result);
+    } finally {
+      setBulkBusy(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -224,13 +355,13 @@ export default function ClassManagement() {
           >
             <RefreshCw className="w-4 h-4" /> Refresh
           </button>
-          {(isAdmin || isLecturer) && (
+          {canCreate && (
             <button
               id="btn-bulk-create"
               onClick={() => setShowBulk(true)}
               className="flex items-center gap-2 px-4 py-2 text-sm bg-primary text-white rounded-xl hover:bg-primary-700 transition-all shadow-sm hover:shadow-md"
             >
-              <Plus className="w-4 h-4" /> {isLecturer ? 'Tạo lớp' : 'Bulk Create'}
+              <Plus className="w-4 h-4" /> Create Classes
             </button>
           )}
         </div>
@@ -301,8 +432,21 @@ export default function ClassManagement() {
             <option value="Draft">Draft</option>
             <option value="Active">Active</option>
             <option value="Inactive">Inactive</option>
+            <option value="Completed">Completed</option>
             {(isAdmin || isLecturer) && <option value="Archived">Archived</option>}
           </select>
+          {isAdmin && (
+            <select
+              value={filterAssignment}
+              onChange={(event) => { setFilterAssignment(event.target.value as 'Assigned' | 'Unassigned' | ''); setPage(1); }}
+              className="border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none bg-white focus:ring-2 focus:ring-primary/20 focus:border-primary"
+              aria-label="Filter by lecturer assignment"
+            >
+              <option value="">All assignments</option>
+              <option value="Assigned">Assigned</option>
+              <option value="Unassigned">Unassigned</option>
+            </select>
+          )}
           <select
             value={sort}
             onChange={(e) => { setSort(e.target.value); setPage(1); }}
@@ -319,7 +463,7 @@ export default function ClassManagement() {
           <button type="submit" className="flex items-center gap-2 px-4 py-2 bg-secondary text-white rounded-xl text-sm hover:bg-secondary-700 transition-all">
             <Filter className="w-4 h-4" /> Filter
           </button>
-          <button type="button" onClick={() => { setSearch(''); setAppliedSearch(''); setFilterSem(''); setFilterYear(''); setFilterSubj(''); setFilterStatus(''); setSort('code'); setPage(1); }} className="text-sm text-slate-400 hover:text-slate-600 px-2">
+          <button type="button" onClick={() => { setSearch(''); setAppliedSearch(''); setFilterSem(''); setFilterYear(''); setFilterSubj(''); setFilterStatus(''); setFilterAssignment(''); setSort('code'); setPage(1); }} className="text-sm text-slate-400 hover:text-slate-600 px-2">
             Reset
           </button>
         </form>
@@ -341,10 +485,70 @@ export default function ClassManagement() {
         <EmptyState
           icon={GraduationCap}
           title="No classes found"
-          description={isAdmin ? 'Use Bulk Create to generate classes by subject code' : 'No classes assigned to you yet'}
-          action={(isAdmin || isLecturer) ? { label: isLecturer ? 'Create class' : 'Bulk Create', onClick: () => setShowBulk(true) } : undefined}
+          description={isAdmin ? 'Use Create Classes to generate classes by subject and index' : 'No classes assigned to you yet'}
+          action={canCreate ? { label: 'Create Classes', onClick: () => setShowBulk(true) } : undefined}
         />
       ) : (
+        <>
+        <div className="sticky top-3 z-20 flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-sm backdrop-blur sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <label className="inline-flex cursor-pointer items-center gap-2 text-sm font-semibold text-slate-700">
+              <input
+                type="checkbox"
+                checked={allSelectableSelected}
+                onChange={toggleSelectPage}
+                disabled={selectableClasses.length === 0}
+                className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
+              />
+              Select this page
+            </label>
+            <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-500">
+              {selectedClasses.length} selected
+            </span>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {isAdmin && (
+              <button
+                type="button"
+                disabled={assignableSelectedClasses.length === 0 || bulkBusy}
+                onClick={() => setBulkAssignOpen(true)}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-primary-200 px-3 py-2 text-xs font-semibold text-primary transition hover:bg-primary-50 disabled:cursor-not-allowed disabled:opacity-40"
+                title={selectedClasses.length > assignableSelectedClasses.length ? 'Completed classes are excluded from lecturer assignment.' : undefined}
+              >
+                <UserRoundCheck className="h-4 w-4" /> Assign Lecturer ({assignableSelectedClasses.length})
+              </button>
+            )}
+            <button
+              type="button"
+              disabled={completableSelectedClasses.length === 0 || bulkBusy}
+              onClick={() => setBulkCompleteOpen(true)}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-green-200 px-3 py-2 text-xs font-semibold text-green-700 transition hover:bg-green-50 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <CircleCheck className="h-4 w-4" /> Complete ({completableSelectedClasses.length})
+            </button>
+            <button
+              type="button"
+              disabled={archivableSelectedClasses.length === 0 || bulkBusy}
+              onClick={() => setBulkArchiveOpen(true)}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 px-3 py-2 text-xs font-semibold text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <Archive className="h-4 w-4" /> Archive ({archivableSelectedClasses.length})
+            </button>
+            <button
+              type="button"
+              disabled={restorableSelectedClasses.length === 0 || bulkBusy}
+              onClick={() => setBulkRestoreOpen(true)}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 px-3 py-2 text-xs font-semibold text-blue-700 transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <RotateCcw className="h-4 w-4" /> Restore ({restorableSelectedClasses.length})
+            </button>
+            {selectedClasses.length > 0 && (
+              <button type="button" onClick={() => setSelectedClassIds(new Set())} className="inline-flex items-center gap-1 rounded-lg px-2.5 py-2 text-xs font-semibold text-slate-500 hover:bg-slate-100">
+                <X className="h-4 w-4" /> Clear
+              </button>
+            )}
+          </div>
+        </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           <AnimatePresence>
             {sortedClasses.map((cls, i) => (
@@ -362,8 +566,8 @@ export default function ClassManagement() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.04 }}
-                className="bg-white rounded-2xl border border-slate-200/60 shadow-sm hover:shadow-elevated hover:-translate-y-1 transition-all group cursor-pointer"
-                onClick={() => navigate(`/classes/${cls._id || cls.id}`)}
+                className={`bg-white rounded-2xl border shadow-sm hover:shadow-elevated hover:-translate-y-1 transition-all group cursor-pointer ${selectedClassIds.has(cls._id) ? 'border-primary ring-2 ring-primary/15' : 'border-slate-200/60'}`}
+                onClick={() => navigate(`/classes/${cls.slug || cls._id || cls.id}`)}
               >
                 <div className="p-5">
                   {/* Top row */}
@@ -380,7 +584,20 @@ export default function ClassManagement() {
                       </div>
                       <h3 className="text-xl font-bold text-slate-900">{cls.classCode}</h3>
                     </div>
-                    <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-primary transition-colors mt-1" />
+                    <div className="flex items-center gap-2">
+                      {canManageClassRecord(cls) && (
+                        <label className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border border-slate-200 bg-white hover:border-primary hover:bg-primary-50" onClick={(event) => event.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            checked={selectedClassIds.has(cls._id)}
+                            onChange={() => toggleClassSelection(cls._id)}
+                            aria-label={`Select ${cls.classCode}`}
+                            className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
+                          />
+                        </label>
+                      )}
+                      <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-primary transition-colors mt-1" />
+                    </div>
                   </div>
 
                   {/* Lecturer */}
@@ -389,14 +606,20 @@ export default function ClassManagement() {
                       <div className="w-7 h-7 rounded-lg bg-primary-100 flex items-center justify-center shrink-0">
                         <GraduationCap className="w-4 h-4 text-primary" />
                       </div>
-                      <div className="min-w-0">
+                      <div className="min-w-0 flex-1">
                         <p className="text-xs text-slate-400">Lecturer</p>
                         <p className="text-sm font-medium text-slate-800 truncate">{cls.lectureId?.name || 'Unknown'}</p>
                       </div>
+                      {isAdmin && cls.status !== 'Completed' && cls.status !== 'Archived' && (
+                        <button type="button" onClick={(event) => { event.stopPropagation(); setAssignTarget(cls); }} className="rounded-lg px-2 py-1 text-[11px] font-semibold text-primary hover:bg-primary-50">Change</button>
+                      )}
                     </div>
                   ) : (
-                    <div className="mb-2 p-2 bg-amber-50 rounded-xl border border-amber-100">
-                      <p className="text-xs text-amber-600 font-medium">⚠ No lecturer assigned</p>
+                    <div className="mb-2 flex items-center justify-between gap-2 rounded-xl border border-amber-100 bg-amber-50 p-2">
+                      <p className="text-xs font-medium text-amber-700">⚠ Unassigned Draft</p>
+                      {isAdmin && cls.status === 'Draft' && (
+                        <button type="button" onClick={(event) => { event.stopPropagation(); setAssignTarget(cls); }} className="rounded-lg bg-white px-2 py-1 text-[11px] font-semibold text-amber-700 shadow-xs hover:bg-amber-100">Assign Lecturer</button>
+                      )}
                     </div>
                   )}
 
@@ -461,19 +684,19 @@ export default function ClassManagement() {
                 {/* Footer actions */}
                 <div className="border-t border-slate-100 px-5 py-3 flex gap-2">
                   <button
-                    onClick={(e) => { e.stopPropagation(); navigate(`/classes/${cls._id || cls.id}`); }}
+                    onClick={(e) => { e.stopPropagation(); navigate(`/classes/${cls.slug || cls._id || cls.id}`); }}
                     className="flex-1 flex items-center justify-center gap-1.5 text-xs text-secondary hover:text-secondary-dark font-medium transition-colors"
                   >
                     <Eye className="w-3.5 h-3.5" /> View Detail
                   </button>
-                  {(isAdmin || isLecturer) && getClassLifecyclePresentation(cls.status).action === 'restore' ? (
+                  {canManageClassRecord(cls) && getClassLifecyclePresentation(cls.status).action === 'restore' ? (
                     <button
                       onClick={(event) => { event.stopPropagation(); setRestoreTarget(cls); }}
                       className="flex-1 flex items-center justify-center gap-1.5 text-xs text-green-700 hover:text-green-800 font-medium transition-colors border-l border-slate-100"
                     >
                       <RotateCcw className="w-3.5 h-3.5" /> Restore
                     </button>
-                  ) : (isAdmin || (isLecturer && classFeatureFlags.lecturerStudentImport)) && (
+                  ) : cls.status !== 'Completed' && canManageClassRecord(cls) && (isAdmin || classFeatureFlags.lecturerStudentImport) && (
                     <button
                       onClick={(e) => { e.stopPropagation(); setImportTarget(cls._id); }}
                       className="flex-1 flex items-center justify-center gap-1.5 text-xs text-primary hover:text-primary-dark font-medium transition-colors border-l border-slate-100"
@@ -487,6 +710,7 @@ export default function ClassManagement() {
             ))}
           </AnimatePresence>
         </div>
+        </>
       )}
 
       {!loading && !error && viewMode === 'classes' && totalPages > 1 && (
@@ -506,12 +730,34 @@ export default function ClassManagement() {
       )}
 
       {/* ── Modals ── */}
-      {showBulk && (
+      {canCreate && showBulk && (
         <BulkCreateModal
-          lecturers={lecturers}
-          isLecturer={isLecturer}
           onClose={() => setShowBulk(false)}
           onCreated={handleBulkCreated}
+        />
+      )}
+      {isAdmin && assignTarget && (
+        <AssignLectureModal
+          classId={assignTarget._id}
+          semester={assignTarget.semester as 'SP' | 'SU' | 'FA'}
+          year={assignTarget.year}
+          currentLecture={assignTarget.lectureId}
+          rowVersion={assignTarget.rowVersion}
+          allowUnassign={assignTarget.status === 'Draft'}
+          onClose={() => setAssignTarget(null)}
+          onAssigned={async () => {
+            setAssignTarget(null);
+            await fetchAll();
+          }}
+        />
+      )}
+      {isAdmin && (
+        <BulkAssignLecturerModal
+          isOpen={bulkAssignOpen}
+          classes={assignableSelectedClasses}
+          isSubmitting={bulkBusy}
+          onClose={() => { if (!bulkBusy) setBulkAssignOpen(false); }}
+          onAssign={handleBulkAssign}
         />
       )}
       {(isAdmin || (isLecturer && classFeatureFlags.lecturerStudentImport)) && importTarget && (
@@ -534,6 +780,62 @@ export default function ClassManagement() {
         onReasonChange={setRestoreReason}
         reasonRequired
       />
+      <ConfirmDialog
+        isOpen={bulkArchiveOpen}
+        onClose={() => { if (!bulkBusy) { setBulkArchiveOpen(false); setBulkReason(''); } }}
+        onConfirm={handleBulkArchive}
+        isSubmitting={bulkBusy}
+        title={`Archive ${archivableSelectedClasses.length} selected classes?`}
+        description="Selected classes will become read-only. Their roster, teams, schedules, history, and audit data are preserved. Each class is validated independently."
+        confirmText={`Archive ${archivableSelectedClasses.length} classes`}
+        confirmVariant="danger"
+        reason={bulkReason}
+        onReasonChange={setBulkReason}
+        reasonRequired
+      />
+      <ConfirmDialog
+        isOpen={bulkCompleteOpen}
+        onClose={() => { if (!bulkBusy) { setBulkCompleteOpen(false); setBulkReason(''); } }}
+        onConfirm={handleBulkComplete}
+        isSubmitting={bulkBusy}
+        title={`Complete ${completableSelectedClasses.length} active classes?`}
+        description="Active enrollments become Completed, class chats become read-only, active mentor assignments end, and open team proposals are cancelled. Classes with an active import or scheduled mentoring session will fail safely and be listed in the result."
+        confirmText={`Complete ${completableSelectedClasses.length} classes`}
+        confirmVariant="primary"
+        reason={bulkReason}
+        onReasonChange={setBulkReason}
+        reasonRequired
+      />
+      <ConfirmDialog
+        isOpen={bulkRestoreOpen}
+        onClose={() => { if (!bulkBusy) { setBulkRestoreOpen(false); setBulkReason(''); } }}
+        onConfirm={handleBulkRestore}
+        isSubmitting={bulkBusy}
+        title={`Restore ${restorableSelectedClasses.length} archived classes?`}
+        description="Each class is revalidated independently for semester, subject, lecturer, schedule, room conflicts, and required relationships before it is restored."
+        confirmText={`Restore ${restorableSelectedClasses.length} classes`}
+        confirmVariant="primary"
+        reason={bulkReason}
+        onReasonChange={setBulkReason}
+        reasonRequired
+      />
+      <Modal isOpen={Boolean(bulkResult)} onClose={() => setBulkResult(null)} title={bulkResult?.title || 'Bulk Action Result'} size="lg">
+        {bulkResult && (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-xl bg-green-50 p-4 text-center"><p className="text-2xl font-bold text-green-700">{bulkResult.result.succeeded.length}</p><p className="text-xs font-semibold text-green-600">Succeeded</p></div>
+              <div className="rounded-xl bg-red-50 p-4 text-center"><p className="text-2xl font-bold text-red-700">{bulkResult.result.failed.length}</p><p className="text-xs font-semibold text-red-600">Failed</p></div>
+            </div>
+            {bulkResult.result.succeeded.length > 0 && (
+              <div><p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-400">Updated classes</p><div className="flex max-h-24 flex-wrap gap-1.5 overflow-y-auto">{bulkResult.result.succeeded.map((code) => <span key={code} className="rounded-md bg-green-50 px-2 py-1 font-mono text-xs font-semibold text-green-700">{code}</span>)}</div></div>
+            )}
+            {bulkResult.result.failed.length > 0 && (
+              <div><p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-400">Classes requiring attention</p><div className="max-h-56 space-y-2 overflow-y-auto">{bulkResult.result.failed.map((failure) => <div key={failure.classId} className="rounded-xl border border-red-100 bg-red-50 p-3"><div className="flex items-center justify-between gap-2"><span className="font-mono text-sm font-bold text-red-800">{failure.classCode}</span>{failure.code && <span className="rounded bg-white px-1.5 py-0.5 text-[10px] font-semibold text-red-600">{failure.code}</span>}</div><p className="mt-1 text-xs leading-5 text-red-700">{failure.message}</p></div>)}</div></div>
+            )}
+            <div className="flex justify-end border-t border-slate-100 pt-4"><Button onClick={() => setBulkResult(null)}>Close</Button></div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

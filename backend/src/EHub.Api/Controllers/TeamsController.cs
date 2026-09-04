@@ -36,6 +36,14 @@ public sealed class TeamsController : ControllerBase
     public async Task<IActionResult> CreateTeam(Guid classId, [FromBody] CreateTeamRequest request, [FromServices] ITeamManagementHandler handler, CancellationToken cancellationToken) =>
         ToResponse(await handler.CreateAsync(classId, request, UserId, Role, cancellationToken), "Team created.");
 
+    [HttpPost("classes/{classId:guid}/teams/generate")]
+    public async Task<IActionResult> GenerateTeam(Guid classId, [FromBody] GenerateClassTeamRequest request, [FromServices] ITeamManagementHandler handler, CancellationToken cancellationToken) =>
+        ToResponse(await handler.GenerateAsync(classId, request, UserId, Role, cancellationToken), "Team request processed.");
+
+    [HttpPost("classes/{classId:guid}/teams/student-proposal")]
+    public async Task<IActionResult> SubmitStudentProposal(Guid classId, [FromBody] SubmitStudentTeamProposalRequest request, [FromServices] ITeamProposalHandler handler, CancellationToken cancellationToken) =>
+        ToResponse(await handler.SubmitStudentProposalAsync(classId, request, UserId, Role, cancellationToken), "Team created and project proposal submitted for review.");
+
     [HttpGet("teams/{teamId:guid}")]
     public async Task<IActionResult> GetTeam(Guid teamId, [FromServices] ITeamManagementHandler handler, CancellationToken cancellationToken) =>
         ToResponse(await handler.GetAsync(teamId, UserId, Role, cancellationToken), "Team retrieved.");
@@ -47,6 +55,10 @@ public sealed class TeamsController : ControllerBase
     [HttpPut("teams/{teamId:guid}/leader")]
     public async Task<IActionResult> AssignLeader(Guid teamId, [FromBody] AssignTeamLeaderRequest request, [FromServices] ITeamManagementHandler handler, CancellationToken cancellationToken) =>
         ToResponse(await handler.AssignLeaderAsync(teamId, request, UserId, Role, cancellationToken), "Team leader assigned.");
+
+    [HttpDelete("teams/{teamId:guid}")]
+    public async Task<IActionResult> DeleteTeam(Guid teamId, [FromServices] ITeamManagementHandler handler, CancellationToken cancellationToken) =>
+        ToResponse(await handler.DeleteAsync(teamId, UserId, Role, cancellationToken), "Team permanently deleted; student accounts and class enrollments preserved.");
 
     [HttpGet("classes/{classId:guid}/mentors")]
     public async Task<IActionResult> GetClassMentors(Guid classId, [FromServices] IMentorAssignmentHandler handler, CancellationToken cancellationToken) =>
@@ -92,6 +104,10 @@ public sealed class TeamsController : ControllerBase
     public async Task<IActionResult> ReviewProposal(Guid proposalId, [FromBody] ReviewTeamProposalRequest request, [FromServices] ITeamProposalHandler handler, CancellationToken cancellationToken) =>
         ToResponse(await handler.ReviewAsync(proposalId, request, UserId, Role, cancellationToken), "Team proposal reviewed.");
 
+    [HttpPut("teams/{teamId:guid}/review")]
+    public async Task<IActionResult> ReviewTeam(Guid teamId, [FromBody] ReviewTeamProposalRequest request, [FromServices] ITeamProposalHandler handler, CancellationToken cancellationToken) =>
+        ToResponse(await handler.ReviewAsync(teamId, request, UserId, Role, cancellationToken), "Team proposal reviewed.");
+
     [HttpGet("team-proposals/{proposalId:guid}/history")]
     public async Task<IActionResult> GetProposalHistory(Guid proposalId, [FromServices] ITeamProposalHandler handler, CancellationToken cancellationToken) =>
         ToResponse(await handler.GetHistoryAsync(proposalId, UserId, Role, cancellationToken), "Team proposal history retrieved.");
@@ -113,8 +129,21 @@ public sealed class TeamsController : ControllerBase
         ToResponse(await handler.ReviewAsync(teamId, request, UserId, Role, cancellationToken), "Project direction reviewed.");
 
     private Guid UserId => _currentUser.UserId ?? Guid.Empty;
-    private string Role => _currentUser.Roles.FirstOrDefault(role =>
-        role is SystemRoles.Admin or SystemRoles.Lecturer or SystemRoles.Mentor or SystemRoles.Student) ?? string.Empty;
+    private string Role
+    {
+        get
+        {
+            if (_currentUser.Roles.Any(role => string.Equals(role, SystemRoles.Admin, StringComparison.OrdinalIgnoreCase)))
+                return SystemRoles.Admin;
+            if (_currentUser.Roles.Any(role => string.Equals(role, SystemRoles.Lecturer, StringComparison.OrdinalIgnoreCase)))
+                return SystemRoles.Lecturer;
+            if (_currentUser.Roles.Any(role => string.Equals(role, SystemRoles.Mentor, StringComparison.OrdinalIgnoreCase)))
+                return SystemRoles.Mentor;
+            if (_currentUser.Roles.Any(role => string.Equals(role, SystemRoles.Student, StringComparison.OrdinalIgnoreCase)))
+                return SystemRoles.Student;
+            return string.Empty;
+        }
+    }
 
     private IActionResult ToResponse<T>(EHub.Shared.Results.Result<T> result, string message)
     {

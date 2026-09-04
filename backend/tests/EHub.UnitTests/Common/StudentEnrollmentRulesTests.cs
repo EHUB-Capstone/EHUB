@@ -7,6 +7,23 @@ namespace EHub.UnitTests.Common;
 public sealed class StudentEnrollmentRulesTests
 {
     [Fact]
+    public void ResolveEffectiveMajorCode_WithImportedMajor_PrefersEnrollmentSnapshot()
+    {
+        StudentEnrollmentRules.ResolveEffectiveMajorCode(" bba_mkt ", MajorCodes.BIT_SE)
+            .Should().Be(MajorCodes.BBA_MKT);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("UNDECLARED")]
+    public void ResolveEffectiveMajorCode_WithMissingImportedMajor_UsesProfileMajor(string? enrollmentMajor)
+    {
+        StudentEnrollmentRules.ResolveEffectiveMajorCode(enrollmentMajor, " bit_se ")
+            .Should().Be(MajorCodes.BIT_SE);
+    }
+
+    [Fact]
     public void ValidateAndNormalize_WithValidContract_NormalizesAllIdentityFields()
     {
         var error = StudentEnrollmentRules.ValidateAndNormalize(
@@ -34,6 +51,34 @@ public sealed class StudentEnrollmentRulesTests
             out _);
 
         error.Should().Contain("invalid");
+    }
+
+    [Fact]
+    public void ValidateAndNormalize_WithMissingMajor_AllowsExplicitDeferredResolution()
+    {
+        var error = StudentEnrollmentRules.ValidateAndNormalize(
+            "SE123456",
+            "Nguyen Van A",
+            "a@fpt.edu.vn",
+            null,
+            out var input,
+            allowMissingMajor: true);
+
+        error.Should().BeNull();
+        input.MajorCode.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void ValidateAndNormalize_WithMissingMajor_RejectsItByDefault()
+    {
+        var error = StudentEnrollmentRules.ValidateAndNormalize(
+            "SE123456",
+            "Nguyen Van A",
+            "a@fpt.edu.vn",
+            null,
+            out _);
+
+        error.Should().Be("Major code is required.");
     }
 
     [Fact]

@@ -67,4 +67,16 @@ public class GetClassesQueryHandlerTests
         result.IsFailure.Should().BeTrue();
         result.Error.Code.Should().Be(ErrorCodes.ClassAccessDenied);
     }
+
+    [Fact]
+    public async Task HandleAsync_WhenAssignmentStatusIsInvalid_ReturnsValidationError()
+    {
+        var request = new GetClassesRequest { AssignmentStatus = "Pending" };
+
+        var result = await _handler.HandleAsync(request, Guid.NewGuid(), SystemRoles.Admin);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be(ErrorCodes.ClassValidationError);
+        result.Error.Message.Should().Be("Assignment status must be Assigned or Unassigned.");
+    }
 }

@@ -38,8 +38,40 @@ public class AuthIntegrationTests
         return string.Empty;
     }
 
+    private async Task<(HttpResponseMessage Response, RegisterResponse Body)> RegisterAndVerifyAsync(
+        RegisterRequest request)
+    {
+        FakeEmailService.LastRegistrationOtp = null;
+        FakeEmailService.LastRegistrationEmail = null;
+
+        var registerResponse = await _client.PostAsJsonAsync("/api/auth/register", request);
+        registerResponse.StatusCode.Should().Be(HttpStatusCode.Accepted);
+        var registerBody = await registerResponse.Content
+            .ReadFromJsonAsync<ApiResponse<RegisterResponse>>();
+        registerBody.Should().NotBeNull();
+        registerBody!.Data.Should().NotBeNull();
+        registerBody.Data!.RequiresEmailVerification.Should().BeTrue();
+        registerBody.Data.RegistrationId.Should().NotBeNull();
+        FakeEmailService.LastRegistrationOtp.Should().MatchRegex("^[0-9]{6}$");
+        FakeEmailService.LastRegistrationEmail.Should().Be(request.Email.ToLowerInvariant());
+
+        var verifyResponse = await _client.PostAsJsonAsync(
+            "/api/auth/register/verify-otp",
+            new VerifyRegistrationOtpRequest
+            {
+                RegistrationId = registerBody.Data.RegistrationId!.Value,
+                Otp = FakeEmailService.LastRegistrationOtp!
+            });
+        var verifyBody = await verifyResponse.Content
+            .ReadFromJsonAsync<ApiResponse<RegisterResponse>>();
+        verifyBody.Should().NotBeNull();
+        verifyBody!.Data.Should().NotBeNull();
+
+        return (verifyResponse, verifyBody.Data!);
+    }
+
     [Fact]
-    public async Task Register_Should_Create_Active_Student_When_Request_Is_Valid()
+    public async Task RegisterAndVerify_Should_Create_Active_Student_When_Request_Is_Valid()
     {
         // Arrange
         var uniqueEmail = $"student-{Guid.NewGuid()}@example.com";
@@ -54,22 +86,14 @@ public class AuthIntegrationTests
         };
 
         // Act
-        var response = await _client.PostAsJsonAsync("/api/auth/register", request);
+        var (response, body) = await RegisterAndVerifyAsync(request);
 
         // Assert
-        if (response.StatusCode != HttpStatusCode.OK)
-        {
-            var err = await response.Content.ReadAsStringAsync();
-            Assert.Fail($"Status: {response.StatusCode}, Body: {err}");
-        }
         response.StatusCode.Should().Be(HttpStatusCode.OK);
-        var body = await response.Content.ReadFromJsonAsync<ApiResponse<RegisterResponse>>();
-        body.Should().NotBeNull();
-        body!.Success.Should().BeTrue();
-        body.Data.Should().NotBeNull();
-        body.Data!.User.Should().NotBeNull();
-        body.Data.User!.Email.Should().Be(uniqueEmail);
-        body.Data.RequiresApproval.Should().BeFalse();
+        body.User.Should().NotBeNull();
+        body.User!.Email.Should().Be(uniqueEmail);
+        body.RequiresEmailVerification.Should().BeFalse();
+        body.RequiresApproval.Should().BeFalse();
 
         // Should also set the refresh token cookie
         var refreshToken = ExtractRefreshToken(response);
@@ -92,7 +116,7 @@ public class AuthIntegrationTests
         };
 
         // Create first user
-        await _client.PostAsJsonAsync("/api/auth/register", request);
+        await RegisterAndVerifyAsync(request);
 
         // Act - Attempt to register same email
         var response = await _client.PostAsJsonAsync("/api/auth/register", request);
@@ -127,7 +151,63 @@ public class AuthIntegrationTests
     }
 
     [Fact]
-    public async Task Register_Should_Create_PendingApproval_Lecturer_When_Valid()
+    public async Task Register_Should_Not_Create_LoginAccount_BeforeOtpVerification()
+    {
+        var email = $"unverified-{Guid.NewGuid()}@example.com";
+        var response = await _client.PostAsJsonAsync("/api/auth/register", new RegisterRequest
+        {
+            FullName = "Unverified Student",
+            Email = email,
+            Password = "Password123",
+            ConfirmPassword = "Password123",
+            Role = "Student",
+            MajorCode = "BIT_SE"
+        });
+
+        response.StatusCode.Should().Be(HttpStatusCode.Accepted);
+        ExtractRefreshToken(response).Should().BeEmpty();
+
+        var loginResponse = await _client.PostAsJsonAsync(
+            "/api/auth/login",
+            new EmailPasswordLoginRequest { Email = email, Password = "Password123" });
+        loginResponse.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task VerifyOtp_Should_RejectWrongCode_ThenAcceptDeliveredCode()
+    {
+        FakeEmailService.LastRegistrationOtp = null;
+        var registerResponse = await _client.PostAsJsonAsync("/api/auth/register", new RegisterRequest
+        {
+            FullName = "Otp Attempt Student",
+            Email = $"otp-{Guid.NewGuid()}@example.com",
+            Password = "Password123",
+            ConfirmPassword = "Password123",
+            Role = "Student",
+            MajorCode = "BIT_SE"
+        });
+        var registerBody = await registerResponse.Content
+            .ReadFromJsonAsync<ApiResponse<RegisterResponse>>();
+        var registrationId = registerBody!.Data!.RegistrationId!.Value;
+        var deliveredOtp = FakeEmailService.LastRegistrationOtp!;
+        var wrongOtp = deliveredOtp == "000000" ? "000001" : "000000";
+
+        var wrongResponse = await _client.PostAsJsonAsync(
+            "/api/auth/register/verify-otp",
+            new VerifyRegistrationOtpRequest { RegistrationId = registrationId, Otp = wrongOtp });
+        wrongResponse.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        var wrongBody = await wrongResponse.Content.ReadFromJsonAsync<ApiResponse<object>>();
+        wrongBody!.Code.Should().Be("AUTH_VERIFICATION_CODE_INVALID");
+
+        var correctResponse = await _client.PostAsJsonAsync(
+            "/api/auth/register/verify-otp",
+            new VerifyRegistrationOtpRequest { RegistrationId = registrationId, Otp = deliveredOtp });
+        correctResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        ExtractRefreshToken(correctResponse).Should().NotBeEmpty();
+    }
+
+    [Fact]
+    public async Task RegisterAndVerify_Should_Create_PendingApproval_Lecturer_When_Valid()
     {
         // Arrange
         var email = $"lecturer-{Guid.NewGuid()}@example.com";
@@ -142,14 +222,12 @@ public class AuthIntegrationTests
         };
 
         // Act
-        var response = await _client.PostAsJsonAsync("/api/auth/register", request);
+        var (response, body) = await RegisterAndVerifyAsync(request);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
-        var body = await response.Content.ReadFromJsonAsync<ApiResponse<RegisterResponse>>();
-        body.Should().NotBeNull();
-        body!.Success.Should().BeTrue();
-        body.Data!.RequiresApproval.Should().BeTrue();
+        body.RequiresEmailVerification.Should().BeFalse();
+        body.RequiresApproval.Should().BeTrue();
     }
 
     [Fact]
@@ -166,7 +244,7 @@ public class AuthIntegrationTests
             Role = "Student",
             MajorCode = "BIT_SE"
         };
-        await _client.PostAsJsonAsync("/api/auth/register", registerRequest);
+        await RegisterAndVerifyAsync(registerRequest);
 
         var loginRequest = new EmailPasswordLoginRequest
         {
@@ -203,7 +281,7 @@ public class AuthIntegrationTests
             Role = "Student",
             MajorCode = "BIT_SE"
         };
-        await _client.PostAsJsonAsync("/api/auth/register", registerRequest);
+        await RegisterAndVerifyAsync(registerRequest);
 
         var loginRequest = new EmailPasswordLoginRequest
         {
@@ -235,7 +313,7 @@ public class AuthIntegrationTests
             Role = "Lecturer",
             MajorCode = null
         };
-        await _client.PostAsJsonAsync("/api/auth/register", registerRequest);
+        await RegisterAndVerifyAsync(registerRequest);
 
         var loginRequest = new EmailPasswordLoginRequest
         {
@@ -277,7 +355,7 @@ public class AuthIntegrationTests
             Role = "Student",
             MajorCode = "BIT_SE"
         };
-        await _client.PostAsJsonAsync("/api/auth/register", registerRequest);
+        await RegisterAndVerifyAsync(registerRequest);
 
         var loginRequest = new EmailPasswordLoginRequest
         {
@@ -316,7 +394,7 @@ public class AuthIntegrationTests
             Role = "Student",
             MajorCode = "BIT_SE"
         };
-        await _client.PostAsJsonAsync("/api/auth/register", registerRequest);
+        await RegisterAndVerifyAsync(registerRequest);
 
         var loginResponse = await _client.PostAsJsonAsync("/api/auth/login", new EmailPasswordLoginRequest { Email = email, Password = "Password123" });
         var firstRefreshToken = ExtractRefreshToken(loginResponse);
@@ -352,7 +430,7 @@ public class AuthIntegrationTests
             Role = "Student",
             MajorCode = "BIT_SE"
         };
-        await _client.PostAsJsonAsync("/api/auth/register", registerRequest);
+        await RegisterAndVerifyAsync(registerRequest);
 
         var loginResponse = await _client.PostAsJsonAsync("/api/auth/login", new EmailPasswordLoginRequest { Email = email, Password = "Password123" });
         var firstRefreshToken = ExtractRefreshToken(loginResponse);
@@ -389,7 +467,7 @@ public class AuthIntegrationTests
             Role = "Student",
             MajorCode = "BIT_SE"
         };
-        await _client.PostAsJsonAsync("/api/auth/register", registerRequest);
+        await RegisterAndVerifyAsync(registerRequest);
 
         var loginResponse = await _client.PostAsJsonAsync("/api/auth/login", new EmailPasswordLoginRequest { Email = email, Password = "Password123" });
         var refreshToken = ExtractRefreshToken(loginResponse);

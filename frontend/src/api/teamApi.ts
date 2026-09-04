@@ -6,6 +6,7 @@ export const teamApi = {
   // ─── Team CRUD ───────────────────────────────────────────────────────────
   getAll:      (params) => runClassFeatureRequest(classFeatureFlags.teamManagement, 'Class team management', () => axiosClient.get('/teams', { params })),
   getById:     (id, options: { signal?: AbortSignal } = {}) => runClassFeatureRequest(classFeatureFlags.teamManagement, 'Class team management', () => axiosClient.get(`/teams/${id}`, { signal: options.signal })),
+  deleteTeam: (id) => runClassFeatureRequest(classFeatureFlags.teamManagement, 'Class team management', () => axiosClient.delete(`/teams/${id}`)),
 
   // ─── Assignment ──────────────────────────────────────────────────────────
   getMentorAssignments: (teamId) => runClassFeatureRequest(classFeatureFlags.mentorAssignment, 'Class mentor assignment', () => axiosClient.get(`/teams/${teamId}/mentor-assignments`)),
@@ -17,7 +18,7 @@ export const teamApi = {
   updateProposal: (proposalId, data) => runClassFeatureRequest(classFeatureFlags.teamManagement, 'Class team management', () => axiosClient.put(`/team-proposals/${proposalId}`, data)),
   submitProposal: (proposalId, rowVersion) => runClassFeatureRequest(classFeatureFlags.teamManagement, 'Class team management', () => axiosClient.post(`/team-proposals/${proposalId}/submit`, { rowVersion })),
   cancelProposal: (proposalId, rowVersion, reason) => runClassFeatureRequest(classFeatureFlags.teamManagement, 'Class team management', () => axiosClient.post(`/team-proposals/${proposalId}/cancel`, { rowVersion, reason })),
-  reviewProposal: (proposalId, data) => runClassFeatureRequest(classFeatureFlags.teamManagement, 'Class team management', () => axiosClient.post(`/team-proposals/${proposalId}/review`, data)),
+  reviewProposal: (proposalId, data) => runClassFeatureRequest(classFeatureFlags.teamManagement, 'Class team management', () => axiosClient.put(`/teams/${proposalId}/review`, data)),
   getProposalHistory: (proposalId) => runClassFeatureRequest(classFeatureFlags.teamManagement, 'Class team management', () => axiosClient.get(`/team-proposals/${proposalId}/history`)),
 
   // ─── Member Management (Lecturer/Admin) ──────────────────────────────────

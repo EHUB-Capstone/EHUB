@@ -16,16 +16,37 @@ public static class HealthCheckExtensions
     {
         services
             .AddHealthChecks()
-            .AddCheck("self", () => HealthCheckResult.Healthy())
-            .AddDbContextCheck<AppDbContext>("postgresql");
+            .AddCheck(
+                "self",
+                () => HealthCheckResult.Healthy(),
+                tags: ["live"])
+            .AddDbContextCheck<AppDbContext>(
+                "postgresql",
+                tags: ["ready"]);
 
         return services;
     }
 
     public static IEndpointRouteBuilder MapApplicationHealthChecks(this IEndpointRouteBuilder endpoints)
     {
-        endpoints.MapHealthChecks("/health", new HealthCheckOptions
+        endpoints.MapHealthChecks("/health/live", CreateOptions(
+            registration => registration.Tags.Contains("live")));
+
+        endpoints.MapHealthChecks("/health/ready", CreateOptions(
+            _ => true));
+
+        // Backwards-compatible aggregate endpoint.
+        endpoints.MapHealthChecks("/health", CreateOptions(
+            _ => true));
+
+        return endpoints;
+    }
+
+    private static HealthCheckOptions CreateOptions(
+        Func<HealthCheckRegistration, bool> predicate) =>
+        new()
         {
+            Predicate = predicate,
             ResponseWriter = async (context, report) =>
             {
                 context.Response.ContentType = "application/json";
@@ -50,8 +71,5 @@ public static class HealthCheckExtensions
 
                 await context.Response.WriteAsync(JsonSerializer.Serialize(response));
             }
-        });
-
-        return endpoints;
-    }
+        };
 }

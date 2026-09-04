@@ -24,6 +24,30 @@ public class AdminApprovalIntegrationTests
         _client = factory.CreateClient();
     }
 
+    private async Task<RegisterResponse> RegisterAndVerifyAsync(RegisterRequest request)
+    {
+        FakeEmailService.LastRegistrationOtp = null;
+        FakeEmailService.LastRegistrationEmail = null;
+
+        var registerResponse = await _client.PostAsJsonAsync("/api/auth/register", request);
+        registerResponse.StatusCode.Should().Be(HttpStatusCode.Accepted);
+        var registerBody = await registerResponse.Content.ReadFromJsonAsync<ApiResponse<RegisterResponse>>();
+        registerBody!.Data!.RegistrationId.Should().NotBeNull();
+        FakeEmailService.LastRegistrationOtp.Should().MatchRegex("^[0-9]{6}$");
+
+        var verifyResponse = await _client.PostAsJsonAsync(
+            "/api/auth/register/verify-otp",
+            new VerifyRegistrationOtpRequest
+            {
+                RegistrationId = registerBody.Data.RegistrationId!.Value,
+                Otp = FakeEmailService.LastRegistrationOtp!
+            });
+        verifyResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        var verifyBody = await verifyResponse.Content.ReadFromJsonAsync<ApiResponse<RegisterResponse>>();
+        verifyBody!.Data.Should().NotBeNull();
+        return verifyBody.Data!;
+    }
+
     private async Task<string> GetAdminTokenAsync()
     {
         var loginRequest = new EmailPasswordLoginRequest
@@ -49,7 +73,7 @@ public class AdminApprovalIntegrationTests
             Role = "Student",
             MajorCode = "BIT_SE"
         };
-        await _client.PostAsJsonAsync("/api/auth/register", registerRequest);
+        await RegisterAndVerifyAsync(registerRequest);
 
         var loginRequest = new EmailPasswordLoginRequest
         {
@@ -122,9 +146,8 @@ public class AdminApprovalIntegrationTests
             Role = "Lecturer",
             MajorCode = null
         };
-        var registerResponse = await _client.PostAsJsonAsync("/api/auth/register", registerRequest);
-        var registerBody = await registerResponse.Content.ReadFromJsonAsync<ApiResponse<RegisterResponse>>();
-        var lecturerId = registerBody!.Data!.User!.Id;
+        var registerBody = await RegisterAndVerifyAsync(registerRequest);
+        var lecturerId = registerBody.User!.Id;
 
         // 2. Fetch pending list, verify Lecturer is in list
         var pendingRequest = new HttpRequestMessage(HttpMethod.Get, "/api/admin/users/pending-approval");
@@ -173,9 +196,8 @@ public class AdminApprovalIntegrationTests
             Role = "Mentor",
             MajorCode = null
         };
-        var registerResponse = await _client.PostAsJsonAsync("/api/auth/register", registerRequest);
-        var registerBody = await registerResponse.Content.ReadFromJsonAsync<ApiResponse<RegisterResponse>>();
-        var mentorId = registerBody!.Data!.User!.Id;
+        var registerBody = await RegisterAndVerifyAsync(registerRequest);
+        var mentorId = registerBody.User!.Id;
 
         // 2. Reject the mentor
         var rejectRequest = new HttpRequestMessage(HttpMethod.Post, $"/api/admin/users/{mentorId}/reject");

@@ -72,7 +72,7 @@ public class UnitOfWork : IUnitOfWork
             await transaction.CommitAsync(cancellationToken);
             return result;
         }
-        catch (Exception exception) when (ContainsSerializationFailure(exception))
+        catch (Exception exception) when (ContainsTransactionConflict(exception))
         {
             await transaction.RollbackAsync(cancellationToken);
             throw new SerializableTransactionConflictException(
@@ -86,12 +86,16 @@ public class UnitOfWork : IUnitOfWork
         }
     }
 
-    private static bool ContainsSerializationFailure(Exception exception)
+    private static bool ContainsTransactionConflict(Exception exception)
     {
         for (var current = exception; current != null; current = current.InnerException)
         {
+            if (current is DbUpdateConcurrencyException)
+                return true;
+
             if (current is PostgresException postgresException &&
-                postgresException.SqlState == PostgresErrorCodes.SerializationFailure)
+                (postgresException.SqlState == PostgresErrorCodes.SerializationFailure ||
+                 postgresException.SqlState == PostgresErrorCodes.DeadlockDetected))
                 return true;
         }
 

@@ -20,15 +20,61 @@ public sealed class SubjectListResponse
 
 public sealed class SemesterResponse
 {
+    public Guid Id { get; init; }
     public string Semester { get; init; } = string.Empty;
     public int Year { get; init; }
+    public string Status { get; init; } = string.Empty;
+    public DateOnly? StartDate { get; init; }
+    public DateOnly? EndDate { get; init; }
+    public DateTime? CompletedAtUtc { get; init; }
+    public string? CompletionReason { get; init; }
+    public string RowVersion { get; init; } = string.Empty;
 }
 
 public sealed class CurrentSemesterResponse
 {
-    public SemesterResponse CurrentSemester { get; init; } = new();
+    public SemesterResponse? CurrentSemester { get; init; }
     public IReadOnlyCollection<int> AvailableYears { get; init; } = Array.Empty<int>();
     public bool IsDecember { get; init; }
+}
+
+public sealed class SemesterListResponse
+{
+    public IReadOnlyCollection<SemesterResponse> Semesters { get; init; } = Array.Empty<SemesterResponse>();
+}
+
+public sealed class ClassCreationSemesterOptionResponse
+{
+    public Guid Id { get; init; }
+    public string Semester { get; init; } = string.Empty;
+    public int Year { get; init; }
+    public string Status { get; init; } = string.Empty;
+    public string Availability { get; init; } = string.Empty;
+    public DateOnly? StartDate { get; init; }
+    public DateOnly? EndDate { get; init; }
+}
+
+public sealed class ClassCreationSemesterOptionsResponse
+{
+    public IReadOnlyCollection<ClassCreationSemesterOptionResponse> Semesters { get; init; } =
+        Array.Empty<ClassCreationSemesterOptionResponse>();
+}
+
+public sealed class SemesterCompletionPreviewResponse
+{
+    public Guid SemesterId { get; init; }
+    public string Semester { get; init; } = string.Empty;
+    public int Year { get; init; }
+    public string Status { get; init; } = string.Empty;
+    public int DraftClassCount { get; init; }
+    public int ActiveClassCount { get; init; }
+    public int InactiveClassCount { get; init; }
+    public int CompletedClassCount { get; init; }
+    public int ArchivedClassCount { get; init; }
+    public int ActiveEnrollmentCount { get; init; }
+    public int ProcessingImportSessionCount { get; init; }
+    public IReadOnlyCollection<string> Blockers { get; init; } = Array.Empty<string>();
+    public string RowVersion { get; init; } = string.Empty;
 }
 
 public sealed class TeachingAssignmentResponse
@@ -43,13 +89,25 @@ public sealed class TeachingStaffResponse
 {
     [JsonPropertyName("_id")]
     public Guid Id { get; init; }
+    public Guid UserId { get; init; }
     public string Name { get; init; } = string.Empty;
     public string Email { get; init; } = string.Empty;
     public string? Avatar { get; init; }
     public string Role { get; init; } = string.Empty;
     public string Status { get; init; } = string.Empty;
+    public string UserStatus { get; init; } = string.Empty;
     public int ClassCount { get; init; }
     public IReadOnlyCollection<TeachingAssignmentResponse> Assignments { get; init; } = Array.Empty<TeachingAssignmentResponse>();
+    public string RowVersion { get; init; } = string.Empty;
+}
+
+public sealed class TeachingStaffCandidateResponse
+{
+    public Guid UserId { get; init; }
+    public string Name { get; init; } = string.Empty;
+    public string Email { get; init; } = string.Empty;
+    public string? Avatar { get; init; }
+    public string Role { get; init; } = string.Empty;
 }
 
 public sealed class TeachingStaffSummaryResponse
@@ -65,6 +123,12 @@ public sealed class TeachingStaffListResponse
 {
     public IReadOnlyCollection<TeachingStaffResponse> Staff { get; init; } = Array.Empty<TeachingStaffResponse>();
     public TeachingStaffSummaryResponse Summary { get; init; } = new();
+}
+
+public sealed class TeachingStaffCandidateListResponse
+{
+    public IReadOnlyCollection<TeachingStaffCandidateResponse> Candidates { get; init; } =
+        Array.Empty<TeachingStaffCandidateResponse>();
 }
 
 public sealed class RoadmapItemResponse

@@ -6,6 +6,7 @@ import type {
   GetClassesParams,
   GetClassRosterParams,
   ExportClassRosterParams,
+  AddStudentToClassPayload,
 } from '../types/classes';
 
 export const classApi = {
@@ -24,6 +25,11 @@ export const classApi = {
   restore: (id: string, data: { rowVersion: string; reason: string }) =>
     runClassFeatureRequest(classFeatureFlags.lifecycle, 'Class lifecycle management', () =>
       axiosClient.post(`/classes/${id}/restore`, data)),
+  getCompletionPreview: (id: string) => axiosClient.get(`/classes/${id}/completion-preview`),
+  complete: (id: string, data: { rowVersion: string; reason: string }) =>
+    axiosClient.post(`/classes/${id}/complete`, data),
+  reopen: (id: string, data: { rowVersion: string; reason: string }) =>
+    axiosClient.post(`/classes/${id}/reopen`, data),
   getAudit: (id: string, params: { page?: number; pageSize?: number } = {}) =>
     axiosClient.get(`/classes/${id}/audit`, { params }),
 
@@ -66,6 +72,8 @@ export const classApi = {
   updateStudentMajor: (classId, studentId, majorCode, reason) =>
     runClassFeatureRequest(classFeatureFlags.majorVerification, 'Class major verification', () =>
       axiosClient.put(`/classes/${classId}/students/${studentId}/major`, { majorCode, reason })),
+  synchronizeProfileMajors: (classId: string) =>
+    axiosClient.post(`/classes/${classId}/students/synchronize-profile-majors`),
   // Explicit, idempotent lock and unlock operations
   lockMajors: (classId) =>
     runClassFeatureRequest(classFeatureFlags.majorVerification, 'Class major verification', () =>
@@ -73,8 +81,12 @@ export const classApi = {
   unlockMajors: (classId) =>
     runClassFeatureRequest(classFeatureFlags.majorVerification, 'Class major verification', () =>
       axiosClient.delete(`/classes/${classId}/major-lock`)),
-  addStudent: (classId, data) =>
+  addStudent: (classId: string, data: AddStudentToClassPayload) =>
     axiosClient.post(`/classes/${classId}/students`, data),
+  assignStudents: (classId: string, data: { studentIds: string[] }) =>
+    axiosClient.post(`/classes/${classId}/students/assign`, data),
+  assignStudentsToTeam: (classId: string, teamId: string, data: { studentIds: string[] }) =>
+    axiosClient.post(`/classes/${classId}/teams/${teamId}/students/assign`, data),
   dropStudent: (classId, studentId) =>
     axiosClient.post(`/classes/${classId}/students/${studentId}/drop`),
   reEnrollStudent: (classId, studentId) =>
@@ -85,15 +97,17 @@ export const classApi = {
     axiosClient.get(`/classes/${classId}/teams`)),
   createTeam:  (classId, data) => runClassFeatureRequest(classFeatureFlags.teamManagement, 'Class team management', () =>
     axiosClient.post(`/classes/${classId}/teams`, data)),
+  generateTeam: (classId, data) => runClassFeatureRequest(classFeatureFlags.teamManagement, 'Class team management', () =>
+    axiosClient.post(`/classes/${classId}/teams/generate`, data)),
   getTeamProposals: (classId) => runClassFeatureRequest(classFeatureFlags.teamManagement, 'Class team management', () =>
     axiosClient.get(`/classes/${classId}/team-proposals`)),
   studentProposeTeam: (classId, payload) =>
     runClassFeatureRequest(classFeatureFlags.teamManagement, 'Class team management', () =>
-      axiosClient.post(`/classes/${classId}/team-proposals`, payload)),
+      axiosClient.post(`/classes/${classId}/teams/student-proposal`, payload)),
 
   // ─── Student/User side ───────────────────────────────────────────────────
-  getMyClasses: () => runClassFeatureRequest(classFeatureFlags.studentSelfService, 'Student class self-service', () =>
-    axiosClient.get('/classes/my-classes')),
+  getMyClasses: (scope: 'Current' | 'History' = 'Current') => runClassFeatureRequest(classFeatureFlags.studentSelfService, 'Student class self-service', () =>
+    axiosClient.get('/classes/my-classes', { params: { scope } })),
   getMyTeam: () => runClassFeatureRequest(classFeatureFlags.studentSelfService, 'Student class self-service', () =>
     axiosClient.get('/classes/my-team')),
   getMyClassDetail: (classId) => runClassFeatureRequest(classFeatureFlags.studentSelfService, 'Student class self-service', () =>

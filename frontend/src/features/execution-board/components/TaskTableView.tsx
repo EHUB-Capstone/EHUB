@@ -3,14 +3,7 @@ import { memo, useMemo } from 'react';
 import { Edit, Trash2 } from 'lucide-react';
 import { PRIORITY_CFG, STATUSES, STATUS_CFG } from '../constants';
 import { getTaskStatus } from '../boardUtils';
-
-const progressByStatus = {
-  TODO: 0,
-  IN_PROGRESS: 50,
-  REVIEW: 80,
-  COMPLETED: 100,
-  OVERDUE: 0,
-};
+import { taskProgress as getProgress } from '../../../utils/taskProgress';
 
 function Badge({ children, className = '' }) {
   return (
@@ -33,21 +26,6 @@ function getAssignee(task) {
   return task.assigneeStudentId?.fullName
     || task.assigneeStudentId?.rollNumber
     || 'Unassigned';
-}
-
-function getProgress(task) {
-  const checklist = Array.isArray(task.checklist) ? task.checklist : [];
-  if (checklist.length > 0) {
-    const done = checklist.filter((item) => item.isCompleted).length;
-    return Math.round((done / checklist.length) * 100);
-  }
-
-  const status = getTaskStatus(task);
-  if (status === 'OVERDUE' && task.status && task.status !== 'OVERDUE') {
-    return progressByStatus[task.status] ?? 0;
-  }
-
-  return progressByStatus[status] ?? Number(task.completionPercentage || 0);
 }
 
 function getDependency(task) {
@@ -105,6 +83,7 @@ function TaskTableView({ tasks, permissions, onEditTask, onDeleteTask, onStatusC
                   <td className="px-3 py-3">
                     <div className="line-clamp-2 font-semibold text-slate-900">{task.title || 'Untitled Task'}</div>
                     <div className="mt-1 text-xs text-slate-400">W{task.weekNumber || '—'}</div>
+                    <div className="text-xs text-slate-500">{task.taskType === 'COURSE_TEMPLATE' ? 'Course Roadmap · Read only' : task.taskType === 'CLASS_TASK' ? 'Class Requirements · Read only' : 'Team Task'}</div>
                   </td>
                   <td className="px-3 py-3 text-slate-600">
                     <div className="line-clamp-2">{task.description || '—'}</div>
@@ -113,7 +92,7 @@ function TaskTableView({ tasks, permissions, onEditTask, onDeleteTask, onStatusC
                   <td className="px-3 py-3 text-slate-600">{formatDate(task.startDate)}</td>
                   <td className="px-3 py-3 text-slate-600">{formatDate(task.dueDate)}</td>
                   <td className="px-3 py-3">
-                    {permissions.canUpdateStatus ? (
+                    {permissions.canUpdateTaskStatus(task) ? (
                       <label className="relative inline-flex items-center">
                         <span className="sr-only">Change status for {task.title}</span>
                         <select

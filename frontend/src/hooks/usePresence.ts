@@ -3,8 +3,7 @@
 import { useEffect, useRef, useContext } from 'react';
 import io from 'socket.io-client';
 import { AuthContext } from '../context/AuthContext';
-
-const SOCKET_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace(/\/api$/, '');
+import { runtimeConfig } from '../config/runtimeConfig';
 
 /**
  * Hook kết nối socket.io và emit 'user_online' khi user đã đăng nhập.
@@ -17,7 +16,7 @@ export function usePresence() {
 
   useEffect(() => {
     const userId = user?._id || user?.id;
-    if (!userId) {
+    if (!userId || !runtimeConfig.realtime.enabled) {
       // Nếu chưa login, disconnect socket cũ nếu có
       if (socketRef.current) {
         socketRef.current.disconnect();
@@ -27,7 +26,7 @@ export function usePresence() {
     }
 
     // Tạo socket connection
-    const socket = io(SOCKET_URL, {
+    const socket = io(runtimeConfig.realtime.origin, {
       withCredentials: true,
       transports: ['websocket', 'polling'],
     });

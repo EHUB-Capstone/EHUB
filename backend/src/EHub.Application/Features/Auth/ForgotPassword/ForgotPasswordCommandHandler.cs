@@ -105,6 +105,7 @@ public sealed class ForgotPasswordCommandHandler : IForgotPasswordCommandHandler
 
     private static bool CanUserRequestPasswordReset(User user)
     {
-        return user.Status is UserStatus.Active or UserStatus.PendingApproval;
+        return user.IsEmailVerified &&
+            (user.Status is UserStatus.Active or UserStatus.PendingApproval);
     }
 }

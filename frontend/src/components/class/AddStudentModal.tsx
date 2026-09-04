@@ -1,33 +1,59 @@
-import { useState } from 'react';
+import { useState, type FormEvent } from 'react';
 import toast from 'react-hot-toast';
-import { X, Loader2 } from 'lucide-react';
+import { Loader2, X } from 'lucide-react';
 import { classApi } from '../../api/classApi';
 import { PROGRAM_GROUPS } from '../../constants/majors';
+import {
+  buildAddStudentPayload,
+  validateAddStudentForm,
+  type AddStudentField,
+  type AddStudentFormErrors,
+  type AddStudentFormValues,
+} from '../../utils/addStudent';
 import { parseApiError } from '../../utils/apiError';
 
-export default function AddStudentModal({ classId, onClose, onAdded }) {
-  const [form, setForm] = useState({
+interface AddStudentModalProps {
+  classId: string;
+  onClose: () => void;
+  onAdded: () => void;
+}
+
+export default function AddStudentModal({ classId, onClose, onAdded }: AddStudentModalProps) {
+  const [form, setForm] = useState<AddStudentFormValues>({
     studentCode: '',
     fullName: '',
     email: '',
-    majorCode: ''
+    majorCode: '',
   });
+  const [errors, setErrors] = useState<AddStudentFormErrors>({});
   const [submitting, setSubmitting] = useState(false);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!form.studentCode || !form.fullName || !form.email || !form.majorCode) {
-      toast.error('Vui lòng điền mã SV, tên và email');
+  const updateField = (field: AddStudentField, value: string) => {
+    setForm(current => ({ ...current, [field]: value }));
+    setErrors(current => {
+      if (!current[field]) return current;
+      const next = { ...current };
+      delete next[field];
+      return next;
+    });
+  };
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const validationErrors = validateAddStudentForm(form);
+    if (Object.keys(validationErrors).length > 0) {
+      setErrors(validationErrors);
+      toast.error('Please correct the highlighted fields.');
       return;
     }
-    
+
     setSubmitting(true);
     try {
-      await classApi.addStudent(classId, form);
-      toast.success('Thêm sinh viên thành công');
+      await classApi.addStudent(classId, buildAddStudentPayload(form));
+      toast.success('Student added successfully.');
       onAdded();
-    } catch (err) {
-      toast.error(parseApiError(err, 'Thêm sinh viên thất bại').message);
+    } catch (error) {
+      toast.error(parseApiError(error, 'Failed to add the student.').message);
     } finally {
       setSubmitting(false);
     }
@@ -35,80 +61,98 @@ export default function AddStudentModal({ classId, onClose, onAdded }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl shadow-float w-full max-w-md animate-scale-in">
-        <div className="flex items-center justify-between p-6 border-b border-slate-100">
+      <button type="button" className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} aria-label="Close add student dialog" />
+      <div className="relative w-full max-w-md rounded-2xl bg-white shadow-float animate-scale-in" role="dialog" aria-modal="true" aria-labelledby="add-student-title">
+        <div className="flex items-center justify-between border-b border-slate-100 p-6">
           <div>
-            <h2 className="text-xl font-bold text-slate-900">Thêm Sinh viên</h2>
-            <p className="text-sm text-slate-400 mt-0.5">Thêm thủ công 1 sinh viên vào lớp</p>
+            <h2 id="add-student-title" className="text-xl font-bold text-slate-900">Add Student</h2>
+            <p className="mt-0.5 text-sm text-slate-400">Manually enroll one student in this class</p>
           </div>
-          <button onClick={onClose} className="p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-all">
-            <X className="w-5 h-5" />
+          <button type="button" onClick={onClose} className="rounded-xl p-2 text-slate-400 transition-all hover:bg-slate-100 hover:text-slate-600" aria-label="Close">
+            <X className="h-5 w-5" />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4 p-6" noValidate>
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Mã SV *</label>
+            <label htmlFor="add-student-code" className="mb-1 block text-sm font-medium text-slate-700">Student code *</label>
             <input
+              id="add-student-code"
               type="text"
               value={form.studentCode}
-              onChange={(e) => setForm({ ...form, studentCode: e.target.value.toUpperCase() })}
-              placeholder="VD: SE123456"
-              className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary uppercase"
-              required
+              onChange={event => updateField('studentCode', event.target.value.toUpperCase())}
+              placeholder="Example: SE123456"
+              maxLength={20}
+              aria-invalid={Boolean(errors.studentCode)}
+              className={`w-full rounded-xl border px-3 py-2 text-sm uppercase outline-none focus:ring-2 focus:ring-primary/20 ${errors.studentCode ? 'border-red-300 bg-red-50 focus:border-red-400' : 'border-slate-200 focus:border-primary'}`}
             />
+            {errors.studentCode && <p className="mt-1 text-xs text-red-600">{errors.studentCode}</p>}
           </div>
+
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Họ và tên *</label>
+            <label htmlFor="add-student-name" className="mb-1 block text-sm font-medium text-slate-700">Full name *</label>
             <input
+              id="add-student-name"
               type="text"
               value={form.fullName}
-              onChange={(e) => setForm({ ...form, fullName: e.target.value })}
-              placeholder="VD: Nguyễn Văn A"
-              className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-              required
+              onChange={event => updateField('fullName', event.target.value)}
+              placeholder="Example: Nguyen Van A"
+              maxLength={150}
+              aria-invalid={Boolean(errors.fullName)}
+              className={`w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/20 ${errors.fullName ? 'border-red-300 bg-red-50 focus:border-red-400' : 'border-slate-200 focus:border-primary'}`}
             />
+            {errors.fullName && <p className="mt-1 text-xs text-red-600">{errors.fullName}</p>}
           </div>
+
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Email *</label>
+            <label htmlFor="add-student-email" className="mb-1 block text-sm font-medium text-slate-700">Email *</label>
             <input
+              id="add-student-email"
               type="email"
               value={form.email}
-              onChange={(e) => setForm({ ...form, email: e.target.value })}
-              placeholder="VD: anvse123456@fpt.edu.vn"
-              className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-              required
+              onChange={event => updateField('email', event.target.value)}
+              placeholder="Example: anvse123456@fpt.edu.vn"
+              maxLength={150}
+              aria-invalid={Boolean(errors.email)}
+              className={`w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/20 ${errors.email ? 'border-red-300 bg-red-50 focus:border-red-400' : 'border-slate-200 focus:border-primary'}`}
             />
+            {errors.email && <p className="mt-1 text-xs text-red-600">{errors.email}</p>}
           </div>
+
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Chuyên ngành</label>
+            <label htmlFor="add-student-major" className="mb-1 block text-sm font-medium text-slate-700">
+              Major <span className="font-normal text-slate-400">(optional for registered students)</span>
+            </label>
             <select
+              id="add-student-major"
               value={form.majorCode}
-              onChange={(e) => setForm({ ...form, majorCode: e.target.value })}
-              className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none bg-white focus:ring-2 focus:ring-primary/20 focus:border-primary"
+              onChange={event => updateField('majorCode', event.target.value)}
+              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
             >
-              <option value="">-- Chưa chọn --</option>
+              <option value="">Use the student's registered major</option>
               {PROGRAM_GROUPS.map(group => (
                 <optgroup key={group.code} label={`${group.code} - ${group.name}`}>
-                  {group.majors.map(m => (
-                    <option key={m.code} value={m.code}>{m.code} - {m.name}</option>
+                  {group.majors.map(major => (
+                    <option key={major.code} value={major.code}>{major.code} - {major.name}</option>
                   ))}
                 </optgroup>
               ))}
             </select>
+            <p className="mt-1.5 text-xs leading-relaxed text-slate-400">
+              Leave this blank to use an existing student's registered major. A major is required for a new profile, and a selected major must match an existing profile.
+            </p>
           </div>
 
-          <div className="flex gap-3 pt-4 border-t border-slate-100">
-            <button type="button" onClick={onClose} className="flex-1 px-4 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-600 hover:bg-slate-50 transition-all">
-              Hủy
+          <div className="flex gap-3 border-t border-slate-100 pt-4">
+            <button type="button" onClick={onClose} className="flex-1 rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-600 transition-all hover:bg-slate-50">
+              Cancel
             </button>
             <button
               type="submit"
               disabled={submitting}
-              className="flex-1 px-4 py-2.5 bg-primary text-white rounded-xl text-sm font-medium hover:bg-primary-700 disabled:opacity-50 transition-all flex items-center justify-center gap-2"
+              className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-medium text-white transition-all hover:bg-primary-700 disabled:opacity-50"
             >
-              {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Thêm sinh viên'}
+              {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Add student'}
             </button>
           </div>
         </form>

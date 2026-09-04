@@ -1,25 +1,58 @@
-// @ts-nocheck
-// src/api/subjectApi.js
 import axiosClient from './axiosClient';
+import type {
+  PlanSemesterPayload,
+  SemesterCode,
+  SemesterLifecyclePayload,
+  SubjectStatus,
+  UpdateSemesterDatesPayload,
+} from '../types/subjects';
+
+interface GetSubjectsParams {
+  search?: string;
+  status?: SubjectStatus;
+}
+
+interface SaveSubjectPayload {
+  subjectCode?: string;
+  subjectName: string;
+  status: SubjectStatus;
+}
 
 export const subjectApi = {
-  getAll: (params) => axiosClient.get('/subjects', { params }),
+  getAll: (params: GetSubjectsParams = {}) => axiosClient.get('/subjects', { params }),
   getActive: () => axiosClient.get('/subjects/active'),
-  create: (data) => axiosClient.post('/subjects', data),
-  update: (id, data) => axiosClient.put(`/subjects/${id}`, data),
-  delete: (id) => axiosClient.delete(`/subjects/${id}`),
+  create: (data: SaveSubjectPayload) => axiosClient.post('/subjects', data),
+  update: (id: string, data: SaveSubjectPayload) => axiosClient.put(`/subjects/${id}`, data),
+  delete: (id: string) => axiosClient.delete(`/subjects/${id}`),
   getCurrentSemester: () => axiosClient.get('/subjects/current-semester'),
-  updateCurrentSemester: (semester, year) => axiosClient.post('/subjects/current-semester', { semester, year }),
-  getTeachingStaff: (params) => axiosClient.get('/subjects/teaching-staff', { params }),
-  getCurriculum: (subjectCode) => axiosClient.get(`/subjects/${subjectCode}/curriculum`),
-  synchronizeCheckpoints: (subjectCode, data) => axiosClient.put(`/subjects/${subjectCode}/checkpoints`, data),
-  createRoadmapItem: (subjectCode, data) => axiosClient.post(`/subjects/${subjectCode}/roadmap`, data),
-  updateRoadmapItem: (subjectCode, id, data) => axiosClient.put(`/subjects/${subjectCode}/roadmap/${id}`, data),
-  deleteRoadmapItem: (subjectCode, id) => axiosClient.delete(`/subjects/${subjectCode}/roadmap/${id}`),
-  createRubric: (subjectCode, data) => axiosClient.post(`/subjects/${subjectCode}/rubrics`, data),
-  updateRubric: (subjectCode, id, data) => axiosClient.put(`/subjects/${subjectCode}/rubrics/${id}`, data),
-  deleteRubric: (subjectCode, id) => axiosClient.delete(`/subjects/${subjectCode}/rubrics/${id}`),
-  createCriterion: (subjectCode, rubricId, data) => axiosClient.post(`/subjects/${subjectCode}/rubrics/${rubricId}/criteria`, data),
-  updateCriterion: (subjectCode, rubricId, id, data) => axiosClient.put(`/subjects/${subjectCode}/rubrics/${rubricId}/criteria/${id}`, data),
-  deleteCriterion: (subjectCode, rubricId, id) => axiosClient.delete(`/subjects/${subjectCode}/rubrics/${rubricId}/criteria/${id}`),
+  getSemesters: () => axiosClient.get('/subjects/semesters'),
+  getClassCreationSemesterOptions: () => axiosClient.get('/subjects/semesters/class-creation-options'),
+  planSemester: (data: PlanSemesterPayload) => axiosClient.post('/subjects/semesters', data),
+  updateSemesterDates: (id: string, data: UpdateSemesterDatesPayload) =>
+    axiosClient.put(`/subjects/semesters/${id}/dates`, data),
+  updateCurrentSemester: (semester: SemesterCode, year: number) =>
+    axiosClient.post('/subjects/current-semester', { semester, year }),
+  getSemesterCompletionPreview: (id: string) => axiosClient.get(`/subjects/semesters/${id}/completion-preview`),
+  completeSemester: (id: string, data: SemesterLifecyclePayload) =>
+    axiosClient.post(`/subjects/semesters/${id}/complete`, data),
+  reopenSemester: (id: string, data: SemesterLifecyclePayload) =>
+    axiosClient.post(`/subjects/semesters/${id}/reopen`, data),
+  getTeachingStaff: (params: { semester: SemesterCode; year: number }) =>
+    axiosClient.get('/subjects/teaching-staff', { params }),
+  getTeachingStaffCandidates: () => axiosClient.get('/subjects/teaching-staff/candidates'),
+  addTeachingStaff: (data: { semester: SemesterCode; year: number; userId: string; role: 'LECTURER' | 'MENTOR' }) =>
+    axiosClient.post('/subjects/teaching-staff', data),
+  updateTeachingStaff: (id: string, data: { status: 'Active' | 'Inactive'; rowVersion: string }) =>
+    axiosClient.put(`/subjects/teaching-staff/${id}`, data),
+  getCurriculum: (subjectCode: string) => axiosClient.get(`/subjects/${subjectCode}/curriculum`),
+  synchronizeCheckpoints: (subjectCode: string, data: unknown) => axiosClient.put(`/subjects/${subjectCode}/checkpoints`, data),
+  createRoadmapItem: (subjectCode: string, data: unknown) => axiosClient.post(`/subjects/${subjectCode}/roadmap`, data),
+  updateRoadmapItem: (subjectCode: string, id: string, data: unknown) => axiosClient.put(`/subjects/${subjectCode}/roadmap/${id}`, data),
+  deleteRoadmapItem: (subjectCode: string, id: string) => axiosClient.delete(`/subjects/${subjectCode}/roadmap/${id}`),
+  createRubric: (subjectCode: string, data: unknown) => axiosClient.post(`/subjects/${subjectCode}/rubrics`, data),
+  updateRubric: (subjectCode: string, id: string, data: unknown) => axiosClient.put(`/subjects/${subjectCode}/rubrics/${id}`, data),
+  deleteRubric: (subjectCode: string, id: string) => axiosClient.delete(`/subjects/${subjectCode}/rubrics/${id}`),
+  createCriterion: (subjectCode: string, rubricId: string, data: unknown) => axiosClient.post(`/subjects/${subjectCode}/rubrics/${rubricId}/criteria`, data),
+  updateCriterion: (subjectCode: string, rubricId: string, id: string, data: unknown) => axiosClient.put(`/subjects/${subjectCode}/rubrics/${rubricId}/criteria/${id}`, data),
+  deleteCriterion: (subjectCode: string, rubricId: string, id: string) => axiosClient.delete(`/subjects/${subjectCode}/rubrics/${rubricId}/criteria/${id}`),
 };

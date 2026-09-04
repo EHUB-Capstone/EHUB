@@ -33,7 +33,7 @@ public sealed class CreateBulkClassesCommandHandler : ICreateBulkClassesCommandH
         string currentUserRole,
         CancellationToken cancellationToken = default)
     {
-        var validation = await ValidateCommonAsync(request, currentUserId, currentUserRole, cancellationToken);
+        var validation = await ValidateCommonAsync(request, currentUserRole, cancellationToken);
         if (validation.IsFailure)
         {
             return Result.Failure<BulkClassPreviewResponse>(validation.Error);
@@ -48,7 +48,7 @@ public sealed class CreateBulkClassesCommandHandler : ICreateBulkClassesCommandH
         string currentUserRole,
         CancellationToken cancellationToken = default)
     {
-        var validation = await ValidateCommonAsync(request, currentUserId, currentUserRole, cancellationToken);
+        var validation = await ValidateCommonAsync(request, currentUserRole, cancellationToken);
         if (validation.IsFailure)
         {
             return Result.Failure<IReadOnlyCollection<ClassResponse>>(validation.Error);
@@ -62,13 +62,27 @@ public sealed class CreateBulkClassesCommandHandler : ICreateBulkClassesCommandH
                 new Error(ErrorCodes.ClassBulkCreateInvalid, $"Batch creation failed: {firstError}"));
         }
 
-        var (course, semester, lecturer, targetIndices) = validation.Value;
+        var (course, semester, lecturersByClassIndex, targetIndices) = validation.Value;
+
+        var existingSlugs = await _context.Classes
+            .AsNoTracking()
+            .Select(@class => @class.Slug)
+            .ToListAsync(cancellationToken);
+        var reservedSlugs = existingSlugs.ToHashSet(StringComparer.OrdinalIgnoreCase);
+
         var createdClasses = new List<Class>(targetIndices.Count);
         foreach (var classIndex in targetIndices)
         {
+            lecturersByClassIndex.TryGetValue(classIndex, out var lecturer);
+
+            var slugBase = ClassSlugRules.BuildBaseSlug(semester.Code, course.Code, classIndex);
+            var slug = ClassSlugRules.MakeUnique(slugBase, reservedSlugs);
+            reservedSlugs.Add(slug);
+
             var newClass = new Class
             {
                 ClassCode = BuildClassCode(course.Code, classIndex),
+                Slug = slug,
                 ClassIndex = classIndex,
                 SemesterId = semester.Id,
                 CourseId = course.Id,
@@ -127,35 +141,40 @@ public sealed class CreateBulkClassesCommandHandler : ICreateBulkClassesCommandH
                 new Error(ErrorCodes.ClassBulkCreateInvalid, "The batch conflicted with another class creation. Preview again and retry."));
         }
 
-        var responses = createdClasses.Select(newClass => new ClassResponse
+        var responses = createdClasses.Select(newClass =>
         {
-            Id = newClass.Id,
-            ClassCode = newClass.ClassCode,
-            ClassIndex = newClass.ClassIndex,
-            CourseId = newClass.CourseId,
-            SubjectCode = course.Code,
-            SubjectName = course.Name,
-            SemesterId = newClass.SemesterId,
-            SemesterCode = semester.Code,
-            Year = semester.Year,
-            PrimaryLecturerId = lecturer?.Id,
-            PrimaryLecturerName = lecturer?.FullName,
-            PrimaryLecturerEmail = lecturer?.Email,
-            Status = newClass.Status.ToString(),
-            StudentCount = 0,
-            TeamCount = 0,
-            CreatedAtUtc = newClass.CreatedAt,
-            RowVersion = newClass.Version.ToString()
+            lecturersByClassIndex.TryGetValue(newClass.ClassIndex, out var lecturer);
+            return new ClassResponse
+            {
+                Id = newClass.Id,
+                Slug = newClass.Slug,
+                ClassCode = newClass.ClassCode,
+                ClassIndex = newClass.ClassIndex,
+                CourseId = newClass.CourseId,
+                SubjectCode = course.Code,
+                SubjectName = course.Name,
+                SemesterId = newClass.SemesterId,
+                SemesterCode = semester.Code,
+                Year = semester.Year,
+                PrimaryLecturerId = lecturer?.Id,
+                PrimaryLecturerName = lecturer?.FullName,
+                PrimaryLecturerEmail = lecturer?.Email,
+                Status = newClass.Status.ToString(),
+                StudentCount = 0,
+                TeamCount = 0,
+                CreatedAtUtc = newClass.CreatedAt,
+                RowVersion = newClass.Version.ToString()
+            };
         }).ToArray();
 
         return Result.Success<IReadOnlyCollection<ClassResponse>>(responses);
     }
 
     private async Task<BulkClassPreviewResponse> BuildPreviewAsync(
-        (Course Course, Semester Semester, User? Lecturer, List<int> TargetIndices) input,
+        (Course Course, Semester Semester, IReadOnlyDictionary<int, User> LecturersByClassIndex, List<int> TargetIndices) input,
         CancellationToken cancellationToken)
     {
-        var (course, semester, lecturer, targetIndices) = input;
+        var (course, semester, lecturersByClassIndex, targetIndices) = input;
         var existingCodes = await _context.Classes
             .AsNoTracking()
             .Where(@class => @class.SemesterId == semester.Id)
@@ -171,6 +190,7 @@ public sealed class CreateBulkClassesCommandHandler : ICreateBulkClassesCommandH
         var indexSet = existingIndices.ToHashSet();
         var items = targetIndices.Select(classIndex =>
         {
+            lecturersByClassIndex.TryGetValue(classIndex, out var lecturer);
             var classCode = BuildClassCode(course.Code, classIndex);
             var error = codeSet.Contains(classCode)
                 ? $"Class code '{classCode}' already exists in this semester."
@@ -184,6 +204,7 @@ public sealed class CreateBulkClassesCommandHandler : ICreateBulkClassesCommandH
                 ClassIndex = classIndex,
                 SubjectCode = course.Code,
                 SemesterCode = semester.Code,
+                PrimaryLecturerId = lecturer?.Id,
                 PrimaryLecturerName = lecturer?.FullName,
                 IsValid = error == null,
                 ErrorMessage = error
@@ -199,23 +220,20 @@ public sealed class CreateBulkClassesCommandHandler : ICreateBulkClassesCommandH
         };
     }
 
-    private async Task<Result<(Course Course, Semester Semester, User? Lecturer, List<int> TargetIndices)>> ValidateCommonAsync(
+    private async Task<Result<(Course Course, Semester Semester, IReadOnlyDictionary<int, User> LecturersByClassIndex, List<int> TargetIndices)>> ValidateCommonAsync(
         CreateBulkClassesRequest request,
-        Guid currentUserId,
         string currentUserRole,
         CancellationToken cancellationToken)
     {
-        var isAdmin = string.Equals(currentUserRole, SystemRoles.Admin, StringComparison.OrdinalIgnoreCase);
-        var isLecturer = string.Equals(currentUserRole, SystemRoles.Lecturer, StringComparison.OrdinalIgnoreCase);
-        if (!isAdmin && !isLecturer)
+        if (!ClassAuthorizationRules.IsAdmin(currentUserRole))
         {
-            return Failure(ErrorCodes.ClassAccessDenied, "You do not have permission to bulk create classes.");
+            return Failure(ErrorCodes.ClassAccessDenied, "Only an administrator can create classes.");
         }
 
         var targetIndicesResult = BuildTargetIndices(request);
         if (targetIndicesResult.IsFailure)
         {
-            return Result.Failure<(Course, Semester, User?, List<int>)>(targetIndicesResult.Error);
+            return Result.Failure<(Course, Semester, IReadOnlyDictionary<int, User>, List<int>)>(targetIndicesResult.Error);
         }
 
         Course? course = null;
@@ -245,7 +263,7 @@ public sealed class CreateBulkClassesCommandHandler : ICreateBulkClassesCommandH
         var semesterResult = await ResolveSemesterAsync(request, cancellationToken);
         if (semesterResult.IsFailure)
         {
-            return Result.Failure<(Course, Semester, User?, List<int>)>(semesterResult.Error);
+            return Result.Failure<(Course, Semester, IReadOnlyDictionary<int, User>, List<int>)>(semesterResult.Error);
         }
 
         var semester = semesterResult.Value;
@@ -256,32 +274,152 @@ public sealed class CreateBulkClassesCommandHandler : ICreateBulkClassesCommandH
         {
             return Failure(ErrorCodes.ClassValidationError, "semesterId, semester, and year must identify the same academic term.");
         }
-        if (semester.Status is SemesterStatus.Completed or SemesterStatus.Archived ||
-            (isLecturer && semester.Status != SemesterStatus.Active))
+        var creationSemesters = await _context.Semesters.AsNoTracking()
+            .Where(item => item.Status == SemesterStatus.Active || item.Status == SemesterStatus.Planned)
+            .ToListAsync(cancellationToken);
+        var allowedSemesterIds = ClassCreationSemesterPolicy.SelectAvailable(
+                creationSemesters,
+                DateOnly.FromDateTime(DateTime.UtcNow))
+            .Select(item => item.Id)
+            .ToHashSet();
+        if (!allowedSemesterIds.Contains(semester.Id))
         {
-            return Failure(ErrorCodes.ClassValidationError, "Classes can only be created in an academic term that is open for creation.");
+            return Failure(
+                ErrorCodes.ClassValidationError,
+                "Classes can only be created in the current active semester or its immediate planned successor.");
         }
 
-        User? lecturer = null;
-        var lecturerId = isLecturer ? currentUserId : request.PrimaryLecturerId;
-        if (lecturerId.HasValue && lecturerId.Value != Guid.Empty)
+        var assignmentsResult = await ResolveLecturerAssignmentsAsync(
+            request,
+            semester.Id,
+            targetIndicesResult.Value,
+            cancellationToken);
+        if (assignmentsResult.IsFailure)
         {
-            lecturer = await _context.Users
-                .AsNoTracking()
-                .Include(user => user.UserRoles)
-                .ThenInclude(userRole => userRole.Role)
-                .FirstOrDefaultAsync(user => user.Id == lecturerId.Value, cancellationToken);
+            return Result.Failure<(Course, Semester, IReadOnlyDictionary<int, User>, List<int>)>(
+                assignmentsResult.Error);
+        }
 
-            if (lecturer == null || lecturer.Status != UserStatus.Active ||
-                !lecturer.UserRoles.Any(userRole =>
-                    string.Equals(userRole.Role.Name, SystemRoles.Lecturer, StringComparison.OrdinalIgnoreCase)))
+        return Result.Success((course, semester, assignmentsResult.Value, targetIndicesResult.Value));
+    }
+
+    private async Task<Result<IReadOnlyDictionary<int, User>>> ResolveLecturerAssignmentsAsync(
+        CreateBulkClassesRequest request,
+        Guid semesterId,
+        IReadOnlyCollection<int> targetIndices,
+        CancellationToken cancellationToken)
+    {
+        var hasLegacyAssignment = request.PrimaryLecturerId.HasValue && request.PrimaryLecturerId.Value != Guid.Empty;
+        var explicitAssignments = request.LecturerAssignments?.ToArray() ?? Array.Empty<BulkClassLecturerAssignmentRequest>();
+        if (explicitAssignments.Any(item => item is null))
+        {
+            return AssignmentFailure("Lecturer assignments must not contain null items.");
+        }
+        if (hasLegacyAssignment && explicitAssignments.Length > 0)
+        {
+            return Result.Failure<IReadOnlyDictionary<int, User>>(new Error(
+                ErrorCodes.ClassValidationError,
+                "Use either primaryLecturerId or lecturerAssignments, not both."));
+        }
+
+        Dictionary<Guid, int[]> requestedAssignments;
+        if (hasLegacyAssignment)
+        {
+            requestedAssignments = new Dictionary<Guid, int[]>
             {
-                return Failure(ErrorCodes.ClassInvalidLecturer, "The lecturer does not exist, is inactive, or does not have LECTURER role.");
+                [request.PrimaryLecturerId!.Value] = targetIndices.ToArray()
+            };
+        }
+        else if (explicitAssignments.Length > 0)
+        {
+            if (explicitAssignments.Any(item => item.LecturerId == Guid.Empty))
+            {
+                return AssignmentFailure("Each lecturer assignment must contain a valid lecturerId.");
+            }
+            if (explicitAssignments.Select(item => item.LecturerId).Distinct().Count() != explicitAssignments.Length)
+            {
+                return AssignmentFailure("Each lecturer may appear only once in lecturerAssignments.");
+            }
+            if (explicitAssignments.Any(item => item.ClassIndices is null || item.ClassIndices.Count == 0))
+            {
+                return AssignmentFailure("Each lecturer assignment must contain at least one class index.");
+            }
+
+            var targetSet = targetIndices.ToHashSet();
+            var assignedIndices = explicitAssignments.SelectMany(item => item.ClassIndices).ToArray();
+            if (assignedIndices.Any(index => !targetSet.Contains(index)))
+            {
+                return AssignmentFailure("Lecturer assignments may only reference class indices in this batch.");
+            }
+            if (assignedIndices.Distinct().Count() != assignedIndices.Length)
+            {
+                return AssignmentFailure("A class index cannot be assigned to more than one lecturer.");
+            }
+            if (assignedIndices.Length != targetSet.Count || !targetSet.SetEquals(assignedIndices))
+            {
+                return AssignmentFailure("Assign every generated class to exactly one lecturer, or create the entire batch unassigned.");
+            }
+
+            requestedAssignments = explicitAssignments.ToDictionary(
+                item => item.LecturerId,
+                item => item.ClassIndices.Distinct().ToArray());
+        }
+        else
+        {
+            return Result.Success<IReadOnlyDictionary<int, User>>(new Dictionary<int, User>());
+        }
+
+        var lecturerIds = requestedAssignments.Keys.ToArray();
+        var lecturers = await _context.Users
+            .AsNoTracking()
+            .Include(user => user.UserRoles)
+            .ThenInclude(userRole => userRole.Role)
+            .Where(user => lecturerIds.Contains(user.Id))
+            .ToListAsync(cancellationToken);
+        var validLecturers = lecturers
+            .Where(user => user.Status == UserStatus.Active && user.UserRoles.Any(userRole =>
+                string.Equals(userRole.Role.Name, SystemRoles.Lecturer, StringComparison.OrdinalIgnoreCase)))
+            .ToDictionary(user => user.Id);
+
+        if (validLecturers.Count != lecturerIds.Length)
+        {
+            return Result.Failure<IReadOnlyDictionary<int, User>>(new Error(
+                ErrorCodes.ClassInvalidLecturer,
+                "One or more lecturers do not exist, are inactive, or do not have LECTURER role."));
+        }
+
+
+        var listedLecturerIds = await _context.SemesterStaffAssignments
+            .AsNoTracking()
+            .Where(item =>
+                item.SemesterId == semesterId &&
+                lecturerIds.Contains(item.UserId) &&
+                item.Role == SemesterStaffRole.Lecturer &&
+                item.Status == SemesterStaffStatus.Active)
+            .Select(item => item.UserId)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+        if (listedLecturerIds.Count != lecturerIds.Length)
+        {
+            return Result.Failure<IReadOnlyDictionary<int, User>>(new Error(
+                ErrorCodes.ClassInvalidLecturer,
+                "One or more lecturers are not active in this semester's teaching staff list."));
+        }
+
+        var byClassIndex = new Dictionary<int, User>();
+        foreach (var (lecturerId, classIndices) in requestedAssignments)
+        {
+            foreach (var classIndex in classIndices)
+            {
+                byClassIndex[classIndex] = validLecturers[lecturerId];
             }
         }
 
-        return Result.Success((course, semester, lecturer, targetIndicesResult.Value));
+        return Result.Success<IReadOnlyDictionary<int, User>>(byClassIndex);
     }
+
+    private static Result<IReadOnlyDictionary<int, User>> AssignmentFailure(string message) =>
+        Result.Failure<IReadOnlyDictionary<int, User>>(new Error(ErrorCodes.ClassValidationError, message));
 
     private static Result<List<int>> BuildTargetIndices(CreateBulkClassesRequest request)
     {
@@ -371,6 +509,6 @@ public sealed class CreateBulkClassesCommandHandler : ICreateBulkClassesCommandH
         return value.Trim().ToUpperInvariant() is "SP" or "SPRING" or "SU" or "SUMMER" or "FA" or "FALL";
     }
 
-    private static Result<(Course, Semester, User?, List<int>)> Failure(string code, string message) =>
-        Result.Failure<(Course, Semester, User?, List<int>)>(new Error(code, message));
+    private static Result<(Course, Semester, IReadOnlyDictionary<int, User>, List<int>)> Failure(string code, string message) =>
+        Result.Failure<(Course, Semester, IReadOnlyDictionary<int, User>, List<int>)>(new Error(code, message));
 }

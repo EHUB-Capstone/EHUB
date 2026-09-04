@@ -32,7 +32,7 @@ const teams: ManagedTeam[] = [
   },
 ];
 
-test('assigns selected students to a class and clears a team from the previous class', () => {
+test('prepares a selected student for class assignment', () => {
   const draft: StudentAssignmentDraft = {
     mode: 'CLASS',
     classId: 'class-1',

@@ -119,33 +119,36 @@ export default function ExecutionBoard() {
   const mutations = useTaskMutations({
     boardKey,
     teamId,
+    courseCode: workspaceContextQuery.data?.selectedWorkspace?.courseCode,
+    classId: workspaceContextQuery.data?.selectedWorkspace?.classId,
     filters: queryFilters,
     onCloseModal: closeModal,
   });
 
   const isTeamMemberContext = Boolean(teamId) && (role === 'STUDENT' || role === 'USER');
   const accessMode = workspaceContextQuery.data?.accessMode || workspaceContextQuery.data?.selectedWorkspace?.accessMode || null;
-  const isReadOnly = accessMode === 'READ_ONLY';
+  const isReadOnly = !workspaceContextQuery.isSuccess || accessMode !== 'READ_WRITE' || role === 'MENTOR';
   const canCreateTeamTask = !isReadOnly && (isPrivileged || isTeamMemberContext);
   const canUpdateStatus = !isReadOnly && (isPrivileged || isTeamMemberContext);
 
   const permissions = useMemo(() => ({
     canUpdateStatus,
+    canUpdateTaskStatus: (task) => canUpdateStatus && task?.taskType === 'TEAM_TASK',
     canEditTask: (task) => {
-      if (isReadOnly) return false;
+      if (isReadOnly || task?.taskType !== 'TEAM_TASK') return false;
       if (isPrivileged) return true;
       if (!isTeamMemberContext) return false;
       const createdById = String(task?.createdBy?._id || task?.createdBy || '');
-      return createdById === String(user?._id || '');
+      return createdById === String(user?.id || user?._id || '');
     },
     canDeleteTask: (task) => {
-      if (isReadOnly) return false;
+      if (isReadOnly || task?.taskType !== 'TEAM_TASK') return false;
       if (isPrivileged) return true;
       if (!isTeamMemberContext) return false;
       const createdById = String(task?.createdBy?._id || task?.createdBy || '');
-      return createdById === String(user?._id || '');
+      return createdById === String(user?.id || user?._id || '');
     },
-  }), [canUpdateStatus, isPrivileged, isReadOnly, isTeamMemberContext, user?._id]);
+  }), [canUpdateStatus, isPrivileged, isReadOnly, isTeamMemberContext, user?.id, user?._id]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -188,15 +191,15 @@ export default function ExecutionBoard() {
   }, [editingTask, isReadOnly, mutations.saveTask]);
 
   const handleStatusChange = useCallback((taskId, status) => {
-    if (isReadOnly) return;
+    if (!permissions.canUpdateTaskStatus(taskById.get(taskId))) return;
     mutations.changeStatus.mutate({ taskId, status });
-  }, [isReadOnly, mutations.changeStatus]);
+  }, [permissions, taskById, mutations.changeStatus]);
 
   const handleSwipeStatusChange = useCallback((taskId, status) => {
-    if (isReadOnly) return;
+    if (!permissions.canUpdateTaskStatus(taskById.get(taskId))) return;
     setActiveMobileStatus(status);
     mutations.changeStatus.mutate({ taskId, status });
-  }, [isReadOnly, mutations.changeStatus]);
+  }, [permissions, taskById, mutations.changeStatus]);
 
   const getStatusFromOver = useCallback((over) => {
     if (!over?.id) return null;
@@ -217,7 +220,7 @@ export default function ExecutionBoard() {
   }, [getStatusFromOver]);
 
   const handleDragEnd = useCallback((event) => {
-    if (isReadOnly) {
+    if (!permissions.canUpdateTaskStatus(taskById.get(event.active.id))) {
       setActiveTask(null);
       setActiveOverStatus(null);
       return;
@@ -232,7 +235,7 @@ export default function ExecutionBoard() {
     if (!nextStatus || !currentStatus || nextStatus === currentStatus) return;
     setActiveMobileStatus(nextStatus);
     mutations.changeStatus.mutate({ taskId, status: nextStatus });
-  }, [getStatusFromOver, isReadOnly, mutations.changeStatus, taskStatusById]);
+  }, [getStatusFromOver, permissions, taskById, mutations.changeStatus, taskStatusById]);
 
   const handleDragCancel = useCallback(() => {
     setActiveTask(null);
@@ -252,7 +255,7 @@ export default function ExecutionBoard() {
     return <BoardSkeleton />;
   }
 
-  if (!teamId) {
+  if (!teamId && !teamContextQuery.isError) {
     return (
       <EmptyState
         icon={CheckSquare}
@@ -264,14 +267,14 @@ export default function ExecutionBoard() {
     );
   }
 
-  if (boardQuery.isError) {
+  if (boardQuery.isError || teamContextQuery.isError || workspaceContextQuery.isError) {
     return (
       <div className="rounded-xl border border-red-200 bg-red-50 p-8 text-center">
         <AlertTriangle className="mx-auto mb-3 h-8 w-8 text-red-400" />
-        <p className="font-semibold text-red-700">{boardQuery.error?.message || 'Failed to load execution board'}</p>
+        <p className="font-semibold text-red-700">Unable to load this execution board. Check your access and try again.</p>
         <button
           type="button"
-          onClick={() => boardQuery.refetch()}
+          onClick={() => { teamContextQuery.refetch(); if (teamId) { boardQuery.refetch(); workspaceContextQuery.refetch(); } }}
           className="mt-4 inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-red-700 transition-colors hover:bg-red-100"
         >
           <RotateCcw className="h-4 w-4" />
@@ -287,7 +290,7 @@ export default function ExecutionBoard() {
         <BoardHeader canCreate={canCreateTeamTask} onCreate={handleCreate} />
         {isReadOnly && (
           <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800">
-            This execution board is read-only because you are viewing an archived workspace.
+            This execution board is read-only for this workspace or your role.
           </div>
         )}
         <div className="mt-5 flex items-center justify-between gap-3 border-t border-slate-100 pt-5">
@@ -297,7 +300,7 @@ export default function ExecutionBoard() {
             </p>
             <p className="text-xs text-slate-500">
               {view === 'kanban'
-                ? 'Drag tasks across statuses for execution.'
+                ? 'Drag team tasks to change status. Course Roadmap and Class Requirements are read-only references.'
                 : 'Review task details, deadlines, progress, and notes.'}
             </p>
           </div>

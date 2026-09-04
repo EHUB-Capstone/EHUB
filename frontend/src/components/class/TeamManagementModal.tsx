@@ -17,8 +17,11 @@ import { classApi } from '../../api/classApi';
 import { teamApi } from '../../api/teamApi';
 import { unwrapApiData } from '../../utils/classMappers';
 import { parseApiError } from '../../utils/apiError';
+import { getTeamGroupFromMajor } from '../../constants/majors';
+import type { ApiEnvelope } from '../../types/classes';
 import type {
   ManagedTeam,
+  MentorCandidate,
   TeamClassOption,
   TeamDraft,
   TeamStudent,
@@ -29,6 +32,7 @@ import {
   getTeamMemberIds,
   getTeamProject,
   normalizeManagedTeam,
+  isMissingTeamMajor,
   TEAM_MEMBER_LIMIT,
   validateTeamDraft,
 } from '../../utils/teamManagement';
@@ -39,6 +43,7 @@ interface TeamManagementModalProps {
   teams: ManagedTeam[];
   team?: ManagedTeam | null;
   initialMemberIds?: string[];
+  initialLeaderId?: string;
   onClose: () => void;
   onSave: (team: ManagedTeam) => void;
 }
@@ -56,6 +61,7 @@ export default function TeamManagementModal({
   teams,
   team = null,
   initialMemberIds = [],
+  initialLeaderId = '',
   onClose,
   onSave,
 }: TeamManagementModalProps) {
@@ -66,7 +72,7 @@ export default function TeamManagementModal({
     teamName: team?.teamName || '',
     classId: classInfo.id,
     memberIds: [...new Set(initialIds.filter((studentId) => knownStudentIds.has(studentId)))],
-    leaderId: entityId(team?.leaderId),
+    leaderId: team ? entityId(team.leaderId) : initialLeaderId,
     description: team?.description || '',
     projectName: currentProject?.name || '',
     projectDescription: currentProject?.description || '',
@@ -74,13 +80,22 @@ export default function TeamManagementModal({
     startupField: currentProject?.startupField || '',
   });
   const [search, setSearch] = useState('');
+  const [useTeamNameForProject, setUseTeamNameForProject] = useState(true);
+  const currentMentorId = team?.currentMentorAssignment?.mentor?.mentorProfileId
+    || entityId(team?.mentorId)
+    || '';
+  const [mentorCandidates, setMentorCandidates] = useState<MentorCandidate[]>([]);
+  const [mentorsLoading, setMentorsLoading] = useState(true);
+  const [mentorId, setMentorId] = useState(
+    currentMentorId,
+  );
   const [attemptedSubmit, setAttemptedSubmit] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   const currentTeamId = team?._id || '';
   const validation = useMemo(
-    () => validateTeamDraft(draft, teams, students, currentTeamId),
-    [currentTeamId, draft, students, teams],
+    () => validateTeamDraft(!team && useTeamNameForProject ? { ...draft, projectName: draft.teamName } : draft, teams, students, currentTeamId),
+    [currentTeamId, draft, students, teams, team, useTeamNameForProject],
   );
   const assignments = useMemo(
     () => buildStudentTeamAssignments(teams, students),
@@ -94,10 +109,29 @@ export default function TeamManagementModal({
   );
   const visibleStudents = useMemo(() => {
     const query = search.trim().toLowerCase();
-    if (!query) return students;
-    return students.filter((student) => [student.fullName, student.rollNumber, student.email, student.major]
-      .some((value) => value?.toLowerCase().includes(query)));
-  }, [search, students]);
+    const selectedIds = new Set(draft.memberIds);
+    return students.filter((student) => !query || [student.fullName, student.rollNumber, student.email, student.major]
+      .some((value) => value?.toLowerCase().includes(query)))
+      .sort((left, right) => Number(selectedIds.has(right._id)) - Number(selectedIds.has(left._id)));
+  }, [search, students, draft.memberIds]);
+  const formationSummary = useMemo(() => {
+    const majorCodes = [...new Set(selectedStudents
+      .map((student) => student.major?.trim().toUpperCase())
+      .filter(Boolean))];
+    const missingMajorStudents = selectedStudents.filter((student) => isMissingTeamMajor(student.major));
+    const hasGroupOne = selectedStudents.some((student) => getTeamGroupFromMajor(student.major) === 'GROUP_1');
+    const hasGroupTwo = selectedStudents.some((student) => getTeamGroupFromMajor(student.major) === 'GROUP_2');
+    const isStandardSize = draft.memberIds.length >= 4 && draft.memberIds.length <= 6;
+
+    return {
+      majorCodes,
+      missingMajorStudents,
+      hasGroupOne,
+      hasGroupTwo,
+      isStandardSize,
+      unassignedStudentCount: students.filter((student) => !student.teamId).length,
+    };
+  }, [draft.memberIds.length, selectedStudents, students]);
 
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
@@ -111,6 +145,30 @@ export default function TeamManagementModal({
       window.removeEventListener('keydown', handleEscape);
     };
   }, [onClose]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadMentorCandidates = async () => {
+      setMentorsLoading(true);
+      try {
+        const response = await classApi.getMentorCandidates(classInfo.id);
+        const payload = unwrapApiData<MentorCandidate[]>(
+          response as ApiEnvelope<MentorCandidate[]> | MentorCandidate[],
+        );
+        if (!cancelled) setMentorCandidates(Array.isArray(payload) ? payload : []);
+      } catch {
+        if (!cancelled) setMentorCandidates([]);
+      } finally {
+        if (!cancelled) setMentorsLoading(false);
+      }
+    };
+
+    void loadMentorCandidates();
+    return () => {
+      cancelled = true;
+    };
+  }, [classInfo.id]);
 
   const updateDraft = <Field extends keyof TeamDraft>(field: Field, value: TeamDraft[Field]) => {
     setDraft((current) => ({ ...current, [field]: value }));
@@ -137,6 +195,7 @@ export default function TeamManagementModal({
   };
 
   const handleSubmit = async () => {
+    if (submitting) return;
     setAttemptedSubmit(true);
     if (!validation.isValid) {
       toast.error('Please correct the highlighted team information.');
@@ -153,14 +212,44 @@ export default function TeamManagementModal({
             leaderStudentId: draft.leaderId,
             rowVersion: team.rowVersion,
           })
-        : await classApi.createTeam(classInfo.id, {
-            teamName: draft.teamName.trim(),
-            description: draft.description.trim() || null,
-            memberIds: draft.memberIds,
+        : await classApi.generateTeam(classInfo.id, {
+            studentIds: draft.memberIds,
             leaderStudentId: draft.leaderId,
+            mode: 'standard',
+            teamName: draft.teamName.trim() || null,
+            useTeamNameForProject,
+            projectName: useTeamNameForProject ? null : draft.projectName.trim() || null,
+            description: draft.description.trim() || null,
+            // Mentor assignment is a separate semester-aware operation.
+            mentorId: null,
           });
-      onSave(normalizeManagedTeam(unwrapApiData(response)));
-      toast.success(team ? 'Team members updated successfully' : 'Team created successfully');
+      const payload = unwrapApiData<any>(response);
+      const savedTeam = team
+        ? normalizeManagedTeam(payload)
+        : payload.team
+          ? normalizeManagedTeam(payload.team)
+          : normalizeManagedTeam(payload);
+      if (mentorId && mentorId !== currentMentorId) {
+        try {
+          await teamApi.assignMentor(savedTeam._id, mentorId);
+        } catch (mentorError) {
+          if (!team) {
+            onSave(savedTeam);
+            toast.error(parseApiError(
+              mentorError,
+              'Team was created, but the mentor could not be assigned.',
+            ).message);
+            return;
+          }
+          throw mentorError;
+        }
+      }
+      onSave(savedTeam);
+      toast.success(
+        team
+          ? 'Team members updated successfully'
+          : 'Team created successfully',
+      );
     } catch (error) {
       toast.error(parseApiError(error, team ? 'Failed to update team.' : 'Failed to create team.').message);
     } finally {
@@ -197,17 +286,34 @@ export default function TeamManagementModal({
                 </div>
 
                 <div>
-                  <label htmlFor="team-name" className="mb-1.5 block text-xs font-semibold text-slate-600">Team name <span className="text-red-500">*</span></label>
+                  <label htmlFor="team-name" className="mb-1.5 block text-xs font-semibold text-slate-600">Team name {team && <span className="text-red-500">*</span>}</label>
                   <input
                     id="team-name"
                     value={draft.teamName}
                     onChange={(event) => updateDraft('teamName', event.target.value)}
-                    placeholder="Example: Nova Founders"
+                    placeholder={team ? 'Example: Nova Founders' : 'Leave blank to generate the next team name'}
                     maxLength={60}
                     className={`w-full rounded-xl border px-3 py-2.5 text-sm outline-none transition-all focus:ring-2 focus:ring-primary/20 ${attemptedSubmit && validation.errors.teamName ? 'border-red-300 bg-red-50' : 'border-slate-200 focus:border-primary'}`}
                   />
                   {attemptedSubmit && validation.errors.teamName && <p className="mt-1 text-xs text-red-600">{validation.errors.teamName}</p>}
                 </div>
+
+                {!team && (
+                  <div className="space-y-2">
+                    <label className="flex items-center gap-2 text-xs font-medium text-slate-600">
+                      <input type="checkbox" checked={useTeamNameForProject} onChange={(event) => setUseTeamNameForProject(event.target.checked)} className="rounded border-slate-300 accent-primary" />
+                      Use team name as project name
+                    </label>
+                    {!useTeamNameForProject && (
+                      <div>
+                        <label htmlFor="create-project-name" className="mb-1 block text-xs font-semibold text-slate-600">Project name</label>
+                        <input id="create-project-name" value={draft.projectName} onChange={(event) => updateDraft('projectName', event.target.value)} maxLength={100} placeholder="Enter a project name (optional)" className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20" />
+                        {attemptedSubmit && validation.errors.projectName && <p className="mt-1 text-xs text-red-600">{validation.errors.projectName}</p>}
+                      </div>
+                    )}
+                    <p className="text-xs text-slate-500">Saved as a draft. Project proposals still require review.</p>
+                  </div>
+                )}
 
                 <div>
                   <label className="mb-1.5 block text-xs font-semibold text-slate-600">Class <span className="text-red-500">*</span></label>
@@ -231,6 +337,34 @@ export default function TeamManagementModal({
                     rows={3}
                     className="w-full resize-none rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
                   />
+                </div>
+
+                <div>
+                  <label htmlFor="team-mentor" className="mb-1.5 block text-xs font-semibold text-slate-600">Assign mentor</label>
+                  <select
+                    id="team-mentor"
+                    value={mentorId}
+                    onChange={(event) => setMentorId(event.target.value)}
+                    disabled={mentorsLoading}
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:opacity-60"
+                  >
+                    <option value="">{mentorsLoading ? 'Loading mentors…' : 'No mentor'}</option>
+                    {mentorCandidates.map((candidate) => (
+                      <option
+                        key={candidate.mentor.mentorProfileId}
+                        value={candidate.mentor.mentorProfileId}
+                        disabled={!candidate.hasCapacity && candidate.mentor.mentorProfileId !== currentMentorId}
+                      >
+                        {candidate.mentor.fullName} ({candidate.activeTeamCount}/{candidate.maxTeams} teams)
+                        {!candidate.hasCapacity && candidate.mentor.mentorProfileId !== currentMentorId ? ' · Full' : ''}
+                      </option>
+                    ))}
+                  </select>
+                  {!mentorsLoading && mentorCandidates.length === 0 ? (
+                    <p className="mt-1 text-xs text-amber-700">No active mentor is configured for this semester.</p>
+                  ) : (
+                    <p className="mt-1 text-xs text-slate-500">Only active mentors in this class semester are available.</p>
+                  )}
                 </div>
               </section>
 
@@ -292,6 +426,17 @@ export default function TeamManagementModal({
                 {attemptedSubmit && validation.errors.memberIds && (
                   <div className="mt-3 flex items-start gap-2 rounded-lg bg-red-50 p-2.5 text-xs text-red-700"><AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />{validation.errors.memberIds}</div>
                 )}
+                <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                  <span className={`rounded-lg px-2 py-1.5 font-semibold ${formationSummary.isStandardSize ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+                    {formationSummary.isStandardSize ? '4-6 members' : 'Invalid member count'}
+                  </span>
+                  <span className={`rounded-lg px-2 py-1.5 font-semibold ${formationSummary.hasGroupOne ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>Has GROUP_1</span>
+                  <span className={`rounded-lg px-2 py-1.5 font-semibold ${formationSummary.hasGroupTwo ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>Has GROUP_2</span>
+                  <span className={`rounded-lg px-2 py-1.5 font-semibold ${draft.leaderId && draft.memberIds.includes(draft.leaderId) ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>Leader selected</span>
+                </div>
+                <p className="mt-2 text-xs text-slate-500">{students.length} total students · {formationSummary.unassignedStudentCount} without a team</p>
+                {formationSummary.majorCodes.length > 0 && <p className="mt-1 text-xs text-slate-500">Majors: {formationSummary.majorCodes.join(', ')}</p>}
+                {formationSummary.missingMajorStudents.length > 0 && <p className="mt-1 text-xs font-medium text-amber-700">{formationSummary.missingMajorStudents.length} selected student(s) have no major and do not satisfy a major-group check.</p>}
               </div>
 
               <div className="flex-1 space-y-2 overflow-y-auto p-3">
@@ -305,6 +450,7 @@ export default function TeamManagementModal({
                     <button
                       key={student._id}
                       type="button"
+                      aria-pressed={selected}
                       disabled={assignedElsewhere || (!selected && draft.memberIds.length >= TEAM_MEMBER_LIMIT)}
                       onClick={() => toggleMember(student)}
                       className={`flex w-full items-center gap-3 rounded-xl border p-3 text-left transition-all ${selected ? 'border-primary bg-primary-50' : assignedElsewhere ? 'cursor-not-allowed border-slate-100 bg-slate-50 opacity-65' : 'border-slate-200 hover:border-primary/50 hover:bg-slate-50'} disabled:pointer-events-none`}
@@ -340,10 +486,18 @@ export default function TeamManagementModal({
         </div>
 
         <footer className="flex shrink-0 flex-col-reverse gap-2 border-t border-slate-100 bg-slate-50/70 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-          <p className="text-xs text-slate-500"><strong>{draft.memberIds.length}</strong> member{draft.memberIds.length === 1 ? '' : 's'} · {draft.projectName.trim() ? 'Project linked' : 'No project linked'}</p>
+          <p className="text-xs text-slate-500"><strong>{draft.memberIds.length}</strong> member{draft.memberIds.length === 1 ? '' : 's'} · {!team && (useTeamNameForProject || draft.projectName.trim()) ? 'Project draft will be created' : currentProject ? 'Project linked' : 'No project linked'}</p>
           <div className="flex gap-2">
             <Button variant="outline" onClick={onClose}>Cancel</Button>
-            <Button variant="gradient" icon={team ? UserCheck : UserPlus} isLoading={submitting} onClick={handleSubmit}>{team ? 'Save members' : 'Create team'}</Button>
+            <Button
+              variant="gradient"
+              icon={team ? UserCheck : UserPlus}
+              isLoading={submitting}
+              disabled={!validation.isValid}
+              onClick={handleSubmit}
+            >
+              {team ? 'Save members' : 'Create team'}
+            </Button>
           </div>
         </footer>
       </div>

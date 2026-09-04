@@ -1,748 +1,475 @@
-import { useState, useEffect, useRef } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
-import { X, Loader2, AlertTriangle, FileSpreadsheet, Keyboard, Upload, CheckCircle2 } from 'lucide-react';
+import {
+  AlertTriangle,
+  CheckCircle2,
+  GraduationCap,
+  Loader2,
+  Search,
+  X,
+} from 'lucide-react';
 import { classApi } from '../../api/classApi';
-import { classFeatureFlags } from '../../config/classFeatureFlags';
-import { userApi } from '../../api/userApi';
 import { subjectApi } from '../../api/subjectApi';
 import { parseApiError } from '../../utils/apiError';
 import { unwrapApiData } from '../../utils/classMappers';
-import { readStudentImportFile } from '../../utils/studentImport';
+import { parseClassPositions } from '../../utils/bulkClassAssignments';
 import type {
   BulkClassPreviewResponse,
   ClassDto,
   CreateBulkClassesRequest,
 } from '../../types/classes';
-import {
-  importStudentsIntoCreatedClasses,
-  parseClassIndex,
-  type BulkStudentImportSummary,
-  type ParsedBulkClassStudentRow,
-} from '../../utils/bulkClassStudentImport';
+import type { ClassCreationSemesterOption } from '../../types/subjects';
 
-const CURRENT_YR = new Date().getFullYear();
-const DEFAULT_CLASS_COUNT = 5;
+type AssignmentMode = 'assign' | 'unassigned';
 
-export default function BulkCreateModal({ lecturers: initialLecturers = [], isLecturer = false, onClose, onCreated }) {
-  const [tabMode, setTabMode] = useState('numbers'); // 'numbers' | 'excel'
+interface LecturerOption {
+  _id: string;
+  name: string;
+  email?: string | null;
+}
+
+interface SubjectOption {
+  subjectCode: string;
+  subjectName?: string;
+}
+
+interface BulkCreateModalProps {
+  onClose: () => void;
+  onCreated: (options?: { keepOpen?: boolean; suppressToast?: boolean }) => void;
+}
+
+const MAXIMUM_BATCH_SIZE = 100;
+const LECTURER_COLORS = [
+  { chip: 'border-blue-200 bg-blue-50 text-blue-700', dot: 'bg-blue-500' },
+  { chip: 'border-violet-200 bg-violet-50 text-violet-700', dot: 'bg-violet-500' },
+  { chip: 'border-emerald-200 bg-emerald-50 text-emerald-700', dot: 'bg-emerald-500' },
+  { chip: 'border-amber-200 bg-amber-50 text-amber-700', dot: 'bg-amber-500' },
+  { chip: 'border-pink-200 bg-pink-50 text-pink-700', dot: 'bg-pink-500' },
+  { chip: 'border-cyan-200 bg-cyan-50 text-cyan-700', dot: 'bg-cyan-500' },
+] as const;
+
+export default function BulkCreateModal({
+  onClose,
+  onCreated,
+}: BulkCreateModalProps) {
+  const [subjects, setSubjects] = useState<SubjectOption[]>([]);
+  const [semesters, setSemesters] = useState<ClassCreationSemesterOption[]>([]);
+  const [lecturers, setLecturers] = useState<LecturerOption[]>([]);
+  const [loadingOptions, setLoadingOptions] = useState(true);
+  const [loadingLecturers, setLoadingLecturers] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [lecturerSearch, setLecturerSearch] = useState('');
+  const [assignmentMode, setAssignmentMode] = useState<AssignmentMode>('assign');
+  const [lecturerPositionInputs, setLecturerPositionInputs] = useState<Record<string, string>>({});
   const [form, setForm] = useState({
     subjectCode: '',
-    semester: 'SP',
-    year: String(CURRENT_YR),
-    count: String(DEFAULT_CLASS_COUNT),
-    classIndicesText: '',
-    primaryLecturerId: '',
+    semesterId: '',
+    startClassIndex: '1',
+    quantity: '1',
   });
-
-  const [excelFile, setExcelFile] = useState<File | null>(null);
-  const [excelParsedRows, setExcelParsedRows] = useState<any[]>([]);
-  const [excelError, setExcelError] = useState('');
-  const [parsingExcel, setParsingExcel] = useState(false);
-  const [bulkImportResult, setBulkImportResult] = useState<BulkStudentImportSummary | null>(null);
-
-  const [submitting, setSubmitting] = useState(false);
-  const [preview, setPreview] = useState<string[]>([]);
   const [serverPreview, setServerPreview] = useState<BulkClassPreviewResponse | null>(null);
-  const [classConflict, setClassConflict] = useState(null);
-
-  const [allLecturers, setAllLecturers] = useState(initialLecturers);
-  const [loadingUsers, setLoadingUsers] = useState(true);
-  const [subjects, setSubjects] = useState([]);
-
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    const fetchUsersAndSubjects = async () => {
+    const controller = new AbortController();
+    let active = true;
+    const loadOptions = async () => {
+      setLoadingOptions(true);
       try {
-        const [lectRes, subjRes, semRes] = await Promise.all([
-          !isLecturer && initialLecturers.length === 0 ? userApi.getAll({ role: 'LECTURER', limit: 200 }) : Promise.resolve(null),
+        const [subjectsResponse, semestersResponse] = await Promise.all([
           subjectApi.getActive(),
-          subjectApi.getCurrentSemester()
+          subjectApi.getClassCreationSemesterOptions(),
         ]);
-        if (lectRes) {
-          const lecturerList = lectRes?.data?.users || lectRes?.users || [];
-          setAllLecturers(lecturerList.map(lecturer => ({
-            ...lecturer,
-            _id: lecturer._id || lecturer.id,
-            name: lecturer.name || lecturer.fullName,
-          })));
-        }
-        const list = subjRes?.data?.subjects || subjRes?.subjects || [];
-        setSubjects(list);
 
-        const activeSem = semRes?.data?.currentSemester || semRes?.currentSemester || { semester: 'SP', year: new Date().getFullYear() };
+        if (!active) return;
 
-        let defaultSubj = '';
-        if (list.length > 0) {
-          defaultSubj = list[0].subjectCode;
-        }
+        const subjectPayload = unwrapApiData<any>(subjectsResponse);
+        const semesterPayload = unwrapApiData<any>(semestersResponse);
+        const subjectList = (subjectPayload?.subjects || []) as SubjectOption[];
+        const semesterList = (semesterPayload?.semesters || []) as ClassCreationSemesterOption[];
 
-        setForm(prev => ({
-          ...prev,
-          subjectCode: defaultSubj,
-          semester: activeSem.semester,
-          year: String(activeSem.year)
+        setSubjects(subjectList);
+        setSemesters(semesterList);
+        const defaultSemester = semesterList.find(semester => semester.status === 'Active') || semesterList[0];
+        setForm(current => ({
+          ...current,
+          subjectCode: current.subjectCode || subjectList[0]?.subjectCode || '',
+          semesterId: current.semesterId || defaultSemester?.id || '',
         }));
-
-        if (defaultSubj && !isLecturer) {
-          setPreview(Array.from({ length: DEFAULT_CLASS_COUNT }, (_, i) => `${defaultSubj}_${i + 1}`));
+      } catch (error) {
+        if (active && !controller.signal.aborted) {
+          toast.error(parseApiError(error, 'Failed to load subjects, semesters, or lecturers.').message);
         }
-      } catch {
-        toast.error('Failed to load active subjects, active semester or users list');
       } finally {
-        setLoadingUsers(false);
+        if (active) setLoadingOptions(false);
       }
     };
-    fetchUsersAndSubjects();
-  }, [initialLecturers.length, isLecturer]);
 
-  const parseClassIndices = (value) => {
-    const numbers = String(value || '')
-      .split(/[,\s]+/)
-      .map(item => parseInt(item.trim(), 10))
-      .filter(num => Number.isInteger(num));
-    return [...new Set(numbers)];
-  };
+    void loadOptions();
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, []);
 
-  const buildPreview = (f) => {
-    if (isLecturer) {
-      return parseClassIndices(f.classIndicesText)
-        .slice(0, 8)
-        .map(idx => `${f.subjectCode}_${idx}`);
-    }
-
-    const n = parseInt(f.count, 10);
-    if (!n || n < 1) return [];
-    return Array.from({ length: Math.min(n, 5) }, (_, i) => `${f.subjectCode}_${i + 1}`);
-  };
-
-  const handleChange = (k, v) => {
-    const next = { ...form, [k]: v };
-    setForm(next);
-    setServerPreview(null);
-    if (k === 'subjectCode' || k === 'count' || k === 'classIndicesText') {
-      setPreview(buildPreview(next));
-    }
-  };
-
-  // ── Excel Parsing for Lecturer Import ─────────────────────────────────────
-  const handleExcelFileSelect = async (file?: File) => {
-    if (!file) return;
-    const ext = file.name.split('.').pop()?.toLowerCase();
-    if (ext !== 'xlsx' && ext !== 'xls' && ext !== 'csv') {
-      setExcelError('Unsupported file type. Please choose an .xlsx, .xls or .csv file.');
-      setExcelFile(null);
-      setExcelParsedRows([]);
+  const selectedSemester = semesters.find(semester => semester.id === form.semesterId);
+  useEffect(() => {
+    if (!selectedSemester) {
+      setLecturers([]);
       return;
     }
 
-    setExcelFile(file);
-    setExcelError('');
-    setBulkImportResult(null);
+    let active = true;
+    setLoadingLecturers(true);
+    subjectApi.getTeachingStaff({
+      semester: selectedSemester.semester,
+      year: selectedSemester.year,
+    }).then(response => {
+      if (!active) return;
+      const payload = unwrapApiData<any>(response);
+      const options = (payload?.staff || [])
+        .filter((member: any) => member.role === 'LECTURER' && member.status === 'Active' && member.userStatus === 'Active')
+        .map((member: any) => ({
+          _id: member.userId,
+          name: member.name,
+          email: member.email,
+        }));
+      setLecturers(options);
+      setLecturerPositionInputs({});
+      setServerPreview(null);
+    }).catch(error => {
+      if (active) {
+        setLecturers([]);
+        toast.error(parseApiError(error, 'Failed to load semester lecturers.').message);
+      }
+    }).finally(() => {
+      if (active) setLoadingLecturers(false);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [selectedSemester?.semester, selectedSemester?.year]);
+  const filteredLecturers = useMemo(() => {
+    const search = lecturerSearch.trim().toLowerCase();
+    if (!search) return lecturers;
+    return lecturers.filter(lecturer =>
+      lecturer.name.toLowerCase().includes(search) || lecturer.email?.toLowerCase().includes(search));
+  }, [lecturerSearch, lecturers]);
+
+  const startIndex = Number(form.startClassIndex);
+  const quantity = Number(form.quantity);
+  const clientCodes = useMemo(() => {
+    if (!form.subjectCode || !Number.isInteger(startIndex) || !Number.isInteger(quantity) || quantity < 1) return [];
+    return Array.from(
+      { length: Math.min(quantity, MAXIMUM_BATCH_SIZE) },
+      (_, index) => `${form.subjectCode}_${startIndex + index}`,
+    );
+  }, [form.subjectCode, quantity, startIndex]);
+
+  const lecturerAssignments = useMemo(() => lecturers.map((lecturer, lecturerIndex) => ({
+    lecturer,
+    lecturerIndex,
+    ...parseClassPositions(lecturerPositionInputs[lecturer._id] || '', quantity),
+  })), [lecturerPositionInputs, lecturers, quantity]);
+
+  const positionAssignments = useMemo(() => {
+    const assignments = new Map<number, { lecturer: LecturerOption; lecturerIndex: number }>();
+    const conflicts = new Set<number>();
+    for (const assignment of lecturerAssignments) {
+      if (assignment.error) continue;
+      for (const position of assignment.positions) {
+        if (assignments.has(position)) conflicts.add(position);
+        else assignments.set(position, assignment);
+      }
+    }
+    return { assignments, conflicts };
+  }, [lecturerAssignments]);
+
+  const updateForm = (field: keyof typeof form, value: string) => {
+    setForm(current => ({ ...current, [field]: value }));
+    if (field === 'semesterId') {
+      setLecturerPositionInputs({});
+    }
     setServerPreview(null);
-    setParsingExcel(true);
+  };
 
-    try {
-      const rawRows = await readStudentImportFile(file);
-      if (!rawRows || rawRows.length <= 1) {
-        setExcelError('File contains no data rows.');
-        setExcelParsedRows([]);
-        return;
-      }
-
-      const normalizeStr = (v: any) => String(v || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/gi, '').toLowerCase();
-
-      // Dynamic header row detection
-      let headerRowIndex = 0;
-      for (let i = 0; i < Math.min(rawRows.length, 10); i++) {
-        const normalizedRow = (rawRows[i] || []).map(normalizeStr);
-        const hasClass = normalizedRow.some(h => h.includes('class') || h.includes('lop'));
-        const hasRoll = normalizedRow.some(h => h.includes('rollnumber') || h.includes('studentcode') || h.includes('masv') || h.includes('mssv'));
-        if (hasClass || hasRoll) {
-          headerRowIndex = i;
-          break;
-        }
-      }
-
-      // Map columns
-      const headers = (rawRows[headerRowIndex] || []).map(normalizeStr);
-      let classCol = headers.findIndex(h => h.includes('class') || h.includes('lop'));
-      let rollCol = headers.findIndex(h => h.includes('rollnumber') || h.includes('studentcode') || h.includes('masv') || h.includes('mssv'));
-      let emailCol = headers.findIndex(h => h.includes('email'));
-      let nameCol = headers.findIndex(h => h.includes('fullname') || h.includes('hovaten') || h.includes('hoten') || h === 'name');
-      let majorCol = headers.findIndex(h => h.includes('major') || h.includes('nganh') || h.includes('specialization'));
-
-      if (classCol === -1 || rollCol === -1 || emailCol === -1 || nameCol === -1) {
-        setExcelError('Required header columns missing: Class, RollNumber, Email, FullName');
-        setExcelParsedRows([]);
-        return;
-      }
-
-      const parsed = [];
-      for (let i = headerRowIndex + 1; i < rawRows.length; i++) {
-        const row = rawRows[i];
-        if (!row || row.every(c => !c)) continue;
-
-        const classVal = String(row[classCol] || '').trim();
-        const rollVal = String(row[rollCol] || '').trim().toUpperCase();
-        let emailVal = String(row[emailCol] || '').trim().toLowerCase();
-        if (emailVal && !emailVal.includes('@')) {
-          emailVal = `${emailVal}@fpt.edu.vn`;
-        }
-        const nameVal = String(row[nameCol] || '').trim();
-        const majorVal = majorCol !== -1 ? String(row[majorCol] || '').trim().toUpperCase() : '';
-
-        parsed.push({
-          sourceRowNumber: i + 1,
-          classVal,
-          studentCode: rollVal,
-          email: emailVal,
-          fullName: nameVal,
-          majorCode: majorVal
-        });
-      }
-
-      if (parsed.length === 0) {
-        setExcelError('No student rows found in the file.');
-      } else {
-        setExcelParsedRows(parsed);
-      }
-    } catch (err: any) {
-      setExcelError(err?.message || 'Error reading Excel file');
-      setExcelParsedRows([]);
-    } finally {
-      setParsingExcel(false);
+  const selectAssignmentMode = (mode: AssignmentMode) => {
+    setAssignmentMode(mode);
+    setServerPreview(null);
+    if (mode === 'unassigned') {
+      setLecturerPositionInputs({});
     }
   };
 
-  const validate = () => {
-    if (!form.subjectCode) return 'Subject code is required';
-    if (!['SP', 'SU', 'FA'].includes(form.semester)) return 'Invalid semester';
+  const updateLecturerPositions = (lecturerId: string, value: string) => {
+    setLecturerPositionInputs(current => ({ ...current, [lecturerId]: value }));
+    setServerPreview(null);
+  };
 
-    if (isLecturer) {
-      if (tabMode === 'numbers') {
-        const rawIndices = String(form.classIndicesText || '').split(/[,\s]+/).filter(Boolean);
-        if (rawIndices.some(value => !/^\d+$/.test(value))) return 'Class numbers must contain digits separated by commas or spaces';
-        const indices = parseClassIndices(form.classIndicesText);
-        if (indices.length === 0) return 'Assign Class is required';
-        if (indices.length !== rawIndices.length) return 'Class numbers must not contain duplicates';
-        if (indices.some(idx => idx < 1 || idx > 999)) return 'Class numbers must be between 1 and 999';
-      } else {
-        if (!excelFile) return 'Please select an Excel file to import';
-        if (excelParsedRows.length === 0) return 'No student data found in the Excel file';
-        const invalidClassRows = excelParsedRows.filter(row => {
-          const match = String(row.classVal || '').trim().match(/^(.+)[_-](\d+)$/);
-          return !match || match[1].toUpperCase() !== form.subjectCode.toUpperCase();
-        });
-        if (invalidClassRows.length > 0) {
-          return `Excel row ${invalidClassRows[0].sourceRowNumber} must contain a class matching ${form.subjectCode}, for example ${form.subjectCode}_1`;
-        }
-      }
-    } else {
-      const n = parseInt(form.count, 10);
-      if (!n || n < 1 || n > 100) return 'Count must be between 1 and 100';
+  const validate = (): string | null => {
+    if (!form.subjectCode) return 'Select an active subject.';
+    if (!form.semesterId || !selectedSemester) return 'Select the current or next semester.';
+    if (!Number.isInteger(startIndex) || startIndex < 1 || startIndex > 999) {
+      return 'Starting class index must be between 1 and 999.';
     }
-    const y = parseInt(form.year, 10);
-    if (!y || y < 2020) return 'Invalid year';
+    if (!Number.isInteger(quantity) || quantity < 1 || quantity > MAXIMUM_BATCH_SIZE) {
+      return `Number of classes must be between 1 and ${MAXIMUM_BATCH_SIZE}.`;
+    }
+    if (startIndex + quantity - 1 > 999) return 'Generated class indices must not exceed 999.';
+    if (assignmentMode === 'assign') {
+      if (loadingLecturers) return 'Wait for the semester lecturer list to finish loading.';
+      if (lecturers.length === 0) return 'Add an active lecturer to this semester before assigning classes.';
+      const assignmentError = lecturerAssignments.find(item => item.error);
+      if (assignmentError?.error) return `${assignmentError.lecturer.name}: ${assignmentError.error}`;
+      if (positionAssignments.conflicts.size > 0) {
+        return `Class position(s) ${Array.from(positionAssignments.conflicts).sort((a, b) => a - b).join(', ')} are assigned more than once.`;
+      }
+      const missing = Array.from({ length: quantity }, (_, index) => index + 1)
+        .filter(position => !positionAssignments.assignments.has(position));
+      if (missing.length > 0) return `Assign every class. Missing position(s): ${missing.join(', ')}.`;
+    }
     return null;
   };
 
-  const buildBulkRequest = (): CreateBulkClassesRequest => {
-    const classIndices = isLecturer
-      ? tabMode === 'excel'
-        ? [...new Set(excelParsedRows.map(row => parseClassIndex(row.classVal)).filter((value): value is number => value !== null))]
-        : parseClassIndices(form.classIndicesText)
-      : undefined;
-
+  const buildRequest = (): CreateBulkClassesRequest => {
+    const assignments = lecturerAssignments
+      .filter(item => !item.error && item.positions.length > 0)
+      .map(item => ({
+        lecturerId: item.lecturer._id,
+        classIndices: item.positions.map(position => startIndex + position - 1),
+      }));
     return {
       subjectCode: form.subjectCode,
-      semester: form.semester,
-      year: parseInt(form.year, 10),
-      quantity: isLecturer ? undefined : parseInt(form.count, 10),
-      classIndices,
-      primaryLecturerId: !isLecturer && form.primaryLecturerId ? form.primaryLecturerId : undefined,
+      semesterId: form.semesterId,
+      startClassIndex: startIndex,
+      quantity,
+      lecturerAssignments: assignmentMode === 'assign' ? assignments : undefined,
     };
   };
 
   const handleSubmit = async () => {
-    const err = validate();
-    if (err) { toast.error(err); return; }
+    const validationError = validate();
+    if (validationError) {
+      toast.error(validationError);
+      return;
+    }
 
     setSubmitting(true);
-    setClassConflict(null);
-    setBulkImportResult(null);
     try {
-      const request = buildBulkRequest();
+      const request = buildRequest();
       if (!serverPreview) {
-        const previewResponse = unwrapApiData<BulkClassPreviewResponse>(
-          await classApi.previewBulkCreate(request),
-        );
-        setServerPreview(previewResponse);
-        if (previewResponse.invalidCount > 0) {
-          toast.error(`${previewResponse.invalidCount} class(es) cannot be created. Review the preview.`);
+        const preview = unwrapApiData<BulkClassPreviewResponse>(await classApi.previewBulkCreate(request));
+        setServerPreview(preview);
+        if (preview.invalidCount > 0) {
+          toast.error(`${preview.invalidCount} class(es) cannot be created. Review the conflicts below.`);
         } else {
-          toast.success('Preview is valid. Confirm once more to create the classes.');
+          toast.success('Preview is valid. Review and confirm the creation.');
         }
         return;
       }
 
       if (serverPreview.invalidCount > 0) {
-        toast.error('Resolve the preview errors before creating classes.');
+        toast.error('Change the class indices before creating classes.');
         return;
       }
 
-      const committedClasses = unwrapApiData<ClassDto[]>(
-        await classApi.commitBulkCreate(request),
+      const createdClasses = unwrapApiData<ClassDto[]>(await classApi.commitBulkCreate(request));
+      const assignedLecturerCount = lecturerAssignments.filter(item => item.positions.length > 0).length;
+      toast.success(
+        assignmentMode === 'assign'
+          ? `${createdClasses.length} class(es) created and assigned across ${assignedLecturerCount} lecturer(s).`
+          : `${createdClasses.length} unassigned Draft class(es) created.`,
       );
-      if (!Array.isArray(committedClasses) || committedClasses.length === 0) {
-        throw new Error('The server did not return the newly created classes.');
-      }
-
-      if (isLecturer && classFeatureFlags.lecturerStudentImport && tabMode === 'excel') {
-        const createdClasses = committedClasses;
-
-        const importResult = await importStudentsIntoCreatedClasses(
-          createdClasses,
-          excelParsedRows as ParsedBulkClassStudentRow[],
-          classApi,
-        );
-        setBulkImportResult(importResult);
-
-        const importedCount = importResult.insertedCount + importResult.updatedCount;
-        if (importResult.errorCount > 0) {
-          toast.error(
-            importedCount > 0
-              ? `${importedCount} students imported; ${importResult.errorCount} rows require attention.`
-              : `No students were imported. ${importResult.errorCount} rows require attention.`,
-          );
-          onCreated({ keepOpen: true, suppressToast: true });
-        } else {
-          toast.success(`Created ${createdClasses.length} class(es) and imported ${importedCount} students.`);
-          onCreated({ suppressToast: true });
-        }
-      } else {
-        // Luồng nhập số lớp thủ công
-        const count = committedClasses.length;
-        toast.success(`${count} classes created successfully!`);
-        onCreated({ suppressToast: true });
-      }
-    } catch (e: any) {
-      const conflict = e?.data?.conflict;
-      if (isLecturer && e?.status === 409 && conflict) {
-        setClassConflict(conflict);
-        return;
-      }
-      const parsed = parseApiError(e, 'Failed to create classes');
+      onCreated({ suppressToast: true });
+    } catch (error) {
       setServerPreview(null);
-      toast.error(parsed.message);
+      toast.error(parseApiError(error, 'Failed to create classes.').message);
     } finally {
       setSubmitting(false);
     }
   };
 
-  const handleConflictMine = () => {
-    setClassConflict(null);
-    toast('Please check and enter your assigned class number again.');
-  };
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative flex max-h-[92vh] w-full max-w-md flex-col overflow-hidden rounded-2xl bg-white shadow-float animate-scale-in">
-        {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-slate-100">
+      <button type="button" className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} aria-label="Close create classes dialog" />
+      <div className="relative flex max-h-[94vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-white shadow-float animate-scale-in" role="dialog" aria-modal="true" aria-labelledby="create-classes-title">
+        <div className="flex items-center justify-between border-b border-slate-100 px-6 py-5">
           <div>
-            <h2 className="text-xl font-bold text-slate-900">
-              {isLecturer ? 'Tạo lớp học' : 'Bulk Create Classes'}
-            </h2>
-            <p className="text-sm text-slate-400 mt-0.5">
-              {isLecturer
-                ? 'Tạo nhiều lớp cùng lúc — tự động gán cho bạn'
-                : 'Generate multiple classes at once'}
-            </p>
+            <h2 id="create-classes-title" className="text-xl font-bold text-slate-900">Create Classes</h2>
+            <p className="mt-0.5 text-sm text-slate-400">Create one or more classes and optionally assign their lecturer now</p>
           </div>
-          <button onClick={onClose} className="p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-all">
-            <X className="w-5 h-5" />
+          <button type="button" onClick={onClose} className="rounded-xl p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600" aria-label="Close">
+            <X className="h-5 w-5" />
           </button>
         </div>
 
-        {/* Body */}
-        <div className="min-h-0 flex-1 overflow-y-auto p-6 space-y-4">
-          {/* Tabs for Lecturer */}
-          {isLecturer && classFeatureFlags.lecturerStudentImport && (
-            <div className="p-1 bg-slate-100 rounded-xl flex gap-1 mb-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setTabMode('numbers');
-                  setServerPreview(null);
-                }}
-                className={`flex-1 flex items-center justify-center gap-2 py-2 text-xs font-semibold rounded-lg transition-all ${
-                  tabMode === 'numbers' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-700'
-                }`}
-              >
-                <Keyboard className="w-4 h-4" /> Enter class numbers
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setTabMode('excel');
-                  setServerPreview(null);
-                }}
-                className={`flex-1 flex items-center justify-center gap-2 py-2 text-xs font-semibold rounded-lg transition-all ${
-                  tabMode === 'excel' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-700'
-                }`}
-              >
-                <FileSpreadsheet className="w-4 h-4" /> Import Excel
-              </button>
+        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-6">
+          {loadingOptions ? (
+            <div className="flex items-center justify-center py-20">
+              <Loader2 className="h-7 w-7 animate-spin text-primary" />
             </div>
-          )}
-
-          {/* Locked semester info banner */}
-          {form.semester && form.year && (
-            <div className="flex items-center gap-3 p-3 bg-orange-50 border border-orange-100 rounded-xl">
-              <div className="w-8 h-8 rounded-lg bg-orange-100 flex items-center justify-center shrink-0">
-                <span className="text-xs font-bold text-orange-600">{form.semester}</span>
-              </div>
-              <div>
-                <p className="text-xs font-semibold text-orange-600">Active Semester Locked</p>
-                <p className="text-[11px] text-orange-600/80">
-                  Classes will be created for <strong>{form.semester} {form.year}</strong>. Change via Subject &amp; Semester settings.
-                </p>
-              </div>
-            </div>
-          )}
-
-          {/* TAB 1: ENTER CLASS NUMBERS */}
-          {(!isLecturer || tabMode === 'numbers') && (
-            <>
-              {/* Subject + Semester */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Subject Code *</label>
-                  <select
-                    value={form.subjectCode}
-                    onChange={(e) => handleChange('subjectCode', e.target.value)}
-                    className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none bg-white focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                  >
-                    {subjects.map(s => (
-                      <option key={s.subjectCode} value={s.subjectCode}>
-                        {s.subjectCode}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Semester *</label>
-                  <input
-                    type="text"
-                    disabled
-                    value={`${form.semester} (Active Semester)`}
-                    className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none bg-slate-50 text-slate-500 font-medium"
-                  />
-                </div>
-              </div>
-
-              {/* Year + Count / Assign Class */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Year *</label>
-                  <input
-                    type="text"
-                    disabled
-                    value={form.year}
-                    className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none bg-slate-50 text-slate-500 font-medium"
-                  />
-                </div>
-                {isLecturer ? (
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Assign Class *</label>
-                    <input
-                      type="text"
-                      value={form.classIndicesText}
-                      onChange={(e) => handleChange('classIndicesText', e.target.value)}
-                      placeholder="e.g. 4, 6, 7"
-                      className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                    />
-                  </div>
-                ) : (
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Number of Classes *</label>
-                    <input
-                      type="number"
-                      min="1" max="100"
-                      value={form.count}
-                      onChange={(e) => handleChange('count', e.target.value)}
-                      className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                    />
-                  </div>
-                )}
-              </div>
-
-              {loadingUsers ? (
-                <div className="flex items-center justify-center py-4">
-                  <Loader2 className="w-5 h-5 text-primary animate-spin" />
-                </div>
-              ) : (
-                <>
-                  {!isLecturer && (
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">Primary Lecturer (optional)</label>
-                      <div className="max-h-28 overflow-y-auto border border-slate-200 rounded-xl p-3 bg-slate-50 space-y-1.5">
-                        <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
-                          <input
-                            type="radio"
-                            name="primaryLecturer"
-                            checked={form.primaryLecturerId === ''}
-                            onChange={() => handleChange('primaryLecturerId', '')}
-                            className="border-slate-300 text-primary focus:ring-primary h-3.5 w-3.5"
-                          />
-                          <span>Create as Draft without a lecturer</span>
-                        </label>
-                        {allLecturers.length === 0 ? (
-                          <p className="text-xs text-slate-400 text-center py-2">No lecturers found</p>
-                        ) : (
-                          allLecturers.map(l => (
-                            <label key={l._id} className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
-                              <input
-                                type="radio"
-                                name="primaryLecturer"
-                                checked={form.primaryLecturerId === l._id}
-                                onChange={() => handleChange('primaryLecturerId', l._id)}
-                                className="border-slate-300 text-primary focus:ring-primary h-3.5 w-3.5"
-                              />
-                              <span>{l.name} ({l.email})</span>
-                            </label>
-                          ))
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {isLecturer && (
-                    <div className="flex items-center gap-2 p-3 bg-primary-50 border border-primary-100 rounded-xl">
-                      <span className="text-lg">👤</span>
-                      <p className="text-xs text-primary font-medium">Lớp sẽ được tự động gán cho bạn.</p>
-                    </div>
-                  )}
-                </>
-              )}
-
-              {/* Preview */}
-              {preview.length > 0 && (
-                <div className="bg-slate-50 rounded-xl p-3 border border-slate-100">
-                  <p className="text-xs font-semibold text-slate-500 mb-2">
-                    {isLecturer ? 'Preview' : `Preview (first ${preview.length} of ${form.count})`}
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    {preview.map(code => (
-                      <span key={code} className="px-2 py-0.5 bg-primary-50 text-primary text-xs font-mono rounded-lg">{code}</span>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-
-          {/* TAB 2: IMPORT EXCEL (FOR LECTURER) */}
-          {isLecturer && classFeatureFlags.lecturerStudentImport && tabMode === 'excel' && (
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Subject Code *</label>
-                <select
-                  value={form.subjectCode}
-                  onChange={(event) => handleChange('subjectCode', event.target.value)}
-                  className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none bg-white focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                >
-                  {subjects.map(subject => (
-                    <option key={subject.subjectCode} value={subject.subjectCode}>{subject.subjectCode}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Helper info banner */}
-              <div className="p-3.5 bg-blue-50/70 border border-blue-100 rounded-xl text-xs text-blue-800 leading-relaxed">
-                The <strong className="font-semibold text-blue-900">Class</strong> column determines the classes to create, for example <strong className="font-mono text-blue-900">EXE101_4</strong> or <strong className="font-mono text-blue-900">EXE201_2</strong>. Each student will be imported into the matching class, and all new classes will be assigned to you.
-              </div>
-
-              {/* File Dropzone */}
-              <div
-                onClick={() => fileInputRef.current?.click()}
-                className={`border-2 border-dashed rounded-2xl p-8 text-center cursor-pointer transition-all ${
-                  excelError
-                    ? 'border-red-300 bg-red-50/50'
-                    : excelFile
-                    ? 'border-green-300 bg-green-50/50'
-                    : 'border-slate-200 bg-slate-50/50 hover:border-primary/50 hover:bg-primary-50/30'
-                }`}
-              >
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".xlsx,.xls,.csv"
-                  className="hidden"
-                  onChange={(e) => handleExcelFileSelect(e.target.files?.[0])}
-                />
-                <div className="mx-auto w-12 h-12 rounded-2xl bg-white border border-slate-200/60 shadow-xs flex items-center justify-center text-slate-400 mb-3">
-                  {parsingExcel ? (
-                    <Loader2 className="w-6 h-6 animate-spin text-primary" />
-                  ) : excelFile ? (
-                    <CheckCircle2 className="w-6 h-6 text-green-600" />
-                  ) : (
-                    <Upload className="w-6 h-6" />
-                  )}
-                </div>
-
-                {parsingExcel ? (
-                  <p className="text-sm font-medium text-slate-600">Reading Excel file...</p>
-                ) : excelFile ? (
-                  <div>
-                    <p className="text-sm font-semibold text-slate-900">{excelFile.name}</p>
-                    <p className="text-xs text-green-600 font-medium mt-1">
-                      {excelParsedRows.length} student rows detected
-                    </p>
-                  </div>
-                ) : (
-                  <div>
-                    <p className="text-sm font-semibold text-slate-800">Drop an Excel file here or click to browse</p>
-                    <p className="text-xs text-slate-400 mt-1">Required: Class, RollNumber, Email, FullName</p>
-                  </div>
-                )}
-              </div>
-
-              {excelError && (
-                <div className="p-3 bg-red-50 border border-red-100 rounded-xl text-xs text-red-600 flex items-center gap-2">
-                  <AlertTriangle className="w-4 h-4 shrink-0" />
-                  <span>{excelError}</span>
-                </div>
-              )}
-
-              {serverPreview && (
-                <div className={`rounded-xl border p-3 ${serverPreview.invalidCount > 0 ? 'border-red-200 bg-red-50' : 'border-green-200 bg-green-50'}`}>
-                  <p className="text-xs font-semibold text-slate-700">
-                    Server preview: {serverPreview.validCount}/{serverPreview.totalCount} valid
-                  </p>
-                  <div className="mt-2 max-h-36 space-y-1 overflow-y-auto">
-                    {serverPreview.items.map(item => (
-                      <div key={`${item.classCode}-${item.classIndex}`} className="flex items-start justify-between gap-2 text-xs">
-                        <span className="font-mono text-slate-700">{item.classCode}</span>
-                        <span className={item.isValid ? 'text-green-700' : 'text-red-700'}>
-                          {item.isValid ? 'Ready' : item.errorMessage}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {serverPreview && (
-                <div className={`rounded-xl border p-3 ${serverPreview.invalidCount > 0 ? 'border-red-200 bg-red-50' : 'border-green-200 bg-green-50'}`}>
-                  <p className="text-xs font-semibold text-slate-700">
-                    Server preview: {serverPreview.validCount}/{serverPreview.totalCount} valid
-                  </p>
-                  <div className="mt-2 max-h-36 space-y-1 overflow-y-auto">
-                    {serverPreview.items.map(item => (
-                      <div key={`${item.classCode}-${item.classIndex}`} className="flex items-start justify-between gap-2 text-xs">
-                        <span className="font-mono text-slate-700">{item.classCode}</span>
-                        <span className={item.isValid ? 'text-green-700' : 'text-red-700'}>
-                          {item.isValid ? 'Ready' : item.errorMessage}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {bulkImportResult && (
-                <div className="rounded-xl border border-amber-200 bg-amber-50 p-3.5">
-                  <div className="flex items-start gap-2">
-                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-amber-900">Class creation completed with roster issues</p>
-                      <p className="mt-1 text-xs leading-relaxed text-amber-800">
-                        Imported {bulkImportResult.insertedCount + bulkImportResult.updatedCount} of {bulkImportResult.requestedCount} students.
-                        {' '}{bulkImportResult.errorCount} row(s) were not enrolled.
-                      </p>
-                      <p className="mt-1 text-[11px] leading-relaxed text-amber-700">
-                        The new classes already exist. Resolve the conflicts below, then use Import students on the relevant class; do not create the classes again.
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="mt-3 max-h-44 space-y-2 overflow-y-auto pr-1">
-                    {bulkImportResult.issues.map((issue, index) => (
-                      <div key={`${issue.classCode}-${issue.rowNumber}-${issue.studentCode}-${index}`} className="rounded-lg border border-amber-200/70 bg-white px-3 py-2">
-                        <p className="text-[11px] font-semibold text-slate-800">
-                          {issue.classCode} · {issue.rowNumber > 0 ? `Excel row ${issue.rowNumber}` : 'Import request'}
-                          {issue.studentCode ? ` · ${issue.studentCode}` : ''}
-                        </p>
-                        <p className="mt-0.5 text-[11px] leading-relaxed text-slate-600">{issue.errorMessage}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div className="flex gap-3 p-6 pt-0">
-          {bulkImportResult ? (
-            <button onClick={onClose} className="w-full px-4 py-2.5 bg-primary text-white rounded-xl text-sm font-medium hover:bg-primary-700 transition-all">
-              Close result
-            </button>
           ) : (
             <>
-              <button onClick={onClose} className="flex-1 px-4 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-600 hover:bg-slate-50 transition-all font-medium">
-                Cancel
-              </button>
-              <button
-                onClick={handleSubmit}
-                disabled={submitting || (isLecturer && classFeatureFlags.lecturerStudentImport && tabMode === 'excel' && (!excelFile || excelParsedRows.length === 0))}
-                className="flex-1 px-4 py-2.5 bg-primary text-white rounded-xl text-sm font-medium hover:bg-primary-700 disabled:opacity-50 transition-all flex items-center justify-center gap-2"
-              >
-                {submitting ? (
-                  <><Loader2 className="w-4 h-4 animate-spin" /> Processing...</>
-                ) : !serverPreview ? (
-                  'Preview Classes'
-                ) : isLecturer && classFeatureFlags.lecturerStudentImport && tabMode === 'excel' ? (
-                  <><Upload className="w-4 h-4" /> Confirm &amp; Import</>
-                ) : (
-                  'Confirm & Create'
+              <section>
+                <div className="mb-3">
+                  <h3 className="text-sm font-bold text-slate-800">1. Academic information</h3>
+                  <p className="text-xs text-slate-400">Class codes are generated by the server from subject and class index.</p>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <label htmlFor="create-class-subject" className="mb-1 block text-xs font-semibold text-slate-600">Subject *</label>
+                    <select id="create-class-subject" value={form.subjectCode} onChange={event => updateForm('subjectCode', event.target.value)} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20">
+                      {subjects.length === 0 && <option value="">No active subjects</option>}
+                      {subjects.map(subject => <option key={subject.subjectCode} value={subject.subjectCode}>{subject.subjectCode}{subject.subjectName ? ` — ${subject.subjectName}` : ''}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label htmlFor="create-class-semester" className="mb-1 block text-xs font-semibold text-slate-600">Semester *</label>
+                    <select id="create-class-semester" value={form.semesterId} onChange={event => updateForm('semesterId', event.target.value)} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20">
+                      {semesters.length === 0 && <option value="">No open semesters</option>}
+                      {semesters.map(semester => <option key={semester.id} value={semester.id}>{semester.semester} {semester.year} — {semester.availability} ({semester.status})</option>)}
+                    </select>
+                    {semesters.length === 0 && <p className="mt-1 text-[11px] text-amber-600">Complete expired semesters and configure the current or next semester first.</p>}
+                  </div>
+                  <div>
+                    <label htmlFor="create-class-index" className="mb-1 block text-xs font-semibold text-slate-600">Starting class index *</label>
+                    <input id="create-class-index" type="number" min="1" max="999" value={form.startClassIndex} onChange={event => updateForm('startClassIndex', event.target.value)} className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20" />
+                  </div>
+                  <div>
+                    <label htmlFor="create-class-quantity" className="mb-1 block text-xs font-semibold text-slate-600">Number of classes *</label>
+                    <input id="create-class-quantity" type="number" min="1" max={MAXIMUM_BATCH_SIZE} value={form.quantity} onChange={event => updateForm('quantity', event.target.value)} className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20" />
+                  </div>
+                </div>
+
+                {clientCodes.length > 0 && (
+                  <div className="mt-3 rounded-xl border border-slate-100 bg-slate-50 p-3">
+                    <div className="mb-2 flex items-center justify-between gap-3">
+                      <p className="text-xs font-semibold text-slate-500">Generated class codes</p>
+                      <p className="text-[11px] text-slate-400">The number before each code is its assignment position.</p>
+                    </div>
+                    <div className="max-h-44 overflow-y-auto pr-1">
+                      <div className="flex flex-wrap gap-2">
+                        {clientCodes.map((code, index) => {
+                          const position = index + 1;
+                          const conflict = positionAssignments.conflicts.has(position);
+                          const assignment = positionAssignments.assignments.get(position);
+                          const color = assignment ? LECTURER_COLORS[assignment.lecturerIndex % LECTURER_COLORS.length] : null;
+                          return (
+                            <div
+                              key={code}
+                              className={`rounded-lg border px-2.5 py-1.5 shadow-xs ${
+                                conflict
+                                  ? 'border-red-300 bg-red-50 text-red-700'
+                                  : assignmentMode === 'assign' && color
+                                    ? color.chip
+                                    : 'border-slate-200 bg-white text-slate-600'
+                              }`}
+                              title={conflict ? 'Assigned to multiple lecturers' : assignment?.lecturer.name || 'Unassigned'}
+                            >
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-[10px] font-bold opacity-70">#{position}</span>
+                                <span className="font-mono text-xs font-semibold">{code}</span>
+                              </div>
+                              {assignmentMode === 'assign' && assignment && !conflict && (
+                                <p className="mt-0.5 max-w-28 truncate text-[10px] font-medium">{assignment.lecturer.name}</p>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
                 )}
-              </button>
+              </section>
+
+              <section className="border-t border-slate-100 pt-5">
+                <h3 className="text-sm font-bold text-slate-800">2. Lecturer assignment</h3>
+                <p className="mb-3 text-xs text-slate-400">Assign now is recommended. Unassigned classes remain Draft and are invisible to lecturers.</p>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <button type="button" onClick={() => selectAssignmentMode('assign')} className={`rounded-xl border p-3 text-left transition ${assignmentMode === 'assign' ? 'border-primary bg-primary-50/60 ring-2 ring-primary/10' : 'border-slate-200 hover:bg-slate-50'}`}>
+                    <div className="flex items-center gap-2">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-100"><GraduationCap className="h-4 w-4 text-primary" /></div>
+                      <div><p className="text-sm font-semibold text-slate-800">Assign now</p><p className="text-xs text-slate-400">Create and assign in one operation</p></div>
+                      {assignmentMode === 'assign' && <CheckCircle2 className="ml-auto h-4 w-4 text-primary" />}
+                    </div>
+                  </button>
+                  <button type="button" onClick={() => selectAssignmentMode('unassigned')} className={`rounded-xl border p-3 text-left transition ${assignmentMode === 'unassigned' ? 'border-amber-400 bg-amber-50 ring-2 ring-amber-100' : 'border-slate-200 hover:bg-slate-50'}`}>
+                    <div className="flex items-center gap-2">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-100"><AlertTriangle className="h-4 w-4 text-amber-600" /></div>
+                      <div><p className="text-sm font-semibold text-slate-800">Create unassigned</p><p className="text-xs text-slate-400">Assign a lecturer later</p></div>
+                      {assignmentMode === 'unassigned' && <CheckCircle2 className="ml-auto h-4 w-4 text-amber-600" />}
+                    </div>
+                  </button>
+                </div>
+
+                {assignmentMode === 'assign' && (
+                  <div className="mt-3 rounded-xl border border-slate-200 p-3">
+                    <div className="mb-3 rounded-lg bg-blue-50 px-3 py-2 text-xs text-blue-700">
+                      Enter generated positions for each lecturer. Use commas and ranges, for example <span className="font-semibold">2,4,8</span> or <span className="font-semibold">1-3,6</span>.
+                    </div>
+                    <div className="relative mb-2">
+                      <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                      <input type="search" value={lecturerSearch} onChange={event => setLecturerSearch(event.target.value)} placeholder="Search lecturer by name or email..." className="w-full rounded-xl border border-slate-200 py-2 pl-9 pr-3 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20" />
+                    </div>
+                    <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
+                      {filteredLecturers.length === 0 ? (
+                        <p className="py-6 text-center text-xs text-slate-400">No active lecturers found</p>
+                      ) : filteredLecturers.map(lecturer => {
+                        const lecturerIndex = lecturers.findIndex(item => item._id === lecturer._id);
+                        const color = LECTURER_COLORS[lecturerIndex % LECTURER_COLORS.length];
+                        const parsed = parseClassPositions(lecturerPositionInputs[lecturer._id] || '', quantity);
+                        return (
+                          <div key={lecturer._id} className={`grid gap-2 rounded-xl border p-2.5 sm:grid-cols-[minmax(0,1fr)_220px] ${parsed.error ? 'border-red-200 bg-red-50/40' : 'border-slate-100 bg-slate-50/60'}`}>
+                            <div className="flex min-w-0 items-center gap-2">
+                              <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white ${color.dot}`}>{lecturer.name.charAt(0).toUpperCase()}</div>
+                              <div className="min-w-0"><p className="truncate text-xs font-semibold text-slate-800">{lecturer.name}</p><p className="truncate text-[11px] text-slate-400">{lecturer.email}</p></div>
+                            </div>
+                            <div>
+                              <input
+                                type="text"
+                                inputMode="numeric"
+                                value={lecturerPositionInputs[lecturer._id] || ''}
+                                onChange={event => updateLecturerPositions(lecturer._id, event.target.value)}
+                                placeholder="e.g. 2,4,8 or 1-3"
+                                aria-label={`Class positions assigned to ${lecturer.name}`}
+                                className={`w-full rounded-lg border bg-white px-3 py-2 text-xs outline-none focus:ring-2 ${parsed.error ? 'border-red-300 focus:border-red-400 focus:ring-red-100' : 'border-slate-200 focus:border-primary focus:ring-primary/20'}`}
+                              />
+                              {parsed.error && <p className="mt-1 text-[10px] text-red-600">{parsed.error}</p>}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </section>
+
+              {serverPreview && (
+                <section className={`rounded-xl border p-4 ${serverPreview.invalidCount > 0 ? 'border-red-200 bg-red-50' : 'border-green-200 bg-green-50'}`}>
+                  <div className="flex items-center justify-between gap-3">
+                    <div><p className="text-sm font-bold text-slate-800">Server validation</p><p className="text-xs text-slate-500">{serverPreview.validCount} of {serverPreview.totalCount} classes are ready</p></div>
+                    {serverPreview.invalidCount === 0 ? <CheckCircle2 className="h-5 w-5 text-green-600" /> : <AlertTriangle className="h-5 w-5 text-red-600" />}
+                  </div>
+                  <div className="mt-3 max-h-36 space-y-1 overflow-y-auto">
+                    {serverPreview.items.map(item => (
+                      <div key={`${item.classCode}-${item.classIndex}`} className="flex items-start justify-between gap-3 rounded-lg bg-white/70 px-2.5 py-2 text-xs">
+                        <span className="font-mono font-semibold text-slate-700">{item.classCode}</span>
+                        <span className={item.isValid ? 'text-green-700' : 'text-red-700'}>{item.isValid ? (item.primaryLecturerName ? `Assign to ${item.primaryLecturerName}` : 'Create as unassigned Draft') : item.errorMessage}</span>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
             </>
           )}
         </div>
 
-        {classConflict && (
-          <div className="absolute inset-0 z-10 flex items-center justify-center p-4 bg-white/80 backdrop-blur-sm rounded-2xl">
-            <div className="w-full max-w-sm bg-white border border-amber-200 rounded-2xl shadow-float p-5">
-              <div className="flex items-start gap-3">
-                <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center shrink-0">
-                  <AlertTriangle className="w-5 h-5 text-amber-600" />
-                </div>
-                <div>
-                  <h3 className="text-base font-bold text-slate-900">Class code already exists</h3>
-                  <p className="text-sm text-slate-600 mt-1">
-                    {classConflict.classCode} has already been created by {classConflict.lecturer?.name || 'another lecturer'}.
-                  </p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 gap-2 mt-4">
-                <button
-                  type="button"
-                  onClick={handleConflictMine}
-                  className="px-4 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-700 hover:bg-slate-50 transition-all"
-                >
-                  Issue is on my side
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+        <div className="flex gap-3 border-t border-slate-100 bg-white px-6 py-4">
+          <button type="button" onClick={onClose} className="flex-1 rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50">Cancel</button>
+          <button type="button" onClick={handleSubmit} disabled={loadingOptions || submitting} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-primary-700 disabled:opacity-50">
+            {submitting ? <><Loader2 className="h-4 w-4 animate-spin" /> Processing...</> : serverPreview ? 'Confirm & Create' : 'Preview Classes'}
+          </button>
+        </div>
       </div>
     </div>
   );

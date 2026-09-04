@@ -28,6 +28,7 @@ public class Project : AuditableEntity
 
     // Navigation properties
     public virtual ICollection<ProjectTag> ProjectTags { get; set; } = new List<ProjectTag>();
+    public virtual ICollection<ProjectActivityLog> ActivityLogs { get; set; } = new List<ProjectActivityLog>();
     public virtual ICollection<Submission> Submissions { get; set; } = new List<Submission>();
     public virtual ICollection<Evaluation> Evaluations { get; set; } = new List<Evaluation>();
     public virtual ICollection<MentorAssignment> MentorAssignments { get; set; } = new List<MentorAssignment>();

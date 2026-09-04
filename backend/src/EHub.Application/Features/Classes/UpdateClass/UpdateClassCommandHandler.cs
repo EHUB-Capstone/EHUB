@@ -97,9 +97,10 @@ public sealed class UpdateClassCommandHandler : IUpdateClassCommandHandler
             return Failure(ErrorCodes.ClassNotFound, "The requested class was not found.");
         }
 
-        if (targetClass.Status == ClassStatus.Archived)
+        var mutationError = ClassStateRules.GetMutationError(targetClass.Status);
+        if (mutationError != null)
         {
-            return Failure(ErrorCodes.ClassArchived, "Cannot update information of an archived class.");
+            return Failure(mutationError.Code, mutationError.Message);
         }
 
         if (targetClass.Version != expectedVersion)
@@ -173,11 +174,9 @@ public sealed class UpdateClassCommandHandler : IUpdateClassCommandHandler
         string currentUserRole,
         CancellationToken cancellationToken = default)
     {
-        var isStaff = string.Equals(currentUserRole, SystemRoles.Admin, StringComparison.OrdinalIgnoreCase) ||
-                      string.Equals(currentUserRole, SystemRoles.Lecturer, StringComparison.OrdinalIgnoreCase);
-        if (!isStaff)
+        if (!ClassAuthorizationRules.IsAdmin(currentUserRole))
         {
-            return Failure(ErrorCodes.ClassAccessDenied, "Only Admin or Lecturer can update teaching assignments.");
+            return Failure(ErrorCodes.ClassAccessDenied, "Only an administrator can update teaching assignments.");
         }
 
         if (!uint.TryParse(request.RowVersion, out var expectedVersion))
@@ -229,9 +228,10 @@ public sealed class UpdateClassCommandHandler : IUpdateClassCommandHandler
             return Failure(ErrorCodes.ClassNotFound, "The requested class was not found.");
         }
 
-        if (targetClass.Status == ClassStatus.Archived)
+        var mutationError = ClassStateRules.GetMutationError(targetClass.Status);
+        if (mutationError != null)
         {
-            return Failure(ErrorCodes.ClassArchived, "Cannot update an archived class.");
+            return Failure(mutationError.Code, mutationError.Message);
         }
 
         if (targetClass.Version != expectedVersion)
@@ -255,6 +255,23 @@ public sealed class UpdateClassCommandHandler : IUpdateClassCommandHandler
                 return Failure(
                     ErrorCodes.ClassInvalidLecturer,
                     "The specified lecturer does not exist, is inactive, or does not have LECTURER role.");
+            }
+
+
+            var isListedForSemester = await _context.SemesterStaffAssignments
+                .AsNoTracking()
+                .AnyAsync(
+                    item =>
+                        item.SemesterId == targetClass.SemesterId &&
+                        item.UserId == newLecturer.Id &&
+                        item.Role == SemesterStaffRole.Lecturer &&
+                        item.Status == SemesterStaffStatus.Active,
+                    cancellationToken);
+            if (!isListedForSemester)
+            {
+                return Failure(
+                    ErrorCodes.ClassInvalidLecturer,
+                    "The specified lecturer is not active in this semester's teaching staff list.");
             }
         }
 
@@ -370,7 +387,7 @@ public sealed class UpdateClassCommandHandler : IUpdateClassCommandHandler
                 @class.Id != targetClass.Id &&
                 @class.SemesterId == targetClass.SemesterId &&
                 @class.PrimaryLecturerId == lecturerId &&
-                @class.Status != ClassStatus.Archived &&
+                (@class.Status == ClassStatus.Draft || @class.Status == ClassStatus.Active) &&
                 @class.ScheduleJson != null)
             .Select(@class => new { @class.ClassCode, @class.ScheduleJson })
             .ToListAsync(cancellationToken);
@@ -412,7 +429,7 @@ public sealed class UpdateClassCommandHandler : IUpdateClassCommandHandler
             .Where(@class =>
                 @class.Id != targetClass.Id &&
                 @class.SemesterId == targetClass.SemesterId &&
-                @class.Status != ClassStatus.Archived &&
+                (@class.Status == ClassStatus.Draft || @class.Status == ClassStatus.Active) &&
                 @class.ScheduleJson != null)
             .Select(@class => new { @class.ClassCode, @class.Room, @class.ScheduleJson })
             .ToListAsync(cancellationToken);
@@ -451,6 +468,7 @@ public sealed class UpdateClassCommandHandler : IUpdateClassCommandHandler
         return new ClassResponse
         {
             Id = targetClass.Id,
+            Slug = targetClass.Slug,
             ClassCode = targetClass.ClassCode,
             ClassIndex = targetClass.ClassIndex,
             CourseId = targetClass.CourseId,

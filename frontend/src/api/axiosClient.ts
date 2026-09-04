@@ -57,7 +57,7 @@ function clearAuth() {
 axiosClient.interceptors.response.use(
   response => response.data,
   async error => {
-    const originalRequest = error.config as AxiosRequestConfig & { _retry?: boolean };
+    const originalRequest = (error.config ?? {}) as AxiosRequestConfig & { _retry?: boolean };
 
     // Do not intercept 401 for auth endpoints
     const isAuthEndpoint = originalRequest.url?.includes('/auth/login') ||

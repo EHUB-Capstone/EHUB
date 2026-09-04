@@ -78,17 +78,22 @@ public static class AuthenticationExtensions
             {
                 OnAuthenticationFailed = context =>
                 {
-                    Console.WriteLine($"[JWT] Authentication FAILED: {context.Exception.GetType().Name}: {context.Exception.Message}");
-                    return Task.CompletedTask;
-                },
-                OnTokenValidated = context =>
-                {
-                    Console.WriteLine($"[JWT] Token VALIDATED for: {context.Principal?.Identity?.Name}");
+                    var logger = context.HttpContext.RequestServices
+                        .GetRequiredService<ILoggerFactory>()
+                        .CreateLogger("JwtAuthentication");
+                    logger.LogWarning(
+                        "JWT authentication failed with {ExceptionType}",
+                        context.Exception.GetType().Name);
                     return Task.CompletedTask;
                 },
                 OnChallenge = context =>
                 {
-                    Console.WriteLine($"[JWT] Challenge issued. Error: {context.Error}, Desc: {context.ErrorDescription}");
+                    var logger = context.HttpContext.RequestServices
+                        .GetRequiredService<ILoggerFactory>()
+                        .CreateLogger("JwtAuthentication");
+                    logger.LogDebug(
+                        "JWT challenge issued with error code {AuthenticationError}",
+                        context.Error);
                     return Task.CompletedTask;
                 }
             };

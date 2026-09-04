@@ -8,6 +8,7 @@ namespace EHub.Domain.Entities;
 public class Class : AuditableEntity
 {
     public string ClassCode { get; set; } = string.Empty;
+    public string Slug { get; set; } = string.Empty;
     public int ClassIndex { get; set; }
 
     public Guid SemesterId { get; set; }
@@ -24,6 +25,11 @@ public class Class : AuditableEntity
 
     public bool IsEnrollmentMajorLocked { get; set; } = false;
     public ClassStatus Status { get; set; } = ClassStatus.Draft;
+
+    public DateTime? CompletedAtUtc { get; set; }
+    public Guid? CompletedByUserId { get; set; }
+    public virtual User? CompletedByUser { get; set; }
+    public string? CompletionReason { get; set; }
 
     public DateTime? ArchivedAtUtc { get; set; }
     public Guid? ArchivedByUserId { get; set; }

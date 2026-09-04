@@ -1,4 +1,5 @@
 using EHub.Contracts.Teams;
+using EHub.Application.Features.Classes.Common;
 using EHub.Domain.Entities;
 using EHub.Domain.Enums;
 
@@ -26,7 +27,10 @@ internal static class TeamMappings
             TeamCode = team.TeamCode,
             TeamName = team.TeamName,
             Description = team.Description,
-            Status = team.Status.ToString(),
+            ProjectName = team.Project?.Name,
+            ProjectDescription = team.Project?.Description,
+            Status = team.Status == TeamStatus.Active ? "APPROVED" : team.Status.ToString(),
+            HasChatGroup = team.ChatGroups.Any(group => !group.IsReadOnly),
             LeaderId = members.FirstOrDefault(member => member.RoleInTeam == TeamMemberRole.Leader.ToString())?.StudentId,
             Members = members,
             CurrentMentorAssignment = activeAssignment == null ? null : ToMentorAssignmentDto(activeAssignment),
@@ -40,7 +44,9 @@ internal static class TeamMappings
         RollNumber = member.ClassStudent.Student.RollNumber ?? string.Empty,
         FullName = member.ClassStudent.Student.FullName,
         Email = member.ClassStudent.Student.Email,
-        MajorCode = member.ClassStudent.MajorCodeAtEnrollment,
+        MajorCode = StudentEnrollmentRules.ResolveEffectiveMajorCode(
+            member.ClassStudent.MajorCodeAtEnrollment,
+            member.ClassStudent.Student.MajorCode) ?? string.Empty,
         RoleInTeam = member.RoleInTeam.ToString(),
         JoinedAtUtc = member.JoinedAt
     };

@@ -1,6 +1,6 @@
 using EHub.Application.Common.Interfaces.Persistence;
+using EHub.Application.Features.Classes.Common;
 using EHub.Contracts.Classes;
-using EHub.Shared.Constants;
 using EHub.Shared.Errors;
 using EHub.Shared.Results;
 using Microsoft.EntityFrameworkCore;
@@ -21,14 +21,22 @@ public sealed class GetClassAuditQueryHandler : IGetClassAuditQueryHandler
         string currentUserRole,
         CancellationToken cancellationToken = default)
     {
-        var isStaff = string.Equals(currentUserRole, SystemRoles.Admin, StringComparison.OrdinalIgnoreCase) ||
-                      string.Equals(currentUserRole, SystemRoles.Lecturer, StringComparison.OrdinalIgnoreCase);
-        if (!isStaff)
-            return Failure(ErrorCodes.ClassAccessDenied, "Only Admin or Lecturer can inspect the class audit trail.");
+        if (!ClassAuthorizationRules.IsStaff(currentUserRole))
+            return Failure(ErrorCodes.ClassAccessDenied, "Only an administrator or assigned lecturer can inspect the class audit trail.");
         if (page < 1 || pageSize is < 1 or > 100)
             return Failure(ErrorCodes.ClassValidationError, "page must be at least 1 and pageSize must be between 1 and 100.");
-        if (!await _context.Classes.AsNoTracking().AnyAsync(item => item.Id == classId, cancellationToken))
+
+        var targetClass = await _context.Classes.AsNoTracking()
+            .Where(item => item.Id == classId)
+            .Select(item => new { item.PrimaryLecturerId })
+            .FirstOrDefaultAsync(cancellationToken);
+        if (targetClass == null)
             return Failure(ErrorCodes.ClassNotFound, "The requested class was not found.");
+        if (!ClassAuthorizationRules.CanManageClass(
+                targetClass.PrimaryLecturerId,
+                currentUserId,
+                currentUserRole))
+            return Failure(ErrorCodes.ClassAccessDenied, "You can only inspect the audit trail for classes assigned to you.");
 
         var query = _context.ClassAuditLogs.AsNoTracking().Where(item => item.ClassId == classId);
         var totalCount = await query.CountAsync(cancellationToken);

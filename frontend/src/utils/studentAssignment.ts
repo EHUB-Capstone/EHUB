@@ -48,6 +48,7 @@ export function directoryRecordToStudent(record: StudentDirectoryRecord): Assign
     email: record.email || null,
     major: record.major || record.majorCode || null,
     classId: record.classId,
+    classCode: record.classCode || null,
     teamId: record.teamId,
     source: 'USER_DIRECTORY',
   };

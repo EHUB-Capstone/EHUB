@@ -118,9 +118,9 @@ const ProfileSettings = () => {
         >
           <span className="text-2xl">⚠️</span>
           <div>
-            <p className="font-semibold text-amber-800 text-sm">Bạn chưa chọn chuyên ngành!</p>
+            <p className="font-semibold text-amber-800 text-sm">You have not selected a major.</p>
             <p className="text-xs text-amber-700 mt-0.5">
-              Vui lòng chọn <strong>Chuyên ngành</strong> bên dưới để có thể sử dụng đầy đủ hệ thống.
+              Select a <strong>Major</strong> below to access all system features.
             </p>
           </div>
         </motion.div>
@@ -213,18 +213,18 @@ const ProfileSettings = () => {
                       <div className="flex items-start gap-2 bg-red-50 p-3 rounded-xl border border-red-100 mb-2">
                         <Lock className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
                         <p className="text-xs text-red-700">
-                          Chuyên ngành của bạn đã bị khóa bởi giảng viên trong một lớp đang tham gia. Không thể thay đổi lúc này.
+                          Your major has been locked by the lecturer of a class you are attending and cannot be changed right now.
                         </p>
                       </div>
                     )}
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1.5">Chuyên ngành (Major)</label>
+                      <label className="block text-sm font-medium text-slate-700 mb-1.5">Major</label>
                       <select
                         value={major} onChange={e => setMajor(e.target.value)} required
                         disabled={user?.isMajorLocked}
                         className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-slate-900 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed"
                       >
-                        <option value="">-- Chọn chuyên ngành --</option>
+                        <option value="">-- Select a major --</option>
                         {TEAM_MAJOR_GROUPS.map(group => (
                           <optgroup key={group.key} label={group.label}>
                             {group.majors.map(m => (

@@ -69,6 +69,7 @@ public class UserRepository : IUserRepository
             .Include(user => user.UserRoles)
                 .ThenInclude(userRole => userRole.Role)
             .Where(user => user.Status == UserStatus.PendingApproval)
+            .Where(user => user.IsEmailVerified)
             .Where(user => user.UserRoles.Any(userRole =>
                 userRole.Role.Name == SystemRoles.Lecturer ||
                 userRole.Role.Name == SystemRoles.Mentor))

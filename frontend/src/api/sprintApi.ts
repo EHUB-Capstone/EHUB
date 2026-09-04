@@ -1,70 +1,49 @@
 // @ts-nocheck
 // frontend/src/api/sprintApi.js
-import axios from 'axios';
-
-const getBaseUrl = () => {
-  const envUrl = import.meta.env.VITE_API_URL;
-  if (!envUrl) return 'http://localhost:5000/api';
-  return envUrl.endsWith('/api') ? envUrl : `${envUrl}/api`;
-};
-const API_URL = getBaseUrl();
-
-const auth = () => ({
-  headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
-});
+import axiosClient from './axiosClient';
 
 // ── Milestones ───────────────────────────────────────────
 
 export const getTeamMilestones = async (teamId) => {
-  const res = await axios.get(`${API_URL}/milestones/team/${teamId}`, auth());
-  return res.data;
+  return axiosClient.get(`/milestones/team/${teamId}`);
 };
 
 export const createMilestone = async (teamId, data) => {
-  const res = await axios.post(`${API_URL}/milestones/team/${teamId}`, data, auth());
-  return res.data;
+  return axiosClient.post(`/milestones/team/${teamId}`, data);
 };
 
 export const updateMilestone = async (milestoneId, data) => {
-  const res = await axios.put(`${API_URL}/milestones/${milestoneId}`, data, auth());
-  return res.data;
+  return axiosClient.put(`/milestones/${milestoneId}`, data);
 };
 
 export const deleteMilestone = async (milestoneId) => {
-  const res = await axios.delete(`${API_URL}/milestones/${milestoneId}`, auth());
-  return res.data;
+  return axiosClient.delete(`/milestones/${milestoneId}`);
 };
 
 // ── Tasks ────────────────────────────────────────────────
 
 export const getTeamTasks = async (teamId, params = {}) => {
-  const res = await axios.get(`${API_URL}/sprint-tasks/team/${teamId}`, { ...auth(), params });
-  return res.data;
+  return axiosClient.get(`/sprint-tasks/team/${teamId}`, { params });
 };
 
 export const createTask = async (teamId, data) => {
-  const res = await axios.post(`${API_URL}/sprint-tasks/team/${teamId}`, data, auth());
-  return res.data;
+  return axiosClient.post(`/sprint-tasks/team/${teamId}`, data);
 };
 
 export const updateTask = async (taskId, data) => {
-  const res = await axios.put(`${API_URL}/sprint-tasks/${taskId}`, data, auth());
-  return res.data;
+  return axiosClient.put(`/sprint-tasks/${taskId}`, data);
 };
 
 export const updateTaskStatus = async (taskId, data) => {
-  const res = await axios.put(`${API_URL}/sprint-tasks/${taskId}/status`, data, auth());
-  return res.data;
+  return axiosClient.put(`/sprint-tasks/${taskId}/status`, data);
 };
 
 export const deleteTask = async (taskId) => {
-  const res = await axios.delete(`${API_URL}/sprint-tasks/${taskId}`, auth());
-  return res.data;
+  return axiosClient.delete(`/sprint-tasks/${taskId}`);
 };
 
 // ── Progress ─────────────────────────────────────────────
 
 export const getTeamProgress = async (teamId) => {
-  const res = await axios.get(`${API_URL}/sprint-tasks/team/${teamId}/progress`, auth());
-  return res.data;
+  return axiosClient.get(`/sprint-tasks/team/${teamId}/progress`);
 };

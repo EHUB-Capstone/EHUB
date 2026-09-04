@@ -15,6 +15,7 @@ import {
   User,
 } from 'lucide-react';
 import { PRIORITY_CFG, STATUSES, STATUS_CFG, WORKFLOW_STATUSES } from '../constants';
+import { taskProgress } from '../../../utils/taskProgress';
 
 const SWIPE_THRESHOLD = 72;
 const SWIPE_LIMIT = 120;
@@ -267,6 +268,7 @@ function TaskCard({
         </div>
 
         <h4 className="mb-1 line-clamp-2 text-sm font-semibold leading-snug text-slate-900">{task.title}</h4>
+        <p className="mb-2 text-xs text-slate-500">{task.taskType === 'COURSE_TEMPLATE' ? 'Course Roadmap · Read only' : task.taskType === 'CLASS_TASK' ? 'Class Requirements · Read only' : 'Team Task'}</p>
         {task.description && <p className="mb-2 line-clamp-2 text-xs leading-relaxed text-slate-500">{task.description}</p>}
 
         {checklist.length > 0 && (
@@ -284,14 +286,14 @@ function TaskCard({
           </div>
         )}
 
-        {checklist.length === 0 && task.completionPercentage > 0 && (
+        {checklist.length === 0 && (
           <div className="mb-3">
             <div className="mb-1 flex items-center justify-between text-[10px] font-medium text-slate-400">
               <span>Progress</span>
-              <span>{task.completionPercentage}%</span>
+              <span>{taskProgress(task)}%</span>
             </div>
             <div className="h-1 overflow-hidden rounded-full bg-slate-100">
-              <div className="h-full rounded-full bg-emerald-500" style={{ width: `${task.completionPercentage}%` }} />
+              <div className="h-full rounded-full bg-emerald-500" style={{ width: `${taskProgress(task)}%` }} />
             </div>
           </div>
         )}

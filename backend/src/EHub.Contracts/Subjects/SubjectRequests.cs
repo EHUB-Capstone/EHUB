@@ -19,6 +19,51 @@ public sealed class SetCurrentSemesterRequest
     public int Year { get; init; }
 }
 
+public sealed class CorrectActiveSemesterRequest
+{
+    public Guid CurrentSemesterId { get; init; }
+    public string CurrentRowVersion { get; init; } = string.Empty;
+    public Guid TargetSemesterId { get; init; }
+    public string TargetRowVersion { get; init; } = string.Empty;
+    public string Reason { get; init; } = string.Empty;
+}
+
+public sealed class PlanSemesterRequest
+{
+    public string Semester { get; init; } = string.Empty;
+    public int Year { get; init; }
+    public DateOnly StartDate { get; init; }
+    public DateOnly EndDate { get; init; }
+}
+
+public sealed class UpdateSemesterDatesRequest
+{
+    public DateOnly StartDate { get; init; }
+    public DateOnly EndDate { get; init; }
+    public string RowVersion { get; init; } = string.Empty;
+    public string Reason { get; init; } = string.Empty;
+}
+
+public sealed class ChangeSemesterLifecycleRequest
+{
+    public string RowVersion { get; init; } = string.Empty;
+    public string Reason { get; init; } = string.Empty;
+}
+
+public sealed class AddSemesterTeachingStaffRequest
+{
+    public string Semester { get; init; } = string.Empty;
+    public int Year { get; init; }
+    public Guid UserId { get; init; }
+    public string Role { get; init; } = string.Empty;
+}
+
+public sealed class UpdateSemesterTeachingStaffRequest
+{
+    public string Status { get; init; } = string.Empty;
+    public string RowVersion { get; init; } = string.Empty;
+}
+
 public sealed class SaveRoadmapItemRequest
 {
     public string Title { get; init; } = string.Empty;

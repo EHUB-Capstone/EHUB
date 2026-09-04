@@ -11,12 +11,16 @@ public interface IApplicationDbContext
     DbSet<Role> Roles { get; }
     DbSet<UserRole> UserRoles { get; }
     DbSet<RefreshToken> RefreshTokens { get; }
+    DbSet<PendingRegistration> PendingRegistrations { get; }
     DbSet<Semester> Semesters { get; }
+    DbSet<SemesterAuditLog> SemesterAuditLogs { get; }
+    DbSet<SemesterStaffAssignment> SemesterStaffAssignments { get; }
     DbSet<Course> Courses { get; }
     DbSet<Class> Classes { get; }
     DbSet<ClassLecturer> ClassLecturers { get; }
     DbSet<ClassAuditLog> ClassAuditLogs { get; }
     DbSet<ClassImportSession> ClassImportSessions { get; }
+    DbSet<LecturerImportSession> LecturerImportSessions { get; }
     DbSet<OutboxMessage> OutboxMessages { get; }
     DbSet<Student> Students { get; }
     DbSet<ClassStudent> ClassStudents { get; }
@@ -29,6 +33,7 @@ public interface IApplicationDbContext
     DbSet<ProjectDirectionReview> ProjectDirectionReviews { get; }
     DbSet<Project> Projects { get; }
     DbSet<ProjectTag> ProjectTags { get; }
+    DbSet<ProjectActivityLog> ProjectActivityLogs { get; }
     DbSet<Checkpoint> Checkpoints { get; }
     DbSet<Submission> Submissions { get; }
     DbSet<SubmissionFile> SubmissionFiles { get; }
@@ -66,6 +71,7 @@ public interface IApplicationDbContext
     DbSet<SprintTask> SprintTasks { get; }
     DbSet<WeeklyTask> WeeklyTasks { get; }
     DbSet<ProjectAnalysis> ProjectAnalyses { get; }
+    DbSet<PasswordResetToken> PasswordResetTokens { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
     void ClearChanges();

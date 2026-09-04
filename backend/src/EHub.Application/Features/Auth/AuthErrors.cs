@@ -67,4 +67,40 @@ public static class AuthErrors
     public static readonly Error PasswordResetTokenInvalid = new(
         ErrorCodes.AuthPasswordResetTokenInvalid,
         "Password reset token is invalid or expired.");
+
+    public static readonly Error EmailVerificationRequired = new(
+        ErrorCodes.AuthEmailVerificationRequired,
+        "Verify your email address before signing in.");
+
+    public static readonly Error RegistrationNotFound = new(
+        ErrorCodes.AuthRegistrationNotFound,
+        "Registration is invalid or no longer available.");
+
+    public static readonly Error VerificationCodeInvalid = new(
+        ErrorCodes.AuthVerificationCodeInvalid,
+        "The verification code is invalid.");
+
+    public static readonly Error VerificationCodeExpired = new(
+        ErrorCodes.AuthVerificationCodeExpired,
+        "The verification code has expired. Request a new code.");
+
+    public static readonly Error VerificationAttemptsExceeded = new(
+        ErrorCodes.AuthVerificationAttemptsExceeded,
+        "Too many invalid verification attempts. Start a new registration.");
+
+    public static readonly Error VerificationResendTooSoon = new(
+        ErrorCodes.AuthVerificationResendTooSoon,
+        "Please wait before requesting another verification code.");
+
+    public static readonly Error VerificationRateLimited = new(
+        ErrorCodes.AuthVerificationRateLimited,
+        "The verification code resend limit has been reached. Try again later.");
+
+    public static readonly Error EmailDeliveryFailed = new(
+        ErrorCodes.AuthEmailDeliveryFailed,
+        "The verification email could not be delivered. Please try again.");
+
+    public static readonly Error RegistrationAlreadyCompleted = new(
+        ErrorCodes.AuthRegistrationAlreadyCompleted,
+        "This registration has already been completed.");
 }

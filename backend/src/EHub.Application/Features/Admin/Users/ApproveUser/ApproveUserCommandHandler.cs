@@ -52,6 +52,11 @@ public sealed class ApproveUserCommandHandler : IApproveUserCommandHandler
             return Result.Failure(AdminUserErrors.UserNotPendingApproval);
         }
 
+        if (!user.IsEmailVerified)
+        {
+            return Result.Failure(AdminUserErrors.EmailNotVerified);
+        }
+
         var roles = user.UserRoles
             .Select(userRole => userRole.Role.Name)
             .ToArray();

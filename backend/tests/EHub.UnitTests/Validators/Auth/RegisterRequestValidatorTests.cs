@@ -86,6 +86,26 @@ public class RegisterRequestValidatorTests
         Assert.Contains(result.Errors, x => x.PropertyName == nameof(RegisterRequest.Password));
     }
 
+    [Theory]
+    [InlineData("12345", false)]
+    [InlineData("123456", true)]
+    public void Should_Enforce_Six_Character_Minimum_Password(string password, bool expectedValid)
+    {
+        var request = new RegisterRequest
+        {
+            FullName = "Nguyen Van A",
+            Email = "student@fpt.edu.vn",
+            Password = password,
+            ConfirmPassword = password,
+            Role = SystemRoles.Student,
+            MajorCode = MajorCodes.BIT_SE
+        };
+
+        var result = _validator.Validate(request);
+
+        Assert.Equal(expectedValid, result.IsValid);
+    }
+
     [Fact]
     public void Should_Have_Error_When_ConfirmPassword_Does_Not_Match()
     {

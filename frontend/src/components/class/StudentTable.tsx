@@ -1,9 +1,10 @@
 import { useState, useMemo, useEffect } from 'react';
 import toast from 'react-hot-toast';
-import { Search, Users, AlertTriangle, UserMinus, RotateCcw, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, Users, AlertTriangle, UserMinus, RotateCcw, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
 import EmptyState from '../ui/EmptyState';
 import { getMajorName, TEAM_MAJOR_GROUPS } from '../../constants/majors';
 import { getDisplayGroupName } from '../../utils/teamDisplay';
+import { isMissingTeamMajor } from '../../utils/teamManagement';
 
 /**
  * Get display label for a major code.
@@ -12,12 +13,12 @@ import { getDisplayGroupName } from '../../utils/teamDisplay';
  * Returns "-" if major is null/empty.
  */
 const majorLabel = (major) => {
-  if (!major || typeof major !== 'string' || !major.trim()) return null;
+  if (isMissingTeamMajor(major)) return null;
   return major.trim().toUpperCase();
 };
 
 const majorTooltip = (major) => {
-  if (!major || typeof major !== 'string' || !major.trim()) return '';
+  if (isMissingTeamMajor(major)) return '';
   const code = major.trim().toUpperCase();
   return getMajorName(code) || code;
 };
@@ -47,6 +48,8 @@ export default function StudentTable({
   onRefresh: _onRefresh = undefined,
   onDeleteStudent = undefined,
   onReEnrollStudent = undefined,
+  onSynchronizeMajors = undefined,
+  synchronizingMajors = false,
   toolbarAction = null,
   selectionDisabled = false,
   maxSelection = 6,
@@ -78,6 +81,10 @@ export default function StudentTable({
       .map(m => m.trim().toUpperCase());
     return [...new Set(codes)].sort();
   }, [students]);
+  const majorMismatchCount = useMemo(
+    () => students.filter(student => student.hasMajorMismatch).length,
+    [students],
+  );
 
   const filtered = useMemo(() => {
     let result = students.filter(s => {
@@ -159,6 +166,12 @@ export default function StudentTable({
   };
 
   const canSelect = (s) => !selectionDisabled && !s.teamId && s.enrollmentStatus === 'Active';
+  const getSelectionBlockReason = (s) => {
+    if (selectionDisabled) return 'Selection is disabled.';
+    if (s.teamId) return 'This student is already assigned or reserved by another team.';
+    if (s.enrollmentStatus !== 'Active') return 'Only active enrollments can be selected.';
+    return '';
+  };
 
   return (
     <div className="overflow-hidden rounded-xl border border-slate-200/70 bg-white shadow-xs">
@@ -181,7 +194,7 @@ export default function StudentTable({
             : setLocalFilterMajor(e.target.value)}
           className="min-h-8 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15 sm:text-sm"
         >
-          <option value="">Tất cả chuyên ngành</option>
+          <option value="">All majors</option>
           {TEAM_MAJOR_GROUPS.map(group => {
             const presentInGroup = serverQuery ? group.majors : group.majors.filter(m => majors.includes(m.code));
             if (presentInGroup.length === 0) return null;
@@ -198,7 +211,7 @@ export default function StudentTable({
             const others = majors.filter(m => !teamMajorCodes.includes(m));
             if (others.length === 0) return null;
             return (
-              <optgroup label="Khác">
+              <optgroup label="Other">
                 {others.map(m => (
                   <option key={m} value={m}>{m}{getMajorName(m) ? ` — ${getMajorName(m)}` : ''}</option>
                 ))}
@@ -222,6 +235,18 @@ export default function StudentTable({
           <span className="inline-flex min-h-8 items-center rounded-lg bg-primary-50 px-2.5 py-1 text-xs font-semibold text-primary">
             {selected.length} selected
           </span>
+        )}
+        {majorMismatchCount > 0 && onSynchronizeMajors && (
+          <button
+            type="button"
+            onClick={onSynchronizeMajors}
+            disabled={synchronizingMajors}
+            className="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-orange-200 bg-orange-50 px-2.5 py-1.5 text-xs font-semibold text-orange-700 transition hover:bg-orange-100 disabled:opacity-50"
+            title="Use the official major imported for this class to correct registered profiles"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${synchronizingMajors ? 'animate-spin' : ''}`} />
+            Synchronize majors ({majorMismatchCount})
+          </button>
         )}
         {toolbarAction}
       </div>
@@ -267,6 +292,7 @@ export default function StudentTable({
                 const mLabel = majorLabel(s.major);
                 const mTooltip = majorTooltip(s.major);
                 const team = s.teamId ? teamMap.get(s.teamId.toString()) : null;
+                const selectionBlockReason = selectable ? '' : getSelectionBlockReason(s);
 
                 const prevStudent = index > 0 ? filtered[index - 1] : null;
                 const isFirstInTeam = s.teamId && (!prevStudent || prevStudent.teamId?.toString() !== s.teamId.toString());
@@ -275,7 +301,7 @@ export default function StudentTable({
                 const rowClass = `transition-colors ${selectable ? 'cursor-pointer hover:bg-slate-50' : ''} ${isSelected ? 'bg-primary-50' : ''} ${isFirstInTeam ? 'border-t-2 border-slate-200' : ''}`;
 
                 return (
-                  <tr key={s._id} onClick={() => selectable && toggleSelect(s._id)} className={rowClass}>
+                  <tr key={s._id} onClick={() => selectable && toggleSelect(s._id)} className={rowClass} title={selectionBlockReason}>
                     {!selectionDisabled && (
                       <td className="px-3 py-2.5">
                         <div className={`flex h-4.5 w-4.5 items-center justify-center rounded-full border-2 transition-all ${isSelected ? 'border-primary bg-primary' : 'border-slate-300'} ${!selectable ? 'opacity-30' : ''}`}>
@@ -311,6 +337,14 @@ export default function StudentTable({
                           <span className="text-[10px] font-medium text-slate-400">
                             {s.majorVerificationStatus || 'Unverified'}
                           </span>
+                          {s.hasMajorMismatch && (
+                            <span
+                              className="flex items-center gap-1 rounded bg-orange-50 px-1.5 py-0.5 text-[10px] font-semibold text-orange-700"
+                              title={`Registered major: ${s.profileMajorCode}. Official imported major: ${s.major}.`}
+                            >
+                              <AlertTriangle className="h-2.5 w-2.5" /> Registered as {s.profileMajorCode}
+                            </span>
+                          )}
                         </div>
                       ) : (
                         <span className="flex w-fit items-center gap-1 rounded-full bg-amber-100 px-1.5 py-0.5 text-[11px] font-semibold text-amber-700" title="Missing major">
@@ -372,6 +406,7 @@ export default function StudentTable({
                             onClick={(e) => { e.stopPropagation(); onDeleteStudent(s); }}
                             className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600"
                             title="Drop enrollment"
+                            aria-label={`Drop enrollment for ${s.fullName || 'student'}`}
                           >
                             <UserMinus className="h-3.5 w-3.5" />
                           </button>
@@ -380,6 +415,7 @@ export default function StudentTable({
                             onClick={(e) => { e.stopPropagation(); onReEnrollStudent(s); }}
                             className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-green-50 hover:text-green-700"
                             title="Re-enroll student"
+                            aria-label={`Re-enroll ${s.fullName || 'student'}`}
                           >
                             <RotateCcw className="h-3.5 w-3.5" />
                           </button>

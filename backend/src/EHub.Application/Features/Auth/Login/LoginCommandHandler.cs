@@ -79,6 +79,14 @@ public sealed class LoginCommandHandler : ILoginCommandHandler
             return Result.Failure<AuthSessionResult>(AuthErrors.InvalidCredentials);
         }
 
+        if (!user.IsEmailVerified)
+        {
+            _logger.LogWarning(
+                "Login blocked because email verification is incomplete. UserId: {UserId}.",
+                user.Id);
+            return Result.Failure<AuthSessionResult>(AuthErrors.EmailVerificationRequired);
+        }
+
         // 4. Validate status (only Active allowed to log in)
         if (user.Status == UserStatus.PendingApproval)
         {

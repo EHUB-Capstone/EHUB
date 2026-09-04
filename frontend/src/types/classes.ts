@@ -1,4 +1,4 @@
-export type ClassStatus = 'Draft' | 'Active' | 'Inactive' | 'Archived';
+export type ClassStatus = 'Draft' | 'Active' | 'Inactive' | 'Completed' | 'Archived';
 
 export interface ClassScheduleSlot {
   dayOfWeek: number;
@@ -21,6 +21,7 @@ export interface ClassMentorSummary {
 
 export interface ClassDto {
   id: string;
+  slug: string;
   classCode: string;
   classIndex: number;
   courseId: string;
@@ -36,10 +37,13 @@ export interface ClassDto {
   schedules: ClassScheduleSlot[];
   isEnrollmentMajorLocked: boolean;
   status: ClassStatus;
+  statusBeforeArchive?: ClassStatus | null;
   studentCount: number;
   teamCount: number;
   mentors: ClassMentorSummary[];
   createdAtUtc: string;
+  completedAtUtc?: string | null;
+  completionReason?: string | null;
   rowVersion: string;
   // Transitional input only. New backend responses use schedules[].
   scheduleJson?: string | null;
@@ -64,6 +68,7 @@ export interface GetClassesParams {
   year?: number;
   subjectCode?: string;
   status?: ClassStatus | '';
+  assignmentStatus?: 'Assigned' | 'Unassigned' | '';
   search?: string;
   page?: number;
   pageSize?: number;
@@ -119,6 +124,12 @@ export interface CreateBulkClassesRequest {
   quantity?: number;
   classIndices?: number[];
   primaryLecturerId?: string;
+  lecturerAssignments?: BulkClassLecturerAssignment[];
+}
+
+export interface BulkClassLecturerAssignment {
+  lecturerId: string;
+  classIndices: number[];
 }
 
 export interface BulkClassPreviewItem {
@@ -126,6 +137,7 @@ export interface BulkClassPreviewItem {
   classIndex: number;
   subjectCode: string;
   semesterCode: string;
+  primaryLecturerId: string | null;
   primaryLecturerName: string | null;
   isValid: boolean;
   errorMessage: string | null;
@@ -143,4 +155,27 @@ export interface ApiEnvelope<T> {
   message: string;
   code?: string | null;
   data: T;
+}
+
+export interface AddStudentToClassPayload {
+  studentCode: string;
+  fullName: string;
+  email: string;
+  majorCode: string | null;
+}
+
+export interface ClassCompletionPreview {
+  classId: string;
+  classCode: string;
+  status: ClassStatus;
+  activeEnrollmentCount: number;
+  droppedEnrollmentCount: number;
+  activeMentorAssignmentCount: number;
+  openTeamProposalCount: number;
+  openProjectDirectionCount: number;
+  processingImportSessionCount: number;
+  scheduledMentoringSessionCount: number;
+  blockers: string[];
+  warnings: string[];
+  rowVersion: string;
 }

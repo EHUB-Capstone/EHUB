@@ -25,6 +25,52 @@ public sealed class SmtpEmailService : IEmailService
         _logger = logger;
     }
 
+    public async Task SendRegistrationOtpAsync(
+        string toEmail,
+        string fullName,
+        string otp,
+        DateTime expiresAtUtc,
+        CancellationToken cancellationToken = default)
+    {
+        var safeFullName = WebUtility.HtmlEncode(fullName);
+        var safeOtp = WebUtility.HtmlEncode(otp);
+        var subject = "[EHUB] Verify your email address";
+        var htmlBody = $"""
+        <div style="font-family:Arial,sans-serif;line-height:1.6;color:#111827;max-width:560px;margin:auto">
+            <h2>Verify your EHUB email</h2>
+            <p>Hello {safeFullName},</p>
+            <p>Use the following one-time code to complete your registration:</p>
+            <div style="font-size:32px;font-weight:700;letter-spacing:8px;padding:16px 20px;background:#f8fafc;border-radius:10px;text-align:center">
+                {safeOtp}
+            </div>
+            <p>This code expires at <strong>{expiresAtUtc:yyyy-MM-dd HH:mm:ss} UTC</strong> and can be used only once.</p>
+            <p>If you did not request this registration, you can ignore this email.</p>
+            <hr />
+            <p style="font-size:12px;color:#6b7280">EHUB - Entrepreneurship Hub</p>
+        </div>
+        """;
+        var textBody = $"""
+        Hello {fullName},
+
+        Your EHUB registration verification code is: {otp}
+
+        This code expires at {expiresAtUtc:yyyy-MM-dd HH:mm:ss} UTC and can be used only once.
+        If you did not request this registration, you can ignore this email.
+
+        EHUB - Entrepreneurship Hub
+        """;
+
+        await SendEmailAsync(
+            toEmail,
+            fullName,
+            subject,
+            htmlBody,
+            textBody,
+            cancellationToken);
+
+        _logger.LogInformation("Registration verification email sent");
+    }
+
     public async Task SendPasswordResetEmailAsync(
         string toEmail,
         string fullName,
@@ -80,9 +126,7 @@ public sealed class SmtpEmailService : IEmailService
             textBody,
             cancellationToken);
 
-        _logger.LogInformation(
-            "Password reset email sent to {Email}",
-            toEmail);
+        _logger.LogInformation("Password reset email sent");
     }
 
     public async Task SendPasswordChangedNotificationAsync(
@@ -125,9 +169,7 @@ public sealed class SmtpEmailService : IEmailService
             textBody,
             cancellationToken);
 
-        _logger.LogInformation(
-            "Password changed notification email sent to {Email}",
-            toEmail);
+        _logger.LogInformation("Password changed notification email sent");
     }
 
     private async Task SendEmailAsync(

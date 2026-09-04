@@ -9,4 +9,7 @@ public interface ITeachingStaffQueryHandler
         string semester,
         int year,
         CancellationToken cancellationToken = default);
+
+    Task<Result<TeachingStaffCandidateListResponse>> GetCandidatesAsync(
+        CancellationToken cancellationToken = default);
 }

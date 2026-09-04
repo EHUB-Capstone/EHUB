@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using EHub.Application.Common.Interfaces.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Hosting;
 using Testcontainers.PostgreSql;
 using EHub.Infrastructure.Persistence;
 using EHub.Infrastructure.Persistence.Seed;
@@ -17,8 +18,7 @@ public sealed class CustomWebApplicationFactory
     : WebApplicationFactory<Program>, Xunit.IAsyncLifetime
 {
     private readonly PostgreSqlContainer _postgresContainer =
-        new PostgreSqlBuilder()
-            .WithImage("postgres:16-alpine")
+        new PostgreSqlBuilder("postgres:16-alpine")
             .WithDatabase("ehub_test_db")
             .WithUsername("ehub_test_user")
             .WithPassword("ehub_test_password")
@@ -51,6 +51,16 @@ public sealed class CustomWebApplicationFactory
 
         builder.ConfigureServices(services =>
         {
+            // Background workers race with explicit outbox assertions and serializable
+            // workflow commands. Integration tests invoke those flows directly, so they
+            // must run against a deterministic database without hosted workers.
+            foreach (var hostedService in services
+                         .Where(descriptor => descriptor.ServiceType == typeof(IHostedService))
+                         .ToArray())
+            {
+                services.Remove(hostedService);
+            }
+
             var dbContextDescriptor = services.SingleOrDefault(
                 d => d.ServiceType == typeof(DbContextOptions<AppDbContext>));
 
@@ -87,6 +97,20 @@ public class FakeEmailService : IEmailService
 {
     public static string? LastResetUrl { get; set; }
     public static string? LastRawToken { get; set; }
+    public static string? LastRegistrationOtp { get; set; }
+    public static string? LastRegistrationEmail { get; set; }
+
+    public Task SendRegistrationOtpAsync(
+        string toEmail,
+        string fullName,
+        string otp,
+        DateTime expiresAtUtc,
+        CancellationToken cancellationToken = default)
+    {
+        LastRegistrationEmail = toEmail;
+        LastRegistrationOtp = otp;
+        return Task.CompletedTask;
+    }
 
     public Task SendPasswordResetEmailAsync(
         string toEmail,

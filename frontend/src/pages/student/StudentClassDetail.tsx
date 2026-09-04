@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ChevronLeft, GraduationCap, Users, Mail, Loader2, LayoutGrid } from 'lucide-react';
+import { ChevronLeft, GraduationCap, Users, Mail, Loader2, LayoutGrid, Lock, UserPlus } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { classApi } from '../../api/classApi';
 import TeamList from '../../components/class/TeamList';
@@ -22,7 +22,7 @@ const semesterLabel = (sem) => {
 };
 
 export default function StudentClassDetail() {
-  const { id } = useParams();
+  const { slug: id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
   const [data, setData] = useState(null);
@@ -35,16 +35,23 @@ export default function StudentClassDetail() {
 
   const fetchClassDetail = useCallback(async () => {
     try {
-      const [detailResponse, proposalResponse] = await Promise.all([
-        classApi.getMyClassDetail(id),
-        classApi.getTeamProposals(id),
-      ]);
+      const detailResponse = await classApi.getMyClassDetail(id);
       const detail = unwrapApiData<any>(detailResponse as any);
+      const classInfo = detail?.class || {};
+      const currentClassId = String(classInfo.id || classInfo._id || id || '');
+      const canonicalSlug = String(classInfo.slug || '').trim();
+
+      if (canonicalSlug && id !== canonicalSlug) {
+        navigate(`/student/classes/${canonicalSlug}`, { replace: true });
+      }
+
+      const proposalResponse = await classApi.getTeamProposals(currentClassId);
       const normalizedStudents = (detail?.students || []).map(student => ({
         ...student,
         _id: student.studentId,
         major: student.majorCode,
-        classId: id,
+        enrollmentStatus: student.enrollmentStatus || classInfo.enrollmentStatus || 'Active',
+        classId: currentClassId,
       }));
       const normalizedTeams = (detail?.teams || []).map(normalizeManagedTeam);
       setData({ ...detail, students: normalizedStudents, teams: normalizedTeams });
@@ -73,9 +80,11 @@ export default function StudentClassDetail() {
   }
 
   const cls      = data?.class;
+  const loadedClassId = cls?.id || cls?._id || id;
   const students = Array.isArray(data?.students) ? data.students : [];
   const teams    = Array.isArray(data?.teams) ? data.teams : [];
   const lecturer = cls?.lectureId;
+  const isReadOnly = cls?.classStatus === 'Completed' || cls?.classStatus === 'Archived';
   const currentUserId = (user?._id || user?.id || '').toString();
   const currentStudent = students.find(s => {
     const studentUserId = (s.userId?._id || s.userId || '').toString();
@@ -83,11 +92,35 @@ export default function StudentClassDetail() {
       || (user?.email && s.email?.toLowerCase() === user.email.toLowerCase());
   });
   const hasTeam = Boolean(currentStudent?.teamId);
+  const reservedProposal = proposals.find((proposal) => {
+    const status = String(proposal.status || '').toUpperCase();
+    return ['DRAFT', 'PENDING', 'NEEDS_REVISION', 'NEEDSREVISION'].includes(status)
+      && getTeamMemberIds(proposal).includes(currentStudent?._id || '');
+  });
+  const canEditReservedProposal = Boolean(
+    proposalToRevise
+    && reservedProposal?._id === proposalToRevise._id
+    && ['NEEDS_REVISION', 'NEEDSREVISION'].includes(String(reservedProposal.status || '').toUpperCase()),
+  );
+  const selectionDisabled = isReadOnly
+    || (hasTeam && !canEditReservedProposal)
+    || Boolean(reservedProposal && !canEditReservedProposal);
 
   const handleTeamCreated = async () => {
     setSelected([]);
     setProposalToRevise(null);
     await fetchClassDetail();
+    setActiveTab('classmates');
+  };
+
+  const startTeamProposal = () => {
+    if (!currentStudent?._id) {
+      toast.error('Your student profile could not be found in this class.');
+      return;
+    }
+
+    setProposalToRevise(null);
+    setSelected([currentStudent._id]);
     setActiveTab('classmates');
   };
 
@@ -161,10 +194,49 @@ export default function StudentClassDetail() {
         </div>
       </div>
 
-      {students.length > 0 && !hasTeam && selected.length > 0 && (
+      {isReadOnly && (
+        <div className="flex items-start gap-2.5 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+          <Lock className="mt-0.5 h-4 w-4 shrink-0" />
+          <div>
+            <p className="font-semibold">
+              {cls?.classStatus === 'Archived' ? 'Archived class' : 'Completed class'} — history is read-only
+            </p>
+            <p className="mt-0.5 text-xs text-blue-700">
+              You can review classmates, teams and proposals, but cannot create or change academic data.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {!isReadOnly && !hasTeam && !reservedProposal && selected.length === 0 && (
+        <div className="flex flex-col gap-3 rounded-xl border border-primary-100 bg-primary-50/60 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-semibold text-slate-800">You do not have a team in this class yet</p>
+            <p className="mt-0.5 text-xs text-slate-600">
+              Choose 4–6 eligible classmates and a leader. Your team is created immediately; only the project proposal needs lecturer review.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={startTeamProposal}
+            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-primary px-3.5 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-primary-600"
+          >
+            <UserPlus className="h-4 w-4" /> Create team
+          </button>
+        </div>
+      )}
+
+      {!isReadOnly && reservedProposal && !canEditReservedProposal && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <p className="font-semibold">Your {reservedProposal.approvedTeamId ? 'project' : 'team'} proposal is {String(reservedProposal.status || 'pending').replaceAll('_', ' ').toLowerCase()}.</p>
+          <p className="mt-0.5 text-xs text-amber-700">{reservedProposal.approvedTeamId ? 'Your team is already active. Only the project proposal is awaiting review.' : 'You cannot join another proposal while this one is open.'} View it in the Class Teams tab.</p>
+        </div>
+      )}
+
+      {students.length > 0 && !selectionDisabled && selected.length > 0 && (
         <div className="sticky top-20 z-30 rounded-2xl bg-white/80 shadow-xl backdrop-blur-md">
           <StudentTeamGeneratePanel
-            classId={id}
+            classId={loadedClassId}
             selected={selected}
             students={students}
             onTeamCreated={handleTeamCreated}
@@ -208,17 +280,26 @@ export default function StudentClassDetail() {
           onSelectionChange={setSelected}
           onRefresh={fetchClassDetail}
           maxSelection={6}
-          selectionDisabled={hasTeam}
-          toolbarAction={!hasTeam && selected.length === 0 ? (
-            <TeamSuggestionTooltip label="Xem hướng dẫn tạo nhóm">
-              <div className="space-y-2">
-                <p className="font-semibold text-white">Hướng dẫn tạo nhóm</p>
-                <p className="text-slate-200">
-                  Chọn chính bạn và các thành viên trong bảng để bắt đầu. Nhóm cần 4–6 thành viên,
-                  có ít nhất một sinh viên nhóm BBA và một sinh viên nhóm BIT.
-                </p>
-              </div>
-            </TeamSuggestionTooltip>
+          selectionDisabled={selectionDisabled}
+          toolbarAction={!selectionDisabled && selected.length === 0 ? (
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={startTeamProposal}
+                className="inline-flex min-h-8 items-center gap-1.5 rounded-lg bg-primary px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-primary-600"
+              >
+                <UserPlus className="h-3.5 w-3.5" /> Create team
+              </button>
+              <TeamSuggestionTooltip label="Xem hướng dẫn tạo nhóm">
+                <div className="space-y-2">
+                  <p className="font-semibold text-white">Hướng dẫn tạo nhóm</p>
+                  <p className="text-slate-200">
+                    Chọn chính bạn và các thành viên trong bảng để bắt đầu. Nhóm cần 4–6 thành viên,
+                    có ít nhất một sinh viên nhóm BBA và một sinh viên nhóm BIT.
+                  </p>
+                </div>
+              </TeamSuggestionTooltip>
+            </div>
           ) : null}
         />
       ) : (

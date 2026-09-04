@@ -18,12 +18,16 @@ public class AppDbContext : DbContext, IApplicationDbContext
     public DbSet<Role> Roles => Set<Role>();
     public DbSet<UserRole> UserRoles => Set<UserRole>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
+    public DbSet<PendingRegistration> PendingRegistrations => Set<PendingRegistration>();
     public DbSet<Semester> Semesters => Set<Semester>();
+    public DbSet<SemesterAuditLog> SemesterAuditLogs => Set<SemesterAuditLog>();
+    public DbSet<SemesterStaffAssignment> SemesterStaffAssignments => Set<SemesterStaffAssignment>();
     public DbSet<Course> Courses => Set<Course>();
     public DbSet<Class> Classes => Set<Class>();
     public DbSet<ClassLecturer> ClassLecturers => Set<ClassLecturer>();
     public DbSet<ClassAuditLog> ClassAuditLogs => Set<ClassAuditLog>();
     public DbSet<ClassImportSession> ClassImportSessions => Set<ClassImportSession>();
+    public DbSet<LecturerImportSession> LecturerImportSessions => Set<LecturerImportSession>();
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
     public DbSet<Student> Students => Set<Student>();
     public DbSet<ClassStudent> ClassStudents => Set<ClassStudent>();
@@ -36,6 +40,7 @@ public class AppDbContext : DbContext, IApplicationDbContext
     public DbSet<ProjectDirectionReview> ProjectDirectionReviews => Set<ProjectDirectionReview>();
     public DbSet<Project> Projects => Set<Project>();
     public DbSet<ProjectTag> ProjectTags => Set<ProjectTag>();
+    public DbSet<ProjectActivityLog> ProjectActivityLogs => Set<ProjectActivityLog>();
     public DbSet<Checkpoint> Checkpoints => Set<Checkpoint>();
     public DbSet<Submission> Submissions => Set<Submission>();
     public DbSet<SubmissionFile> SubmissionFiles => Set<SubmissionFile>();

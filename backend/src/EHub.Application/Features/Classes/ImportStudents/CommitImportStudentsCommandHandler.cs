@@ -98,10 +98,11 @@ public sealed class CommitImportStudentsCommandHandler : ICommitImportStudentsCo
             return Failure(ErrorCodes.ClassNotFound, "The requested class was not found.");
         }
 
-        if (targetClass.Status == ClassStatus.Archived)
+        var mutationError = ClassStateRules.GetMutationError(targetClass.Status);
+        if (mutationError != null)
         {
             await ReleaseAsync(session, cancellationToken);
-            return Failure(ErrorCodes.ClassArchived, "Cannot import students to an archived class.");
+            return Failure(mutationError.Code, mutationError.Message);
         }
 
         if (isLecturer && targetClass.PrimaryLecturerId != currentUserId)
@@ -134,6 +135,7 @@ public sealed class CommitImportStudentsCommandHandler : ICommitImportStudentsCo
                     targetClass,
                     session,
                     rows,
+                    request.SynchronizeProfileMajors,
                     currentUserId,
                     transactionCancellationToken),
                 cancellationToken);
@@ -158,6 +160,7 @@ public sealed class CommitImportStudentsCommandHandler : ICommitImportStudentsCo
         Class targetClass,
         ClassImportSession session,
         IReadOnlyCollection<ImportStudentRowPreviewDto> rows,
+        bool synchronizeProfileMajors,
         Guid currentUserId,
         CancellationToken cancellationToken)
     {
@@ -194,6 +197,7 @@ public sealed class CommitImportStudentsCommandHandler : ICommitImportStudentsCo
 
         var insertedCount = 0;
         var updatedCount = 0;
+        var synchronizedMajorCount = 0;
         var errors = new List<ImportStudentCommitErrorDto>();
 
         foreach (var row in rows)
@@ -203,12 +207,13 @@ public sealed class CommitImportStudentsCommandHandler : ICommitImportStudentsCo
             profilesByEmail.TryGetValue(row.Email, out var emailProfiles);
             var profileByEmail = emailProfiles?.Count == 1 ? emailProfiles[0] : null;
 
-            if ((codeProfiles?.Count ?? 0) > 1 ||
-                (emailProfiles?.Count ?? 0) > 1 ||
-                (profileByCode != null && profileByEmail != null && profileByCode.Id != profileByEmail.Id) ||
-                (profileByCode != null && !string.Equals(profileByCode.Email, row.Email, StringComparison.OrdinalIgnoreCase)) ||
-                (profileByEmail != null &&
-                 !string.Equals(profileByEmail.NormalizedRollNumber ?? profileByEmail.RollNumber, row.StudentCode, StringComparison.OrdinalIgnoreCase)))
+            if (StudentImportIdentityRules.HasConflict(
+                    codeProfiles?.Count ?? 0,
+                    emailProfiles?.Count ?? 0,
+                    profileByCode,
+                    profileByEmail,
+                    row.StudentCode,
+                    row.Email))
             {
                 errors.Add(RowError(row, ErrorCodes.ClassStudentIdentityConflict, "Student code and email no longer identify one unique student profile."));
                 continue;
@@ -261,6 +266,32 @@ public sealed class CommitImportStudentsCommandHandler : ICommitImportStudentsCo
                 profilesByCode[row.StudentCode] = [profile];
                 profilesByEmail[row.Email] = [profile];
             }
+            else
+            {
+                if (StudentImportIdentityRules.CompleteMissingIdentity(profile, row.StudentCode, row.Email))
+                {
+                    profile.UpdatedAt = DateTime.UtcNow;
+                    profile.UpdatedBy = currentUserId;
+                    profilesByCode[row.StudentCode] = [profile];
+                    profilesByEmail[row.Email] = [profile];
+                    updatedCount++;
+                }
+
+                if (synchronizeProfileMajors &&
+                    profile.UserId.HasValue &&
+                    MajorCodes.IsValid(row.MajorCode))
+                {
+                    var importedMajor = row.MajorCode.Trim().ToUpperInvariant();
+                    var registeredMajor = profile.MajorCode?.Trim().ToUpperInvariant();
+                    if (!string.Equals(importedMajor, registeredMajor, StringComparison.OrdinalIgnoreCase))
+                    {
+                        profile.MajorCode = importedMajor;
+                        profile.UpdatedAt = DateTime.UtcNow;
+                        profile.UpdatedBy = currentUserId;
+                        synchronizedMajorCount++;
+                    }
+                }
+            }
 
             currentEnrollment = new ClassStudent
             {
@@ -295,6 +326,8 @@ public sealed class CommitImportStudentsCommandHandler : ICommitImportStudentsCo
                 SessionId = session.Id,
                 InsertedCount = insertedCount,
                 UpdatedCount = updatedCount,
+                SynchronizedMajorCount = synchronizedMajorCount,
+                SynchronizeProfileMajors = synchronizeProfileMajors,
                 ErrorCount = errors.Count
             }, JsonOptions)
         });
@@ -311,6 +344,7 @@ public sealed class CommitImportStudentsCommandHandler : ICommitImportStudentsCo
         {
             InsertedCount = insertedCount,
             UpdatedCount = updatedCount,
+            SynchronizedMajorCount = synchronizedMajorCount,
             SkippedCount = errors.Count,
             ErrorCount = errors.Count,
             Errors = errors

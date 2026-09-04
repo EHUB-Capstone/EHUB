@@ -24,6 +24,25 @@ public class PasswordResetIntegrationTests
         FakeEmailService.LastResetUrl = null;
     }
 
+    private async Task RegisterAndVerifyAsync(RegisterRequest request)
+    {
+        FakeEmailService.LastRegistrationOtp = null;
+        var registerResponse = await _client.PostAsJsonAsync("/api/auth/register", request);
+        registerResponse.StatusCode.Should().Be(HttpStatusCode.Accepted);
+        var registerBody = await registerResponse.Content.ReadFromJsonAsync<ApiResponse<RegisterResponse>>();
+        registerBody!.Data!.RegistrationId.Should().NotBeNull();
+        FakeEmailService.LastRegistrationOtp.Should().MatchRegex("^[0-9]{6}$");
+
+        var verifyResponse = await _client.PostAsJsonAsync(
+            "/api/auth/register/verify-otp",
+            new VerifyRegistrationOtpRequest
+            {
+                RegistrationId = registerBody.Data.RegistrationId!.Value,
+                Otp = FakeEmailService.LastRegistrationOtp!
+            });
+        verifyResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
     [Fact]
     public async Task ForgotPassword_Should_Return_200_Generic_Whether_Email_Exists_Or_Not()
     {
@@ -48,7 +67,7 @@ public class PasswordResetIntegrationTests
             Role = "Student",
             MajorCode = "BIT_SE"
         };
-        await _client.PostAsJsonAsync("/api/auth/register", registerRequest);
+        await RegisterAndVerifyAsync(registerRequest);
 
         var requestExistent = new ForgotPasswordRequest { Email = uniqueEmail };
         var response2 = await _client.PostAsJsonAsync("/api/auth/forgot-password", requestExistent);
@@ -76,7 +95,7 @@ public class PasswordResetIntegrationTests
             Role = "Student",
             MajorCode = "BIT_SE"
         };
-        await _client.PostAsJsonAsync("/api/auth/register", registerRequest);
+        await RegisterAndVerifyAsync(registerRequest);
 
         // 2. Request forgot password
         var forgotRequest = new ForgotPasswordRequest { Email = uniqueEmail };

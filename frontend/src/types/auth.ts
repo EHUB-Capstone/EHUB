@@ -16,9 +16,14 @@ export interface AuthResponse {
 }
 
 export interface RegisterResult {
-  status: string;           // "Active" | "PendingApproval"
+  status: string;           // "PendingEmailVerification" | "Active" | "PendingApproval"
+  requiresEmailVerification: boolean;
   requiresApproval: boolean;
   message: string;
+  registrationId: string | null;
+  maskedEmail: string | null;
+  verificationExpiresAtUtc: string | null;
+  resendAvailableAtUtc: string | null;
   user: UserSummary | null;
   accessToken: string | null;
   expiresAt: string | null;
@@ -62,6 +67,15 @@ export interface LoginPayload {
   password: string;
 }
 
+export interface VerifyRegistrationOtpPayload {
+  registrationId: string;
+  otp: string;
+}
+
+export interface ResendRegistrationOtpPayload {
+  registrationId: string;
+}
+
 export interface GoogleLoginPayload {
   idToken: string;
 }
@@ -101,13 +115,24 @@ export const AUTH_ERROR_CODES = {
   USER_INACTIVE:            'AUTH_USER_INACTIVE',
   ACCOUNT_NOT_REGISTERED:   'AUTH_ACCOUNT_NOT_REGISTERED',
   INVALID_GOOGLE_TOKEN:     'AUTH_INVALID_GOOGLE_TOKEN',
+  GOOGLE_EMAIL_NOT_VERIFIED:'AUTH_GOOGLE_EMAIL_NOT_VERIFIED',
   REFRESH_TOKEN_INVALID:    'AUTH_REFRESH_TOKEN_INVALID',
   REFRESH_TOKEN_EXPIRED:    'AUTH_REFRESH_TOKEN_EXPIRED',
   REFRESH_TOKEN_REVOKED:    'AUTH_REFRESH_TOKEN_REVOKED',
   INVALID_ROLE:             'AUTH_INVALID_ROLE',
   INVALID_MAJOR:            'AUTH_INVALID_MAJOR',
   STUDENT_MAJOR_REQUIRED:   'AUTH_STUDENT_MAJOR_REQUIRED',
+  PASSWORD_CONFIRMATION_MISMATCH: 'AUTH_PASSWORD_CONFIRMATION_MISMATCH',
   PASSWORD_RESET_TOKEN_INVALID: 'AUTH_PASSWORD_RESET_TOKEN_INVALID',
   PASSWORD_RESET_RATE_LIMITED:  'AUTH_PASSWORD_RESET_RATE_LIMITED',
   PASSWORD_RESET_FAILED:        'AUTH_PASSWORD_RESET_FAILED',
+  EMAIL_VERIFICATION_REQUIRED:  'AUTH_EMAIL_VERIFICATION_REQUIRED',
+  REGISTRATION_NOT_FOUND:       'AUTH_REGISTRATION_NOT_FOUND',
+  VERIFICATION_CODE_INVALID:    'AUTH_VERIFICATION_CODE_INVALID',
+  VERIFICATION_CODE_EXPIRED:    'AUTH_VERIFICATION_CODE_EXPIRED',
+  VERIFICATION_ATTEMPTS_EXCEEDED: 'AUTH_VERIFICATION_ATTEMPTS_EXCEEDED',
+  VERIFICATION_RESEND_TOO_SOON: 'AUTH_VERIFICATION_RESEND_TOO_SOON',
+  VERIFICATION_RATE_LIMITED:    'AUTH_VERIFICATION_RATE_LIMITED',
+  EMAIL_DELIVERY_FAILED:        'AUTH_EMAIL_DELIVERY_FAILED',
+  REGISTRATION_ALREADY_COMPLETED: 'AUTH_REGISTRATION_ALREADY_COMPLETED',
 } as const;
