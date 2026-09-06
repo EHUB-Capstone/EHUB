@@ -8,6 +8,7 @@ using EHub.Application.Features.Teams.MentorAssignments;
 using EHub.Application.Features.Teams.ProjectDirections;
 using EHub.Application.Features.Teams.TeamProposals;
 using EHub.Application.Features.Workspaces;
+using EHub.Application.Features.Workspaces.GetCheckpointOverview;
 using EHub.Application.Features.Admin.Users.ManageUsers;
 using EHub.Application.Common.Interfaces.Identity;
 using EHub.Contracts.Classes;
@@ -23,6 +24,7 @@ using EHub.Shared.Errors;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using System.Text.Json;
 
 namespace EHub.IntegrationTests.Classes;
 
@@ -567,6 +569,104 @@ public sealed class TeamWorkflowIntegrationTests
     }
 
     [Fact]
+    public async Task WorkspaceCheckpointOverview_UsesCourseConfigurationAndDeniesOutsiders()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateSeedAsync(context, createProposal: false, createTeam: true);
+        var courseId = await context.Classes
+            .Where(item => item.Id == seed.ClassId)
+            .Select(item => item.CourseId)
+            .SingleAsync();
+        var firstCheckpoint = new Checkpoint
+        {
+            CourseId = courseId,
+            Name = "Startup idea",
+            CheckpointNumber = 1,
+            Description = "Define the problem and proposed solution.",
+            RequirementsJson = JsonSerializer.Serialize(new[] { "Problem", "Solution" }),
+            Status = CheckpointStatus.Open,
+            CreatedById = seed.AdminId,
+            CreatedBy = seed.AdminId
+        };
+        var secondCheckpoint = new Checkpoint
+        {
+            CourseId = courseId,
+            Name = "Market validation",
+            CheckpointNumber = 2,
+            Description = "Validate the target customer.",
+            RequirementsJson = JsonSerializer.Serialize(new[] { "Customer interviews" }),
+            Status = CheckpointStatus.Draft,
+            CreatedById = seed.AdminId,
+            CreatedBy = seed.AdminId
+        };
+        var project = new Project
+        {
+            TeamId = seed.TeamId!.Value,
+            Name = "Checkpoint project",
+            Description = "Project used to verify checkpoint overview data.",
+            Status = ProjectStatus.Draft,
+            CreatedById = seed.ProposerUserId,
+            CreatedBy = seed.ProposerUserId
+        };
+        var submission = new Submission
+        {
+            Project = project,
+            TeamId = seed.TeamId.Value,
+            Checkpoint = firstCheckpoint,
+            SubmittedById = seed.ProposerUserId,
+            Title = "Startup idea draft",
+            Status = SubmissionStatus.Draft,
+            VersionNumber = 1,
+            CreatedBy = seed.ProposerUserId
+        };
+        submission.Files.Add(new SubmissionFile
+        {
+            FileName = "startup-idea.pdf",
+            OriginalName = "Startup Idea.pdf",
+            FileUrl = "https://example.invalid/startup-idea.pdf",
+            CloudinaryPublicId = "integration/startup-idea",
+            MimeType = "application/pdf",
+            FileSize = 1_024,
+            UploadedById = seed.ProposerUserId,
+            UploadedAt = DateTime.UtcNow,
+            CreatedBy = seed.ProposerUserId
+        });
+        context.Checkpoints.AddRange(firstCheckpoint, secondCheckpoint);
+        context.Projects.Add(project);
+        context.Submissions.Add(submission);
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        var handler = scope.ServiceProvider
+            .GetRequiredService<IGetWorkspaceCheckpointOverviewQueryHandler>();
+        var result = await handler.HandleAsync(
+            seed.TeamId.Value,
+            seed.ProposerUserId,
+            SystemRoles.Student);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.Checkpoints.Select(item => item.Title)
+            .Should().ContainInOrder("Startup idea", "Market validation");
+        result.Value.Checkpoints.ElementAt(0).Requirements
+            .Should().BeEquivalentTo("Problem", "Solution");
+        result.Value.Submissions.Should().HaveCount(2);
+        result.Value.Submissions.ElementAt(0).Files.Should().ContainSingle();
+        result.Value.Submissions.ElementAt(0).Files.Single().FileType.Should().Be("pdf");
+        result.Value.Submissions.ElementAt(1).Status.Should().Be("NotSubmitted");
+
+        var outsider = await CreateUserAsync(context, SystemRoles.Student, "checkpoint-outsider");
+        context.ChangeTracker.Clear();
+        var denied = await handler.HandleAsync(
+            seed.TeamId.Value,
+            outsider.Id,
+            SystemRoles.Student);
+
+        denied.IsFailure.Should().BeTrue();
+        denied.Error.Code.Should().Be(ErrorCodes.WorkspaceAccessDenied);
+    }
+
+    [Fact]
     public async Task WorkspaceCreationRejectsDuplicateWorkspaceNonLeaderAndInvalidTags()
     {
         using var scope = _factory.Services.CreateScope();
@@ -1060,7 +1160,7 @@ public sealed class TeamWorkflowIntegrationTests
         }
         await context.SaveChangesAsync();
         (await handler.UpdateWeeklyTaskAsync(created.Value.Id, request, seed.AdminId, SystemRoles.Admin)).IsFailure.Should().BeTrue();
-        (await handler.UpdateWeeklyTaskStatusAsync(created.Value.Id, new UpdateWeeklyTaskStatusRequest { Status = "COMPLETED" }, seed.AdminId, SystemRoles.Admin)).IsFailure.Should().BeTrue();
+        (await handler.UpdateWeeklyTaskStatusAsync(created.Value.Id, new UpdateWeeklyTaskStatusRequest { Status = "COMPLETED", TeamId = seed.TeamId }, seed.AdminId, SystemRoles.Admin)).IsFailure.Should().BeTrue();
         (await handler.DeleteWeeklyTaskAsync(created.Value.Id, seed.AdminId, SystemRoles.Admin)).IsFailure.Should().BeTrue();
         (await handler.CreateWeeklyTaskAsync(request, seed.AdminId, SystemRoles.Admin)).IsFailure.Should().BeTrue();
     }
@@ -1118,7 +1218,7 @@ public sealed class TeamWorkflowIntegrationTests
     }
 
     [Fact]
-    public async Task ExecutionBoard_IncludesAllRoadmapSourcesAndWeeks_WithFiltersAndSharedStatus()
+    public async Task ExecutionBoard_IncludesAllRoadmapSourcesAndWeeks_WithTeamScopedStatus()
     {
         using var scope = _factory.Services.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -1145,11 +1245,22 @@ public sealed class TeamWorkflowIntegrationTests
         var filtered = await handler.GetWeeklyTasksAsync(new WeeklyTaskQuery { TeamId = seed.TeamId, WeekNumber = 2, Search = "TEAM_TASK", Priority = "HIGH" }, seed.ProposerUserId, SystemRoles.Student);
         filtered.Value.TeamTasks.Should().ContainSingle();
         filtered.Value.CourseTasks.Should().BeEmpty();
-        var taskId = board.Value.TeamTasks.Single().Id;
-        (await handler.UpdateWeeklyTaskStatusAsync(taskId, new UpdateWeeklyTaskStatusRequest { Status = "COMPLETED" }, seed.ProposerUserId, SystemRoles.Student)).IsSuccess.Should().BeTrue();
+        var teamTaskId = board.Value.TeamTasks.Single().Id;
+        (await handler.UpdateWeeklyTaskStatusAsync(teamTaskId, new UpdateWeeklyTaskStatusRequest { Status = "COMPLETED", TeamId = seed.TeamId }, seed.ProposerUserId, SystemRoles.Student)).IsSuccess.Should().BeTrue();
+        var courseTaskId = board.Value.CourseTasks.Single().Id;
+        (await handler.UpdateWeeklyTaskStatusAsync(courseTaskId, new UpdateWeeklyTaskStatusRequest { Status = "COMPLETED", TeamId = seed.TeamId }, seed.ProposerUserId, SystemRoles.Student)).IsSuccess.Should().BeTrue();
+        var classTaskId = board.Value.ClassTasks.Single().Id;
+        (await handler.UpdateWeeklyTaskStatusAsync(classTaskId, new UpdateWeeklyTaskStatusRequest { Status = "IN_PROGRESS", TeamId = seed.TeamId }, seed.ProposerUserId, SystemRoles.Student)).IsSuccess.Should().BeTrue();
         var roadmap = await handler.GetWeeklyTasksAsync(new WeeklyTaskQuery { TeamId = seed.TeamId, WeekNumber = 2 }, seed.ProposerUserId, SystemRoles.Student);
         roadmap.Value.TeamTasks.Single().Status.Should().Be("COMPLETED");
-        (await handler.UpdateWeeklyTaskStatusAsync(board.Value.CourseTasks.Single().Id, new UpdateWeeklyTaskStatusRequest { Status = "COMPLETED" }, seed.ProposerUserId, SystemRoles.Student)).IsFailure.Should().BeTrue();
+        var teamRoadmap = await handler.GetWeeklyTasksAsync(new WeeklyTaskQuery { TeamId = seed.TeamId }, seed.ProposerUserId, SystemRoles.Student);
+        teamRoadmap.Value.CourseTasks.Single().Status.Should().Be("COMPLETED");
+        teamRoadmap.Value.ClassTasks.Single().Status.Should().Be("IN_PROGRESS");
+        var otherTeamRoadmap = await handler.GetWeeklyTasksAsync(new WeeklyTaskQuery { TeamId = seed.OtherTeamId }, seed.AdminId, SystemRoles.Admin);
+        otherTeamRoadmap.Value.CourseTasks.Single().Status.Should().Be("TODO");
+        otherTeamRoadmap.Value.ClassTasks.Single().Status.Should().Be("TODO");
+        (await context.WeeklyTasks.SingleAsync(item => item.Id == courseTaskId)).Status.Should().Be(WeeklyTaskStatus.Todo);
+        (await handler.UpdateWeeklyTaskStatusAsync(courseTaskId, new UpdateWeeklyTaskStatusRequest { Status = "COMPLETED", TeamId = seed.OtherTeamId }, seed.ProposerUserId, SystemRoles.Student)).IsFailure.Should().BeTrue();
         (await handler.GetWeeklyTasksAsync(new WeeklyTaskQuery { TeamId = seed.TeamId }, Guid.NewGuid(), SystemRoles.Student)).IsFailure.Should().BeTrue();
     }
 

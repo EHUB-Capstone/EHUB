@@ -44,7 +44,7 @@ export const deleteWeeklyTask = (taskId: string): Promise<ApiEnvelope<null>> =>
 /**
  * PATCH /api/weekly-tasks/:id/status
  * @param {string} taskId
- * @param {Object} payload - { status, checklist? }
+ * @param {Object} payload - { status, teamId?, checklist? }
  */
-export const updateWeeklyTaskStatus = (taskId: string, payload: { status: WeeklyTaskStatus; checklist?: WeeklyTask['checklist'] }): Promise<ApiEnvelope<WeeklyTask>> =>
+export const updateWeeklyTaskStatus = (taskId: string, payload: { status: WeeklyTaskStatus; teamId?: string; checklist?: WeeklyTask['checklist'] }): Promise<ApiEnvelope<WeeklyTask>> =>
   axiosClient.patch(`/weekly-tasks/${taskId}/status`, payload);

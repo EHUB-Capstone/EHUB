@@ -70,6 +70,7 @@ public interface IApplicationDbContext
     DbSet<Milestone> Milestones { get; }
     DbSet<SprintTask> SprintTasks { get; }
     DbSet<WeeklyTask> WeeklyTasks { get; }
+    DbSet<WeeklyTaskTeamProgress> WeeklyTaskTeamProgress { get; }
     DbSet<ProjectAnalysis> ProjectAnalyses { get; }
     DbSet<PasswordResetToken> PasswordResetTokens { get; }
 

@@ -3,11 +3,7 @@
 import axiosClient from './axiosClient';
 
 export const checkpointApi = {
-  // Static config — no team id required
-  getConfig: () =>
-    axiosClient.get('/workspace/checkpoints/config'),
-
-  // All submissions + feedbacks for a team
+  // Subject-configured checkpoints plus the team's latest submission data
   getCheckpointData: (teamId) =>
     axiosClient.get(`/workspace/checkpoints/teams/${teamId}`),
 
