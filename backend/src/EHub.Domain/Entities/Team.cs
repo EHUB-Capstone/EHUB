@@ -30,6 +30,7 @@ public class Team : AuditableEntity
     public virtual ICollection<Milestone> Milestones { get; set; } = new List<Milestone>();
     public virtual ICollection<SprintTask> SprintTasks { get; set; } = new List<SprintTask>();
     public virtual ICollection<WeeklyTask> WeeklyTasks { get; set; } = new List<WeeklyTask>();
+    public virtual ICollection<WeeklyTaskTeamProgress> WeeklyTaskProgress { get; set; } = new List<WeeklyTaskTeamProgress>();
     public virtual ICollection<TeamProposal> ApprovedProposals { get; set; } = new List<TeamProposal>();
     public virtual ProjectDirection? ProjectDirection { get; set; }
 }

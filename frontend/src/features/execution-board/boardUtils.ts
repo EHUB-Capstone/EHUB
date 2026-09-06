@@ -14,6 +14,33 @@ export const normalizeBoardResponse = (response) => {
 
 export const getTaskStatus = (task) => task?.computedStatus || task?.status || 'TODO';
 
+const STATUS_MUTABLE_TASK_TYPES = new Set(['COURSE_TEMPLATE', 'CLASS_TASK', 'TEAM_TASK']);
+
+export const isTaskStatusMutableType = (task) => STATUS_MUTABLE_TASK_TYPES.has(task?.taskType);
+
+export const getDropTarget = (over, taskStatusById) => {
+  if (!over?.id) return null;
+
+  const overId = String(over.id);
+  const dataStatus = over.data?.current?.status;
+  const status = STATUSES.includes(dataStatus)
+    ? dataStatus
+    : overId.startsWith('column-tab-')
+      ? overId.replace('column-tab-', '')
+      : overId.startsWith('column-')
+        ? overId.replace('column-', '')
+        : taskStatusById?.get(over.id) || taskStatusById?.get(overId) || null;
+
+  if (!STATUSES.includes(status)) return null;
+
+  return {
+    status,
+    taskId: over.data?.current?.type === 'task' ? over.id : null,
+  };
+};
+
+export const getDropStatus = (over, taskStatusById) => getDropTarget(over, taskStatusById)?.status || null;
+
 export const groupTasks = (tasks = []) => {
   const grouped = {
     TODO: [],
@@ -92,8 +119,18 @@ const replaceGroupedTask = (grouped, status, taskId, nextTask) => {
   return list.map((task) => (task._id === taskId ? nextTask : task));
 };
 
-export const moveTaskStatusInBoard = (board, taskId, nextStatus) => {
+export const getTaskDropIndex = ({ tasks, activeTaskId, overTaskId, insertAfter = false }) => {
+  const destinationTasks = tasks.filter((task) => task._id !== activeTaskId);
+  if (!overTaskId || overTaskId === activeTaskId) return destinationTasks.length;
+
+  const overIndex = destinationTasks.findIndex((task) => task._id === overTaskId);
+  if (overIndex < 0) return destinationTasks.length;
+  return overIndex + (insertAfter ? 1 : 0);
+};
+
+export const moveTaskStatusInBoard = (board, taskId, nextStatus, destinationIndex) => {
   if (!board) return board;
+  if (!STATUSES.includes(nextStatus)) return board;
 
   const currentTask = board.tasks.find((task) => task._id === taskId);
   if (!currentTask) return board;
@@ -111,26 +148,26 @@ export const moveTaskStatusInBoard = (board, taskId, nextStatus) => {
   };
 
   const tasks = board.tasks.map((task) => (task._id === taskId ? nextTask : task));
+  const previousList = (board.grouped?.[previousStatus] || []).filter((task) => task._id !== taskId);
+  const destinationList = (board.grouped?.[nextStatus] || []).filter((task) => task._id !== taskId);
+  const currentIndex = (board.grouped?.[nextStatus] || []).findIndex((task) => task._id === taskId);
+  const fallbackIndex = previousStatus === nextStatus && currentIndex >= 0 ? currentIndex : 0;
+  const insertionIndex = Number.isInteger(destinationIndex)
+    ? Math.max(0, Math.min(destinationIndex, destinationList.length))
+    : fallbackIndex;
 
-  if (previousStatus === nextStatus) {
-    return {
-      tasks,
-      grouped: {
-        ...board.grouped,
-        [nextStatus]: replaceGroupedTask(board.grouped, nextStatus, taskId, nextTask),
-      },
-      summary: summarizeTasks(tasks),
-    };
+  if (previousStatus === nextStatus && currentIndex === insertionIndex) {
+    return board;
   }
 
-  const previousList = (board.grouped?.[previousStatus] || []).filter((task) => task._id !== taskId);
-  const nextList = [nextTask, ...(board.grouped?.[nextStatus] || [])];
+  const nextList = [...destinationList];
+  nextList.splice(insertionIndex, 0, nextTask);
 
   return {
     tasks,
     grouped: {
       ...board.grouped,
-      [previousStatus]: previousList,
+      ...(previousStatus === nextStatus ? {} : { [previousStatus]: previousList }),
       [nextStatus]: nextList,
     },
     summary: summarizeTasks(tasks),

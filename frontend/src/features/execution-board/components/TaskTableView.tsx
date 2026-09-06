@@ -83,7 +83,7 @@ function TaskTableView({ tasks, permissions, onEditTask, onDeleteTask, onStatusC
                   <td className="px-3 py-3">
                     <div className="line-clamp-2 font-semibold text-slate-900">{task.title || 'Untitled Task'}</div>
                     <div className="mt-1 text-xs text-slate-400">W{task.weekNumber || '—'}</div>
-                    <div className="text-xs text-slate-500">{task.taskType === 'COURSE_TEMPLATE' ? 'Course Roadmap · Read only' : task.taskType === 'CLASS_TASK' ? 'Class Requirements · Read only' : 'Team Task'}</div>
+                    <div className="text-xs text-slate-500">{task.taskType === 'COURSE_TEMPLATE' ? 'Course Roadmap' : task.taskType === 'CLASS_TASK' ? 'Class Requirement' : 'Team Task'}</div>
                   </td>
                   <td className="px-3 py-3 text-slate-600">
                     <div className="line-clamp-2">{task.description || '—'}</div>

@@ -24,6 +24,7 @@ using EHub.Application.Features.Subjects.Roadmap;
 using EHub.Application.Features.Subjects.Rubrics;
 using EHub.Application.Features.Subjects.TeachingStaff;
 using EHub.Application.Features.Tracking;
+using EHub.Application.Features.Workspaces.GetCheckpointOverview;
 using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -97,6 +98,7 @@ public static class DependencyInjection
         services.AddScoped<EHub.Application.Features.Classes.StudentSelfService.IStudentClassSelfServiceHandler, EHub.Application.Features.Classes.StudentSelfService.StudentClassSelfServiceHandler>();
         services.AddScoped<EHub.Application.Features.Workspaces.IProjectWorkspaceHandler, EHub.Application.Features.Workspaces.ProjectWorkspaceHandler>();
         services.AddScoped<EHub.Application.Features.Workspaces.IWorkspaceToolsHandler, EHub.Application.Features.Workspaces.WorkspaceToolsHandler>();
+        services.AddScoped<IGetWorkspaceCheckpointOverviewQueryHandler, GetWorkspaceCheckpointOverviewQueryHandler>();
 
         services.AddScoped<EHub.Application.Common.Interfaces.Authorization.IPermissionService, EHub.Application.Common.Services.Authorization.PermissionService>();
 

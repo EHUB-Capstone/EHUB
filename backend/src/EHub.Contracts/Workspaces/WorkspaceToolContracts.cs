@@ -40,6 +40,7 @@ public sealed class SaveWeeklyTaskRequest
 public sealed class UpdateWeeklyTaskStatusRequest
 {
     public string Status { get; init; } = string.Empty;
+    public Guid? TeamId { get; init; }
     public IReadOnlyCollection<WeeklyTaskChecklistItemDto>? Checklist { get; init; }
 }
 

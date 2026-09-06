@@ -6,6 +6,7 @@ import { checkpointApi } from '../../../api/checkpointApi';
 import CheckpointCard from './CheckpointCard';
 import CheckpointPanel from './CheckpointPanel';
 import ErrorState from '../../ui/ErrorState';
+import { buildWorkspaceCheckpointOverview } from '../../../utils/workspaceCheckpointOverview';
 
 export default function CheckpointSection({
   teamId,
@@ -27,27 +28,14 @@ export default function CheckpointSection({
     setConfigs([]);
     setStats({});
     try {
-      const [config, res] = await Promise.all([checkpointApi.getConfig(), checkpointApi.getCheckpointData(String(teamId))]);
-      if (!config.success || !res.success) throw new Error('Checkpoint request failed');
-      setConfigs(config.data);
-      if (res.success) {
-        const map = {};
-        res.data.submissions.forEach((sub) => {
-          const sorted = [...(sub.files || [])].sort(
-            (a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt)
-          );
-          const reqFilled = (sub.requirementContents || []).filter(
-            (r) => r.content && String(r.content).trim()
-          ).length;
-          map[Number(sub.checkpointNumber)] = {
-            count: sorted.length,
-            latest: sorted[0] || null,
-            reqFilled,
-            reqTotal: sub.requirementContents?.length || 0,
-          };
-        });
-        setStats(map);
-      }
+      const res = await checkpointApi.getCheckpointData(String(teamId));
+      if (!res.success) throw new Error('Checkpoint request failed');
+      const overview = buildWorkspaceCheckpointOverview(
+        res.data?.checkpoints || [],
+        res.data?.submissions || [],
+      );
+      setConfigs(overview.checkpoints);
+      setStats(overview.stats);
     } catch (e) {
       setError(e?.response?.status === 404 || e?.status === 404
         ? 'Checkpoints are not available on this server yet. Submission and feedback are unavailable.'
@@ -83,7 +71,7 @@ export default function CheckpointSection({
               <div>
                 <h2 className="text-lg font-bold text-slate-900">Startup Checkpoints</h2>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  4 milestone stages · submit docs & receive feedback
+                  {configs.length} milestone stage{configs.length === 1 ? '' : 's'} · submit docs & receive feedback
                 </p>
               </div>
             </div>
@@ -96,7 +84,7 @@ export default function CheckpointSection({
                   <Target className="w-4 h-4 text-primary" />
                   <span className="text-sm font-bold text-slate-700">
                     {completedCount}
-                    <span className="text-slate-400 font-medium"> / {configs.length || 4} completed</span>
+                    <span className="text-slate-400 font-medium"> / {configs.length} completed</span>
                   </span>
                 </div>
               )}
@@ -137,6 +125,7 @@ export default function CheckpointSection({
       {selected && (
         <CheckpointPanel
           checkpoint={selected}
+          checkpointCount={configs.length}
           teamId={teamId}
           isEditable={isEditable}
           isReadOnly={isReadOnly}

@@ -12,6 +12,7 @@ import {
   USER_DIRECTORY_MAX_PAGE_SIZE,
 } from '../src/utils/lecturerDirectory.ts';
 import { resolveWorkspaceTab, WORKSPACE_TABS } from '../src/utils/workspaceNavigation.ts';
+import { buildWorkspaceCheckpointOverview } from '../src/utils/workspaceCheckpointOverview.ts';
 
 test('workspace keeps evaluation inside checkpoints and removes standalone evaluation and mentoring tabs', () => {
   assert.deepEqual(WORKSPACE_TABS, ['overview', 'roadmap', 'shortcut']);
@@ -75,4 +76,52 @@ test('lecturer directory normalizes backend identifiers and ignores incomplete r
     { id: 'lecturer-1', fullName: 'Lecturer One', email: 'one@example.com', _id: 'lecturer-1', name: 'Lecturer One' },
     { _id: 'lecturer-2', name: 'Lecturer Two', email: 'two@example.com' },
   ]);
+});
+
+test('workspace checkpoint overview uses configured totals and counts any entered content as progress', () => {
+  const result = buildWorkspaceCheckpointOverview([
+    {
+      number: 1,
+      title: 'Startup idea',
+      requirements: ['Problem', 'Solution'],
+    },
+    {
+      number: 2,
+      title: 'Market validation',
+      requirements: ['Interviews'],
+    },
+  ], [{
+    checkpointNumber: 1,
+    status: 'Draft',
+    requirementContents: [
+      { index: 0, content: 'Validated problem' },
+      { index: 1, content: '   ' },
+    ],
+    files: [
+      { _id: 'older', originalName: 'older.pdf', fileType: 'pdf', fileSize: 10, uploadedAt: '2026-09-01T00:00:00Z' },
+      { _id: 'latest', originalName: 'latest.pdf', fileType: 'pdf', fileSize: 20, uploadedAt: '2026-09-02T00:00:00Z' },
+    ],
+  }]);
+
+  assert.equal(result.checkpoints.length, 2);
+  assert.equal(result.checkpoints[0].icon, 'Users');
+  assert.equal(result.checkpoints[1].icon, 'BarChart2');
+  assert.deepEqual(result.stats[1], {
+    count: 2,
+    latest: {
+      _id: 'latest',
+      originalName: 'latest.pdf',
+      fileType: 'pdf',
+      fileSize: 20,
+      uploadedAt: '2026-09-02T00:00:00Z',
+    },
+    reqFilled: 1,
+    reqTotal: 2,
+  });
+  assert.deepEqual(result.stats[2], {
+    count: 0,
+    latest: null,
+    reqFilled: 0,
+    reqTotal: 1,
+  });
 });
