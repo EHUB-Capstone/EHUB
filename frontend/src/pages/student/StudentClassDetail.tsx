@@ -9,7 +9,7 @@ import StudentTeamGeneratePanel from '../../components/class/StudentTeamGenerate
 import TeamSuggestionTooltip from '../../components/class/TeamSuggestionTooltip';
 import { useAuth } from '../../hooks/useAuth';
 import { unwrapApiData } from '../../utils/classMappers';
-import { normalizeManagedTeam, normalizeTeamProposal, getTeamMemberIds } from '../../utils/teamManagement';
+import { normalizeManagedTeam, normalizeTeamProposal, getTeamMemberIds, mergeTeamsWithLinkedProposals } from '../../utils/teamManagement';
 import ProjectDirectionModal from '../../components/class/ProjectDirectionModal';
 import { teamApi } from '../../api/teamApi';
 import { parseApiError } from '../../utils/apiError';
@@ -83,6 +83,7 @@ export default function StudentClassDetail() {
   const loadedClassId = cls?.id || cls?._id || id;
   const students = Array.isArray(data?.students) ? data.students : [];
   const teams    = Array.isArray(data?.teams) ? data.teams : [];
+  const displayedTeams = mergeTeamsWithLinkedProposals(teams, proposals);
   const lecturer = cls?.lectureId;
   const isReadOnly = cls?.classStatus === 'Completed' || cls?.classStatus === 'Archived';
   const currentUserId = (user?._id || user?.id || '').toString();
@@ -304,7 +305,7 @@ export default function StudentClassDetail() {
         />
       ) : (
         <TeamList
-          teams={[...teams, ...proposals]}
+          teams={displayedTeams}
           onRefresh={fetchClassDetail}
           canDelete={false}
           canManageInfo={false}
@@ -325,7 +326,6 @@ export default function StudentClassDetail() {
           role="STUDENT"
           currentStudentId={currentStudent?._id}
           onClose={() => setDirectionTeam(null)}
-          onChanged={fetchClassDetail}
         />
       )}
     </div>

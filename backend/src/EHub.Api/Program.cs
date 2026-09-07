@@ -129,6 +129,10 @@ app.UseSerilogRequestLogging();
 // CORS must be configured before Authentication & Authorization middleware
 app.UseCors(CorsExtensions.FrontendPolicy);
 app.UseRateLimiter();
+app.UseWebSockets(new WebSocketOptions
+{
+    KeepAliveInterval = TimeSpan.FromSeconds(30)
+});
 
 app.UseAuthentication();
 app.UseAuthorization();

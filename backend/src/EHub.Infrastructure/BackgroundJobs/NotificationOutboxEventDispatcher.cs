@@ -13,20 +13,25 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
 {
     private readonly AppDbContext _context;
     private readonly IClassChatMembershipSynchronizer _chatMembershipSynchronizer;
+    private readonly IProjectDirectionRealtimePublisher _projectDirectionRealtimePublisher;
     private readonly ILogger<NotificationOutboxEventDispatcher> _logger;
 
     public NotificationOutboxEventDispatcher(
         AppDbContext context,
         IClassChatMembershipSynchronizer chatMembershipSynchronizer,
+        IProjectDirectionRealtimePublisher projectDirectionRealtimePublisher,
         ILogger<NotificationOutboxEventDispatcher> logger)
     {
         _context = context;
         _chatMembershipSynchronizer = chatMembershipSynchronizer;
+        _projectDirectionRealtimePublisher = projectDirectionRealtimePublisher;
         _logger = logger;
     }
 
     public async Task DispatchAsync(OutboxMessage message, CancellationToken cancellationToken = default)
     {
+        IReadOnlyCollection<Guid> realtimeNotificationRecipients = [];
+        Guid? realtimeNotificationTeamId = null;
         using var document = JsonDocument.Parse(message.PayloadJson);
         if (!document.RootElement.TryGetProperty("data", out var data))
         {
@@ -125,18 +130,19 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
             case "ProjectDirection.Submitted.v1":
                 await AddForOptionalUserAsync(message, data, "lecturerUserId", NotificationType.ProjectDirectionSubmitted,
                     "Project direction awaiting review", "A team submitted its project direction for your review.", cancellationToken);
+                var lecturerUserId = ReadGuid(data, "lecturerUserId");
+                if (lecturerUserId.HasValue) realtimeNotificationRecipients = [lecturerUserId.Value];
+                realtimeNotificationTeamId = ReadGuid(data, "teamId");
                 break;
             case "ProjectDirection.Reviewed.v1":
                 var directionDecision = ReadString(data, "decision");
-                if (data.TryGetProperty("studentUserIds", out var recipients) && recipients.ValueKind == JsonValueKind.Array)
+                realtimeNotificationRecipients = ReadGuids(data, "studentUserIds");
+                realtimeNotificationTeamId = ReadGuid(data, "teamId");
+                foreach (var userId in realtimeNotificationRecipients)
                 {
-                    foreach (var recipient in recipients.EnumerateArray())
-                    {
-                        if (recipient.TryGetGuid(out var userId))
-                            await AddAsync(message, userId,
-                                directionDecision == "Approved" ? NotificationType.ProjectDirectionApproved : NotificationType.ProjectDirectionNeedsRevision,
-                                "Project direction reviewed", $"Your project direction was reviewed: {directionDecision}.", cancellationToken);
-                    }
+                    await AddAsync(message, userId,
+                        directionDecision == "Approved" ? NotificationType.ProjectDirectionApproved : NotificationType.ProjectDirectionNeedsRevision,
+                        "Project direction reviewed", $"Your project direction was reviewed: {directionDecision}.", cancellationToken);
                 }
                 break;
             case "Team.MentorAssignmentChanged.v1" when ReadString(data, "action") is "Assigned" or "Reassigned":
@@ -152,6 +158,12 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
             await _chatMembershipSynchronizer.SynchronizeAsync(message.AggregateId, cancellationToken: cancellationToken);
 
         await _context.SaveChangesAsync(cancellationToken);
+        if (realtimeNotificationTeamId.HasValue && realtimeNotificationRecipients.Count > 0)
+            await _projectDirectionRealtimePublisher.PublishNotificationReadyAsync(
+                realtimeNotificationRecipients,
+                message.AggregateId,
+                realtimeNotificationTeamId.Value,
+                cancellationToken);
     }
 
     private static bool RequiresChatSynchronization(string eventType) => eventType is
@@ -239,6 +251,7 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
                 notification.SourceEventId == message.EventId && notification.RecipientUserId == recipientUserId, cancellationToken))
             return;
 
+        var link = await BuildLinkAsync(message, cancellationToken);
         _context.Notifications.Add(new Notification
         {
             SourceEventId = message.EventId,
@@ -246,24 +259,77 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
             Type = type,
             Title = title,
             Body = body,
-            Link = BuildLink(message),
+            Link = link,
             DataJson = message.PayloadJson,
             CreatedAt = message.OccurredAtUtc
         });
     }
 
-    private static string? BuildLink(OutboxMessage message) => message.Type switch
+    private async Task<string?> BuildLinkAsync(OutboxMessage message, CancellationToken cancellationToken)
     {
-        "TeamProposal.Submitted.v1" or "ProjectDirection.Submitted.v1" => $"/classes/{message.AggregateId}",
-        "TeamProposal.Reviewed.v1" or "ProjectDirection.Reviewed.v1" => $"/student/classes/{message.AggregateId}",
-        "Team.MentorAssignmentChanged.v1" => "/mentor/dashboard",
-        _ => null
-    };
+        if (message.Type == "ProjectDirection.Submitted.v1")
+        {
+            var classPeriod = await _context.Classes
+                .AsNoTracking()
+                .Where(item => item.Id == message.AggregateId)
+                .Select(item => new { item.Semester.Code, item.Semester.Year })
+                .FirstOrDefaultAsync(cancellationToken);
+            var teamId = ReadPayloadGuid(message.PayloadJson, "teamId");
+            var query = new List<string>();
+
+            if (classPeriod != null)
+            {
+                var semester = classPeriod.Code.Length >= 2
+                    ? classPeriod.Code[..2].ToUpperInvariant()
+                    : string.Empty;
+                if (!string.IsNullOrWhiteSpace(semester)) query.Add($"semester={Uri.EscapeDataString(semester)}");
+                query.Add($"year={classPeriod.Year}");
+            }
+
+            query.Add("tab=overview");
+            query.Add($"classId={message.AggregateId}");
+            if (teamId.HasValue) query.Add($"teamId={teamId.Value}");
+            return $"/lecturer/classes?{string.Join('&', query)}";
+        }
+
+        return message.Type switch
+        {
+            "TeamProposal.Submitted.v1" => $"/classes/{message.AggregateId}",
+            "TeamProposal.Reviewed.v1" or "ProjectDirection.Reviewed.v1" => $"/student/classes/{message.AggregateId}",
+            "Team.MentorAssignmentChanged.v1" => "/mentor/dashboard",
+            _ => null
+        };
+    }
+
+    private static Guid? ReadPayloadGuid(string payloadJson, string propertyName)
+    {
+        using var document = JsonDocument.Parse(payloadJson);
+        return document.RootElement.TryGetProperty("data", out var data)
+            && data.TryGetProperty(propertyName, out var property)
+            && property.TryGetGuid(out var value)
+                ? value
+                : null;
+    }
 
     private static string ReadString(JsonElement data, string propertyName) =>
         data.TryGetProperty(propertyName, out var value) && value.ValueKind == JsonValueKind.String
             ? value.GetString() ?? string.Empty
             : string.Empty;
+
+    private static Guid? ReadGuid(JsonElement data, string propertyName) =>
+        data.TryGetProperty(propertyName, out var value) && value.TryGetGuid(out var parsed)
+            ? parsed
+            : null;
+
+    private static Guid[] ReadGuids(JsonElement data, string propertyName) =>
+        data.TryGetProperty(propertyName, out var values) && values.ValueKind == JsonValueKind.Array
+            ? values.EnumerateArray()
+                .Select(value => value.TryGetGuid(out var parsed) ? (Guid?)parsed : null)
+                .Where(value => value.HasValue)
+                .Select(value => value!.Value)
+                .Distinct()
+                .ToArray()
+            : [];
 
     private static bool ReadBoolean(JsonElement data, string propertyName) =>
         data.TryGetProperty(propertyName, out var value) && value.ValueKind is JsonValueKind.True or JsonValueKind.False && value.GetBoolean();

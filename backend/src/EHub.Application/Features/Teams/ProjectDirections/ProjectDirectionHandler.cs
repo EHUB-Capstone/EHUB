@@ -1,4 +1,5 @@
 using EHub.Application.Common.Interfaces.Persistence;
+using EHub.Application.Common.Interfaces.Services;
 using EHub.Application.Features.Classes.Common;
 using EHub.Contracts.Teams;
 using EHub.Domain.Entities;
@@ -13,10 +14,14 @@ namespace EHub.Application.Features.Teams.ProjectDirections;
 public sealed class ProjectDirectionHandler : IProjectDirectionHandler
 {
     private readonly IApplicationDbContext _context;
+    private readonly IProjectDirectionRealtimePublisher? _realtimePublisher;
 
-    public ProjectDirectionHandler(IApplicationDbContext context)
+    public ProjectDirectionHandler(
+        IApplicationDbContext context,
+        IProjectDirectionRealtimePublisher? realtimePublisher = null)
     {
         _context = context;
+        _realtimePublisher = realtimePublisher;
     }
 
     public async Task<Result<ProjectDirectionDto>> GetAsync(
@@ -103,7 +108,16 @@ public sealed class ProjectDirectionHandler : IProjectDirectionHandler
         }, now);
         try { await _context.SaveChangesAsync(cancellationToken); }
         catch (DbUpdateConcurrencyException) { return Failure(ErrorCodes.ClassConcurrencyConflict, "The project direction changed concurrently. Refresh and try again."); }
-        return Result.Success(ToDto(direction));
+        var directionDto = ToDto(direction);
+        if (team.Class.PrimaryLecturerId.HasValue && _realtimePublisher != null)
+            await _realtimePublisher.PublishAsync(
+                [team.Class.PrimaryLecturerId.Value],
+                "ProjectDirectionSubmitted",
+                team.ClassId,
+                teamId,
+                directionDto,
+                cancellationToken);
+        return Result.Success(directionDto);
     }
 
     public async Task<Result<ProjectDirectionDto>> ReviewAsync(
@@ -143,17 +157,27 @@ public sealed class ProjectDirectionHandler : IProjectDirectionHandler
             ReviewedByUserId = userId,
             OccurredAtUtc = now
         });
+        var studentUserIds = team.TeamMembers.Where(member => member.CountsTowardActiveTeam && member.ClassStudent.Student.UserId.HasValue)
+            .Select(member => member.ClassStudent.Student.UserId!.Value).Distinct().ToArray();
         ClassOutbox.Enqueue(_context, "ProjectDirection.Reviewed.v1", team.ClassId, new
         {
             TeamId = teamId,
             ProjectDirectionId = direction.Id,
             Decision = decision.ToString(),
-            StudentUserIds = team.TeamMembers.Where(member => member.CountsTowardActiveTeam && member.ClassStudent.Student.UserId.HasValue)
-                .Select(member => member.ClassStudent.Student.UserId!.Value).ToArray()
+            StudentUserIds = studentUserIds
         }, now);
         try { await _context.SaveChangesAsync(cancellationToken); }
         catch (DbUpdateConcurrencyException) { return Failure(ErrorCodes.ClassConcurrencyConflict, "The project direction was reviewed concurrently. Refresh the page."); }
-        return Result.Success(ToDto(direction));
+        var directionDto = ToDto(direction);
+        if (_realtimePublisher != null)
+            await _realtimePublisher.PublishAsync(
+                studentUserIds,
+                "ProjectDirectionReviewed",
+                team.ClassId,
+                teamId,
+                directionDto,
+                cancellationToken);
+        return Result.Success(directionDto);
     }
 
     private IQueryable<Team> TeamAccessQuery() => _context.Teams

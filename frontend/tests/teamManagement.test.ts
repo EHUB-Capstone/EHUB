@@ -3,6 +3,9 @@ import test from 'node:test';
 import type { ManagedTeam, TeamDraft, TeamStudent } from '../src/types/teamManagement.ts';
 import {
   getTeamProject,
+  mergeTeamsWithLinkedProposals,
+  normalizeManagedTeam,
+  normalizeTeamProposal,
   resolveEffectiveTeamMajor,
   validateTeamDraft,
   validateTeamSelection,
@@ -172,6 +175,50 @@ test('reads linked project information from legacy team fields', () => {
     description: 'Existing project information.',
     status: 'VALIDATED',
   });
+});
+
+test('merges a project proposal into its linked team instead of rendering a duplicate team card', () => {
+  const team = normalizeManagedTeam({
+    id: 'team-1',
+    classId: 'class-1',
+    teamCode: 'EXE101_1_TEAM_2',
+    teamName: 'SMEP',
+    status: 'APPROVED',
+    members: [],
+  });
+  const proposal = normalizeTeamProposal({
+    id: 'proposal-1',
+    classId: 'class-1',
+    approvedTeamId: 'team-1',
+    teamName: 'SMEP',
+    projectName: 'SMEP',
+    description: 'Project proposal description.',
+    status: 'Approved',
+    members: [],
+  });
+
+  const result = mergeTeamsWithLinkedProposals([team], [proposal]);
+
+  assert.equal(result.length, 1);
+  assert.equal(result[0]._id, 'team-1');
+  assert.equal(result[0].teamCode, 'EXE101_1_TEAM_2');
+  assert.equal(result[0].projectName, 'SMEP');
+  assert.equal(result[0].projectDescription, 'Project proposal description.');
+  assert.equal(result[0].linkedProposal?._id, 'proposal-1');
+});
+
+test('keeps an unlinked proposal visible as a standalone proposal card', () => {
+  const proposal = normalizeTeamProposal({
+    id: 'proposal-1',
+    classId: 'class-1',
+    teamName: 'Future Team',
+    status: 'Draft',
+    members: [],
+  });
+
+  const result = mergeTeamsWithLinkedProposals([], [proposal]);
+
+  assert.deepEqual(result, [proposal]);
 });
 
 test('validates required project workspace information', () => {

@@ -3,6 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import { Bell, Check, Calendar, Award, Kanban, Brain, MessageSquare, ShieldAlert } from 'lucide-react';
 import { getNotificationId, normalizeNotification, notificationApi } from '../../api/notificationApi';
 import toast from 'react-hot-toast';
+import { classApi } from '../../api/classApi';
+import { toClassViewModel, unwrapApiData } from '../../utils/classMappers';
+import {
+  buildLecturerDirectionOverviewLink,
+  getLegacyNotificationClassId,
+  isProjectDirectionSubmittedNotification,
+} from '../../utils/notificationNavigation';
+import { subscribeProjectDirectionRealtime } from '../../api/projectDirectionRealtime';
 
 const NotificationDropdown = () => {
   const [notifications, setNotifications] = useState([]);
@@ -26,9 +34,15 @@ const NotificationDropdown = () => {
 
   useEffect(() => {
     fetchNotifications();
-    // Poll every 30 seconds
+    const unsubscribe = subscribeProjectDirectionRealtime((event) => {
+      if (event.eventType === 'ProjectDirectionNotificationReady') void fetchNotifications();
+    });
+    // Backup refresh for notification types that do not have a realtime event yet.
     const interval = setInterval(fetchNotifications, 30000);
-    return () => clearInterval(interval);
+    return () => {
+      unsubscribe();
+      clearInterval(interval);
+    };
   }, []);
 
   useEffect(() => {
@@ -57,6 +71,26 @@ const NotificationDropdown = () => {
   const handleNotificationClick = async (n) => {
     setIsOpen(false);
     const notificationId = getNotificationId(n);
+    let targetLink = n.link;
+
+    if (isProjectDirectionSubmittedNotification(n) && !n.link?.startsWith('/lecturer/classes')) {
+      const classId = getLegacyNotificationClassId(n);
+      if (classId) {
+        try {
+          const response = await classApi.getById(classId);
+          const classPayload = unwrapApiData(response);
+          const classInfo = toClassViewModel(classPayload?.class || classPayload);
+          targetLink = buildLecturerDirectionOverviewLink({
+            semester: classInfo.semester,
+            year: classInfo.year,
+            classId: classInfo._id,
+            teamId: n.data?.teamId,
+          });
+        } catch (error) {
+          console.error('Failed to resolve project direction notification target:', error);
+        }
+      }
+    }
 
     if (!n.isRead) {
       try {
@@ -67,8 +101,8 @@ const NotificationDropdown = () => {
         console.error('Failed to mark notification as read:', err);
       }
     }
-    if (n.link) {
-      navigate(n.link);
+    if (targetLink) {
+      navigate(targetLink);
     }
   };
 
