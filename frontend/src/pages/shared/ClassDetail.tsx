@@ -29,7 +29,7 @@ import RenameClassModal from '../../components/class/RenameClassModal';
 import VerifyMajorModal from '../../components/class/VerifyMajorModal';
 import AddStudentModal from '../../components/class/AddStudentModal';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
-import { getTeamMemberIds, normalizeManagedTeam, normalizeTeamProposal, resolveEffectiveTeamMajor } from '../../utils/teamManagement';
+import { getTeamMemberIds, mergeTeamsWithLinkedProposals, normalizeManagedTeam, normalizeTeamProposal, resolveEffectiveTeamMajor } from '../../utils/teamManagement';
 import { directoryRecordToStudent, mergeAssignmentCandidates, normalizeClassStudents } from '../../utils/studentAssignment';
 import { classFeatureFlags } from '../../config/classFeatureFlags';
 import { parseApiError } from '../../utils/apiError';
@@ -360,7 +360,7 @@ export default function ClassDetail() {
     setDeletingTeam(true);
     try {
       await teamApi.deleteTeam(teamToDelete._id);
-      toast.success('Team archived and members were unassigned.');
+      toast.success('Team permanently deleted and members were unassigned.');
       setTeamToDelete(null);
       await fetchData();
     } catch (error) {
@@ -538,6 +538,7 @@ export default function ClassDetail() {
 
   const safeStudents = Array.isArray(students) ? students : [];
   const safeTeams    = Array.isArray(teams) ? teams : [];
+  const displayedTeams = mergeTeamsWithLinkedProposals(safeTeams, teamProposals);
   const selectedTeamStudents = selectedStudentSnapshots.filter(student => selected.includes(student._id));
   const unassignedCount = safeStudents.filter(s => !s.teamId).length;
   
@@ -934,7 +935,7 @@ export default function ClassDetail() {
         ) : tab === 'students' ? (
           <StudentTable
             students={safeStudents}
-            teams={teamControlsVisible ? [...safeTeams, ...teamProposals] : []}
+            teams={teamControlsVisible ? displayedTeams : []}
             cls={cls}
             selected={teamControlsVisible && canSelectTeamMembers ? selected : []}
             onSelectionChange={teamControlsVisible && canSelectTeamMembers ? setSelected : undefined}
@@ -982,7 +983,7 @@ export default function ClassDetail() {
           />
         ) : (
           <TeamList
-            teams={[...safeTeams, ...teamProposals]}
+            teams={displayedTeams}
             onReview={!isReadOnly && canManageClass ? (team) => setReviewTeam(team) : undefined}
             canDelete={!isReadOnly && canDissolveTeam}
             canManageInfo={!isReadOnly && canManageClass}
@@ -1128,7 +1129,6 @@ export default function ClassDetail() {
           team={directionTeam}
           role={user?.role}
           onClose={() => setDirectionTeam(null)}
-          onChanged={fetchData}
         />
       )}
 
@@ -1141,6 +1141,8 @@ export default function ClassDetail() {
         description="Permanently delete this team and its project, submissions, evaluations, tasks and team chat. This cannot be undone. Student accounts and class enrollments will remain. Teams with externally stored files require storage cleanup support before deletion."
         confirmText="Permanently dissolve team"
         cancelText="Cancel"
+        size="lg"
+        actionLayout="confirmWide"
       />
 
       <ConfirmDialog

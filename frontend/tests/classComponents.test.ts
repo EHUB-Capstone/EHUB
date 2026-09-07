@@ -13,6 +13,16 @@ import {
 } from '../src/utils/lecturerDirectory.ts';
 import { resolveWorkspaceTab, WORKSPACE_TABS } from '../src/utils/workspaceNavigation.ts';
 import { buildWorkspaceCheckpointOverview } from '../src/utils/workspaceCheckpointOverview.ts';
+import {
+  buildLecturerDirectionOverviewLink,
+  getLegacyNotificationClassId,
+  isProjectDirectionSubmittedNotification,
+} from '../src/utils/notificationNavigation.ts';
+import {
+  getProjectDirectionDecisionNotice,
+  hasProjectDirectionChanged,
+  updateProjectDirectionOverviewTeams,
+} from '../src/utils/projectDirectionSync.ts';
 
 test('workspace keeps evaluation inside checkpoints and removes standalone evaluation and mentoring tabs', () => {
   assert.deepEqual(WORKSPACE_TABS, ['overview', 'roadmap', 'shortcut']);
@@ -124,4 +134,75 @@ test('workspace checkpoint overview uses configured totals and counts any entere
     reqFilled: 0,
     reqTotal: 1,
   });
+});
+
+test('project direction notifications deep-link to the lecturer overview and focused team', () => {
+  const notification = {
+    type: 'ProjectDirectionSubmitted',
+    link: '/classes/class-1',
+    data: { teamId: 'team-1' },
+  };
+
+  assert.equal(isProjectDirectionSubmittedNotification(notification), true);
+  assert.equal(getLegacyNotificationClassId(notification), 'class-1');
+  assert.equal(buildLecturerDirectionOverviewLink({
+    semester: 'su',
+    year: 2026,
+    classId: 'class-1',
+    teamId: 'team-1',
+  }), '/lecturer/classes?semester=SU&year=2026&tab=overview&classId=class-1&teamId=team-1');
+});
+
+test('project direction live synchronization detects and announces lecturer decisions', () => {
+  const submitted = { id: 'direction-1', status: 'Submitted', rowVersion: '10', reviews: [] };
+  const approved = {
+    id: 'direction-1',
+    status: 'Approved',
+    rowVersion: '11',
+    reviewedAtUtc: '2026-09-07T01:00:00Z',
+    reviews: [{ id: 'review-1', toStatus: 'Approved' }],
+  };
+  const needsRevision = {
+    ...approved,
+    status: 'NeedsRevision',
+    reviews: [{ id: 'review-2', toStatus: 'NeedsRevision' }],
+  };
+
+  assert.equal(hasProjectDirectionChanged(submitted, { ...submitted }), false);
+  assert.equal(hasProjectDirectionChanged(submitted, approved), true);
+  assert.equal(getProjectDirectionDecisionNotice(submitted, approved), 'Lecturer approved your project direction.');
+  assert.equal(getProjectDirectionDecisionNotice(submitted, needsRevision), 'Lecturer reviewed your project direction and requested changes.');
+  assert.equal(getProjectDirectionDecisionNotice(approved, needsRevision), '');
+});
+
+test('lecturer review updates only the reviewed team without reloading the overview', () => {
+  const firstTeam = { _id: 'team-1', projectDirectionStatus: 'PENDING', projectDirectionRowVersion: '10' };
+  const secondTeam = { _id: 'team-2', projectDirectionStatus: 'PENDING', projectDirectionRowVersion: '20' };
+  const result = updateProjectDirectionOverviewTeams([firstTeam, secondTeam], 'team-1', {
+    title: 'Approved direction',
+    summary: 'Approved summary',
+    status: 'Approved',
+    rowVersion: '11',
+    reviews: [{ id: 'review-1', toStatus: 'Approved', comment: 'Proceed with this scope.' }],
+  });
+
+  assert.deepEqual(result[0], {
+    _id: 'team-1',
+    projectDirectionStatus: 'APPROVED',
+    projectDirectionRowVersion: '11',
+    projectDirection: 'Approved summary',
+    projectDirectionTitle: 'Approved direction',
+    projectDirectionReviewComment: 'Proceed with this scope.',
+  });
+  assert.equal(result[1], secondTeam);
+
+  const submittedResult = updateProjectDirectionOverviewTeams(result, 'team-2', {
+    title: 'New submission',
+    summary: 'A newly submitted direction',
+    status: 'Submitted',
+    rowVersion: '21',
+    reviews: [],
+  });
+  assert.equal(submittedResult[1].projectDirectionStatus, 'PENDING');
+  assert.equal(submittedResult[1].projectDirectionRowVersion, '21');
 });

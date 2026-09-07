@@ -50,6 +50,8 @@ export interface ManagedTeam {
   rejectReason?: string | null;
   rowVersion?: string;
   isProposal?: boolean;
+  approvedTeamId?: EntityReference;
+  linkedProposal?: ManagedTeam;
   currentMentorAssignment?: MentorAssignment | null;
 }
 

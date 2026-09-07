@@ -10,7 +10,7 @@ const formatStatus = (status) => String(status || 'Not created')
   .replace(/^NEEDSREVISION$/i, 'Needs revision')
   .replace(/([a-z])([A-Z])/g, '$1 $2');
 
-export default function ProjectDirectionModal({ team, role, currentStudentId = '', onClose, onChanged }) {
+export default function ProjectDirectionModal({ team, role, currentStudentId = '', onClose }) {
   const [direction, setDirection] = useState(null);
   const [title, setTitle] = useState('');
   const [summary, setSummary] = useState('');
@@ -54,7 +54,6 @@ export default function ProjectDirectionModal({ team, role, currentStudentId = '
       const value = unwrapApiData(response);
       setDirection(value);
       toast.success('Project direction saved as draft.');
-      await onChanged?.();
     } catch (error) {
       toast.error(parseApiError(error, 'Failed to save project direction.').message);
     } finally {
@@ -69,7 +68,6 @@ export default function ProjectDirectionModal({ team, role, currentStudentId = '
       const response = await teamApi.submitProjectDirection(team._id, direction.rowVersion);
       setDirection(unwrapApiData(response));
       toast.success('Project direction submitted to the assigned lecturer.');
-      await onChanged?.();
     } catch (error) {
       toast.error(parseApiError(error, 'Failed to submit project direction.').message);
     } finally {
@@ -92,7 +90,6 @@ export default function ProjectDirectionModal({ team, role, currentStudentId = '
       setDirection(unwrapApiData(response));
       setComment('');
       toast.success(decision === 'Approved' ? 'Project direction approved.' : 'Changes requested.');
-      await onChanged?.();
     } catch (error) {
       toast.error(parseApiError(error, 'Failed to review project direction.').message);
     } finally {

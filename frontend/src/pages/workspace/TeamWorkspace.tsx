@@ -278,10 +278,9 @@ export default function TeamWorkspace() {
             <ProjectWorkspaceProfile project={project} classInfo={cls} activities={activities || []} />
 
             {classFeatureFlags.projectDirection && <ProjectDirectionCard
-              key={`${team._id}-${team.projectDirectionUpdatedAt || ''}`}
+              key={team._id}
               team={team}
               canEdit={!isReadOnly && isTeamLeader}
-              onSaved={() => fetchWorkspaceData(team._id)}
             />}
 
             {/* Startup Checkpoints */}

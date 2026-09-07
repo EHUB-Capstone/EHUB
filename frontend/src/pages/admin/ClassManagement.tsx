@@ -88,7 +88,17 @@ export default function ClassManagement() {
   const [sort, setSort] = useState(searchParams.get('sort') || 'code');
   const [page, setPage] = useState(Math.max(1, Number(searchParams.get('page')) || 1));
   const pageSize = 12;
-  const [viewMode, setViewMode] = useState('classes');
+  const viewMode = searchParams.get('tab') === 'overview' ? 'overview' : 'classes';
+  const overviewClassId = searchParams.get('classId') || '';
+  const overviewTeamId = searchParams.get('teamId') || '';
+  const deepLinkSemester = viewMode === 'overview' && overviewClassId
+    ? searchParams.get('semester') || ''
+    : '';
+  const deepLinkYear = viewMode === 'overview' && overviewClassId
+    ? searchParams.get('year') || ''
+    : '';
+  const effectiveFilterSem = deepLinkSemester || filterSem;
+  const effectiveFilterYear = deepLinkYear || filterYear;
 
   // Modals
   const [showBulk,   setShowBulk]   = useState(false);
@@ -121,8 +131,8 @@ export default function ClassManagement() {
         assignmentStatus?: 'Assigned' | 'Unassigned';
         search?: string;
       };
-      if (filterSem && filterYear) params.semesterCode = `${filterSem}${filterYear}`;
-      if (filterYear) params.year = Number(filterYear);
+      if (effectiveFilterSem && effectiveFilterYear) params.semesterCode = `${effectiveFilterSem}${effectiveFilterYear}`;
+      if (effectiveFilterYear) params.year = Number(effectiveFilterYear);
       if (filterSubj) params.subjectCode = filterSubj;
       if (filterStatus) params.status = filterStatus;
       if (isAdmin && filterAssignment) params.assignmentStatus = filterAssignment;
@@ -141,7 +151,7 @@ export default function ClassManagement() {
     } finally {
       setLoading(false);
     }
-  }, [appliedSearch, filterAssignment, filterSem, filterStatus, filterSubj, filterYear, isAdmin, page, sort]);
+  }, [appliedSearch, effectiveFilterSem, effectiveFilterYear, filterAssignment, filterStatus, filterSubj, isAdmin, page, sort]);
 
   useEffect(() => {
     const loadInitialConfig = async () => {
@@ -168,17 +178,31 @@ export default function ClassManagement() {
   useEffect(() => { void fetchAll(); }, [fetchAll]);
 
   useEffect(() => {
+    if (!overviewClassId) return;
+    // Notification deep-links are an external navigation source, including when this route is already mounted.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (deepLinkSemester && deepLinkSemester !== filterSem) setFilterSem(deepLinkSemester);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (deepLinkYear && deepLinkYear !== filterYear) setFilterYear(deepLinkYear);
+  }, [deepLinkSemester, deepLinkYear, filterSem, filterYear, overviewClassId]);
+
+  useEffect(() => {
     const next = new URLSearchParams();
     if (appliedSearch) next.set('search', appliedSearch);
-    if (filterSem) next.set('semester', filterSem);
-    if (filterYear) next.set('year', filterYear);
+    if (effectiveFilterSem) next.set('semester', effectiveFilterSem);
+    if (effectiveFilterYear) next.set('year', effectiveFilterYear);
     if (filterSubj) next.set('subject', filterSubj);
     if (filterStatus) next.set('status', filterStatus);
     if (isAdmin && filterAssignment) next.set('assignment', filterAssignment);
     if (sort !== 'code') next.set('sort', sort);
     if (page > 1) next.set('page', String(page));
+    if (viewMode === 'overview') {
+      next.set('tab', 'overview');
+      if (overviewClassId) next.set('classId', overviewClassId);
+      if (overviewTeamId) next.set('teamId', overviewTeamId);
+    }
     setSearchParams(next, { replace: true });
-  }, [appliedSearch, filterAssignment, filterSem, filterStatus, filterSubj, filterYear, isAdmin, page, setSearchParams, sort]);
+  }, [appliedSearch, effectiveFilterSem, effectiveFilterYear, filterAssignment, filterStatus, filterSubj, isAdmin, overviewClassId, overviewTeamId, page, setSearchParams, sort, viewMode]);
 
   useEffect(() => {
     setSelectedClassIds(new Set());
@@ -371,14 +395,24 @@ export default function ClassManagement() {
         <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1">
           <button
             type="button"
-            onClick={() => setViewMode('classes')}
+            onClick={() => {
+              const next = new URLSearchParams(searchParams);
+              next.delete('tab');
+              next.delete('classId');
+              next.delete('teamId');
+              setSearchParams(next);
+            }}
             className={`inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-semibold transition ${viewMode === 'classes' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
           >
             <LayoutGrid className="h-4 w-4" /> Classes
           </button>
           <button
             type="button"
-            onClick={() => setViewMode('overview')}
+            onClick={() => {
+              const next = new URLSearchParams(searchParams);
+              next.set('tab', 'overview');
+              setSearchParams(next);
+            }}
             className={`inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-semibold transition ${viewMode === 'overview' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
           >
             <ClipboardCheck className="h-4 w-4" /> Overview
@@ -409,7 +443,14 @@ export default function ClassManagement() {
           </select>
           <select
             value={filterSem}
-            onChange={(e) => { setFilterSem(e.target.value); setPage(1); }}
+            onChange={(e) => {
+              setFilterSem(e.target.value);
+              setPage(1);
+              const next = new URLSearchParams(searchParams);
+              next.delete('classId');
+              next.delete('teamId');
+              setSearchParams(next, { replace: true });
+            }}
             className="border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none bg-white focus:ring-2 focus:ring-primary/20 focus:border-primary"
           >
             <option value="">All Semesters</option>
@@ -417,7 +458,14 @@ export default function ClassManagement() {
           </select>
           <select
             value={filterYear}
-            onChange={(e) => { setFilterYear(e.target.value); setPage(1); }}
+            onChange={(e) => {
+              setFilterYear(e.target.value);
+              setPage(1);
+              const next = new URLSearchParams(searchParams);
+              next.delete('classId');
+              next.delete('teamId');
+              setSearchParams(next, { replace: true });
+            }}
             className="border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none bg-white focus:ring-2 focus:ring-primary/20 focus:border-primary"
           >
             <option value="">All Years</option>
@@ -463,7 +511,13 @@ export default function ClassManagement() {
           <button type="submit" className="flex items-center gap-2 px-4 py-2 bg-secondary text-white rounded-xl text-sm hover:bg-secondary-700 transition-all">
             <Filter className="w-4 h-4" /> Filter
           </button>
-          <button type="button" onClick={() => { setSearch(''); setAppliedSearch(''); setFilterSem(''); setFilterYear(''); setFilterSubj(''); setFilterStatus(''); setFilterAssignment(''); setSort('code'); setPage(1); }} className="text-sm text-slate-400 hover:text-slate-600 px-2">
+          <button type="button" onClick={() => {
+            setSearch(''); setAppliedSearch(''); setFilterSem(''); setFilterYear(''); setFilterSubj(''); setFilterStatus(''); setFilterAssignment(''); setSort('code'); setPage(1);
+            const next = new URLSearchParams(searchParams);
+            next.delete('classId');
+            next.delete('teamId');
+            setSearchParams(next, { replace: true });
+          }} className="text-sm text-slate-400 hover:text-slate-600 px-2">
             Reset
           </button>
         </form>
@@ -480,7 +534,18 @@ export default function ClassManagement() {
           <button type="button" onClick={() => void fetchAll()} className="mt-3 rounded-lg border border-red-300 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100">Retry</button>
         </div>
       ) : isLecturer && classFeatureFlags.projectDirection && viewMode === 'overview' ? (
-        <ClassDirectionOverview semester={filterSem} year={filterYear} />
+        <ClassDirectionOverview
+          semester={effectiveFilterSem}
+          year={effectiveFilterYear}
+          initialClassId={overviewClassId}
+          focusTeamId={overviewTeamId}
+          onSelectedClassChange={(classId) => {
+            const next = new URLSearchParams(searchParams);
+            next.set('classId', classId);
+            next.delete('teamId');
+            setSearchParams(next, { replace: true });
+          }}
+        />
       ) : classes.length === 0 ? (
         <EmptyState
           icon={GraduationCap}
