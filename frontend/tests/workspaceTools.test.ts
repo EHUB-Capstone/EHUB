@@ -12,6 +12,52 @@ import {
   normalizeFilters,
 } from '../src/features/execution-board/boardUtils.ts';
 import { taskProgress } from '../src/utils/taskProgress.ts';
+import { groupWorkspacesByClass, normalizeAccessibleWorkspaces } from '../src/utils/workspaceHub.ts';
+
+test('workspace hub reads the accessible workspace array from the API envelope', () => {
+  const workspaces = [{
+    teamId: 'team-1',
+    teamName: 'Phoenix Founders',
+    classId: 'class-1',
+    classCode: 'SE1818',
+    courseCode: 'EXE101',
+    semester: 'FA26',
+    accessMode: 'READ_WRITE' as const,
+    isArchived: false,
+    isCurrent: true,
+    hasWorkspace: true,
+  }];
+
+  assert.deepEqual(normalizeAccessibleWorkspaces({
+    success: true,
+    message: 'Accessible workspaces retrieved.',
+    data: workspaces,
+  }), workspaces);
+  assert.deepEqual(normalizeAccessibleWorkspaces({
+    success: false,
+    message: 'Forbidden',
+    data: workspaces,
+  }), []);
+});
+
+test('workspace hub groups teams by class code and sorts class and team names naturally', () => {
+  const base = {
+    courseCode: 'EXE101',
+    semester: 'SU26',
+    accessMode: 'READ_WRITE' as const,
+    isArchived: false,
+    isCurrent: true,
+    hasWorkspace: true,
+  };
+  const groups = groupWorkspacesByClass([
+    { ...base, teamId: 'team-3', teamName: 'Team 10', classId: 'class-10', classCode: 'SE10' },
+    { ...base, teamId: 'team-2', teamName: 'Team 2', classId: 'class-2', classCode: 'SE2' },
+    { ...base, teamId: 'team-1', teamName: 'Team 1', classId: 'class-10', classCode: 'SE10' },
+  ]);
+
+  assert.deepEqual(groups.map(group => group.classCode), ['SE2', 'SE10']);
+  assert.deepEqual(groups[1].workspaces.map(workspace => workspace.teamName), ['Team 1', 'Team 10']);
+});
 
 test('table and board summary use API progress instead of status estimates', () => {
   const tasks = [{ _id: 'review', status: 'REVIEW', completionPercentage: 0 }, { _id: 'working', status: 'IN_PROGRESS', completionPercentage: 30 }];

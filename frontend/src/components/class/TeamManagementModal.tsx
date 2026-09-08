@@ -77,7 +77,6 @@ export default function TeamManagementModal({
     projectName: currentProject?.name || '',
     projectDescription: currentProject?.description || '',
     projectStatus: currentProject?.status || 'DRAFT',
-    startupField: currentProject?.startupField || '',
   });
   const [search, setSearch] = useState('');
   const [useTeamNameForProject, setUseTeamNameForProject] = useState(true);
@@ -383,17 +382,11 @@ export default function TeamManagementModal({
                   {attemptedSubmit && validation.errors.projectName && <p className="mt-1 text-xs text-red-600">{validation.errors.projectName}</p>}
                 </div>
 
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div>
-                    <label htmlFor="project-status" className="mb-1.5 block text-xs font-semibold text-slate-600">Status</label>
-                    <select id="project-status" value={draft.projectStatus} onChange={(event) => updateDraft('projectStatus', event.target.value)} disabled={!draft.projectName.trim()} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-secondary disabled:opacity-50">
-                      {PROJECT_STATUSES.map((status) => <option key={status.value} value={status.value}>{status.label}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label htmlFor="startup-field" className="mb-1.5 block text-xs font-semibold text-slate-600">Startup field</label>
-                    <input id="startup-field" value={draft.startupField} onChange={(event) => updateDraft('startupField', event.target.value)} disabled={!draft.projectName.trim()} placeholder="EdTech, FinTech…" className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-secondary disabled:opacity-50" />
-                  </div>
+                <div>
+                  <label htmlFor="project-status" className="mb-1.5 block text-xs font-semibold text-slate-600">Status</label>
+                  <select id="project-status" value={draft.projectStatus} onChange={(event) => updateDraft('projectStatus', event.target.value)} disabled={!draft.projectName.trim()} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-secondary disabled:opacity-50">
+                    {PROJECT_STATUSES.map((status) => <option key={status.value} value={status.value}>{status.label}</option>)}
+                  </select>
                 </div>
 
                 <div>

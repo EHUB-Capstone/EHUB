@@ -14,6 +14,38 @@ export interface ProjectDirectionSyncValue {
   summary?: string | null;
 }
 
+export const hasUnsavedProjectDirectionChanges = (
+  direction: ProjectDirectionSyncValue | null | undefined,
+  title: string,
+  summary: string,
+): boolean => !direction
+  || title.trim() !== (direction.title || '').trim()
+  || summary.trim() !== (direction.summary || '').trim();
+
+export const canSubmitProjectDirection = (
+  direction: ProjectDirectionSyncValue | null | undefined,
+  title: string,
+  summary: string,
+): boolean => direction?.status === 'Draft'
+  && !hasUnsavedProjectDirectionChanges(direction, title, summary);
+
+export const getProjectDirectionSubmitGuidance = (
+  direction: ProjectDirectionSyncValue | null | undefined,
+  title: string,
+  summary: string,
+): string => {
+  const hasUnsavedChanges = hasUnsavedProjectDirectionChanges(direction, title, summary);
+  if (direction?.status === 'NeedsRevision') {
+    return hasUnsavedChanges
+      ? 'Save your revised project direction as a draft to enable Submit.'
+      : 'The lecturer requested changes. Update the title or summary, then select Save draft to enable Submit.';
+  }
+  if (direction?.status === 'Draft' && hasUnsavedChanges) {
+    return 'Save your changes as a draft before submitting.';
+  }
+  return '';
+};
+
 interface ProjectDirectionOverviewTeam {
   _id: string;
   projectDirectionStatus?: string | null;

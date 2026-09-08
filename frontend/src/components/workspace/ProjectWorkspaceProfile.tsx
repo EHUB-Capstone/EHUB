@@ -1,11 +1,9 @@
-import { CalendarDays, Clock3, GraduationCap, Layers3, Tag } from 'lucide-react';
+import { CalendarDays, Clock3, GraduationCap, Tag } from 'lucide-react';
 
 type Props = {
   project: {
     projectName?: string;
     description?: string;
-    startupField?: string;
-    technologyStack?: string[];
     keywords?: string[];
     status?: string;
     createdAtUtc?: string;
@@ -54,30 +52,18 @@ export default function ProjectWorkspaceProfile({ project, classInfo, activities
     <>
       <section className="overflow-hidden rounded-2xl border border-slate-200/70 bg-white shadow-sm">
         <div className="border-b border-slate-100 px-5 py-4">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-lg font-bold text-slate-900">{project.projectName}</h2>
-                <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-emerald-700">
-                  {project.status || 'Draft'}
-                </span>
-              </div>
-              <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-600">{project.description}</p>
+          <div>
+            <div className="flex items-center gap-2">
+              <h2 className="text-lg font-bold text-slate-900">{project.projectName}</h2>
+              <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-emerald-700">
+                {project.status || 'Draft'}
+              </span>
             </div>
-            <div className="rounded-xl border border-primary-100 bg-primary-50 px-3 py-2 text-right">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-primary-500">Startup field</p>
-              <p className="mt-0.5 text-sm font-semibold text-primary">{project.startupField || 'Not specified'}</p>
-            </div>
+            <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-600">{project.description}</p>
           </div>
         </div>
 
-        <div className="grid gap-4 px-5 py-4 md:grid-cols-2">
-          <div>
-            <p className="mb-2 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-slate-400">
-              <Layers3 className="h-3.5 w-3.5" /> Technology stack
-            </p>
-            <TagList values={project.technologyStack} empty="No technologies listed." />
-          </div>
+        <div className="px-5 py-4">
           <div>
             <p className="mb-2 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-slate-400">
               <Tag className="h-3.5 w-3.5" /> Keywords

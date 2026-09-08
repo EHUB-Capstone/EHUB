@@ -16,7 +16,6 @@ export interface TeamProject {
   name: string;
   description?: string | null;
   status?: string | null;
-  startupField?: string | null;
   problem?: string | null;
   solution?: string | null;
 }
@@ -93,7 +92,6 @@ export interface TeamDraft {
   projectName: string;
   projectDescription: string;
   projectStatus: string;
-  startupField: string;
 }
 
 export type TeamDraftField = 'teamName' | 'classId' | 'memberIds' | 'leaderId' | 'projectName' | 'projectDescription';

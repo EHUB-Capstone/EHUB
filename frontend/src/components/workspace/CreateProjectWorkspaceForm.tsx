@@ -87,8 +87,6 @@ export default function CreateProjectWorkspaceForm({ team, classInfo, onCreated 
   const [draft, setDraft] = useState<ProjectWorkspaceDraft>({
     projectName: team.teamName || team.name || '',
     description: '',
-    startupField: '',
-    technologyStack: [],
     keywords: [],
   });
   const [errors, setErrors] = useState<ProjectWorkspaceErrors>({});
@@ -113,8 +111,6 @@ export default function CreateProjectWorkspaceForm({ team, classInfo, onCreated 
       await workspaceApi.createWorkspace(teamId, {
         projectName: draft.projectName.trim(),
         description: draft.description.trim(),
-        startupField: draft.startupField.trim(),
-        technologyStack: draft.technologyStack,
         keywords: draft.keywords,
       });
       toast.success('Project workspace created successfully.');
@@ -147,12 +143,8 @@ export default function CreateProjectWorkspaceForm({ team, classInfo, onCreated 
           <div className="mt-1 flex justify-between text-xs"><span className="text-red-600">{errors.description}</span><span className="text-slate-400">{draft.description.length}/2000</span></div>
         </div>
         <div className="sm:col-span-2">
-          <label htmlFor="workspace-startup-field" className="mb-1.5 block text-xs font-semibold text-slate-700">Startup field <span className="text-red-500">*</span></label>
-          <input id="workspace-startup-field" value={draft.startupField} onChange={(event) => setField('startupField', event.target.value)} maxLength={100} placeholder="EdTech, FinTech, GreenTech…" className={`w-full rounded-xl border px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/15 ${errors.startupField ? 'border-red-300' : 'border-slate-200 focus:border-primary'}`} />
-          {errors.startupField && <p className="mt-1 text-xs text-red-600">{errors.startupField}</p>}
+          <TagInput label="Keywords" values={draft.keywords} onChange={(values) => setField('keywords', values)} placeholder="education, marketplace…" error={errors.keywords} />
         </div>
-        <TagInput label="Technology stack" required values={draft.technologyStack} onChange={(values) => setField('technologyStack', values)} placeholder="React, .NET, PostgreSQL…" error={errors.technologyStack} />
-        <TagInput label="Keywords" values={draft.keywords} onChange={(values) => setField('keywords', values)} placeholder="education, marketplace…" error={errors.keywords} />
       </div>
       <div className="flex items-center justify-between gap-3 border-t border-slate-100 bg-slate-50/70 px-5 py-4">
         <p className="text-xs text-slate-500">Only one active workspace is allowed per team.</p>

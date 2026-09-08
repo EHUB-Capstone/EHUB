@@ -99,10 +99,9 @@ public sealed class ProjectWorkspaceHandler : IProjectWorkspaceHandler
         if (!IsRole(role, SystemRoles.Student))
             return Failure<ProjectWorkspaceDto>(ErrorCodes.WorkspaceAccessDenied, "Only the active team leader can create a project workspace.");
 
-        var validation = Validate(request.ProjectName, request.Description, request.StartupField, request.TechnologyStack, request.Keywords);
+        var validation = Validate(request.ProjectName, request.Description, request.Keywords);
         if (validation != null) return Result.Failure<ProjectWorkspaceDto>(validation);
 
-        var technologies = NormalizeTags(request.TechnologyStack ?? Array.Empty<string>());
         var keywords = NormalizeTags(request.Keywords ?? Array.Empty<string>());
         try
         {
@@ -133,15 +132,11 @@ public sealed class ProjectWorkspaceHandler : IProjectWorkspaceHandler
                     Team = team,
                     Name = (request.ProjectName ?? string.Empty).Trim(),
                     Description = (request.Description ?? string.Empty).Trim(),
-                    StartupField = (request.StartupField ?? string.Empty).Trim(),
-                    Technology = string.Join(", ", technologies.Select(tag => tag.Display)),
                     Status = ProjectStatus.Draft,
                     CreatedById = userId,
                     CreatedBy = userId,
                     CreatedAt = now
                 };
-                foreach (var tag in technologies)
-                    project.ProjectTags.Add(CreateTag(project, tag, ProjectTagType.Technology, userId, now));
                 foreach (var tag in keywords)
                     project.ProjectTags.Add(CreateTag(project, tag, ProjectTagType.Keyword, userId, now));
                 project.ActivityLogs.Add(new ProjectActivityLog
@@ -151,7 +146,7 @@ public sealed class ProjectWorkspaceHandler : IProjectWorkspaceHandler
                     ActorUserId = userId,
                     Action = "WORKSPACE_CREATED",
                     Summary = "Created the project workspace.",
-                    ChangedFieldsJson = JsonSerializer.Serialize(new[] { "projectName", "description", "startupField", "technologyStack", "keywords" }),
+                    ChangedFieldsJson = JsonSerializer.Serialize(new[] { "projectName", "description", "keywords" }),
                     OccurredAtUtc = now
                 });
 
@@ -189,9 +184,8 @@ public sealed class ProjectWorkspaceHandler : IProjectWorkspaceHandler
         if (!IsRole(role, SystemRoles.Student))
             return Failure<ProjectWorkspaceDto>(ErrorCodes.WorkspaceAccessDenied, "Only the active team leader can update the project profile.");
 
-        var validation = Validate(request.ProjectName, request.Description, request.StartupField, request.TechnologyStack, request.Keywords);
+        var validation = Validate(request.ProjectName, request.Description, request.Keywords);
         if (validation != null) return Result.Failure<ProjectWorkspaceDto>(validation);
-        var technologies = NormalizeTags(request.TechnologyStack ?? Array.Empty<string>());
         var keywords = NormalizeTags(request.Keywords ?? Array.Empty<string>());
 
         try
@@ -219,22 +213,16 @@ public sealed class ProjectWorkspaceHandler : IProjectWorkspaceHandler
                 var project = team.Project;
                 var nextName = (request.ProjectName ?? string.Empty).Trim();
                 var nextDescription = (request.Description ?? string.Empty).Trim();
-                var nextStartupField = (request.StartupField ?? string.Empty).Trim();
                 var changedFields = new List<string>();
                 if (!string.Equals(project.Name, nextName, StringComparison.Ordinal)) changedFields.Add("projectName");
                 if (!string.Equals(project.Description ?? string.Empty, nextDescription, StringComparison.Ordinal)) changedFields.Add("description");
-                if (!string.Equals(project.StartupField ?? string.Empty, nextStartupField, StringComparison.Ordinal)) changedFields.Add("startupField");
-                if (!SameTags(project.ProjectTags, ProjectTagType.Technology, technologies)) changedFields.Add("technologyStack");
                 if (!SameTags(project.ProjectTags, ProjectTagType.Keyword, keywords)) changedFields.Add("keywords");
                 if (changedFields.Count == 0) return Result.Success(MapProject(project, team));
 
                 project.Name = nextName;
                 project.Description = nextDescription;
-                project.StartupField = nextStartupField;
-                project.Technology = string.Join(", ", technologies.Select(tag => tag.Display));
                 project.UpdatedBy = userId;
                 var now = DateTime.UtcNow;
-                SyncTags(project, ProjectTagType.Technology, technologies, userId, now);
                 SyncTags(project, ProjectTagType.Keyword, keywords, userId, now);
                 var activity = new ProjectActivityLog
                 {
@@ -271,7 +259,7 @@ public sealed class ProjectWorkspaceHandler : IProjectWorkspaceHandler
 
     private IQueryable<Team>? AccessibleTeamQuery(Guid userId, string role)
     {
-        var query = TeamQuery();
+        var query = TeamQuery().Where(team => team.Status == TeamStatus.Active);
         if (IsRole(role, SystemRoles.Admin)) return query;
         if (IsRole(role, SystemRoles.Lecturer)) return query.Where(team => team.Class.PrimaryLecturerId == userId);
         if (IsRole(role, SystemRoles.Mentor)) return query.Where(team => team.MentorAssignments.Any(assignment =>
@@ -297,21 +285,12 @@ public sealed class ProjectWorkspaceHandler : IProjectWorkspaceHandler
     private static Error? Validate(
         string? projectName,
         string? description,
-        string? startupField,
-        IReadOnlyCollection<string>? technologyStack,
         IReadOnlyCollection<string>? keywords)
     {
         if ((projectName ?? string.Empty).Trim().Length is < 3 or > 200)
             return new Error(ErrorCodes.WorkspaceValidationError, "Project name must be between 3 and 200 characters.");
         if ((description ?? string.Empty).Trim().Length is < 20 or > 2_000)
             return new Error(ErrorCodes.WorkspaceValidationError, "Project description must be between 20 and 2000 characters.");
-        if ((startupField ?? string.Empty).Trim().Length is < 2 or > 100)
-            return new Error(ErrorCodes.WorkspaceValidationError, "Startup field must be between 2 and 100 characters.");
-        var technologies = technologyStack ?? Array.Empty<string>();
-        var technologyError = ValidateTags(technologies, "technology");
-        if (technologyError != null) return technologyError;
-        if (technologies.Count == 0)
-            return new Error(ErrorCodes.WorkspaceValidationError, "At least one technology is required.");
         return ValidateTags(keywords ?? Array.Empty<string>(), "keyword");
     }
 
@@ -349,8 +328,6 @@ public sealed class ProjectWorkspaceHandler : IProjectWorkspaceHandler
     private static string ToDisplayField(string field) => field switch
     {
         "projectName" => "project name",
-        "startupField" => "startup field",
-        "technologyStack" => "technology stack",
         _ => field
     };
 
@@ -472,8 +449,6 @@ public sealed class ProjectWorkspaceHandler : IProjectWorkspaceHandler
         SemesterId = team.Class.SemesterId,
         ProjectName = project.Name,
         Description = project.Description ?? string.Empty,
-        StartupField = project.StartupField ?? string.Empty,
-        TechnologyStack = project.ProjectTags.Where(tag => tag.TagType == ProjectTagType.Technology).Select(tag => tag.TagName).ToArray(),
         Keywords = project.ProjectTags.Where(tag => tag.TagType == ProjectTagType.Keyword).Select(tag => tag.TagName).ToArray(),
         Status = project.Status.ToString(),
         CreatedAtUtc = project.CreatedAt,
