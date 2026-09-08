@@ -6,8 +6,8 @@ This directory contains the target architecture baseline for the final EHub grad
 
 1. **Development and Delivery View Architecture** — reviewed source change, parallel CI checks, staging acceptance, versioned releases and controlled production deployment.
 2. **Physical View Architecture** — target production deployment behind Cloudflare on a single VPS with an explicit React frontend and external managed services.
-3. **Overall Logical View Architecture** — actors, presentation layer, modular-monolith business modules, Clean Architecture layers and external systems.
-4. **AI Proposal Analysis Architecture** — provider-neutral asynchronous AI workflow with structured validation and human governance.
+3. **Overall Logical View Architecture** — role-based React UI, REST API, hosting-neutral background processing, nine business capabilities, inward infrastructure dependencies and external systems.
+4. **AI Proposal Analysis Architecture** — analysis bound to a submitted proposal version, scoped project similarity checks, durable job state, validated reports, REST status polling and lecturer review.
 5. **Realtime and Asynchronous Processing Architecture** — authorized SignalR communication and transactional PostgreSQL outbox processing.
 
 ## Files
@@ -27,7 +27,7 @@ This directory contains the target architecture baseline for the final EHub grad
 - Every icon is stored inside the generated SVG/Draw.io content, so the diagrams remain fully visible offline and do not depend on external image URLs.
 - Each component is represented by a standalone large icon or logo with its name directly underneath; rectangular component cards are intentionally omitted.
 - In the Draw.io source, each icon and caption remains a separate editable object so the layout can be refined without rebuilding the diagram.
-- Report figures show component names only. Detailed responsibilities and architectural rationale belong in `REPORT_CONTENT.md`, not inside the figures.
+- Report figures primarily show component names. Figure 4 adds short captions to clarify the authorized Student actor, version-bound automatic job creation, orchestration, REST polling and lecturer decisions; detailed responsibilities remain in `REPORT_CONTENT.md`.
 
 ## Recommended report order
 
@@ -42,7 +42,7 @@ B. Physical View Architecture
 
 C. Logical View Architecture
    Figure 3. EHub Overall Logical Architecture
-   Figure 4. AI-assisted Project Proposal Analysis Architecture
+   Figure 4. Logical View – AI-assisted Project Proposal Analysis Architecture
    Figure 5. Realtime Communication and Asynchronous Processing Architecture
 ```
 
@@ -53,6 +53,12 @@ C. Logical View Architecture
 3. Preserve the shared icon, color and connector language across all pages.
 4. Export as SVG for the final report. Use PNG only when the report editor cannot preserve SVG quality.
 5. Keep captions outside the image in the report document so figure numbering remains controlled by the document editor.
+
+To regenerate only Figure 4's SVG/PNG exports while retaining the complete multi-page Draw.io document, run `node docs/system-architecture/tools/generate-architecture-diagrams.js --only=04-ai-proposal-analysis-architecture` from the repository root. PNG generation requires `sharp` on Node's module search path.
+
+For Figure 3, use `--only=03-overall-logical-view-architecture`. Its nine capabilities use a 3 × 3 layout; Team Management, Mentoring & Support, Data Bank and Notifications have distinct responsibilities. The `AI Proposal Analysis` capability is detailed in Figure 4. Figure 3's REST path does not require SignalR, and `Background Processing` does not mandate a separate worker process. Capability groups express the target organization rather than nine already-complete code modules. The detailed implementation qualifications are in `REPORT_CONTENT.md`.
+
+Figure 4's target scope is **proposal analysis**, automatically queued after an authorized submission. It supports lecturer approval or revision decisions; it is not a rubric-grading workflow. Its REST status/result path does not require the SignalR implementation shown in the older realtime view. Changes to rubric-based AI grading or the other figures require their own scope review.
 
 ## Architecture status
 

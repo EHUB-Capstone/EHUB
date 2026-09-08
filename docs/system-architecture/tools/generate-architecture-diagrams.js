@@ -98,13 +98,14 @@ const ICON_ASSIGNMENTS = {
   'ai-provider': 'brain', 'email-provider': 'mail', backup: 'archive',
   admin: 'shield', lecturer: 'graduation', mentor: 'user', student: 'user', 'role-portals': 'monitor', 'web-state': 'react',
   'web-clients': 'link', 'api-layer': 'dotnet', 'iam-module': 'key', 'academic-module': 'book', 'team-module': 'users',
-  'workspace-module': 'folder', 'evaluation-module': 'chart', 'learning-module': 'calendar', 'communication-module': 'message',
+  'workspace-module': 'folder', 'evaluation-module': 'chart', 'mentoring-module': 'calendar', 'notification-module': 'bell',
+  'databank-module': 'archive',
   'ai-module': 'sparkles', 'domain-layer': 'layers', 'infrastructure-layer': 'server', 'logical-db': 'postgresql',
   'logical-worker': 'settings', 'logical-google': 'google', 'logical-cloud': 'cloudinary', 'logical-ai': 'brain',
   'logical-email': 'mail',
   'ai-user': 'users', 'ai-web': 'react', 'ai-api': 'dotnet', 'context-minimizer': 'shield', 'ai-transaction': 'workflow',
   'ai-db': 'postgresql', 'job-claimer': 'list', 'ai-orchestrator': 'brain', 'result-validator': 'shield',
-  'external-ai': 'brain', 'notification-delivery': 'bell', 'human-governance': 'user',
+  'external-ai': 'brain', 'notification-delivery': 'link', 'human-governance': 'graduation',
   'rt-user': 'user', 'signalr-client': 'react', 'signalr-hub': 'radio', 'membership-auth': 'lock',
   'message-service': 'message', 'rt-database': 'postgresql', broadcast: 'radio', 'business-action': 'workflow',
   'outbox-store': 'workflow', 'outbox-worker': 'settings', 'event-dispatcher': 'workflow', 'membership-sync': 'users',
@@ -312,11 +313,12 @@ const diagrams = [
     file: '03-overall-logical-view-architecture',
     title: 'EHub Overall Logical Architecture',
     subtitle: 'Role-based presentation, modular business capabilities and dependency-inverted adapters',
+    preciseEdges: true,
     groups: [
       group('actors-boundary', 25, 145, 170, 775, 'System Actors', 'infra', { compactTitleGap: true }),
       group('client-boundary', 220, 145, 260, 775, 'Presentation Layer', 'frontend', { compactTitleGap: true }),
       group('backend-boundary', 505, 105, 790, 835, 'EHub Backend — Modular Monolith', 'backend', { compactTitleGap: true }),
-      group('application-boundary', 570, 335, 655, 365, 'Application Layer — Business Use Cases', 'domain', { compactTitleGap: true }),
+      group('application-boundary', 570, 335, 655, 420, 'Application Layer — Business Capabilities', 'domain', { compactTitleGap: true, insetTitle: true }),
       group('data-boundary', 1320, 145, 335, 220, 'Application Data', 'data', { compactTitleGap: true }),
       group('external-logical', 1320, 395, 335, 525, 'External Services', 'external', { compactTitleGap: true }),
     ],
@@ -326,24 +328,25 @@ const diagrams = [
       node('mentor', 50, 495, 120, 80, 'Mentor', ['Assigned teams'], 'actor'),
       node('student', 50, 640, 120, 80, 'Student', ['Own class and team'], 'actor'),
 
-      node('role-portals', 260, 220, 180, 115, 'Role-based Portals', ['Admin, Lecturer, Mentor and Student'], 'frontend'),
+      node('role-portals', 260, 220, 180, 115, 'Role-based UI', ['Role-specific views within the same React application'], 'frontend'),
       node('web-state', 260, 410, 180, 115, 'React Web Application', ['Routing, server state and forms'], 'frontend'),
-      node('web-clients', 260, 600, 180, 115, 'REST and SignalR Clients', ['HTTPS/JSON and realtime connection'], 'frontend'),
+      node('web-clients', 260, 600, 180, 115, 'API Client', ['HTTPS REST requests and responses'], 'frontend'),
 
-      node('api-layer', 645, 160, 200, 110, 'API Layer', ['Controllers, contracts, auth and SignalR'], 'backend'),
-      node('logical-worker', 955, 160, 200, 110, 'Background Worker', ['Outbox and scheduled jobs'], 'backend'),
+      node('api-layer', 645, 160, 200, 110, 'API Layer', ['Controllers, transport contracts, authentication and authorization'], 'backend'),
+      node('logical-worker', 935, 160, 240, 110, 'Background Processing', ['Outbox and scheduled jobs; logical responsibility independent of hosting'], 'backend'),
 
-      node('iam-module', 590, 385, 150, 115, 'Identity and Access', ['Auth, roles and account approval'], 'domain'),
-      node('academic-module', 745, 385, 150, 115, 'Academic and Class', ['Terms, subjects, classes and enrollment'], 'domain'),
-      node('team-module', 900, 385, 150, 115, 'Team and Mentor', ['Teams, proposals and assignments'], 'domain'),
-      node('workspace-module', 1055, 385, 150, 115, 'Project Workspace', ['Projects, milestones, tasks and submissions'], 'domain'),
-      node('evaluation-module', 590, 535, 150, 115, 'Evaluation and Tracking', ['Rubrics, checkpoints and progress'], 'domain'),
-      node('learning-module', 745, 535, 150, 115, 'Mentoring and Data', ['Sessions, workshops and data bank'], 'domain'),
-      node('communication-module', 900, 535, 150, 115, 'Communication', ['Chat, presence and notifications'], 'domain'),
-      node('ai-module', 1055, 535, 150, 115, 'AI Assistance', ['Human-reviewed proposal analysis'], 'domain'),
+      node('iam-module', 590, 375, 195, 115, 'Identity and Access', ['Auth, roles and account approval'], 'domain'),
+      node('academic-module', 800, 375, 195, 115, 'Academic and Class', ['Semesters, courses, classes, enrollment and lecturer assignment'], 'domain'),
+      node('team-module', 1010, 375, 195, 115, 'Team Management', ['Teams, membership, team formation proposals and team leadership'], 'domain'),
+      node('workspace-module', 590, 500, 195, 115, 'Project Workspace and Submission', ['Project directions and proposals, checkpoints, submission versions and files'], 'domain'),
+      node('evaluation-module', 800, 500, 195, 115, 'Evaluation and Analytics', ['Rubrics, evaluations, feedback and academic dashboards'], 'domain'),
+      node('mentoring-module', 1010, 500, 195, 115, 'Mentoring and Support', ['Mentor profiles, assignments, sessions and feedback'], 'domain'),
+      node('databank-module', 590, 625, 195, 115, 'Data Bank', ['Scoped datasets, configurable columns, import/export, history and snapshots'], 'domain'),
+      node('notification-module', 800, 625, 195, 115, 'Notifications', ['In-app notification history and transactional email coordination'], 'domain'),
+      node('ai-module', 1010, 625, 195, 115, 'AI Proposal Analysis', ['Target human-reviewed proposal analysis; detailed in Figure 4'], 'domain'),
 
-      node('domain-layer', 650, 770, 230, 105, 'Domain Model', ['Entities, invariants and domain events'], 'domain'),
-      node('infrastructure-layer', 970, 770, 230, 105, 'Infrastructure Adapters', ['Persistence and external-service adapters'], 'infra'),
+      node('domain-layer', 650, 825, 230, 105, 'Domain Model', ['Entities, invariants and business concepts'], 'domain'),
+      node('infrastructure-layer', 970, 825, 230, 105, 'Infrastructure Adapters', ['Persistence and external-service adapters'], 'infra'),
 
       node('logical-db', 1385, 205, 205, 105, 'PostgreSQL', ['Single source of truth'], 'data'),
       node('logical-google', 1385, 430, 205, 100, 'Google Identity', ['External authentication'], 'external'),
@@ -353,34 +356,38 @@ const diagrams = [
     ],
     edges: [
       edge('l1', 'actors-boundary', 'role-portals', 'role-based access', {
-        sourceSide: 'right', sourceRatio: 0.1445, targetSide: 'left', targetRatio: 0.5,
-        labelX: 260, labelY: 245,
+        sourceSide: 'right', sourceRatio: 112 / 775, targetSide: 'left', targetRatio: 0.5,
+        labelX: 258, labelY: 238,
       }),
       edge('l2', 'role-portals', 'web-state', '', { sourceSide: 'bottom', targetSide: 'top' }),
       edge('l3', 'web-state', 'web-clients', '', { sourceSide: 'bottom', targetSide: 'top' }),
-      edge('l4', 'web-clients', 'api-layer', 'HTTPS REST / SignalR', {
-        sourceSide: 'right', targetSide: 'left', labelX: 525, labelY: 195,
+      edge('l4', 'web-clients', 'api-layer', 'HTTPS REST API', {
+        sourceSide: 'right', targetSide: 'left', labelX: 615, labelY: 179,
         points: [{ x: 525, y: 637 }, { x: 525, y: 197 }],
       }),
-      edge('l5', 'api-layer', 'application-boundary', 'commands and queries', {
-        sourceSide: 'bottom', targetSide: 'top', targetRatio: 0.2672,
+      edge('l5', 'api-layer', 'application-boundary', 'invoke application use cases and handlers', {
+        sourceSide: 'bottom', targetSide: 'top', targetRatio: 175 / 655,
+        labelX: 840, labelY: 306,
       }),
       edge('l6', 'logical-worker', 'application-boundary', 'jobs and events', {
-        sourceSide: 'bottom', targetSide: 'top', targetRatio: 0.7405,
+        sourceSide: 'bottom', targetSide: 'top', targetRatio: 485 / 655,
+        labelX: 1130, labelY: 306,
       }),
       edge('l7', 'application-boundary', 'domain-layer', 'uses domain rules', {
-        sourceSide: 'bottom', sourceRatio: 0.2977, targetSide: 'top',
+        sourceSide: 'bottom', sourceRatio: 195 / 655, targetSide: 'top',
+        labelX: 835, labelY: 793,
       }),
       edge('l8', 'infrastructure-layer', 'application-boundary', 'implements application ports', {
-        sourceSide: 'top', targetSide: 'bottom', targetRatio: 0.7863, dashed: true,
+        sourceSide: 'top', targetSide: 'bottom', targetRatio: 515 / 655, dashed: true,
+        labelX: 1175, labelY: 793,
       }),
       edge('l9', 'infrastructure-layer', 'logical-db', 'persistence adapter', {
-        sourceSide: 'right', sourceRatio: 0.25, targetSide: 'left', labelX: 1300, labelY: 235,
-        points: [{ x: 1270, y: 792.5 }, { x: 1270, y: 242 }],
+        sourceSide: 'right', sourceRatio: 0.15, targetSide: 'left', labelX: 1360, labelY: 222,
+        points: [{ x: 1270, y: 841.7 }, { x: 1270, y: 242 }],
       }),
       edge('l10', 'infrastructure-layer', 'external-logical', 'external adapters', {
-        sourceSide: 'right', sourceRatio: 0.75, targetSide: 'left', targetRatio: 0.8124,
-        labelX: 1217, labelY: 810,
+        sourceSide: 'right', sourceRatio: 0.85, targetSide: 'left', targetRatio: 487.3 / 525,
+        labelX: 1217, labelY: 865,
       }),
     ],
   },
@@ -389,56 +396,78 @@ const diagrams = [
     page: '04 - AI Logical View',
     file: '04-ai-proposal-analysis-architecture',
     title: 'AI-assisted Project Proposal Analysis Architecture',
-    subtitle: 'Authorized, privacy-aware, durable and human-governed AI analysis workflow',
+    subtitle: 'Target workflow: proposal submission queues analysis; scoped comparison, durable job state and REST results support lecturer review',
+    preciseEdges: true,
     groups: [
-      group('request-lane', 25, 145, 700, 760, 'Request and Safety Controls', 'frontend', { compactTitleGap: true }),
-      group('ai-state-boundary', 750, 145, 255, 760, 'Durable Analysis State', 'data', { compactTitleGap: true }),
-      group('worker-lane', 1030, 145, 350, 760, 'Asynchronous AI Processing', 'backend', { compactTitleGap: true }),
+      group('request-lane', 25, 145, 700, 780, 'Request and Safety Controls', 'frontend', { compactTitleGap: true }),
+      group('ai-state-boundary', 750, 145, 255, 780, 'Durable Analysis State', 'data', { compactTitleGap: true }),
+      group('worker-lane', 1030, 145, 350, 780, 'Asynchronous AI Processing', 'backend', { compactTitleGap: true }),
       group('ai-external-boundary', 1405, 145, 250, 500, 'External AI Provider', 'external', { compactTitleGap: true }),
-      group('ai-governance-boundary', 1405, 670, 250, 235, 'Human Governance', 'security', { compactTitleGap: true }),
+      group('ai-governance-boundary', 1405, 670, 250, 255, 'Human Governance', 'security', { compactTitleGap: true }),
     ],
     nodes: [
-      node('ai-user', 55, 230, 145, 110, 'Team / Lecturer', ['Submit proposal or request analysis'], 'actor'),
+      node('ai-user', 35, 230, 185, 120, 'Student', ['Submit only with the required team-scoped permission; Team Leader is not a separate global role'], 'actor', {
+        caption: ['Authorized team member'],
+      }),
       node('ai-web', 245, 230, 150, 110, 'EHub Web', ['Proposal form and analysis status'], 'frontend'),
-      node('ai-api', 475, 230, 200, 110, 'Proposal Analysis API', ['Authorization, validation and rate limit'], 'backend'),
+      node('ai-api', 465, 230, 220, 110, 'EHUB Proposal and Analysis API', ['An API capability within the EHUB modular monolith; authorize, validate and apply rate limits'], 'backend'),
       node('context-minimizer', 475, 410, 200, 115, 'Context and Prompt Controls', ['Minimize personal data and select prompt version'], 'security'),
-      node('ai-transaction', 475, 620, 200, 110, 'Persist Request and Job', ['Atomic request, job and outbox write'], 'data'),
+      node('ai-transaction', 455, 620, 240, 125, 'Persist Proposal and Analysis Job', ['Atomically bind a pending analysis job to the immutable submitted proposal version'], 'data', {
+        caption: ['Bound to submitted version', 'Auto-queue on submit'],
+      }),
 
-      node('ai-db', 785, 620, 185, 110, 'PostgreSQL', ['Proposal snapshot, job, result and metadata'], 'data'),
+      node('ai-db', 785, 620, 185, 110, 'PostgreSQL', ['Proposal versions, comparison data, job state and validated reports'], 'data'),
 
-      node('job-claimer', 1100, 230, 210, 110, 'Job Claim and Retry', ['Lease, idempotency and retry policy'], 'backend'),
-      node('ai-orchestrator', 1100, 410, 210, 110, 'AI Orchestrator', ['IAiProvider, timeout and model configuration'], 'backend'),
+      node('job-claimer', 1100, 230, 210, 110, 'Job Claim and Retry', ['Atomic claim, processing lease, retry metadata and terminal failure'], 'backend'),
+      node('ai-orchestrator', 1100, 410, 210, 140, 'AI Orchestrator', ['Load scoped context, reapply prompt controls and invoke IAiProvider'], 'backend', {
+        caption: ['Analyze / Classify', 'Similarity / Report'],
+      }),
       node('result-validator', 1100, 620, 210, 110, 'Output Guardrails', ['Schema validation and business sanity checks'], 'security'),
-      node('notification-delivery', 1100, 790, 210, 95, 'Result Delivery', ['In-app, SignalR and optional email'], 'backend'),
+      node('notification-delivery', 1095, 790, 220, 110, 'Analysis Status and Results', ['Authorized REST access to pending, processing, completed or failed jobs and reports'], 'backend', {
+        caption: ['REST polling'],
+      }),
 
       node('external-ai', 1440, 410, 180, 110, 'AI Model Provider', ['Structured response API'], 'external'),
-      node('human-governance', 1440, 790, 180, 95, 'Human Review', ['Lecturer or Admin retains decision authority'], 'security'),
+      node('human-governance', 1425, 790, 210, 110, 'Lecturer Review', ['Review the report in EHub; persist the lecturer decision through the authorized proposal workflow'], 'security', {
+        caption: ['Approve / Request revision'],
+      }),
     ],
     edges: [
-      edge('a1', 'ai-user', 'ai-web', 'submit proposal', { sourceSide: 'right', targetSide: 'left' }),
-      edge('a2', 'ai-web', 'ai-api', 'request analysis', { sourceSide: 'right', targetSide: 'left' }),
-      edge('a3', 'ai-api', 'context-minimizer', 'authorized input', { sourceSide: 'bottom', targetSide: 'top' }),
-      edge('a4', 'context-minimizer', 'ai-transaction', 'safe versioned context', { sourceSide: 'bottom', targetSide: 'top' }),
-      edge('a5', 'ai-transaction', 'ai-db', 'atomic write and accept', { sourceSide: 'right', targetSide: 'left' }),
+      edge('a1', 'ai-user', 'ai-web', 'submit proposal through the web interface', { sourceSide: 'right', targetSide: 'left', labelX: 224, labelY: 247 }),
+      edge('a2', 'ai-web', 'ai-api', 'submit proposal for automatic analysis', { sourceSide: 'right', targetSide: 'left', labelX: 447, labelY: 247 }),
+      edge('a3', 'ai-api', 'context-minimizer', 'authorized input', { sourceSide: 'bottom', targetSide: 'top', labelX: 630, labelY: 378 }),
+      edge('a4', 'context-minimizer', 'ai-transaction', 'safe versioned context', { sourceSide: 'bottom', targetSide: 'top', labelX: 630, labelY: 576 }),
+      edge('a5', 'ai-transaction', 'ai-db', 'atomic submitted snapshot and pending job; accept after commit', { sourceSide: 'right', targetSide: 'left', labelX: 685, labelY: 638 }),
       edge('a6', 'ai-db', 'job-claimer', 'claim pending job', {
-        sourceSide: 'top', targetSide: 'left', labelX: 950, labelY: 430,
-        points: [{ x: 877.5, y: 267 }],
+        sourceSide: 'top', sourceRatio: 0.22, targetSide: 'left', targetRatio: 0.25,
+        labelX: 1100, labelY: 233,
+        points: [{ x: 861.26, y: 252.5 }],
       }),
-      edge('a7', 'job-claimer', 'ai-orchestrator', 'execute once', { sourceSide: 'bottom', targetSide: 'top' }),
-      edge('a8', 'ai-orchestrator', 'external-ai', 'provider request', { sourceSide: 'right', targetSide: 'left' }),
+      edge('a-state', 'job-claimer', 'ai-db', 'persist processing lease, retry schedule and failure state', {
+        sourceSide: 'left', sourceRatio: 0.75, targetSide: 'top', targetRatio: 0.78, dashed: true,
+        labelX: 1100, labelY: 306,
+        points: [{ x: 893.74, y: 281.5 }],
+      }),
+      edge('a-context', 'ai-db', 'ai-orchestrator', 'proposal snapshot and permitted comparison context from the proposal semester; reapply prompt controls', {
+        sourceSide: 'right', sourceRatio: 0.12, targetSide: 'left',
+        labelX: 1100, labelY: 410, labelLines: ['Scoped Proposal', '& Project Context'],
+        points: [{ x: 975, y: 634.96 }, { x: 975, y: 447 }],
+      }),
+      edge('a7', 'job-claimer', 'ai-orchestrator', 'execute leased job with bounded retry', { sourceSide: 'bottom', targetSide: 'top', labelX: 1265, labelY: 378 }),
+      edge('a8', 'ai-orchestrator', 'external-ai', 'invoke provider with controlled context', { sourceSide: 'right', targetSide: 'left', labelX: 1330, labelY: 426 }),
       edge('a9', 'external-ai', 'result-validator', 'untrusted structured result', {
-        sourceSide: 'bottom', targetSide: 'right', labelX: 1392, labelY: 585,
-        points: [{ x: 1392, y: 520 }, { x: 1392, y: 657 }],
+        sourceSide: 'bottom', targetSide: 'right', labelX: 1325, labelY: 638,
+        points: [{ x: 1530, y: 657 }],
       }),
-      edge('a10', 'result-validator', 'ai-db', 'validated result and completion event', {
-        sourceSide: 'left', targetSide: 'right', labelX: 1035, labelY: 645,
+      edge('a10', 'result-validator', 'ai-db', 'atomically persist validated report, metadata and completed job state', {
+        sourceSide: 'left', targetSide: 'right', labelX: 1100, labelY: 684,
       }),
-      edge('a11', 'ai-db', 'notification-delivery', 'completion event', {
-        sourceSide: 'bottom', targetSide: 'left', dashed: true, labelX: 1017, labelY: 765,
-        points: [{ x: 1017, y: 730 }, { x: 1017, y: 827 }],
+      edge('a11', 'ai-db', 'notification-delivery', 'read durable job status and validated report through the authorized result API', {
+        sourceSide: 'bottom', targetSide: 'left', labelX: 1100, labelY: 807,
+        points: [{ x: 877.5, y: 827 }],
       }),
-      edge('a12', 'notification-delivery', 'human-governance', 'notify and review', {
-        sourceSide: 'right', targetSide: 'left',
+      edge('a12', 'notification-delivery', 'human-governance', 'lecturer reads status and report in EHub before a separate authorized review decision', {
+        sourceSide: 'right', targetSide: 'left', labelX: 1325, labelY: 807,
       }),
     ],
   },
@@ -560,21 +589,22 @@ const COMPACT_BODIES = {
   student: '',
   'role-portals': 'Role-based UI',
   'web-state': 'React SPA',
-  'web-clients': 'REST • SignalR',
-  'api-layer': 'Auth • REST • Hubs',
+  'web-clients': 'HTTPS • REST',
+  'api-layer': 'Auth • REST • Contracts',
   'iam-module': 'Auth • Roles',
   'academic-module': 'Classes • Roster',
-  'team-module': 'Teams • Mentors',
-  'workspace-module': 'Projects • Tasks',
-  'evaluation-module': 'Rubrics • Progress',
-  'learning-module': 'Sessions • Data bank',
-  'communication-module': 'Chat • Notifications',
+  'team-module': 'Teams • Membership',
+  'workspace-module': 'Projects • Checkpoints • Submissions',
+  'evaluation-module': 'Rubrics • Analytics',
+  'mentoring-module': 'Assignments • Sessions • Feedback',
+  'databank-module': 'Datasets • Import / Export',
+  'notification-module': 'In-app • Email',
   'ai-module': 'Proposal analysis',
-  'domain-layer': 'Rules • Events',
+  'domain-layer': 'Entities • Rules',
   'infrastructure-layer': 'EF Core • Adapters',
   'logical-db': 'Source of truth',
   'logical-worker': 'Outbox • Jobs',
-  'logical-google': 'OAuth',
+  'logical-google': 'Verified Google identity',
   'logical-cloud': 'Media • Documents',
   'logical-ai': 'Model API',
   'logical-email': 'Transactional Email',
@@ -583,14 +613,14 @@ const COMPACT_BODIES = {
   'ai-web': 'Submit • Track status',
   'ai-api': 'Authorize • Validate',
   'context-minimizer': 'Minimize • Normalize • Version',
-  'ai-transaction': 'Request + Job + Outbox',
-  'ai-db': 'Request • Job • Result',
+  'ai-transaction': 'Submitted version + Bound analysis job',
+  'ai-db': 'Versions • Context • Jobs • Reports',
   'job-claimer': 'Lease • Idempotency • Retry',
-  'ai-orchestrator': 'Provider-neutral execution',
+  'ai-orchestrator': 'Analyze • Classify • Similarity • Report',
   'result-validator': 'Schema + business checks',
   'external-ai': 'Structured API',
-  'notification-delivery': 'In-app • SignalR • Email',
-  'human-governance': 'AI recommends; human decides',
+  'notification-delivery': 'Authorized REST polling',
+  'human-governance': 'AI advises; lecturer decides',
 
   'rt-user': '',
   'signalr-client': 'JWT • Reconnect',
@@ -619,10 +649,11 @@ const COMPACT_EDGE_LABELS = {
   p5: 'EF Core', p6: 'Jobs / Outbox', p8: 'OAuth',
   p9: 'Storage', p10: 'AI', p11: 'Email', p12: 'All-container telemetry', p13: 'Telemetry',
   p14: 'DB export', p15: 'Encrypted',
-  l1: 'Role Access', l4: 'REST / SignalR', l5: 'Commands / Queries', l6: 'Jobs / Events',
+  l1: 'Role Access', l4: 'REST API', l5: 'Use Cases / Handlers', l6: 'Jobs / Events',
   l7: 'Domain Rules', l8: 'Implements Ports', l9: 'Persistence', l10: 'External Adapters',
-  a1: '1 Submit', a2: '2 Request', a3: '3 Authorize', a4: '4 Prepare', a5: '5 Persist', a6: '6 Claimed Job',
-  a7: '7 Execute', a8: '8 Invoke', a9: '9 Result', a10: '10 Store', a11: '11 Completion', a12: '12 Review',
+  a1: '1 Submit Proposal', a2: '2 Request', a3: '3 Authorize', a4: '4 Prepare', a5: '5 Persist', a6: '6 Claim Job',
+  'a-state': 'Job State / Retry', 'a-context': 'Scoped Proposal & Project Context',
+  a7: '7 Execute', a8: '8 Invoke', a9: '9 Result', a10: '10 Store / Complete', a11: '11 Status / Result', a12: '12 Review',
   r1: '1 Open', r2: '2 Connect', r3: '3 Authorize', r4: '4 Command', r5: '5 Persist', r6: '6 After Commit',
   r7: '7 Best-effort Push', r8: '8 Atomic Commit', r9: '9 Claim', r10: '10 Dispatch', r11: 'Membership',
   r12: 'Notification', r13: 'Optional Email', r14: 'Retry Exhausted', r15: 'Access Update', r16: 'Notification',
@@ -653,33 +684,33 @@ const SHORT_TITLES = {
   'ai-provider': 'AI Provider',
   'email-provider': 'Email Provider',
   backup: 'Off-site Backup',
-  'role-portals': 'Role Portals',
+  'role-portals': 'Role-based UI',
   'web-state': 'React Web App',
-  'web-clients': 'REST / SignalR Client',
+  'web-clients': 'API Client',
   'api-layer': 'API Layer',
   'iam-module': 'Identity & Access',
   'academic-module': 'Academic & Class',
-  'team-module': 'Team & Mentor',
-  'evaluation-module': 'Evaluation & Tracking',
-  'learning-module': 'Mentoring & Data',
-  'communication-module': 'Communication',
+  'team-module': 'Team Management',
+  'workspace-module': 'Project Workspace & Submission',
+  'evaluation-module': 'Evaluation & Analytics',
+  'mentoring-module': 'Mentoring & Support',
   'domain-layer': 'Domain Model',
   'infrastructure-layer': 'Infrastructure Adapters',
-  'logical-worker': 'Background Worker',
-  'logical-google': 'Google OAuth',
+  'logical-worker': 'Background Processing',
+  'logical-google': 'Google Identity',
   'logical-ai': 'AI Provider',
   'logical-email': 'Email Provider',
-  'ai-user': 'Team / Lecturer',
+  'ai-user': 'Student',
   'ai-web': 'EHub Web',
-  'ai-api': 'Proposal Analysis API',
+  'ai-api': 'EHUB Proposal & Analysis API',
   'context-minimizer': 'Context & Prompt Controls',
-  'ai-transaction': 'Persist Request & Job',
+  'ai-transaction': 'Persist Proposal & Analysis Job',
   'job-claimer': 'Job Claim & Retry',
   'ai-orchestrator': 'AI Orchestrator',
   'result-validator': 'Output Guardrails',
   'external-ai': 'AI Model Provider',
-  'notification-delivery': 'Result Delivery',
-  'human-governance': 'Human Review',
+  'notification-delivery': 'Analysis Status & Results',
+  'human-governance': 'Lecturer Review',
   'signalr-client': 'React SignalR Client',
   'membership-auth': 'Membership Authorization',
   'message-service': 'Chat Message Service',
@@ -824,9 +855,11 @@ function svgNode(n) {
   const titleY = visual.iconY + visual.iconSize + 22;
   const titleMarkup = titleLines.map((line, index) =>
     `<text x="${visual.cx}" y="${titleY + index * 17}" class="node-title" fill="${palette.ink}">${esc(line)}</text>`).join('');
+  const captionMarkup = (n.caption || []).map((line, index) =>
+    `<text x="${visual.cx}" y="${titleY + titleLines.length * 17 + index * 15}" font-size="10.5" text-anchor="middle" fill="${palette.muted}">${esc(line)}</text>`).join('');
   return `<g id="${esc(n.id)}" class="diagram-node">
     <g transform="translate(${visual.iconX} ${visual.iconY}) scale(${visual.iconSize / 24})" aria-hidden="true">${iconArtwork(key, p.accent)}</g>
-    ${titleMarkup}
+    ${titleMarkup}${captionMarkup}
   </g>`;
 }
 
@@ -836,6 +869,13 @@ function svgGroup(g) {
   const titleGapWidth = g.compactTitleGap
     ? Math.max(100, Math.min(g.w - titleOffsetX - 12, g.title.length * 7.2 + 28))
     : Math.max(170, Math.min(g.w - 36, g.title.length * 9.2 + 34));
+  if (g.insetTitle) {
+    // Keep incoming connectors on the border clear of this long layer heading.
+    return `<g id="${esc(g.id)}" class="diagram-group">
+    <rect x="${g.x}" y="${g.y}" width="${g.w}" height="${g.h}" rx="4" fill="none" stroke="${p.stroke}" stroke-width="1.25" stroke-dasharray="6 5"/>
+    <text x="${g.x + titleOffsetX + 11}" y="${g.y + 28}" class="group-title">${esc(g.title)}</text>
+  </g>`;
+  }
   return `<g id="${esc(g.id)}" class="diagram-group">
     <rect x="${g.x}" y="${g.y}" width="${g.w}" height="${g.h}" rx="4" fill="none" stroke="${p.stroke}" stroke-width="1.25" stroke-dasharray="6 5"/>
     <rect x="${g.x + titleOffsetX}" y="${g.y - 13}" width="${titleGapWidth}" height="28" rx="8" fill="${palette.canvas}"/>
@@ -851,10 +891,12 @@ function svgEdge(e, lookup) {
     ? { x: e.labelX, y: e.labelY }
     : edgeLabelPosition(route);
   const displayLabel = displayEdgeLabel(e);
-  const labelWidth = Math.max(42, displayLabel.length * 6.6 + 16);
+  const labelLines = e.labelLines || [displayLabel];
+  const labelWidth = Math.max(42, ...labelLines.map(line => line.length * 6.6 + 16));
+  const labelHeight = 20 + (labelLines.length - 1) * 14;
   const label = displayLabel ? `<g class="edge-label">
-    <rect x="${labelPosition.x - labelWidth / 2}" y="${labelPosition.y - 13}" width="${labelWidth}" height="20" rx="6"/>
-    <text x="${labelPosition.x}" y="${labelPosition.y + 2}">${esc(displayLabel)}</text>
+    <rect x="${labelPosition.x - labelWidth / 2}" y="${labelPosition.y - 13}" width="${labelWidth}" height="${labelHeight}" rx="6"/>
+    ${labelLines.map((line, index) => `<text x="${labelPosition.x}" y="${labelPosition.y + 2 + index * 14}">${esc(line)}</text>`).join('')}
   </g>` : '';
   return `<g id="${esc(e.id)}" class="diagram-edge">
     <path d="${d}" fill="none" stroke="${e.danger ? palette.danger.stroke : palette.line}" stroke-width="1.8" ${e.dashed ? 'stroke-dasharray="7 6"' : ''} marker-end="url(#arrow)"/>
@@ -941,6 +983,44 @@ function drawioGroup(g) {
   return `<mxCell id="${esc(g.id)}" value="${esc(g.title)}" style="${style}" vertex="1" parent="1"><mxGeometry x="${g.x}" y="${g.y}" width="${g.w}" height="${g.h}" as="geometry"/></mxCell>`;
 }
 
+function drawioCaption(n) {
+  if (!n.caption?.length) return '';
+  const visual = nodeVisualBox(n);
+  const titleLines = wrapWords(displayTitle(n), Math.max(12, Math.floor(n.w / 7.4))).slice(0, 3);
+  const captionY = visual.iconY + visual.iconSize + 26 + (titleLines.length - 1) * 17;
+  const style = `text;html=1;align=center;verticalAlign=top;whiteSpace=wrap;fillColor=none;strokeColor=none;fontColor=${palette.muted};fontSize=10.5;`;
+  return `<mxCell id="caption-${esc(n.id)}" value="${esc(n.caption.join('<br>'))}" style="${style}" vertex="1" parent="1"><mxGeometry x="${n.x}" y="${captionY}" width="${n.w}" height="${n.caption.length * 15 + 5}" as="geometry"/></mxCell>`;
+}
+
+// Selected figures share explicit SVG/Draw.io routes and editable off-line labels.
+// Node bottom ports start below captions; group ports stay on the group boundary.
+function drawioRoutedEdge(e, lookup) {
+  const route = pathForEdge(e, lookup);
+  const ports = [['exit', e.source, e.sourceSide, e.sourceRatio], ['entry', e.target, e.targetSide, e.targetRatio]]
+    .map(([prefix, id, side, ratio]) => {
+      const item = lookup.get(id);
+      const visual = item.kind === 'node' ? nodeVisualBox(item) : null;
+      const dy = visual && side === 'bottom' ? item.y + item.h - visual.iconY - visual.iconSize : 0;
+      return `${drawioPortStyle(prefix, side, ratio ?? 0.5)};${prefix}Perimeter=0;${prefix}Dy=${dy}`;
+    });
+  const style = [
+    'edgeStyle=none', 'rounded=0', 'endArrow=block', 'endFill=1',
+    `strokeColor=${palette.line}`, 'strokeWidth=1.8', ...ports,
+    e.dashed ? 'dashed=1;dashPattern=7 6' : '',
+  ].filter(Boolean).join(';');
+  const waypoints = route.points.slice(1, -1).map(p => `<mxPoint x="${p.x}" y="${p.y}"/>`).join('');
+  const cell = `<mxCell id="${esc(e.id)}" value="" style="${style}" edge="1" parent="1" source="${esc(e.source)}" target="${esc(e.target)}"><mxGeometry relative="1" as="geometry"><Array as="points">${waypoints}</Array></mxGeometry></mxCell>`;
+  const label = displayEdgeLabel(e);
+  if (!label) return cell;
+  const position = e.labelX !== undefined && e.labelY !== undefined
+    ? { x: e.labelX, y: e.labelY } : edgeLabelPosition(route);
+  const labelLines = e.labelLines || [label];
+  const width = Math.max(42, ...labelLines.map(line => line.length * 6.6 + 16));
+  const height = 20 + (labelLines.length - 1) * 14;
+  const labelStyle = `text;html=1;align=center;verticalAlign=middle;fillColor=none;strokeColor=none;fontColor=${palette.muted};fontSize=11;`;
+  return `${cell}<mxCell id="label-${esc(e.id)}" value="${esc(labelLines.join('<br>'))}" style="${labelStyle}" vertex="1" parent="1"><mxGeometry x="${position.x - width / 2}" y="${position.y - 13}" width="${width}" height="${height}" as="geometry"/></mxCell>`;
+}
+
 function drawioPortStyle(prefix, side, ratio = 0.5) {
   if (!side) return '';
   const x = side === 'left' ? 0 : side === 'right' ? 1 : ratio;
@@ -964,6 +1044,7 @@ function drawioEdge(e) {
 }
 
 function drawioPage(diagram) {
+  const lookup = new Map([...diagram.groups, ...diagram.nodes].map(item => [item.id, item]));
   const titleStyle = `text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=22;fontStyle=1;fontColor=${palette.ink};`;
   return `<diagram id="${esc(diagram.id)}" name="${esc(diagram.page)}">
     <mxGraphModel dx="1680" dy="1050" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1680" pageHeight="1050" math="0" shadow="0">
@@ -972,19 +1053,23 @@ function drawioPage(diagram) {
         <mxCell id="1" parent="0"/>
         <mxCell id="title-${esc(diagram.id)}" value="${esc(diagram.title)}" style="${titleStyle}" vertex="1" parent="1"><mxGeometry x="40" y="25" width="1200" height="40" as="geometry"/></mxCell>
         ${diagram.groups.map(drawioGroup).join('\n')}
-        ${diagram.edges.map(drawioEdge).join('\n')}
+        ${diagram.edges.map(e => diagram.preciseEdges ? drawioRoutedEdge(e, lookup) : drawioEdge(e)).join('\n')}
         ${diagram.nodes.map(drawioNode).join('\n')}
-        ${diagram.nodes.map(drawioLabel).join('\n')}
+        ${diagram.nodes.map(n => drawioLabel(n) + drawioCaption(n)).join('\n')}
       </root>
     </mxGraphModel>
   </diagram>`;
 }
 
 async function main() {
+  const only = process.argv.find(arg => arg.startsWith('--only='))?.slice('--only='.length);
+  const selectedDiagrams = only ? diagrams.filter(diagram => diagram.file === only) : diagrams;
+  if (!selectedDiagrams.length) throw new Error(`Unknown diagram: ${only}`);
+
   fs.mkdirSync(SVG_DIR, { recursive: true });
   fs.mkdirSync(PNG_DIR, { recursive: true });
 
-  for (const diagram of diagrams) {
+  for (const diagram of selectedDiagrams) {
     const svg = renderSvg(diagram);
     fs.writeFileSync(path.join(SVG_DIR, `${diagram.file}.svg`), svg, 'utf8');
   }
@@ -1000,13 +1085,13 @@ async function main() {
     return;
   }
 
-  for (const diagram of diagrams) {
+  for (const diagram of selectedDiagrams) {
     const svgPath = path.join(SVG_DIR, `${diagram.file}.svg`);
     const pngPath = path.join(PNG_DIR, `${diagram.file}.png`);
     await sharp(svgPath, { density: 180 }).png({ compressionLevel: 9 }).toFile(pngPath);
   }
 
-  console.log(`Generated ${diagrams.length} architecture diagrams in ${ROOT}`);
+  console.log(`Generated ${selectedDiagrams.length} architecture export(s) and the full Draw.io document in ${ROOT}`);
 }
 
 main().catch((error) => {
