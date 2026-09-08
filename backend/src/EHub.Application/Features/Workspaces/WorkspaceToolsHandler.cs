@@ -57,7 +57,14 @@ public sealed class WorkspaceToolsHandler(
                 query.TeamId.HasValue && item.Scope == WeeklyTaskScope.Team && item.TeamId == query.TeamId);
         if (course is not null) tasks = tasks.Where(item => item.CourseId == course.Id);
         if (IsRole(role, SystemRoles.Student)) tasks = tasks.Where(item => item.VisibleToStudents);
-        if (!string.IsNullOrWhiteSpace(query.Status) && TryStatus(query.Status, out var status)) tasks = tasks.Where(item => item.Status == status);
+        WeeklyTaskStatus? statusFilter = null;
+        if (!string.IsNullOrWhiteSpace(query.Status))
+        {
+            if (!TryStatus(query.Status, out var parsedStatus))
+                return Fail<WeeklyTaskBoardDto>(ErrorCodes.WorkspaceValidationError, "Task status is invalid.");
+            statusFilter = parsedStatus;
+            if (!query.TeamId.HasValue) tasks = tasks.Where(item => item.Status == parsedStatus);
+        }
         if (query.AssigneeStudentId.HasValue) tasks = tasks.Where(item => item.AssigneeStudentId == query.AssigneeStudentId);
         if (!string.IsNullOrWhiteSpace(query.Priority))
         {
@@ -72,11 +79,27 @@ public sealed class WorkspaceToolsHandler(
         }
 
         var rows = await tasks.OrderBy(item => item.CreatedAt).ToListAsync(cancellationToken);
+        var progressByTaskId = new Dictionary<Guid, WeeklyTaskTeamProgress>();
+        if (query.TeamId.HasValue)
+        {
+            var taskIds = rows.Select(item => item.Id).ToArray();
+            progressByTaskId = await context.WeeklyTaskTeamProgress
+                .AsNoTracking()
+                .Where(progress => progress.TeamId == query.TeamId && taskIds.Contains(progress.WeeklyTaskId))
+                .ToDictionaryAsync(progress => progress.WeeklyTaskId, cancellationToken);
+        }
+
+        WeeklyTaskDto[] MapRows(Func<WeeklyTask, bool> predicate) => rows
+            .Where(predicate)
+            .Select(item => MapTask(item, progressByTaskId.GetValueOrDefault(item.Id)))
+            .Where(item => !statusFilter.HasValue || item.Status == StatusText(statusFilter.Value))
+            .ToArray();
+
         var result = new WeeklyTaskBoardDto
         {
-            CourseTasks = rows.Where(item => item.Scope is WeeklyTaskScope.Course or WeeklyTaskScope.GlobalTemplate).Select(MapTask).ToArray(),
-            ClassTasks = rows.Where(item => item.Scope == WeeklyTaskScope.Class && item.ClassId == effectiveClassId).Select(MapTask).ToArray(),
-            TeamTasks = rows.Where(item => item.Scope == WeeklyTaskScope.Team && item.TeamId == query.TeamId).Select(MapTask).ToArray()
+            CourseTasks = MapRows(item => item.Scope is WeeklyTaskScope.Course or WeeklyTaskScope.GlobalTemplate),
+            ClassTasks = MapRows(item => item.Scope == WeeklyTaskScope.Class && item.ClassId == effectiveClassId),
+            TeamTasks = MapRows(item => item.Scope == WeeklyTaskScope.Team && item.TeamId == query.TeamId)
         };
         return Result.Success(result);
     }
@@ -135,6 +158,47 @@ public sealed class WorkspaceToolsHandler(
         var task = await context.WeeklyTasks.Include(item => item.Course).Include(item => item.Creator).Include(item => item.AssigneeStudent).FirstOrDefaultAsync(item => item.Id == taskId, cancellationToken);
         if (task is null) return Fail<WeeklyTaskDto>(ErrorCodes.WeeklyTaskNotFound, "Weekly task was not found.");
         if (!TryStatus(request.Status, out var status)) return Fail<WeeklyTaskDto>(ErrorCodes.WorkspaceValidationError, "Task status is invalid.");
+
+        if (task.Scope is WeeklyTaskScope.Course or WeeklyTaskScope.GlobalTemplate or WeeklyTaskScope.Class && request.TeamId.HasValue)
+        {
+            if (IsRole(role, SystemRoles.Student) && !task.VisibleToStudents)
+                return Fail<WeeklyTaskDto>(ErrorCodes.WorkspaceAccessDenied, "You cannot change this task status.");
+            if (!await CanMutateTeamAsync(request.TeamId.Value, userId, role, cancellationToken))
+                return Fail<WeeklyTaskDto>(ErrorCodes.WorkspaceAccessDenied, "You cannot change this task status for this team.");
+            if (!await TaskAppliesToTeamAsync(task, request.TeamId.Value, cancellationToken))
+                return Fail<WeeklyTaskDto>(ErrorCodes.WorkspaceAccessDenied, "This task does not belong to the selected team workspace.");
+
+            var progress = await context.WeeklyTaskTeamProgress.FirstOrDefaultAsync(
+                item => item.WeeklyTaskId == task.Id && item.TeamId == request.TeamId.Value,
+                cancellationToken);
+            var now = DateTime.UtcNow;
+            if (progress is null)
+            {
+                progress = new WeeklyTaskTeamProgress
+                {
+                    WeeklyTaskId = task.Id,
+                    TeamId = request.TeamId.Value,
+                    CreatedAt = now,
+                    CreatedBy = userId
+                };
+                context.WeeklyTaskTeamProgress.Add(progress);
+            }
+
+            progress.Status = status;
+            if (request.Checklist is not null)
+                progress.ChecklistJson = JsonSerializer.Serialize(request.Checklist);
+            var effectiveChecklist = progress.ChecklistJson ?? task.ChecklistJson;
+            progress.CompletionPercentage = status == WeeklyTaskStatus.Done
+                ? 100
+                : CalculateCompletion(effectiveChecklist);
+            progress.UpdatedAt = now;
+            progress.UpdatedBy = userId;
+            await context.SaveChangesAsync(cancellationToken);
+            return Result.Success(MapTask(task, progress));
+        }
+
+        if (request.TeamId.HasValue && task.TeamId != request.TeamId)
+            return Fail<WeeklyTaskDto>(ErrorCodes.WorkspaceAccessDenied, "This task does not belong to the selected team workspace.");
         if (!await CanMutateTaskScopeAsync(task.Scope, task.CourseId, task.ClassId, task.TeamId, userId, role, cancellationToken))
             return Fail<WeeklyTaskDto>(ErrorCodes.WorkspaceAccessDenied, "You cannot change this task status.");
         task.Status = status;
@@ -248,6 +312,15 @@ public sealed class WorkspaceToolsHandler(
         return teamId.HasValue && await CanMutateTeamAsync(teamId.Value, userId, role, ct);
     }
 
+    private Task<bool> TaskAppliesToTeamAsync(WeeklyTask task, Guid teamId, CancellationToken cancellationToken)
+    {
+        return context.Teams.AnyAsync(team =>
+            team.Id == teamId &&
+            team.Class.CourseId == task.CourseId &&
+            (task.Scope != WeeklyTaskScope.Class || team.ClassId == task.ClassId),
+            cancellationToken);
+    }
+
     private async Task<bool> ContextMatchesAsync(WeeklyTaskScope scope, Guid courseId, Guid? classId, Guid? teamId, Guid? assigneeId, CancellationToken ct)
     {
         if (scope == WeeklyTaskScope.Class && (!classId.HasValue || !await context.Classes.AnyAsync(item => item.Id == classId && item.CourseId == courseId, ct))) return false;
@@ -286,19 +359,64 @@ public sealed class WorkspaceToolsHandler(
         return rows.Count > 0 ? (int)Math.Round(rows.Count(row => row.IsCompleted) * 100d / rows.Count) : 0;
     }
 
-    private static WeeklyTaskDto MapTask(WeeklyTask item) => new()
+    private static WeeklyTaskDto MapTask(WeeklyTask item, WeeklyTaskTeamProgress? progress = null)
     {
-        Id = item.Id, Title = item.Title, Description = item.Description ?? string.Empty, TaskType = item.Scope switch { WeeklyTaskScope.Course or WeeklyTaskScope.GlobalTemplate => "COURSE_TEMPLATE", WeeklyTaskScope.Class => "CLASS_TASK", _ => "TEAM_TASK" }, Scope = item.Scope.ToString().ToUpperInvariant(), WeekNumber = item.WeekNumber,
-        CourseCode = item.Course?.Code ?? string.Empty, ClassId = item.ClassId, TeamId = item.TeamId, AssigneeStudentId = item.AssigneeStudent is null ? null : new WeeklyTaskAssigneeDto { Id = item.AssigneeStudent.Id, FullName = item.AssigneeStudent.FullName, RollNumber = item.AssigneeStudent.RollNumber ?? string.Empty },
-        Status = item.Status switch { WeeklyTaskStatus.InProgress => "IN_PROGRESS", WeeklyTaskStatus.Done => "COMPLETED", _ => item.Status.ToString().ToUpperInvariant() }, Priority = item.Priority.ToString().ToUpperInvariant(), StartDate = item.StartDate, DueDate = item.DueDate,
-        AttachmentsJson = item.AttachmentsJson, ChecklistJson = item.ChecklistJson, Attachments = DeserializeAttachments(item.AttachmentsJson), Checklist = DeserializeChecklist(item.ChecklistJson), Tags = item.Tags, IsTemplate = item.IsTemplate, IsMandatory = item.IsMandatory, VisibleToStudents = item.VisibleToStudents, CompletionPercentage = item.CompletionPercentage, EstimatedHours = item.EstimatedHours,
-        CreatedBy = new WeeklyTaskCreatorDto { Id = item.Creator.Id, Name = item.Creator.FullName, Avatar = item.Creator.AvatarUrl }, CreatedAt = item.CreatedAt, UpdatedAt = item.UpdatedAt
-    };
+        var checklistJson = progress?.ChecklistJson ?? item.ChecklistJson;
+        var status = progress?.Status ?? item.Status;
+        return new WeeklyTaskDto
+        {
+            Id = item.Id,
+            Title = item.Title,
+            Description = item.Description ?? string.Empty,
+            TaskType = item.Scope switch
+            {
+                WeeklyTaskScope.Course or WeeklyTaskScope.GlobalTemplate => "COURSE_TEMPLATE",
+                WeeklyTaskScope.Class => "CLASS_TASK",
+                _ => "TEAM_TASK"
+            },
+            Scope = item.Scope.ToString().ToUpperInvariant(),
+            WeekNumber = item.WeekNumber,
+            CourseCode = item.Course?.Code ?? string.Empty,
+            ClassId = item.ClassId,
+            TeamId = item.TeamId,
+            AssigneeStudentId = item.AssigneeStudent is null
+                ? null
+                : new WeeklyTaskAssigneeDto
+                {
+                    Id = item.AssigneeStudent.Id,
+                    FullName = item.AssigneeStudent.FullName,
+                    RollNumber = item.AssigneeStudent.RollNumber ?? string.Empty
+                },
+            Status = StatusText(status),
+            Priority = item.Priority.ToString().ToUpperInvariant(),
+            StartDate = item.StartDate,
+            DueDate = item.DueDate,
+            AttachmentsJson = item.AttachmentsJson,
+            ChecklistJson = checklistJson,
+            Attachments = DeserializeAttachments(item.AttachmentsJson),
+            Checklist = DeserializeChecklist(checklistJson),
+            Tags = item.Tags,
+            IsTemplate = item.IsTemplate,
+            IsMandatory = item.IsMandatory,
+            VisibleToStudents = item.VisibleToStudents,
+            CompletionPercentage = progress?.CompletionPercentage ?? item.CompletionPercentage,
+            EstimatedHours = item.EstimatedHours,
+            CreatedBy = new WeeklyTaskCreatorDto
+            {
+                Id = item.Creator.Id,
+                Name = item.Creator.FullName,
+                Avatar = item.Creator.AvatarUrl
+            },
+            CreatedAt = item.CreatedAt,
+            UpdatedAt = progress?.UpdatedAt ?? item.UpdatedAt
+        };
+    }
 
     private static ProjectShortcutDto MapShortcut(ProjectShortcut item) => new() { Id = item.Id, TeamId = item.TeamId, ProjectId = item.ProjectId, Name = item.Name, Url = item.Url, Description = item.Description, ShortcutType = item.ShortcutType.ToString().ToUpperInvariant(), CreatedBy = new ShortcutCreatorDto { Id = item.Creator.Id, Name = item.Creator.FullName, Avatar = item.Creator.AvatarUrl }, CreatedAt = item.CreatedAt, UpdatedAt = item.UpdatedAt };
     private static IReadOnlyCollection<WeeklyTaskAttachmentDto> DeserializeAttachments(string json) { try { return JsonSerializer.Deserialize<WeeklyTaskAttachmentDto[]>(json, JsonOptions) ?? Array.Empty<WeeklyTaskAttachmentDto>(); } catch (JsonException) { return Array.Empty<WeeklyTaskAttachmentDto>(); } }
     private static IReadOnlyCollection<WeeklyTaskChecklistItemDto> DeserializeChecklist(string json) { try { return JsonSerializer.Deserialize<WeeklyTaskChecklistItemDto[]>(json, JsonOptions) ?? Array.Empty<WeeklyTaskChecklistItemDto>(); } catch (JsonException) { return Array.Empty<WeeklyTaskChecklistItemDto>(); } }
     private static WeeklyTaskScope ParseScope(string type, string scope) => type.ToUpperInvariant() switch { "COURSE_TEMPLATE" => WeeklyTaskScope.Course, "CLASS_TASK" => WeeklyTaskScope.Class, "TEAM_TASK" => WeeklyTaskScope.Team, _ => Enum.TryParse<WeeklyTaskScope>(scope, true, out var parsed) ? parsed : WeeklyTaskScope.Team };
+    private static string StatusText(WeeklyTaskStatus status) => status switch { WeeklyTaskStatus.InProgress => "IN_PROGRESS", WeeklyTaskStatus.Done => "COMPLETED", _ => status.ToString().ToUpperInvariant() };
     private static bool TryStatus(string? value, out WeeklyTaskStatus status) { var normalized = value?.Trim().ToUpperInvariant(); status = normalized switch { "TODO" => WeeklyTaskStatus.Todo, "IN_PROGRESS" => WeeklyTaskStatus.InProgress, "REVIEW" => WeeklyTaskStatus.Review, "COMPLETED" => WeeklyTaskStatus.Done, "DONE" => WeeklyTaskStatus.Done, "CANCELLED" => WeeklyTaskStatus.Cancelled, "OVERDUE" => WeeklyTaskStatus.Overdue, _ => (WeeklyTaskStatus)(-1) }; return (int)status >= 0; }
     private static ShortcutType ParseShortcutType(string? value) => Enum.TryParse<ShortcutType>(value, true, out var type) ? type : ShortcutType.Other;
     private static string NormalizeUrl(string value) { var trimmed = value.Trim(); return trimmed.EndsWith('/') ? trimmed.TrimEnd('/') : trimmed; }

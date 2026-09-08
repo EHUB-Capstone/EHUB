@@ -77,6 +77,7 @@ public class AppDbContext : DbContext, IApplicationDbContext
     public DbSet<Milestone> Milestones => Set<Milestone>();
     public DbSet<SprintTask> SprintTasks => Set<SprintTask>();
     public DbSet<WeeklyTask> WeeklyTasks => Set<WeeklyTask>();
+    public DbSet<WeeklyTaskTeamProgress> WeeklyTaskTeamProgress => Set<WeeklyTaskTeamProgress>();
     public DbSet<ProjectAnalysis> ProjectAnalyses => Set<ProjectAnalysis>();
     public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
 

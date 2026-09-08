@@ -201,6 +201,39 @@ export function normalizeTeamProposal(source: any): ManagedTeam {
   };
 }
 
+export function mergeTeamsWithLinkedProposals(
+  teams: ManagedTeam[],
+  proposals: ManagedTeam[],
+): ManagedTeam[] {
+  const proposalByTeamId = new Map<string, ManagedTeam>();
+
+  proposals.forEach((proposal) => {
+    const approvedTeamId = entityId(proposal.approvedTeamId);
+    if (approvedTeamId && !proposalByTeamId.has(approvedTeamId)) {
+      proposalByTeamId.set(approvedTeamId, proposal);
+    }
+  });
+
+  const linkedProposalIds = new Set<string>();
+  const mergedTeams = teams.map((team) => {
+    const proposal = proposalByTeamId.get(team._id);
+    if (!proposal) return team;
+
+    linkedProposalIds.add(proposal._id);
+    return {
+      ...team,
+      projectName: team.projectName || proposal.projectName,
+      projectDescription: team.projectDescription || proposal.projectDescription || proposal.description,
+      linkedProposal: proposal,
+    };
+  });
+
+  return [
+    ...mergedTeams,
+    ...proposals.filter((proposal) => !linkedProposalIds.has(proposal._id)),
+  ];
+}
+
 export function entityId(reference: EntityReference): string {
   if (!reference) return '';
   if (typeof reference === 'string') return reference;

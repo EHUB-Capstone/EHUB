@@ -1,13 +1,15 @@
 // @ts-nocheck
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
-  closestCorners,
   DndContext,
   DragOverlay,
   KeyboardSensor,
+  MeasuringStrategy,
   PointerSensor,
+  pointerWithin,
+  rectIntersection,
   TouchSensor,
   useSensor,
   useSensors,
@@ -29,7 +31,13 @@ import TaskCard from '../../features/execution-board/components/TaskCard';
 import TaskTableView from '../../features/execution-board/components/TaskTableView';
 import TaskModal from '../../features/execution-board/components/TaskModal';
 import { EMPTY_GROUPED, STATUSES } from '../../features/execution-board/constants';
-import { getTaskStatus, normalizeFilters } from '../../features/execution-board/boardUtils';
+import {
+  getDropTarget,
+  getTaskDropIndex,
+  getTaskStatus,
+  isTaskStatusMutableType,
+  normalizeFilters,
+} from '../../features/execution-board/boardUtils';
 import { useDebounce } from '../../features/execution-board/hooks/useDebounce';
 import {
   useTaskBoard,
@@ -43,6 +51,11 @@ const DEFAULT_FILTERS = {
   assignee: 'ALL',
   priority: 'ALL',
   search: '',
+};
+const EMPTY_BOARD = {
+  tasks: [],
+  grouped: EMPTY_GROUPED,
+  summary: null,
 };
 
 const getInitialView = () => {
@@ -62,7 +75,13 @@ export default function ExecutionBoard() {
   const [editingTask, setEditingTask] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [activeTask, setActiveTask] = useState(null);
+  const [activeTaskWidth, setActiveTaskWidth] = useState(null);
+  const [activeTaskHeight, setActiveTaskHeight] = useState(null);
   const [activeOverStatus, setActiveOverStatus] = useState(null);
+  const [dragTarget, setDragTarget] = useState(null);
+  const [dndSessionKey, setDndSessionKey] = useState(0);
+  const dragTargetRef = useRef(null);
+  const dragOriginStatusRef = useRef(null);
   const [view, setView] = useState(getInitialView);
 
   const debouncedSearch = useDebounce(filters.search, 180);
@@ -89,7 +108,7 @@ export default function ExecutionBoard() {
   const teamMembers = teamMembersQuery.data || [];
   const boardQuery = useTaskBoard({ teamId, filters: queryFilters });
 
-  const board = boardQuery.data || { tasks: [], grouped: EMPTY_GROUPED, summary: null };
+  const board = boardQuery.data || EMPTY_BOARD;
   const boardParams = useMemo(() => normalizeFilters(queryFilters), [queryFilters]);
   const taskById = useMemo(() => {
     const map = new Map();
@@ -133,7 +152,7 @@ export default function ExecutionBoard() {
 
   const permissions = useMemo(() => ({
     canUpdateStatus,
-    canUpdateTaskStatus: (task) => canUpdateStatus && task?.taskType === 'TEAM_TASK',
+    canUpdateTaskStatus: (task) => canUpdateStatus && isTaskStatusMutableType(task),
     canEditTask: (task) => {
       if (isReadOnly || task?.taskType !== 'TEAM_TASK') return false;
       if (isPrivileged) return true;
@@ -152,7 +171,7 @@ export default function ExecutionBoard() {
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
-      activationConstraint: { distance: 6 },
+      activationConstraint: { distance: 4 },
     }),
     useSensor(TouchSensor, {
       activationConstraint: { delay: 120, tolerance: 8 },
@@ -161,6 +180,22 @@ export default function ExecutionBoard() {
       coordinateGetter: sortableKeyboardCoordinates,
     })
   );
+
+  const collisionDetectionStrategy = useCallback((args) => {
+    const pointerCollisions = pointerWithin(args);
+    let collisions = pointerCollisions.filter((collision) => collision.id !== args.active.id);
+    if (collisions.length === 0) {
+      collisions = rectIntersection(args).filter((collision) => collision.id !== args.active.id);
+    }
+    const droppableById = new Map(
+      args.droppableContainers.map((container) => [container.id, container])
+    );
+    const taskCollisions = collisions.filter((collision) => (
+      droppableById.get(collision.id)?.data.current?.type === 'task'
+    ));
+
+    return taskCollisions.length > 0 ? taskCollisions : collisions;
+  }, []);
 
   const updateFilters = useCallback((patch) => {
     setFilters((current) => ({ ...current, ...patch }));
@@ -201,46 +236,100 @@ export default function ExecutionBoard() {
     mutations.changeStatus.mutate({ taskId, status });
   }, [permissions, taskById, mutations.changeStatus]);
 
-  const getStatusFromOver = useCallback((over) => {
-    if (!over?.id) return null;
-    const overId = String(over.id);
-    if (overId.startsWith('column-tab-')) return overId.replace('column-tab-', '');
-    if (overId.startsWith('column-')) return overId.replace('column-', '');
-    return taskStatusById.get(over.id) || null;
-  }, [taskStatusById]);
+  const getDragTarget = useCallback((event) => {
+    const target = getDropTarget(event.over, taskStatusById);
+    if (!target) return null;
+
+    const activeTaskId = event.active.id;
+    const translatedRect = event.active.rect.current.translated;
+    const overRect = event.over?.rect;
+    const insertAfter = Boolean(
+      target.taskId &&
+      translatedRect &&
+      overRect &&
+      translatedRect.top + translatedRect.height / 2 > overRect.top + overRect.height / 2
+    );
+    const destinationIndex = getTaskDropIndex({
+      tasks: board.grouped?.[target.status] || [],
+      activeTaskId,
+      overTaskId: target.taskId,
+      insertAfter,
+    });
+
+    return {
+      destinationIndex,
+      status: target.status,
+    };
+  }, [board.grouped, taskStatusById]);
+
+  const clearDragSession = useCallback(() => {
+    setActiveTask(null);
+    setActiveTaskWidth(null);
+    setActiveTaskHeight(null);
+    setActiveOverStatus(null);
+    setDragTarget(null);
+    setDndSessionKey((current) => current + 1);
+    dragTargetRef.current = null;
+    dragOriginStatusRef.current = null;
+  }, []);
 
   const handleDragStart = useCallback((event) => {
     const task = event.active.data.current?.task || taskById.get(event.active.id);
+    const status = task ? getTaskStatus(task) : null;
+    dragOriginStatusRef.current = status;
+    dragTargetRef.current = status ? { status, destinationIndex: 0 } : null;
+    setDragTarget(dragTargetRef.current);
     setActiveTask(task || null);
-    setActiveOverStatus(task ? getTaskStatus(task) : null);
+    setActiveTaskWidth(event.active.rect.current.initial?.width || null);
+    setActiveTaskHeight(event.active.rect.current.initial?.height || null);
+    setActiveOverStatus(status);
   }, [taskById]);
 
   const handleDragOver = useCallback((event) => {
-    setActiveOverStatus(getStatusFromOver(event.over));
-  }, [getStatusFromOver]);
-
-  const handleDragEnd = useCallback((event) => {
-    if (!permissions.canUpdateTaskStatus(taskById.get(event.active.id))) {
-      setActiveTask(null);
+    const nextTarget = getDragTarget(event);
+    if (!nextTarget) {
+      dragTargetRef.current = null;
+      setDragTarget(null);
       setActiveOverStatus(null);
       return;
     }
+
+    setActiveOverStatus(nextTarget.status);
+    const currentTarget = dragTargetRef.current;
+    if (
+      currentTarget?.status === nextTarget.status &&
+      currentTarget?.destinationIndex === nextTarget.destinationIndex
+    ) return;
+
+    dragTargetRef.current = nextTarget;
+    setDragTarget(nextTarget);
+  }, [getDragTarget]);
+
+  const handleDragEnd = useCallback((event) => {
+    if (!permissions.canUpdateTaskStatus(taskById.get(event.active.id))) {
+      clearDragSession();
+      return;
+    }
+
     const taskId = event.active.id;
-    const nextStatus = getStatusFromOver(event.over);
-    const currentStatus = taskStatusById.get(taskId);
+    const originStatus = dragOriginStatusRef.current;
+    const finalTarget = event.over ? getDragTarget(event) || dragTargetRef.current : null;
 
-    setActiveTask(null);
-    setActiveOverStatus(null);
+    clearDragSession();
+    if (!finalTarget || !originStatus || finalTarget.status === originStatus) return;
 
-    if (!nextStatus || !currentStatus || nextStatus === currentStatus) return;
-    setActiveMobileStatus(nextStatus);
-    mutations.changeStatus.mutate({ taskId, status: nextStatus });
-  }, [getStatusFromOver, permissions, taskById, mutations.changeStatus, taskStatusById]);
+    setActiveMobileStatus(finalTarget.status);
+    mutations.changeStatus.mutate({
+      taskId,
+      status: finalTarget.status,
+      previousStatus: originStatus,
+      destinationIndex: finalTarget.destinationIndex,
+    });
+  }, [clearDragSession, getDragTarget, permissions, taskById, mutations.changeStatus]);
 
   const handleDragCancel = useCallback(() => {
-    setActiveTask(null);
-    setActiveOverStatus(null);
-  }, []);
+    clearDragSession();
+  }, [clearDragSession]);
 
   const handleDeleteConfirm = useCallback(() => {
     if (!deleteTarget || isReadOnly) return;
@@ -300,7 +389,7 @@ export default function ExecutionBoard() {
             </p>
             <p className="text-xs text-slate-500">
               {view === 'kanban'
-                ? 'Drag team tasks to change status. Course Roadmap and Class Requirements are read-only references.'
+                ? 'Drag tasks between columns to update this team’s progress.'
                 : 'Review task details, deadlines, progress, and notes.'}
             </p>
           </div>
@@ -318,8 +407,14 @@ export default function ExecutionBoard() {
 
       {view === 'kanban' ? (
         <DndContext
+          key={dndSessionKey}
           sensors={sensors}
-          collisionDetection={closestCorners}
+          collisionDetection={collisionDetectionStrategy}
+          measuring={{
+            droppable: {
+              strategy: MeasuringStrategy.Always,
+            },
+          }}
           onDragStart={handleDragStart}
           onDragOver={handleDragOver}
           onDragEnd={handleDragEnd}
@@ -342,7 +437,14 @@ export default function ExecutionBoard() {
               onSwipeStatusChange={handleSwipeStatusChange}
               enableSwipe
               activeOverStatus={activeOverStatus}
-              />
+              showDropPlaceholder={Boolean(
+                activeTask &&
+                dragTarget?.status === activeMobileStatus &&
+                dragTarget.status !== getTaskStatus(activeTask)
+              )}
+              dropPlaceholderIndex={dragTarget?.destinationIndex}
+              dropPlaceholderHeight={activeTaskHeight}
+            />
           </div>
 
           <div className="hidden gap-4 md:grid md:grid-cols-5">
@@ -356,13 +458,26 @@ export default function ExecutionBoard() {
                 onDeleteTask={setDeleteTarget}
                 onStatusChange={handleStatusChange}
                 activeOverStatus={activeOverStatus}
+                showDropPlaceholder={Boolean(
+                  activeTask &&
+                  dragTarget?.status === status &&
+                  dragTarget.status !== getTaskStatus(activeTask)
+                )}
+                dropPlaceholderIndex={dragTarget?.destinationIndex}
+                dropPlaceholderHeight={activeTaskHeight}
               />
             ))}
           </div>
 
-          <DragOverlay dropAnimation={{ duration: 180, easing: 'cubic-bezier(0.2, 0, 0, 1)' }}>
+          <DragOverlay
+            adjustScale={false}
+            dropAnimation={{ duration: 160, easing: 'cubic-bezier(0.2, 0, 0, 1)' }}
+          >
             {activeTask ? (
-              <div className="w-[300px]">
+              <div
+                className="max-w-[calc(100vw-2rem)]"
+                style={{ width: activeTaskWidth || 280 }}
+              >
                 <TaskCard
                   task={activeTask}
                   canEdit={false}

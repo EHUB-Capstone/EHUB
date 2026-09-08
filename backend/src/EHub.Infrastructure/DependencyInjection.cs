@@ -34,6 +34,9 @@ public static class DependencyInjection
         services.AddHostedService<PendingRegistrationCleanupService>();
         services.AddScoped<IOutboxEventDispatcher, NotificationOutboxEventDispatcher>();
         services.AddScoped<IClassChatMembershipSynchronizer, ClassChatMembershipSynchronizer>();
+        services.AddSingleton<ProjectDirectionRealtimeService>();
+        services.AddSingleton<IProjectDirectionRealtimePublisher>(provider =>
+            provider.GetRequiredService<ProjectDirectionRealtimeService>());
         services.AddHostedService<OutboxProcessorBackgroundService>();
 
         // Repositories & Persistence

@@ -76,6 +76,18 @@ public static class AuthenticationExtensions
             // Diagnostic: log JWT validation failures
             options.Events = new JwtBearerEvents
             {
+                OnMessageReceived = context =>
+                {
+                    if (!context.HttpContext.WebSockets.IsWebSocketRequest ||
+                        context.HttpContext.Request.Path != "/api/realtime/project-directions")
+                        return Task.CompletedTask;
+
+                    const string bearerProtocolPrefix = "ehub-bearer.";
+                    var bearerProtocol = context.HttpContext.WebSockets.WebSocketRequestedProtocols
+                        .FirstOrDefault(protocol => protocol.StartsWith(bearerProtocolPrefix, StringComparison.Ordinal));
+                    if (bearerProtocol != null) context.Token = bearerProtocol[bearerProtocolPrefix.Length..];
+                    return Task.CompletedTask;
+                },
                 OnAuthenticationFailed = context =>
                 {
                     var logger = context.HttpContext.RequestServices

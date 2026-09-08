@@ -175,6 +175,8 @@ function checkpointData(teamId: string) {
   const team = teamById(teamId)!;
   const uploader = getMockState().users.find((user) => user.id === team.leaderId);
   return {
+    subjectCode: classByTeam(teamId)?.subjectCode || '',
+    checkpoints: checkpointConfig,
     submissions: checkpointConfig.map((checkpoint) => ({
       checkpointNumber: checkpoint.number,
       files: checkpoint.number === 1 ? [{
@@ -485,8 +487,6 @@ export function registerWorkspaceMockHandlers(mock: MockAdapter): void {
     persistMockState();
     return ok(workspaceData(teamId).project, 'Project profile updated.');
   });
-
-  mock.onGet('/workspace/checkpoints/config').reply(() => ok(checkpointConfig));
 
   mock.onGet(/^\/workspace\/checkpoints\/teams\/[^/]+$/).reply((config) => {
     const teamId = routeId(config, /^\/workspace\/checkpoints\/teams\/([^/]+)$/);

@@ -5,13 +5,6 @@ import toast from 'react-hot-toast';
 import { classApi } from '../../api/classApi';
 import EmptyState from '../../components/ui/EmptyState';
 
-const semesterLabel = (sem) => {
-  if (sem === 'SP') return 'Spring';
-  if (sem === 'SU') return 'Summer';
-  if (sem === 'FA') return 'Fall';
-  return sem;
-};
-
 export default function MyClasses() {
   const [classes, setClasses] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -102,7 +95,7 @@ export default function MyClasses() {
                     </div>
                     <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 bg-slate-50 border border-slate-100 rounded-lg px-2 py-1">
                       <Calendar className="w-3.5 h-3.5" />
-                      <span>{semesterLabel(cls.semester)} {cls.year}</span>
+                      <span>{cls.semester || '—'}</span>
                     </div>
                   </div>
 

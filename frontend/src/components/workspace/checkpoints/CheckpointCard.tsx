@@ -84,16 +84,14 @@ export default function CheckpointCard({
             </p>
 
             <div className="mt-3 flex flex-wrap items-center gap-2">
-              {hasRequirements && (
-                <span className="rounded-md bg-emerald-100 px-2.5 py-1 text-[10px] font-bold text-emerald-700">
+              {reqTotal > 0 && (
+                <span className={`rounded-md px-2.5 py-1 text-[10px] font-bold ${hasRequirements ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
                   {reqFilled}/{reqTotal} requirements
                 </span>
               )}
-              {hasFiles && (
-                <span className="rounded-md bg-orange-100 px-2.5 py-1 text-[10px] font-bold text-orange-700">
+              <span className={`rounded-md px-2.5 py-1 text-[10px] font-bold ${hasFiles ? 'bg-orange-100 text-orange-700' : 'bg-slate-100 text-slate-500'}`}>
                   {fileCount} file{fileCount !== 1 ? 's' : ''}
-                </span>
-              )}
+              </span>
               {!hasSubmission && (
                 <span className="rounded-md bg-slate-100 px-2.5 py-1 text-[10px] font-medium text-slate-500">
                   Not submitted

@@ -1,18 +1,41 @@
 // @ts-nocheck
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { FileText, Loader2, Save, Send } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { teamApi } from '../../api/teamApi';
 import { unwrapApiData } from '../../utils/classMappers';
 import { parseApiError } from '../../utils/apiError';
+import {
+  getProjectDirectionDecisionNotice,
+  hasProjectDirectionChanged,
+} from '../../utils/projectDirectionSync';
+import { subscribeProjectDirectionRealtime } from '../../api/projectDirectionRealtime';
 
-export default function ProjectDirectionCard({ team, canEdit, onSaved }) {
+export default function ProjectDirectionCard({ team, canEdit }) {
   const [direction, setDirection] = useState(null);
   const [title, setTitle] = useState('');
   const [summary, setSummary] = useState('');
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [activeAction, setActiveAction] = useState(null);
+  const directionRef = useRef(null);
+  const busy = activeAction !== null;
   const editableState = !direction || ['Draft', 'NeedsRevision'].includes(direction.status);
+
+  const applyDirection = useCallback((value, announceDecision = false) => {
+    if (!value) return;
+    const previous = directionRef.current;
+    if (previous && !hasProjectDirectionChanged(previous, value)) return;
+
+    directionRef.current = value;
+    setDirection(value);
+    setTitle(value.title || '');
+    setSummary(value.summary || '');
+
+    if (announceDecision) {
+      const notice = getProjectDirectionDecisionNotice(previous, value);
+      if (notice) toast(notice, { id: `project-direction-${value.rowVersion}` });
+    }
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -21,9 +44,7 @@ export default function ProjectDirectionCard({ team, canEdit, onSaved }) {
         const response = await teamApi.getProjectDirection(team._id);
         const value = unwrapApiData(response);
         if (!active) return;
-        setDirection(value);
-        setTitle(value.title || '');
-        setSummary(value.summary || '');
+        applyDirection(value);
       } catch (error) {
         const parsed = parseApiError(error, 'Unable to load project direction.');
         if (parsed.code !== 'PROJECT_DIRECTION_NOT_FOUND') toast.error(parsed.message);
@@ -33,10 +54,36 @@ export default function ProjectDirectionCard({ team, canEdit, onSaved }) {
     };
     load();
     return () => { active = false; };
-  }, [team._id]);
+  }, [applyDirection, team._id]);
+
+  useEffect(() => {
+    if (direction?.status !== 'Submitted') return undefined;
+
+    let active = true;
+    const synchronizeAfterReconnect = async () => {
+      try {
+        const response = await teamApi.getProjectDirection(team._id);
+        if (active) applyDirection(unwrapApiData(response), true);
+      } catch {
+        // The next WebSocket event or reconnect will synchronize the card.
+      }
+    };
+    const unsubscribe = subscribeProjectDirectionRealtime(
+      (event) => {
+        if (event.eventType === 'ProjectDirectionReviewed' && event.teamId === team._id)
+          applyDirection(event.direction, true);
+      },
+      () => void synchronizeAfterReconnect(),
+    );
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, [applyDirection, direction?.status, team._id]);
 
   const save = async () => {
-    setSaving(true);
+    if (busy) return;
+    setActiveAction('save');
     try {
       const response = await teamApi.saveProjectDirection(team._id, {
         title: title.trim(),
@@ -44,28 +91,27 @@ export default function ProjectDirectionCard({ team, canEdit, onSaved }) {
         rowVersion: direction?.rowVersion || null,
       });
       const value = unwrapApiData(response);
-      setDirection(value);
+      applyDirection(value);
       toast.success('Project direction saved as draft.');
-      await onSaved?.();
     } catch (error) {
       toast.error(parseApiError(error, 'Unable to save project direction.').message);
     } finally {
-      setSaving(false);
+      setActiveAction(null);
     }
   };
 
   const submit = async () => {
-    if (!direction) return;
-    setSaving(true);
+    if (!direction || busy) return;
+    setActiveAction('submit');
     try {
       const response = await teamApi.submitProjectDirection(team._id, direction.rowVersion);
-      setDirection(unwrapApiData(response));
+      const value = unwrapApiData(response);
+      applyDirection(value);
       toast.success('Project direction submitted for lecturer review.');
-      await onSaved?.();
     } catch (error) {
       toast.error(parseApiError(error, 'Unable to submit project direction.').message);
     } finally {
-      setSaving(false);
+      setActiveAction(null);
     }
   };
 
@@ -78,15 +124,16 @@ export default function ProjectDirectionCard({ team, canEdit, onSaved }) {
         <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-600">{direction?.status || 'Not created'}</span>
       </div>
       {loading ? <div className="flex min-h-40 items-center justify-center"><Loader2 className="h-5 w-5 animate-spin text-primary" /></div> : canEdit && editableState ? (
-        <div className="mt-4 space-y-3">
-          <input value={title} onChange={event => setTitle(event.target.value)} maxLength={200} placeholder="Direction title" className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-primary" />
-          <textarea value={summary} onChange={event => setSummary(event.target.value)} maxLength={5000} rows={8} placeholder="Describe the problem, target users, proposed solution, and implementation direction..." className="w-full resize-y rounded-xl border border-slate-200 px-4 py-3 text-sm leading-6 text-slate-700 outline-none focus:border-primary" />
-          <div className="flex flex-wrap items-center justify-between gap-3"><p className={`text-xs ${valid ? 'text-slate-500' : 'text-red-500'}`}>{summary.length}/5000 characters · minimum 20</p><div className="flex gap-2"><button type="button" onClick={save} disabled={saving || !valid} className="inline-flex items-center gap-2 rounded-lg border border-primary-200 px-4 py-2 text-sm font-semibold text-primary disabled:opacity-50">{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Save draft</button>{direction && <button type="button" onClick={submit} disabled={saving} className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"><Send className="h-4 w-4" /> Submit</button>}</div></div>
+        <div className="mt-4 space-y-3" aria-busy={busy || undefined}>
+          <input value={title} onChange={event => setTitle(event.target.value)} disabled={busy} maxLength={200} placeholder="Direction title" className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-primary disabled:bg-slate-50 disabled:text-slate-500" />
+          <textarea value={summary} onChange={event => setSummary(event.target.value)} disabled={busy} maxLength={5000} rows={8} placeholder="Describe the problem, target users, proposed solution, and implementation direction..." className="w-full resize-y rounded-xl border border-slate-200 px-4 py-3 text-sm leading-6 text-slate-700 outline-none focus:border-primary disabled:bg-slate-50 disabled:text-slate-500" />
+          <div className="flex flex-wrap items-center justify-between gap-3"><p className={`text-xs ${valid ? 'text-slate-500' : 'text-red-500'}`}>{summary.length}/5000 characters · minimum 20</p><div className="flex gap-2"><button type="button" onClick={save} disabled={busy || !valid} className="inline-flex items-center gap-2 rounded-lg border border-primary-200 px-4 py-2 text-sm font-semibold text-primary disabled:opacity-50">{activeAction === 'save' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} {activeAction === 'save' ? 'Saving...' : 'Save draft'}</button>{direction && <button type="button" onClick={submit} disabled={busy} className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{activeAction === 'submit' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} {activeAction === 'submit' ? 'Submitting...' : 'Submit'}</button>}</div></div>
         </div>
       ) : (
         <div className="mt-4 space-y-3">{direction ? <><h3 className="font-semibold text-slate-900">{direction.title}</h3><p className="whitespace-pre-wrap text-sm leading-7 text-slate-700">{direction.summary}</p></> : <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">The team leader has not created a project direction yet.</p>}</div>
       )}
-      {latestReview && <div className="mt-4 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3"><p className="text-xs font-bold uppercase text-blue-700">Latest lecturer review · {latestReview.toStatus}</p><p className="mt-1 text-sm leading-6 text-blue-900">{latestReview.comment}</p></div>}
+      {direction?.status === 'Submitted' && <div className="mt-4 flex items-center gap-2 text-xs font-medium text-slate-500"><span className="h-2 w-2 rounded-full bg-emerald-500" /> Waiting for lecturer decision · live updates enabled</div>}
+      {latestReview && <div role="status" aria-live="polite" className="mt-4 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3"><p className="text-xs font-bold uppercase text-blue-700">Latest lecturer review · {latestReview.toStatus}</p><p className="mt-1 text-sm leading-6 text-blue-900">{latestReview.comment}</p></div>}
     </section>
   );
 }

@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Users, Shield, MessageSquare, AlertCircle, Calendar, Star, Loader2, Sparkles, ArrowRight } from 'lucide-react';
+import { Users, Shield, MessageSquare, AlertCircle, Calendar, Star, Loader2, Sparkles, ArrowRight, Crown } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { classApi } from '../../api/classApi';
 import EmptyState from '../../components/ui/EmptyState';
 import { getDisplayTeamName } from '../../utils/teamDisplay';
 import { unwrapApiData } from '../../utils/classMappers';
-import { getTeamMembers, normalizeManagedTeam } from '../../utils/teamManagement';
+import { entityId, getTeamMembers, normalizeManagedTeam } from '../../utils/teamManagement';
 
 const majorColor = (major) => {
   const palette = [
@@ -68,6 +68,7 @@ export default function MyTeam() {
   const lecturer  = cls?.lectureId;
   const mentor    = team?.currentMentorAssignment?.mentor;
   const displayTeamName = getDisplayTeamName(team) || 'Unnamed Team';
+  const leaderId = entityId(team?.leaderId);
 
   if (!team) {
     return (
@@ -123,7 +124,7 @@ export default function MyTeam() {
 
         <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 bg-slate-50 border border-slate-200/40 rounded-xl px-3 py-1.5">
           <Calendar className="w-3.5 h-3.5 text-slate-400" />
-          <span>Semester: {cls?.semester || '—'} {cls?.year || ''}</span>
+          <span>Semester: {cls?.semester || '—'}</span>
         </div>
       </div>
 
@@ -193,6 +194,7 @@ export default function MyTeam() {
             <div className="divide-y divide-slate-100">
               {members.map((m) => {
                 const isSelected = m._id === data?.student?._id;
+                const isLeader = m._id === leaderId;
                 return (
                   <div
                     key={m._id}
@@ -207,6 +209,12 @@ export default function MyTeam() {
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
                           <span className="font-semibold text-slate-800 text-sm truncate">{m.fullName}</span>
+                          {isLeader && (
+                            <span className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-1.5 py-0.5 text-[10px] font-bold uppercase text-amber-700">
+                              <Crown className="h-3 w-3" />
+                              Leader
+                            </span>
+                          )}
                           {isSelected && (
                             <span className="px-1.5 py-0.5 bg-primary-100 text-primary text-[10px] font-bold rounded-md uppercase">
                               You

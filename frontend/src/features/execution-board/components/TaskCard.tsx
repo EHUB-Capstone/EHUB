@@ -1,6 +1,5 @@
 // @ts-nocheck
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
-import { motion, useReducedMotion } from 'framer-motion';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import {
@@ -45,7 +44,6 @@ function TaskCard({
   const swipeStartRef = useRef(null);
   const swipeXRef = useRef(0);
   const suppressClickRef = useRef(false);
-  const reduceMotion = useReducedMotion();
   const {
     attributes,
     listeners,
@@ -81,6 +79,7 @@ function TaskCard({
     : null;
   const previousCfg = previousStatus ? STATUS_CFG[previousStatus] : null;
   const nextCfg = nextStatus ? STATUS_CFG[nextStatus] : null;
+  const cardIsDragSurface = !enableSwipe && !isOverlay && canUpdateStatus;
 
   const dueDate = useMemo(() => {
     if (!task.dueDate) return null;
@@ -178,31 +177,28 @@ function TaskCard({
   };
 
   return (
-    <motion.article
+    <div
       ref={isOverlay ? undefined : setNodeRef}
-      layout={!reduceMotion && !isOverlay}
-      layoutId={isOverlay ? undefined : `task-${task._id}`}
-      initial={false}
-      animate={{
-        scale: isOverlay ? 1.03 : 1,
-        opacity: isDragging ? 0.35 : 1,
-      }}
-      transition={reduceMotion ? { duration: 0 } : { type: 'spring', stiffness: 520, damping: 38, mass: 0.8 }}
       style={style}
-      onPointerDown={handlePointerDown}
-      onPointerMove={handlePointerMove}
-      onPointerUp={finishSwipe}
-      onPointerCancel={resetSwipe}
-      onClickCapture={(event) => {
-        if (!suppressClickRef.current) return;
-        event.preventDefault();
-        event.stopPropagation();
-        suppressClickRef.current = false;
-      }}
-      className={`group relative overflow-hidden rounded-lg border bg-slate-100 transition-colors hover:border-slate-300 ${
-        isOverlay ? 'shadow-2xl ring-2 ring-blue-500/20' : ''
-      } ${isOverdue ? 'border-red-200' : 'border-slate-200'}`}
+      className={`relative z-0 transition-opacity duration-100 ${isDragging ? 'opacity-25' : 'opacity-100'}`}
     >
+      <article
+        {...(cardIsDragSurface ? listeners : { onPointerDown: handlePointerDown })}
+        onPointerMove={handlePointerMove}
+        onPointerUp={finishSwipe}
+        onPointerCancel={resetSwipe}
+        onClickCapture={(event) => {
+          if (!suppressClickRef.current) return;
+          event.preventDefault();
+          event.stopPropagation();
+          suppressClickRef.current = false;
+        }}
+        className={`group relative overflow-hidden rounded-lg border bg-slate-100 transition-[border-color,box-shadow,transform] duration-150 hover:border-slate-300 ${
+          isOverlay ? 'scale-[1.02] shadow-2xl ring-2 ring-primary/20' : ''
+        } ${cardIsDragSurface ? 'touch-none cursor-grab select-none active:cursor-grabbing' : ''
+        } ${isDragging ? 'border-dashed shadow-none' : 'shadow-sm'
+        } ${isOverdue ? 'border-red-200' : 'border-slate-200'}`}
+      >
       {enableSwipe && canUpdateStatus && previousCfg && (
         <div className={`absolute inset-y-0 left-0 flex w-28 items-center gap-1.5 px-3 ${previousCfg.bg} ${previousCfg.text}`}>
           <ChevronRight className="h-5 w-5" />
@@ -231,15 +227,19 @@ function TaskCard({
             <Badge className={`${priorityCfg.bg} ${priorityCfg.text}`}>{priorityCfg.label}</Badge>
           </div>
 
-          <div className="flex shrink-0 items-center gap-0.5 opacity-70 transition-opacity group-hover:opacity-100">
+          <div
+            className="flex shrink-0 items-center gap-0.5 opacity-70 transition-opacity group-hover:opacity-100"
+            onPointerDown={(event) => event.stopPropagation()}
+          >
             {!isOverlay && canUpdateStatus && (
               <button
                 type="button"
                 ref={setActivatorNodeRef}
                 {...attributes}
                 {...listeners}
-                className="touch-none rounded-md p-1.5 text-slate-300 transition-colors hover:bg-white hover:text-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                className="inline-flex touch-none cursor-grab items-center rounded-md p-1.5 text-slate-400 transition-colors hover:bg-primary-50 hover:text-primary focus:outline-none focus:ring-2 focus:ring-primary/30 active:cursor-grabbing"
                 aria-label={`Drag ${task.title}`}
+                title="Drag this task to another status"
               >
                 <GripVertical className="h-3.5 w-3.5" />
               </button>
@@ -268,7 +268,7 @@ function TaskCard({
         </div>
 
         <h4 className="mb-1 line-clamp-2 text-sm font-semibold leading-snug text-slate-900">{task.title}</h4>
-        <p className="mb-2 text-xs text-slate-500">{task.taskType === 'COURSE_TEMPLATE' ? 'Course Roadmap · Read only' : task.taskType === 'CLASS_TASK' ? 'Class Requirements · Read only' : 'Team Task'}</p>
+        <p className="mb-2 text-xs text-slate-500">{task.taskType === 'COURSE_TEMPLATE' ? 'Course Roadmap' : task.taskType === 'CLASS_TASK' ? 'Class Requirement' : 'Team Task'}</p>
         {task.description && <p className="mb-2 line-clamp-2 text-xs leading-relaxed text-slate-500">{task.description}</p>}
 
         {checklist.length > 0 && (
@@ -305,7 +305,10 @@ function TaskCard({
         </div>
 
         {canUpdateStatus && currentStatus !== 'COMPLETED' && (
-          <div className="mt-3 flex items-center gap-2 border-t border-slate-100 pt-3">
+          <div
+            className="mt-3 flex items-center gap-2 border-t border-slate-100 pt-3"
+            onPointerDown={(event) => event.stopPropagation()}
+          >
             <button
               type="button"
               onClick={() => onStatusChange(task._id, 'COMPLETED')}
@@ -353,7 +356,8 @@ function TaskCard({
         )}
         </div>
       </div>
-    </motion.article>
+      </article>
+    </div>
   );
 }
 

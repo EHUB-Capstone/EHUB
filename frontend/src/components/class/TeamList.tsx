@@ -77,6 +77,8 @@ export default function TeamList({
   onCancelProposal,
 }: TeamListProps) {
   const safeTeams = Array.isArray(teams) ? teams : [];
+  const teamCount = safeTeams.filter((team) => !team.isProposal).length;
+  const standaloneProposalCount = safeTeams.length - teamCount;
 
   return (
     <div className="space-y-4">
@@ -85,7 +87,12 @@ export default function TeamList({
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-50 text-primary"><Users className="h-5 w-5" /></div>
           <div>
             <h2 className="font-bold text-slate-900">Team management</h2>
-            <p className="text-sm text-slate-500">{safeTeams.length} team{safeTeams.length === 1 ? '' : 's'} in this class</p>
+            <p className="text-sm text-slate-500">
+              {teamCount} team{teamCount === 1 ? '' : 's'} in this class
+              {standaloneProposalCount > 0
+                ? ` · ${standaloneProposalCount} standalone proposal${standaloneProposalCount === 1 ? '' : 's'}`
+                : ''}
+            </p>
           </div>
         </div>
         {canManageInfo && (onAssign || onCreate) && (
@@ -160,9 +167,11 @@ function TeamCard({
   const project = getTeamProject(team);
   const leaderId = entityId(team.leaderId);
   const status = String(team.status || 'ACTIVE').toUpperCase();
+  const actionProposal = team.isProposal ? team : team.linkedProposal;
+  const proposalStatus = String(actionProposal?.status || '').toUpperCase();
   const teamInitial = team.teamName.trim().charAt(0).toUpperCase() || 'T';
-  const isPending = status === 'PENDING';
-  const needsRevision = status === 'NEEDSREVISION' || status === 'NEEDS_REVISION';
+  const isPending = status === 'PENDING' || proposalStatus === 'PENDING';
+  const needsRevision = proposalStatus === 'NEEDSREVISION' || proposalStatus === 'NEEDS_REVISION';
   const currentStudentIsMember = Boolean(currentStudentId && members.some(member => member._id === currentStudentId));
   const canOpenTeamWorkspace = canManageInfo || currentStudentIsMember;
 
@@ -178,13 +187,21 @@ function TeamCard({
                 <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${statusStyles[status] || statusStyles.ACTIVE}`}>{readableStatus(status)}</span>
               </div>
               <p className="mt-0.5 font-mono text-xs text-slate-400">{team.teamCode || 'No team code'}</p>
+              {team.linkedProposal && (
+                <p className="mt-1 text-xs font-medium text-slate-500">
+                  Project proposal:{' '}
+                  <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold uppercase ${statusStyles[proposalStatus] || statusStyles.ACTIVE}`}>
+                    {readableStatus(proposalStatus)}
+                  </span>
+                </p>
+              )}
             </div>
           </div>
 
           <div className="flex shrink-0 items-center gap-1">
-            {isPending && onReview && <button type="button" onClick={() => onReview(team)} className="rounded-lg bg-amber-50 px-2.5 py-1.5 text-xs font-semibold text-amber-700 hover:bg-amber-100">Review</button>}
-            {currentStudentIsMember && needsRevision && onRevise && <button type="button" onClick={() => onRevise(team)} className="rounded-lg bg-orange-50 px-2.5 py-1.5 text-xs font-semibold text-orange-700 hover:bg-orange-100">Revise</button>}
-            {currentStudentIsMember && team.isProposal && ['PENDING', 'NEEDSREVISION', 'NEEDS_REVISION', 'DRAFT'].includes(status) && onCancelProposal && <button type="button" onClick={() => onCancelProposal(team)} className="rounded-lg bg-red-50 px-2.5 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-100">Cancel</button>}
+            {proposalStatus === 'PENDING' && actionProposal && onReview && <button type="button" onClick={() => onReview(actionProposal)} className="rounded-lg bg-amber-50 px-2.5 py-1.5 text-xs font-semibold text-amber-700 hover:bg-amber-100">Review</button>}
+            {currentStudentIsMember && needsRevision && actionProposal && onRevise && <button type="button" onClick={() => onRevise(actionProposal)} className="rounded-lg bg-orange-50 px-2.5 py-1.5 text-xs font-semibold text-orange-700 hover:bg-orange-100">Revise</button>}
+            {currentStudentIsMember && actionProposal && ['PENDING', 'NEEDSREVISION', 'NEEDS_REVISION', 'DRAFT'].includes(proposalStatus) && onCancelProposal && <button type="button" onClick={() => onCancelProposal(actionProposal)} className="rounded-lg bg-red-50 px-2.5 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-100">Cancel</button>}
             {!team.isProposal && canManageInfo && onEdit && <button type="button" onClick={() => onEdit(team)} className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-primary-50 hover:text-primary" aria-label={`Edit ${team.teamName}`} title="Edit team"><Pencil className="h-4 w-4" /></button>}
             {!team.isProposal && canDelete && onDelete && <button type="button" onClick={() => onDelete(team)} className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-300 hover:bg-red-50 hover:text-red-500" aria-label={`Delete ${team.teamName}`} title="Delete team"><Trash2 className="h-4 w-4" /></button>}
           </div>

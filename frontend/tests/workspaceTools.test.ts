@@ -3,7 +3,14 @@ import assert from 'node:assert/strict';
 import { weeklyTaskSavePayload } from '../src/utils/weeklyTaskPayload.ts';
 import { resolveWorkspaceTab, workspaceTabSearch } from '../src/utils/workspaceNavigation.ts';
 import type { WeeklyTask, SaveWeeklyTaskPayload } from '../src/types/workspaceTools.ts';
-import { normalizeBoardResponse, moveTaskStatusInBoard, normalizeFilters } from '../src/features/execution-board/boardUtils.ts';
+import {
+  getDropStatus,
+  getTaskDropIndex,
+  isTaskStatusMutableType,
+  moveTaskStatusInBoard,
+  normalizeBoardResponse,
+  normalizeFilters,
+} from '../src/features/execution-board/boardUtils.ts';
 import { taskProgress } from '../src/utils/taskProgress.ts';
 
 test('table and board summary use API progress instead of status estimates', () => {
@@ -43,6 +50,72 @@ test('execution board includes all three roadmap sources and preserves status', 
   const moved = moveTaskStatusInBoard(board, 'team', 'REVIEW');
   assert.equal(moved.grouped.REVIEW[0]._id, 'team');
   assert.equal(moved.tasks.length, 3);
+});
+
+test('execution board resolves drag targets from empty columns and task cards', () => {
+  const taskStatuses = new Map([
+    ['task-in-review', 'REVIEW'],
+  ]);
+
+  assert.equal(getDropStatus({ id: 'column-IN_PROGRESS' }, taskStatuses), 'IN_PROGRESS');
+  assert.equal(getDropStatus({ id: 'column-tab-COMPLETED' }, taskStatuses), 'COMPLETED');
+  assert.equal(getDropStatus({ id: 'task-in-review' }, taskStatuses), 'REVIEW');
+  assert.equal(getDropStatus(null, taskStatuses), null);
+});
+
+test('execution board prioritizes live droppable data after a card changes columns', () => {
+  const staleTaskStatuses = new Map([
+    ['moving-task', 'TODO'],
+  ]);
+
+  assert.equal(getDropStatus({
+    id: 'moving-task',
+    data: { current: { type: 'task', status: 'REVIEW' } },
+  }, staleTaskStatuses), 'REVIEW');
+});
+
+test('execution board inserts a dragged task beside the card under the pointer', () => {
+  const tasks = [
+    { _id: 'review-a' },
+    { _id: 'moving-task' },
+    { _id: 'review-b' },
+  ];
+
+  assert.equal(getTaskDropIndex({
+    tasks,
+    activeTaskId: 'moving-task',
+    overTaskId: 'review-b',
+    insertAfter: false,
+  }), 1);
+  assert.equal(getTaskDropIndex({
+    tasks,
+    activeTaskId: 'moving-task',
+    overTaskId: 'review-b',
+    insertAfter: true,
+  }), 2);
+});
+
+test('execution board can cycle a task through every status without duplicating or losing it', () => {
+  const statuses = ['IN_PROGRESS', 'REVIEW', 'COMPLETED', 'OVERDUE', 'TODO'];
+  let board = normalizeBoardResponse({
+    tasks: [{ _id: 'moving-task', status: 'TODO' }],
+  });
+
+  for (let cycle = 0; cycle < 3; cycle += 1) {
+    for (const status of statuses) {
+      board = moveTaskStatusInBoard(board, 'moving-task', status);
+      assert.equal(board.tasks[0].status, status);
+      assert.equal(board.grouped[status].filter((task) => task._id === 'moving-task').length, 1);
+      assert.equal(Object.values(board.grouped).flat().length, 1);
+    }
+  }
+});
+
+test('all execution board task sources allow team-scoped status updates', () => {
+  assert.equal(isTaskStatusMutableType({ taskType: 'COURSE_TEMPLATE' }), true);
+  assert.equal(isTaskStatusMutableType({ taskType: 'CLASS_TASK' }), true);
+  assert.equal(isTaskStatusMutableType({ taskType: 'TEAM_TASK' }), true);
+  assert.equal(isTaskStatusMutableType({ taskType: 'UNKNOWN' }), false);
 });
 
 test('all weeks omits week restriction while forwarding board filters', () => {
