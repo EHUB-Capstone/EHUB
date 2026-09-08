@@ -5,6 +5,11 @@ import { teamApi } from '../../api/teamApi';
 import { unwrapApiData } from '../../utils/classMappers';
 import { parseApiError } from '../../utils/apiError';
 import { entityId } from '../../utils/teamManagement';
+import {
+  canSubmitProjectDirection,
+  getProjectDirectionSubmitGuidance,
+  hasUnsavedProjectDirectionChanges,
+} from '../../utils/projectDirectionSync';
 
 const formatStatus = (status) => String(status || 'Not created')
   .replace(/^NEEDSREVISION$/i, 'Needs revision')
@@ -21,6 +26,10 @@ export default function ProjectDirectionModal({ team, role, currentStudentId = '
   const isLeader = role === 'STUDENT' && entityId(team.leaderId) === currentStudentId;
   const canEdit = isLeader && (!direction || ['Draft', 'NeedsRevision'].includes(direction.status));
   const canReview = role === 'LECTURER' && direction?.status === 'Submitted';
+  const valid = title.trim().length >= 3 && summary.trim().length >= 20 && summary.trim().length <= 5000;
+  const hasUnsavedChanges = hasUnsavedProjectDirectionChanges(direction, title, summary);
+  const canSubmitDirection = canSubmitProjectDirection(direction, title, summary);
+  const submitGuidance = getProjectDirectionSubmitGuidance(direction, title, summary);
 
   useEffect(() => {
     let active = true;
@@ -118,7 +127,7 @@ export default function ProjectDirectionModal({ team, role, currentStudentId = '
               <p className="mt-1 text-right text-[11px] text-slate-400">{summary.length}/5000 · minimum 20</p>
             </div>
 
-            {canEdit && <div className="flex justify-end gap-2"><button type="button" onClick={save} disabled={submitting} className="rounded-xl border border-primary-200 px-4 py-2 text-sm font-semibold text-primary disabled:opacity-50">Save draft</button>{direction && <button type="button" onClick={submit} disabled={submitting} className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"><Send className="h-4 w-4" /> Submit</button>}</div>}
+            {canEdit && <><div className="flex justify-end gap-2"><button type="button" onClick={save} disabled={submitting || !valid || !hasUnsavedChanges} className="rounded-xl border border-primary-200 px-4 py-2 text-sm font-semibold text-primary disabled:opacity-50">Save draft</button>{direction && <button type="button" onClick={submit} disabled={submitting || !canSubmitDirection} className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-600 disabled:opacity-100"><Send className="h-4 w-4" /> Submit</button>}</div>{submitGuidance && <p role="status" className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">{submitGuidance}</p>}</>}
 
             {canReview && <section className="rounded-xl border border-indigo-100 bg-indigo-50/40 p-4">
               <h4 className="text-sm font-bold text-slate-800">Lecturer review</h4>

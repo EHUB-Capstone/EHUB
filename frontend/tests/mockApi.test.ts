@@ -625,8 +625,6 @@ test('mock team leader creates one project workspace linked to its academic cont
   const created = await axiosClient.post(`/workspace/teams/${team.id}`, {
     projectName: 'Energy Insight Workspace',
     description: 'A project that helps small offices understand their energy usage.',
-    startupField: 'GreenTech',
-    technologyStack: ['React', '.NET'],
     keywords: ['energy', 'analytics'],
   });
   const cls = state.classes.find((item) => item.id === team.classId);
@@ -638,8 +636,6 @@ test('mock team leader creates one project workspace linked to its academic cont
   await axiosClient.put(`/workspace/teams/${team.id}/profile`, {
     projectName: 'Energy Insight Platform',
     description: 'The latest project profile helps small offices reduce their energy usage.',
-    startupField: 'ClimateTech',
-    technologyStack: ['React', '.NET', 'PostgreSQL'],
     keywords: ['energy', 'efficiency'],
   });
   const latest = await axiosClient.get(`/workspace/teams/${team.id}`);
@@ -654,8 +650,6 @@ test('mock team leader creates one project workspace linked to its academic cont
     axiosClient.post(`/workspace/teams/${team.id}`, {
       projectName: 'Duplicate Workspace',
       description: 'This second project workspace must be rejected by the API.',
-      startupField: 'GreenTech',
-      technologyStack: ['React'],
       keywords: [],
     }),
     (error: unknown) => (error as { response?: { status?: number; data?: { code?: string } } }).response?.data?.code === 'WORKSPACE_ALREADY_EXISTS',

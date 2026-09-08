@@ -147,8 +147,6 @@ export interface MockTeam {
   description: string | null;
   projectName?: string | null;
   projectDescription?: string | null;
-  startupField?: string | null;
-  technologyStack?: string[];
   keywords?: string[];
   projectCreatedAtUtc?: string | null;
   projectUpdatedAtUtc?: string | null;

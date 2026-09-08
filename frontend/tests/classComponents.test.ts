@@ -19,7 +19,10 @@ import {
   isProjectDirectionSubmittedNotification,
 } from '../src/utils/notificationNavigation.ts';
 import {
+  canSubmitProjectDirection,
   getProjectDirectionDecisionNotice,
+  getProjectDirectionSubmitGuidance,
+  hasUnsavedProjectDirectionChanges,
   hasProjectDirectionChanged,
   updateProjectDirectionOverviewTeams,
 } from '../src/utils/projectDirectionSync.ts';
@@ -173,6 +176,32 @@ test('project direction live synchronization detects and announces lecturer deci
   assert.equal(getProjectDirectionDecisionNotice(submitted, approved), 'Lecturer approved your project direction.');
   assert.equal(getProjectDirectionDecisionNotice(submitted, needsRevision), 'Lecturer reviewed your project direction and requested changes.');
   assert.equal(getProjectDirectionDecisionNotice(approved, needsRevision), '');
+});
+
+test('project direction requires requested revisions to be changed and saved before submit', () => {
+  const needsRevision = {
+    id: 'direction-1',
+    title: 'Initial direction',
+    summary: 'The initial project direction summary.',
+    status: 'NeedsRevision',
+    rowVersion: '11',
+  };
+
+  assert.equal(canSubmitProjectDirection(needsRevision, needsRevision.title, needsRevision.summary), false);
+  assert.equal(hasUnsavedProjectDirectionChanges(needsRevision, needsRevision.title, needsRevision.summary), false);
+  assert.match(getProjectDirectionSubmitGuidance(needsRevision, needsRevision.title, needsRevision.summary), /Update.*Save draft/);
+
+  const revisedSummary = 'The revised project direction includes lecturer feedback.';
+  assert.equal(hasUnsavedProjectDirectionChanges(needsRevision, needsRevision.title, revisedSummary), true);
+  assert.equal(canSubmitProjectDirection(needsRevision, needsRevision.title, revisedSummary), false);
+  assert.match(getProjectDirectionSubmitGuidance(needsRevision, needsRevision.title, revisedSummary), /Save.*enable Submit/);
+
+  const savedDraft = { ...needsRevision, summary: revisedSummary, status: 'Draft', rowVersion: '12' };
+  assert.equal(canSubmitProjectDirection(savedDraft, savedDraft.title, savedDraft.summary), true);
+  assert.equal(getProjectDirectionSubmitGuidance(savedDraft, savedDraft.title, savedDraft.summary), '');
+
+  assert.equal(canSubmitProjectDirection(savedDraft, savedDraft.title, `${savedDraft.summary} Unsaved`), false);
+  assert.match(getProjectDirectionSubmitGuidance(savedDraft, savedDraft.title, `${savedDraft.summary} Unsaved`), /Save your changes/);
 });
 
 test('lecturer review updates only the reviewed team without reloading the overview', () => {

@@ -6,6 +6,22 @@ export interface ApiEnvelope<T> {
   errors?: Array<{ field: string; message: string }> | null;
 }
 
+export type WorkspaceAccessMode = 'READ_WRITE' | 'READ_ONLY';
+
+/** Mirrors EHub.Contracts.Workspaces.WorkspaceOptionDto. */
+export interface WorkspaceOption {
+  teamId: string;
+  teamName: string;
+  classId: string;
+  classCode: string;
+  courseCode: string;
+  semester: string;
+  accessMode: WorkspaceAccessMode;
+  isArchived: boolean;
+  isCurrent: boolean;
+  hasWorkspace: boolean;
+}
+
 export type WeeklyTaskKind = 'COURSE_TEMPLATE' | 'CLASS_TASK' | 'TEAM_TASK';
 export type WeeklyTaskStatus = 'TODO' | 'IN_PROGRESS' | 'REVIEW' | 'COMPLETED' | 'CANCELLED' | 'OVERDUE';
 export type WeeklyTaskPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';

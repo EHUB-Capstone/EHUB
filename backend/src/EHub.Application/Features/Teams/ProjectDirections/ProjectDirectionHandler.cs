@@ -68,8 +68,16 @@ public sealed class ProjectDirectionHandler : IProjectDirectionHandler
                 return Failure(ErrorCodes.ClassConcurrencyConflict, "The project direction changed concurrently. Refresh and try again.");
             if (direction.Status is not (ProjectDirectionStatus.Draft or ProjectDirectionStatus.NeedsRevision))
                 return Failure(ErrorCodes.ProjectDirectionStateInvalid, "Only Draft or NeedsRevision directions can be edited.");
-            direction.Title = request.Title.Trim();
-            direction.Summary = request.Summary.Trim();
+            var revisedTitle = request.Title.Trim();
+            var revisedSummary = request.Summary.Trim();
+            if (direction.Status == ProjectDirectionStatus.NeedsRevision
+                && direction.Title == revisedTitle
+                && direction.Summary == revisedSummary)
+                return Failure(ErrorCodes.ClassValidationError, "Change the project direction before saving the requested revision.");
+            direction.Title = revisedTitle;
+            direction.Summary = revisedSummary;
+            if (direction.Status == ProjectDirectionStatus.NeedsRevision)
+                direction.Status = ProjectDirectionStatus.Draft;
             direction.UpdatedBy = userId;
         }
 
@@ -94,8 +102,8 @@ public sealed class ProjectDirectionHandler : IProjectDirectionHandler
         var direction = await DirectionQuery(tracking: true).FirstOrDefaultAsync(item => item.TeamId == teamId, cancellationToken);
         if (direction == null) return Failure(ErrorCodes.ProjectDirectionNotFound, "Create the project direction before submitting it.");
         if (direction.Version != version) return Failure(ErrorCodes.ClassConcurrencyConflict, "The project direction changed concurrently. Refresh and try again.");
-        if (direction.Status is not (ProjectDirectionStatus.Draft or ProjectDirectionStatus.NeedsRevision))
-            return Failure(ErrorCodes.ProjectDirectionStateInvalid, "Only Draft or NeedsRevision directions can be submitted.");
+        if (direction.Status != ProjectDirectionStatus.Draft)
+            return Failure(ErrorCodes.ProjectDirectionStateInvalid, "Save requested revisions as a draft before submitting.");
         var now = DateTime.UtcNow;
         direction.Status = ProjectDirectionStatus.Submitted;
         direction.SubmittedAtUtc = now;

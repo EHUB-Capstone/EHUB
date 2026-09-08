@@ -297,7 +297,6 @@ function ProjectDetail({ project }: { project: TeamProject | null }) {
         </div>
         <span className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-bold uppercase ${projectStatusStyles[status] || projectStatusStyles.DRAFT}`}>{readableStatus(status)}</span>
       </div>
-      {project.startupField && <p className="mt-3 text-xs font-semibold text-secondary">Field: {project.startupField}</p>}
       {project.description && <p className="mt-2 text-sm leading-6 text-slate-600">{project.description}</p>}
       {(project.problem || project.solution) && (
         <div className="mt-3 grid gap-2 sm:grid-cols-2">

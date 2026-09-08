@@ -6,7 +6,10 @@ import { teamApi } from '../../api/teamApi';
 import { unwrapApiData } from '../../utils/classMappers';
 import { parseApiError } from '../../utils/apiError';
 import {
+  canSubmitProjectDirection,
   getProjectDirectionDecisionNotice,
+  getProjectDirectionSubmitGuidance,
+  hasUnsavedProjectDirectionChanges,
   hasProjectDirectionChanged,
 } from '../../utils/projectDirectionSync';
 import { subscribeProjectDirectionRealtime } from '../../api/projectDirectionRealtime';
@@ -116,6 +119,9 @@ export default function ProjectDirectionCard({ team, canEdit }) {
   };
 
   const valid = title.trim().length >= 3 && summary.trim().length >= 20 && summary.trim().length <= 5000;
+  const hasUnsavedChanges = hasUnsavedProjectDirectionChanges(direction, title, summary);
+  const canSubmit = canSubmitProjectDirection(direction, title, summary);
+  const submitGuidance = getProjectDirectionSubmitGuidance(direction, title, summary);
   const latestReview = direction?.reviews?.[0];
   return (
     <section className="rounded-2xl border border-slate-200/60 bg-white p-6 shadow-sm">
@@ -127,7 +133,8 @@ export default function ProjectDirectionCard({ team, canEdit }) {
         <div className="mt-4 space-y-3" aria-busy={busy || undefined}>
           <input value={title} onChange={event => setTitle(event.target.value)} disabled={busy} maxLength={200} placeholder="Direction title" className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-primary disabled:bg-slate-50 disabled:text-slate-500" />
           <textarea value={summary} onChange={event => setSummary(event.target.value)} disabled={busy} maxLength={5000} rows={8} placeholder="Describe the problem, target users, proposed solution, and implementation direction..." className="w-full resize-y rounded-xl border border-slate-200 px-4 py-3 text-sm leading-6 text-slate-700 outline-none focus:border-primary disabled:bg-slate-50 disabled:text-slate-500" />
-          <div className="flex flex-wrap items-center justify-between gap-3"><p className={`text-xs ${valid ? 'text-slate-500' : 'text-red-500'}`}>{summary.length}/5000 characters · minimum 20</p><div className="flex gap-2"><button type="button" onClick={save} disabled={busy || !valid} className="inline-flex items-center gap-2 rounded-lg border border-primary-200 px-4 py-2 text-sm font-semibold text-primary disabled:opacity-50">{activeAction === 'save' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} {activeAction === 'save' ? 'Saving...' : 'Save draft'}</button>{direction && <button type="button" onClick={submit} disabled={busy} className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{activeAction === 'submit' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} {activeAction === 'submit' ? 'Submitting...' : 'Submit'}</button>}</div></div>
+          <div className="flex flex-wrap items-center justify-between gap-3"><p className={`text-xs ${valid ? 'text-slate-500' : 'text-red-500'}`}>{summary.length}/5000 characters · minimum 20</p><div className="flex gap-2"><button type="button" onClick={save} disabled={busy || !valid || !hasUnsavedChanges} className="inline-flex items-center gap-2 rounded-lg border border-primary-200 px-4 py-2 text-sm font-semibold text-primary disabled:opacity-50">{activeAction === 'save' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} {activeAction === 'save' ? 'Saving...' : 'Save draft'}</button>{direction && <button type="button" onClick={submit} disabled={busy || !canSubmit} className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-600 disabled:opacity-100">{activeAction === 'submit' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} {activeAction === 'submit' ? 'Submitting...' : 'Submit'}</button>}</div></div>
+          {submitGuidance && <p role="status" className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">{submitGuidance}</p>}
         </div>
       ) : (
         <div className="mt-4 space-y-3">{direction ? <><h3 className="font-semibold text-slate-900">{direction.title}</h3><p className="whitespace-pre-wrap text-sm leading-7 text-slate-700">{direction.summary}</p></> : <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">The team leader has not created a project direction yet.</p>}</div>

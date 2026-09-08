@@ -1,10 +1,11 @@
 // @ts-nocheck
 // frontend/src/api/workspaceApi.js
 import axiosClient from './axiosClient';
+import type { ApiEnvelope, WorkspaceOption } from '../types/workspaceTools';
 
 export const workspaceApi = {
   getMyWorkspace: () => axiosClient.get('/workspace/my-team'),
-  getAccessibleTeams: () => axiosClient.get('/workspace/accessible-teams'),
+  getAccessibleTeams: (): Promise<ApiEnvelope<WorkspaceOption[]>> => axiosClient.get('/workspace/accessible-teams'),
   getTeamWorkspace: (teamId) => axiosClient.get(`/workspace/teams/${teamId}`),
   createWorkspace: (teamId, payload) => axiosClient.post(`/workspace/teams/${teamId}`, payload),
   updateWorkspaceProfile: (teamId, payload) => axiosClient.put(`/workspace/teams/${teamId}/profile`, payload),

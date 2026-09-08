@@ -28,7 +28,7 @@ const checkpointConfig = [
     title: 'Startup Idea & Team Formation',
     shortDescription: 'Define your startup concept, choose your field, and establish clear member roles.',
     icon: 'Users',
-    requirements: ['Team name', 'Startup idea', 'Startup field', 'Member roles'],
+    requirements: ['Team name', 'Startup idea', 'Member roles'],
     rubrics: [
       { key: 'idea-clarity', label: 'Startup Idea Clarity', description: 'How clear, focused, and understandable the idea is.', weight: 30, maxScore: 10, levels: [] },
       { key: 'problem-fit', label: 'Problem & Customer Fit', description: 'Evidence that the idea addresses a meaningful customer problem.', weight: 40, maxScore: 10, levels: [] },
@@ -83,6 +83,7 @@ function workspaceOption(teamId: string) {
     accessMode: 'READ_WRITE',
     isArchived: cls.status === 'Archived',
     isCurrent: cls.status === 'Active',
+    hasWorkspace: Boolean(team.projectName),
   };
 }
 
@@ -150,8 +151,6 @@ function workspaceData(teamId: string) {
       semesterId: cls.semesterId,
       projectName: team.projectName,
       description: team.projectDescription || team.description || '',
-      startupField: team.startupField || '',
-      technologyStack: team.technologyStack || [],
       keywords: team.keywords || [],
       status: 'Draft',
       createdAtUtc: projectCreatedAtUtc,
@@ -163,7 +162,7 @@ function workspaceData(teamId: string) {
       summary: 'Created the project workspace.',
       actorUserId: team.leaderId,
       actorName: members.find((member) => member._id === team.leaderId)?.fullName || 'Team leader',
-      changedFields: ['projectName', 'description', 'startupField', 'technologyStack', 'keywords'],
+      changedFields: ['projectName', 'description', 'keywords'],
       occurredAtUtc: projectCreatedAtUtc,
     }] : []),
     proposal: { _id: uuid(1101), status: 'SUBMITTED', projectName: 'CampusLink' },
@@ -402,20 +401,16 @@ export function registerWorkspaceMockHandlers(mock: MockAdapter): void {
     const body = parseBody(config);
     const projectName = String(body.projectName || '').trim();
     const description = String(body.description || '').trim();
-    const startupField = String(body.startupField || '').trim();
-    const technologyStack = Array.isArray(body.technologyStack) ? body.technologyStack.map(String) : [];
     const keywords = Array.isArray(body.keywords) ? body.keywords.map(String) : [];
-    if (projectName.length < 3 || description.length < 20 || startupField.length < 2 || technologyStack.length === 0) {
+    if (projectName.length < 3 || description.length < 20) {
       return failure(400, 'WORKSPACE_VALIDATION_ERROR', 'Required project workspace information is missing or invalid.');
     }
     const hasDuplicate = (values: string[]) => new Set(values.map((value) => value.trim().replace(/\s+/g, ' ').toUpperCase())).size !== values.length;
-    if (hasDuplicate(technologyStack) || hasDuplicate(keywords)) {
+    if (hasDuplicate(keywords)) {
       return failure(409, 'WORKSPACE_TAG_DUPLICATED', 'Duplicate workspace tags are not allowed.');
     }
     team.projectName = projectName;
     team.projectDescription = description;
-    team.startupField = startupField;
-    team.technologyStack = technologyStack;
     team.keywords = keywords;
     const createdAtUtc = new Date().toISOString();
     team.projectCreatedAtUtc = createdAtUtc;
@@ -426,14 +421,14 @@ export function registerWorkspaceMockHandlers(mock: MockAdapter): void {
       summary: 'Created the project workspace.',
       actorUserId: currentUser.id,
       actorName: currentUser.name,
-      changedFields: ['projectName', 'description', 'startupField', 'technologyStack', 'keywords'],
+      changedFields: ['projectName', 'description', 'keywords'],
       occurredAtUtc: createdAtUtc,
     }];
     persistMockState();
     const project = {
       _id: uuid(1601), teamId, classId: team.classId, subjectId: classByTeam(teamId)!.courseId,
-      semesterId: classByTeam(teamId)!.semesterId, projectName, description, startupField,
-      technologyStack, keywords, status: 'Draft', createdAtUtc, updatedAtUtc: null,
+      semesterId: classByTeam(teamId)!.semesterId, projectName, description,
+      keywords, status: 'Draft', createdAtUtc, updatedAtUtc: null,
     };
     return ok(project, 'Project workspace created.');
   });
@@ -452,24 +447,18 @@ export function registerWorkspaceMockHandlers(mock: MockAdapter): void {
     const body = parseBody(config);
     const projectName = String(body.projectName || '').trim();
     const description = String(body.description || '').trim();
-    const startupField = String(body.startupField || '').trim();
-    const technologyStack = Array.isArray(body.technologyStack) ? body.technologyStack.map(String) : [];
     const keywords = Array.isArray(body.keywords) ? body.keywords.map(String) : [];
-    if (projectName.length < 3 || description.length < 20 || startupField.length < 2 || technologyStack.length === 0) {
+    if (projectName.length < 3 || description.length < 20) {
       return failure(400, 'WORKSPACE_VALIDATION_ERROR', 'Required project workspace information is missing or invalid.');
     }
     const changedFields = [
       team.projectName !== projectName && 'projectName',
       (team.projectDescription || '') !== description && 'description',
-      (team.startupField || '') !== startupField && 'startupField',
-      JSON.stringify(team.technologyStack || []) !== JSON.stringify(technologyStack) && 'technologyStack',
       JSON.stringify(team.keywords || []) !== JSON.stringify(keywords) && 'keywords',
     ].filter(Boolean) as string[];
 
     team.projectName = projectName;
     team.projectDescription = description;
-    team.startupField = startupField;
-    team.technologyStack = technologyStack;
     team.keywords = keywords;
     if (changedFields.length > 0) {
       const occurredAtUtc = new Date().toISOString();

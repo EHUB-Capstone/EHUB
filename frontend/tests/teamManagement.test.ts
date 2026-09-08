@@ -40,7 +40,6 @@ const validDraft: TeamDraft = {
   projectName: 'EcoTrack',
   projectDescription: 'A platform for measuring and reducing personal carbon emissions.',
   projectStatus: 'IN_PROGRESS',
-  startupField: 'GreenTech',
 };
 
 test('accepts a valid team name, class and member list', () => {
@@ -225,14 +224,10 @@ test('validates required project workspace information', () => {
   const errors = validateProjectWorkspace({
     projectName: '',
     description: 'too short',
-    startupField: '',
-    technologyStack: [],
     keywords: [],
   });
   assert.equal(errors.projectName, 'Project name must be 3–200 characters.');
   assert.equal(errors.description, 'Description must be 20–2000 characters.');
-  assert.equal(errors.startupField, 'Startup field must be 2–100 characters.');
-  assert.equal(errors.technologyStack, 'Add at least one technology.');
 });
 
 test('normalizes and rejects duplicated or invalid workspace tags', () => {

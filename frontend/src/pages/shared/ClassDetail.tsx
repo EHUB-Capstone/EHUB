@@ -4,7 +4,7 @@ import toast from 'react-hot-toast';
 import { motion } from 'framer-motion';
 import {
   ArrowLeft, GraduationCap, Users, BookOpen,
-  Upload, Download, UserPlus, UserRoundCheck, Loader2, Calendar, Pencil, ShieldCheck, Lock, Unlock, AlertTriangle,
+  Upload, Download, UserPlus, UserRoundCheck, Loader2, Calendar, ShieldCheck, Lock, Unlock, AlertTriangle,
   Database, MessagesSquare, Archive, RotateCcw, CircleCheck, Play
 } from 'lucide-react';
 import { AuthContext } from '../../context/AuthContext';
@@ -25,7 +25,6 @@ import ProjectDirectionModal from '../../components/class/ProjectDirectionModal'
 import EditScheduleModal from '../../components/class/EditScheduleModal';
 import AssignLectureModal from '../../components/class/AssignLectureModal';
 import AssignMentorsModal from '../../components/class/AssignMentorsModal';
-import RenameClassModal from '../../components/class/RenameClassModal';
 import VerifyMajorModal from '../../components/class/VerifyMajorModal';
 import AddStudentModal from '../../components/class/AddStudentModal';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
@@ -100,7 +99,6 @@ export default function ClassDetail() {
   const [showEditSchedule, setShowEditSchedule] = useState(false);
   const [showAssignLecturer, setShowAssignLecturer] = useState(false);
   const [showAssignMentors, setShowAssignMentors] = useState(false);
-  const [showRename, setShowRename] = useState(false);
   const [showVerify, setShowVerify] = useState(false);
   const [reviewTeam, setReviewTeam] = useState(null);
   const [teamToDelete, setTeamToDelete] = useState(null);
@@ -620,21 +618,7 @@ export default function ClassDetail() {
             <ArrowLeft className="h-4.5 w-4.5" />
           </button>
           <div className="min-w-0">
-            <div className="flex items-center gap-1.5">
-              <h1 className="truncate text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">{cls.classCode}</h1>
-              {!isReadOnly && isFeatureVisible(classFeatureFlags.rename) && canManageClass && (
-                <button
-                  type="button"
-                  id="btn-rename-class"
-                  onClick={() => runFeatureAction(classFeatureFlags.rename, 'Class rename', () => setShowRename(true))}
-                  title="Rename class"
-                  aria-label="Rename class"
-                  className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-primary-50 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/25"
-                >
-                  <Pencil className="h-3.5 w-3.5" />
-                </button>
-              )}
-            </div>
+            <h1 className="truncate text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">{cls.classCode}</h1>
             <p className="mt-0.5 truncate text-xs font-medium text-slate-500 sm:text-sm">
               {cls.subjectCode || '—'} · {cls.semester || '—'} {cls.year || ''}
             </p>
@@ -1078,19 +1062,6 @@ export default function ClassDetail() {
           onAssigned={async () => {
             setShowAssignMentors(false);
             await fetchData();
-          }}
-        />
-      )}
-
-      {/* ── Rename Class Modal ── */}
-      {!isReadOnly && classFeatureFlags.rename && showRename && (
-        <RenameClassModal
-          classId={loadedClassId}
-          currentCode={cls.classCode}
-          onClose={() => setShowRename(false)}
-          onRenamed={(updated) => {
-            if (updated) setCls(prev => ({ ...prev, classCode: updated.classCode }));
-            setShowRename(false);
           }}
         />
       )}

@@ -4,8 +4,6 @@ public sealed class CreateProjectWorkspaceRequest
 {
     public string ProjectName { get; init; } = string.Empty;
     public string Description { get; init; } = string.Empty;
-    public string StartupField { get; init; } = string.Empty;
-    public IReadOnlyCollection<string> TechnologyStack { get; init; } = Array.Empty<string>();
     public IReadOnlyCollection<string> Keywords { get; init; } = Array.Empty<string>();
 }
 
@@ -13,8 +11,6 @@ public sealed class UpdateProjectWorkspaceRequest
 {
     public string ProjectName { get; init; } = string.Empty;
     public string Description { get; init; } = string.Empty;
-    public string StartupField { get; init; } = string.Empty;
-    public IReadOnlyCollection<string> TechnologyStack { get; init; } = Array.Empty<string>();
     public IReadOnlyCollection<string> Keywords { get; init; } = Array.Empty<string>();
 }
 
@@ -27,8 +23,6 @@ public sealed class ProjectWorkspaceDto
     public Guid SemesterId { get; init; }
     public string ProjectName { get; init; } = string.Empty;
     public string Description { get; init; } = string.Empty;
-    public string StartupField { get; init; } = string.Empty;
-    public IReadOnlyCollection<string> TechnologyStack { get; init; } = Array.Empty<string>();
     public IReadOnlyCollection<string> Keywords { get; init; } = Array.Empty<string>();
     public string Status { get; init; } = string.Empty;
     public DateTime CreatedAtUtc { get; init; }

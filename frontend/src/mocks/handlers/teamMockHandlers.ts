@@ -539,12 +539,18 @@ function registerDirectionHandlers(mock: MockAdapter): void {
     const body = parseBody(config);
     let direction = getMockState().directions.find((item) => item.teamId === teamId);
     if (direction && asString(body.rowVersion) && body.rowVersion !== direction.rowVersion) return failure(409, 'PROJECT_DIRECTION_CONCURRENCY_CONFLICT', 'Project direction data is stale.');
+    if (direction && !['Draft', 'NeedsRevision'].includes(direction.status)) return failure(409, 'PROJECT_DIRECTION_STATE_INVALID', 'Only Draft or NeedsRevision directions can be edited.');
+    const revisedTitle = asString(body.title, direction?.title).trim();
+    const revisedSummary = asString(body.summary, direction?.summary).trim();
+    if (direction?.status === 'NeedsRevision' && revisedTitle === direction.title && revisedSummary === direction.summary) {
+      return failure(400, 'VALIDATION_ERROR', 'Change the project direction before saving the requested revision.');
+    }
     if (!direction) {
       direction = { id: allocateId(), teamId, title: '', summary: '', status: 'Draft', submittedAtUtc: null, reviewedAtUtc: null, rowVersion: allocateRowVersion(), reviews: [] };
       getMockState().directions.push(direction);
     }
-    direction.title = asString(body.title, direction.title).trim();
-    direction.summary = asString(body.summary, direction.summary).trim();
+    direction.title = revisedTitle;
+    direction.summary = revisedSummary;
     direction.status = 'Draft';
     direction.rowVersion = allocateRowVersion();
     persistMockState();
@@ -576,6 +582,7 @@ function directionState(config: AxiosRequestConfig, status: 'Submitted') {
   const direction = getMockState().directions.find((item) => item.teamId === teamId);
   if (!direction) return failure(404, 'PROJECT_DIRECTION_NOT_FOUND', 'Project direction has not been created.');
   if (asString(parseBody(config).rowVersion) !== direction.rowVersion) return failure(409, 'PROJECT_DIRECTION_CONCURRENCY_CONFLICT', 'Project direction data is stale.');
+  if (direction.status !== 'Draft') return failure(409, 'PROJECT_DIRECTION_STATE_INVALID', 'Save requested revisions as a draft before submitting.');
   direction.status = status;
   direction.submittedAtUtc = new Date().toISOString();
   direction.rowVersion = allocateRowVersion();

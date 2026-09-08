@@ -546,8 +546,6 @@ public sealed class TeamWorkflowIntegrationTests
             {
                 ProjectName = "Campus Circular",
                 Description = "A student marketplace that helps campuses reuse equipment safely.",
-                StartupField = "EdTech",
-                TechnologyStack = new[] { "React", ".NET", "PostgreSQL" },
                 Keywords = new[] { "campus", "circular economy" }
             },
             seed.ProposerUserId,
@@ -556,7 +554,6 @@ public sealed class TeamWorkflowIntegrationTests
         result.IsSuccess.Should().BeTrue($"workspace creation failed with {result.Error.Code}: {result.Error.Message}");
         result.Value.TeamId.Should().Be(seed.TeamId!.Value);
         result.Value.ClassId.Should().Be(seed.ClassId);
-        result.Value.TechnologyStack.Should().BeEquivalentTo("React", ".NET", "PostgreSQL");
         result.Value.Keywords.Should().BeEquivalentTo("campus", "circular economy");
         context.ChangeTracker.Clear();
         var targetClass = await context.Classes.AsNoTracking().SingleAsync(item => item.Id == seed.ClassId);
@@ -566,6 +563,50 @@ public sealed class TeamWorkflowIntegrationTests
         (await context.OutboxMessages.AsNoTracking().AnyAsync(message =>
             message.AggregateId == seed.ClassId && message.Type == "ProjectWorkspace.Created.v1"))
             .Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task WorkspaceQueriesExcludeArchivedAndDisabledTeams()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateSeedAsync(context, createProposal: false, createTeam: true);
+
+        var archivedTeam = await context.Teams.SingleAsync(team => team.Id == seed.TeamId);
+        archivedTeam.Status = TeamStatus.Archived;
+        archivedTeam.ArchivedAt = DateTime.UtcNow;
+
+        var disabledTeam = await context.Teams.SingleAsync(team => team.Id == seed.OtherTeamId);
+        disabledTeam.Status = TeamStatus.Disabled;
+
+        var activeTeam = new Team
+        {
+            ClassId = seed.ClassId,
+            TeamCode = "WORKSPACE_ACTIVE",
+            TeamName = "Active Workspace Team",
+            Status = TeamStatus.Active,
+            CreatedById = seed.AdminId,
+            CreatedBy = seed.AdminId
+        };
+        context.Teams.Add(activeTeam);
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        var handler = new ProjectWorkspaceHandler(
+            context,
+            scope.ServiceProvider.GetRequiredService<EHub.Application.Common.Interfaces.Persistence.IUnitOfWork>());
+
+        var accessible = await handler.GetAccessibleAsync(seed.AdminId, SystemRoles.Admin);
+        accessible.IsSuccess.Should().BeTrue();
+        var classWorkspaces = accessible.Value.Where(option => option.ClassId == seed.ClassId).ToArray();
+        classWorkspaces.Should().ContainSingle(option => option.TeamId == activeTeam.Id);
+        classWorkspaces.Should().NotContain(option => option.TeamId == archivedTeam.Id);
+        classWorkspaces.Should().NotContain(option => option.TeamId == disabledTeam.Id);
+
+        (await handler.GetContextAsync(archivedTeam.Id, seed.AdminId, SystemRoles.Admin))
+            .IsFailure.Should().BeTrue();
+        (await handler.GetDetailAsync(disabledTeam.Id, seed.AdminId, SystemRoles.Admin))
+            .IsFailure.Should().BeTrue();
     }
 
     [Fact]
@@ -680,8 +721,6 @@ public sealed class TeamWorkflowIntegrationTests
         {
             ProjectName = "Founder Workspace",
             Description = "A complete project workspace description for the team.",
-            StartupField = "SaaS",
-            TechnologyStack = new[] { "React" },
             Keywords = new[] { "startup" }
         };
 
@@ -699,8 +738,7 @@ public sealed class TeamWorkflowIntegrationTests
             {
                 ProjectName = validRequest.ProjectName,
                 Description = validRequest.Description,
-                StartupField = validRequest.StartupField,
-                TechnologyStack = new[] { "React", " react " }
+                Keywords = new[] { "Startup", " startup " }
             },
             seed.ProposerUserId,
             SystemRoles.Student);
@@ -728,8 +766,6 @@ public sealed class TeamWorkflowIntegrationTests
         {
             ProjectName = "Campus Circular",
             Description = "A student marketplace that helps campuses reuse equipment safely.",
-            StartupField = "EdTech",
-            TechnologyStack = new[] { "React", ".NET" },
             Keywords = new[] { "campus" }
         };
         (await handler.CreateAsync(seed.TeamId!.Value, initial, seed.ProposerUserId, SystemRoles.Student))
@@ -742,8 +778,6 @@ public sealed class TeamWorkflowIntegrationTests
             {
                 ProjectName = "Campus Circular Hub",
                 Description = "The latest student marketplace profile for safe campus equipment reuse.",
-                StartupField = "Circular Economy",
-                TechnologyStack = new[] { "React", ".NET", "PostgreSQL" },
                 Keywords = new[] { "campus", "reuse" }
             },
             seed.ProposerUserId,
@@ -758,7 +792,6 @@ public sealed class TeamWorkflowIntegrationTests
         var detail = await handler.GetDetailAsync(seed.TeamId.Value, memberUserId, SystemRoles.Student);
         detail.IsSuccess.Should().BeTrue();
         detail.Value.Project!.ProjectName.Should().Be("Campus Circular Hub");
-        detail.Value.Project.StartupField.Should().Be("Circular Economy");
         detail.Value.Class.Id.Should().Be(seed.ClassId);
         detail.Value.Class.SubjectId.Should().NotBeEmpty();
         detail.Value.Class.SemesterId.Should().NotBeEmpty();
@@ -849,6 +882,27 @@ public sealed class TeamWorkflowIntegrationTests
             SystemRoles.Lecturer);
         reviewed.IsSuccess.Should().BeTrue();
 
+        var resubmitWithoutSaving = await handler.SubmitAsync(
+            seed.TeamId.Value,
+            new ProjectDirectionStateRequest { RowVersion = reviewed.Value.RowVersion },
+            seed.ProposerUserId,
+            SystemRoles.Student);
+        resubmitWithoutSaving.IsFailure.Should().BeTrue();
+        resubmitWithoutSaving.Error.Code.Should().Be(ErrorCodes.ProjectDirectionStateInvalid);
+
+        var unchangedRevision = await handler.SaveAsync(
+            seed.TeamId.Value,
+            new SaveProjectDirectionRequest
+            {
+                Title = reviewed.Value.Title,
+                Summary = reviewed.Value.Summary,
+                RowVersion = reviewed.Value.RowVersion
+            },
+            seed.ProposerUserId,
+            SystemRoles.Student);
+        unchangedRevision.IsFailure.Should().BeTrue();
+        unchangedRevision.Error.Code.Should().Be(ErrorCodes.ClassValidationError);
+
         var revised = await handler.SaveAsync(
             seed.TeamId.Value,
             new SaveProjectDirectionRequest
@@ -860,6 +914,7 @@ public sealed class TeamWorkflowIntegrationTests
             seed.ProposerUserId,
             SystemRoles.Student);
         revised.IsSuccess.Should().BeTrue();
+        revised.Value.Status.Should().Be(nameof(ProjectDirectionStatus.Draft));
 
         var resubmitted = await handler.SubmitAsync(
             seed.TeamId.Value,
