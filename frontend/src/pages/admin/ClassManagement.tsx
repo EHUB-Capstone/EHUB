@@ -79,7 +79,15 @@ export default function ClassManagement() {
 
   // Filters
   const [search, setSearch] = useState(searchParams.get('search') || '');
-  const [appliedSearch, setAppliedSearch] = useState(searchParams.get('search') || '');
+  const appliedSearch = searchParams.get('search') || '';
+  const [previousSearch, setPreviousSearch] = useState(appliedSearch);
+  const setAppliedSearch = (value: string) => {
+    const next = new URLSearchParams(searchParams);
+    if (value) next.set('search', value);
+    else next.delete('search');
+    next.delete('page');
+    setSearchParams(next, { replace: true });
+  };
   const [filterSem, setFilterSem] = useState(searchParams.get('semester') || '');
   const [filterYear, setFilterYear] = useState(searchParams.get('year') || '');
   const [filterSubj, setFilterSubj] = useState(searchParams.get('subject') || '');
@@ -87,6 +95,13 @@ export default function ClassManagement() {
   const [filterAssignment, setFilterAssignment] = useState<'Assigned' | 'Unassigned' | ''>((searchParams.get('assignment') as 'Assigned' | 'Unassigned' | null) || '');
   const [sort, setSort] = useState(searchParams.get('sort') || 'code');
   const [page, setPage] = useState(Math.max(1, Number(searchParams.get('page')) || 1));
+  // The shared navbar can submit a search while this route stays mounted.
+  // Synchronize before rendering so the URL writer cannot restore stale filters.
+  if (previousSearch !== appliedSearch) {
+    setPreviousSearch(appliedSearch);
+    setSearch(appliedSearch);
+    setPage(1);
+  }
   const pageSize = 12;
   const viewMode = searchParams.get('tab') === 'overview' ? 'overview' : 'classes';
   const overviewClassId = searchParams.get('classId') || '';
@@ -210,7 +225,6 @@ export default function ClassManagement() {
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    setPage(1);
     setAppliedSearch(search.trim());
   };
 
@@ -512,11 +526,8 @@ export default function ClassManagement() {
             <Filter className="w-4 h-4" /> Filter
           </button>
           <button type="button" onClick={() => {
-            setSearch(''); setAppliedSearch(''); setFilterSem(''); setFilterYear(''); setFilterSubj(''); setFilterStatus(''); setFilterAssignment(''); setSort('code'); setPage(1);
-            const next = new URLSearchParams(searchParams);
-            next.delete('classId');
-            next.delete('teamId');
-            setSearchParams(next, { replace: true });
+            setSearch(''); setFilterSem(''); setFilterYear(''); setFilterSubj(''); setFilterStatus(''); setFilterAssignment(''); setSort('code'); setPage(1);
+            setSearchParams(new URLSearchParams(), { replace: true });
           }} className="text-sm text-slate-400 hover:text-slate-600 px-2">
             Reset
           </button>
