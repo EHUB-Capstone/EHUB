@@ -199,6 +199,7 @@ public sealed class CommitImportStudentsCommandHandler : ICommitImportStudentsCo
         var updatedCount = 0;
         var synchronizedMajorCount = 0;
         var errors = new List<ImportStudentCommitErrorDto>();
+        var importedStudents = new List<(string Email, string FullName, Guid? UserId)>();
 
         foreach (var row in rows)
         {
@@ -308,6 +309,7 @@ public sealed class CommitImportStudentsCommandHandler : ICommitImportStudentsCo
             };
             _context.ClassStudents.Add(currentEnrollment);
             enrollments.Add(currentEnrollment);
+            importedStudents.Add((profile.Email ?? row.Email, profile.FullName, profile.UserId));
             insertedCount++;
         }
 
@@ -335,7 +337,17 @@ public sealed class CommitImportStudentsCommandHandler : ICommitImportStudentsCo
         {
             SessionId = session.Id,
             InsertedCount = insertedCount,
-            ErrorCount = errors.Count
+            ErrorCount = errors.Count,
+            StudentUserIds = importedStudents
+                .Where(student => student.UserId.HasValue)
+                .Select(student => student.UserId!.Value)
+                .Distinct()
+                .ToArray(),
+            StudentRecipients = importedStudents
+                .Where(student => !string.IsNullOrWhiteSpace(student.Email))
+                .Select(student => new { student.Email, student.FullName })
+                .Distinct()
+                .ToArray()
         });
 
         await _context.SaveChangesAsync(cancellationToken);

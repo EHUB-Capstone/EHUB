@@ -24,4 +24,12 @@ public interface IEmailService
         string toEmail,
         string fullName,
         CancellationToken cancellationToken = default);
+
+    Task SendClassNotificationAsync(
+        string toEmail,
+        string fullName,
+        string subject,
+        string title,
+        string message,
+        CancellationToken cancellationToken = default);
 }

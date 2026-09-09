@@ -172,6 +172,36 @@ public sealed class SmtpEmailService : IEmailService
         _logger.LogInformation("Password changed notification email sent");
     }
 
+    public async Task SendClassNotificationAsync(
+        string toEmail,
+        string fullName,
+        string subject,
+        string title,
+        string message,
+        CancellationToken cancellationToken = default)
+    {
+        var safeTitle = WebUtility.HtmlEncode(title);
+        var safeMessage = WebUtility.HtmlEncode(message);
+        var htmlBody = $"""
+        <div style="font-family:Arial,sans-serif;line-height:1.6;color:#111827;max-width:560px;margin:auto">
+            <h2>{safeTitle}</h2>
+            <p style="white-space:pre-line">{safeMessage}</p>
+            <hr />
+            <p style="font-size:12px;color:#6b7280">EHUB - Entrepreneurship Hub</p>
+        </div>
+        """;
+        var textBody = $"""
+        {title}
+
+        {message}
+
+        EHUB - Entrepreneurship Hub
+        """;
+
+        await SendEmailAsync(toEmail, fullName, subject, htmlBody, textBody, cancellationToken);
+        _logger.LogInformation("Class notification email sent");
+    }
+
     private async Task SendEmailAsync(
         string toEmail,
         string toName,
