@@ -14,7 +14,9 @@ using EHub.Application.Features.Auth.ForgotPassword;
 using EHub.Application.Features.Auth.ResetPassword;
 using EHub.Application.Features.Auth.ResendRegistrationOtp;
 using EHub.Application.Features.Auth.VerifyRegistrationOtp;
+using EHub.Application.Features.Auth.UpdateProfile;
 using EHub.Application.Features.Auth.Common;
+using EHub.Api.Models.Auth;
 using EHub.Api.Extensions;
 using EHub.Contracts.Auth;
 using EHub.Contracts.Common;
@@ -388,6 +390,43 @@ public sealed class AuthController : ControllerBase
         return Ok(ApiResponse<CurrentUserResponse>.SuccessResponse(
             result.Value,
             "Current user retrieved successfully"));
+    }
+
+    [Authorize(Policy = SystemPolicies.AuthenticatedOnly)]
+    [HttpPut("update-profile")]
+    [Consumes("multipart/form-data")]
+    public async Task<IActionResult> UpdateProfile(
+        [FromForm] UpdateProfileFormRequest request,
+        [FromServices] IUpdateProfileCommandHandler updateProfileCommandHandler,
+        CancellationToken cancellationToken)
+    {
+        await using var avatarStream = request.Avatar?.OpenReadStream();
+        var result = await updateProfileCommandHandler.HandleAsync(new UpdateProfileCommand
+        {
+            FullName = request.FullName,
+            AvatarContent = avatarStream,
+            AvatarLength = request.Avatar?.Length ?? 0,
+            AvatarFileName = request.Avatar?.FileName,
+            AvatarContentType = request.Avatar?.ContentType
+        }, cancellationToken);
+
+        if (result.IsFailure)
+        {
+            return result.Error.Code switch
+            {
+                ErrorCodes.CommonUnauthorizedError => Unauthorized(
+                    ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code)),
+                ErrorCodes.AuthProfileImageUploadFailed => StatusCode(
+                    StatusCodes.Status503ServiceUnavailable,
+                    ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code)),
+                _ => BadRequest(
+                    ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code))
+            };
+        }
+
+        return Ok(ApiResponse<UpdateProfileResponse>.SuccessResponse(
+            result.Value,
+            "Profile updated successfully."));
     }
 
     [HttpPost("refresh-token")]

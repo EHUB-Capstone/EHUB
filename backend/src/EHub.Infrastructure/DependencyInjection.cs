@@ -13,6 +13,9 @@ using EHub.Infrastructure.Services.Auth;
 using EHub.Application.Common.Models.Identity;
 using EHub.Infrastructure.Options;
 using EHub.Infrastructure.BackgroundJobs;
+using CloudinaryDotNet;
+using EHub.Application.Common.Interfaces.Storage;
+using EHub.Infrastructure.Storage;
 
 namespace EHub.Infrastructure;
 
@@ -61,6 +64,18 @@ public static class DependencyInjection
         services.AddScoped<IDateTimeProvider, DateTimeProvider>();
         services.AddScoped<IPasswordResetTokenService, PasswordResetTokenService>();
         services.AddSingleton<IRegistrationOtpService, RegistrationOtpService>();
+        services.AddOptions<CloudinaryOptions>()
+            .Bind(configuration.GetSection(CloudinaryOptions.SectionName))
+            .Validate(options => !string.IsNullOrWhiteSpace(options.CloudName), "Cloudinary:CloudName is required.")
+            .Validate(options => !string.IsNullOrWhiteSpace(options.ApiKey), "Cloudinary:ApiKey is required.")
+            .Validate(options => !string.IsNullOrWhiteSpace(options.ApiSecret), "Cloudinary:ApiSecret is required.")
+            .ValidateOnStart();
+        services.AddSingleton(provider =>
+        {
+            var options = provider.GetRequiredService<Microsoft.Extensions.Options.IOptions<CloudinaryOptions>>().Value;
+            return new Cloudinary(new Account(options.CloudName, options.ApiKey, options.ApiSecret));
+        });
+        services.AddScoped<IImageStorageService, CloudinaryImageStorageService>();
         
         services.Configure<EmailOptions>(configuration.GetSection(EmailOptions.SectionName));
         var emailProvider = configuration["Email:Provider"];

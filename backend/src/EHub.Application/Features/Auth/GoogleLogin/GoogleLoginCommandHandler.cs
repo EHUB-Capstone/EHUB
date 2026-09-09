@@ -181,6 +181,7 @@ public class GoogleLoginCommandHandler : IGoogleLoginCommandHandler
             {
                 Id = user.Id,
                 FullName = user.FullName,
+                AvatarUrl = user.AvatarUrl,
                 Email = user.Email,
                 Roles = roles,
                 Status = user.Status.ToString(),

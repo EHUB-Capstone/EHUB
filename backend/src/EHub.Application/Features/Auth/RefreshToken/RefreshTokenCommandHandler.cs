@@ -183,6 +183,7 @@ public sealed class RefreshTokenCommandHandler : IRefreshTokenCommandHandler
             {
                 Id = user.Id,
                 FullName = user.FullName,
+                AvatarUrl = user.AvatarUrl,
                 Email = user.Email,
                 Roles = roles,
                 Status = user.Status.ToString(),

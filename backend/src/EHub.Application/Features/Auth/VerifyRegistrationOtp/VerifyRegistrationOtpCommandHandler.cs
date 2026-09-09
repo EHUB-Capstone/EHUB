@@ -243,6 +243,7 @@ public sealed class VerifyRegistrationOtpCommandHandler : IVerifyRegistrationOtp
             {
                 Id = user.Id,
                 FullName = user.FullName,
+                AvatarUrl = user.AvatarUrl,
                 Email = user.Email,
                 Roles = new[] { registration.RoleName },
                 Status = user.Status.ToString(),
