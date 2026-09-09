@@ -12,6 +12,9 @@ import {
 } from '../src/utils/teamManagement.ts';
 import {
   appendWorkspaceTag,
+  hasPersistedProjectProfile,
+  resolveWorkspaceCreationDefaults,
+  validateProjectProfile,
   validateProjectWorkspace,
 } from '../src/utils/projectWorkspace.ts';
 
@@ -228,6 +231,53 @@ test('validates required project workspace information', () => {
   });
   assert.equal(errors.projectName, 'Project name must be 3–200 characters.');
   assert.equal(errors.description, 'Description must be 20–2000 characters.');
+});
+
+test('workspace creation defaults come from the linked student proposal', () => {
+  const defaults = resolveWorkspaceCreationDefaults(
+    { teamName: 'Fallback team' },
+    {
+      teamName: 'Student Venture Team',
+      projectName: 'Student Venture Project',
+      projectDescription: 'A balanced student-created proposal ready for lecturer review.',
+    },
+  );
+
+  assert.equal(defaults.teamName, 'Student Venture Team');
+  assert.equal(defaults.draft.projectName, 'Student Venture Project');
+  assert.equal(defaults.draft.description, 'A balanced student-created proposal ready for lecturer review.');
+});
+
+test('project profile requires name, description, problem, solution, and target users', () => {
+  const invalid = validateProjectProfile({
+    projectName: 'x',
+    description: '',
+    problem: '',
+    solution: '',
+    targetUsers: '',
+  });
+  assert.deepEqual(Object.keys(invalid).sort(), ['description', 'problem', 'projectName', 'solution', 'targetUsers']);
+
+  assert.deepEqual(validateProjectProfile({
+    projectName: 'Campus Circular Hub',
+    description: 'A complete description of the approved project profile.',
+    problem: 'Students struggle to reuse useful equipment safely on campus.',
+    solution: 'A verified marketplace supports safe exchanges between students.',
+    targetUsers: 'University students and student clubs',
+  }), {});
+});
+
+test('project profile success requires the server to return every persisted field', () => {
+  const draft = {
+    projectName: 'Campus Circular Hub',
+    description: 'A complete description of the approved project profile.',
+    problem: 'Students struggle to reuse useful equipment safely on campus.',
+    solution: 'A verified marketplace supports safe exchanges between students.',
+    targetUsers: 'University students and student clubs',
+  };
+
+  assert.equal(hasPersistedProjectProfile(draft, draft), true);
+  assert.equal(hasPersistedProjectProfile(draft, { ...draft, targetUsers: '' }), false);
 });
 
 test('normalizes and rejects duplicated or invalid workspace tags', () => {

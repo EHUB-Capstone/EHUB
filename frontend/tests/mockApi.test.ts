@@ -402,6 +402,28 @@ test('mock API persists subject CRUD mutations for later queries', async () => {
   assert.equal(response.data.subjects[0].subjectName, 'Mock Contract Testing');
 });
 
+test('mock API persists startup industry CRUD and status mutations', async () => {
+  resetMockState();
+  const created = await axiosClient.post('/startup-industries', {
+    name: 'Logistics & Supply Chain',
+    status: 'active',
+  });
+  assert.equal(created.data.name, 'Logistics & Supply Chain');
+
+  const updated = await axiosClient.put(`/startup-industries/${created.data.id}`, {
+    name: 'Logistics Operations',
+    status: 'active',
+  });
+  assert.equal(updated.data.name, 'Logistics Operations');
+
+  await axiosClient.put(`/startup-industries/${created.data.id}/status`, { status: 'inactive' });
+  const filtered = await axiosClient.get('/startup-industries', {
+    params: { search: 'Logistics', status: 'inactive', sort: 'name-asc' },
+  });
+  assert.equal(filtered.data.industries.length, 1);
+  assert.equal(filtered.data.industries[0].status, 'inactive');
+});
+
 test('mock API enforces archived class read-only behavior', async () => {
   const list = await axiosClient.get('/classes', { params: { pageSize: 20 } });
   const active = list.data.items.find((item: { status: string }) => item.status === 'Active');
@@ -597,6 +619,11 @@ test('mock student creates a team immediately while its project proposal awaits 
   assert.equal(createdTeam.projectName, null);
   assert.ok(roster.every((student) => student.teamId === createdTeam.id));
 
+  const workspace = await axiosClient.get(`/workspace/teams/${createdTeam.id}`);
+  assert.equal(workspace.data.team.teamName, 'Student Venture Team');
+  assert.equal(workspace.data.proposal.projectName, 'Student Venture Project');
+  assert.equal(workspace.data.proposal.projectDescription, 'A balanced student-created proposal for lecturer review.');
+
   await assert.rejects(
     axiosClient.post(`/classes/${targetClass.id}/teams/student-proposal`, {
       studentIds: memberIds,
@@ -636,10 +663,14 @@ test('mock team leader creates one project workspace linked to its academic cont
   await axiosClient.put(`/workspace/teams/${team.id}/profile`, {
     projectName: 'Energy Insight Platform',
     description: 'The latest project profile helps small offices reduce their energy usage.',
+    problem: 'Small offices cannot clearly identify the equipment driving energy waste.',
+    solution: 'The platform turns usage data into practical recommendations for each office.',
+    targetUsers: 'Small office owners and facility managers',
     keywords: ['energy', 'efficiency'],
   });
   const latest = await axiosClient.get(`/workspace/teams/${team.id}`);
   assert.equal(latest.data.project.projectName, 'Energy Insight Platform');
+  assert.equal(latest.data.project.targetUsers, 'Small office owners and facility managers');
   assert.equal(latest.data.class.subjectCode, cls?.subjectCode);
   assert.equal(latest.data.class.semesterCode, cls?.semesterCode);
   assert.ok(latest.data.members.length > 0);

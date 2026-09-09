@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import { workspaceApi } from '../../api/workspaceApi';
 import {
   appendWorkspaceTag,
+  resolveWorkspaceCreationDefaults,
   validateProjectWorkspace,
   type ProjectWorkspaceDraft,
   type ProjectWorkspaceErrors,
@@ -12,6 +13,12 @@ import { parseApiError } from '../../utils/apiError';
 
 interface Props {
   team: { _id?: string; id?: string; teamName?: string; name?: string };
+  proposal?: {
+    teamName?: string | null;
+    projectName?: string | null;
+    projectDescription?: string | null;
+    description?: string | null;
+  } | null;
   classInfo: { classCode?: string; subjectCode?: string; semesterCode?: string };
   onCreated: () => void | Promise<void>;
 }
@@ -83,12 +90,9 @@ function TagInput({ label, required = false, values, placeholder, error, onChang
   );
 }
 
-export default function CreateProjectWorkspaceForm({ team, classInfo, onCreated }: Props) {
-  const [draft, setDraft] = useState<ProjectWorkspaceDraft>({
-    projectName: team.teamName || team.name || '',
-    description: '',
-    keywords: [],
-  });
+export default function CreateProjectWorkspaceForm({ team, proposal, classInfo, onCreated }: Props) {
+  const creationDefaults = resolveWorkspaceCreationDefaults(team, proposal);
+  const [draft, setDraft] = useState<ProjectWorkspaceDraft>(creationDefaults.draft);
   const [errors, setErrors] = useState<ProjectWorkspaceErrors>({});
   const [submitting, setSubmitting] = useState(false);
   const teamId = String(team._id || team.id || '');
@@ -132,6 +136,11 @@ export default function CreateProjectWorkspaceForm({ team, classInfo, onCreated 
         </div>
       </div>
       <div className="grid gap-4 p-5 sm:grid-cols-2">
+        <div className="sm:col-span-2">
+          <label htmlFor="workspace-team-name" className="mb-1.5 block text-xs font-semibold text-slate-700">Team name</label>
+          <input id="workspace-team-name" value={creationDefaults.teamName} readOnly aria-readonly="true" className="w-full cursor-not-allowed rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-600 outline-none" />
+          <p className="mt-1 text-xs text-slate-400">Team name comes from the submitted team proposal.</p>
+        </div>
         <div className="sm:col-span-2">
           <label htmlFor="workspace-project-name" className="mb-1.5 block text-xs font-semibold text-slate-700">Project name <span className="text-red-500">*</span></label>
           <input id="workspace-project-name" value={draft.projectName} onChange={(event) => setField('projectName', event.target.value)} maxLength={200} className={`w-full rounded-xl border px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/15 ${errors.projectName ? 'border-red-300' : 'border-slate-200 focus:border-primary'}`} />

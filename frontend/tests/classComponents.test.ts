@@ -24,6 +24,7 @@ import {
   getProjectDirectionSubmitGuidance,
   hasUnsavedProjectDirectionChanges,
   hasProjectDirectionChanged,
+  isProjectProfileAvailable,
   updateProjectDirectionOverviewTeams,
 } from '../src/utils/projectDirectionSync.ts';
 
@@ -176,6 +177,9 @@ test('project direction live synchronization detects and announces lecturer deci
   assert.equal(getProjectDirectionDecisionNotice(submitted, approved), 'Lecturer approved your project direction.');
   assert.equal(getProjectDirectionDecisionNotice(submitted, needsRevision), 'Lecturer reviewed your project direction and requested changes.');
   assert.equal(getProjectDirectionDecisionNotice(approved, needsRevision), '');
+  assert.equal(isProjectProfileAvailable(submitted), false);
+  assert.equal(isProjectProfileAvailable(needsRevision), false);
+  assert.equal(isProjectProfileAvailable(approved), true);
 });
 
 test('project direction requires requested revisions to be changed and saved before submit', () => {

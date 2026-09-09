@@ -21,6 +21,7 @@ const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'));
 const ClassManagement = lazy(() => import('./pages/admin/ClassManagement'));
 const SubjectManagement = lazy(() => import('./pages/admin/SubjectManagement'));
 const SubjectDetail = lazy(() => import('./pages/admin/SubjectDetail'));
+const StartupIndustryManagement = lazy(() => import('./pages/admin/StartupIndustryManagement'));
 const UserManagement = lazy(() => import('./pages/admin/UserManagement'));
 const AccountApprovals = lazy(() => import('./pages/admin/AccountApprovals'));
 const LecturerDashboard = lazy(() => import('./pages/lecturer/LecturerDashboard'));
@@ -40,6 +41,7 @@ const Rankings = lazy(() => import('./pages/common/Rankings'));
 const StartupWorkspaceHub = lazy(() => import('./pages/workspace/StartupWorkspaceHub'));
 const TeamWorkspace = lazy(() => import('./pages/workspace/TeamWorkspace'));
 const ProposalEditor = lazy(() => import('./pages/workspace/ProposalEditor'));
+const ProjectProfileEditor = lazy(() => import('./pages/workspace/ProjectProfileEditor'));
 const Workshops = lazy(() => import('./pages/workshops/Workshops'));
 const DataBankPage = lazy(() => import('./features/data-bank/DataBankPage'));
 const ClassDetail = lazy(() => import('./pages/shared/ClassDetail'));
@@ -95,6 +97,7 @@ function App(): React.ReactElement {
                   <Route path="/admin/classes" element={<ProtectedRoute allowedRoles={['ADMIN']}><ClassManagement /></ProtectedRoute>} />
                   <Route path="/admin/subjects" element={<ProtectedRoute allowedRoles={['ADMIN']}><SubjectManagement /></ProtectedRoute>} />
                   <Route path="/admin/subjects/:subjectCode" element={<ProtectedRoute allowedRoles={['ADMIN']}><SubjectDetail /></ProtectedRoute>} />
+                  <Route path="/admin/startup-industries" element={<ProtectedRoute allowedRoles={['ADMIN']}><StartupIndustryManagement /></ProtectedRoute>} />
 
                   <Route path="/lecturer" element={<ProtectedRoute allowedRoles={[...classRouteAccess.lecturerArea]}><LecturerDashboard /></ProtectedRoute>} />
                   <Route path="/lecturer/classes" element={<ProtectedRoute allowedRoles={[...classRouteAccess.lecturerArea]}><LecturerClasses /></ProtectedRoute>} />
@@ -120,8 +123,11 @@ function App(): React.ReactElement {
                   <Route path="/workspace" element={<ProtectedRoute allowedRoles={['ADMIN', 'LECTURER', 'MENTOR']}><StartupWorkspaceHub /></ProtectedRoute>} />
                   <Route path="/student/workspace" element={<ProtectedRoute allowedRoles={['STUDENT']}><TeamWorkspace /></ProtectedRoute>} />
                   <Route path="/student/workspace/proposal" element={<ProtectedRoute allowedRoles={['STUDENT']}><ProposalEditor /></ProtectedRoute>} />
+                  <Route path="/student/workspace/project-profile/:teamId" element={<ProtectedRoute allowedRoles={['STUDENT']}><ProjectProfileEditor /></ProtectedRoute>} />
+                  <Route path="/student/workspace/:teamId" element={<ProtectedRoute allowedRoles={['STUDENT']}><TeamWorkspace /></ProtectedRoute>} />
                   <Route path="/workspace/teams/:teamId" element={<TeamWorkspace />} />
                   <Route path="/workspace/teams/:teamId/proposal" element={<ProposalEditor />} />
+                  <Route path="/workspace/teams/:teamId/project-profile" element={<ProjectProfileEditor />} />
 
                   <Route path="/rankings" element={<Rankings />} />
                   <Route path="/evaluations" element={<IdeaDetail />} />

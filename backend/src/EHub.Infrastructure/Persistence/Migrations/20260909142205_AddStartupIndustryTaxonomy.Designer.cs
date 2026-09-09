@@ -3,6 +3,7 @@ using System;
 using EHub.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace EHub.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260909142205_AddStartupIndustryTaxonomy")]
+    partial class AddStartupIndustryTaxonomy
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -4384,6 +4387,11 @@ namespace EHub.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("deleted_by");
 
+                    b.Property<string>("Description")
+                        .HasMaxLength(240)
+                        .HasColumnType("character varying(240)")
+                        .HasColumnName("description");
+
                     b.Property<bool>("IsDeleted")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
@@ -4498,6 +4506,43 @@ namespace EHub.Infrastructure.Persistence.Migrations
                     b.HasIndex("Status");
 
                     b.ToTable("startup_lineages", (string)null);
+                });
+
+            modelBuilder.Entity("EHub.Domain.Entities.StartupSubIndustry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<int>("DisplayOrder")
+                        .HasColumnType("integer")
+                        .HasColumnName("display_order");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("name");
+
+                    b.Property<string>("NormalizedName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("normalized_name");
+
+                    b.Property<Guid>("StartupIndustryId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("startup_industry_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StartupIndustryId", "DisplayOrder");
+
+                    b.HasIndex("StartupIndustryId", "NormalizedName")
+                        .IsUnique();
+
+                    b.ToTable("startup_sub_industries", (string)null);
                 });
 
             modelBuilder.Entity("EHub.Domain.Entities.Student", b =>
@@ -6901,6 +6946,17 @@ namespace EHub.Infrastructure.Persistence.Migrations
                     b.Navigation("OriginalProject");
                 });
 
+            modelBuilder.Entity("EHub.Domain.Entities.StartupSubIndustry", b =>
+                {
+                    b.HasOne("EHub.Domain.Entities.StartupIndustry", "StartupIndustry")
+                        .WithMany("SubIndustries")
+                        .HasForeignKey("StartupIndustryId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("StartupIndustry");
+                });
+
             modelBuilder.Entity("EHub.Domain.Entities.Student", b =>
                 {
                     b.HasOne("EHub.Domain.Entities.User", "User")
@@ -7413,6 +7469,11 @@ namespace EHub.Infrastructure.Persistence.Migrations
                     b.Navigation("Classes");
 
                     b.Navigation("StaffAssignments");
+                });
+
+            modelBuilder.Entity("EHub.Domain.Entities.StartupIndustry", b =>
+                {
+                    b.Navigation("SubIndustries");
                 });
 
             modelBuilder.Entity("EHub.Domain.Entities.Student", b =>

@@ -16,7 +16,6 @@ import CheckpointSection from '../../components/workspace/checkpoints/Checkpoint
 import WorkspaceSelector from '../../components/workspace/WorkspaceSelector';
 import ProjectDirectionCard from '../../components/workspace/ProjectDirectionCard';
 import CreateProjectWorkspaceForm from '../../components/workspace/CreateProjectWorkspaceForm';
-import ProjectWorkspaceProfile from '../../components/workspace/ProjectWorkspaceProfile';
 import { classFeatureFlags } from '../../config/classFeatureFlags';
 import { getDisplayTeamName } from '../../utils/teamDisplay';
 import { resolveWorkspaceTab, workspaceTabSearch } from '../../utils/workspaceNavigation';
@@ -157,7 +156,7 @@ export default function TeamWorkspace() {
     );
   }
 
-  const { team, class: cls, members, lecturer, mentor, proposal, latestDeck, project, activities } = data;
+  const { team, class: cls, members, lecturer, mentor, proposal, latestDeck, project } = data;
   const privilegedRoles = ['ADMIN', 'LECTURER', 'MENTOR'];
   const isTeamMember = members && members.some((member) =>
     String(member.userId?._id || member.userId || '') === String(user?._id || user?.id || ''));
@@ -190,7 +189,7 @@ export default function TeamWorkspace() {
         </div>
 
         {isTeamLeader && !isReadOnly ? (
-          <CreateProjectWorkspaceForm team={team} classInfo={cls} onCreated={() => fetchWorkspaceData(team._id)} />
+          <CreateProjectWorkspaceForm key={team._id} team={team} proposal={proposal} classInfo={cls} onCreated={() => fetchWorkspaceData(team._id)} />
         ) : (
           <div className="rounded-2xl border border-amber-200 bg-amber-50 p-8 text-center">
             <Shield className="mx-auto h-8 w-8 text-amber-500" />
@@ -275,12 +274,14 @@ export default function TeamWorkspace() {
           {/* Left Side - Proposal & Checkpoints */}
           <div className="lg:col-span-8 space-y-6">
 
-            <ProjectWorkspaceProfile project={project} classInfo={cls} activities={activities || []} />
-
             {classFeatureFlags.projectDirection && <ProjectDirectionCard
               key={team._id}
               team={team}
+              project={project}
               canEdit={!isReadOnly && isTeamLeader}
+              onOpenProjectProfile={() => navigate(user?.role === 'STUDENT'
+                ? `/student/workspace/project-profile/${team._id}`
+                : `/workspace/teams/${team._id}/project-profile`)}
             />}
 
             {/* Startup Checkpoints */}

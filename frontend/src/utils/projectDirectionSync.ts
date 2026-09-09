@@ -66,6 +66,10 @@ export const hasProjectDirectionChanged = (
   incoming?: ProjectDirectionSyncValue | null,
 ): boolean => Boolean(incoming) && revisionKey(current) !== revisionKey(incoming);
 
+export const isProjectProfileAvailable = (
+  direction?: ProjectDirectionSyncValue | null,
+): boolean => direction?.status === 'Approved';
+
 export const getProjectDirectionDecisionNotice = (
   current?: ProjectDirectionSyncValue | null,
   incoming?: ProjectDirectionSyncValue | null,

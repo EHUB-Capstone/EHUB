@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ChevronLeft, GraduationCap, Users, Mail, Loader2, LayoutGrid, Lock, UserPlus } from 'lucide-react';
+import { ArrowRight, ChevronLeft, GraduationCap, Users, Mail, Loader2, LayoutGrid, Lock, Rocket, UserPlus } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { classApi } from '../../api/classApi';
 import TeamList from '../../components/class/TeamList';
@@ -9,7 +9,7 @@ import StudentTeamGeneratePanel from '../../components/class/StudentTeamGenerate
 import TeamSuggestionTooltip from '../../components/class/TeamSuggestionTooltip';
 import { useAuth } from '../../hooks/useAuth';
 import { unwrapApiData } from '../../utils/classMappers';
-import { normalizeManagedTeam, normalizeTeamProposal, getTeamMemberIds, mergeTeamsWithLinkedProposals } from '../../utils/teamManagement';
+import { entityId, normalizeManagedTeam, normalizeTeamProposal, getTeamMemberIds, mergeTeamsWithLinkedProposals } from '../../utils/teamManagement';
 import ProjectDirectionModal from '../../components/class/ProjectDirectionModal';
 import { teamApi } from '../../api/teamApi';
 import { parseApiError } from '../../utils/apiError';
@@ -103,6 +103,9 @@ export default function StudentClassDetail() {
     && reservedProposal?._id === proposalToRevise._id
     && ['NEEDS_REVISION', 'NEEDSREVISION'].includes(String(reservedProposal.status || '').toUpperCase()),
   );
+  const reservedProposalStatus = String(reservedProposal?.status || '').toUpperCase();
+  const reservedProposalTeamId = entityId(reservedProposal?.approvedTeamId);
+  const isPendingProjectProposal = reservedProposalStatus === 'PENDING' && Boolean(reservedProposalTeamId);
   const selectionDisabled = isReadOnly
     || (hasTeam && !canEditReservedProposal)
     || Boolean(reservedProposal && !canEditReservedProposal);
@@ -228,9 +231,26 @@ export default function StudentClassDetail() {
       )}
 
       {!isReadOnly && reservedProposal && !canEditReservedProposal && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          <p className="font-semibold">Your {reservedProposal.approvedTeamId ? 'project' : 'team'} proposal is {String(reservedProposal.status || 'pending').replaceAll('_', ' ').toLowerCase()}.</p>
-          <p className="mt-0.5 text-xs text-amber-700">{reservedProposal.approvedTeamId ? 'Your team is already active. Only the project proposal is awaiting review.' : 'You cannot join another proposal while this one is open.'} View it in the Class Teams tab.</p>
+        <div className="flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="font-semibold">Your {reservedProposal.approvedTeamId ? 'project' : 'team'} proposal is {String(reservedProposal.status || 'pending').replaceAll('_', ' ').toLowerCase()}.</p>
+            <p className="mt-0.5 text-xs text-amber-700">
+              {isPendingProjectProposal
+                ? 'Your team is already active. Only the project proposal is awaiting review. The Team Leader should create the project workspace next; every team member can open the Startup Workspace to follow the team’s progress.'
+                : reservedProposal.approvedTeamId
+                  ? 'Your team is already active. Check the proposal status and lecturer feedback in the Class Teams tab.'
+                  : 'You cannot join another proposal while this one is open. View it in the Class Teams tab.'}
+            </p>
+          </div>
+          {isPendingProjectProposal && (
+            <button
+              type="button"
+              onClick={() => navigate(`/student/workspace/${reservedProposalTeamId}`)}
+              className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-amber-700 px-3.5 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-amber-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/30"
+            >
+              <Rocket className="h-4 w-4" /> Open Startup Workspace <ArrowRight className="h-3.5 w-3.5" />
+            </button>
+          )}
         </div>
       )}
 

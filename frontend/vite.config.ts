@@ -6,6 +6,10 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 5173,
+    headers: {
+      // Google Sign-In's popup returns the credential via window.postMessage.
+      'Cross-Origin-Opener-Policy': 'same-origin-allow-popups',
+    },
     // proxy API requests to backend
     proxy: {
       '/api': {
@@ -14,5 +18,10 @@ export default defineConfig({
         ws: true,
       }
     }
-  }
+  },
+  preview: {
+    headers: {
+      'Cross-Origin-Opener-Policy': 'same-origin-allow-popups',
+    },
+  },
 })

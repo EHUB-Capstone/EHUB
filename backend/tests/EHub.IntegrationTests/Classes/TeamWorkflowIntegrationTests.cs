@@ -491,12 +491,45 @@ public sealed class TeamWorkflowIntegrationTests
             new SubmitTeamProposalRequest { RowVersion = updated.Value.RowVersion }, seed.ProposerUserId, SystemRoles.Student);
         submitted.IsSuccess.Should().BeTrue();
         context.ChangeTracker.Clear();
+
+        var leaderUserId = await context.Students.AsNoTracking()
+            .Where(student => student.Id == seed.StudentIds[1])
+            .Select(student => student.UserId)
+            .SingleAsync();
+        leaderUserId.Should().NotBeNull();
+        var workspaceHandler = new ProjectWorkspaceHandler(
+            context,
+            scope.ServiceProvider.GetRequiredService<EHub.Application.Common.Interfaces.Persistence.IUnitOfWork>());
+        var workspaceDetail = await workspaceHandler.GetDetailAsync(
+            createdTeam.Id,
+            leaderUserId.Value,
+            SystemRoles.Student);
+        workspaceDetail.IsSuccess.Should().BeTrue();
+        workspaceDetail.Value.Team.TeamName.Should().Be("Student Venture Team");
+        workspaceDetail.Value.Proposal.Should().NotBeNull();
+        workspaceDetail.Value.Proposal!.ProjectName.Should().Be("Revised Venture Project");
+        workspaceDetail.Value.Proposal.ProjectDescription.Should().Be("A clarified project scope for the existing student team.");
+
+        var workspace = await workspaceHandler.CreateAsync(createdTeam.Id, new CreateProjectWorkspaceRequest
+            {
+                ProjectName = workspaceDetail.Value.Proposal.ProjectName,
+                Description = workspaceDetail.Value.Proposal.ProjectDescription,
+                Keywords = new[] { "startup" }
+            }, leaderUserId!.Value, SystemRoles.Student);
+        workspace.IsSuccess.Should().BeTrue($"{workspace.Error.Code}: {workspace.Error.Message}");
+        context.ChangeTracker.Clear();
+
         var approved = await handler.ReviewAsync(result.Value.Id,
             new ReviewTeamProposalRequest { Decision = "Approved", RowVersion = submitted.Value.RowVersion }, seed.LecturerId, SystemRoles.Lecturer);
         approved.IsSuccess.Should().BeTrue($"{approved.Error.Code}: {approved.Error.Message}");
         context.ChangeTracker.Clear();
         (await context.Teams.CountAsync(team => team.ClassId == seed.ClassId)).Should().Be(1);
-        (await context.Projects.SingleAsync(project => project.TeamId == createdTeam.Id)).Name.Should().Be("Revised Venture Project");
+        var approvedProject = await context.Projects
+            .Include(project => project.ProjectTags)
+            .SingleAsync(project => project.TeamId == createdTeam.Id);
+        approvedProject.Name.Should().Be("Revised Venture Project");
+        approvedProject.Description.Should().Be("A clarified project scope for the existing student team.");
+        approvedProject.ProjectTags.Should().ContainSingle(tag => tag.TagName == "startup");
     }
 
     [Theory]
@@ -772,26 +805,65 @@ public sealed class TeamWorkflowIntegrationTests
             .IsSuccess.Should().BeTrue();
         context.ChangeTracker.Clear();
 
+        var invalid = await handler.UpdateAsync(
+            seed.TeamId.Value,
+            new UpdateProjectWorkspaceRequest
+            {
+                ProjectName = "X",
+                Description = "Too short",
+                Problem = "Too short",
+                Solution = "Too short",
+                TargetUsers = string.Empty
+            },
+            seed.ProposerUserId,
+            SystemRoles.Student);
+        invalid.IsFailure.Should().BeTrue();
+        invalid.Error.Code.Should().Be(ErrorCodes.WorkspaceValidationError);
+
         var updated = await handler.UpdateAsync(
             seed.TeamId.Value,
             new UpdateProjectWorkspaceRequest
             {
                 ProjectName = "Campus Circular Hub",
                 Description = "The latest student marketplace profile for safe campus equipment reuse.",
+                Problem = "Students cannot reliably find safe ways to reuse equipment across campus.",
+                Solution = "A verified marketplace connects students and supports trustworthy exchanges.",
+                TargetUsers = "University students and student clubs",
                 Keywords = new[] { "campus", "reuse" }
             },
             seed.ProposerUserId,
             SystemRoles.Student);
         updated.IsSuccess.Should().BeTrue($"workspace update failed with {updated.Error.Code}: {updated.Error.Message}");
+        updated.Value.Problem.Should().Contain("reuse equipment");
+        updated.Value.Solution.Should().Contain("verified marketplace");
+        updated.Value.TargetUsers.Should().Be("University students and student clubs");
 
         context.ChangeTracker.Clear();
         var memberUserId = (await context.Students.AsNoTracking()
             .Where(student => student.Id == seed.StudentIds[1])
             .Select(student => student.UserId)
             .SingleAsync())!.Value;
+        var memberUpdate = await handler.UpdateAsync(
+            seed.TeamId.Value,
+            new UpdateProjectWorkspaceRequest
+            {
+                ProjectName = updated.Value.ProjectName,
+                Description = updated.Value.Description,
+                Problem = updated.Value.Problem,
+                Solution = updated.Value.Solution,
+                TargetUsers = updated.Value.TargetUsers,
+                Keywords = updated.Value.Keywords
+            },
+            memberUserId,
+            SystemRoles.Student);
+        memberUpdate.IsFailure.Should().BeTrue();
+        memberUpdate.Error.Code.Should().Be(ErrorCodes.WorkspaceLeaderRequired);
+
+        context.ChangeTracker.Clear();
         var detail = await handler.GetDetailAsync(seed.TeamId.Value, memberUserId, SystemRoles.Student);
         detail.IsSuccess.Should().BeTrue();
         detail.Value.Project!.ProjectName.Should().Be("Campus Circular Hub");
+        detail.Value.Project.TargetUsers.Should().Be("University students and student clubs");
         detail.Value.Class.Id.Should().Be(seed.ClassId);
         detail.Value.Class.SubjectId.Should().NotBeEmpty();
         detail.Value.Class.SemesterId.Should().NotBeEmpty();
