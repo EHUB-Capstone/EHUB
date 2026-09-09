@@ -826,6 +826,66 @@ function registerSubjectHandlers(mock: MockAdapter): void {
   });
 }
 
+function registerStartupIndustryHandlers(mock: MockAdapter): void {
+  mock.onGet('/startup-industries').reply((config) => {
+    const params = requestParams(config);
+    const query = asString(params.search).trim().toLowerCase();
+    const status = asString(params.status).trim().toLowerCase();
+    const sort = asString(params.sort, 'name-asc').trim().toLowerCase();
+    const industries = getMockState().startupIndustries
+      .filter((industry) => (
+        (!status || industry.status === status)
+        && (!query || industry.name.toLowerCase().includes(query))
+      ))
+      .sort((left, right) => {
+        const comparison = left.name.localeCompare(right.name);
+        return sort === 'name-desc' ? -comparison : comparison;
+      });
+    return ok({ industries }, 'Startup industries retrieved successfully.');
+  });
+
+  mock.onPost('/startup-industries').reply((config) => {
+    const body = parseBody(config);
+    const name = asString(body.name).trim();
+    if (!name) return failure(400, 'COMMON_VALIDATION_ERROR', 'Industry name is required.');
+    if (getMockState().startupIndustries.some((item) => item.name.toLowerCase() === name.toLowerCase())) {
+      return failure(409, 'STARTUP_INDUSTRY_NAME_EXISTS', 'An industry with this name already exists.');
+    }
+    const industry = {
+      id: allocateId(),
+      name,
+      status: asString(body.status, 'active').toLowerCase() === 'inactive' ? 'inactive' as const : 'active' as const,
+    };
+    getMockState().startupIndustries.push(industry);
+    persistMockState();
+    return created(industry, 'Startup industry created successfully.');
+  });
+
+  mock.onPut(/^\/startup-industries\/[^/]+\/status$/).reply((config) => {
+    const id = routeId(config, /^\/startup-industries\/([^/]+)\/status$/);
+    const industry = getMockState().startupIndustries.find((item) => item.id === id);
+    if (!industry) return failure(404, 'STARTUP_INDUSTRY_NOT_FOUND', 'Startup industry was not found.');
+    industry.status = asString(parseBody(config).status).toLowerCase() === 'inactive' ? 'inactive' : 'active';
+    persistMockState();
+    return ok(industry, 'Startup industry status updated successfully.');
+  });
+
+  mock.onPut(/^\/startup-industries\/[^/]+$/).reply((config) => {
+    const id = routeId(config, /^\/startup-industries\/([^/]+)$/);
+    const industry = getMockState().startupIndustries.find((item) => item.id === id);
+    if (!industry) return failure(404, 'STARTUP_INDUSTRY_NOT_FOUND', 'Startup industry was not found.');
+    const body = parseBody(config);
+    const name = asString(body.name).trim();
+    if (getMockState().startupIndustries.some((item) => item.id !== id && item.name.toLowerCase() === name.toLowerCase())) {
+      return failure(409, 'STARTUP_INDUSTRY_NAME_EXISTS', 'An industry with this name already exists.');
+    }
+    industry.name = name;
+    industry.status = asString(body.status, industry.status).toLowerCase() === 'inactive' ? 'inactive' : 'active';
+    persistMockState();
+    return ok(industry, 'Startup industry updated successfully.');
+  });
+}
+
 function saveRoadmap(config: AxiosRequestConfig, update: boolean) {
   const pattern = update ? /^\/subjects\/([^/]+)\/roadmap\/([^/]+)$/ : /^\/subjects\/([^/]+)\/roadmap$/;
   const match = config.url?.match(pattern);
@@ -1032,5 +1092,6 @@ export function registerCoreMockHandlers(mock: MockAdapter): void {
   registerAuthHandlers(mock);
   registerUserHandlers(mock);
   registerSubjectHandlers(mock);
+  registerStartupIndustryHandlers(mock);
   registerDashboardHandlers(mock);
 }

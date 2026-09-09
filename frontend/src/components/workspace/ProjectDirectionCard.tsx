@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { FileText, Loader2, Save, Send } from 'lucide-react';
+import { ArrowRight, FileText, FolderKanban, Loader2, Save, Send } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { teamApi } from '../../api/teamApi';
 import { unwrapApiData } from '../../utils/classMappers';
@@ -11,10 +11,11 @@ import {
   getProjectDirectionSubmitGuidance,
   hasUnsavedProjectDirectionChanges,
   hasProjectDirectionChanged,
+  isProjectProfileAvailable,
 } from '../../utils/projectDirectionSync';
 import { subscribeProjectDirectionRealtime } from '../../api/projectDirectionRealtime';
 
-export default function ProjectDirectionCard({ team, canEdit }) {
+export default function ProjectDirectionCard({ team, project, canEdit, onOpenProjectProfile }) {
   const [direction, setDirection] = useState(null);
   const [title, setTitle] = useState('');
   const [summary, setSummary] = useState('');
@@ -123,6 +124,34 @@ export default function ProjectDirectionCard({ team, canEdit }) {
   const canSubmit = canSubmitProjectDirection(direction, title, summary);
   const submitGuidance = getProjectDirectionSubmitGuidance(direction, title, summary);
   const latestReview = direction?.reviews?.[0];
+
+  if (!loading && isProjectProfileAvailable(direction)) {
+    return (
+      <button type="button" onClick={onOpenProjectProfile} className="group w-full overflow-hidden rounded-2xl border border-emerald-200 bg-white text-left shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-300 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-emerald-300">
+        <div className="flex items-start justify-between gap-4 border-b border-emerald-100 bg-emerald-50/60 px-6 py-4">
+          <div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700"><FolderKanban className="h-5 w-5" /></span><div><h2 className="text-lg font-bold text-slate-800">Project Profile</h2><p className="mt-0.5 text-xs text-slate-500">Keep the approved project information clear, complete, and up to date.</p></div></div>
+          <span className="rounded-full border border-emerald-200 bg-white px-2.5 py-1 text-xs font-semibold text-emerald-700">Approved</span>
+        </div>
+        <div className="px-6 py-5">
+          <div className="flex items-start justify-between gap-4"><div className="min-w-0"><h3 className="truncate font-semibold text-slate-900">{project?.projectName || direction.title}</h3><p className="mt-1 line-clamp-2 text-sm leading-6 text-slate-600">{project?.description || direction.summary}</p></div><ArrowRight className="mt-1 h-5 w-5 shrink-0 text-slate-400 transition group-hover:translate-x-1 group-hover:text-emerald-600" /></div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-3">
+            {[
+              ['Problem', project?.problem],
+              ['Solution', project?.solution],
+              ['Target users', project?.targetUsers],
+            ].map(([label, value]) => (
+              <div key={label} className="rounded-xl border border-slate-100 bg-slate-50/70 px-3 py-2.5">
+                <p className="text-xs font-bold uppercase tracking-wide text-slate-500">{label}</p>
+                <p className="mt-1 line-clamp-2 text-sm leading-5 text-slate-700">{value || 'Not documented yet.'}</p>
+              </div>
+            ))}
+          </div>
+          <p className="mt-3 text-xs font-semibold text-emerald-700">Open the profile to view details{canEdit ? ' or update it' : ''}</p>
+        </div>
+      </button>
+    );
+  }
+
   return (
     <section className="rounded-2xl border border-slate-200/60 bg-white p-6 shadow-sm">
       <div className="flex items-start justify-between gap-4 border-b border-slate-100 pb-4">

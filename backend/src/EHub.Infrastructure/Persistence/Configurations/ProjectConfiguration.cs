@@ -38,6 +38,10 @@ public class ProjectConfiguration : IEntityTypeConfiguration<Project>
             .HasColumnName("solution")
             .HasMaxLength(2000);
 
+        builder.Property(p => p.TargetUsers)
+            .HasColumnName("target_users")
+            .HasMaxLength(2000);
+
         builder.Property(p => p.StartupField)
             .HasColumnName("startup_field")
             .HasMaxLength(100);

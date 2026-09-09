@@ -23,6 +23,7 @@ public class AppDbContext : DbContext, IApplicationDbContext
     public DbSet<SemesterAuditLog> SemesterAuditLogs => Set<SemesterAuditLog>();
     public DbSet<SemesterStaffAssignment> SemesterStaffAssignments => Set<SemesterStaffAssignment>();
     public DbSet<Course> Courses => Set<Course>();
+    public DbSet<StartupIndustry> StartupIndustries => Set<StartupIndustry>();
     public DbSet<Class> Classes => Set<Class>();
     public DbSet<ClassLecturer> ClassLecturers => Set<ClassLecturer>();
     public DbSet<ClassAuditLog> ClassAuditLogs => Set<ClassAuditLog>();

@@ -5,7 +5,7 @@ import { cn } from '../../utils/cn';
 import logo from '../../assets/logo.png';
 import {
   LayoutDashboard, Users, GraduationCap, Trophy, CalendarDays,
-  Kanban, Brain, Video, Rocket, LogOut, Plus, X, MessageSquare, Database, BookOpen, ShieldCheck
+  Kanban, Brain, Video, Rocket, LogOut, Plus, X, MessageSquare, Database, BookOpen, ShieldCheck, Factory
 } from 'lucide-react';
 import { classFeatureFlags } from '../../config/classFeatureFlags';
 
@@ -25,6 +25,7 @@ const iconMap: Record<string, LucideIcon> = {
   chat: MessageSquare,
   database: Database,
   book_open: BookOpen,
+  factory: Factory,
   account_approval: ShieldCheck,
 };
 
@@ -59,6 +60,7 @@ const Sidebar = ({ mobileOpen, onMobileClose }: SidebarProps) => {
     ADMIN: [
       { path: '/admin', icon: 'dashboard', label: 'Overview' },
       { path: '/admin/subjects', icon: 'book_open', label: 'Subject Management' },
+      { path: '/admin/startup-industries', icon: 'factory', label: 'Startup Industry Management' },
       { path: '/admin/users', icon: 'group', label: 'Users' },
       { path: '/admin/account-approvals', icon: 'account_approval', label: 'Account Approvals' },
       { path: '/admin/classes', icon: 'school', label: 'Classes' },

@@ -36,6 +36,12 @@ export interface MockSubject {
   status: 'active' | 'disabled';
 }
 
+export interface MockStartupIndustry {
+  id: string;
+  name: string;
+  status: 'active' | 'inactive';
+}
+
 export interface MockSemester {
   id: string;
   semester: 'SP' | 'SU' | 'FA';
@@ -147,6 +153,9 @@ export interface MockTeam {
   description: string | null;
   projectName?: string | null;
   projectDescription?: string | null;
+  projectProblem?: string | null;
+  projectSolution?: string | null;
+  projectTargetUsers?: string | null;
   keywords?: string[];
   projectCreatedAtUtc?: string | null;
   projectUpdatedAtUtc?: string | null;
@@ -253,6 +262,7 @@ export interface MockApiState {
   semesterStaffAssignments: MockSemesterStaffAssignment[];
   users: MockUser[];
   subjects: MockSubject[];
+  startupIndustries: MockStartupIndustry[];
   curricula: Record<string, MockCurriculum>;
   classes: MockClass[];
   rosters: Record<string, MockRosterStudent[]>;
@@ -312,6 +322,13 @@ const subjects: MockSubject[] = [
   { _id: id(102), subjectCode: 'SSG104', subjectName: 'Startup Project Development', status: 'active' },
   { _id: id(103), subjectCode: 'BUS101', subjectName: 'Business Fundamentals', status: 'active' },
   { _id: id(104), subjectCode: 'LEGACY01', subjectName: 'Legacy Incubation Lab', status: 'disabled' },
+];
+
+const startupIndustries: MockStartupIndustry[] = [
+  { id: id(111), name: 'Technology & Software', status: 'active' },
+  { id: id(112), name: 'Education & EdTech', status: 'active' },
+  { id: id(113), name: 'Healthcare & Wellness', status: 'active' },
+  { id: id(114), name: 'Agriculture & FoodTech', status: 'inactive' },
 ];
 
 const curriculumFor = (subject: MockSubject): MockCurriculum => ({
@@ -419,6 +436,7 @@ const initialMockState: MockApiState = {
     semesterStaffAssignments,
     users,
     subjects,
+    startupIndustries,
     curricula: Object.fromEntries(subjects.map((subject) => [subject.subjectCode, curriculumFor(subject)])),
     classes,
     rosters: { [classIds.active]: activeRoster, [classIds.draft]: draftRoster, [classIds.archived]: archivedRoster },

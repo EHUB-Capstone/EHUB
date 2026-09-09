@@ -554,18 +554,30 @@ public sealed class TeamProposalHandler : ITeamProposalHandler
                         proposal.ApprovedTeam = team;
                     }
 
-                    if (await _context.Projects.AnyAsync(item => item.TeamId == team.Id, transactionCancellationToken))
-                        return Failure(ErrorCodes.TeamProposalStateInvalid, "This team already has a project.");
-                    _context.Projects.Add(new Project
+                    var project = await _context.Projects
+                        .FirstOrDefaultAsync(item => item.TeamId == team.Id, transactionCancellationToken);
+                    if (project == null)
                     {
-                        TeamId = team.Id,
-                        Team = team,
-                        Name = proposal.ProjectName ?? proposal.TeamName,
-                        Description = proposal.Description,
-                        Status = ProjectStatus.Draft,
-                        CreatedById = userId,
-                        CreatedBy = userId
-                    });
+                        _context.Projects.Add(new Project
+                        {
+                            TeamId = team.Id,
+                            Team = team,
+                            Name = proposal.ProjectName ?? proposal.TeamName,
+                            Description = proposal.Description,
+                            Status = ProjectStatus.Draft,
+                            CreatedById = userId,
+                            CreatedBy = userId
+                        });
+                    }
+                    else
+                    {
+                        // A team leader can create the workspace while the project proposal is pending.
+                        // Approval makes the reviewed proposal text canonical without replacing the workspace.
+                        project.Name = proposal.ProjectName ?? proposal.TeamName;
+                        project.Description = proposal.Description;
+                        project.UpdatedAt = now;
+                        project.UpdatedBy = userId;
+                    }
                 }
 
                 proposal.Status = decision;

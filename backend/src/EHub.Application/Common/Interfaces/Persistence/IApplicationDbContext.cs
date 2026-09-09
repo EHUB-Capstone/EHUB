@@ -16,6 +16,7 @@ public interface IApplicationDbContext
     DbSet<SemesterAuditLog> SemesterAuditLogs { get; }
     DbSet<SemesterStaffAssignment> SemesterStaffAssignments { get; }
     DbSet<Course> Courses { get; }
+    DbSet<StartupIndustry> StartupIndustries { get; }
     DbSet<Class> Classes { get; }
     DbSet<ClassLecturer> ClassLecturers { get; }
     DbSet<ClassAuditLog> ClassAuditLogs { get; }

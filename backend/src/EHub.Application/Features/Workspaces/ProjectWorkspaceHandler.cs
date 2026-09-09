@@ -83,7 +83,9 @@ public sealed class ProjectWorkspaceHandler : IProjectWorkspaceHandler
         var query = AccessibleTeamQuery(userId, role);
         if (query == null)
             return Failure<ProjectWorkspaceDetailDto>(ErrorCodes.WorkspaceAccessDenied, "You do not have access to project workspaces.");
-        var team = await query.FirstOrDefaultAsync(item => item.Id == teamId, cancellationToken);
+        var team = await query
+            .Include(item => item.ApprovedProposals)
+            .FirstOrDefaultAsync(item => item.Id == teamId, cancellationToken);
         if (team == null)
             return Failure<ProjectWorkspaceDetailDto>(ErrorCodes.WorkspaceAccessDenied, "You do not have access to this team workspace.");
         return Result.Success(MapDetail(team));
@@ -184,7 +186,7 @@ public sealed class ProjectWorkspaceHandler : IProjectWorkspaceHandler
         if (!IsRole(role, SystemRoles.Student))
             return Failure<ProjectWorkspaceDto>(ErrorCodes.WorkspaceAccessDenied, "Only the active team leader can update the project profile.");
 
-        var validation = Validate(request.ProjectName, request.Description, request.Keywords);
+        var validation = ValidateProfile(request);
         if (validation != null) return Result.Failure<ProjectWorkspaceDto>(validation);
         var keywords = NormalizeTags(request.Keywords ?? Array.Empty<string>());
 
@@ -213,14 +215,23 @@ public sealed class ProjectWorkspaceHandler : IProjectWorkspaceHandler
                 var project = team.Project;
                 var nextName = (request.ProjectName ?? string.Empty).Trim();
                 var nextDescription = (request.Description ?? string.Empty).Trim();
+                var nextProblem = (request.Problem ?? string.Empty).Trim();
+                var nextSolution = (request.Solution ?? string.Empty).Trim();
+                var nextTargetUsers = (request.TargetUsers ?? string.Empty).Trim();
                 var changedFields = new List<string>();
                 if (!string.Equals(project.Name, nextName, StringComparison.Ordinal)) changedFields.Add("projectName");
                 if (!string.Equals(project.Description ?? string.Empty, nextDescription, StringComparison.Ordinal)) changedFields.Add("description");
+                if (!string.Equals(project.Problem ?? string.Empty, nextProblem, StringComparison.Ordinal)) changedFields.Add("problem");
+                if (!string.Equals(project.Solution ?? string.Empty, nextSolution, StringComparison.Ordinal)) changedFields.Add("solution");
+                if (!string.Equals(project.TargetUsers ?? string.Empty, nextTargetUsers, StringComparison.Ordinal)) changedFields.Add("targetUsers");
                 if (!SameTags(project.ProjectTags, ProjectTagType.Keyword, keywords)) changedFields.Add("keywords");
                 if (changedFields.Count == 0) return Result.Success(MapProject(project, team));
 
                 project.Name = nextName;
                 project.Description = nextDescription;
+                project.Problem = nextProblem;
+                project.Solution = nextSolution;
+                project.TargetUsers = nextTargetUsers;
                 project.UpdatedBy = userId;
                 var now = DateTime.UtcNow;
                 SyncTags(project, ProjectTagType.Keyword, keywords, userId, now);
@@ -294,6 +305,19 @@ public sealed class ProjectWorkspaceHandler : IProjectWorkspaceHandler
         return ValidateTags(keywords ?? Array.Empty<string>(), "keyword");
     }
 
+    private static Error? ValidateProfile(UpdateProjectWorkspaceRequest request)
+    {
+        var commonValidation = Validate(request.ProjectName, request.Description, request.Keywords);
+        if (commonValidation != null) return commonValidation;
+        if ((request.Problem ?? string.Empty).Trim().Length is < 20 or > 2_000)
+            return new Error(ErrorCodes.WorkspaceValidationError, "Project problem must be between 20 and 2000 characters.");
+        if ((request.Solution ?? string.Empty).Trim().Length is < 20 or > 2_000)
+            return new Error(ErrorCodes.WorkspaceValidationError, "Project solution must be between 20 and 2000 characters.");
+        if ((request.TargetUsers ?? string.Empty).Trim().Length is < 3 or > 2_000)
+            return new Error(ErrorCodes.WorkspaceValidationError, "Target users must be between 3 and 2000 characters.");
+        return null;
+    }
+
     private static Error? ValidateTags(IReadOnlyCollection<string> values, string label)
     {
         if (values.Count > MaximumTagsPerType)
@@ -328,6 +352,7 @@ public sealed class ProjectWorkspaceHandler : IProjectWorkspaceHandler
     private static string ToDisplayField(string field) => field switch
     {
         "projectName" => "project name",
+        "targetUsers" => "target users",
         _ => field
     };
 
@@ -389,6 +414,9 @@ public sealed class ProjectWorkspaceHandler : IProjectWorkspaceHandler
             assignment.Status == MentorAssignmentStatus.Active && assignment.EndedAt == null);
         var leader = team.TeamMembers.FirstOrDefault(member =>
             member.CountsTowardActiveTeam && member.RoleInTeam == TeamMemberRole.Leader);
+        var proposal = team.ApprovedProposals
+            .OrderByDescending(item => item.CreatedAt)
+            .FirstOrDefault();
         return new ProjectWorkspaceDetailDto
         {
             Team = new WorkspaceTeamDto
@@ -432,6 +460,14 @@ public sealed class ProjectWorkspaceHandler : IProjectWorkspaceHandler
                 Name = activeMentor.MentorProfile.User.FullName,
                 Email = activeMentor.MentorProfile.User.Email
             },
+            Proposal = proposal == null ? null : new WorkspaceProjectProposalDto
+            {
+                Id = proposal.Id,
+                TeamName = proposal.TeamName,
+                ProjectName = proposal.ProjectName ?? proposal.TeamName,
+                ProjectDescription = proposal.Description ?? string.Empty,
+                Status = proposal.Status.ToString()
+            },
             Project = team.Project == null ? null : MapProject(team.Project, team),
             Activities = team.Project?.ActivityLogs
                 .OrderByDescending(activity => activity.OccurredAtUtc)
@@ -449,6 +485,9 @@ public sealed class ProjectWorkspaceHandler : IProjectWorkspaceHandler
         SemesterId = team.Class.SemesterId,
         ProjectName = project.Name,
         Description = project.Description ?? string.Empty,
+        Problem = project.Problem ?? string.Empty,
+        Solution = project.Solution ?? string.Empty,
+        TargetUsers = project.TargetUsers ?? string.Empty,
         Keywords = project.ProjectTags.Where(tag => tag.TagType == ProjectTagType.Keyword).Select(tag => tag.TagName).ToArray(),
         Status = project.Status.ToString(),
         CreatedAtUtc = project.CreatedAt,

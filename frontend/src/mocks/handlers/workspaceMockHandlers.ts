@@ -109,11 +109,13 @@ function workspaceData(teamId: string) {
   const lecturer = state.users.find((user) => user.id === cls.primaryLecturerId) || null;
   const mentorUserId = team.currentMentorAssignment?.mentor.userId;
   const mentor = mentorUserId ? state.users.find((user) => user.id === mentorUserId) || null : null;
+  const proposal = state.proposals.find((item) => item.approvedTeamId === teamId) || null;
   const projectCreatedAtUtc = team.projectCreatedAtUtc || '2026-08-20T08:00:00.000Z';
   const members = team.members.map((member) => {
     const user = state.users.find((item) => item.id === member.studentId);
     return {
       _id: member.studentId,
+      studentId: member.studentId,
       userId: user ? { _id: user.id, name: user.name, email: user.email } : { _id: member.studentId },
       fullName: member.fullName,
       email: member.email,
@@ -151,6 +153,9 @@ function workspaceData(teamId: string) {
       semesterId: cls.semesterId,
       projectName: team.projectName,
       description: team.projectDescription || team.description || '',
+      problem: team.projectProblem || '',
+      solution: team.projectSolution || '',
+      targetUsers: team.projectTargetUsers || '',
       keywords: team.keywords || [],
       status: 'Draft',
       createdAtUtc: projectCreatedAtUtc,
@@ -165,7 +170,14 @@ function workspaceData(teamId: string) {
       changedFields: ['projectName', 'description', 'keywords'],
       occurredAtUtc: projectCreatedAtUtc,
     }] : []),
-    proposal: { _id: uuid(1101), status: 'SUBMITTED', projectName: 'CampusLink' },
+    proposal: proposal ? {
+      id: proposal.id,
+      _id: proposal.id,
+      teamName: proposal.teamName,
+      projectName: proposal.projectName || proposal.teamName,
+      projectDescription: proposal.description || '',
+      status: proposal.status,
+    } : null,
     latestDeck: { _id: uuid(1102), originalName: 'Phoenix-Founders-Pitch.pdf' },
   };
 }
@@ -428,7 +440,7 @@ export function registerWorkspaceMockHandlers(mock: MockAdapter): void {
     const project = {
       _id: uuid(1601), teamId, classId: team.classId, subjectId: classByTeam(teamId)!.courseId,
       semesterId: classByTeam(teamId)!.semesterId, projectName, description,
-      keywords, status: 'Draft', createdAtUtc, updatedAtUtc: null,
+      problem: '', solution: '', targetUsers: '', keywords, status: 'Draft', createdAtUtc, updatedAtUtc: null,
     };
     return ok(project, 'Project workspace created.');
   });
@@ -447,18 +459,31 @@ export function registerWorkspaceMockHandlers(mock: MockAdapter): void {
     const body = parseBody(config);
     const projectName = String(body.projectName || '').trim();
     const description = String(body.description || '').trim();
+    const problem = String(body.problem || '').trim();
+    const solution = String(body.solution || '').trim();
+    const targetUsers = String(body.targetUsers || '').trim();
     const keywords = Array.isArray(body.keywords) ? body.keywords.map(String) : [];
-    if (projectName.length < 3 || description.length < 20) {
+    if (projectName.length < 3 || projectName.length > 200
+      || description.length < 20 || description.length > 2000
+      || problem.length < 20 || problem.length > 2000
+      || solution.length < 20 || solution.length > 2000
+      || targetUsers.length < 3 || targetUsers.length > 2000) {
       return failure(400, 'WORKSPACE_VALIDATION_ERROR', 'Required project workspace information is missing or invalid.');
     }
     const changedFields = [
       team.projectName !== projectName && 'projectName',
       (team.projectDescription || '') !== description && 'description',
+      (team.projectProblem || '') !== problem && 'problem',
+      (team.projectSolution || '') !== solution && 'solution',
+      (team.projectTargetUsers || '') !== targetUsers && 'targetUsers',
       JSON.stringify(team.keywords || []) !== JSON.stringify(keywords) && 'keywords',
     ].filter(Boolean) as string[];
 
     team.projectName = projectName;
     team.projectDescription = description;
+    team.projectProblem = problem;
+    team.projectSolution = solution;
+    team.projectTargetUsers = targetUsers;
     team.keywords = keywords;
     if (changedFields.length > 0) {
       const occurredAtUtc = new Date().toISOString();

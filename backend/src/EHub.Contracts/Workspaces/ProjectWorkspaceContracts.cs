@@ -11,6 +11,9 @@ public sealed class UpdateProjectWorkspaceRequest
 {
     public string ProjectName { get; init; } = string.Empty;
     public string Description { get; init; } = string.Empty;
+    public string Problem { get; init; } = string.Empty;
+    public string Solution { get; init; } = string.Empty;
+    public string TargetUsers { get; init; } = string.Empty;
     public IReadOnlyCollection<string> Keywords { get; init; } = Array.Empty<string>();
 }
 
@@ -23,6 +26,9 @@ public sealed class ProjectWorkspaceDto
     public Guid SemesterId { get; init; }
     public string ProjectName { get; init; } = string.Empty;
     public string Description { get; init; } = string.Empty;
+    public string Problem { get; init; } = string.Empty;
+    public string Solution { get; init; } = string.Empty;
+    public string TargetUsers { get; init; } = string.Empty;
     public IReadOnlyCollection<string> Keywords { get; init; } = Array.Empty<string>();
     public string Status { get; init; } = string.Empty;
     public DateTime CreatedAtUtc { get; init; }
@@ -79,6 +85,15 @@ public sealed class WorkspacePersonDto
     public string Email { get; init; } = string.Empty;
 }
 
+public sealed class WorkspaceProjectProposalDto
+{
+    public Guid Id { get; init; }
+    public string TeamName { get; init; } = string.Empty;
+    public string ProjectName { get; init; } = string.Empty;
+    public string ProjectDescription { get; init; } = string.Empty;
+    public string Status { get; init; } = string.Empty;
+}
+
 public sealed class ProjectWorkspaceDetailDto
 {
     public WorkspaceTeamDto Team { get; init; } = new();
@@ -86,6 +101,7 @@ public sealed class ProjectWorkspaceDetailDto
     public IReadOnlyCollection<WorkspaceMemberDto> Members { get; init; } = Array.Empty<WorkspaceMemberDto>();
     public WorkspacePersonDto? Lecturer { get; init; }
     public WorkspacePersonDto? Mentor { get; init; }
+    public WorkspaceProjectProposalDto? Proposal { get; init; }
     public ProjectWorkspaceDto? Project { get; init; }
     public IReadOnlyCollection<ProjectActivityDto> Activities { get; init; } = Array.Empty<ProjectActivityDto>();
 }
