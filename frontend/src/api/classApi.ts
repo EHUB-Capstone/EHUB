@@ -95,13 +95,9 @@ export const classApi = {
   // ─── Teams ───────────────────────────────────────────────────────────────
   getTeams:      (classId) => runClassFeatureRequest(classFeatureFlags.teamManagement, 'Class team management', () =>
     axiosClient.get(`/classes/${classId}/teams`)),
-  createTeam:  (classId, data) => runClassFeatureRequest(classFeatureFlags.teamManagement, 'Class team management', () =>
-    axiosClient.post(`/classes/${classId}/teams`, data)),
-  generateTeam: (classId, data) => runClassFeatureRequest(classFeatureFlags.teamManagement, 'Class team management', () =>
-    axiosClient.post(`/classes/${classId}/teams/generate`, data)),
   getTeamProposals: (classId) => runClassFeatureRequest(classFeatureFlags.teamManagement, 'Class team management', () =>
     axiosClient.get(`/classes/${classId}/team-proposals`)),
-  studentProposeTeam: (classId, payload) =>
+  submitTeamProposal: (classId, payload) =>
     runClassFeatureRequest(classFeatureFlags.teamManagement, 'Class team management', () =>
       axiosClient.post(`/classes/${classId}/teams/student-proposal`, payload)),
 

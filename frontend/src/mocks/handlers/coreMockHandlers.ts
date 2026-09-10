@@ -373,6 +373,24 @@ function registerAuthHandlers(mock: MockAdapter): void {
 }
 
 function registerUserHandlers(mock: MockAdapter): void {
+  mock.onGet('/admin/users/pending-approval').reply(() => {
+    const users = getMockState().users
+      .filter((user) => (
+        user.status === 'PENDING'
+        && (user.role === 'LECTURER' || user.role === 'MENTOR')
+      ))
+      .map((user) => ({
+        id: user.id,
+        fullName: user.name,
+        email: user.email,
+        roles: [backendRole(user.role)],
+        status: backendStatus[user.status],
+        createdAt: user.createdAt,
+      }));
+
+    return ok(users, 'Pending approval users retrieved successfully.');
+  });
+
   mock.onGet('/users').reply((config) => {
     const params = requestParams(config);
     const query = asString(params.search).trim().toLowerCase();
@@ -390,6 +408,22 @@ function registerUserHandlers(mock: MockAdapter): void {
       users: users.map(userResponse),
       pagination: { total, page, limit, pages: Math.max(1, Math.ceil(total / limit)) },
     }, 'Users retrieved successfully.');
+  });
+
+  mock.onPost(/^\/admin\/users\/[^/]+\/(approve|reject)$/).reply((config) => {
+    const match = config.url?.match(/^\/admin\/users\/([^/]+)\/(approve|reject)$/);
+    const user = getMockState().users.find((item) => item.id === match?.[1]);
+    if (!user) return failure(404, 'USER_NOT_FOUND', 'User was not found.');
+    if (user.status !== 'PENDING') {
+      return failure(409, 'APPROVAL_USER_NOT_PENDING', 'The user is not pending approval.');
+    }
+    if (user.role !== 'LECTURER' && user.role !== 'MENTOR') {
+      return failure(400, 'APPROVAL_INVALID_TARGET_ROLE', 'Only Lecturer or Mentor accounts can be approved or rejected.');
+    }
+
+    user.status = match?.[2] === 'approve' ? 'APPROVED' : 'REJECTED';
+    persistMockState();
+    return ok(null, match?.[2] === 'approve' ? 'User approved successfully.' : 'User rejected successfully.');
   });
 
   mock.onGet(/^\/users\/[^/]+$/).reply((config) => {
@@ -827,6 +861,13 @@ function registerSubjectHandlers(mock: MockAdapter): void {
 }
 
 function registerStartupIndustryHandlers(mock: MockAdapter): void {
+  mock.onGet('/startup-industries/options').reply(() => {
+    const industries = getMockState().startupIndustries
+      .filter((industry) => industry.status === 'active')
+      .sort((left, right) => left.name.localeCompare(right.name));
+    return ok({ industries }, 'Active startup industries retrieved successfully.');
+  });
+
   mock.onGet('/startup-industries').reply((config) => {
     const params = requestParams(config);
     const query = asString(params.search).trim().toLowerCase();
@@ -854,6 +895,7 @@ function registerStartupIndustryHandlers(mock: MockAdapter): void {
     const industry = {
       id: allocateId(),
       name,
+      description: asString(body.description).trim() || null,
       status: asString(body.status, 'active').toLowerCase() === 'inactive' ? 'inactive' as const : 'active' as const,
     };
     getMockState().startupIndustries.push(industry);
@@ -880,6 +922,7 @@ function registerStartupIndustryHandlers(mock: MockAdapter): void {
       return failure(409, 'STARTUP_INDUSTRY_NAME_EXISTS', 'An industry with this name already exists.');
     }
     industry.name = name;
+    industry.description = asString(body.description).trim() || null;
     industry.status = asString(body.status, industry.status).toLowerCase() === 'inactive' ? 'inactive' : 'active';
     persistMockState();
     return ok(industry, 'Startup industry updated successfully.');

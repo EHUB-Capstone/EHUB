@@ -1,5 +1,5 @@
 import type MockAdapter from 'axios-mock-adapter';
-import { failure, getMockState, ok, parseBody, persistMockState, routeId } from '../mockHelpers.ts';
+import { allocateId, allocateRowVersion, failure, getMockState, ok, parseBody, persistMockState, routeId } from '../mockHelpers.ts';
 
 const uuid = (value: number) => `00000000-0000-4000-8000-${String(value).padStart(12, '0')}`;
 
@@ -157,6 +157,7 @@ function workspaceData(teamId: string) {
       solution: team.projectSolution || '',
       targetUsers: team.projectTargetUsers || '',
       keywords: team.keywords || [],
+      startupIndustries: team.startupIndustries || [],
       status: 'Draft',
       createdAtUtc: projectCreatedAtUtc,
       updatedAtUtc: team.projectUpdatedAtUtc || null,
@@ -167,7 +168,7 @@ function workspaceData(teamId: string) {
       summary: 'Created the project workspace.',
       actorUserId: team.leaderId,
       actorName: members.find((member) => member._id === team.leaderId)?.fullName || 'Team leader',
-      changedFields: ['projectName', 'description', 'keywords'],
+      changedFields: ['projectName', 'description', 'startupIndustries'],
       occurredAtUtc: projectCreatedAtUtc,
     }] : []),
     proposal: proposal ? {
@@ -413,17 +414,22 @@ export function registerWorkspaceMockHandlers(mock: MockAdapter): void {
     const body = parseBody(config);
     const projectName = String(body.projectName || '').trim();
     const description = String(body.description || '').trim();
-    const keywords = Array.isArray(body.keywords) ? body.keywords.map(String) : [];
+    const startupIndustryIds = Array.isArray(body.startupIndustryIds) ? body.startupIndustryIds.map(String) : [];
     if (projectName.length < 3 || description.length < 20) {
       return failure(400, 'WORKSPACE_VALIDATION_ERROR', 'Required project workspace information is missing or invalid.');
     }
-    const hasDuplicate = (values: string[]) => new Set(values.map((value) => value.trim().replace(/\s+/g, ' ').toUpperCase())).size !== values.length;
-    if (hasDuplicate(keywords)) {
-      return failure(409, 'WORKSPACE_TAG_DUPLICATED', 'Duplicate workspace tags are not allowed.');
+    const activeIndustries = state.startupIndustries.filter((industry) => (
+      industry.status === 'active' && startupIndustryIds.includes(industry.id)
+    ));
+    if (startupIndustryIds.length < 1 || startupIndustryIds.length > 3
+      || new Set(startupIndustryIds).size !== startupIndustryIds.length
+      || activeIndustries.length !== startupIndustryIds.length) {
+      return failure(400, 'WORKSPACE_VALIDATION_ERROR', 'Select between 1 and 3 active startup industries.');
     }
     team.projectName = projectName;
     team.projectDescription = description;
-    team.keywords = keywords;
+    team.startupIndustryIds = startupIndustryIds;
+    team.startupIndustries = startupIndustryIds.map((id) => activeIndustries.find((industry) => industry.id === id)!.name);
     const createdAtUtc = new Date().toISOString();
     team.projectCreatedAtUtc = createdAtUtc;
     team.projectUpdatedAtUtc = null;
@@ -433,14 +439,39 @@ export function registerWorkspaceMockHandlers(mock: MockAdapter): void {
       summary: 'Created the project workspace.',
       actorUserId: currentUser.id,
       actorName: currentUser.name,
-      changedFields: ['projectName', 'description', 'keywords'],
+      changedFields: ['projectName', 'description', 'startupIndustries'],
       occurredAtUtc: createdAtUtc,
     }];
+    let direction = state.directions.find((item) => item.teamId === teamId);
+    if (!direction) {
+      direction = {
+        id: allocateId(),
+        teamId,
+        title: projectName,
+        summary: description,
+        startupIndustries: team.startupIndustries,
+        status: 'Submitted',
+        submittedAtUtc: createdAtUtc,
+        reviewedAtUtc: null,
+        rowVersion: allocateRowVersion(),
+        reviews: [],
+      };
+      state.directions.push(direction);
+    } else if (['Draft', 'NeedsRevision'].includes(direction.status)) {
+      direction.title = projectName;
+      direction.summary = description;
+      direction.startupIndustries = team.startupIndustries;
+      direction.status = 'Submitted';
+      direction.submittedAtUtc = createdAtUtc;
+      direction.reviewedAtUtc = null;
+      direction.rowVersion = allocateRowVersion();
+    }
     persistMockState();
     const project = {
       _id: uuid(1601), teamId, classId: team.classId, subjectId: classByTeam(teamId)!.courseId,
       semesterId: classByTeam(teamId)!.semesterId, projectName, description,
-      problem: '', solution: '', targetUsers: '', keywords, status: 'Draft', createdAtUtc, updatedAtUtc: null,
+      problem: '', solution: '', targetUsers: '', keywords: [], startupIndustries: team.startupIndustries,
+      status: 'Draft', createdAtUtc, updatedAtUtc: null,
     };
     return ok(project, 'Project workspace created.');
   });

@@ -1,7 +1,7 @@
 export interface ProjectWorkspaceDraft {
   projectName: string;
   description: string;
-  keywords: string[];
+  startupIndustryIds: string[];
 }
 
 export interface ProjectProfileDraft {
@@ -32,7 +32,7 @@ export const resolveWorkspaceCreationDefaults = (
   draft: {
     projectName: proposal?.projectName?.trim() || team.teamName?.trim() || team.name?.trim() || '',
     description: proposal?.projectDescription?.trim() || proposal?.description?.trim() || '',
-    keywords: [],
+    startupIndustryIds: [],
   },
 });
 
@@ -62,6 +62,9 @@ export const validateProjectWorkspace = (draft: ProjectWorkspaceDraft): ProjectW
   const descriptionLength = draft.description.trim().length;
   if (nameLength < 3 || nameLength > 200) errors.projectName = 'Project name must be 3–200 characters.';
   if (descriptionLength < 20 || descriptionLength > 2_000) errors.description = 'Description must be 20–2000 characters.';
+  if (draft.startupIndustryIds.length < 1 || draft.startupIndustryIds.length > 3) {
+    errors.startupIndustryIds = 'Select between 1 and 3 startup industries.';
+  }
   return errors;
 };
 

@@ -25,7 +25,7 @@ export default function AccountApprovals() {
       setLoading(true);
       setLoadError(null);
       try {
-        const response = await adminApprovalApi.getPending();
+        const response = await adminApprovalApi.getAll();
         const approvalRequests = (response.data || [])
           .map((record) => registrationToApprovalRequest(record))
           .filter((request: AccountApprovalRequest | null): request is AccountApprovalRequest => Boolean(request));

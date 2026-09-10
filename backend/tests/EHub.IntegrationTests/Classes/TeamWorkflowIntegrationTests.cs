@@ -179,16 +179,18 @@ public sealed class TeamWorkflowIntegrationTests
         await context.SaveChangesAsync();
         context.ChangeTracker.Clear();
 
-        var handler = new TeamManagementHandler(
+        var handler = new TeamProposalHandler(
             context,
             scope.ServiceProvider.GetRequiredService<EHub.Application.Common.Interfaces.Persistence.IUnitOfWork>());
-        var result = await handler.CreateAsync(
+        var result = await handler.SubmitStudentProposalAsync(
             seed.ClassId,
-            new CreateTeamRequest
+            new SubmitStudentTeamProposalRequest
             {
-                TeamName = "Profile Major Fallback",
-                MemberIds = seed.StudentIds,
-                LeaderStudentId = seed.StudentIds[0]
+                GroupName = "Profile Major Fallback",
+                ProjectName = "Profile Major Project",
+                Description = "Profile major fallback project description.",
+                StudentIds = seed.StudentIds,
+                LeaderStudentId = seed.StudentIds[0],
             },
             seed.LecturerId,
             SystemRoles.Lecturer);
@@ -514,7 +516,7 @@ public sealed class TeamWorkflowIntegrationTests
             {
                 ProjectName = workspaceDetail.Value.Proposal.ProjectName,
                 Description = workspaceDetail.Value.Proposal.ProjectDescription,
-                Keywords = new[] { "startup" }
+                StartupIndustryIds = new[] { seed.StartupIndustryIds[0] }
             }, leaderUserId!.Value, SystemRoles.Student);
         workspace.IsSuccess.Should().BeTrue($"{workspace.Error.Code}: {workspace.Error.Message}");
         context.ChangeTracker.Clear();
@@ -529,7 +531,82 @@ public sealed class TeamWorkflowIntegrationTests
             .SingleAsync(project => project.TeamId == createdTeam.Id);
         approvedProject.Name.Should().Be("Revised Venture Project");
         approvedProject.Description.Should().Be("A clarified project scope for the existing student team.");
-        approvedProject.ProjectTags.Should().ContainSingle(tag => tag.TagName == "startup");
+        approvedProject.ProjectTags.Should().ContainSingle(tag => tag.TagName.StartsWith("Integration Technology "));
+    }
+
+    [Theory]
+    [InlineData("ADMIN")]
+    [InlineData("LECTURER")]
+    public async Task ClassManagerCreatesTeamOnBehalfOfLeader_WithPendingProjectProposal(string role)
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateSeedAsync(context, createProposal: false, createTeam: false);
+        context.ChangeTracker.Clear();
+        var handler = new TeamProposalHandler(
+            context,
+            scope.ServiceProvider.GetRequiredService<EHub.Application.Common.Interfaces.Persistence.IUnitOfWork>());
+        var actorId = role == SystemRoles.Admin ? seed.AdminId : seed.LecturerId;
+        var leaderId = seed.StudentIds[1];
+
+        var result = await handler.SubmitStudentProposalAsync(
+            seed.ClassId,
+            new SubmitStudentTeamProposalRequest
+            {
+                StudentIds = seed.StudentIds,
+                LeaderStudentId = leaderId,
+                GroupName = $"Manager Assisted {role}",
+                ProjectName = $"Manager Project {role}",
+                IsProjectNameSameAsGroup = false,
+                Description = "A team proposal entered by a class manager on behalf of its chosen leader."
+            },
+            actorId,
+            role);
+
+        result.IsSuccess.Should().BeTrue($"{result.Error.Code}: {result.Error.Message}");
+        result.Value.Status.Should().Be(nameof(TeamProposalStatus.Pending));
+        context.ChangeTracker.Clear();
+        var proposal = await context.TeamProposals.AsNoTracking()
+            .SingleAsync(item => item.Id == result.Value.Id);
+        proposal.ProposedByStudentId.Should().Be(leaderId);
+        proposal.CreatedBy.Should().Be(actorId);
+        var team = await context.Teams.AsNoTracking()
+            .SingleAsync(item => item.Id == proposal.ApprovedTeamId);
+        team.Status.Should().Be(TeamStatus.Active);
+        (await context.Projects.AsNoTracking().AnyAsync(item => item.TeamId == team.Id)).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task UnassignedLecturerCannotCreateTeamOnBehalfOfLeader()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateSeedAsync(context, createProposal: false, createTeam: false);
+        var outsider = await CreateUserAsync(context, SystemRoles.Lecturer, "unassigned-team-creator");
+        context.ChangeTracker.Clear();
+        var handler = new TeamProposalHandler(
+            context,
+            scope.ServiceProvider.GetRequiredService<EHub.Application.Common.Interfaces.Persistence.IUnitOfWork>());
+
+        var result = await handler.SubmitStudentProposalAsync(
+            seed.ClassId,
+            new SubmitStudentTeamProposalRequest
+            {
+                StudentIds = seed.StudentIds,
+                LeaderStudentId = seed.StudentIds[0],
+                GroupName = "Unauthorized Manager Team",
+                ProjectName = "Unauthorized Manager Project",
+                IsProjectNameSameAsGroup = false,
+                Description = "This proposal must be rejected because the lecturer is not assigned."
+            },
+            outsider.Id,
+            SystemRoles.Lecturer);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be(ErrorCodes.ClassAccessDenied);
+        context.ChangeTracker.Clear();
+        (await context.Teams.AsNoTracking().CountAsync(item => item.ClassId == seed.ClassId)).Should().Be(0);
+        (await context.TeamProposals.AsNoTracking().CountAsync(item => item.ClassId == seed.ClassId)).Should().Be(0);
     }
 
     [Theory]
@@ -563,7 +640,7 @@ public sealed class TeamWorkflowIntegrationTests
     }
 
     [Fact]
-    public async Task TeamLeaderCreatesWorkspaceLinkedToAcademicContextAndTags()
+    public async Task TeamLeaderCreatesWorkspaceLinkedToAcademicContextAndStartupIndustries()
     {
         using var scope = _factory.Services.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -579,7 +656,7 @@ public sealed class TeamWorkflowIntegrationTests
             {
                 ProjectName = "Campus Circular",
                 Description = "A student marketplace that helps campuses reuse equipment safely.",
-                Keywords = new[] { "campus", "circular economy" }
+                StartupIndustryIds = seed.StartupIndustryIds[..2]
             },
             seed.ProposerUserId,
             SystemRoles.Student);
@@ -587,14 +664,33 @@ public sealed class TeamWorkflowIntegrationTests
         result.IsSuccess.Should().BeTrue($"workspace creation failed with {result.Error.Code}: {result.Error.Message}");
         result.Value.TeamId.Should().Be(seed.TeamId!.Value);
         result.Value.ClassId.Should().Be(seed.ClassId);
-        result.Value.Keywords.Should().BeEquivalentTo("campus", "circular economy");
+        var expectedIndustries = await context.StartupIndustries.AsNoTracking()
+            .Where(industry => seed.StartupIndustryIds.Take(2).Contains(industry.Id))
+            .Select(industry => industry.Name)
+            .ToArrayAsync();
+        result.Value.StartupIndustries.Should().BeEquivalentTo(expectedIndustries);
         context.ChangeTracker.Clear();
         var targetClass = await context.Classes.AsNoTracking().SingleAsync(item => item.Id == seed.ClassId);
         result.Value.SubjectId.Should().Be(targetClass.CourseId);
         result.Value.SemesterId.Should().Be(targetClass.SemesterId);
         (await context.Projects.AsNoTracking().CountAsync(project => project.TeamId == seed.TeamId)).Should().Be(1);
+        var submittedDirection = await context.ProjectDirections.AsNoTracking()
+            .SingleAsync(direction => direction.TeamId == seed.TeamId);
+        submittedDirection.Title.Should().Be("Campus Circular");
+        submittedDirection.Summary.Should().Be("A student marketplace that helps campuses reuse equipment safely.");
+        submittedDirection.Status.Should().Be(ProjectDirectionStatus.Submitted);
+        submittedDirection.SubmittedAtUtc.Should().NotBeNull();
+        var directionView = await new ProjectDirectionHandler(context).GetAsync(
+            seed.TeamId.Value,
+            seed.ProposerUserId,
+            SystemRoles.Student);
+        directionView.IsSuccess.Should().BeTrue();
+        directionView.Value.StartupIndustries.Should().BeEquivalentTo(expectedIndustries);
         (await context.OutboxMessages.AsNoTracking().AnyAsync(message =>
             message.AggregateId == seed.ClassId && message.Type == "ProjectWorkspace.Created.v1"))
+            .Should().BeTrue();
+        (await context.OutboxMessages.AsNoTracking().AnyAsync(message =>
+            message.AggregateId == seed.ClassId && message.Type == "ProjectDirection.Submitted.v1"))
             .Should().BeTrue();
     }
 
@@ -741,7 +837,7 @@ public sealed class TeamWorkflowIntegrationTests
     }
 
     [Fact]
-    public async Task WorkspaceCreationRejectsDuplicateWorkspaceNonLeaderAndInvalidTags()
+    public async Task WorkspaceCreationRejectsDuplicateWorkspaceNonLeaderAndInvalidIndustries()
     {
         using var scope = _factory.Services.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -754,7 +850,7 @@ public sealed class TeamWorkflowIntegrationTests
         {
             ProjectName = "Founder Workspace",
             Description = "A complete project workspace description for the team.",
-            Keywords = new[] { "startup" }
+            StartupIndustryIds = new[] { seed.StartupIndustryIds[0] }
         };
 
         var nonLeader = await handler.CreateAsync(
@@ -765,18 +861,43 @@ public sealed class TeamWorkflowIntegrationTests
         nonLeader.IsFailure.Should().BeTrue();
         nonLeader.Error.Code.Should().Be(ErrorCodes.WorkspaceLeaderRequired);
 
-        var invalidTags = await handler.CreateAsync(
+        var invalidIndustries = await handler.CreateAsync(
             seed.TeamId.Value,
             new CreateProjectWorkspaceRequest
             {
                 ProjectName = validRequest.ProjectName,
                 Description = validRequest.Description,
-                Keywords = new[] { "Startup", " startup " }
+                StartupIndustryIds = new[] { seed.StartupIndustryIds[0], seed.StartupIndustryIds[0] }
             },
             seed.ProposerUserId,
             SystemRoles.Student);
-        invalidTags.IsFailure.Should().BeTrue();
-        invalidTags.Error.Code.Should().Be(ErrorCodes.WorkspaceTagDuplicated);
+        invalidIndustries.IsFailure.Should().BeTrue();
+        invalidIndustries.Error.Code.Should().Be(ErrorCodes.WorkspaceValidationError);
+
+        var inactiveIndustry = await handler.CreateAsync(
+            seed.TeamId.Value,
+            new CreateProjectWorkspaceRequest
+            {
+                ProjectName = validRequest.ProjectName,
+                Description = validRequest.Description,
+                StartupIndustryIds = new[] { seed.StartupIndustryIds[2] }
+            },
+            seed.ProposerUserId,
+            SystemRoles.Student);
+        inactiveIndustry.IsFailure.Should().BeTrue();
+        inactiveIndustry.Error.Code.Should().Be(ErrorCodes.WorkspaceValidationError);
+
+        var missingIndustry = await handler.CreateAsync(
+            seed.TeamId.Value,
+            new CreateProjectWorkspaceRequest
+            {
+                ProjectName = validRequest.ProjectName,
+                Description = validRequest.Description
+            },
+            seed.ProposerUserId,
+            SystemRoles.Student);
+        missingIndustry.IsFailure.Should().BeTrue();
+        missingIndustry.Error.Code.Should().Be(ErrorCodes.WorkspaceValidationError);
 
         (await handler.CreateAsync(seed.TeamId.Value, validRequest, seed.ProposerUserId, SystemRoles.Student)).IsSuccess.Should().BeTrue();
         context.ChangeTracker.Clear();
@@ -799,7 +920,7 @@ public sealed class TeamWorkflowIntegrationTests
         {
             ProjectName = "Campus Circular",
             Description = "A student marketplace that helps campuses reuse equipment safely.",
-            Keywords = new[] { "campus" }
+            StartupIndustryIds = new[] { seed.StartupIndustryIds[0] }
         };
         (await handler.CreateAsync(seed.TeamId!.Value, initial, seed.ProposerUserId, SystemRoles.Student))
             .IsSuccess.Should().BeTrue();
@@ -1007,61 +1128,34 @@ public sealed class TeamWorkflowIntegrationTests
     }
 
     [Fact]
-    public async Task LecturerGeneratedThreeMemberTeam_IsRejected()
+    public async Task LecturerSubmittedThreeMemberTeam_IsRejected()
     {
         using var scope = _factory.Services.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var seed = await CreateSeedAsync(context, createProposal: false, createTeam: false);
         context.ChangeTracker.Clear();
-        var handler = new TeamManagementHandler(
+        var handler = new TeamProposalHandler(
             context,
             scope.ServiceProvider.GetRequiredService<EHub.Application.Common.Interfaces.Persistence.IUnitOfWork>());
 
-        var result = await handler.GenerateAsync(
+        var result = await handler.SubmitStudentProposalAsync(
             seed.ClassId,
-            new GenerateClassTeamRequest
+            new SubmitStudentTeamProposalRequest
             {
                 StudentIds = seed.StudentIds.Take(3).ToArray(),
                 LeaderStudentId = seed.StudentIds[0],
-                TeamName = "Three Member Team"
+                GroupName = "Three Member Team",
+                ProjectName = "Three Member Project",
+                Description = "This proposal intentionally has only three members."
             },
             seed.LecturerId,
             SystemRoles.Lecturer);
 
         result.IsFailure.Should().BeTrue();
-        result.Error.Code.Should().Be(ErrorCodes.ClassValidationError);
+        result.Error.Code.Should().Be(ErrorCodes.TeamProposalInvalid);
         context.ChangeTracker.Clear();
         (await context.Teams.AsNoTracking().CountAsync(team => team.ClassId == seed.ClassId)).Should().Be(0);
         (await context.TeamProposals.AsNoTracking().CountAsync(item => item.ClassId == seed.ClassId)).Should().Be(0);
-    }
-
-    [Theory]
-    [InlineData(true, null)]
-    [InlineData(false, "Independent Project")]
-    [InlineData(false, null)]
-    public async Task LecturerGeneratedTeam_PersistsOptionalDraftProject(bool useTeamName, string? projectName)
-    {
-        using var scope = _factory.Services.CreateScope();
-        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var seed = await CreateSeedAsync(context, createProposal: false, createTeam: false);
-        context.ChangeTracker.Clear();
-        var handler = new TeamManagementHandler(context,
-            scope.ServiceProvider.GetRequiredService<EHub.Application.Common.Interfaces.Persistence.IUnitOfWork>());
-        var result = await handler.GenerateAsync(seed.ClassId, new GenerateClassTeamRequest
-        {
-            StudentIds = seed.StudentIds, LeaderStudentId = seed.StudentIds[0],
-            UseTeamNameForProject = useTeamName, ProjectName = projectName
-        }, seed.LecturerId, SystemRoles.Lecturer);
-        result.IsSuccess.Should().BeTrue();
-        context.ChangeTracker.Clear();
-        var savedTeam = await context.Teams.Include(item => item.Project).SingleAsync(item => item.Id == result.Value.Team!.Id);
-        if (!useTeamName && projectName == null) savedTeam.Project.Should().BeNull();
-        else
-        {
-            savedTeam.Project.Should().NotBeNull();
-            savedTeam.Project!.Name.Should().Be(useTeamName ? savedTeam.TeamName : projectName);
-            savedTeam.Project.Status.Should().Be(ProjectStatus.Draft);
-        }
     }
 
     [Fact]
@@ -1123,10 +1217,16 @@ public sealed class TeamWorkflowIntegrationTests
         (await context.TeamMembers.AsNoTracking()
             .AnyAsync(member => member.TeamId == seed.TeamId && member.CountsTowardActiveTeam))
             .Should().BeFalse();
-        var recreated = await handler.GenerateAsync(seed.ClassId, new GenerateClassTeamRequest
+        var proposalHandler = new TeamProposalHandler(
+            context,
+            scope.ServiceProvider.GetRequiredService<EHub.Application.Common.Interfaces.Persistence.IUnitOfWork>());
+        var recreated = await proposalHandler.SubmitStudentProposalAsync(seed.ClassId, new SubmitStudentTeamProposalRequest
         {
-            TeamName = "Official Team", StudentIds = seed.StudentIds, LeaderStudentId = seed.StudentIds[0],
-            ProjectName = "Reusable Project"
+            GroupName = "Official Team",
+            StudentIds = seed.StudentIds,
+            LeaderStudentId = seed.StudentIds[0],
+            ProjectName = "Reusable Project",
+            Description = "A reusable project proposal after dissolving the team."
         }, seed.LecturerId, SystemRoles.Lecturer);
         recreated.IsSuccess.Should().BeTrue();
     }
@@ -1429,6 +1529,31 @@ public sealed class TeamWorkflowIntegrationTests
         context.MentorProfiles.Add(mentorProfile);
 
         var unique = Guid.NewGuid().ToString("N")[..8].ToUpperInvariant();
+        var startupIndustries = new[]
+        {
+            new StartupIndustry
+            {
+                Name = $"Integration Technology {unique}",
+                NormalizedName = $"INTEGRATION TECHNOLOGY {unique}",
+                Status = StartupIndustryStatus.Active,
+                CreatedBy = admin.Id
+            },
+            new StartupIndustry
+            {
+                Name = $"Integration Education {unique}",
+                NormalizedName = $"INTEGRATION EDUCATION {unique}",
+                Status = StartupIndustryStatus.Active,
+                CreatedBy = admin.Id
+            },
+            new StartupIndustry
+            {
+                Name = $"Integration Inactive {unique}",
+                NormalizedName = $"INTEGRATION INACTIVE {unique}",
+                Status = StartupIndustryStatus.Inactive,
+                CreatedBy = admin.Id
+            }
+        };
+        context.StartupIndustries.AddRange(startupIndustries);
         var course = new Course { Code = $"TW{unique}", Name = $"Team Workflow {unique}", Status = CourseStatus.Active, CreatedBy = admin.Id };
         var semester = await context.Semesters.FirstAsync(item => item.Status == SemesterStatus.Active);
         var targetClass = new Class
@@ -1575,7 +1700,7 @@ public sealed class TeamWorkflowIntegrationTests
 
         await context.SaveChangesAsync();
         return new WorkflowSeed(targetClass.Id, admin.Id, lecturer.Id, mentorUser.Id, studentUsers[0].Id,
-            studentIds.ToArray(), proposal?.Id, team?.Id, otherTeam?.Id);
+            studentIds.ToArray(), proposal?.Id, team?.Id, otherTeam?.Id, startupIndustries.Select(industry => industry.Id).ToArray());
     }
 
     private sealed record TestCurrentUser(Guid Id, string Role) : ICurrentUserService
@@ -1614,5 +1739,6 @@ public sealed class TeamWorkflowIntegrationTests
         Guid[] StudentIds,
         Guid? ProposalId,
         Guid? TeamId,
-        Guid? OtherTeamId);
+        Guid? OtherTeamId,
+        Guid[] StartupIndustryIds);
 }

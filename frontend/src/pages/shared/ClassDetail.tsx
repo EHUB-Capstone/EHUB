@@ -16,7 +16,6 @@ import StudentTable from '../../components/class/StudentTable';
 import TeamList from '../../components/class/TeamList';
 import TeamManagementModal from '../../components/class/TeamManagementModal';
 import StudentAssignmentModal from '../../components/class/StudentAssignmentModal';
-import TeamCreationSummary from '../../components/class/TeamCreationSummary';
 import ImportStudentsModal from '../../components/class/ImportStudentsModal';
 import StudentTeamGeneratePanel from '../../components/class/StudentTeamGeneratePanel';
 import TeamSuggestionTooltip from '../../components/class/TeamSuggestionTooltip';
@@ -82,7 +81,6 @@ export default function ClassDetail() {
   // Selected students for team generation
   const [selected, setSelected] = useState([]);
   const [selectedStudentSnapshots, setSelectedStudentSnapshots] = useState([]);
-  const [selectedLeaderId, setSelectedLeaderId] = useState('');
 
   // Modals & Actions
   const [showImport, setShowImport] = useState(false);
@@ -93,8 +91,6 @@ export default function ClassDetail() {
   const [assignmentCandidates, setAssignmentCandidates] = useState([]);
   const [assignmentCandidatesLoading, setAssignmentCandidatesLoading] = useState(false);
   const [teamToEdit, setTeamToEdit] = useState(null);
-  const [teamFormMemberIds, setTeamFormMemberIds] = useState([]);
-  const [teamFormLeaderId, setTeamFormLeaderId] = useState('');
   const [showAddStudent, setShowAddStudent] = useState(false);
   const [showEditSchedule, setShowEditSchedule] = useState(false);
   const [showAssignLecturer, setShowAssignLecturer] = useState(false);
@@ -267,12 +263,6 @@ export default function ClassDetail() {
   }, [fetchData]);
 
   useEffect(() => {
-    if (selectedLeaderId && !selected.includes(selectedLeaderId)) {
-      setSelectedLeaderId('');
-    }
-  }, [selected, selectedLeaderId]);
-
-  useEffect(() => {
     setSelectedStudentSnapshots((current) => {
       const snapshots = new Map(current.map((student) => [student._id, student]));
       students.forEach((student) => {
@@ -289,34 +279,26 @@ export default function ClassDetail() {
 
   const handleTeamCreated = async () => {
     setSelected([]);
-    setSelectedLeaderId('');
     await fetchData();
   };
 
-  const openCreateTeam = (memberIds = [], leaderId = '') => {
-    setTeamToEdit(null);
-    setTeamFormMemberIds(memberIds);
-    setTeamFormLeaderId(leaderId);
-    setShowTeamManagement(true);
+  const startInlineTeamCreation = () => {
+    setTab('students');
+    toast('Select 4–6 students in the table to create a team.');
   };
 
   const openEditTeam = (team) => {
     setTeamToEdit(team);
-    setTeamFormMemberIds([]);
-    setTeamFormLeaderId('');
     setShowTeamManagement(true);
   };
 
   const closeTeamManagement = () => {
     setShowTeamManagement(false);
     setTeamToEdit(null);
-    setTeamFormMemberIds([]);
-    setTeamFormLeaderId('');
   };
 
   const handleTeamSaved = () => {
     setSelected([]);
-    setSelectedLeaderId('');
     closeTeamManagement();
     void fetchData();
   };
@@ -537,7 +519,10 @@ export default function ClassDetail() {
   const safeStudents = Array.isArray(students) ? students : [];
   const safeTeams    = Array.isArray(teams) ? teams : [];
   const displayedTeams = mergeTeamsWithLinkedProposals(safeTeams, teamProposals);
-  const selectedTeamStudents = selectedStudentSnapshots.filter(student => selected.includes(student._id));
+  const selectedTeamStudents = selected
+    .map(studentId => safeStudents.find(student => student._id === studentId)
+      || selectedStudentSnapshots.find(student => student._id === studentId))
+    .filter(Boolean);
   const unassignedCount = safeStudents.filter(s => !s.teamId).length;
   
   const isAdmin = hasClassRole(user, 'ADMIN');
@@ -859,29 +844,16 @@ export default function ClassDetail() {
         </div>}
       </div>
 
-      {/* ── Team Generation Panel (always visible when students exist) ── */}
-      {teamControlsVisible && safeStudents.length > 0 && tab === 'students' && canSelectTeamMembers && (
-        <div className="rounded-xl bg-white/85 shadow-elevated backdrop-blur-md">
-          {user?.role === 'STUDENT' ? selected.length > 0 ? (
-            <StudentTeamGeneratePanel
-              classId={loadedClassId}
-              selected={selected}
-              students={safeStudents}
-              onTeamCreated={handleTeamCreated}
-              currentStudentId={safeStudents.find(s => s.userId === user._id)?._id}
-            />
-          ) : null : canManageClass ? (
-            <TeamCreationSummary
-              selectedStudents={selectedTeamStudents}
-              selectedLeaderId={selectedLeaderId}
-              onLeaderChange={setSelectedLeaderId}
-              onCreateTeam={() => runFeatureAction(
-                classFeatureFlags.teamManagement,
-                'Team management',
-                () => openCreateTeam(selected, selectedLeaderId),
-              )}
-            />
-          ) : null}
+      {/* ── Inline team proposal flow shared by students and class managers ── */}
+      {teamControlsVisible && selected.length > 0 && tab === 'students' && canManageClass && (
+        <div className="sticky top-20 z-20 rounded-2xl bg-white/80 shadow-xl backdrop-blur-md">
+          <StudentTeamGeneratePanel
+            classId={loadedClassId}
+            selected={selected}
+            students={selectedTeamStudents}
+            onTeamCreated={handleTeamCreated}
+            requireCurrentStudentMembership={false}
+          />
         </div>
       )}
 
@@ -946,7 +918,14 @@ export default function ClassDetail() {
               if (!Object.prototype.hasOwnProperty.call(next, 'page')) setRosterPage(1);
             }}
             toolbarAction={canSelectTeamMembers && teamControlsVisible && selected.length === 0 ? (
-              user?.role === 'STUDENT' ? (
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={startInlineTeamCreation}
+                  className="inline-flex min-h-8 items-center gap-1.5 rounded-lg bg-primary px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-primary-600"
+                >
+                  <UserPlus className="h-3.5 w-3.5" /> Create team
+                </button>
                 <TeamSuggestionTooltip label="View team creation guidance">
                   <div className="space-y-2">
                     <p className="font-semibold text-white">
@@ -958,11 +937,7 @@ export default function ClassDetail() {
                     </p>
                   </div>
                 </TeamSuggestionTooltip>
-              ) : (
-                <button onClick={() => runFeatureAction(classFeatureFlags.teamManagement, 'Team management', () => openCreateTeam())} className="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-primary-200 bg-primary-50/60 px-2.5 py-1.5 text-xs font-semibold text-primary hover:bg-primary-50">
-                  <UserPlus className="h-3.5 w-3.5" /> Create team
-                </button>
-              )
+              </div>
             ) : null}
           />
         ) : (
@@ -972,7 +947,7 @@ export default function ClassDetail() {
             canDelete={!isReadOnly && canDissolveTeam}
             canManageInfo={!isReadOnly && canManageClass}
             classStudents={safeStudents}
-            onCreate={!isReadOnly && canManageClass ? () => runFeatureAction(classFeatureFlags.teamManagement, 'Team management', () => openCreateTeam()) : undefined}
+            onCreate={!isReadOnly && canManageClass ? startInlineTeamCreation : undefined}
             onEdit={!isReadOnly && canManageClass ? (team) => !team.isProposal && runFeatureAction(classFeatureFlags.teamManagement, 'Team management', () => openEditTeam(team)) : undefined}
             onDelete={!isReadOnly && canDissolveTeam ? setTeamToDelete : undefined}
             onProjectDirection={!isReadOnly && classFeatureFlags.projectDirection ? setDirectionTeam : undefined}
@@ -991,7 +966,7 @@ export default function ClassDetail() {
         />
       )}
 
-      {!isReadOnly && classFeatureFlags.teamManagement && showTeamManagement && canManageClass && (
+      {!isReadOnly && classFeatureFlags.teamManagement && showTeamManagement && teamToEdit && canManageClass && (
         <TeamManagementModal
           classInfo={{
             id: loadedClassId,
@@ -1001,8 +976,6 @@ export default function ClassDetail() {
           students={safeStudents}
           teams={safeTeams}
           team={teamToEdit}
-          initialMemberIds={teamFormMemberIds}
-          initialLeaderId={teamFormLeaderId}
           onClose={closeTeamManagement}
           onSave={handleTeamSaved}
         />

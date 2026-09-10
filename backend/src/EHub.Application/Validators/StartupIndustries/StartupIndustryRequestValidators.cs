@@ -8,6 +8,7 @@ public sealed class CreateStartupIndustryRequestValidator : AbstractValidator<Cr
     public CreateStartupIndustryRequestValidator()
     {
         RuleFor(request => request.Name).NotEmpty().MaximumLength(100);
+        RuleFor(request => request.Description).MaximumLength(240);
         RuleFor(request => request.Status).Must(IsValidStatus).WithMessage("Status must be active or inactive.");
     }
 
@@ -21,6 +22,7 @@ public sealed class UpdateStartupIndustryRequestValidator : AbstractValidator<Up
     public UpdateStartupIndustryRequestValidator()
     {
         RuleFor(request => request.Name).NotEmpty().MaximumLength(100);
+        RuleFor(request => request.Description).MaximumLength(240);
         RuleFor(request => request.Status).Must(IsValidStatus).WithMessage("Status must be active or inactive.");
     }
 

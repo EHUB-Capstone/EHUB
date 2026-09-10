@@ -227,10 +227,26 @@ test('validates required project workspace information', () => {
   const errors = validateProjectWorkspace({
     projectName: '',
     description: 'too short',
-    keywords: [],
+    startupIndustryIds: [],
   });
   assert.equal(errors.projectName, 'Project name must be 3–200 characters.');
   assert.equal(errors.description, 'Description must be 20–2000 characters.');
+  assert.equal(errors.startupIndustryIds, 'Select between 1 and 3 startup industries.');
+});
+
+test('accepts one to three startup industries for a project workspace', () => {
+  assert.deepEqual(validateProjectWorkspace({
+    projectName: 'Valid project',
+    description: 'A sufficiently detailed project workspace description.',
+    startupIndustryIds: ['industry-1', 'industry-2', 'industry-3'],
+  }), {});
+
+  const errors = validateProjectWorkspace({
+    projectName: 'Valid project',
+    description: 'A sufficiently detailed project workspace description.',
+    startupIndustryIds: ['1', '2', '3', '4'],
+  });
+  assert.equal(errors.startupIndustryIds, 'Select between 1 and 3 startup industries.');
 });
 
 test('workspace creation defaults come from the linked student proposal', () => {

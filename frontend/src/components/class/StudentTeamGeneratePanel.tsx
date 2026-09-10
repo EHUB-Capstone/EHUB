@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Users, AlertTriangle, CheckCircle2, Crown, Loader2, AlertCircle, Send } from 'lucide-react';
+import { Users, AlertTriangle, CheckCircle2, Crown, Loader2, AlertCircle, Send, X } from 'lucide-react';
 import { classApi } from '../../api/classApi';
 import { teamApi } from '../../api/teamApi';
 import { unwrapApiData } from '../../utils/classMappers';
@@ -54,7 +54,15 @@ const getTeamSizeSuggestion = (count) => {
   return `Suggested split: ${summary.join(', ')}. Every team still needs both major groups.`;
 };
 
-export default function StudentTeamGeneratePanel({ classId, selected: rawSelected, students: rawStudents, onTeamCreated, currentStudentId, proposal = null }) {
+export default function StudentTeamGeneratePanel({
+  classId,
+  selected: rawSelected,
+  students: rawStudents,
+  onTeamCreated,
+  currentStudentId = '',
+  requireCurrentStudentMembership = true,
+  proposal = null,
+}) {
   const [submitting, setSubmitting] = useState(false);
   const students = useMemo(() => (Array.isArray(rawStudents) ? rawStudents : []), [rawStudents]);
   const selected = useMemo(() => (Array.isArray(rawSelected) ? rawSelected : []), [rawSelected]);
@@ -64,6 +72,7 @@ export default function StudentTeamGeneratePanel({ classId, selected: rawSelecte
   const [description, setDescription] = useState('');
   const [isProjectNameSameAsGroup, setIsProjectNameSameAsGroup] = useState(true);
   const [selectedLeaderId, setSelectedLeaderId] = useState('');
+  const [showConfirmation, setShowConfirmation] = useState(false);
 
   useEffect(() => {
     if (!proposal) return;
@@ -73,6 +82,22 @@ export default function StudentTeamGeneratePanel({ classId, selected: rawSelecte
     setIsProjectNameSameAsGroup(proposal.projectName === proposal.teamName);
     setSelectedLeaderId(proposal.leaderId?._id || proposal.leaderId || '');
   }, [proposal]);
+
+  useEffect(() => {
+    if (!showConfirmation) return undefined;
+
+    const previousOverflow = document.body.style.overflow;
+    const handleEscape = (event) => {
+      if (event.key === 'Escape' && !submitting) setShowConfirmation(false);
+    };
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', handleEscape);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', handleEscape);
+    };
+  }, [showConfirmation, submitting]);
 
   const suggestionInfo = useMemo(() => {
     const unassignedCount = students.filter(s => !s.teamId).length;
@@ -109,7 +134,7 @@ export default function StudentTeamGeneratePanel({ classId, selected: rawSelecte
       ? isGroupNameValid
       : projectName.trim().length >= 3 && projectName.trim().length <= 60;
     const isDescriptionValid = description.trim().length >= 20 && description.trim().length <= 500;
-    const hasCurrentUser = selected.includes(currentStudentId);
+    const hasCurrentUser = !requireCurrentStudentMembership || selected.includes(currentStudentId);
 
     const hasLeader = teamSelection.isTeamLeaderValid;
     const isFormValid = isGroupNameValid && isProjectNameValid && isDescriptionValid && hasCurrentUser && hasLeader;
@@ -126,7 +151,7 @@ export default function StudentTeamGeneratePanel({ classId, selected: rawSelecte
       hasCurrentUser,
       hasLeader,
     };
-  }, [selected, students, groupName, projectName, description, isProjectNameSameAsGroup, currentStudentId, selectedLeaderId]);
+  }, [selected, students, groupName, projectName, description, isProjectNameSameAsGroup, currentStudentId, requireCurrentStudentMembership, selectedLeaderId]);
 
   const {
     selectedStudents, studentCount, uniqueMajors,
@@ -134,6 +159,22 @@ export default function StudentTeamGeneratePanel({ classId, selected: rawSelecte
     missingMajorCount, isFormValid, hasCurrentUser, hasLeader
   } = validation;
   const canSubmit = isFormValid && isFullyValid;
+  const selectedLeader = selectedStudents.find(student => student._id === selectedLeaderId);
+  const confirmedProjectName = isProjectNameSameAsGroup ? groupName.trim() : projectName.trim();
+
+  const requestSubmission = () => {
+    if (submitting || !canSubmit) {
+      toast.error('Complete the required team and project information.');
+      return;
+    }
+
+    if (proposal) {
+      void handleSubmit();
+      return;
+    }
+
+    setShowConfirmation(true);
+  };
 
   const handleSubmit = async () => {
     if (submitting || !canSubmit) {
@@ -155,7 +196,7 @@ export default function StudentTeamGeneratePanel({ classId, selected: rawSelecte
         const draft = unwrapApiData<any>(response);
         await teamApi.submitProposal(draft.id, draft.rowVersion);
       } else {
-        await classApi.studentProposeTeam(classId, {
+        await classApi.submitTeamProposal(classId, {
           studentIds: selected,
           leaderStudentId: selectedLeaderId,
           groupName: groupName.trim(),
@@ -175,6 +216,7 @@ export default function StudentTeamGeneratePanel({ classId, selected: rawSelecte
       setDescription('');
       setIsProjectNameSameAsGroup(true);
       setSelectedLeaderId('');
+      setShowConfirmation(false);
       onTeamCreated();
     } catch (e) {
       toast.error(e?.response?.data?.message || e?.message || 'Failed to create the team.');
@@ -184,7 +226,8 @@ export default function StudentTeamGeneratePanel({ classId, selected: rawSelecte
   };
 
   return (
-    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+    <>
+      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
       <div className="hidden">
         <div>
           <h3 className="text-lg font-bold text-slate-900">Create team</h3>
@@ -199,94 +242,96 @@ export default function StudentTeamGeneratePanel({ classId, selected: rawSelecte
 
       <div className="grid grid-cols-1">
         {/* Form Info */}
-        <div className="order-2 grid gap-3 border-t border-slate-200 bg-slate-50/30 p-3 md:grid-cols-[0.8fr_0.8fr_1.4fr]">
-          <div>
-            <label className="mb-1.5 block text-xs font-semibold text-slate-600">
-              Team name <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              value={groupName}
-              onChange={e => setGroupName(e.target.value)}
-              placeholder="Example: Alpha Team"
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
-              required
-              minLength={3}
-              maxLength={60}
-            />
-            {groupName.length > 0 && groupName.trim().length < 3 && (
-              <p className="mt-1 text-xs text-red-500">Team name must be 3–60 characters.</p>
-            )}
-          </div>
-
-          <div className="hidden">
-            <label className="mb-1.5 block text-xs font-semibold text-slate-600">
-              Team Leader <span className="text-red-500">*</span>
-            </label>
-            <select
-              value={selected.includes(selectedLeaderId) ? selectedLeaderId : ''}
-              onChange={(event) => setSelectedLeaderId(event.target.value)}
-              className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none bg-white"
-            >
-              <option value="">Select a team member</option>
-              {selectedStudents.map(student => (
-                <option key={student._id} value={student._id}>{student.fullName}</option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="mb-1.5 flex items-center justify-between gap-2 text-xs font-semibold text-slate-600">
-              <span>Project name <span className="text-red-500">*</span></span>
-              <span className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-slate-500">
+        {hasLeader && (
+          <div className="order-2 grid gap-3 border-t border-slate-200 bg-slate-50/30 p-3 md:grid-cols-[0.8fr_0.8fr_1.4fr]">
+            <div>
+              <label className="mb-1.5 block text-xs font-semibold text-slate-600">
+                Team name <span className="text-red-500">*</span>
+              </label>
               <input
-                type="checkbox"
-                checked={isProjectNameSameAsGroup}
-                onChange={e => setIsProjectNameSameAsGroup(e.target.checked)}
-                className="rounded border-slate-300 text-primary focus:ring-primary"
+                type="text"
+                value={groupName}
+                onChange={e => setGroupName(e.target.value)}
+                placeholder="Example: Alpha Team"
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+                required
+                minLength={3}
+                maxLength={60}
               />
-                Same as team
-              </span>
-            </label>
-            <input
-              type="text"
-              value={isProjectNameSameAsGroup ? groupName : projectName}
-              onChange={e => setProjectName(e.target.value)}
-              placeholder="Enter a project name"
-              disabled={isProjectNameSameAsGroup}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:bg-slate-100 disabled:text-slate-500"
-              required
-              minLength={3}
-              maxLength={60}
-            />
-            {!isProjectNameSameAsGroup && projectName.length > 0 && projectName.trim().length < 3 && (
-              <p className="mt-1 text-xs text-red-500">Project name must be 3–60 characters.</p>
-            )}
-          </div>
+              {groupName.length > 0 && groupName.trim().length < 3 && (
+                <p className="mt-1 text-xs text-red-500">Team name must be 3–60 characters.</p>
+              )}
+            </div>
 
-          <div>
-            <label className="mb-1.5 block text-xs font-semibold text-slate-600">
-              Project description <span className="text-red-500">*</span>
-            </label>
-            <textarea
-              value={description}
-              onChange={e => setDescription(e.target.value)}
-              placeholder="Briefly describe the project idea"
-              className="h-10 w-full resize-none rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
-              required
-              minLength={20}
-              maxLength={500}
-            />
-            <div className="mt-1 flex items-center justify-between gap-3">
-              <span>
-                {description.length > 0 && description.trim().length < 20 && (
-                  <span className="text-xs text-red-500">Description must be 20–500 characters.</span>
-                )}
-              </span>
-              <span className="text-xs text-slate-400">{description.length}/500</span>
+            <div className="hidden">
+              <label className="mb-1.5 block text-xs font-semibold text-slate-600">
+                Team Leader <span className="text-red-500">*</span>
+              </label>
+              <select
+                value={selected.includes(selectedLeaderId) ? selectedLeaderId : ''}
+                onChange={(event) => setSelectedLeaderId(event.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none bg-white"
+              >
+                <option value="">Select a team member</option>
+                {selectedStudents.map(student => (
+                  <option key={student._id} value={student._id}>{student.fullName}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="mb-1.5 flex items-center justify-between gap-2 text-xs font-semibold text-slate-600">
+                <span>Project name <span className="text-red-500">*</span></span>
+                <span className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-slate-500">
+                  <input
+                    type="checkbox"
+                    checked={isProjectNameSameAsGroup}
+                    onChange={e => setIsProjectNameSameAsGroup(e.target.checked)}
+                    className="rounded border-slate-300 text-primary focus:ring-primary"
+                  />
+                  Same as team
+                </span>
+              </label>
+              <input
+                type="text"
+                value={isProjectNameSameAsGroup ? groupName : projectName}
+                onChange={e => setProjectName(e.target.value)}
+                placeholder="Enter a project name"
+                disabled={isProjectNameSameAsGroup}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:bg-slate-100 disabled:text-slate-500"
+                required
+                minLength={3}
+                maxLength={60}
+              />
+              {!isProjectNameSameAsGroup && projectName.length > 0 && projectName.trim().length < 3 && (
+                <p className="mt-1 text-xs text-red-500">Project name must be 3–60 characters.</p>
+              )}
+            </div>
+
+            <div>
+              <label className="mb-1.5 block text-xs font-semibold text-slate-600">
+                Project description <span className="text-red-500">*</span>
+              </label>
+              <textarea
+                value={description}
+                onChange={e => setDescription(e.target.value)}
+                placeholder="Briefly describe the project idea"
+                className="h-10 w-full resize-none rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+                required
+                minLength={20}
+                maxLength={500}
+              />
+              <div className="mt-1 flex items-center justify-between gap-3">
+                <span>
+                  {description.length > 0 && description.trim().length < 20 && (
+                    <span className="text-xs text-red-500">Description must be 20–500 characters.</span>
+                  )}
+                </span>
+                <span className="text-xs text-slate-400">{description.length}/500</span>
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
         {/* Validation Info & Submit */}
         <div className="order-1 grid lg:grid-cols-[minmax(0,1fr)_260px]">
@@ -371,7 +416,7 @@ export default function StudentTeamGeneratePanel({ classId, selected: rawSelecte
             </select>
             <button
               type="button"
-              onClick={handleSubmit}
+              onClick={requestSubmission}
               disabled={submitting || !canSubmit}
               className={`mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-bold transition-all
                 ${!canSubmit
@@ -389,7 +434,125 @@ export default function StudentTeamGeneratePanel({ classId, selected: rawSelecte
           </div>
         </div>
       </div>
-    </div>
+      </div>
+
+      {showConfirmation && !proposal && (
+        <div
+          className="fixed inset-0 z-[90] flex items-end justify-center p-0 sm:items-center sm:p-6"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="team-confirmation-title"
+        >
+          <button
+            type="button"
+            className="absolute inset-0 cursor-default bg-slate-900/50 backdrop-blur-sm"
+            onClick={() => !submitting && setShowConfirmation(false)}
+            aria-label="Close team confirmation"
+          />
+
+          <div className="relative flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl sm:rounded-2xl">
+            <header className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4 sm:px-6">
+              <div>
+                <h2 id="team-confirmation-title" className="text-lg font-bold text-slate-900">
+                  Confirm team information
+                </h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  Review all information carefully before creating the team.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowConfirmation(false)}
+                disabled={submitting}
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-50"
+                aria-label="Close"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </header>
+
+            <div className="space-y-5 overflow-y-auto px-5 py-5 sm:px-6">
+              <dl className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Team name</dt>
+                  <dd className="mt-1 break-words text-sm font-semibold text-slate-900">{groupName.trim()}</dd>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Project name</dt>
+                  <dd className="mt-1 break-words text-sm font-semibold text-slate-900">{confirmedProjectName}</dd>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 sm:col-span-2">
+                  <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Project description</dt>
+                  <dd className="mt-1 whitespace-pre-wrap break-words text-sm leading-6 text-slate-700">{description.trim()}</dd>
+                </div>
+              </dl>
+
+              <section>
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                    <Users className="h-4 w-4 text-primary" /> Team members
+                  </h3>
+                  <span className="rounded-full bg-primary-50 px-2.5 py-1 text-xs font-bold text-primary">
+                    {selectedStudents.length} members
+                  </span>
+                </div>
+                <div className="divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-200">
+                  {selectedStudents.map(student => {
+                    const isLeader = student._id === selectedLeaderId;
+                    return (
+                      <div key={student._id} className="flex items-center gap-3 px-3 py-2.5">
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-50 text-sm font-bold text-primary">
+                          {student.fullName?.charAt(0)?.toUpperCase() || '?'}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-semibold text-slate-800">{student.fullName}</p>
+                          <p className="truncate text-xs text-slate-500">
+                            {student.rollNumber || 'No student code'}{student.major ? ` · ${student.major}` : ''}
+                          </p>
+                        </div>
+                        {isLeader && (
+                          <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-50 px-2 py-1 text-[11px] font-bold text-amber-700">
+                            <Crown className="h-3 w-3" /> Team Leader
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+
+              <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                <p>
+                  The team will be activated immediately. The project proposal will remain Pending until it is reviewed.
+                  {selectedLeader && <> The proposal will be recorded on behalf of <strong>{selectedLeader.fullName}</strong>.</>}
+                </p>
+              </div>
+            </div>
+
+            <footer className="flex flex-col-reverse gap-2 border-t border-slate-200 bg-slate-50 px-5 py-4 sm:flex-row sm:justify-end sm:px-6">
+              <button
+                type="button"
+                onClick={() => setShowConfirmation(false)}
+                disabled={submitting}
+                className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              >
+                Back to edit
+              </button>
+              <button
+                type="button"
+                onClick={handleSubmit}
+                disabled={submitting}
+                className="inline-flex items-center justify-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm font-bold text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                {submitting ? 'Creating team…' : 'Confirm & Create Team'}
+              </button>
+            </footer>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 

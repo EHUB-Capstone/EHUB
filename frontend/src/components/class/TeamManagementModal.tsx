@@ -5,23 +5,18 @@ import {
   BookOpen,
   Check,
   Crown,
-  FolderKanban,
   Search,
   UserCheck,
-  UserPlus,
   Users,
   X,
 } from 'lucide-react';
 import Button from '../ui/Button';
-import { classApi } from '../../api/classApi';
 import { teamApi } from '../../api/teamApi';
 import { unwrapApiData } from '../../utils/classMappers';
 import { parseApiError } from '../../utils/apiError';
 import { getTeamGroupFromMajor } from '../../constants/majors';
-import type { ApiEnvelope } from '../../types/classes';
 import type {
   ManagedTeam,
-  MentorCandidate,
   TeamClassOption,
   TeamDraft,
   TeamStudent,
@@ -41,60 +36,40 @@ interface TeamManagementModalProps {
   classInfo: TeamClassOption;
   students: TeamStudent[];
   teams: ManagedTeam[];
-  team?: ManagedTeam | null;
-  initialMemberIds?: string[];
-  initialLeaderId?: string;
+  team: ManagedTeam;
   onClose: () => void;
   onSave: (team: ManagedTeam) => void;
 }
-
-const PROJECT_STATUSES = [
-  { value: 'DRAFT', label: 'Draft' },
-  { value: 'IN_PROGRESS', label: 'In progress' },
-  { value: 'VALIDATED', label: 'Validated' },
-  { value: 'COMPLETED', label: 'Completed' },
-];
 
 export default function TeamManagementModal({
   classInfo,
   students,
   teams,
-  team = null,
-  initialMemberIds = [],
-  initialLeaderId = '',
+  team,
   onClose,
   onSave,
 }: TeamManagementModalProps) {
-  const currentProject = team ? getTeamProject(team) : null;
-  const initialIds = team ? getTeamMemberIds(team) : initialMemberIds;
+  const currentProject = getTeamProject(team);
+  const initialIds = getTeamMemberIds(team);
   const knownStudentIds = new Set(students.map((student) => student._id));
   const [draft, setDraft] = useState<TeamDraft>({
-    teamName: team?.teamName || '',
+    teamName: team.teamName || '',
     classId: classInfo.id,
     memberIds: [...new Set(initialIds.filter((studentId) => knownStudentIds.has(studentId)))],
-    leaderId: team ? entityId(team.leaderId) : initialLeaderId,
-    description: team?.description || '',
+    leaderId: entityId(team.leaderId),
+    description: team.description || '',
     projectName: currentProject?.name || '',
     projectDescription: currentProject?.description || '',
     projectStatus: currentProject?.status || 'DRAFT',
   });
   const [search, setSearch] = useState('');
-  const [useTeamNameForProject, setUseTeamNameForProject] = useState(true);
-  const currentMentorId = team?.currentMentorAssignment?.mentor?.mentorProfileId
-    || entityId(team?.mentorId)
-    || '';
-  const [mentorCandidates, setMentorCandidates] = useState<MentorCandidate[]>([]);
-  const [mentorsLoading, setMentorsLoading] = useState(true);
-  const [mentorId, setMentorId] = useState(
-    currentMentorId,
-  );
   const [attemptedSubmit, setAttemptedSubmit] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
-  const currentTeamId = team?._id || '';
+  const currentTeamId = team._id;
   const validation = useMemo(
-    () => validateTeamDraft(!team && useTeamNameForProject ? { ...draft, projectName: draft.teamName } : draft, teams, students, currentTeamId),
-    [currentTeamId, draft, students, teams, team, useTeamNameForProject],
+    () => validateTeamDraft(draft, teams, students, currentTeamId),
+    [currentTeamId, draft, students, teams],
   );
   const assignments = useMemo(
     () => buildStudentTeamAssignments(teams, students),
@@ -145,30 +120,6 @@ export default function TeamManagementModal({
     };
   }, [onClose]);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    const loadMentorCandidates = async () => {
-      setMentorsLoading(true);
-      try {
-        const response = await classApi.getMentorCandidates(classInfo.id);
-        const payload = unwrapApiData<MentorCandidate[]>(
-          response as ApiEnvelope<MentorCandidate[]> | MentorCandidate[],
-        );
-        if (!cancelled) setMentorCandidates(Array.isArray(payload) ? payload : []);
-      } catch {
-        if (!cancelled) setMentorCandidates([]);
-      } finally {
-        if (!cancelled) setMentorsLoading(false);
-      }
-    };
-
-    void loadMentorCandidates();
-    return () => {
-      cancelled = true;
-    };
-  }, [classInfo.id]);
-
   const updateDraft = <Field extends keyof TeamDraft>(field: Field, value: TeamDraft[Field]) => {
     setDraft((current) => ({ ...current, [field]: value }));
   };
@@ -203,54 +154,19 @@ export default function TeamManagementModal({
 
     setSubmitting(true);
     try {
-      const response = team
-        ? await teamApi.updateMembers(team._id, {
-            teamName: draft.teamName.trim(),
-            description: draft.description.trim(),
-            memberIds: draft.memberIds,
-            leaderStudentId: draft.leaderId,
-            rowVersion: team.rowVersion,
-          })
-        : await classApi.generateTeam(classInfo.id, {
-            studentIds: draft.memberIds,
-            leaderStudentId: draft.leaderId,
-            mode: 'standard',
-            teamName: draft.teamName.trim() || null,
-            useTeamNameForProject,
-            projectName: useTeamNameForProject ? null : draft.projectName.trim() || null,
-            description: draft.description.trim() || null,
-            // Mentor assignment is a separate semester-aware operation.
-            mentorId: null,
-          });
+      const response = await teamApi.updateMembers(team._id, {
+        teamName: draft.teamName.trim(),
+        description: draft.description.trim(),
+        memberIds: draft.memberIds,
+        leaderStudentId: draft.leaderId,
+        rowVersion: team.rowVersion,
+      });
       const payload = unwrapApiData<any>(response);
-      const savedTeam = team
-        ? normalizeManagedTeam(payload)
-        : payload.team
-          ? normalizeManagedTeam(payload.team)
-          : normalizeManagedTeam(payload);
-      if (mentorId && mentorId !== currentMentorId) {
-        try {
-          await teamApi.assignMentor(savedTeam._id, mentorId);
-        } catch (mentorError) {
-          if (!team) {
-            onSave(savedTeam);
-            toast.error(parseApiError(
-              mentorError,
-              'Team was created, but the mentor could not be assigned.',
-            ).message);
-            return;
-          }
-          throw mentorError;
-        }
-      }
+      const savedTeam = normalizeManagedTeam(payload);
       onSave(savedTeam);
-      toast.success(
-        team
-          ? 'Team members updated successfully'
-          : 'Team created successfully',
-      );
+      toast.success('Team members updated successfully');
     } catch (error) {
-      toast.error(parseApiError(error, team ? 'Failed to update team.' : 'Failed to create team.').message);
+      toast.error(parseApiError(error, 'Failed to update team.').message);
     } finally {
       setSubmitting(false);
     }
@@ -263,11 +179,11 @@ export default function TeamManagementModal({
         <header className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-100 px-5 py-4 sm:px-6">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-50 text-primary">
-              {team ? <UserCheck className="h-5 w-5" /> : <UserPlus className="h-5 w-5" />}
+              <UserCheck className="h-5 w-5" />
             </div>
             <div>
-              <h2 id="team-management-title" className="text-lg font-bold text-slate-900">{team ? 'Update team' : 'Create team'}</h2>
-              <p className="text-sm text-slate-500">Manage team information, members and linked project</p>
+              <h2 id="team-management-title" className="text-lg font-bold text-slate-900">Update team</h2>
+              <p className="text-sm text-slate-500">Manage team information and members</p>
             </div>
           </div>
           <button type="button" onClick={onClose} className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700" aria-label="Close">
@@ -285,34 +201,17 @@ export default function TeamManagementModal({
                 </div>
 
                 <div>
-                  <label htmlFor="team-name" className="mb-1.5 block text-xs font-semibold text-slate-600">Team name {team && <span className="text-red-500">*</span>}</label>
+                  <label htmlFor="team-name" className="mb-1.5 block text-xs font-semibold text-slate-600">Team name <span className="text-red-500">*</span></label>
                   <input
                     id="team-name"
                     value={draft.teamName}
                     onChange={(event) => updateDraft('teamName', event.target.value)}
-                    placeholder={team ? 'Example: Nova Founders' : 'Leave blank to generate the next team name'}
+                    placeholder="Example: Nova Founders"
                     maxLength={60}
                     className={`w-full rounded-xl border px-3 py-2.5 text-sm outline-none transition-all focus:ring-2 focus:ring-primary/20 ${attemptedSubmit && validation.errors.teamName ? 'border-red-300 bg-red-50' : 'border-slate-200 focus:border-primary'}`}
                   />
                   {attemptedSubmit && validation.errors.teamName && <p className="mt-1 text-xs text-red-600">{validation.errors.teamName}</p>}
                 </div>
-
-                {!team && (
-                  <div className="space-y-2">
-                    <label className="flex items-center gap-2 text-xs font-medium text-slate-600">
-                      <input type="checkbox" checked={useTeamNameForProject} onChange={(event) => setUseTeamNameForProject(event.target.checked)} className="rounded border-slate-300 accent-primary" />
-                      Use team name as project name
-                    </label>
-                    {!useTeamNameForProject && (
-                      <div>
-                        <label htmlFor="create-project-name" className="mb-1 block text-xs font-semibold text-slate-600">Project name</label>
-                        <input id="create-project-name" value={draft.projectName} onChange={(event) => updateDraft('projectName', event.target.value)} maxLength={100} placeholder="Enter a project name (optional)" className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20" />
-                        {attemptedSubmit && validation.errors.projectName && <p className="mt-1 text-xs text-red-600">{validation.errors.projectName}</p>}
-                      </div>
-                    )}
-                    <p className="text-xs text-slate-500">Saved as a draft. Project proposals still require review.</p>
-                  </div>
-                )}
 
                 <div>
                   <label className="mb-1.5 block text-xs font-semibold text-slate-600">Class <span className="text-red-500">*</span></label>
@@ -338,62 +237,6 @@ export default function TeamManagementModal({
                   />
                 </div>
 
-                <div>
-                  <label htmlFor="team-mentor" className="mb-1.5 block text-xs font-semibold text-slate-600">Assign mentor</label>
-                  <select
-                    id="team-mentor"
-                    value={mentorId}
-                    onChange={(event) => setMentorId(event.target.value)}
-                    disabled={mentorsLoading}
-                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:opacity-60"
-                  >
-                    <option value="">{mentorsLoading ? 'Loading mentors…' : 'No mentor'}</option>
-                    {mentorCandidates.map((candidate) => (
-                      <option
-                        key={candidate.mentor.mentorProfileId}
-                        value={candidate.mentor.mentorProfileId}
-                        disabled={!candidate.hasCapacity && candidate.mentor.mentorProfileId !== currentMentorId}
-                      >
-                        {candidate.mentor.fullName} ({candidate.activeTeamCount}/{candidate.maxTeams} teams)
-                        {!candidate.hasCapacity && candidate.mentor.mentorProfileId !== currentMentorId ? ' · Full' : ''}
-                      </option>
-                    ))}
-                  </select>
-                  {!mentorsLoading && mentorCandidates.length === 0 ? (
-                    <p className="mt-1 text-xs text-amber-700">No active mentor is configured for this semester.</p>
-                  ) : (
-                    <p className="mt-1 text-xs text-slate-500">Only active mentors in this class semester are available.</p>
-                  )}
-                </div>
-              </section>
-
-              <section className="hidden space-y-4 rounded-2xl border border-secondary-100 bg-secondary-50/50 p-4">
-                <div className="flex items-center gap-2">
-                  <FolderKanban className="h-4 w-4 text-secondary" />
-                  <div>
-                    <h3 className="text-sm font-bold text-slate-900">Project direction</h3>
-                    <p className="text-xs text-slate-500">Created separately by the team leader after this official team is saved.</p>
-                  </div>
-                </div>
-
-                <div>
-                  <label htmlFor="project-name" className="mb-1.5 block text-xs font-semibold text-slate-600">Project name</label>
-                  <input id="project-name" value={draft.projectName} onChange={(event) => updateDraft('projectName', event.target.value)} placeholder="Example: EcoTrack" maxLength={100} className={`w-full rounded-xl border bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-secondary/20 ${attemptedSubmit && validation.errors.projectName ? 'border-red-300' : 'border-slate-200 focus:border-secondary'}`} />
-                  {attemptedSubmit && validation.errors.projectName && <p className="mt-1 text-xs text-red-600">{validation.errors.projectName}</p>}
-                </div>
-
-                <div>
-                  <label htmlFor="project-status" className="mb-1.5 block text-xs font-semibold text-slate-600">Status</label>
-                  <select id="project-status" value={draft.projectStatus} onChange={(event) => updateDraft('projectStatus', event.target.value)} disabled={!draft.projectName.trim()} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-secondary disabled:opacity-50">
-                    {PROJECT_STATUSES.map((status) => <option key={status.value} value={status.value}>{status.label}</option>)}
-                  </select>
-                </div>
-
-                <div>
-                  <label htmlFor="project-summary" className="mb-1.5 block text-xs font-semibold text-slate-600">Project summary</label>
-                  <textarea id="project-summary" value={draft.projectDescription} onChange={(event) => updateDraft('projectDescription', event.target.value)} disabled={!draft.projectName.trim()} placeholder="Problem and solution overview" maxLength={500} rows={3} className={`w-full resize-none rounded-xl border bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-secondary/20 disabled:opacity-50 ${attemptedSubmit && validation.errors.projectDescription ? 'border-red-300' : 'border-slate-200 focus:border-secondary'}`} />
-                  {attemptedSubmit && validation.errors.projectDescription && <p className="mt-1 text-xs text-red-600">{validation.errors.projectDescription}</p>}
-                </div>
               </section>
             </div>
 
@@ -479,17 +322,17 @@ export default function TeamManagementModal({
         </div>
 
         <footer className="flex shrink-0 flex-col-reverse gap-2 border-t border-slate-100 bg-slate-50/70 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-          <p className="text-xs text-slate-500"><strong>{draft.memberIds.length}</strong> member{draft.memberIds.length === 1 ? '' : 's'} · {!team && (useTeamNameForProject || draft.projectName.trim()) ? 'Project draft will be created' : currentProject ? 'Project linked' : 'No project linked'}</p>
+          <p className="text-xs text-slate-500"><strong>{draft.memberIds.length}</strong> member{draft.memberIds.length === 1 ? '' : 's'} · {currentProject ? 'Project linked' : 'No project linked'}</p>
           <div className="flex gap-2">
             <Button variant="outline" onClick={onClose}>Cancel</Button>
             <Button
               variant="gradient"
-              icon={team ? UserCheck : UserPlus}
+              icon={UserCheck}
               isLoading={submitting}
               disabled={!validation.isValid}
               onClick={handleSubmit}
             >
-              {team ? 'Save members' : 'Create team'}
+              Save members
             </Button>
           </div>
         </footer>

@@ -24,9 +24,9 @@ export default function ProjectDirectionModal({ team, role, currentStudentId = '
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const isLeader = role === 'STUDENT' && entityId(team.leaderId) === currentStudentId;
-  const canEdit = isLeader && (!direction || ['Draft', 'NeedsRevision'].includes(direction.status));
+  const canEdit = isLeader && direction && ['Draft', 'NeedsRevision'].includes(direction.status);
   const canReview = role === 'LECTURER' && direction?.status === 'Submitted';
-  const valid = title.trim().length >= 3 && summary.trim().length >= 20 && summary.trim().length <= 5000;
+  const valid = title.trim().length >= 3 && summary.trim().length >= 20 && summary.trim().length <= 2000;
   const hasUnsavedChanges = hasUnsavedProjectDirectionChanges(direction, title, summary);
   const canSubmitDirection = canSubmitProjectDirection(direction, title, summary);
   const submitGuidance = getProjectDirectionSubmitGuidance(direction, title, summary);
@@ -110,7 +110,7 @@ export default function ProjectDirectionModal({ team, role, currentStudentId = '
     <div className="fixed inset-0 z-[85] flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm">
       <div className="flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl">
         <header className="flex items-start justify-between border-b border-slate-100 bg-slate-50 px-5 py-4">
-          <div><h3 className="font-bold text-slate-900">Project direction · {team.teamName}</h3><p className="mt-0.5 text-xs text-slate-500">This workflow is separate from the team proposal.</p></div>
+          <div><h3 className="font-bold text-slate-900">Project direction · {team.teamName}</h3><p className="mt-0.5 text-xs text-slate-500">Project information submitted from the team workspace.</p></div>
           <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-400 hover:bg-slate-200"><X className="h-4 w-4" /></button>
         </header>
 
@@ -118,14 +118,16 @@ export default function ProjectDirectionModal({ team, role, currentStudentId = '
           <div className="flex-1 space-y-5 overflow-y-auto p-5">
             <div className="flex items-center justify-between"><span className="text-xs font-bold uppercase text-slate-500">Current status</span><span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">{formatStatus(direction?.status)}</span></div>
             <div>
-              <label className="text-xs font-semibold text-slate-600">Direction title</label>
+              <label className="text-xs font-semibold text-slate-600">Project Name</label>
               <input value={title} onChange={event => setTitle(event.target.value)} disabled={!canEdit} maxLength={200} className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-primary disabled:bg-slate-50" />
             </div>
             <div>
-              <label className="text-xs font-semibold text-slate-600">Summary</label>
-              <textarea value={summary} onChange={event => setSummary(event.target.value)} disabled={!canEdit} maxLength={5000} rows={7} className="mt-1.5 w-full resize-none rounded-xl border border-slate-200 px-3 py-2 text-sm leading-6 outline-none focus:border-primary disabled:bg-slate-50" />
-              <p className="mt-1 text-right text-[11px] text-slate-400">{summary.length}/5000 · minimum 20</p>
+              <label className="text-xs font-semibold text-slate-600">Project description</label>
+              <textarea value={summary} onChange={event => setSummary(event.target.value)} disabled={!canEdit} maxLength={2000} rows={7} className="mt-1.5 w-full resize-none rounded-xl border border-slate-200 px-3 py-2 text-sm leading-6 outline-none focus:border-primary disabled:bg-slate-50" />
+              <p className="mt-1 text-right text-[11px] text-slate-400">{summary.length}/2000 · minimum 20</p>
             </div>
+
+            {direction?.startupIndustries?.length > 0 && <div><p className="mb-2 text-xs font-semibold text-slate-600">Startup Industry</p><div className="flex flex-wrap gap-2">{direction.startupIndustries.map(industry => <span key={industry} className="rounded-full border border-primary-100 bg-primary-50 px-2.5 py-1 text-xs font-semibold text-primary-700">{industry}</span>)}</div></div>}
 
             {canEdit && <><div className="flex justify-end gap-2"><button type="button" onClick={save} disabled={submitting || !valid || !hasUnsavedChanges} className="rounded-xl border border-primary-200 px-4 py-2 text-sm font-semibold text-primary disabled:opacity-50">Save draft</button>{direction && <button type="button" onClick={submit} disabled={submitting || !canSubmitDirection} className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-600 disabled:opacity-100"><Send className="h-4 w-4" /> Submit</button>}</div>{submitGuidance && <p role="status" className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">{submitGuidance}</p>}</>}
 

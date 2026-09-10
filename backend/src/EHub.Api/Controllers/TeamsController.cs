@@ -32,14 +32,6 @@ public sealed class TeamsController : ControllerBase
     public async Task<IActionResult> GetClassTeams(Guid classId, [FromServices] ITeamManagementHandler handler, CancellationToken cancellationToken) =>
         ToResponse(await handler.GetForClassAsync(classId, UserId, Role, cancellationToken), "Class teams retrieved.");
 
-    [HttpPost("classes/{classId:guid}/teams")]
-    public async Task<IActionResult> CreateTeam(Guid classId, [FromBody] CreateTeamRequest request, [FromServices] ITeamManagementHandler handler, CancellationToken cancellationToken) =>
-        ToResponse(await handler.CreateAsync(classId, request, UserId, Role, cancellationToken), "Team created.");
-
-    [HttpPost("classes/{classId:guid}/teams/generate")]
-    public async Task<IActionResult> GenerateTeam(Guid classId, [FromBody] GenerateClassTeamRequest request, [FromServices] ITeamManagementHandler handler, CancellationToken cancellationToken) =>
-        ToResponse(await handler.GenerateAsync(classId, request, UserId, Role, cancellationToken), "Team request processed.");
-
     [HttpPost("classes/{classId:guid}/teams/student-proposal")]
     public async Task<IActionResult> SubmitStudentProposal(Guid classId, [FromBody] SubmitStudentTeamProposalRequest request, [FromServices] ITeamProposalHandler handler, CancellationToken cancellationToken) =>
         ToResponse(await handler.SubmitStudentProposalAsync(classId, request, UserId, Role, cancellationToken), "Team created and project proposal submitted for review.");

@@ -58,32 +58,6 @@ public sealed class TeamDto
     public string RowVersion { get; init; } = string.Empty;
 }
 
-public sealed class CreateTeamRequest
-{
-    public string TeamName { get; init; } = string.Empty;
-    public string? Description { get; init; }
-    public IReadOnlyCollection<Guid> MemberIds { get; init; } = Array.Empty<Guid>();
-    public Guid LeaderStudentId { get; init; }
-}
-
-public sealed class GenerateClassTeamRequest
-{
-    public bool UseTeamNameForProject { get; init; }
-    public string? ProjectName { get; init; }
-    public IReadOnlyCollection<Guid> StudentIds { get; init; } = Array.Empty<Guid>();
-    public Guid LeaderStudentId { get; init; }
-    public Guid? MentorId { get; init; }
-    public string Mode { get; init; } = "standard";
-    public string? TeamName { get; init; }
-    public string? Description { get; init; }
-}
-
-public sealed class GenerateClassTeamResponse
-{
-    public TeamDto? Team { get; init; }
-    public TeamProposalDto? Proposal { get; init; }
-}
-
 public sealed class UpdateTeamMembersRequest
 {
     public string? TeamName { get; init; }
@@ -199,6 +173,7 @@ public sealed class ProjectDirectionDto
     public Guid TeamId { get; init; }
     public string Title { get; init; } = string.Empty;
     public string Summary { get; init; } = string.Empty;
+    public IReadOnlyCollection<string> StartupIndustries { get; init; } = Array.Empty<string>();
     public string Status { get; init; } = string.Empty;
     public DateTime? SubmittedAtUtc { get; init; }
     public DateTime? ReviewedAtUtc { get; init; }

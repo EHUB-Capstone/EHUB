@@ -1,3 +1,4 @@
+using System.Text.Json;
 using EHub.Application.Common.Interfaces.Persistence;
 using EHub.Application.Common.Interfaces.Services;
 using EHub.Application.Features.Classes.Common;
@@ -48,6 +49,8 @@ public sealed class ProjectDirectionHandler : IProjectDirectionHandler
         if (classError != null) return Failure(classError.Code, classError.Message);
 
         var direction = await DirectionQuery(tracking: true).FirstOrDefaultAsync(item => item.TeamId == teamId, cancellationToken);
+        var revisedTitle = request.Title.Trim();
+        var revisedSummary = request.Summary.Trim();
         if (direction == null)
         {
             if (!string.IsNullOrWhiteSpace(request.RowVersion)) return Failure(ErrorCodes.ClassConcurrencyConflict, "The project direction no longer matches this screen.");
@@ -55,8 +58,8 @@ public sealed class ProjectDirectionHandler : IProjectDirectionHandler
             {
                 TeamId = teamId,
                 Team = team,
-                Title = request.Title.Trim(),
-                Summary = request.Summary.Trim(),
+                Title = revisedTitle,
+                Summary = revisedSummary,
                 Status = ProjectDirectionStatus.Draft,
                 CreatedBy = userId
             };
@@ -68,8 +71,6 @@ public sealed class ProjectDirectionHandler : IProjectDirectionHandler
                 return Failure(ErrorCodes.ClassConcurrencyConflict, "The project direction changed concurrently. Refresh and try again.");
             if (direction.Status is not (ProjectDirectionStatus.Draft or ProjectDirectionStatus.NeedsRevision))
                 return Failure(ErrorCodes.ProjectDirectionStateInvalid, "Only Draft or NeedsRevision directions can be edited.");
-            var revisedTitle = request.Title.Trim();
-            var revisedSummary = request.Summary.Trim();
             if (direction.Status == ProjectDirectionStatus.NeedsRevision
                 && direction.Title == revisedTitle
                 && direction.Summary == revisedSummary)
@@ -79,6 +80,30 @@ public sealed class ProjectDirectionHandler : IProjectDirectionHandler
             if (direction.Status == ProjectDirectionStatus.NeedsRevision)
                 direction.Status = ProjectDirectionStatus.Draft;
             direction.UpdatedBy = userId;
+        }
+
+        var project = direction.Team.Project;
+        if (project != null)
+        {
+            var changedFields = new List<string>();
+            if (!string.Equals(project.Name, revisedTitle, StringComparison.Ordinal)) changedFields.Add("projectName");
+            if (!string.Equals(project.Description ?? string.Empty, revisedSummary, StringComparison.Ordinal)) changedFields.Add("description");
+            if (changedFields.Count > 0)
+            {
+                project.Name = revisedTitle;
+                project.Description = revisedSummary;
+                project.UpdatedBy = userId;
+                _context.ProjectActivityLogs.Add(new ProjectActivityLog
+                {
+                    ProjectId = project.Id,
+                    Project = project,
+                    ActorUserId = userId,
+                    Action = "PROJECT_DIRECTION_DETAILS_UPDATED",
+                    Summary = "Updated project details from the project direction.",
+                    ChangedFieldsJson = JsonSerializer.Serialize(changedFields),
+                    OccurredAtUtc = DateTime.UtcNow
+                });
+            }
         }
 
         ClassOutbox.Enqueue(_context, "ProjectDirection.Saved.v1", team.ClassId, new { TeamId = teamId, ProjectDirectionId = direction.Id });
@@ -190,13 +215,16 @@ public sealed class ProjectDirectionHandler : IProjectDirectionHandler
 
     private IQueryable<Team> TeamAccessQuery() => _context.Teams
         .Include(team => team.Class)
+        .Include(team => team.Project).ThenInclude(project => project!.ProjectTags)
         .Include(team => team.TeamMembers).ThenInclude(member => member.ClassStudent).ThenInclude(enrollment => enrollment.Student)
         .Include(team => team.MentorAssignments).ThenInclude(assignment => assignment.MentorProfile);
 
     private IQueryable<ProjectDirection> DirectionQuery(bool tracking = false)
     {
         var query = tracking ? _context.ProjectDirections.AsQueryable() : _context.ProjectDirections.AsNoTracking();
-        return query.Include(direction => direction.Reviews);
+        return query
+            .Include(direction => direction.Reviews)
+            .Include(direction => direction.Team).ThenInclude(team => team.Project).ThenInclude(project => project!.ProjectTags);
     }
 
     private async Task<bool> CanViewAsync(Team team, Guid userId, string role, CancellationToken cancellationToken)
@@ -223,14 +251,18 @@ public sealed class ProjectDirectionHandler : IProjectDirectionHandler
 
     private static (string Code, string Message)? ValidateContent(string title, string summary)
     {
-        if (string.IsNullOrWhiteSpace(title) || title.Trim().Length is < 3 or > 200) return (ErrorCodes.ClassValidationError, "Direction title must be between 3 and 200 characters.");
-        if (string.IsNullOrWhiteSpace(summary) || summary.Trim().Length is < 20 or > 5_000) return (ErrorCodes.ClassValidationError, "Direction summary must be between 20 and 5000 characters.");
+        if (string.IsNullOrWhiteSpace(title) || title.Trim().Length is < 3 or > 200) return (ErrorCodes.ClassValidationError, "Project name must be between 3 and 200 characters.");
+        if (string.IsNullOrWhiteSpace(summary) || summary.Trim().Length is < 20 or > 2_000) return (ErrorCodes.ClassValidationError, "Project description must be between 20 and 2000 characters.");
         return null;
     }
 
     private static ProjectDirectionDto ToDto(ProjectDirection direction) => new()
     {
         Id = direction.Id, TeamId = direction.TeamId, Title = direction.Title, Summary = direction.Summary,
+        StartupIndustries = direction.Team?.Project?.ProjectTags
+            .Where(tag => tag.TagType == ProjectTagType.StartupField)
+            .Select(tag => tag.TagName)
+            .ToArray() ?? Array.Empty<string>(),
         Status = direction.Status.ToString(), SubmittedAtUtc = direction.SubmittedAtUtc, ReviewedAtUtc = direction.ReviewedAtUtc,
         RowVersion = direction.Version.ToString(),
         Reviews = direction.Reviews.OrderByDescending(review => review.OccurredAtUtc).Select(review => new ProjectDirectionReviewDto

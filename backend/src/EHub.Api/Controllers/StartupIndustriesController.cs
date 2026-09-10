@@ -10,10 +10,21 @@ namespace EHub.Api.Controllers;
 
 [ApiController]
 [Route("api/startup-industries")]
-[Authorize(Policy = SystemPolicies.AdminOnly)]
+[Authorize]
 public sealed class StartupIndustriesController(IStartupIndustryManagementHandler handler) : ControllerBase
 {
+    [HttpGet("options")]
+    public async Task<IActionResult> GetActiveOptions(CancellationToken cancellationToken)
+    {
+        var result = await handler.GetActiveOptionsAsync(cancellationToken);
+        return result.IsFailure
+            ? ToErrorResponse(result.Error)
+            : Ok(ApiResponse<StartupIndustryListResponse>.SuccessResponse(
+                result.Value!, "Active startup industries retrieved successfully."));
+    }
+
     [HttpGet]
+    [Authorize(Policy = SystemPolicies.AdminOnly)]
     public async Task<IActionResult> GetIndustries(
         [FromQuery] string? search,
         [FromQuery] string? status,
@@ -28,6 +39,7 @@ public sealed class StartupIndustriesController(IStartupIndustryManagementHandle
     }
 
     [HttpPost]
+    [Authorize(Policy = SystemPolicies.AdminOnly)]
     public async Task<IActionResult> CreateIndustry(
         [FromBody] CreateStartupIndustryRequest request,
         CancellationToken cancellationToken)
@@ -41,6 +53,7 @@ public sealed class StartupIndustriesController(IStartupIndustryManagementHandle
     }
 
     [HttpPut("{id:guid}")]
+    [Authorize(Policy = SystemPolicies.AdminOnly)]
     public async Task<IActionResult> UpdateIndustry(
         Guid id,
         [FromBody] UpdateStartupIndustryRequest request,
@@ -54,6 +67,7 @@ public sealed class StartupIndustriesController(IStartupIndustryManagementHandle
     }
 
     [HttpPut("{id:guid}/status")]
+    [Authorize(Policy = SystemPolicies.AdminOnly)]
     public async Task<IActionResult> ChangeStatus(
         Guid id,
         [FromBody] ChangeStartupIndustryStatusRequest request,

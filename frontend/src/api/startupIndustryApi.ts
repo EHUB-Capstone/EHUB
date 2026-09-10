@@ -12,6 +12,8 @@ interface GetStartupIndustriesParams {
 }
 
 export const startupIndustryApi = {
+  getActiveOptions: (signal?: AbortSignal) =>
+    axiosClient.get('/startup-industries/options', { signal }),
   getAll: (params: GetStartupIndustriesParams = {}, signal?: AbortSignal) =>
     axiosClient.get('/startup-industries', { params, signal }),
   create: (data: SaveStartupIndustryPayload) =>

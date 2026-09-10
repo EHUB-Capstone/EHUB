@@ -127,18 +127,23 @@ public sealed class TeamProposalHandler : ITeamProposalHandler
         string role,
         CancellationToken cancellationToken = default)
     {
-        if (!IsRole(role, SystemRoles.Student))
+        var isStudent = IsRole(role, SystemRoles.Student);
+        var isAdmin = IsRole(role, SystemRoles.Admin);
+        var isLecturer = IsRole(role, SystemRoles.Lecturer);
+        if (!isStudent && !isAdmin && !isLecturer)
         {
-            return Failure(ErrorCodes.ClassAccessDenied, "Only a student can submit a team proposal.");
+            return Failure(ErrorCodes.ClassAccessDenied, "Only a student, administrator, or assigned lecturer can submit a team proposal.");
         }
 
-        var studentId = await GetStudentIdAsync(userId, cancellationToken);
-        if (!studentId.HasValue)
+        var proposingStudentId = isStudent
+            ? await GetStudentIdAsync(userId, cancellationToken)
+            : request.LeaderStudentId;
+        if (!proposingStudentId.HasValue)
         {
             return Failure(ErrorCodes.ClassAccessDenied, "The current account is not linked to a student profile.");
         }
 
-        if (!request.StudentIds.Contains(studentId.Value))
+        if (isStudent && !request.StudentIds.Contains(proposingStudentId.Value))
         {
             return Failure(
                 ErrorCodes.ClassAccessDenied,
@@ -174,6 +179,13 @@ public sealed class TeamProposalHandler : ITeamProposalHandler
                 if (targetClass == null)
                 {
                     return Failure(ErrorCodes.ClassNotFound, "The requested class was not found.");
+                }
+
+                if (!isStudent && !isAdmin && targetClass.PrimaryLecturerId != userId)
+                {
+                    return Failure(
+                        ErrorCodes.ClassAccessDenied,
+                        "Only an administrator or the assigned lecturer can create a team for this class.");
                 }
 
                 var composition = await LoadAndValidateCompositionAsync(
@@ -243,7 +255,7 @@ public sealed class TeamProposalHandler : ITeamProposalHandler
                 var proposal = new TeamProposal
                 {
                     ClassId = classId,
-                    ProposedByStudentId = studentId.Value,
+                    ProposedByStudentId = proposingStudentId.Value,
                     TeamName = groupName,
                     ProjectName = projectName,
                     Description = request.Description.Trim(),
