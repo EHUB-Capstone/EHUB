@@ -255,7 +255,7 @@ export default function StudentClassDetail() {
       )}
 
       {students.length > 0 && !selectionDisabled && selected.length > 0 && (
-        <div className="sticky top-20 z-30 rounded-2xl bg-white/80 shadow-xl backdrop-blur-md">
+        <div className="sticky top-20 z-20 rounded-2xl bg-white/80 shadow-xl backdrop-blur-md">
           <StudentTeamGeneratePanel
             classId={loadedClassId}
             selected={selected}

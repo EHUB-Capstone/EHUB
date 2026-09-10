@@ -101,10 +101,9 @@ public sealed class ProjectWorkspaceHandler : IProjectWorkspaceHandler
         if (!IsRole(role, SystemRoles.Student))
             return Failure<ProjectWorkspaceDto>(ErrorCodes.WorkspaceAccessDenied, "Only the active team leader can create a project workspace.");
 
-        var validation = Validate(request.ProjectName, request.Description, request.Keywords);
+        var industryIds = request.StartupIndustryIds ?? Array.Empty<Guid>();
+        var validation = ValidateCreate(request.ProjectName, request.Description, industryIds);
         if (validation != null) return Result.Failure<ProjectWorkspaceDto>(validation);
-
-        var keywords = NormalizeTags(request.Keywords ?? Array.Empty<string>());
         try
         {
             return await _unitOfWork.ExecuteInSerializableTransactionAsync(async transactionCancellationToken =>
@@ -127,6 +126,19 @@ public sealed class ProjectWorkspaceHandler : IProjectWorkspaceHandler
                 if (team.Project != null || await _context.Projects.AnyAsync(project => project.TeamId == teamId, transactionCancellationToken))
                     return Failure<ProjectWorkspaceDto>(ErrorCodes.WorkspaceAlreadyExists, "This team already has an active project workspace.");
 
+                var activeIndustries = await _context.StartupIndustries
+                    .AsNoTracking()
+                    .Where(industry => industry.Status == StartupIndustryStatus.Active && industryIds.Contains(industry.Id))
+                    .ToArrayAsync(transactionCancellationToken);
+                if (activeIndustries.Length != industryIds.Count)
+                    return Failure<ProjectWorkspaceDto>(ErrorCodes.WorkspaceValidationError, "Select between 1 and 3 active startup industries.");
+
+                var industriesById = activeIndustries.ToDictionary(industry => industry.Id);
+                var industryTags = industryIds
+                    .Select(industryId => industriesById[industryId])
+                    .Select(industry => (Display: industry.Name, Normalized: industry.NormalizedName))
+                    .ToArray();
+
                 var now = DateTime.UtcNow;
                 var project = new Project
                 {
@@ -139,8 +151,38 @@ public sealed class ProjectWorkspaceHandler : IProjectWorkspaceHandler
                     CreatedBy = userId,
                     CreatedAt = now
                 };
-                foreach (var tag in keywords)
-                    project.ProjectTags.Add(CreateTag(project, tag, ProjectTagType.Keyword, userId, now));
+                foreach (var tag in industryTags)
+                    project.ProjectTags.Add(CreateTag(project, tag, ProjectTagType.StartupField, userId, now));
+
+                var direction = team.ProjectDirection;
+                var directionSubmitted = false;
+                if (direction == null)
+                {
+                    direction = new ProjectDirection
+                    {
+                        TeamId = team.Id,
+                        Team = team,
+                        Title = project.Name,
+                        Summary = project.Description,
+                        Status = ProjectDirectionStatus.Submitted,
+                        SubmittedAtUtc = now,
+                        CreatedBy = userId
+                    };
+                    _context.ProjectDirections.Add(direction);
+                    directionSubmitted = true;
+                }
+                else if (direction.Status is ProjectDirectionStatus.Draft or ProjectDirectionStatus.NeedsRevision)
+                {
+                    direction.Title = project.Name;
+                    direction.Summary = project.Description;
+                    direction.Status = ProjectDirectionStatus.Submitted;
+                    direction.SubmittedAtUtc = now;
+                    direction.ReviewedAtUtc = null;
+                    direction.ReviewedByUserId = null;
+                    direction.UpdatedBy = userId;
+                    directionSubmitted = true;
+                }
+
                 project.ActivityLogs.Add(new ProjectActivityLog
                 {
                     ProjectId = project.Id,
@@ -148,7 +190,7 @@ public sealed class ProjectWorkspaceHandler : IProjectWorkspaceHandler
                     ActorUserId = userId,
                     Action = "WORKSPACE_CREATED",
                     Summary = "Created the project workspace.",
-                    ChangedFieldsJson = JsonSerializer.Serialize(new[] { "projectName", "description", "keywords" }),
+                    ChangedFieldsJson = JsonSerializer.Serialize(new[] { "projectName", "description", "startupIndustries" }),
                     OccurredAtUtc = now
                 });
 
@@ -162,6 +204,15 @@ public sealed class ProjectWorkspaceHandler : IProjectWorkspaceHandler
                     SemesterId = team.Class.SemesterId,
                     LeaderUserId = userId
                 }, now);
+                if (directionSubmitted)
+                {
+                    ClassOutbox.Enqueue(_context, "ProjectDirection.Submitted.v1", team.ClassId, new
+                    {
+                        TeamId = team.Id,
+                        ProjectDirectionId = direction.Id,
+                        LecturerUserId = team.Class.PrimaryLecturerId
+                    }, now);
+                }
                 await _context.SaveChangesAsync(transactionCancellationToken);
                 return Result.Success(MapProject(project, team));
             }, cancellationToken);
@@ -186,10 +237,6 @@ public sealed class ProjectWorkspaceHandler : IProjectWorkspaceHandler
         if (!IsRole(role, SystemRoles.Student))
             return Failure<ProjectWorkspaceDto>(ErrorCodes.WorkspaceAccessDenied, "Only the active team leader can update the project profile.");
 
-        var validation = ValidateProfile(request);
-        if (validation != null) return Result.Failure<ProjectWorkspaceDto>(validation);
-        var keywords = NormalizeTags(request.Keywords ?? Array.Empty<string>());
-
         try
         {
             return await _unitOfWork.ExecuteInSerializableTransactionAsync(async transactionCancellationToken =>
@@ -211,6 +258,10 @@ public sealed class ProjectWorkspaceHandler : IProjectWorkspaceHandler
                     return Failure<ProjectWorkspaceDto>(ErrorCodes.WorkspaceLeaderRequired, "Only the active team leader can update this project profile.");
                 if (team.Project == null)
                     return Failure<ProjectWorkspaceDto>(ErrorCodes.WorkspaceNotFound, "This team does not have a project workspace.");
+
+                var validation = ValidateProfile(request);
+                if (validation != null) return Result.Failure<ProjectWorkspaceDto>(validation);
+                var keywords = NormalizeTags(request.Keywords ?? Array.Empty<string>());
 
                 var project = team.Project;
                 var nextName = (request.ProjectName ?? string.Empty).Trim();
@@ -290,6 +341,7 @@ public sealed class ProjectWorkspaceHandler : IProjectWorkspaceHandler
             .Include(team => team.TeamMembers).ThenInclude(member => member.ClassStudent).ThenInclude(enrollment => enrollment.Student)
             .Include(team => team.Project).ThenInclude(project => project!.ProjectTags)
             .Include(team => team.Project).ThenInclude(project => project!.ActivityLogs).ThenInclude(activity => activity.ActorUser)
+            .Include(team => team.ProjectDirection)
             .Include(team => team.MentorAssignments).ThenInclude(assignment => assignment.MentorProfile).ThenInclude(profile => profile.User);
     }
 
@@ -303,6 +355,22 @@ public sealed class ProjectWorkspaceHandler : IProjectWorkspaceHandler
         if ((description ?? string.Empty).Trim().Length is < 20 or > 2_000)
             return new Error(ErrorCodes.WorkspaceValidationError, "Project description must be between 20 and 2000 characters.");
         return ValidateTags(keywords ?? Array.Empty<string>(), "keyword");
+    }
+
+    private static Error? ValidateCreate(
+        string? projectName,
+        string? description,
+        IReadOnlyCollection<Guid> startupIndustryIds)
+    {
+        if ((projectName ?? string.Empty).Trim().Length is < 3 or > 200)
+            return new Error(ErrorCodes.WorkspaceValidationError, "Project name must be between 3 and 200 characters.");
+        if ((description ?? string.Empty).Trim().Length is < 20 or > 2_000)
+            return new Error(ErrorCodes.WorkspaceValidationError, "Project description must be between 20 and 2000 characters.");
+        if (startupIndustryIds.Count is < 1 or > 3)
+            return new Error(ErrorCodes.WorkspaceValidationError, "Select between 1 and 3 startup industries.");
+        if (startupIndustryIds.Any(industryId => industryId == Guid.Empty) || startupIndustryIds.Distinct().Count() != startupIndustryIds.Count)
+            return new Error(ErrorCodes.WorkspaceValidationError, "Startup industry selections must be unique and valid.");
+        return null;
     }
 
     private static Error? ValidateProfile(UpdateProjectWorkspaceRequest request)
@@ -386,7 +454,6 @@ public sealed class ProjectWorkspaceHandler : IProjectWorkspaceHandler
         {
             var created = CreateTag(project, tag, type, userId, now);
             _context.ProjectTags.Add(created);
-            project.ProjectTags.Add(created);
         }
     }
 
@@ -489,6 +556,7 @@ public sealed class ProjectWorkspaceHandler : IProjectWorkspaceHandler
         Solution = project.Solution ?? string.Empty,
         TargetUsers = project.TargetUsers ?? string.Empty,
         Keywords = project.ProjectTags.Where(tag => tag.TagType == ProjectTagType.Keyword).Select(tag => tag.TagName).ToArray(),
+        StartupIndustries = project.ProjectTags.Where(tag => tag.TagType == ProjectTagType.StartupField).Select(tag => tag.TagName).ToArray(),
         Status = project.Status.ToString(),
         CreatedAtUtc = project.CreatedAt,
         UpdatedAtUtc = project.UpdatedAt

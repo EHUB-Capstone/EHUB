@@ -3,12 +3,14 @@ namespace EHub.Contracts.StartupIndustries;
 public sealed class CreateStartupIndustryRequest
 {
     public string Name { get; init; } = string.Empty;
+    public string? Description { get; init; }
     public string Status { get; init; } = "active";
 }
 
 public sealed class UpdateStartupIndustryRequest
 {
     public string Name { get; init; } = string.Empty;
+    public string? Description { get; init; }
     public string Status { get; init; } = "active";
 }
 
@@ -21,6 +23,7 @@ public sealed class StartupIndustryResponse
 {
     public Guid Id { get; init; }
     public string Name { get; init; } = string.Empty;
+    public string? Description { get; init; }
     public string Status { get; init; } = string.Empty;
 }
 

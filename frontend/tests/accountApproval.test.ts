@@ -54,6 +54,21 @@ test('maps Lecturer and Mentor registrations into typed approval requests', () =
   assert.equal(result?.expertise, 'FinTech, Business Model');
 });
 
+test('maps the managed-user contract used for approval statistics', () => {
+  const result = registrationToApprovalRequest({
+    id: 'lecturer-2',
+    name: 'Pham Thu Ha',
+    email: 'ha@example.com',
+    role: 'LECTURER',
+    status: 'APPROVED',
+    createdAt: '2026-09-10T08:00:00.000Z',
+  });
+
+  assert.equal(result?.fullName, 'Pham Thu Ha');
+  assert.equal(result?.role, 'LECTURER');
+  assert.equal(result?.status, 'APPROVED');
+});
+
 test('ignores student registrations in the staff approval workflow', () => {
   const result = registrationToApprovalRequest({
     id: 'student-1',

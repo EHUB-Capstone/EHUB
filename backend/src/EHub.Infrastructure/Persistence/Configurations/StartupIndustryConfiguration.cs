@@ -14,6 +14,7 @@ public sealed class StartupIndustryConfiguration : IEntityTypeConfiguration<Star
         builder.Property(industry => industry.Id).HasColumnName("id");
         builder.Property(industry => industry.Name).HasColumnName("name").HasMaxLength(100).IsRequired();
         builder.Property(industry => industry.NormalizedName).HasColumnName("normalized_name").HasMaxLength(100).IsRequired();
+        builder.Property(industry => industry.Description).HasColumnName("description").HasMaxLength(240);
         builder.Property(industry => industry.Status).HasColumnName("status").HasConversion<string>().HasMaxLength(20).IsRequired();
 
         builder.HasIndex(industry => industry.NormalizedName).IsUnique();

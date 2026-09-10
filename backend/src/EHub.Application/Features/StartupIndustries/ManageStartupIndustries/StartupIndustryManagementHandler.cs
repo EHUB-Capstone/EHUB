@@ -13,6 +13,21 @@ public sealed class StartupIndustryManagementHandler(
     IApplicationDbContext context,
     ICurrentUserService currentUser) : IStartupIndustryManagementHandler
 {
+    public async Task<Result<StartupIndustryListResponse>> GetActiveOptionsAsync(
+        CancellationToken cancellationToken = default)
+    {
+        var industries = await context.StartupIndustries
+            .AsNoTracking()
+            .Where(industry => industry.Status == StartupIndustryStatus.Active)
+            .OrderBy(industry => industry.Name)
+            .ToArrayAsync(cancellationToken);
+
+        return Result.Success(new StartupIndustryListResponse
+        {
+            Industries = industries.Select(ToResponse).ToArray()
+        });
+    }
+
     public async Task<Result<StartupIndustryListResponse>> GetAsync(
         string? search,
         string? status,
@@ -71,6 +86,7 @@ public sealed class StartupIndustryManagementHandler(
         {
             Name = name,
             NormalizedName = normalizedName,
+            Description = NormalizeDescription(request.Description),
             Status = ParseStatus(request.Status),
             CreatedBy = currentUser.UserId
         };
@@ -103,6 +119,7 @@ public sealed class StartupIndustryManagementHandler(
 
         industry.Name = name;
         industry.NormalizedName = normalizedName;
+        industry.Description = NormalizeDescription(request.Description);
         industry.Status = ParseStatus(request.Status);
         industry.UpdatedBy = currentUser.UserId;
 
@@ -129,6 +146,9 @@ public sealed class StartupIndustryManagementHandler(
     }
 
     private static string NormalizeName(string value) => value.Trim().ToUpperInvariant();
+
+    private static string? NormalizeDescription(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
     private static bool TryParseStatus(string? status, out StartupIndustryStatus? value)
     {
@@ -164,6 +184,7 @@ public sealed class StartupIndustryManagementHandler(
     {
         Id = industry.Id,
         Name = industry.Name,
+        Description = industry.Description,
         Status = industry.Status == StartupIndustryStatus.Active ? "active" : "inactive"
     };
 

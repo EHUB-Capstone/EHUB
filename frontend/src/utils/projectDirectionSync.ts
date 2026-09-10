@@ -12,6 +12,7 @@ export interface ProjectDirectionSyncValue {
   reviews?: ProjectDirectionReviewLike[] | null;
   title?: string | null;
   summary?: string | null;
+  startupIndustries?: string[] | null;
 }
 
 export const hasUnsavedProjectDirectionChanges = (
@@ -37,8 +38,8 @@ export const getProjectDirectionSubmitGuidance = (
   const hasUnsavedChanges = hasUnsavedProjectDirectionChanges(direction, title, summary);
   if (direction?.status === 'NeedsRevision') {
     return hasUnsavedChanges
-      ? 'Save your revised project direction as a draft to enable Submit.'
-      : 'The lecturer requested changes. Update the title or summary, then select Save draft to enable Submit.';
+      ? 'Save your revised project information as a draft to enable Submit.'
+      : 'The lecturer requested changes. Update the Project Name or Project description, then select Save draft to enable Submit.';
   }
   if (direction?.status === 'Draft' && hasUnsavedChanges) {
     return 'Save your changes as a draft before submitting.';

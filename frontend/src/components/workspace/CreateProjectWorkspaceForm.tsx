@@ -1,15 +1,16 @@
-import { useMemo, useState } from 'react';
-import { FolderKanban, Loader2, Plus, X } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { ChevronDown, FolderKanban, Loader2, RefreshCw, X } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { startupIndustryApi } from '../../api/startupIndustryApi';
 import { workspaceApi } from '../../api/workspaceApi';
 import {
-  appendWorkspaceTag,
   resolveWorkspaceCreationDefaults,
   validateProjectWorkspace,
   type ProjectWorkspaceDraft,
   type ProjectWorkspaceErrors,
 } from '../../utils/projectWorkspace';
 import { parseApiError } from '../../utils/apiError';
+import type { StartupIndustryDto } from '../../types/startupIndustries';
 
 interface Props {
   team: { _id?: string; id?: string; teamName?: string; name?: string };
@@ -23,80 +24,43 @@ interface Props {
   onCreated: () => void | Promise<void>;
 }
 
-interface TagInputProps {
-  label: string;
-  required?: boolean;
-  values: string[];
-  placeholder: string;
-  error?: string;
-  onChange: (values: string[]) => void;
-}
-
-function TagInput({ label, required = false, values, placeholder, error, onChange }: TagInputProps) {
-  const [input, setInput] = useState('');
-  const [localError, setLocalError] = useState('');
-
-  const add = () => {
-    const result = appendWorkspaceTag(values, input);
-    if (result.error) {
-      setLocalError(result.error);
-      return;
-    }
-    onChange(result.values);
-    setInput('');
-    setLocalError('');
-  };
-
-  return (
-    <div>
-      <label className="mb-1.5 block text-xs font-semibold text-slate-700">
-        {label}{required && <span className="text-red-500"> *</span>}
-      </label>
-      <div className={`rounded-xl border bg-white p-2 transition focus-within:ring-2 focus-within:ring-primary/15 ${error || localError ? 'border-red-300' : 'border-slate-200 focus-within:border-primary'}`}>
-        {values.length > 0 && (
-          <div className="mb-2 flex flex-wrap gap-1.5">
-            {values.map((value) => (
-              <span key={value} className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700">
-                {value}
-                <button type="button" onClick={() => onChange(values.filter((item) => item !== value))} aria-label={`Remove ${value}`} className="text-slate-400 hover:text-red-500">
-                  <X className="h-3 w-3" />
-                </button>
-              </span>
-            ))}
-          </div>
-        )}
-        <div className="flex gap-2">
-          <input
-            value={input}
-            onChange={(event) => { setInput(event.target.value); setLocalError(''); }}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter' || event.key === ',') {
-                event.preventDefault();
-                add();
-              }
-            }}
-            onBlur={add}
-            placeholder={placeholder}
-            maxLength={50}
-            className="min-w-0 flex-1 border-0 px-1 py-1 text-sm outline-none"
-          />
-          <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={add} className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-600 hover:bg-primary-50 hover:text-primary" aria-label={`Add ${label}`}>
-            <Plus className="h-4 w-4" />
-          </button>
-        </div>
-      </div>
-      {(localError || error) && <p className="mt-1 text-xs text-red-600">{localError || error}</p>}
-    </div>
-  );
-}
-
 export default function CreateProjectWorkspaceForm({ team, proposal, classInfo, onCreated }: Props) {
   const creationDefaults = resolveWorkspaceCreationDefaults(team, proposal);
   const [draft, setDraft] = useState<ProjectWorkspaceDraft>(creationDefaults.draft);
   const [errors, setErrors] = useState<ProjectWorkspaceErrors>({});
   const [submitting, setSubmitting] = useState(false);
+  const [industries, setIndustries] = useState<StartupIndustryDto[]>([]);
+  const [industriesLoading, setIndustriesLoading] = useState(true);
+  const [industriesError, setIndustriesError] = useState('');
+  const [industriesOpen, setIndustriesOpen] = useState(false);
+  const [industriesReload, setIndustriesReload] = useState(0);
   const teamId = String(team._id || team.id || '');
   const contextLabel = useMemo(() => [classInfo.classCode, classInfo.subjectCode, classInfo.semesterCode].filter(Boolean).join(' · '), [classInfo]);
+  const selectedIndustries = useMemo(
+    () => draft.startupIndustryIds
+      .map((id) => industries.find((industry) => industry.id === id))
+      .filter((industry): industry is StartupIndustryDto => Boolean(industry)),
+    [draft.startupIndustryIds, industries],
+  );
+
+  useEffect(() => {
+    const controller = new AbortController();
+    startupIndustryApi.getActiveOptions(controller.signal)
+      .then((response) => {
+        const payload = response?.data ?? response;
+        setIndustries(Array.isArray(payload?.industries) ? payload.industries : []);
+      })
+      .catch((error) => {
+        if (!controller.signal.aborted) {
+          setIndustries([]);
+          setIndustriesError(parseApiError(error, 'Failed to load startup industries.').message);
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setIndustriesLoading(false);
+      });
+    return () => controller.abort();
+  }, [industriesReload]);
 
   const setField = <K extends keyof ProjectWorkspaceDraft>(field: K, value: ProjectWorkspaceDraft[K]) => {
     setDraft((current) => ({ ...current, [field]: value }));
@@ -115,9 +79,9 @@ export default function CreateProjectWorkspaceForm({ team, proposal, classInfo, 
       await workspaceApi.createWorkspace(teamId, {
         projectName: draft.projectName.trim(),
         description: draft.description.trim(),
-        keywords: draft.keywords,
+        startupIndustryIds: draft.startupIndustryIds,
       });
-      toast.success('Project workspace created successfully.');
+      toast.success('Workspace created and project direction submitted for lecturer review.');
       await onCreated();
     } catch (error) {
       toast.error(parseApiError(error, 'Failed to create project workspace.').message);
@@ -152,13 +116,98 @@ export default function CreateProjectWorkspaceForm({ team, proposal, classInfo, 
           <div className="mt-1 flex justify-between text-xs"><span className="text-red-600">{errors.description}</span><span className="text-slate-400">{draft.description.length}/2000</span></div>
         </div>
         <div className="sm:col-span-2">
-          <TagInput label="Keywords" values={draft.keywords} onChange={(values) => setField('keywords', values)} placeholder="education, marketplace…" error={errors.keywords} />
+          <label id="startup-industry-label" className="mb-1.5 block text-xs font-semibold text-slate-700">
+            Startup Industry <span className="text-red-500">*</span>
+          </label>
+          <div className="relative">
+            <div className={`rounded-xl border bg-white p-2 transition focus-within:ring-2 focus-within:ring-primary/15 ${errors.startupIndustryIds ? 'border-red-300' : 'border-slate-200 focus-within:border-primary'}`}>
+              {selectedIndustries.length > 0 && (
+                <div className="mb-2 flex flex-wrap gap-1.5">
+                  {selectedIndustries.map((industry) => (
+                    <span key={industry.id} className="inline-flex items-center gap-1 rounded-md bg-primary-50 px-2 py-1 text-xs font-semibold text-primary-700">
+                      {industry.name}
+                      <button
+                        type="button"
+                        onClick={() => setField('startupIndustryIds', draft.startupIndustryIds.filter((id) => id !== industry.id))}
+                        aria-label={`Remove ${industry.name}`}
+                        className="text-primary-400 hover:text-red-500"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+              <button
+                type="button"
+                aria-labelledby="startup-industry-label"
+                aria-expanded={industriesOpen}
+                aria-haspopup="listbox"
+                disabled={industriesLoading || Boolean(industriesError) || industries.length === 0}
+                onClick={() => setIndustriesOpen((open) => !open)}
+                className="flex w-full items-center justify-between gap-3 rounded-lg px-1 py-1 text-left text-sm text-slate-500 outline-none disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <span>{industriesLoading ? 'Loading industries…' : selectedIndustries.length >= 3 ? 'Maximum 3 industries selected' : 'Select startup industries'}</span>
+                {industriesLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ChevronDown className={`h-4 w-4 transition ${industriesOpen ? 'rotate-180' : ''}`} />}
+              </button>
+            </div>
+            {industriesOpen && (
+              <div role="listbox" aria-multiselectable="true" aria-labelledby="startup-industry-label" className="relative z-20 mt-1 w-full rounded-xl border border-slate-200 bg-white p-1.5 shadow-lg">
+                {industries.map((industry) => {
+                  const selected = draft.startupIndustryIds.includes(industry.id);
+                  const disabled = !selected && draft.startupIndustryIds.length >= 3;
+                  return (
+                    <button
+                      key={industry.id}
+                      type="button"
+                      role="option"
+                      aria-selected={selected}
+                      disabled={disabled}
+                      onClick={() => setField(
+                        'startupIndustryIds',
+                        selected
+                          ? draft.startupIndustryIds.filter((id) => id !== industry.id)
+                          : [...draft.startupIndustryIds, industry.id],
+                      )}
+                      className={`block w-full rounded-lg px-3 py-2 text-left text-sm transition disabled:cursor-not-allowed disabled:opacity-40 ${selected ? 'bg-primary-50 text-primary-800' : 'text-slate-700 hover:bg-slate-50'}`}
+                    >
+                      <span className="font-semibold">{industry.name}</span>
+                      <span className="text-slate-500"> - {industry.description || 'No description'}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+          <div className="mt-1 flex items-center justify-between gap-3 text-xs">
+            <span className="text-red-600">{errors.startupIndustryIds}</span>
+            <span className="text-slate-400">{draft.startupIndustryIds.length}/3 selected</span>
+          </div>
+          {industriesError && (
+            <div className="mt-2 flex items-center justify-between gap-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">
+              <span>{industriesError}</span>
+              <button
+                type="button"
+                onClick={() => {
+                  setIndustriesLoading(true);
+                  setIndustriesError('');
+                  setIndustriesReload((value) => value + 1);
+                }}
+                className="inline-flex shrink-0 items-center gap-1 font-semibold hover:text-red-900"
+              >
+                <RefreshCw className="h-3.5 w-3.5" /> Retry
+              </button>
+            </div>
+          )}
+          {!industriesLoading && !industriesError && industries.length === 0 && (
+            <p className="mt-2 text-xs text-amber-700">No active startup industries are available. Ask an administrator to create or activate one.</p>
+          )}
         </div>
       </div>
       <div className="flex items-center justify-between gap-3 border-t border-slate-100 bg-slate-50/70 px-5 py-4">
-        <p className="text-xs text-slate-500">Only one active workspace is allowed per team.</p>
+        <p className="text-xs text-slate-500">Creating the workspace also submits this information to the lecturer for review.</p>
         <button type="button" disabled={submitting} onClick={submit} className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-primary-600 disabled:cursor-not-allowed disabled:opacity-60">
-          {submitting && <Loader2 className="h-4 w-4 animate-spin" />} Create workspace
+          {submitting && <Loader2 className="h-4 w-4 animate-spin" />} Create workspace & submit
         </button>
       </div>
     </div>

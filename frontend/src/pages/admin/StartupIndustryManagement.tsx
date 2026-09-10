@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
+import { startTransition, useEffect, useRef, useState } from 'react';
 import {
   Building2,
   ChevronDown,
   Edit3,
   Layers3,
+  LoaderCircle,
   Plus,
   Power,
   Search,
@@ -28,20 +29,57 @@ type StatusFilter = 'all' | StartupIndustryStatus;
 
 interface IndustryFormState {
   name: string;
+  description: string;
   status: StartupIndustryStatus;
 }
 
 const emptyForm: IndustryFormState = {
   name: '',
+  description: '',
   status: 'active',
 };
 
+function extractIndustry(response: unknown): StartupIndustryDto | null {
+  const envelope = response as { data?: unknown } | null;
+  const candidate = (envelope?.data ?? response) as Partial<StartupIndustryDto> | null;
+  if (!candidate || typeof candidate.id !== 'string' || typeof candidate.name !== 'string') return null;
+  if (candidate.status !== 'active' && candidate.status !== 'inactive') return null;
+
+  return {
+    id: candidate.id,
+    name: candidate.name,
+    description: typeof candidate.description === 'string' ? candidate.description : null,
+    status: candidate.status,
+  };
+}
+
+function matchesCurrentView(
+  industry: StartupIndustryDto,
+  search: string,
+  status: StatusFilter,
+): boolean {
+  const matchesSearch = !search || industry.name.toLocaleLowerCase().includes(search.toLocaleLowerCase());
+  return matchesSearch && (status === 'all' || industry.status === status);
+}
+
+function sortIndustries(
+  industries: StartupIndustryDto[],
+  sort: StartupIndustrySort,
+): StartupIndustryDto[] {
+  return [...industries].sort((left, right) => {
+    const comparison = left.name.localeCompare(right.name);
+    return sort === 'name-desc' ? -comparison : comparison;
+  });
+}
+
 export default function StartupIndustryManagement(): React.ReactElement {
   const [industries, setIndustries] = useState<StartupIndustryDto[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [refreshVersion, setRefreshVersion] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [sortOption, setSortOption] = useState<StartupIndustrySort>('name-asc');
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -50,35 +88,67 @@ export default function StartupIndustryManagement(): React.ReactElement {
   const [statusTarget, setStatusTarget] = useState<StartupIndustryDto | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isChangingStatus, setIsChangingStatus] = useState(false);
+  const hasLoadedRef = useRef(false);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      setDebouncedSearch(searchQuery.trim());
+    }, 250);
+
+    return () => window.clearTimeout(timeout);
+  }, [searchQuery]);
 
   useEffect(() => {
     const controller = new AbortController();
-    const timeout = window.setTimeout(async () => {
-      setIsLoading(true);
+    const loadIndustries = async () => {
+      const isFirstLoad = !hasLoadedRef.current;
+      if (isFirstLoad) setIsInitialLoading(true);
+      else setIsRefreshing(true);
       setLoadError(null);
+
       try {
         const params = {
-          ...(searchQuery.trim() ? { search: searchQuery.trim() } : {}),
+          ...(debouncedSearch ? { search: debouncedSearch } : {}),
           ...(statusFilter !== 'all' ? { status: statusFilter } : {}),
           sort: sortOption,
         };
         const response = await startupIndustryApi.getAll(params, controller.signal);
         const payload = response?.data ?? response;
-        setIndustries(Array.isArray(payload?.industries) ? payload.industries : []);
+        startTransition(() => {
+          setIndustries(Array.isArray(payload?.industries) ? payload.industries : []);
+        });
+        hasLoadedRef.current = true;
       } catch (error) {
         if (controller.signal.aborted) return;
-        setIndustries([]);
-        setLoadError(parseApiError(error, 'Failed to load startup industries.').message);
+        const message = parseApiError(error, 'Failed to load startup industries.').message;
+        if (isFirstLoad) {
+          setIndustries([]);
+          setLoadError(message);
+        } else {
+          toast.error(message);
+        }
       } finally {
-        if (!controller.signal.aborted) setIsLoading(false);
+        if (!controller.signal.aborted) {
+          setIsInitialLoading(false);
+          setIsRefreshing(false);
+        }
       }
-    }, 350);
-
-    return () => {
-      window.clearTimeout(timeout);
-      controller.abort();
     };
-  }, [refreshVersion, searchQuery, sortOption, statusFilter]);
+
+    void loadIndustries();
+
+    return () => controller.abort();
+  }, [debouncedSearch, refreshVersion, sortOption, statusFilter]);
+
+  const upsertVisibleIndustry = (industry: StartupIndustryDto) => {
+    startTransition(() => {
+      setIndustries((current) => {
+        const next = current.filter((item) => item.id !== industry.id);
+        if (matchesCurrentView(industry, debouncedSearch, statusFilter)) next.push(industry);
+        return sortIndustries(next, sortOption);
+      });
+    });
+  };
 
   const openCreateForm = () => {
     setEditingIndustryId(null);
@@ -90,6 +160,7 @@ export default function StartupIndustryManagement(): React.ReactElement {
     setEditingIndustryId(industry.id);
     setForm({
       name: industry.name,
+      description: industry.description ?? '',
       status: industry.status,
     });
     setIsFormOpen(true);
@@ -121,16 +192,23 @@ export default function StartupIndustryManagement(): React.ReactElement {
 
     setIsSaving(true);
     try {
-      const payload = { name, status: form.status };
+      const payload = {
+        name,
+        description: form.description.trim() || null,
+        status: form.status,
+      };
+      let response: unknown;
       if (editingIndustryId) {
-        await startupIndustryApi.update(editingIndustryId, payload);
+        response = await startupIndustryApi.update(editingIndustryId, payload);
         toast.success('Industry updated successfully.');
       } else {
-        await startupIndustryApi.create(payload);
+        response = await startupIndustryApi.create(payload);
         toast.success('Industry added successfully.');
       }
+      const savedIndustry = extractIndustry(response);
+      if (savedIndustry) upsertVisibleIndustry(savedIndustry);
+      else setRefreshVersion((version) => version + 1);
       closeForm();
-      setRefreshVersion((version) => version + 1);
     } catch (error) {
       toast.error(parseApiError(error, 'Failed to save startup industry.').message);
     } finally {
@@ -144,10 +222,12 @@ export default function StartupIndustryManagement(): React.ReactElement {
     const nextStatus: StartupIndustryStatus = statusTarget.status === 'active' ? 'inactive' : 'active';
     setIsChangingStatus(true);
     try {
-      await startupIndustryApi.changeStatus(statusTarget.id, nextStatus);
+      const response = await startupIndustryApi.changeStatus(statusTarget.id, nextStatus);
       toast.success(`${statusTarget.name} is now ${nextStatus}.`);
+      const updatedIndustry = extractIndustry(response);
+      if (updatedIndustry) upsertVisibleIndustry(updatedIndustry);
+      else setRefreshVersion((version) => version + 1);
       setStatusTarget(null);
-      setRefreshVersion((version) => version + 1);
     } catch (error) {
       toast.error(parseApiError(error, 'Failed to update industry status.').message);
     } finally {
@@ -163,7 +243,10 @@ export default function StartupIndustryManagement(): React.ReactElement {
         action={{ label: 'Add Industry', icon: Plus, variant: 'primary', onClick: openCreateForm }}
       />
 
-      <section className="overflow-hidden rounded-2xl border border-slate-200/70 bg-white shadow-card">
+      <section
+        className="overflow-hidden rounded-2xl border border-slate-200/70 bg-white shadow-card"
+        aria-busy={isInitialLoading || isRefreshing}
+      >
         <div className="border-b border-slate-100 p-4 sm:p-5">
           <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
             <div className="relative min-w-0 flex-1 xl:max-w-xl">
@@ -213,7 +296,7 @@ export default function StartupIndustryManagement(): React.ReactElement {
           </div>
         </div>
 
-        {isLoading ? (
+        {isInitialLoading ? (
           <div className="p-5"><LoadingSkeleton variant="table" lines={6} /></div>
         ) : loadError ? (
           <div className="p-5">
@@ -231,16 +314,24 @@ export default function StartupIndustryManagement(): React.ReactElement {
               ? 'Try a different search term or status filter.'
               : 'Create the first standardized startup industry for E-HUB projects.'}
             action={searchQuery || statusFilter !== 'all'
-              ? { label: 'Clear filters', onClick: () => { setSearchQuery(''); setStatusFilter('all'); } }
+              ? {
+                  label: 'Clear filters',
+                  onClick: () => {
+                    setSearchQuery('');
+                    setDebouncedSearch('');
+                    setStatusFilter('all');
+                  },
+                }
               : { label: 'Add Industry', onClick: openCreateForm }}
           />
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[640px]">
+            <table className="w-full min-w-[860px]">
               <thead>
                 <tr className="bg-slate-50/70 text-left">
                   <th className="w-16 px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-400">#</th>
                   <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-400">Industry</th>
+                  <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-400">Description</th>
                   <th className="w-28 px-5 py-3.5 text-center text-xs font-semibold uppercase tracking-wider text-slate-400">Projects</th>
                   <th className="w-28 px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-400">Status</th>
                   <th className="w-28 px-5 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-slate-400">Actions</th>
@@ -251,12 +342,12 @@ export default function StartupIndustryManagement(): React.ReactElement {
                   <tr key={industry.id} className="group transition-colors hover:bg-primary-50/30">
                     <td className="px-5 py-4 text-sm font-medium text-slate-400">{String(index + 1).padStart(2, '0')}</td>
                     <td className="px-5 py-4">
-                      <div className="flex items-center gap-3">
-                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-secondary-100 bg-secondary-50 text-secondary">
-                          <Building2 className="h-5 w-5" />
-                        </span>
-                        <p className="font-semibold text-slate-900">{industry.name}</p>
-                      </div>
+                      <p className="font-semibold text-slate-900">{industry.name}</p>
+                    </td>
+                    <td className="max-w-sm px-5 py-4">
+                      <p className="whitespace-pre-wrap break-words text-sm leading-5 text-slate-600">
+                        {industry.description || <span className="text-slate-400">—</span>}
+                      </p>
                     </td>
                     <td className="px-5 py-4 text-center">
                       <span className="inline-flex min-w-10 items-center justify-center rounded-lg bg-slate-100 px-2.5 py-1.5 text-sm font-bold tabular-nums text-slate-700">
@@ -301,8 +392,9 @@ export default function StartupIndustryManagement(): React.ReactElement {
           </div>
         )}
 
-        {!isLoading && !loadError && <div className="flex flex-col gap-2 border-t border-slate-100 bg-slate-50/40 px-5 py-3.5 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between">
-          <span>
+        {!isInitialLoading && !loadError && <div className="flex flex-col gap-2 border-t border-slate-100 bg-slate-50/40 px-5 py-3.5 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between">
+          <span className="inline-flex items-center gap-2" aria-live="polite">
+            {isRefreshing && <LoaderCircle className="h-3.5 w-3.5 animate-spin text-primary" aria-hidden="true" />}
             Showing <strong className="font-semibold text-slate-700">{industries.length}</strong> industries
           </span>
           <span className="inline-flex items-center gap-1.5">
@@ -327,11 +419,31 @@ export default function StartupIndustryManagement(): React.ReactElement {
               autoFocus
               type="text"
               maxLength={100}
+              aria-describedby="industry-name-character-count"
               value={form.name}
               onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
               placeholder="e.g. Logistics & Supply Chain"
               className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15"
             />
+            <span id="industry-name-character-count" className="mt-1.5 block text-right text-xs text-slate-400">
+              {form.name.length}/100
+            </span>
+          </label>
+
+          <label className="block">
+            <span className="mb-1.5 block text-sm font-semibold text-slate-700">Description</span>
+            <textarea
+              rows={4}
+              maxLength={240}
+              aria-describedby="industry-description-character-count"
+              value={form.description}
+              onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))}
+              placeholder="Describe the scope of this startup industry..."
+              className="w-full resize-y rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm leading-6 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15"
+            />
+            <span id="industry-description-character-count" className="mt-1.5 block text-right text-xs text-slate-400">
+              {form.description.length}/240
+            </span>
           </label>
 
           <label className="block">

@@ -39,6 +39,7 @@ export interface MockSubject {
 export interface MockStartupIndustry {
   id: string;
   name: string;
+  description: string | null;
   status: 'active' | 'inactive';
 }
 
@@ -157,6 +158,8 @@ export interface MockTeam {
   projectSolution?: string | null;
   projectTargetUsers?: string | null;
   keywords?: string[];
+  startupIndustryIds?: string[];
+  startupIndustries?: string[];
   projectCreatedAtUtc?: string | null;
   projectUpdatedAtUtc?: string | null;
   projectActivities?: Array<{
@@ -196,6 +199,7 @@ export interface MockProposalHistory {
 export interface MockProposal {
   id: string;
   classId: string;
+  proposedByStudentId?: string;
   teamName: string;
   description: string | null;
   projectName: string | null;
@@ -221,6 +225,7 @@ export interface MockProjectDirection {
   teamId: string;
   title: string;
   summary: string;
+  startupIndustries: string[];
   status: string;
   submittedAtUtc: string | null;
   reviewedAtUtc: string | null;
@@ -325,10 +330,10 @@ const subjects: MockSubject[] = [
 ];
 
 const startupIndustries: MockStartupIndustry[] = [
-  { id: id(111), name: 'Technology & Software', status: 'active' },
-  { id: id(112), name: 'Education & EdTech', status: 'active' },
-  { id: id(113), name: 'Healthcare & Wellness', status: 'active' },
-  { id: id(114), name: 'Agriculture & FoodTech', status: 'inactive' },
+  { id: id(111), name: 'Technology & Software', description: 'Software products, digital platforms, and emerging technologies.', status: 'active' },
+  { id: id(112), name: 'Education & EdTech', description: 'Learning solutions, educational services, and training technologies.', status: 'active' },
+  { id: id(113), name: 'Healthcare & Wellness', description: 'Healthcare delivery, wellness services, and medical innovation.', status: 'active' },
+  { id: id(114), name: 'Agriculture & FoodTech', description: null, status: 'inactive' },
 ];
 
 const curriculumFor = (subject: MockSubject): MockCurriculum => ({
@@ -446,7 +451,7 @@ const initialMockState: MockApiState = {
       members: activeRoster.slice(8, 10).map((student, index) => ({ studentId: student.studentId, rollNumber: student.rollNumber, fullName: student.fullName, majorCode: student.majorCode || '', isLeader: index === 0 })),
       rowVersion: 'rv-20', history: [{ id: id(802), fromStatus: 'Draft', toStatus: 'Pending', action: 'SUBMITTED', comment: null, performedByUserId: activeRoster[8].userId || activeRoster[8].studentId, occurredAtUtc: isoAgo(1) }],
     }],
-    directions: [{ id: id(901), teamId: id(601), title: 'Student Services Marketplace', summary: 'Validate trust, fulfillment time, and willingness to pay before building the full marketplace.', status: 'Submitted', submittedAtUtc: isoAgo(2), reviewedAtUtc: null, rowVersion: 'rv-30', reviews: [] }],
+    directions: [{ id: id(901), teamId: id(601), title: 'Student Services Marketplace', summary: 'Validate trust, fulfillment time, and willingness to pay before building the full marketplace.', startupIndustries: ['Technology & Software'], status: 'Submitted', submittedAtUtc: isoAgo(2), reviewedAtUtc: null, rowVersion: 'rv-30', reviews: [] }],
     audits: {
       [classIds.active]: [{ id: id(951), action: 'CLASS_CREATED', performedByUserId: id(1), performedByName: 'Nguyễn Minh Admin', occurredAtUtc: isoAgo(45), detailsJson: JSON.stringify({ status: 'Active' }) }],
       [classIds.draft]: [{ id: id(952), action: 'CLASS_CREATED', performedByUserId: id(2), performedByName: 'Trần Thu Giang', occurredAtUtc: isoAgo(30), detailsJson: JSON.stringify({ status: 'Draft' }) }],

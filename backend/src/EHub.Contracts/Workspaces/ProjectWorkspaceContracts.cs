@@ -4,7 +4,7 @@ public sealed class CreateProjectWorkspaceRequest
 {
     public string ProjectName { get; init; } = string.Empty;
     public string Description { get; init; } = string.Empty;
-    public IReadOnlyCollection<string> Keywords { get; init; } = Array.Empty<string>();
+    public IReadOnlyCollection<Guid> StartupIndustryIds { get; init; } = Array.Empty<Guid>();
 }
 
 public sealed class UpdateProjectWorkspaceRequest
@@ -30,6 +30,7 @@ public sealed class ProjectWorkspaceDto
     public string Solution { get; init; } = string.Empty;
     public string TargetUsers { get; init; } = string.Empty;
     public IReadOnlyCollection<string> Keywords { get; init; } = Array.Empty<string>();
+    public IReadOnlyCollection<string> StartupIndustries { get; init; } = Array.Empty<string>();
     public string Status { get; init; } = string.Empty;
     public DateTime CreatedAtUtc { get; init; }
     public DateTime? UpdatedAtUtc { get; init; }

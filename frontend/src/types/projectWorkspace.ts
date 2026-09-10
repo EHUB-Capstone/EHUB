@@ -10,6 +10,7 @@ export interface ProjectWorkspaceProfile {
   solution: string;
   targetUsers: string;
   keywords: string[];
+  startupIndustries: string[];
   status: string;
   createdAtUtc: string;
   updatedAtUtc: string | null;
