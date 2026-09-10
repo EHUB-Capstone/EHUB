@@ -10,6 +10,7 @@ using EHub.Application.Features.Auth.Login;
 using EHub.Application.Features.Auth.Logout;
 using EHub.Application.Features.Auth.RefreshToken;
 using EHub.Application.Features.Auth.Register;
+using EHub.Application.Features.Auth.UpdateProfile;
 using EHub.Application.Features.Auth.ResetPassword;
 using EHub.Application.Features.Auth.ResendRegistrationOtp;
 using EHub.Application.Features.Auth.VerifyRegistrationOtp;
@@ -38,6 +39,7 @@ public static class DependencyInjection
         services.AddValidatorsFromAssembly(Assembly.GetExecutingAssembly());
 
         services.AddScoped<IRegisterCommandHandler, RegisterCommandHandler>();
+        services.AddScoped<IUpdateProfileCommandHandler, UpdateProfileCommandHandler>();
         services.AddScoped<ILoginCommandHandler, LoginCommandHandler>();
         services.AddScoped<IGoogleLoginCommandHandler, GoogleLoginCommandHandler>();
         services.AddScoped<IGetCurrentUserQueryHandler, GetCurrentUserQueryHandler>();

@@ -10,6 +10,7 @@ import type {
   ResendRegistrationOtpPayload,
   ResetPasswordPayload,
   VerifyRegistrationOtpPayload,
+  UpdateProfileResponse,
 } from '../types/auth';
 
 // ─── POST /api/auth/register ──────────────────────────────────────────────
@@ -49,6 +50,14 @@ export async function googleLogin(payload: GoogleLoginPayload): Promise<AuthResp
 // ─── GET /api/auth/me  (requires Bearer token) ───────────────────────────
 export async function getCurrentUser(): Promise<CurrentUser> {
   const data = await axiosClient.get('/auth/me');
+  return data.data;
+}
+
+// ─── PUT /api/auth/update-profile (requires Bearer token) ─────────────────
+export async function updateProfile(formData: FormData): Promise<UpdateProfileResponse> {
+  const data = await axiosClient.put('/auth/update-profile', formData, {
+    headers: { 'Content-Type': undefined },
+  });
   return data.data;
 }
 

@@ -49,6 +49,7 @@ function toWorkspaceUser(user: CurrentUser): WorkspaceUser {
     name: user.fullName,
     role,
     major: user.majorCode,
+    avatar: user.avatarUrl ?? undefined,
   };
 }
 

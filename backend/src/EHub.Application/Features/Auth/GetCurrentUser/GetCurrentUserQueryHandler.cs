@@ -105,7 +105,8 @@ public sealed class GetCurrentUserQueryHandler : IGetCurrentUserQueryHandler
             Email = user.Email,
             Roles = roles,
             Status = user.Status.ToString(),
-            MajorCode = majorCode
+            MajorCode = majorCode,
+            AvatarUrl = user.AvatarUrl
         };
 
         return Result.Success(response);

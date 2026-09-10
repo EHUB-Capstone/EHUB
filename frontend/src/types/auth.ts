@@ -7,6 +7,7 @@ export interface UserSummary {
   roles: string[];
   status: string;
   majorCode: string | null;
+  avatarUrl?: string | null;
 }
 
 export interface AuthResponse {
@@ -36,6 +37,7 @@ export interface CurrentUser {
   roles: string[];
   status: string;
   majorCode: string | null;
+  avatarUrl?: string | null;
 }
 
 /**
@@ -49,6 +51,12 @@ export interface WorkspaceUser extends CurrentUser {
   role: string;
   major: string | null;
   avatar?: string;
+}
+
+export interface UpdateProfileResponse {
+  id: string;
+  fullName: string;
+  avatarUrl: string | null;
 }
 
 // ─── Request payloads ────────────────────────────────────────────────────────

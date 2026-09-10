@@ -38,6 +38,8 @@ public static class ErrorCodes
     public const string AuthVerificationRateLimited = "AUTH_VERIFICATION_RATE_LIMITED";
     public const string AuthEmailDeliveryFailed = "AUTH_EMAIL_DELIVERY_FAILED";
     public const string AuthRegistrationAlreadyCompleted = "AUTH_REGISTRATION_ALREADY_COMPLETED";
+    public const string AuthProfileImageInvalid = "AUTH_PROFILE_IMAGE_INVALID";
+    public const string AuthProfileImageUploadFailed = "AUTH_PROFILE_IMAGE_UPLOAD_FAILED";
 
     // System error codes
     public const string InternalServerError = "COMMON_INTERNAL_SERVER_ERROR";

@@ -1,11 +1,11 @@
 // @ts-nocheck
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Mail, Key, User, ShieldCheck, Camera, Lock, ArrowLeft } from 'lucide-react';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
-import axiosClient from '../../api/axiosClient';
+import { updateProfile } from '../../api/authApi';
 import toast from 'react-hot-toast';
 import { motion } from 'framer-motion';
 import { TEAM_MAJOR_GROUPS, getTeamGroupFromMajor, ALL_TEAM_MAJOR_CODES } from '../../constants/majors';
@@ -29,7 +29,8 @@ const ProfileSettings = () => {
   
   // Profile state
   const [name, setName] = useState(user?.name || '');
-  const [avatar, setAvatar] = useState(user?.avatar || '');
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
   const [major, setMajor] = useState(user?.major || '');
   const [isSavingProfile, setIsSavingProfile] = useState(false);
 
@@ -48,24 +49,46 @@ const ProfileSettings = () => {
     if (role === 'STUDENT') {
       if (!major) return toast.error('Major is required for students.');
     }
-    
+
     setIsSavingProfile(true);
     try {
-      const payload = { name, avatar };
-      if (role === 'STUDENT') {
-        payload.major = major;
-        // Auto-derive programGroup from chosen major
-        const derivedGroup = getTeamGroupFromMajor(major);
-        payload.programGroup = derivedGroup === 'GROUP_1' ? 'BBA' : derivedGroup === 'GROUP_2' ? 'BIT' : '';
+      const formData = new FormData();
+      formData.append('fullName', name.trim());
+      if (avatarFile) {
+        formData.append('avatar', avatarFile);
       }
-      const res = await axiosClient.put('/auth/update-profile', payload);
-      updateUser(res.data?.user || res.user);
+      if (role === 'STUDENT') {
+        formData.append('major', major);
+        const derivedGroup = getTeamGroupFromMajor(major);
+        formData.append('programGroup', derivedGroup === 'GROUP_1' ? 'BBA' : derivedGroup === 'GROUP_2' ? 'BIT' : '');
+      }
+      const profile = await updateProfile(formData);
+      updateUser({
+        fullName: profile.fullName,
+        name: profile.fullName,
+        avatarUrl: profile.avatarUrl,
+        avatar: profile.avatarUrl || undefined,
+      });
+      setAvatarFile(null);
+      if (avatarInputRef.current) {
+        avatarInputRef.current.value = '';
+      }
       toast.success('Profile updated successfully');
     } catch (err) {
       toast.error(err.message || 'Failed to update profile');
     } finally {
       setIsSavingProfile(false);
     }
+  };
+
+  const handleAvatarChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] || null;
+    if (file && (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > 5 * 1024 * 1024)) {
+      event.target.value = '';
+      toast.error('Choose a JPEG, PNG, or WebP image no larger than 5 MB.');
+      return;
+    }
+    setAvatarFile(file);
   };
 
   const handleChangePassword = async (e) => {
@@ -200,11 +223,12 @@ const ProfileSettings = () => {
                 </div>
 
                 <div>
-                  <label htmlFor="profile-avatar" className="block text-sm font-medium text-slate-700 mb-1.5">Avatar URL (Optional)</label>
+                  <label htmlFor="profile-avatar" className="block text-sm font-medium text-slate-700 mb-1.5">Avatar (Optional)</label>
                   <div className="relative">
                     <Camera className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                    <input id="profile-avatar" type="url" value={avatar} onChange={e => setAvatar(e.target.value)} placeholder="https://..." className="w-full bg-white border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 text-slate-900 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none" />
+                    <input ref={avatarInputRef} id="profile-avatar" type="file" accept="image/jpeg,image/png,image/webp" onChange={handleAvatarChange} className="w-full bg-white border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 text-slate-900 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none file:mr-3 file:border-0 file:bg-transparent file:text-sm file:font-medium" />
                   </div>
+                  <p className="text-xs text-slate-400 mt-1.5">JPEG, PNG, or WebP; maximum 5 MB.</p>
                 </div>
 
                 {role === 'STUDENT' && (
