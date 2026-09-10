@@ -159,4 +159,15 @@ public class FakeEmailService : IEmailService
     {
         return Task.CompletedTask;
     }
+
+    public Task SendClassNotificationAsync(
+        string toEmail,
+        string fullName,
+        string subject,
+        string title,
+        string message,
+        CancellationToken cancellationToken = default)
+    {
+        return Task.CompletedTask;
+    }
 }

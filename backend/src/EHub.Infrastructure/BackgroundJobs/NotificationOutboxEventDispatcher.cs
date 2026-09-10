@@ -14,17 +14,20 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
     private readonly AppDbContext _context;
     private readonly IClassChatMembershipSynchronizer _chatMembershipSynchronizer;
     private readonly IProjectDirectionRealtimePublisher _projectDirectionRealtimePublisher;
+    private readonly IEmailService _emailService;
     private readonly ILogger<NotificationOutboxEventDispatcher> _logger;
 
     public NotificationOutboxEventDispatcher(
         AppDbContext context,
         IClassChatMembershipSynchronizer chatMembershipSynchronizer,
         IProjectDirectionRealtimePublisher projectDirectionRealtimePublisher,
+        IEmailService emailService,
         ILogger<NotificationOutboxEventDispatcher> logger)
     {
         _context = context;
         _chatMembershipSynchronizer = chatMembershipSynchronizer;
         _projectDirectionRealtimePublisher = projectDirectionRealtimePublisher;
+        _emailService = emailService;
         _logger = logger;
     }
 
@@ -41,6 +44,22 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
 
         switch (message.Type)
         {
+            case "Class.Created.v1":
+                var createdClassDetails = await GetClassEmailDetailsAsync(message.AggregateId, cancellationToken);
+                await AddForOptionalUserAsync(
+                    message, data, "primaryLecturerId", NotificationType.SystemAnnouncement,
+                    "You have been assigned to a class",
+                    $"You have been assigned as the lecturer for class {createdClassDetails.ClassCode}.", cancellationToken);
+                await SendClassCreatedEmailAsync(data, createdClassDetails, cancellationToken);
+                break;
+            case "Class.StudentRosterImported.v1":
+                var importedClassDetails = await GetClassEmailDetailsAsync(message.AggregateId, cancellationToken);
+                await AddForUsersAsync(
+                    message, data, "studentUserIds", NotificationType.SystemAnnouncement,
+                    "You have been added to a class",
+                    $"You have been added to class {importedClassDetails.ClassCode}.", cancellationToken);
+                await SendStudentImportEmailsAsync(data, importedClassDetails, cancellationToken);
+                break;
             case "TeamProposal.Submitted.v1":
                 if (ReadBoolean(data, "adminReviewRequired"))
                 {
@@ -196,6 +215,150 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
         if (data.TryGetProperty(propertyName, out var property) && property.ValueKind != JsonValueKind.Null && property.TryGetGuid(out var userId))
             await AddAsync(message, userId, type, title, body, cancellationToken);
     }
+
+    private async Task SendClassCreatedEmailAsync(
+        JsonElement data,
+        ClassEmailDetails classDetails,
+        CancellationToken cancellationToken)
+    {
+        var lecturerUserId = ReadGuid(data, "primaryLecturerId");
+        if (!lecturerUserId.HasValue) return;
+
+        var lecturer = await _context.Users.AsNoTracking()
+            .Where(user => user.Id == lecturerUserId.Value && user.Status == UserStatus.Active)
+            .Select(user => new { user.Email, user.FullName })
+            .FirstOrDefaultAsync(cancellationToken);
+        if (lecturer is null || string.IsNullOrWhiteSpace(lecturer.Email)) return;
+
+        await _emailService.SendClassNotificationAsync(
+            lecturer.Email, lecturer.FullName,
+            $"[E-HUB] Teaching Assignment: {classDetails.ClassCode}",
+            $"Teaching Assignment: {classDetails.ClassCode}",
+            $"""
+            Dear {lecturer.FullName},
+
+            E-HUB is pleased to inform you that you have been assigned as the lecturer for class {classDetails.ClassCode} in {classDetails.Semester}.
+
+            Class details:
+            • Course: {classDetails.SubjectName}
+            • Class code: {classDetails.ClassCode}
+        
+
+            Please sign in to E-HUB to view the student roster, manage the class, and carry out course activities.
+
+            Kind regards,
+            E-HUB – Entrepreneurship Hub
+            """, cancellationToken);
+    }
+
+    private async Task SendStudentImportEmailsAsync(
+        JsonElement data,
+        ClassEmailDetails classDetails,
+        CancellationToken cancellationToken)
+    {
+        if (!data.TryGetProperty("studentRecipients", out var recipients) || recipients.ValueKind != JsonValueKind.Array) return;
+
+        foreach (var recipient in recipients.EnumerateArray())
+        {
+            var email = ReadString(recipient, "email");
+            if (string.IsNullOrWhiteSpace(email)) continue;
+
+            await _emailService.SendClassNotificationAsync(
+                email, ReadString(recipient, "fullName"),
+                $"[E-HUB] You have been added to {classDetails.ClassCode}",
+                $"You have been added to {classDetails.ClassCode}",
+                $"""
+                Dear {ReadString(recipient, "fullName")},
+
+                E-HUB is pleased to inform you that you have been added to class {classDetails.ClassCode} in {classDetails.Semester}.
+
+                Class details:
+                • Course: {classDetails.SubjectName}
+                • Class code: {classDetails.ClassCode}
+                • Lecturer: {classDetails.LecturerName}
+                • Room: {classDetails.Room}
+                • Schedule: {classDetails.Schedule}
+
+                Please sign in to E-HUB to review the class information, follow announcements, and participate in course activities when available.
+
+                If this assignment is not correct, please contact the assigned lecturer or an E-HUB administrator.
+
+                Kind regards,
+                E-HUB – Entrepreneurship Hub
+                """, cancellationToken);
+        }
+    }
+
+    private async Task<ClassEmailDetails> GetClassEmailDetailsAsync(Guid classId, CancellationToken cancellationToken)
+    {
+        var @class = await _context.Classes.AsNoTracking()
+            .Include(item => item.Course)
+            .Include(item => item.Semester)
+            .Include(item => item.PrimaryLecturer)
+            .FirstOrDefaultAsync(item => item.Id == classId, cancellationToken);
+        if (@class is null)
+            return new ClassEmailDetails("your class", "Not available", "Not available", "Not available", "Not available", "Not available");
+
+        return new ClassEmailDetails(
+            @class.ClassCode,
+            @class.Course.Name,
+            $"{@class.Semester.Code} – {@class.Semester.Year}",
+            string.IsNullOrWhiteSpace(@class.Room) ? "Not available" : @class.Room,
+            FormatSchedule(@class.ScheduleJson),
+            @class.PrimaryLecturer?.FullName ?? "Not available");
+    }
+
+    private static string FormatSchedule(string? scheduleJson)
+    {
+        if (string.IsNullOrWhiteSpace(scheduleJson)) return "Not available";
+        try
+        {
+            using var document = JsonDocument.Parse(scheduleJson);
+            var slots = document.RootElement.EnumerateArray()
+                .Select(slot =>
+                {
+                    var day = slot.TryGetProperty("dayOfWeek", out var dayValue) && dayValue.TryGetInt32(out var dayNumber)
+                        ? ToEnglishDay(dayNumber)
+                        : "";
+                    var slotNumber = slot.TryGetProperty("slotNumber", out var slotValue) && slotValue.TryGetInt32(out var parsedSlot)
+                        ? $"Tiết {parsedSlot}"
+                        : "";
+                    var room = ReadString(slot, "room");
+                    return string.Join(" · ", new[] { day, slotNumber, room }.Where(value => !string.IsNullOrWhiteSpace(value)));
+                })
+                .Where(value => !string.IsNullOrWhiteSpace(value));
+            return string.Join("; ", slots) is { Length: > 0 } value ? value : "Not available";
+        }
+        catch (JsonException)
+        {
+            return "Not available";
+        }
+    }
+
+    private static string ToEnglishDay(int dayOfWeek) => dayOfWeek switch
+    {
+        1 => "Monday",
+        2 => "Tuesday",
+        3 => "Wednesday",
+        4 => "Thursday",
+        5 => "Friday",
+        6 => "Saturday",
+        _ => string.Empty
+    };
+
+    private sealed record ClassEmailDetails(
+        string ClassCode,
+        string SubjectName,
+        string Semester,
+        string Room,
+        string Schedule,
+        string LecturerName);
+
+    private async Task<string> GetClassCodeAsync(Guid classId, CancellationToken cancellationToken) =>
+        await _context.Classes.AsNoTracking()
+            .Where(@class => @class.Id == classId)
+            .Select(@class => @class.ClassCode)
+            .FirstOrDefaultAsync(cancellationToken) ?? "your class";
 
     private async Task AddForUsersAsync(
         OutboxMessage message,

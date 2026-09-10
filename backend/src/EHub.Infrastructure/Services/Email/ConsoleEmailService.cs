@@ -58,4 +58,22 @@ public sealed class ConsoleEmailService : IEmailService
 
         return Task.CompletedTask;
     }
+
+    public Task SendClassNotificationAsync(
+        string toEmail,
+        string fullName,
+        string subject,
+        string title,
+        string message,
+        CancellationToken cancellationToken = default)
+    {
+        _logger.LogInformation(
+            "=== [Console Email Dispatch] ===\nTo: {Email} ({FullName})\nSubject: {Subject}\nTitle: {Title}\n================================",
+            toEmail,
+            fullName,
+            subject,
+            title);
+
+        return Task.CompletedTask;
+    }
 }

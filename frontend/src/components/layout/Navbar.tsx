@@ -1,7 +1,7 @@
 import { useAuth } from '../../hooks/useAuth';
-import { Search, ChevronDown, User, LogOut, Menu, Settings, Moon, Sun, AlertTriangle } from 'lucide-react';
+import { ChevronDown, User, LogOut, Menu, Settings, Moon, Sun, AlertTriangle } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import Badge from '../ui/Badge';
 import NotificationDropdown from './NotificationDropdown';
 import { useTheme } from '../../context/ThemeContext';
@@ -11,10 +11,6 @@ const Navbar = ({ onMenuClick }) => {
   const { user, logout } = useAuth();
   const { isDark, toggleTheme } = useTheme();
   const navigate = useNavigate();
-  const location = useLocation();
-  const classSearch = new URLSearchParams(location.search).get('search') || '';
-  const [searchDraft, setSearchDraft] = useState<string | null>(null);
-  useEffect(() => { setSearchDraft(null); }, [location.pathname, location.search]);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [classConflictAlert, setClassConflictAlert] = useState(null);
   const menuRef = useRef(null);
@@ -92,7 +88,7 @@ const Navbar = ({ onMenuClick }) => {
 
   return (
     <header className="bg-white/85 dark:bg-[#111827]/88 backdrop-blur-xl border-b border-slate-200/60 dark:border-white/10 sticky top-0 z-30 h-16 flex items-center justify-between px-4 sm:px-6 gap-4 transition-colors duration-200">
-      {/* Left: Hamburger + Search */}
+      {/* Left: Hamburger */}
       <div className="flex items-center gap-3 flex-1 min-w-0">
         <button
           onClick={onMenuClick}
@@ -101,33 +97,6 @@ const Navbar = ({ onMenuClick }) => {
         >
           <Menu className="w-5 h-5" />
         </button>
-
-        <form className="flex-1 max-w-md hidden sm:block" onSubmit={(event) => {
-          event.preventDefault();
-          if (role !== 'ADMIN') return;
-          const params = new URLSearchParams(location.pathname === '/admin/classes' ? location.search : '');
-          const query = (searchDraft ?? classSearch).trim();
-          if (query) params.set('search', query);
-          else params.delete('search');
-          for (const key of ['page', 'tab', 'classId', 'teamId']) params.delete(key);
-          navigate(`/admin/classes?${params.toString()}`);
-          setSearchDraft(null);
-        }}>
-          <div className="relative group">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-primary transition-colors" />
-            <input
-              className={`w-full bg-slate-50/80 border border-slate-200 rounded-xl pl-10 ${role === 'ADMIN' ? 'pr-20' : 'pr-4'} py-2 text-[13px] text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary focus:bg-white transition-all`}
-              placeholder={role === 'ADMIN' ? 'Search classes...' : 'Search teams, ideas, students...'}
-              value={searchDraft ?? (role === 'ADMIN' ? classSearch : '')}
-              onChange={(event) => setSearchDraft(event.target.value)}
-              type="text"
-              aria-label={role === 'ADMIN' ? 'Search classes' : 'Search'}
-            />
-            {role === 'ADMIN' ? <button type="submit" className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-primary" aria-label="Submit class search">Search</button> : <kbd className="absolute right-3 top-1/2 -translate-y-1/2 hidden md:inline-flex h-5 items-center gap-1 rounded border border-slate-200 bg-white px-1.5 text-[10px] font-medium text-slate-400">
-              ⌘K
-            </kbd>}
-          </div>
-        </form>
       </div>
 
       {/* Right Section */}
