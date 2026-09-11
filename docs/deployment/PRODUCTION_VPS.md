@@ -151,9 +151,9 @@ All three services must be running and healthy. Before installing host Nginx,
 verify the loopback entry point:
 
 ```bash
-curl --fail --silent --show-error http://127.0.0.1:3000/healthz
-curl --fail --silent --show-error http://127.0.0.1:3000/health/live
-curl --fail --silent --show-error http://127.0.0.1:3000/health/ready
+curl --fail --silent --show-error --header 'Host: e-hub.com.vn' http://127.0.0.1:3000/healthz
+curl --fail --silent --show-error --header 'Host: e-hub.com.vn' http://127.0.0.1:3000/health/live
+curl --fail --silent --show-error --header 'Host: e-hub.com.vn' http://127.0.0.1:3000/health/ready
 sudo ss -lntup
 ```
 
