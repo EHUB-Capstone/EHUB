@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react';
-import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
+import { BrowserRouter as Router, Navigate, Route, Routes } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { ThemeProvider } from './context/ThemeContext';
@@ -11,6 +11,7 @@ import ErrorBoundary from './components/ui/ErrorBoundary';
 
 import { classFeatureFlags } from './config/classFeatureFlags';
 import { classRouteAccess } from './config/classAccessPolicy';
+import { releaseFeatureFlags } from './config/releaseFeatureFlags';
 
 const Home = lazy(() => import('./pages/Home'));
 const Login = lazy(() => import('./pages/auth/Login'));
@@ -99,19 +100,19 @@ function App(): React.ReactElement {
                   <Route path="/admin/subjects/:subjectCode" element={<ProtectedRoute allowedRoles={['ADMIN']}><SubjectDetail /></ProtectedRoute>} />
                   <Route path="/admin/startup-industries" element={<ProtectedRoute allowedRoles={['ADMIN']}><StartupIndustryManagement /></ProtectedRoute>} />
 
-                  <Route path="/lecturer" element={<ProtectedRoute allowedRoles={[...classRouteAccess.lecturerArea]}><LecturerDashboard /></ProtectedRoute>} />
+                  <Route path="/lecturer" element={<ProtectedRoute allowedRoles={[...classRouteAccess.lecturerArea]}>{releaseFeatureFlags.roleDashboards ? <LecturerDashboard /> : <Navigate to="/lecturer/classes" replace />}</ProtectedRoute>} />
                   <Route path="/lecturer/classes" element={<ProtectedRoute allowedRoles={[...classRouteAccess.lecturerArea]}><LecturerClasses /></ProtectedRoute>} />
-                  <Route path="/lecturer/data-bank" element={<ProtectedRoute allowedRoles={['ADMIN', 'LECTURER']}><DataBankPage /></ProtectedRoute>} />
-                  <Route path="/mentor" element={<ProtectedRoute allowedRoles={['MENTOR']}><MentorDashboard /></ProtectedRoute>} />
+                  {releaseFeatureFlags.dataBank && <Route path="/lecturer/data-bank" element={<ProtectedRoute allowedRoles={['ADMIN', 'LECTURER']}><DataBankPage /></ProtectedRoute>} />}
+                  <Route path="/mentor" element={<ProtectedRoute allowedRoles={['MENTOR']}>{releaseFeatureFlags.roleDashboards ? <MentorDashboard /> : <Navigate to="/workspace" replace />}</ProtectedRoute>} />
 
                   <Route path="/classes/:slug" element={<ProtectedRoute allowedRoles={[...classRouteAccess.classDetail]}><ClassDetail /></ProtectedRoute>} />
 
-                  <Route path="/student" element={<ProtectedRoute allowedRoles={['STUDENT']}><StudentDashboard /></ProtectedRoute>} />
-                  <Route path="/student/idea/new" element={<ProtectedRoute allowedRoles={['STUDENT']}><IdeaForm /></ProtectedRoute>} />
-                  <Route path="/student/idea/:id" element={<ProtectedRoute allowedRoles={['STUDENT']}><IdeaDetail /></ProtectedRoute>} />
-                  <Route path="/student/feedback" element={<ProtectedRoute allowedRoles={['STUDENT']}><IdeaDetail /></ProtectedRoute>} />
-                  <Route path="/student/ai-analysis" element={<ProtectedRoute allowedRoles={['STUDENT']}><AIAnalysis /></ProtectedRoute>} />
-                  <Route path="/student/ai-analysis/:startupIdeaId" element={<ProtectedRoute allowedRoles={['STUDENT']}><AIAnalysis /></ProtectedRoute>} />
+                  <Route path="/student" element={<ProtectedRoute allowedRoles={['STUDENT']}>{releaseFeatureFlags.roleDashboards ? <StudentDashboard /> : <Navigate to={classFeatureFlags.studentSelfService ? '/student/classes' : '/student/workspace'} replace />}</ProtectedRoute>} />
+                  {releaseFeatureFlags.startupIdeas && <Route path="/student/idea/new" element={<ProtectedRoute allowedRoles={['STUDENT']}><IdeaForm /></ProtectedRoute>} />}
+                  {releaseFeatureFlags.startupIdeas && <Route path="/student/idea/:id" element={<ProtectedRoute allowedRoles={['STUDENT']}><IdeaDetail /></ProtectedRoute>} />}
+                  {releaseFeatureFlags.evaluations && <Route path="/student/feedback" element={<ProtectedRoute allowedRoles={['STUDENT']}><IdeaDetail /></ProtectedRoute>} />}
+                  {releaseFeatureFlags.ai && <Route path="/student/ai-analysis" element={<ProtectedRoute allowedRoles={['STUDENT']}><AIAnalysis /></ProtectedRoute>} />}
+                  {releaseFeatureFlags.ai && <Route path="/student/ai-analysis/:startupIdeaId" element={<ProtectedRoute allowedRoles={['STUDENT']}><AIAnalysis /></ProtectedRoute>} />}
                   {classFeatureFlags.studentSelfService && (
                     <>
                       <Route path="/student/classes" element={<ProtectedRoute allowedRoles={['STUDENT']}><MyClasses /></ProtectedRoute>} />
@@ -129,12 +130,12 @@ function App(): React.ReactElement {
                   <Route path="/workspace/teams/:teamId/proposal" element={<ProposalEditor />} />
                   <Route path="/workspace/teams/:teamId/project-profile" element={<ProjectProfileEditor />} />
 
-                  <Route path="/rankings" element={<Rankings />} />
-                  <Route path="/evaluations" element={<IdeaDetail />} />
+                  {releaseFeatureFlags.rankings && <Route path="/rankings" element={<Rankings />} />}
+                  {releaseFeatureFlags.evaluations && <Route path="/evaluations" element={<IdeaDetail />} />}
                   <Route path="/executionboard" element={<ExecutionBoard />} />
-                  <Route path="/sessions" element={<MentoringSessions />} />
-                  <Route path="/workshops" element={<Workshops />} />
-                  <Route path="/chat" element={<GroupChat />} />
+                  {releaseFeatureFlags.mentoring && <Route path="/sessions" element={<MentoringSessions />} />}
+                  {releaseFeatureFlags.workshops && <Route path="/workshops" element={<Workshops />} />}
+                  {releaseFeatureFlags.chat && <Route path="/chat" element={<GroupChat />} />}
                   <Route path="/settings" element={<ProfileSettings />} />
                 </Route>
 

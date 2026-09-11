@@ -8,6 +8,7 @@ import {
   Kanban, Brain, Video, Rocket, LogOut, Plus, X, MessageSquare, Database, BookOpen, ShieldCheck, Factory
 } from 'lucide-react';
 import { classFeatureFlags } from '../../config/classFeatureFlags';
+import { releaseFeatureFlags } from '../../config/releaseFeatureFlags';
 
 const iconMap: Record<string, LucideIcon> = {
   dashboard: LayoutDashboard,
@@ -64,32 +65,32 @@ const Sidebar = ({ mobileOpen, onMobileClose }: SidebarProps) => {
       { path: '/admin/users', icon: 'group', label: 'Users' },
       { path: '/admin/account-approvals', icon: 'account_approval', label: 'Account Approvals' },
       { path: '/admin/classes', icon: 'school', label: 'Classes' },
-      { path: '/lecturer/data-bank', icon: 'database', label: 'Data Bank' },
+      ...(releaseFeatureFlags.dataBank ? [{ path: '/lecturer/data-bank', icon: 'database', label: 'Data Bank' }] : []),
       { path: '/workspace', icon: 'view_kanban', label: 'Startup Workspace' },
-      { path: '/workshops', icon: 'calendar_month', label: 'Workshops' },
-      { path: '/chat', icon: 'chat', label: 'Group Chat' },
-      { path: '/rankings', icon: 'leaderboard', label: 'Rankings' },
-      { path: '/sessions', icon: 'calendar_month', label: 'Schedules' },
+      ...(releaseFeatureFlags.workshops ? [{ path: '/workshops', icon: 'calendar_month', label: 'Workshops' }] : []),
+      ...(releaseFeatureFlags.chat ? [{ path: '/chat', icon: 'chat', label: 'Group Chat' }] : []),
+      ...(releaseFeatureFlags.rankings ? [{ path: '/rankings', icon: 'leaderboard', label: 'Rankings' }] : []),
+      ...(releaseFeatureFlags.mentoring ? [{ path: '/sessions', icon: 'calendar_month', label: 'Schedules' }] : []),
     ],
     LECTURER: [
-      { path: '/lecturer', icon: 'dashboard', label: 'Dashboard' },
+      ...(releaseFeatureFlags.roleDashboards ? [{ path: '/lecturer', icon: 'dashboard', label: 'Dashboard' }] : []),
       { path: '/lecturer/classes', icon: 'school', label: 'My Classes' },
-      { path: '/lecturer/data-bank', icon: 'database', label: 'Data Bank' },
+      ...(releaseFeatureFlags.dataBank ? [{ path: '/lecturer/data-bank', icon: 'database', label: 'Data Bank' }] : []),
       { path: '/workspace', icon: 'view_kanban', label: 'Startup Workspace' },
-      { path: '/workshops', icon: 'calendar_month', label: 'Workshops' },
-      { path: '/chat', icon: 'chat', label: 'Group Chat' },
+      ...(releaseFeatureFlags.workshops ? [{ path: '/workshops', icon: 'calendar_month', label: 'Workshops' }] : []),
+      ...(releaseFeatureFlags.chat ? [{ path: '/chat', icon: 'chat', label: 'Group Chat' }] : []),
       { path: '/executionboard', icon: 'view_kanban', label: 'Execution Board' },
-      { path: '/evaluations', icon: 'analytics', label: 'AI Reports' },
-      { path: '/sessions', icon: 'event', label: 'Sessions' },
-      { path: '/rankings', icon: 'military_tech', label: 'Rankings' },
+      ...(releaseFeatureFlags.evaluations ? [{ path: '/evaluations', icon: 'analytics', label: 'Evaluation Reports' }] : []),
+      ...(releaseFeatureFlags.mentoring ? [{ path: '/sessions', icon: 'event', label: 'Sessions' }] : []),
+      ...(releaseFeatureFlags.rankings ? [{ path: '/rankings', icon: 'military_tech', label: 'Rankings' }] : []),
     ],
     MENTOR: [
-      { path: '/mentor', icon: 'dashboard', label: 'Dashboard' },
+      ...(releaseFeatureFlags.roleDashboards ? [{ path: '/mentor', icon: 'dashboard', label: 'Dashboard' }] : []),
       { path: '/workspace', icon: 'view_kanban', label: 'Startup Workspace' },
-      { path: '/workshops', icon: 'calendar_month', label: 'Workshops' },
-      { path: '/chat', icon: 'chat', label: 'Group Chat' },
-      { path: '/sessions', icon: 'event', label: 'Sessions' },
-      { path: '/rankings', icon: 'military_tech', label: 'Rankings' },
+      ...(releaseFeatureFlags.workshops ? [{ path: '/workshops', icon: 'calendar_month', label: 'Workshops' }] : []),
+      ...(releaseFeatureFlags.chat ? [{ path: '/chat', icon: 'chat', label: 'Group Chat' }] : []),
+      ...(releaseFeatureFlags.mentoring ? [{ path: '/sessions', icon: 'event', label: 'Sessions' }] : []),
+      ...(releaseFeatureFlags.rankings ? [{ path: '/rankings', icon: 'military_tech', label: 'Rankings' }] : []),
     ],
     STUDENT: [
       ...(classFeatureFlags.studentSelfService
@@ -99,13 +100,13 @@ const Sidebar = ({ mobileOpen, onMobileClose }: SidebarProps) => {
           ]
         : []),
       { path: '/student/workspace', icon: 'view_kanban', label: 'Startup Workspace' },
-      { path: '/student', icon: 'dashboard', label: 'Dashboard' },
-      { path: '/workshops', icon: 'calendar_month', label: 'Workshops' },
-      { path: '/rankings', icon: 'military_tech', label: 'Rankings' },
-      { path: '/chat', icon: 'chat', label: 'Group Chat' },
-      { path: '/student/idea/new', icon: 'rocket_launch', label: 'My Idea' },
+      ...(releaseFeatureFlags.roleDashboards ? [{ path: '/student', icon: 'dashboard', label: 'Dashboard' }] : []),
+      ...(releaseFeatureFlags.workshops ? [{ path: '/workshops', icon: 'calendar_month', label: 'Workshops' }] : []),
+      ...(releaseFeatureFlags.rankings ? [{ path: '/rankings', icon: 'military_tech', label: 'Rankings' }] : []),
+      ...(releaseFeatureFlags.chat ? [{ path: '/chat', icon: 'chat', label: 'Group Chat' }] : []),
+      ...(releaseFeatureFlags.startupIdeas ? [{ path: '/student/idea/new', icon: 'rocket_launch', label: 'My Idea' }] : []),
       { path: '/executionboard', icon: 'task_alt', label: 'Execution Board' },
-      { path: '/sessions', icon: 'video_chat', label: 'Mentoring' },
+      ...(releaseFeatureFlags.mentoring ? [{ path: '/sessions', icon: 'video_chat', label: 'Mentoring' }] : []),
     ],
   };
 
