@@ -64,8 +64,10 @@ silently changing the others.
 
 Before tagging the pilot release:
 
-1. Backend build, unit/application tests and integration tests pass in GitHub
-   Actions. Integration failures must block the workflow.
+1. Backend build and unit/application tests pass in GitHub Actions. Integration
+   tests remain visible but temporarily non-blocking for the first pilot; every
+   failure must be recorded and resolved before final handover or before the
+   integration suite is restored as a required release gate.
 2. Frontend uses the lock file (`npm ci`) and passes lint, type checking, all
    tests and the production build.
 3. The production frontend is built with

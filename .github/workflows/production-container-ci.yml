@@ -1,0 +1,112 @@
+name: Production Container CI
+
+on:
+  pull_request:
+    branches:
+      - develop
+      - main
+    paths:
+      - .env.production.example
+      - docker-compose.production.yml
+      - backend/**
+      - frontend/**
+      - deploy/**
+      - scripts/production/**
+      - .github/workflows/production-container-ci.yml
+  push:
+    branches:
+      - develop
+      - main
+    paths:
+      - .env.production.example
+      - docker-compose.production.yml
+      - backend/**
+      - frontend/**
+      - deploy/**
+      - scripts/production/**
+      - .github/workflows/production-container-ci.yml
+
+permissions:
+  contents: read
+
+jobs:
+  validate-deployment-files:
+    name: Validate deployment files
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Check production shell scripts
+        run: bash -n scripts/production/*.sh
+
+      - name: Prepare temporary TLS files for Nginx syntax check
+        run: |
+          mkdir -p "${RUNNER_TEMP}/letsencrypt/live/e-hub.com.vn"
+          openssl req -x509 -newkey rsa:2048 -nodes -days 1 \
+            -subj "/CN=e-hub.com.vn" \
+            -keyout "${RUNNER_TEMP}/letsencrypt/live/e-hub.com.vn/privkey.pem" \
+            -out "${RUNNER_TEMP}/letsencrypt/live/e-hub.com.vn/fullchain.pem"
+
+      - name: Check bootstrap Nginx configuration
+        run: |
+          docker run --rm \
+            --volume "${PWD}/deploy/nginx/e-hub.com.vn.bootstrap.conf:/etc/nginx/conf.d/default.conf:ro" \
+            nginx:1.27-alpine nginx -t
+
+      - name: Check TLS Nginx configuration
+        run: |
+          docker run --rm \
+            --volume "${PWD}/deploy/nginx/e-hub.com.vn.conf:/etc/nginx/conf.d/default.conf:ro" \
+            --volume "${PWD}/deploy/nginx/cloudflare-real-ip.conf:/etc/nginx/snippets/ehub-cloudflare-real-ip.conf:ro" \
+            --volume "${RUNNER_TEMP}/letsencrypt:/etc/letsencrypt:ro" \
+            nginx:1.27-alpine nginx -t
+
+  validate-compose:
+    name: Validate production Compose
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Validate production configuration
+        run: docker compose --env-file .env.production.example -f docker-compose.production.yml config --quiet
+
+  build-images:
+    name: Build ${{ matrix.component }} image
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - component: backend
+            context: ./backend
+            file: ./backend/Dockerfile
+            build-args: ""
+          - component: frontend
+            context: ./frontend
+            file: ./frontend/Dockerfile
+            build-args: |
+              VITE_GOOGLE_CLIENT_ID=ci-placeholder.apps.googleusercontent.com
+              VITE_ENABLE_API_MOCKS=false
+              VITE_ENABLE_REALTIME=false
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build image without publishing
+        uses: docker/build-push-action@v7
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.file }}
+          push: false
+          tags: ehub-${{ matrix.component }}:ci
+          build-args: ${{ matrix.build-args }}
+          cache-from: type=gha,scope=${{ matrix.component }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.component }}
