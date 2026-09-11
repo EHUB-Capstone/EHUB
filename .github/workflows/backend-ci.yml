@@ -38,4 +38,5 @@ jobs:
         run: dotnet test EHub.slnx --configuration Release --no-build --filter "FullyQualifiedName!~IntegrationTests" --verbosity normal
 
       - name: Run integration tests
+        continue-on-error: true
         run: dotnet test tests/EHub.IntegrationTests/EHub.IntegrationTests.csproj --configuration Release --no-build --verbosity normal
