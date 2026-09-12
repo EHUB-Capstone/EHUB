@@ -381,6 +381,79 @@ public class AuthIntegrationTests
     }
 
     [Fact]
+    public async Task ChangePassword_Should_Return_401_When_No_Token_Is_Provided()
+    {
+        var response = await _client.PutAsJsonAsync("/api/auth/change-password", new ChangePasswordRequest
+        {
+            CurrentPassword = "OldPassword123",
+            NewPassword = "NewPassword123",
+            ConfirmPassword = "NewPassword123"
+        });
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task ChangePassword_Should_Verify_CurrentPassword_And_Update_Credentials()
+    {
+        var email = $"change-password-{Guid.NewGuid()}@example.com";
+        var (_, registration) = await RegisterAndVerifyAsync(new RegisterRequest
+        {
+            FullName = "Change Password User",
+            Email = email,
+            Password = "OldPassword123",
+            ConfirmPassword = "OldPassword123",
+            Role = "Student",
+            MajorCode = "BIT_SE"
+        });
+        var token = registration.AccessToken;
+        token.Should().NotBeNullOrWhiteSpace();
+
+        var wrongPasswordRequest = new HttpRequestMessage(HttpMethod.Put, "/api/auth/change-password")
+        {
+            Content = JsonContent.Create(new ChangePasswordRequest
+            {
+                CurrentPassword = "WrongPassword123",
+                NewPassword = "NewPassword123",
+                ConfirmPassword = "NewPassword123"
+            })
+        };
+        wrongPasswordRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        var wrongPasswordResponse = await _client.SendAsync(wrongPasswordRequest);
+
+        wrongPasswordResponse.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        var wrongPasswordBody = await wrongPasswordResponse.Content.ReadFromJsonAsync<ApiResponse<object>>();
+        wrongPasswordBody!.Code.Should().Be("AUTH_CURRENT_PASSWORD_INVALID");
+
+        var validRequest = new HttpRequestMessage(HttpMethod.Put, "/api/auth/change-password")
+        {
+            Content = JsonContent.Create(new ChangePasswordRequest
+            {
+                CurrentPassword = "OldPassword123",
+                NewPassword = "NewPassword123",
+                ConfirmPassword = "NewPassword123"
+            })
+        };
+        validRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        var validResponse = await _client.SendAsync(validRequest);
+        validResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var oldLoginResponse = await _client.PostAsJsonAsync("/api/auth/login", new EmailPasswordLoginRequest
+        {
+            Email = email,
+            Password = "OldPassword123"
+        });
+        oldLoginResponse.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+
+        var newLoginResponse = await _client.PostAsJsonAsync("/api/auth/login", new EmailPasswordLoginRequest
+        {
+            Email = email,
+            Password = "NewPassword123"
+        });
+        newLoginResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    [Fact]
     public async Task RefreshToken_Should_Succeed_And_Rotate_Tokens_When_Valid()
     {
         // Arrange

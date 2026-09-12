@@ -1,6 +1,6 @@
 import type MockAdapter from 'axios-mock-adapter';
 import type { AxiosRequestConfig } from 'axios';
-import type { LoginPayload, RegisterPayload } from '../../types/auth.ts';
+import type { ChangePasswordPayload, LoginPayload, RegisterPayload } from '../../types/auth.ts';
 import {
   normalizeLoginPayload,
   normalizeRegisterPayload,
@@ -221,6 +221,34 @@ function registerAuthHandlers(mock: MockAdapter): void {
     getMockState().sessionUserId = null;
     persistMockState();
     return ok(null, 'Logout successfully');
+  });
+
+  mock.onPut('/auth/change-password').reply((config) => {
+    const state = getMockState();
+    const user = state.users.find((item) => item.id === state.sessionUserId);
+    if (!user) return failure(401, 'COMMON_UNAUTHORIZED', 'Unauthorized access.');
+
+    const body = parseBody(config);
+    const payload: ChangePasswordPayload = {
+      currentPassword: asString(body.currentPassword),
+      newPassword: asString(body.newPassword),
+      confirmPassword: asString(body.confirmPassword),
+    };
+    if (!payload.currentPassword || !payload.newPassword || !payload.confirmPassword) {
+      return failure(400, 'COMMON_VALIDATION_ERROR', 'Validation failed');
+    }
+    if (payload.newPassword.length < 6 || payload.confirmPassword !== payload.newPassword) {
+      return failure(400, 'COMMON_VALIDATION_ERROR', 'Validation failed');
+    }
+
+    const expectedPassword = state.authPasswords[user.id] ?? 'Mock123!';
+    if (payload.currentPassword !== expectedPassword) {
+      return failure(400, 'AUTH_CURRENT_PASSWORD_INVALID', 'Current password is incorrect.');
+    }
+
+    state.authPasswords[user.id] = payload.newPassword;
+    persistMockState();
+    return ok(null, 'Password changed successfully.');
   });
 
   mock.onPost('/auth/register').reply((config) => {

@@ -68,6 +68,10 @@ public static class AuthErrors
         ErrorCodes.AuthPasswordResetTokenInvalid,
         "Password reset token is invalid or expired.");
 
+    public static readonly Error CurrentPasswordInvalid = new(
+        ErrorCodes.AuthCurrentPasswordInvalid,
+        "Current password is incorrect.");
+
     public static readonly Error EmailVerificationRequired = new(
         ErrorCodes.AuthEmailVerificationRequired,
         "Verify your email address before signing in.");

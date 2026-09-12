@@ -48,6 +48,22 @@ public sealed class ProjectDirectionHandler : IProjectDirectionHandler
         var classError = ClassStateRules.GetMutationError(team.Class.Status);
         if (classError != null) return Failure(classError.Code, classError.Message);
 
+        IReadOnlyCollection<StartupIndustry>? selectedIndustries = null;
+        if (request.StartupIndustryIds != null)
+        {
+            var industryIds = request.StartupIndustryIds.Distinct().ToArray();
+            if (industryIds.Length != request.StartupIndustryIds.Count || industryIds.Length is < 1 or > 3)
+                return Failure(ErrorCodes.ClassValidationError, "Select between 1 and 3 distinct startup industries.");
+            selectedIndustries = await _context.StartupIndustries.AsNoTracking()
+                .Where(industry => industryIds.Contains(industry.Id) && industry.Status == StartupIndustryStatus.Active)
+                .OrderBy(industry => industry.Name)
+                .ToArrayAsync(cancellationToken);
+            if (selectedIndustries.Count != industryIds.Length)
+                return Failure(ErrorCodes.ClassValidationError, "Every selected startup industry must exist and be active.");
+            if (team.Project == null)
+                return Failure(ErrorCodes.WorkspaceNotFound, "Create the project workspace before changing startup industries.");
+        }
+
         var direction = await DirectionQuery(tracking: true).FirstOrDefaultAsync(item => item.TeamId == teamId, cancellationToken);
         var revisedTitle = request.Title.Trim();
         var revisedSummary = request.Summary.Trim();
@@ -71,9 +87,12 @@ public sealed class ProjectDirectionHandler : IProjectDirectionHandler
                 return Failure(ErrorCodes.ClassConcurrencyConflict, "The project direction changed concurrently. Refresh and try again.");
             if (direction.Status is not (ProjectDirectionStatus.Draft or ProjectDirectionStatus.NeedsRevision))
                 return Failure(ErrorCodes.ProjectDirectionStateInvalid, "Only Draft or NeedsRevision directions can be edited.");
+            var startupIndustriesChanged = selectedIndustries != null
+                && !HaveSameStartupIndustries(direction.Team.Project!, selectedIndustries);
             if (direction.Status == ProjectDirectionStatus.NeedsRevision
                 && direction.Title == revisedTitle
-                && direction.Summary == revisedSummary)
+                && direction.Summary == revisedSummary
+                && !startupIndustriesChanged)
                 return Failure(ErrorCodes.ClassValidationError, "Change the project direction before saving the requested revision.");
             direction.Title = revisedTitle;
             direction.Summary = revisedSummary;
@@ -88,11 +107,17 @@ public sealed class ProjectDirectionHandler : IProjectDirectionHandler
             var changedFields = new List<string>();
             if (!string.Equals(project.Name, revisedTitle, StringComparison.Ordinal)) changedFields.Add("projectName");
             if (!string.Equals(project.Description ?? string.Empty, revisedSummary, StringComparison.Ordinal)) changedFields.Add("description");
+            if (selectedIndustries != null && !HaveSameStartupIndustries(project, selectedIndustries))
+                changedFields.Add("startupIndustries");
             if (changedFields.Count > 0)
             {
+                var now = DateTime.UtcNow;
                 project.Name = revisedTitle;
                 project.Description = revisedSummary;
                 project.UpdatedBy = userId;
+                project.UpdatedAt = now;
+                if (selectedIndustries != null)
+                    ReplaceStartupIndustries(project, selectedIndustries, userId, now);
                 _context.ProjectActivityLogs.Add(new ProjectActivityLog
                 {
                     ProjectId = project.Id,
@@ -101,10 +126,12 @@ public sealed class ProjectDirectionHandler : IProjectDirectionHandler
                     Action = "PROJECT_DIRECTION_DETAILS_UPDATED",
                     Summary = "Updated project details from the project direction.",
                     ChangedFieldsJson = JsonSerializer.Serialize(changedFields),
-                    OccurredAtUtc = DateTime.UtcNow
+                    OccurredAtUtc = now
                 });
             }
         }
+
+        direction.UpdatedAt = DateTime.UtcNow;
 
         ClassOutbox.Enqueue(_context, "ProjectDirection.Saved.v1", team.ClassId, new { TeamId = teamId, ProjectDirectionId = direction.Id });
         try { await _context.SaveChangesAsync(cancellationToken); }
@@ -254,6 +281,51 @@ public sealed class ProjectDirectionHandler : IProjectDirectionHandler
         if (string.IsNullOrWhiteSpace(title) || title.Trim().Length is < 3 or > 200) return (ErrorCodes.ClassValidationError, "Project name must be between 3 and 200 characters.");
         if (string.IsNullOrWhiteSpace(summary) || summary.Trim().Length is < 20 or > 2_000) return (ErrorCodes.ClassValidationError, "Project description must be between 20 and 2000 characters.");
         return null;
+    }
+
+    private static bool HaveSameStartupIndustries(Project project, IEnumerable<StartupIndustry> industries)
+    {
+        var current = project.ProjectTags
+            .Where(tag => tag.TagType == ProjectTagType.StartupField)
+            .Select(tag => tag.NormalizedTagName)
+            .ToHashSet(StringComparer.Ordinal);
+        var requested = industries.Select(industry => industry.NormalizedName).ToHashSet(StringComparer.Ordinal);
+        return current.SetEquals(requested);
+    }
+
+    private void ReplaceStartupIndustries(
+        Project project,
+        IEnumerable<StartupIndustry> industries,
+        Guid userId,
+        DateTime now)
+    {
+        var requested = industries.ToDictionary(industry => industry.NormalizedName, StringComparer.Ordinal);
+        var current = project.ProjectTags
+            .Where(tag => tag.TagType == ProjectTagType.StartupField)
+            .ToArray();
+
+        foreach (var tag in current.Where(tag => !requested.ContainsKey(tag.NormalizedTagName)))
+        {
+            _context.ProjectTags.Remove(tag);
+            project.ProjectTags.Remove(tag);
+        }
+
+        var currentNames = current
+            .Select(tag => tag.NormalizedTagName)
+            .ToHashSet(StringComparer.Ordinal);
+        foreach (var industry in requested.Values.Where(industry => !currentNames.Contains(industry.NormalizedName)))
+        {
+            _context.ProjectTags.Add(new ProjectTag
+            {
+                ProjectId = project.Id,
+                Project = project,
+                TagName = industry.Name,
+                NormalizedTagName = industry.NormalizedName,
+                TagType = ProjectTagType.StartupField,
+                CreatedById = userId,
+                CreatedAt = now
+            });
+        }
     }
 
     private static ProjectDirectionDto ToDto(ProjectDirection direction) => new()

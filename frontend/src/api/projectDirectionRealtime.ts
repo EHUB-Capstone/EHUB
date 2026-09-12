@@ -13,6 +13,7 @@ interface ProjectDirectionChangedRealtimeEvent {
     submittedAtUtc?: string | null;
     reviewedAtUtc?: string | null;
     rowVersion: string;
+    startupIndustries?: string[];
     reviews?: Array<{
       id: string;
       fromStatus: string;
@@ -44,6 +45,7 @@ let reconnectTimer: number | null = null;
 let reconnectAttempt = 0;
 let hasConnected = false;
 let explicitlyStopped = false;
+let closeWhenConnected = false;
 
 const websocketUrl = (): string => {
   const url = new URL('/api/realtime/project-directions', window.location.origin);
@@ -85,6 +87,12 @@ const connect = () => {
 
   connection.addEventListener('open', () => {
     if (socket !== connection) return;
+    if (closeWhenConnected || explicitlyStopped || handlers.size === 0) {
+      closeWhenConnected = false;
+      socket = null;
+      connection.close(1000, 'No active subscribers');
+      return;
+    }
     const reconnected = hasConnected;
     hasConnected = true;
     reconnectAttempt = 0;
@@ -112,8 +120,15 @@ const stopWhenUnused = () => {
   explicitlyStopped = true;
   if (reconnectTimer !== null) window.clearTimeout(reconnectTimer);
   reconnectTimer = null;
-  socket?.close(1000, 'No active subscribers');
-  socket = null;
+  if (socket?.readyState === WebSocket.CONNECTING) {
+    // React StrictMode immediately unsubscribes and resubscribes effects in development.
+    // Let the handshake finish instead of closing a CONNECTING socket, which browsers
+    // report as a failed WebSocket connection. A new subscriber cancels this close.
+    closeWhenConnected = true;
+  } else {
+    socket?.close(1000, 'No active subscribers');
+    socket = null;
+  }
   hasConnected = false;
   reconnectAttempt = 0;
 };
@@ -124,6 +139,8 @@ export const subscribeProjectDirectionRealtime = (
 ): (() => void) => {
   handlers.add(handler);
   if (onConnected) connectedHandlers.add(onConnected);
+  explicitlyStopped = false;
+  closeWhenConnected = false;
   connect();
   if (onConnected && socket?.readyState === WebSocket.OPEN) {
     queueMicrotask(() => {

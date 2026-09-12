@@ -24,6 +24,7 @@ import {
   getProjectDirectionSubmitGuidance,
   hasUnsavedProjectDirectionChanges,
   hasProjectDirectionChanged,
+  isProjectDirectionConcurrencyConflict,
   isProjectProfileAvailable,
   updateProjectDirectionOverviewTeams,
 } from '../src/utils/projectDirectionSync.ts';
@@ -187,6 +188,7 @@ test('project direction requires requested revisions to be changed and saved bef
     id: 'direction-1',
     title: 'Initial direction',
     summary: 'The initial project direction summary.',
+    startupIndustries: ['Healthcare / HealthTech', 'Education / EdTech'],
     status: 'NeedsRevision',
     rowVersion: '11',
   };
@@ -200,12 +202,32 @@ test('project direction requires requested revisions to be changed and saved bef
   assert.equal(canSubmitProjectDirection(needsRevision, needsRevision.title, revisedSummary), false);
   assert.match(getProjectDirectionSubmitGuidance(needsRevision, needsRevision.title, revisedSummary), /Save.*enable Submit/);
 
+  const revisedIndustries = ['Healthcare / HealthTech'];
+  assert.equal(hasUnsavedProjectDirectionChanges(
+    needsRevision,
+    needsRevision.title,
+    needsRevision.summary,
+    revisedIndustries,
+  ), true);
+  assert.equal(canSubmitProjectDirection(
+    needsRevision,
+    needsRevision.title,
+    needsRevision.summary,
+    revisedIndustries,
+  ), false);
+
   const savedDraft = { ...needsRevision, summary: revisedSummary, status: 'Draft', rowVersion: '12' };
   assert.equal(canSubmitProjectDirection(savedDraft, savedDraft.title, savedDraft.summary), true);
   assert.equal(getProjectDirectionSubmitGuidance(savedDraft, savedDraft.title, savedDraft.summary), '');
 
   assert.equal(canSubmitProjectDirection(savedDraft, savedDraft.title, `${savedDraft.summary} Unsaved`), false);
   assert.match(getProjectDirectionSubmitGuidance(savedDraft, savedDraft.title, `${savedDraft.summary} Unsaved`), /Save your changes/);
+});
+
+test('project direction recognizes both backend and mock concurrency error codes', () => {
+  assert.equal(isProjectDirectionConcurrencyConflict('CLASS_CONCURRENCY_CONFLICT'), true);
+  assert.equal(isProjectDirectionConcurrencyConflict('PROJECT_DIRECTION_CONCURRENCY_CONFLICT'), true);
+  assert.equal(isProjectDirectionConcurrencyConflict('PROJECT_DIRECTION_STATE_INVALID'), false);
 });
 
 test('lecturer review updates only the reviewed team without reloading the overview', () => {
@@ -216,6 +238,7 @@ test('lecturer review updates only the reviewed team without reloading the overv
     summary: 'Approved summary',
     status: 'Approved',
     rowVersion: '11',
+    startupIndustries: ['Healthcare / HealthTech', 'Education / EdTech'],
     reviews: [{ id: 'review-1', toStatus: 'Approved', comment: 'Proceed with this scope.' }],
   });
 
@@ -225,6 +248,7 @@ test('lecturer review updates only the reviewed team without reloading the overv
     projectDirectionRowVersion: '11',
     projectDirection: 'Approved summary',
     projectDirectionTitle: 'Approved direction',
+    projectDirectionStartupIndustries: ['Healthcare / HealthTech', 'Education / EdTech'],
     projectDirectionReviewComment: 'Proceed with this scope.',
   });
   assert.equal(result[1], secondTeam);

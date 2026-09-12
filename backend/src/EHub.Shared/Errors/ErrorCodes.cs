@@ -40,6 +40,7 @@ public static class ErrorCodes
     public const string AuthRegistrationAlreadyCompleted = "AUTH_REGISTRATION_ALREADY_COMPLETED";
     public const string AuthProfileImageInvalid = "AUTH_PROFILE_IMAGE_INVALID";
     public const string AuthProfileImageUploadFailed = "AUTH_PROFILE_IMAGE_UPLOAD_FAILED";
+    public const string AuthCurrentPasswordInvalid = "AUTH_CURRENT_PASSWORD_INVALID";
 
     // System error codes
     public const string InternalServerError = "COMMON_INTERNAL_SERVER_ERROR";

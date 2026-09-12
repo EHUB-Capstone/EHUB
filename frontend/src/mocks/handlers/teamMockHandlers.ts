@@ -469,7 +469,21 @@ function registerDirectionHandlers(mock: MockAdapter): void {
     if (direction && !['Draft', 'NeedsRevision'].includes(direction.status)) return failure(409, 'PROJECT_DIRECTION_STATE_INVALID', 'Only Draft or NeedsRevision directions can be edited.');
     const revisedTitle = asString(body.title, direction?.title).trim();
     const revisedSummary = asString(body.summary, direction?.summary).trim();
-    if (direction?.status === 'NeedsRevision' && revisedTitle === direction.title && revisedSummary === direction.summary) {
+    let revisedIndustries = team.startupIndustries || [];
+    if (Array.isArray(body.startupIndustryIds)) {
+      const startupIndustryIds = asStringArray(body.startupIndustryIds);
+      if (startupIndustryIds.length < 1 || startupIndustryIds.length > 3 || new Set(startupIndustryIds).size !== startupIndustryIds.length) {
+        return failure(400, 'VALIDATION_ERROR', 'Select between 1 and 3 distinct startup industries.');
+      }
+      const activeIndustries = getMockState().startupIndustries.filter((industry) => industry.status === 'active');
+      const selectedIndustries = startupIndustryIds.map((id) => activeIndustries.find((industry) => industry.id === id));
+      if (selectedIndustries.some((industry) => !industry)) {
+        return failure(400, 'VALIDATION_ERROR', 'Every selected startup industry must exist and be active.');
+      }
+      revisedIndustries = selectedIndustries.map((industry) => industry!.name);
+    }
+    const industriesChanged = [...revisedIndustries].sort().join('|') !== [...(direction?.startupIndustries || [])].sort().join('|');
+    if (direction?.status === 'NeedsRevision' && revisedTitle === direction.title && revisedSummary === direction.summary && !industriesChanged) {
       return failure(400, 'VALIDATION_ERROR', 'Change the project direction before saving the requested revision.');
     }
     if (!direction) {
@@ -478,12 +492,13 @@ function registerDirectionHandlers(mock: MockAdapter): void {
     }
     direction.title = revisedTitle;
     direction.summary = revisedSummary;
-    direction.startupIndustries = team.startupIndustries || [];
+    direction.startupIndustries = revisedIndustries;
     direction.status = 'Draft';
     direction.rowVersion = allocateRowVersion();
     if (team.projectName) {
       team.projectName = revisedTitle;
       team.projectDescription = revisedSummary;
+      team.startupIndustries = revisedIndustries;
     }
     persistMockState();
     return ok(direction, 'Project direction saved successfully.');
