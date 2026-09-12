@@ -4,6 +4,7 @@ using EHub.Application.Features.Admin.Users.GetPendingApprovalUsers;
 using EHub.Application.Features.Admin.Users.ManageUsers;
 using EHub.Application.Features.Admin.Users.RejectUser;
 using EHub.Application.Features.Auth.ForgotPassword;
+using EHub.Application.Features.Auth.ChangePassword;
 using EHub.Application.Features.Auth.GetCurrentUser;
 using EHub.Application.Features.Auth.GoogleLogin;
 using EHub.Application.Features.Auth.Login;
@@ -46,6 +47,7 @@ public static class DependencyInjection
         services.AddScoped<IRefreshTokenCommandHandler, RefreshTokenCommandHandler>();
         services.AddScoped<ILogoutCommandHandler, LogoutCommandHandler>();
         services.AddScoped<IForgotPasswordCommandHandler, ForgotPasswordCommandHandler>();
+        services.AddScoped<IChangePasswordCommandHandler, ChangePasswordCommandHandler>();
         services.AddScoped<IResetPasswordCommandHandler, ResetPasswordCommandHandler>();
         services.AddScoped<IVerifyRegistrationOtpCommandHandler, VerifyRegistrationOtpCommandHandler>();
         services.AddScoped<IResendRegistrationOtpCommandHandler, ResendRegistrationOtpCommandHandler>();

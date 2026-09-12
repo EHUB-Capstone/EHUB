@@ -15,36 +15,51 @@ export interface ProjectDirectionSyncValue {
   startupIndustries?: string[] | null;
 }
 
+export const isProjectDirectionConcurrencyConflict = (code?: string | null): boolean => (
+  code === 'CLASS_CONCURRENCY_CONFLICT' || code === 'PROJECT_DIRECTION_CONCURRENCY_CONFLICT'
+);
+
 export const hasUnsavedProjectDirectionChanges = (
   direction: ProjectDirectionSyncValue | null | undefined,
   title: string,
   summary: string,
+  startupIndustries?: string[],
 ): boolean => !direction
   || title.trim() !== (direction.title || '').trim()
-  || summary.trim() !== (direction.summary || '').trim();
+  || summary.trim() !== (direction.summary || '').trim()
+  || (startupIndustries !== undefined && !haveSameValues(startupIndustries, direction.startupIndustries || []));
 
 export const canSubmitProjectDirection = (
   direction: ProjectDirectionSyncValue | null | undefined,
   title: string,
   summary: string,
+  startupIndustries?: string[],
 ): boolean => direction?.status === 'Draft'
-  && !hasUnsavedProjectDirectionChanges(direction, title, summary);
+  && !hasUnsavedProjectDirectionChanges(direction, title, summary, startupIndustries);
 
 export const getProjectDirectionSubmitGuidance = (
   direction: ProjectDirectionSyncValue | null | undefined,
   title: string,
   summary: string,
+  startupIndustries?: string[],
 ): string => {
-  const hasUnsavedChanges = hasUnsavedProjectDirectionChanges(direction, title, summary);
+  const hasUnsavedChanges = hasUnsavedProjectDirectionChanges(direction, title, summary, startupIndustries);
   if (direction?.status === 'NeedsRevision') {
     return hasUnsavedChanges
       ? 'Save your revised project information as a draft to enable Submit.'
-      : 'The lecturer requested changes. Update the Project Name or Project description, then select Save draft to enable Submit.';
+      : 'The lecturer requested changes. Update the Project Name, Project description, or Startup Industry, then select Save draft to enable Submit.';
   }
   if (direction?.status === 'Draft' && hasUnsavedChanges) {
     return 'Save your changes as a draft before submitting.';
   }
   return '';
+};
+
+const haveSameValues = (left: string[], right: string[]): boolean => {
+  const normalizedLeft = [...new Set(left.map((value) => value.trim().toLocaleUpperCase()).filter(Boolean))].sort();
+  const normalizedRight = [...new Set(right.map((value) => value.trim().toLocaleUpperCase()).filter(Boolean))].sort();
+  return normalizedLeft.length === normalizedRight.length
+    && normalizedLeft.every((value, index) => value === normalizedRight[index]);
 };
 
 interface ProjectDirectionOverviewTeam {
@@ -96,6 +111,7 @@ export const updateProjectDirectionOverviewTeams = <T extends ProjectDirectionOv
     ...team,
     projectDirection: direction.summary || '',
     projectDirectionTitle: direction.title || '',
+    projectDirectionStartupIndustries: direction.startupIndustries || [],
     projectDirectionStatus,
     projectDirectionReviewComment: direction.reviews?.[0]?.comment || null,
     projectDirectionRowVersion: direction.rowVersion || '',

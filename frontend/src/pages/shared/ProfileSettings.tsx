@@ -2,13 +2,14 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Mail, Key, User, ShieldCheck, Camera, Lock, ArrowLeft } from 'lucide-react';
+import { Mail, Key, User, ShieldCheck, Camera, Lock, ArrowLeft, Eye, EyeOff } from 'lucide-react';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
-import { updateProfile } from '../../api/authApi';
+import { changePassword, updateProfile } from '../../api/authApi';
 import toast from 'react-hot-toast';
 import { motion } from 'framer-motion';
 import { TEAM_MAJOR_GROUPS, getTeamGroupFromMajor, ALL_TEAM_MAJOR_CODES } from '../../constants/majors';
+import { parseApiError } from '../../utils/apiError';
 
 const roleBadgeVariant = { ADMIN: 'Approved', LECTURER: 'Submitted', MENTOR: 'Review', STUDENT: 'Reviewed' };
 const roleLabel = { ADMIN: 'Administrator', LECTURER: 'Lecturer', MENTOR: 'Mentor', STUDENT: 'Student' };
@@ -38,6 +39,9 @@ const ProfileSettings = () => {
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isSavingPassword, setIsSavingPassword] = useState(false);
 
   const role = user?.role?.toUpperCase() || 'STUDENT';
@@ -105,13 +109,13 @@ const ProfileSettings = () => {
     
     setIsSavingPassword(true);
     try {
-      await axiosClient.put('/auth/change-password', { currentPassword, newPassword });
+      await changePassword({ currentPassword, newPassword, confirmPassword });
       toast.success('Password changed successfully');
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
     } catch (err) {
-      toast.error(err.message || 'Failed to change password');
+      toast.error(parseApiError(err, 'Failed to change password').message);
     } finally {
       setIsSavingPassword(false);
     }
@@ -286,19 +290,49 @@ const ProfileSettings = () => {
               <form onSubmit={handleChangePassword} className="space-y-5">
                 <div>
                   <label htmlFor="current-pw" className="block text-sm font-medium text-slate-700 mb-1.5">Current Password</label>
-                  <input id="current-pw" type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} required placeholder="••••••••" className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-slate-900 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none" />
+                  <div className="relative">
+                    <input id="current-pw" type={showCurrentPassword ? 'text' : 'password'} value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} required autoComplete="current-password" placeholder="••••••••" className="w-full bg-white border border-slate-200 rounded-xl pl-4 pr-11 py-2.5 text-slate-900 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none" />
+                    <button
+                      type="button"
+                      onClick={() => setShowCurrentPassword(visible => !visible)}
+                      aria-label={showCurrentPassword ? 'Hide current password' : 'Show current password'}
+                      className="absolute right-3.5 top-1/2 -translate-y-1/2 bg-transparent border-none cursor-pointer text-slate-400 p-0 hover:text-slate-600"
+                    >
+                      {showCurrentPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
                 </div>
 
                 <div className="w-full h-px bg-slate-100 my-2" />
 
                 <div>
                   <label htmlFor="new-pw" className="block text-sm font-medium text-slate-700 mb-1.5">New Password</label>
-                  <input id="new-pw" type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} required minLength={6} placeholder="Min 6 characters" className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-slate-900 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none" />
+                  <div className="relative">
+                    <input id="new-pw" type={showNewPassword ? 'text' : 'password'} value={newPassword} onChange={e => setNewPassword(e.target.value)} required minLength={6} autoComplete="new-password" placeholder="Min 6 characters" className="w-full bg-white border border-slate-200 rounded-xl pl-4 pr-11 py-2.5 text-slate-900 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none" />
+                    <button
+                      type="button"
+                      onClick={() => setShowNewPassword(visible => !visible)}
+                      aria-label={showNewPassword ? 'Hide new password' : 'Show new password'}
+                      className="absolute right-3.5 top-1/2 -translate-y-1/2 bg-transparent border-none cursor-pointer text-slate-400 p-0 hover:text-slate-600"
+                    >
+                      {showNewPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
                 </div>
 
                 <div>
                   <label htmlFor="confirm-pw" className="block text-sm font-medium text-slate-700 mb-1.5">Confirm New Password</label>
-                  <input id="confirm-pw" type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} required minLength={6} placeholder="Re-enter new password" className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-slate-900 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none" />
+                  <div className="relative">
+                    <input id="confirm-pw" type={showConfirmPassword ? 'text' : 'password'} value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} required minLength={6} autoComplete="new-password" placeholder="Re-enter new password" className="w-full bg-white border border-slate-200 rounded-xl pl-4 pr-11 py-2.5 text-slate-900 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none" />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPassword(visible => !visible)}
+                      aria-label={showConfirmPassword ? 'Hide confirm password' : 'Show confirm password'}
+                      className="absolute right-3.5 top-1/2 -translate-y-1/2 bg-transparent border-none cursor-pointer text-slate-400 p-0 hover:text-slate-600"
+                    >
+                      {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
                 </div>
 
                 <div className="pt-2">

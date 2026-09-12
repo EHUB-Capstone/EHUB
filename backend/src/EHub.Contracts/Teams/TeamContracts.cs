@@ -185,6 +185,7 @@ public sealed class SaveProjectDirectionRequest
 {
     public string Title { get; init; } = string.Empty;
     public string Summary { get; init; } = string.Empty;
+    public IReadOnlyCollection<Guid>? StartupIndustryIds { get; init; }
     public string? RowVersion { get; init; }
 }
 

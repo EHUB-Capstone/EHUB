@@ -102,6 +102,7 @@ export default function ClassDirectionOverview({ semester, year, initialClassId 
           leaderName: typeof leader?.studentId === 'object' ? leader.studentId.fullName : 'Not assigned',
           projectDirection: direction?.summary || '',
           projectDirectionTitle: direction?.title || '',
+          projectDirectionStartupIndustries: direction?.startupIndustries || [],
           projectDirectionStatus: status,
           projectDirectionReviewComment: direction?.reviews?.[0]?.comment || null,
           projectDirectionRowVersion: direction?.rowVersion || '',
@@ -272,14 +273,19 @@ export default function ClassDirectionOverview({ semester, year, initialClassId 
           {displayedTeams.map((team) => {
             const status = team.projectDirectionStatus || 'NOT_SUBMITTED';
             const hasDirection = Boolean(team.projectDirection);
+            const startupIndustries = Array.isArray(team.projectDirectionStartupIndustries)
+              ? team.projectDirectionStartupIndustries
+              : [];
             const busy = reviewingTeamId === team._id;
             return (
               <section key={team._id} className={`py-5 first:pt-4 ${team._id === focusTeamId ? 'rounded-xl bg-primary-50/40 px-4 ring-2 ring-primary/15' : ''}`}>
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
-                    <h3 className="font-bold text-slate-900">{getDisplayTeamName(team) || team.teamCode}</h3>
+                    <h3 className="font-bold text-slate-900">
+                      {team.projectDirectionTitle || team.projectName || getDisplayTeamName(team) || team.teamCode}
+                    </h3>
                     <p className="mt-0.5 text-xs text-slate-500">
-                      {team.teamCode} · Leader: {team.leaderName}
+                      Team: {team.teamName || 'Unnamed team'} · Leader: {team.leaderName}
                     </p>
                   </div>
                   <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${statusStyles[status]}`}>
@@ -290,6 +296,21 @@ export default function ClassDirectionOverview({ semester, year, initialClassId 
                 {hasDirection ? (
                   <>
                     <p className="mt-4 whitespace-pre-wrap text-sm leading-7 text-slate-700">{team.projectDirection}</p>
+                    {startupIndustries.length > 0 && (
+                      <div className="mt-4">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Startup Industry</p>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {startupIndustries.map((industry) => (
+                            <span
+                              key={industry}
+                              className="rounded-full border border-orange-200 bg-orange-50 px-2.5 py-1 text-xs font-medium text-orange-700"
+                            >
+                              {industry}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                     {team.projectDirectionReviewComment && (
                       <div className="mt-3 border-l-2 border-blue-300 pl-3">
                         <p className="text-xs font-semibold text-blue-700">Previous lecturer comment</p>

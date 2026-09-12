@@ -16,6 +16,40 @@ test('mock authentication opens an admin session for protected UI testing', asyn
   assert.equal(me.data.email, 'admin@ehub.local');
 });
 
+test('mock change password rejects an incorrect current password and updates valid credentials', async () => {
+  resetMockState();
+  await axiosClient.post('/auth/login', { email: 'admin@ehub.local', password: 'Mock123!' });
+
+  await assert.rejects(
+    axiosClient.put('/auth/change-password', {
+      currentPassword: 'Wrong123!',
+      newPassword: 'NewMock123!',
+      confirmPassword: 'NewMock123!',
+    }),
+    (error: unknown) => {
+      const response = (error as { response?: { status?: number; data?: { code?: string } } }).response;
+      return response?.status === 400 && response.data?.code === 'AUTH_CURRENT_PASSWORD_INVALID';
+    },
+  );
+
+  await axiosClient.put('/auth/change-password', {
+    currentPassword: 'Mock123!',
+    newPassword: 'NewMock123!',
+    confirmPassword: 'NewMock123!',
+  });
+  await axiosClient.post('/auth/logout');
+
+  await assert.rejects(
+    axiosClient.post('/auth/login', { email: 'admin@ehub.local', password: 'Mock123!' }),
+  );
+  const login = await axiosClient.post('/auth/login', {
+    email: 'admin@ehub.local',
+    password: 'NewMock123!',
+  });
+  assert.equal(login.data.user.email, 'admin@ehub.local');
+  resetMockState();
+});
+
 test('account approval API loads persisted Lecturer and Mentor statistics', async () => {
   resetMockState();
   const response = await adminApprovalApi.getAll();
@@ -747,6 +781,24 @@ test('mock team leader creates one project workspace linked to its academic cont
   assert.equal(submittedDirection.data.title, 'Energy Insight Workspace');
   assert.equal(submittedDirection.data.summary, 'A project that helps small offices understand their energy usage.');
   assert.deepEqual(submittedDirection.data.startupIndustries, created.data.startupIndustries);
+
+  const storedDirection = state.directions.find((direction) => direction.teamId === team.id);
+  assert.ok(storedDirection);
+  storedDirection.status = 'NeedsRevision';
+  storedDirection.rowVersion = 'rv-industry-revision';
+  const replacementIndustryId = state.startupIndustries.find((industry) => (
+    industry.status === 'active' && industry.name === created.data.startupIndustries[0]
+  ))?.id;
+  assert.ok(replacementIndustryId);
+  const revisedDirection = await axiosClient.put(`/teams/${team.id}/project-direction`, {
+    title: storedDirection.title,
+    summary: storedDirection.summary,
+    startupIndustryIds: [replacementIndustryId],
+    rowVersion: storedDirection.rowVersion,
+  });
+  assert.equal(revisedDirection.data.status, 'Draft');
+  assert.deepEqual(revisedDirection.data.startupIndustries, [created.data.startupIndustries[0]]);
+  assert.deepEqual(team.startupIndustries, [created.data.startupIndustries[0]]);
 
   await axiosClient.put(`/workspace/teams/${team.id}/profile`, {
     projectName: 'Energy Insight Platform',

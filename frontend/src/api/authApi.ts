@@ -1,6 +1,7 @@
 import axiosClient from './axiosClient';
 import type {
   AuthResponse,
+  ChangePasswordPayload,
   CurrentUser,
   ForgotPasswordPayload,
   GoogleLoginPayload,
@@ -59,6 +60,11 @@ export async function updateProfile(formData: FormData): Promise<UpdateProfileRe
     headers: { 'Content-Type': undefined },
   });
   return data.data;
+}
+
+// ─── PUT /api/auth/change-password (requires Bearer token) ──────────────
+export async function changePassword(payload: ChangePasswordPayload): Promise<void> {
+  await axiosClient.put('/auth/change-password', payload);
 }
 
 // ─── POST /api/auth/refresh-token ────────────────────────────────────────

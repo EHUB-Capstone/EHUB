@@ -695,6 +695,70 @@ public sealed class TeamWorkflowIntegrationTests
     }
 
     [Fact]
+    public async Task TeamLeaderCanChangeOnlyStartupIndustriesAfterLecturerRequestsRevision()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateSeedAsync(context, createProposal: false, createTeam: true);
+        context.ChangeTracker.Clear();
+        var workspaceHandler = new ProjectWorkspaceHandler(
+            context,
+            scope.ServiceProvider.GetRequiredService<EHub.Application.Common.Interfaces.Persistence.IUnitOfWork>());
+        var created = await workspaceHandler.CreateAsync(
+            seed.TeamId!.Value,
+            new CreateProjectWorkspaceRequest
+            {
+                ProjectName = "Campus Circular",
+                Description = "A student marketplace that helps campuses reuse equipment safely.",
+                StartupIndustryIds = seed.StartupIndustryIds[..2]
+            },
+            seed.ProposerUserId,
+            SystemRoles.Student);
+        created.IsSuccess.Should().BeTrue();
+
+        context.ChangeTracker.Clear();
+        var directionHandler = new ProjectDirectionHandler(context);
+        var submitted = await directionHandler.GetAsync(seed.TeamId.Value, seed.ProposerUserId, SystemRoles.Student);
+        var reviewed = await directionHandler.ReviewAsync(
+            seed.TeamId.Value,
+            new ReviewProjectDirectionRequest
+            {
+                Decision = "NeedsRevision",
+                Comment = "Select the single industry that best fits this project.",
+                RowVersion = submitted.Value.RowVersion
+            },
+            seed.LecturerId,
+            SystemRoles.Lecturer);
+        reviewed.IsSuccess.Should().BeTrue();
+
+        var revised = await directionHandler.SaveAsync(
+            seed.TeamId.Value,
+            new SaveProjectDirectionRequest
+            {
+                Title = reviewed.Value.Title,
+                Summary = reviewed.Value.Summary,
+                StartupIndustryIds = [seed.StartupIndustryIds[1]],
+                RowVersion = reviewed.Value.RowVersion
+            },
+            seed.ProposerUserId,
+            SystemRoles.Student);
+
+        revised.IsSuccess.Should().BeTrue($"industry revision failed with {revised.Error.Code}: {revised.Error.Message}");
+        revised.Value.Status.Should().Be(nameof(ProjectDirectionStatus.Draft));
+        var expectedIndustry = await context.StartupIndustries.AsNoTracking()
+            .Where(industry => industry.Id == seed.StartupIndustryIds[1])
+            .Select(industry => industry.Name)
+            .SingleAsync();
+        revised.Value.StartupIndustries.Should().Equal(expectedIndustry);
+        context.ChangeTracker.Clear();
+        var persistedIndustries = await context.ProjectTags.AsNoTracking()
+            .Where(tag => tag.Project.TeamId == seed.TeamId && tag.TagType == ProjectTagType.StartupField)
+            .Select(tag => tag.TagName)
+            .ToArrayAsync();
+        persistedIndustries.Should().Equal(expectedIndustry);
+    }
+
+    [Fact]
     public async Task WorkspaceQueriesExcludeArchivedAndDisabledTeams()
     {
         using var scope = _factory.Services.CreateScope();

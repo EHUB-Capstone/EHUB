@@ -11,6 +11,7 @@ using EHub.Application.Features.Auth.GetCurrentUser;
 using EHub.Application.Features.Auth.RefreshToken;
 using EHub.Application.Features.Auth.Logout;
 using EHub.Application.Features.Auth.ForgotPassword;
+using EHub.Application.Features.Auth.ChangePassword;
 using EHub.Application.Features.Auth.ResetPassword;
 using EHub.Application.Features.Auth.ResendRegistrationOtp;
 using EHub.Application.Features.Auth.VerifyRegistrationOtp;
@@ -563,6 +564,31 @@ public sealed class AuthController : ControllerBase
         return Ok(ApiResponse<object?>.SuccessResponse(
             null,
             "If this email exists in our system, a password reset link has been sent."));
+    }
+
+    [Authorize(Policy = SystemPolicies.AuthenticatedOnly)]
+    [HttpPut("change-password")]
+    public async Task<IActionResult> ChangePassword(
+        [FromBody] ChangePasswordRequest request,
+        [FromServices] IChangePasswordCommandHandler changePasswordCommandHandler,
+        CancellationToken cancellationToken)
+    {
+        var result = await changePasswordCommandHandler.HandleAsync(request, cancellationToken);
+
+        if (result.IsFailure)
+        {
+            return result.Error.Code switch
+            {
+                ErrorCodes.CommonUnauthorizedError => Unauthorized(
+                    ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code)),
+                _ => BadRequest(
+                    ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code))
+            };
+        }
+
+        return Ok(ApiResponse<object?>.SuccessResponse(
+            null,
+            "Password changed successfully."));
     }
 
     [HttpPost("reset-password")]

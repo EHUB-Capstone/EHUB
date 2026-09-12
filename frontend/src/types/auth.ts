@@ -98,6 +98,12 @@ export interface ResetPasswordPayload {
   confirmPassword: string;
 }
 
+export interface ChangePasswordPayload {
+  currentPassword: string;
+  newPassword: string;
+  confirmPassword: string;
+}
+
 // ─── Backend ApiResponse<T> wrapper ─────────────────────────────────────────
 
 export interface ApiResponse<T> {
@@ -134,6 +140,7 @@ export const AUTH_ERROR_CODES = {
   PASSWORD_RESET_TOKEN_INVALID: 'AUTH_PASSWORD_RESET_TOKEN_INVALID',
   PASSWORD_RESET_RATE_LIMITED:  'AUTH_PASSWORD_RESET_RATE_LIMITED',
   PASSWORD_RESET_FAILED:        'AUTH_PASSWORD_RESET_FAILED',
+  CURRENT_PASSWORD_INVALID:     'AUTH_CURRENT_PASSWORD_INVALID',
   EMAIL_VERIFICATION_REQUIRED:  'AUTH_EMAIL_VERIFICATION_REQUIRED',
   REGISTRATION_NOT_FOUND:       'AUTH_REGISTRATION_NOT_FOUND',
   VERIFICATION_CODE_INVALID:    'AUTH_VERIFICATION_CODE_INVALID',
