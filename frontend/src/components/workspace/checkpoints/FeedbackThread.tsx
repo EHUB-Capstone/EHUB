@@ -1,10 +1,11 @@
 // @ts-nocheck
 // src/components/workspace/checkpoints/FeedbackThread.jsx
 import { useState } from 'react';
-import { CornerDownRight, Calendar, Send } from 'lucide-react';
+import { CornerDownRight, Calendar, Send, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { checkpointApi } from '../../../api/checkpointApi';
 import { useAuth } from '../../../hooks/useAuth';
+import ConfirmDialog from '../../ui/ConfirmDialog';
 
 // ─── Helper badges ────────────────────────────────────────────────────────────
 const ROLE_COLORS = {
@@ -21,35 +22,39 @@ const roleLabel = (role) =>
   ] || role);
 
 // ─── Avatar initial ───────────────────────────────────────────────────────────
-const Avatar = ({ name, size = 'md' }) => {
+const Avatar = ({ name, avatarUrl, size = 'md' }) => {
+  const [imageFailed, setImageFailed] = useState(false);
   const sz = size === 'sm' ? 'w-7 h-7 text-[10px]' : 'w-8 h-8 text-xs';
   return (
-    <div className={`${sz} rounded-full bg-orange-100 text-orange-700 font-bold flex items-center justify-center shrink-0`}>
-      {name?.charAt(0)?.toUpperCase() || '?'}
+    <div className={`${sz} overflow-hidden rounded-full bg-orange-100 text-orange-700 font-bold flex items-center justify-center shrink-0`}>
+      {avatarUrl && !imageFailed ? (
+        <img src={avatarUrl} alt="" onError={() => setImageFailed(true)} className="h-full w-full object-cover" />
+      ) : (name?.charAt(0)?.toUpperCase() || '?')}
     </div>
   );
 };
 
 // ─── Single comment with optional reply thread ────────────────────────────────
-function FeedbackItem({ comment, replies, teamId, checkpointNumber, onPosted }) {
+function FeedbackItem({ comment, replies, teamId, checkpointNumber, onPosted, onRequestDelete }) {
   const { user } = useAuth();
   const [open,    setOpen]    = useState(false);
   const [text,    setText]    = useState('');
   const [sending, setSending] = useState(false);
+  const canDelete = user?.role?.toUpperCase() === 'ADMIN' || comment.user?._id === user?._id;
 
   const handleReply = async (e) => {
     e.preventDefault();
     if (!text.trim()) return;
     setSending(true);
     try {
-      await checkpointApi.addFeedback(teamId, checkpointNumber, {
+      const res = await checkpointApi.addFeedback(teamId, checkpointNumber, {
         comment: text.trim(),
         parentFeedbackId: comment._id,
       });
       toast.success('Reply posted!');
       setText('');
       setOpen(false);
-      onPosted?.();
+      onPosted?.(res?.data);
     } catch (err) {
       toast.error(err?.response?.data?.error || 'Failed to post reply.');
     } finally {
@@ -61,7 +66,7 @@ function FeedbackItem({ comment, replies, teamId, checkpointNumber, onPosted }) 
     <div className="space-y-3">
       {/* Root comment */}
       <div className="flex gap-3">
-        <Avatar name={comment.user?.name} />
+        <Avatar name={comment.user?.name} avatarUrl={comment.user?.avatarUrl} />
         <div className="flex-1 space-y-1">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-xs font-bold text-slate-800">{comment.user?.name}</span>
@@ -82,6 +87,7 @@ function FeedbackItem({ comment, replies, teamId, checkpointNumber, onPosted }) 
           >
             {open ? 'Cancel' : 'Reply'}
           </button>
+          {canDelete && <button onClick={() => onRequestDelete(comment)} className="ml-3 text-[10px] font-bold text-slate-400 hover:text-red-600">Delete</button>}
         </div>
       </div>
 
@@ -91,7 +97,7 @@ function FeedbackItem({ comment, replies, teamId, checkpointNumber, onPosted }) 
           {replies.map((r) => (
             <div key={r._id} className="flex gap-2.5">
               <CornerDownRight className="w-3.5 h-3.5 text-slate-300 mt-1 shrink-0" />
-              <Avatar name={r.user?.name} size="sm" />
+              <Avatar name={r.user?.name} avatarUrl={r.user?.avatarUrl} size="sm" />
               <div className="flex-1 bg-slate-50/60 border border-slate-100 rounded-xl px-3 py-2 space-y-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-[11px] font-bold text-slate-800">{r.user?.name}</span>
@@ -105,6 +111,7 @@ function FeedbackItem({ comment, replies, teamId, checkpointNumber, onPosted }) 
                 <p className="text-[11px] text-slate-600 leading-relaxed whitespace-pre-wrap">
                   {r.comment}
                 </p>
+                {(user?.role?.toUpperCase() === 'ADMIN' || r.user?._id === user?._id) && <button onClick={() => onRequestDelete(r)} className="inline-flex items-center gap-1 text-[9px] font-bold text-slate-400 hover:text-red-600"><Trash2 className="w-3 h-3" />Delete</button>}
               </div>
             </div>
           ))}
@@ -114,7 +121,7 @@ function FeedbackItem({ comment, replies, teamId, checkpointNumber, onPosted }) 
       {/* Reply input */}
       {open && (
         <form onSubmit={handleReply} className="pl-11 flex gap-2 items-center">
-          <Avatar name={user?.name} size="sm" />
+          <Avatar name={user?.name} avatarUrl={user?.avatarUrl || user?.avatar} size="sm" />
           <input
             autoFocus
             value={text}
@@ -136,12 +143,14 @@ function FeedbackItem({ comment, replies, teamId, checkpointNumber, onPosted }) 
 }
 
 // ─── Main FeedbackThread component ───────────────────────────────────────────
-export default function FeedbackThread({ feedbacks, teamId, checkpointNumber, onPosted, fullHeight = false }) {
+export default function FeedbackThread({ feedbacks, teamId, checkpointNumber, onPosted, onDeleted, fullHeight = false }) {
   const { user } = useAuth();
   const [text,    setText]    = useState('');
   const [sending, setSending] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
-  const roots   = feedbacks.filter((f) => !f.parentFeedbackId);
+  const roots   = feedbacks.filter((f) => !f.parentFeedbackId || !feedbacks.some((parent) => parent._id === f.parentFeedbackId));
   const replies = (parentId) => feedbacks.filter((f) => f.parentFeedbackId === parentId);
 
   const handlePost = async (e) => {
@@ -149,14 +158,31 @@ export default function FeedbackThread({ feedbacks, teamId, checkpointNumber, on
     if (!text.trim()) return;
     setSending(true);
     try {
-      await checkpointApi.addFeedback(teamId, checkpointNumber, { comment: text.trim() });
+      const res = await checkpointApi.addFeedback(teamId, checkpointNumber, { comment: text.trim() });
       toast.success('Feedback posted!');
       setText('');
-      onPosted?.();
+      onPosted?.(res?.data);
     } catch (err) {
       toast.error(err?.response?.data?.error || 'Failed to post feedback.');
     } finally {
       setSending(false);
+    }
+  };
+
+  const deleteFeedback = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      const res = await checkpointApi.deleteFeedback(teamId, checkpointNumber, deleteTarget._id);
+      if (res.success) {
+        onDeleted?.(deleteTarget._id);
+        setDeleteTarget(null);
+        toast.success('Feedback deleted.');
+      }
+    } catch (err) {
+      toast.error(err?.response?.data?.error || 'Failed to delete feedback.');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -177,6 +203,7 @@ export default function FeedbackThread({ feedbacks, teamId, checkpointNumber, on
                 teamId={teamId}
                 checkpointNumber={checkpointNumber}
                 onPosted={onPosted}
+                onRequestDelete={setDeleteTarget}
               />
             </div>
           ))}
@@ -185,7 +212,7 @@ export default function FeedbackThread({ feedbacks, teamId, checkpointNumber, on
 
       {/* New top-level comment */}
       <form onSubmit={handlePost} className="flex gap-3 items-start pt-1">
-        <Avatar name={user?.name} />
+        <Avatar name={user?.name} avatarUrl={user?.avatarUrl || user?.avatar} />
         <div className="flex-1 space-y-2">
           <textarea
             value={text}
@@ -206,6 +233,16 @@ export default function FeedbackThread({ feedbacks, teamId, checkpointNumber, on
           </div>
         </div>
       </form>
+
+      <ConfirmDialog
+        isOpen={Boolean(deleteTarget)}
+        onClose={() => { if (!deleting) setDeleteTarget(null); }}
+        onConfirm={deleteFeedback}
+        title="Delete feedback?"
+        description="This comment will be permanently removed from the checkpoint."
+        confirmText="Delete feedback"
+        isSubmitting={deleting}
+      />
     </div>
   );
 }

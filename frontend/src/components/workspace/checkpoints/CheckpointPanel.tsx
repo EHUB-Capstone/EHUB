@@ -11,9 +11,11 @@ import toast from 'react-hot-toast';
 import { checkpointApi } from '../../../api/checkpointApi';
 import { useAuth } from '../../../hooks/useAuth';
 import Button from '../../ui/Button';
+import ConfirmDialog from '../../ui/ConfirmDialog';
 import FileUploadZone from './FileUploadZone';
 import FeedbackThread from './FeedbackThread';
 import EvaluationPanel from '../EvaluationPanel';
+import { subscribeProjectDirectionRealtime } from '../../../api/projectDirectionRealtime';
 
 const ICONS = { Users, BarChart2, Layers, TrendingUp };
 
@@ -68,6 +70,8 @@ export default function CheckpointPanel({
   const [savingRequirements, setSavingRequirements] = useState(false);
   const [loading, setLoading] = useState(true);
   const [downloadingId, setDownloadingId] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleting, setDeleting] = useState(false);
   const isStudent = user?.role?.toUpperCase() === 'STUDENT';
   const isLecturer = user?.role?.toUpperCase() === 'LECTURER';
   const [showEvaluation, setShowEvaluation] = useState(isLecturer);
@@ -109,8 +113,32 @@ export default function CheckpointPanel({
     }
   }, [teamId, checkpoint, buildContentsMap]);
 
+  const addFeedback = useCallback((feedback) => {
+    if (!feedback?._id) return;
+    setFeedbacks((current) => current.some((item) => item._id === feedback._id)
+      ? current
+      : [...current, feedback]);
+  }, []);
+
+  const removeFeedback = useCallback((feedbackId) => {
+    setFeedbacks((current) => current.filter((item) => item._id !== feedbackId));
+  }, []);
+
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  useEffect(() => subscribeProjectDirectionRealtime((event) => {
+    if (event.eventType === 'CheckpointFeedbackPosted'
+      && String(event.teamId) === String(teamId)
+      && Number(event.checkpointNumber) === Number(checkpoint.number)) {
+      addFeedback(event.feedback);
+    }
+    if (event.eventType === 'CheckpointFeedbackDeleted'
+      && String(event.teamId) === String(teamId)
+      && Number(event.checkpointNumber) === Number(checkpoint.number)) {
+      removeFeedback(event.feedbackId);
+    }
+  }), [addFeedback, checkpoint.number, removeFeedback, teamId]);
 
   useEffect(() => {
     document.body.style.overflow = 'hidden';
@@ -147,15 +175,19 @@ export default function CheckpointPanel({
   };
 
   const handleDelete = async (fileId) => {
-    if (!window.confirm('Delete this file?')) return;
+    setDeleting(true);
     try {
       const res = await checkpointApi.deleteFile(teamId, checkpoint.number, fileId);
       if (res.success) {
-        setFiles(res.data?.files || []);
+        setFiles((current) => current.filter((file) => file._id !== fileId));
+        setDeleteTarget(null);
         toast.success('File deleted.');
+        onRequirementsSaved?.();
       }
     } catch (e) {
       toast.error(e?.response?.data?.error || 'Failed to delete file.');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -450,7 +482,7 @@ export default function CheckpointPanel({
                     {files.map((file) => {
                       const isOwner = file.uploadedBy?._id === user?._id;
                       const isAdmin = user?.role?.toUpperCase() === 'ADMIN';
-                      const canDelete = isOwner || isAdmin;
+                      const canDelete = isStudent && (isOwner || isAdmin);
                       const style = FILE_TYPE_STYLES[file.fileType] || {
                         bg: 'bg-slate-50',
                         text: 'text-slate-600',
@@ -503,7 +535,7 @@ export default function CheckpointPanel({
                             {canDelete && (
                               <button
                                 type="button"
-                                onClick={() => handleDelete(file._id)}
+                                onClick={() => setDeleteTarget(file)}
                                 className="px-3 py-2 rounded-lg border border-slate-200 text-slate-500 hover:text-red-600 hover:border-red-200 hover:bg-red-50 transition-all"
                                 title="Delete"
                               >
@@ -536,7 +568,8 @@ export default function CheckpointPanel({
                       feedbacks={feedbacks}
                       teamId={teamId}
                       checkpointNumber={checkpoint.number}
-                      onPosted={fetchData}
+                      onPosted={addFeedback}
+                      onDeleted={removeFeedback}
                       fullHeight
                     />
                   )}
@@ -590,6 +623,16 @@ export default function CheckpointPanel({
           </aside>}
         </div>
       </div>
+
+      <ConfirmDialog
+        isOpen={Boolean(deleteTarget)}
+        onClose={() => { if (!deleting) setDeleteTarget(null); }}
+        onConfirm={() => { if (deleteTarget) return handleDelete(deleteTarget._id); }}
+        title="Delete submitted file?"
+        description={`“${deleteTarget?.originalName || 'This file'}” will be permanently removed from this checkpoint.`}
+        confirmText="Delete file"
+        isSubmitting={deleting}
+      />
     </div>
   );
 

@@ -133,7 +133,8 @@ public sealed class GetWorkspaceCheckpointOverviewQueryHandler(
 
         if (IsRole(role, SystemRoles.Lecturer))
         {
-            return query.Where(team => team.Class.PrimaryLecturerId == userId);
+            return query.Where(team => team.Class.PrimaryLecturerId == userId ||
+                team.Class.ClassLecturers.Any(assignment => assignment.LecturerId == userId));
         }
 
         if (IsRole(role, SystemRoles.Mentor))
@@ -242,7 +243,8 @@ public sealed class GetWorkspaceCheckpointOverviewQueryHandler(
                     {
                         Id = feedback.Creator.Id,
                         Name = feedback.Creator.FullName,
-                        Role = ResolveRole(feedback.Creator)
+                        Role = ResolveRole(feedback.Creator),
+                        AvatarUrl = feedback.Creator.AvatarUrl
                     }
             });
     }
