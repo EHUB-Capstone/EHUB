@@ -44,6 +44,16 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
 
         switch (message.Type)
         {
+            case "AccountApproval.Requested.v1":
+                var accountRole = ReadString(data, "role");
+                var applicantName = ReadString(data, "fullName");
+                await AddForAdministratorsAsync(
+                    message,
+                    NotificationType.AccountApprovalRequested,
+                    $"{accountRole} account awaiting approval",
+                    $"{applicantName} registered as a {accountRole} and is ready for review.",
+                    cancellationToken);
+                break;
             case "Class.Created.v1":
                 var createdClassDetails = await GetClassEmailDetailsAsync(message.AggregateId, cancellationToken);
                 await AddForOptionalUserAsync(
@@ -457,6 +467,7 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
 
         return message.Type switch
         {
+            "AccountApproval.Requested.v1" => "/admin/account-approvals",
             "TeamProposal.Submitted.v1" => $"/classes/{message.AggregateId}",
             "TeamProposal.Reviewed.v1" or "ProjectDirection.Reviewed.v1" => $"/student/classes/{message.AggregateId}",
             "Team.MentorAssignmentChanged.v1" => "/mentor/dashboard",

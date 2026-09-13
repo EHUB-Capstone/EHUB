@@ -29,6 +29,19 @@ export interface MockPendingRegistration {
   failedAttempts: number;
 }
 
+export interface MockNotification {
+  id: string;
+  recipientUserId: string;
+  type: string;
+  title: string;
+  message: string;
+  link: string | null;
+  data: Record<string, unknown> | null;
+  isRead: boolean;
+  readAt: string | null;
+  createdAt: string;
+}
+
 export interface MockSubject {
   _id: string;
   subjectCode: string;
@@ -262,6 +275,7 @@ export interface MockApiState {
   sessionUserId: string | null;
   authPasswords: Record<string, string>;
   pendingRegistrations: MockPendingRegistration[];
+  notifications: MockNotification[];
   currentSemester: { semester: 'SP' | 'SU' | 'FA'; year: number } | null;
   semesters: MockSemester[];
   semesterStaffAssignments: MockSemesterStaffAssignment[];
@@ -436,6 +450,10 @@ const initialMockState: MockApiState = {
     sessionUserId: null,
     authPasswords: {},
     pendingRegistrations: [],
+    notifications: [
+      { id: 'mock-notification-1', recipientUserId: id(1), type: 'TEAM', title: 'Team proposal submitted', message: 'Nova Crew is ready for review.', isRead: false, readAt: null, link: '/admin/classes', data: null, createdAt: isoAgo(0) },
+      { id: 'mock-notification-2', recipientUserId: id(1), type: 'MENTORING', title: 'Mentor assigned', message: 'Phạm Anh Khoa was assigned to Phoenix Founders.', isRead: true, readAt: isoAgo(0, 60), link: '/admin/classes', data: null, createdAt: isoAgo(0, 60) },
+    ],
     currentSemester: { semester: 'FA', year: 2026 },
     semesters,
     semesterStaffAssignments,

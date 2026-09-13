@@ -158,15 +158,7 @@ public sealed class GetClassesQueryHandler : IGetClassesQueryHandler
                 new Error(ErrorCodes.ClassValidationError, "Sort must be code, createdAt, classIndex, or the descending '-' variant."));
         }
 
-        query = normalizedSort switch
-        {
-            "-code" or "-classcode" => query.OrderByDescending(c => c.ClassCode),
-            "createdat" => query.OrderBy(c => c.CreatedAt),
-            "-createdat" => query.OrderByDescending(c => c.CreatedAt),
-            "classindex" => query.OrderBy(c => c.ClassIndex),
-            "-classindex" => query.OrderByDescending(c => c.ClassIndex),
-            _ => query.OrderBy(c => c.ClassCode)
-        };
+        query = ClassListOrdering.Apply(query, normalizedSort);
 
         // 9. Pagination & Projection
         var projectedItems = await query

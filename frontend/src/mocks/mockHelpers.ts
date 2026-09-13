@@ -24,6 +24,7 @@ function loadState(): MockApiState {
       ...parsed,
       authPasswords: parsed.authPasswords ?? {},
       pendingRegistrations: parsed.pendingRegistrations ?? [],
+      notifications: parsed.notifications ?? defaults.notifications,
       semesterStaffAssignments: parsed.semesterStaffAssignments ?? defaults.semesterStaffAssignments,
     };
   } catch {

@@ -65,7 +65,7 @@ const StudentDashboard = () => {
         setData(d);
         setWeeklyStats(d?.weeklyTasksSummary || null);
       })
-      .catch(() => toast.error('Failed to load dashboard'))
+      .catch(() => undefined)
       .finally(() => setLoading(false));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

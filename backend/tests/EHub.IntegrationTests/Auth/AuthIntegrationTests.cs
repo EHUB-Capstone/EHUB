@@ -4,22 +4,30 @@ using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Xunit;
 using FluentAssertions;
+using EHub.Application.Common.Interfaces.Services;
 using EHub.Contracts.Auth;
 using EHub.Contracts.Common;
 using EHub.IntegrationTests.Common;
+using EHub.Infrastructure.Persistence;
+using EHub.Shared.Constants;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace EHub.IntegrationTests.Auth;
 
 [Collection("Sequential")]
 public class AuthIntegrationTests
 {
+    private readonly CustomWebApplicationFactory _factory;
     private readonly HttpClient _client;
 
     public AuthIntegrationTests(CustomWebApplicationFactory factory)
     {
+        _factory = factory;
         _client = factory.CreateClient();
     }
 
@@ -228,6 +236,63 @@ public class AuthIntegrationTests
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         body.RequiresEmailVerification.Should().BeFalse();
         body.RequiresApproval.Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData("Lecturer")]
+    [InlineData("Mentor")]
+    public async Task RegisterAndVerify_Staff_Should_Notify_Admin_With_Approval_Link(string role)
+    {
+        var fullName = $"{role} Approval Applicant";
+        var (_, body) = await RegisterAndVerifyAsync(new RegisterRequest
+        {
+            FullName = fullName,
+            Email = $"{role.ToLowerInvariant()}-notification-{Guid.NewGuid()}@example.com",
+            Password = "Password123",
+            ConfirmPassword = "Password123",
+            Role = role,
+            MajorCode = null
+        });
+
+        body.User.Should().NotBeNull();
+        body.RequiresApproval.Should().BeTrue();
+
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var outboxMessage = await context.OutboxMessages
+            .SingleAsync(message =>
+                message.Type == "AccountApproval.Requested.v1" &&
+                message.AggregateId == body.User!.Id);
+
+        using (var payload = JsonDocument.Parse(outboxMessage.PayloadJson))
+        {
+            var data = payload.RootElement.GetProperty("data");
+            data.GetProperty("userId").GetGuid().Should().Be(body.User.Id);
+            data.GetProperty("fullName").GetString().Should().Be(fullName);
+            data.GetProperty("role").GetString().Should().Be(role);
+        }
+
+        var dispatcher = scope.ServiceProvider.GetRequiredService<IOutboxEventDispatcher>();
+        await dispatcher.DispatchAsync(outboxMessage);
+        await dispatcher.DispatchAsync(outboxMessage);
+
+        var administratorIds = await context.Users
+            .Where(user =>
+                user.Status == EHub.Domain.Enums.UserStatus.Active &&
+                user.UserRoles.Any(userRole => userRole.Role.Name == SystemRoles.Admin))
+            .Select(user => user.Id)
+            .ToArrayAsync();
+        administratorIds.Should().NotBeEmpty();
+
+        var notifications = await context.Notifications
+            .Where(notification => notification.SourceEventId == outboxMessage.EventId)
+            .ToArrayAsync();
+        notifications.Select(notification => notification.RecipientUserId)
+            .Should().BeEquivalentTo(administratorIds);
+        notifications.Should().OnlyContain(notification =>
+            notification.Type == EHub.Domain.Enums.NotificationType.AccountApprovalRequested &&
+            notification.Link == "/admin/account-approvals" &&
+            !notification.IsRead);
     }
 
     [Fact]

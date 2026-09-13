@@ -98,6 +98,9 @@ public static class ErrorCodes
     // Semester lifecycle error codes
     public const string SemesterNotFound = "SEMESTER_NOT_FOUND";
     public const string SemesterInvalidState = "SEMESTER_INVALID_STATE";
+    public const string SemesterAlreadyPlanned = "SEMESTER_ALREADY_PLANNED";
+    public const string SemesterDateOverlap = "SEMESTER_DATE_OVERLAP";
+    public const string SemesterDateInvalid = "SEMESTER_DATE_INVALID";
     public const string SemesterActivationBlocked = "SEMESTER_ACTIVATION_BLOCKED";
     public const string SemesterCompletionBlocked = "SEMESTER_COMPLETION_BLOCKED";
     public const string SemesterConcurrencyConflict = "SEMESTER_CONCURRENCY_CONFLICT";

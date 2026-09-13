@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import toast from 'react-hot-toast';
 import { motion } from 'framer-motion';
 import { dashboardApi } from '../../api/dashboardApi';
 import LoadingSkeleton from '../../components/ui/LoadingSkeleton';
@@ -24,7 +23,7 @@ const LecturerDashboard = () => {
   useEffect(() => {
     dashboardApi.getLecturer()
       .then(res => setData(res.data || res))
-      .catch(() => toast.error('Failed to load dashboard'))
+      .catch(() => undefined)
       .finally(() => setLoading(false));
   }, []);
 

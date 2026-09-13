@@ -17,11 +17,12 @@ interface ModalProps {
   children?: ReactNode;
   submitText?: string;
   isSubmitting?: boolean;
+  submitDisabled?: boolean;
   onSubmit?: () => void | Promise<void>;
   size?: keyof typeof modalSizes;
 }
 
-const Modal = ({ isOpen, onClose, title, children, submitText = 'Save', isSubmitting = false, onSubmit, size = 'md' }: ModalProps) => {
+const Modal = ({ isOpen, onClose, title, children, submitText = 'Save', isSubmitting = false, submitDisabled = false, onSubmit, size = 'md' }: ModalProps) => {
   // Prevent body scroll when modal is open
   useEffect(() => {
     if (isOpen) {
@@ -70,7 +71,7 @@ const Modal = ({ isOpen, onClose, title, children, submitText = 'Save', isSubmit
             <Button variant="outline" onClick={onClose} disabled={isSubmitting}>
               Cancel
             </Button>
-            <Button variant="gradient" onClick={onSubmit} isLoading={isSubmitting}>
+            <Button variant="gradient" onClick={onSubmit} isLoading={isSubmitting} disabled={submitDisabled}>
               {submitText}
             </Button>
           </div>

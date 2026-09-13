@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
-  BookOpen, Calendar, CheckCircle2, Edit3, Filter, GraduationCap, Plus,
-  LockKeyhole, RefreshCw, Search, ShieldAlert, Sparkles, UserPlus, Users,
+  BookOpen, Calendar, CheckCircle2, ChevronLeft, ChevronRight, Edit3, Filter, GraduationCap, Plus,
+  LockKeyhole, RefreshCw, Search, ShieldAlert, Sparkles, Users,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { subjectApi } from '../../api/subjectApi';
+import SemesterDateRangePicker from '../../components/admin/SemesterDateRangePicker';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
@@ -52,6 +53,34 @@ function semesterTiming(semester: SemesterDto): 'Not configured' | 'Upcoming' | 
   return 'In progress';
 }
 
+function semesterDateRangeError(
+  semester: SemesterCode,
+  year: number,
+  startDate: string,
+  endDate: string,
+  blockedRanges: Array<{ label: string; startDate: string; endDate: string }>,
+): string | undefined {
+  if (startDate && !startDate.startsWith(`${year}-`)) {
+    return `Start date must belong to ${year}.`;
+  }
+  if (!startDate || !endDate) return undefined;
+  if (endDate <= startDate) return 'End date must be after the start date.';
+
+  const validEndInSelectedYear = endDate.startsWith(`${year}-`);
+  const validFallEnd = semester === 'FA' && endDate.startsWith(`${year + 1}-01-`);
+  if (!validEndInSelectedYear && !validFallEnd) {
+    return semester === 'FA'
+      ? `End date must be in ${year}, or January ${year + 1} for Fall.`
+      : `End date must belong to ${year}.`;
+  }
+
+  const overlappingRange = blockedRanges.find(range => range.startDate <= endDate && range.endDate >= startDate);
+  if (overlappingRange) {
+    return `This date range overlaps with ${overlappingRange.label}\n(${formatSemesterDate(overlappingRange.startDate)} – ${formatSemesterDate(overlappingRange.endDate)}).`;
+  }
+  return undefined;
+}
+
 const SubjectManagement = () => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'subjects' | 'staff'>('subjects');
@@ -62,6 +91,7 @@ const SubjectManagement = () => {
   const [statusFilter, setStatusFilter] = useState<'ALL' | SubjectStatus>('ALL');
   const [currentSemester, setCurrentSemester] = useState<SemesterDto | null>(null);
   const [semesters, setSemesters] = useState<SemesterDto[]>([]);
+  const [semesterScheduleYear, setSemesterScheduleYear] = useState(currentYear);
   const [selectedSemester, setSelectedSemester] = useState<SemesterCode>('SP');
   const [selectedYear, setSelectedYear] = useState(currentYear);
   const [semesterContextReady, setSemesterContextReady] = useState(false);
@@ -70,6 +100,7 @@ const SubjectManagement = () => {
   const [savingSemester, setSavingSemester] = useState(false);
   const [semesterScheduleOpen, setSemesterScheduleOpen] = useState(false);
   const [editingSemesterSchedule, setEditingSemesterSchedule] = useState<SemesterDto | null>(null);
+  const [semesterScheduleServerError, setSemesterScheduleServerError] = useState<{ code: string; message: string } | null>(null);
   const [semesterScheduleForm, setSemesterScheduleForm] = useState({
     semester: 'SP' as SemesterCode,
     year: currentYear,
@@ -84,6 +115,7 @@ const SubjectManagement = () => {
   const [staffRole, setStaffRole] = useState<'ALL' | TeachingStaffDto['role']>('ALL');
   const [staffModalOpen, setStaffModalOpen] = useState(false);
   const [editingStaff, setEditingStaff] = useState<TeachingStaffDto | null>(null);
+  const [staffModalRole, setStaffModalRole] = useState<TeachingStaffDto['role']>('LECTURER');
   const [staffCandidates, setStaffCandidates] = useState<TeachingStaffCandidateDto[]>([]);
   const [staffCandidateKey, setStaffCandidateKey] = useState('');
   const [staffEntryStatus, setStaffEntryStatus] = useState<'Active' | 'Inactive'>('Active');
@@ -133,18 +165,23 @@ const SubjectManagement = () => {
       const payload = responseData(currentResponse);
       const listPayload = responseData(listResponse);
       const semester = payload.currentSemester as SemesterDto | undefined;
+      const loadedSemesters = (listPayload.semesters ?? []) as SemesterDto[];
       const years = Array.isArray(payload.availableYears) && payload.availableYears.length
         ? payload.availableYears.map(Number)
         : [currentYear];
       if (semester) {
         setCurrentSemester(semester);
+        setSemesterScheduleYear(Number(semester.year));
         setSelectedSemester(semester.semester);
         setSelectedYear(Number(semester.year));
       }
       else {
         setCurrentSemester(null);
+        setSemesterScheduleYear(current => loadedSemesters.some(item => Number(item.year) === current)
+          ? current
+          : Number(loadedSemesters[0]?.year ?? currentYear));
       }
-      setSemesters(listPayload.semesters ?? []);
+      setSemesters(loadedSemesters);
       setAvailableYears(years);
       setCanPlanNextYear(Boolean(payload.isDecember || payload.canPlanNextYear));
       setSemesterContextReady(true);
@@ -203,7 +240,7 @@ const SubjectManagement = () => {
     setActiveTab('staff');
   };
 
-  const openAddStaff = async () => {
+  const openAddStaff = async (role: TeachingStaffDto['role']) => {
     const targetSemester = semesters.find(item =>
       item.semester === selectedSemester && item.year === selectedYear);
     if (!targetSemester) {
@@ -216,6 +253,7 @@ const SubjectManagement = () => {
     }
 
     setEditingStaff(null);
+    setStaffModalRole(role);
     setStaffCandidateKey('');
     setStaffEntryStatus('Active');
     setStaffModalOpen(true);
@@ -321,13 +359,18 @@ const SubjectManagement = () => {
   };
 
   const openPlanSemester = () => {
+    const initialYear = semesterScheduleYear >= currentYear && semesterScheduleYear <= currentYear + 2
+      ? semesterScheduleYear
+      : currentYear;
     setEditingSemesterSchedule(null);
-    setSemesterScheduleForm({ semester: 'SP', year: currentYear, startDate: '', endDate: '', reason: '' });
+    setSemesterScheduleServerError(null);
+    setSemesterScheduleForm({ semester: 'SP', year: initialYear, startDate: '', endDate: '', reason: '' });
     setSemesterScheduleOpen(true);
   };
 
   const openEditSemesterDates = (semester: SemesterDto) => {
     setEditingSemesterSchedule(semester);
+    setSemesterScheduleServerError(null);
     setSemesterScheduleForm({
       semester: semester.semester,
       year: semester.year,
@@ -339,6 +382,10 @@ const SubjectManagement = () => {
   };
 
   const saveSemesterSchedule = async () => {
+    if (!editingSemesterSchedule && (semesterScheduleForm.year < currentYear || semesterScheduleForm.year > currentYear + 2)) {
+      toast.error(`Semester year must be between ${currentYear} and ${currentYear + 2}.`);
+      return;
+    }
     if (!semesterScheduleForm.startDate || !semesterScheduleForm.endDate) {
       toast.error('Start date and end date are required.');
       return;
@@ -396,7 +443,11 @@ const SubjectManagement = () => {
       setSemesterScheduleOpen(false);
       await loadSemester();
     } catch (error) {
-      toast.error(parseApiError(error, 'Failed to save semester schedule').message);
+      const parsedError = parseApiError(error, 'Failed to save semester schedule');
+      setSemesterScheduleServerError({ code: parsedError.code, message: parsedError.message });
+      if (!['SEMESTER_ALREADY_PLANNED', 'SEMESTER_DATE_OVERLAP', 'SEMESTER_DATE_INVALID'].includes(parsedError.code)) {
+        toast.error(parsedError.message);
+      }
     } finally {
       setSavingSemester(false);
     }
@@ -470,8 +521,67 @@ const SubjectManagement = () => {
 
   const availableStaffCandidates = useMemo(() => {
     const existingKeys = new Set(staff.map(member => `${member.userId}:${member.role}`));
-    return staffCandidates.filter(candidate => !existingKeys.has(`${candidate.userId}:${candidate.role}`));
-  }, [staff, staffCandidates]);
+    return staffCandidates.filter(candidate =>
+      candidate.role === staffModalRole && !existingKeys.has(`${candidate.userId}:${candidate.role}`));
+  }, [staff, staffCandidates, staffModalRole]);
+
+  const semesterScheduleYears = useMemo(() => Array.from(new Set(
+    semesters.map(item => Number(item.year)),
+  )).sort((left, right) => left - right), [semesters]);
+  const semesterScheduleYearIndex = semesterScheduleYears.indexOf(semesterScheduleYear);
+  const previousSemesterScheduleYear = semesterScheduleYearIndex > 0
+    ? semesterScheduleYears[semesterScheduleYearIndex - 1]
+    : null;
+  const nextSemesterScheduleYear = semesterScheduleYearIndex >= 0
+    && semesterScheduleYearIndex < semesterScheduleYears.length - 1
+    ? semesterScheduleYears[semesterScheduleYearIndex + 1]
+    : null;
+  const plannedSemestersForScheduleYear = useMemo(() => semesters.filter(item =>
+    item.status === 'Planned' && Number(item.year) === semesterScheduleYear), [semesters, semesterScheduleYear]);
+  const semesterScheduleBlockedRanges = useMemo(() => semesters
+    .filter(item => item.id !== editingSemesterSchedule?.id
+      && Boolean(item.startDate)
+      && Boolean(item.endDate))
+    .map(item => ({ label: semesterLabel(item), startDate: item.startDate!, endDate: item.endDate! })), [editingSemesterSchedule?.id, semesters]);
+  const existingSemesterSchedule = !editingSemesterSchedule
+    ? semesters.find(item => item.semester === semesterScheduleForm.semester
+      && Number(item.year) === semesterScheduleForm.year)
+    : undefined;
+  const semesterScheduleDuplicateError = existingSemesterSchedule
+    ? `${semesterLabel(existingSemesterSchedule)} has already been planned. You can edit its dates instead.`
+    : semesterScheduleServerError?.code === 'SEMESTER_ALREADY_PLANNED'
+      ? semesterScheduleServerError.message
+      : undefined;
+  const semesterScheduleFormError = useMemo(() => semesterDateRangeError(
+    semesterScheduleForm.semester,
+    semesterScheduleForm.year,
+    semesterScheduleForm.startDate,
+    semesterScheduleForm.endDate,
+    semesterScheduleBlockedRanges,
+  ), [semesterScheduleBlockedRanges, semesterScheduleForm]);
+  const semesterScheduleDateError = semesterScheduleFormError
+    ?? (semesterScheduleServerError?.code === 'SEMESTER_DATE_OVERLAP'
+      || semesterScheduleServerError?.code === 'SEMESTER_DATE_INVALID'
+      ? semesterScheduleServerError.message
+      : undefined);
+  const semesterScheduleGeneralError = semesterScheduleServerError
+    && !['SEMESTER_ALREADY_PLANNED', 'SEMESTER_DATE_OVERLAP', 'SEMESTER_DATE_INVALID'].includes(semesterScheduleServerError.code)
+    ? semesterScheduleServerError.message
+    : undefined;
+  const semesterScheduleYearAllowed = Boolean(editingSemesterSchedule)
+    || (semesterScheduleForm.year >= currentYear && semesterScheduleForm.year <= currentYear + 2);
+  const canSaveSemesterSchedule = ['SP', 'SU', 'FA'].includes(semesterScheduleForm.semester)
+    && Number.isInteger(semesterScheduleForm.year)
+    && semesterScheduleYearAllowed
+    && Boolean(semesterScheduleForm.startDate)
+    && Boolean(semesterScheduleForm.endDate)
+    && !semesterScheduleDuplicateError
+    && !semesterScheduleDateError
+    && !semesterScheduleGeneralError
+    && (!editingSemesterSchedule || semesterScheduleForm.reason.trim().length >= 3);
+  const semesterPlanYears = editingSemesterSchedule
+    ? [Number(editingSemesterSchedule.year)]
+    : [currentYear, currentYear + 1, currentYear + 2];
 
   const staffStats = [
     { label: 'Lecturers', value: staffSummary.lecturers, icon: GraduationCap, style: 'text-primary bg-primary-50' },
@@ -514,7 +624,6 @@ const SubjectManagement = () => {
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" icon={RefreshCw} onClick={() => void refresh()}>Refresh</Button>
           {activeTab === 'subjects' && <Button icon={Plus} onClick={openAdd}>Add Subject</Button>}
-          {activeTab === 'staff' && <Button icon={UserPlus} onClick={() => void openAddStaff()}>Add Teaching Staff</Button>}
         </div>
       </div>
 
@@ -582,34 +691,59 @@ const SubjectManagement = () => {
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Planned semesters</p>
                 <button type="button" onClick={openPlanSemester} className="text-xs font-semibold text-primary">Add</button>
               </div>
-              <div className="mt-2 space-y-2">
-                {semesters.filter(item => item.status === 'Planned').length === 0 ? (
-                  <p className="rounded-lg bg-slate-50 px-2.5 py-3 text-center text-xs text-slate-400">No planned semester</p>
-                ) : semesters.filter(item => item.status === 'Planned').map(item => {
-                  const timing = semesterTiming(item);
-                  const canActivate = !currentSemester && timing === 'In progress';
-                  return (
-                    <div key={item.id} className="rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-2 text-xs">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <p className="font-semibold text-slate-800">{semesterLabel(item)}</p>
-                          <p className="mt-0.5 text-[11px] text-slate-500">{formatSemesterDate(item.startDate)} – {formatSemesterDate(item.endDate)}</p>
-                          <p className={`mt-0.5 text-[11px] font-semibold ${timing === 'Ended' ? 'text-red-600' : timing === 'In progress' ? 'text-green-700' : 'text-blue-600'}`}>{timing}</p>
+              <div className="mt-2 flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50 px-2 py-1.5">
+                <button
+                  type="button"
+                  disabled={previousSemesterScheduleYear === null}
+                  onClick={() => previousSemesterScheduleYear !== null && setSemesterScheduleYear(previousSemesterScheduleYear)}
+                  className="rounded-md p-1 text-slate-500 hover:bg-white hover:text-primary disabled:cursor-not-allowed disabled:opacity-30"
+                  aria-label={previousSemesterScheduleYear === null ? 'No earlier semester year' : `View semester schedule for ${previousSemesterScheduleYear}`}
+                  title={previousSemesterScheduleYear === null ? 'No earlier semester year' : `View ${previousSemesterScheduleYear}`}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+                <span className="text-sm font-bold text-slate-700">{semesterScheduleYear}</span>
+                <button
+                  type="button"
+                  disabled={nextSemesterScheduleYear === null}
+                  onClick={() => nextSemesterScheduleYear !== null && setSemesterScheduleYear(nextSemesterScheduleYear)}
+                  className="rounded-md p-1 text-slate-500 hover:bg-white hover:text-primary disabled:cursor-not-allowed disabled:opacity-30"
+                  aria-label={nextSemesterScheduleYear === null ? 'No later semester year' : `View semester schedule for ${nextSemesterScheduleYear}`}
+                  title={nextSemesterScheduleYear === null ? 'No later semester year' : `View ${nextSemesterScheduleYear}`}
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
+              <div className="mt-2 h-72 overflow-y-auto pr-1 [scrollbar-gutter:stable]">
+                <div key={semesterScheduleYear} className="space-y-2 motion-safe:animate-fade-in">
+                  {plannedSemestersForScheduleYear.length === 0 ? (
+                    <p className="flex h-72 items-center justify-center rounded-lg bg-slate-50 px-2.5 text-center text-xs text-slate-400">No planned semester in {semesterScheduleYear}</p>
+                  ) : plannedSemestersForScheduleYear.map(item => {
+                    const timing = semesterTiming(item);
+                    const canActivate = !currentSemester && timing === 'In progress';
+                    return (
+                      <div key={item.id} className="rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-2 text-xs">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="font-semibold text-slate-800">{semesterLabel(item)}</p>
+                            <p className="mt-0.5 text-[11px] text-slate-500">{formatSemesterDate(item.startDate)} – {formatSemesterDate(item.endDate)}</p>
+                            <p className={`mt-0.5 text-[11px] font-semibold ${timing === 'Ended' ? 'text-red-600' : timing === 'In progress' ? 'text-green-700' : 'text-blue-600'}`}>{timing}</p>
+                          </div>
+                          <button type="button" onClick={() => openEditSemesterDates(item)} className="rounded p-1 text-slate-400 hover:bg-white hover:text-primary" title="Edit dates"><Edit3 className="h-3.5 w-3.5" /></button>
                         </div>
-                        <button type="button" onClick={() => openEditSemesterDates(item)} className="rounded p-1 text-slate-400 hover:bg-white hover:text-primary" title="Edit dates"><Edit3 className="h-3.5 w-3.5" /></button>
+                        <button
+                          type="button"
+                          disabled={!canActivate || savingSemester}
+                          onClick={() => void activateSemester(item)}
+                          className="mt-2 w-full rounded-lg border border-primary-200 bg-white px-2 py-1.5 font-semibold text-primary disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400"
+                          title={currentSemester ? 'Complete the active semester first' : timing !== 'In progress' ? 'Activation is available only between the configured dates' : 'Activate semester'}
+                        >
+                          Activate
+                        </button>
                       </div>
-                      <button
-                        type="button"
-                        disabled={!canActivate || savingSemester}
-                        onClick={() => void activateSemester(item)}
-                        className="mt-2 w-full rounded-lg border border-primary-200 bg-white px-2 py-1.5 font-semibold text-primary disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400"
-                        title={currentSemester ? 'Complete the active semester first' : timing !== 'In progress' ? 'Activation is available only between the configured dates' : 'Activate semester'}
-                      >
-                        Activate
-                      </button>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
             </div>
             {semesters.some(item => item.status === 'Completed') && (
@@ -668,6 +802,9 @@ const SubjectManagement = () => {
                         <p className="mt-0.5 text-sm text-slate-500">{description}</p>
                       </div>
                     </div>
+                    <Button size="sm" variant="outline" icon={Plus} onClick={() => void openAddStaff(role)}>
+                      Add {role === 'LECTURER' ? 'Lecturer' : 'Mentor'}
+                    </Button>
                   </header>
 
                   {members.length === 0 ? (
@@ -737,12 +874,17 @@ const SubjectManagement = () => {
       <Modal
         isOpen={staffModalOpen}
         onClose={() => setStaffModalOpen(false)}
-        title={editingStaff ? `Edit ${editingStaff.name}` : `Add Teaching Staff · ${selectedSemester} ${selectedYear}`}
+        title={editingStaff ? `Edit ${editingStaff.name}` : `Add Existing ${staffModalRole === 'LECTURER' ? 'Lecturer' : 'Mentor'} to ${selectedSemester} ${selectedYear}`}
         submitText={staffSaving ? 'Saving...' : editingStaff ? 'Update Status' : 'Add to Semester'}
         isSubmitting={staffSaving}
         onSubmit={saveTeachingStaff}
       >
         <div className="space-y-4">
+          {!editingStaff && (
+            <p className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs leading-5 text-blue-700">
+              This does not create a new account. Select an existing active {staffModalRole === 'LECTURER' ? 'Lecturer' : 'Mentor'} to make them available for assignments in this semester.
+            </p>
+          )}
           {editingStaff ? (
             <>
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
@@ -774,7 +916,7 @@ const SubjectManagement = () => {
           ) : (
             <>
               <label className="block text-sm font-medium text-slate-700">
-                Eligible lecturer or mentor *
+                Existing active {staffModalRole === 'LECTURER' ? 'lecturer' : 'mentor'} *
                 <select
                   value={staffCandidateKey}
                   onChange={(event) => setStaffCandidateKey(event.target.value)}
@@ -790,13 +932,22 @@ const SubjectManagement = () => {
               </label>
               {availableStaffCandidates.length === 0 && (
                 <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
-                  No additional active Lecturer or Mentor accounts are available. Create or activate the user account first.
+                  No additional active {staffModalRole === 'LECTURER' ? 'Lecturer' : 'Mentor'} accounts are available for this semester.
                 </p>
               )}
             </>
           )}
-          <p className="rounded-xl bg-blue-50 px-3 py-2 text-xs leading-5 text-blue-700">
-            Only active lecturers in this semester list appear when classes are created or reassigned. Mentor candidates use the same semester rule.
+          {!editingStaff && (
+            <p className="text-xs leading-5 text-slate-500">
+              Need to create a new staff account?{' '}
+              <Link to="/admin/users" className="font-semibold text-primary hover:underline">
+                Go to User Management
+              </Link>{' '}
+              first, then return here to add the account to this semester.
+            </p>
+          )}
+          <p className="rounded-xl bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-600">
+            Only active staff in this semester list are available for new class or team assignments.
           </p>
         </div>
       </Modal>
@@ -810,35 +961,73 @@ const SubjectManagement = () => {
         title={editingSemesterSchedule ? `Edit ${semesterLabel(editingSemesterSchedule)} Dates` : 'Plan Semester'}
         submitText={savingSemester ? 'Saving...' : editingSemesterSchedule ? 'Update Dates' : 'Plan Semester'}
         isSubmitting={savingSemester}
+        submitDisabled={!canSaveSemesterSchedule}
         onSubmit={saveSemesterSchedule}
+        size="lg"
       >
-        <div className="space-y-4">
+        <div className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <label className="block text-sm font-medium text-slate-700">Semester *
-              <select disabled={Boolean(editingSemesterSchedule)} value={semesterScheduleForm.semester} onChange={(event) => setSemesterScheduleForm(current => ({ ...current, semester: event.target.value as SemesterCode }))} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-primary disabled:bg-slate-50">
+              <select disabled={Boolean(editingSemesterSchedule)} value={semesterScheduleForm.semester} onChange={(event) => {
+                const semester = event.target.value as SemesterCode;
+                setSemesterScheduleServerError(null);
+                setSemesterScheduleForm(current => {
+                  if (semester !== 'FA' && current.startDate === `${current.year}-12-31`) {
+                    return { ...current, semester, startDate: '', endDate: '' };
+                  }
+                  const endDate = semester !== 'FA' && current.endDate && !current.endDate.startsWith(`${current.year}-`)
+                    ? ''
+                    : current.endDate;
+                  return { ...current, semester, endDate };
+                });
+              }} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-primary disabled:bg-slate-50">
                 <option value="SP">SP (Spring)</option><option value="SU">SU (Summer)</option><option value="FA">FA (Fall)</option>
               </select>
             </label>
             <label className="block text-sm font-medium text-slate-700">Year *
-              <input disabled={Boolean(editingSemesterSchedule)} type="number" min={2000} max={2100} value={semesterScheduleForm.year} onChange={(event) => setSemesterScheduleForm(current => ({ ...current, year: Number(event.target.value) }))} className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-primary disabled:bg-slate-50" />
+              <select disabled={Boolean(editingSemesterSchedule)} value={semesterScheduleForm.year} onChange={(event) => {
+                setSemesterScheduleServerError(null);
+                setSemesterScheduleForm(current => ({ ...current, year: Number(event.target.value), startDate: '', endDate: '' }));
+              }} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-primary disabled:bg-slate-50">
+                {semesterPlanYears.map(year => <option key={year} value={year}>{year}</option>)}
+              </select>
             </label>
           </div>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <label className="block text-sm font-medium text-slate-700">Start date *
-              <input type="date" value={semesterScheduleForm.startDate} onChange={(event) => setSemesterScheduleForm(current => ({ ...current, startDate: event.target.value }))} className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-primary" />
-            </label>
-            <label className="block text-sm font-medium text-slate-700">End date *
-              <input type="date" value={semesterScheduleForm.endDate} onChange={(event) => setSemesterScheduleForm(current => ({ ...current, endDate: event.target.value }))} className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-primary" />
-            </label>
-          </div>
+          {semesterScheduleDuplicateError && (
+            <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700" aria-live="polite">
+              {semesterScheduleDuplicateError}
+            </p>
+          )}
+          <SemesterDateRangePicker
+            semester={semesterScheduleForm.semester}
+            year={semesterScheduleForm.year}
+            startDate={semesterScheduleForm.startDate}
+            endDate={semesterScheduleForm.endDate}
+            error={semesterScheduleDateError}
+            onChange={(startDate, endDate) => {
+              setSemesterScheduleServerError(null);
+              setSemesterScheduleForm(current => ({ ...current, startDate, endDate }));
+            }}
+          />
           {editingSemesterSchedule && (
             <label className="block text-sm font-medium text-slate-700">Reason for change *
-              <textarea rows={3} maxLength={500} value={semesterScheduleForm.reason} onChange={(event) => setSemesterScheduleForm(current => ({ ...current, reason: event.target.value }))} placeholder="Explain why the semester dates are being corrected" className="mt-1.5 w-full resize-none rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-primary" />
+              <textarea rows={3} maxLength={500} value={semesterScheduleForm.reason} onChange={(event) => {
+                setSemesterScheduleServerError(null);
+                setSemesterScheduleForm(current => ({ ...current, reason: event.target.value }));
+              }} placeholder="Explain why the semester dates are being corrected" className="mt-1.5 w-full resize-none rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-primary" />
+              {semesterScheduleForm.reason.length > 0 && semesterScheduleForm.reason.trim().length < 3 && (
+                <span className="mt-1 block text-xs font-medium text-danger">Reason must contain at least 3 characters.</span>
+              )}
             </label>
           )}
-          <p className="rounded-xl bg-blue-50 px-3 py-2 text-xs leading-5 text-blue-700">
-          Semester dates are configured by Admin. Planning does not activate the semester automatically.
-          {semesterScheduleForm.semester === 'FA' && ' Fall semesters may end in January of the following year (e.g. Sep 2026 – Jan 2027).'}
+          {semesterScheduleGeneralError && (
+            <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700" aria-live="polite">
+              {semesterScheduleGeneralError}
+            </p>
+          )}
+          <p className="text-center text-xs leading-5 text-slate-500">
+            Planning saves the schedule only; it does not activate the semester.
+            {semesterScheduleForm.semester === 'FA' && ' Fall may end in January of the following year.'}
           </p>
         </div>
       </Modal>

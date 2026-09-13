@@ -435,6 +435,8 @@ public sealed class SubjectsController : ControllerBase
             ErrorCodes.SemesterConcurrencyConflict or
             ErrorCodes.SemesterActivationBlocked or
             ErrorCodes.SemesterCompletionBlocked or
+            ErrorCodes.SemesterAlreadyPlanned or
+            ErrorCodes.SemesterDateOverlap or
             ErrorCodes.SemesterInvalidState => Conflict(response),
             ErrorCodes.SemesterStaffConflict or
             ErrorCodes.SemesterStaffInUse => Conflict(response),

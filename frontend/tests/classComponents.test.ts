@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  CLASS_LIST_PAGE_SIZE,
   buildScheduleUpdatePayload,
   getClassLifecyclePresentation,
   isClassReadOnly,
@@ -50,6 +51,10 @@ test('ClassDetail presents Archive for an active class and Restore for an archiv
 test('ClassManagement archived-card policy never treats an active class as restorable', () => {
   assert.equal(getClassLifecyclePresentation('Archived').action, 'restore');
   assert.equal(getClassLifecyclePresentation('Active').action, 'archive');
+});
+
+test('ClassManagement requests five complete rows for its three-column grid', () => {
+  assert.equal(CLASS_LIST_PAGE_SIZE, 15);
 });
 
 test('EditScheduleModal builds the exact backend schedule contract without lecturer data', () => {

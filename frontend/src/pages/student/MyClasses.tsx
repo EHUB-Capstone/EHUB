@@ -4,6 +4,7 @@ import { GraduationCap, User, Mail, Calendar, ArrowRight, Loader2 } from 'lucide
 import toast from 'react-hot-toast';
 import { classApi } from '../../api/classApi';
 import EmptyState from '../../components/ui/EmptyState';
+import { formatSemesterCode } from '../../utils/semester';
 
 export default function MyClasses() {
   const [classes, setClasses] = useState([]);
@@ -106,7 +107,7 @@ export default function MyClasses() {
                   )}
 
                   <p className="text-sm text-slate-400 font-medium">
-                    {cls.description || 'No description provided.'}
+                    {formatSemesterCode(cls.semester, cls.year)}
                   </p>
 
                   {/* Lecturer Info Card */}
