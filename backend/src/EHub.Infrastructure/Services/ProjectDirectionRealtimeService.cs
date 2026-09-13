@@ -3,12 +3,13 @@ using System.Net.WebSockets;
 using System.Text.Json;
 using EHub.Application.Common.Interfaces.Services;
 using EHub.Contracts.Teams;
+using EHub.Contracts.Workspaces;
 using Microsoft.Extensions.Logging;
 
 namespace EHub.Infrastructure.Services;
 
 public sealed class ProjectDirectionRealtimeService(
-    ILogger<ProjectDirectionRealtimeService> logger) : IProjectDirectionRealtimePublisher
+    ILogger<ProjectDirectionRealtimeService> logger) : IProjectDirectionRealtimePublisher, ICheckpointFeedbackRealtimePublisher
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private readonly ConcurrentDictionary<Guid, ConcurrentDictionary<Guid, Connection>> _connections = new();
@@ -75,6 +76,24 @@ public sealed class ProjectDirectionRealtimeService(
             classId,
             teamId
         }, JsonOptions);
+        await PublishPayloadAsync(recipientUserIds, payload);
+    }
+
+    public async Task PublishAsync(IReadOnlyCollection<Guid> recipientUserIds, Guid teamId, WorkspaceCheckpointFeedbackResponse feedback, CancellationToken cancellationToken = default)
+    {
+        var payload = JsonSerializer.SerializeToUtf8Bytes(new
+        {
+            eventType = "CheckpointFeedbackPosted",
+            teamId,
+            checkpointNumber = feedback.CheckpointNumber,
+            feedback
+        }, JsonOptions);
+        await PublishPayloadAsync(recipientUserIds, payload);
+    }
+
+    public async Task PublishDeletedAsync(IReadOnlyCollection<Guid> recipientUserIds, Guid teamId, int checkpointNumber, Guid feedbackId, CancellationToken cancellationToken = default)
+    {
+        var payload = JsonSerializer.SerializeToUtf8Bytes(new { eventType = "CheckpointFeedbackDeleted", teamId, checkpointNumber, feedbackId }, JsonOptions);
         await PublishPayloadAsync(recipientUserIds, payload);
     }
 

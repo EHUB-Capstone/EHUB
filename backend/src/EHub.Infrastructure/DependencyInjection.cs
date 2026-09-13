@@ -40,6 +40,8 @@ public static class DependencyInjection
         services.AddSingleton<ProjectDirectionRealtimeService>();
         services.AddSingleton<IProjectDirectionRealtimePublisher>(provider =>
             provider.GetRequiredService<ProjectDirectionRealtimeService>());
+        services.AddSingleton<ICheckpointFeedbackRealtimePublisher>(provider =>
+            provider.GetRequiredService<ProjectDirectionRealtimeService>());
         services.AddHostedService<OutboxProcessorBackgroundService>();
 
         // Repositories & Persistence
@@ -76,6 +78,8 @@ public static class DependencyInjection
             return new Cloudinary(new Account(options.CloudName, options.ApiKey, options.ApiSecret));
         });
         services.AddScoped<IImageStorageService, CloudinaryImageStorageService>();
+        services.AddHttpClient("CloudinarySubmissionFiles", client => client.Timeout = TimeSpan.FromSeconds(30));
+        services.AddScoped<ISubmissionFileStorageService, CloudinarySubmissionFileStorageService>();
         
         services.Configure<EmailOptions>(configuration.GetSection(EmailOptions.SectionName));
         var emailProvider = configuration["Email:Provider"];

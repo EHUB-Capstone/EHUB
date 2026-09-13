@@ -31,9 +31,25 @@ interface ProjectDirectionNotificationReadyRealtimeEvent {
   teamId: string;
 }
 
+interface CheckpointFeedbackPostedRealtimeEvent {
+  eventType: 'CheckpointFeedbackPosted';
+  teamId: string;
+  checkpointNumber: number;
+  feedback: unknown;
+}
+
+interface CheckpointFeedbackDeletedRealtimeEvent {
+  eventType: 'CheckpointFeedbackDeleted';
+  teamId: string;
+  checkpointNumber: number;
+  feedbackId: string;
+}
+
 export type ProjectDirectionRealtimeEvent =
   | ProjectDirectionChangedRealtimeEvent
-  | ProjectDirectionNotificationReadyRealtimeEvent;
+  | ProjectDirectionNotificationReadyRealtimeEvent
+  | CheckpointFeedbackPostedRealtimeEvent
+  | CheckpointFeedbackDeletedRealtimeEvent;
 
 type EventHandler = (event: ProjectDirectionRealtimeEvent) => void;
 type ConnectedHandler = (reconnected: boolean) => void;
@@ -102,7 +118,10 @@ const connect = () => {
     try {
       const event = JSON.parse(String(message.data)) as ProjectDirectionRealtimeEvent;
       if (!event?.eventType || !event.teamId) return;
-      if (event.eventType !== 'ProjectDirectionNotificationReady' && !event.direction) return;
+      if (event.eventType !== 'ProjectDirectionNotificationReady'
+        && event.eventType !== 'CheckpointFeedbackPosted'
+        && event.eventType !== 'CheckpointFeedbackDeleted'
+        && !event.direction) return;
       handlers.forEach((handler) => handler(event));
     } catch {
       // Ignore malformed frames and keep the connection alive.

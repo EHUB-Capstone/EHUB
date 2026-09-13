@@ -26,28 +26,12 @@ export const checkpointApi = {
       `/workspace/checkpoints/teams/${teamId}/checkpoints/${checkpointNumber}/files/${fileId}`
     ),
 
-  // Download with JWT (browser tab links cannot send Authorization header)
+  // Use axiosClient so its in-memory access token and refresh interceptor apply.
   downloadFile: async (teamId, checkpointNumber, fileId, fileName) => {
-    const token = localStorage.getItem('token');
-    const base = axiosClient.defaults.baseURL || '/api';
-    const url = `${base}/workspace/checkpoints/teams/${teamId}/checkpoints/${checkpointNumber}/files/${fileId}/download`;
-
-    const res = await fetch(url, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    });
-
-    if (!res.ok) {
-      let message = 'Download failed';
-      try {
-        const err = await res.json();
-        message = err.message || err.error || message;
-      } catch {
-        /* non-JSON error body */
-      }
-      throw new Error(message);
-    }
-
-    const blob = await res.blob();
+    const blob = await axiosClient.get(
+      `/workspace/checkpoints/teams/${teamId}/checkpoints/${checkpointNumber}/files/${fileId}/download`,
+      { responseType: 'blob' },
+    );
     const objectUrl = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = objectUrl;
@@ -71,4 +55,6 @@ export const checkpointApi = {
       `/workspace/checkpoints/teams/${teamId}/checkpoints/${checkpointNumber}/feedback`,
       payload
     ),
+  deleteFeedback: (teamId, checkpointNumber, feedbackId) =>
+    axiosClient.delete(`/workspace/checkpoints/teams/${teamId}/checkpoints/${checkpointNumber}/feedback/${feedbackId}`),
 };

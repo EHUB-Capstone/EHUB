@@ -323,7 +323,9 @@ public sealed class ProjectWorkspaceHandler : IProjectWorkspaceHandler
     {
         var query = TeamQuery().Where(team => team.Status == TeamStatus.Active);
         if (IsRole(role, SystemRoles.Admin)) return query;
-        if (IsRole(role, SystemRoles.Lecturer)) return query.Where(team => team.Class.PrimaryLecturerId == userId);
+        if (IsRole(role, SystemRoles.Lecturer)) return query.Where(team =>
+            team.Class.PrimaryLecturerId == userId ||
+            team.Class.ClassLecturers.Any(assignment => assignment.LecturerId == userId));
         if (IsRole(role, SystemRoles.Mentor)) return query.Where(team => team.MentorAssignments.Any(assignment =>
             assignment.MentorProfile.UserId == userId && assignment.Status == MentorAssignmentStatus.Active && assignment.EndedAt == null));
         if (IsRole(role, SystemRoles.Student)) return query.Where(team => team.TeamMembers.Any(member =>
