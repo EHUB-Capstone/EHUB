@@ -13,6 +13,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../hooks/useAuth';
 import { AUTH_ERROR_CODES } from '../../types/auth';
 import { parseApiError } from '../../utils/apiError';
+import { classFeatureFlags } from '../../config/classFeatureFlags';
 import {
   AUTH_FIELD_LIMITS,
   LOGIN_FIELDS,
@@ -84,8 +85,9 @@ const Login: React.FC = () => {
   const redirectByRole = (roles: string[]) => {
     const normalizedRoles = roles.map(normalizeRole);
     if (normalizedRoles.includes('ADMIN'))         navigate('/admin');
-    else if (normalizedRoles.includes('LECTURER')) navigate('/lecturer');
+    else if (normalizedRoles.includes('LECTURER')) navigate('/lecturer/classes');
     else if (normalizedRoles.includes('MENTOR'))   navigate('/mentor');
+    else if (normalizedRoles.includes('STUDENT'))  navigate(classFeatureFlags.studentSelfService ? '/student/classes' : '/student/workspace');
     else                                           navigate('/student');
   };
 

@@ -18,11 +18,13 @@ public sealed class SubjectRoadmapHandler(
         var course = await FindCourseAsync(subjectCode, cancellationToken);
         if (course is null) return Failure<RoadmapItemResponse>("NOT_FOUND", "Subject was not found.");
         if (!request.CourseCode.Equals(course.Code, StringComparison.OrdinalIgnoreCase)) return Failure<RoadmapItemResponse>("VALIDATION_ERROR", "Course code does not match the requested subject.");
+        var duplicateError = await FindDuplicateErrorAsync(course.Id, request, null, cancellationToken);
+        if (duplicateError is not null) return Failure<RoadmapItemResponse>(ErrorCodes.WeeklyTaskDuplicated, duplicateError);
 
         var item = new WeeklyTask
         {
             Title = request.Title.Trim(),
-            Description = request.Description?.Trim(),
+            Description = request.Description!.Trim(),
             CourseId = course.Id,
             Scope = WeeklyTaskScope.Course,
             IsTemplate = true,
@@ -45,9 +47,11 @@ public sealed class SubjectRoadmapHandler(
             task.Id == itemId && task.CourseId == course.Id && task.Scope == WeeklyTaskScope.Course && task.IsTemplate,
             cancellationToken);
         if (item is null) return Failure<RoadmapItemResponse>("NOT_FOUND", "Roadmap item was not found.");
+        var duplicateError = await FindDuplicateErrorAsync(course.Id, request, item.Id, cancellationToken);
+        if (duplicateError is not null) return Failure<RoadmapItemResponse>(ErrorCodes.WeeklyTaskDuplicated, duplicateError);
 
         item.Title = request.Title.Trim();
-        item.Description = request.Description?.Trim();
+        item.Description = request.Description!.Trim();
         item.WeekNumber = request.WeekNumber;
         item.Priority = ToPriority(request.Priority);
         item.EstimatedHours = request.EstimatedHours;
@@ -73,6 +77,33 @@ public sealed class SubjectRoadmapHandler(
 
     private Task<Course?> FindCourseAsync(string subjectCode, CancellationToken cancellationToken) =>
         context.Courses.FirstOrDefaultAsync(course => course.Code == subjectCode.Trim().ToUpperInvariant(), cancellationToken);
+
+    private async Task<string?> FindDuplicateErrorAsync(
+        Guid courseId,
+        SaveRoadmapItemRequest request,
+        Guid? excludedItemId,
+        CancellationToken cancellationToken)
+    {
+        var normalizedTitle = request.Title.Trim().ToLower();
+        var normalizedDescription = request.Description!.Trim().ToLower();
+        var items = context.WeeklyTasks.AsNoTracking().Where(item =>
+            item.CourseId == courseId &&
+            item.Scope == WeeklyTaskScope.Course &&
+            item.IsTemplate &&
+            (!excludedItemId.HasValue || item.Id != excludedItemId.Value));
+
+        if (await items.AnyAsync(item => item.Title.Trim().ToLower() == normalizedTitle, cancellationToken))
+        {
+            return "A roadmap item with this title already exists for this subject.";
+        }
+
+        if (await items.AnyAsync(item => item.Description != null && item.Description.Trim().ToLower() == normalizedDescription, cancellationToken))
+        {
+            return "A roadmap item with this description already exists for this subject.";
+        }
+
+        return null;
+    }
 
     private static TaskPriority ToPriority(string priority) => priority.ToUpperInvariant() switch
     {

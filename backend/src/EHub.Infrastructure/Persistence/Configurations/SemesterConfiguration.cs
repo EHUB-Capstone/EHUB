@@ -73,7 +73,7 @@ public class SemesterConfiguration : IEntityTypeConfiguration<Semester>
         {
             table.HasCheckConstraint(
                 "CK_semesters_date_range",
-                "start_date IS NULL OR end_date IS NULL OR start_date <= end_date");
+                "start_date IS NULL OR end_date IS NULL OR start_date < end_date");
             table.HasCheckConstraint(
                 "CK_semesters_completion_metadata",
                 "status <> 'Completed' OR (completed_at_utc IS NOT NULL AND completion_reason IS NOT NULL)");

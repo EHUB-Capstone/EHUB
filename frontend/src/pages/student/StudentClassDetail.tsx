@@ -13,13 +13,7 @@ import { entityId, normalizeManagedTeam, normalizeTeamProposal, getTeamMemberIds
 import ProjectDirectionModal from '../../components/class/ProjectDirectionModal';
 import { teamApi } from '../../api/teamApi';
 import { parseApiError } from '../../utils/apiError';
-
-const semesterLabel = (sem) => {
-  if (sem === 'SP') return 'Spring';
-  if (sem === 'SU') return 'Summer';
-  if (sem === 'FA') return 'Fall';
-  return sem;
-};
+import { formatSemesterCode } from '../../utils/semester';
 
 export default function StudentClassDetail() {
   const { slug: id } = useParams();
@@ -162,7 +156,7 @@ export default function StudentClassDetail() {
                 {cls?.subjectCode}
               </span>
               <span className="text-xs font-semibold px-2 py-0.5 bg-slate-100 text-slate-500 border border-slate-200/40 rounded-md">
-                {semesterLabel(cls?.semester)} {cls?.year}
+                {formatSemesterCode(cls?.semester, cls?.year)}
               </span>
             </div>
             <h1 className="text-2xl font-bold text-slate-900 mt-1.5">{cls?.classCode}</h1>

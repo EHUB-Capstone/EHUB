@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bell, Check, Calendar, Award, Kanban, Brain, MessageSquare, ShieldAlert } from 'lucide-react';
+import { Bell, Check, Calendar, Award, Kanban, Brain, MessageSquare, ShieldAlert, UserCheck } from 'lucide-react';
 import { getNotificationId, normalizeNotification, notificationApi } from '../../api/notificationApi';
 import toast from 'react-hot-toast';
 import { classApi } from '../../api/classApi';
@@ -121,6 +121,9 @@ const NotificationDropdown = () => {
       case 'TEAM':
       case 'CLASS':
         return <MessageSquare className="w-4 h-4 text-purple-500" />;
+      case 'AccountApprovalRequested':
+      case 'ACCOUNT_APPROVAL_REQUESTED':
+        return <UserCheck className="w-4 h-4 text-amber-500" />;
       default:
         return <ShieldAlert className="w-4 h-4 text-slate-500" />;
     }

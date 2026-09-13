@@ -98,7 +98,7 @@ public sealed class CurrentSemesterHandler : ICurrentSemesterHandler
             return Failure<SemesterResponse>(ErrorCodes.ClassValidationError, "A semester can only be planned for the current year or the next two years.");
         var dateValidation = ValidateDateRange(term, request.Year, request.StartDate, request.EndDate);
         if (dateValidation != null)
-            return Failure<SemesterResponse>(ErrorCodes.ClassValidationError, dateValidation);
+            return Failure<SemesterResponse>(ErrorCodes.SemesterDateInvalid, dateValidation);
         if (request.EndDate < DateOnly.FromDateTime(now))
             return Failure<SemesterResponse>(ErrorCodes.ClassValidationError, "A newly planned semester cannot end in the past.");
 
@@ -109,9 +109,18 @@ public sealed class CurrentSemesterHandler : ICurrentSemesterHandler
                 if (await _context.Semesters.AnyAsync(
                         item => item.Term == term && item.Year == request.Year,
                         cancellationToken))
-                    return Failure<SemesterResponse>(ErrorCodes.SemesterInvalidState, "This semester already exists. Edit its dates instead.");
-                if (await HasOverlappingSemesterAsync(null, request.StartDate, request.EndDate, cancellationToken))
-                    return Failure<SemesterResponse>(ErrorCodes.SemesterInvalidState, "The semester date range overlaps another semester.");
+                    return Failure<SemesterResponse>(
+                        ErrorCodes.SemesterAlreadyPlanned,
+                        AlreadyPlannedMessage(term, request.Year));
+                var overlappingSemester = await FindOverlappingSemesterAsync(
+                    null,
+                    request.StartDate,
+                    request.EndDate,
+                    cancellationToken);
+                if (overlappingSemester != null)
+                    return Failure<SemesterResponse>(
+                        ErrorCodes.SemesterDateOverlap,
+                        OverlapMessage(overlappingSemester));
 
                 var semester = new Semester
                 {
@@ -133,10 +142,26 @@ public sealed class CurrentSemesterHandler : ICurrentSemesterHandler
         catch (DbUpdateException exception)
         {
             _logger.LogWarning(exception, "Could not plan semester {Term} {Year}", request.Semester, request.Year);
+            var conflict = await FindPlanningConflictAsync(
+                term,
+                request.Year,
+                request.StartDate,
+                request.EndDate,
+                token);
+            if (conflict != null)
+                return Failure<SemesterResponse>(conflict.Code, conflict.Message);
             return Failure<SemesterResponse>(ErrorCodes.SemesterInvalidState, "The semester conflicts with existing academic data. Reload and try again.");
         }
         catch (SerializableTransactionConflictException)
         {
+            var conflict = await FindPlanningConflictAsync(
+                term,
+                request.Year,
+                request.StartDate,
+                request.EndDate,
+                token);
+            if (conflict != null)
+                return Failure<SemesterResponse>(conflict.Code, conflict.Message);
             return Failure<SemesterResponse>(ErrorCodes.SemesterConcurrencyConflict, "Another semester operation completed first. Reload and try again.");
         }
     }
@@ -169,15 +194,22 @@ public sealed class CurrentSemesterHandler : ICurrentSemesterHandler
 
                 var dateValidation = ValidateDateRange(semester.Term, semester.Year, request.StartDate, request.EndDate);
                 if (dateValidation != null)
-                    return Failure<SemesterResponse>(ErrorCodes.ClassValidationError, dateValidation);
+                    return Failure<SemesterResponse>(ErrorCodes.SemesterDateInvalid, dateValidation);
                 var today = DateOnly.FromDateTime(DateTime.UtcNow);
                 if (semester.Status == SemesterStatus.Active &&
                     (today < request.StartDate || today > request.EndDate))
                     return Failure<SemesterResponse>(
                         ErrorCodes.SemesterInvalidState,
                         "The active semester date range must include today. Correct the active semester before moving it outside the current date.");
-                if (await HasOverlappingSemesterAsync(semester.Id, request.StartDate, request.EndDate, cancellationToken))
-                    return Failure<SemesterResponse>(ErrorCodes.SemesterInvalidState, "The semester date range overlaps another semester.");
+                var overlappingSemester = await FindOverlappingSemesterAsync(
+                    semester.Id,
+                    request.StartDate,
+                    request.EndDate,
+                    cancellationToken);
+                if (overlappingSemester != null)
+                    return Failure<SemesterResponse>(
+                        ErrorCodes.SemesterDateOverlap,
+                        OverlapMessage(overlappingSemester));
                 if (semester.StartDate == request.StartDate && semester.EndDate == request.EndDate)
                     return Result.Success(ToResponse(semester));
 
@@ -609,17 +641,43 @@ public sealed class CurrentSemesterHandler : ICurrentSemesterHandler
         return normalized is "SP" or "SU" or "FA";
     }
 
-    private async Task<bool> HasOverlappingSemesterAsync(
+    private async Task<Semester?> FindOverlappingSemesterAsync(
         Guid? excludedSemesterId,
         DateOnly startDate,
         DateOnly endDate,
         CancellationToken token) =>
-        await _context.Semesters.AsNoTracking().AnyAsync(item =>
+        await _context.Semesters.AsNoTracking()
+            .Where(item =>
             (!excludedSemesterId.HasValue || item.Id != excludedSemesterId.Value) &&
-            item.Status != SemesterStatus.Archived &&
             item.StartDate.HasValue && item.EndDate.HasValue &&
-            item.StartDate.Value <= endDate && item.EndDate.Value >= startDate,
-            token);
+            item.StartDate.Value <= endDate && item.EndDate.Value >= startDate)
+            .OrderBy(item => item.StartDate)
+            .FirstOrDefaultAsync(token);
+
+    private async Task<Error?> FindPlanningConflictAsync(
+        SemesterTerm term,
+        int year,
+        DateOnly startDate,
+        DateOnly endDate,
+        CancellationToken token)
+    {
+        if (await _context.Semesters.AsNoTracking().AnyAsync(
+                item => item.Term == term && item.Year == year,
+                token))
+            return new Error(ErrorCodes.SemesterAlreadyPlanned, AlreadyPlannedMessage(term, year));
+
+        var overlap = await FindOverlappingSemesterAsync(null, startDate, endDate, token);
+        return overlap == null
+            ? null
+            : new Error(ErrorCodes.SemesterDateOverlap, OverlapMessage(overlap));
+    }
+
+    private static string AlreadyPlannedMessage(SemesterTerm term, int year) =>
+        $"{ToTermCode(term)} {year} has already been planned. You can edit its dates instead.";
+
+    private static string OverlapMessage(Semester semester) =>
+        $"This date range overlaps with {ToTermCode(semester.Term)} {semester.Year} " +
+        $"({semester.StartDate:dd/MM/yyyy} – {semester.EndDate:dd/MM/yyyy}).";
 
     private static string? ValidateDateRange(SemesterTerm term, int year, DateOnly startDate, DateOnly endDate)
     {

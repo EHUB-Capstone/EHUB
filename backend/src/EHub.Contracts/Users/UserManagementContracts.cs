@@ -26,6 +26,9 @@ public sealed class ManagedUserResponse
     public string? ProgramGroup { get; init; }
     public string? Major { get; init; }
     public string? Phone { get; init; }
+    public string? Semester { get; init; }
+    public string? Class { get; init; }
+    public string? GroupName { get; init; }
     public DateTime CreatedAt { get; init; }
 }
 

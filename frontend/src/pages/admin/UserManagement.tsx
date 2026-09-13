@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Search, Filter, Plus, Edit, Trash2, Users, ArrowLeft, ArrowRight, Check, X, Mail, GraduationCap, Upload } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Search, Filter, Plus, Edit, Trash2, Users, ArrowLeft, ArrowRight, Check, X, Mail, GraduationCap, Upload, Loader2 } from 'lucide-react';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
 import Modal from '../../components/ui/Modal';
@@ -21,6 +21,9 @@ const statusLabel = { PENDING: 'Pending Approval', APPROVED: 'Approved', REJECTE
 export default function UserManagement() {
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const hasLoadedUsers = useRef(false);
+  const latestRequestId = useRef(0);
 
   // Pagination & Filter state
   const [search, setSearch] = useState('');
@@ -61,9 +64,14 @@ export default function UserManagement() {
     return () => clearTimeout(handler);
   }, [search]);
 
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async () => {
+    const requestId = ++latestRequestId.current;
     try {
-      setLoading(true);
+      if (hasLoadedUsers.current) {
+        setIsRefreshing(true);
+      } else {
+        setLoading(true);
+      }
       const params: {
         page: number;
         limit: number;
@@ -76,6 +84,8 @@ export default function UserManagement() {
       if (statusFilter !== 'ALL') params.status = statusFilter;
 
       const res = await userApi.getAll(params);
+      if (requestId !== latestRequestId.current) return;
+
       const payload = res.data?.data || res.data || res;
       const list = payload.users || [];
       setUsers(Array.isArray(list) ? list : []);
@@ -87,15 +97,27 @@ export default function UserManagement() {
         setTotalPages(1);
       }
     } catch {
-      toast.error('Failed to load users');
+      if (requestId === latestRequestId.current) {
+        toast.error('Failed to load users');
+      }
     } finally {
-      setLoading(false);
+      if (requestId === latestRequestId.current) {
+        hasLoadedUsers.current = true;
+        setLoading(false);
+        setIsRefreshing(false);
+      }
     }
-  };
+  }, [page, debouncedSearch, roleFilter, statusFilter]);
 
   useEffect(() => {
-    fetchUsers();
-  }, [page, debouncedSearch, roleFilter, statusFilter]);
+    void fetchUsers();
+  }, [fetchUsers]);
+
+  const changePage = (nextPage: number) => {
+    if (isRefreshing || nextPage === page || nextPage < 1 || nextPage > totalPages) return;
+    setIsRefreshing(true);
+    setPage(nextPage);
+  };
 
   const handleStatusUpdate = async (userId: string, newStatus: string) => {
     setRowActionId(userId);
@@ -277,14 +299,31 @@ export default function UserManagement() {
         ) : users.length === 0 ? (
           <div className="p-12"><EmptyState icon={Users} title="No users found" description="Try adjusting your search or filters" /></div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[700px]">
+          <div className="relative">
+            {isRefreshing && (
+              <div
+                className="pointer-events-none absolute right-4 top-3 z-10 flex items-center gap-2 rounded-full border border-primary-100 bg-white/95 px-3 py-1.5 text-xs font-medium text-primary shadow-sm"
+                role="status"
+                aria-live="polite"
+              >
+                <Loader2 className="h-3.5 w-3.5 animate-spin" /> Updating users...
+              </div>
+            )}
+            <div
+              className={`overflow-x-auto transition-opacity duration-200 ${isRefreshing ? 'pointer-events-none opacity-60' : 'opacity-100'}`}
+              aria-label="Scrollable user table"
+              aria-busy={isRefreshing}
+            >
+              <table className="w-full min-w-[1220px]">
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50/60">
                   <th className="py-3.5 px-6 text-xs text-slate-400 uppercase text-left font-semibold tracking-wider">User</th>
                   <th className="py-3.5 px-6 text-xs text-slate-400 uppercase text-left font-semibold tracking-wider">Role</th>
                   <th className="py-3.5 px-6 text-xs text-slate-400 uppercase text-left font-semibold tracking-wider">Status</th>
                   <th className="py-3.5 px-6 text-xs text-slate-400 uppercase text-left font-semibold tracking-wider">Student ID / Major</th>
+                  <th className="py-3.5 px-6 text-xs text-slate-400 uppercase text-left font-semibold tracking-wider">Semester</th>
+                  <th className="py-3.5 px-6 text-xs text-slate-400 uppercase text-left font-semibold tracking-wider">Class</th>
+                  <th className="py-3.5 px-6 text-xs text-slate-400 uppercase text-left font-semibold tracking-wider">Group Name</th>
                   <th className="py-3.5 px-6 text-xs text-slate-400 uppercase text-left font-semibold tracking-wider">Joined Date</th>
                   <th className="py-3.5 px-6 text-xs text-slate-400 uppercase text-right font-semibold tracking-wider">Actions</th>
                 </tr>
@@ -328,6 +367,15 @@ export default function UserManagement() {
                       ) : (
                         <span className="text-xs text-slate-400">—</span>
                       )}
+                    </td>
+                    <td className="py-3.5 px-6 text-sm font-medium text-slate-700 whitespace-nowrap">
+                      {user.semester || '—'}
+                    </td>
+                    <td className="py-3.5 px-6 text-sm text-slate-600 whitespace-nowrap" title={user.class || undefined}>
+                      {user.class || '—'}
+                    </td>
+                    <td className="py-3.5 px-6 text-sm text-slate-600 whitespace-nowrap" title={user.groupName || undefined}>
+                      {user.groupName || '—'}
                     </td>
                     <td className="py-3.5 px-6 text-xs text-slate-400">
                       {user.createdAt ? new Date(user.createdAt).toLocaleDateString() : '—'}
@@ -381,7 +429,8 @@ export default function UserManagement() {
                   </tr>
                 ))}
               </tbody>
-            </table>
+              </table>
+            </div>
           </div>
         )}
 
@@ -392,10 +441,10 @@ export default function UserManagement() {
               Page <span className="font-semibold text-slate-900">{page}</span> of <span className="font-semibold text-slate-900">{totalPages}</span> ({totalItems} items)
             </span>
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" disabled={page === 1} onClick={() => setPage(p => Math.max(1, p - 1))}>
+              <Button variant="outline" size="sm" disabled={isRefreshing || page === 1} onClick={() => changePage(page - 1)}>
                 <ArrowLeft className="w-4 h-4 mr-1" /> Prev
               </Button>
-              <Button variant="outline" size="sm" disabled={page === totalPages} onClick={() => setPage(p => Math.min(totalPages, p + 1))}>
+              <Button variant="outline" size="sm" disabled={isRefreshing || page === totalPages} onClick={() => changePage(page + 1)}>
                 Next <ArrowRight className="w-4 h-4 ml-1" />
               </Button>
             </div>

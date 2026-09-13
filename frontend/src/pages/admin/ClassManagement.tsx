@@ -23,7 +23,7 @@ import BulkAssignLecturerModal from '../../components/class/BulkAssignLecturerMo
 import { classFeatureFlags } from '../../config/classFeatureFlags';
 import { parseApiError } from '../../utils/apiError';
 import { toClassViewModel, unwrapApiData } from '../../utils/classMappers';
-import { getClassLifecyclePresentation } from '../../utils/classComponentPolicy';
+import { CLASS_LIST_PAGE_SIZE, getClassLifecyclePresentation } from '../../utils/classComponentPolicy';
 import type { ClassListResponse, ClassStatus, ClassViewModel } from '../../types/classes';
 import { canCreateClasses, canManageClass, hasClassRole } from '../../utils/classPermissions';
 import { executeBulkClassAction, type BulkClassActionResult } from '../../utils/bulkClassActions';
@@ -40,16 +40,7 @@ const statusColor: Record<ClassStatus, string> = {
   Completed: 'bg-blue-50 text-blue-700',
   Archived: 'bg-red-50 text-red-600',
 };
-const classCodeCollator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
-
-const sortClasses = (list: ClassViewModel[]) => [...list].sort((a, b) => {
-  const subjectCompare = (a.subjectCode || '').localeCompare(b.subjectCode || '');
-  if (subjectCompare !== 0) return subjectCompare;
-  if ((a.classIndex || 0) !== (b.classIndex || 0)) return (a.classIndex || 0) - (b.classIndex || 0);
-  return classCodeCollator.compare(a.classCode || '', b.classCode || '');
-});
-
-const groupClassesBySubject = (list: ClassViewModel[]) => sortClasses(list).reduce<Array<{ subjectCode: string; classes: ClassViewModel[] }>>((groups, cls) => {
+const groupClassesBySubject = (list: ClassViewModel[]) => list.reduce<Array<{ subjectCode: string; classes: ClassViewModel[] }>>((groups, cls) => {
   const subjectCode = cls.subjectCode || 'Unknown Subject';
   const group = groups.find(item => item.subjectCode === subjectCode);
   if (group) {
@@ -102,7 +93,6 @@ export default function ClassManagement() {
     setSearch(appliedSearch);
     setPage(1);
   }
-  const pageSize = 12;
   const viewMode = searchParams.get('tab') === 'overview' ? 'overview' : 'classes';
   const overviewClassId = searchParams.get('classId') || '';
   const overviewTeamId = searchParams.get('teamId') || '';
@@ -135,7 +125,7 @@ export default function ClassManagement() {
     setLoading(true);
     setError('');
     try {
-      const params = { page, pageSize, sort } as {
+      const params = { page, pageSize: CLASS_LIST_PAGE_SIZE, sort } as {
         page: number;
         pageSize: number;
         sort: string;
@@ -257,13 +247,15 @@ export default function ClassManagement() {
     }
   };
 
-  const sortedClasses = useMemo(() => sortClasses(classes), [classes]);
+  // The API sorts the full filtered result before pagination. Preserve that order
+  // instead of re-sorting each page independently in the browser.
+  const displayedClasses = classes;
   const subjectGroups = useMemo(() => groupClassesBySubject(classes), [classes]);
   const showSubjectGroups = !filterSubj;
-  const selectableClasses = sortedClasses.filter((item) => canManageClassRecord(item));
+  const selectableClasses = displayedClasses.filter((item) => canManageClassRecord(item));
   const selectedClasses = useMemo(
-    () => sortedClasses.filter((item) => selectedClassIds.has(item._id)),
-    [selectedClassIds, sortedClasses],
+    () => displayedClasses.filter((item) => selectedClassIds.has(item._id)),
+    [displayedClasses, selectedClassIds],
   );
   const assignableSelectedClasses = useMemo(
     () => selectedClasses.filter((item) => item.status !== 'Completed' && item.status !== 'Archived'),
@@ -504,7 +496,7 @@ export default function ClassManagement() {
               className="border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none bg-white focus:ring-2 focus:ring-primary/20 focus:border-primary"
               aria-label="Filter by lecturer assignment"
             >
-              <option value="">All assignments</option>
+              <option value="">All</option>
               <option value="Assigned">Assigned</option>
               <option value="Unassigned">Unassigned</option>
             </select>
@@ -576,7 +568,7 @@ export default function ClassManagement() {
                 disabled={selectableClasses.length === 0}
                 className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
               />
-              Select this page
+              Select All
             </label>
             <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-500">
               {selectedClasses.length} selected
@@ -627,9 +619,9 @@ export default function ClassManagement() {
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           <AnimatePresence>
-            {sortedClasses.map((cls, i) => (
+            {displayedClasses.map((cls, i) => (
               <div key={cls._id} className="contents">
-                {showSubjectGroups && (i === 0 || sortedClasses[i - 1]?.subjectCode !== cls.subjectCode) && (
+                {showSubjectGroups && (i === 0 || displayedClasses[i - 1]?.subjectCode !== cls.subjectCode) && (
                   <div className="col-span-full flex items-center gap-3 pt-2 first:pt-0">
                     <h2 className="text-lg font-bold text-slate-900">{cls.subjectCode || 'Unknown Subject'}</h2>
                     <span className="h-px flex-1 bg-slate-200" />

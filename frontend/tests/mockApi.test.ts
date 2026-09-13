@@ -5,15 +5,49 @@ import axiosClient from '../src/api/axiosClient.ts';
 import { enableApiMocks } from '../src/mocks/mockApi.ts';
 import { getMockState, resetMockState } from '../src/mocks/mockHelpers.ts';
 import { getApprovalStats, registrationToApprovalRequest } from '../src/utils/accountApproval.ts';
+import { generateCriterionKey, resolveCriterionKey } from '../src/utils/rubricKey.ts';
 
 resetMockState();
 enableApiMocks();
+
+test('criterion key follows label changes until the key is manually customized', () => {
+  assert.equal(generateCriterionKey('Problem clarity'), 'problemClarity');
+  assert.equal(generateCriterionKey('Độ phù hợp giải pháp'), 'doPhuHopGiaiPhap');
+  assert.equal(generateCriterionKey('360 degree feedback'), 'criterion360DegreeFeedback');
+  assert.equal(resolveCriterionKey('p', 'P', 'Problem'), 'problem');
+  assert.equal(resolveCriterionKey('custom-key', 'Problem', 'Problem clarity'), 'custom-key');
+});
 
 test('mock authentication opens an admin session for protected UI testing', async () => {
   const login = await axiosClient.post('/auth/login', { email: 'admin@ehub.local', password: 'Mock123!' });
   assert.deepEqual(login.data.user.roles, ['Admin']);
   const me = await axiosClient.get('/auth/me');
   assert.equal(me.data.email, 'admin@ehub.local');
+});
+
+test('managed users include class and group data from the active semester', async () => {
+  resetMockState();
+  await axiosClient.post('/auth/login', { email: 'admin@ehub.local', password: 'Mock123!' });
+
+  const response = await axiosClient.get('/users', {
+    params: { page: 1, limit: 100 },
+  });
+  const lecturer = response.data.users.find((user: { email: string }) =>
+    user.email === 'giang.lecturer@ehub.local');
+  const mentor = response.data.users.find((user: { email: string }) =>
+    user.email === 'khoa.mentor@ehub.local');
+  const student = response.data.users.find((user: { studentId: string | null }) =>
+    user.studentId === 'SE200001');
+
+  assert.equal(lecturer.semester, 'FA2026');
+  assert.equal(lecturer.class, 'EXE101-FA26-01');
+  assert.equal(lecturer.groupName, null);
+  assert.equal(mentor.semester, 'FA2026');
+  assert.equal(mentor.class, 'EXE101-FA26-01');
+  assert.equal(mentor.groupName, 'Phoenix Founders');
+  assert.equal(student.semester, 'FA2026');
+  assert.equal(student.class, 'EXE101-FA26-01');
+  assert.equal(student.groupName, 'Phoenix Founders');
 });
 
 test('mock change password rejects an incorrect current password and updates valid credentials', async () => {
@@ -215,6 +249,37 @@ test('mock register verifies OTP before storing normalized user state', async ()
 
   const login = await axiosClient.post('/auth/login', { email, password: 'Secret123!' });
   assert.deepEqual(login.data.user.roles, ['Student']);
+});
+
+test('mock staff registration creates an admin notification linked to account approvals', async () => {
+  resetMockState();
+  const registration = await axiosClient.post('/auth/register', {
+    fullName: 'New Mentor Applicant',
+    email: 'new-mentor-applicant@ehub.local',
+    password: 'Secret123!',
+    confirmPassword: 'Secret123!',
+    role: 'Mentor',
+  });
+
+  await axiosClient.post('/auth/register/verify-otp', {
+    registrationId: registration.data.registrationId,
+    otp: '123456',
+  });
+  await axiosClient.post('/auth/login', {
+    email: 'admin@ehub.local',
+    password: 'Mock123!',
+  });
+
+  const notificationResponse = await axiosClient.get('/notifications');
+  const notification = notificationResponse.data.find((item: { type: string }) =>
+    item.type === 'AccountApprovalRequested');
+  assert.equal(notification.title, 'Mentor account awaiting approval');
+  assert.equal(notification.message, 'New Mentor Applicant registered as a Mentor and is ready for review.');
+  assert.equal(notification.link, '/admin/account-approvals');
+  assert.equal(notification.isRead, false);
+
+  const countResponse = await axiosClient.get('/notifications/unread-count');
+  assert.equal(countResponse.data.count, 2);
 });
 
 test('mock register preserves backend duplicate-email business error', async () => {
@@ -465,6 +530,48 @@ test('mock API persists subject CRUD mutations for later queries', async () => {
   const response = await axiosClient.get('/subjects', { params: { search: code } });
   assert.equal(response.data.subjects.length, 1);
   assert.equal(response.data.subjects[0].subjectName, 'Mock Contract Testing');
+});
+
+test('mock roadmap API rejects blank and duplicate title or description on create and update', async () => {
+  resetMockState();
+  const payload = {
+    title: 'New roadmap title',
+    description: 'New roadmap description',
+    taskType: 'COURSE_TEMPLATE',
+    courseCode: 'EXE101',
+    weekNumber: 1,
+    priority: 'MEDIUM',
+    estimatedHours: null,
+    tags: [],
+  };
+
+  for (const invalid of [
+    { ...payload, title: '   ' },
+    { ...payload, description: '   ' },
+    { ...payload, title: ' problem DISCOVERY ' },
+    { ...payload, description: ' Interview target users and validate the problem. ' },
+  ]) {
+    await assert.rejects(
+      axiosClient.post('/subjects/EXE101/roadmap', invalid),
+      (error: unknown) => (error as { response?: { status?: number } }).response?.status === 400,
+    );
+  }
+
+  const created = await axiosClient.post('/subjects/EXE101/roadmap', payload);
+  const existing = getMockState().curricula.EXE101.roadmapItems[0];
+  await assert.rejects(
+    axiosClient.put(`/subjects/EXE101/roadmap/${created.data._id}`, {
+      ...payload,
+      title: existing.title.toUpperCase(),
+    }),
+    (error: unknown) => (error as { response?: { data?: { code?: string } } }).response?.data?.code === 'WEEKLY_TASK_DUPLICATED',
+  );
+
+  const updated = await axiosClient.put(`/subjects/EXE101/roadmap/${created.data._id}`, {
+    ...payload,
+    title: 'Updated roadmap title',
+  });
+  assert.equal(updated.data.title, 'Updated roadmap title');
 });
 
 test('mock API persists startup industry CRUD and status mutations', async () => {
@@ -937,8 +1044,62 @@ test('mock semester schedule supports admin planning and date correction', async
       semester: 'SU', year: 2027, startDate: '2027-04-20', endDate: '2027-08-20',
     }),
     (error: unknown) => {
+      const response = (error as { response?: { status?: number; data?: { code?: string; message?: string } } }).response;
+      return response?.status === 409
+        && response.data?.code === 'SEMESTER_DATE_OVERLAP'
+        && response.data.message?.includes('SP 2027') === true
+        && response.data.message.includes('08/01/2027 – 28/04/2027');
+    },
+  );
+
+  await assert.rejects(
+    axiosClient.post('/subjects/semesters', {
+      semester: 'SP', year: 2027, startDate: '2027-05-01', endDate: '2027-08-20',
+    }),
+    (error: unknown) => {
+      const response = (error as { response?: { status?: number; data?: { code?: string; message?: string } } }).response;
+      return response?.status === 409
+        && response.data?.code === 'SEMESTER_ALREADY_PLANNED'
+        && response.data.message === 'SP 2027 has already been planned. You can edit its dates instead.';
+    },
+  );
+});
+
+test('mock semester planning rejects past years and allows Fall to end the following January', async () => {
+  resetMockState();
+  await axiosClient.post('/auth/login', { email: 'admin@ehub.local', password: 'Mock123!' });
+  const currentYear = new Date().getFullYear();
+
+  await assert.rejects(
+    axiosClient.post('/subjects/semesters', {
+      semester: 'SP', year: currentYear - 1,
+      startDate: `${currentYear - 1}-01-05`, endDate: `${currentYear - 1}-04-25`,
+    }),
+    (error: unknown) => {
       const response = (error as { response?: { status?: number; data?: { code?: string } } }).response;
-      return response?.status === 409 && response.data?.code === 'SEMESTER_INVALID_STATE';
+      return response?.status === 400 && response.data?.code === 'CLASS_VALIDATION_ERROR';
+    },
+  );
+
+  const fallYear = currentYear + 2;
+  const planned = await axiosClient.post('/subjects/semesters', {
+    semester: 'FA', year: fallYear,
+    startDate: `${fallYear}-09-01`, endDate: `${fallYear + 1}-01-15`,
+  });
+
+  assert.equal(planned.data.status, 'Planned');
+  assert.equal(planned.data.endDate, `${fallYear + 1}-01-15`);
+
+  await assert.rejects(
+    axiosClient.post('/subjects/semesters', {
+      semester: 'SP', year: currentYear + 1,
+      startDate: `${currentYear + 1}-04-01`, endDate: `${currentYear + 1}-04-01`,
+    }),
+    (error: unknown) => {
+      const response = (error as { response?: { status?: number; data?: { code?: string; message?: string } } }).response;
+      return response?.status === 400
+        && response.data?.code === 'SEMESTER_DATE_INVALID'
+        && response.data.message === 'End date must be after the start date.';
     },
   );
 });

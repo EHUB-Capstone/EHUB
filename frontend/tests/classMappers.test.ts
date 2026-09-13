@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { toClassViewModel, unwrapApiData } from '../src/utils/classMappers.ts';
+import { formatSemesterCode } from '../src/utils/semester.ts';
 import type { ClassDto } from '../src/types/classes.ts';
 
 const createClassDto = (overrides: Partial<ClassDto> = {}): ClassDto => ({
@@ -50,4 +51,10 @@ test('toClassViewModel keeps one isolated fallback for legacy scheduleJson', () 
   assert.deepEqual(toClassViewModel(source).schedules, [
     { dayOfWeek: 4, slotNumber: 3, room: 'P.401' },
   ]);
+});
+
+test('formatSemesterCode does not append a duplicated year', () => {
+  assert.equal(formatSemesterCode('SU2026', 2026), 'SU2026');
+  assert.equal(formatSemesterCode('SU', 2026), 'SU2026');
+  assert.equal(formatSemesterCode('su 2026', 2026), 'SU2026');
 });

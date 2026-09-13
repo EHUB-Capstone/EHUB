@@ -1,3 +1,4 @@
+using System.Text.Json;
 using EHub.Application.Common.Exceptions;
 using EHub.Application.Common.Interfaces.Identity;
 using EHub.Application.Common.Interfaces.Persistence;
@@ -16,12 +17,15 @@ namespace EHub.Application.Features.Auth.VerifyRegistrationOtp;
 
 public sealed class VerifyRegistrationOtpCommandHandler : IVerifyRegistrationOtpCommandHandler
 {
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+
     private readonly IPendingRegistrationRepository _pendingRegistrationRepository;
     private readonly IUserRepository _userRepository;
     private readonly IRoleRepository _roleRepository;
     private readonly IUserRoleRepository _userRoleRepository;
     private readonly IStudentRepository _studentRepository;
     private readonly IMentorProfileRepository _mentorProfileRepository;
+    private readonly IApplicationDbContext _context;
     private readonly IRefreshTokenRepository _refreshTokenRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IRegistrationOtpService _otpService;
@@ -38,6 +42,7 @@ public sealed class VerifyRegistrationOtpCommandHandler : IVerifyRegistrationOtp
         IUserRoleRepository userRoleRepository,
         IStudentRepository studentRepository,
         IMentorProfileRepository mentorProfileRepository,
+        IApplicationDbContext context,
         IRefreshTokenRepository refreshTokenRepository,
         IUnitOfWork unitOfWork,
         IRegistrationOtpService otpService,
@@ -53,6 +58,7 @@ public sealed class VerifyRegistrationOtpCommandHandler : IVerifyRegistrationOtp
         _userRoleRepository = userRoleRepository;
         _studentRepository = studentRepository;
         _mentorProfileRepository = mentorProfileRepository;
+        _context = context;
         _refreshTokenRepository = refreshTokenRepository;
         _unitOfWork = unitOfWork;
         _otpService = otpService;
@@ -228,6 +234,10 @@ public sealed class VerifyRegistrationOtpCommandHandler : IVerifyRegistrationOtp
         registration.CompletedUserId = user.Id;
         registration.OtpHash = string.Empty;
         registration.PasswordHash = string.Empty;
+        if (registration.RoleName is SystemRoles.Lecturer or SystemRoles.Mentor)
+        {
+            EnqueueAccountApprovalRequested(user, registration.RoleName, now);
+        }
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         var requiresApproval = registration.RoleName != SystemRoles.Student;
@@ -252,6 +262,35 @@ public sealed class VerifyRegistrationOtpCommandHandler : IVerifyRegistrationOtp
             AccessToken = accessToken,
             RefreshToken = rawRefreshToken,
             ExpiresAt = expiresAt
+        });
+    }
+
+    private void EnqueueAccountApprovalRequested(User user, string role, DateTime occurredAtUtc)
+    {
+        var eventId = Guid.NewGuid();
+        const string eventType = "AccountApproval.Requested.v1";
+        _context.OutboxMessages.Add(new OutboxMessage
+        {
+            EventId = eventId,
+            Type = eventType,
+            AggregateType = "User",
+            AggregateId = user.Id,
+            OccurredAtUtc = occurredAtUtc,
+            AvailableAtUtc = occurredAtUtc,
+            PayloadJson = JsonSerializer.Serialize(new
+            {
+                EventId = eventId,
+                EventType = eventType,
+                AggregateType = "User",
+                AggregateId = user.Id,
+                OccurredAtUtc = occurredAtUtc,
+                Data = new
+                {
+                    UserId = user.Id,
+                    user.FullName,
+                    Role = role
+                }
+            }, JsonOptions)
         });
     }
 }

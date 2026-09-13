@@ -6,6 +6,9 @@ export type EditableSchedule = {
   room: string;
 };
 
+// Five complete rows in the desktop three-column class grid.
+export const CLASS_LIST_PAGE_SIZE = 15;
+
 export const isClassReadOnly = (status: ClassStatus | string | undefined): boolean =>
   status === 'Completed' || status === 'Archived';
 

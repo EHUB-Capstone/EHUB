@@ -75,14 +75,26 @@ public sealed class PlanSemesterRequestValidator : AbstractValidator<PlanSemeste
         RuleFor(x => x.StartDate).NotEmpty();
         RuleFor(x => x.EndDate).NotEmpty().GreaterThan(x => x.StartDate)
             .WithMessage("End date must be after start date.");
-        RuleFor(x => x).Must(x => x.StartDate.Year == x.Year && x.EndDate.Year == x.Year)
-            .WithMessage("Start date and end date must belong to the semester year.");
+        RuleFor(x => x).Must(HasValidSemesterYears)
+            .WithMessage("Start date must belong to the semester year. End date must belong to the same year, except Fall may end in January of the following year.");
     }
 
     private static bool IsSemesterCode(string value) =>
         value.Equals("SP", StringComparison.OrdinalIgnoreCase) ||
         value.Equals("SU", StringComparison.OrdinalIgnoreCase) ||
         value.Equals("FA", StringComparison.OrdinalIgnoreCase);
+
+    private static bool HasValidSemesterYears(PlanSemesterRequest request)
+    {
+        if (request.StartDate.Year != request.Year)
+            return false;
+        if (request.EndDate.Year == request.Year)
+            return true;
+
+        return request.Semester.Equals("FA", StringComparison.OrdinalIgnoreCase) &&
+               request.EndDate.Year == request.Year + 1 &&
+               request.EndDate.Month == 1;
+    }
 }
 
 public sealed class UpdateSemesterDatesRequestValidator : AbstractValidator<UpdateSemesterDatesRequest>
@@ -101,7 +113,8 @@ public sealed class SaveRoadmapItemRequestValidator : AbstractValidator<SaveRoad
 {
     public SaveRoadmapItemRequestValidator()
     {
-        RuleFor(x => x.Title).NotEmpty().MaximumLength(200);
+        RuleFor(x => x.Title).NotEmpty().WithMessage("Title is required.").MaximumLength(200);
+        RuleFor(x => x.Description).NotEmpty().WithMessage("Description is required.");
         RuleFor(x => x.CourseCode).NotEmpty().MaximumLength(20);
         RuleFor(x => x.WeekNumber).InclusiveBetween(1, 10);
         RuleFor(x => x.Priority).Must(value => new[] { "LOW", "MEDIUM", "HIGH", "CRITICAL" }.Contains(value.ToUpperInvariant()));

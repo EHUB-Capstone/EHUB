@@ -14,5 +14,6 @@ public enum NotificationType
     ProjectDirectionNeedsRevision,
     ProjectDirectionApproved,
     DeadlineReminder,
+    AccountApprovalRequested,
     SystemAnnouncement
 }

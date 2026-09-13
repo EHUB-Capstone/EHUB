@@ -7,7 +7,7 @@ import {
   validateLoginPayload,
   validateRegisterPayload,
 } from '../../utils/authValidation.ts';
-import type { MockCurriculum, MockUser } from '../mockState.ts';
+import type { MockCurriculum, MockSemester, MockUser } from '../mockState.ts';
 import type { MockReply } from '../mockHelpers.ts';
 import {
   allocateId,
@@ -28,6 +28,25 @@ import {
 
 const emptyCurriculum = (): MockCurriculum => ({ roadmapItems: [], rubrics: [], checkpoints: [] });
 
+function isValidSemesterDateRange(semester: string, year: number, startDate: string, endDate: string): boolean {
+  const startMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(startDate);
+  const endMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(endDate);
+  if (!startMatch || !endMatch || endDate <= startDate || Number(startMatch[1]) !== year) return false;
+
+  const endYear = Number(endMatch[1]);
+  const endMonth = Number(endMatch[2]);
+  return endYear === year || (semester === 'FA' && endYear === year + 1 && endMonth === 1);
+}
+
+function formatSemesterDate(value: string): string {
+  const [year, month, day] = value.split('-');
+  return `${day}/${month}/${year}`;
+}
+
+function semesterOverlapMessage(semester: MockSemester): string {
+  return `This date range overlaps with ${semester.semester} ${semester.year} (${formatSemesterDate(semester.startDate!)} – ${formatSemesterDate(semester.endDate!)}).`;
+}
+
 const backendRole = (role: MockUser['role']): string =>
   role.charAt(0) + role.slice(1).toLowerCase();
 
@@ -45,13 +64,58 @@ const validationFailure = (
 
 function userResponse(user: MockUser) {
   const state = getMockState();
-  const enrollment = Object.entries(state.rosters)
+  const currentSemester = state.semesters.find((semester) => semester.status === 'Active');
+  const currentClasses = currentSemester
+    ? state.classes.filter((cls) => cls.semesterId === currentSemester.id)
+    : [];
+  const currentClassIds = new Set(currentClasses.map((cls) => cls.id));
+  const enrollments = Object.entries(state.rosters)
     .flatMap(([classId, roster]) => roster.map((student) => ({ classId, student })))
-    .find(({ student }) => (
+    .filter(({ classId, student }) => (
+      currentClassIds.has(classId)
+      &&
       (student.userId === user.id || student.studentId === user.id)
-      && student.enrollmentStatus === 'Active'
+      && student.enrollmentStatus !== 'Dropped'
     ));
+  const enrollment = enrollments[0];
   const assignedClass = enrollment ? state.classes.find((item) => item.id === enrollment.classId) : undefined;
+  const classNames = new Set(enrollments
+    .map(({ classId }) => state.classes.find((cls) => cls.id === classId)?.classCode)
+    .filter((classCode): classCode is string => Boolean(classCode)));
+  const groupNames = new Set(enrollments
+    .map(({ student }) => student.teamName)
+    .filter((teamName): teamName is string => Boolean(teamName)));
+
+  if (user.role === 'LECTURER') {
+    currentClasses
+      .filter((cls) => cls.primaryLecturerId === user.id && cls.status !== 'Archived')
+      .forEach((cls) => classNames.add(cls.classCode));
+  }
+
+  if (user.role === 'MENTOR') {
+    state.teams
+      .filter((team) => (
+        currentClassIds.has(team.classId)
+        && team.status === 'Active'
+        && team.currentMentorAssignment?.status === 'Active'
+        && team.currentMentorAssignment.mentor.userId === user.id
+      ))
+      .forEach((team) => {
+        const cls = state.classes.find((item) => item.id === team.classId);
+        if (cls) classNames.add(cls.classCode);
+        groupNames.add(team.teamName);
+      });
+  }
+
+  const isCurrentSemesterStaff = currentSemester
+    ? state.semesterStaffAssignments.some((assignment) => (
+      assignment.semesterId === currentSemester.id
+      && assignment.userId === user.id
+      && assignment.status === 'ACTIVE'
+    ))
+    : false;
+  const hasCurrentSemesterContext = classNames.size > 0 || groupNames.size > 0 || isCurrentSemesterStaff;
+
   return {
     ...user,
     _id: user.id,
@@ -62,6 +126,11 @@ function userResponse(user: MockUser) {
     classCode: assignedClass?.classCode || null,
     teamId: enrollment?.student.teamId || null,
     teamName: enrollment?.student.teamName || null,
+    semester: hasCurrentSemesterContext && currentSemester
+      ? `${currentSemester.semester}${currentSemester.year}`
+      : null,
+    class: classNames.size ? [...classNames].sort().join(', ') : null,
+    groupName: groupNames.size ? [...groupNames].sort().join(', ') : null,
   };
 }
 
@@ -343,6 +412,25 @@ function registerAuthHandlers(mock: MockAdapter): void {
     getMockState().authPasswords[user.id] = registration.password;
     getMockState().pendingRegistrations = getMockState().pendingRegistrations
       .filter((item) => item.id !== registrationId);
+    if (user.status === 'PENDING') {
+      const roleLabel = user.role === 'LECTURER' ? 'Lecturer' : 'Mentor';
+      getMockState().users
+        .filter((candidate) => candidate.role === 'ADMIN' && candidate.status === 'APPROVED')
+        .forEach((administrator) => {
+          getMockState().notifications.unshift({
+            id: allocateId(),
+            recipientUserId: administrator.id,
+            type: 'AccountApprovalRequested',
+            title: `${roleLabel} account awaiting approval`,
+            message: `${user.name} registered as a ${roleLabel} and is ready for review.`,
+            link: '/admin/account-approvals',
+            data: { userId: user.id, fullName: user.name, role: roleLabel },
+            isRead: false,
+            readAt: null,
+            createdAt: user.createdAt,
+          });
+        });
+    }
     if (user.status === 'APPROVED') getMockState().sessionUserId = user.id;
     persistMockState();
     const session = user.status === 'APPROVED' ? authResponse(user) : null;
@@ -728,12 +816,21 @@ function registerSubjectHandlers(mock: MockAdapter): void {
     const startDate = asString(body.startDate);
     const endDate = asString(body.endDate);
     const state = getMockState();
-    if (!['SP', 'SU', 'FA'].includes(semesterCode) || !startDate || !endDate || endDate <= startDate)
+    const currentYear = new Date().getFullYear();
+    if (!['SP', 'SU', 'FA'].includes(semesterCode)
+      || year < currentYear
+      || year > currentYear + 2
+      || endDate < new Date().toISOString().slice(0, 10))
       return failure(400, 'CLASS_VALIDATION_ERROR', 'Provide a valid semester and date range.');
+    if (endDate <= startDate)
+      return failure(400, 'SEMESTER_DATE_INVALID', 'End date must be after the start date.');
+    if (!isValidSemesterDateRange(semesterCode, year, startDate, endDate))
+      return failure(400, 'SEMESTER_DATE_INVALID', 'Start date and end date do not follow the selected semester year rules.');
     if (state.semesters.some((item) => item.semester === semesterCode && item.year === year))
-      return failure(409, 'SEMESTER_INVALID_STATE', 'This semester already exists. Edit its dates instead.');
-    if (state.semesters.some((item) => item.status !== 'Archived' && item.startDate && item.endDate && item.startDate <= endDate && item.endDate >= startDate))
-      return failure(409, 'SEMESTER_INVALID_STATE', 'The semester date range overlaps another semester.');
+      return failure(409, 'SEMESTER_ALREADY_PLANNED', `${semesterCode} ${year} has already been planned. You can edit its dates instead.`);
+    const overlappingSemester = state.semesters.find((item) => item.startDate && item.endDate && item.startDate <= endDate && item.endDate >= startDate);
+    if (overlappingSemester)
+      return failure(409, 'SEMESTER_DATE_OVERLAP', semesterOverlapMessage(overlappingSemester));
     const semester = {
       id: allocateId(), semester: semesterCode, year, status: 'Planned' as const,
       startDate, endDate, completedAtUtc: null, completionReason: null,
@@ -755,10 +852,15 @@ function registerSubjectHandlers(mock: MockAdapter): void {
       return failure(409, 'SEMESTER_CONCURRENCY_CONFLICT', 'The semester changed concurrently. Reload and try again.');
     const startDate = asString(body.startDate);
     const endDate = asString(body.endDate);
-    if (!startDate || !endDate || endDate <= startDate || asString(body.reason).trim().length < 3)
-      return failure(400, 'CLASS_VALIDATION_ERROR', 'Provide a valid date range, rowVersion, and reason.');
-    if (getMockState().semesters.some((item) => item.id !== semester.id && item.status !== 'Archived' && item.startDate && item.endDate && item.startDate <= endDate && item.endDate >= startDate))
-      return failure(409, 'SEMESTER_INVALID_STATE', 'The semester date range overlaps another semester.');
+    if (endDate <= startDate)
+      return failure(400, 'SEMESTER_DATE_INVALID', 'End date must be after the start date.');
+    if (!isValidSemesterDateRange(semester.semester, semester.year, startDate, endDate))
+      return failure(400, 'SEMESTER_DATE_INVALID', 'Start date and end date do not follow the selected semester year rules.');
+    if (asString(body.reason).trim().length < 3)
+      return failure(400, 'CLASS_VALIDATION_ERROR', 'Provide a valid rowVersion and reason.');
+    const overlappingSemester = getMockState().semesters.find((item) => item.id !== semester.id && item.startDate && item.endDate && item.startDate <= endDate && item.endDate >= startDate);
+    if (overlappingSemester)
+      return failure(409, 'SEMESTER_DATE_OVERLAP', semesterOverlapMessage(overlappingSemester));
     semester.startDate = startDate;
     semester.endDate = endDate;
     semester.rowVersion = allocateRowVersion();
@@ -966,12 +1068,24 @@ function saveRoadmap(config: AxiosRequestConfig, update: boolean) {
   const body = parseBody(config);
   const existing = update ? curriculum.roadmapItems.find((item) => item._id === match?.[2]) : undefined;
   if (update && !existing) return failure(404, 'ROADMAP_ITEM_NOT_FOUND', 'Roadmap item not found.');
+  const title = asString(body.title).trim();
+  const description = asString(body.description).trim();
+  const weekNumber = asNumber(body.weekNumber, existing?.weekNumber ?? 1);
+  if (!title) return failure(400, 'COMMON_VALIDATION_ERROR', 'Title is required.');
+  if (!description) return failure(400, 'COMMON_VALIDATION_ERROR', 'Description is required.');
+  const comparableItems = curriculum.roadmapItems.filter((item) => item._id !== existing?._id);
+  if (comparableItems.some((item) => item.title.trim().toLowerCase() === title.toLowerCase())) {
+    return failure(400, 'WEEKLY_TASK_DUPLICATED', 'A roadmap item with this title already exists for this subject.');
+  }
+  if (comparableItems.some((item) => (item.description ?? '').trim().toLowerCase() === description.toLowerCase())) {
+    return failure(400, 'WEEKLY_TASK_DUPLICATED', 'A roadmap item with this description already exists for this subject.');
+  }
   const item = existing || { _id: allocateId(), title: '', description: null, taskType: 'COURSE_TEMPLATE', courseCode: subjectCode, weekNumber: 1, priority: 'MEDIUM', estimatedHours: null, tags: [] };
-  item.title = asString(body.title, item.title).trim();
-  item.description = asString(body.description, item.description || '') || null;
+  item.title = title;
+  item.description = description;
   item.taskType = asString(body.taskType, item.taskType);
   item.courseCode = asString(body.courseCode, subjectCode);
-  item.weekNumber = asNumber(body.weekNumber, item.weekNumber);
+  item.weekNumber = weekNumber;
   item.priority = asString(body.priority, item.priority);
   item.estimatedHours = body.estimatedHours === null ? null : asNumber(body.estimatedHours, item.estimatedHours || 0);
   item.tags = asStringArray(body.tags);
@@ -1150,13 +1264,44 @@ function registerDashboardHandlers(mock: MockAdapter): void {
     return ok({ onlineCount: onlineUsers.length, totalUsers: getMockState().users.length, onlineUsers, recentlyActive }, 'Online users retrieved successfully.');
   });
 
-  mock.onGet('/notifications').reply(() => ok([
-    { _id: 'mock-notification-1', type: 'TEAM', title: 'Team proposal submitted', message: 'Nova Crew is ready for review.', isRead: false, link: '/admin/classes', createdAt: new Date().toISOString() },
-    { _id: 'mock-notification-2', type: 'MENTORING', title: 'Mentor assigned', message: 'Phạm Anh Khoa was assigned to Phoenix Founders.', isRead: true, link: '/admin/classes', createdAt: new Date(Date.now() - 3_600_000).toISOString() },
-  ], 'Notifications retrieved successfully.'));
-  mock.onGet('/notifications/unread-count').reply(() => ok({ count: 1 }, 'Unread notification count retrieved successfully.'));
-  mock.onPut(/^\/notifications\/[^/]+\/read$/).reply(() => ok(null, 'Notification marked as read.'));
-  mock.onPut('/notifications/mark-all-read').reply(() => ok(null, 'All notifications marked as read.'));
+  mock.onGet('/notifications').reply(() => {
+    const state = getMockState();
+    const notifications = state.notifications
+      .filter((notification) => notification.recipientUserId === state.sessionUserId)
+      .map((notification) => ({ ...notification, _id: notification.id }));
+    return ok(notifications, 'Notifications retrieved successfully.');
+  });
+  mock.onGet('/notifications/unread-count').reply(() => {
+    const state = getMockState();
+    const count = state.notifications.filter((notification) => (
+      notification.recipientUserId === state.sessionUserId && !notification.isRead
+    )).length;
+    return ok({ count }, 'Unread notification count retrieved successfully.');
+  });
+  mock.onPut(/^\/notifications\/[^/]+\/read$/).reply((config) => {
+    const state = getMockState();
+    const notificationId = routeId(config, /^\/notifications\/([^/]+)\/read$/);
+    const notification = state.notifications.find((item) => (
+      item.id === notificationId && item.recipientUserId === state.sessionUserId
+    ));
+    if (!notification) return failure(404, 'NOTIFICATION_NOT_FOUND', 'Notification was not found.');
+    notification.isRead = true;
+    notification.readAt = new Date().toISOString();
+    persistMockState();
+    return ok(null, 'Notification marked as read.');
+  });
+  mock.onPut('/notifications/mark-all-read').reply(() => {
+    const state = getMockState();
+    const now = new Date().toISOString();
+    state.notifications
+      .filter((notification) => notification.recipientUserId === state.sessionUserId && !notification.isRead)
+      .forEach((notification) => {
+        notification.isRead = true;
+        notification.readAt = now;
+      });
+    persistMockState();
+    return ok(null, 'All notifications marked as read.');
+  });
 }
 
 export function registerCoreMockHandlers(mock: MockAdapter): void {

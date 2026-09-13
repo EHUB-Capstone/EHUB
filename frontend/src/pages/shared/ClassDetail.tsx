@@ -3,9 +3,9 @@ import { useParams, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { motion } from 'framer-motion';
 import {
-  ArrowLeft, GraduationCap, Users, BookOpen,
+  ArrowLeft, GraduationCap, Users,
   Upload, Download, UserPlus, UserRoundCheck, Loader2, Calendar, ShieldCheck, Lock, Unlock, AlertTriangle,
-  Database, MessagesSquare, Archive, RotateCcw, CircleCheck, Play
+  Database, MessagesSquare, Archive, RotateCcw, CircleCheck, Play, MoreHorizontal, ChevronDown
 } from 'lucide-react';
 import { AuthContext } from '../../context/AuthContext';
 import { classApi } from '../../api/classApi';
@@ -115,6 +115,7 @@ export default function ClassDetail() {
   const [completionReason, setCompletionReason] = useState('');
   const [completionPreview, setCompletionPreview] = useState<ClassCompletionPreview | null>(null);
   const [completionLoading, setCompletionLoading] = useState(false);
+  const [showActionsMenu, setShowActionsMenu] = useState(false);
 
   const fetchData = useCallback(async () => {
     if (!id || id === 'undefined') {
@@ -593,121 +594,122 @@ export default function ClassDetail() {
     <div className="space-y-5">
       {/* ── Class heading + compact actions ── */}
       <section className="space-y-3">
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => navigate(-1)}
-            aria-label="Go back"
-            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-400 shadow-xs transition-all hover:border-slate-300 hover:bg-slate-50 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/25"
-          >
-            <ArrowLeft className="h-4.5 w-4.5" />
-          </button>
-          <div className="min-w-0">
-            <h1 className="truncate text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">{cls.classCode}</h1>
-            <p className="mt-0.5 truncate text-xs font-medium text-slate-500 sm:text-sm">
-              {cls.subjectCode || '—'} · {cls.semester || '—'} {cls.year || ''}
-            </p>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-1.5">
-          {isFeatureVisible(classFeatureFlags.chatBackfill) && canManageClass && (
-            <ClassActionButton
-              icon={MessagesSquare}
-              loading={backfilling}
-              onClick={() => runFeatureAction(classFeatureFlags.chatBackfill, 'Chat membership repair', handleBackfillChats)}
-              disabled={backfilling}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => navigate(-1)}
+              aria-label="Go back"
+              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-400 shadow-xs transition-all hover:border-slate-300 hover:bg-slate-50 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/25 cursor-pointer"
             >
-              {backfilling ? 'Repairing...' : 'Repair Chats'}
-            </ClassActionButton>
-          )}
+              <ArrowLeft className="h-4.5 w-4.5" />
+            </button>
+            <div className="min-w-0">
+              <h1 className="truncate text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">{cls.classCode}</h1>
+              <p className="mt-0.5 truncate text-xs font-medium text-slate-500 sm:text-sm">
+                {cls.subjectCode || '—'} · {cls.semester || '—'} {cls.year || ''}
+              </p>
+            </div>
+          </div>
 
           {canManageClass && (
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setShowActionsMenu(prev => !prev)}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200/80 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 shadow-xs transition-all hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/25 cursor-pointer"
+                aria-expanded={showActionsMenu}
+                aria-label="Toggle class action menu"
+              >
+                <MoreHorizontal className="h-4 w-4 text-slate-500" />
+                <span>Actions</span>
+                <ChevronDown className={`h-3.5 w-3.5 text-slate-400 transition-transform duration-200 ${showActionsMenu ? 'rotate-180' : ''}`} />
+              </button>
+            </div>
+          )}
+        </div>
+
+        {canManageClass && showActionsMenu && (
+          <div className="flex flex-wrap items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50/70 p-2.5 transition-all">
+            {isFeatureVisible(classFeatureFlags.chatBackfill) && (
+              <ClassActionButton
+                icon={MessagesSquare}
+                loading={backfilling}
+                onClick={() => runFeatureAction(classFeatureFlags.chatBackfill, 'Chat membership repair', handleBackfillChats)}
+                disabled={backfilling}
+              >
+                {backfilling ? 'Repairing...' : 'Repair Chats'}
+              </ClassActionButton>
+            )}
+
             <ClassActionButton icon={Download} loading={exporting} onClick={handleExportExcel} disabled={exporting}>
               Export
             </ClassActionButton>
-          )}
 
-          {!isReadOnly && canManageClass && (
-            <>
+            {!isReadOnly && (
+              <>
+                <ClassActionButton icon={UserPlus} tone="primary" onClick={() => setShowAddStudent(true)}>
+                  Add student
+                </ClassActionButton>
+
+                <ClassActionButton icon={UserRoundCheck} tone="secondary" onClick={() => openStudentAssignment('CLASS')}>
+                  Assign students
+                </ClassActionButton>
+              </>
+            )}
+
+            {!isReadOnly && (isAdmin || classFeatureFlags.lecturerStudentImport) && (
+              <ClassActionButton icon={Upload} tone="primary" onClick={() => setShowImport(true)}>
+                Import Excel
+              </ClassActionButton>
+            )}
+
+            {!isReadOnly && isFeatureVisible(classFeatureFlags.majorVerification) && (
               <ClassActionButton
-                icon={Database}
-                onClick={() =>
-                  navigate('/lecturer/data-bank', {
-                    state: {
-                      classId: cls._id,
-                      classCode: cls.classCode,
-                      subjectCode: cls.subjectCode,
-                      semester: `${cls.semester || ''}${String(cls.year || '').slice(-2)}`,
-                    },
-                  })
-                }
+                id="btn-verify-majors"
+                icon={ShieldCheck}
+                tone="indigo"
+                onClick={() => runFeatureAction(classFeatureFlags.majorVerification, 'Major verification', () => setShowVerify(true))}
               >
-                Open Data Bank
+                Verify majors
               </ClassActionButton>
+            )}
 
-              <ClassActionButton icon={UserPlus} tone="primary" onClick={() => setShowAddStudent(true)}>
-                Add student
+            {!isReadOnly && (
+              <ClassActionButton
+                icon={cls.isMajorLocked ? Lock : Unlock}
+                tone={cls.isMajorLocked ? 'danger' : 'success'}
+                loading={togglingLock}
+                onClick={() => runFeatureAction(classFeatureFlags.majorVerification, 'Major locking', handleToggleMajorLock)}
+                disabled={togglingLock}
+              >
+                {cls.isMajorLocked ? 'Unlock major updates' : 'Lock major updates'}
               </ClassActionButton>
+            )}
 
-              <ClassActionButton icon={UserRoundCheck} tone="secondary" onClick={() => openStudentAssignment('CLASS')}>
-                Assign students
+            {((cls.status === 'Active') || (isCompleted && isAdmin)) && (
+              <ClassActionButton
+                icon={isCompleted ? Play : CircleCheck}
+                tone={isCompleted ? 'primary' : 'success'}
+                loading={completionLoading}
+                onClick={openCompletionDialog}
+                disabled={completionLoading}
+              >
+                {isCompleted ? 'Reopen Class' : 'Complete Class'}
               </ClassActionButton>
+            )}
 
-            </>
-          )}
-
-          {!isReadOnly && canManageClass && (isAdmin || classFeatureFlags.lecturerStudentImport) && (
-            <ClassActionButton icon={Upload} tone="primary" onClick={() => setShowImport(true)}>
-              Import Excel
-            </ClassActionButton>
-          )}
-
-          {!isReadOnly && isFeatureVisible(classFeatureFlags.majorVerification) && canManageClass && (
-            <ClassActionButton
-              id="btn-verify-majors"
-              icon={ShieldCheck}
-              tone="indigo"
-              onClick={() => runFeatureAction(classFeatureFlags.majorVerification, 'Major verification', () => setShowVerify(true))}
-            >
-              Verify majors
-            </ClassActionButton>
-          )}
-
-          {!isReadOnly && canManageClass && (
-            <ClassActionButton
-              icon={cls.isMajorLocked ? Lock : Unlock}
-              tone={cls.isMajorLocked ? 'danger' : 'success'}
-              loading={togglingLock}
-              onClick={() => runFeatureAction(classFeatureFlags.majorVerification, 'Major locking', handleToggleMajorLock)}
-              disabled={togglingLock}
-            >
-              {cls.isMajorLocked ? 'Unlock major updates' : 'Lock major updates'}
-            </ClassActionButton>
-          )}
-
-          {((cls.status === 'Active' && canManageClass) || (isCompleted && isAdmin)) && (
-            <ClassActionButton
-              icon={isCompleted ? Play : CircleCheck}
-              tone={isCompleted ? 'primary' : 'success'}
-              loading={completionLoading}
-              onClick={openCompletionDialog}
-              disabled={completionLoading}
-            >
-              {isCompleted ? 'Reopen Class' : 'Complete Class'}
-            </ClassActionButton>
-          )}
-
-          {isFeatureVisible(classFeatureFlags.lifecycle) && canManageClass && (
-            <ClassActionButton
-              icon={isArchived ? RotateCcw : Archive}
-              tone={isArchived ? 'success' : 'danger'}
-              onClick={() => runFeatureAction(classFeatureFlags.lifecycle, 'Class lifecycle management', () => setShowDeleteClass(true))}
-            >
-              {lifecyclePresentation.label}
-            </ClassActionButton>
-          )}
-        </div>
+            {isFeatureVisible(classFeatureFlags.lifecycle) && (
+              <ClassActionButton
+                icon={isArchived ? RotateCcw : Archive}
+                tone={isArchived ? 'success' : 'danger'}
+                onClick={() => runFeatureAction(classFeatureFlags.lifecycle, 'Class lifecycle management', () => setShowDeleteClass(true))}
+              >
+                {lifecyclePresentation.label}
+              </ClassActionButton>
+            )}
+          </div>
+        )}
       </section>
 
       {isReadOnly && (
@@ -831,17 +833,6 @@ export default function ClassDetail() {
             <p className="mt-1 text-[11px] text-slate-400">{rosterLoadError ? 'Unable to load roster' : `${unassignedCount} unassigned`}</p>
           </div>
         </div>
-
-        {/* Teams Card */}
-        {teamControlsVisible && <div className="flex min-h-20 items-center gap-2.5 rounded-xl border border-slate-200/70 bg-white p-3.5 shadow-xs transition-all hover:border-slate-300 hover:shadow-sm">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-green-100">
-            <BookOpen className="h-4.5 w-4.5 text-green-600" />
-          </div>
-          <div>
-            <p className="text-[10px] text-slate-400 uppercase font-semibold tracking-wider">Teams</p>
-            <p className="mt-0.5 text-xl font-bold leading-none text-slate-900">{safeTeams.length}</p>
-          </div>
-        </div>}
       </div>
 
       {/* ── Inline team proposal flow shared by students and class managers ── */}

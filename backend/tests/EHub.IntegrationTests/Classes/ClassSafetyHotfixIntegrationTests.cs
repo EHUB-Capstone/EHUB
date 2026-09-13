@@ -1653,6 +1653,41 @@ public sealed class ClassSafetyHotfixIntegrationTests
         plannedBody!.Data!.Status.Should().Be(nameof(SemesterStatus.Planned));
         plannedBody.Data.StartDate.Should().Be(startDate);
 
+        using var duplicateRequest = CreateAuthorizedPostRequest(
+            "/api/subjects/semesters",
+            token,
+            new PlanSemesterRequest
+            {
+                Semester = "SP",
+                Year = year,
+                StartDate = new DateOnly(year, 5, 1),
+                EndDate = new DateOnly(year, 8, 31)
+            });
+        var duplicateResponse = await _client.SendAsync(duplicateRequest);
+        var duplicateBody = await duplicateResponse.Content.ReadFromJsonAsync<ApiResponse<object>>();
+
+        duplicateResponse.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        duplicateBody!.Code.Should().Be(ErrorCodes.SemesterAlreadyPlanned);
+        duplicateBody.Message.Should().Be($"SP {year} has already been planned. You can edit its dates instead.");
+
+        using var overlapRequest = CreateAuthorizedPostRequest(
+            "/api/subjects/semesters",
+            token,
+            new PlanSemesterRequest
+            {
+                Semester = "FA",
+                Year = year,
+                StartDate = new DateOnly(year, 4, 20),
+                EndDate = new DateOnly(year, 9, 30)
+            });
+        var overlapResponse = await _client.SendAsync(overlapRequest);
+        var overlapBody = await overlapResponse.Content.ReadFromJsonAsync<ApiResponse<object>>();
+
+        overlapResponse.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        overlapBody!.Code.Should().Be(ErrorCodes.SemesterDateOverlap);
+        overlapBody.Message.Should().Contain($"SP {year}");
+        overlapBody.Message.Should().Contain($"{startDate:dd/MM/yyyy} – {endDate:dd/MM/yyyy}");
+
         var correctedStart = startDate.AddDays(2);
         var correctedEnd = endDate.AddDays(2);
         using var updateRequest = new HttpRequestMessage(
@@ -1676,6 +1711,35 @@ public sealed class ClassSafetyHotfixIntegrationTests
         updatedBody.Data.EndDate.Should().Be(correctedEnd);
         updatedBody.Data.RowVersion.Should().NotBe(plannedBody.Data.RowVersion);
 
+        using var summerRequest = CreateAuthorizedPostRequest(
+            "/api/subjects/semesters",
+            token,
+            new PlanSemesterRequest
+            {
+                Semester = "SU",
+                Year = year,
+                StartDate = correctedEnd.AddDays(1),
+                EndDate = new DateOnly(year, 8, 31)
+            });
+        var summerResponse = await _client.SendAsync(summerRequest);
+        summerResponse.StatusCode.Should().Be(HttpStatusCode.Created);
+
+        using var fallRequest = CreateAuthorizedPostRequest(
+            "/api/subjects/semesters",
+            token,
+            new PlanSemesterRequest
+            {
+                Semester = "FA",
+                Year = year,
+                StartDate = new DateOnly(year, 9, 1),
+                EndDate = new DateOnly(year + 1, 1, 15)
+            });
+        var fallResponse = await _client.SendAsync(fallRequest);
+        var fallBody = await fallResponse.Content.ReadFromJsonAsync<ApiResponse<SemesterResponse>>();
+
+        fallResponse.StatusCode.Should().Be(HttpStatusCode.Created);
+        fallBody!.Data!.EndDate.Should().Be(new DateOnly(year + 1, 1, 15));
+
         context.ChangeTracker.Clear();
         var auditActions = await context.SemesterAuditLogs.AsNoTracking()
             .Where(item => item.SemesterId == plannedBody.Data.Id)
@@ -1683,6 +1747,42 @@ public sealed class ClassSafetyHotfixIntegrationTests
             .ToListAsync();
         auditActions.Should().Contain("SEMESTER_PLANNED");
         auditActions.Should().Contain("SEMESTER_DATES_UPDATED");
+    }
+
+    [Fact]
+    public async Task PlanSemester_WhenTwoRequestsUseSameSemesterAndYear_CreatesOnlyOne()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var admin = await context.Users
+            .Include(user => user.UserRoles)
+            .ThenInclude(userRole => userRole.Role)
+            .FirstAsync(user => user.UserRoles.Any(userRole => userRole.Role.Name == SystemRoles.Admin));
+        var token = GenerateToken(scope.ServiceProvider, admin, SystemRoles.Admin);
+        var year = DateTime.UtcNow.Year + 1;
+        var payload = new PlanSemesterRequest
+        {
+            Semester = "SU",
+            Year = year,
+            StartDate = new DateOnly(year, 5, 1),
+            EndDate = new DateOnly(year, 8, 31)
+        };
+        using var firstRequest = CreateAuthorizedPostRequest("/api/subjects/semesters", token, payload);
+        using var secondRequest = CreateAuthorizedPostRequest("/api/subjects/semesters", token, payload);
+
+        var responses = await Task.WhenAll(
+            _client.SendAsync(firstRequest),
+            _client.SendAsync(secondRequest));
+
+        responses.Count(response => response.StatusCode == HttpStatusCode.Created).Should().Be(1);
+        responses.Count(response => response.StatusCode == HttpStatusCode.Conflict).Should().Be(1);
+        var conflictResponse = responses.Single(response => response.StatusCode == HttpStatusCode.Conflict);
+        var conflictBody = await conflictResponse.Content.ReadFromJsonAsync<ApiResponse<object>>();
+        conflictBody!.Code.Should().Be(ErrorCodes.SemesterAlreadyPlanned);
+
+        context.ChangeTracker.Clear();
+        (await context.Semesters.AsNoTracking().CountAsync(item =>
+            item.Term == SemesterTerm.Summer && item.Year == year)).Should().Be(1);
     }
 
     private static async Task<ClassSeed> CreateClassSeedAsync(AppDbContext context, string suffix)
