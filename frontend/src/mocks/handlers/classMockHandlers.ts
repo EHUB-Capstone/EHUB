@@ -725,6 +725,31 @@ function registerRosterHandlers(mock: MockAdapter): void {
     return ok({ mismatchCount: synchronizedCount, synchronizedCount }, `Synchronized ${synchronizedCount} registered major(s).`);
   });
 
+  mock.onPost(/^\/classes\/[^/]+\/students\/drop-all$/).reply((config) => {
+    const classId = routeId(config, /^\/classes\/([^/]+)\/students\/drop-all$/);
+    const guard = classMutationGuard(classId);
+    if (guard) return guard;
+    const state = getMockState();
+    if (state.teams.some((team) => team.classId === classId && team.status === 'Active' && team.members.length > 0)) {
+      return failure(409, 'STUDENT_IN_ACTIVE_TEAM', 'Cannot remove all students while the class has active teams. Dissolve the teams first.');
+    }
+    if (state.proposals.some((proposal) =>
+      proposal.classId === classId && ['Draft', 'Pending', 'NeedsRevision'].includes(proposal.status))) {
+      return failure(409, 'TEAM_MEMBERSHIP_CONFLICT', 'Cannot remove all students while the class has open team proposals. Resolve or cancel the proposals first.');
+    }
+    const activeStudents = (state.rosters[classId] || []).filter((student) => student.enrollmentStatus === 'Active');
+    activeStudents.forEach((student) => {
+      student.enrollmentStatus = 'Dropped';
+      student.teamId = null;
+      student.teamName = null;
+      student.isTeamLeader = false;
+    });
+    refreshClassCounts(classId);
+    addAudit(classId, 'ALL_STUDENT_ENROLLMENTS_DROPPED', { droppedCount: activeStudents.length });
+    persistMockState();
+    return ok({ droppedCount: activeStudents.length }, `Removed ${activeStudents.length} active student enrollment(s) from the class.`);
+  });
+
   mock.onPost(/^\/classes\/[^/]+\/students\/[^/]+\/drop$/).reply((config) => changeEnrollment(config, 'Dropped'));
   mock.onPost(/^\/classes\/[^/]+\/students\/[^/]+\/re-enroll$/).reply((config) => changeEnrollment(config, 'Active'));
 
@@ -745,8 +770,12 @@ function registerRosterHandlers(mock: MockAdapter): void {
     const guard = classMutationGuard(classId);
     if (guard) return guard;
     const sessionId = allocateId();
+    const droppedStudent = (getMockState().rosters[classId] || [])
+      .find((student) => student.enrollmentStatus === 'Dropped');
     const rows = [
-      { rowNumber: 2, studentCode: `MOCK${getMockState().sequence}`, fullName: 'Mock Import Student', email: `mock.import.${getMockState().sequence}@fpt.edu.vn`, majorCode: 'BIT_SE', isValid: true, status: 'Valid', errorMessage: null },
+      droppedStudent
+        ? { rowNumber: 2, studentCode: droppedStudent.rollNumber, fullName: droppedStudent.fullName, email: droppedStudent.email, majorCode: droppedStudent.majorCode, isValid: true, status: 'ReEnroll', errorMessage: null }
+        : { rowNumber: 2, studentCode: `MOCK${getMockState().sequence}`, fullName: 'Mock Import Student', email: `mock.import.${getMockState().sequence}@fpt.edu.vn`, majorCode: 'BIT_SE', isValid: true, status: 'Valid', errorMessage: null },
       { rowNumber: 3, studentCode: '', fullName: 'Invalid Mock Row', email: 'invalid-email', majorCode: '', isValid: false, status: 'Invalid', errorMessage: 'StudentCode, valid Email, and MajorCode are required.' },
     ];
     getMockState().imports[sessionId] = { classId, consumed: false, rows };
@@ -763,13 +792,31 @@ function registerRosterHandlers(mock: MockAdapter): void {
     if (session.consumed) return failure(409, 'CLASS_IMPORT_SESSION_CONSUMED', 'Import session has already been committed.');
     const validRows = session.rows.filter((row) => row.isValid);
     const roster = getMockState().rosters[classId] ||= [];
+    let insertedCount = 0;
+    let updatedCount = 0;
+    const errors: Array<{ rowNumber: number; studentCode: string; errorCode: string; errorMessage: string }> = [];
     for (const row of validRows) {
+      const existing = roster.find((student) =>
+        student.rollNumber.toUpperCase() === row.studentCode.toUpperCase() ||
+        student.email.toLowerCase() === row.email.toLowerCase());
+      if (existing?.enrollmentStatus === 'Dropped') {
+        existing.enrollmentStatus = 'Active';
+        existing.majorCode = row.majorCode;
+        existing.majorVerificationStatus = 'Unverified';
+        updatedCount++;
+        continue;
+      }
+      if (existing) {
+        errors.push({ rowNumber: row.rowNumber, studentCode: row.studentCode, errorCode: 'STUDENT_ALREADY_ENROLLED', errorMessage: 'Student already has an enrollment in this class.' });
+        continue;
+      }
       roster.push({ studentId: allocateId(), userId: null, rollNumber: row.studentCode, fullName: row.fullName, email: row.email, majorCode: row.majorCode, profileMajorCode: null, majorVerificationStatus: 'Unverified', memberCode: `MEM-${getMockState().sequence}`, enrollmentStatus: 'Active', teamId: null, teamName: null, isTeamLeader: false, joinedAtUtc: new Date().toISOString() });
+      insertedCount++;
     }
     session.consumed = true;
     refreshClassCounts(classId);
     persistMockState();
-    return ok({ insertedCount: validRows.length, updatedCount: 0, synchronizedMajorCount: 0, skippedCount: 0, errorCount: 0, errors: [] }, 'Students imported successfully.');
+    return ok({ insertedCount, updatedCount, synchronizedMajorCount: 0, skippedCount: errors.length, errorCount: errors.length, errors }, 'Students imported successfully.');
   });
 }
 

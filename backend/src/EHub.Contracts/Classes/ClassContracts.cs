@@ -237,6 +237,11 @@ public sealed class ClassStudentAssignmentResponse
     public IReadOnlyCollection<Guid> AssignedStudentIds { get; init; } = Array.Empty<Guid>();
 }
 
+public sealed class DropAllStudentsResponse
+{
+    public int DroppedCount { get; init; }
+}
+
 public sealed class TeamStudentAssignmentResponse
 {
     public Guid ClassId { get; init; }

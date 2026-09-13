@@ -257,6 +257,7 @@ export default function ImportStudentsModal({
                 <div className="text-xs leading-5 text-slate-600">
                   <p><strong className="text-slate-700">Required columns:</strong> StudentCode (RollNumber), FullName, Email</p>
                   <p><strong className="text-slate-700">MajorCode:</strong> Optional for legacy files; missing values are imported as unverified.</p>
+                  <p><strong className="text-slate-700">Dropped students:</strong> Matching enrollments in this class will be re-enrolled instead of duplicated.</p>
                   <p><strong className="text-slate-700">Limits:</strong> Max file size 10 MB · Maximum 5,000 rows · Validated line by line before commit</p>
                 </div>
               </div>
@@ -477,6 +478,10 @@ function StudentRowsTable({ rows, compact = false }: { rows: any[]; compact?: bo
                       </span>
                       <p className="mt-1 max-w-xs text-[11px] leading-4 text-orange-700">{row.majorWarningMessage}</p>
                     </div>
+                  ) : row.status === 'ReEnroll' ? (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-1 font-semibold text-blue-700">
+                      <RotateCcw className="h-3 w-3" /> Ready to re-enroll
+                    </span>
                   ) : row.majorComparisonStatus?.startsWith('AwaitingRegistration') ? (
                     <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-1 font-semibold text-slate-600">
                       <Info className="h-3 w-3" /> Awaiting registration

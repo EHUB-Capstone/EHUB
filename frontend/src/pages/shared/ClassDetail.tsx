@@ -5,7 +5,7 @@ import { motion } from 'framer-motion';
 import {
   ArrowLeft, GraduationCap, Users,
   Upload, Download, UserPlus, UserRoundCheck, Loader2, Calendar, ShieldCheck, Lock, Unlock, AlertTriangle,
-  Database, MessagesSquare, Archive, RotateCcw, CircleCheck, Play, MoreHorizontal, ChevronDown
+  MessagesSquare, Archive, RotateCcw, CircleCheck, Play, MoreHorizontal, ChevronDown, Trash2
 } from 'lucide-react';
 import { AuthContext } from '../../context/AuthContext';
 import { classApi } from '../../api/classApi';
@@ -106,6 +106,8 @@ export default function ClassDetail() {
   const [togglingLock, setTogglingLock] = useState(false);
   const [synchronizingMajors, setSynchronizingMajors] = useState(false);
   const [removingStudent, setRemovingStudent] = useState(false);
+  const [showDropAllStudents, setShowDropAllStudents] = useState(false);
+  const [droppingAllStudents, setDroppingAllStudents] = useState(false);
   const [reEnrollingStudent, setReEnrollingStudent] = useState(false);
   const [showDeleteClass, setShowDeleteClass] = useState(false);
   const [deletingClass, setDeletingClass] = useState(false);
@@ -445,6 +447,27 @@ export default function ClassDetail() {
     }
   };
 
+  const confirmDropAllStudents = async () => {
+    setDroppingAllStudents(true);
+    try {
+      const response = await classApi.dropAllStudents(loadedClassId);
+      const result = unwrapApiData<{ droppedCount?: number }>(response);
+      const droppedCount = result?.droppedCount ?? 0;
+      toast.success(droppedCount === 0
+        ? 'There are no active student enrollments to remove.'
+        : `Removed ${droppedCount} student enrollment${droppedCount === 1 ? '' : 's'} from the class.`);
+      setShowDropAllStudents(false);
+      setSelected([]);
+      setSelectedStudentSnapshots([]);
+      setRosterPage(1);
+      await fetchData();
+    } catch (err) {
+      toast.error(parseApiError(err, 'Failed to remove all students from the class.').message);
+    } finally {
+      setDroppingAllStudents(false);
+    }
+  };
+
   const confirmDeleteClass = async () => {
     setDeletingClass(true);
     try {
@@ -655,12 +678,23 @@ export default function ClassDetail() {
                 <ClassActionButton icon={UserRoundCheck} tone="secondary" onClick={() => openStudentAssignment('CLASS')}>
                   Assign students
                 </ClassActionButton>
+
+                <ClassActionButton
+                  icon={Trash2}
+                  tone="danger"
+                  onClick={() => {
+                    setShowActionsMenu(false);
+                    setShowDropAllStudents(true);
+                  }}
+                >
+                  Remove all students
+                </ClassActionButton>
               </>
             )}
 
             {!isReadOnly && (isAdmin || classFeatureFlags.lecturerStudentImport) && (
               <ClassActionButton icon={Upload} tone="primary" onClick={() => setShowImport(true)}>
-                Import Excel
+                Import Students
               </ClassActionButton>
             )}
 
@@ -1104,6 +1138,18 @@ export default function ClassDetail() {
         description={studentToReEnroll ? `Restore "${studentToReEnroll.fullName}" as an Active enrollment in this class.` : ''}
         confirmText="Re-enroll"
         cancelText="Cancel"
+      />
+
+      <ConfirmDialog
+        isOpen={showDropAllStudents}
+        onClose={() => setShowDropAllStudents(false)}
+        onConfirm={confirmDropAllStudents}
+        isSubmitting={droppingAllStudents}
+        title={`Remove all students from ${cls.classCode}?`}
+        description="All active enrollments will move to Dropped history. Global student profiles will not be deleted. This action is blocked while the class has active teams or open team proposals."
+        confirmText="Remove all students"
+        cancelText="Cancel"
+        confirmVariant="danger"
       />
 
       <ConfirmDialog

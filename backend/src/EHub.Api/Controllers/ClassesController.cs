@@ -22,6 +22,7 @@ using EHub.Application.Features.Classes.GetMajorVerificationTemplate;
 using EHub.Application.Features.Classes.ImportStudents;
 using EHub.Application.Features.Classes.RemoveStudentFromClass;
 using EHub.Application.Features.Classes.ReEnrollStudent;
+using EHub.Application.Features.Classes.DropAllStudents;
 using EHub.Application.Features.Classes.RepairChatMemberships;
 using EHub.Application.Features.Classes.SetEnrollmentMajorLock;
 using EHub.Application.Features.Classes.SynchronizeProfileMajors;
@@ -627,6 +628,25 @@ public sealed class ClassesController : ControllerBase
         }
 
         return Ok(ApiResponse<object?>.SuccessResponse(null, "Student enrollment dropped successfully."));
+    }
+
+    [HttpPost("{id:guid}/students/drop-all")]
+    public async Task<IActionResult> DropAllStudents(
+        Guid id,
+        [FromServices] IDropAllStudentsCommandHandler commandHandler,
+        CancellationToken cancellationToken)
+    {
+        var result = await commandHandler.HandleAsync(
+            id,
+            _currentUserService.UserId ?? Guid.Empty,
+            GetCurrentUserRole(),
+            cancellationToken);
+
+        if (result.IsFailure) return ToClassErrorResponse(result.Error);
+
+        return Ok(ApiResponse<DropAllStudentsResponse>.SuccessResponse(
+            result.Value,
+            $"Removed {result.Value.DroppedCount} active student enrollment(s) from the class."));
     }
 
     [HttpPost("{id:guid}/students/{studentId:guid}/re-enroll")]

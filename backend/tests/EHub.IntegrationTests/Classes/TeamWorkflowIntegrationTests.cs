@@ -2,6 +2,7 @@ using EHub.Application.Features.Classes.Common;
 using EHub.Application.Features.Classes.GetClassRoster;
 using EHub.Application.Features.Classes.AssignStudents;
 using EHub.Application.Features.Classes.RemoveStudentFromClass;
+using EHub.Application.Features.Classes.DropAllStudents;
 using EHub.Application.Features.Classes.StudentSelfService;
 using EHub.Application.Features.Teams.ManageTeams;
 using EHub.Application.Features.Teams.MentorAssignments;
@@ -295,6 +296,58 @@ public sealed class TeamWorkflowIntegrationTests
 
         result.IsFailure.Should().BeTrue();
         result.Error.Code.Should().Be(ErrorCodes.ClassStudentInActiveTeam);
+    }
+
+    [Fact]
+    public async Task DroppingAllStudents_MovesEveryActiveEnrollmentToDroppedHistory()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateSeedAsync(context, createProposal: false, createTeam: false);
+        context.ChangeTracker.Clear();
+
+        var result = await new DropAllStudentsCommandHandler(context).HandleAsync(
+            seed.ClassId, seed.LecturerId, SystemRoles.Lecturer);
+
+        result.IsSuccess.Should().BeTrue($"{result.Error.Code}: {result.Error.Message}");
+        result.Value.DroppedCount.Should().Be(4);
+        context.ChangeTracker.Clear();
+        var enrollments = await context.ClassStudents.AsNoTracking()
+            .Where(enrollment => enrollment.ClassId == seed.ClassId)
+            .ToListAsync();
+        enrollments.Should().OnlyContain(enrollment =>
+            enrollment.EnrollmentStatus == EnrollmentStatus.Dropped &&
+            !enrollment.CountsTowardCourseSemesterLimit);
+        (await context.ClassAuditLogs.AsNoTracking().CountAsync(log =>
+            log.ClassId == seed.ClassId && log.Action == "ALL_STUDENT_ENROLLMENTS_DROPPED"))
+            .Should().Be(1);
+        (await context.OutboxMessages.AsNoTracking().CountAsync(message =>
+            message.AggregateId == seed.ClassId && message.Type == "Class.StudentEnrollmentDropped.v1"))
+            .Should().Be(4);
+    }
+
+    [Fact]
+    public async Task DroppingAllStudents_IsBlockedForActiveTeamsAndUnauthorizedUsers()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateSeedAsync(context, createProposal: false, createTeam: true);
+        context.ChangeTracker.Clear();
+        var handler = new DropAllStudentsCommandHandler(context);
+
+        var unauthorized = await handler.HandleAsync(
+            seed.ClassId, seed.ProposerUserId, SystemRoles.Student);
+        unauthorized.IsFailure.Should().BeTrue();
+        unauthorized.Error.Code.Should().Be(ErrorCodes.ClassAccessDenied);
+
+        var blocked = await handler.HandleAsync(
+            seed.ClassId, seed.LecturerId, SystemRoles.Lecturer);
+        blocked.IsFailure.Should().BeTrue();
+        blocked.Error.Code.Should().Be(ErrorCodes.ClassStudentInActiveTeam);
+        context.ChangeTracker.Clear();
+        (await context.ClassStudents.AsNoTracking().CountAsync(enrollment =>
+            enrollment.ClassId == seed.ClassId && enrollment.EnrollmentStatus == EnrollmentStatus.Active))
+            .Should().Be(4);
     }
 
     [Fact]
