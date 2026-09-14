@@ -620,6 +620,40 @@ test('mock API enforces archived class read-only behavior', async () => {
   );
 });
 
+test('mock bulk roster removal requires a class without active team links', async () => {
+  resetMockState();
+  await axiosClient.post('/auth/login', { email: 'admin@ehub.local', password: 'Mock123!' });
+  const state = getMockState();
+  const targetClass = state.classes.find((item) => item.status === 'Active');
+  assert.ok(targetClass);
+
+  await assert.rejects(
+    axiosClient.post(`/classes/${targetClass.id}/students/drop-all`),
+    (error: unknown) => {
+      const response = (error as { response?: { status?: number; data?: { code?: string } } }).response;
+      return response?.status === 409 && response.data?.code === 'STUDENT_IN_ACTIVE_TEAM';
+    },
+  );
+
+  state.teams.splice(0, state.teams.length, ...state.teams.filter((team) => team.classId !== targetClass.id));
+  state.proposals.splice(0, state.proposals.length, ...state.proposals.filter((proposal) => proposal.classId !== targetClass.id));
+  const response = await axiosClient.post(`/classes/${targetClass.id}/students/drop-all`);
+  assert.ok(response.data.droppedCount > 0);
+  assert.ok(state.rosters[targetClass.id].every((student) => student.enrollmentStatus !== 'Active'));
+
+  const preview = await axiosClient.post(`/classes/${targetClass.id}/import-students/preview`, new FormData());
+  assert.equal(preview.data.validRowsCount, 1);
+  assert.equal(preview.data.rows[0].status, 'ReEnroll');
+
+  const commit = await axiosClient.post(`/classes/${targetClass.id}/import-students/commit`, {
+    sessionId: preview.data.sessionId,
+  });
+  assert.equal(commit.data.insertedCount, 0);
+  assert.equal(commit.data.updatedCount, 1);
+  assert.equal(commit.data.errorCount, 0);
+  assert.equal(state.rosters[targetClass.id].filter((student) => student.enrollmentStatus === 'Active').length, 1);
+});
+
 test('mock API mirrors class completion, read-only state, and audit side effects', async () => {
   resetMockState();
   await axiosClient.post('/auth/login', { email: 'admin@ehub.local', password: 'Mock123!' });

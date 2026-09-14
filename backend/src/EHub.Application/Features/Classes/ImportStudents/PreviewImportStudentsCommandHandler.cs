@@ -485,21 +485,25 @@ public sealed class PreviewImportStudentsCommandHandler : IPreviewImportStudents
                     ? null
                     : enrollments.FirstOrDefault(enrollment =>
                         enrollment.StudentId == profile.Id && enrollment.ClassId == targetClass.Id);
-                if (currentEnrollment != null)
+                if (currentEnrollment != null && currentEnrollment.EnrollmentStatus != EnrollmentStatus.Dropped)
                 {
-                    error = currentEnrollment.EnrollmentStatus == EnrollmentStatus.Dropped
-                        ? $"Student '{row.StudentCode}' has a dropped enrollment. Use the explicit re-enroll action."
-                        : $"Student '{row.StudentCode}' already has an enrollment in this class.";
+                    error = $"Student '{row.StudentCode}' already has an enrollment in this class.";
                 }
                 else
                 {
                     var conflict = profile == null
                         ? null
                         : enrollments.FirstOrDefault(enrollment =>
-                            enrollment.StudentId == profile.Id && enrollment.CountsTowardCourseSemesterLimit);
+                            enrollment.StudentId == profile.Id &&
+                            enrollment.ClassId != targetClass.Id &&
+                            enrollment.CountsTowardCourseSemesterLimit);
                     if (conflict != null)
                     {
                         error = $"Student '{row.StudentCode}' is already enrolled in class '{conflict.Class.ClassCode}' for the same course and semester.";
+                    }
+                    else if (currentEnrollment?.EnrollmentStatus == EnrollmentStatus.Dropped)
+                    {
+                        rows[index] = WithStatus(row, "ReEnroll");
                     }
                 }
             }
@@ -563,6 +567,22 @@ public sealed class PreviewImportStudentsCommandHandler : IPreviewImportStudents
             ErrorMessage = row.ErrorMessage
         };
     }
+
+    private static ImportStudentRowPreviewDto WithStatus(ImportStudentRowPreviewDto row, string status) => new()
+    {
+        RowNumber = row.RowNumber,
+        StudentCode = row.StudentCode,
+        FullName = row.FullName,
+        Email = row.Email,
+        MajorCode = row.MajorCode,
+        RegisteredMajorCode = row.RegisteredMajorCode,
+        MajorComparisonStatus = row.MajorComparisonStatus,
+        MajorWarningMessage = row.MajorWarningMessage,
+        NeedsMajorSync = row.NeedsMajorSync,
+        IsValid = row.IsValid,
+        Status = status,
+        ErrorMessage = row.ErrorMessage
+    };
 
     private static ImportStudentRowPreviewDto Invalid(ImportStudentRowPreviewDto row, string error) => new()
     {

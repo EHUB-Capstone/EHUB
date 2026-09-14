@@ -197,6 +197,7 @@ public sealed class CommitImportStudentsCommandHandler : ICommitImportStudentsCo
 
         var insertedCount = 0;
         var updatedCount = 0;
+        var reEnrolledCount = 0;
         var synchronizedMajorCount = 0;
         var errors = new List<ImportStudentCommitErrorDto>();
         var importedStudents = new List<(string Email, string FullName, Guid? UserId)>();
@@ -225,23 +226,21 @@ public sealed class CommitImportStudentsCommandHandler : ICommitImportStudentsCo
                 ? null
                 : enrollments.FirstOrDefault(enrollment =>
                     enrollment.StudentId == profile.Id && enrollment.ClassId == targetClass.Id);
-            if (currentEnrollment != null)
+            if (currentEnrollment != null && currentEnrollment.EnrollmentStatus != EnrollmentStatus.Dropped)
             {
                 errors.Add(RowError(
                     row,
-                    currentEnrollment.EnrollmentStatus == EnrollmentStatus.Dropped
-                        ? ErrorCodes.ClassStudentReEnrollmentRequired
-                        : ErrorCodes.ClassStudentAlreadyEnrolled,
-                    currentEnrollment.EnrollmentStatus == EnrollmentStatus.Dropped
-                        ? "Student has a dropped enrollment. Use the explicit re-enroll action."
-                        : "Student already has an enrollment in this class."));
+                    ErrorCodes.ClassStudentAlreadyEnrolled,
+                    "Student already has an enrollment in this class."));
                 continue;
             }
 
             var conflict = profile == null
                 ? null
                 : enrollments.FirstOrDefault(enrollment =>
-                    enrollment.StudentId == profile.Id && enrollment.CountsTowardCourseSemesterLimit);
+                    enrollment.StudentId == profile.Id &&
+                    enrollment.ClassId != targetClass.Id &&
+                    enrollment.CountsTowardCourseSemesterLimit);
             if (conflict != null)
             {
                 errors.Add(RowError(
@@ -251,6 +250,7 @@ public sealed class CommitImportStudentsCommandHandler : ICommitImportStudentsCo
                 continue;
             }
 
+            var rowUpdated = false;
             if (profile == null)
             {
                 profile = new Student
@@ -275,7 +275,7 @@ public sealed class CommitImportStudentsCommandHandler : ICommitImportStudentsCo
                     profile.UpdatedBy = currentUserId;
                     profilesByCode[row.StudentCode] = [profile];
                     profilesByEmail[row.Email] = [profile];
-                    updatedCount++;
+                    rowUpdated = true;
                 }
 
                 if (synchronizeProfileMajors &&
@@ -294,23 +294,46 @@ public sealed class CommitImportStudentsCommandHandler : ICommitImportStudentsCo
                 }
             }
 
-            currentEnrollment = new ClassStudent
+            if (currentEnrollment != null)
             {
-                ClassId = targetClass.Id,
-                StudentId = profile.Id,
-                SemesterId = targetClass.SemesterId,
-                CourseId = targetClass.CourseId,
-                EnrollmentStatus = EnrollmentStatus.Active,
-                CountsTowardCourseSemesterLimit = true,
-                MajorCodeAtEnrollment = row.MajorCode,
-                MajorVerificationStatus = EnrollmentMajorVerificationStatus.Unverified,
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow
-            };
-            _context.ClassStudents.Add(currentEnrollment);
-            enrollments.Add(currentEnrollment);
+                currentEnrollment.EnrollmentStatus = EnrollmentStatus.Active;
+                currentEnrollment.CountsTowardCourseSemesterLimit = true;
+                currentEnrollment.CompletedAtUtc = null;
+                currentEnrollment.CompletedByUserId = null;
+                currentEnrollment.MajorCodeAtEnrollment = row.MajorCode;
+                currentEnrollment.MajorVerificationStatus = EnrollmentMajorVerificationStatus.Unverified;
+                currentEnrollment.MajorVerifiedAtUtc = null;
+                currentEnrollment.MajorVerifiedByUserId = null;
+                currentEnrollment.UpdatedAt = DateTime.UtcNow;
+                rowUpdated = true;
+                reEnrolledCount++;
+            }
+            else
+            {
+                currentEnrollment = new ClassStudent
+                {
+                    ClassId = targetClass.Id,
+                    StudentId = profile.Id,
+                    SemesterId = targetClass.SemesterId,
+                    CourseId = targetClass.CourseId,
+                    EnrollmentStatus = EnrollmentStatus.Active,
+                    CountsTowardCourseSemesterLimit = true,
+                    MajorCodeAtEnrollment = row.MajorCode,
+                    MajorVerificationStatus = EnrollmentMajorVerificationStatus.Unverified,
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                };
+                _context.ClassStudents.Add(currentEnrollment);
+                enrollments.Add(currentEnrollment);
+                insertedCount++;
+            }
+
+            if (rowUpdated)
+            {
+                updatedCount++;
+            }
+
             importedStudents.Add((profile.Email ?? row.Email, profile.FullName, profile.UserId));
-            insertedCount++;
         }
 
         session.Status = ClassImportSessionStatus.Consumed;
@@ -328,6 +351,7 @@ public sealed class CommitImportStudentsCommandHandler : ICommitImportStudentsCo
                 SessionId = session.Id,
                 InsertedCount = insertedCount,
                 UpdatedCount = updatedCount,
+                ReEnrolledCount = reEnrolledCount,
                 SynchronizedMajorCount = synchronizedMajorCount,
                 SynchronizeProfileMajors = synchronizeProfileMajors,
                 ErrorCount = errors.Count
@@ -337,6 +361,8 @@ public sealed class CommitImportStudentsCommandHandler : ICommitImportStudentsCo
         {
             SessionId = session.Id,
             InsertedCount = insertedCount,
+            UpdatedCount = updatedCount,
+            ReEnrolledCount = reEnrolledCount,
             ErrorCount = errors.Count,
             StudentUserIds = importedStudents
                 .Where(student => student.UserId.HasValue)

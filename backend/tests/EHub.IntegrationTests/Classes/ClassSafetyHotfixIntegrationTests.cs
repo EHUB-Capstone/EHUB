@@ -856,6 +856,92 @@ public sealed class ClassSafetyHotfixIntegrationTests
     }
 
     [Fact]
+    public async Task ImportingDroppedStudent_ReactivatesExistingEnrollmentWithoutCreatingDuplicate()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateClassSeedAsync(context, "import-dropped-student");
+        var targetClass = await context.Classes.AsNoTracking()
+            .SingleAsync(@class => @class.Id == seed.ClassId);
+        var lecturer = await context.Users.SingleAsync(user => user.Id == seed.LecturerId);
+        var token = GenerateToken(scope.ServiceProvider, lecturer, SystemRoles.Lecturer);
+        var studentCode = "SE" + Guid.NewGuid().ToString("N")[..8].ToUpperInvariant();
+        var studentEmail = $"dropped-import-{Guid.NewGuid():N}@example.com";
+        var student = new Student
+        {
+            RollNumber = studentCode,
+            NormalizedRollNumber = studentCode,
+            FullName = "Dropped Import Student",
+            Email = studentEmail,
+            MajorCode = MajorCodes.BIT_SE,
+            Status = StudentStatus.Active,
+            CreatedBy = seed.AdminId
+        };
+        var enrollment = new ClassStudent
+        {
+            ClassId = seed.ClassId,
+            StudentId = student.Id,
+            SemesterId = targetClass.SemesterId,
+            CourseId = targetClass.CourseId,
+            EnrollmentStatus = EnrollmentStatus.Dropped,
+            CountsTowardCourseSemesterLimit = false,
+            MajorCodeAtEnrollment = MajorCodes.BIT_SE,
+            MajorVerificationStatus = EnrollmentMajorVerificationStatus.Matched,
+            MajorVerifiedAtUtc = DateTime.UtcNow.AddDays(-1),
+            MajorVerifiedByUserId = seed.LecturerId
+        };
+        context.Students.Add(student);
+        context.ClassStudents.Add(enrollment);
+        await context.SaveChangesAsync();
+        var enrollmentCreatedAt = enrollment.CreatedAt;
+        context.ChangeTracker.Clear();
+
+        using var multipart = new MultipartFormDataContent();
+        var fileContent = new ByteArrayContent(CreateImportWorkbook(studentCode, studentEmail, MajorCodes.BIT_AI));
+        fileContent.Headers.ContentType = new MediaTypeHeaderValue("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        multipart.Add(fileContent, "file", "students.xlsx");
+        using var previewRequest = new HttpRequestMessage(HttpMethod.Post, $"/api/classes/{seed.ClassId}/import-students/preview")
+        {
+            Content = multipart
+        };
+        previewRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var previewResponse = await _client.SendAsync(previewRequest);
+        var previewBody = await previewResponse.Content.ReadFromJsonAsync<ApiResponse<ImportStudentsPreviewResponse>>();
+
+        previewResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        previewBody!.Data!.ValidRowsCount.Should().Be(1);
+        previewBody.Data.ErrorRowsCount.Should().Be(0);
+        previewBody.Data.Rows.Should().ContainSingle(row => row.Status == "ReEnroll" && row.IsValid);
+
+        using var commitRequest = new HttpRequestMessage(HttpMethod.Post, $"/api/classes/{seed.ClassId}/import-students/commit")
+        {
+            Content = JsonContent.Create(new CommitImportStudentsRequest { SessionId = previewBody.Data.SessionId })
+        };
+        commitRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        var commitResponse = await _client.SendAsync(commitRequest);
+        var commitBody = await commitResponse.Content.ReadFromJsonAsync<ApiResponse<ImportStudentsCommitResponse>>();
+
+        commitResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        commitBody!.Data!.InsertedCount.Should().Be(0);
+        commitBody.Data.UpdatedCount.Should().Be(1);
+        commitBody.Data.ErrorCount.Should().Be(0);
+        context.ChangeTracker.Clear();
+
+        var restoredEnrollments = await context.ClassStudents.AsNoTracking()
+            .Where(item => item.ClassId == seed.ClassId && item.StudentId == student.Id)
+            .ToListAsync();
+        restoredEnrollments.Should().ContainSingle();
+        restoredEnrollments[0].EnrollmentStatus.Should().Be(EnrollmentStatus.Active);
+        restoredEnrollments[0].CountsTowardCourseSemesterLimit.Should().BeTrue();
+        restoredEnrollments[0].CreatedAt.Should().Be(enrollmentCreatedAt);
+        restoredEnrollments[0].MajorCodeAtEnrollment.Should().Be(MajorCodes.BIT_AI);
+        restoredEnrollments[0].MajorVerificationStatus.Should().Be(EnrollmentMajorVerificationStatus.Unverified);
+        restoredEnrollments[0].MajorVerifiedAtUtc.Should().BeNull();
+        restoredEnrollments[0].MajorVerifiedByUserId.Should().BeNull();
+    }
+
+    [Fact]
     public async Task ImportRegisteredStudentWithMissingRollNumber_CompletesProfileAndEnrollsStudent()
     {
         using var scope = _factory.Services.CreateScope();

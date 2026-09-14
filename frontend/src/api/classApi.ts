@@ -89,6 +89,8 @@ export const classApi = {
     axiosClient.post(`/classes/${classId}/teams/${teamId}/students/assign`, data),
   dropStudent: (classId, studentId) =>
     axiosClient.post(`/classes/${classId}/students/${studentId}/drop`),
+  dropAllStudents: (classId: string) =>
+    axiosClient.post(`/classes/${classId}/students/drop-all`),
   reEnrollStudent: (classId, studentId) =>
     axiosClient.post(`/classes/${classId}/students/${studentId}/re-enroll`),
 
