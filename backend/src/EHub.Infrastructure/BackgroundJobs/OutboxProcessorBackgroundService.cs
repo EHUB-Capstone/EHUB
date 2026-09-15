@@ -1,3 +1,4 @@
+using EHub.Application.Common.Exceptions;
 using EHub.Application.Common.Interfaces.Services;
 using EHub.Domain.Enums;
 using EHub.Infrastructure.Persistence;
@@ -83,13 +84,15 @@ internal sealed class OutboxProcessorBackgroundService : BackgroundService
         return messages.Select(message => message.Id).ToArray();
     }
 
-    private async Task ProcessAsync(Guid messageId, CancellationToken cancellationToken)
+    internal async Task ProcessAsync(Guid messageId, CancellationToken cancellationToken)
     {
         await using var scope = _scopeFactory.CreateAsyncScope();
         var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var dispatcher = scope.ServiceProvider.GetRequiredService<IOutboxEventDispatcher>();
+        await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
         var message = await context.OutboxMessages
-            .FirstOrDefaultAsync(candidate => candidate.Id == messageId, cancellationToken);
+            .FromSqlInterpolated($"SELECT * FROM outbox_messages WHERE id = {messageId} FOR UPDATE")
+            .FirstOrDefaultAsync(cancellationToken);
         if (message == null || message.Status != OutboxMessageStatus.Processing)
         {
             return;
@@ -103,6 +106,7 @@ internal sealed class OutboxProcessorBackgroundService : BackgroundService
             message.ProcessingStartedAtUtc = null;
             message.LastError = null;
             await context.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
 
             _logger.LogInformation(
                 "Processed outbox event {OutboxEventId} {OutboxEventType}",
@@ -115,34 +119,50 @@ internal sealed class OutboxProcessorBackgroundService : BackgroundService
         }
         catch (Exception exception)
         {
-            var reachedAttemptLimit = message.AttemptCount >= MaximumAttempts;
+            // Dispatch may have saved projections before failing. Never flush those
+            // tracked changes when persisting the retry: fan-out and parent completion
+            // must commit together, or both must be rolled back.
+            await transaction.RollbackAsync(cancellationToken);
+            await transaction.DisposeAsync();
+            context.ChangeTracker.Clear();
+            message = await context.OutboxMessages.SingleAsync(candidate => candidate.Id == messageId, cancellationToken);
+
+            var deliveryFailure = exception as EmailDeliveryException;
+            var quotaExceeded = deliveryFailure?.FailureKind == EmailDeliveryFailureKind.QuotaExceeded;
+            if (quotaExceeded)
+                message.AttemptCount = Math.Max(0, message.AttemptCount - 1);
+            var reachedAttemptLimit = !quotaExceeded && message.AttemptCount >= MaximumAttempts;
             message.Status = reachedAttemptLimit
                 ? OutboxMessageStatus.Failed
                 : OutboxMessageStatus.Pending;
-            message.AvailableAtUtc = DateTime.UtcNow.AddSeconds(
-                Math.Pow(2, Math.Min(message.AttemptCount, 8)));
+            var now = DateTime.UtcNow;
+            message.AvailableAtUtc = quotaExceeded
+                ? deliveryFailure!.RetryAfterUtc is { } retryAt && retryAt > now
+                    ? retryAt
+                    : now.AddMinutes(15)
+                : now.AddSeconds(Math.Pow(2, Math.Min(message.AttemptCount, 8)));
             message.ProcessingStartedAtUtc = null;
-            message.LastError = exception.ToString()[..Math.Min(exception.ToString().Length, 2_000)];
+            message.LastError = deliveryFailure?.FailureKind.ToString() ?? exception.GetType().Name;
             await context.SaveChangesAsync(cancellationToken);
 
             if (reachedAttemptLimit)
             {
                 _logger.LogError(
-                    exception,
-                    "Outbox event {OutboxEventId} {OutboxEventType} failed permanently after {AttemptCount} attempts",
+                    "Outbox event {OutboxEventId} {OutboxEventType} failed permanently after {AttemptCount} attempts: {FailureKind}",
                     message.EventId,
                     message.Type,
-                    message.AttemptCount);
+                    message.AttemptCount,
+                    message.LastError);
             }
             else
             {
                 _logger.LogWarning(
-                    exception,
-                    "Outbox event {OutboxEventId} {OutboxEventType} failed on attempt {AttemptCount}; retry scheduled at {RetryAtUtc}",
+                    "Outbox event {OutboxEventId} {OutboxEventType} failed on attempt {AttemptCount}; retry scheduled at {RetryAtUtc}: {FailureKind}",
                     message.EventId,
                     message.Type,
                     message.AttemptCount,
-                    message.AvailableAtUtc);
+                    message.AvailableAtUtc,
+                    message.LastError);
             }
         }
     }

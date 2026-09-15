@@ -85,6 +85,8 @@ public static class DependencyInjection
         var emailProvider = configuration["Email:Provider"];
         if (string.Equals(emailProvider, "Smtp", StringComparison.OrdinalIgnoreCase))
         {
+            services.AddSingleton<ISmtpClientFactory, SmtpClientFactory>();
+            services.AddSingleton<SmtpProviderCooldown>();
             services.AddScoped<IEmailService, SmtpEmailService>();
         }
         else

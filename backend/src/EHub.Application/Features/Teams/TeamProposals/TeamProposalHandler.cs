@@ -21,7 +21,8 @@ public sealed class TeamProposalHandler : ITeamProposalHandler
         "BBA_MC",
         "BBA_MKT",
         "BEN",
-        "BBA_TM"
+        "BBA_TM",
+        "BBA_FIN"
     };
 
     private static readonly HashSet<string> GroupTwoMajorCodes = new(StringComparer.OrdinalIgnoreCase)
