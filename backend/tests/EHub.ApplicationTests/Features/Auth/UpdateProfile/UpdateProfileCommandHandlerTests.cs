@@ -93,6 +93,51 @@ public sealed class UpdateProfileCommandHandlerTests
         await _unitOfWork.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
     }
 
+    [Theory]
+    [InlineData(" bit_se ", true)]
+    [InlineData("UNDECLARED", false)]
+    [InlineData("invalid", false)]
+    [InlineData("", false)]
+    public async Task HandleAsync_ValidatesAndPersistsStudentMajor(string major, bool succeeds)
+    {
+        var user = new User { FullName = "Student" };
+        user.UserRoles.Add(new UserRole { Role = new Role { Name = EHub.Shared.Constants.SystemRoles.Student } });
+        var student = new Student { UserId = user.Id };
+        _currentUser.IsAuthenticated.Returns(true);
+        _currentUser.UserId.Returns(user.Id);
+        _users.GetByIdWithRolesAsync(user.Id, Arg.Any<CancellationToken>()).Returns(user);
+        _students.GetByUserIdAsync(user.Id, Arg.Any<CancellationToken>()).Returns(student);
+
+        var result = await _handler.HandleAsync(new UpdateProfileCommand { FullName = "Student", Major = major });
+
+        Assert.Equal(succeeds, result.IsSuccess);
+        if (succeeds)
+        {
+            Assert.Equal("BIT_SE", student.MajorCode);
+            Assert.Equal("BIT_SE", result.Value.MajorCode);
+            await _unitOfWork.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+        }
+        else
+        {
+            Assert.Null(student.MajorCode);
+            await _unitOfWork.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
+        }
+    }
+
+    [Fact]
+    public async Task HandleAsync_RejectsMajorForNonStudent()
+    {
+        var user = new User { FullName = "Lecturer" };
+        _currentUser.IsAuthenticated.Returns(true);
+        _currentUser.UserId.Returns(user.Id);
+        _users.GetByIdWithRolesAsync(user.Id, Arg.Any<CancellationToken>()).Returns(user);
+
+        var result = await _handler.HandleAsync(new UpdateProfileCommand { FullName = "Lecturer", Major = "BIT_SE" });
+
+        Assert.Equal(ErrorCodes.CommonForbiddenError, result.Error.Code);
+        await _unitOfWork.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
     private static void SetId(BaseEntity entity, Guid id)
     {
         typeof(BaseEntity).GetProperty(nameof(BaseEntity.Id), BindingFlags.Public | BindingFlags.Instance)?.SetValue(entity, id);

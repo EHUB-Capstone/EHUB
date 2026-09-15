@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using EHub.Application.Common.Interfaces.Identity;
 using EHub.Application.Common.Interfaces.Persistence;
+using EHub.Application.Common.Interfaces.Services;
 using EHub.Application.Features.Auth.Common;
 using EHub.Contracts.Auth;
 using EHub.Domain.Entities;
@@ -25,6 +26,9 @@ public class GoogleLoginCommandHandler : IGoogleLoginCommandHandler
     private readonly IJwtTokenService _jwtTokenService;
     private readonly IRefreshTokenService _refreshTokenService;
     private readonly ILogger<GoogleLoginCommandHandler> _logger;
+    private readonly IRoleRepository _roleRepository;
+    private readonly IUserRoleRepository _userRoleRepository;
+    private readonly IDateTimeProvider _dateTimeProvider;
 
     public GoogleLoginCommandHandler(
         IGoogleAuthService googleAuthService,
@@ -34,7 +38,10 @@ public class GoogleLoginCommandHandler : IGoogleLoginCommandHandler
         IUnitOfWork unitOfWork,
         IJwtTokenService jwtTokenService,
         IRefreshTokenService refreshTokenService,
-        ILogger<GoogleLoginCommandHandler> logger)
+        ILogger<GoogleLoginCommandHandler> logger,
+        IRoleRepository roleRepository,
+        IUserRoleRepository userRoleRepository,
+        IDateTimeProvider dateTimeProvider)
     {
         _googleAuthService = googleAuthService;
         _userRepository = userRepository;
@@ -44,6 +51,9 @@ public class GoogleLoginCommandHandler : IGoogleLoginCommandHandler
         _jwtTokenService = jwtTokenService;
         _refreshTokenService = refreshTokenService;
         _logger = logger;
+        _roleRepository = roleRepository;
+        _userRoleRepository = userRoleRepository;
+        _dateTimeProvider = dateTimeProvider;
     }
 
     public async Task<Result<AuthSessionResult>> HandleAsync(
@@ -79,19 +89,43 @@ public class GoogleLoginCommandHandler : IGoogleLoginCommandHandler
             normalizedEmail,
             cancellationToken);
 
+        var isNewUser = user is null;
         if (user is null)
         {
-            _logger.LogWarning(
-                "Google login failed. Reason: account not registered. Email: {Email}.",
-                SensitiveDataMasker.MaskEmail(googleUser.Email));
-            return Result.Failure<AuthSessionResult>(AuthErrors.AccountNotRegistered);
+            var role = await _roleRepository.GetByNameAsync(SystemRoles.Student, cancellationToken);
+            if (role is null)
+                return Result.Failure<AuthSessionResult>(AuthErrors.InvalidRole);
+
+            user = new User
+            {
+                Email = normalizedEmail,
+                NormalizedEmail = normalizedEmail,
+                FullName = string.IsNullOrWhiteSpace(googleUser.FullName) ? normalizedEmail : googleUser.FullName.Trim(),
+                IsEmailVerified = true,
+                Status = UserStatus.Active
+            };
+            await _userRepository.AddAsync(user, cancellationToken);
+            await _userRoleRepository.AddAsync(new UserRole { UserId = user.Id, RoleId = role.Id }, cancellationToken);
+
+            var student = await _studentRepository.GetUnlinkedByEmailAsync(normalizedEmail, cancellationToken);
+            if (student is null)
+            {
+                await _studentRepository.AddAsync(new Student
+                {
+                    UserId = user.Id, Email = normalizedEmail, FullName = user.FullName
+                }, cancellationToken);
+            }
+            else
+            {
+                student.UserId = user.Id;
+                _studentRepository.Update(student);
+            }
         }
 
         if (!user.IsEmailVerified)
         {
             user.IsEmailVerified = true;
             _userRepository.Update(user);
-            await _unitOfWork.SaveChangesAsync(cancellationToken);
         }
 
         // 4. Validate user status
@@ -136,7 +170,7 @@ public class GoogleLoginCommandHandler : IGoogleLoginCommandHandler
         }
 
         // 5. Get roles
-        var roles = user.UserRoles
+        var roles = isNewUser ? new[] { SystemRoles.Student } : user.UserRoles
             .Select(userRole => userRole.Role.Name)
             .ToArray();
 
@@ -155,7 +189,7 @@ public class GoogleLoginCommandHandler : IGoogleLoginCommandHandler
             refreshTokenEntity,
             cancellationToken);
 
-        user.LastLoginAt = DateTime.UtcNow;
+        user.LastLoginAt = _dateTimeProvider.UtcNow;
 
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 

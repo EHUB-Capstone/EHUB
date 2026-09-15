@@ -893,6 +893,8 @@ public sealed class ClassSafetyHotfixIntegrationTests
         context.Students.Add(student);
         context.ClassStudents.Add(enrollment);
         await context.SaveChangesAsync();
+        // Compare persisted timestamps on both sides: PostgreSQL stores microsecond precision.
+        await context.Entry(enrollment).ReloadAsync();
         var enrollmentCreatedAt = enrollment.CreatedAt;
         context.ChangeTracker.Clear();
 

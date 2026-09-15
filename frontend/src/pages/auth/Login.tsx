@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { FormEvent } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
@@ -73,9 +73,18 @@ const Login: React.FC = () => {
   const navigate  = useNavigate();
   const location  = useLocation();
   const state     = location.state as LocationState | null;
-  const googleButtonWidth = typeof window === 'undefined'
-    ? 400
-    : Math.min(400, Math.max(240, window.innerWidth - 48));
+  const googleButtonContainer = useRef<HTMLDivElement>(null);
+  const [googleButtonWidth, setGoogleButtonWidth] = useState(320);
+
+  useEffect(() => {
+    const container = googleButtonContainer.current;
+    if (!container) return;
+    const observer = new ResizeObserver(([entry]) => {
+      if (entry) setGoogleButtonWidth(Math.min(400, Math.floor(entry.contentRect.width)));
+    });
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     if (state?.prefillEmail || state?.email) setEmail(state.prefillEmail ?? state.email ?? '');
@@ -171,7 +180,8 @@ const Login: React.FC = () => {
     try {
       const user = await loginWithGoogle(credentialResponse.credential);
       toast.success('Signed in with Google!');
-      redirectByRole(user.roles as string[]);
+      if (user.role === 'STUDENT') navigate('/settings', { replace: true });
+      else redirectByRole(user.roles as string[]);
     } catch (err: unknown) {
       const { code, message } = parseApiError(err, 'Google sign-in failed.');
       if (code === AUTH_ERROR_CODES.ACCOUNT_NOT_REGISTERED) {
@@ -295,20 +305,35 @@ const Login: React.FC = () => {
 
           {/* Google btn */}
           {import.meta.env.VITE_GOOGLE_CLIENT_ID ? (
-            <div className={`relative mb-5 flex justify-center ${googleLoading ? 'pointer-events-none opacity-70' : ''}`}>
-              <GoogleLogin
-                onSuccess={handleGoogleSuccess}
-                onError={() => { toast.error('Google sign-in failed.'); setGoogleLoading(false); }}
-                theme={isDark ? 'filled_black' : 'outline'}
-                size="large"
-                text="continue_with"
-                shape="rectangular"
-                logo_alignment="center"
-                width={googleButtonWidth}
-              />
+            <div
+              ref={googleButtonContainer}
+              aria-busy={googleLoading}
+              className={`group relative mb-5 flex h-[50px] w-full items-center justify-center overflow-hidden rounded-[14px] border border-[#D9E1EC] bg-white shadow-[0_2px_8px_rgba(15,23,42,0.06)] transition-all dark:border-white/10 dark:bg-white/[0.06] dark:shadow-none ${googleLoading ? 'pointer-events-none opacity-80' : 'hover:-translate-y-0.5 hover:border-[#EA6A12]/40 hover:bg-[#FFF9F5] hover:shadow-[0_8px_22px_rgba(234,106,18,0.12)] dark:hover:border-[#EA6A12]/40 dark:hover:bg-white/[0.09]'}`}
+              style={{ colorScheme: isDark ? 'dark' : 'light' }}
+            >
+              <div className="pointer-events-none flex items-center justify-center gap-3 text-[14px] font-semibold text-[#1E293B] dark:text-slate-100">
+                <span className="flex h-8 w-8 items-center justify-center rounded-[10px] bg-[#F8FAFC] ring-1 ring-slate-200/80 transition-transform group-hover:scale-105 dark:bg-white dark:ring-white">
+                  <GoogleIcon />
+                </span>
+                <span>Continue with Google</span>
+              </div>
+              <div className="absolute inset-0 z-10 flex items-center justify-center opacity-[0.001]">
+                <GoogleLogin
+                  key={`${isDark ? 'dark' : 'light'}-${googleButtonWidth}`}
+                  onSuccess={handleGoogleSuccess}
+                  onError={() => { toast.error('Google sign-in failed.'); setGoogleLoading(false); }}
+                  theme={isDark ? 'filled_black' : 'outline'}
+                  size="large"
+                  text="continue_with"
+                  shape="rectangular"
+                  logo_alignment="center"
+                  width={googleButtonWidth}
+                />
+              </div>
               {googleLoading && (
-                <div className="absolute inset-0 flex items-center justify-center rounded-[14px] bg-white/70 dark:bg-[#0F172A]/70">
+                <div role="status" className="absolute inset-0 z-20 flex items-center justify-center gap-2.5 rounded-[14px] bg-white text-sm font-semibold text-[#0F172A] dark:bg-[#171C29] dark:text-slate-100">
                   <div className="w-[18px] h-[18px] rounded-full border-2 border-[#EA6A12] border-t-transparent animate-spin" />
+                  Connecting to Google…
                 </div>
               )}
             </div>

@@ -57,6 +57,7 @@ export interface UpdateProfileResponse {
   id: string;
   fullName: string;
   avatarUrl: string | null;
+  majorCode: string | null;
 }
 
 // ─── Request payloads ────────────────────────────────────────────────────────

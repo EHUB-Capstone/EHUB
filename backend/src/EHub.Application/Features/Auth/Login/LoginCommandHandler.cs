@@ -67,7 +67,7 @@ public sealed class LoginCommandHandler : ILoginCommandHandler
         }
 
         // 3. Verify password hash
-        var isPasswordValid = _passwordHasher.Verify(
+        var isPasswordValid = !string.IsNullOrEmpty(user.PasswordHash) && _passwordHasher.Verify(
             request.Password,
             user.PasswordHash);
 

@@ -181,19 +181,12 @@ Tất cả các API đều phản hồi theo cấu trúc thống nhất:
 }
 ```
 
-#### Response (Thành công - Đã có tài khoản trước đó):
+#### Response (Thành công - tài khoản hiện có hoặc Student mới):
 *(Cấu hình phản hồi thành công tương tự như `/api/auth/login`)*
 
-#### Response (Thất bại - Chưa có tài khoản):
-```json
-{
-  "success": false,
-  "message": "Account is not registered. Please create an account first.",
-  "code": "AUTH_ACCOUNT_NOT_REGISTERED",
-  "data": null,
-  "errors": null
-}
-```
+Email Google đã xác minh chưa có tài khoản được tạo với vai trò Student và trạng thái Active. `user.majorCode` có thể là `null`. Student được chuyển tới `/settings` sau đăng nhập để hoàn tất chuyên ngành. Tài khoản hiện có giữ nguyên vai trò và các kiểm tra trạng thái.
+
+`PUT /api/auth/update-profile` yêu cầu xác thực, nhận multipart `fullName`, `major` (chuyên ngành hợp lệ của Student, tùy chọn khi chỉ sửa tên/ảnh), `avatar` (tùy chọn). Dữ liệu phản hồi gồm `id`, `fullName`, `avatarUrl`, `majorCode`. Chuyên ngành được chuẩn hóa chữ hoa và lưu vào hồ sơ Student của người gọi.
 
 ---
 
@@ -274,7 +267,6 @@ Frontend dựa vào giá trị trả về trong trường `code` (cho phản h�
 | **`AUTH_ACCOUNT_REJECTED`** | `403` | Tài khoản đăng ký bị Admin từ chối duyệt | Hiển thị thông báo tài khoản bị từ chối duyệt. |
 | **`AUTH_USER_BLOCKED`** | `403` | Tài khoản đang bị khóa do vi phạm | Hiển thị thông báo tài khoản bị khóa, liên hệ hỗ trợ. |
 | **`AUTH_USER_INACTIVE`** | `403` | Tài khoản chưa được kích hoạt hoặc tạm ngưng | Hiển thị thông báo tài khoản tạm ngưng hoạt động. |
-| **`AUTH_ACCOUNT_NOT_REGISTERED`** | `401` / `404` | Tài khoản Google chưa từng đăng ký hệ thống | Điều hướng sang màn hình **Hoàn tất hồ sơ**, autofill Email & Name. |
 | **`AUTH_INVALID_GOOGLE_TOKEN`** | `401` | Token Google ID Token sai hoặc hết hạn | Thông báo đăng nhập bằng Google thất bại. |
 | **`AUTH_GOOGLE_EMAIL_NOT_VERIFIED`** | `401` | Tài khoản Google chưa được xác thực email | Từ chối đăng nhập. |
 | **`AUTH_REFRESH_TOKEN_INVALID`** | `401` | Refresh token không khớp hoặc sai định dạng | Xóa cookies/storage và chuyển hướng về màn hình Đăng nhập. |

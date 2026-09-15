@@ -31,6 +31,32 @@ public class AuthIntegrationTests
         _client = factory.CreateClient();
     }
 
+    [Fact]
+    public async Task GoogleLogin_Should_CreateStudent_AndPersistSelectedMajor()
+    {
+        var email = $"google-{Guid.NewGuid()}@example.com";
+        var login = await _client.PostAsJsonAsync("/api/auth/google", new GoogleLoginRequest { IdToken = email });
+        login.StatusCode.Should().Be(HttpStatusCode.OK);
+        var session = (await login.Content.ReadFromJsonAsync<ApiResponse<AuthResponse>>())!.Data!;
+        session.User.Roles.Should().ContainSingle().Which.Should().Be(SystemRoles.Student);
+        session.User.MajorCode.Should().BeNull();
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", session.AccessToken);
+
+        using var form = new MultipartFormDataContent();
+        form.Add(new StringContent("Google Student"), "fullName");
+        form.Add(new StringContent("BIT_SE"), "major");
+        var updated = await _client.PutAsync("/api/auth/update-profile", form);
+        updated.StatusCode.Should().Be(HttpStatusCode.OK);
+        var me = await _client.GetFromJsonAsync<ApiResponse<CurrentUserResponse>>("/api/auth/me");
+        me!.Data!.MajorCode.Should().Be("BIT_SE");
+
+        var repeated = await _client.PostAsJsonAsync("/api/auth/google", new GoogleLoginRequest { IdToken = email });
+        repeated.StatusCode.Should().Be(HttpStatusCode.OK);
+        var secondSession = (await repeated.Content.ReadFromJsonAsync<ApiResponse<AuthResponse>>())!.Data!;
+        secondSession.User.Id.Should().Be(session.User.Id);
+        secondSession.User.MajorCode.Should().Be("BIT_SE");
+    }
+
     private string ExtractRefreshToken(HttpResponseMessage response)
     {
         if (response.Headers.TryGetValues("Set-Cookie", out var values))

@@ -8,7 +8,7 @@ import Badge from '../../components/ui/Badge';
 import { changePassword, updateProfile } from '../../api/authApi';
 import toast from 'react-hot-toast';
 import { motion } from 'framer-motion';
-import { TEAM_MAJOR_GROUPS, getTeamGroupFromMajor, ALL_TEAM_MAJOR_CODES } from '../../constants/majors';
+import { TEAM_MAJOR_GROUPS, ALL_TEAM_MAJOR_CODES } from '../../constants/majors';
 import { parseApiError } from '../../utils/apiError';
 
 const roleBadgeVariant = { ADMIN: 'Approved', LECTURER: 'Submitted', MENTOR: 'Review', STUDENT: 'Reviewed' };
@@ -49,6 +49,7 @@ const ProfileSettings = () => {
 
   const handleUpdateProfile = async (e) => {
     e.preventDefault();
+    if (isSavingProfile) return;
     if (!name.trim()) return toast.error('Name is required');
     if (role === 'STUDENT') {
       if (!major) return toast.error('Major is required for students.');
@@ -63,8 +64,6 @@ const ProfileSettings = () => {
       }
       if (role === 'STUDENT') {
         formData.append('major', major);
-        const derivedGroup = getTeamGroupFromMajor(major);
-        formData.append('programGroup', derivedGroup === 'GROUP_1' ? 'BBA' : derivedGroup === 'GROUP_2' ? 'BIT' : '');
       }
       const profile = await updateProfile(formData);
       updateUser({
@@ -72,6 +71,8 @@ const ProfileSettings = () => {
         name: profile.fullName,
         avatarUrl: profile.avatarUrl,
         avatar: profile.avatarUrl || undefined,
+        majorCode: profile.majorCode,
+        major: profile.majorCode,
       });
       setAvatarFile(null);
       if (avatarInputRef.current) {
@@ -79,7 +80,7 @@ const ProfileSettings = () => {
       }
       toast.success('Profile updated successfully');
     } catch (err) {
-      toast.error(err.message || 'Failed to update profile');
+      toast.error(parseApiError(err, 'Failed to update profile').message);
     } finally {
       setIsSavingProfile(false);
     }
@@ -246,8 +247,9 @@ const ProfileSettings = () => {
                       </div>
                     )}
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1.5">Major</label>
+                      <label htmlFor="profile-major" className="block text-sm font-medium text-slate-700 mb-1.5">Major</label>
                       <select
+                        id="profile-major"
                         value={major} onChange={e => setMajor(e.target.value)} required
                         disabled={user?.isMajorLocked}
                         className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-slate-900 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed"

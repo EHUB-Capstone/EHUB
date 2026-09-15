@@ -416,13 +416,16 @@ test('mock Google auth validates the request and mirrors backend business errors
       return response?.status === 401 && response.data?.code === 'AUTH_GOOGLE_EMAIL_NOT_VERIFIED';
     },
   );
-  await assert.rejects(
-    axiosClient.post('/auth/google', { idToken: 'mock-google:not-registered@ehub.local' }),
-    (error: unknown) => {
-      const response = (error as { response?: { status?: number; data?: { code?: string } } }).response;
-      return response?.status === 404 && response.data?.code === 'AUTH_ACCOUNT_NOT_REGISTERED';
-    },
-  );
+  const newGoogleUser = await axiosClient.post('/auth/google', { idToken: 'mock-google:not-registered@ehub.local' });
+  assert.deepEqual(newGoogleUser.data.user.roles, ['Student']);
+  assert.equal(newGoogleUser.data.user.majorCode, null);
+  const profileForm = new FormData();
+  profileForm.append('fullName', 'Google Student');
+  profileForm.append('major', 'BIT_SE');
+  const savedProfile = await axiosClient.put('/auth/update-profile', profileForm, { headers: { 'Content-Type': undefined } });
+  assert.equal(savedProfile.data.majorCode, 'BIT_SE');
+  const currentGoogleUser = await axiosClient.get('/auth/me');
+  assert.equal(currentGoogleUser.data.majorCode, 'BIT_SE');
   await assert.rejects(
     axiosClient.post('/auth/google', { idToken: 'mock-google:blocked.mentor@ehub.local' }),
     (error: unknown) => {
