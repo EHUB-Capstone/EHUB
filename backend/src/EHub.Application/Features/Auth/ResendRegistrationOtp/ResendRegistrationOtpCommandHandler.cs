@@ -1,4 +1,5 @@
 using EHub.Application.Common.Interfaces.Persistence;
+using EHub.Application.Common.Exceptions;
 using EHub.Application.Common.Interfaces.Services;
 using EHub.Application.Common.Models.Identity;
 using EHub.Application.Features.Auth.Register;
@@ -42,6 +43,32 @@ public sealed class ResendRegistrationOtpCommandHandler : IResendRegistrationOtp
     public async Task<Result<RegisterResult>> HandleAsync(
         ResendRegistrationOtpRequest request,
         CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            // Roll back the replacement challenge and resend counter on SMTP failure.
+            // Never retry this transaction automatically after an external send.
+            return await _unitOfWork.ExecuteInSerializableTransactionAsync(
+                ct => ResendAsync(request, ct), cancellationToken);
+        }
+        catch (EmailDeliveryException exception)
+        {
+            _logger.LogWarning(
+                "Registration email resend failed. FailureKind: {FailureKind}; RetryAfterUtc: {RetryAfterUtc}",
+                exception.FailureKind, exception.RetryAfterUtc);
+            return Result.Failure<RegisterResult>(exception.FailureKind == EmailDeliveryFailureKind.QuotaExceeded
+                ? AuthErrors.EmailTemporarilyUnavailable
+                : AuthErrors.EmailDeliveryFailed);
+        }
+        catch (SerializableTransactionConflictException)
+        {
+            return Result.Failure<RegisterResult>(AuthErrors.VerificationResendTooSoon);
+        }
+    }
+
+    private async Task<Result<RegisterResult>> ResendAsync(
+        ResendRegistrationOtpRequest request,
+        CancellationToken cancellationToken)
     {
         var registration = await _repository.GetByIdAsync(
             request.RegistrationId,
@@ -89,15 +116,18 @@ public sealed class ResendRegistrationOtpCommandHandler : IResendRegistrationOtp
                 registration.OtpExpiresAtUtc,
                 cancellationToken);
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (EmailDeliveryException)
+        {
+            throw;
+        }
         catch (Exception exception)
         {
-            registration.LastSentAtUtc = null;
-            await _unitOfWork.SaveChangesAsync(cancellationToken);
-            _logger.LogError(
-                exception,
-                "Registration verification email resend failed for registration {RegistrationId}",
-                registration.Id);
-            return Result.Failure<RegisterResult>(AuthErrors.EmailDeliveryFailed);
+            _logger.LogWarning("Registration email provider threw {ExceptionType}", exception.GetType().Name);
+            throw new EmailDeliveryException(EmailDeliveryFailureKind.Unknown);
         }
 
         return Result.Success(new RegisterResult
