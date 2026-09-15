@@ -406,6 +406,7 @@ public sealed class AuthController : ControllerBase
         {
             FullName = request.FullName,
             AvatarContent = avatarStream,
+            Major = request.Major,
             AvatarLength = request.Avatar?.Length ?? 0,
             AvatarFileName = request.Avatar?.FileName,
             AvatarContentType = request.Avatar?.ContentType
@@ -419,6 +420,9 @@ public sealed class AuthController : ControllerBase
                     ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code)),
                 ErrorCodes.AuthProfileImageUploadFailed => StatusCode(
                     StatusCodes.Status503ServiceUnavailable,
+                    ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code)),
+                ErrorCodes.CommonForbiddenError => StatusCode(
+                    StatusCodes.Status403Forbidden,
                     ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code)),
                 _ => BadRequest(
                     ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code))

@@ -4,6 +4,7 @@ using EHub.Application.Common.Interfaces.Storage;
 using EHub.Contracts.Auth;
 using EHub.Shared.Errors;
 using EHub.Shared.Results;
+using EHub.Shared.Constants;
 
 namespace EHub.Application.Features.Auth.UpdateProfile;
 
@@ -69,6 +70,15 @@ public sealed class UpdateProfileCommandHandler : IUpdateProfileCommandHandler
         }
 
         string? avatarUrl = user.AvatarUrl;
+        var student = await _studentRepository.GetByUserIdAsync(user.Id, cancellationToken);
+        if (command.Major is not null && !user.UserRoles.Any(r => r.Role.Name == SystemRoles.Student))
+        {
+            return Result.Failure<UpdateProfileResponse>(CommonErrors.Forbidden);
+        }
+        if (command.Major is not null && (student is null || !MajorCodes.IsValid(command.Major)))
+        {
+            return Result.Failure<UpdateProfileResponse>(ErrorCodes.CommonValidationError, "Select a valid student major.");
+        }
         if (command.AvatarContent is not null)
         {
             var uploadResult = await _imageStorageService.UploadAvatarAsync(
@@ -90,9 +100,12 @@ public sealed class UpdateProfileCommandHandler : IUpdateProfileCommandHandler
         user.AvatarUrl = avatarUrl;
         _userRepository.Update(user);
 
-        var student = await _studentRepository.GetByUserIdAsync(user.Id, cancellationToken);
         if (student is not null)
         {
+            if (command.Major is not null)
+            {
+                student.MajorCode = command.Major.Trim().ToUpperInvariant();
+            }
             student.FullName = fullName;
             student.AvatarUrl = avatarUrl;
             _studentRepository.Update(student);
@@ -104,7 +117,8 @@ public sealed class UpdateProfileCommandHandler : IUpdateProfileCommandHandler
         {
             Id = user.Id,
             FullName = fullName,
-            AvatarUrl = avatarUrl
+            AvatarUrl = avatarUrl,
+            MajorCode = student?.MajorCode
         });
     }
 

@@ -76,4 +76,6 @@ Khi người dùng thực hiện Đăng nhập (Local hoặc Google):
 *   Backend gọi API Google để xác thực và lấy thông tin Email, FullName.
 *   **Kiểm tra tính tồn tại:**
     *   Nếu email **đã tồn tại** $\rightarrow$ Kiểm tra trạng thái tài khoản (`Active` cấp token, `Pending` chặn).
-    *   Nếu email **chưa tồn tại** $\rightarrow$ Không tự động tạo tài khoản. Trả về mã lỗi `AUTH_ACCOUNT_NOT_REGISTERED` để Frontend hướng dẫn người dùng chọn vai trò/chuyên ngành và thực hiện hoàn tất đăng ký.
+    *   Nếu email **chưa tồn tại** $\rightarrow$ Tạo tài khoản Student Active với email đã được Google xác minh, liên kết hồ sơ sinh viên theo email nếu có, rồi cấp phiên đăng nhập. Không yêu cầu mật khẩu hoặc OTP đăng ký.
+*   Student đăng nhập Google thành công được chuyển tới `/settings` để chọn và lưu chuyên ngành qua `PUT /api/auth/update-profile` (multipart: `fullName`, `major`, `avatar` tùy chọn). Phản hồi chứa `majorCode`; frontend cập nhật hồ sơ trong bộ nhớ. Các vai trò khác giữ điều hướng hiện tại.
+*   Chuyên ngành hồ sơ không thay đổi chuyên ngành đã xác nhận trong từng lớp. Tài khoản chỉ có Google có thể dùng luồng quên mật khẩu để thiết lập mật khẩu nếu cần.

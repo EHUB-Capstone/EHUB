@@ -43,7 +43,7 @@ public sealed class ChangePasswordCommandHandler : IChangePasswordCommandHandler
             return Result.Failure(CommonErrors.Unauthorized);
         }
 
-        if (!_passwordHasher.Verify(request.CurrentPassword, user.PasswordHash))
+        if (string.IsNullOrEmpty(user.PasswordHash) || !_passwordHasher.Verify(request.CurrentPassword, user.PasswordHash))
         {
             return Result.Failure(AuthErrors.CurrentPasswordInvalid);
         }

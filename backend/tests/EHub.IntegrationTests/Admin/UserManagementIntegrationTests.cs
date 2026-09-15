@@ -129,6 +129,16 @@ public sealed class UserManagementIntegrationTests : IAsyncLifetime
             Major = MajorCodes.BIT_SE
         });
         createResult.IsSuccess.Should().BeTrue();
+        createResult.Value.Role.Should().Be("STUDENT");
+        var lecturerResult = await handler.CreateUserAsync(new SaveManagedUserRequest
+        {
+            Name = "Current Semester Lecturer",
+            Email = $"current-semester-lecturer-{unique}@example.com",
+            Password = "Temporary123",
+            Role = "LECTURER",
+            Status = "APPROVED"
+        });
+        lecturerResult.IsSuccess.Should().BeTrue();
 
         var semester = new Semester
         {
@@ -155,6 +165,8 @@ public sealed class UserManagementIntegrationTests : IAsyncLifetime
             Semester = semester,
             CourseId = course.Id,
             Course = course,
+            PrimaryLecturerId = lecturerResult.Value.Id,
+            ScheduleJson = "[{\"dayOfWeek\":1,\"slotNumber\":1,\"room\":\"UM-101\"}]",
             Status = ClassStatus.Active,
             CreatedById = _adminId,
             CreatedBy = _adminId

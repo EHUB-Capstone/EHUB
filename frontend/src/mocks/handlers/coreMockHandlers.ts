@@ -1,4 +1,5 @@
 import type MockAdapter from 'axios-mock-adapter';
+import { ALL_TEAM_MAJOR_CODES } from '../../constants/majors.ts';
 import type { AxiosRequestConfig } from 'axios';
 import type { ChangePasswordPayload, LoginPayload, RegisterPayload } from '../../types/auth.ts';
 import {
@@ -250,9 +251,13 @@ function registerAuthHandlers(mock: MockAdapter): void {
     }
 
     const email = identity.email.trim().toLowerCase();
-    const user = getMockState().users.find((item) => item.email.toLowerCase() === email);
+    let user = getMockState().users.find((item) => item.email.toLowerCase() === email);
     if (!user) {
-      return failure(404, 'AUTH_ACCOUNT_NOT_REGISTERED', 'Account is not registered. Please create an account first.');
+      const id = allocateId();
+      user = { id, _id: id, email, name: email, role: 'STUDENT', status: 'APPROVED',
+        major: null, avatar: null, studentId: null, programGroup: null, phone: null,
+        createdAt: new Date().toISOString(), lastSeen: null };
+      getMockState().users.push(user);
     }
     const statusFailure = accountStatusFailure(user);
     if (statusFailure) return statusFailure;
@@ -284,6 +289,25 @@ function registerAuthHandlers(mock: MockAdapter): void {
     const statusFailure = accountStatusFailure(user);
     if (statusFailure) return statusFailure;
     return ok(authUser(user), 'Current user retrieved successfully');
+  });
+
+  mock.onPut('/auth/update-profile').reply((config) => {
+    const state = getMockState();
+    const user = state.users.find(item => item.id === state.sessionUserId);
+    if (!user) return failure(401, 'COMMON_UNAUTHORIZED', 'Unauthorized access.');
+    const statusFailure = accountStatusFailure(user);
+    if (statusFailure) return statusFailure;
+    const form = config.data;
+    if (!(form instanceof FormData)) return failure(400, 'COMMON_VALIDATION_ERROR', 'Invalid profile form.');
+    const name = String(form.get('fullName') ?? '').trim();
+    const major = form.has('major') ? String(form.get('major')).trim().toUpperCase() : null;
+    if (major !== null && user.role !== 'STUDENT') return failure(403, 'COMMON_FORBIDDEN', 'Forbidden access.');
+    if (!name || name.length > 200 || (major !== null && !ALL_TEAM_MAJOR_CODES.includes(major)))
+      return failure(400, 'COMMON_VALIDATION_ERROR', 'Enter a valid name and student major.');
+    user.name = name;
+    if (major !== null) user.major = major;
+    persistMockState();
+    return ok({ id: user.id, fullName: user.name, avatarUrl: user.avatar, majorCode: user.major }, 'Profile updated.');
   });
 
   mock.onPost('/auth/logout').reply(() => {

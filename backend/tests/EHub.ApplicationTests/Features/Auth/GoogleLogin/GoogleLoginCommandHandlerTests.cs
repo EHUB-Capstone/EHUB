@@ -26,6 +26,8 @@ public class GoogleLoginCommandHandlerTests
     private readonly IGoogleAuthService _googleAuthService = Substitute.For<IGoogleAuthService>();
     private readonly IUserRepository _userRepository = Substitute.For<IUserRepository>();
     private readonly IStudentRepository _studentRepository = Substitute.For<IStudentRepository>();
+    private readonly IRoleRepository _roleRepository = Substitute.For<IRoleRepository>();
+    private readonly IUserRoleRepository _userRoleRepository = Substitute.For<IUserRoleRepository>();
     private readonly IRefreshTokenRepository _refreshTokenRepository = Substitute.For<IRefreshTokenRepository>();
     private readonly IUnitOfWork _unitOfWork = Substitute.For<IUnitOfWork>();
     private readonly IJwtTokenService _jwtTokenService = Substitute.For<IJwtTokenService>();
@@ -44,7 +46,10 @@ public class GoogleLoginCommandHandlerTests
             _unitOfWork,
             _jwtTokenService,
             _refreshTokenService,
-            _logger);
+            _logger,
+            _roleRepository,
+            _userRoleRepository,
+            Substitute.For<EHub.Application.Common.Interfaces.Services.IDateTimeProvider>());
     }
 
     private static void SetId(BaseEntity entity, Guid id)
@@ -158,8 +163,10 @@ public class GoogleLoginCommandHandlerTests
         await _userRepository.DidNotReceiveWithAnyArgs().GetByEmailWithRolesAsync(default!, default!);
     }
 
-    [Fact]
-    public async Task Should_Fail_Login_When_User_Not_Registered()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Should_Create_Student_And_Login_When_User_Not_Registered(bool hasRosterProfile)
     {
         var request = new GoogleLoginRequest { IdToken = "valid-google-id-token" };
 
@@ -175,13 +182,39 @@ public class GoogleLoginCommandHandlerTests
             .Returns(Result.Success(googleUserInfo));
 
         _userRepository.GetByEmailWithRolesAsync("notregistered@fpt.edu.vn", Arg.Any<CancellationToken>()).Returns((User?)null);
+        _roleRepository.GetByNameAsync(SystemRoles.Student, Arg.Any<CancellationToken>())
+            .Returns(new Role { Name = SystemRoles.Student });
+        _jwtTokenService.GenerateAccessToken(Arg.Any<User>(), Arg.Any<string[]>())
+            .Returns(new AccessTokenResult { Token = "access", ExpiresAt = DateTime.UtcNow.AddHours(1) });
+        _refreshTokenService.GenerateRefreshToken().Returns(new RefreshTokenResult
+        {
+            RawToken = "refresh", TokenHash = "hash", ExpiresAt = DateTime.UtcNow.AddDays(7)
+        });
+        var rosterStudent = new Student { Email = googleUserInfo.Email, MajorCode = MajorCodes.BIT_SE };
+        if (hasRosterProfile)
+        {
+            _studentRepository.GetUnlinkedByEmailAsync(googleUserInfo.Email, Arg.Any<CancellationToken>()).Returns(rosterStudent);
+            _studentRepository.GetByUserIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(rosterStudent);
+        }
 
         var result = await _handler.HandleAsync(request, CancellationToken.None);
 
-        Assert.False(result.IsSuccess);
-        Assert.Equal(ErrorCodes.AuthAccountNotRegistered, result.Error.Code);
-
-        _jwtTokenService.DidNotReceiveWithAnyArgs().GenerateAccessToken(default!, default!);
+        Assert.True(result.IsSuccess);
+        Assert.Equal(new[] { SystemRoles.Student }, result.Value.User.Roles);
+        Assert.Equal(hasRosterProfile ? MajorCodes.BIT_SE : null, result.Value.User.MajorCode);
+        await _userRepository.Received(1).AddAsync(Arg.Is<User>(u => u != null && u.IsEmailVerified && u.Status == UserStatus.Active), Arg.Any<CancellationToken>());
+        if (hasRosterProfile)
+        {
+            Assert.Equal(result.Value.User.Id, rosterStudent.UserId);
+            _studentRepository.Received(1).Update(rosterStudent);
+            await _studentRepository.DidNotReceiveWithAnyArgs().AddAsync(default!, default);
+        }
+        else
+        {
+            await _studentRepository.Received(1).AddAsync(Arg.Is<Student>(s => s != null && s.MajorCode == null), Arg.Any<CancellationToken>());
+        }
+        await _userRoleRepository.Received(1).AddAsync(Arg.Is<UserRole>(r => r != null && r.UserId == result.Value.User.Id), Arg.Any<CancellationToken>());
+        await _unitOfWork.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
     }
 
     [Theory]

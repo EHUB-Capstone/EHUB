@@ -37,9 +37,7 @@ Sau khi gọi thành công các API Đăng nhập (`/login`, `/google`) hoặc �
 2.  **Bước 2: Gửi IdToken lên Backend**
     *   Frontend gọi API `POST /api/auth/google` truyền `idToken` vừa lấy được.
 3.  **Bước 3: Xử lý phản hồi từ Backend**
-    *   *Trường hợp 1 (Đăng nhập thành công):* Nhận về AccessToken & Refresh Token $\rightarrow$ Chuyển hướng vào Dashboard.
-    *   *Trường hợp 2 (Tài khoản chưa đăng ký):* Nhận về mã lỗi `AUTH_ACCOUNT_NOT_REGISTERED` cùng dữ liệu Email & FullName trích xuất từ Google.
-        *   Frontend chuyển hướng sang màn hình **"Hoàn tất hồ sơ đăng ký"** (Complete Profile).
-        *   Tự động điền (Pre-fill) và khóa (Disable) các ô Email, Full Name.
-        *   Yêu cầu người dùng chọn vai trò (Student, Lecturer, Mentor) và chuyên ngành (nếu là Student).
-        *   Khi bấm nút Hoàn tất, gọi API `POST /api/auth/complete-google-register` để tạo tài khoản.
+    *   Email Google đã xác minh chưa có tài khoản được backend tạo thành Student Active và cấp phiên đăng nhập ngay.
+    *   Student đăng nhập thành công được chuyển tới `/settings`, chọn chuyên ngành và lưu bằng `PUT /api/auth/update-profile` (multipart: `fullName`, `major`, `avatar` tùy chọn).
+    *   Cập nhật `majorCode` và `major` trong AuthContext bằng `majorCode` từ phản hồi để giao diện nhận hồ sơ mới ngay.
+    *   Tài khoản hiện có giữ nguyên vai trò và kiểm tra trạng thái; các vai trò ngoài Student giữ điều hướng hiện tại. Không dùng endpoint `complete-google-register`.

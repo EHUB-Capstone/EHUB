@@ -48,7 +48,19 @@ public sealed class UserManagementHandler(IApplicationDbContext context, ICurren
         var validation = await ValidateAsync(request, null, true, token); if (validation is not null) return Fail<ManagedUserResponse>("VALIDATION_ERROR", validation);
         var role = await context.Roles.FirstAsync(item => item.Name == NormalizeRole(request.Role), token); var email = request.Email.Trim().ToLowerInvariant(); var user = new User { FullName = request.Name.Trim(), Email = email, NormalizedEmail = email, PasswordHash = passwordHasher.Hash(request.Password!), Phone = Clean(request.Phone), Status = ToStatus(request.Status), IsEmailVerified = true, CreatedBy = currentUser.UserId };
         var requestedRole = NormalizeRole(request.Role);
-        await context.Users.AddAsync(user, token); await context.UserRoles.AddAsync(new UserRole { UserId = user.Id, RoleId = role.Id, AssignedBy = currentUser.UserId }, token); if (requestedRole == SystemRoles.Student) await context.Students.AddAsync(NewStudent(user, request), token); if (requestedRole == SystemRoles.Mentor) await context.MentorProfiles.AddAsync(NewMentorProfile(user), token); await context.SaveChangesAsync(token); user.UserRoles.Add(new UserRole { Role = role }); return Result.Success(ToResponse(user, request));
+        await context.Users.AddAsync(user, token);
+        await context.UserRoles.AddAsync(new UserRole
+        {
+            UserId = user.Id,
+            RoleId = role.Id,
+            User = user,
+            Role = role,
+            AssignedBy = currentUser.UserId
+        }, token);
+        if (requestedRole == SystemRoles.Student) await context.Students.AddAsync(NewStudent(user, request), token);
+        if (requestedRole == SystemRoles.Mentor) await context.MentorProfiles.AddAsync(NewMentorProfile(user), token);
+        await context.SaveChangesAsync(token);
+        return Result.Success(ToResponse(user, request));
     }
     public async Task<Result<ManagedUserResponse>> UpdateUserAsync(Guid id, SaveManagedUserRequest request, CancellationToken token = default)
     {
