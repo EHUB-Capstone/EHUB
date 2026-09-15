@@ -104,10 +104,6 @@ public static class AuthErrors
         ErrorCodes.AuthEmailDeliveryFailed,
         "The verification email could not be delivered. Please try again.");
 
-    public static readonly Error EmailTemporarilyUnavailable = new(
-        ErrorCodes.AuthEmailTemporarilyUnavailable,
-        "Verification emails are temporarily unavailable. Please try again later.");
-
     public static readonly Error RegistrationAlreadyCompleted = new(
         ErrorCodes.AuthRegistrationAlreadyCompleted,
         "This registration has already been completed.");

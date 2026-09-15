@@ -1,10 +1,7 @@
 using System;
-using System.Diagnostics;
 using System.Net;
-using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
-using EHub.Application.Common.Exceptions;
 using EHub.Application.Common.Interfaces.Services;
 using EHub.Infrastructure.Options;
 using MailKit.Net.Smtp;
@@ -19,22 +16,13 @@ public sealed class SmtpEmailService : IEmailService
 {
     private readonly EmailOptions _options;
     private readonly ILogger<SmtpEmailService> _logger;
-    private readonly ISmtpClientFactory _clientFactory;
-    private readonly SmtpProviderCooldown _providerCooldown;
-    private readonly IDateTimeProvider _dateTimeProvider;
 
     public SmtpEmailService(
         IOptions<EmailOptions> options,
-        ILogger<SmtpEmailService> logger,
-        ISmtpClientFactory clientFactory,
-        SmtpProviderCooldown providerCooldown,
-        IDateTimeProvider dateTimeProvider)
+        ILogger<SmtpEmailService> logger)
     {
         _options = options.Value;
         _logger = logger;
-        _clientFactory = clientFactory;
-        _providerCooldown = providerCooldown;
-        _dateTimeProvider = dateTimeProvider;
     }
 
     public async Task SendRegistrationOtpAsync(
@@ -222,168 +210,51 @@ public sealed class SmtpEmailService : IEmailService
         string textBody,
         CancellationToken cancellationToken)
     {
-        try
+        ValidateOptions();
+
+        var message = new MimeMessage();
+
+        message.From.Add(new MailboxAddress(
+            _options.FromName,
+            _options.FromEmail));
+
+        message.To.Add(new MailboxAddress(
+            toName,
+            toEmail));
+
+        message.Subject = subject;
+
+        var bodyBuilder = new BodyBuilder
         {
-            await SendViaProviderAsync(toEmail, toName, subject, htmlBody, textBody,
-                _options, _providerCooldown, cancellationToken);
-        }
-        catch (EmailDeliveryException exception) when (
-            exception.FailureKind == EmailDeliveryFailureKind.QuotaExceeded
-            && _options.EnableBrevoFallback)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            var brevo = _options.Brevo;
-            if (brevo is null
-                || !string.Equals(brevo.SmtpHost, "smtp-relay.brevo.com", StringComparison.OrdinalIgnoreCase)
-                || !string.Equals(brevo.SecureSocketOption, "StartTls", StringComparison.OrdinalIgnoreCase))
-            {
-                throw new EmailDeliveryException(EmailDeliveryFailureKind.Configuration);
-            }
-
-            _logger.LogInformation("Primary SMTP quota exhausted; attempting Brevo fallback");
-            // Reuse the same content/OTP. Never fall back on ambiguous transport failures.
-            await SendViaProviderAsync(toEmail, toName, subject, htmlBody, textBody,
-                brevo, null, cancellationToken);
-        }
-    }
-
-    private async Task SendViaProviderAsync(
-        string toEmail, string toName, string subject, string htmlBody, string textBody,
-        EmailOptions options, SmtpProviderCooldown? cooldown, CancellationToken cancellationToken)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-        ValidateOptions(options);
-        cooldown?.ThrowIfActive(_dateTimeProvider.UtcNow);
-
-        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeout.CancelAfter(TimeSpan.FromSeconds(options.SmtpTimeoutSeconds));
-
-        ISmtpClient? smtpClient = null;
-        var accepted = false;
-        var stage = EmailDeliveryFailureKind.Configuration;
-        var stageTimer = Stopwatch.StartNew();
-        try
-        {
-            using var message = new MimeMessage();
-            message.From.Add(new MailboxAddress(options.FromName, options.FromEmail));
-            stage = EmailDeliveryFailureKind.RecipientRejected;
-            message.To.Add(new MailboxAddress(toName, toEmail));
-            message.Subject = subject;
-            message.Body = new BodyBuilder { HtmlBody = htmlBody, TextBody = textBody }.ToMessageBody();
-
-            stage = EmailDeliveryFailureKind.Configuration;
-            smtpClient = _clientFactory.Create();
-            smtpClient.Timeout = options.SmtpTimeoutSeconds * 1000;
-
-            stage = EmailDeliveryFailureKind.Connection;
-            stageTimer.Restart();
-            await smtpClient.ConnectAsync(
-                options.SmtpHost,
-                options.SmtpPort,
-                ResolveSecureSocketOptions(options.SecureSocketOption),
-                timeout.Token);
-            LogStageDuration("connect", options, stageTimer);
-
-            stage = EmailDeliveryFailureKind.Authentication;
-            stageTimer.Restart();
-            await smtpClient.AuthenticateAsync(options.Username, options.Password, timeout.Token);
-            LogStageDuration("authenticate", options, stageTimer);
-
-            stage = EmailDeliveryFailureKind.ProviderRejected;
-            stageTimer.Restart();
-            await smtpClient.SendAsync(message, timeout.Token);
-            accepted = true;
-            LogStageDuration("send", options, stageTimer);
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch (Exception exception)
-        {
-            var failureKind = ClassifyFailure(exception, stage, options);
-            _logger.LogWarning("SMTP stage failed: {Stage}; category {FailureKind}; elapsed {ElapsedMs} ms",
-                stage, failureKind, stageTimer.ElapsedMilliseconds);
-            DateTime? retryAfterUtc = failureKind == EmailDeliveryFailureKind.QuotaExceeded
-                ? cooldown?.RecordQuotaFailure(
-                    _dateTimeProvider.UtcNow, TimeSpan.FromMinutes(options.QuotaCooldownMinutes))
-                : null;
-
-            // Never retain the provider message or inner exception: they may contain private data.
-            throw new EmailDeliveryException(failureKind, retryAfterUtc);
-        }
-        finally
-        {
-            if (smtpClient is not null)
-            {
-                if (accepted)
-                {
-                    try
-                    {
-                        using var cleanupTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(2));
-                        // DATA acceptance already confirms delivery to the SMTP server.
-                        // Close locally without a QUIT round trip on the HTTP critical path.
-                        await smtpClient.DisconnectAsync(false, cleanupTimeout.Token);
-                    }
-                    catch (Exception)
-                    {
-                        // SMTP already accepted the message. Reporting failure here would cause duplicates.
-                        _logger.LogWarning("SMTP disconnect failed after message acceptance; email remains accepted");
-                    }
-                }
-
-                try
-                {
-                    smtpClient.Dispose();
-                }
-                catch (Exception)
-                {
-                    _logger.LogWarning("SMTP client cleanup failed; delivery outcome is unchanged");
-                }
-            }
-        }
-    }
-
-    private void LogStageDuration(string stage, EmailOptions options, Stopwatch timer)
-    {
-        var provider = string.Equals(options.SmtpHost, "smtp-relay.brevo.com", StringComparison.OrdinalIgnoreCase)
-            ? "Brevo" : "Primary";
-        _logger.LogInformation("SMTP {Provider} {Stage} completed in {ElapsedMs} ms",
-            provider, stage, timer.ElapsedMilliseconds);
-    }
-
-    private static EmailDeliveryFailureKind ClassifyFailure(Exception exception, EmailDeliveryFailureKind stage, EmailOptions options)
-    {
-        if (exception is SmtpCommandException command)
-        {
-            var isGmail = string.Equals(options.SmtpHost, "smtp.gmail.com", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(options.SmtpHost, "smtp-relay.gmail.com", StringComparison.OrdinalIgnoreCase);
-            if (isGmail
-                && command.Message.Contains("5.4.5", StringComparison.Ordinal)
-                && command.Message.Contains("Daily user sending limit exceeded", StringComparison.OrdinalIgnoreCase))
-            {
-                return EmailDeliveryFailureKind.QuotaExceeded;
-            }
-
-            return command.ErrorCode switch
-            {
-                SmtpErrorCode.SenderNotAccepted => EmailDeliveryFailureKind.SenderRejected,
-                SmtpErrorCode.RecipientNotAccepted => EmailDeliveryFailureKind.RecipientRejected,
-                _ => stage == EmailDeliveryFailureKind.Authentication
-                    ? EmailDeliveryFailureKind.Authentication
-                    : EmailDeliveryFailureKind.ProviderRejected
-            };
-        }
-
-        return exception switch
-        {
-            SslHandshakeException or System.Security.Authentication.AuthenticationException => EmailDeliveryFailureKind.Tls,
-            MailKit.Security.AuthenticationException or SaslException => EmailDeliveryFailureKind.Authentication,
-            OperationCanceledException or TimeoutException => EmailDeliveryFailureKind.Timeout,
-            SocketException or IOException or MailKit.ProtocolException => EmailDeliveryFailureKind.Connection,
-            FormatException or ArgumentException => stage,
-            _ => EmailDeliveryFailureKind.Unknown
+            HtmlBody = htmlBody,
+            TextBody = textBody
         };
+
+        message.Body = bodyBuilder.ToMessageBody();
+
+        using var smtpClient = new SmtpClient();
+
+        var secureSocketOptions = ResolveSecureSocketOptions(
+            _options.SecureSocketOption);
+
+        await smtpClient.ConnectAsync(
+            _options.SmtpHost,
+            _options.SmtpPort,
+            secureSocketOptions,
+            cancellationToken);
+
+        await smtpClient.AuthenticateAsync(
+            _options.Username,
+            _options.Password,
+            cancellationToken);
+
+        await smtpClient.SendAsync(
+            message,
+            cancellationToken);
+
+        await smtpClient.DisconnectAsync(
+            true,
+            cancellationToken);
     }
 
     private static SecureSocketOptions ResolveSecureSocketOptions(string value)
@@ -400,17 +271,31 @@ public sealed class SmtpEmailService : IEmailService
         };
     }
 
-    private static void ValidateOptions(EmailOptions options)
+    private void ValidateOptions()
     {
-        if (string.IsNullOrWhiteSpace(options.FromEmail)
-            || string.IsNullOrWhiteSpace(options.SmtpHost)
-            || options.SmtpPort is < 1 or > 65535
-            || string.IsNullOrWhiteSpace(options.Username)
-            || string.IsNullOrWhiteSpace(options.Password)
-            || options.SmtpTimeoutSeconds is < 1 or > 120
-            || options.QuotaCooldownMinutes is < 1 or > 1440)
+        if (string.IsNullOrWhiteSpace(_options.FromEmail))
         {
-            throw new EmailDeliveryException(EmailDeliveryFailureKind.Configuration);
+            throw new InvalidOperationException("Email FromEmail is not configured.");
+        }
+
+        if (string.IsNullOrWhiteSpace(_options.SmtpHost))
+        {
+            throw new InvalidOperationException("Email SmtpHost is not configured.");
+        }
+
+        if (_options.SmtpPort <= 0)
+        {
+            throw new InvalidOperationException("Email SmtpPort is invalid.");
+        }
+
+        if (string.IsNullOrWhiteSpace(_options.Username))
+        {
+            throw new InvalidOperationException("Email Username is not configured.");
+        }
+
+        if (string.IsNullOrWhiteSpace(_options.Password))
+        {
+            throw new InvalidOperationException("Email Password is not configured.");
         }
     }
 }

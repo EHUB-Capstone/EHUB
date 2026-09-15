@@ -22,8 +22,7 @@ public sealed class TeamManagementHandler : ITeamManagementHandler
         "BBA_MC",
         "BBA_MKT",
         "BEN",
-        "BBA_TM",
-        "BBA_FIN"
+        "BBA_TM"
     };
 
     private static readonly HashSet<string> GroupTwoMajorCodes = new(StringComparer.OrdinalIgnoreCase)

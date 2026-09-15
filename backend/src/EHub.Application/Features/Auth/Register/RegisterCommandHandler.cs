@@ -1,5 +1,4 @@
 using EHub.Application.Common.Interfaces.Identity;
-using EHub.Application.Common.Exceptions;
 using EHub.Application.Common.Interfaces.Persistence;
 using EHub.Application.Common.Interfaces.Services;
 using EHub.Application.Common.Models.Identity;
@@ -54,33 +53,6 @@ public sealed class RegisterCommandHandler : IRegisterCommandHandler
     public async Task<Result<RegisterResult>> HandleAsync(
         RegisterRequest request,
         CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            // Save before SMTP to serialize competing requests, but only commit after
-            // acceptance. A rejected send rolls back OTP rotation and resend counters.
-            // Do not automatically retry this transaction: SMTP is an external effect.
-            return await _unitOfWork.ExecuteInSerializableTransactionAsync(
-                ct => RegisterAndSendAsync(request, ct), cancellationToken);
-        }
-        catch (EmailDeliveryException exception)
-        {
-            _logger.LogWarning(
-                "Registration email failed. FailureKind: {FailureKind}; RetryAfterUtc: {RetryAfterUtc}",
-                exception.FailureKind, exception.RetryAfterUtc);
-            return Result.Failure<RegisterResult>(exception.FailureKind == EmailDeliveryFailureKind.QuotaExceeded
-                ? AuthErrors.EmailTemporarilyUnavailable
-                : AuthErrors.EmailDeliveryFailed);
-        }
-        catch (SerializableTransactionConflictException)
-        {
-            return Result.Failure<RegisterResult>(AuthErrors.VerificationResendTooSoon);
-        }
-    }
-
-    private async Task<Result<RegisterResult>> RegisterAndSendAsync(
-        RegisterRequest request,
-        CancellationToken cancellationToken)
     {
         var normalizedEmail = request.Email.Trim().ToLowerInvariant();
         if (await _userRepository.ExistsByEmailAsync(normalizedEmail, cancellationToken))
@@ -198,19 +170,15 @@ public sealed class RegisterCommandHandler : IRegisterCommandHandler
                 registration.OtpExpiresAtUtc,
                 cancellationToken);
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch (EmailDeliveryException)
-        {
-            throw;
-        }
         catch (Exception exception)
         {
-            // Keep unexpected provider data, recipient details and tokens out of logs.
-            _logger.LogWarning("Registration email provider threw {ExceptionType}", exception.GetType().Name);
-            throw new EmailDeliveryException(EmailDeliveryFailureKind.Unknown);
+            registration.LastSentAtUtc = null;
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+            _logger.LogError(
+                exception,
+                "Registration verification email delivery failed for registration {RegistrationId}",
+                registration.Id);
+            return Result.Failure<RegisterResult>(AuthErrors.EmailDeliveryFailed);
         }
 
         _logger.LogInformation(

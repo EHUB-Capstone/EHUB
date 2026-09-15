@@ -309,7 +309,7 @@ function registerProposalHandlers(mock: MockAdapter): void {
       return failure(409, 'TEAM_PROPOSAL_MEMBERSHIP_CONFLICT', 'A proposed member already belongs to another open proposal.');
     }
 
-    const groupOneMajors = new Set(['BBA_HM', 'BBA_FIN', 'BBA_IB', 'BBA_MC', 'BBA_MKT', 'BEN', 'BBA_TM']);
+    const groupOneMajors = new Set(['BBA_HM', 'BBA_IB', 'BBA_MC', 'BBA_MKT', 'BEN', 'BBA_TM']);
     const groupTwoMajors = new Set(['BIT_AI', 'BIT_GD', 'BIT_IA', 'BIT_SE']);
     const majors = selectedStudents.map((student) => student?.majorCode?.toUpperCase() || '');
     if (!majors.some((major) => groupOneMajors.has(major)) || !majors.some((major) => groupTwoMajors.has(major))) {

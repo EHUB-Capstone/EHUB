@@ -15,7 +15,6 @@ export const TEAM_MAJOR_GROUPS = [
     label: 'GROUP 1 (BBA)',
     majors: [
       { code: 'BBA_HM',  name: 'Hospitality Management' },
-      { code: 'BBA_FIN', name: 'Finance' },
       { code: 'BBA_IB',  name: 'International Business' },
       { code: 'BBA_MC',  name: 'Marketing & Communication' },
       { code: 'BBA_MKT', name: 'Marketing' },
@@ -47,7 +46,6 @@ export const PROGRAM_GROUPS = [
     code: 'BBA',
     name: 'Bachelor of Business Administration',
     majors: [
-      { code: 'BBA_FIN', name: 'Finance' },
       { code: 'BBA_HM',  name: 'Hospitality Management' },
       { code: 'BBA_IB',  name: 'International Business' },
       { code: 'BBA_MC',  name: 'Marketing & Communication' },
