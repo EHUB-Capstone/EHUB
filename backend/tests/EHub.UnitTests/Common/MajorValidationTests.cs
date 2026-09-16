@@ -10,7 +10,6 @@ public sealed class MajorValidationTests
     {
         MajorCodes.All.Should().Equal(
             MajorCodes.BBA_HM,
-            MajorCodes.BBA_FIN,
             MajorCodes.BBA_IB,
             MajorCodes.BBA_MC,
             MajorCodes.BBA_MKT,
@@ -24,7 +23,6 @@ public sealed class MajorValidationTests
 
     [Theory]
     [InlineData(MajorCodes.BBA_HM)]
-    [InlineData(MajorCodes.BBA_FIN)]
     [InlineData(MajorCodes.BBA_IB)]
     [InlineData(MajorCodes.BBA_MC)]
     [InlineData(MajorCodes.BBA_MKT)]
@@ -41,7 +39,7 @@ public sealed class MajorValidationTests
     }
 
     [Theory]
-    [InlineData("UNKNOWN")]
+    [InlineData("BBA_FIN")]
     [InlineData("BIT_IS")]
     [InlineData("BLA_CN")]
     public void IsValid_ShouldReturnFalse_WhenMajorCodeIsNoLongerSupported(string majorCode) =>

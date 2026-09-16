@@ -10,7 +10,6 @@ public static class MajorCodes
     public const string Undeclared = "UNDECLARED";
 
     public const string BBA_HM = "BBA_HM";
-    public const string BBA_FIN = "BBA_FIN";
     public const string BBA_IB = "BBA_IB";
     public const string BBA_MC = "BBA_MC";
     public const string BBA_MKT = "BBA_MKT";
@@ -25,7 +24,6 @@ public static class MajorCodes
     public static readonly string[] All =
     [
         BBA_HM,
-        BBA_FIN,
         BBA_IB,
         BBA_MC,
         BBA_MKT,
