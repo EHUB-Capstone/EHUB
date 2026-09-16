@@ -156,6 +156,7 @@ function workspaceData(teamId: string) {
       problem: team.projectProblem || '',
       solution: team.projectSolution || '',
       targetUsers: team.projectTargetUsers || '',
+      zaloGroupUrl: team.projectZaloGroupUrl || '',
       keywords: team.keywords || [],
       startupIndustries: team.startupIndustries || [],
       status: 'Draft',
@@ -470,7 +471,7 @@ export function registerWorkspaceMockHandlers(mock: MockAdapter): void {
     const project = {
       _id: uuid(1601), teamId, classId: team.classId, subjectId: classByTeam(teamId)!.courseId,
       semesterId: classByTeam(teamId)!.semesterId, projectName, description,
-      problem: '', solution: '', targetUsers: '', keywords: [], startupIndustries: team.startupIndustries,
+      problem: '', solution: '', targetUsers: '', zaloGroupUrl: '', keywords: [], startupIndustries: team.startupIndustries,
       status: 'Draft', createdAtUtc, updatedAtUtc: null,
     };
     return ok(project, 'Project workspace created.');
@@ -493,12 +494,23 @@ export function registerWorkspaceMockHandlers(mock: MockAdapter): void {
     const problem = String(body.problem || '').trim();
     const solution = String(body.solution || '').trim();
     const targetUsers = String(body.targetUsers || '').trim();
+    const zaloGroupUrl = String(body.zaloGroupUrl || '').trim();
     const keywords = Array.isArray(body.keywords) ? body.keywords.map(String) : [];
+    let isValidZaloGroupUrl = zaloGroupUrl.length === 0;
+    if (zaloGroupUrl.length > 0 && zaloGroupUrl.length <= 500) {
+      try {
+        const url = new URL(zaloGroupUrl);
+        isValidZaloGroupUrl = url.protocol === 'https:' && (url.hostname === 'zalo.me' || url.hostname.endsWith('.zalo.me'));
+      } catch {
+        isValidZaloGroupUrl = false;
+      }
+    }
     if (projectName.length < 3 || projectName.length > 200
       || description.length < 20 || description.length > 2000
       || problem.length < 20 || problem.length > 2000
       || solution.length < 20 || solution.length > 2000
-      || targetUsers.length < 3 || targetUsers.length > 2000) {
+      || targetUsers.length < 3 || targetUsers.length > 2000
+      || !isValidZaloGroupUrl) {
       return failure(400, 'WORKSPACE_VALIDATION_ERROR', 'Required project workspace information is missing or invalid.');
     }
     const changedFields = [
@@ -507,6 +519,7 @@ export function registerWorkspaceMockHandlers(mock: MockAdapter): void {
       (team.projectProblem || '') !== problem && 'problem',
       (team.projectSolution || '') !== solution && 'solution',
       (team.projectTargetUsers || '') !== targetUsers && 'targetUsers',
+      (team.projectZaloGroupUrl || '') !== zaloGroupUrl && 'zaloGroupUrl',
       JSON.stringify(team.keywords || []) !== JSON.stringify(keywords) && 'keywords',
     ].filter(Boolean) as string[];
 
@@ -515,6 +528,7 @@ export function registerWorkspaceMockHandlers(mock: MockAdapter): void {
     team.projectProblem = problem;
     team.projectSolution = solution;
     team.projectTargetUsers = targetUsers;
+    team.projectZaloGroupUrl = zaloGroupUrl;
     team.keywords = keywords;
     if (changedFields.length > 0) {
       const occurredAtUtc = new Date().toISOString();

@@ -9,6 +9,7 @@ export interface ProjectWorkspaceProfile {
   problem: string;
   solution: string;
   targetUsers: string;
+  zaloGroupUrl: string;
   keywords: string[];
   startupIndustries: string[];
   status: string;

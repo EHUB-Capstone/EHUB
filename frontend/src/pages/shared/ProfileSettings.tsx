@@ -79,6 +79,9 @@ const ProfileSettings = () => {
         avatarInputRef.current.value = '';
       }
       toast.success('Profile updated successfully');
+      if (isMissingMajor && profile.majorCode) {
+        navigate(myClassesPath, { replace: true });
+      }
     } catch (err) {
       toast.error(parseApiError(err, 'Failed to update profile').message);
     } finally {

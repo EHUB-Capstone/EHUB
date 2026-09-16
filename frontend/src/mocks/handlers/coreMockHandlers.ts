@@ -362,7 +362,7 @@ function registerAuthHandlers(mock: MockAdapter): void {
     const payload = normalizeRegisterPayload(rawPayload);
     const email = payload.email;
     if (getMockState().users.some((user) => user.email.toLowerCase() === email)) {
-      return failure(409, 'AUTH_EMAIL_ALREADY_EXISTS', 'Email already exists.');
+      return failure(400, 'AUTH_REGISTRATION_FAILED', 'Unable to create account. Please try signing in or resetting your password.');
     }
     const role = payload.role.toUpperCase() as Exclude<MockUser['role'], 'ADMIN'>;
     const major = role === 'STUDENT' ? payload.majorCode ?? null : null;

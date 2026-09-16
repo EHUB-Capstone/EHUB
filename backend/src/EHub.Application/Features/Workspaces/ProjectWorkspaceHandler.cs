@@ -269,12 +269,14 @@ public sealed class ProjectWorkspaceHandler : IProjectWorkspaceHandler
                 var nextProblem = (request.Problem ?? string.Empty).Trim();
                 var nextSolution = (request.Solution ?? string.Empty).Trim();
                 var nextTargetUsers = (request.TargetUsers ?? string.Empty).Trim();
+                var nextZaloGroupUrl = (request.ZaloGroupUrl ?? string.Empty).Trim();
                 var changedFields = new List<string>();
                 if (!string.Equals(project.Name, nextName, StringComparison.Ordinal)) changedFields.Add("projectName");
                 if (!string.Equals(project.Description ?? string.Empty, nextDescription, StringComparison.Ordinal)) changedFields.Add("description");
                 if (!string.Equals(project.Problem ?? string.Empty, nextProblem, StringComparison.Ordinal)) changedFields.Add("problem");
                 if (!string.Equals(project.Solution ?? string.Empty, nextSolution, StringComparison.Ordinal)) changedFields.Add("solution");
                 if (!string.Equals(project.TargetUsers ?? string.Empty, nextTargetUsers, StringComparison.Ordinal)) changedFields.Add("targetUsers");
+                if (!string.Equals(project.ZaloGroupUrl ?? string.Empty, nextZaloGroupUrl, StringComparison.Ordinal)) changedFields.Add("zaloGroupUrl");
                 if (!SameTags(project.ProjectTags, ProjectTagType.Keyword, keywords)) changedFields.Add("keywords");
                 if (changedFields.Count == 0) return Result.Success(MapProject(project, team));
 
@@ -283,6 +285,7 @@ public sealed class ProjectWorkspaceHandler : IProjectWorkspaceHandler
                 project.Problem = nextProblem;
                 project.Solution = nextSolution;
                 project.TargetUsers = nextTargetUsers;
+                project.ZaloGroupUrl = nextZaloGroupUrl;
                 project.UpdatedBy = userId;
                 var now = DateTime.UtcNow;
                 SyncTags(project, ProjectTagType.Keyword, keywords, userId, now);
@@ -385,8 +388,17 @@ public sealed class ProjectWorkspaceHandler : IProjectWorkspaceHandler
             return new Error(ErrorCodes.WorkspaceValidationError, "Project solution must be between 20 and 2000 characters.");
         if ((request.TargetUsers ?? string.Empty).Trim().Length is < 3 or > 2_000)
             return new Error(ErrorCodes.WorkspaceValidationError, "Target users must be between 3 and 2000 characters.");
+        var zaloGroupUrl = (request.ZaloGroupUrl ?? string.Empty).Trim();
+        if (zaloGroupUrl.Length > 500 || (zaloGroupUrl.Length > 0 && !IsValidZaloUrl(zaloGroupUrl)))
+            return new Error(ErrorCodes.WorkspaceValidationError, "Zalo group link must be a valid HTTPS URL on zalo.me.");
         return null;
     }
+
+    private static bool IsValidZaloUrl(string value) =>
+        Uri.TryCreate(value, UriKind.Absolute, out var uri)
+        && uri.Scheme == Uri.UriSchemeHttps
+        && (uri.Host.Equals("zalo.me", StringComparison.OrdinalIgnoreCase)
+            || uri.Host.EndsWith(".zalo.me", StringComparison.OrdinalIgnoreCase));
 
     private static Error? ValidateTags(IReadOnlyCollection<string> values, string label)
     {
@@ -423,6 +435,7 @@ public sealed class ProjectWorkspaceHandler : IProjectWorkspaceHandler
     {
         "projectName" => "project name",
         "targetUsers" => "target users",
+        "zaloGroupUrl" => "Zalo group link",
         _ => field
     };
 
@@ -557,6 +570,7 @@ public sealed class ProjectWorkspaceHandler : IProjectWorkspaceHandler
         Problem = project.Problem ?? string.Empty,
         Solution = project.Solution ?? string.Empty,
         TargetUsers = project.TargetUsers ?? string.Empty,
+        ZaloGroupUrl = project.ZaloGroupUrl ?? string.Empty,
         Keywords = project.ProjectTags.Where(tag => tag.TagType == ProjectTagType.Keyword).Select(tag => tag.TagName).ToArray(),
         StartupIndustries = project.ProjectTags.Where(tag => tag.TagType == ProjectTagType.StartupField).Select(tag => tag.TagName).ToArray(),
         Status = project.Status.ToString(),

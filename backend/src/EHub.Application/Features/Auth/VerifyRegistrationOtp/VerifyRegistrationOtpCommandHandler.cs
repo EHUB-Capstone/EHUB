@@ -139,7 +139,7 @@ public sealed class VerifyRegistrationOtpCommandHandler : IVerifyRegistrationOtp
                 registration.NormalizedEmail,
                 cancellationToken))
         {
-            return Result.Failure<RegisterResult>(AuthErrors.EmailAlreadyExists);
+            return Result.Failure<RegisterResult>(AuthErrors.RegistrationFailed);
         }
 
         var role = await _roleRepository.GetByNameAsync(

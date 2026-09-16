@@ -14,7 +14,7 @@ public sealed class UserManagementHandler(IApplicationDbContext context, ICurren
 {
     private static readonly IReadOnlyDictionary<string, string[]> ValidMajors = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
     {
-        ["BBA"] = [MajorCodes.BBA_HM, MajorCodes.BBA_IB, MajorCodes.BBA_MC, MajorCodes.BBA_MKT, MajorCodes.BBA_TM],
+        ["BBA"] = [MajorCodes.BBA_HM, MajorCodes.BBA_FIN, MajorCodes.BBA_IB, MajorCodes.BBA_MC, MajorCodes.BBA_MKT, MajorCodes.BBA_TM],
         ["BEN"] = [MajorCodes.BEN],
         ["BIT"] = [MajorCodes.BIT_AI, MajorCodes.BIT_GD, MajorCodes.BIT_IA, MajorCodes.BIT_SE]
     };

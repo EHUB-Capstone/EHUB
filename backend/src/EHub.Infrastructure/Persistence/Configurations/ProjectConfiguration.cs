@@ -42,6 +42,10 @@ public class ProjectConfiguration : IEntityTypeConfiguration<Project>
             .HasColumnName("target_users")
             .HasMaxLength(2000);
 
+        builder.Property(p => p.ZaloGroupUrl)
+            .HasColumnName("zalo_group_url")
+            .HasMaxLength(500);
+
         builder.Property(p => p.StartupField)
             .HasColumnName("startup_field")
             .HasMaxLength(100);

@@ -255,6 +255,15 @@ export default function TeamManagementModal({
                   )}
                 </div>
 
+                <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+                  <label htmlFor="team-leader" className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-slate-600"><Crown className="h-3.5 w-3.5 text-amber-500" /> Team leader</label>
+                  <select id="team-leader" value={draft.leaderId} onChange={(event) => updateDraft('leaderId', event.target.value)} disabled={selectedStudents.length === 0} className={`w-full rounded-xl border bg-white px-3 py-2.5 text-sm outline-none focus:border-primary disabled:opacity-50 ${attemptedSubmit && validation.errors.leaderId ? 'border-red-300' : 'border-slate-200'}`}>
+                    <option value="">No leader selected</option>
+                    {selectedStudents.map((student) => <option key={student._id} value={student._id}>{student.fullName} ({student.rollNumber || student._id})</option>)}
+                  </select>
+                  {attemptedSubmit && validation.errors.leaderId && <p className="mt-1 text-xs text-red-600">{validation.errors.leaderId}</p>}
+                </div>
+
                 <div className="relative mt-3">
                   <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                   <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search name, student code, email or major" className="w-full rounded-xl border border-slate-200 py-2.5 pl-9 pr-3 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20" />
@@ -307,15 +316,6 @@ export default function TeamManagementModal({
                     </button>
                   );
                 })}
-              </div>
-
-              <div className="border-t border-slate-100 bg-slate-50/60 p-4">
-                <label htmlFor="team-leader" className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-slate-600"><Crown className="h-3.5 w-3.5 text-amber-500" /> Team leader</label>
-                <select id="team-leader" value={draft.leaderId} onChange={(event) => updateDraft('leaderId', event.target.value)} disabled={selectedStudents.length === 0} className={`w-full rounded-xl border bg-white px-3 py-2.5 text-sm outline-none focus:border-primary disabled:opacity-50 ${attemptedSubmit && validation.errors.leaderId ? 'border-red-300' : 'border-slate-200'}`}>
-                  <option value="">No leader selected</option>
-                  {selectedStudents.map((student) => <option key={student._id} value={student._id}>{student.fullName} ({student.rollNumber || student._id})</option>)}
-                </select>
-                {attemptedSubmit && validation.errors.leaderId && <p className="mt-1 text-xs text-red-600">{validation.errors.leaderId}</p>}
               </div>
             </section>
           </div>

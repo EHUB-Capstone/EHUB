@@ -1058,6 +1058,22 @@ public sealed class TeamWorkflowIntegrationTests
         invalid.IsFailure.Should().BeTrue();
         invalid.Error.Code.Should().Be(ErrorCodes.WorkspaceValidationError);
 
+        var invalidZaloLink = await handler.UpdateAsync(
+            seed.TeamId.Value,
+            new UpdateProjectWorkspaceRequest
+            {
+                ProjectName = "Campus Circular Hub",
+                Description = "The latest student marketplace profile for safe campus equipment reuse.",
+                Problem = "Students cannot reliably find safe ways to reuse equipment across campus.",
+                Solution = "A verified marketplace connects students and supports trustworthy exchanges.",
+                TargetUsers = "University students and student clubs",
+                ZaloGroupUrl = "https://example.com/not-zalo"
+            },
+            seed.ProposerUserId,
+            SystemRoles.Student);
+        invalidZaloLink.IsFailure.Should().BeTrue();
+        invalidZaloLink.Error.Code.Should().Be(ErrorCodes.WorkspaceValidationError);
+
         var updated = await handler.UpdateAsync(
             seed.TeamId.Value,
             new UpdateProjectWorkspaceRequest
@@ -1067,6 +1083,7 @@ public sealed class TeamWorkflowIntegrationTests
                 Problem = "Students cannot reliably find safe ways to reuse equipment across campus.",
                 Solution = "A verified marketplace connects students and supports trustworthy exchanges.",
                 TargetUsers = "University students and student clubs",
+                ZaloGroupUrl = "https://zalo.me/g/campus-circular",
                 Keywords = new[] { "campus", "reuse" }
             },
             seed.ProposerUserId,
@@ -1075,6 +1092,7 @@ public sealed class TeamWorkflowIntegrationTests
         updated.Value.Problem.Should().Contain("reuse equipment");
         updated.Value.Solution.Should().Contain("verified marketplace");
         updated.Value.TargetUsers.Should().Be("University students and student clubs");
+        updated.Value.ZaloGroupUrl.Should().Be("https://zalo.me/g/campus-circular");
 
         context.ChangeTracker.Clear();
         var memberUserId = (await context.Students.AsNoTracking()
@@ -1090,6 +1108,7 @@ public sealed class TeamWorkflowIntegrationTests
                 Problem = updated.Value.Problem,
                 Solution = updated.Value.Solution,
                 TargetUsers = updated.Value.TargetUsers,
+                ZaloGroupUrl = updated.Value.ZaloGroupUrl,
                 Keywords = updated.Value.Keywords
             },
             memberUserId,
@@ -1102,6 +1121,7 @@ public sealed class TeamWorkflowIntegrationTests
         detail.IsSuccess.Should().BeTrue();
         detail.Value.Project!.ProjectName.Should().Be("Campus Circular Hub");
         detail.Value.Project.TargetUsers.Should().Be("University students and student clubs");
+        detail.Value.Project.ZaloGroupUrl.Should().Be("https://zalo.me/g/campus-circular");
         detail.Value.Class.Id.Should().Be(seed.ClassId);
         detail.Value.Class.SubjectId.Should().NotBeEmpty();
         detail.Value.Class.SemesterId.Should().NotBeEmpty();

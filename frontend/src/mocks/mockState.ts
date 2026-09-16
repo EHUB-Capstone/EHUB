@@ -170,6 +170,7 @@ export interface MockTeam {
   projectProblem?: string | null;
   projectSolution?: string | null;
   projectTargetUsers?: string | null;
+  projectZaloGroupUrl?: string | null;
   keywords?: string[];
   startupIndustryIds?: string[];
   startupIndustries?: string[];

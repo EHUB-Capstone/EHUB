@@ -282,7 +282,7 @@ test('mock staff registration creates an admin notification linked to account ap
   assert.equal(countResponse.data.count, 2);
 });
 
-test('mock register preserves backend duplicate-email business error', async () => {
+test('mock register hides whether an email already belongs to an account', async () => {
   await assert.rejects(
     axiosClient.post('/auth/register', {
       fullName: 'Duplicate Admin',
@@ -295,9 +295,10 @@ test('mock register preserves backend duplicate-email business error', async () 
       const response = (error as {
         response?: { status?: number; data?: { code?: string; message?: string; errors?: unknown } };
       }).response;
-      assert.equal(response?.status, 409);
-      assert.equal(response?.data?.code, 'AUTH_EMAIL_ALREADY_EXISTS');
-      assert.equal(response?.data?.message, 'Email already exists.');
+      assert.equal(response?.status, 400);
+      assert.equal(response?.data?.code, 'AUTH_REGISTRATION_FAILED');
+      assert.equal(response?.data?.message, 'Unable to create account. Please try signing in or resetting your password.');
+      assert.equal(response?.data?.message?.includes('admin@ehub.local'), false);
       assert.equal(response?.data?.errors, null);
       return true;
     },
@@ -950,11 +951,13 @@ test('mock team leader creates one project workspace linked to its academic cont
     problem: 'Small offices cannot clearly identify the equipment driving energy waste.',
     solution: 'The platform turns usage data into practical recommendations for each office.',
     targetUsers: 'Small office owners and facility managers',
+    zaloGroupUrl: 'https://zalo.me/g/greenbyte-team',
     keywords: ['energy', 'efficiency'],
   });
   const latest = await axiosClient.get(`/workspace/teams/${team.id}`);
   assert.equal(latest.data.project.projectName, 'Energy Insight Platform');
   assert.equal(latest.data.project.targetUsers, 'Small office owners and facility managers');
+  assert.equal(latest.data.project.zaloGroupUrl, 'https://zalo.me/g/greenbyte-team');
   assert.equal(latest.data.class.subjectCode, cls?.subjectCode);
   assert.equal(latest.data.class.semesterCode, cls?.semesterCode);
   assert.ok(latest.data.members.length > 0);

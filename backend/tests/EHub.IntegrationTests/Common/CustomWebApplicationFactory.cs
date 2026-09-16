@@ -43,6 +43,7 @@ public sealed class CustomWebApplicationFactory
 
     public new async Task DisposeAsync()
     {
+        await base.DisposeAsync();
         await _postgresContainer.DisposeAsync();
     }
 

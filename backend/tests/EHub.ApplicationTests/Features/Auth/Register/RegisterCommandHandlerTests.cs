@@ -7,6 +7,7 @@ using EHub.Application.Features.Auth.Register;
 using EHub.Contracts.Auth;
 using EHub.Domain.Entities;
 using EHub.Shared.Constants;
+using EHub.Shared.Results;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using NSubstitute;
@@ -39,6 +40,9 @@ public sealed class RegisterCommandHandlerTests
         });
 
         _dateTimeProvider.UtcNow.Returns(UtcNow);
+        _unitOfWork.ExecuteInSerializableTransactionAsync(
+                Arg.Any<Func<CancellationToken, Task<Result<RegisterResult>>>>(), Arg.Any<CancellationToken>())
+            .Returns(call => call.Arg<Func<CancellationToken, Task<Result<RegisterResult>>>>()(call.Arg<CancellationToken>()));
         _passwordHasher.Hash(Arg.Any<string>()).Returns("hashed-password");
         _otpService.GenerateCode().Returns("123456");
         _otpService.HashCode(Arg.Any<Guid>(), "123456").Returns("hashed-otp");
@@ -95,7 +99,7 @@ public sealed class RegisterCommandHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_WhenUserAlreadyExists_ReturnsEmailAlreadyExists()
+    public async Task HandleAsync_WhenUserAlreadyExists_ReturnsGenericRegistrationFailure()
     {
         _userRepository.ExistsByEmailAsync(
                 "student@fpt.edu.vn",
@@ -105,7 +109,8 @@ public sealed class RegisterCommandHandlerTests
         var result = await _handler.HandleAsync(CreateStudentRequest(), CancellationToken.None);
 
         Assert.False(result.IsSuccess);
-        Assert.Equal(AuthErrors.EmailAlreadyExists.Code, result.Error.Code);
+        Assert.Equal(AuthErrors.RegistrationFailed.Code, result.Error.Code);
+        Assert.DoesNotContain("email already", result.Error.Message, StringComparison.OrdinalIgnoreCase);
         await _emailService.DidNotReceiveWithAnyArgs().SendRegistrationOtpAsync(
             default!, default!, default!, default, default);
     }

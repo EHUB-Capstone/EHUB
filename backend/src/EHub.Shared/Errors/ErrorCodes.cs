@@ -13,7 +13,8 @@ public static class ErrorCodes
 
     // Auth error codes
     public const string AuthInvalidCredentials = "AUTH_INVALID_CREDENTIALS";
-    public const string AuthEmailAlreadyExists = "AUTH_EMAIL_ALREADY_EXISTS";
+    public const string AuthRegistrationFailed = "AUTH_REGISTRATION_FAILED";
+    public const string AuthRateLimited = "AUTH_RATE_LIMITED";
     public const string AuthUserInactive = "AUTH_USER_INACTIVE";
     public const string AuthRefreshTokenInvalid = "AUTH_REFRESH_TOKEN_INVALID";
     public const string AuthRefreshTokenExpired = "AUTH_REFRESH_TOKEN_EXPIRED";
@@ -37,6 +38,7 @@ public static class ErrorCodes
     public const string AuthVerificationResendTooSoon = "AUTH_VERIFICATION_RESEND_TOO_SOON";
     public const string AuthVerificationRateLimited = "AUTH_VERIFICATION_RATE_LIMITED";
     public const string AuthEmailDeliveryFailed = "AUTH_EMAIL_DELIVERY_FAILED";
+    public const string AuthEmailTemporarilyUnavailable = "AUTH_EMAIL_TEMPORARILY_UNAVAILABLE";
     public const string AuthRegistrationAlreadyCompleted = "AUTH_REGISTRATION_ALREADY_COMPLETED";
     public const string AuthProfileImageInvalid = "AUTH_PROFILE_IMAGE_INVALID";
     public const string AuthProfileImageUploadFailed = "AUTH_PROFILE_IMAGE_UPLOAD_FAILED";

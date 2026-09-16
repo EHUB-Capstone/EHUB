@@ -160,7 +160,7 @@ test('summarizes real-time team selection constraints', () => {
   assert.equal(result.isTeamLeaderValid, true);
   assert.equal(result.canCreateTeam, true);
   assert.deepEqual(result.missingMajorStudents.map(student => student._id), ['student-5']);
-  assert.deepEqual(result.unclassifiedMajorCodes, ['BBA_FIN']);
+  assert.deepEqual(result.unclassifiedMajorCodes, []);
 });
 
 test('reads linked project information from legacy team fields', () => {
@@ -271,6 +271,7 @@ test('project profile requires name, description, problem, solution, and target 
     problem: '',
     solution: '',
     targetUsers: '',
+    zaloGroupUrl: '',
   });
   assert.deepEqual(Object.keys(invalid).sort(), ['description', 'problem', 'projectName', 'solution', 'targetUsers']);
 
@@ -280,6 +281,7 @@ test('project profile requires name, description, problem, solution, and target 
     problem: 'Students struggle to reuse useful equipment safely on campus.',
     solution: 'A verified marketplace supports safe exchanges between students.',
     targetUsers: 'University students and student clubs',
+    zaloGroupUrl: 'https://zalo.me/g/campus-circular',
   }), {});
 });
 
@@ -290,10 +292,28 @@ test('project profile success requires the server to return every persisted fiel
     problem: 'Students struggle to reuse useful equipment safely on campus.',
     solution: 'A verified marketplace supports safe exchanges between students.',
     targetUsers: 'University students and student clubs',
+    zaloGroupUrl: 'https://zalo.me/g/campus-circular',
   };
 
   assert.equal(hasPersistedProjectProfile(draft, draft), true);
   assert.equal(hasPersistedProjectProfile(draft, { ...draft, targetUsers: '' }), false);
+  assert.equal(hasPersistedProjectProfile(draft, { ...draft, zaloGroupUrl: '' }), false);
+});
+
+test('project profile accepts only optional HTTPS zalo.me links', () => {
+  const draft = {
+    projectName: 'Campus Circular Hub',
+    description: 'A complete description of the approved project profile.',
+    problem: 'Students struggle to reuse useful equipment safely on campus.',
+    solution: 'A verified marketplace supports safe exchanges between students.',
+    targetUsers: 'University students and student clubs',
+    zaloGroupUrl: '',
+  };
+
+  assert.equal(validateProjectProfile(draft).zaloGroupUrl, undefined);
+  assert.equal(validateProjectProfile({ ...draft, zaloGroupUrl: 'https://zalo.me/g/campus-circular' }).zaloGroupUrl, undefined);
+  assert.match(validateProjectProfile({ ...draft, zaloGroupUrl: 'https://example.com/team' }).zaloGroupUrl || '', /zalo\.me/);
+  assert.match(validateProjectProfile({ ...draft, zaloGroupUrl: 'http://zalo.me/g/campus-circular' }).zaloGroupUrl || '', /HTTPS/);
 });
 
 test('normalizes and rejects duplicated or invalid workspace tags', () => {
