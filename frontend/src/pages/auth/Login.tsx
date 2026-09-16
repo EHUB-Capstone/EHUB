@@ -14,6 +14,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { AUTH_ERROR_CODES } from '../../types/auth';
 import { parseApiError } from '../../utils/apiError';
 import { classFeatureFlags } from '../../config/classFeatureFlags';
+import { requiresMajor } from '../../utils/requiresMajor';
 import {
   AUTH_FIELD_LIMITS,
   LOGIN_FIELDS,
@@ -91,12 +92,19 @@ const Login: React.FC = () => {
     if (state?.isPending) setPendingApproval(true);
   }, [state]);
 
-  const redirectByRole = (roles: string[]) => {
+  const redirectByRole = (roles: string[], major?: string | null) => {
     const normalizedRoles = roles.map(normalizeRole);
     if (normalizedRoles.includes('ADMIN'))         navigate('/admin');
     else if (normalizedRoles.includes('LECTURER')) navigate('/lecturer/classes');
     else if (normalizedRoles.includes('MENTOR'))   navigate('/mentor');
-    else if (normalizedRoles.includes('STUDENT'))  navigate(classFeatureFlags.studentSelfService ? '/student/classes' : '/student/workspace');
+    else if (normalizedRoles.includes('STUDENT')) {
+      navigate(
+        requiresMajor({ roles, major })
+          ? '/settings'
+          : classFeatureFlags.studentSelfService ? '/student/classes' : '/student/workspace',
+        { replace: true },
+      );
+    }
     else                                           navigate('/student');
   };
 
@@ -149,7 +157,7 @@ const Login: React.FC = () => {
     try {
       const user = await loginWithEmail(normalizedPayload);
       toast.success('Login successful!');
-      redirectByRole(user.roles as string[]);
+      redirectByRole(user.roles as string[], user.major);
     } catch (err: unknown) {
       const { code, message, fieldErrors: apiFieldErrors } = parseApiError(err, 'Login failed.');
       const mappedFieldErrors = mapApiFieldErrors(apiFieldErrors, LOGIN_FIELDS);
@@ -180,8 +188,7 @@ const Login: React.FC = () => {
     try {
       const user = await loginWithGoogle(credentialResponse.credential);
       toast.success('Signed in with Google!');
-      if (user.role === 'STUDENT') navigate('/settings', { replace: true });
-      else redirectByRole(user.roles as string[]);
+      redirectByRole(user.roles as string[], user.major);
     } catch (err: unknown) {
       const { code, message } = parseApiError(err, 'Google sign-in failed.');
       if (code === AUTH_ERROR_CODES.ACCOUNT_NOT_REGISTERED) {
