@@ -35,7 +35,15 @@ x-backend-environment: &backend-environment
   Email__SmtpPort: ${EMAIL_SMTP_PORT:-587}
   Email__Username: ${EMAIL_USERNAME:?EMAIL_USERNAME is required}
   Email__Password: ${EMAIL_PASSWORD:?EMAIL_PASSWORD is required}
-  Email__SecureSocketOption: ${EMAIL_SECURE_SOCKET_OPTION:-StartTls}
+  Email__SecureSocketOption: ${EMAIL_SECURE_SOCKET_OPTION:-StartTls} # Brevo SMTP fallback
+  Email__Brevo__SmtpHost: ${BREVO_SMTP_HOST:-smtp-relay.brevo.com}
+  Email__Brevo__SmtpPort: ${BREVO_SMTP_PORT:-587}
+  Email__Brevo__SecureSocketOption: ${BREVO_SECURE_SOCKET_OPTION:-StartTls}
+  Email__Brevo__FromName: ${BREVO_FROM_NAME:-EHUB}
+  Email__Brevo__FromEmail: ${BREVO_FROM_EMAIL:?BREVO_FROM_EMAIL is required}
+  Email__Brevo__Username: ${BREVO_SMTP_USERNAME:?BREVO_SMTP_USERNAME is required}
+  Email__Brevo__Password: ${BREVO_SMTP_PASSWORD:?BREVO_SMTP_PASSWORD is required}
+  Email__EnableBrevoFallback: ${EMAIL_ENABLE_BREVO_FALLBACK:-true}
   Cloudinary__CloudName: ${CLOUDINARY_CLOUD_NAME:?CLOUDINARY_CLOUD_NAME is required}
   Cloudinary__ApiKey: ${CLOUDINARY_API_KEY:?CLOUDINARY_API_KEY is required}
   Cloudinary__ApiSecret: ${CLOUDINARY_API_SECRET:?CLOUDINARY_API_SECRET is required}
@@ -54,7 +62,7 @@ services:
     volumes:
       - ehub_postgres_data:/var/lib/postgresql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      test: [ "CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\"" ]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -78,11 +86,7 @@ services:
     expose:
       - "8080"
     healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "curl --fail --silent --show-error --header 'Host: e-hub.com.vn' --header 'X-Forwarded-Proto: https' http://localhost:8080/health/ready || exit 1",
-        ]
+      test: [ "CMD-SHELL", "curl --fail --silent --show-error --header 'Host: e-hub.com.vn' --header 'X-Forwarded-Proto: https' http://localhost:8080/health/ready || exit 1" ]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -129,7 +133,7 @@ services:
     ports:
       - "127.0.0.1:${FRONTEND_HOST_PORT:-3000}:80"
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/healthz >/dev/null || exit 1"]
+      test: [ "CMD-SHELL", "wget -qO- http://127.0.0.1/healthz >/dev/null || exit 1" ]
       interval: 30s
       timeout: 5s
       retries: 3
