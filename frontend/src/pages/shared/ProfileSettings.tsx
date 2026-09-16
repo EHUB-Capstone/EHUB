@@ -18,7 +18,7 @@ const ProfileSettings = () => {
   const { user, updateUser } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState('profile');
+  const activeTab = location.pathname === '/settings' ? 'password' : 'profile';
 
   useEffect(() => {
     if (location.state?.message) {
@@ -126,8 +126,8 @@ const ProfileSettings = () => {
   };
 
   const tabs = [
-    { id: 'profile', label: 'Profile Info', icon: User },
-    { id: 'password', label: 'Security', icon: Key },
+    { id: 'profile', label: 'Profile', icon: User, path: '/profile' },
+    { id: 'password', label: 'Security Settings', icon: Key, path: '/settings' },
   ];
 
   const isMissingMajor = role === 'STUDENT' && (!user?.major || !ALL_TEAM_MAJOR_CODES.includes(user.major.toUpperCase()));
@@ -136,8 +136,8 @@ const ProfileSettings = () => {
     <div className="max-w-4xl mx-auto">
       {/* Header */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-6 sm:mb-8">
-        <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">Account Settings</h1>
-        <p className="text-slate-500 mt-1">Manage your profile and security preferences</p>
+        <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">{activeTab === 'profile' ? 'My Profile' : 'Account Settings'}</h1>
+        <p className="text-slate-500 mt-1">{activeTab === 'profile' ? 'View and update your personal details' : 'Manage your account security preferences'}</p>
       </motion.div>
 
       {/* ── Missing Major Banner ── */}
@@ -194,7 +194,7 @@ const ProfileSettings = () => {
                   ? 'bg-white text-primary shadow-sm border border-slate-200/50'
                   : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800'
               }`}
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => navigate(tab.path)}
             >
               <tab.icon className="w-4 h-4 shrink-0" /> {tab.label}
             </button>
