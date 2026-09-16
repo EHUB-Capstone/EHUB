@@ -93,7 +93,7 @@ public sealed class AuthController : ControllerBase
                     StatusCodes.Status429TooManyRequests,
                     ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code)),
 
-                ErrorCodes.AuthEmailDeliveryFailed => StatusCode(
+                ErrorCodes.AuthEmailDeliveryFailed or ErrorCodes.AuthEmailTemporarilyUnavailable => StatusCode(
                     StatusCodes.Status503ServiceUnavailable,
                     ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code)),
 
@@ -175,7 +175,7 @@ public sealed class AuthController : ControllerBase
                 ErrorCodes.AuthVerificationAttemptsExceeded => StatusCode(
                     StatusCodes.Status429TooManyRequests,
                     ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code)),
-                ErrorCodes.AuthEmailDeliveryFailed => StatusCode(
+                ErrorCodes.AuthEmailDeliveryFailed or ErrorCodes.AuthEmailTemporarilyUnavailable => StatusCode(
                     StatusCodes.Status503ServiceUnavailable,
                     ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code)),
                 _ => BadRequest(

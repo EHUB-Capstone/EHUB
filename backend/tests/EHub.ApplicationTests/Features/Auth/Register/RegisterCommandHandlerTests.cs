@@ -7,6 +7,7 @@ using EHub.Application.Features.Auth.Register;
 using EHub.Contracts.Auth;
 using EHub.Domain.Entities;
 using EHub.Shared.Constants;
+using EHub.Shared.Results;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using NSubstitute;
@@ -39,6 +40,9 @@ public sealed class RegisterCommandHandlerTests
         });
 
         _dateTimeProvider.UtcNow.Returns(UtcNow);
+        _unitOfWork.ExecuteInSerializableTransactionAsync(
+                Arg.Any<Func<CancellationToken, Task<Result<RegisterResult>>>>(), Arg.Any<CancellationToken>())
+            .Returns(call => call.Arg<Func<CancellationToken, Task<Result<RegisterResult>>>>()(call.Arg<CancellationToken>()));
         _passwordHasher.Hash(Arg.Any<string>()).Returns("hashed-password");
         _otpService.GenerateCode().Returns("123456");
         _otpService.HashCode(Arg.Any<Guid>(), "123456").Returns("hashed-otp");

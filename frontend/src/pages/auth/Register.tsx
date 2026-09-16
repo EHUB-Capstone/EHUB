@@ -12,7 +12,7 @@ import { resendRegistrationOtp } from '../../api/authApi';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../hooks/useAuth';
 import { AUTH_ERROR_CODES } from '../../types/auth';
-import { PROGRAM_GROUPS } from '../../constants/majors';
+import { TEAM_MAJOR_GROUPS } from '../../constants/majors';
 import { parseApiError } from '../../utils/apiError';
 import {
   AUTH_FIELD_LIMITS,
@@ -538,9 +538,9 @@ const Register: React.FC = () => {
                       className={`w-full py-2.5 px-3.5 rounded-[14px] border bg-[#F8FAFC] dark:bg-white/5 text-[14px] outline-none transition-colors text-[#0F172A] dark:text-slate-100 ${fieldErrors.majorCode ? 'border-red-500 focus:border-red-500' : 'border-[#E5E7EB] dark:border-white/10 focus:border-[#EA6A12] dark:focus:border-[#EA6A12]'}`}
                     >
                       <option value="" className="text-slate-500">-- Select Major --</option>
-                      {PROGRAM_GROUPS.map(g => (
-                        <optgroup key={g.code} label={`${g.code} — ${g.name}`} className="text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800">
-                          {g.majors.map(m => <option key={m.code} value={m.code}>{m.code} — {m.name}</option>)}
+                      {TEAM_MAJOR_GROUPS.map(g => (
+                        <optgroup key={g.key} label={g.label} className="text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800">
+                          {g.majors.map(m => <option key={m.code} value={m.code}>{m.code} - {m.name}</option>)}
                         </optgroup>
                       ))}
                     </select>

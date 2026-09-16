@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using EHub.Application.Common.Interfaces.Services;
 using EHub.Domain.Entities;
@@ -11,6 +13,9 @@ namespace EHub.Infrastructure.BackgroundJobs;
 
 internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
 {
+    internal const string ClassEmailEventType = "Class.NotificationEmailRequested.v1";
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+
     private readonly AppDbContext _context;
     private readonly IClassChatMembershipSynchronizer _chatMembershipSynchronizer;
     private readonly IProjectDirectionRealtimePublisher _projectDirectionRealtimePublisher;
@@ -60,7 +65,7 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
                     message, data, "primaryLecturerId", NotificationType.SystemAnnouncement,
                     "You have been assigned to a class",
                     $"You have been assigned as the lecturer for class {createdClassDetails.ClassCode}.", cancellationToken);
-                await SendClassCreatedEmailAsync(data, createdClassDetails, cancellationToken);
+                await QueueClassCreatedEmailAsync(message, data, createdClassDetails, cancellationToken);
                 break;
             case "Class.StudentRosterImported.v1":
                 var importedClassDetails = await GetClassEmailDetailsAsync(message.AggregateId, cancellationToken);
@@ -68,7 +73,13 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
                     message, data, "studentUserIds", NotificationType.SystemAnnouncement,
                     "You have been added to a class",
                     $"You have been added to class {importedClassDetails.ClassCode}.", cancellationToken);
-                await SendStudentImportEmailsAsync(data, importedClassDetails, cancellationToken);
+                await QueueStudentImportEmailsAsync(message, data, importedClassDetails, cancellationToken);
+                break;
+            case ClassEmailEventType:
+                await _emailService.SendClassNotificationAsync(
+                    ReadString(data, "email"), ReadString(data, "fullName"),
+                    ReadString(data, "subject"), ReadString(data, "title"),
+                    ReadString(data, "body"), cancellationToken);
                 break;
             case "TeamProposal.Submitted.v1":
                 if (ReadBoolean(data, "adminReviewRequired"))
@@ -226,7 +237,8 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
             await AddAsync(message, userId, type, title, body, cancellationToken);
     }
 
-    private async Task SendClassCreatedEmailAsync(
+    private async Task QueueClassCreatedEmailAsync(
+        OutboxMessage message,
         JsonElement data,
         ClassEmailDetails classDetails,
         CancellationToken cancellationToken)
@@ -240,8 +252,8 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
             .FirstOrDefaultAsync(cancellationToken);
         if (lecturer is null || string.IsNullOrWhiteSpace(lecturer.Email)) return;
 
-        await _emailService.SendClassNotificationAsync(
-            lecturer.Email, lecturer.FullName,
+        await QueueClassEmailAsync(
+            message, lecturer.Email, lecturer.FullName,
             $"[E-HUB] Teaching Assignment: {classDetails.ClassCode}",
             $"Teaching Assignment: {classDetails.ClassCode}",
             $"""
@@ -261,7 +273,8 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
             """, cancellationToken);
     }
 
-    private async Task SendStudentImportEmailsAsync(
+    private async Task QueueStudentImportEmailsAsync(
+        OutboxMessage message,
         JsonElement data,
         ClassEmailDetails classDetails,
         CancellationToken cancellationToken)
@@ -273,8 +286,8 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
             var email = ReadString(recipient, "email");
             if (string.IsNullOrWhiteSpace(email)) continue;
 
-            await _emailService.SendClassNotificationAsync(
-                email, ReadString(recipient, "fullName"),
+            await QueueClassEmailAsync(
+                message, email, ReadString(recipient, "fullName"),
                 $"[E-HUB] You have been added to {classDetails.ClassCode}",
                 $"You have been added to {classDetails.ClassCode}",
                 $"""
@@ -297,6 +310,40 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
                 E-HUB – Entrepreneurship Hub
                 """, cancellationToken);
         }
+    }
+
+    private async Task QueueClassEmailAsync(
+        OutboxMessage source,
+        string email,
+        string fullName,
+        string subject,
+        string title,
+        string body,
+        CancellationToken cancellationToken)
+    {
+        // One durable delivery per source event and recipient, including replays of
+        // a source event after a crash. The existing unique event_id index is the guard.
+        var normalizedEmail = email.Trim().ToLowerInvariant();
+        var key = $"{ClassEmailEventType}:{source.EventId:N}:{normalizedEmail}";
+        var eventId = new Guid(SHA256.HashData(Encoding.UTF8.GetBytes(key)).AsSpan(0, 16));
+        if (_context.OutboxMessages.Local.Any(item => item.EventId == eventId)
+            || await _context.OutboxMessages.AnyAsync(item => item.EventId == eventId, cancellationToken))
+            return;
+
+        _context.OutboxMessages.Add(new OutboxMessage
+        {
+            EventId = eventId,
+            Type = ClassEmailEventType,
+            AggregateType = source.AggregateType,
+            AggregateId = source.AggregateId,
+            OccurredAtUtc = source.OccurredAtUtc,
+            AvailableAtUtc = source.OccurredAtUtc,
+            PayloadJson = JsonSerializer.Serialize(new
+            {
+                sourceEventId = source.EventId,
+                data = new { email = normalizedEmail, fullName, subject, title, body }
+            }, JsonOptions)
+        });
     }
 
     private async Task<ClassEmailDetails> GetClassEmailDetailsAsync(Guid classId, CancellationToken cancellationToken)
@@ -420,7 +467,9 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
         string body,
         CancellationToken cancellationToken)
     {
-        if (await _context.Notifications.IgnoreQueryFilters().AnyAsync(notification =>
+        if (_context.Notifications.Local.Any(notification =>
+                notification.SourceEventId == message.EventId && notification.RecipientUserId == recipientUserId)
+            || await _context.Notifications.IgnoreQueryFilters().AnyAsync(notification =>
                 notification.SourceEventId == message.EventId && notification.RecipientUserId == recipientUserId, cancellationToken))
             return;
 

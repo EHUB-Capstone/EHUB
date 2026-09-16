@@ -160,7 +160,7 @@ test('summarizes real-time team selection constraints', () => {
   assert.equal(result.isTeamLeaderValid, true);
   assert.equal(result.canCreateTeam, true);
   assert.deepEqual(result.missingMajorStudents.map(student => student._id), ['student-5']);
-  assert.deepEqual(result.unclassifiedMajorCodes, ['BBA_FIN']);
+  assert.deepEqual(result.unclassifiedMajorCodes, []);
 });
 
 test('reads linked project information from legacy team fields', () => {

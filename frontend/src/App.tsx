@@ -5,6 +5,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { ThemeProvider } from './context/ThemeContext';
 import { AuthProvider } from './context/AuthContext';
 import { ProtectedRoute } from './routes/ProtectedRoute';
+import { RequireMajor } from './routes/RequireMajor';
 import { queryClient } from './lib/queryClient';
 import DashboardLayout from './components/layout/DashboardLayout';
 import ErrorBoundary from './components/ui/ErrorBoundary';
@@ -84,6 +85,7 @@ function App(): React.ReactElement {
 
               <Suspense fallback={<PageFallback />}>
               <Routes>
+                <Route element={<RequireMajor />}>
                 <Route path="/" element={<Home />} />
                 <Route path="/login" element={<Login />} />
                 <Route path="/register" element={<Register />} />
@@ -142,6 +144,7 @@ function App(): React.ReactElement {
                 <Route path="/403" element={<Forbidden />} />
                 <Route path="/unauthorized" element={<Forbidden />} />
                 <Route path="*" element={<NotFound />} />
+                </Route>
               </Routes>
               </Suspense>
             </Router>

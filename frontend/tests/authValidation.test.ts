@@ -208,12 +208,12 @@ test('student major is required and every non-empty major must be a backend majo
   );
 });
 
-test('frontend major list exactly covers the 10 supported backend registration majors', () => {
+test('frontend major list exactly covers the 11 supported backend registration majors', () => {
   const backendMajors = [
-    'BBA_HM', 'BBA_IB', 'BBA_MC', 'BBA_MKT', 'BEN', 'BBA_TM',
+    'BBA_HM', 'BBA_FIN', 'BBA_IB', 'BBA_MC', 'BBA_MKT', 'BEN', 'BBA_TM',
     'BIT_AI', 'BIT_GD', 'BIT_IA', 'BIT_SE',
   ];
-  assert.equal(BACKEND_MAJOR_CODES.length, 10);
+  assert.equal(BACKEND_MAJOR_CODES.length, 11);
   assert.deepEqual([...BACKEND_MAJOR_CODES].sort(), backendMajors.sort());
 
   for (const majorCode of backendMajors) {
@@ -308,4 +308,15 @@ test('field error map displays only the first FluentValidation error for each fi
     fullName: 'Full name is required.',
     email: 'Email is required.',
   });
+});
+import { requiresMajor } from '../src/utils/requiresMajor.ts';
+
+test('students must save a supported major before navigating away from profile', () => {
+  for (const major of [undefined, null, '', ' ', 'UNDECLARED', 'UNKNOWN']) {
+    assert.equal(requiresMajor({ roles: ['Student'], major }), true);
+  }
+  assert.equal(requiresMajor({ roles: ['Student'], major: 'BBA_FIN' }), false);
+  assert.equal(requiresMajor({ roles: ['Student'], major: ' bit_se ' }), false);
+  assert.equal(requiresMajor({ roles: ['Lecturer'] }), false);
+  assert.equal(requiresMajor(null), false);
 });
