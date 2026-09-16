@@ -154,7 +154,7 @@ const Navbar = ({ onMenuClick }) => {
               </button>
               <button
                 className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 hover:text-primary transition-colors flex items-center gap-2.5"
-                onClick={() => { setShowProfileMenu(false); navigate('/settings'); }}
+                onClick={() => { setShowProfileMenu(false); navigate('/profile'); }}
               >
                 <User className="w-4 h-4" /> Profile
               </button>

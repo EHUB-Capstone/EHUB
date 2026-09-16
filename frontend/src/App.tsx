@@ -139,6 +139,7 @@ function App(): React.ReactElement {
                   {releaseFeatureFlags.workshops && <Route path="/workshops" element={<Workshops />} />}
                   {releaseFeatureFlags.chat && <Route path="/chat" element={<GroupChat />} />}
                   <Route path="/settings" element={<ProfileSettings />} />
+                  <Route path="/profile" element={<ProfileSettings />} />
                 </Route>
 
                 <Route path="/403" element={<Forbidden />} />
