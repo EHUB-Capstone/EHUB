@@ -19,14 +19,4 @@ public sealed class EmailOptions
     public string Password { get; init; } = string.Empty;
 
     public string SecureSocketOption { get; init; } = "StartTls";
-
-    // Covers connection, authentication and send together; no automatic send retry.
-    public int SmtpTimeoutSeconds { get; init; } = 10;
-
-    // Process-local retry delay after explicit provider quota rejection, not quota reset time.
-    public int QuotaCooldownMinutes { get; init; } = 15;
-
-    // Opt-in: credentials are supplied through User Secrets or deployment secrets.
-    public bool EnableBrevoFallback { get; init; }
-    public EmailOptions? Brevo { get; init; }
 }

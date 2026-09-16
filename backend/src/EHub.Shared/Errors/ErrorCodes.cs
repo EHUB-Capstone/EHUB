@@ -37,7 +37,6 @@ public static class ErrorCodes
     public const string AuthVerificationResendTooSoon = "AUTH_VERIFICATION_RESEND_TOO_SOON";
     public const string AuthVerificationRateLimited = "AUTH_VERIFICATION_RATE_LIMITED";
     public const string AuthEmailDeliveryFailed = "AUTH_EMAIL_DELIVERY_FAILED";
-    public const string AuthEmailTemporarilyUnavailable = "AUTH_EMAIL_TEMPORARILY_UNAVAILABLE";
     public const string AuthRegistrationAlreadyCompleted = "AUTH_REGISTRATION_ALREADY_COMPLETED";
     public const string AuthProfileImageInvalid = "AUTH_PROFILE_IMAGE_INVALID";
     public const string AuthProfileImageUploadFailed = "AUTH_PROFILE_IMAGE_UPLOAD_FAILED";
