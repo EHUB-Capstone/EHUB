@@ -99,7 +99,7 @@ public sealed class RegisterCommandHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_WhenUserAlreadyExists_ReturnsEmailAlreadyExists()
+    public async Task HandleAsync_WhenUserAlreadyExists_ReturnsGenericRegistrationFailure()
     {
         _userRepository.ExistsByEmailAsync(
                 "student@fpt.edu.vn",
@@ -109,7 +109,8 @@ public sealed class RegisterCommandHandlerTests
         var result = await _handler.HandleAsync(CreateStudentRequest(), CancellationToken.None);
 
         Assert.False(result.IsSuccess);
-        Assert.Equal(AuthErrors.EmailAlreadyExists.Code, result.Error.Code);
+        Assert.Equal(AuthErrors.RegistrationFailed.Code, result.Error.Code);
+        Assert.DoesNotContain("email already", result.Error.Message, StringComparison.OrdinalIgnoreCase);
         await _emailService.DidNotReceiveWithAnyArgs().SendRegistrationOtpAsync(
             default!, default!, default!, default, default);
     }

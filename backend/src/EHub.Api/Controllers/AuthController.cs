@@ -69,7 +69,7 @@ public sealed class AuthController : ControllerBase
         {
             return result.Error.Code switch
             {
-                ErrorCodes.AuthEmailAlreadyExists => Conflict(
+                ErrorCodes.AuthRegistrationFailed => BadRequest(
                     ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code)),
 
                 ErrorCodes.AuthInvalidRole => BadRequest(
@@ -130,7 +130,7 @@ public sealed class AuthController : ControllerBase
                     ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code)),
                 ErrorCodes.AuthRegistrationAlreadyCompleted => Conflict(
                     ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code)),
-                ErrorCodes.AuthEmailAlreadyExists => Conflict(
+                ErrorCodes.AuthRegistrationFailed => BadRequest(
                     ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code)),
                 _ => BadRequest(
                     ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code))
@@ -189,6 +189,7 @@ public sealed class AuthController : ControllerBase
     }
 
     [HttpPost("login")]
+    [EnableRateLimiting(AuthRateLimitPolicies.Login)]
     public async Task<IActionResult> Login(
         [FromBody] EmailPasswordLoginRequest request,
         CancellationToken cancellationToken)
@@ -260,6 +261,7 @@ public sealed class AuthController : ControllerBase
     }
 
     [HttpPost("google")]
+    [EnableRateLimiting(AuthRateLimitPolicies.GoogleLogin)]
     public async Task<IActionResult> GoogleLogin(
         [FromBody] GoogleLoginRequest request,
         CancellationToken cancellationToken)
@@ -551,6 +553,7 @@ public sealed class AuthController : ControllerBase
 
     [HttpPost("forgot-password")]
     [AllowAnonymous]
+    [EnableRateLimiting(AuthRateLimitPolicies.ForgotPassword)]
     public async Task<IActionResult> ForgotPassword(
         [FromBody] ForgotPasswordRequest request,
         [FromServices] IForgotPasswordCommandHandler forgotPasswordCommandHandler,

@@ -14,6 +14,7 @@ import ProjectDirectionModal from '../../components/class/ProjectDirectionModal'
 import { teamApi } from '../../api/teamApi';
 import { parseApiError } from '../../utils/apiError';
 import { formatSemesterCode } from '../../utils/semester';
+import ConfirmDialog from '../../components/ui/ConfirmDialog';
 
 export default function StudentClassDetail() {
   const { slug: id } = useParams();
@@ -26,6 +27,9 @@ export default function StudentClassDetail() {
   const [proposals, setProposals] = useState([]);
   const [proposalToRevise, setProposalToRevise] = useState(null);
   const [directionTeam, setDirectionTeam] = useState(null);
+  const [proposalToCancel, setProposalToCancel] = useState(null);
+  const [cancellationReason, setCancellationReason] = useState('');
+  const [cancellingProposal, setCancellingProposal] = useState(false);
 
   const fetchClassDetail = useCallback(async () => {
     try {
@@ -122,15 +126,35 @@ export default function StudentClassDetail() {
     setActiveTab('classmates');
   };
 
-  const cancelProposal = async (proposal) => {
-    const reason = window.prompt('Why do you want to cancel this proposal?');
-    if (!reason) return;
+  const requestProposalCancellation = (proposal) => {
+    setProposalToCancel(proposal);
+    setCancellationReason('');
+  };
+
+  const closeCancellationDialog = () => {
+    if (cancellingProposal) return;
+    setProposalToCancel(null);
+    setCancellationReason('');
+  };
+
+  const cancelProposal = async () => {
+    if (!proposalToCancel || cancellationReason.trim().length < 3) return;
+
+    setCancellingProposal(true);
     try {
-      await teamApi.cancelProposal(proposal._id, proposal.rowVersion, reason);
+      await teamApi.cancelProposal(
+        proposalToCancel._id,
+        proposalToCancel.rowVersion,
+        cancellationReason.trim(),
+      );
       toast.success('Team proposal cancelled.');
+      setProposalToCancel(null);
+      setCancellationReason('');
       await fetchClassDetail();
     } catch (error) {
       toast.error(parseApiError(error, 'Failed to cancel team proposal.').message);
+    } finally {
+      setCancellingProposal(false);
     }
   };
 
@@ -330,7 +354,7 @@ export default function StudentClassDetail() {
             setActiveTab('classmates');
           }}
           onProjectDirection={setDirectionTeam}
-          onCancelProposal={cancelProposal}
+          onCancelProposal={requestProposalCancellation}
         />
       )}
 
@@ -342,6 +366,22 @@ export default function StudentClassDetail() {
           onClose={() => setDirectionTeam(null)}
         />
       )}
+
+      <ConfirmDialog
+        isOpen={Boolean(proposalToCancel)}
+        onClose={closeCancellationDialog}
+        onConfirm={cancelProposal}
+        title="Cancel team proposal?"
+        description="This will cancel the current proposal for every selected team member. You can create a new proposal afterward."
+        isSubmitting={cancellingProposal}
+        confirmText="Cancel proposal"
+        cancelText="Keep proposal"
+        reason={cancellationReason}
+        onReasonChange={setCancellationReason}
+        reasonLabel="Reason for cancellation"
+        reasonRequired
+        actionLayout="confirmWide"
+      />
     </div>
   );
 }

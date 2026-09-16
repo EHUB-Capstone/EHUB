@@ -22,6 +22,7 @@ const emptyDraft: ProjectProfileDraft = {
   problem: '',
   solution: '',
   targetUsers: '',
+  zaloGroupUrl: '',
 };
 
 const toDraft = (project: ProjectWorkspaceProfile): ProjectProfileDraft => ({
@@ -30,6 +31,7 @@ const toDraft = (project: ProjectWorkspaceProfile): ProjectProfileDraft => ({
   problem: project.problem || '',
   solution: project.solution || '',
   targetUsers: project.targetUsers || '',
+  zaloGroupUrl: project.zaloGroupUrl || '',
 });
 
 const userIdOf = (value: ProjectWorkspaceDetail['members'][number]['userId']): string => {
@@ -45,19 +47,22 @@ type FieldProps = {
   error?: string;
   maxLength: number;
   multiline?: boolean;
+  required?: boolean;
+  placeholder?: string;
+  type?: 'text' | 'url';
   readOnly: boolean;
   onChange: (field: keyof ProjectProfileDraft, value: string) => void;
 };
 
-function ProfileField({ id, label, value, error, maxLength, multiline = false, readOnly, onChange }: FieldProps) {
+function ProfileField({ id, label, value, error, maxLength, multiline = false, required = true, placeholder, type = 'text', readOnly, onChange }: FieldProps) {
   const classes = `mt-1.5 w-full rounded-xl border px-3 py-2.5 text-sm leading-6 outline-none transition focus:ring-2 focus:ring-primary/15 disabled:bg-slate-50 disabled:text-slate-600 ${error ? 'border-red-300' : 'border-slate-200 focus:border-primary'}`;
   return (
     <div>
-      <label htmlFor={`project-profile-${id}`} className="text-sm font-semibold text-slate-700">{label} <span className="text-red-500">*</span></label>
+      <label htmlFor={`project-profile-${id}`} className="text-sm font-semibold text-slate-700">{label} {required && <span className="text-red-500">*</span>}</label>
       {multiline ? (
-        <textarea id={`project-profile-${id}`} value={value} onChange={(event) => onChange(id, event.target.value)} disabled={readOnly} rows={5} maxLength={maxLength} aria-invalid={Boolean(error)} aria-describedby={error ? `project-profile-${id}-error` : undefined} className={`${classes} resize-y`} />
+        <textarea id={`project-profile-${id}`} value={value} onChange={(event) => onChange(id, event.target.value)} disabled={readOnly} rows={5} maxLength={maxLength} placeholder={placeholder} aria-invalid={Boolean(error)} aria-describedby={error ? `project-profile-${id}-error` : undefined} className={`${classes} resize-y`} />
       ) : (
-        <input id={`project-profile-${id}`} value={value} onChange={(event) => onChange(id, event.target.value)} disabled={readOnly} maxLength={maxLength} aria-invalid={Boolean(error)} aria-describedby={error ? `project-profile-${id}-error` : undefined} className={classes} />
+        <input id={`project-profile-${id}`} type={type} value={value} onChange={(event) => onChange(id, event.target.value)} disabled={readOnly} maxLength={maxLength} placeholder={placeholder} aria-invalid={Boolean(error)} aria-describedby={error ? `project-profile-${id}-error` : undefined} className={classes} />
       )}
       <div className="mt-1 flex min-h-5 justify-between gap-3 text-xs">
         <span id={`project-profile-${id}-error`} className="text-red-600">{error}</span>
@@ -135,6 +140,7 @@ export default function ProjectProfileEditor() {
         problem: draft.problem.trim(),
         solution: draft.solution.trim(),
         targetUsers: draft.targetUsers.trim(),
+        zaloGroupUrl: draft.zaloGroupUrl.trim(),
         keywords: workspace.project.keywords || [],
       };
       const response = await workspaceApi.updateWorkspaceProfile(teamId, payload);
@@ -179,6 +185,7 @@ export default function ProjectProfileEditor() {
           <ProfileField id="problem" label="Problem" value={draft.problem} error={errors.problem} maxLength={2000} multiline readOnly={!canEdit} onChange={setField} />
           <ProfileField id="solution" label="Solution" value={draft.solution} error={errors.solution} maxLength={2000} multiline readOnly={!canEdit} onChange={setField} />
           <ProfileField id="targetUsers" label="Target users" value={draft.targetUsers} error={errors.targetUsers} maxLength={2000} multiline readOnly={!canEdit} onChange={setField} />
+          <ProfileField id="zaloGroupUrl" label="Zalo group link" value={draft.zaloGroupUrl} error={errors.zaloGroupUrl} maxLength={500} required={false} placeholder="https://zalo.me/g/..." type="url" readOnly={!canEdit} onChange={setField} />
         </div>
 
         {canEdit && <footer className="flex items-center justify-between gap-3 border-t border-slate-100 bg-slate-50/70 px-6 py-4"><p className="text-xs text-slate-500">Changes are immediately visible to authorized workspace viewers.</p><button type="button" onClick={() => void save()} disabled={saving || !hasChanges} className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} {saving ? 'Saving…' : 'Save profile'}</button></footer>}

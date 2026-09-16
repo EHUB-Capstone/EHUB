@@ -135,7 +135,7 @@ public class AuthIntegrationTests
     }
 
     [Fact]
-    public async Task Register_Should_Return_409_Conflict_When_Email_Already_Exists()
+    public async Task Register_Should_Return_Generic_400_When_Email_Already_Exists()
     {
         // Arrange
         var email = $"student-{Guid.NewGuid()}@example.com";
@@ -156,11 +156,13 @@ public class AuthIntegrationTests
         var response = await _client.PostAsJsonAsync("/api/auth/register", request);
 
         // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
         var body = await response.Content.ReadFromJsonAsync<ApiResponse<object>>();
         body.Should().NotBeNull();
         body!.Success.Should().BeFalse();
-        body.Code.Should().Be("AUTH_EMAIL_ALREADY_EXISTS");
+        body.Code.Should().Be("AUTH_REGISTRATION_FAILED");
+        body.Message.Should().Be("Unable to create account. Please try signing in or resetting your password.");
+        body.Message.Should().NotContain(email);
     }
 
     [Fact]

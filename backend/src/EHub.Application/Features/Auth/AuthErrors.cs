@@ -8,9 +8,9 @@ public static class AuthErrors
         ErrorCodes.AuthInvalidCredentials,
         "Invalid email or password.");
 
-    public static readonly Error EmailAlreadyExists = new(
-        ErrorCodes.AuthEmailAlreadyExists,
-        "Email already exists.");
+    public static readonly Error RegistrationFailed = new(
+        ErrorCodes.AuthRegistrationFailed,
+        "Unable to create account. Please try signing in or resetting your password.");
 
     public static readonly Error InvalidRole = new(
         ErrorCodes.AuthInvalidRole,

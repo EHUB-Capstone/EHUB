@@ -10,6 +10,7 @@ export interface ProjectProfileDraft {
   problem: string;
   solution: string;
   targetUsers: string;
+  zaloGroupUrl: string;
 }
 
 interface WorkspaceCreationTeamSource {
@@ -76,6 +77,7 @@ const projectProfileFields: Array<keyof ProjectProfileDraft> = [
   'problem',
   'solution',
   'targetUsers',
+  'zaloGroupUrl',
 ];
 
 export const hasPersistedProjectProfile = (
@@ -95,11 +97,23 @@ export const validateProjectProfile = (draft: ProjectProfileDraft): ProjectProfi
     problem: draft.problem.trim().length,
     solution: draft.solution.trim().length,
     targetUsers: draft.targetUsers.trim().length,
+    zaloGroupUrl: draft.zaloGroupUrl.trim().length,
   };
   if (lengths.projectName < 3 || lengths.projectName > 200) errors.projectName = 'Project name must be 3–200 characters.';
   if (lengths.description < 20 || lengths.description > 2_000) errors.description = 'Description must be 20–2000 characters.';
   if (lengths.problem < 20 || lengths.problem > 2_000) errors.problem = 'Problem must be 20–2000 characters.';
   if (lengths.solution < 20 || lengths.solution > 2_000) errors.solution = 'Solution must be 20–2000 characters.';
   if (lengths.targetUsers < 3 || lengths.targetUsers > 2_000) errors.targetUsers = 'Target users must be 3–2000 characters.';
+  if (lengths.zaloGroupUrl > 0) {
+    try {
+      const url = new URL(draft.zaloGroupUrl.trim());
+      const isZaloHost = url.hostname === 'zalo.me' || url.hostname.endsWith('.zalo.me');
+      if (url.protocol !== 'https:' || !isZaloHost || lengths.zaloGroupUrl > 500) {
+        errors.zaloGroupUrl = 'Enter a valid HTTPS link on zalo.me.';
+      }
+    } catch {
+      errors.zaloGroupUrl = 'Enter a valid HTTPS link on zalo.me.';
+    }
+  }
   return errors;
 };

@@ -14,6 +14,7 @@ public sealed class UpdateProjectWorkspaceRequest
     public string Problem { get; init; } = string.Empty;
     public string Solution { get; init; } = string.Empty;
     public string TargetUsers { get; init; } = string.Empty;
+    public string ZaloGroupUrl { get; init; } = string.Empty;
     public IReadOnlyCollection<string> Keywords { get; init; } = Array.Empty<string>();
 }
 
@@ -29,6 +30,7 @@ public sealed class ProjectWorkspaceDto
     public string Problem { get; init; } = string.Empty;
     public string Solution { get; init; } = string.Empty;
     public string TargetUsers { get; init; } = string.Empty;
+    public string ZaloGroupUrl { get; init; } = string.Empty;
     public IReadOnlyCollection<string> Keywords { get; init; } = Array.Empty<string>();
     public IReadOnlyCollection<string> StartupIndustries { get; init; } = Array.Empty<string>();
     public string Status { get; init; } = string.Empty;

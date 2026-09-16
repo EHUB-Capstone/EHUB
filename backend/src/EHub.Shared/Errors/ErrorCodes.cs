@@ -13,7 +13,8 @@ public static class ErrorCodes
 
     // Auth error codes
     public const string AuthInvalidCredentials = "AUTH_INVALID_CREDENTIALS";
-    public const string AuthEmailAlreadyExists = "AUTH_EMAIL_ALREADY_EXISTS";
+    public const string AuthRegistrationFailed = "AUTH_REGISTRATION_FAILED";
+    public const string AuthRateLimited = "AUTH_RATE_LIMITED";
     public const string AuthUserInactive = "AUTH_USER_INACTIVE";
     public const string AuthRefreshTokenInvalid = "AUTH_REFRESH_TOKEN_INVALID";
     public const string AuthRefreshTokenExpired = "AUTH_REFRESH_TOKEN_EXPIRED";

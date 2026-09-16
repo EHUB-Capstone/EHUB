@@ -103,7 +103,7 @@ const Register: React.FC = () => {
   const [loading,         setLoading]         = useState<boolean>(false);
   const [showPass,        setShowPass]        = useState<boolean>(false);
   const [showConfirm,     setShowConfirm]     = useState<boolean>(false);
-  const [emailTakenError, setEmailTakenError] = useState<boolean>(false);
+  const [registrationFailed, setRegistrationFailed] = useState<boolean>(false);
   const [pendingApproval, setPendingApproval] = useState<boolean>(false);
   const [fieldErrors,     setFieldErrors]     = useState<AuthFieldErrors<RegisterField>>({});
   const [formError,       setFormError]       = useState<string>('');
@@ -212,7 +212,7 @@ const Register: React.FC = () => {
     const normalizedPayload = normalizeRegisterPayload(payload);
     if (normalizedPayload.fullName !== name) setName(normalizedPayload.fullName);
     if (normalizedPayload.email !== email) setEmail(normalizedPayload.email);
-    setLoading(true); setEmailTakenError(false);
+    setLoading(true); setRegistrationFailed(false);
     try {
       const result = await register(normalizedPayload);
       if (!result.requiresEmailVerification || !result.registrationId) {
@@ -237,9 +237,8 @@ const Register: React.FC = () => {
       const { code, message, fieldErrors: apiFieldErrors } = parseApiError(err, 'Registration failed.');
       const mappedFieldErrors = mapApiFieldErrors(apiFieldErrors, REGISTER_FIELDS);
 
-      if (code === AUTH_ERROR_CODES.EMAIL_ALREADY_EXISTS) {
-        setEmailTakenError(true);
-        mappedFieldErrors.email = message;
+      if (code === AUTH_ERROR_CODES.REGISTRATION_FAILED) {
+        setRegistrationFailed(true);
       } else if (code === AUTH_ERROR_CODES.INVALID_ROLE) {
         mappedFieldErrors.role = message;
       } else if (code === AUTH_ERROR_CODES.INVALID_MAJOR) {
@@ -405,13 +404,13 @@ const Register: React.FC = () => {
 
               {/* Email taken banner */}
               <AnimatePresence>
-                {emailTakenError && (
+                {registrationFailed && (
                   <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
                     className="bg-red-500/10 border border-red-500/30 rounded-xl p-3.5 flex gap-3 mb-4.5">
                     <AlertTriangle size={18} className="text-red-400 shrink-0 mt-0.5" />
                     <div>
-                      <p className="text-[13px] font-semibold text-red-400 mb-1">Email already registered</p>
-                      <p className="text-[12px] text-slate-500 dark:text-slate-400 mb-2"><strong>{email}</strong> is already in use.</p>
+                      <p className="text-[13px] font-semibold text-red-400 mb-1">Unable to create account</p>
+                      <p className="text-[12px] text-slate-500 dark:text-slate-400 mb-2">Please try signing in or resetting your password.</p>
                       <div className="flex gap-3">
                         <Link to="/login" state={{ prefillEmail: email }} className="text-[12px] font-semibold text-red-400 underline">Sign in →</Link>
                         <Link to="/forgot-password" className="text-[12px] font-semibold text-slate-500 dark:text-slate-400 underline">Forgot password?</Link>
@@ -451,7 +450,7 @@ const Register: React.FC = () => {
                   <label htmlFor="reg-email" className="block text-[13px] font-semibold text-slate-900 dark:text-slate-50 mb-1.5">Email</label>
                   <div className="relative">
                     <Mail size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-                    <input id="reg-email" type="email" value={email} onChange={(e: ChangeEvent<HTMLInputElement>) => { setEmail(e.target.value); setEmailTakenError(false); clearFieldError('email'); }}
+                    <input id="reg-email" type="email" value={email} onChange={(e: ChangeEvent<HTMLInputElement>) => { setEmail(e.target.value); setRegistrationFailed(false); clearFieldError('email'); }}
                       onBlur={() => validateField('email')}
                       placeholder="you@example.com" autoComplete="email" required maxLength={AUTH_FIELD_LIMITS.emailMax}
                       aria-invalid={Boolean(fieldErrors.email)} aria-describedby={fieldErrors.email ? 'reg-email-error' : undefined}

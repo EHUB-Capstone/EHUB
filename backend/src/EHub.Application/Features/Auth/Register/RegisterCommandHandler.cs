@@ -88,7 +88,7 @@ public sealed class RegisterCommandHandler : IRegisterCommandHandler
             _logger.LogWarning(
                 "Registration rejected because the email already belongs to an account. Email: {Email}",
                 SensitiveDataMasker.MaskEmail(request.Email));
-            return Result.Failure<RegisterResult>(AuthErrors.EmailAlreadyExists);
+            return Result.Failure<RegisterResult>(AuthErrors.RegistrationFailed);
         }
 
         var roleName = request.Role.Trim();
@@ -120,13 +120,13 @@ public sealed class RegisterCommandHandler : IRegisterCommandHandler
         {
             if (registration.Status == PendingRegistrationStatus.Completed)
             {
-                return Result.Failure<RegisterResult>(AuthErrors.EmailAlreadyExists);
+                return Result.Failure<RegisterResult>(AuthErrors.RegistrationFailed);
             }
 
             var activeChallenge = registration.OtpExpiresAtUtc > now;
             if (activeChallenge && !_passwordHasher.Verify(request.Password, registration.PasswordHash))
             {
-                return Result.Failure<RegisterResult>(AuthErrors.EmailAlreadyExists);
+                return Result.Failure<RegisterResult>(AuthErrors.RegistrationFailed);
             }
 
             if (activeChallenge && registration.FailedAttemptCount >= _otpOptions.MaximumAttempts)

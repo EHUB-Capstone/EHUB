@@ -78,7 +78,7 @@ const ForgotPassword = (): React.ReactElement => {
               </div>
               <h3 className="text-xl font-bold text-slate-900">Check your inbox</h3>
               <p className="text-slate-500 text-body leading-relaxed">
-                If an account exists for <span className="font-medium text-slate-900">{email}</span>, we have sent a password reset link.
+                If an account exists for this email, we have sent a password reset link.
               </p>
               <Link to="/login" className="w-full mt-4">
                 <Button variant="outline" className="w-full">Return to login</Button>

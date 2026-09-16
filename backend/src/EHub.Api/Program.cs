@@ -32,7 +32,7 @@ builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddAuth(builder.Configuration);
 builder.Services.AddApplicationAuthorization();
-builder.Services.AddAuthRateLimiting();
+builder.Services.AddAuthRateLimiting(builder.Configuration);
 
 // Customize Model State Binding validation response format
 builder.Services.Configure<ApiBehaviorOptions>(options =>
@@ -150,6 +150,7 @@ try
 catch (Exception ex)
 {
     Log.Fatal(ex, "Host terminated unexpectedly");
+    throw;
 }
 finally
 {
