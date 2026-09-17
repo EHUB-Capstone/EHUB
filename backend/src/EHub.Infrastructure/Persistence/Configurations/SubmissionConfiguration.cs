@@ -86,5 +86,10 @@ public class SubmissionConfiguration : IEntityTypeConfiguration<Submission>
             .WithMany()
             .HasForeignKey(s => s.SubmittedById)
             .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasMany(s => s.RequirementContents)
+            .WithOne(content => content.Submission)
+            .HasForeignKey(content => content.SubmissionId)
+            .OnDelete(DeleteBehavior.Cascade);
     }
 }

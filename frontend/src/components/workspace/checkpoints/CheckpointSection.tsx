@@ -7,6 +7,7 @@ import CheckpointCard from './CheckpointCard';
 import CheckpointPanel from './CheckpointPanel';
 import ErrorState from '../../ui/ErrorState';
 import { buildWorkspaceCheckpointOverview } from '../../../utils/workspaceCheckpointOverview';
+import { subscribeProjectDirectionRealtime } from '../../../api/projectDirectionRealtime';
 
 export default function CheckpointSection({
   teamId,
@@ -50,6 +51,14 @@ export default function CheckpointSection({
     // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchStats();
   }, [fetchStats]);
+
+  useEffect(() => subscribeProjectDirectionRealtime((event) => {
+    if (event.eventType === 'CheckpointRequirementsUpdated' && String(event.teamId) === String(teamId)) {
+      void fetchStats();
+    }
+  }, (reconnected) => {
+    if (reconnected) void fetchStats();
+  }), [fetchStats, teamId]);
 
   const completedCount = configs.filter((cp) => {
     const s = stats[cp.number];

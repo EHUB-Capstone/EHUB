@@ -15,6 +15,7 @@ import { teamApi } from '../../api/teamApi';
 import { parseApiError } from '../../utils/apiError';
 import { formatSemesterCode } from '../../utils/semester';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
+import { subscribeProjectDirectionRealtime } from '../../api/projectDirectionRealtime';
 
 export default function StudentClassDetail() {
   const { slug: id } = useParams();
@@ -67,6 +68,16 @@ export default function StudentClassDetail() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchClassDetail();
   }, [fetchClassDetail]);
+
+  useEffect(() => subscribeProjectDirectionRealtime((event) => {
+    const currentClassId = String(data?.class?.id || data?.class?._id || '');
+    if (currentClassId && (event.eventType === 'ClassMajorUpdated' || event.eventType === 'TeamProposalReviewed')
+      && String(event.classId) === currentClassId) {
+      void fetchClassDetail();
+    }
+  }, (reconnected) => {
+    if (reconnected) void fetchClassDetail();
+  }), [data?.class?.id, data?.class?._id, fetchClassDetail]);
 
   if (loading) {
     return (

@@ -184,7 +184,7 @@ export default function ProjectProfileEditor() {
           <ProfileField id="description" label="Description" value={draft.description} error={errors.description} maxLength={2000} multiline readOnly={!canEdit} onChange={setField} />
           <ProfileField id="problem" label="Problem" value={draft.problem} error={errors.problem} maxLength={2000} multiline readOnly={!canEdit} onChange={setField} />
           <ProfileField id="solution" label="Solution" value={draft.solution} error={errors.solution} maxLength={2000} multiline readOnly={!canEdit} onChange={setField} />
-          <ProfileField id="targetUsers" label="Target users" value={draft.targetUsers} error={errors.targetUsers} maxLength={2000} multiline readOnly={!canEdit} onChange={setField} />
+          <ProfileField id="targetUsers" label="Target users" value={draft.targetUsers} error={errors.targetUsers} maxLength={2000} multiline required={false} readOnly={!canEdit} onChange={setField} />
           <ProfileField id="zaloGroupUrl" label="Zalo group link" value={draft.zaloGroupUrl} error={errors.zaloGroupUrl} maxLength={500} required={false} placeholder="https://zalo.me/g/..." type="url" readOnly={!canEdit} onChange={setField} />
         </div>
 
