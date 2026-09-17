@@ -42,7 +42,10 @@ public sealed class ExportClassRosterQueryHandler : IExportClassRosterQueryHandl
 
         var targetClass = await _context.Classes
             .AsNoTracking()
+            .Include(c => c.Course)
+            .Include(c => c.Semester)
             .FirstOrDefaultAsync(c => c.Id == classId, cancellationToken);
+
 
         if (targetClass == null)
         {
@@ -88,8 +91,10 @@ public sealed class ExportClassRosterQueryHandler : IExportClassRosterQueryHandl
             .AsNoTracking()
             .Include(cs => cs.Student)
             .Include(cs => cs.TeamMembers)
-            .ThenInclude(tm => tm.Team)
+                .ThenInclude(tm => tm.Team)
+                    .ThenInclude(t => t.Project)
             .Where(cs => cs.ClassId == classId);
+
 
         rosterQuery = ClassRosterFilters.Apply(rosterQuery, request.Search, request.MajorCode, status);
 
@@ -98,43 +103,65 @@ public sealed class ExportClassRosterQueryHandler : IExportClassRosterQueryHandl
             .ThenBy(cs => cs.Student.FullName)
             .ToListAsync(cancellationToken);
 
+        var shortSemesterCode = ShortenSemesterCode(targetClass.Semester?.Code);
+        var groupHeader = $"Group {shortSemesterCode}";
+
         using var workbook = new XLWorkbook();
         var worksheet = workbook.Worksheets.Add("Class Roster");
 
         // Headers
-        worksheet.Cell(1, 1).Value = "STT";
-        worksheet.Cell(1, 2).Value = "StudentCode";
-        worksheet.Cell(1, 3).Value = "FullName";
-        worksheet.Cell(1, 4).Value = "Email";
-        worksheet.Cell(1, 5).Value = "MajorCode";
-        worksheet.Cell(1, 6).Value = "EnrollmentStatus";
-        worksheet.Cell(1, 7).Value = "TeamName";
-        worksheet.Cell(1, 8).Value = "IsTeamLeader";
-        worksheet.Cell(1, 9).Value = "JoinedAt";
+        worksheet.Cell(1, 1).Value = "RollNumber";
+        worksheet.Cell(1, 2).Value = "Fullname";
+        worksheet.Cell(1, 3).Value = "Chuyên ngành";
+        worksheet.Cell(1, 4).Value = "SubjectCode";
+        worksheet.Cell(1, 5).Value = "GroupName";
+        worksheet.Cell(1, 6).Value = groupHeader;
+        worksheet.Cell(1, 7).Value = "Project Name";
+        worksheet.Cell(1, 8).Value = "Description";
+        worksheet.Cell(1, 9).Value = "Zalo Link";
+        worksheet.Cell(1, 10).Value = "Mentor";
+        worksheet.Cell(1, 11).Value = "Mentor - GV";
 
         var headerRow = worksheet.Row(1);
         headerRow.Style.Font.Bold = true;
         headerRow.Style.Fill.BackgroundColor = XLColor.FromHtml("#F1F5F9");
 
         int rowIndex = 2;
-        int stt = 1;
 
         foreach (var cs in roster)
         {
-            var activeTeamMember = cs.TeamMembers.FirstOrDefault(tm => tm.CountsTowardActiveTeam && tm.Team != null && tm.Team.Status == TeamStatus.Active);
+            var activeTeamMember = cs.TeamMembers
+                .FirstOrDefault(tm => tm.CountsTowardActiveTeam && tm.Team != null && tm.Team.Status == TeamStatus.Active);
+            var project = activeTeamMember?.Team?.Project;
 
-            worksheet.Cell(rowIndex, 1).Value = stt++;
-            worksheet.Cell(rowIndex, 2).Value = cs.Student.RollNumber ?? string.Empty;
-            worksheet.Cell(rowIndex, 3).Value = cs.Student.FullName;
-            worksheet.Cell(rowIndex, 4).Value = cs.Student.Email ?? string.Empty;
-            worksheet.Cell(rowIndex, 5).Value = cs.MajorCodeAtEnrollment;
-            worksheet.Cell(rowIndex, 6).Value = cs.EnrollmentStatus.ToString();
-            worksheet.Cell(rowIndex, 7).Value = activeTeamMember?.Team?.TeamName ?? "N/A";
-            worksheet.Cell(rowIndex, 8).Value = activeTeamMember?.RoleInTeam == TeamMemberRole.Leader ? "Yes" : "No";
-            worksheet.Cell(rowIndex, 9).Value = cs.CreatedAt.ToString("yyyy-MM-dd HH:mm");
+            worksheet.Cell(rowIndex, 1).Value = cs.Student.RollNumber ?? string.Empty;
+            worksheet.Cell(rowIndex, 2).Value = cs.Student.FullName;
+            worksheet.Cell(rowIndex, 3).Value = cs.MajorCodeAtEnrollment;
+            worksheet.Cell(rowIndex, 4).Value = targetClass.Course?.Code ?? string.Empty; // Mã môn học (ví dụ EXE101)
+            worksheet.Cell(rowIndex, 5).Value = targetClass.ClassCode;                   // Tên lớp (ví dụ EXE101_1)
+            worksheet.Cell(rowIndex, 6).Value = string.Empty;                            // Để trống, chỉ header là "Group SU26"
+            worksheet.Cell(rowIndex, 7).Value = project?.Name ?? string.Empty;             // Project Name
+            worksheet.Cell(rowIndex, 8).Value = project?.Description ?? string.Empty;      // Description
+            worksheet.Cell(rowIndex, 10).Value = string.Empty;                            // Mentor (để trống)
+            worksheet.Cell(rowIndex, 11).Value = string.Empty;                            // Mentor - GV (để trống)
+
+            var zaloUrl = project?.ZaloGroupUrl;
+            var zaloCell = worksheet.Cell(rowIndex, 9);
+            if (!string.IsNullOrWhiteSpace(zaloUrl))
+            {
+                zaloCell.Value = zaloUrl;
+                zaloCell.SetHyperlink(new XLHyperlink(zaloUrl));
+                zaloCell.Style.Font.FontColor = XLColor.Blue;
+                zaloCell.Style.Font.Underline = XLFontUnderlineValues.Single;
+            }
+            else
+            {
+                zaloCell.Value = string.Empty;
+            }
 
             rowIndex++;
         }
+
 
         worksheet.Columns().AdjustToContents();
 
@@ -149,5 +176,20 @@ public sealed class ExportClassRosterQueryHandler : IExportClassRosterQueryHandl
         var contentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
         return Result.Success((bytes, contentType, fileName));
+    }
+
+    private static string ShortenSemesterCode(string? code)
+    {
+        if (string.IsNullOrWhiteSpace(code))
+            return string.Empty;
+
+        // Tách phần chữ (mùa: SP/SU/FA...) và phần số (năm)
+        var letters = new string(code.Where(char.IsLetter).ToArray());
+        var digits = new string(code.Where(char.IsDigit).ToArray());
+
+        if (digits.Length >= 2)
+            digits = digits[^2..]; // lấy 2 số cuối, ví dụ 2026 -> 26
+
+        return letters + digits;
     }
 }
