@@ -196,6 +196,7 @@ test('merges a project proposal into its linked team instead of rendering a dupl
     projectName: 'SMEP',
     description: 'Project proposal description.',
     status: 'Approved',
+    latestReviewComment: 'Approved with the agreed project scope.',
     members: [],
   });
 
@@ -207,6 +208,7 @@ test('merges a project proposal into its linked team instead of rendering a dupl
   assert.equal(result[0].projectName, 'SMEP');
   assert.equal(result[0].projectDescription, 'Project proposal description.');
   assert.equal(result[0].linkedProposal?._id, 'proposal-1');
+  assert.equal(result[0].linkedProposal?.rejectReason, 'Approved with the agreed project scope.');
 });
 
 test('keeps an unlinked proposal visible as a standalone proposal card', () => {
@@ -264,7 +266,7 @@ test('workspace creation defaults come from the linked student proposal', () => 
   assert.equal(defaults.draft.description, 'A balanced student-created proposal ready for lecturer review.');
 });
 
-test('project profile requires name, description, problem, solution, and target users', () => {
+test('project profile requires name, description, problem, and solution, while target users is optional', () => {
   const invalid = validateProjectProfile({
     projectName: 'x',
     description: '',
@@ -273,14 +275,14 @@ test('project profile requires name, description, problem, solution, and target 
     targetUsers: '',
     zaloGroupUrl: '',
   });
-  assert.deepEqual(Object.keys(invalid).sort(), ['description', 'problem', 'projectName', 'solution', 'targetUsers']);
+  assert.deepEqual(Object.keys(invalid).sort(), ['description', 'problem', 'projectName', 'solution']);
 
   assert.deepEqual(validateProjectProfile({
     projectName: 'Campus Circular Hub',
     description: 'A complete description of the approved project profile.',
     problem: 'Students struggle to reuse useful equipment safely on campus.',
     solution: 'A verified marketplace supports safe exchanges between students.',
-    targetUsers: 'University students and student clubs',
+    targetUsers: '',
     zaloGroupUrl: 'https://zalo.me/g/campus-circular',
   }), {});
 });

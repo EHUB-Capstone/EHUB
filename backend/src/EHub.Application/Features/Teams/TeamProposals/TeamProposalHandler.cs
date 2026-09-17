@@ -1,5 +1,6 @@
 using System.Text.Json;
 using EHub.Application.Common.Interfaces.Persistence;
+using EHub.Application.Common.Interfaces.Services;
 using EHub.Application.Common.Exceptions;
 using EHub.Application.Features.Classes.Common;
 using EHub.Contracts.Teams;
@@ -35,11 +36,13 @@ public sealed class TeamProposalHandler : ITeamProposalHandler
 
     private readonly IApplicationDbContext _context;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IClassRealtimePublisher? _realtimePublisher;
 
-    public TeamProposalHandler(IApplicationDbContext context, IUnitOfWork unitOfWork)
+    public TeamProposalHandler(IApplicationDbContext context, IUnitOfWork unitOfWork, IClassRealtimePublisher? realtimePublisher = null)
     {
         _context = context;
         _unitOfWork = unitOfWork;
+        _realtimePublisher = realtimePublisher;
     }
 
     public async Task<Result<IReadOnlyCollection<TeamProposalDto>>> GetForClassAsync(
@@ -496,7 +499,7 @@ public sealed class TeamProposalHandler : ITeamProposalHandler
 
         try
         {
-            return await _unitOfWork.ExecuteInSerializableTransactionAsync(async transactionCancellationToken =>
+            var result = await _unitOfWork.ExecuteInSerializableTransactionAsync(async transactionCancellationToken =>
             {
                 var proposal = await ProposalQuery(tracking: true).FirstOrDefaultAsync(item => item.Id == proposalId, transactionCancellationToken);
                 if (proposal == null) return Failure(ErrorCodes.TeamProposalNotFound, "The requested proposal was not found.");
@@ -614,10 +617,39 @@ public sealed class TeamProposalHandler : ITeamProposalHandler
                 await _context.SaveChangesAsync(transactionCancellationToken);
                 return Result.Success(ToDto(proposal));
             }, cancellationToken);
+            if (result.IsSuccess && _realtimePublisher is not null)
+            {
+                try { await PublishProposalReviewedAsync(proposalId, cancellationToken); }
+                catch { /* Realtime delivery is best-effort after the review has committed. */ }
+            }
+            return result;
         }
         catch (DbUpdateConcurrencyException) { return Failure(ErrorCodes.ClassConcurrencyConflict, "The proposal was reviewed concurrently. Refresh the page."); }
         catch (SerializableTransactionConflictException) { return Failure(ErrorCodes.ClassConcurrencyConflict, "The proposal was reviewed concurrently. Refresh the page."); }
         catch (DbUpdateException) { return Failure(ErrorCodes.TeamApprovalConflict, "The proposal could not be approved because a member was assigned concurrently."); }
+    }
+
+    private async Task PublishProposalReviewedAsync(Guid proposalId, CancellationToken cancellationToken)
+    {
+        var proposal = await ProposalQuery().FirstOrDefaultAsync(item => item.Id == proposalId, cancellationToken);
+        if (proposal is null || _realtimePublisher is null) return;
+
+        var administratorIds = await _context.Users.AsNoTracking()
+            .Where(user => user.UserRoles.Any(link => link.Role.Name == SystemRoles.Admin))
+            .Select(user => user.Id)
+            .ToArrayAsync(cancellationToken);
+        var lecturerIds = await _context.Classes.AsNoTracking()
+            .Where(item => item.Id == proposal.ClassId)
+            .SelectMany(item => item.ClassLecturers.Select(assignment => assignment.LecturerId)
+                .Append(item.PrimaryLecturerId ?? Guid.Empty))
+            .ToArrayAsync(cancellationToken);
+        var recipients = administratorIds
+            .Concat(GetMemberUserIds(proposal.Members.Where(member => member.IsIncluded)))
+            .Concat(lecturerIds)
+            .Where(id => id != Guid.Empty)
+            .Distinct()
+            .ToArray();
+        await _realtimePublisher.PublishProposalReviewedAsync(recipients, proposal.ClassId, proposal.Id, cancellationToken);
     }
 
     public async Task<Result<TeamProposalDto>> CancelAsync(

@@ -38,6 +38,7 @@ public interface IApplicationDbContext
     DbSet<Checkpoint> Checkpoints { get; }
     DbSet<Submission> Submissions { get; }
     DbSet<SubmissionFile> SubmissionFiles { get; }
+    DbSet<SubmissionRequirementContent> SubmissionRequirementContents { get; }
     DbSet<SubmissionFeedback> SubmissionFeedbacks { get; }
     DbSet<Rubric> Rubrics { get; }
     DbSet<RubricCriterion> RubricCriteria { get; }

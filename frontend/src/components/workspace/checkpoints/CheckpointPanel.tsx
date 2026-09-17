@@ -2,6 +2,7 @@
 // Full-screen checkpoint detail view
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
+import { AnimatePresence, motion } from 'framer-motion';
 import {
   X, CheckCircle2, Award, FileText, Download, Trash2, Loader2,
   MessageSquare, ArrowLeft, Users, BarChart2, Layers, TrendingUp, Upload, Save,
@@ -74,7 +75,7 @@ export default function CheckpointPanel({
   const [deleting, setDeleting] = useState(false);
   const isStudent = user?.role?.toUpperCase() === 'STUDENT';
   const isLecturer = user?.role?.toUpperCase() === 'LECTURER';
-  const [showEvaluation, setShowEvaluation] = useState(isLecturer);
+  const [showEvaluation, setShowEvaluation] = useState(false);
   const canEditRequirements = isStudent && isEditable;
   const Icon = ICONS[checkpoint?.icon] || FileText;
 
@@ -138,7 +139,15 @@ export default function CheckpointPanel({
       && Number(event.checkpointNumber) === Number(checkpoint.number)) {
       removeFeedback(event.feedbackId);
     }
-  }), [addFeedback, checkpoint.number, removeFeedback, teamId]);
+    if (event.eventType === 'CheckpointRequirementsUpdated'
+      && String(event.teamId) === String(teamId)
+      && Number(event.checkpointNumber) === Number(checkpoint.number)) {
+      void fetchData();
+      onRequirementsSaved?.();
+    }
+  }, (reconnected) => {
+    if (reconnected) void fetchData();
+  }), [addFeedback, checkpoint.number, fetchData, onRequirementsSaved, removeFeedback, teamId]);
 
   useEffect(() => {
     document.body.style.overflow = 'hidden';
@@ -578,18 +587,27 @@ export default function CheckpointPanel({
             </div>
           </main>
 
+          <AnimatePresence>
           {showEvaluation && (
-            <button
+            <motion.button
               type="button"
               className="absolute inset-0 z-10 bg-slate-950/30 backdrop-blur-[1px] lg:hidden"
               aria-label="Close evaluation panel"
               onClick={() => setShowEvaluation(false)}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
             />
           )}
 
-          {showEvaluation && <aside
+          {showEvaluation && <motion.aside
             id="checkpoint-evaluation-panel"
             className="absolute inset-y-0 right-0 z-20 flex w-full max-w-[580px] flex-col border-l border-slate-200 bg-slate-100 shadow-2xl lg:static lg:z-auto lg:w-[420px] lg:max-w-none lg:shrink-0 lg:shadow-none xl:w-[500px] 2xl:w-[560px]"
+            initial={{ opacity: 0, x: 48 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 48 }}
+            transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
           >
             <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3">
               <div className="flex min-w-0 items-center gap-2">
@@ -620,7 +638,8 @@ export default function CheckpointPanel({
                 embedded
               />
             </div>
-          </aside>}
+          </motion.aside>}
+          </AnimatePresence>
         </div>
       </div>
 

@@ -1,10 +1,12 @@
 using EHub.Application.Common.Interfaces.Identity;
 using EHub.Application.Common.Interfaces.Persistence;
+using EHub.Application.Common.Interfaces.Services;
 using EHub.Application.Common.Interfaces.Storage;
 using EHub.Contracts.Auth;
 using EHub.Shared.Errors;
 using EHub.Shared.Results;
 using EHub.Shared.Constants;
+using Microsoft.EntityFrameworkCore;
 
 namespace EHub.Application.Features.Auth.UpdateProfile;
 
@@ -21,19 +23,25 @@ public sealed class UpdateProfileCommandHandler : IUpdateProfileCommandHandler
     private readonly IStudentRepository _studentRepository;
     private readonly IImageStorageService _imageStorageService;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IApplicationDbContext? _context;
+    private readonly IClassRealtimePublisher? _realtimePublisher;
 
     public UpdateProfileCommandHandler(
         ICurrentUserService currentUserService,
         IUserRepository userRepository,
         IStudentRepository studentRepository,
         IImageStorageService imageStorageService,
-        IUnitOfWork unitOfWork)
+        IUnitOfWork unitOfWork,
+        IApplicationDbContext? context = null,
+        IClassRealtimePublisher? realtimePublisher = null)
     {
         _currentUserService = currentUserService;
         _userRepository = userRepository;
         _studentRepository = studentRepository;
         _imageStorageService = imageStorageService;
         _unitOfWork = unitOfWork;
+        _context = context;
+        _realtimePublisher = realtimePublisher;
     }
 
     public async Task<Result<UpdateProfileResponse>> HandleAsync(
@@ -113,6 +121,23 @@ public sealed class UpdateProfileCommandHandler : IUpdateProfileCommandHandler
 
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
+        if (command.Major is not null && student is not null && _context is not null && _realtimePublisher is not null)
+        {
+            var classIds = await _context.ClassStudents.AsNoTracking()
+                .Where(enrollment => enrollment.StudentId == student.Id &&
+                    (enrollment.EnrollmentStatus == EHub.Domain.Enums.EnrollmentStatus.Active ||
+                     enrollment.EnrollmentStatus == EHub.Domain.Enums.EnrollmentStatus.Completed))
+                .Select(enrollment => enrollment.ClassId)
+                .Distinct()
+                .ToArrayAsync(cancellationToken);
+            foreach (var classId in classIds)
+            {
+                var recipients = await ClassRecipientUserIdsAsync(classId, cancellationToken);
+                await _realtimePublisher.PublishMajorUpdatedAsync(
+                    recipients, classId, student.Id, student.MajorCode!, cancellationToken);
+            }
+        }
+
         return Result.Success(new UpdateProfileResponse
         {
             Id = user.Id,
@@ -146,6 +171,24 @@ public sealed class UpdateProfileCommandHandler : IUpdateProfileCommandHandler
         }
 
         return true;
+    }
+
+    private async Task<IReadOnlyCollection<Guid>> ClassRecipientUserIdsAsync(Guid classId, CancellationToken cancellationToken)
+    {
+        var context = _context!;
+        var studentUserIds = await context.ClassStudents.AsNoTracking()
+            .Where(enrollment => enrollment.ClassId == classId &&
+                (enrollment.EnrollmentStatus == EHub.Domain.Enums.EnrollmentStatus.Active ||
+                 enrollment.EnrollmentStatus == EHub.Domain.Enums.EnrollmentStatus.Completed) &&
+                enrollment.Student.UserId.HasValue)
+            .Select(enrollment => enrollment.Student.UserId!.Value)
+            .ToArrayAsync(cancellationToken);
+        var lecturerUserIds = await context.Classes.AsNoTracking()
+            .Where(item => item.Id == classId)
+            .SelectMany(item => item.ClassLecturers.Select(assignment => assignment.LecturerId)
+                .Append(item.PrimaryLecturerId ?? Guid.Empty))
+            .ToArrayAsync(cancellationToken);
+        return studentUserIds.Concat(lecturerUserIds).Where(id => id != Guid.Empty).Distinct().ToArray();
     }
 
     private static bool HasImageSignature(Stream content)

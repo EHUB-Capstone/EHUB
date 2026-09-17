@@ -47,8 +47,17 @@ const normalizeCriteria = (criteria = []) => {
     description: item.description || '',
     weight: Number(item.weight ?? 1),
     maxScore: Number(item.maxScore ?? 10),
-    levels: item.levels || LEVEL_OPTIONS,
+    levels: Array.isArray(item.levels) && item.levels.length > 0 ? item.levels : LEVEL_OPTIONS,
   }));
+};
+
+const inferLevelFromScore = (score) => {
+  const value = Number(score);
+  if (!Number.isFinite(value)) return '';
+  if (value >= 8.5) return 'EXCELLENT';
+  if (value >= 7.0) return 'GOOD';
+  if (value >= 5.0) return 'FAIR';
+  return 'POOR';
 };
 
 const initialRows = (criteria, initialData) => {
@@ -56,7 +65,7 @@ const initialRows = (criteria, initialData) => {
 
   return criteria.map((criterion) => {
     const existing = byKey.get(criterion.criterionKey) || {};
-    const fallbackLevel = existing.selectedLevel || existing.level || '';
+    const fallbackLevel = existing.selectedLevel || existing.level || inferLevelFromScore(existing.score ?? existing.manualScore);
     const scoreMode = existing.scoreMode || (existing.manualScore != null ? 'MANUAL' : 'LEVEL');
 
     let currentScore = existing.score ?? existing.manualScore;
@@ -116,10 +125,7 @@ export default function RubricForm({
     if (score === '' || score == null) return '';
     const s = Number(score);
     if (!Number.isFinite(s)) return '';
-    if (s >= 8.5) return 'EXCELLENT';
-    if (s >= 7.0) return 'GOOD';
-    if (s >= 5.0) return 'FAIR';
-    return 'POOR';
+    return inferLevelFromScore(s);
   };
 
   const updateRow = (index, patch) => {
@@ -235,6 +241,11 @@ export default function RubricForm({
     const hasUncompleted = rubricScores.some(
       (item) => !item.selectedLevel || item.score === '' || item.score == null
     );
+
+    if (hasUncompleted && status === 'SUBMITTED') {
+      toast.error('Score every configured criterion before submitting the evaluation.');
+      return;
+    }
 
     if (hasUncompleted) {
       setPendingStatus(status);

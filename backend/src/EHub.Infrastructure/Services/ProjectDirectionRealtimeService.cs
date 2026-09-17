@@ -9,7 +9,7 @@ using Microsoft.Extensions.Logging;
 namespace EHub.Infrastructure.Services;
 
 public sealed class ProjectDirectionRealtimeService(
-    ILogger<ProjectDirectionRealtimeService> logger) : IProjectDirectionRealtimePublisher, ICheckpointFeedbackRealtimePublisher
+    ILogger<ProjectDirectionRealtimeService> logger) : IProjectDirectionRealtimePublisher, ICheckpointFeedbackRealtimePublisher, IClassRealtimePublisher
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private readonly ConcurrentDictionary<Guid, ConcurrentDictionary<Guid, Connection>> _connections = new();
@@ -96,6 +96,18 @@ public sealed class ProjectDirectionRealtimeService(
         var payload = JsonSerializer.SerializeToUtf8Bytes(new { eventType = "CheckpointFeedbackDeleted", teamId, checkpointNumber, feedbackId }, JsonOptions);
         await PublishPayloadAsync(recipientUserIds, payload);
     }
+
+    public Task PublishMajorUpdatedAsync(IReadOnlyCollection<Guid> recipientUserIds, Guid classId, Guid studentId, string majorCode, CancellationToken cancellationToken = default) =>
+        PublishPayloadAsync(recipientUserIds, JsonSerializer.SerializeToUtf8Bytes(new { eventType = "ClassMajorUpdated", classId, studentId, majorCode }, JsonOptions));
+
+    public Task PublishProposalReviewedAsync(IReadOnlyCollection<Guid> recipientUserIds, Guid classId, Guid proposalId, CancellationToken cancellationToken = default) =>
+        PublishPayloadAsync(recipientUserIds, JsonSerializer.SerializeToUtf8Bytes(new { eventType = "TeamProposalReviewed", classId, proposalId }, JsonOptions));
+
+    public Task PublishCheckpointRequirementsUpdatedAsync(IReadOnlyCollection<Guid> recipientUserIds, Guid teamId, int checkpointNumber, CancellationToken cancellationToken = default) =>
+        PublishPayloadAsync(recipientUserIds, JsonSerializer.SerializeToUtf8Bytes(new { eventType = "CheckpointRequirementsUpdated", teamId, checkpointNumber }, JsonOptions));
+
+    public Task PublishCheckpointEvaluationUpdatedAsync(IReadOnlyCollection<Guid> recipientUserIds, Guid teamId, int checkpointNumber, CancellationToken cancellationToken = default) =>
+        PublishPayloadAsync(recipientUserIds, JsonSerializer.SerializeToUtf8Bytes(new { eventType = "CheckpointEvaluationUpdated", teamId, checkpointNumber }, JsonOptions));
 
     private async Task PublishPayloadAsync(IReadOnlyCollection<Guid> recipientUserIds, byte[] payload)
     {

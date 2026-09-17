@@ -236,8 +236,8 @@ function TeamCard({
 
       {expanded && (
         <div className="border-t border-slate-100 bg-slate-50/50 p-4">
-          {team.rejectReason && (status === 'REJECTED' || needsRevision) && (
-            <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800"><strong>Review note:</strong> {team.rejectReason}</div>
+          {actionProposal?.rejectReason && (
+            <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800"><strong>Lecturer review note:</strong> {actionProposal.rejectReason}</div>
           )}
 
           <div className="space-y-4">

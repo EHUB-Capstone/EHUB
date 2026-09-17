@@ -386,8 +386,9 @@ public sealed class ProjectWorkspaceHandler : IProjectWorkspaceHandler
             return new Error(ErrorCodes.WorkspaceValidationError, "Project problem must be between 20 and 2000 characters.");
         if ((request.Solution ?? string.Empty).Trim().Length is < 20 or > 2_000)
             return new Error(ErrorCodes.WorkspaceValidationError, "Project solution must be between 20 and 2000 characters.");
-        if ((request.TargetUsers ?? string.Empty).Trim().Length is < 3 or > 2_000)
-            return new Error(ErrorCodes.WorkspaceValidationError, "Target users must be between 3 and 2000 characters.");
+        var targetUsersLength = (request.TargetUsers ?? string.Empty).Trim().Length;
+        if (targetUsersLength > 0 && targetUsersLength is < 3 or > 2_000)
+            return new Error(ErrorCodes.WorkspaceValidationError, "Target users must be between 3 and 2000 characters when provided.");
         var zaloGroupUrl = (request.ZaloGroupUrl ?? string.Empty).Trim();
         if (zaloGroupUrl.Length > 500 || (zaloGroupUrl.Length > 0 && !IsValidZaloUrl(zaloGroupUrl)))
             return new Error(ErrorCodes.WorkspaceValidationError, "Zalo group link must be a valid HTTPS URL on zalo.me.");

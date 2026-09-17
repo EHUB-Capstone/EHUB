@@ -45,11 +45,40 @@ interface CheckpointFeedbackDeletedRealtimeEvent {
   feedbackId: string;
 }
 
+interface ClassMajorUpdatedRealtimeEvent {
+  eventType: 'ClassMajorUpdated';
+  classId: string;
+  studentId: string;
+  majorCode: string;
+}
+
+interface TeamProposalReviewedRealtimeEvent {
+  eventType: 'TeamProposalReviewed';
+  classId: string;
+  proposalId: string;
+}
+
+interface CheckpointRequirementsUpdatedRealtimeEvent {
+  eventType: 'CheckpointRequirementsUpdated';
+  teamId: string;
+  checkpointNumber: number;
+}
+
+interface CheckpointEvaluationUpdatedRealtimeEvent {
+  eventType: 'CheckpointEvaluationUpdated';
+  teamId: string;
+  checkpointNumber: number;
+}
+
 export type ProjectDirectionRealtimeEvent =
   | ProjectDirectionChangedRealtimeEvent
   | ProjectDirectionNotificationReadyRealtimeEvent
   | CheckpointFeedbackPostedRealtimeEvent
-  | CheckpointFeedbackDeletedRealtimeEvent;
+  | CheckpointFeedbackDeletedRealtimeEvent
+  | ClassMajorUpdatedRealtimeEvent
+  | TeamProposalReviewedRealtimeEvent
+  | CheckpointRequirementsUpdatedRealtimeEvent
+  | CheckpointEvaluationUpdatedRealtimeEvent;
 
 type EventHandler = (event: ProjectDirectionRealtimeEvent) => void;
 type ConnectedHandler = (reconnected: boolean) => void;
@@ -117,10 +146,17 @@ const connect = () => {
   connection.addEventListener('message', (message) => {
     try {
       const event = JSON.parse(String(message.data)) as ProjectDirectionRealtimeEvent;
-      if (!event?.eventType || !event.teamId) return;
+      if (!event?.eventType) return;
+      if (event.eventType === 'ClassMajorUpdated' || event.eventType === 'TeamProposalReviewed') {
+        if (!event.classId) return;
+      } else if (!event.teamId) return;
       if (event.eventType !== 'ProjectDirectionNotificationReady'
         && event.eventType !== 'CheckpointFeedbackPosted'
         && event.eventType !== 'CheckpointFeedbackDeleted'
+        && event.eventType !== 'CheckpointRequirementsUpdated'
+        && event.eventType !== 'CheckpointEvaluationUpdated'
+        && event.eventType !== 'ClassMajorUpdated'
+        && event.eventType !== 'TeamProposalReviewed'
         && !event.direction) return;
       handlers.forEach((handler) => handler(event));
     } catch {

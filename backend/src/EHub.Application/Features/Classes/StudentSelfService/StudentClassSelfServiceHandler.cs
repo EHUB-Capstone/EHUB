@@ -94,16 +94,31 @@ public sealed class StudentClassSelfServiceHandler : IStudentClassSelfServiceHan
         var rosterStatus = enrollmentStatus == EnrollmentStatus.Completed
             ? EnrollmentStatus.Completed
             : EnrollmentStatus.Active;
-        var members = await _context.ClassStudents.AsNoTracking().Include(item => item.Student)
+        var memberRows = await _context.ClassStudents.AsNoTracking().Include(item => item.Student)
             .Where(item => item.ClassId == classId && item.EnrollmentStatus == rosterStatus)
             .OrderBy(item => item.Student.RollNumber)
-            .Select(item => new StudentClassMemberDto
+            .Select(item => new
             {
                 StudentId = item.StudentId, UserId = item.Student.UserId, RollNumber = item.Student.RollNumber ?? string.Empty,
-                FullName = item.Student.FullName, Email = item.Student.Email, MajorCode = item.MajorCodeAtEnrollment,
+                FullName = item.Student.FullName, Email = item.Student.Email,
+                EnrollmentMajorCode = item.MajorCodeAtEnrollment,
+                ProfileMajorCode = item.Student.MajorCode,
                 EnrollmentStatus = item.EnrollmentStatus.ToString(),
                 TeamId = item.TeamMembers.Where(member => member.CountsTowardActiveTeam).Select(member => (Guid?)member.TeamId).FirstOrDefault()
             }).ToListAsync(cancellationToken);
+        var members = memberRows.Select(item => new StudentClassMemberDto
+        {
+            StudentId = item.StudentId,
+            UserId = item.UserId,
+            RollNumber = item.RollNumber,
+            FullName = item.FullName,
+            Email = item.Email,
+            MajorCode = StudentEnrollmentRules.ResolveEffectiveMajorCode(
+                item.EnrollmentMajorCode,
+                item.ProfileMajorCode) ?? string.Empty,
+            EnrollmentStatus = item.EnrollmentStatus,
+            TeamId = item.TeamId
+        }).ToArray();
         var teams = await TeamQuery().Where(item => item.ClassId == classId && item.Status == TeamStatus.Active).OrderBy(item => item.TeamCode).ToListAsync(cancellationToken);
         var mentorsByClass = await LoadMentorsByClassAsync([classId], cancellationToken);
         return Result.Success(new StudentClassDetailResponse

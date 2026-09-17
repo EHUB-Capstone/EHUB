@@ -36,6 +36,7 @@ import { getClassLifecyclePresentation, isArchivedClass, isClassReadOnly } from 
 import { canManageClass as canManageClassPermission, hasClassRole } from '../../utils/classPermissions';
 import type { ClassCompletionPreview } from '../../types/classes';
 import type { StudentAssignmentMode } from '../../types/studentAssignment';
+import { subscribeProjectDirectionRealtime } from '../../api/projectDirectionRealtime';
 
 const classActionTone = {
   neutral: 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-800',
@@ -264,6 +265,17 @@ export default function ClassDetail() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchData();
   }, [fetchData]);
+
+  // Refresh only when the server confirms this class changed, or after reconnecting.
+  useEffect(() => subscribeProjectDirectionRealtime((event) => {
+    const currentClassId = String(cls?.id || cls?._id || '');
+    if (currentClassId && (event.eventType === 'ClassMajorUpdated' || event.eventType === 'TeamProposalReviewed')
+      && String(event.classId) === currentClassId) {
+      void fetchData();
+    }
+  }, (reconnected) => {
+    if (reconnected) void fetchData();
+  }), [cls?.id, cls?._id, fetchData]);
 
   useEffect(() => {
     setSelectedStudentSnapshots((current) => {

@@ -2,6 +2,8 @@ using EHub.Application.Common.Interfaces.Identity;
 using EHub.Application.Features.Workspaces.GetCheckpointOverview;
 using EHub.Application.Features.Workspaces.CheckpointFiles;
 using EHub.Application.Features.Workspaces.CheckpointFeedback;
+using EHub.Application.Features.Workspaces.CheckpointEvaluations;
+using EHub.Application.Features.Workspaces.CheckpointRequirements;
 using EHub.Contracts.Common;
 using EHub.Contracts.Workspaces;
 using EHub.Shared.Constants;
@@ -64,6 +66,17 @@ public sealed class WorkspaceCheckpointsController(
         return ToErrorResponse(result.Error);
     }
 
+    [HttpPut("teams/{teamId:guid}/checkpoints/{checkpointNumber:int}/requirements")]
+    public async Task<IActionResult> UpdateRequirements(Guid teamId, int checkpointNumber,
+        [FromBody] UpdateWorkspaceCheckpointRequirementsRequest request,
+        [FromServices] ICheckpointRequirementHandler handler, CancellationToken cancellationToken)
+    {
+        var result = await handler.UpdateAsync(teamId, checkpointNumber, request, UserId, Role, cancellationToken);
+        return result.IsSuccess
+            ? Ok(ApiResponse<WorkspaceCheckpointSubmissionResponse>.SuccessResponse(result.Value, "Checkpoint requirements saved."))
+            : ToErrorResponse(result.Error);
+    }
+
     [HttpPost("teams/{teamId:guid}/checkpoints/{checkpointNumber:int}/feedback")]
     public async Task<IActionResult> AddFeedback(Guid teamId, int checkpointNumber, [FromBody] CreateWorkspaceCheckpointFeedbackRequest request, [FromServices] ICheckpointFeedbackHandler handler, CancellationToken cancellationToken)
     {
@@ -76,6 +89,38 @@ public sealed class WorkspaceCheckpointsController(
     {
         var result = await handler.DeleteAsync(teamId, checkpointNumber, feedbackId, UserId, Role, cancellationToken);
         return result.IsSuccess ? Ok(ApiResponse<object>.SuccessResponse(new { }, "Feedback deleted.")) : ToErrorResponse(result.Error);
+    }
+
+    [HttpGet("teams/{teamId:guid}/checkpoints/{checkpointNumber:int}/evaluation-summary")]
+    public async Task<IActionResult> GetEvaluationSummary(Guid teamId, int checkpointNumber,
+        [FromServices] ICheckpointEvaluationHandler handler, CancellationToken cancellationToken)
+    {
+        var result = await handler.GetSummaryAsync(teamId, checkpointNumber, UserId, Role, cancellationToken);
+        return result.IsSuccess
+            ? Ok(ApiResponse<WorkspaceCheckpointEvaluationSummaryResponse>.SuccessResponse(result.Value, "Checkpoint evaluation retrieved."))
+            : ToErrorResponse(result.Error);
+    }
+
+    [HttpPost("teams/{teamId:guid}/checkpoints/{checkpointNumber:int}/evaluations")]
+    public async Task<IActionResult> SaveEvaluation(Guid teamId, int checkpointNumber,
+        [FromBody] SaveWorkspaceCheckpointEvaluationRequest request,
+        [FromServices] ICheckpointEvaluationHandler handler, CancellationToken cancellationToken)
+    {
+        var result = await handler.SaveAsync(teamId, checkpointNumber, request, UserId, Role, cancellationToken);
+        return result.IsSuccess
+            ? Ok(ApiResponse<WorkspaceCheckpointEvaluationResponse>.SuccessResponse(result.Value, "Checkpoint evaluation saved."))
+            : ToErrorResponse(result.Error);
+    }
+
+    [HttpPut("evaluations/{evaluationId:guid}")]
+    public async Task<IActionResult> UpdateEvaluation(Guid evaluationId,
+        [FromBody] SaveWorkspaceCheckpointEvaluationRequest request,
+        [FromServices] ICheckpointEvaluationHandler handler, CancellationToken cancellationToken)
+    {
+        var result = await handler.UpdateAsync(evaluationId, request, UserId, Role, cancellationToken);
+        return result.IsSuccess
+            ? Ok(ApiResponse<WorkspaceCheckpointEvaluationResponse>.SuccessResponse(result.Value, "Checkpoint evaluation updated."))
+            : ToErrorResponse(result.Error);
     }
 
     private Guid UserId => currentUser.UserId ?? Guid.Empty;

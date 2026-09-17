@@ -42,6 +42,8 @@ public static class DependencyInjection
             provider.GetRequiredService<ProjectDirectionRealtimeService>());
         services.AddSingleton<ICheckpointFeedbackRealtimePublisher>(provider =>
             provider.GetRequiredService<ProjectDirectionRealtimeService>());
+        services.AddSingleton<IClassRealtimePublisher>(provider =>
+            provider.GetRequiredService<ProjectDirectionRealtimeService>());
         services.AddHostedService<OutboxProcessorBackgroundService>();
 
         // Repositories & Persistence

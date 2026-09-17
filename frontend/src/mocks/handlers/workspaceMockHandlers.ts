@@ -509,7 +509,7 @@ export function registerWorkspaceMockHandlers(mock: MockAdapter): void {
       || description.length < 20 || description.length > 2000
       || problem.length < 20 || problem.length > 2000
       || solution.length < 20 || solution.length > 2000
-      || targetUsers.length < 3 || targetUsers.length > 2000
+      || (targetUsers.length > 0 && (targetUsers.length < 3 || targetUsers.length > 2000))
       || !isValidZaloGroupUrl) {
       return failure(400, 'WORKSPACE_VALIDATION_ERROR', 'Required project workspace information is missing or invalid.');
     }

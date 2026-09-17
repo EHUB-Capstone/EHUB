@@ -74,6 +74,13 @@ public sealed class GetWorkspaceCheckpointOverviewQueryHandler(
         var latestSubmissionIds = latestSubmissions.Values
             .Select(submission => submission.Id)
             .ToArray();
+        var requirementContents = latestSubmissionIds.Length == 0
+            ? Array.Empty<SubmissionRequirementContent>()
+            : await context.SubmissionRequirementContents
+                .AsNoTracking()
+                .Where(content => latestSubmissionIds.Contains(content.SubmissionId))
+                .OrderBy(content => content.RequirementIndex)
+                .ToArrayAsync(cancellationToken);
         var files = latestSubmissionIds.Length == 0
             ? Array.Empty<SubmissionFile>()
             : await context.SubmissionFiles
@@ -98,6 +105,9 @@ public sealed class GetWorkspaceCheckpointOverviewQueryHandler(
         var feedbacksBySubmission = feedbacks
             .GroupBy(feedback => feedback.SubmissionId)
             .ToDictionary(group => group.Key, group => group.ToArray());
+        var requirementContentsBySubmission = requirementContents
+            .GroupBy(content => content.SubmissionId)
+            .ToDictionary(group => group.Key, group => group.ToArray());
 
         return Result.Success(new WorkspaceCheckpointOverviewResponse
         {
@@ -110,7 +120,11 @@ public sealed class GetWorkspaceCheckpointOverviewQueryHandler(
                     FilesForCheckpoint(
                         checkpoint.Id,
                         latestSubmissions,
-                        filesBySubmission)))
+                        filesBySubmission),
+                    RequirementContentsForCheckpoint(
+                        checkpoint.Id,
+                        latestSubmissions,
+                        requirementContentsBySubmission)))
                 .ToArray(),
             Feedbacks = checkpoints
                 .SelectMany(checkpoint => ToFeedbackResponses(
@@ -188,7 +202,8 @@ public sealed class GetWorkspaceCheckpointOverviewQueryHandler(
     private static WorkspaceCheckpointSubmissionResponse ToSubmissionResponse(
         Checkpoint checkpoint,
         Submission? submission,
-        IReadOnlyCollection<SubmissionFile> files)
+        IReadOnlyCollection<SubmissionFile> files,
+        IReadOnlyCollection<SubmissionRequirementContent> requirementContents)
     {
         if (submission is null)
         {
@@ -219,6 +234,14 @@ public sealed class GetWorkspaceCheckpointOverviewQueryHandler(
                             Id = file.UploadedBy.Id,
                             Name = file.UploadedBy.FullName
                         }
+                })
+                .ToArray(),
+            RequirementContents = requirementContents
+                .OrderBy(content => content.RequirementIndex)
+                .Select(content => new WorkspaceCheckpointRequirementContentResponse
+                {
+                    Index = content.RequirementIndex,
+                    Content = content.Content
                 })
                 .ToArray()
         };
@@ -269,6 +292,17 @@ public sealed class GetWorkspaceCheckpointOverviewQueryHandler(
         return submission is null
             ? Array.Empty<SubmissionFeedback>()
             : feedbacksBySubmission.GetValueOrDefault(submission.Id) ?? Array.Empty<SubmissionFeedback>();
+    }
+
+    private static IReadOnlyCollection<SubmissionRequirementContent> RequirementContentsForCheckpoint(
+        Guid checkpointId,
+        IReadOnlyDictionary<Guid, Submission> latestSubmissions,
+        IReadOnlyDictionary<Guid, SubmissionRequirementContent[]> contentsBySubmission)
+    {
+        var submission = latestSubmissions.GetValueOrDefault(checkpointId);
+        return submission is null
+            ? Array.Empty<SubmissionRequirementContent>()
+            : contentsBySubmission.GetValueOrDefault(submission.Id) ?? Array.Empty<SubmissionRequirementContent>();
     }
 
     private static IReadOnlyCollection<T> DeserializeArray<T>(string? value)

@@ -7,6 +7,7 @@ import RubricForm from './RubricForm';
 import { useAuth } from '../../hooks/useAuth';
 import { MentorEvaluationCard } from '../evaluation/PerformanceLevelBadge';
 import PerformanceLevelBadge from '../evaluation/PerformanceLevelBadge';
+import { subscribeProjectDirectionRealtime } from '../../api/projectDirectionRealtime';
 
 const CHECKPOINTS = [1, 2, 3, 4];
 
@@ -77,6 +78,16 @@ export default function EvaluationPanel({
     // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchCheckpointData();
   }, [fetchCheckpointData]);
+
+  useEffect(() => subscribeProjectDirectionRealtime((event) => {
+    if (event.eventType === 'CheckpointEvaluationUpdated'
+      && String(event.teamId) === String(teamId)
+      && Number(event.checkpointNumber) === Number(selectedCheckpoint)) {
+      void fetchCheckpointData();
+    }
+  }, (reconnected) => {
+    if (reconnected) void fetchCheckpointData();
+  }), [fetchCheckpointData, selectedCheckpoint, teamId]);
 
   const saveEvaluation = async (formData) => {
     try {

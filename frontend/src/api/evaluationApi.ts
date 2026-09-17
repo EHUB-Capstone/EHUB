@@ -30,16 +30,16 @@ export const evaluationApi = {
     return axiosClient.get(`/evaluations/team/${teamId}/checkpoints/${checkpointNumber}`);
   },
   getCheckpointSummary: async (teamId, checkpointNumber) => {
-    return axiosClient.get(`/evaluations/team/${teamId}/checkpoints/${checkpointNumber}/summary`);
+    return axiosClient.get(`/workspace/checkpoints/teams/${teamId}/checkpoints/${checkpointNumber}/evaluation-summary`);
   },
   getCheckpointHistory: async (teamId, checkpointNumber) => {
     return axiosClient.get(`/evaluations/team/${teamId}/checkpoints/${checkpointNumber}/history`);
   },
   createCheckpointEvaluation: async (teamId, checkpointNumber, evaluationData) => {
-    return axiosClient.post(`/evaluations/team/${teamId}/checkpoints/${checkpointNumber}`, evaluationData);
+    return axiosClient.post(`/workspace/checkpoints/teams/${teamId}/checkpoints/${checkpointNumber}/evaluations`, evaluationData);
   },
   updateCheckpointEvaluation: async (evaluationId, evaluationData) => {
-    return axiosClient.put(`/evaluations/team/${evaluationId}`, evaluationData);
+    return axiosClient.put(`/workspace/checkpoints/evaluations/${evaluationId}`, evaluationData);
   },
   submitCheckpointEvaluation: async (evaluationId) => {
     return axiosClient.put(`/evaluations/team/${evaluationId}/submit`, {});

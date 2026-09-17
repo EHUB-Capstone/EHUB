@@ -103,7 +103,9 @@ export const validateProjectProfile = (draft: ProjectProfileDraft): ProjectProfi
   if (lengths.description < 20 || lengths.description > 2_000) errors.description = 'Description must be 20–2000 characters.';
   if (lengths.problem < 20 || lengths.problem > 2_000) errors.problem = 'Problem must be 20–2000 characters.';
   if (lengths.solution < 20 || lengths.solution > 2_000) errors.solution = 'Solution must be 20–2000 characters.';
-  if (lengths.targetUsers < 3 || lengths.targetUsers > 2_000) errors.targetUsers = 'Target users must be 3–2000 characters.';
+  if (lengths.targetUsers > 0 && (lengths.targetUsers < 3 || lengths.targetUsers > 2_000)) {
+    errors.targetUsers = 'Target users must be 3–2000 characters when provided.';
+  }
   if (lengths.zaloGroupUrl > 0) {
     try {
       const url = new URL(draft.zaloGroupUrl.trim());

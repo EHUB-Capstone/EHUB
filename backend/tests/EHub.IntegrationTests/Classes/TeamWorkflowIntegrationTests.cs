@@ -10,6 +10,8 @@ using EHub.Application.Features.Teams.ProjectDirections;
 using EHub.Application.Features.Teams.TeamProposals;
 using EHub.Application.Features.Workspaces;
 using EHub.Application.Features.Workspaces.GetCheckpointOverview;
+using EHub.Application.Features.Workspaces.CheckpointRequirements;
+using EHub.Application.Features.Workspaces.CheckpointEvaluations;
 using EHub.Application.Features.Admin.Users.ManageUsers;
 using EHub.Application.Common.Interfaces.Identity;
 using EHub.Contracts.Classes;
@@ -954,6 +956,205 @@ public sealed class TeamWorkflowIntegrationTests
     }
 
     [Fact]
+    public async Task CheckpointRequirements_CreateUpdateAndReloadWithoutDuplicates()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateSeedAsync(context, createProposal: false, createTeam: true);
+        var courseId = await context.Classes.Where(item => item.Id == seed.ClassId).Select(item => item.CourseId).SingleAsync();
+        var checkpoint = new Checkpoint
+        {
+            CourseId = courseId,
+            Name = "Requirement persistence",
+            CheckpointNumber = 1,
+            RequirementsJson = JsonSerializer.Serialize(new[] { "Problem", "Solution" }),
+            Status = CheckpointStatus.Open,
+            CreatedById = seed.AdminId,
+            CreatedBy = seed.AdminId
+        };
+        context.Checkpoints.Add(checkpoint);
+        context.Projects.Add(new Project
+        {
+            TeamId = seed.TeamId!.Value,
+            Name = "Requirements project",
+            Status = ProjectStatus.Draft,
+            CreatedById = seed.ProposerUserId,
+            CreatedBy = seed.ProposerUserId
+        });
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        var handler = new CheckpointRequirementHandler(context);
+        var create = await handler.UpdateAsync(seed.TeamId.Value, checkpoint.CheckpointNumber,
+            new UpdateWorkspaceCheckpointRequirementsRequest
+            {
+                Contents = new[]
+                {
+                    new WorkspaceCheckpointRequirementContentInput { Index = 0, Content = "Validated student problem." },
+                    new WorkspaceCheckpointRequirementContentInput { Index = 1, Content = "First solution." }
+                }
+            }, seed.ProposerUserId, SystemRoles.Student);
+        create.IsSuccess.Should().BeTrue();
+
+        var update = await handler.UpdateAsync(seed.TeamId.Value, checkpoint.CheckpointNumber,
+            new UpdateWorkspaceCheckpointRequirementsRequest
+            {
+                Contents = new[]
+                {
+                    new WorkspaceCheckpointRequirementContentInput { Index = 0, Content = "Validated student problem." },
+                    new WorkspaceCheckpointRequirementContentInput { Index = 1, Content = "Updated persisted solution." }
+                }
+            }, seed.ProposerUserId, SystemRoles.Student);
+        update.IsSuccess.Should().BeTrue();
+        context.ChangeTracker.Clear();
+
+        var submission = await context.Submissions.AsNoTracking().SingleAsync(item =>
+            item.TeamId == seed.TeamId && item.CheckpointId == checkpoint.Id);
+        (await context.SubmissionRequirementContents.AsNoTracking()
+            .Where(item => item.SubmissionId == submission.Id)
+            .OrderBy(item => item.RequirementIndex)
+            .Select(item => new { item.RequirementIndex, item.Content })
+            .ToListAsync())
+            .Should().Equal(new[]
+            {
+                new { RequirementIndex = 0, Content = "Validated student problem." },
+                new { RequirementIndex = 1, Content = "Updated persisted solution." }
+            });
+
+        var overview = await scope.ServiceProvider.GetRequiredService<IGetWorkspaceCheckpointOverviewQueryHandler>()
+            .HandleAsync(seed.TeamId.Value, seed.ProposerUserId, SystemRoles.Student);
+        overview.IsSuccess.Should().BeTrue();
+        overview.Value.Submissions.Single(item => item.CheckpointNumber == checkpoint.CheckpointNumber)
+            .RequirementContents.Select(item => item.Content)
+            .Should().Equal("Validated student problem.", "Updated persisted solution.");
+
+        var forbidden = await handler.UpdateAsync(seed.TeamId.Value, checkpoint.CheckpointNumber,
+            new UpdateWorkspaceCheckpointRequirementsRequest(), seed.LecturerId, SystemRoles.Lecturer);
+        forbidden.IsFailure.Should().BeTrue();
+        forbidden.Error.Code.Should().Be(ErrorCodes.WorkspaceAccessDenied);
+    }
+
+    [Fact]
+    public async Task CheckpointEvaluation_UsesAdministratorRubricAndPersistsLecturerScores()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateSeedAsync(context, createProposal: false, createTeam: true);
+        var courseId = await context.Classes.Where(item => item.Id == seed.ClassId).Select(item => item.CourseId).SingleAsync();
+        var checkpoint = new Checkpoint
+        {
+            CourseId = courseId,
+            Name = "Rubric checkpoint",
+            CheckpointNumber = 1,
+            Status = CheckpointStatus.Open,
+            CreatedById = seed.AdminId,
+            CreatedBy = seed.AdminId
+        };
+        var rubric = new Rubric
+        {
+            CourseId = courseId,
+            Checkpoint = checkpoint,
+            Name = "Administrator rubric",
+            Status = RubricStatus.Active,
+            TotalWeight = 100,
+            CreatedById = seed.AdminId,
+            Criteria = new List<RubricCriterion>
+            {
+                new() { Key = "clarity", Name = "Startup clarity", Weight = 60, MaxScore = 10, DisplayOrder = 1 },
+                new() { Key = "evidence", Name = "Evidence", Weight = 40, MaxScore = 10, DisplayOrder = 2 }
+            }
+        };
+        context.Checkpoints.Add(checkpoint);
+        context.Rubrics.Add(rubric);
+        context.Projects.Add(new Project
+        {
+            TeamId = seed.TeamId!.Value,
+            Name = "Evaluation project",
+            Description = "Project evaluated from the checkpoint rubric.",
+            Status = ProjectStatus.Draft,
+            CreatedById = seed.ProposerUserId,
+            CreatedBy = seed.ProposerUserId
+        });
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        var handler = scope.ServiceProvider.GetRequiredService<ICheckpointEvaluationHandler>();
+        var saved = await handler.SaveAsync(seed.TeamId.Value, 1,
+            new SaveWorkspaceCheckpointEvaluationRequest
+            {
+                Status = "SUBMITTED",
+                OverallFeedback = "Strong evidence and a clear startup direction.",
+                RubricScores = new[]
+                {
+                    new WorkspaceCheckpointCriterionScoreInput { CriterionKey = "clarity", Score = 9, Comment = "Clear." },
+                    new WorkspaceCheckpointCriterionScoreInput { CriterionKey = "evidence", Score = 8, Comment = "Good evidence." }
+                }
+            }, seed.LecturerId, SystemRoles.Lecturer);
+
+        saved.IsSuccess.Should().BeTrue();
+        saved.Value.CheckpointTotal.Should().Be(8.6m);
+        saved.Value.RubricScores.Select(item => item.CriterionKey).Should().Equal("clarity", "evidence");
+
+        var studentSummary = await handler.GetSummaryAsync(seed.TeamId.Value, 1, seed.ProposerUserId, SystemRoles.Student);
+        studentSummary.IsSuccess.Should().BeTrue();
+        studentSummary.Value.Checkpoint.Rubrics.Select(item => item.Key).Should().Equal("clarity", "evidence");
+        studentSummary.Value.Evaluations.Should().ContainSingle();
+        studentSummary.Value.Evaluations.Single().CheckpointTotal.Should().Be(8.6m);
+
+        var forbidden = await handler.SaveAsync(seed.TeamId.Value, 1,
+            new SaveWorkspaceCheckpointEvaluationRequest(), seed.ProposerUserId, SystemRoles.Student);
+        forbidden.IsFailure.Should().BeTrue();
+        forbidden.Error.Code.Should().Be(ErrorCodes.WorkspaceAccessDenied);
+    }
+
+    [Fact]
+    public async Task StudentClassDetail_UsesProfileMajorWhenEnrollmentSnapshotIsMissing()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateSeedAsync(context, createProposal: false, createTeam: false);
+        var enrollment = await context.ClassStudents.SingleAsync(item =>
+            item.ClassId == seed.ClassId && item.StudentId == seed.StudentIds[0]);
+        enrollment.MajorCodeAtEnrollment = string.Empty;
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        var detail = await new StudentClassSelfServiceHandler(context)
+            .GetClassDetailAsync(seed.ClassId, seed.ProposerUserId, SystemRoles.Student);
+
+        detail.IsSuccess.Should().BeTrue();
+        detail.Value.Students.Single(item => item.StudentId == seed.StudentIds[0]).MajorCode
+            .Should().Be(MajorCodes.BEN);
+    }
+
+    [Fact]
+    public async Task ApprovedProposalComment_IsPersistedAndVisibleToItsStudentMembers()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateSeedAsync(context, createProposal: true, createTeam: false);
+        var handler = new TeamProposalHandler(context,
+            scope.ServiceProvider.GetRequiredService<EHub.Application.Common.Interfaces.Persistence.IUnitOfWork>());
+        const string comment = "Approved. Keep this scope for the first checkpoint.";
+        var rowVersion = await context.TeamProposals.AsNoTracking()
+            .Where(item => item.Id == seed.ProposalId)
+            .Select(item => item.Version.ToString())
+            .SingleAsync();
+
+        var review = await handler.ReviewAsync(seed.ProposalId!.Value,
+            new ReviewTeamProposalRequest { Decision = "Approved", Comment = comment, RowVersion = rowVersion },
+            seed.LecturerId, SystemRoles.Lecturer);
+        review.IsSuccess.Should().BeTrue();
+        context.ChangeTracker.Clear();
+
+        var studentProposals = await handler.GetForClassAsync(seed.ClassId, seed.ProposerUserId, SystemRoles.Student);
+        studentProposals.IsSuccess.Should().BeTrue();
+        studentProposals.Value.Single(item => item.Id == seed.ProposalId).LatestReviewComment.Should().Be(comment);
+        (await context.TeamProposals.AsNoTracking().SingleAsync(item => item.Id == seed.ProposalId))
+            .LatestReviewComment.Should().Be(comment);
+    }
+
+    [Fact]
     public async Task WorkspaceCreationRejectsDuplicateWorkspaceNonLeaderAndInvalidIndustries()
     {
         using var scope = _factory.Services.CreateScope();
@@ -1066,7 +1267,7 @@ public sealed class TeamWorkflowIntegrationTests
                 Description = "The latest student marketplace profile for safe campus equipment reuse.",
                 Problem = "Students cannot reliably find safe ways to reuse equipment across campus.",
                 Solution = "A verified marketplace connects students and supports trustworthy exchanges.",
-                TargetUsers = "University students and student clubs",
+                TargetUsers = string.Empty,
                 ZaloGroupUrl = "https://example.com/not-zalo"
             },
             seed.ProposerUserId,
@@ -1082,7 +1283,7 @@ public sealed class TeamWorkflowIntegrationTests
                 Description = "The latest student marketplace profile for safe campus equipment reuse.",
                 Problem = "Students cannot reliably find safe ways to reuse equipment across campus.",
                 Solution = "A verified marketplace connects students and supports trustworthy exchanges.",
-                TargetUsers = "University students and student clubs",
+                TargetUsers = string.Empty,
                 ZaloGroupUrl = "https://zalo.me/g/campus-circular",
                 Keywords = new[] { "campus", "reuse" }
             },
@@ -1091,7 +1292,7 @@ public sealed class TeamWorkflowIntegrationTests
         updated.IsSuccess.Should().BeTrue($"workspace update failed with {updated.Error.Code}: {updated.Error.Message}");
         updated.Value.Problem.Should().Contain("reuse equipment");
         updated.Value.Solution.Should().Contain("verified marketplace");
-        updated.Value.TargetUsers.Should().Be("University students and student clubs");
+        updated.Value.TargetUsers.Should().BeEmpty();
         updated.Value.ZaloGroupUrl.Should().Be("https://zalo.me/g/campus-circular");
 
         context.ChangeTracker.Clear();
@@ -1120,7 +1321,7 @@ public sealed class TeamWorkflowIntegrationTests
         var detail = await handler.GetDetailAsync(seed.TeamId.Value, memberUserId, SystemRoles.Student);
         detail.IsSuccess.Should().BeTrue();
         detail.Value.Project!.ProjectName.Should().Be("Campus Circular Hub");
-        detail.Value.Project.TargetUsers.Should().Be("University students and student clubs");
+        detail.Value.Project.TargetUsers.Should().BeEmpty();
         detail.Value.Project.ZaloGroupUrl.Should().Be("https://zalo.me/g/campus-circular");
         detail.Value.Class.Id.Should().Be(seed.ClassId);
         detail.Value.Class.SubjectId.Should().NotBeEmpty();
