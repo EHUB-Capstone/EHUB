@@ -50,6 +50,7 @@ const ClassDetail = lazy(() => import('./pages/shared/ClassDetail'));
 const Forbidden = lazy(() => import('./pages/shared/Forbidden'));
 const NotFound = lazy(() => import('./pages/shared/NotFound'));
 const ProfileSettings = lazy(() => import('./pages/shared/ProfileSettings'));
+const FeedbackPage = lazy(() => import('./pages/shared/FeedbackPage'));
 
 const PageFallback = () => (
   <div className="flex min-h-56 items-center justify-center" role="status" aria-label="Loading page">
@@ -101,6 +102,7 @@ function App(): React.ReactElement {
                   <Route path="/admin/subjects" element={<ProtectedRoute allowedRoles={['ADMIN']}><SubjectManagement /></ProtectedRoute>} />
                   <Route path="/admin/subjects/:subjectCode" element={<ProtectedRoute allowedRoles={['ADMIN']}><SubjectDetail /></ProtectedRoute>} />
                   <Route path="/admin/startup-industries" element={<ProtectedRoute allowedRoles={['ADMIN']}><StartupIndustryManagement /></ProtectedRoute>} />
+                  <Route path="/admin/feedback" element={<ProtectedRoute allowedRoles={['ADMIN']}><FeedbackPage admin /></ProtectedRoute>} />
 
                   <Route path="/lecturer" element={<ProtectedRoute allowedRoles={[...classRouteAccess.lecturerArea]}>{releaseFeatureFlags.roleDashboards ? <LecturerDashboard /> : <Navigate to="/lecturer/classes" replace />}</ProtectedRoute>} />
                   <Route path="/lecturer/classes" element={<ProtectedRoute allowedRoles={[...classRouteAccess.lecturerArea]}><LecturerClasses /></ProtectedRoute>} />
@@ -139,6 +141,7 @@ function App(): React.ReactElement {
                   {releaseFeatureFlags.workshops && <Route path="/workshops" element={<Workshops />} />}
                   {releaseFeatureFlags.chat && <Route path="/chat" element={<GroupChat />} />}
                   <Route path="/settings" element={<ProfileSettings />} />
+                  <Route path="/feedback" element={<ProtectedRoute allowedRoles={['STUDENT','LECTURER','MENTOR']}><FeedbackPage /></ProtectedRoute>} />
                   <Route path="/profile" element={<ProfileSettings />} />
                 </Route>
 

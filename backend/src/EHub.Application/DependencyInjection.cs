@@ -109,7 +109,11 @@ public static class DependencyInjection
         services.AddScoped<EHub.Application.Features.Workspaces.CheckpointFiles.ICheckpointFileHandler, EHub.Application.Features.Workspaces.CheckpointFiles.CheckpointFileHandler>();
         services.AddScoped<EHub.Application.Features.Workspaces.CheckpointRequirements.ICheckpointRequirementHandler, EHub.Application.Features.Workspaces.CheckpointRequirements.CheckpointRequirementHandler>();
         services.AddScoped<EHub.Application.Features.Workspaces.CheckpointFeedback.ICheckpointFeedbackHandler, EHub.Application.Features.Workspaces.CheckpointFeedback.CheckpointFeedbackHandler>();
+
         services.AddScoped<EHub.Application.Features.Workspaces.CheckpointEvaluations.ICheckpointEvaluationHandler, EHub.Application.Features.Workspaces.CheckpointEvaluations.CheckpointEvaluationHandler>();
+
+        services.AddScoped<EHub.Application.Features.ProductFeedback.IProductFeedbackHandler, EHub.Application.Features.ProductFeedback.ProductFeedbackHandler>();
+
 
         services.AddScoped<EHub.Application.Common.Interfaces.Authorization.IPermissionService, EHub.Application.Common.Services.Authorization.PermissionService>();
 

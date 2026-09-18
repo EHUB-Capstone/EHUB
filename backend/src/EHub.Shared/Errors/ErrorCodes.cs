@@ -129,6 +129,9 @@ public static class ErrorCodes
     public const string ProjectDirectionNotFound = "PROJECT_DIRECTION_NOT_FOUND";
     public const string ProjectDirectionStateInvalid = "PROJECT_DIRECTION_STATE_INVALID";
     public const string NotificationNotFound = "NOTIFICATION_NOT_FOUND";
+    public const string ProductFeedbackNotFound = "PRODUCT_FEEDBACK_NOT_FOUND";
+    public const string ProductFeedbackAccessDenied = "PRODUCT_FEEDBACK_ACCESS_DENIED";
+    public const string ProductFeedbackValidationError = "PRODUCT_FEEDBACK_VALIDATION_ERROR";
 
     // Team project workspace error codes
     public const string WorkspaceAccessDenied = "WORKSPACE_ACCESS_DENIED";
