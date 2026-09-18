@@ -82,6 +82,8 @@ public class AppDbContext : DbContext, IApplicationDbContext
     public DbSet<WeeklyTaskTeamProgress> WeeklyTaskTeamProgress => Set<WeeklyTaskTeamProgress>();
     public DbSet<ProjectAnalysis> ProjectAnalyses => Set<ProjectAnalysis>();
     public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
+    public DbSet<ProductFeedback> ProductFeedbacks => Set<ProductFeedback>();
+    public DbSet<ProductFeedbackAttachment> ProductFeedbackAttachments => Set<ProductFeedbackAttachment>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

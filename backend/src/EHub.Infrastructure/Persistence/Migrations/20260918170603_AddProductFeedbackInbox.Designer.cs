@@ -3,6 +3,7 @@ using System;
 using EHub.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace EHub.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260918170603_AddProductFeedbackInbox")]
+    partial class AddProductFeedbackInbox
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -5034,65 +5037,6 @@ namespace EHub.Infrastructure.Persistence.Migrations
                     b.ToTable("submission_files", (string)null);
                 });
 
-            modelBuilder.Entity("EHub.Domain.Entities.SubmissionRequirementContent", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<string>("Content")
-                        .IsRequired()
-                        .HasMaxLength(5000)
-                        .HasColumnType("character varying(5000)")
-                        .HasColumnName("content");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at");
-
-                    b.Property<Guid?>("CreatedBy")
-                        .HasColumnType("uuid")
-                        .HasColumnName("created_by");
-
-                    b.Property<DateTime?>("DeletedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("deleted_at");
-
-                    b.Property<Guid?>("DeletedBy")
-                        .HasColumnType("uuid")
-                        .HasColumnName("deleted_by");
-
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("is_deleted");
-
-                    b.Property<int>("RequirementIndex")
-                        .HasColumnType("integer")
-                        .HasColumnName("requirement_index");
-
-                    b.Property<Guid>("SubmissionId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("submission_id");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("updated_at");
-
-                    b.Property<Guid?>("UpdatedBy")
-                        .HasColumnType("uuid")
-                        .HasColumnName("updated_by");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("SubmissionId", "RequirementIndex")
-                        .IsUnique();
-
-                    b.ToTable("submission_requirement_contents", (string)null);
-                });
-
             modelBuilder.Entity("EHub.Domain.Entities.Team", b =>
                 {
                     b.Property<Guid>("Id")
@@ -7242,17 +7186,6 @@ namespace EHub.Infrastructure.Persistence.Migrations
                     b.Navigation("UploadedBy");
                 });
 
-            modelBuilder.Entity("EHub.Domain.Entities.SubmissionRequirementContent", b =>
-                {
-                    b.HasOne("EHub.Domain.Entities.Submission", "Submission")
-                        .WithMany("RequirementContents")
-                        .HasForeignKey("SubmissionId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Submission");
-                });
-
             modelBuilder.Entity("EHub.Domain.Entities.Team", b =>
                 {
                     b.HasOne("EHub.Domain.Entities.Class", "Class")
@@ -7704,8 +7637,6 @@ namespace EHub.Infrastructure.Persistence.Migrations
                     b.Navigation("Feedbacks");
 
                     b.Navigation("Files");
-
-                    b.Navigation("RequirementContents");
                 });
 
             modelBuilder.Entity("EHub.Domain.Entities.Team", b =>
