@@ -263,6 +263,13 @@ public sealed class ExportClassRosterRequest
     public string? Status { get; init; }
 }
 
+public sealed class ExportAdminClassDataRequest
+{
+    public string Semester { get; init; } = string.Empty;
+    public int Year { get; init; }
+    public IReadOnlyCollection<Guid> ClassIds { get; init; } = Array.Empty<Guid>();
+}
+
 public sealed class EnrollmentMajorLockResponse
 {
     public Guid ClassId { get; init; }

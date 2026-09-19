@@ -14,6 +14,7 @@ using EHub.Application.Features.Classes.ClassLifecycle;
 using EHub.Application.Features.Classes.ClassCompletion;
 using EHub.Application.Common.Interfaces.Services;
 using EHub.Application.Features.Classes.ExportClassRoster;
+using EHub.Application.Features.Classes.ExportAdminClassData;
 using EHub.Application.Features.Classes.GetClassDetail;
 using EHub.Application.Features.Classes.GetClasses;
 using EHub.Application.Features.Classes.GetClassRoster;
@@ -743,6 +744,26 @@ public sealed class ClassesController : ControllerBase
             request,
             currentUserId,
             currentUserRole,
+            cancellationToken);
+
+        if (result.IsFailure)
+        {
+            return ToClassErrorResponse(result.Error);
+        }
+
+        return File(result.Value.FileBytes, result.Value.ContentType, result.Value.FileName);
+    }
+
+    [HttpPost("bulk/export-excel")]
+    [Authorize(Policy = SystemPolicies.AdminOnly)]
+    public async Task<IActionResult> ExportAdminClassData(
+        [FromBody] ExportAdminClassDataRequest request,
+        [FromServices] IExportAdminClassDataQueryHandler queryHandler,
+        CancellationToken cancellationToken)
+    {
+        var result = await queryHandler.HandleAsync(
+            request,
+            GetCurrentUserRole(),
             cancellationToken);
 
         if (result.IsFailure)

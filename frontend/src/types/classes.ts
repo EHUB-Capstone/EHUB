@@ -114,6 +114,12 @@ export interface ExportClassRosterParams {
   status?: 'Active' | 'Dropped' | 'Completed' | '';
 }
 
+export interface ExportAdminClassDataRequest {
+  semester: 'SP' | 'SU' | 'FA';
+  year: number;
+  classIds: string[];
+}
+
 export interface CreateBulkClassesRequest {
   courseId?: string;
   semesterId?: string;

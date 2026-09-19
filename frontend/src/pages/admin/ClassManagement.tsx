@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Plus, RefreshCw, Search, Filter, GraduationCap,
   Users, BookOpen, ChevronRight, ChevronLeft, Upload, Eye, Calendar, LayoutGrid, ClipboardCheck, AlertCircle, RotateCcw,
-  Archive, UserRoundCheck, X, CircleCheck,
+  Archive, UserRoundCheck, X, CircleCheck, Download, Loader2,
 } from 'lucide-react';
 import { AuthContext } from '../../context/AuthContext';
 import { classApi } from '../../api/classApi';
@@ -118,6 +118,7 @@ export default function ClassManagement() {
   const [bulkCompleteOpen, setBulkCompleteOpen] = useState(false);
   const [bulkRestoreOpen, setBulkRestoreOpen] = useState(false);
   const [bulkReason, setBulkReason] = useState('');
+  const [bulkExporting, setBulkExporting] = useState(false);
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkResult, setBulkResult] = useState<{ title: string; result: BulkClassActionResult } | null>(null);
 
@@ -295,6 +296,37 @@ export default function ClassManagement() {
     else if (result.succeeded.length > 0) toast.success(`${result.succeeded.length} succeeded; ${result.failed.length} failed.`);
     else toast.error(`All ${result.failed.length} selected classes failed.`);
     await fetchAll();
+  };
+
+  const handleBulkExport = async () => {
+    if (!isAdmin || selectedClasses.length === 0) return;
+    if (!SEMESTERS.includes(effectiveFilterSem) || !effectiveFilterYear) {
+      toast.error('Select a semester and year before exporting class data.');
+      return;
+    }
+
+    setBulkExporting(true);
+    try {
+      const response = await classApi.exportAdminClassData({
+        semester: effectiveFilterSem as 'SP' | 'SU' | 'FA',
+        year: Number(effectiveFilterYear),
+        classIds: selectedClasses.map(item => item._id),
+      });
+      const blob = new Blob([response.data || response], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${effectiveFilterSem}${effectiveFilterYear}_class_data.xlsx`;
+      link.click();
+      window.URL.revokeObjectURL(url);
+      toast.success(`Exported data for ${selectedClasses.length} class(es).`);
+    } catch (error) {
+      toast.error(parseApiError(error, 'Failed to export class data.').message);
+    } finally {
+      setBulkExporting(false);
+    }
   };
 
   const handleBulkAssign = async (lecturerId: string) => {
@@ -575,6 +607,17 @@ export default function ClassManagement() {
             </span>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            {isAdmin && (
+              <button
+                type="button"
+                disabled={selectedClasses.length === 0 || bulkBusy || bulkExporting}
+                onClick={handleBulkExport}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50/70 px-3 py-2 text-xs font-semibold text-indigo-700 transition hover:bg-indigo-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/25 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {bulkExporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                Export Class Data ({selectedClasses.length})
+              </button>
+            )}
             {isAdmin && (
               <button
                 type="button"

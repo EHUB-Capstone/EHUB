@@ -25,6 +25,40 @@ test('mock authentication opens an admin session for protected UI testing', asyn
   assert.equal(me.data.email, 'admin@ehub.local');
 });
 
+test('admin class export accepts selected classes from one semester and returns one Excel blob', async () => {
+  resetMockState();
+  await axiosClient.post('/auth/login', { email: 'admin@ehub.local', password: 'Mock123!' });
+  const selected = getMockState().classes.filter((cls) => cls.semesterCode === 'FA2026').slice(0, 2);
+
+  const response = await axiosClient.post('/classes/bulk/export-excel', {
+    semester: 'FA',
+    year: 2026,
+    classIds: selected.map((cls) => cls.id).reverse(),
+  }, { responseType: 'blob' });
+
+  assert.ok(response instanceof Blob);
+  assert.ok(response.size > 0);
+});
+
+test('admin class export mock rejects a selected class outside the requested semester', async () => {
+  resetMockState();
+  await axiosClient.post('/auth/login', { email: 'admin@ehub.local', password: 'Mock123!' });
+  const outOfScopeClass = getMockState().classes.find((cls) => cls.semesterCode === 'SP2026');
+  assert.ok(outOfScopeClass);
+
+  await assert.rejects(
+    axiosClient.post(
+      '/classes/bulk/export-excel',
+      { semester: 'FA', year: 2026, classIds: [outOfScopeClass.id] },
+      { responseType: 'blob' },
+    ),
+    (error: unknown) => {
+      const response = (error as { response?: { status?: number; data?: { code?: string } } }).response;
+      return response?.status === 400 && response.data?.code === 'VALIDATION_ERROR';
+    },
+  );
+});
+
 test('managed users include class and group data from the active semester', async () => {
   resetMockState();
   await axiosClient.post('/auth/login', { email: 'admin@ehub.local', password: 'Mock123!' });
