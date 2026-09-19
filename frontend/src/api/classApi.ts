@@ -6,6 +6,7 @@ import type {
   GetClassesParams,
   GetClassRosterParams,
   ExportClassRosterParams,
+  ExportAdminClassDataRequest,
   AddStudentToClassPayload,
 } from '../types/classes';
 
@@ -59,6 +60,8 @@ export const classApi = {
     axiosClient.get('/classes/import-template', { responseType: 'blob' }),
   exportClassExcel: (classId: string, params: ExportClassRosterParams) =>
     axiosClient.get(`/classes/${classId}/export-excel`, { params, responseType: 'blob' }),
+  exportAdminClassData: (data: ExportAdminClassDataRequest) =>
+    axiosClient.post('/classes/bulk/export-excel', data, { responseType: 'blob' }),
 
   // Verify student majors against lecturer's Excel file
   verifyMajors: (classId, formData) =>
