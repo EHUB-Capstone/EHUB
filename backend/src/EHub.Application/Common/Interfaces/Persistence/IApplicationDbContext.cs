@@ -75,6 +75,8 @@ public interface IApplicationDbContext
     DbSet<WeeklyTaskTeamProgress> WeeklyTaskTeamProgress { get; }
     DbSet<ProjectAnalysis> ProjectAnalyses { get; }
     DbSet<PasswordResetToken> PasswordResetTokens { get; }
+    DbSet<ProductFeedback> ProductFeedbacks { get; }
+    DbSet<ProductFeedbackAttachment> ProductFeedbackAttachments { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
     void ClearChanges();

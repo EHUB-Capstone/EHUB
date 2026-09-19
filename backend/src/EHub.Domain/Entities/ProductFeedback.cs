@@ -1,0 +1,5 @@
+using EHub.Domain.Common;
+using EHub.Domain.Enums;
+namespace EHub.Domain.Entities;
+public sealed class ProductFeedback : AuditableEntity
+{ public Guid ReporterUserId { get; set; } public User ReporterUser { get; set; } = null!; public ProductFeedbackCategory Category { get; set; } public ProductFeedbackPriority Priority { get; set; } public string Title { get; set; } = string.Empty; public string Description { get; set; } = string.Empty; public string? ContextUrl { get; set; } public bool IsRead { get; set; } public DateTime? ReadAtUtc { get; set; } public Guid? ReadByUserId { get; set; } public bool IsAcknowledged { get; set; } public DateTime? AcknowledgedAtUtc { get; set; } public Guid? AcknowledgedByUserId { get; set; } public bool IsArchived { get; set; } public DateTime? ArchivedAtUtc { get; set; } public Guid? ArchivedByUserId { get; set; } public uint Version { get; set; } public ICollection<ProductFeedbackAttachment> Attachments { get; set; } = new List<ProductFeedbackAttachment>(); }

@@ -66,6 +66,7 @@ const Sidebar = ({ mobileOpen, onMobileClose }: SidebarProps) => {
       { path: '/admin/account-approvals', icon: 'account_approval', label: 'Account Approvals' },
       { path: '/admin/classes', icon: 'school', label: 'Classes' },
       { path: '/workspace', icon: 'view_kanban', label: 'Startup Workspace' },
+      { path: '/admin/feedback', icon: 'chat', label: 'Feedback Inbox' },
       // ...(releaseFeatureFlags.dataBank ? [{ path: '/lecturer/data-bank', icon: 'database', label: 'Data Bank' }] : []),
       // ...(releaseFeatureFlags.workshops ? [{ path: '/workshops', icon: 'calendar_month', label: 'Workshops' }] : []),
       // ...(releaseFeatureFlags.chat ? [{ path: '/chat', icon: 'chat', label: 'Group Chat' }] : []),
@@ -76,6 +77,7 @@ const Sidebar = ({ mobileOpen, onMobileClose }: SidebarProps) => {
       // ...(releaseFeatureFlags.roleDashboards ? [{ path: '/lecturer', icon: 'dashboard', label: 'Dashboard' }] : []),
       { path: '/lecturer/classes', icon: 'school', label: 'My Classes' },
       { path: '/workspace', icon: 'view_kanban', label: 'Startup Workspace' },
+      { path: '/feedback', icon: 'chat', label: 'Send feedback' },
       // ...(releaseFeatureFlags.workshops ? [{ path: '/workshops', icon: 'calendar_month', label: 'Workshops' }] : []),
       // ...(releaseFeatureFlags.chat ? [{ path: '/chat', icon: 'chat', label: 'Group Chat' }] : []),
       // ...(releaseFeatureFlags.dataBank ? [{ path: '/lecturer/data-bank', icon: 'database', label: 'Data Bank' }] : []),
@@ -87,6 +89,7 @@ const Sidebar = ({ mobileOpen, onMobileClose }: SidebarProps) => {
     MENTOR: [
       // ...(releaseFeatureFlags.roleDashboards ? [{ path: '/mentor', icon: 'dashboard', label: 'Dashboard' }] : []),
       { path: '/workspace', icon: 'view_kanban', label: 'Startup Workspace' },
+      { path: '/feedback', icon: 'chat', label: 'Send feedback' },
       // ...(releaseFeatureFlags.workshops ? [{ path: '/workshops', icon: 'calendar_month', label: 'Workshops' }] : []),
       // ...(releaseFeatureFlags.chat ? [{ path: '/chat', icon: 'chat', label: 'Group Chat' }] : []),
       // ...(releaseFeatureFlags.mentoring ? [{ path: '/sessions', icon: 'event', label: 'Sessions' }] : []),
@@ -100,6 +103,7 @@ const Sidebar = ({ mobileOpen, onMobileClose }: SidebarProps) => {
           ]
         : []),
       { path: '/student/workspace', icon: 'view_kanban', label: 'Startup Workspace' },
+      { path: '/feedback', icon: 'chat', label: 'Send feedback' },
       // ...(releaseFeatureFlags.roleDashboards ? [{ path: '/student', icon: 'dashboard', label: 'Dashboard' }] : []),
       // ...(releaseFeatureFlags.workshops ? [{ path: '/workshops', icon: 'calendar_month', label: 'Workshops' }] : []),
       // ...(releaseFeatureFlags.rankings ? [{ path: '/rankings', icon: 'military_tech', label: 'Rankings' }] : []),

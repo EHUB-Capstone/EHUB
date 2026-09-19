@@ -1,0 +1,4 @@
+using EHub.Domain.Entities; using Microsoft.EntityFrameworkCore; using Microsoft.EntityFrameworkCore.Metadata.Builders;
+namespace EHub.Infrastructure.Persistence.Configurations;
+public sealed class ProductFeedbackAttachmentConfiguration : IEntityTypeConfiguration<ProductFeedbackAttachment>
+{ public void Configure(EntityTypeBuilder<ProductFeedbackAttachment> b) { b.ToTable("product_feedback_attachments"); b.HasKey(x=>x.Id); b.Property(x=>x.OriginalName).HasMaxLength(256).IsRequired(); b.Property(x=>x.MimeType).HasMaxLength(128).IsRequired(); b.Property(x=>x.FileUrl).HasMaxLength(2000).IsRequired(); b.Property(x=>x.CloudinaryPublicId).HasMaxLength(500).IsRequired(); b.HasQueryFilter(x=>!x.IsDeleted); b.HasOne(x=>x.ProductFeedback).WithMany(x=>x.Attachments).HasForeignKey(x=>x.ProductFeedbackId).OnDelete(DeleteBehavior.Cascade); } }
