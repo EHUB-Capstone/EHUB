@@ -17,9 +17,15 @@ import Button from '../ui/Button';
 import { classApi } from '../../api/classApi';
 import { parseApiError } from '../../utils/apiError';
 import { validateImportFileSelection } from '../../utils/classComponentPolicy';
+import type {
+  ImportStudentCommitError,
+  ImportStudentRowPreview,
+  ImportStudentsCommitResponse,
+  ImportStudentsPreviewResponse,
+} from '../../types/classes';
 
 interface ImportStudentsModalProps {
-  classId?: string;
+  classId: string;
   onClose: () => void;
   onImported: () => void;
 }
@@ -48,8 +54,8 @@ export default function ImportStudentsModal({
   const inputRef = useRef<HTMLInputElement>(null);
   const [phase, setPhase] = useState<ImportPhase>('upload');
   const [file, setFile] = useState<File | null>(null);
-  const [previewData, setPreviewData] = useState<any | null>(null);
-  const [commitResult, setCommitResult] = useState<any | null>(null);
+  const [previewData, setPreviewData] = useState<ImportStudentsPreviewResponse | null>(null);
+  const [commitResult, setCommitResult] = useState<ImportStudentsCommitResponse | null>(null);
   const [fileError, setFileError] = useState('');
   const [analyzing, setAnalyzing] = useState(false);
   const [importing, setImporting] = useState(false);
@@ -101,7 +107,7 @@ export default function ImportStudentsModal({
       formData.append('file', selectedFile);
 
       const res = await classApi.previewImportStudents(classId, formData);
-      const data = res?.data || res;
+      const data = (res?.data || res) as ImportStudentsPreviewResponse;
 
       setPreviewData(data);
       setPhase('review');
@@ -150,12 +156,16 @@ export default function ImportStudentsModal({
         sessionId: previewData.sessionId,
         synchronizeProfileMajors,
       });
-      const result = res?.data || res;
+      const result = (res?.data || res) as ImportStudentsCommitResponse;
       setCommitResult(result);
       setPhase('result');
       onImported();
-      const committedCount = result.insertedCount + result.updatedCount;
-      if (committedCount > 0) {
+      const committedCount = result.importMode === 'TeamAssignment'
+        ? result.createdMembershipCount
+        : result.insertedCount + result.updatedCount;
+      if (result.importMode === 'TeamAssignment' && result.createdTeamCount > 0) {
+        toast.success(`Added ${result.insertedCount} students, created ${result.createdTeamCount} teams and ${result.createdProjectCount} projects.`);
+      } else if (committedCount > 0) {
         toast.success(
           result.synchronizedMajorCount > 0
             ? `Imported ${committedCount} students and synchronized ${result.synchronizedMajorCount} registered major${result.synchronizedMajorCount > 1 ? 's' : ''}.`
@@ -180,7 +190,10 @@ export default function ImportStudentsModal({
   const successCount = previewData?.validRowsCount ?? 0;
   const failedCount = previewData?.errorRowsCount ?? 0;
   const majorMismatchCount = previewData?.majorMismatchCount ?? 0;
-  const committedCount = (commitResult?.insertedCount ?? 0) + (commitResult?.updatedCount ?? 0);
+  const isTeamAssignment = previewData?.importMode === 'TeamAssignment';
+  const committedCount = commitResult?.importMode === 'TeamAssignment'
+    ? commitResult.createdMembershipCount
+    : (commitResult?.insertedCount ?? 0) + (commitResult?.updatedCount ?? 0);
   const commitHasChanges = committedCount > 0;
 
   return (
@@ -200,8 +213,8 @@ export default function ImportStudentsModal({
                 <FileSpreadsheet className="h-5 w-5" />
               </div>
               <div className="min-w-0">
-                <h2 id="import-students-title" className="text-lg font-bold text-slate-900">Import students (Excel)</h2>
-                <p className="truncate text-sm text-slate-500">Preview &amp; commit student roster from Excel</p>
+                <h2 id="import-students-title" className="text-lg font-bold text-slate-900">Import students or team assignments</h2>
+                <p className="truncate text-sm text-slate-500">One Excel file, validated before any class data changes</p>
               </div>
             </div>
             <button
@@ -244,7 +257,7 @@ export default function ImportStudentsModal({
                   <Download className="mt-0.5 h-5 w-5 shrink-0 text-secondary" />
                   <div>
                     <p className="text-sm font-semibold text-secondary-dark">Start with the official EHUB template</p>
-                    <p className="mt-0.5 text-xs text-slate-500">Includes recommended columns: StudentCode, FullName, Email, MajorCode.</p>
+                    <p className="mt-0.5 text-xs text-slate-500">Supports student roster import and complete Team + Project assignment.</p>
                   </div>
                 </div>
                 <Button variant="outline" size="sm" icon={Download} onClick={() => void handleDownloadTemplate()} className="shrink-0 border-secondary-200 text-secondary">
@@ -257,6 +270,8 @@ export default function ImportStudentsModal({
                 <div className="text-xs leading-5 text-slate-600">
                   <p><strong className="text-slate-700">Required columns:</strong> StudentCode (RollNumber), FullName, Email</p>
                   <p><strong className="text-slate-700">MajorCode:</strong> Optional for legacy files; missing values are imported as unverified.</p>
+                  <p><strong className="text-slate-700">Team assignment:</strong> Add Group and Project. EHUB adds or re-enrolls students in the class before creating teams; Zalo and Description may appear once per Group.</p>
+                  <p><strong className="text-slate-700">Automatic mode:</strong> If no Group value is present, EHUB keeps the existing student roster import flow.</p>
                   <p><strong className="text-slate-700">Dropped students:</strong> Matching enrollments in this class will be re-enrolled instead of duplicated.</p>
                   <p><strong className="text-slate-700">Limits:</strong> Max file size 10 MB · Maximum 5,000 rows · Validated line by line before commit</p>
                 </div>
@@ -323,10 +338,21 @@ export default function ImportStudentsModal({
                 <SummaryCard label="Total rows" value={totalRows} tone="neutral" />
                 <SummaryCard label="Valid &amp; Ready" value={successCount} tone="success" />
                 <SummaryCard label="Errors / Skip" value={failedCount} tone="danger" />
-                <SummaryCard label="Major mismatches" value={majorMismatchCount} tone={majorMismatchCount > 0 ? 'warning' : 'success'} />
+                {isTeamAssignment ? (
+                  <SummaryCard label="Teams ready" value={previewData.teamCount} tone={previewData.teamCount > 0 ? 'success' : 'warning'} />
+                ) : (
+                  <SummaryCard label="Major mismatches" value={majorMismatchCount} tone={majorMismatchCount > 0 ? 'warning' : 'success'} />
+                )}
               </div>
 
-              {majorMismatchCount > 0 && (
+              {isTeamAssignment && (
+                <div className="flex items-start gap-2.5 rounded-xl border border-blue-200 bg-blue-50 p-3.5 text-sm text-blue-900">
+                  <Info className="mt-0.5 h-4 w-4 shrink-0" />
+                  <p><strong>Team assignment mode detected.</strong> EHUB will add or re-enroll the students in this class, create each valid Team and its Project, import Zalo/Description, then assign the members. Major composition is not required.</p>
+                </div>
+              )}
+
+              {!isTeamAssignment && majorMismatchCount > 0 && (
                 <div className="flex items-start gap-2.5 rounded-xl border border-orange-200 bg-orange-50 p-3.5 text-sm text-orange-900">
                   <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
                   <div>
@@ -343,7 +369,8 @@ export default function ImportStudentsModal({
                 </div>
               )}
 
-              <StudentRowsTable rows={previewData.rows || []} />
+              {isTeamAssignment && <TeamPreviewList teams={previewData.teams || []} />}
+              <StudentRowsTable rows={previewData.rows || []} teamAssignment={isTeamAssignment} />
             </div>
           )}
 
@@ -354,17 +381,21 @@ export default function ImportStudentsModal({
                   {commitHasChanges ? <CheckCircle2 className="h-6 w-6" /> : <AlertCircle className="h-6 w-6" />}
                 </div>
                 <h3 className="mt-3 text-lg font-bold text-slate-900">
-                  {commitHasChanges ? 'Import committed successfully' : 'No students were imported'}
+                  {commitHasChanges
+                    ? commitResult.importMode === 'TeamAssignment' ? 'Teams and projects created successfully' : 'Import committed successfully'
+                    : commitResult.importMode === 'TeamAssignment' ? 'No teams were created' : 'No students were imported'}
                 </h3>
                 <p className="mt-1 text-sm text-slate-600">
-                  {commitResult.insertedCount} new inserted, {commitResult.updatedCount} updated, {commitResult.skippedCount} skipped.
+                  {commitResult.importMode === 'TeamAssignment'
+                    ? `${commitResult.insertedCount} new enrollments, ${commitResult.updatedCount} updated, ${commitResult.createdTeamCount} teams, ${commitResult.createdProjectCount} projects, ${commitResult.createdMembershipCount} memberships, ${commitResult.skippedCount} rows skipped.`
+                    : `${commitResult.insertedCount} new inserted, ${commitResult.updatedCount} updated, ${commitResult.skippedCount} skipped.`}
                 </p>
               </div>
 
               <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
-                <SummaryCard label="Inserted" value={commitResult.insertedCount} tone="success" />
-                <SummaryCard label="Updated" value={commitResult.updatedCount} tone="neutral" />
-                <SummaryCard label="Majors synced" value={commitResult.synchronizedMajorCount ?? 0} tone="success" />
+                <SummaryCard label={commitResult.importMode === 'TeamAssignment' ? 'Teams' : 'Inserted'} value={commitResult.importMode === 'TeamAssignment' ? commitResult.createdTeamCount : commitResult.insertedCount} tone="success" />
+                <SummaryCard label={commitResult.importMode === 'TeamAssignment' ? 'Projects' : 'Updated'} value={commitResult.importMode === 'TeamAssignment' ? commitResult.createdProjectCount : commitResult.updatedCount} tone="neutral" />
+                <SummaryCard label={commitResult.importMode === 'TeamAssignment' ? 'Memberships' : 'Majors synced'} value={commitResult.importMode === 'TeamAssignment' ? commitResult.createdMembershipCount : commitResult.synchronizedMajorCount ?? 0} tone="success" />
                 <SummaryCard label="Skipped" value={commitResult.skippedCount} tone="danger" />
               </div>
 
@@ -374,7 +405,7 @@ export default function ImportStudentsModal({
                     Rows skipped because data changed after preview
                   </div>
                   <div className="max-h-52 divide-y divide-amber-100 overflow-y-auto">
-                    {commitResult.errors.map((error: any) => (
+                    {commitResult.errors.map((error: ImportStudentCommitError) => (
                       <div key={`${error.rowNumber}-${error.studentCode}`} className="grid gap-1 px-4 py-3 text-xs sm:grid-cols-[5rem_8rem_1fr]">
                         <span className="font-semibold text-amber-900">Row {error.rowNumber}</span>
                         <span className="font-mono text-slate-700">{error.studentCode}</span>
@@ -401,10 +432,12 @@ export default function ImportStudentsModal({
                 icon={Upload}
                 isLoading={importing}
                 disabled={successCount === 0}
-                onClick={() => void handleImport(majorMismatchCount > 0)}
+                onClick={() => void handleImport(!isTeamAssignment && majorMismatchCount > 0)}
               >
                 {successCount === 0
                   ? 'No valid rows to commit'
+                  : isTeamAssignment
+                    ? `Create ${previewData?.teamCount ?? 0} team${(previewData?.teamCount ?? 0) === 1 ? '' : 's'} and assign ${successCount} students`
                   : majorMismatchCount > 0
                     ? `Import & synchronize ${majorMismatchCount} major${majorMismatchCount > 1 ? 's' : ''}`
                     : `Commit ${successCount} valid student${successCount > 1 ? 's' : ''}`}
@@ -439,17 +472,48 @@ function SummaryCard({ label, value, tone }: { label: string; value: number; ton
   );
 }
 
-function StudentRowsTable({ rows, compact = false }: { rows: any[]; compact?: boolean }) {
+function TeamPreviewList({ teams }: { teams: ImportStudentsPreviewResponse['teams'] }) {
+  return (
+    <div className="grid gap-2 sm:grid-cols-2">
+      {teams.map((team) => (
+        <div key={team.teamName} className={`rounded-xl border p-3.5 ${team.isValid ? 'border-green-200 bg-green-50/60' : 'border-red-200 bg-red-50/50'}`}>
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="truncate text-sm font-bold text-slate-900">{team.teamName}</p>
+              <p className="mt-0.5 truncate text-xs font-medium text-slate-600">Project: {team.projectName || 'Missing'}</p>
+            </div>
+            <span className={`shrink-0 rounded-full px-2 py-1 text-[11px] font-semibold ${team.isValid ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+              {team.validMemberCount}/{team.memberCount} ready
+            </span>
+          </div>
+          {team.zaloGroupUrl && <p className="mt-2 truncate text-xs text-slate-600">Zalo: {team.zaloGroupUrl}</p>}
+          {team.description && <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-600">{team.description}</p>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function StudentRowsTable({
+  rows,
+  compact = false,
+  teamAssignment = false,
+}: {
+  rows: ImportStudentRowPreview[];
+  compact?: boolean;
+  teamAssignment?: boolean;
+}) {
   return (
     <div className="overflow-hidden rounded-xl border border-slate-200">
       <div className={`${compact ? 'max-h-52' : 'max-h-72'} overflow-auto`}>
-        <table className="w-full min-w-[900px] text-left text-xs">
+        <table className={`w-full ${teamAssignment ? 'min-w-[1050px]' : 'min-w-[900px]'} text-left text-xs`}>
           <thead className="sticky top-0 z-10 bg-slate-50 text-slate-500">
             <tr>
               <th className="w-16 px-3 py-2.5 font-semibold">Row</th>
               <th className="px-3 py-2.5 font-semibold">Student code</th>
               <th className="px-3 py-2.5 font-semibold">Full name</th>
               <th className="px-3 py-2.5 font-semibold">Email</th>
+              {teamAssignment && <th className="px-3 py-2.5 font-semibold">Group / Project</th>}
               <th className="px-3 py-2.5 font-semibold">Registered major</th>
               <th className="px-3 py-2.5 font-semibold">Major in file</th>
               <th className="w-52 px-3 py-2.5 font-semibold">Validation</th>
@@ -462,6 +526,12 @@ function StudentRowsTable({ rows, compact = false }: { rows: any[]; compact?: bo
                 <td className="px-3 py-3 font-semibold text-slate-700">{row.studentCode || '—'}</td>
                 <td className="px-3 py-3 text-slate-700">{row.fullName || '—'}</td>
                 <td className="px-3 py-3 text-slate-600">{row.email || '—'}</td>
+                {teamAssignment && (
+                  <td className="px-3 py-3">
+                    <p className="font-semibold text-slate-700">{row.groupName || '—'}</p>
+                    <p className="mt-0.5 text-[11px] text-slate-500">{row.projectName || 'No project'}</p>
+                  </td>
+                )}
                 <td className={`px-3 py-3 font-mono ${row.needsMajorSync ? 'font-semibold text-red-600' : 'text-slate-600'}`}>
                   {row.registeredMajorCode || '—'}
                 </td>
