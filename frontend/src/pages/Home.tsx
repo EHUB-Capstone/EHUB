@@ -194,7 +194,7 @@ const Home: React.FC = () => {
                   <div className="flex items-center gap-1.5 px-4 py-2 border-b border-[#E8EDF5]/80 dark:border-white/10 bg-[#F8FAFC]/55 dark:bg-white/[0.04]">
                     {['#CBD5E1','#CBD5E1','#F97316'].map((c, i) => <div key={`${c}-${i}`} className="w-2 h-2 rounded-full opacity-70" style={{ background: c }} />)}
                     <div className="flex-1 h-5 ml-3 px-2.5 flex items-center rounded-md bg-white/80 dark:bg-[#0F172A]/70 border border-[#E8EDF5]/70 dark:border-white/10">
-                      <span className="text-[10px] text-[#64748B]/80 dark:text-slate-400">ehub.platform.edu.vn</span>
+                      <span className="text-[10px] text-[#64748B]/80 dark:text-slate-400">e-hub.com.vn</span>
                     </div>
                   </div>
                   <div className="p-5">

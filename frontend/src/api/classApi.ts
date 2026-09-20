@@ -8,6 +8,7 @@ import type {
   ExportClassRosterParams,
   ExportAdminClassDataRequest,
   AddStudentToClassPayload,
+  CommitImportStudentsPayload,
 } from '../types/classes';
 
 export const classApi = {
@@ -46,11 +47,11 @@ export const classApi = {
 
   // ─── Students ────────────────────────────────────────────────────────────
   getStudents: (classId: string, params: GetClassRosterParams) => axiosClient.get(`/classes/${classId}/students`, { params }),
-  previewImportStudents: (classId, formData) =>
+  previewImportStudents: (classId: string, formData: FormData) =>
     axiosClient.post(`/classes/${classId}/import-students/preview`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     }),
-  commitImportStudents: (classId, payload) =>
+  commitImportStudents: (classId: string, payload: CommitImportStudentsPayload) =>
     axiosClient.post(`/classes/${classId}/import-students/commit`, payload),
   importStudents: (classId, formData) =>
     axiosClient.post(`/classes/${classId}/import-students/preview`, formData, {

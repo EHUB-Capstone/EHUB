@@ -725,7 +725,7 @@ public sealed class ClassesController : ControllerBase
 
         return Ok(ApiResponse<ImportStudentsCommitResponse>.SuccessResponse(
             result.Value,
-            "Students imported successfully."));
+            "Import committed successfully."));
     }
 
     [HttpGet("{id:guid}/export-students")]

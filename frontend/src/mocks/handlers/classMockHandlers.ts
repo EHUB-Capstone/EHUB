@@ -780,7 +780,17 @@ function registerRosterHandlers(mock: MockAdapter): void {
     ];
     getMockState().imports[sessionId] = { classId, consumed: false, rows };
     persistMockState();
-    return ok({ sessionId, totalRows: rows.length, validRowsCount: 1, errorRowsCount: 1, majorMismatchCount: 0, rows }, 'Student import preview generated.');
+    return ok({
+      sessionId,
+      importMode: 'StudentRoster',
+      totalRows: rows.length,
+      validRowsCount: 1,
+      errorRowsCount: 1,
+      majorMismatchCount: 0,
+      teamCount: 0,
+      teams: [],
+      rows,
+    }, 'Student import preview generated.');
   });
 
   mock.onPost(/^\/classes\/[^/]+\/import-students\/commit$/).reply((config) => {
@@ -816,7 +826,18 @@ function registerRosterHandlers(mock: MockAdapter): void {
     session.consumed = true;
     refreshClassCounts(classId);
     persistMockState();
-    return ok({ insertedCount, updatedCount, synchronizedMajorCount: 0, skippedCount: errors.length, errorCount: errors.length, errors }, 'Students imported successfully.');
+    return ok({
+      importMode: 'StudentRoster',
+      insertedCount,
+      updatedCount,
+      createdTeamCount: 0,
+      createdMembershipCount: 0,
+      createdProjectCount: 0,
+      synchronizedMajorCount: 0,
+      skippedCount: errors.length,
+      errorCount: errors.length,
+      errors,
+    }, 'Students imported successfully.');
   });
 }
 

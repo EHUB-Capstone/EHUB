@@ -17,6 +17,9 @@ internal static class ClassRosterExportWorkbookBuilder
     internal const string WorksheetName = "Class Roster";
     internal const string ContentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
+    private const double ProjectNameMaxWidth = 25;
+    private const double DescriptionMaxWidth = 50;
+
     internal static byte[] Build(IReadOnlyCollection<ClassRosterExportSection> sections)
     {
         using var workbook = new XLWorkbook();
@@ -31,7 +34,8 @@ internal static class ClassRosterExportWorkbookBuilder
             rowIndex = WriteRoster(worksheet, rowIndex, section);
         }
 
-        worksheet.Columns().AdjustToContents();
+        ApplyColumnSizing(worksheet, rowIndex - 1);
+        ApplyBorders(worksheet, rowIndex - 1);
 
         using var stream = new MemoryStream();
         workbook.SaveAs(stream);
@@ -133,6 +137,99 @@ internal static class ClassRosterExportWorkbookBuilder
         }
 
         return rowIndex;
+    }
+
+    private static void ApplyBorders(IXLWorksheet worksheet, int lastRowIndex)
+    {
+        const int firstColumn = 1;
+        const int lastColumn = 11; // RollNumber ... Mentor - GV
+
+        var range = worksheet.Range(1, firstColumn, lastRowIndex, lastColumn);
+        range.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+        range.Style.Border.InsideBorder = XLBorderStyleValues.Thin;
+    }
+
+    private static void ApplyColumnSizing(IXLWorksheet worksheet, int lastRowIndex)
+    {
+        // Tự co giãn các cột theo nội dung, riêng Project Name / Description giới hạn độ rộng tối đa
+        // và bật wrap text để nội dung dài xuống dòng thay vì kéo giãn cột.
+        worksheet.Columns().AdjustToContents();
+
+        var projectNameColumn = worksheet.Column(7);
+        if (projectNameColumn.Width > ProjectNameMaxWidth)
+        {
+            projectNameColumn.Width = ProjectNameMaxWidth;
+        }
+        projectNameColumn.Style.Alignment.WrapText = true;
+
+        var descriptionColumn = worksheet.Column(8);
+        if (descriptionColumn.Width > DescriptionMaxWidth)
+        {
+            descriptionColumn.Width = DescriptionMaxWidth;
+        }
+        descriptionColumn.Style.Alignment.WrapText = true;
+
+        // ClosedXML's Rows().AdjustToContents() không tính đúng chiều cao dòng khi có wrap text,
+        // nên tự ước lượng số dòng cần thiết cho từng row và set Height thủ công.
+        const double defaultRowHeight = 15d; // chiều cao ~1 dòng với font mặc định (Calibri 11)
+
+        for (var rowNumber = 2; rowNumber <= lastRowIndex; rowNumber++)
+        {
+            var projectText = worksheet.Cell(rowNumber, 7).GetString();
+            var descriptionText = worksheet.Cell(rowNumber, 8).GetString();
+
+            var lineCount = Math.Max(
+                EstimateWrappedLineCount(projectText, ProjectNameMaxWidth),
+                EstimateWrappedLineCount(descriptionText, DescriptionMaxWidth));
+
+            if (lineCount > 1)
+            {
+                worksheet.Row(rowNumber).Height = lineCount * defaultRowHeight;
+            }
+        }
+    }
+
+    private static int EstimateWrappedLineCount(string text, double columnWidth)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return 1;
+        }
+
+        // Ước lượng số ký tự vừa một dòng theo độ rộng cột (xấp xỉ cho font Calibri 11 mặc định của Excel)
+        var charsPerLine = Math.Max(10, (int)(columnWidth * 1.8));
+        var lineCount = 0;
+
+        foreach (var paragraph in text.Split('\n'))
+        {
+            var words = paragraph.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (words.Length == 0)
+            {
+                lineCount++;
+                continue;
+            }
+
+            var linesInParagraph = 1;
+            var currentLineLength = 0;
+
+            foreach (var word in words)
+            {
+                var wordLength = word.Length + 1; // +1 cho khoảng trắng
+                if (currentLineLength + wordLength > charsPerLine)
+                {
+                    linesInParagraph++;
+                    currentLineLength = wordLength;
+                }
+                else
+                {
+                    currentLineLength += wordLength;
+                }
+            }
+
+            lineCount += linesInParagraph;
+        }
+
+        return Math.Max(1, lineCount);
     }
 
     private static string ShortenSemesterCode(string? code)
