@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\EHub.Application\EHub.Application.csproj" />
+    <ProjectReference Include="..\..\src\EHub.Contracts\EHub.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\EHub.Infrastructure\EHub.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Keep the tool runtime aligned with the Infrastructure assembly it directly consumes. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.9" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="Data\proposal-golden-dataset-v1.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

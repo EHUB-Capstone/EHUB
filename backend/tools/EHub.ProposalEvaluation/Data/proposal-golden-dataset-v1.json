@@ -1,0 +1,379 @@
+{
+  "schemaVersion": "proposal-golden-dataset-v1",
+  "name": "EHUB synthetic proposal ranking seed v1",
+  "labelStatus": "seed-unreviewed",
+  "proposals": [
+    {
+      "id": "housing-query",
+      "snapshot": {
+        "title": "Smart student housing recommendation",
+        "startupName": "SmartRent",
+        "tagline": "Find a room and compatible roommate near campus",
+        "problem": "University students struggle to find affordable verified rooms and compatible roommates near campus.",
+        "solution": "A student housing platform recommends rooms and roommate matches using budget, distance, lifestyle, and verified listings.",
+        "targetCustomers": "University students seeking rental accommodation near campus.",
+        "valueProposition": "Personalized room discovery, verified housing information, and roommate compatibility in one workflow."
+      }
+    },
+    {
+      "id": "housing-campus",
+      "snapshot": {
+        "title": "Campus room discovery platform",
+        "startupName": "RoomHub",
+        "tagline": "Verified rentals for university communities",
+        "problem": "Students waste time comparing unreliable rental posts and cannot verify rooms close to their university.",
+        "solution": "A campus housing marketplace verifies landlords and filters rooms by price, location, utilities, and student preferences.",
+        "targetCustomers": "Students and landlords around universities.",
+        "valueProposition": "Trusted rental listings and faster room search for the student housing market."
+      }
+    },
+    {
+      "id": "housing-roommate",
+      "snapshot": {
+        "title": "Roommate compatibility matching",
+        "startupName": "MateStay",
+        "tagline": "Live with people who fit your habits",
+        "problem": "Students often choose incompatible roommates because they lack structured lifestyle and budget information.",
+        "solution": "A roommate matching service compares study schedule, cleanliness, sleep habits, budget, and preferred campus area.",
+        "targetCustomers": "University students sharing apartments or dorm rooms.",
+        "valueProposition": "Reduce roommate conflict through transparent compatibility profiles and matching."
+      }
+    },
+    {
+      "id": "food-query",
+      "snapshot": {
+        "title": "Restaurant surplus food rescue",
+        "startupName": "MealRescue",
+        "tagline": "Turn surplus meals into community support",
+        "problem": "Restaurants discard safe surplus food while nearby charities lack predictable meal donations.",
+        "solution": "A platform matches restaurant food surplus with verified charities and coordinates pickup before food expires.",
+        "targetCustomers": "Restaurants, food banks, charities, and volunteer delivery partners.",
+        "valueProposition": "Reduce food waste and make local meal donation traceable and reliable."
+      }
+    },
+    {
+      "id": "food-donation",
+      "snapshot": {
+        "title": "Food donation coordination network",
+        "startupName": "ShareMeal",
+        "tagline": "Connect kitchens with people in need",
+        "problem": "Canteens and bakeries have unsold food but nonprofit organizations cannot discover donations quickly enough.",
+        "solution": "A donation network publishes available meals, verifies recipients, and assigns time-sensitive collection routes.",
+        "targetCustomers": "Food businesses and nonprofit meal programs.",
+        "valueProposition": "Fast discovery and accountable delivery of surplus food donations."
+      }
+    },
+    {
+      "id": "food-surplus",
+      "snapshot": {
+        "title": "Discount marketplace for unsold meals",
+        "startupName": "LastPlate",
+        "tagline": "Affordable meals instead of food waste",
+        "problem": "Food stores lose money when fresh meals remain unsold at closing time.",
+        "solution": "Consumers reserve discounted surplus meal packages from nearby restaurants before closing.",
+        "targetCustomers": "Price-conscious consumers, restaurants, bakeries, and campus canteens.",
+        "valueProposition": "Recover restaurant revenue while reducing edible food waste."
+      }
+    },
+    {
+      "id": "crop-query",
+      "snapshot": {
+        "title": "Mobile crop disease detection",
+        "startupName": "CropDoctor",
+        "tagline": "Detect plant disease from a field photo",
+        "problem": "Small farmers identify crop disease too late and lack immediate access to agricultural experts.",
+        "solution": "A mobile application analyzes leaf images, suggests likely crop diseases, and provides treatment guidance for farmers.",
+        "targetCustomers": "Smallholder farmers and agricultural extension workers.",
+        "valueProposition": "Earlier disease detection and accessible field guidance from a smartphone."
+      }
+    },
+    {
+      "id": "crop-vision",
+      "snapshot": {
+        "title": "Plant health computer vision assistant",
+        "startupName": "LeafGuard",
+        "tagline": "Photograph, diagnose, and protect crops",
+        "problem": "Farmers cannot reliably distinguish visual symptoms of pests, nutrient deficiencies, and plant diseases.",
+        "solution": "Computer vision classifies crop leaf symptoms and connects uncertain cases with agronomists.",
+        "targetCustomers": "Farmers, cooperatives, and crop advisors.",
+        "valueProposition": "Rapid visual screening with an expert escalation path."
+      }
+    },
+    {
+      "id": "crop-advisory",
+      "snapshot": {
+        "title": "Community agricultural advisory service",
+        "startupName": "FarmHelp",
+        "tagline": "Practical farming advice on demand",
+        "problem": "Rural farmers wait days for advice when crops show unfamiliar disease symptoms.",
+        "solution": "Farmers submit field photos and questions to a network of verified agriculture specialists.",
+        "targetCustomers": "Rural farmers and independent agronomists.",
+        "valueProposition": "Timely expert advice for crop health decisions without traveling."
+      }
+    },
+    {
+      "id": "mental-query",
+      "snapshot": {
+        "title": "Private university mental health support",
+        "startupName": "MindBridge",
+        "tagline": "Reach the right support before a crisis",
+        "problem": "Students avoid mental health support because counseling access is confusing, slow, and perceived as stigmatizing.",
+        "solution": "A confidential platform provides wellbeing screening, counseling appointment booking, and guided support resources.",
+        "targetCustomers": "University students and campus counseling centers.",
+        "valueProposition": "A private and simple path from early concern to professional student support."
+      }
+    },
+    {
+      "id": "mental-counsel",
+      "snapshot": {
+        "title": "Campus counseling appointment system",
+        "startupName": "CounselNow",
+        "tagline": "Confidential counseling without administrative friction",
+        "problem": "Students cannot see counseling availability and abandon support when appointment coordination takes too long.",
+        "solution": "A secure booking system triages student needs and schedules sessions with appropriate campus counselors.",
+        "targetCustomers": "Students, university counselors, and student affairs offices.",
+        "valueProposition": "Shorter waiting time and confidential counseling coordination."
+      }
+    },
+    {
+      "id": "mental-peer",
+      "snapshot": {
+        "title": "Moderated peer wellbeing community",
+        "startupName": "PeerCircle",
+        "tagline": "Students supporting students safely",
+        "problem": "Students experiencing stress feel isolated but hesitate to contact formal mental health services.",
+        "solution": "A moderated peer support community offers anonymous discussion, wellbeing resources, and counselor referral.",
+        "targetCustomers": "University students seeking early emotional support.",
+        "valueProposition": "Low-pressure peer connection with safety moderation and professional escalation."
+      }
+    },
+    {
+      "id": "shuttle-query",
+      "snapshot": {
+        "title": "Real-time campus shuttle tracking",
+        "startupName": "CampusBus Live",
+        "tagline": "Know when the university bus will arrive",
+        "problem": "Students wait without reliable arrival information and miss classes when campus shuttle schedules change.",
+        "solution": "GPS tracking provides live shuttle location, predicted arrival time, route alerts, and occupancy information.",
+        "targetCustomers": "University students, staff, and campus transport operators.",
+        "valueProposition": "Reduce uncertain waiting and improve use of campus shuttle services."
+      }
+    },
+    {
+      "id": "shuttle-tracker",
+      "snapshot": {
+        "title": "University bus arrival application",
+        "startupName": "UniTransit",
+        "tagline": "Live routes for every campus stop",
+        "problem": "Fixed timetables do not reflect traffic delays, leaving students unsure when university buses arrive.",
+        "solution": "A mobile map streams bus GPS positions and sends arrival notifications for selected campus stops.",
+        "targetCustomers": "Students and university transportation departments.",
+        "valueProposition": "Accurate bus arrival visibility and fewer missed campus connections."
+      }
+    },
+    {
+      "id": "shuttle-routing",
+      "snapshot": {
+        "title": "Demand-aware university transport planning",
+        "startupName": "RouteCampus",
+        "tagline": "Plan shuttle capacity from student demand",
+        "problem": "Campus transport teams run empty buses on some routes while students crowd other stops.",
+        "solution": "Transport analytics predicts shuttle demand and recommends route frequency and capacity changes.",
+        "targetCustomers": "University operations teams and campus bus providers.",
+        "valueProposition": "Better shuttle route planning using observed student travel demand."
+      }
+    },
+    {
+      "id": "carbon-query",
+      "snapshot": {
+        "title": "Personal campus carbon footprint tracker",
+        "startupName": "GreenSteps",
+        "tagline": "Measure and reduce everyday emissions",
+        "problem": "Students want sustainable habits but cannot see the carbon impact of transport, food, and energy choices.",
+        "solution": "A carbon footprint application estimates daily emissions and recommends measurable low-carbon actions and challenges.",
+        "targetCustomers": "Students and universities running sustainability programs.",
+        "valueProposition": "Turn abstract climate goals into visible personal carbon reduction."
+      }
+    },
+    {
+      "id": "carbon-campus",
+      "snapshot": {
+        "title": "University sustainability measurement dashboard",
+        "startupName": "EcoCampus",
+        "tagline": "Understand emissions across campus activity",
+        "problem": "Universities lack consistent data about commuting, energy use, and student participation in sustainability initiatives.",
+        "solution": "A dashboard aggregates campus carbon data and tracks progress against sustainability targets.",
+        "targetCustomers": "University sustainability offices and facilities teams.",
+        "valueProposition": "Evidence-based carbon planning and transparent campus sustainability reporting."
+      }
+    },
+    {
+      "id": "carbon-rewards",
+      "snapshot": {
+        "title": "Rewards for low-carbon student behavior",
+        "startupName": "EcoPoints",
+        "tagline": "Make sustainable choices worth repeating",
+        "problem": "Students understand climate issues but lack motivation to maintain low-carbon daily behavior.",
+        "solution": "A rewards platform verifies sustainable transport and recycling actions and grants campus benefits.",
+        "targetCustomers": "Students, universities, and sustainable campus merchants.",
+        "valueProposition": "Increase participation in carbon reduction through verified incentives."
+      }
+    },
+    {
+      "id": "tutor-query",
+      "snapshot": {
+        "title": "Ghép đôi gia sư đồng trang lứa cho môn học khó",
+        "startupName": "TutorLink",
+        "tagline": "Tìm đúng sinh viên gia sư một cách nhanh chóng",
+        "problem": "Sinh viên gặp khó ở một số môn học chưa thể tìm được bạn học đáng tin cậy, có đúng kinh nghiệm môn học và lịch rảnh phù hợp.",
+        "solution": "Nền tảng gia sư ghép người học với sinh viên gia sư đã xác minh dựa trên môn học, kỹ năng, lịch học và cách học mong muốn.",
+        "targetCustomers": "Sinh viên đại học có nhu cầu học kèm hoặc cung cấp dịch vụ gia sư.",
+        "valueProposition": "Ghép đôi gia sư đúng môn học, đáng tin cậy ngay trong cộng đồng trường đại học."
+      }
+    },
+    {
+      "id": "tutor-match",
+      "snapshot": {
+        "title": "Sàn gia sư sinh viên theo từng môn học",
+        "startupName": "StudyMate",
+        "tagline": "Kết nối học tập theo môn và lịch rảnh",
+        "problem": "Người học đang phụ thuộc vào bài đăng tự phát và khó đánh giá năng lực gia sư đối với một học phần cụ thể ở trường.",
+        "solution": "Sinh viên gia sư đã xác minh công khai lịch sử môn học, thời gian rảnh, hình thức học và phản hồi từ người học.",
+        "targetCustomers": "Sinh viên cần học kèm và sinh viên có thành tích tốt muốn làm gia sư.",
+        "valueProposition": "Lựa chọn gia sư minh bạch và đặt lịch gắn với các môn học thực tế của trường."
+      }
+    },
+    {
+      "id": "tutor-peer",
+      "snapshot": {
+        "title": "Thành lập nhóm học tập nhỏ cùng tiến",
+        "startupName": "StudyCircle",
+        "tagline": "Tạo nhóm phù hợp cho từng môn học",
+        "problem": "Sinh viên khó tìm bạn cùng lớp có mục tiêu và thời gian học phù hợp cho những môn nhiều thử thách.",
+        "solution": "Dịch vụ ghép nhóm học tập dựa trên môn học, trình độ, mục tiêu và thời gian rảnh hằng tuần.",
+        "targetCustomers": "Sinh viên đại học đang theo học các môn có độ khó cao.",
+        "valueProposition": "Duy trì nhóm học cùng tiến ổn định mà không phải tìm kiếm trong các kênh trò chuyện tự phát."
+      }
+    },
+    {
+      "id": "event-query",
+      "snapshot": {
+        "title": "Digital ticketing for campus events",
+        "startupName": "CampusPass",
+        "tagline": "Discover, reserve, and enter student events",
+        "problem": "Student clubs manage registration through disconnected forms and cannot prevent duplicate or fraudulent event tickets.",
+        "solution": "A campus event platform provides discovery, digital ticket reservation, QR check-in, and attendance reporting.",
+        "targetCustomers": "Student clubs, event organizers, and university students.",
+        "valueProposition": "One trusted workflow for campus event registration and admission."
+      }
+    },
+    {
+      "id": "event-ticket",
+      "snapshot": {
+        "title": "Student club event registration hub",
+        "startupName": "UniEvents",
+        "tagline": "All campus activities in one calendar",
+        "problem": "Students miss activities while clubs manually combine registrations from multiple channels.",
+        "solution": "A university event directory supports registration, digital passes, reminders, and organizer attendance statistics.",
+        "targetCustomers": "University clubs, departments, and students.",
+        "valueProposition": "Central event discovery with reliable digital registration."
+      }
+    },
+    {
+      "id": "event-checkin",
+      "snapshot": {
+        "title": "Fast QR attendance for large events",
+        "startupName": "CheckInGo",
+        "tagline": "Verify every guest without entrance queues",
+        "problem": "Large student events create long queues and inaccurate attendance records with manual check-in.",
+        "solution": "Organizers issue unique QR tickets and scan them at multiple gates with duplicate detection.",
+        "targetCustomers": "Campus event organizers and conference teams.",
+        "valueProposition": "Faster admission and accurate event attendance evidence."
+      }
+    },
+    {
+      "id": "inventory-query",
+      "snapshot": {
+        "title": "Demand forecasting for small retailers",
+        "startupName": "StockSense",
+        "tagline": "Order the right stock before demand changes",
+        "problem": "Small shops overstock slow products and run out of popular items because purchasing relies on intuition.",
+        "solution": "An inventory system forecasts product demand from sales history, seasonality, promotions, and current stock.",
+        "targetCustomers": "Small retailers, convenience stores, and local shop owners.",
+        "valueProposition": "Reduce stockouts and waste through practical demand forecasting."
+      }
+    },
+    {
+      "id": "inventory-forecast",
+      "snapshot": {
+        "title": "Predictive replenishment for local stores",
+        "startupName": "ReorderAI",
+        "tagline": "Smart purchase suggestions for every shelf",
+        "problem": "Independent retailers lack analysts and order inventory too late or in excessive quantities.",
+        "solution": "Sales trends and seasonal signals generate product-level replenishment recommendations and low-stock alerts.",
+        "targetCustomers": "Independent stores and small retail chains.",
+        "valueProposition": "Accessible inventory forecasting without an enterprise planning system."
+      }
+    },
+    {
+      "id": "inventory-retail",
+      "snapshot": {
+        "title": "Mobile stock control for micro businesses",
+        "startupName": "PocketStock",
+        "tagline": "Simple inventory visibility from a phone",
+        "problem": "Micro retailers record stock manually and cannot identify missing, expired, or fast-moving products.",
+        "solution": "A mobile inventory application scans products, tracks quantities, and summarizes sales movement.",
+        "targetCustomers": "Micro businesses, kiosks, and family-owned stores.",
+        "valueProposition": "Low-cost stock control and clearer purchase decisions for small shops."
+      }
+    },
+    {
+      "id": "blood-query",
+      "snapshot": {
+        "title": "Kết nối người hiến máu khẩn cấp",
+        "startupName": "BloodConnect",
+        "tagline": "Tiếp cận người hiến phù hợp ở gần khi thời gian là yếu tố quyết định",
+        "problem": "Bệnh viện và gia đình gặp khó khăn khi tìm người hiến máu tương thích, sẵn sàng trong các đợt thiếu máu khẩn cấp.",
+        "solution": "Mạng lưới người hiến đã xác minh ghép theo nhóm máu, vị trí, điều kiện hiến và thời gian sẵn sàng rồi gửi yêu cầu khẩn.",
+        "targetCustomers": "Bệnh viện, ngân hàng máu, bệnh nhân và người tình nguyện hiến máu.",
+        "valueProposition": "Tiếp cận người hiến đủ điều kiện ở gần nhanh hơn với cơ chế bảo mật và xác minh."
+      }
+    },
+    {
+      "id": "blood-match",
+      "snapshot": {
+        "title": "Mạng lưới người hiến máu khẩn cấp đã xác minh",
+        "startupName": "LifeDrop",
+        "tagline": "Điều phối đúng người hiến máu trong thời gian ngắn",
+        "problem": "Yêu cầu hiến máu khẩn lan truyền trên mạng xã hội nhưng thiếu thông tin đáng tin cậy về điều kiện hiến và vị trí người hiến.",
+        "solution": "Bệnh viện công bố nhu cầu đã xác minh và thông báo đến người hiến tương thích theo nhóm máu, khoảng cách và lịch sử hiến.",
+        "targetCustomers": "Cơ sở y tế, ngân hàng máu và người hiến đã đăng ký.",
+        "valueProposition": "Điều phối yêu cầu máu đáng tin cậy và gửi thông báo đúng nhóm người hiến phù hợp."
+      }
+    },
+    {
+      "id": "blood-campaign",
+      "snapshot": {
+        "title": "Quản lý chiến dịch hiến máu cộng đồng",
+        "startupName": "DonateDay",
+        "tagline": "Lấp đầy lịch hẹn trước ngày tổ chức chiến dịch",
+        "problem": "Ngân hàng máu khó dự báo số người tham dự và vẫn phải điều phối thủ công người hiến trong các chiến dịch cộng đồng.",
+        "solution": "Nền tảng chiến dịch tuyển người đủ điều kiện, đặt khung giờ hiến, gửi nhắc lịch và báo cáo kết quả tiếp nhận máu.",
+        "targetCustomers": "Ngân hàng máu, bệnh viện, trường đại học và người tình nguyện hiến máu.",
+        "valueProposition": "Tăng độ tin cậy của số người tham gia và giúp sự kiện hiến máu vận hành trơn tru hơn."
+      }
+    }
+  ],
+  "cases": [
+    { "id": "housing", "queryProposalId": "housing-query", "relevanceGrades": { "housing-campus": 3, "housing-roommate": 2 } },
+    { "id": "food-rescue", "queryProposalId": "food-query", "relevanceGrades": { "food-donation": 3, "food-surplus": 2 } },
+    { "id": "crop-health", "queryProposalId": "crop-query", "relevanceGrades": { "crop-vision": 3, "crop-advisory": 2 } },
+    { "id": "mental-health", "queryProposalId": "mental-query", "relevanceGrades": { "mental-counsel": 3, "mental-peer": 2 } },
+    { "id": "campus-shuttle", "queryProposalId": "shuttle-query", "relevanceGrades": { "shuttle-tracker": 3, "shuttle-routing": 2 } },
+    { "id": "carbon", "queryProposalId": "carbon-query", "relevanceGrades": { "carbon-campus": 3, "carbon-rewards": 2 } },
+    { "id": "peer-tutoring", "queryProposalId": "tutor-query", "relevanceGrades": { "tutor-match": 3, "tutor-peer": 2 } },
+    { "id": "campus-events", "queryProposalId": "event-query", "relevanceGrades": { "event-ticket": 3, "event-checkin": 2 } },
+    { "id": "retail-inventory", "queryProposalId": "inventory-query", "relevanceGrades": { "inventory-forecast": 3, "inventory-retail": 2 } },
+    { "id": "blood-donation", "queryProposalId": "blood-query", "relevanceGrades": { "blood-match": 3, "blood-campaign": 2 } }
+  ]
+}
