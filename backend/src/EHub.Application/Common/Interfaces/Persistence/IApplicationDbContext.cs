@@ -61,6 +61,7 @@ public interface IApplicationDbContext
     DbSet<ProjectProposalVersion> ProjectProposalVersions { get; }
     DbSet<ProjectProposalReview> ProjectProposalReviews { get; }
     DbSet<ProjectProposalAnalysisJob> ProjectProposalAnalysisJobs { get; }
+    DbSet<ProjectProposalAnalysisResult> ProjectProposalAnalysisResults { get; }
     DbSet<ProjectComment> ProjectComments { get; }
     DbSet<PitchDeck> PitchDecks { get; }
     DbSet<ProjectShortcut> Shortcuts { get; }

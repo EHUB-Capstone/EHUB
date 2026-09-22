@@ -1,5 +1,6 @@
 using EHub.Application.Common.Interfaces.Identity;
 using EHub.Application.Features.ProjectProposals;
+using EHub.Application.Features.ProposalAnalyses;
 using EHub.Contracts.Common;
 using EHub.Contracts.ProjectProposals;
 using EHub.Shared.Constants;
@@ -88,6 +89,14 @@ public sealed class ProjectProposalsController : ControllerBase
         CancellationToken cancellationToken) =>
         ToResponse(await handler.ReviewAsync(proposalId, request, UserId, Role, cancellationToken), "Project proposal reviewed.");
 
+    [HttpGet("proposal-analyses/{jobId:guid}")]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    public async Task<IActionResult> GetAnalysis(
+        Guid jobId,
+        [FromServices] IProjectProposalAnalysisQueryHandler handler,
+        CancellationToken cancellationToken) =>
+        ToResponse(await handler.GetAsync(jobId, UserId, Role, cancellationToken), "Project proposal analysis retrieved.");
+
     private Guid UserId => _currentUser.UserId ?? Guid.Empty;
 
     private string Role => SystemRoles.All.FirstOrDefault(expected =>
@@ -104,8 +113,9 @@ public sealed class ProjectProposalsController : ControllerBase
         var failure = ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code);
         return result.Error.Code switch
         {
-            ErrorCodes.ProjectProposalAccessDenied => StatusCode(StatusCodes.Status403Forbidden, failure),
-            ErrorCodes.TeamNotFound or ErrorCodes.WorkspaceNotFound or ErrorCodes.ProjectProposalNotFound or ErrorCodes.ProjectProposalVersionNotFound => NotFound(failure),
+            ErrorCodes.ProjectProposalAccessDenied or ErrorCodes.ProjectProposalAnalysisAccessDenied => StatusCode(StatusCodes.Status403Forbidden, failure),
+            ErrorCodes.TeamNotFound or ErrorCodes.WorkspaceNotFound or ErrorCodes.ProjectProposalNotFound or ErrorCodes.ProjectProposalVersionNotFound
+                or ErrorCodes.ProjectProposalAnalysisNotFound or ErrorCodes.AiFeatureDisabled => NotFound(failure),
             ErrorCodes.ProjectProposalConcurrencyConflict or ErrorCodes.ProjectProposalStateInvalid or ErrorCodes.ProjectProposalDirectionNotApproved
                 or ErrorCodes.TeamInactive or ErrorCodes.ClassArchived or ErrorCodes.ClassCompleted => Conflict(failure),
             _ => BadRequest(failure)

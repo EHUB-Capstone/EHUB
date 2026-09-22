@@ -17,6 +17,7 @@ using CloudinaryDotNet;
 using EHub.Application.Common.Interfaces.Storage;
 using EHub.Infrastructure.Storage;
 using EHub.Application.Common.Interfaces.AI;
+using Microsoft.Extensions.Hosting;
 
 namespace EHub.Infrastructure;
 
@@ -34,6 +35,9 @@ public static class DependencyInjection
 
         services.AddScoped<IApplicationDbContext>(provider => provider.GetRequiredService<AppDbContext>());
         services.AddSingleton<IAiFeatureGate, ConfigurationAiFeatureGate>();
+        services.AddScoped<IProposalAnalysisProvider, MockProposalAnalysisProvider>();
+        services.AddSingleton<ProjectProposalAnalysisWorker>();
+        services.AddSingleton<IHostedService>(provider => provider.GetRequiredService<ProjectProposalAnalysisWorker>());
         services.AddHostedService<ClassImportSessionCleanupService>();
         services.AddHostedService<LecturerImportSessionCleanupService>();
         services.AddHostedService<PendingRegistrationCleanupService>();

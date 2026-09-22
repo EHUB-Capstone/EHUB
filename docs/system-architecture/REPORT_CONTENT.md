@@ -105,6 +105,12 @@ Scope and status: this is a target logical view aligned with the code structure,
 
 ### Figure 4. Logical View – AI-assisted Project Proposal Analysis Architecture
 
+Current implementation boundary: the durable job, processing lease/retry lifecycle,
+provider abstraction, deterministic mock provider, validated structured result,
+authorized result API and polling UI are implemented. The mock result is explicitly
+labelled as insufficient data. Semantic retrieval, embeddings/cosine ranking and an
+external model provider remain later phases and must not be claimed as implemented.
+
 This target logical view describes asynchronous, provider-neutral **proposal analysis**. A Student with the required team-scoped submission permission submits a proposal through EHub Web. The actor caption, `Authorized team member`, does not grant submission rights to every Student; the backend enforces the applicable team-role policy. Team Leader is a responsibility represented by `TeamMember.RoleInTeam`, not an additional global role alongside Student. The backend checks class/team membership, proposal ownership, lifecycle state and request limits, then prepares a versioned proposal snapshot. The submitted proposal state and a pending analysis job bound to that immutable submitted version are committed atomically in PostgreSQL. A successful submission automatically queues analysis inside the backend; an internal system trigger does not pass through the React application. The UI receives the submission outcome and an analysis identifier only after this durable commit. A dedicated asynchronous analysis-request endpoint may use `202 Accepted`; it must not report the analysis as completed at acceptance time.
 
 The background processor claims a pending job and records its processing lease, attempt count and retry metadata. It executes the job through AI Orchestrator, which reads the submitted proposal version and a permitted comparison context from PostgreSQL. The agreed candidate scope covers eligible historical proposals across the system and across semesters; it still excludes the submitted project itself and applies candidate-state, privacy and field-allowlist rules. The orchestrator reapplies Context and Prompt Controls to all retrieved data before calling the external provider through the target `IAiProvider` abstraction. It coordinates proposal analysis, domain/tag classification, comparison with relevant projects and report generation. These are responsibilities of the orchestration workflow, not four separately deployed services.

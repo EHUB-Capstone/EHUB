@@ -3,16 +3,19 @@ using EHub.Application.Common.Interfaces.Persistence;
 using EHub.Application.Common.Interfaces.Services;
 using EHub.Application.Features.Classes.Common;
 using EHub.Application.Features.ProjectProposals;
+using EHub.Application.Features.ProposalAnalyses;
 using EHub.Contracts.ProjectProposals;
 using EHub.Domain.Entities;
 using EHub.Domain.Enums;
 using EHub.IntegrationTests.Common;
 using EHub.Infrastructure.Persistence;
+using EHub.Infrastructure.BackgroundJobs;
 using EHub.Shared.Constants;
 using EHub.Shared.Errors;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace EHub.IntegrationTests.ProjectProposals;
 
@@ -34,6 +37,171 @@ public sealed class ProjectProposalLifecycleIntegrationTests
         var response = await client.GetAsync($"/api/workspace/teams/{Guid.NewGuid()}/proposal");
 
         response.StatusCode.Should().Be(System.Net.HttpStatusCode.Unauthorized);
+
+        var analysisResponse = await client.GetAsync($"/api/workspace/proposal-analyses/{Guid.NewGuid()}");
+        analysisResponse.StatusCode.Should().Be(System.Net.HttpStatusCode.Unauthorized);
+
+        var featuresResponse = await client.GetAsync("/api/features");
+        featuresResponse.StatusCode.Should().Be(System.Net.HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task AnalysisWorker_RespectsFeatureFlag_AndCompletesExactlyOnce()
+    {
+        Guid jobId;
+        Guid leaderUserId;
+        Guid teamId;
+        await using (var setupScope = _factory.Services.CreateAsyncScope())
+        {
+            var context = setupScope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var seed = await CreateSeedAsync(context);
+            leaderUserId = seed.LeaderUserId;
+            teamId = seed.TeamId;
+            context.ChangeTracker.Clear();
+            var handler = CreateHandler(setupScope, context, aiEnabled: true);
+            var created = await handler.CreateAsync(seed.TeamId, ValidDraft("Worker"), seed.LeaderUserId, SystemRoles.Student);
+            var submitted = await handler.SubmitAsync(created.Value.Id,
+                new SubmitProjectProposalRequest { RowVersion = created.Value.RowVersion },
+                seed.LeaderUserId,
+                SystemRoles.Student);
+            submitted.IsSuccess.Should().BeTrue(submitted.Error.Message);
+            jobId = submitted.Value.CurrentAnalysisJobId!.Value;
+            await DeferOtherPendingAnalysisJobsAsync(context, jobId);
+        }
+
+        var scopeFactory = _factory.Services.GetRequiredService<IServiceScopeFactory>();
+        var disabledWorker = new ProjectProposalAnalysisWorker(
+            scopeFactory,
+            new FixedAiFeatureGate(false),
+            NullLogger<ProjectProposalAnalysisWorker>.Instance);
+        (await disabledWorker.RunCycleAsync()).Should().Be(0);
+
+        await using (var verificationScope = _factory.Services.CreateAsyncScope())
+        {
+            var context = verificationScope.ServiceProvider.GetRequiredService<AppDbContext>();
+            (await context.ProjectProposalAnalysisJobs.AsNoTracking().SingleAsync(job => job.Id == jobId))
+                .Status.Should().Be(ProjectProposalAnalysisJobStatus.Pending);
+            (await context.ProjectProposalAnalysisResults.AsNoTracking().CountAsync(result => result.AnalysisJobId == jobId))
+                .Should().Be(0);
+            var proposalView = await CreateHandler(verificationScope, context, aiEnabled: false)
+                .GetByTeamAsync(teamId, leaderUserId, SystemRoles.Student);
+            proposalView.Value.CurrentAnalysisJobId.Should().BeNull();
+            proposalView.Value.CurrentAnalysisStatus.Should().BeNull();
+        }
+
+        var enabledWorker = new ProjectProposalAnalysisWorker(
+            scopeFactory,
+            new FixedAiFeatureGate(true),
+            NullLogger<ProjectProposalAnalysisWorker>.Instance);
+        (await enabledWorker.RunCycleAsync()).Should().Be(1);
+        (await enabledWorker.RunCycleAsync()).Should().Be(0);
+
+        await using var scope = _factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var completedJob = await db.ProjectProposalAnalysisJobs.AsNoTracking().SingleAsync(job => job.Id == jobId);
+        completedJob.Status.Should().Be(ProjectProposalAnalysisJobStatus.Completed);
+        completedJob.AttemptCount.Should().Be(1);
+        completedJob.LeaseOwner.Should().BeNull();
+        completedJob.LeaseExpiresAtUtc.Should().BeNull();
+        var result = await db.ProjectProposalAnalysisResults.AsNoTracking().SingleAsync(item => item.AnalysisJobId == jobId);
+        result.Provider.Should().Be("Mock");
+        result.OverlapRisk.Should().Be(ProjectProposalOverlapRisk.InsufficientData);
+
+        var queryHandler = new ProjectProposalAnalysisQueryHandler(db, new FixedAiFeatureGate(true));
+        var studentView = await queryHandler.GetAsync(jobId, leaderUserId, SystemRoles.Student);
+        studentView.IsSuccess.Should().BeTrue(studentView.Error.Message);
+        studentView.Value.Status.Should().Be(nameof(ProjectProposalAnalysisJobStatus.Completed));
+        studentView.Value.CanViewDetailedReport.Should().BeFalse();
+        studentView.Value.Report.Should().NotBeNull();
+        studentView.Value.Report!.Limitations.Should().Contain(item => item.Contains("mô phỏng", StringComparison.OrdinalIgnoreCase));
+
+        var hiddenWhenDisabled = await new ProjectProposalAnalysisQueryHandler(db, new FixedAiFeatureGate(false))
+            .GetAsync(jobId, leaderUserId, SystemRoles.Student);
+        hiddenWhenDisabled.IsFailure.Should().BeTrue();
+        hiddenWhenDisabled.Error.Code.Should().Be(ErrorCodes.AiFeatureDisabled);
+    }
+
+    [Fact]
+    public async Task AnalysisWorker_RecoversExpiredLease_WithoutDuplicateResult()
+    {
+        Guid jobId;
+        await using (var setupScope = _factory.Services.CreateAsyncScope())
+        {
+            var context = setupScope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var seed = await CreateSeedAsync(context);
+            context.ChangeTracker.Clear();
+            var handler = CreateHandler(setupScope, context, aiEnabled: true);
+            var created = await handler.CreateAsync(seed.TeamId, ValidDraft("Expired lease"), seed.LeaderUserId, SystemRoles.Student);
+            var submitted = await handler.SubmitAsync(created.Value.Id,
+                new SubmitProjectProposalRequest { RowVersion = created.Value.RowVersion },
+                seed.LeaderUserId,
+                SystemRoles.Student);
+            jobId = submitted.Value.CurrentAnalysisJobId!.Value;
+            context.ChangeTracker.Clear();
+            var job = await context.ProjectProposalAnalysisJobs.SingleAsync(candidate => candidate.Id == jobId);
+            job.Status = ProjectProposalAnalysisJobStatus.Processing;
+            job.AttemptCount = 1;
+            job.ProcessingStartedAtUtc = DateTime.UtcNow.AddMinutes(-10);
+            job.LeaseOwner = "expired-worker";
+            job.LeaseExpiresAtUtc = DateTime.UtcNow.AddMinutes(-5);
+            await context.SaveChangesAsync();
+            await DeferOtherPendingAnalysisJobsAsync(context, jobId);
+        }
+
+        var worker = new ProjectProposalAnalysisWorker(
+            _factory.Services.GetRequiredService<IServiceScopeFactory>(),
+            new FixedAiFeatureGate(true),
+            NullLogger<ProjectProposalAnalysisWorker>.Instance);
+        (await worker.RunCycleAsync()).Should().Be(1);
+
+        await using var scope = _factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var jobAfterRecovery = await db.ProjectProposalAnalysisJobs.AsNoTracking().SingleAsync(job => job.Id == jobId);
+        jobAfterRecovery.Status.Should().Be(ProjectProposalAnalysisJobStatus.Completed);
+        jobAfterRecovery.AttemptCount.Should().Be(2);
+        (await db.ProjectProposalAnalysisResults.AsNoTracking().CountAsync(result => result.AnalysisJobId == jobId))
+            .Should().Be(1);
+    }
+
+    [Fact]
+    public async Task AnalysisFailure_DoesNotChangeSubmittedProposal()
+    {
+        Guid jobId;
+        Guid proposalId;
+        await using (var setupScope = _factory.Services.CreateAsyncScope())
+        {
+            var context = setupScope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var seed = await CreateSeedAsync(context);
+            context.ChangeTracker.Clear();
+            var handler = CreateHandler(setupScope, context, aiEnabled: true);
+            var created = await handler.CreateAsync(seed.TeamId, ValidDraft("Invalid snapshot"), seed.LeaderUserId, SystemRoles.Student);
+            proposalId = created.Value.Id;
+            var submitted = await handler.SubmitAsync(created.Value.Id,
+                new SubmitProjectProposalRequest { RowVersion = created.Value.RowVersion },
+                seed.LeaderUserId,
+                SystemRoles.Student);
+            jobId = submitted.Value.CurrentAnalysisJobId!.Value;
+            context.ChangeTracker.Clear();
+            var version = await context.ProjectProposalVersions.SingleAsync(item => item.Id == submitted.Value.CurrentSubmittedVersionId);
+            version.SnapshotSchemaVersion = "unsupported-test-schema";
+            await context.SaveChangesAsync();
+            await DeferOtherPendingAnalysisJobsAsync(context, jobId);
+        }
+
+        var worker = new ProjectProposalAnalysisWorker(
+            _factory.Services.GetRequiredService<IServiceScopeFactory>(),
+            new FixedAiFeatureGate(true),
+            NullLogger<ProjectProposalAnalysisWorker>.Instance);
+        (await worker.RunCycleAsync()).Should().Be(1);
+
+        await using var scope = _factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var failedJob = await db.ProjectProposalAnalysisJobs.AsNoTracking().SingleAsync(job => job.Id == jobId);
+        failedJob.Status.Should().Be(ProjectProposalAnalysisJobStatus.Failed);
+        failedJob.LastErrorCode.Should().Be("PROPOSAL_ANALYSIS_SNAPSHOT_UNSUPPORTED");
+        (await db.ProjectProposalAnalysisResults.AsNoTracking().AnyAsync(result => result.AnalysisJobId == jobId)).Should().BeFalse();
+        (await db.ProjectProposals.AsNoTracking().SingleAsync(proposal => proposal.Id == proposalId))
+            .Status.Should().Be(ProjectProposalStatus.Submitted);
     }
 
     [Fact]
@@ -223,7 +391,7 @@ public sealed class ProjectProposalLifecycleIntegrationTests
         var outsider = await CreateUserAsync(context, SystemRoles.Student, "outsider");
         var otherLecturer = await CreateUserAsync(context, SystemRoles.Lecturer, "other-lecturer");
         context.ChangeTracker.Clear();
-        var handler = CreateHandler(scope, context);
+        var handler = CreateHandler(scope, context, aiEnabled: true);
         var created = await handler.CreateAsync(seed.TeamId, ValidDraft("Authorization"), seed.LeaderUserId, SystemRoles.Student);
         var submitted = await handler.SubmitAsync(created.Value.Id,
             new SubmitProjectProposalRequest { RowVersion = created.Value.RowVersion }, seed.LeaderUserId, SystemRoles.Student);
@@ -241,6 +409,11 @@ public sealed class ProjectProposalLifecycleIntegrationTests
         outsiderView.Error.Code.Should().Be(ErrorCodes.ProjectProposalAccessDenied);
         unrelatedReview.IsFailure.Should().BeTrue();
         unrelatedReview.Error.Code.Should().Be(ErrorCodes.ProjectProposalAccessDenied);
+
+        var analysisView = await new ProjectProposalAnalysisQueryHandler(context, new FixedAiFeatureGate(true))
+            .GetAsync(submitted.Value.CurrentAnalysisJobId!.Value, outsider.Id, SystemRoles.Student);
+        analysisView.IsFailure.Should().BeTrue();
+        analysisView.Error.Code.Should().Be(ErrorCodes.ProjectProposalAnalysisAccessDenied);
     }
 
     [Fact]
@@ -368,6 +541,11 @@ public sealed class ProjectProposalLifecycleIntegrationTests
     };
 
     private static string Text(string sentence, int repetitions) => string.Join(' ', Enumerable.Repeat(sentence, repetitions));
+
+    private static Task<int> DeferOtherPendingAnalysisJobsAsync(AppDbContext context, Guid jobId) =>
+        context.ProjectProposalAnalysisJobs
+            .Where(job => job.Id != jobId && job.Status == ProjectProposalAnalysisJobStatus.Pending)
+            .ExecuteUpdateAsync(setters => setters.SetProperty(job => job.AvailableAtUtc, DateTime.UtcNow.AddDays(1)));
 
     private static async Task<ProposalSeed> CreateSeedAsync(
         AppDbContext context,

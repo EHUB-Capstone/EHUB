@@ -341,6 +341,8 @@ function evaluationSummary(checkpointNumber: number) {
 }
 
 export function registerWorkspaceMockHandlers(mock: MockAdapter): void {
+  mock.onGet('/features').reply(() => ok({ aiEnabled: true }, 'Feature availability retrieved.'));
+
   mock.onGet('/weekly-tasks').reply((config) => {
     const weekNumber = Number(config.params?.weekNumber || 1);
     const teamId = String(config.params?.teamId || '');
@@ -692,12 +694,51 @@ export function registerWorkspaceMockHandlers(mock: MockAdapter): void {
     const version = addProposalVersion(proposal, 'Submission', String(body.changeNote || ''), user.id);
     proposal.status = 'Submitted';
     proposal.currentSubmittedVersionId = version.id;
+    proposal.currentAnalysisJobId = allocateId();
+    proposal.currentAnalysisStatus = 'Completed';
     proposal.submittedAtUtc = version.createdAtUtc;
     proposal.approvedAtUtc = null;
     proposal.rejectedAtUtc = null;
     proposal.rowVersion = allocateRowVersion();
     persistMockState();
     return ok(proposalResponse(proposal), 'Project proposal submitted.');
+  });
+
+  mock.onGet(/^\/workspace\/proposal-analyses\/[^/]+$/).reply((config) => {
+    const jobId = routeId(config, /^\/workspace\/proposal-analyses\/([^/]+)$/);
+    const proposal = getMockState().detailedProposals.find((item) => item.currentAnalysisJobId === jobId);
+    if (!proposal) return failure(404, 'PROJECT_PROPOSAL_ANALYSIS_NOT_FOUND', 'The proposal analysis job was not found.');
+    if (!canAccessTeam(proposal.teamId)) return failure(403, 'PROJECT_PROPOSAL_ANALYSIS_ACCESS_DENIED', 'You cannot view this proposal analysis.');
+    const generatedAtUtc = proposal.submittedAtUtc || new Date().toISOString();
+    return ok({
+      jobId,
+      proposalVersionId: proposal.currentSubmittedVersionId,
+      status: 'Completed',
+      attemptCount: 1,
+      candidateScope: 'AllSystem',
+      includeCrossSemester: true,
+      languageMode: 'VietnameseAndEnglish',
+      requestedAtUtc: generatedAtUtc,
+      processingStartedAtUtc: generatedAtUtc,
+      completedAtUtc: generatedAtUtc,
+      failedAtUtc: null,
+      failureCode: null,
+      canViewDetailedReport: currentMockUser()?.role !== 'STUDENT',
+      report: {
+        summary: `Báo cáo mô phỏng đã tiếp nhận đề xuất ${proposal.startupName}. Giai đoạn này chưa so sánh ngữ nghĩa với kho dự án lịch sử.`,
+        overlapRisk: 'InsufficientData',
+        potentialDifferentiators: [`Đề xuất giá trị đã nêu: ${proposal.valueProposition.slice(0, 220)}`],
+        limitations: [
+          'Đây là kết quả mô phỏng, không phải kết luận về mức độ trùng lặp hoặc đạo văn.',
+          'Chưa áp dụng embedding, cosine similarity hoặc truy xuất dự án tương đồng.',
+        ],
+        provider: 'Mock',
+        model: 'deterministic-v1',
+        promptVersion: 'proposal-analysis-mock-v1',
+        outputSchemaVersion: 'proposal-analysis-result-v1',
+        generatedAtUtc,
+      },
+    }, 'Project proposal analysis retrieved.');
   });
 
   mock.onGet(/^\/workspace\/proposals\/[^/]+\/versions$/).reply((config) => {

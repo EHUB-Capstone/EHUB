@@ -6,6 +6,7 @@ import { ThemeProvider } from './context/ThemeContext';
 import { AuthProvider } from './context/AuthContext';
 import { ProtectedRoute } from './routes/ProtectedRoute';
 import { RequireMajor } from './routes/RequireMajor';
+import { RuntimeAiFeatureRoute } from './routes/RuntimeAiFeatureRoute';
 import { queryClient } from './lib/queryClient';
 import DashboardLayout from './components/layout/DashboardLayout';
 import ErrorBoundary from './components/ui/ErrorBoundary';
@@ -115,8 +116,8 @@ function App(): React.ReactElement {
                   {releaseFeatureFlags.startupIdeas && <Route path="/student/idea/new" element={<ProtectedRoute allowedRoles={['STUDENT']}><IdeaForm /></ProtectedRoute>} />}
                   {releaseFeatureFlags.startupIdeas && <Route path="/student/idea/:id" element={<ProtectedRoute allowedRoles={['STUDENT']}><IdeaDetail /></ProtectedRoute>} />}
                   {releaseFeatureFlags.evaluations && <Route path="/student/feedback" element={<ProtectedRoute allowedRoles={['STUDENT']}><IdeaDetail /></ProtectedRoute>} />}
-                  {releaseFeatureFlags.ai && <Route path="/student/ai-analysis" element={<ProtectedRoute allowedRoles={['STUDENT']}><AIAnalysis /></ProtectedRoute>} />}
-                  {releaseFeatureFlags.ai && <Route path="/student/ai-analysis/:startupIdeaId" element={<ProtectedRoute allowedRoles={['STUDENT']}><AIAnalysis /></ProtectedRoute>} />}
+                  <Route path="/student/ai-analysis" element={<ProtectedRoute allowedRoles={['STUDENT']}><RuntimeAiFeatureRoute><AIAnalysis /></RuntimeAiFeatureRoute></ProtectedRoute>} />
+                  <Route path="/student/ai-analysis/:startupIdeaId" element={<ProtectedRoute allowedRoles={['STUDENT']}><RuntimeAiFeatureRoute><AIAnalysis /></RuntimeAiFeatureRoute></ProtectedRoute>} />
                   {classFeatureFlags.studentSelfService && (
                     <>
                       <Route path="/student/classes" element={<ProtectedRoute allowedRoles={['STUDENT']}><MyClasses /></ProtectedRoute>} />

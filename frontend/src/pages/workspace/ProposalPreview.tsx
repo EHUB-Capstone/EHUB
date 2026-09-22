@@ -1,6 +1,7 @@
 import { ArrowLeft, Calendar, FileText, MessageSquareText, ShieldAlert } from 'lucide-react';
 import type { ProjectProposal, ProjectProposalContent, ProjectProposalStatus } from '../../types/projectProposal';
 import { projectProposalFields, projectProposalStatusLabel } from '../../utils/projectProposal';
+import ProposalAnalysisPanel from './ProposalAnalysisPanel';
 
 const statusColors: Record<ProjectProposalStatus, string> = {
   Draft: 'border-slate-200 bg-slate-100 text-slate-700',
@@ -69,6 +70,8 @@ export default function ProposalPreview({ proposal, onBack }: Props) {
       </header>
 
       <div className="space-y-5 p-6 sm:p-8">
+        {proposal.currentAnalysisJobId && <ProposalAnalysisPanel jobId={proposal.currentAnalysisJobId} />}
+
         {proposal.reviews.length > 0 && (
           <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5">
             <div className="flex items-center gap-2 text-sm font-bold text-amber-900"><MessageSquareText className="h-4 w-4" /> Lecturer feedback</div>

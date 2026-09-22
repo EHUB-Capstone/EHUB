@@ -9,6 +9,7 @@ export type ProjectProposalStatus =
 export type ProjectProposalVersionPurpose = 'DraftSave' | 'Submission';
 
 export type ProjectProposalAnalysisStatus = 'Pending' | 'Processing' | 'Completed' | 'Failed';
+export type ProjectProposalOverlapRisk = 'InsufficientData' | 'Low' | 'Medium' | 'High';
 
 export interface ProjectProposalContent {
   title: string;
@@ -96,4 +97,33 @@ export interface ProjectProposalVersionSummary {
 export interface ProjectProposalVersion extends ProjectProposalVersionSummary {
   projectProposalId: string;
   snapshot: ProjectProposalContent;
+}
+
+export interface ProjectProposalAnalysisReport {
+  summary: string;
+  overlapRisk: ProjectProposalOverlapRisk;
+  potentialDifferentiators: string[];
+  limitations: string[];
+  provider: string;
+  model: string;
+  promptVersion: string;
+  outputSchemaVersion: string;
+  generatedAtUtc: string;
+}
+
+export interface ProjectProposalAnalysis {
+  jobId: string;
+  proposalVersionId: string;
+  status: ProjectProposalAnalysisStatus;
+  attemptCount: number;
+  candidateScope: 'AllSystem';
+  includeCrossSemester: boolean;
+  languageMode: 'VietnameseAndEnglish';
+  requestedAtUtc: string;
+  processingStartedAtUtc: string | null;
+  completedAtUtc: string | null;
+  failedAtUtc: string | null;
+  failureCode: string | null;
+  canViewDetailedReport: boolean;
+  report: ProjectProposalAnalysisReport | null;
 }

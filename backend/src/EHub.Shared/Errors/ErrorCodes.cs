@@ -135,6 +135,9 @@ public static class ErrorCodes
     public const string ProjectProposalStateInvalid = "PROJECT_PROPOSAL_STATE_INVALID";
     public const string ProjectProposalDirectionNotApproved = "PROJECT_PROPOSAL_DIRECTION_NOT_APPROVED";
     public const string ProjectProposalConcurrencyConflict = "PROJECT_PROPOSAL_CONCURRENCY_CONFLICT";
+    public const string ProjectProposalAnalysisNotFound = "PROJECT_PROPOSAL_ANALYSIS_NOT_FOUND";
+    public const string ProjectProposalAnalysisAccessDenied = "PROJECT_PROPOSAL_ANALYSIS_ACCESS_DENIED";
+    public const string AiFeatureDisabled = "AI_FEATURE_DISABLED";
     public const string NotificationNotFound = "NOTIFICATION_NOT_FOUND";
     public const string ProductFeedbackNotFound = "PRODUCT_FEEDBACK_NOT_FOUND";
     public const string ProductFeedbackAccessDenied = "PRODUCT_FEEDBACK_ACCESS_DENIED";

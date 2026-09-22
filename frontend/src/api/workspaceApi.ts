@@ -3,6 +3,7 @@ import type { ApiResponse } from '../types/auth';
 import type {
   CreateProjectProposalRequest,
   ProjectProposal,
+  ProjectProposalAnalysis,
   ProjectProposalVersion,
   ProjectProposalVersionSummary,
   RestoreProjectProposalVersionRequest,
@@ -28,6 +29,8 @@ export const workspaceApi = {
   getProposalVersion: (proposalId: string, versionId: string): Promise<ApiResponse<ProjectProposalVersion>> => axiosClient.get(`/workspace/proposals/${proposalId}/versions/${versionId}`),
   restoreProposalVersion: (proposalId: string, versionId: string, payload: RestoreProjectProposalVersionRequest): Promise<ApiResponse<ProjectProposal>> => axiosClient.post(`/workspace/proposals/${proposalId}/versions/${versionId}/restore`, payload),
   reviewProposal: (proposalId: string, payload: ReviewProjectProposalRequest): Promise<ApiResponse<ProjectProposal>> => axiosClient.post(`/workspace/proposals/${proposalId}/review`, payload),
+  getProposalAnalysis: (jobId: string, signal?: AbortSignal): Promise<ApiResponse<ProjectProposalAnalysis>> =>
+    axiosClient.get(`/workspace/proposal-analyses/${jobId}`, { signal }),
   
   uploadPitchDeck: (teamId: string, formData: FormData) => axiosClient.post(`/workspace/teams/${teamId}/decks/upload`, formData, {
     headers: { 'Content-Type': 'multipart/form-data' }

@@ -40,12 +40,13 @@ still pass the role-based smoke checklist before the release is approved:
 Static inspection found frontend clients for these modules without a complete
 matching production API surface. The pages remain visible, but their workflows
 must not be represented as production-ready until their backend contracts and
-authorization tests are complete. Each build-time flag remains available as an
-emergency switch if a page must be hidden after verification:
+authorization tests are complete. Release flags remain available as emergency
+switches if a page must be hidden after verification. AI visibility is additionally
+checked at runtime against the backend, which remains the authority:
 
-| Module | Build-time flag |
+| Module | Release flag |
 | --- | --- |
-| AI analysis | `FEATURES_AI_ENABLED` (mapped to backend `Features__AI__Enabled` and frontend `VITE_FEATURE_AI` during the image build) |
+| AI analysis | `FEATURES_AI_ENABLED` (mapped to backend `Features__AI__Enabled`; `GET /api/features` controls runtime UI access, while the frontend build argument remains compatible with the deployment pipeline) |
 | In-platform chat | `VITE_FEATURE_CHAT` |
 | Data Bank | `VITE_FEATURE_DATA_BANK` |
 | Evaluation reports | `VITE_FEATURE_EVALUATIONS` |

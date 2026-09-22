@@ -665,7 +665,7 @@ public sealed class ProjectProposalHandler : IProjectProposalHandler
         catch (JsonException) { return null; }
     }
 
-    private static ProjectProposalDto ToDto(ProjectProposal proposal)
+    private ProjectProposalDto ToDto(ProjectProposal proposal)
     {
         var submittedVersion = LatestSubmittedVersion(proposal);
         return new ProjectProposalDto
@@ -678,8 +678,8 @@ public sealed class ProjectProposalHandler : IProjectProposalHandler
             Technology = Trimmed(proposal.Technology), FinancialPlan = Trimmed(proposal.FinancialPlan), Roadmap = Trimmed(proposal.Roadmap),
             TeamIntroduction = Trimmed(proposal.TeamIntroduction), Status = proposal.Status.ToString(),
             CurrentSubmittedVersionId = submittedVersion?.Id,
-            CurrentAnalysisJobId = submittedVersion?.AnalysisJob?.Id,
-            CurrentAnalysisStatus = submittedVersion?.AnalysisJob?.Status.ToString(),
+            CurrentAnalysisJobId = _aiFeatureGate.IsEnabled ? submittedVersion?.AnalysisJob?.Id : null,
+            CurrentAnalysisStatus = _aiFeatureGate.IsEnabled ? submittedVersion?.AnalysisJob?.Status.ToString() : null,
             SubmittedAtUtc = proposal.SubmittedAt,
             ApprovedAtUtc = proposal.ApprovedAt, RejectedAtUtc = proposal.RejectedAt, RowVersion = proposal.Version.ToString(),
             Reviews = proposal.Reviews.OrderByDescending(review => review.OccurredAtUtc).Select(review => new ProjectProposalReviewDto

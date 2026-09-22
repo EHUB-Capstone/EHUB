@@ -1286,6 +1286,13 @@ test('mock detailed project proposal supports draft versions, leader submission,
     changeNote: 'Ready for lecturer review',
   });
   assert.equal(submitted.data.status, 'Submitted');
+  assert.equal(submitted.data.currentAnalysisStatus, 'Completed');
+  const analysis = await axiosClient.get(`/workspace/proposal-analyses/${submitted.data.currentAnalysisJobId}`);
+  assert.equal(analysis.data.report.provider, 'Mock');
+  assert.equal(analysis.data.report.overlapRisk, 'InsufficientData');
+
+  const features = await axiosClient.get('/features');
+  assert.equal(features.data.aiEnabled, true);
 
   const versions = await axiosClient.get(`/workspace/proposals/${created.data.id}/versions`);
   assert.equal(versions.data.length, 3);

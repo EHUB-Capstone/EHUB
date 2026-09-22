@@ -26,4 +26,6 @@ public class ProjectProposalAnalysisJob : BaseEntity
     public DateTime? CompletedAtUtc { get; set; }
     public DateTime? FailedAtUtc { get; set; }
     public string? LastErrorCode { get; set; }
+
+    public virtual ProjectProposalAnalysisResult? Result { get; set; }
 }
