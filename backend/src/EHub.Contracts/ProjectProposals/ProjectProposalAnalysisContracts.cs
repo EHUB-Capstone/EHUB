@@ -33,6 +33,9 @@ public sealed class ProjectProposalAnalysisReportDto
     public int EmbeddingDimension { get; init; }
     public string TextSchemaVersion { get; init; } = string.Empty;
     public string RetrievalVersion { get; init; } = string.Empty;
+    public string FieldTextSchemaVersion { get; init; } = string.Empty;
+    public string FieldScoringVersion { get; init; } = string.Empty;
+    public ProjectProposalFieldWeightsDto FieldWeights { get; init; } = new();
     public IReadOnlyCollection<ProjectProposalAnalysisMatchDto> Matches { get; init; } = Array.Empty<ProjectProposalAnalysisMatchDto>();
     public DateTime GeneratedAtUtc { get; init; }
 }
@@ -50,5 +53,18 @@ public sealed class ProjectProposalAnalysisMatchDto
     public string Title { get; init; } = string.Empty;
     public string StartupName { get; init; } = string.Empty;
     public double SemanticSimilarity { get; init; }
+    public double ProblemSimilarity { get; init; }
+    public double SolutionSimilarity { get; init; }
+    public double TargetCustomerSimilarity { get; init; }
+    public double ValueAndApproachSimilarity { get; init; }
+    public double WeightedSemanticSimilarity { get; init; }
     public DateTime SubmittedAtUtc { get; init; }
+}
+
+public sealed class ProjectProposalFieldWeightsDto
+{
+    public double Problem { get; init; }
+    public double Solution { get; init; }
+    public double TargetCustomers { get; init; }
+    public double ValueAndApproach { get; init; }
 }

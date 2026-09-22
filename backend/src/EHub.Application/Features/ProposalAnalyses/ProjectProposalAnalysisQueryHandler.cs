@@ -93,6 +93,9 @@ public sealed class ProjectProposalAnalysisQueryHandler : IProjectProposalAnalys
                 EmbeddingDimension = job.Result.EmbeddingDimension,
                 TextSchemaVersion = job.Result.TextSchemaVersion,
                 RetrievalVersion = job.Result.RetrievalVersion,
+                FieldTextSchemaVersion = job.Result.FieldTextSchemaVersion,
+                FieldScoringVersion = job.Result.FieldScoringVersion,
+                FieldWeights = DeserializeWeights(job.Result.FieldWeightsJson),
                 Matches = isStudent ? [] : job.Result.Matches
                     .OrderBy(match => match.Rank)
                     .Select(ToMatchDto)
@@ -152,8 +155,27 @@ public sealed class ProjectProposalAnalysisQueryHandler : IProjectProposalAnalys
             Title = snapshot?.Title ?? string.Empty,
             StartupName = snapshot?.StartupName ?? string.Empty,
             SemanticSimilarity = Math.Max(0, match.SemanticSimilarity),
+            ProblemSimilarity = Math.Max(0, match.ProblemSimilarity),
+            SolutionSimilarity = Math.Max(0, match.SolutionSimilarity),
+            TargetCustomerSimilarity = Math.Max(0, match.TargetCustomerSimilarity),
+            ValueAndApproachSimilarity = Math.Max(0, match.ValueAndApproachSimilarity),
+            WeightedSemanticSimilarity = Math.Max(0, match.WeightedSemanticSimilarity),
             SubmittedAtUtc = match.CandidateProposalVersion.CreatedAt
         };
+    }
+
+    private static ProjectProposalFieldWeightsDto DeserializeWeights(string json)
+    {
+        try
+        {
+            return JsonSerializer.Deserialize<ProjectProposalFieldWeightsDto>(
+                json,
+                new JsonSerializerOptions(JsonSerializerDefaults.Web)) ?? new ProjectProposalFieldWeightsDto();
+        }
+        catch (JsonException)
+        {
+            return new ProjectProposalFieldWeightsDto();
+        }
     }
 
     private static bool IsRole(string role, string expected) =>

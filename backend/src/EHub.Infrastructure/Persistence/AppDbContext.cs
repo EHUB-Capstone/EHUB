@@ -70,6 +70,7 @@ public class AppDbContext : DbContext, IApplicationDbContext
     public DbSet<ProjectProposalAnalysisJob> ProjectProposalAnalysisJobs => Set<ProjectProposalAnalysisJob>();
     public DbSet<ProjectProposalAnalysisResult> ProjectProposalAnalysisResults => Set<ProjectProposalAnalysisResult>();
     public DbSet<ProjectProposalEmbedding> ProjectProposalEmbeddings => Set<ProjectProposalEmbedding>();
+    public DbSet<ProjectProposalFieldEmbedding> ProjectProposalFieldEmbeddings => Set<ProjectProposalFieldEmbedding>();
     public DbSet<ProjectProposalAnalysisMatch> ProjectProposalAnalysisMatches => Set<ProjectProposalAnalysisMatch>();
     public DbSet<ProjectComment> ProjectComments => Set<ProjectComment>();
     public DbSet<PitchDeck> PitchDecks => Set<PitchDeck>();

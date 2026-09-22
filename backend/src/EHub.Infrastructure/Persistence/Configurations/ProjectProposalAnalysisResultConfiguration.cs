@@ -26,6 +26,9 @@ public sealed class ProjectProposalAnalysisResultConfiguration : IEntityTypeConf
         builder.Property(result => result.EmbeddingDimension).HasColumnName("embedding_dimension").IsRequired();
         builder.Property(result => result.TextSchemaVersion).HasColumnName("text_schema_version").HasMaxLength(100).IsRequired();
         builder.Property(result => result.RetrievalVersion).HasColumnName("retrieval_version").HasMaxLength(100).IsRequired();
+        builder.Property(result => result.FieldScoringVersion).HasColumnName("field_scoring_version").HasMaxLength(100).IsRequired();
+        builder.Property(result => result.FieldTextSchemaVersion).HasColumnName("field_text_schema_version").HasMaxLength(100).IsRequired();
+        builder.Property(result => result.FieldWeightsJson).HasColumnName("field_weights_json").HasColumnType("jsonb").IsRequired();
         builder.Property(result => result.GeneratedAtUtc).HasColumnName("generated_at_utc").IsRequired();
 
         builder.HasIndex(result => result.AnalysisJobId).IsUnique();

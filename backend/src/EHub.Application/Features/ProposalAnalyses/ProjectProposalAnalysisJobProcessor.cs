@@ -86,7 +86,13 @@ public sealed class ProjectProposalAnalysisJobProcessor : IProjectProposalAnalys
             retrieval.Matches.Select(match => new ProposalAnalysisProviderCandidate(
                 match.ProposalVersionId,
                 match.Proposal,
-                match.SemanticSimilarity)).ToArray()), cancellationToken);
+                match.SemanticSimilarity,
+                new ProposalAnalysisProviderFieldScores(
+                    match.FieldSimilarities.Problem,
+                    match.FieldSimilarities.Solution,
+                    match.FieldSimilarities.TargetCustomers,
+                    match.FieldSimilarities.ValueAndApproach),
+                match.WeightedSemanticSimilarity)).ToArray()), cancellationToken);
         Validate(providerResult);
 
         await _unitOfWork.ExecuteInSerializableTransactionAsync(async transactionCancellationToken =>
@@ -121,6 +127,9 @@ public sealed class ProjectProposalAnalysisJobProcessor : IProjectProposalAnalys
                     EmbeddingDimension = retrieval.EmbeddingDimension,
                     TextSchemaVersion = retrieval.TextSchemaVersion,
                     RetrievalVersion = retrieval.RetrievalVersion,
+                    FieldTextSchemaVersion = retrieval.FieldTextSchemaVersion,
+                    FieldScoringVersion = retrieval.FieldScoringVersion,
+                    FieldWeightsJson = JsonSerializer.Serialize(retrieval.FieldWeights, JsonOptions),
                     GeneratedAtUtc = _dateTimeProvider.UtcNow
                 };
 
@@ -132,6 +141,11 @@ public sealed class ProjectProposalAnalysisJobProcessor : IProjectProposalAnalys
                         CandidateProposalVersionId = match.ProposalVersionId,
                         Rank = index + 1,
                         SemanticSimilarity = match.SemanticSimilarity,
+                        ProblemSimilarity = match.FieldSimilarities.Problem,
+                        SolutionSimilarity = match.FieldSimilarities.Solution,
+                        TargetCustomerSimilarity = match.FieldSimilarities.TargetCustomers,
+                        ValueAndApproachSimilarity = match.FieldSimilarities.ValueAndApproach,
+                        WeightedSemanticSimilarity = match.WeightedSemanticSimilarity,
                         CreatedAtUtc = _dateTimeProvider.UtcNow
                     });
                 }
@@ -179,14 +193,32 @@ public sealed class ProjectProposalAnalysisJobProcessor : IProjectProposalAnalys
             || !ValidMetadata(result.EmbeddingModel)
             || !ValidMetadata(result.TextSchemaVersion)
             || !ValidMetadata(result.RetrievalVersion)
+            || !ValidMetadata(result.FieldTextSchemaVersion)
+            || !ValidMetadata(result.FieldScoringVersion)
             || result.EmbeddingDimension is <= 0 or > 3072
             || result.Matches.Count > 10
-            || result.Matches.Any(match => !double.IsFinite(match.SemanticSimilarity)
-                || match.SemanticSimilarity is < -1 or > 1))
+            || result.Matches.Any(match => !ValidSimilarity(match.SemanticSimilarity)
+                || !ValidSimilarity(match.FieldSimilarities.Problem)
+                || !ValidSimilarity(match.FieldSimilarities.Solution)
+                || !ValidSimilarity(match.FieldSimilarities.TargetCustomers)
+                || !ValidSimilarity(match.FieldSimilarities.ValueAndApproach)
+                || !ValidSimilarity(match.WeightedSemanticSimilarity))
+            || !ValidWeight(result.FieldWeights.Problem)
+            || !ValidWeight(result.FieldWeights.Solution)
+            || !ValidWeight(result.FieldWeights.TargetCustomers)
+            || !ValidWeight(result.FieldWeights.ValueAndApproach)
+            || Math.Abs(result.FieldWeights.Problem + result.FieldWeights.Solution
+                + result.FieldWeights.TargetCustomers + result.FieldWeights.ValueAndApproach - 1d) > 0.000001)
             throw new ProposalAnalysisProcessingException(
                 "PROPOSAL_RETRIEVAL_OUTPUT_INVALID",
                 "The proposal retrieval result was invalid.");
     }
+
+    private static bool ValidSimilarity(double value) =>
+        double.IsFinite(value) && value is >= -1 and <= 1;
+
+    private static bool ValidWeight(double value) =>
+        double.IsFinite(value) && value is >= 0 and <= 1;
 
     private static bool ValidItems(IReadOnlyCollection<string>? items) =>
         items is { Count: <= 10 } && items.All(item => !string.IsNullOrWhiteSpace(item) && item.Trim().Length <= 500);

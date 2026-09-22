@@ -16,7 +16,15 @@ public sealed record ProposalAnalysisProviderRequest(
 public sealed record ProposalAnalysisProviderCandidate(
     Guid ProposalVersionId,
     ProjectProposalSnapshotDto Proposal,
-    double SemanticSimilarity);
+    double SemanticSimilarity,
+    ProposalAnalysisProviderFieldScores FieldSimilarities,
+    double WeightedSemanticSimilarity);
+
+public sealed record ProposalAnalysisProviderFieldScores(
+    double Problem,
+    double Solution,
+    double TargetCustomers,
+    double ValueAndApproach);
 
 public sealed record ProposalAnalysisProviderResponse(
     string Summary,

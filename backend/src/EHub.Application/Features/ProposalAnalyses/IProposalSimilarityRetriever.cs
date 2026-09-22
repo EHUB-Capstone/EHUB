@@ -12,7 +12,9 @@ public sealed record ProposalSimilarityCandidate(
     string SemesterCode,
     DateTime SubmittedAtUtc,
     ProjectProposalSnapshotDto Proposal,
-    double SemanticSimilarity);
+    double SemanticSimilarity,
+    ProposalFieldSimilarityScores FieldSimilarities,
+    double WeightedSemanticSimilarity);
 
 public sealed record ProposalSimilarityRetrievalResult(
     IReadOnlyList<ProposalSimilarityCandidate> Matches,
@@ -21,6 +23,9 @@ public sealed record ProposalSimilarityRetrievalResult(
     int EmbeddingDimension,
     string TextSchemaVersion,
     string RetrievalVersion,
+    string FieldTextSchemaVersion,
+    string FieldScoringVersion,
+    ProposalFieldSimilarityWeights FieldWeights,
     bool CurrentTextWasTruncated,
     int SkippedCandidateCount);
 

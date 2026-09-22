@@ -113,6 +113,14 @@ export interface ProjectProposalAnalysisReport {
   embeddingDimension: number;
   textSchemaVersion: string;
   retrievalVersion: string;
+  fieldTextSchemaVersion: string;
+  fieldScoringVersion: string;
+  fieldWeights: {
+    problem: number;
+    solution: number;
+    targetCustomers: number;
+    valueAndApproach: number;
+  };
   matches: ProjectProposalAnalysisMatch[];
   generatedAtUtc: string;
 }
@@ -129,6 +137,11 @@ export interface ProjectProposalAnalysisMatch {
   title: string;
   startupName: string;
   semanticSimilarity: number;
+  problemSimilarity: number;
+  solutionSimilarity: number;
+  targetCustomerSimilarity: number;
+  valueAndApproachSimilarity: number;
+  weightedSemanticSimilarity: number;
   submittedAtUtc: string;
 }
 

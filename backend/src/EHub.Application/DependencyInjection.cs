@@ -109,6 +109,7 @@ public static class DependencyInjection
         services.AddScoped<EHub.Application.Features.ProposalAnalyses.IProjectProposalAnalysisJobProcessor, EHub.Application.Features.ProposalAnalyses.ProjectProposalAnalysisJobProcessor>();
         services.AddScoped<EHub.Application.Features.ProposalAnalyses.IProjectProposalAnalysisQueryHandler, EHub.Application.Features.ProposalAnalyses.ProjectProposalAnalysisQueryHandler>();
         services.AddScoped<EHub.Application.Features.ProposalAnalyses.IProposalEmbeddingTextBuilder, EHub.Application.Features.ProposalAnalyses.ProposalEmbeddingTextBuilder>();
+        services.AddScoped<EHub.Application.Features.ProposalAnalyses.IProposalFieldEmbeddingTextBuilder, EHub.Application.Features.ProposalAnalyses.ProposalFieldEmbeddingTextBuilder>();
         services.AddScoped<EHub.Application.Features.ProposalAnalyses.IProposalSimilarityRetriever, EHub.Application.Features.ProposalAnalyses.ProposalSimilarityRetriever>();
         services.AddScoped<EHub.Application.Features.FeatureAvailability.IFeatureAvailabilityQueryHandler, EHub.Application.Features.FeatureAvailability.FeatureAvailabilityQueryHandler>();
         services.AddScoped<EHub.Application.Features.Workspaces.IWorkspaceToolsHandler, EHub.Application.Features.Workspaces.WorkspaceToolsHandler>();

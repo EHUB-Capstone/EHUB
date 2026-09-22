@@ -21,6 +21,9 @@ public class ProjectProposalAnalysisResult : BaseEntity
     public int EmbeddingDimension { get; set; }
     public string TextSchemaVersion { get; set; } = string.Empty;
     public string RetrievalVersion { get; set; } = string.Empty;
+    public string FieldScoringVersion { get; set; } = string.Empty;
+    public string FieldTextSchemaVersion { get; set; } = string.Empty;
+    public string FieldWeightsJson { get; set; } = "{}";
     public DateTime GeneratedAtUtc { get; set; }
 
     public virtual ICollection<ProjectProposalAnalysisMatch> Matches { get; set; } = new List<ProjectProposalAnalysisMatch>();

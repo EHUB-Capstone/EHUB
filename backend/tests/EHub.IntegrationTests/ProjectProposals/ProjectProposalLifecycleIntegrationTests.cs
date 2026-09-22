@@ -229,6 +229,11 @@ public sealed class ProjectProposalLifecycleIntegrationTests
         matches.Should().NotBeEmpty();
         matches.Should().HaveCountLessThanOrEqualTo(10);
         matches[0].CandidateProposalVersionId.Should().Be(similarVersionId);
+        matches[0].ProblemSimilarity.Should().BeApproximately(1, 0.000001);
+        matches[0].SolutionSimilarity.Should().BeApproximately(1, 0.000001);
+        matches[0].TargetCustomerSimilarity.Should().BeApproximately(1, 0.000001);
+        matches[0].ValueAndApproachSimilarity.Should().BeApproximately(1, 0.000001);
+        matches[0].WeightedSemanticSimilarity.Should().BeApproximately(1, 0.000001);
         matches.Select(match => match.Rank).Should().Equal(Enumerable.Range(1, matches.Length));
 
         var relevantVersionIds = matches.Select(match => match.CandidateProposalVersionId)
@@ -239,6 +244,12 @@ public sealed class ProjectProposalLifecycleIntegrationTests
             .ToDictionaryAsync(embedding => embedding.ProposalVersionId, embedding => embedding.GeneratedAtUtc);
         generatedBefore.Should().ContainKey(currentVersionId);
         generatedBefore.Should().ContainKey(similarVersionId);
+        var fieldEmbeddingsBefore = await db.ProjectProposalFieldEmbeddings.AsNoTracking()
+            .Where(embedding => relevantVersionIds.Contains(embedding.ProposalVersionId))
+            .ToDictionaryAsync(
+                embedding => $"{embedding.ProposalVersionId}:{embedding.Field}",
+                embedding => embedding.GeneratedAtUtc);
+        fieldEmbeddingsBefore.Should().HaveCount(relevantVersionIds.Length * 4);
 
         var studentView = await new ProjectProposalAnalysisQueryHandler(db, new FixedAiFeatureGate(true))
             .GetAsync(currentJobId, currentSeed.LeaderUserId, SystemRoles.Student);
@@ -250,6 +261,8 @@ public sealed class ProjectProposalLifecycleIntegrationTests
         lecturerView.IsSuccess.Should().BeTrue(lecturerView.Error.Message);
         lecturerView.Value.CanViewDetailedReport.Should().BeTrue();
         lecturerView.Value.Report!.Matches.First().ProposalVersionId.Should().Be(similarVersionId);
+        lecturerView.Value.Report.FieldScoringVersion.Should().Be("proposal-field-weighted-semantic-v1");
+        lecturerView.Value.Report.FieldWeights.Problem.Should().Be(0.3);
 
         db.ChangeTracker.Clear();
         var retriever = scope.ServiceProvider.GetRequiredService<IProposalSimilarityRetriever>();
@@ -259,6 +272,12 @@ public sealed class ProjectProposalLifecycleIntegrationTests
             .Where(embedding => relevantVersionIds.Contains(embedding.ProposalVersionId))
             .ToDictionaryAsync(embedding => embedding.ProposalVersionId, embedding => embedding.GeneratedAtUtc);
         generatedAfter.Should().BeEquivalentTo(generatedBefore);
+        var fieldEmbeddingsAfter = await db.ProjectProposalFieldEmbeddings.AsNoTracking()
+            .Where(embedding => relevantVersionIds.Contains(embedding.ProposalVersionId))
+            .ToDictionaryAsync(
+                embedding => $"{embedding.ProposalVersionId}:{embedding.Field}",
+                embedding => embedding.GeneratedAtUtc);
+        fieldEmbeddingsAfter.Should().BeEquivalentTo(fieldEmbeddingsBefore);
 
         var staleEmbedding = await db.ProjectProposalEmbeddings.SingleAsync(embedding => embedding.ProposalVersionId == currentVersionId);
         staleEmbedding.Model = "obsolete-model";
@@ -271,6 +290,21 @@ public sealed class ProjectProposalLifecycleIntegrationTests
             .SingleAsync(embedding => embedding.ProposalVersionId == currentVersionId);
         refreshedEmbedding.Model.Should().Be("feature-hashing-384-v1");
         refreshedEmbedding.GeneratedAtUtc.Should().BeAfter(new DateTime(2000, 1, 1, 0, 0, 0, DateTimeKind.Utc));
+
+        var staleFieldEmbedding = await db.ProjectProposalFieldEmbeddings.SingleAsync(embedding =>
+            embedding.ProposalVersionId == currentVersionId
+            && embedding.Field == ProjectProposalSemanticField.Problem);
+        staleFieldEmbedding.Model = "obsolete-model";
+        staleFieldEmbedding.GeneratedAtUtc = new DateTime(2000, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        await db.SaveChangesAsync();
+        db.ChangeTracker.Clear();
+        await retriever.RetrieveAsync(currentVersionId, includeCrossSemester: true);
+        db.ChangeTracker.Clear();
+        var refreshedFieldEmbedding = await db.ProjectProposalFieldEmbeddings.AsNoTracking().SingleAsync(embedding =>
+            embedding.ProposalVersionId == currentVersionId
+            && embedding.Field == ProjectProposalSemanticField.Problem);
+        refreshedFieldEmbedding.Model.Should().Be("feature-hashing-384-v1");
+        refreshedFieldEmbedding.GeneratedAtUtc.Should().BeAfter(new DateTime(2000, 1, 1, 0, 0, 0, DateTimeKind.Utc));
     }
 
     [Fact]
