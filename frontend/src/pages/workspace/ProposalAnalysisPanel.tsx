@@ -126,9 +126,14 @@ export default function ProposalAnalysisPanel({ jobId }: Props) {
           <div className="flex flex-wrap items-start justify-between gap-2">
             <div>
               <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700">Top proposal tương đồng</h3>
-              <p className="mt-1 text-xs text-slate-500">Xếp hạng theo semantic từng trường có trọng số; đây không phải tỷ lệ đạo văn.</p>
+              <p className="mt-1 text-xs text-slate-500">
+                Top {analysis.report.matches.length} sau khi xếp hạng lại {analysis.report.retrievalCandidateCount} ứng viên; đây không phải tỷ lệ đạo văn.
+              </p>
               <p className="mt-1 text-[11px] text-slate-400">
                 Trọng số: vấn đề {similarityPercent(analysis.report.fieldWeights.problem)} · giải pháp {similarityPercent(analysis.report.fieldWeights.solution)} · khách hàng {similarityPercent(analysis.report.fieldWeights.targetCustomers)} · giá trị/cách làm {similarityPercent(analysis.report.fieldWeights.valueAndApproach)}
+              </p>
+              <p className="mt-1 text-[11px] text-slate-400">
+                Hybrid: semantic {similarityPercent(analysis.report.hybridWeights.semantic)} · TF-IDF {similarityPercent(analysis.report.hybridWeights.tfIdf)} · Jaccard {similarityPercent(analysis.report.hybridWeights.jaccard)}
               </p>
             </div>
             <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-600">
@@ -144,10 +149,13 @@ export default function ProposalAnalysisPanel({ jobId }: Props) {
                     <p className="mt-0.5 text-xs text-slate-500">{match.classCode} · {match.semesterCode} · nộp {new Date(match.submittedAtUtc).toLocaleDateString()}</p>
                   </div>
                   <span className="shrink-0 rounded-full border border-indigo-100 bg-indigo-50 px-2.5 py-1 text-xs font-bold text-indigo-700">
-                    Trọng số {similarityPercent(match.weightedSemanticSimilarity)}
+                    Hybrid {similarityPercent(match.hybridSimilarity)}
                   </span>
                 </div>
-                <div className="mt-2 grid grid-cols-2 gap-1.5 text-[11px] text-slate-600 sm:grid-cols-5">
+                <div className="mt-2 grid grid-cols-2 gap-1.5 text-[11px] text-slate-600 sm:grid-cols-4">
+                  <span className="rounded bg-indigo-50 px-2 py-1 text-indigo-700">Semantic trọng số {similarityPercent(match.weightedSemanticSimilarity)}</span>
+                  <span className="rounded bg-slate-50 px-2 py-1">TF-IDF {similarityPercent(match.tfIdfSimilarity)}</span>
+                  <span className="rounded bg-slate-50 px-2 py-1">Jaccard {similarityPercent(match.jaccardSimilarity)}</span>
                   <span className="rounded bg-slate-50 px-2 py-1">Tổng thể {similarityPercent(match.semanticSimilarity)}</span>
                   <span className="rounded bg-slate-50 px-2 py-1">Vấn đề {similarityPercent(match.problemSimilarity)}</span>
                   <span className="rounded bg-slate-50 px-2 py-1">Giải pháp {similarityPercent(match.solutionSimilarity)}</span>
@@ -164,6 +172,8 @@ export default function ProposalAnalysisPanel({ jobId }: Props) {
         Hoàn tất {new Date(analysis.report.generatedAtUtc).toLocaleString()} · báo cáo {analysis.report.provider}/{analysis.report.model}
         {' · '}embedding {analysis.report.embeddingProvider}/{analysis.report.embeddingModel} ({analysis.report.embeddingDimension} chiều)
         {' · '}{analysis.report.fieldScoringVersion}
+        {' · '}{analysis.report.lexicalScoringVersion}
+        {' · '}{analysis.report.hybridScoringVersion}
       </p>
     </div>
   );

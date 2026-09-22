@@ -175,6 +175,8 @@ public sealed class ProjectProposalLifecycleIntegrationTests
             var context = setupScope.ServiceProvider.GetRequiredService<AppDbContext>();
             var similarSeed = await CreateSeedAsync(context);
             var unrelatedSeed = await CreateSeedAsync(context);
+            var additionalUnrelatedSeed = await CreateSeedAsync(context);
+            var anotherUnrelatedSeed = await CreateSeedAsync(context);
             currentSeed = await CreateSeedAsync(context);
             context.ChangeTracker.Clear();
             var handler = CreateHandler(setupScope, context, aiEnabled: true);
@@ -199,6 +201,23 @@ public sealed class ProjectProposalLifecycleIntegrationTests
                 new SubmitProjectProposalRequest { RowVersion = unrelated.Value.RowVersion },
                 unrelatedSeed.LeaderUserId,
                 SystemRoles.Student);
+
+            foreach (var (seed, theme) in new[]
+            {
+                (additionalUnrelatedSeed, "logisticswarehouse"),
+                (anotherUnrelatedSeed, "restaurantinventory")
+            })
+            {
+                var additional = await handler.CreateAsync(
+                    seed.TeamId,
+                    ThemedDraft(theme, "Additional"),
+                    seed.LeaderUserId,
+                    SystemRoles.Student);
+                await handler.SubmitAsync(additional.Value.Id,
+                    new SubmitProjectProposalRequest { RowVersion = additional.Value.RowVersion },
+                    seed.LeaderUserId,
+                    SystemRoles.Student);
+            }
 
             var current = await handler.CreateAsync(
                 currentSeed.TeamId,
@@ -226,14 +245,16 @@ public sealed class ProjectProposalLifecycleIntegrationTests
             .Where(match => match.AnalysisResult.AnalysisJobId == currentJobId)
             .OrderBy(match => match.Rank)
             .ToArrayAsync();
-        matches.Should().NotBeEmpty();
-        matches.Should().HaveCountLessThanOrEqualTo(10);
+        matches.Should().HaveCount(3);
         matches[0].CandidateProposalVersionId.Should().Be(similarVersionId);
         matches[0].ProblemSimilarity.Should().BeApproximately(1, 0.000001);
         matches[0].SolutionSimilarity.Should().BeApproximately(1, 0.000001);
         matches[0].TargetCustomerSimilarity.Should().BeApproximately(1, 0.000001);
         matches[0].ValueAndApproachSimilarity.Should().BeApproximately(1, 0.000001);
         matches[0].WeightedSemanticSimilarity.Should().BeApproximately(1, 0.000001);
+        matches[0].TfIdfSimilarity.Should().BeGreaterThan(0.9);
+        matches[0].JaccardSimilarity.Should().BeGreaterThan(0.8);
+        matches[0].HybridSimilarity.Should().BeGreaterThan(0.9);
         matches.Select(match => match.Rank).Should().Equal(Enumerable.Range(1, matches.Length));
 
         var relevantVersionIds = matches.Select(match => match.CandidateProposalVersionId)
@@ -263,6 +284,11 @@ public sealed class ProjectProposalLifecycleIntegrationTests
         lecturerView.Value.Report!.Matches.First().ProposalVersionId.Should().Be(similarVersionId);
         lecturerView.Value.Report.FieldScoringVersion.Should().Be("proposal-field-weighted-semantic-v1");
         lecturerView.Value.Report.FieldWeights.Problem.Should().Be(0.3);
+        lecturerView.Value.Report.LexicalScoringVersion.Should().Be("proposal-lexical-unigram-bigram-v1");
+        lecturerView.Value.Report.HybridScoringVersion.Should().Be("proposal-hybrid-semantic-tfidf-jaccard-v1");
+        lecturerView.Value.Report.HybridWeights.Semantic.Should().Be(0.7);
+        lecturerView.Value.Report.RetrievalCandidateCount.Should().BeInRange(4, 10);
+        lecturerView.Value.Report.Matches.First().HybridSimilarity.Should().BeGreaterThan(0.9);
 
         db.ChangeTracker.Clear();
         var retriever = scope.ServiceProvider.GetRequiredService<IProposalSimilarityRetriever>();

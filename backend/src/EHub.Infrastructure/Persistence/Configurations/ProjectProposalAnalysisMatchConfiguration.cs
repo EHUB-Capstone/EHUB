@@ -13,6 +13,8 @@ public sealed class ProjectProposalAnalysisMatchConfiguration : IEntityTypeConfi
             table.HasCheckConstraint("CK_ProjectProposalAnalysisMatch_Rank", "rank > 0");
             table.HasCheckConstraint("CK_ProjectProposalAnalysisMatch_Similarity", "semantic_similarity >= -1 AND semantic_similarity <= 1");
             table.HasCheckConstraint("CK_ProjectProposalAnalysisMatch_FieldScores", "problem_similarity >= -1 AND problem_similarity <= 1 AND solution_similarity >= -1 AND solution_similarity <= 1 AND target_customer_similarity >= -1 AND target_customer_similarity <= 1 AND value_and_approach_similarity >= -1 AND value_and_approach_similarity <= 1 AND weighted_semantic_similarity >= -1 AND weighted_semantic_similarity <= 1");
+            table.HasCheckConstraint("CK_ProjectProposalAnalysisMatch_LexicalScores", "tf_idf_similarity >= 0 AND tf_idf_similarity <= 1 AND jaccard_similarity >= 0 AND jaccard_similarity <= 1");
+            table.HasCheckConstraint("CK_ProjectProposalAnalysisMatch_HybridScore", "hybrid_similarity >= -1 AND hybrid_similarity <= 1");
         });
 
         builder.HasKey(match => match.Id);
@@ -26,6 +28,9 @@ public sealed class ProjectProposalAnalysisMatchConfiguration : IEntityTypeConfi
         builder.Property(match => match.TargetCustomerSimilarity).HasColumnName("target_customer_similarity").IsRequired();
         builder.Property(match => match.ValueAndApproachSimilarity).HasColumnName("value_and_approach_similarity").IsRequired();
         builder.Property(match => match.WeightedSemanticSimilarity).HasColumnName("weighted_semantic_similarity").IsRequired();
+        builder.Property(match => match.TfIdfSimilarity).HasColumnName("tf_idf_similarity").IsRequired();
+        builder.Property(match => match.JaccardSimilarity).HasColumnName("jaccard_similarity").IsRequired();
+        builder.Property(match => match.HybridSimilarity).HasColumnName("hybrid_similarity").IsRequired();
         builder.Property(match => match.CreatedAtUtc).HasColumnName("created_at_utc").IsRequired();
 
         builder.HasIndex(match => new { match.AnalysisResultId, match.Rank }).IsUnique();

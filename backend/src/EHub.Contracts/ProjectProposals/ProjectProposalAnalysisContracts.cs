@@ -36,6 +36,10 @@ public sealed class ProjectProposalAnalysisReportDto
     public string FieldTextSchemaVersion { get; init; } = string.Empty;
     public string FieldScoringVersion { get; init; } = string.Empty;
     public ProjectProposalFieldWeightsDto FieldWeights { get; init; } = new();
+    public string LexicalScoringVersion { get; init; } = string.Empty;
+    public string HybridScoringVersion { get; init; } = string.Empty;
+    public ProjectProposalHybridWeightsDto HybridWeights { get; init; } = new();
+    public int RetrievalCandidateCount { get; init; }
     public IReadOnlyCollection<ProjectProposalAnalysisMatchDto> Matches { get; init; } = Array.Empty<ProjectProposalAnalysisMatchDto>();
     public DateTime GeneratedAtUtc { get; init; }
 }
@@ -58,6 +62,9 @@ public sealed class ProjectProposalAnalysisMatchDto
     public double TargetCustomerSimilarity { get; init; }
     public double ValueAndApproachSimilarity { get; init; }
     public double WeightedSemanticSimilarity { get; init; }
+    public double TfIdfSimilarity { get; init; }
+    public double JaccardSimilarity { get; init; }
+    public double HybridSimilarity { get; init; }
     public DateTime SubmittedAtUtc { get; init; }
 }
 
@@ -67,4 +74,11 @@ public sealed class ProjectProposalFieldWeightsDto
     public double Solution { get; init; }
     public double TargetCustomers { get; init; }
     public double ValueAndApproach { get; init; }
+}
+
+public sealed class ProjectProposalHybridWeightsDto
+{
+    public double Semantic { get; init; }
+    public double TfIdf { get; init; }
+    public double Jaccard { get; init; }
 }

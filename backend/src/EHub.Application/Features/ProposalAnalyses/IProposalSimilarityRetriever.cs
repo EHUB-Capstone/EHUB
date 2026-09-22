@@ -14,7 +14,10 @@ public sealed record ProposalSimilarityCandidate(
     ProjectProposalSnapshotDto Proposal,
     double SemanticSimilarity,
     ProposalFieldSimilarityScores FieldSimilarities,
-    double WeightedSemanticSimilarity);
+    double WeightedSemanticSimilarity,
+    double TfIdfSimilarity,
+    double JaccardSimilarity,
+    double HybridSimilarity);
 
 public sealed record ProposalSimilarityRetrievalResult(
     IReadOnlyList<ProposalSimilarityCandidate> Matches,
@@ -26,6 +29,10 @@ public sealed record ProposalSimilarityRetrievalResult(
     string FieldTextSchemaVersion,
     string FieldScoringVersion,
     ProposalFieldSimilarityWeights FieldWeights,
+    string LexicalScoringVersion,
+    string HybridScoringVersion,
+    ProposalHybridSimilarityWeights HybridWeights,
+    int RetrievalCandidateCount,
     bool CurrentTextWasTruncated,
     int SkippedCandidateCount);
 

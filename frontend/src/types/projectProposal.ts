@@ -121,6 +121,14 @@ export interface ProjectProposalAnalysisReport {
     targetCustomers: number;
     valueAndApproach: number;
   };
+  lexicalScoringVersion: string;
+  hybridScoringVersion: string;
+  hybridWeights: {
+    semantic: number;
+    tfIdf: number;
+    jaccard: number;
+  };
+  retrievalCandidateCount: number;
   matches: ProjectProposalAnalysisMatch[];
   generatedAtUtc: string;
 }
@@ -142,6 +150,9 @@ export interface ProjectProposalAnalysisMatch {
   targetCustomerSimilarity: number;
   valueAndApproachSimilarity: number;
   weightedSemanticSimilarity: number;
+  tfIdfSimilarity: number;
+  jaccardSimilarity: number;
+  hybridSimilarity: number;
   submittedAtUtc: string;
 }
 

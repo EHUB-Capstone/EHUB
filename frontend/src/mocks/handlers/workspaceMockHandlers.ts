@@ -730,7 +730,7 @@ export function registerWorkspaceMockHandlers(mock: MockAdapter): void {
         potentialDifferentiators: [`Đề xuất giá trị đã nêu: ${proposal.valueProposition.slice(0, 220)}`],
         limitations: [
           'Đây là kết quả mô phỏng, không phải kết luận về mức độ trùng lặp hoặc đạo văn.',
-          'Đã áp dụng embedding và cosine similarity ở mức toàn proposal; chưa có diễn giải bằng LLM.',
+          'Đã áp dụng embedding theo từng trường, TF-IDF, Jaccard và hybrid ranking; chưa có diễn giải bằng LLM.',
         ],
         provider: 'Mock',
         model: 'deterministic-v1',
@@ -740,7 +740,7 @@ export function registerWorkspaceMockHandlers(mock: MockAdapter): void {
         embeddingModel: 'feature-hashing-384-v1',
         embeddingDimension: 384,
         textSchemaVersion: 'proposal-embedding-text-v1',
-        retrievalVersion: 'proposal-overall-top10-field-rerank-v2',
+        retrievalVersion: 'proposal-overall-top10-hybrid-top3-v3',
         fieldTextSchemaVersion: 'proposal-field-embedding-text-v1',
         fieldScoringVersion: 'proposal-field-weighted-semantic-v1',
         fieldWeights: {
@@ -749,6 +749,14 @@ export function registerWorkspaceMockHandlers(mock: MockAdapter): void {
           targetCustomers: 0.2,
           valueAndApproach: 0.2,
         },
+        lexicalScoringVersion: 'proposal-lexical-unigram-bigram-v1',
+        hybridScoringVersion: 'proposal-hybrid-semantic-tfidf-jaccard-v1',
+        hybridWeights: {
+          semantic: 0.7,
+          tfIdf: 0.2,
+          jaccard: 0.1,
+        },
+        retrievalCandidateCount: 0,
         matches: [],
         generatedAtUtc,
       },

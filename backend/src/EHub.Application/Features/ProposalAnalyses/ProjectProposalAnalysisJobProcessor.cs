@@ -92,7 +92,10 @@ public sealed class ProjectProposalAnalysisJobProcessor : IProjectProposalAnalys
                     match.FieldSimilarities.Solution,
                     match.FieldSimilarities.TargetCustomers,
                     match.FieldSimilarities.ValueAndApproach),
-                match.WeightedSemanticSimilarity)).ToArray()), cancellationToken);
+                match.WeightedSemanticSimilarity,
+                match.TfIdfSimilarity,
+                match.JaccardSimilarity,
+                match.HybridSimilarity)).ToArray()), cancellationToken);
         Validate(providerResult);
 
         await _unitOfWork.ExecuteInSerializableTransactionAsync(async transactionCancellationToken =>
@@ -130,6 +133,10 @@ public sealed class ProjectProposalAnalysisJobProcessor : IProjectProposalAnalys
                     FieldTextSchemaVersion = retrieval.FieldTextSchemaVersion,
                     FieldScoringVersion = retrieval.FieldScoringVersion,
                     FieldWeightsJson = JsonSerializer.Serialize(retrieval.FieldWeights, JsonOptions),
+                    LexicalScoringVersion = retrieval.LexicalScoringVersion,
+                    HybridScoringVersion = retrieval.HybridScoringVersion,
+                    HybridWeightsJson = JsonSerializer.Serialize(retrieval.HybridWeights, JsonOptions),
+                    RetrievalCandidateCount = retrieval.RetrievalCandidateCount,
                     GeneratedAtUtc = _dateTimeProvider.UtcNow
                 };
 
@@ -146,6 +153,9 @@ public sealed class ProjectProposalAnalysisJobProcessor : IProjectProposalAnalys
                         TargetCustomerSimilarity = match.FieldSimilarities.TargetCustomers,
                         ValueAndApproachSimilarity = match.FieldSimilarities.ValueAndApproach,
                         WeightedSemanticSimilarity = match.WeightedSemanticSimilarity,
+                        TfIdfSimilarity = match.TfIdfSimilarity,
+                        JaccardSimilarity = match.JaccardSimilarity,
+                        HybridSimilarity = match.HybridSimilarity,
                         CreatedAtUtc = _dateTimeProvider.UtcNow
                     });
                 }
@@ -195,20 +205,32 @@ public sealed class ProjectProposalAnalysisJobProcessor : IProjectProposalAnalys
             || !ValidMetadata(result.RetrievalVersion)
             || !ValidMetadata(result.FieldTextSchemaVersion)
             || !ValidMetadata(result.FieldScoringVersion)
+            || !ValidMetadata(result.LexicalScoringVersion)
+            || !ValidMetadata(result.HybridScoringVersion)
             || result.EmbeddingDimension is <= 0 or > 3072
-            || result.Matches.Count > 10
+            || result.RetrievalCandidateCount is < 0 or > 10
+            || result.Matches.Count > 3
+            || result.Matches.Count > result.RetrievalCandidateCount
             || result.Matches.Any(match => !ValidSimilarity(match.SemanticSimilarity)
                 || !ValidSimilarity(match.FieldSimilarities.Problem)
                 || !ValidSimilarity(match.FieldSimilarities.Solution)
                 || !ValidSimilarity(match.FieldSimilarities.TargetCustomers)
                 || !ValidSimilarity(match.FieldSimilarities.ValueAndApproach)
-                || !ValidSimilarity(match.WeightedSemanticSimilarity))
+                || !ValidSimilarity(match.WeightedSemanticSimilarity)
+                || !ValidUnitScore(match.TfIdfSimilarity)
+                || !ValidUnitScore(match.JaccardSimilarity)
+                || !ValidSimilarity(match.HybridSimilarity))
             || !ValidWeight(result.FieldWeights.Problem)
             || !ValidWeight(result.FieldWeights.Solution)
             || !ValidWeight(result.FieldWeights.TargetCustomers)
             || !ValidWeight(result.FieldWeights.ValueAndApproach)
             || Math.Abs(result.FieldWeights.Problem + result.FieldWeights.Solution
-                + result.FieldWeights.TargetCustomers + result.FieldWeights.ValueAndApproach - 1d) > 0.000001)
+                + result.FieldWeights.TargetCustomers + result.FieldWeights.ValueAndApproach - 1d) > 0.000001
+            || !ValidWeight(result.HybridWeights.Semantic)
+            || !ValidWeight(result.HybridWeights.TfIdf)
+            || !ValidWeight(result.HybridWeights.Jaccard)
+            || Math.Abs(result.HybridWeights.Semantic + result.HybridWeights.TfIdf
+                + result.HybridWeights.Jaccard - 1d) > 0.000001)
             throw new ProposalAnalysisProcessingException(
                 "PROPOSAL_RETRIEVAL_OUTPUT_INVALID",
                 "The proposal retrieval result was invalid.");
@@ -216,6 +238,9 @@ public sealed class ProjectProposalAnalysisJobProcessor : IProjectProposalAnalys
 
     private static bool ValidSimilarity(double value) =>
         double.IsFinite(value) && value is >= -1 and <= 1;
+
+    private static bool ValidUnitScore(double value) =>
+        double.IsFinite(value) && value is >= 0 and <= 1;
 
     private static bool ValidWeight(double value) =>
         double.IsFinite(value) && value is >= 0 and <= 1;

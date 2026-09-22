@@ -8,7 +8,8 @@ public sealed class ProjectProposalAnalysisResultConfiguration : IEntityTypeConf
 {
     public void Configure(EntityTypeBuilder<ProjectProposalAnalysisResult> builder)
     {
-        builder.ToTable("project_proposal_analysis_results");
+        builder.ToTable("project_proposal_analysis_results", table =>
+            table.HasCheckConstraint("CK_ProjectProposalAnalysisResult_RetrievalCandidateCount", "retrieval_candidate_count >= 0 AND retrieval_candidate_count <= 10"));
 
         builder.HasKey(result => result.Id);
         builder.Property(result => result.Id).HasColumnName("id");
@@ -29,6 +30,10 @@ public sealed class ProjectProposalAnalysisResultConfiguration : IEntityTypeConf
         builder.Property(result => result.FieldScoringVersion).HasColumnName("field_scoring_version").HasMaxLength(100).IsRequired();
         builder.Property(result => result.FieldTextSchemaVersion).HasColumnName("field_text_schema_version").HasMaxLength(100).IsRequired();
         builder.Property(result => result.FieldWeightsJson).HasColumnName("field_weights_json").HasColumnType("jsonb").IsRequired();
+        builder.Property(result => result.LexicalScoringVersion).HasColumnName("lexical_scoring_version").HasMaxLength(100).IsRequired();
+        builder.Property(result => result.HybridScoringVersion).HasColumnName("hybrid_scoring_version").HasMaxLength(100).IsRequired();
+        builder.Property(result => result.HybridWeightsJson).HasColumnName("hybrid_weights_json").HasColumnType("jsonb").IsRequired();
+        builder.Property(result => result.RetrievalCandidateCount).HasColumnName("retrieval_candidate_count").IsRequired();
         builder.Property(result => result.GeneratedAtUtc).HasColumnName("generated_at_utc").IsRequired();
 
         builder.HasIndex(result => result.AnalysisJobId).IsUnique();

@@ -11,9 +11,10 @@ namespace EHub.Application.Features.ProposalAnalyses;
 
 public sealed class ProposalSimilarityRetriever : IProposalSimilarityRetriever
 {
-    public const string CurrentRetrievalVersion = "proposal-overall-top10-field-rerank-v2";
+    public const string CurrentRetrievalVersion = "proposal-overall-top10-hybrid-top3-v3";
     private const string SupportedSnapshotSchema = "project-proposal-snapshot-v1";
-    private const int MaximumMatches = 10;
+    private const int MaximumRetrievalCandidates = 10;
+    private const int MaximumFinalMatches = 3;
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     private readonly IApplicationDbContext _context;
@@ -101,7 +102,7 @@ public sealed class ProposalSimilarityRetriever : IProposalSimilarityRetriever
                 CosineSimilarity.Calculate(currentVector, vectors[candidate.Version.Id])))
             .OrderByDescending(candidate => candidate.SemanticSimilarity)
             .ThenBy(candidate => candidate.Candidate.Version.Id)
-            .Take(MaximumMatches)
+            .Take(MaximumRetrievalCandidates)
             .ToArray();
 
         var fieldTexts = new List<VersionFieldTexts>(overallCandidates.Length + 1)
@@ -113,11 +114,27 @@ public sealed class ProposalSimilarityRetriever : IProposalSimilarityRetriever
             _fieldTextBuilder.Build(candidate.Candidate.Snapshot))));
         var fieldVectors = await EnsureFieldEmbeddingsAsync(fieldTexts, cancellationToken);
 
-        var matches = overallCandidates
+        var semanticCandidates = overallCandidates
             .Select(candidate => BuildFieldScoredCandidate(candidate, fieldVectors, currentVersion.Id))
-            .OrderByDescending(candidate => candidate.WeightedSemanticSimilarity)
+            .ToArray();
+        var lexicalScores = ProposalLexicalSimilarity.Calculate(
+            currentSnapshot,
+            semanticCandidates.Select(candidate => candidate.Proposal).ToArray());
+        var matches = semanticCandidates
+            .Select((candidate, index) => candidate with
+            {
+                TfIdfSimilarity = lexicalScores[index].TfIdf,
+                JaccardSimilarity = lexicalScores[index].Jaccard,
+                HybridSimilarity = HybridProposalSimilarity.Calculate(
+                    candidate.WeightedSemanticSimilarity,
+                    lexicalScores[index].TfIdf,
+                    lexicalScores[index].Jaccard)
+            })
+            .OrderByDescending(candidate => candidate.HybridSimilarity)
+            .ThenByDescending(candidate => candidate.WeightedSemanticSimilarity)
             .ThenByDescending(candidate => candidate.SemanticSimilarity)
             .ThenBy(candidate => candidate.ProposalVersionId)
+            .Take(MaximumFinalMatches)
             .ToArray();
 
         return new ProposalSimilarityRetrievalResult(
@@ -130,6 +147,10 @@ public sealed class ProposalSimilarityRetriever : IProposalSimilarityRetriever
             ProposalFieldEmbeddingTextBuilder.CurrentSchemaVersion,
             WeightedSemanticSimilarity.CurrentVersion,
             WeightedSemanticSimilarity.CurrentWeights,
+            ProposalLexicalSimilarity.CurrentVersion,
+            HybridProposalSimilarity.CurrentVersion,
+            HybridProposalSimilarity.CurrentWeights,
+            semanticCandidates.Length,
             currentText.WasTruncated,
             skippedCandidateCount);
     }
@@ -161,7 +182,10 @@ public sealed class ProposalSimilarityRetriever : IProposalSimilarityRetriever
             candidate.Snapshot,
             overall.SemanticSimilarity,
             scores,
-            WeightedSemanticSimilarity.Calculate(scores));
+            WeightedSemanticSimilarity.Calculate(scores),
+            0,
+            0,
+            0);
     }
 
     private async Task<IReadOnlyDictionary<Guid, IReadOnlyList<float>>> EnsureEmbeddingsAsync(

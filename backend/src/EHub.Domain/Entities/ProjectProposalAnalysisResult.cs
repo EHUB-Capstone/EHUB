@@ -24,6 +24,10 @@ public class ProjectProposalAnalysisResult : BaseEntity
     public string FieldScoringVersion { get; set; } = string.Empty;
     public string FieldTextSchemaVersion { get; set; } = string.Empty;
     public string FieldWeightsJson { get; set; } = "{}";
+    public string LexicalScoringVersion { get; set; } = string.Empty;
+    public string HybridScoringVersion { get; set; } = string.Empty;
+    public string HybridWeightsJson { get; set; } = "{}";
+    public int RetrievalCandidateCount { get; set; }
     public DateTime GeneratedAtUtc { get; set; }
 
     public virtual ICollection<ProjectProposalAnalysisMatch> Matches { get; set; } = new List<ProjectProposalAnalysisMatch>();

@@ -18,7 +18,10 @@ public sealed record ProposalAnalysisProviderCandidate(
     ProjectProposalSnapshotDto Proposal,
     double SemanticSimilarity,
     ProposalAnalysisProviderFieldScores FieldSimilarities,
-    double WeightedSemanticSimilarity);
+    double WeightedSemanticSimilarity,
+    double TfIdfSimilarity,
+    double JaccardSimilarity,
+    double HybridSimilarity);
 
 public sealed record ProposalAnalysisProviderFieldScores(
     double Problem,

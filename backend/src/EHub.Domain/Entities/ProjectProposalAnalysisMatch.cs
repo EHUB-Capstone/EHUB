@@ -17,5 +17,8 @@ public class ProjectProposalAnalysisMatch : BaseEntity
     public double TargetCustomerSimilarity { get; set; }
     public double ValueAndApproachSimilarity { get; set; }
     public double WeightedSemanticSimilarity { get; set; }
+    public double TfIdfSimilarity { get; set; }
+    public double JaccardSimilarity { get; set; }
+    public double HybridSimilarity { get; set; }
     public DateTime CreatedAtUtc { get; set; }
 }

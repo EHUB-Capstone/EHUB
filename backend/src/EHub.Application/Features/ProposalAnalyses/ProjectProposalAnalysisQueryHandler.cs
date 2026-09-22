@@ -95,7 +95,11 @@ public sealed class ProjectProposalAnalysisQueryHandler : IProjectProposalAnalys
                 RetrievalVersion = job.Result.RetrievalVersion,
                 FieldTextSchemaVersion = job.Result.FieldTextSchemaVersion,
                 FieldScoringVersion = job.Result.FieldScoringVersion,
-                FieldWeights = DeserializeWeights(job.Result.FieldWeightsJson),
+                FieldWeights = DeserializeFieldWeights(job.Result.FieldWeightsJson),
+                LexicalScoringVersion = job.Result.LexicalScoringVersion,
+                HybridScoringVersion = job.Result.HybridScoringVersion,
+                HybridWeights = DeserializeHybridWeights(job.Result.HybridWeightsJson),
+                RetrievalCandidateCount = job.Result.RetrievalCandidateCount,
                 Matches = isStudent ? [] : job.Result.Matches
                     .OrderBy(match => match.Rank)
                     .Select(ToMatchDto)
@@ -160,11 +164,14 @@ public sealed class ProjectProposalAnalysisQueryHandler : IProjectProposalAnalys
             TargetCustomerSimilarity = Math.Max(0, match.TargetCustomerSimilarity),
             ValueAndApproachSimilarity = Math.Max(0, match.ValueAndApproachSimilarity),
             WeightedSemanticSimilarity = Math.Max(0, match.WeightedSemanticSimilarity),
+            TfIdfSimilarity = match.TfIdfSimilarity,
+            JaccardSimilarity = match.JaccardSimilarity,
+            HybridSimilarity = Math.Max(0, match.HybridSimilarity),
             SubmittedAtUtc = match.CandidateProposalVersion.CreatedAt
         };
     }
 
-    private static ProjectProposalFieldWeightsDto DeserializeWeights(string json)
+    private static ProjectProposalFieldWeightsDto DeserializeFieldWeights(string json)
     {
         try
         {
@@ -175,6 +182,20 @@ public sealed class ProjectProposalAnalysisQueryHandler : IProjectProposalAnalys
         catch (JsonException)
         {
             return new ProjectProposalFieldWeightsDto();
+        }
+    }
+
+    private static ProjectProposalHybridWeightsDto DeserializeHybridWeights(string json)
+    {
+        try
+        {
+            return JsonSerializer.Deserialize<ProjectProposalHybridWeightsDto>(
+                json,
+                new JsonSerializerOptions(JsonSerializerDefaults.Web)) ?? new ProjectProposalHybridWeightsDto();
+        }
+        catch (JsonException)
+        {
+            return new ProjectProposalHybridWeightsDto();
         }
     }
 
