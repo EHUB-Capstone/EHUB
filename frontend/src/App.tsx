@@ -128,6 +128,7 @@ function App(): React.ReactElement {
                   <Route path="/workspace" element={<ProtectedRoute allowedRoles={['ADMIN', 'LECTURER', 'MENTOR']}><StartupWorkspaceHub /></ProtectedRoute>} />
                   <Route path="/student/workspace" element={<ProtectedRoute allowedRoles={['STUDENT']}><TeamWorkspace /></ProtectedRoute>} />
                   <Route path="/student/workspace/proposal" element={<ProtectedRoute allowedRoles={['STUDENT']}><ProposalEditor /></ProtectedRoute>} />
+                  <Route path="/student/workspace/:teamId/proposal" element={<ProtectedRoute allowedRoles={['STUDENT']}><ProposalEditor /></ProtectedRoute>} />
                   <Route path="/student/workspace/project-profile/:teamId" element={<ProtectedRoute allowedRoles={['STUDENT']}><ProjectProfileEditor /></ProtectedRoute>} />
                   <Route path="/student/workspace/:teamId" element={<ProtectedRoute allowedRoles={['STUDENT']}><TeamWorkspace /></ProtectedRoute>} />
                   <Route path="/workspace/teams/:teamId" element={<TeamWorkspace />} />

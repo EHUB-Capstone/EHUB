@@ -1233,3 +1233,85 @@ test('mock manual enrollment preserves backend identity and explicit re-enroll r
     },
   );
 });
+
+test('mock detailed project proposal supports draft versions, leader submission, review, and resubmission', async () => {
+  resetMockState();
+  await axiosClient.post('/auth/login', { email: 'se200001@fpt.edu.vn', password: 'Mock123!' });
+  const state = getMockState();
+  const team = state.teams.find((item) => item.teamCode === 'EXE-T01');
+  assert.ok(team);
+  team.startupIndustries = ['Technology & Software'];
+  const direction = state.directions.find((item) => item.teamId === team.id);
+  assert.ok(direction);
+  direction.status = 'Approved';
+
+  const content = {
+    title: 'Campus Connect student services marketplace',
+    startupName: 'Campus Connect',
+    tagline: 'Trusted student services in one place',
+    problem: 'University students struggle to identify trustworthy campus service providers, compare alternatives, and resolve service issues after a booking. '.repeat(2),
+    solution: 'Campus Connect provides verified provider profiles, transparent service information, structured booking, and post-service feedback for university communities. '.repeat(2),
+    targetCustomers: 'University students who need convenient and trustworthy services near their campus.',
+    valueProposition: 'Students save time and reduce risk while providers gain a trusted channel to reach a focused community.',
+    marketSize: 'The initial market is one university campus before expansion to additional institutions.',
+    competitors: 'Informal social groups and general marketplaces lack campus-specific verification and workflows.',
+    businessModel: 'The platform operates a curated two-sided marketplace and charges providers a commission for completed bookings while keeping discovery free for students. ',
+    revenueModel: 'Commission and optional provider subscriptions.',
+    marketingStrategy: 'Campus ambassadors, student clubs, and verified provider partnerships.',
+    technology: 'React frontend, ASP.NET Core API, and PostgreSQL.',
+    financialPlan: 'Validate willingness to pay before expanding operating costs.',
+    roadmap: 'Phase one validates demand and provider quality. Phase two launches a focused booking MVP. Phase three measures retention and expands to another campus. ',
+    teamIntroduction: 'Product, customer research, engineering, and business development roles.',
+  };
+
+  const created = await axiosClient.post(`/workspace/teams/${team.id}/proposal`, { ...content, changeNote: 'Initial draft' });
+  assert.equal(created.data.status, 'Draft');
+  const initialRowVersion = created.data.rowVersion;
+
+  const updated = await axiosClient.put(`/workspace/proposals/${created.data.id}`, {
+    ...content,
+    tagline: 'Trusted campus services, clearly verified',
+    rowVersion: initialRowVersion,
+    changeNote: 'Clarified the tagline',
+  });
+  assert.notEqual(updated.data.rowVersion, initialRowVersion);
+
+  await assert.rejects(
+    axiosClient.put(`/workspace/proposals/${created.data.id}`, { ...content, rowVersion: initialRowVersion, changeNote: 'Stale edit' }),
+    (error: unknown) => (error as { response?: { data?: { code?: string } } }).response?.data?.code === 'PROJECT_PROPOSAL_CONCURRENCY_CONFLICT',
+  );
+
+  const submitted = await axiosClient.post(`/workspace/proposals/${created.data.id}/submit`, {
+    rowVersion: updated.data.rowVersion,
+    changeNote: 'Ready for lecturer review',
+  });
+  assert.equal(submitted.data.status, 'Submitted');
+
+  const versions = await axiosClient.get(`/workspace/proposals/${created.data.id}/versions`);
+  assert.equal(versions.data.length, 3);
+  assert.equal(versions.data[0].purpose, 'Submission');
+
+  await axiosClient.post('/auth/login', { email: 'giang.lecturer@ehub.local', password: 'Mock123!' });
+  const reviewed = await axiosClient.post(`/workspace/proposals/${created.data.id}/review`, {
+    decision: 'NeedsRevision',
+    feedback: 'Add stronger evidence from student interviews.',
+    rowVersion: submitted.data.rowVersion,
+  });
+  assert.equal(reviewed.data.status, 'NeedsRevision');
+  assert.equal(reviewed.data.reviews.length, 1);
+
+  await axiosClient.post('/auth/login', { email: 'se200001@fpt.edu.vn', password: 'Mock123!' });
+  const revised = await axiosClient.put(`/workspace/proposals/${created.data.id}`, {
+    ...content,
+    problem: `${content.problem} The team also completed ten exploratory student interviews.`,
+    rowVersion: reviewed.data.rowVersion,
+    changeNote: 'Added interview evidence',
+  });
+  assert.equal(revised.data.status, 'Draft');
+  const resubmitted = await axiosClient.post(`/workspace/proposals/${created.data.id}/submit`, {
+    rowVersion: revised.data.rowVersion,
+    changeNote: 'Resubmitted after lecturer feedback',
+  });
+  assert.equal(resubmitted.data.status, 'Submitted');
+  assert.notEqual(resubmitted.data.currentSubmittedVersionId, submitted.data.currentSubmittedVersionId);
+});

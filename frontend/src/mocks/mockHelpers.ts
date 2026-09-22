@@ -26,6 +26,7 @@ function loadState(): MockApiState {
       pendingRegistrations: parsed.pendingRegistrations ?? [],
       notifications: parsed.notifications ?? defaults.notifications,
       semesterStaffAssignments: parsed.semesterStaffAssignments ?? defaults.semesterStaffAssignments,
+      detailedProposals: parsed.detailedProposals ?? defaults.detailedProposals,
     };
   } catch {
     window.localStorage.removeItem(STORAGE_KEY);

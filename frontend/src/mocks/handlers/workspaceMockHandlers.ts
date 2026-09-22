@@ -1,5 +1,6 @@
 import type MockAdapter from 'axios-mock-adapter';
-import { allocateId, allocateRowVersion, failure, getMockState, ok, parseBody, persistMockState, routeId } from '../mockHelpers.ts';
+import type { MockDetailedProposal, MockDetailedProposalContent, MockDetailedProposalVersion } from '../mockState.ts';
+import { allocateId, allocateRowVersion, created, failure, getMockState, ok, parseBody, persistMockState, routeId } from '../mockHelpers.ts';
 
 const uuid = (value: number) => `00000000-0000-4000-8000-${String(value).padStart(12, '0')}`;
 
@@ -21,6 +22,79 @@ type MockShortcut = {
 
 const mockWeeklyTasks: MockWeeklyTask[] = [];
 const mockShortcuts = new Map<string, MockShortcut[]>();
+
+const proposalContentKeys = [
+  'title', 'startupName', 'tagline', 'problem', 'solution', 'targetCustomers', 'valueProposition',
+  'marketSize', 'competitors', 'businessModel', 'revenueModel', 'marketingStrategy', 'technology',
+  'financialPlan', 'roadmap', 'teamIntroduction',
+] as const;
+
+const proposalMaximums: Record<(typeof proposalContentKeys)[number], number> = {
+  title: 200, startupName: 150, tagline: 200, problem: 3000, solution: 3000,
+  targetCustomers: 2000, valueProposition: 2000, marketSize: 2500, competitors: 3000,
+  businessModel: 3000, revenueModel: 2000, marketingStrategy: 3000, technology: 3000,
+  financialPlan: 3000, roadmap: 3000, teamIntroduction: 2000,
+};
+
+function proposalContent(body: Partial<Record<(typeof proposalContentKeys)[number], unknown>>): MockDetailedProposalContent {
+  return Object.fromEntries(proposalContentKeys.map((key) => [key, String(body[key] || '').trim()])) as unknown as MockDetailedProposalContent;
+}
+
+function proposalContentError(content: MockDetailedProposalContent): string | null {
+  for (const key of proposalContentKeys) {
+    if (content[key].length > proposalMaximums[key]) return `${key} exceeds its maximum length.`;
+  }
+  return proposalContentKeys.reduce((total, key) => total + content[key].length, 0) > 30_000
+    ? 'Proposal content must not exceed 30000 characters in total.'
+    : null;
+}
+
+function proposalSubmissionError(content: MockDetailedProposalContent): string | null {
+  const minimums: Partial<Record<(typeof proposalContentKeys)[number], number>> = {
+    title: 5, startupName: 2, problem: 100, solution: 100, targetCustomers: 50,
+    valueProposition: 50, businessModel: 100, roadmap: 100,
+  };
+  for (const [key, minimum] of Object.entries(minimums) as Array<[(typeof proposalContentKeys)[number], number]>) {
+    if (content[key].length < minimum) return `${key} must contain at least ${minimum} characters.`;
+  }
+  return null;
+}
+
+function proposalResponse(proposal: MockDetailedProposal) {
+  const { versions: _versions, ...response } = proposal;
+  return response;
+}
+
+function versionSummary(version: MockDetailedProposalVersion) {
+  const { snapshot: _snapshot, projectProposalId: _projectProposalId, ...summary } = version;
+  return summary;
+}
+
+function addProposalVersion(proposal: MockDetailedProposal, purpose: 'DraftSave' | 'Submission', changeNote: string, changedByUserId: string) {
+  const version: MockDetailedProposalVersion = {
+    id: allocateId(),
+    projectProposalId: proposal.id,
+    versionNumber: proposal.versions.length + 1,
+    purpose,
+    snapshotSchemaVersion: 'project-proposal-snapshot-v1',
+    changeNote,
+    changedByUserId,
+    createdAtUtc: new Date().toISOString(),
+    snapshot: proposalContent(proposal),
+  };
+  proposal.versions.push(version);
+  return version;
+}
+
+function currentMockUser() {
+  const state = getMockState();
+  return state.users.find((user) => user.id === state.sessionUserId);
+}
+
+function canMutateProposal(teamId: string) {
+  const user = currentMockUser();
+  return Boolean(user?.role === 'STUDENT' && teamById(teamId)?.members.some((member) => member.studentId === user.id));
+}
 
 const checkpointConfig = [
   {
@@ -545,6 +619,141 @@ export function registerWorkspaceMockHandlers(mock: MockAdapter): void {
     }
     persistMockState();
     return ok(workspaceData(teamId).project, 'Project profile updated.');
+  });
+
+  mock.onGet(/^\/workspace\/teams\/[^/]+\/proposal$/).reply((config) => {
+    const teamId = routeId(config, /^\/workspace\/teams\/([^/]+)\/proposal$/);
+    if (!teamById(teamId)) return failure(404, 'TEAM_NOT_FOUND', 'Team not found.');
+    if (!canAccessTeam(teamId)) return failure(403, 'PROJECT_PROPOSAL_ACCESS_DENIED', 'You cannot view this project proposal.');
+    const proposal = getMockState().detailedProposals.find((item) => item.teamId === teamId);
+    return proposal
+      ? ok(proposalResponse(proposal), 'Project proposal retrieved.')
+      : failure(404, 'PROJECT_PROPOSAL_NOT_FOUND', 'The team has not created a project proposal.');
+  });
+
+  mock.onPost(/^\/workspace\/teams\/[^/]+\/proposal$/).reply((config) => {
+    const teamId = routeId(config, /^\/workspace\/teams\/([^/]+)\/proposal$/);
+    const team = teamById(teamId);
+    if (!team) return failure(404, 'TEAM_NOT_FOUND', 'Team not found.');
+    if (!canMutateProposal(teamId)) return failure(403, 'PROJECT_PROPOSAL_ACCESS_DENIED', 'Only active team members can edit the project proposal draft.');
+    if (!team.projectName) return failure(404, 'WORKSPACE_NOT_FOUND', 'Create the project workspace before creating a project proposal.');
+    const state = getMockState();
+    if (state.detailedProposals.some((item) => item.teamId === teamId)) return failure(409, 'PROJECT_PROPOSAL_STATE_INVALID', 'This team already has a project proposal.');
+    const body = parseBody(config);
+    const content = proposalContent(body);
+    const contentError = proposalContentError(content);
+    if (contentError) return failure(400, 'PROJECT_PROPOSAL_VALIDATION_ERROR', contentError);
+    const user = currentMockUser()!;
+    const proposal: MockDetailedProposal = {
+      id: allocateId(), projectId: workspaceData(teamId).project._id, teamId, classId: team.classId,
+      ...content, status: 'Draft', currentSubmittedVersionId: null, submittedAtUtc: null,
+      approvedAtUtc: null, rejectedAtUtc: null, rowVersion: allocateRowVersion(), reviews: [], versions: [],
+    };
+    addProposalVersion(proposal, 'DraftSave', String(body.changeNote || ''), user.id);
+    state.detailedProposals.push(proposal);
+    persistMockState();
+    return created(proposalResponse(proposal), 'Project proposal draft created.');
+  });
+
+  mock.onPut(/^\/workspace\/proposals\/[^/]+$/).reply((config) => {
+    const proposalId = routeId(config, /^\/workspace\/proposals\/([^/]+)$/);
+    const proposal = getMockState().detailedProposals.find((item) => item.id === proposalId);
+    if (!proposal) return failure(404, 'PROJECT_PROPOSAL_NOT_FOUND', 'The project proposal was not found.');
+    if (!canMutateProposal(proposal.teamId)) return failure(403, 'PROJECT_PROPOSAL_ACCESS_DENIED', 'Only active team members can edit the project proposal draft.');
+    const body = parseBody(config);
+    if (String(body.rowVersion || '') !== proposal.rowVersion) return failure(409, 'PROJECT_PROPOSAL_CONCURRENCY_CONFLICT', 'The supplied rowVersion is stale.');
+    if (!['Draft', 'NeedsRevision'].includes(proposal.status)) return failure(409, 'PROJECT_PROPOSAL_STATE_INVALID', 'Only Draft or NeedsRevision proposals can be edited.');
+    const content = proposalContent(body);
+    const contentError = proposalContentError(content);
+    if (contentError) return failure(400, 'PROJECT_PROPOSAL_VALIDATION_ERROR', contentError);
+    if (proposalContentKeys.every((key) => proposal[key] === content[key])) return failure(400, 'PROJECT_PROPOSAL_VALIDATION_ERROR', 'Change at least one proposal field before saving a new version.');
+    Object.assign(proposal, content, { status: 'Draft', rowVersion: allocateRowVersion() });
+    addProposalVersion(proposal, 'DraftSave', String(body.changeNote || ''), currentMockUser()!.id);
+    persistMockState();
+    return ok(proposalResponse(proposal), 'Project proposal draft version saved.');
+  });
+
+  mock.onPost(/^\/workspace\/proposals\/[^/]+\/submit$/).reply((config) => {
+    const proposalId = routeId(config, /^\/workspace\/proposals\/([^/]+)\/submit$/);
+    const proposal = getMockState().detailedProposals.find((item) => item.id === proposalId);
+    if (!proposal) return failure(404, 'PROJECT_PROPOSAL_NOT_FOUND', 'The project proposal was not found.');
+    const team = teamById(proposal.teamId)!;
+    const body = parseBody(config);
+    const user = currentMockUser();
+    if (!user || user.role !== 'STUDENT' || team.leaderId !== user.id) return failure(403, 'PROJECT_PROPOSAL_ACCESS_DENIED', 'Only the active team leader can submit the project proposal.');
+    if (String(body.rowVersion || '') !== proposal.rowVersion) return failure(409, 'PROJECT_PROPOSAL_CONCURRENCY_CONFLICT', 'The project proposal changed concurrently.');
+    if (proposal.status !== 'Draft') return failure(409, 'PROJECT_PROPOSAL_STATE_INVALID', 'Only a saved Draft proposal can be submitted.');
+    const direction = getMockState().directions.find((item) => item.teamId === proposal.teamId);
+    if (direction?.status !== 'Approved') return failure(409, 'PROJECT_PROPOSAL_DIRECTION_NOT_APPROVED', 'The project direction must be approved before submission.');
+    const submissionError = proposalSubmissionError(proposal);
+    if (submissionError) return failure(400, 'PROJECT_PROPOSAL_VALIDATION_ERROR', submissionError);
+    if (!team.startupIndustries?.length || team.startupIndustries.length > 3) return failure(400, 'PROJECT_PROPOSAL_VALIDATION_ERROR', 'The project must have between 1 and 3 startup industries.');
+    const version = addProposalVersion(proposal, 'Submission', String(body.changeNote || ''), user.id);
+    proposal.status = 'Submitted';
+    proposal.currentSubmittedVersionId = version.id;
+    proposal.submittedAtUtc = version.createdAtUtc;
+    proposal.approvedAtUtc = null;
+    proposal.rejectedAtUtc = null;
+    proposal.rowVersion = allocateRowVersion();
+    persistMockState();
+    return ok(proposalResponse(proposal), 'Project proposal submitted.');
+  });
+
+  mock.onGet(/^\/workspace\/proposals\/[^/]+\/versions$/).reply((config) => {
+    const proposalId = routeId(config, /^\/workspace\/proposals\/([^/]+)\/versions$/);
+    const proposal = getMockState().detailedProposals.find((item) => item.id === proposalId);
+    if (!proposal) return failure(404, 'PROJECT_PROPOSAL_NOT_FOUND', 'The project proposal was not found.');
+    if (!canAccessTeam(proposal.teamId)) return failure(403, 'PROJECT_PROPOSAL_ACCESS_DENIED', 'You cannot view this project proposal.');
+    return ok([...proposal.versions].reverse().map(versionSummary), 'Project proposal versions retrieved.');
+  });
+
+  mock.onGet(/^\/workspace\/proposals\/[^/]+\/versions\/[^/]+$/).reply((config) => {
+    const match = config.url?.match(/^\/workspace\/proposals\/([^/]+)\/versions\/([^/]+)$/);
+    const proposal = getMockState().detailedProposals.find((item) => item.id === match?.[1]);
+    if (!proposal) return failure(404, 'PROJECT_PROPOSAL_NOT_FOUND', 'The project proposal was not found.');
+    if (!canAccessTeam(proposal.teamId)) return failure(403, 'PROJECT_PROPOSAL_ACCESS_DENIED', 'You cannot view this project proposal.');
+    const version = proposal.versions.find((item) => item.id === match?.[2]);
+    return version ? ok(version, 'Project proposal version retrieved.') : failure(404, 'PROJECT_PROPOSAL_VERSION_NOT_FOUND', 'The project proposal version was not found.');
+  });
+
+  mock.onPost(/^\/workspace\/proposals\/[^/]+\/versions\/[^/]+\/restore$/).reply((config) => {
+    const match = config.url?.match(/^\/workspace\/proposals\/([^/]+)\/versions\/([^/]+)\/restore$/);
+    const proposal = getMockState().detailedProposals.find((item) => item.id === match?.[1]);
+    if (!proposal) return failure(404, 'PROJECT_PROPOSAL_NOT_FOUND', 'The project proposal was not found.');
+    if (!canMutateProposal(proposal.teamId)) return failure(403, 'PROJECT_PROPOSAL_ACCESS_DENIED', 'Only active team members can restore a proposal version.');
+    const body = parseBody(config);
+    if (String(body.rowVersion || '') !== proposal.rowVersion) return failure(409, 'PROJECT_PROPOSAL_CONCURRENCY_CONFLICT', 'The project proposal changed concurrently.');
+    if (!['Draft', 'NeedsRevision'].includes(proposal.status)) return failure(409, 'PROJECT_PROPOSAL_STATE_INVALID', 'Only Draft or NeedsRevision proposals can restore a version.');
+    const version = proposal.versions.find((item) => item.id === match?.[2]);
+    if (!version) return failure(404, 'PROJECT_PROPOSAL_VERSION_NOT_FOUND', 'The project proposal version was not found.');
+    if (proposalContentKeys.every((key) => proposal[key] === version.snapshot[key])) return failure(400, 'PROJECT_PROPOSAL_VALIDATION_ERROR', 'The selected version already matches the current draft.');
+    Object.assign(proposal, version.snapshot, { status: 'Draft', rowVersion: allocateRowVersion() });
+    addProposalVersion(proposal, 'DraftSave', String(body.changeNote || `Restored version ${version.versionNumber}.`), currentMockUser()!.id);
+    persistMockState();
+    return ok(proposalResponse(proposal), 'Project proposal version restored as a new draft.');
+  });
+
+  mock.onPost(/^\/workspace\/proposals\/[^/]+\/review$/).reply((config) => {
+    const proposalId = routeId(config, /^\/workspace\/proposals\/([^/]+)\/review$/);
+    const proposal = getMockState().detailedProposals.find((item) => item.id === proposalId);
+    if (!proposal) return failure(404, 'PROJECT_PROPOSAL_NOT_FOUND', 'The project proposal was not found.');
+    const body = parseBody(config);
+    const user = currentMockUser();
+    const cls = classByTeam(proposal.teamId);
+    if (!user || user.role !== 'LECTURER' || cls?.primaryLecturerId !== user.id) return failure(403, 'PROJECT_PROPOSAL_ACCESS_DENIED', 'Only an assigned lecturer can review this project proposal.');
+    if (String(body.rowVersion || '') !== proposal.rowVersion) return failure(409, 'PROJECT_PROPOSAL_CONCURRENCY_CONFLICT', 'The project proposal changed concurrently.');
+    if (proposal.status !== 'Submitted') return failure(409, 'PROJECT_PROPOSAL_STATE_INVALID', 'Only a Submitted project proposal can be reviewed.');
+    const decision = String(body.decision || '');
+    const feedback = String(body.feedback || '').trim();
+    if (!['Approved', 'NeedsRevision', 'Rejected'].includes(decision) || feedback.length < 3 || feedback.length > 1000) return failure(400, 'PROJECT_PROPOSAL_VALIDATION_ERROR', 'A valid decision and feedback are required.');
+    const occurredAtUtc = new Date().toISOString();
+    proposal.reviews.unshift({ id: allocateId(), proposalVersionId: proposal.currentSubmittedVersionId!, fromStatus: proposal.status, toStatus: decision, feedback, reviewedByUserId: user.id, occurredAtUtc });
+    proposal.status = decision as MockDetailedProposal['status'];
+    proposal.approvedAtUtc = decision === 'Approved' ? occurredAtUtc : null;
+    proposal.rejectedAtUtc = decision === 'Rejected' ? occurredAtUtc : null;
+    proposal.rowVersion = allocateRowVersion();
+    persistMockState();
+    return ok(proposalResponse(proposal), 'Project proposal reviewed.');
   });
 
   mock.onGet(/^\/workspace\/checkpoints\/teams\/[^/]+$/).reply((config) => {

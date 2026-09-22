@@ -247,6 +247,60 @@ export interface MockProjectDirection {
   reviews: MockDirectionReview[];
 }
 
+export interface MockDetailedProposalContent {
+  title: string;
+  startupName: string;
+  tagline: string;
+  problem: string;
+  solution: string;
+  targetCustomers: string;
+  valueProposition: string;
+  marketSize: string;
+  competitors: string;
+  businessModel: string;
+  revenueModel: string;
+  marketingStrategy: string;
+  technology: string;
+  financialPlan: string;
+  roadmap: string;
+  teamIntroduction: string;
+}
+
+export interface MockDetailedProposalVersion {
+  id: string;
+  projectProposalId: string;
+  versionNumber: number;
+  purpose: 'DraftSave' | 'Submission';
+  snapshotSchemaVersion: 'project-proposal-snapshot-v1';
+  changeNote: string;
+  changedByUserId: string;
+  createdAtUtc: string;
+  snapshot: MockDetailedProposalContent;
+}
+
+export interface MockDetailedProposal extends MockDetailedProposalContent {
+  id: string;
+  projectId: string;
+  teamId: string;
+  classId: string;
+  status: 'Draft' | 'Submitted' | 'NeedsRevision' | 'Approved' | 'Rejected' | 'Archived';
+  currentSubmittedVersionId: string | null;
+  submittedAtUtc: string | null;
+  approvedAtUtc: string | null;
+  rejectedAtUtc: string | null;
+  rowVersion: string;
+  reviews: Array<{
+    id: string;
+    proposalVersionId: string;
+    fromStatus: string;
+    toStatus: string;
+    feedback: string;
+    reviewedByUserId: string;
+    occurredAtUtc: string;
+  }>;
+  versions: MockDetailedProposalVersion[];
+}
+
 export interface MockAuditEntry {
   id: string;
   action: string;
@@ -289,6 +343,7 @@ export interface MockApiState {
   teams: MockTeam[];
   proposals: MockProposal[];
   directions: MockProjectDirection[];
+  detailedProposals: MockDetailedProposal[];
   audits: Record<string, MockAuditEntry[]>;
   imports: Record<string, MockImportSession>;
 }
@@ -471,6 +526,7 @@ const initialMockState: MockApiState = {
       rowVersion: 'rv-20', history: [{ id: id(802), fromStatus: 'Draft', toStatus: 'Pending', action: 'SUBMITTED', comment: null, performedByUserId: activeRoster[8].userId || activeRoster[8].studentId, occurredAtUtc: isoAgo(1) }],
     }],
     directions: [{ id: id(901), teamId: id(601), title: 'Student Services Marketplace', summary: 'Validate trust, fulfillment time, and willingness to pay before building the full marketplace.', startupIndustries: ['Technology & Software'], status: 'Submitted', submittedAtUtc: isoAgo(2), reviewedAtUtc: null, rowVersion: 'rv-30', reviews: [] }],
+    detailedProposals: [],
     audits: {
       [classIds.active]: [{ id: id(951), action: 'CLASS_CREATED', performedByUserId: id(1), performedByName: 'Nguyễn Minh Admin', occurredAtUtc: isoAgo(45), detailsJson: JSON.stringify({ status: 'Active' }) }],
       [classIds.draft]: [{ id: id(952), action: 'CLASS_CREATED', performedByUserId: id(2), performedByName: 'Trần Thu Giang', occurredAtUtc: isoAgo(30), detailsJson: JSON.stringify({ status: 'Draft' }) }],

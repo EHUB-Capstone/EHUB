@@ -13,6 +13,14 @@ import {
 } from '../src/features/execution-board/boardUtils.ts';
 import { taskProgress } from '../src/utils/taskProgress.ts';
 import { groupWorkspacesByClass, normalizeAccessibleWorkspaces } from '../src/utils/workspaceHub.ts';
+import type { ProjectProposal } from '../src/types/projectProposal.ts';
+import {
+  emptyProjectProposalDraft,
+  proposalHasContentChanges,
+  toProjectProposalDraft,
+  validateProjectProposalDraft,
+  validateProjectProposalSubmission,
+} from '../src/utils/projectProposal.ts';
 
 test('workspace hub reads the accessible workspace array from the API envelope', () => {
   const workspaces = [{
@@ -192,4 +200,40 @@ for (const tab of ['overview', 'roadmap', 'shortcut'] as const) {
 }
 test('invalid tab falls back to overview', () => {
   assert.equal(resolveWorkspaceTab('?tab=invalid'), 'overview');
+});
+
+test('project proposal draft validation permits partial drafts but enforces field limits', () => {
+  const partial = { ...emptyProjectProposalDraft, title: 'Early idea' };
+  assert.deepEqual(validateProjectProposalDraft(partial), {});
+  const invalid = { ...partial, title: 'x'.repeat(201), changeNote: 'x'.repeat(1001) };
+  assert.equal(validateProjectProposalDraft(invalid).title, 'Maximum 200 characters.');
+  assert.equal(validateProjectProposalDraft(invalid).changeNote, 'Maximum 1000 characters.');
+});
+
+test('project proposal submission validation mirrors required backend minimums', () => {
+  const proposal = {
+    ...emptyProjectProposalDraft,
+    id: 'proposal-1', projectId: 'project-1', teamId: 'team-1', classId: 'class-1',
+    status: 'Draft', currentSubmittedVersionId: null, submittedAtUtc: null, approvedAtUtc: null,
+    rejectedAtUtc: null, rowVersion: '1', reviews: [],
+  } as ProjectProposal;
+  const errors = validateProjectProposalSubmission(proposal);
+  for (const field of ['title', 'startupName', 'problem', 'solution', 'targetCustomers', 'valueProposition', 'businessModel', 'roadmap']) {
+    assert.ok(errors[field as keyof typeof errors]);
+  }
+});
+
+test('project proposal change detection ignores whitespace-only differences', () => {
+  const proposal = {
+    ...emptyProjectProposalDraft,
+    title: 'Campus Connect',
+    id: 'proposal-1', projectId: 'project-1', teamId: 'team-1', classId: 'class-1',
+    status: 'Draft', currentSubmittedVersionId: null, submittedAtUtc: null, approvedAtUtc: null,
+    rejectedAtUtc: null, rowVersion: '1', reviews: [],
+  } as ProjectProposal;
+  const draft = toProjectProposalDraft(proposal);
+  draft.title = '  Campus Connect  ';
+  assert.equal(proposalHasContentChanges(proposal, draft), false);
+  draft.problem = 'A new problem statement';
+  assert.equal(proposalHasContentChanges(proposal, draft), true);
 });

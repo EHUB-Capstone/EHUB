@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   Users, Mail, Loader2,
-  Award, ArrowLeft, Shield
+  Award, ArrowLeft, Shield, FileText
 } from 'lucide-react';
 import { workspaceApi } from '../../api/workspaceApi';
 import { teamWorkspaceApi } from '../../api/teamWorkspaceApi';
@@ -283,6 +283,25 @@ export default function TeamWorkspace() {
                 ? `/student/workspace/project-profile/${team._id}`
                 : `/workspace/teams/${team._id}/project-profile`)}
             />}
+
+            <button
+              type="button"
+              onClick={() => navigate(user?.role === 'STUDENT'
+                ? `/student/workspace/${team._id}/proposal`
+                : `/workspace/teams/${team._id}/proposal?preview=true`)}
+              className="group w-full rounded-2xl border border-slate-200/60 bg-white p-5 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-primary-200 hover:shadow-md"
+            >
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex min-w-0 items-center gap-3">
+                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary-50 text-primary"><FileText className="h-5 w-5" /></span>
+                  <div className="min-w-0">
+                    <h2 className="font-bold text-slate-800">Detailed Project Proposal</h2>
+                    <p className="mt-1 text-sm text-slate-500">Draft, submit, review, and inspect immutable proposal versions.</p>
+                  </div>
+                </div>
+                <span className="shrink-0 text-sm font-semibold text-primary group-hover:underline">Open</span>
+              </div>
+            </button>
 
             {/* Startup Checkpoints */}
             <CheckpointSection 

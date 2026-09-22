@@ -1,103 +1,103 @@
-// @ts-nocheck
-import { FileText, ArrowLeft, Calendar, User, ShieldAlert } from 'lucide-react';
-import Badge from '../../components/ui/Badge';
-import InlineCommentUI from '../../components/workspace/InlineCommentUI';
+import { ArrowLeft, Calendar, FileText, MessageSquareText, ShieldAlert } from 'lucide-react';
+import type { ProjectProposal, ProjectProposalContent, ProjectProposalStatus } from '../../types/projectProposal';
+import { projectProposalFields, projectProposalStatusLabel } from '../../utils/projectProposal';
 
-const statusColors = {
-  DRAFT: 'bg-slate-100 text-slate-600 border border-slate-200',
-  SUBMITTED: 'bg-blue-50 text-blue-600 border border-blue-200',
-  REVIEWED: 'bg-purple-50 text-purple-600 border border-purple-200',
-  APPROVED: 'bg-emerald-50 text-emerald-600 border border-emerald-200',
-  REJECTED: 'bg-red-50 text-red-600 border border-red-200'
+const statusColors: Record<ProjectProposalStatus, string> = {
+  Draft: 'border-slate-200 bg-slate-100 text-slate-700',
+  Submitted: 'border-blue-200 bg-blue-50 text-blue-700',
+  NeedsRevision: 'border-amber-200 bg-amber-50 text-amber-700',
+  Approved: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+  Rejected: 'border-red-200 bg-red-50 text-red-700',
+  Archived: 'border-slate-200 bg-slate-100 text-slate-500',
 };
 
-export default function ProposalPreview({ proposal, onBack }) {
+type Props = {
+  proposal: ProjectProposal | null;
+  onBack: () => void;
+};
+
+function proposalDate(proposal: ProjectProposal): { label: string; value: string } | null {
+  if (proposal.approvedAtUtc) return { label: 'Approved', value: proposal.approvedAtUtc };
+  if (proposal.rejectedAtUtc) return { label: 'Rejected', value: proposal.rejectedAtUtc };
+  if (proposal.submittedAtUtc) return { label: 'Submitted', value: proposal.submittedAtUtc };
+  return null;
+}
+
+export default function ProposalPreview({ proposal, onBack }: Props) {
   if (!proposal) {
     return (
-      <div className="bg-white rounded-2xl border border-slate-200/60 p-12 text-center">
-        <ShieldAlert className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-        <h3 className="text-lg font-bold text-slate-800">No proposal initialized</h3>
-        <p className="text-slate-500 text-sm mt-1">This team has not created a proposal draft yet.</p>
-        {onBack && (
-          <button 
-            onClick={onBack}
-            className="mt-4 text-sm font-semibold text-primary hover:underline"
-          >
-            Go Back
-          </button>
-        )}
+      <div className="mx-auto max-w-2xl rounded-2xl border border-slate-200/60 bg-white p-12 text-center">
+        <ShieldAlert className="mx-auto mb-3 h-12 w-12 text-slate-300" />
+        <h1 className="text-lg font-bold text-slate-800">No detailed proposal yet</h1>
+        <p className="mt-1 text-sm text-slate-500">This team has not created its detailed project proposal draft.</p>
+        <button type="button" onClick={onBack} className="mt-4 text-sm font-semibold text-primary hover:underline">Back to workspace</button>
       </div>
     );
   }
 
-  const sections = [
-    { key: 'problem', label: 'Problem Statement', val: proposal.problem },
-    { key: 'solution', label: 'Proposed Solution', val: proposal.solution },
-    { key: 'targetCustomers', label: 'Target Customers', val: proposal.targetCustomers },
-    { key: 'valueProposition', label: 'Value Proposition', val: proposal.valueProposition },
-    { key: 'marketSize', label: 'Market Size & Potential', val: proposal.marketSize },
-    { key: 'competitors', label: 'Competitors & Competitive Advantage', val: proposal.competitors },
-    { key: 'businessModel', label: 'Business Model', val: proposal.businessModel },
-    { key: 'revenueModel', label: 'Revenue Model', val: proposal.revenueModel },
-    { key: 'marketingStrategy', label: 'Marketing & Sales Strategy', val: proposal.marketingStrategy },
-    { key: 'technology', label: 'Technology Stack', val: proposal.technology },
-    { key: 'financialPlan', label: 'Financial Plan', val: proposal.financialPlan },
-    { key: 'roadmap', label: 'Product Roadmap & Milestones', val: proposal.roadmap },
-    { key: 'teamIntroduction', label: 'Team Introduction & Roles', val: proposal.teamIntroduction },
-  ];
+  const relevantDate = proposalDate(proposal);
+  const sections = projectProposalFields.filter((field) => !['title', 'startupName', 'tagline'].includes(field.name));
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm overflow-hidden max-w-4xl mx-auto">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-slate-900 to-slate-800 p-6 sm:p-8 text-white relative">
-        <div className="flex items-center justify-between flex-wrap gap-4">
-          <button
-            onClick={onBack}
-            className="flex items-center gap-1.5 text-slate-300 hover:text-white transition-all text-xs font-semibold uppercase tracking-wider"
-          >
-            <ArrowLeft className="w-4 h-4" /> Back to Workspace
+    <section className="mx-auto max-w-4xl overflow-hidden rounded-2xl border border-slate-200/60 bg-white shadow-sm">
+      <header className="bg-gradient-to-r from-slate-900 to-slate-800 p-6 text-white sm:p-8">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <button type="button" onClick={onBack} className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-slate-300 transition hover:text-white">
+            <ArrowLeft className="h-4 w-4" /> Back to workspace
           </button>
-          <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${statusColors[proposal.status]}`}>
-            {proposal.status}
+          <span className={`rounded-full border px-3 py-1 text-xs font-bold ${statusColors[proposal.status]}`}>
+            {projectProposalStatusLabel[proposal.status]}
           </span>
         </div>
 
         <div className="mt-6 flex items-start gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-white/10 flex items-center justify-center shrink-0 border border-white/10">
-            <FileText className="w-6 h-6 text-primary-200" />
-          </div>
+          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/10">
+            <FileText className="h-6 w-6 text-primary-200" />
+          </span>
           <div>
-            <h1 className="text-2xl sm:text-3xl font-black">{proposal.startupName || 'Unnamed Startup'}</h1>
-            {proposal.tagline && <p className="text-slate-300/80 mt-1 italic text-sm sm:text-base">"{proposal.tagline}"</p>}
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">{proposal.title || 'Untitled proposal'}</p>
+            <h1 className="mt-1 text-2xl font-black sm:text-3xl">{proposal.startupName || 'Unnamed startup'}</h1>
+            {proposal.tagline && <p className="mt-1 text-sm italic text-slate-300/80 sm:text-base">“{proposal.tagline}”</p>}
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-6 mt-6 pt-6 border-t border-white/10 text-xs text-slate-400">
-          <span className="flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5" /> Updated {new Date(proposal.updatedAt).toLocaleString()}</span>
-          {proposal.submittedAt && (
-            <span className="flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5 text-blue-400" /> Submitted {new Date(proposal.submittedAt).toLocaleDateString()}</span>
-          )}
-        </div>
-      </div>
+        {relevantDate && (
+          <div className="mt-6 flex items-center gap-1.5 border-t border-white/10 pt-5 text-xs text-slate-400">
+            <Calendar className="h-3.5 w-3.5" /> {relevantDate.label} {new Date(relevantDate.value).toLocaleString()}
+          </div>
+        )}
+      </header>
 
-      {/* Content */}
-      <div className="p-6 sm:p-8 space-y-6">
-        {sections.map(({ key, label, val }) => (
-          <div key={label} className="p-5 rounded-2xl bg-slate-50/50 border border-slate-100 group">
-            <div className="flex justify-between items-start mb-2.5">
-              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">{label}</h3>
-            </div>
-            <div className="text-slate-700 leading-relaxed text-sm whitespace-pre-line mb-4">
-              {val || <span className="text-slate-300 italic">Not specified yet.</span>}
-            </div>
-            
-            {/* Inline Comment Section */}
-            <div className="border-t border-slate-200/50 pt-2 opacity-0 group-hover:opacity-100 transition-opacity focus-within:opacity-100">
-              <InlineCommentUI proposalId={proposal._id} sectionKey={key} sectionLabel={label} />
+      <div className="space-y-5 p-6 sm:p-8">
+        {proposal.reviews.length > 0 && (
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5">
+            <div className="flex items-center gap-2 text-sm font-bold text-amber-900"><MessageSquareText className="h-4 w-4" /> Lecturer feedback</div>
+            <div className="mt-3 space-y-3">
+              {proposal.reviews.map((review) => (
+                <div key={review.id} className="rounded-xl border border-amber-100 bg-white/70 p-3 text-sm text-slate-700">
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                    <span className="font-bold text-amber-800">{projectProposalStatusLabel[review.toStatus]}</span>
+                    <span className="text-slate-400">{new Date(review.occurredAtUtc).toLocaleString()}</span>
+                  </div>
+                  <p className="mt-2 whitespace-pre-line leading-6">{review.feedback}</p>
+                </div>
+              ))}
             </div>
           </div>
-        ))}
+        )}
+
+        {sections.map((field) => {
+          const value = proposal[field.name as keyof ProjectProposalContent];
+          return (
+            <article key={field.name} className="rounded-2xl border border-slate-100 bg-slate-50/50 p-5">
+              <h2 className="text-xs font-bold uppercase tracking-widest text-slate-400">{field.label}</h2>
+              <p className="mt-2 whitespace-pre-line text-sm leading-6 text-slate-700">
+                {value || <span className="italic text-slate-300">Not specified yet.</span>}
+              </p>
+            </article>
+          );
+        })}
       </div>
-    </div>
+    </section>
   );
 }

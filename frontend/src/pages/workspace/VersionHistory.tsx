@@ -1,315 +1,179 @@
-// @ts-nocheck
-// frontend/src/pages/workspace/VersionHistory.jsx
-import { useState } from 'react';
-import { History, Eye, RotateCcw, Calendar, User } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import { Calendar, Eye, History, Loader2, RotateCcw, User } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { workspaceApi } from '../../api/workspaceApi';
 import Modal from '../../components/ui/Modal';
-import Button from '../../components/ui/Button';
+import type { ProjectProposal, ProjectProposalContent, ProjectProposalVersion, ProjectProposalVersionSummary } from '../../types/projectProposal';
+import { parseApiError } from '../../utils/apiError';
+import { unwrapApiData } from '../../utils/classMappers';
+import { projectProposalFields } from '../../utils/projectProposal';
 
-// Zero-dependency pure JS Word-level LCS Diffing Component
-function DiffText({ oldText = '', newText = '' }) {
-  const o = oldText || '';
-  const n = newText || '';
-  
-  if (o === n) {
-    return <span className="whitespace-pre-wrap">{n || '—'}</span>;
+type Props = {
+  proposal: ProjectProposal;
+  canRestore: boolean;
+  onProposalChanged: (proposal: ProjectProposal) => void;
+};
+
+type DiffPart = { value: string; type: 'equal' | 'added' | 'removed' };
+
+function DiffText({ oldText = '', newText = '' }: { oldText?: string; newText?: string }) {
+  if (oldText === newText) return <span className="whitespace-pre-wrap">{newText || '—'}</span>;
+  const oldWords = oldText.split(/(\s+)/);
+  const newWords = newText.split(/(\s+)/);
+  if (oldWords.length * newWords.length > 40_000) {
+    return <span className="space-y-2"><del className="block whitespace-pre-wrap rounded bg-red-50 p-2 text-red-800">{oldText || '—'}</del><ins className="block whitespace-pre-wrap rounded bg-emerald-50 p-2 text-emerald-900 no-underline">{newText || '—'}</ins></span>;
   }
-
-  // Tokenize text into words & white-spaces so we retain format
-  const words1 = o.split(/(\s+)/);
-  const words2 = n.split(/(\s+)/);
-  
-  const n1 = words1.length;
-  const n2 = words2.length;
-  
-  // DP table for LCS
-  const dp = Array.from({ length: n1 + 1 }, () => Array(n2 + 1).fill(0));
-  
-  for (let i = 1; i <= n1; i++) {
-    for (let j = 1; j <= n2; j++) {
-      if (words1[i - 1] === words2[j - 1]) {
-        dp[i][j] = dp[i - 1][j - 1] + 1;
-      } else {
-        dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
-      }
+  const table = Array.from({ length: oldWords.length + 1 }, () => Array<number>(newWords.length + 1).fill(0));
+  for (let i = 1; i <= oldWords.length; i += 1) {
+    for (let j = 1; j <= newWords.length; j += 1) {
+      table[i][j] = oldWords[i - 1] === newWords[j - 1]
+        ? table[i - 1][j - 1] + 1
+        : Math.max(table[i - 1][j], table[i][j - 1]);
     }
   }
-  
-  const result = [];
-  let i = n1;
-  let j = n2;
-  
+  const result: DiffPart[] = [];
+  let i = oldWords.length;
+  let j = newWords.length;
   while (i > 0 || j > 0) {
-    if (i > 0 && j > 0 && words1[i - 1] === words2[j - 1]) {
-      result.push({ value: words1[i - 1], type: 'equal' });
-      i--;
-      j--;
-    } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
-      result.push({ value: words2[j - 1], type: 'added' });
-      j--;
+    if (i > 0 && j > 0 && oldWords[i - 1] === newWords[j - 1]) {
+      result.push({ value: oldWords[i - 1], type: 'equal' }); i -= 1; j -= 1;
+    } else if (j > 0 && (i === 0 || table[i][j - 1] >= table[i - 1][j])) {
+      result.push({ value: newWords[j - 1], type: 'added' }); j -= 1;
     } else {
-      result.push({ value: words1[i - 1], type: 'removed' });
-      i--;
+      result.push({ value: oldWords[i - 1], type: 'removed' }); i -= 1;
     }
   }
-  
-  result.reverse();
-
   return (
     <span className="whitespace-pre-wrap">
-      {result.map((part, index) => {
-        if (part.type === 'added') {
-          return (
-            <ins 
-              key={index} 
-              className="bg-emerald-50 text-emerald-800 font-semibold px-1 py-0.5 rounded border border-emerald-200/50 no-underline inline-block sm:inline"
-            >
-              {part.value}
-            </ins>
-          );
-        }
-        if (part.type === 'removed') {
-          return (
-            <del 
-              key={index} 
-              className="bg-red-50 text-red-800 line-through px-1 py-0.5 rounded border border-red-200/50 opacity-70 inline-block sm:inline"
-            >
-              {part.value}
-            </del>
-          );
-        }
-        return <span key={index}>{part.value}</span>;
-      })}
+      {result.reverse().map((part, index) => part.type === 'added'
+        ? <ins key={index} className="rounded bg-emerald-100 px-0.5 text-emerald-900 no-underline">{part.value}</ins>
+        : part.type === 'removed'
+          ? <del key={index} className="rounded bg-red-100 px-0.5 text-red-800">{part.value}</del>
+          : <span key={index}>{part.value}</span>)}
     </span>
   );
 }
 
-export default function VersionHistory({ proposalId, versions, isEditable, onRefresh }) {
-  const [selectedVer, setSelectedVer] = useState(null);
-  const [restoring, setRestoring] = useState(false);
+export default function VersionHistory({ proposal, canRestore, onProposalChanged }: Props) {
+  const [versions, setVersions] = useState<ProjectProposalVersionSummary[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [selected, setSelected] = useState<ProjectProposalVersion | null>(null);
+  const [previous, setPrevious] = useState<ProjectProposalVersion | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
   const [compareMode, setCompareMode] = useState(false);
+  const [restoring, setRestoring] = useState(false);
 
-  const getWorkspaceLabel = (team) => {
-    if (!team) return null;
-    return [team.courseCode, team.semester, team.isArchived ? 'Archived' : null]
-      .filter(Boolean)
-      .join(' - ');
+  const loadVersions = useCallback(async () => {
+    setLoading(true);
+    setLoadError('');
+    try {
+      const response = await workspaceApi.getProposalVersions(proposal.id);
+      setVersions(unwrapApiData<ProjectProposalVersionSummary[]>(response) || []);
+    } catch (error) {
+      setLoadError(parseApiError(error, 'Unable to load proposal version history.').message);
+    } finally {
+      setLoading(false);
+    }
+  }, [proposal.id]);
+
+  useEffect(() => {
+    void proposal.rowVersion;
+    void loadVersions();
+  }, [loadVersions, proposal.rowVersion]);
+
+  const openVersion = async (summary: ProjectProposalVersionSummary) => {
+    setDetailLoading(true);
+    setCompareMode(false);
+    try {
+      const selectedIndex = versions.findIndex((item) => item.id === summary.id);
+      const previousSummary = selectedIndex >= 0 ? versions[selectedIndex + 1] : undefined;
+      const [selectedResponse, previousResponse] = await Promise.all([
+        workspaceApi.getProposalVersion(proposal.id, summary.id),
+        previousSummary ? workspaceApi.getProposalVersion(proposal.id, previousSummary.id) : Promise.resolve(null),
+      ]);
+      setSelected(unwrapApiData<ProjectProposalVersion>(selectedResponse));
+      setPrevious(previousResponse ? unwrapApiData<ProjectProposalVersion>(previousResponse) : null);
+    } catch (error) {
+      toast.error(parseApiError(error, 'Unable to load this proposal version.').message);
+    } finally {
+      setDetailLoading(false);
+    }
   };
 
-  const handleRestore = async (versionId, versionNumber) => {
-    if (!proposalId) return;
-    if (!window.confirm(`Are you sure you want to restore the proposal to Version ${versionNumber}? This will create a new draft.`)) return;
+  const restore = async (version: ProjectProposalVersion | ProjectProposalVersionSummary) => {
+    if (!canRestore || restoring) return;
+    if (!window.confirm(`Restore version ${version.versionNumber} as a new draft version?`)) return;
     setRestoring(true);
     try {
-      await workspaceApi.restoreProposalVersion(proposalId, versionId);
-      toast.success(`Proposal successfully restored to Version ${versionNumber}!`);
-      onRefresh();
-    } catch (err) {
-      console.error(err);
-      toast.error(err.response?.data?.error || err.message || 'Restore failed');
+      const response = await workspaceApi.restoreProposalVersion(proposal.id, version.id, {
+        rowVersion: proposal.rowVersion,
+        changeNote: `Restored version ${version.versionNumber}.`,
+      });
+      const updated = unwrapApiData<ProjectProposal>(response);
+      if (!updated) throw new Error('The server did not return the restored proposal.');
+      setSelected(null);
+      onProposalChanged(updated);
+      toast.success(`Version ${version.versionNumber} restored as a new draft.`);
+    } catch (error) {
+      toast.error(parseApiError(error, 'Unable to restore this version. Refresh and try again.').message);
     } finally {
       setRestoring(false);
     }
   };
 
-  const showDetail = (ver) => {
-    setSelectedVer(ver);
-    setCompareMode(false); // Reset compare mode whenever new version is viewed
-  };
-
-  // Find immediately preceding version in list for comparison (versions is sorted descending)
-  const selectedIndex = versions && selectedVer
-    ? versions.findIndex(v => v._id === selectedVer._id)
-    : -1;
-  const prevVersion = selectedIndex !== -1 && versions && selectedIndex + 1 < versions.length
-    ? versions[selectedIndex + 1]
-    : null;
-
-  const showDiff = compareMode && prevVersion;
-
   return (
-    <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-5 space-y-4">
+    <section className="rounded-2xl border border-slate-200/60 bg-white p-5 shadow-sm">
       <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-        <div className="flex items-center gap-2">
-          <History className="w-4 h-4 text-primary" />
-          <h3 className="font-bold text-slate-800">Version History</h3>
-        </div>
-        <span className="text-xs bg-slate-100 text-slate-500 font-semibold px-2 py-0.5 rounded">
-          {versions ? versions.length : 0} saves
-        </span>
+        <h2 className="flex items-center gap-2 font-bold text-slate-800"><History className="h-4 w-4 text-primary" /> Version history</h2>
+        <span className="rounded bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-500">{versions.length} saves</span>
       </div>
 
-      {versions && versions.length > 0 ? (
-        <div className="space-y-3 max-h-[300px] overflow-y-auto pr-1">
-          {versions.map((ver) => (
-            <div 
-              key={ver._id} 
-              className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50/40 border border-slate-100 hover:bg-slate-50 transition-all"
-            >
-              <div className="min-w-0 flex-1 pr-2">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-primary">v{ver.versionNumber}</span>
-                  <span className="text-[10px] text-slate-400 font-semibold flex items-center gap-0.5">
-                    <Calendar className="w-3 h-3" /> {new Date(ver.createdAt).toLocaleDateString()}
-                  </span>
-                </div>
-                <p className="text-xs font-medium text-slate-700 mt-1 truncate" title={ver.changeNote}>
-                  {ver.changeNote || 'No change note'}
-                </p>
-                <p className="text-[10px] text-slate-400 mt-0.5 flex items-center gap-0.5">
-                  <User className="w-2.5 h-2.5" /> {ver.changedBy?.name || 'Unknown'}
-                </p>
-                {getWorkspaceLabel(ver.teamId) && (
-                  <p className="text-[10px] text-slate-500 mt-1 font-semibold">
-                    {getWorkspaceLabel(ver.teamId)}
-                  </p>
-                )}
+      {loading ? (
+        <div className="flex items-center justify-center gap-2 py-8 text-sm text-slate-500"><Loader2 className="h-4 w-4 animate-spin" /> Loading versions…</div>
+      ) : loadError ? (
+        <div className="py-6 text-center"><p className="text-sm text-red-600">{loadError}</p><button type="button" onClick={() => void loadVersions()} className="mt-2 text-sm font-semibold text-primary hover:underline">Retry</button></div>
+      ) : versions.length === 0 ? (
+        <p className="py-6 text-center text-sm italic text-slate-400">No saved version yet.</p>
+      ) : (
+        <div className="mt-3 max-h-[360px] space-y-2 overflow-y-auto pr-1">
+          {versions.map((version) => (
+            <div key={version.id} className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50/50 p-3">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2"><span className="text-xs font-bold text-primary">v{version.versionNumber}</span><span className="rounded bg-white px-1.5 py-0.5 text-[10px] font-semibold text-slate-500">{version.purpose === 'Submission' ? 'Submission' : 'Draft save'}</span></div>
+                <p className="mt-1 truncate text-xs font-medium text-slate-700" title={version.changeNote}>{version.changeNote || 'No change note'}</p>
+                <div className="mt-1 flex flex-wrap gap-3 text-[10px] text-slate-400"><span className="flex items-center gap-1"><Calendar className="h-3 w-3" />{new Date(version.createdAtUtc).toLocaleString()}</span><span className="flex items-center gap-1"><User className="h-3 w-3" />{version.changedByUserId}</span></div>
               </div>
-
-              <div className="flex gap-1 shrink-0">
-                <button
-                  onClick={() => showDetail(ver)}
-                  className="p-1.5 border border-slate-200/50 bg-white text-slate-500 rounded-lg hover:text-primary transition-all"
-                  title="View Snapshot"
-                >
-                  <Eye className="w-3.5 h-3.5" />
-                </button>
-                {isEditable && proposalId && (
-                  <button
-                    disabled={restoring}
-                    onClick={() => handleRestore(ver._id, ver.versionNumber)}
-                    className="p-1.5 border border-slate-200/50 bg-white text-slate-500 rounded-lg hover:text-primary transition-all disabled:opacity-50"
-                    title="Restore Version"
-                  >
-                    <RotateCcw className="w-3.5 h-3.5" />
-                  </button>
-                )}
+              <div className="ml-2 flex shrink-0 gap-1">
+                <button type="button" onClick={() => void openVersion(version)} disabled={detailLoading} aria-label={`View version ${version.versionNumber}`} className="rounded-lg border border-slate-200 bg-white p-2 text-slate-500 hover:text-primary disabled:opacity-50"><Eye className="h-3.5 w-3.5" /></button>
+                {canRestore && <button type="button" onClick={() => void restore(version)} disabled={restoring} aria-label={`Restore version ${version.versionNumber}`} className="rounded-lg border border-slate-200 bg-white p-2 text-slate-500 hover:text-primary disabled:opacity-50"><RotateCcw className="h-3.5 w-3.5" /></button>}
               </div>
             </div>
           ))}
         </div>
-      ) : (
-        <div className="text-center py-4 text-slate-400 text-sm italic">
-          No version history yet.
-        </div>
       )}
 
-      {/* Snapshot Modal Detail */}
-      <Modal
-        isOpen={selectedVer !== null}
-        onClose={() => setSelectedVer(null)}
-        title={selectedVer ? `Proposal Snapshot v${selectedVer.versionNumber}` : ''}
-        size="lg"
-      >
-        {selectedVer && (
+      <Modal isOpen={selected !== null} onClose={() => setSelected(null)} title={selected ? `Proposal snapshot v${selected.versionNumber}` : ''} size="xl">
+        {selected && (
           <div className="space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
-              <div>
-                <p className="text-xs text-slate-400">Created by <span className="font-semibold text-slate-700">{selectedVer.changedBy?.name}</span> ({selectedVer.changedBy?.email})</p>
-                <p className="text-xs text-slate-400 mt-0.5">Date: {new Date(selectedVer.createdAt).toLocaleString()}</p>
-                {getWorkspaceLabel(selectedVer.teamId) && (
-                  <p className="text-xs text-slate-400 mt-0.5">Workspace: {getWorkspaceLabel(selectedVer.teamId)}</p>
-                )}
-              </div>
-
-              <div className="flex items-center gap-2">
-                {prevVersion && (
-                  <button
-                    type="button"
-                    onClick={() => setCompareMode(!compareMode)}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all shadow-sm ${
-                      compareMode 
-                        ? 'bg-primary-50 text-primary border-primary-200 hover:bg-primary-100' 
-                        : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-                    }`}
-                  >
-                    <div className={`w-2 h-2 rounded-full ${compareMode ? 'bg-primary animate-pulse' : 'bg-slate-300'}`} />
-                    Compare with v{prevVersion.versionNumber}
-                  </button>
-                )}
-                <span className="text-xs bg-slate-50 border border-slate-200 text-slate-600 px-3 py-1.5 rounded-xl font-bold">
-                  Note: {selectedVer.changeNote || 'No change note'}
-                </span>
-              </div>
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4 text-xs text-slate-500">
+              <div><p>{new Date(selected.createdAtUtc).toLocaleString()}</p><p className="mt-1">{selected.changeNote || 'No change note'}</p></div>
+              {previous && <button type="button" onClick={() => setCompareMode((value) => !value)} className={`rounded-xl border px-3 py-2 font-bold ${compareMode ? 'border-primary-200 bg-primary-50 text-primary' : 'border-slate-200 bg-white text-slate-600'}`}>{compareMode ? 'Hide comparison' : `Compare with v${previous.versionNumber}`}</button>}
             </div>
-
-            <div className="space-y-4 text-slate-700 text-sm max-h-[55vh] overflow-y-auto pr-1">
-              <div>
-                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-0.5">Startup Name</h4>
-                <p className="font-bold text-slate-900 mt-0.5 text-base">
-                  {showDiff ? (
-                    <DiffText oldText={prevVersion.snapshot.startupName} newText={selectedVer.snapshot.startupName} />
-                  ) : (
-                    selectedVer.snapshot.startupName || '—'
-                  )}
-                </p>
-              </div>
-              <div>
-                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-0.5">Tagline</h4>
-                <p className="italic text-slate-600 mt-0.5">
-                  {showDiff ? (
-                    <DiffText oldText={prevVersion.snapshot.tagline} newText={selectedVer.snapshot.tagline} />
-                  ) : (
-                    selectedVer.snapshot.tagline || '—'
-                  )}
-                </p>
-              </div>
-              <hr className="border-slate-100" />
-              {[
-                { key: 'problem', label: 'Problem' },
-                { key: 'solution', label: 'Solution' },
-                { key: 'targetCustomers', label: 'Target Customers' },
-                { key: 'valueProposition', label: 'Value Proposition' },
-                { key: 'marketSize', label: 'Market Size' },
-                { key: 'competitors', label: 'Competitors' },
-                { key: 'businessModel', label: 'Business Model' },
-                { key: 'revenueModel', label: 'Revenue Model' },
-                { key: 'marketingStrategy', label: 'Marketing Strategy' },
-                { key: 'technology', label: 'Technology Stack' },
-                { key: 'financialPlan', label: 'Financial Plan' },
-                { key: 'roadmap', label: 'Roadmap' },
-                { key: 'teamIntroduction', label: 'Team Introduction' },
-              ].map(({ key, label }) => {
-                const curVal = selectedVer.snapshot[key];
-                const oldVal = prevVersion ? prevVersion.snapshot[key] : '';
-                return (
-                  <div key={key} className="bg-slate-50 p-3.5 rounded-xl border border-slate-100/60">
-                    <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">{label}</h4>
-                    {showDiff ? (
-                      <div className="text-slate-700 leading-relaxed">
-                        <DiffText oldText={oldVal} newText={curVal} />
-                      </div>
-                    ) : (
-                      <p className="text-slate-700 whitespace-pre-line leading-relaxed">{curVal || '—'}</p>
-                    )}
-                  </div>
-                );
+            <div className="max-h-[55vh] space-y-3 overflow-y-auto pr-1">
+              {projectProposalFields.map((field) => {
+                const currentValue = selected.snapshot[field.name as keyof ProjectProposalContent];
+                const oldValue = previous?.snapshot[field.name as keyof ProjectProposalContent] || '';
+                return <div key={field.name} className="rounded-xl border border-slate-100 bg-slate-50 p-3"><h3 className="text-xs font-bold uppercase tracking-wide text-slate-400">{field.label}</h3><div className="mt-1 text-sm leading-6 text-slate-700">{compareMode && previous ? <DiffText oldText={oldValue} newText={currentValue} /> : <span className="whitespace-pre-wrap">{currentValue || '—'}</span>}</div></div>;
               })}
             </div>
-
-            <div className="pt-3 border-t border-slate-100 flex justify-end gap-2">
-              <Button variant="outline" size="sm" onClick={() => setSelectedVer(null)}>
-                Close
-              </Button>
-              {isEditable && proposalId && (
-                <Button 
-                  variant="primary" 
-                  size="sm"
-                  onClick={() => {
-                    const verNum = selectedVer.versionNumber;
-                    const verId = selectedVer._id;
-                    setSelectedVer(null);
-                    handleRestore(verId, verNum);
-                  }}
-                >
-                  Restore this version
-                </Button>
-              )}
+            <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
+              <button type="button" onClick={() => setSelected(null)} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700">Close</button>
+              {canRestore && <button type="button" onClick={() => void restore(selected)} disabled={restoring} className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{restoring && <Loader2 className="h-4 w-4 animate-spin" />} Restore this version</button>}
             </div>
           </div>
         )}
       </Modal>
-    </div>
+    </section>
   );
 }

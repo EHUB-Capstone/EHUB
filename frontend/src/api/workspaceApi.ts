@@ -1,27 +1,38 @@
-// @ts-nocheck
-// frontend/src/api/workspaceApi.js
 import axiosClient from './axiosClient';
+import type { ApiResponse } from '../types/auth';
+import type {
+  CreateProjectProposalRequest,
+  ProjectProposal,
+  ProjectProposalVersion,
+  ProjectProposalVersionSummary,
+  RestoreProjectProposalVersionRequest,
+  ReviewProjectProposalRequest,
+  SubmitProjectProposalRequest,
+  UpdateProjectProposalRequest,
+} from '../types/projectProposal';
+import type { ProjectWorkspaceDetail, ProjectWorkspaceProfile } from '../types/projectWorkspace';
 import type { ApiEnvelope, WorkspaceOption } from '../types/workspaceTools';
 
 export const workspaceApi = {
   getMyWorkspace: () => axiosClient.get('/workspace/my-team'),
   getAccessibleTeams: (): Promise<ApiEnvelope<WorkspaceOption[]>> => axiosClient.get('/workspace/accessible-teams'),
-  getTeamWorkspace: (teamId) => axiosClient.get(`/workspace/teams/${teamId}`),
-  createWorkspace: (teamId, payload) => axiosClient.post(`/workspace/teams/${teamId}`, payload),
-  updateWorkspaceProfile: (teamId, payload) => axiosClient.put(`/workspace/teams/${teamId}/profile`, payload),
-  createProposal: (teamId, payload) => axiosClient.post(`/workspace/teams/${teamId}/proposal`, payload),
-  getProposal: (teamId) => axiosClient.get(`/workspace/teams/${teamId}/proposal`),
-  updateProposal: (proposalId, payload) => axiosClient.put(`/workspace/proposals/${proposalId}`, payload),
-  submitProposal: (proposalId, payload = {}) => axiosClient.put(`/workspace/proposals/${proposalId}/submit`, payload),
+  getTeamWorkspace: (teamId: string): Promise<ApiResponse<ProjectWorkspaceDetail>> => axiosClient.get(`/workspace/teams/${teamId}`),
+  createWorkspace: (teamId: string, payload: unknown): Promise<ApiResponse<ProjectWorkspaceProfile>> => axiosClient.post(`/workspace/teams/${teamId}`, payload),
+  updateWorkspaceProfile: (teamId: string, payload: unknown): Promise<ApiResponse<ProjectWorkspaceProfile>> => axiosClient.put(`/workspace/teams/${teamId}/profile`, payload),
+  createProposal: (teamId: string, payload: CreateProjectProposalRequest): Promise<ApiResponse<ProjectProposal>> => axiosClient.post(`/workspace/teams/${teamId}/proposal`, payload),
+  getProposal: (teamId: string): Promise<ApiResponse<ProjectProposal>> => axiosClient.get(`/workspace/teams/${teamId}/proposal`),
+  updateProposal: (proposalId: string, payload: UpdateProjectProposalRequest): Promise<ApiResponse<ProjectProposal>> => axiosClient.put(`/workspace/proposals/${proposalId}`, payload),
+  submitProposal: (proposalId: string, payload: SubmitProjectProposalRequest): Promise<ApiResponse<ProjectProposal>> => axiosClient.post(`/workspace/proposals/${proposalId}/submit`, payload),
   
-  getProposalVersions: (proposalId) => axiosClient.get(`/workspace/proposals/${proposalId}/versions`),
-  getProposalVersion: (proposalId, versionId) => axiosClient.get(`/workspace/proposals/${proposalId}/versions/${versionId}`),
-  restoreProposalVersion: (proposalId, versionId) => axiosClient.post(`/workspace/proposals/${proposalId}/restore/${versionId}`),
+  getProposalVersions: (proposalId: string): Promise<ApiResponse<ProjectProposalVersionSummary[]>> => axiosClient.get(`/workspace/proposals/${proposalId}/versions`),
+  getProposalVersion: (proposalId: string, versionId: string): Promise<ApiResponse<ProjectProposalVersion>> => axiosClient.get(`/workspace/proposals/${proposalId}/versions/${versionId}`),
+  restoreProposalVersion: (proposalId: string, versionId: string, payload: RestoreProjectProposalVersionRequest): Promise<ApiResponse<ProjectProposal>> => axiosClient.post(`/workspace/proposals/${proposalId}/versions/${versionId}/restore`, payload),
+  reviewProposal: (proposalId: string, payload: ReviewProjectProposalRequest): Promise<ApiResponse<ProjectProposal>> => axiosClient.post(`/workspace/proposals/${proposalId}/review`, payload),
   
-  uploadPitchDeck: (teamId, formData) => axiosClient.post(`/workspace/teams/${teamId}/decks/upload`, formData, {
+  uploadPitchDeck: (teamId: string, formData: FormData) => axiosClient.post(`/workspace/teams/${teamId}/decks/upload`, formData, {
     headers: { 'Content-Type': 'multipart/form-data' }
   }),
-  getPitchDecks: (teamId) => axiosClient.get(`/workspace/teams/${teamId}/decks`),
-  deletePitchDeck: (deckId) => axiosClient.delete(`/workspace/decks/${deckId}`),
-  downloadPitchDeckUrl: (deckId) => `${axiosClient.defaults.baseURL || '/api'}/workspace/decks/${deckId}/download`
+  getPitchDecks: (teamId: string) => axiosClient.get(`/workspace/teams/${teamId}/decks`),
+  deletePitchDeck: (deckId: string) => axiosClient.delete(`/workspace/decks/${deckId}`),
+  downloadPitchDeckUrl: (deckId: string) => `${axiosClient.defaults.baseURL || '/api'}/workspace/decks/${deckId}/download`
 };
