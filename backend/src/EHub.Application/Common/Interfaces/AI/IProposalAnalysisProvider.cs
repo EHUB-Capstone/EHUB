@@ -10,7 +10,13 @@ public sealed record ProposalAnalysisProviderRequest(
     ProjectProposalAnalysisCandidateScope CandidateScope,
     bool IncludeCrossSemester,
     ProjectProposalAnalysisLanguageMode LanguageMode,
-    string ConfigurationVersion);
+    string ConfigurationVersion,
+    IReadOnlyList<ProposalAnalysisProviderCandidate> RetrievalCandidates);
+
+public sealed record ProposalAnalysisProviderCandidate(
+    Guid ProposalVersionId,
+    ProjectProposalSnapshotDto Proposal,
+    double SemanticSimilarity);
 
 public sealed record ProposalAnalysisProviderResponse(
     string Summary,

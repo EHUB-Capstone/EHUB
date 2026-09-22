@@ -28,5 +28,27 @@ public sealed class ProjectProposalAnalysisReportDto
     public string Model { get; init; } = string.Empty;
     public string PromptVersion { get; init; } = string.Empty;
     public string OutputSchemaVersion { get; init; } = string.Empty;
+    public string EmbeddingProvider { get; init; } = string.Empty;
+    public string EmbeddingModel { get; init; } = string.Empty;
+    public int EmbeddingDimension { get; init; }
+    public string TextSchemaVersion { get; init; } = string.Empty;
+    public string RetrievalVersion { get; init; } = string.Empty;
+    public IReadOnlyCollection<ProjectProposalAnalysisMatchDto> Matches { get; init; } = Array.Empty<ProjectProposalAnalysisMatchDto>();
     public DateTime GeneratedAtUtc { get; init; }
+}
+
+public sealed class ProjectProposalAnalysisMatchDto
+{
+    public int Rank { get; init; }
+    public Guid ProposalVersionId { get; init; }
+    public Guid ProjectProposalId { get; init; }
+    public Guid ProjectId { get; init; }
+    public Guid TeamId { get; init; }
+    public Guid ClassId { get; init; }
+    public string ClassCode { get; init; } = string.Empty;
+    public string SemesterCode { get; init; } = string.Empty;
+    public string Title { get; init; } = string.Empty;
+    public string StartupName { get; init; } = string.Empty;
+    public double SemanticSimilarity { get; init; }
+    public DateTime SubmittedAtUtc { get; init; }
 }

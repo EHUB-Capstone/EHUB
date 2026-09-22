@@ -36,6 +36,23 @@ public static class DependencyInjection
         services.AddScoped<IApplicationDbContext>(provider => provider.GetRequiredService<AppDbContext>());
         services.AddSingleton<IAiFeatureGate, ConfigurationAiFeatureGate>();
         services.AddScoped<IProposalAnalysisProvider, MockProposalAnalysisProvider>();
+        services.AddSingleton<DeterministicLocalEmbeddingProvider>();
+        services.AddHttpClient<GeminiEmbeddingProvider>((provider, client) =>
+        {
+            var options = provider.GetRequiredService<Microsoft.Extensions.Options.IOptions<ProposalEmbeddingOptions>>().Value;
+            client.BaseAddress = new Uri("https://generativelanguage.googleapis.com/");
+            client.Timeout = TimeSpan.FromSeconds(Math.Clamp(options.TimeoutSeconds, 5, 120));
+        });
+        services.AddScoped<IEmbeddingProvider>(provider =>
+        {
+            var options = provider.GetRequiredService<Microsoft.Extensions.Options.IOptions<ProposalEmbeddingOptions>>().Value;
+            return options.Provider.Trim().ToLowerInvariant() switch
+            {
+                "deterministiclocal" => provider.GetRequiredService<DeterministicLocalEmbeddingProvider>(),
+                "gemini" => provider.GetRequiredService<GeminiEmbeddingProvider>(),
+                _ => throw new InvalidOperationException("AI:Embedding:Provider must be DeterministicLocal or Gemini.")
+            };
+        });
         services.AddSingleton<ProjectProposalAnalysisWorker>();
         services.AddSingleton<IHostedService>(provider => provider.GetRequiredService<ProjectProposalAnalysisWorker>());
         services.AddHostedService<ClassImportSessionCleanupService>();
@@ -110,6 +127,8 @@ public static class DependencyInjection
         services.Configure<GoogleOptions>(configuration.GetSection(GoogleOptions.SectionName));
         services.Configure<FrontendOptions>(configuration.GetSection(FrontendOptions.SectionName));
         services.Configure<PasswordResetOptions>(configuration.GetSection(PasswordResetOptions.SectionName));
+        services.AddOptions<ProposalEmbeddingOptions>()
+            .Bind(configuration.GetSection(ProposalEmbeddingOptions.SectionName));
         services.AddOptions<RegistrationOtpOptions>()
             .Bind(configuration.GetSection(RegistrationOtpOptions.SectionName))
             .Validate(options => options.ExpirationMinutes is >= 1 and <= 15,

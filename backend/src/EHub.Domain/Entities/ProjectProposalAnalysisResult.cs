@@ -16,5 +16,12 @@ public class ProjectProposalAnalysisResult : BaseEntity
     public string Model { get; set; } = string.Empty;
     public string PromptVersion { get; set; } = string.Empty;
     public string OutputSchemaVersion { get; set; } = string.Empty;
+    public string EmbeddingProvider { get; set; } = string.Empty;
+    public string EmbeddingModel { get; set; } = string.Empty;
+    public int EmbeddingDimension { get; set; }
+    public string TextSchemaVersion { get; set; } = string.Empty;
+    public string RetrievalVersion { get; set; } = string.Empty;
     public DateTime GeneratedAtUtc { get; set; }
+
+    public virtual ICollection<ProjectProposalAnalysisMatch> Matches { get; set; } = new List<ProjectProposalAnalysisMatch>();
 }

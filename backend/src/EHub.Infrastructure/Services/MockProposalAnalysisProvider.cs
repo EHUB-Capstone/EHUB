@@ -21,13 +21,17 @@ public sealed class MockProposalAnalysisProvider : IProposalAnalysisProvider
         if (differentiators.Count == 0)
             differentiators.Add("Cần bổ sung dữ liệu để xác định điểm khác biệt tiềm năng.");
 
+        var retrievalSummary = request.RetrievalCandidates.Count == 0
+            ? "Chưa có proposal lịch sử hợp lệ để đối sánh."
+            : $"Đã truy xuất {request.RetrievalCandidates.Count} proposal gần nhất theo độ tương đồng vector; mức cao nhất là {Math.Max(0, request.RetrievalCandidates[0].SemanticSimilarity):P1}.";
+
         return Task.FromResult(new ProposalAnalysisProviderResponse(
-            $"Báo cáo mô phỏng đã tiếp nhận đề xuất {proposalName}. Giai đoạn này chỉ kiểm tra luồng xử lý và cấu trúc báo cáo; chưa so sánh ngữ nghĩa với kho dự án lịch sử.",
+            $"Báo cáo retrieval đã tiếp nhận đề xuất {proposalName}. {retrievalSummary}",
             ProjectProposalOverlapRisk.InsufficientData,
             differentiators,
             [
                 "Đây là kết quả mô phỏng, không phải kết luận về mức độ trùng lặp hoặc đạo văn.",
-                "Chưa áp dụng embedding, cosine similarity hoặc truy xuất dự án tương đồng.",
+                "Đã áp dụng embedding và cosine similarity ở mức toàn proposal; chưa có phân tích theo từng trường hoặc diễn giải bằng LLM.",
                 "Kết quả chỉ hỗ trợ tham khảo và không tự động quyết định duyệt hoặc từ chối đề xuất."
             ],
             "Mock",

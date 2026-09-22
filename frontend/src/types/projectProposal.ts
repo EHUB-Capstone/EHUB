@@ -108,7 +108,28 @@ export interface ProjectProposalAnalysisReport {
   model: string;
   promptVersion: string;
   outputSchemaVersion: string;
+  embeddingProvider: string;
+  embeddingModel: string;
+  embeddingDimension: number;
+  textSchemaVersion: string;
+  retrievalVersion: string;
+  matches: ProjectProposalAnalysisMatch[];
   generatedAtUtc: string;
+}
+
+export interface ProjectProposalAnalysisMatch {
+  rank: number;
+  proposalVersionId: string;
+  projectProposalId: string;
+  projectId: string;
+  teamId: string;
+  classId: string;
+  classCode: string;
+  semesterCode: string;
+  title: string;
+  startupName: string;
+  semanticSimilarity: number;
+  submittedAtUtc: string;
 }
 
 export interface ProjectProposalAnalysis {

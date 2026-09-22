@@ -22,6 +22,10 @@ x-backend-environment: &backend-environment
   Frontend__BaseUrl: https://e-hub.com.vn
   ReverseProxy__Enabled: "true"
   Features__AI__Enabled: ${FEATURES_AI_ENABLED:-OFF}
+  AI__Embedding__Provider: ${AI_EMBEDDING_PROVIDER:-DeterministicLocal}
+  AI__Embedding__ApiKey: ${GEMINI_API_KEY:-}
+  AI__Embedding__Model: ${GEMINI_EMBEDDING_MODEL:-gemini-embedding-2}
+  AI__Embedding__Dimension: ${GEMINI_EMBEDDING_DIMENSION:-768}
   PasswordReset__TokenExpirationMinutes: ${PASSWORD_RESET_TOKEN_EXPIRATION_MINUTES:-15}
   RegistrationOtp__HashKey: ${REGISTRATION_OTP_HASH_KEY:?REGISTRATION_OTP_HASH_KEY is required}
   RegistrationOtp__ExpirationMinutes: ${REGISTRATION_OTP_EXPIRATION_MINUTES:-5}

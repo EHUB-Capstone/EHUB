@@ -17,17 +17,20 @@ public sealed class ProjectProposalAnalysisJobProcessor : IProjectProposalAnalys
     private readonly IApplicationDbContext _context;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IProposalAnalysisProvider _provider;
+    private readonly IProposalSimilarityRetriever _retriever;
     private readonly IDateTimeProvider _dateTimeProvider;
 
     public ProjectProposalAnalysisJobProcessor(
         IApplicationDbContext context,
         IUnitOfWork unitOfWork,
         IProposalAnalysisProvider provider,
+        IProposalSimilarityRetriever retriever,
         IDateTimeProvider dateTimeProvider)
     {
         _context = context;
         _unitOfWork = unitOfWork;
         _provider = provider;
+        _retriever = retriever;
         _dateTimeProvider = dateTimeProvider;
     }
 
@@ -66,6 +69,12 @@ public sealed class ProjectProposalAnalysisJobProcessor : IProjectProposalAnalys
                 innerException: exception);
         }
 
+        var retrieval = await _retriever.RetrieveAsync(
+            job.ProposalVersionId,
+            job.IncludeCrossSemester,
+            cancellationToken);
+        Validate(retrieval);
+
         var providerResult = await _provider.AnalyzeAsync(new ProposalAnalysisProviderRequest(
             job.Id,
             job.ProposalVersionId,
@@ -73,7 +82,11 @@ public sealed class ProjectProposalAnalysisJobProcessor : IProjectProposalAnalys
             job.CandidateScope,
             job.IncludeCrossSemester,
             job.LanguageMode,
-            job.ConfigurationVersion), cancellationToken);
+            job.ConfigurationVersion,
+            retrieval.Matches.Select(match => new ProposalAnalysisProviderCandidate(
+                match.ProposalVersionId,
+                match.Proposal,
+                match.SemanticSimilarity)).ToArray()), cancellationToken);
         Validate(providerResult);
 
         await _unitOfWork.ExecuteInSerializableTransactionAsync(async transactionCancellationToken =>
@@ -103,8 +116,35 @@ public sealed class ProjectProposalAnalysisJobProcessor : IProjectProposalAnalys
                     Model = providerResult.Model.Trim(),
                     PromptVersion = providerResult.PromptVersion.Trim(),
                     OutputSchemaVersion = providerResult.OutputSchemaVersion.Trim(),
+                    EmbeddingProvider = retrieval.EmbeddingProvider,
+                    EmbeddingModel = retrieval.EmbeddingModel,
+                    EmbeddingDimension = retrieval.EmbeddingDimension,
+                    TextSchemaVersion = retrieval.TextSchemaVersion,
+                    RetrievalVersion = retrieval.RetrievalVersion,
                     GeneratedAtUtc = _dateTimeProvider.UtcNow
                 };
+
+                foreach (var (match, index) in retrieval.Matches.Select((match, index) => (match, index)))
+                {
+                    result.Matches.Add(new ProjectProposalAnalysisMatch
+                    {
+                        AnalysisResult = result,
+                        CandidateProposalVersionId = match.ProposalVersionId,
+                        Rank = index + 1,
+                        SemanticSimilarity = match.SemanticSimilarity,
+                        CreatedAtUtc = _dateTimeProvider.UtcNow
+                    });
+                }
+
+                if (retrieval.CurrentTextWasTruncated || retrieval.SkippedCandidateCount > 0)
+                {
+                    var limitations = providerResult.Limitations.ToList();
+                    if (retrieval.CurrentTextWasTruncated)
+                        limitations.Add("Nội dung proposal vượt giới hạn embedding và đã được cắt theo quy tắc cố định.");
+                    if (retrieval.SkippedCandidateCount > 0)
+                        limitations.Add($"Đã bỏ qua {retrieval.SkippedCandidateCount} proposal lịch sử có snapshot không tương thích.");
+                    result.LimitationsJson = JsonSerializer.Serialize(limitations.Take(10), JsonOptions);
+                }
                 currentJob.Result = result;
                 _context.ProjectProposalAnalysisResults.Add(result);
             }
@@ -131,6 +171,21 @@ public sealed class ProjectProposalAnalysisJobProcessor : IProjectProposalAnalys
         if (!ValidMetadata(result.Provider) || !ValidMetadata(result.Model)
             || !ValidMetadata(result.PromptVersion) || !ValidMetadata(result.OutputSchemaVersion))
             throw InvalidOutput();
+    }
+
+    private static void Validate(ProposalSimilarityRetrievalResult result)
+    {
+        if (!ValidMetadata(result.EmbeddingProvider)
+            || !ValidMetadata(result.EmbeddingModel)
+            || !ValidMetadata(result.TextSchemaVersion)
+            || !ValidMetadata(result.RetrievalVersion)
+            || result.EmbeddingDimension is <= 0 or > 3072
+            || result.Matches.Count > 10
+            || result.Matches.Any(match => !double.IsFinite(match.SemanticSimilarity)
+                || match.SemanticSimilarity is < -1 or > 1))
+            throw new ProposalAnalysisProcessingException(
+                "PROPOSAL_RETRIEVAL_OUTPUT_INVALID",
+                "The proposal retrieval result was invalid.");
     }
 
     private static bool ValidItems(IReadOnlyCollection<string>? items) =>

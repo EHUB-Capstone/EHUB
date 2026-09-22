@@ -164,6 +164,116 @@ public sealed class ProjectProposalLifecycleIntegrationTests
     }
 
     [Fact]
+    public async Task SemanticRetrieval_RanksClosestProposal_CachesEmbeddings_AndHidesEvidenceFromStudents()
+    {
+        Guid currentJobId;
+        Guid currentVersionId;
+        Guid similarVersionId;
+        ProposalSeed currentSeed;
+        await using (var setupScope = _factory.Services.CreateAsyncScope())
+        {
+            var context = setupScope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var similarSeed = await CreateSeedAsync(context);
+            var unrelatedSeed = await CreateSeedAsync(context);
+            currentSeed = await CreateSeedAsync(context);
+            context.ChangeTracker.Clear();
+            var handler = CreateHandler(setupScope, context, aiEnabled: true);
+
+            var similar = await handler.CreateAsync(
+                similarSeed.TeamId,
+                ThemedDraft("uniquesolarwater", "Similar"),
+                similarSeed.LeaderUserId,
+                SystemRoles.Student);
+            var similarSubmission = await handler.SubmitAsync(similar.Value.Id,
+                new SubmitProjectProposalRequest { RowVersion = similar.Value.RowVersion },
+                similarSeed.LeaderUserId,
+                SystemRoles.Student);
+            similarVersionId = similarSubmission.Value.CurrentSubmittedVersionId!.Value;
+
+            var unrelated = await handler.CreateAsync(
+                unrelatedSeed.TeamId,
+                ThemedDraft("differentmedicalclinic", "Unrelated"),
+                unrelatedSeed.LeaderUserId,
+                SystemRoles.Student);
+            await handler.SubmitAsync(unrelated.Value.Id,
+                new SubmitProjectProposalRequest { RowVersion = unrelated.Value.RowVersion },
+                unrelatedSeed.LeaderUserId,
+                SystemRoles.Student);
+
+            var current = await handler.CreateAsync(
+                currentSeed.TeamId,
+                ThemedDraft("uniquesolarwater", "Current"),
+                currentSeed.LeaderUserId,
+                SystemRoles.Student);
+            var currentSubmission = await handler.SubmitAsync(current.Value.Id,
+                new SubmitProjectProposalRequest { RowVersion = current.Value.RowVersion },
+                currentSeed.LeaderUserId,
+                SystemRoles.Student);
+            currentJobId = currentSubmission.Value.CurrentAnalysisJobId!.Value;
+            currentVersionId = currentSubmission.Value.CurrentSubmittedVersionId!.Value;
+            await DeferOtherPendingAnalysisJobsAsync(context, currentJobId);
+        }
+
+        var worker = new ProjectProposalAnalysisWorker(
+            _factory.Services.GetRequiredService<IServiceScopeFactory>(),
+            new FixedAiFeatureGate(true),
+            NullLogger<ProjectProposalAnalysisWorker>.Instance);
+        (await worker.RunCycleAsync()).Should().Be(1);
+
+        await using var scope = _factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var matches = await db.ProjectProposalAnalysisMatches.AsNoTracking()
+            .Where(match => match.AnalysisResult.AnalysisJobId == currentJobId)
+            .OrderBy(match => match.Rank)
+            .ToArrayAsync();
+        matches.Should().NotBeEmpty();
+        matches.Should().HaveCountLessThanOrEqualTo(10);
+        matches[0].CandidateProposalVersionId.Should().Be(similarVersionId);
+        matches.Select(match => match.Rank).Should().Equal(Enumerable.Range(1, matches.Length));
+
+        var relevantVersionIds = matches.Select(match => match.CandidateProposalVersionId)
+            .Append(currentVersionId)
+            .ToArray();
+        var generatedBefore = await db.ProjectProposalEmbeddings.AsNoTracking()
+            .Where(embedding => relevantVersionIds.Contains(embedding.ProposalVersionId))
+            .ToDictionaryAsync(embedding => embedding.ProposalVersionId, embedding => embedding.GeneratedAtUtc);
+        generatedBefore.Should().ContainKey(currentVersionId);
+        generatedBefore.Should().ContainKey(similarVersionId);
+
+        var studentView = await new ProjectProposalAnalysisQueryHandler(db, new FixedAiFeatureGate(true))
+            .GetAsync(currentJobId, currentSeed.LeaderUserId, SystemRoles.Student);
+        studentView.Value.CanViewDetailedReport.Should().BeFalse();
+        studentView.Value.Report!.Matches.Should().BeEmpty();
+
+        var lecturerView = await new ProjectProposalAnalysisQueryHandler(db, new FixedAiFeatureGate(true))
+            .GetAsync(currentJobId, currentSeed.LecturerUserId, SystemRoles.Lecturer);
+        lecturerView.IsSuccess.Should().BeTrue(lecturerView.Error.Message);
+        lecturerView.Value.CanViewDetailedReport.Should().BeTrue();
+        lecturerView.Value.Report!.Matches.First().ProposalVersionId.Should().Be(similarVersionId);
+
+        db.ChangeTracker.Clear();
+        var retriever = scope.ServiceProvider.GetRequiredService<IProposalSimilarityRetriever>();
+        await retriever.RetrieveAsync(currentVersionId, includeCrossSemester: true);
+        db.ChangeTracker.Clear();
+        var generatedAfter = await db.ProjectProposalEmbeddings.AsNoTracking()
+            .Where(embedding => relevantVersionIds.Contains(embedding.ProposalVersionId))
+            .ToDictionaryAsync(embedding => embedding.ProposalVersionId, embedding => embedding.GeneratedAtUtc);
+        generatedAfter.Should().BeEquivalentTo(generatedBefore);
+
+        var staleEmbedding = await db.ProjectProposalEmbeddings.SingleAsync(embedding => embedding.ProposalVersionId == currentVersionId);
+        staleEmbedding.Model = "obsolete-model";
+        staleEmbedding.GeneratedAtUtc = new DateTime(2000, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        await db.SaveChangesAsync();
+        db.ChangeTracker.Clear();
+        await retriever.RetrieveAsync(currentVersionId, includeCrossSemester: true);
+        db.ChangeTracker.Clear();
+        var refreshedEmbedding = await db.ProjectProposalEmbeddings.AsNoTracking()
+            .SingleAsync(embedding => embedding.ProposalVersionId == currentVersionId);
+        refreshedEmbedding.Model.Should().Be("feature-hashing-384-v1");
+        refreshedEmbedding.GeneratedAtUtc.Should().BeAfter(new DateTime(2000, 1, 1, 0, 0, 0, DateTimeKind.Utc));
+    }
+
+    [Fact]
     public async Task AnalysisFailure_DoesNotChangeSubmittedProposal()
     {
         Guid jobId;
@@ -527,6 +637,31 @@ public sealed class ProjectProposalLifecycleIntegrationTests
             TeamIntroduction = draft.TeamIntroduction,
             ChangeNote = draft.ChangeNote,
             RowVersion = rowVersion
+        };
+    }
+
+    private static CreateProjectProposalRequest ThemedDraft(string token, string suffix)
+    {
+        var detail = Text($"{token} platform connects verified users with measurable operational outcomes and transparent workflows.", 3);
+        return new CreateProjectProposalRequest
+        {
+            Title = $"{token} platform {suffix}",
+            StartupName = $"{token} {suffix}",
+            Tagline = $"A focused {token} service.",
+            Problem = detail,
+            Solution = detail,
+            TargetCustomers = detail,
+            ValueProposition = detail,
+            MarketSize = detail,
+            Competitors = detail,
+            BusinessModel = detail,
+            RevenueModel = detail,
+            MarketingStrategy = detail,
+            Technology = detail,
+            FinancialPlan = detail,
+            Roadmap = detail,
+            TeamIntroduction = detail,
+            ChangeNote = $"{suffix} semantic retrieval test"
         };
     }
 

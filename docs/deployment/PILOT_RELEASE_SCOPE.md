@@ -61,6 +61,14 @@ disabled in the pilot image. Core class features keep their explicit Docker
 build arguments so that a future release can change one capability without
 silently changing the others.
 
+`FEATURES_AI_ENABLED` remains the only runtime ON/OFF switch for the proposal
+analysis feature. The embedding provider is one-time infrastructure
+configuration: use `AI_EMBEDDING_PROVIDER=DeterministicLocal` for offline
+development/tests, or `AI_EMBEDDING_PROVIDER=Gemini` with `GEMINI_API_KEY`
+stored as a VPS secret for real semantic retrieval. The backend never silently
+falls back from Gemini to the local provider, so a provider failure cannot be
+mistaken for a real model result.
+
 ## Required release gates
 
 Before tagging the pilot release:

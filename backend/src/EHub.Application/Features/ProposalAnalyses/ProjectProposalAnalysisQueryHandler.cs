@@ -34,6 +34,11 @@ public sealed class ProjectProposalAnalysisQueryHandler : IProjectProposalAnalys
         var job = await _context.ProjectProposalAnalysisJobs
             .AsNoTracking()
             .Include(candidate => candidate.Result)
+                .ThenInclude(result => result!.Matches)
+                .ThenInclude(match => match.CandidateProposalVersion)
+                .ThenInclude(version => version.ProjectProposal)
+                .ThenInclude(proposal => proposal.Class)
+                .ThenInclude(targetClass => targetClass.Semester)
             .Include(candidate => candidate.ProposalVersion)
                 .ThenInclude(version => version.ProjectProposal)
                 .ThenInclude(proposal => proposal.Team)
@@ -83,6 +88,15 @@ public sealed class ProjectProposalAnalysisQueryHandler : IProjectProposalAnalys
                 Model = job.Result.Model,
                 PromptVersion = job.Result.PromptVersion,
                 OutputSchemaVersion = job.Result.OutputSchemaVersion,
+                EmbeddingProvider = job.Result.EmbeddingProvider,
+                EmbeddingModel = job.Result.EmbeddingModel,
+                EmbeddingDimension = job.Result.EmbeddingDimension,
+                TextSchemaVersion = job.Result.TextSchemaVersion,
+                RetrievalVersion = job.Result.RetrievalVersion,
+                Matches = isStudent ? [] : job.Result.Matches
+                    .OrderBy(match => match.Rank)
+                    .Select(ToMatchDto)
+                    .ToArray(),
                 GeneratedAtUtc = job.Result.GeneratedAtUtc
             }
         });
@@ -108,6 +122,38 @@ public sealed class ProjectProposalAnalysisQueryHandler : IProjectProposalAnalys
     {
         try { return JsonSerializer.Deserialize<string[]>(json) ?? []; }
         catch (JsonException) { return []; }
+    }
+
+    private static ProjectProposalAnalysisMatchDto ToMatchDto(ProjectProposalAnalysisMatch match)
+    {
+        ProjectProposalSnapshotDto? snapshot = null;
+        try
+        {
+            snapshot = JsonSerializer.Deserialize<ProjectProposalSnapshotDto>(
+                match.CandidateProposalVersion.SnapshotJson,
+                new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        }
+        catch (JsonException)
+        {
+            // Historical evidence remains available even if its display snapshot can no longer be parsed.
+        }
+
+        var proposal = match.CandidateProposalVersion.ProjectProposal;
+        return new ProjectProposalAnalysisMatchDto
+        {
+            Rank = match.Rank,
+            ProposalVersionId = match.CandidateProposalVersionId,
+            ProjectProposalId = proposal.Id,
+            ProjectId = proposal.ProjectId,
+            TeamId = proposal.TeamId,
+            ClassId = proposal.ClassId,
+            ClassCode = proposal.Class.ClassCode,
+            SemesterCode = proposal.Class.Semester.Code,
+            Title = snapshot?.Title ?? string.Empty,
+            StartupName = snapshot?.StartupName ?? string.Empty,
+            SemanticSimilarity = Math.Max(0, match.SemanticSimilarity),
+            SubmittedAtUtc = match.CandidateProposalVersion.CreatedAt
+        };
     }
 
     private static bool IsRole(string role, string expected) =>

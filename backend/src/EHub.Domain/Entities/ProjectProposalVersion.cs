@@ -22,4 +22,5 @@ public class ProjectProposalVersion : BaseEntity
 
     public virtual ICollection<ProjectProposalReview> Reviews { get; set; } = new List<ProjectProposalReview>();
     public virtual ProjectProposalAnalysisJob? AnalysisJob { get; set; }
+    public virtual ProjectProposalEmbedding? Embedding { get; set; }
 }
