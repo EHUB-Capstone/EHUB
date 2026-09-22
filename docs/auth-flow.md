@@ -51,7 +51,7 @@ Khi người dùng thực hiện Đăng nhập (Local hoặc Google):
 ### Nhóm 1: Bachelor of Business Administration (BBA)
 *   `BBA_HM`: Hospitality Management (Quản trị Khách sạn)
 *   `BBA_IB`: International Business (Kinh doanh Quốc tế)
-*   `BBA_MC`: Marketing & Communication (Truyền thông Marketing)
+*   `BBA_MC`: Multimedia Communication (Truyền thông Đa phương tiện)
 *   `BBA_MKT`: Marketing (Marketing)
 *   `BEN`: Business English (Tiếng Anh Thương mại)
 *   `BBA_TM`: Tourism Management (Quản trị Du lịch)

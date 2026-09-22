@@ -17,6 +17,7 @@ import {
 } from '../src/utils/authValidation.ts';
 import type { LoginPayload, RegisterPayload } from '../src/types/auth.ts';
 import { parseApiError } from '../src/utils/apiError.ts';
+import { PROGRAM_GROUPS, TEAM_MAJOR_GROUPS, getMajorName } from '../src/constants/majors.ts';
 
 const validLogin = (overrides: Partial<LoginPayload> = {}): LoginPayload => ({
   email: 'student@fpt.edu.vn',
@@ -309,7 +310,11 @@ test('field error map displays only the first FluentValidation error for each fi
     email: 'Email is required.',
   });
 });
-import { requiresMajor } from '../src/utils/requiresMajor.ts';
+import {
+  getMajorCompletionRedirect,
+  MAJOR_COMPLETION_PATH,
+  requiresMajor,
+} from '../src/utils/requiresMajor.ts';
 
 test('students must save a supported major before navigating away from profile', () => {
   for (const major of [undefined, null, '', ' ', 'UNDECLARED', 'UNKNOWN']) {
@@ -319,4 +324,25 @@ test('students must save a supported major before navigating away from profile',
   assert.equal(requiresMajor({ roles: ['Student'], major: ' bit_se ' }), false);
   assert.equal(requiresMajor({ roles: ['Lecturer'] }), false);
   assert.equal(requiresMajor(null), false);
+});
+
+test('BBA_MC uses the Multimedia Communication display name in every major dropdown catalog', () => {
+  const teamMajor = TEAM_MAJOR_GROUPS.flatMap(group => group.majors)
+    .find(major => major.code === 'BBA_MC');
+  const programMajor = PROGRAM_GROUPS.flatMap(group => group.majors)
+    .find(major => major.code === 'BBA_MC');
+
+  assert.equal(teamMajor?.name, 'Multimedia Communication');
+  assert.equal(programMajor?.name, 'Multimedia Communication');
+  assert.equal(getMajorName('BBA_MC'), 'Multimedia Communication');
+});
+
+test('students missing a major can open profile but are redirected there from other pages', () => {
+  const studentWithoutMajor = { roles: ['Student'], major: null };
+
+  assert.equal(MAJOR_COMPLETION_PATH, '/profile');
+  assert.equal(getMajorCompletionRedirect(studentWithoutMajor, '/settings'), '/profile');
+  assert.equal(getMajorCompletionRedirect(studentWithoutMajor, '/student/classes'), '/profile');
+  assert.equal(getMajorCompletionRedirect(studentWithoutMajor, '/profile'), null);
+  assert.equal(getMajorCompletionRedirect({ roles: ['Student'], major: 'BIT_SE' }, '/settings'), null);
 });
