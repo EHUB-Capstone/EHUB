@@ -1,6 +1,7 @@
 using System.IO.Compression;
 using EHub.Application.Common.Interfaces.Persistence;
 using EHub.Application.Common.Interfaces.Storage;
+using EHub.Application.Features.Workspaces.CheckpointAvailability;
 using EHub.Contracts.Workspaces;
 using EHub.Domain.Entities;
 using EHub.Domain.Enums;
@@ -39,6 +40,10 @@ public sealed class CheckpointFileHandler(
         var access = await ResolveAccessAsync(teamId, checkpointNumber, userId, role, cancellationToken);
         if (access.IsFailure) return Result.Failure<WorkspaceCheckpointFileResponse>(access.Error);
         if (!access.Value.IsMember) return Denied<WorkspaceCheckpointFileResponse>();
+
+        var availability = await ResolveAvailabilityAsync(teamId, access.Value.TeamClassId, access.Value.Checkpoint, cancellationToken);
+        if (!availability.CanSubmit)
+            return Invalid<WorkspaceCheckpointFileResponse>(availability.Reason ?? "This checkpoint is not open for submission.");
 
         await using var uploadStream = new MemoryStream(bytes, writable: false);
         var storageResult = await storage.UploadAsync(uploadStream, SafeOriginalName(originalName), expectedContentType, teamId, checkpointNumber, cancellationToken);
@@ -150,7 +155,19 @@ public sealed class CheckpointFileHandler(
         var checkpoint = await context.Checkpoints.AsNoTracking().FirstOrDefaultAsync(item => item.CourseId == team.Class.CourseId && item.ClassId == null && item.CheckpointNumber == checkpointNumber && item.Status != CheckpointStatus.Archived, cancellationToken);
         var project = await context.Projects.AsNoTracking().FirstOrDefaultAsync(item => item.TeamId == teamId, cancellationToken);
         if (checkpoint is null || project is null) return Result.Failure<Access>(ErrorCodes.WorkspaceNotFound, "The checkpoint workspace was not found.");
-        return Result.Success(new Access(checkpoint, project, isMember, team.TeamMembers.FirstOrDefault(member => member.ClassStudent.Student.UserId == userId)?.ClassStudent.Student.FullName ?? string.Empty));
+        return Result.Success(new Access(checkpoint, project, team.ClassId, isMember, team.TeamMembers.FirstOrDefault(member => member.ClassStudent.Student.UserId == userId)?.ClassStudent.Student.FullName ?? string.Empty));
+    }
+
+    private async Task<CheckpointAvailabilityResult> ResolveAvailabilityAsync(Guid teamId, Guid classId, Checkpoint checkpoint, CancellationToken cancellationToken)
+    {
+        var schedule = await context.Checkpoints.AsNoTracking().FirstOrDefaultAsync(item =>
+            item.ClassId == classId && item.CheckpointNumber == checkpoint.CheckpointNumber, cancellationToken);
+        var previousCheckpoint = await context.Checkpoints.AsNoTracking().Where(item =>
+                item.CourseId == checkpoint.CourseId && item.ClassId == null && item.CheckpointNumber < checkpoint.CheckpointNumber)
+            .OrderByDescending(item => item.CheckpointNumber).FirstOrDefaultAsync(cancellationToken);
+        var previousCompleted = previousCheckpoint is null || await context.Submissions.AsNoTracking().AnyAsync(item =>
+            item.TeamId == teamId && item.CheckpointId == previousCheckpoint.Id && item.Status == SubmissionStatus.Submitted, cancellationToken);
+        return CheckpointAvailabilityRules.Evaluate(schedule, previousCompleted, DateTime.UtcNow);
     }
 
     private static bool HasExpectedSignature(byte[] bytes, string extension)
@@ -174,5 +191,5 @@ public sealed class CheckpointFileHandler(
     private static bool IsRole(string role, string expected) => string.Equals(role, expected, StringComparison.OrdinalIgnoreCase);
     private static Result<T> Denied<T>() => Result.Failure<T>(ErrorCodes.WorkspaceAccessDenied, "You do not have access to this team workspace.");
     private static Result<T> Invalid<T>(string message) => Result.Failure<T>(ErrorCodes.WorkspaceValidationError, message);
-    private sealed record Access(Checkpoint Checkpoint, Project Project, bool IsMember, string UserName);
+    private sealed record Access(Checkpoint Checkpoint, Project Project, Guid TeamClassId, bool IsMember, string UserName);
 }

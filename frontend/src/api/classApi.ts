@@ -32,6 +32,12 @@ export const classApi = {
     axiosClient.post(`/classes/${id}/reopen`, data),
   getAudit: (id: string, params: { page?: number; pageSize?: number } = {}) =>
     axiosClient.get(`/classes/${id}/audit`, { params }),
+  getCheckpointDeadlines: (classId: string) => axiosClient.get(`/classes/${classId}/checkpoints`),
+  saveCheckpointDeadline: (classId: string, checkpointNumber: number, data: { dueDate: string; status: string }) =>
+    axiosClient.put(`/classes/${classId}/checkpoints/${checkpointNumber}/deadline`, data),
+  getCheckpointDeadlineClasses: () => axiosClient.get('/classes/checkpoint-deadline-classes'),
+  saveCheckpointDeadlineForClasses: (checkpointNumber: number, data: { dueDate: string; status: string; applyToAllAccessibleClasses: boolean; classIds: string[] }) =>
+    axiosClient.put(`/classes/checkpoints/${checkpointNumber}/deadline/bulk`, data),
 
   // ─── Lecturer Assignment & Schedule ──────────────────────────────────────────
   getClassMentors: (id: string) => runClassFeatureRequest(classFeatureFlags.mentorAssignment, 'Class mentor assignment', () =>

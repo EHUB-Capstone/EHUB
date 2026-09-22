@@ -137,12 +137,16 @@ test('workspace checkpoint overview uses configured totals and counts any entere
     },
     reqFilled: 1,
     reqTotal: 2,
+    status: 'Draft',
+    submittedAt: undefined,
   });
   assert.deepEqual(result.stats[2], {
     count: 0,
     latest: null,
     reqFilled: 0,
     reqTotal: 1,
+    status: 'NotSubmitted',
+    submittedAt: null,
   });
 });
 

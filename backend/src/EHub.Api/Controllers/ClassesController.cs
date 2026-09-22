@@ -12,6 +12,7 @@ using EHub.Application.Features.Classes.CreateClass;
 using EHub.Application.Features.Classes.ClassAudit;
 using EHub.Application.Features.Classes.ClassLifecycle;
 using EHub.Application.Features.Classes.ClassCompletion;
+using EHub.Application.Features.Classes.CheckpointDeadlines;
 using EHub.Application.Common.Interfaces.Services;
 using EHub.Application.Features.Classes.ExportClassRoster;
 using EHub.Application.Features.Classes.GetClassDetail;
@@ -114,6 +115,42 @@ public sealed class ClassesController : ControllerBase
         return Ok(ApiResponse<ClassResponse>.SuccessResponse(
             result.Value,
             "Class details retrieved successfully."));
+    }
+
+    [HttpGet("{id:guid}/checkpoints")]
+    public async Task<IActionResult> GetCheckpointDeadlines(Guid id, [FromServices] IClassCheckpointDeadlineHandler handler, CancellationToken cancellationToken)
+    {
+        var result = await handler.GetAsync(id, _currentUserService.UserId ?? Guid.Empty, GetCurrentUserRole(), cancellationToken);
+        return result.IsSuccess
+            ? Ok(ApiResponse<IReadOnlyCollection<ClassCheckpointDeadlineResponse>>.SuccessResponse(result.Value, "Class checkpoints retrieved successfully."))
+            : ToClassErrorResponse(result.Error);
+    }
+
+    [HttpGet("checkpoint-deadline-classes")]
+    public async Task<IActionResult> GetCheckpointDeadlineClasses([FromServices] IClassCheckpointDeadlineHandler handler, CancellationToken cancellationToken)
+    {
+        var result = await handler.GetAvailableClassesAsync(_currentUserService.UserId ?? Guid.Empty, GetCurrentUserRole(), cancellationToken);
+        return result.IsSuccess
+            ? Ok(ApiResponse<IReadOnlyCollection<ClassCheckpointDeadlineClassResponse>>.SuccessResponse(result.Value, "Available classes retrieved successfully."))
+            : ToClassErrorResponse(result.Error);
+    }
+
+    [HttpPut("checkpoints/{checkpointNumber:int}/deadline/bulk")]
+    public async Task<IActionResult> SaveCheckpointDeadlineForClasses(int checkpointNumber, [FromBody] SaveClassCheckpointDeadlineBulkRequest request, [FromServices] IClassCheckpointDeadlineHandler handler, CancellationToken cancellationToken)
+    {
+        var result = await handler.SaveForClassesAsync(checkpointNumber, request, _currentUserService.UserId ?? Guid.Empty, GetCurrentUserRole(), cancellationToken);
+        return result.IsSuccess
+            ? Ok(ApiResponse<ClassCheckpointDeadlineBulkResponse>.SuccessResponse(result.Value, "Checkpoint deadline saved successfully."))
+            : ToClassErrorResponse(result.Error);
+    }
+
+    [HttpPut("{id:guid}/checkpoints/{checkpointNumber:int}/deadline")]
+    public async Task<IActionResult> SaveCheckpointDeadline(Guid id, int checkpointNumber, [FromBody] SaveClassCheckpointDeadlineRequest request, [FromServices] IClassCheckpointDeadlineHandler handler, CancellationToken cancellationToken)
+    {
+        var result = await handler.SaveAsync(id, checkpointNumber, request, _currentUserService.UserId ?? Guid.Empty, GetCurrentUserRole(), cancellationToken);
+        return result.IsSuccess
+            ? Ok(ApiResponse<ClassCheckpointDeadlineResponse>.SuccessResponse(result.Value, "Checkpoint deadline saved successfully."))
+            : ToClassErrorResponse(result.Error);
     }
 
     [HttpGet("{slug}")]

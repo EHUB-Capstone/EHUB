@@ -136,6 +136,43 @@ public sealed class UpdateClassRequest
     public string RowVersion { get; init; } = string.Empty;
 }
 
+public class SaveClassCheckpointDeadlineRequest
+{
+    public DateTime DueDate { get; init; }
+    public string Status { get; init; } = "OPEN";
+}
+
+public sealed class ClassCheckpointDeadlineResponse
+{
+    public int CheckpointNumber { get; init; }
+    public string Title { get; init; } = string.Empty;
+    public DateTime? OpenDate { get; init; }
+    public DateTime? DueDate { get; init; }
+    public string Status { get; init; } = string.Empty;
+}
+
+public sealed class ClassCheckpointDeadlineClassResponse
+{
+    public Guid ClassId { get; init; }
+    public string ClassCode { get; init; } = string.Empty;
+    public string SubjectName { get; init; } = string.Empty;
+    public string SemesterCode { get; init; } = string.Empty;
+    public DateOnly? SemesterStartDate { get; init; }
+    public DateOnly? SemesterEndDate { get; init; }
+}
+
+public sealed class SaveClassCheckpointDeadlineBulkRequest : SaveClassCheckpointDeadlineRequest
+{
+    public bool ApplyToAllAccessibleClasses { get; init; }
+    public IReadOnlyCollection<Guid> ClassIds { get; init; } = Array.Empty<Guid>();
+}
+
+public sealed class ClassCheckpointDeadlineBulkResponse
+{
+    public int UpdatedCount { get; init; }
+    public IReadOnlyCollection<Guid> ClassIds { get; init; } = Array.Empty<Guid>();
+}
+
 public sealed class ClassScheduleSlotDto
 {
     public DayOfWeek DayOfWeek { get; init; }

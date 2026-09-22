@@ -972,7 +972,20 @@ public sealed class TeamWorkflowIntegrationTests
             CreatedById = seed.AdminId,
             CreatedBy = seed.AdminId
         };
-        context.Checkpoints.Add(checkpoint);
+        var classSchedule = new Checkpoint
+        {
+            CourseId = courseId,
+            ClassId = seed.ClassId,
+            Name = checkpoint.Name,
+            CheckpointNumber = checkpoint.CheckpointNumber,
+            RequirementsJson = checkpoint.RequirementsJson,
+            Status = CheckpointStatus.Open,
+            OpenDate = DateTime.UtcNow.AddMinutes(-1),
+            DueDate = DateTime.UtcNow.AddDays(1),
+            CreatedById = seed.AdminId,
+            CreatedBy = seed.AdminId
+        };
+        context.Checkpoints.AddRange(checkpoint, classSchedule);
         context.Projects.Add(new Project
         {
             TeamId = seed.TeamId!.Value,

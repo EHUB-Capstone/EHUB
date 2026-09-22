@@ -76,7 +76,8 @@ export default function CheckpointPanel({
   const isStudent = user?.role?.toUpperCase() === 'STUDENT';
   const isLecturer = user?.role?.toUpperCase() === 'LECTURER';
   const [showEvaluation, setShowEvaluation] = useState(false);
-  const canEditRequirements = isStudent && isEditable;
+  const isCheckpointOpen = checkpoint?.availabilityStatus === 'Open';
+  const canEditRequirements = isStudent && isEditable && isCheckpointOpen;
   const Icon = ICONS[checkpoint?.icon] || FileText;
 
   const buildContentsMap = useCallback((sub) => {
@@ -321,7 +322,9 @@ export default function CheckpointPanel({
                 subtitle={
                   canEditRequirements
                     ? 'Complete all fields, then save once at the bottom.'
-                    : 'Submitted answers from the team (read-only).'
+                    : isStudent && isEditable
+                      ? checkpoint.availabilityReason || 'This checkpoint is not open for submission.'
+                      : 'Submitted answers from the team (read-only).'
                 }
               >
                 Requirements
@@ -443,7 +446,7 @@ export default function CheckpointPanel({
           {/* Main column */}
           <main className="flex-1 overflow-y-auto scrollbar-thin bg-orange-50/20">
             <div className="p-5 lg:p-8 max-w-4xl mx-auto w-full space-y-6">
-              {isEditable && isStudent && (
+              {isEditable && isStudent && isCheckpointOpen && (
                 <section className="rounded-2xl border border-slate-200/60 bg-white p-5 shadow-sm space-y-4">
                   <SectionTitle
                     icon={Upload}
@@ -481,9 +484,11 @@ export default function CheckpointPanel({
                     </div>
                     <p className="text-sm font-semibold text-slate-700">No documents yet</p>
                     <p className="text-xs text-slate-400 mt-1 max-w-sm">
-                      {isStudent && isEditable
+                      {isStudent && isEditable && isCheckpointOpen
                         ? 'Upload milestone files using the form above.'
-                        : 'This team has not uploaded files for this checkpoint.'}
+                        : isStudent && isEditable
+                          ? checkpoint.availabilityReason || 'This checkpoint is not open for submission.'
+                          : 'This team has not uploaded files for this checkpoint.'}
                     </p>
                   </div>
                 ) : (

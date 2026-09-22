@@ -26,6 +26,13 @@ export default function CheckpointCard({
   const hasFiles = fileCount > 0;
   const hasRequirements = reqFilled > 0;
   const hasSubmission = hasFiles || hasRequirements;
+  const checkpointStatus = checkpoint.availabilityStatus || 'Scheduled';
+  const submitted = String(stat.status || '').toLowerCase() === 'submitted';
+  const statusStyle = submitted || checkpointStatus === 'Open'
+    ? 'bg-emerald-100 text-emerald-700'
+    : checkpointStatus === 'Locked' ? 'bg-amber-100 text-amber-700'
+      : checkpointStatus === 'Closed' || checkpointStatus === 'Archived' ? 'bg-red-100 text-red-700'
+        : 'bg-slate-100 text-slate-600';
 
   return (
     <div className="relative pl-12 sm:pl-16">
@@ -84,6 +91,17 @@ export default function CheckpointCard({
             </p>
 
             <div className="mt-3 flex flex-wrap items-center gap-2">
+              <span className={`rounded-md px-2.5 py-1 text-[10px] font-bold ${statusStyle}`}>
+                {submitted ? 'Submitted' : checkpointStatus}
+              </span>
+              {checkpoint.dueDate && (
+                <span className="rounded-md bg-slate-100 px-2.5 py-1 text-[10px] font-medium text-slate-600">
+                  Due {new Date(checkpoint.dueDate).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                </span>
+              )}
+              {checkpoint.availabilityReason && !submitted && (
+                <span className="text-[10px] text-slate-500">{checkpoint.availabilityReason}</span>
+              )}
               {reqTotal > 0 && (
                 <span className={`rounded-md px-2.5 py-1 text-[10px] font-bold ${hasRequirements ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
                   {reqFilled}/{reqTotal} requirements
@@ -107,7 +125,7 @@ export default function CheckpointCard({
           </div>
 
           <span className="inline-flex shrink-0 items-center gap-1 self-end text-xs font-bold text-slate-500 group-hover:text-orange-600 sm:self-center">
-            Open
+            View
             <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
           </span>
         </div>
