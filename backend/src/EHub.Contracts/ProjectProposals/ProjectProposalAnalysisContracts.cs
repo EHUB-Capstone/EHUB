@@ -40,6 +40,7 @@ public sealed class ProjectProposalAnalysisReportDto
     public string HybridScoringVersion { get; init; } = string.Empty;
     public ProjectProposalHybridWeightsDto HybridWeights { get; init; } = new();
     public int RetrievalCandidateCount { get; init; }
+    public ProjectProposalSnapshotDto? CurrentProposal { get; init; }
     public IReadOnlyCollection<ProjectProposalAnalysisMatchDto> Matches { get; init; } = Array.Empty<ProjectProposalAnalysisMatchDto>();
     public DateTime GeneratedAtUtc { get; init; }
 }
@@ -56,6 +57,7 @@ public sealed class ProjectProposalAnalysisMatchDto
     public string SemesterCode { get; init; } = string.Empty;
     public string Title { get; init; } = string.Empty;
     public string StartupName { get; init; } = string.Empty;
+    public ProjectProposalSnapshotDto? CandidateProposal { get; init; }
     public double SemanticSimilarity { get; init; }
     public double ProblemSimilarity { get; init; }
     public double SolutionSimilarity { get; init; }

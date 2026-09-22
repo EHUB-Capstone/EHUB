@@ -63,6 +63,7 @@ public sealed class ProjectProposalAnalysisQueryHandler : IProjectProposalAnalys
             return Failure(ErrorCodes.ProjectProposalAnalysisAccessDenied, "You cannot view this proposal analysis.");
 
         var isStudent = IsRole(role, SystemRoles.Student);
+        var canViewDetailedReport = !isStudent;
         return Result.Success(new ProjectProposalAnalysisDto
         {
             JobId = job.Id,
@@ -77,7 +78,7 @@ public sealed class ProjectProposalAnalysisQueryHandler : IProjectProposalAnalys
             CompletedAtUtc = job.CompletedAtUtc,
             FailedAtUtc = job.FailedAtUtc,
             FailureCode = job.Status == ProjectProposalAnalysisJobStatus.Failed ? job.LastErrorCode : null,
-            CanViewDetailedReport = !isStudent,
+            CanViewDetailedReport = canViewDetailedReport,
             Report = job.Result == null ? null : new ProjectProposalAnalysisReportDto
             {
                 Summary = job.Result.Summary,
@@ -100,10 +101,15 @@ public sealed class ProjectProposalAnalysisQueryHandler : IProjectProposalAnalys
                 HybridScoringVersion = job.Result.HybridScoringVersion,
                 HybridWeights = DeserializeHybridWeights(job.Result.HybridWeightsJson),
                 RetrievalCandidateCount = job.Result.RetrievalCandidateCount,
-                Matches = isStudent ? [] : job.Result.Matches
-                    .OrderBy(match => match.Rank)
-                    .Select(ToMatchDto)
-                    .ToArray(),
+                CurrentProposal = canViewDetailedReport
+                    ? DeserializeSnapshot(job.ProposalVersion.SnapshotJson)
+                    : null,
+                Matches = canViewDetailedReport
+                    ? job.Result.Matches
+                        .OrderBy(match => match.Rank)
+                        .Select(ToMatchDto)
+                        .ToArray()
+                    : [],
                 GeneratedAtUtc = job.Result.GeneratedAtUtc
             }
         });
@@ -133,17 +139,7 @@ public sealed class ProjectProposalAnalysisQueryHandler : IProjectProposalAnalys
 
     private static ProjectProposalAnalysisMatchDto ToMatchDto(ProjectProposalAnalysisMatch match)
     {
-        ProjectProposalSnapshotDto? snapshot = null;
-        try
-        {
-            snapshot = JsonSerializer.Deserialize<ProjectProposalSnapshotDto>(
-                match.CandidateProposalVersion.SnapshotJson,
-                new JsonSerializerOptions(JsonSerializerDefaults.Web));
-        }
-        catch (JsonException)
-        {
-            // Historical evidence remains available even if its display snapshot can no longer be parsed.
-        }
+        var snapshot = DeserializeSnapshot(match.CandidateProposalVersion.SnapshotJson);
 
         var proposal = match.CandidateProposalVersion.ProjectProposal;
         return new ProjectProposalAnalysisMatchDto
@@ -158,6 +154,7 @@ public sealed class ProjectProposalAnalysisQueryHandler : IProjectProposalAnalys
             SemesterCode = proposal.Class.Semester.Code,
             Title = snapshot?.Title ?? string.Empty,
             StartupName = snapshot?.StartupName ?? string.Empty,
+            CandidateProposal = snapshot,
             SemanticSimilarity = Math.Max(0, match.SemanticSimilarity),
             ProblemSimilarity = Math.Max(0, match.ProblemSimilarity),
             SolutionSimilarity = Math.Max(0, match.SolutionSimilarity),
@@ -214,6 +211,21 @@ public sealed class ProjectProposalAnalysisQueryHandler : IProjectProposalAnalys
         catch (JsonException)
         {
             return [];
+        }
+    }
+
+    private static ProjectProposalSnapshotDto? DeserializeSnapshot(string json)
+    {
+        try
+        {
+            return JsonSerializer.Deserialize<ProjectProposalSnapshotDto>(
+                json,
+                new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        }
+        catch (JsonException)
+        {
+            // The report remains readable even when an old display snapshot is no longer compatible.
+            return null;
         }
     }
 

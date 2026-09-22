@@ -1290,6 +1290,8 @@ test('mock detailed project proposal supports draft versions, leader submission,
   const analysis = await axiosClient.get(`/workspace/proposal-analyses/${submitted.data.currentAnalysisJobId}`);
   assert.equal(analysis.data.report.provider, 'Mock');
   assert.equal(analysis.data.report.overlapRisk, 'InsufficientData');
+  assert.equal(analysis.data.canViewDetailedReport, false);
+  assert.equal(analysis.data.report.currentProposal, null);
 
   const features = await axiosClient.get('/features');
   assert.equal(features.data.aiEnabled, true);
@@ -1299,6 +1301,9 @@ test('mock detailed project proposal supports draft versions, leader submission,
   assert.equal(versions.data[0].purpose, 'Submission');
 
   await axiosClient.post('/auth/login', { email: 'giang.lecturer@ehub.local', password: 'Mock123!' });
+  const lecturerAnalysis = await axiosClient.get(`/workspace/proposal-analyses/${submitted.data.currentAnalysisJobId}`);
+  assert.equal(lecturerAnalysis.data.canViewDetailedReport, true);
+  assert.equal(lecturerAnalysis.data.report.currentProposal.startupName, content.startupName);
   const reviewed = await axiosClient.post(`/workspace/proposals/${created.data.id}/review`, {
     decision: 'NeedsRevision',
     feedback: 'Add stronger evidence from student interviews.',

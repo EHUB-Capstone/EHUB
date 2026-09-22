@@ -710,6 +710,7 @@ export function registerWorkspaceMockHandlers(mock: MockAdapter): void {
     if (!proposal) return failure(404, 'PROJECT_PROPOSAL_ANALYSIS_NOT_FOUND', 'The proposal analysis job was not found.');
     if (!canAccessTeam(proposal.teamId)) return failure(403, 'PROJECT_PROPOSAL_ANALYSIS_ACCESS_DENIED', 'You cannot view this proposal analysis.');
     const generatedAtUtc = proposal.submittedAtUtc || new Date().toISOString();
+    const canViewDetailedReport = currentMockUser()?.role !== 'STUDENT';
     return ok({
       jobId,
       proposalVersionId: proposal.currentSubmittedVersionId,
@@ -723,7 +724,7 @@ export function registerWorkspaceMockHandlers(mock: MockAdapter): void {
       completedAtUtc: generatedAtUtc,
       failedAtUtc: null,
       failureCode: null,
-      canViewDetailedReport: currentMockUser()?.role !== 'STUDENT',
+      canViewDetailedReport,
       report: {
         summary: `Báo cáo retrieval đã tiếp nhận đề xuất ${proposal.startupName}. Chưa có proposal lịch sử hợp lệ để đối sánh trong dữ liệu mock.`,
         overlapRisk: 'InsufficientData',
@@ -757,6 +758,7 @@ export function registerWorkspaceMockHandlers(mock: MockAdapter): void {
           jaccard: 0.1,
         },
         retrievalCandidateCount: 0,
+        currentProposal: canViewDetailedReport ? proposalContent(proposal) : null,
         matches: [],
         generatedAtUtc,
       },

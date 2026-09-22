@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { AlertTriangle, BrainCircuit, CheckCircle2, LoaderCircle, RefreshCw, ShieldAlert } from 'lucide-react';
 import { workspaceApi } from '../../api/workspaceApi';
 import type { ProjectProposalAnalysis, ProjectProposalOverlapRisk } from '../../types/projectProposal';
+import ProposalSideBySideComparison from './ProposalSideBySideComparison';
 
 type Props = {
   jobId: string;
@@ -192,6 +193,13 @@ export default function ProposalAnalysisPanel({ jobId }: Props) {
             ))}
           </ol>
         </div>
+      )}
+
+      {analysis.canViewDetailedReport && analysis.report.currentProposal && analysis.report.matches.length > 0 && (
+        <ProposalSideBySideComparison
+          currentProposal={analysis.report.currentProposal}
+          matches={[...analysis.report.matches]}
+        />
       )}
 
       <p className="mt-4 text-xs text-slate-400">

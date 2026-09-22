@@ -275,13 +275,18 @@ public sealed class ProjectProposalLifecycleIntegrationTests
         var studentView = await new ProjectProposalAnalysisQueryHandler(db, new FixedAiFeatureGate(true))
             .GetAsync(currentJobId, currentSeed.LeaderUserId, SystemRoles.Student);
         studentView.Value.CanViewDetailedReport.Should().BeFalse();
+        studentView.Value.Report!.CurrentProposal.Should().BeNull();
         studentView.Value.Report!.Matches.Should().BeEmpty();
 
         var lecturerView = await new ProjectProposalAnalysisQueryHandler(db, new FixedAiFeatureGate(true))
             .GetAsync(currentJobId, currentSeed.LecturerUserId, SystemRoles.Lecturer);
         lecturerView.IsSuccess.Should().BeTrue(lecturerView.Error.Message);
         lecturerView.Value.CanViewDetailedReport.Should().BeTrue();
+        lecturerView.Value.Report!.CurrentProposal.Should().NotBeNull();
+        lecturerView.Value.Report.CurrentProposal!.StartupName.Should().Contain("Current");
         lecturerView.Value.Report!.Matches.First().ProposalVersionId.Should().Be(similarVersionId);
+        lecturerView.Value.Report.Matches.First().CandidateProposal.Should().NotBeNull();
+        lecturerView.Value.Report.Matches.First().CandidateProposal!.StartupName.Should().Contain("Similar");
         lecturerView.Value.Report.FieldScoringVersion.Should().Be("proposal-field-weighted-semantic-v1");
         lecturerView.Value.Report.FieldWeights.Problem.Should().Be(0.3);
         lecturerView.Value.Report.LexicalScoringVersion.Should().Be("proposal-lexical-unigram-bigram-v1");

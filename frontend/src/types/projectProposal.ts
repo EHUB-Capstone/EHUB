@@ -129,6 +129,7 @@ export interface ProjectProposalAnalysisReport {
     jaccard: number;
   };
   retrievalCandidateCount: number;
+  currentProposal: ProjectProposalContent | null;
   matches: ProjectProposalAnalysisMatch[];
   generatedAtUtc: string;
 }
@@ -144,6 +145,7 @@ export interface ProjectProposalAnalysisMatch {
   semesterCode: string;
   title: string;
   startupName: string;
+  candidateProposal: ProjectProposalContent | null;
   semanticSimilarity: number;
   problemSimilarity: number;
   solutionSimilarity: number;
