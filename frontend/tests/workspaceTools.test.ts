@@ -215,6 +215,7 @@ test('project proposal submission validation mirrors required backend minimums',
     ...emptyProjectProposalDraft,
     id: 'proposal-1', projectId: 'project-1', teamId: 'team-1', classId: 'class-1',
     status: 'Draft', currentSubmittedVersionId: null, submittedAtUtc: null, approvedAtUtc: null,
+    currentAnalysisJobId: null, currentAnalysisStatus: null,
     rejectedAtUtc: null, rowVersion: '1', reviews: [],
   } as ProjectProposal;
   const errors = validateProjectProposalSubmission(proposal);
@@ -229,6 +230,7 @@ test('project proposal change detection ignores whitespace-only differences', ()
     title: 'Campus Connect',
     id: 'proposal-1', projectId: 'project-1', teamId: 'team-1', classId: 'class-1',
     status: 'Draft', currentSubmittedVersionId: null, submittedAtUtc: null, approvedAtUtc: null,
+    currentAnalysisJobId: null, currentAnalysisStatus: null,
     rejectedAtUtc: null, rowVersion: '1', reviews: [],
   } as ProjectProposal;
   const draft = toProjectProposalDraft(proposal);

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using EHub.Application.Common.Exceptions;
+using EHub.Application.Common.Interfaces.AI;
 using EHub.Application.Common.Interfaces.Persistence;
 using EHub.Application.Common.Interfaces.Services;
 using EHub.Application.Features.Classes.Common;
@@ -21,15 +22,18 @@ public sealed class ProjectProposalHandler : IProjectProposalHandler
     private readonly IApplicationDbContext _context;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly IAiFeatureGate _aiFeatureGate;
 
     public ProjectProposalHandler(
         IApplicationDbContext context,
         IUnitOfWork unitOfWork,
-        IDateTimeProvider dateTimeProvider)
+        IDateTimeProvider dateTimeProvider,
+        IAiFeatureGate aiFeatureGate)
     {
         _context = context;
         _unitOfWork = unitOfWork;
         _dateTimeProvider = dateTimeProvider;
+        _aiFeatureGate = aiFeatureGate;
     }
 
     public async Task<Result<ProjectProposalDto>> GetByTeamAsync(
@@ -193,6 +197,24 @@ public sealed class ProjectProposalHandler : IProjectProposalHandler
                     request.ChangeNote, userId, now);
                 proposal.Versions.Add(version);
                 _context.ProjectProposalVersions.Add(version);
+                if (_aiFeatureGate.IsEnabled)
+                {
+                    var analysisJob = new ProjectProposalAnalysisJob
+                    {
+                        ProposalVersionId = version.Id,
+                        ProposalVersion = version,
+                        Status = ProjectProposalAnalysisJobStatus.Pending,
+                        CandidateScope = ProjectProposalAnalysisCandidateScope.AllSystem,
+                        IncludeCrossSemester = true,
+                        LanguageMode = ProjectProposalAnalysisLanguageMode.VietnameseAndEnglish,
+                        ConfigurationVersion = "proposal-analysis-config-v1",
+                        RequestedByUserId = userId,
+                        AvailableAtUtc = now,
+                        CreatedAtUtc = now
+                    };
+                    version.AnalysisJob = analysisJob;
+                    _context.ProjectProposalAnalysisJobs.Add(analysisJob);
+                }
                 proposal.Status = ProjectProposalStatus.Submitted;
                 proposal.SubmittedAt = now;
                 proposal.ApprovedAt = null;
@@ -426,7 +448,7 @@ public sealed class ProjectProposalHandler : IProjectProposalHandler
     {
         var query = tracking ? _context.ProjectProposals.AsQueryable() : _context.ProjectProposals.AsNoTracking();
         return query
-            .Include(proposal => proposal.Versions)
+            .Include(proposal => proposal.Versions).ThenInclude(version => version.AnalysisJob)
             .Include(proposal => proposal.Reviews)
             .Include(proposal => proposal.Project).ThenInclude(project => project.ProjectTags)
             .Include(proposal => proposal.Team).ThenInclude(team => team.Class).ThenInclude(item => item.ClassLecturers)
@@ -655,7 +677,10 @@ public sealed class ProjectProposalHandler : IProjectProposalHandler
             BusinessModel = Trimmed(proposal.BusinessModel), RevenueModel = Trimmed(proposal.RevenueModel), MarketingStrategy = Trimmed(proposal.MarketingStrategy),
             Technology = Trimmed(proposal.Technology), FinancialPlan = Trimmed(proposal.FinancialPlan), Roadmap = Trimmed(proposal.Roadmap),
             TeamIntroduction = Trimmed(proposal.TeamIntroduction), Status = proposal.Status.ToString(),
-            CurrentSubmittedVersionId = submittedVersion?.Id, SubmittedAtUtc = proposal.SubmittedAt,
+            CurrentSubmittedVersionId = submittedVersion?.Id,
+            CurrentAnalysisJobId = submittedVersion?.AnalysisJob?.Id,
+            CurrentAnalysisStatus = submittedVersion?.AnalysisJob?.Status.ToString(),
+            SubmittedAtUtc = proposal.SubmittedAt,
             ApprovedAtUtc = proposal.ApprovedAt, RejectedAtUtc = proposal.RejectedAt, RowVersion = proposal.Version.ToString(),
             Reviews = proposal.Reviews.OrderByDescending(review => review.OccurredAtUtc).Select(review => new ProjectProposalReviewDto
             {

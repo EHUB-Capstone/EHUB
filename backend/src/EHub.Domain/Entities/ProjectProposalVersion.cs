@@ -21,4 +21,5 @@ public class ProjectProposalVersion : BaseEntity
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public virtual ICollection<ProjectProposalReview> Reviews { get; set; } = new List<ProjectProposalReview>();
+    public virtual ProjectProposalAnalysisJob? AnalysisJob { get; set; }
 }

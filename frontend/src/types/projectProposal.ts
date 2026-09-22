@@ -8,6 +8,8 @@ export type ProjectProposalStatus =
 
 export type ProjectProposalVersionPurpose = 'DraftSave' | 'Submission';
 
+export type ProjectProposalAnalysisStatus = 'Pending' | 'Processing' | 'Completed' | 'Failed';
+
 export interface ProjectProposalContent {
   title: string;
   startupName: string;
@@ -44,6 +46,8 @@ export interface ProjectProposal extends ProjectProposalContent {
   classId: string;
   status: ProjectProposalStatus;
   currentSubmittedVersionId: string | null;
+  currentAnalysisJobId: string | null;
+  currentAnalysisStatus: ProjectProposalAnalysisStatus | null;
   submittedAtUtc: string | null;
   approvedAtUtc: string | null;
   rejectedAtUtc: string | null;

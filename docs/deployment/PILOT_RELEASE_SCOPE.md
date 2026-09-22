@@ -45,7 +45,7 @@ emergency switch if a page must be hidden after verification:
 
 | Module | Build-time flag |
 | --- | --- |
-| AI analysis | `VITE_FEATURE_AI` |
+| AI analysis | `FEATURES_AI_ENABLED` (mapped to backend `Features__AI__Enabled` and frontend `VITE_FEATURE_AI` during the image build) |
 | In-platform chat | `VITE_FEATURE_CHAT` |
 | Data Bank | `VITE_FEATURE_DATA_BANK` |
 | Evaluation reports | `VITE_FEATURE_EVALUATIONS` |

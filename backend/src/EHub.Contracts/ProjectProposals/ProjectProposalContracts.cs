@@ -71,6 +71,8 @@ public sealed class ProjectProposalDto
     public string TeamIntroduction { get; init; } = string.Empty;
     public string Status { get; init; } = string.Empty;
     public Guid? CurrentSubmittedVersionId { get; init; }
+    public Guid? CurrentAnalysisJobId { get; init; }
+    public string? CurrentAnalysisStatus { get; init; }
     public DateTime? SubmittedAtUtc { get; init; }
     public DateTime? ApprovedAtUtc { get; init; }
     public DateTime? RejectedAtUtc { get; init; }

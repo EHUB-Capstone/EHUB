@@ -18,3 +18,9 @@ test('allows one page to be disabled explicitly without hiding the others', () =
   assert.equal(flags.ai, false);
   assert.equal(flags.chat, true);
 });
+
+test('accepts the shared production ON value for AI page visibility', () => {
+  const flags = createReleaseFeatureFlags({ VITE_FEATURE_AI: 'ON' });
+
+  assert.equal(flags.ai, true);
+});

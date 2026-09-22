@@ -1,3 +1,4 @@
+using EHub.Application.Common.Interfaces.AI;
 using EHub.Application.Common.Interfaces.Persistence;
 using EHub.Application.Common.Interfaces.Services;
 using EHub.Application.Features.Classes.Common;
@@ -75,6 +76,8 @@ public sealed class ProjectProposalLifecycleIntegrationTests
         submitted.IsSuccess.Should().BeTrue(submitted.Error.Message);
         submitted.Value.Status.Should().Be(nameof(ProjectProposalStatus.Submitted));
         submitted.Value.CurrentSubmittedVersionId.Should().NotBeNull();
+        submitted.Value.CurrentAnalysisJobId.Should().BeNull();
+        submitted.Value.CurrentAnalysisStatus.Should().BeNull();
         context.ChangeTracker.Clear();
         var versions = await context.ProjectProposalVersions.AsNoTracking()
             .Where(version => version.ProjectProposalId == created.Value.Id)
@@ -82,6 +85,8 @@ public sealed class ProjectProposalLifecycleIntegrationTests
             .ToArrayAsync();
         versions.Should().HaveCount(3);
         versions.Last().Purpose.Should().Be(ProjectProposalVersionPurpose.Submission);
+        (await context.ProjectProposalAnalysisJobs.AsNoTracking().CountAsync(job =>
+            job.ProposalVersionId == submitted.Value.CurrentSubmittedVersionId)).Should().Be(0);
         (await context.OutboxMessages.AsNoTracking().AnyAsync(message =>
             message.Type == "ProjectProposal.Submitted.v1" && message.AggregateId == seed.ClassId)).Should().BeTrue();
     }
@@ -150,7 +155,7 @@ public sealed class ProjectProposalLifecycleIntegrationTests
         var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var seed = await CreateSeedAsync(context);
         context.ChangeTracker.Clear();
-        var handler = CreateHandler(scope, context);
+        var handler = CreateHandler(scope, context, aiEnabled: true);
         var created = await handler.CreateAsync(seed.TeamId, ValidDraft("Review cycle"), seed.LeaderUserId, SystemRoles.Student);
         var firstSubmission = await handler.SubmitAsync(created.Value.Id,
             new SubmitProjectProposalRequest { RowVersion = created.Value.RowVersion }, seed.LeaderUserId, SystemRoles.Student);
@@ -178,6 +183,8 @@ public sealed class ProjectProposalLifecycleIntegrationTests
             seed.LeaderUserId,
             SystemRoles.Student);
         secondSubmission.IsSuccess.Should().BeTrue(secondSubmission.Error.Message);
+        secondSubmission.Value.CurrentAnalysisJobId.Should().NotBeNull();
+        secondSubmission.Value.CurrentAnalysisStatus.Should().Be(nameof(ProjectProposalAnalysisJobStatus.Pending));
         context.ChangeTracker.Clear();
         var approved = await handler.ReviewAsync(created.Value.Id, new ReviewProjectProposalRequest
         {
@@ -193,6 +200,18 @@ public sealed class ProjectProposalLifecycleIntegrationTests
         context.ChangeTracker.Clear();
         (await context.ProjectProposalVersions.AsNoTracking().CountAsync(version =>
             version.ProjectProposalId == created.Value.Id && version.Purpose == ProjectProposalVersionPurpose.Submission)).Should().Be(2);
+        var analysisJobs = await context.ProjectProposalAnalysisJobs.AsNoTracking()
+            .Where(job => job.ProposalVersion.ProjectProposalId == created.Value.Id)
+            .OrderBy(job => job.CreatedAtUtc)
+            .ToArrayAsync();
+        analysisJobs.Should().HaveCount(2);
+        analysisJobs.Select(job => job.ProposalVersionId).Should().OnlyHaveUniqueItems();
+        analysisJobs.Should().OnlyContain(job =>
+            job.Status == ProjectProposalAnalysisJobStatus.Pending
+            && job.CandidateScope == ProjectProposalAnalysisCandidateScope.AllSystem
+            && job.IncludeCrossSemester
+            && job.LanguageMode == ProjectProposalAnalysisLanguageMode.VietnameseAndEnglish
+            && job.AttemptCount == 0);
     }
 
     [Fact]
@@ -283,10 +302,13 @@ public sealed class ProjectProposalLifecycleIntegrationTests
         versions[2].SnapshotJson.Should().Be(originalSnapshotJson);
     }
 
-    private static ProjectProposalHandler CreateHandler(AsyncServiceScope scope, AppDbContext context) => new(
+    private static ProjectProposalHandler CreateHandler(AsyncServiceScope scope, AppDbContext context, bool? aiEnabled = null) => new(
         context,
         scope.ServiceProvider.GetRequiredService<IUnitOfWork>(),
-        scope.ServiceProvider.GetRequiredService<IDateTimeProvider>());
+        scope.ServiceProvider.GetRequiredService<IDateTimeProvider>(),
+        aiEnabled.HasValue
+            ? new FixedAiFeatureGate(aiEnabled.Value)
+            : scope.ServiceProvider.GetRequiredService<IAiFeatureGate>());
 
     private static CreateProjectProposalRequest ValidDraft(string suffix) => new()
     {
@@ -501,4 +523,9 @@ public sealed class ProjectProposalLifecycleIntegrationTests
     }
 
     private sealed record ProposalSeed(Guid ClassId, Guid TeamId, Guid LeaderUserId, Guid MemberUserId, Guid LecturerUserId);
+
+    private sealed class FixedAiFeatureGate(bool isEnabled) : IAiFeatureGate
+    {
+        public bool IsEnabled { get; } = isEnabled;
+    }
 }

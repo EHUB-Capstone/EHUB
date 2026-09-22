@@ -1,7 +1,7 @@
 type FeatureEnvironment = Record<string, string | boolean | undefined>;
 
 const isEnabled = (value: string | boolean | undefined): boolean =>
-  value === true || (typeof value === 'string' && value.toLowerCase() === 'true');
+  value === true || (typeof value === 'string' && ['on', 'true', '1', 'yes'].includes(value.trim().toLowerCase()));
 
 const isEnabledByDefault = (value: string | boolean | undefined): boolean =>
   value === undefined ? true : isEnabled(value);

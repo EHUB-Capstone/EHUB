@@ -285,6 +285,8 @@ export interface MockDetailedProposal extends MockDetailedProposalContent {
   classId: string;
   status: 'Draft' | 'Submitted' | 'NeedsRevision' | 'Approved' | 'Rejected' | 'Archived';
   currentSubmittedVersionId: string | null;
+  currentAnalysisJobId: string | null;
+  currentAnalysisStatus: 'Pending' | 'Processing' | 'Completed' | 'Failed' | null;
   submittedAtUtc: string | null;
   approvedAtUtc: string | null;
   rejectedAtUtc: string | null;

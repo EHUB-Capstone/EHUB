@@ -16,6 +16,7 @@ using EHub.Infrastructure.BackgroundJobs;
 using CloudinaryDotNet;
 using EHub.Application.Common.Interfaces.Storage;
 using EHub.Infrastructure.Storage;
+using EHub.Application.Common.Interfaces.AI;
 
 namespace EHub.Infrastructure;
 
@@ -32,6 +33,7 @@ public static class DependencyInjection
                 b => b.MigrationsAssembly(typeof(AppDbContext).Assembly.FullName)));
 
         services.AddScoped<IApplicationDbContext>(provider => provider.GetRequiredService<AppDbContext>());
+        services.AddSingleton<IAiFeatureGate, ConfigurationAiFeatureGate>();
         services.AddHostedService<ClassImportSessionCleanupService>();
         services.AddHostedService<LecturerImportSessionCleanupService>();
         services.AddHostedService<PendingRegistrationCleanupService>();

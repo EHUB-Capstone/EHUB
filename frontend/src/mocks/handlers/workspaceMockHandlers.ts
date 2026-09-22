@@ -647,6 +647,7 @@ export function registerWorkspaceMockHandlers(mock: MockAdapter): void {
     const proposal: MockDetailedProposal = {
       id: allocateId(), projectId: workspaceData(teamId).project._id, teamId, classId: team.classId,
       ...content, status: 'Draft', currentSubmittedVersionId: null, submittedAtUtc: null,
+      currentAnalysisJobId: null, currentAnalysisStatus: null,
       approvedAtUtc: null, rejectedAtUtc: null, rowVersion: allocateRowVersion(), reviews: [], versions: [],
     };
     addProposalVersion(proposal, 'DraftSave', String(body.changeNote || ''), user.id);
