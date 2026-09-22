@@ -75,7 +75,7 @@ public sealed class ProjectProposalAnalysisJobProcessor : IProjectProposalAnalys
             cancellationToken);
         Validate(retrieval);
 
-        var providerResult = await _provider.AnalyzeAsync(new ProposalAnalysisProviderRequest(
+        var providerRequest = new ProposalAnalysisProviderRequest(
             job.Id,
             job.ProposalVersionId,
             snapshot,
@@ -95,8 +95,22 @@ public sealed class ProjectProposalAnalysisJobProcessor : IProjectProposalAnalys
                 match.WeightedSemanticSimilarity,
                 match.TfIdfSimilarity,
                 match.JaccardSimilarity,
-                match.HybridSimilarity)).ToArray()), cancellationToken);
-        Validate(providerResult);
+                match.HybridSimilarity)).ToArray());
+        ProposalAnalysisProviderResponse providerResult;
+        try
+        {
+            providerResult = await _provider.AnalyzeAsync(providerRequest, cancellationToken);
+        }
+        catch (ProposalAnalysisProviderException exception)
+        {
+            throw new ProposalAnalysisProcessingException(
+                exception.ErrorCode,
+                "The proposal analysis provider could not process the proposal.",
+                exception.IsTransient,
+                exception);
+        }
+        ProposalAnalysisOutputValidator.Validate(providerRequest, providerResult);
+        var providerMatches = providerResult.Matches.ToDictionary(match => match.ProposalVersionId);
 
         await _unitOfWork.ExecuteInSerializableTransactionAsync(async transactionCancellationToken =>
         {
@@ -142,6 +156,7 @@ public sealed class ProjectProposalAnalysisJobProcessor : IProjectProposalAnalys
 
                 foreach (var (match, index) in retrieval.Matches.Select((match, index) => (match, index)))
                 {
+                    var providerMatch = providerMatches[match.ProposalVersionId];
                     result.Matches.Add(new ProjectProposalAnalysisMatch
                     {
                         AnalysisResult = result,
@@ -156,6 +171,14 @@ public sealed class ProjectProposalAnalysisJobProcessor : IProjectProposalAnalys
                         TfIdfSimilarity = match.TfIdfSimilarity,
                         JaccardSimilarity = match.JaccardSimilarity,
                         HybridSimilarity = match.HybridSimilarity,
+                        SimilaritiesJson = JsonSerializer.Serialize(providerMatch.Similarities, JsonOptions),
+                        DifferencesJson = JsonSerializer.Serialize(providerMatch.Differences, JsonOptions),
+                        NovelElementsJson = JsonSerializer.Serialize(providerMatch.NovelElements, JsonOptions),
+                        EvidenceJson = JsonSerializer.Serialize(providerMatch.Evidence.Select(item => new ProjectProposalAnalysisEvidenceDto
+                        {
+                            Source = item.Source.ToString(),
+                            Quote = item.Quote
+                        }), JsonOptions),
                         CreatedAtUtc = _dateTimeProvider.UtcNow
                     });
                 }
@@ -182,19 +205,6 @@ public sealed class ProjectProposalAnalysisJobProcessor : IProjectProposalAnalys
             await _context.SaveChangesAsync(transactionCancellationToken);
             return true;
         }, cancellationToken);
-    }
-
-    private static void Validate(ProposalAnalysisProviderResponse result)
-    {
-        if (string.IsNullOrWhiteSpace(result.Summary) || result.Summary.Trim().Length > 2_000)
-            throw InvalidOutput();
-        if (!Enum.IsDefined(result.OverlapRisk))
-            throw InvalidOutput();
-        if (!ValidItems(result.PotentialDifferentiators) || !ValidItems(result.Limitations))
-            throw InvalidOutput();
-        if (!ValidMetadata(result.Provider) || !ValidMetadata(result.Model)
-            || !ValidMetadata(result.PromptVersion) || !ValidMetadata(result.OutputSchemaVersion))
-            throw InvalidOutput();
     }
 
     private static void Validate(ProposalSimilarityRetrievalResult result)
@@ -245,13 +255,7 @@ public sealed class ProjectProposalAnalysisJobProcessor : IProjectProposalAnalys
     private static bool ValidWeight(double value) =>
         double.IsFinite(value) && value is >= 0 and <= 1;
 
-    private static bool ValidItems(IReadOnlyCollection<string>? items) =>
-        items is { Count: <= 10 } && items.All(item => !string.IsNullOrWhiteSpace(item) && item.Trim().Length <= 500);
-
     private static bool ValidMetadata(string? value) =>
         !string.IsNullOrWhiteSpace(value) && value.Trim().Length <= 100;
 
-    private static ProposalAnalysisProcessingException InvalidOutput() => new(
-        "PROPOSAL_ANALYSIS_OUTPUT_INVALID",
-        "The analysis provider returned an invalid result.");
 }

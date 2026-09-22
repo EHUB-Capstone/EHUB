@@ -153,6 +153,13 @@ export interface ProjectProposalAnalysisMatch {
   tfIdfSimilarity: number;
   jaccardSimilarity: number;
   hybridSimilarity: number;
+  similarities: string[];
+  differences: string[];
+  novelElements: string[];
+  evidence: Array<{
+    source: 'Current' | 'Candidate';
+    quote: string;
+  }>;
   submittedAtUtc: string;
 }
 

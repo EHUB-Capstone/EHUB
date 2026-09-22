@@ -31,6 +31,10 @@ public sealed class ProjectProposalAnalysisMatchConfiguration : IEntityTypeConfi
         builder.Property(match => match.TfIdfSimilarity).HasColumnName("tf_idf_similarity").IsRequired();
         builder.Property(match => match.JaccardSimilarity).HasColumnName("jaccard_similarity").IsRequired();
         builder.Property(match => match.HybridSimilarity).HasColumnName("hybrid_similarity").IsRequired();
+        builder.Property(match => match.SimilaritiesJson).HasColumnName("similarities_json").HasColumnType("jsonb").IsRequired();
+        builder.Property(match => match.DifferencesJson).HasColumnName("differences_json").HasColumnType("jsonb").IsRequired();
+        builder.Property(match => match.NovelElementsJson).HasColumnName("novel_elements_json").HasColumnType("jsonb").IsRequired();
+        builder.Property(match => match.EvidenceJson).HasColumnName("evidence_json").HasColumnType("jsonb").IsRequired();
         builder.Property(match => match.CreatedAtUtc).HasColumnName("created_at_utc").IsRequired();
 
         builder.HasIndex(match => new { match.AnalysisResultId, match.Rank }).IsUnique();

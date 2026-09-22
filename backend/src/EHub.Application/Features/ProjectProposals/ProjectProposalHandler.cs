@@ -207,7 +207,7 @@ public sealed class ProjectProposalHandler : IProjectProposalHandler
                         CandidateScope = ProjectProposalAnalysisCandidateScope.AllSystem,
                         IncludeCrossSemester = true,
                         LanguageMode = ProjectProposalAnalysisLanguageMode.VietnameseAndEnglish,
-                        ConfigurationVersion = "proposal-analysis-config-v1",
+                        ConfigurationVersion = "proposal-analysis-config-v2",
                         RequestedByUserId = userId,
                         AvailableAtUtc = now,
                         CreatedAtUtc = now

@@ -289,6 +289,10 @@ public sealed class ProjectProposalLifecycleIntegrationTests
         lecturerView.Value.Report.HybridWeights.Semantic.Should().Be(0.7);
         lecturerView.Value.Report.RetrievalCandidateCount.Should().BeInRange(4, 10);
         lecturerView.Value.Report.Matches.First().HybridSimilarity.Should().BeGreaterThan(0.9);
+        lecturerView.Value.Report.Matches.First().Similarities.Should().NotBeEmpty();
+        lecturerView.Value.Report.Matches.First().Differences.Should().NotBeEmpty();
+        lecturerView.Value.Report.Matches.First().NovelElements.Should().NotBeEmpty();
+        lecturerView.Value.Report.Matches.First().Evidence.Should().HaveCount(2);
 
         db.ChangeTracker.Clear();
         var retriever = scope.ServiceProvider.GetRequiredService<IProposalSimilarityRetriever>();

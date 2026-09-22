@@ -20,5 +20,9 @@ public class ProjectProposalAnalysisMatch : BaseEntity
     public double TfIdfSimilarity { get; set; }
     public double JaccardSimilarity { get; set; }
     public double HybridSimilarity { get; set; }
+    public string SimilaritiesJson { get; set; } = "[]";
+    public string DifferencesJson { get; set; } = "[]";
+    public string NovelElementsJson { get; set; } = "[]";
+    public string EvidenceJson { get; set; } = "[]";
     public DateTime CreatedAtUtc { get; set; }
 }

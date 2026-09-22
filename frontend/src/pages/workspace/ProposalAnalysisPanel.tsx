@@ -162,6 +162,32 @@ export default function ProposalAnalysisPanel({ jobId }: Props) {
                   <span className="rounded bg-slate-50 px-2 py-1">Khách hàng {similarityPercent(match.targetCustomerSimilarity)}</span>
                   <span className="rounded bg-slate-50 px-2 py-1">Giá trị/cách làm {similarityPercent(match.valueAndApproachSimilarity)}</span>
                 </div>
+                <div className="mt-3 grid gap-3 text-xs leading-5 text-slate-700 lg:grid-cols-3">
+                  <div className="rounded-lg border border-indigo-100 bg-indigo-50/50 p-3">
+                    <p className="font-bold text-indigo-800">Điểm tương đồng</p>
+                    <ul className="mt-1.5 space-y-1">{match.similarities.map((item, index) => <li key={`${index}-${item}`}>• {item}</li>)}</ul>
+                  </div>
+                  <div className="rounded-lg border border-sky-100 bg-sky-50/50 p-3">
+                    <p className="font-bold text-sky-800">Điểm khác biệt</p>
+                    <ul className="mt-1.5 space-y-1">{match.differences.map((item, index) => <li key={`${index}-${item}`}>• {item}</li>)}</ul>
+                  </div>
+                  <div className="rounded-lg border border-emerald-100 bg-emerald-50/50 p-3">
+                    <p className="font-bold text-emerald-800">Yếu tố mới tiềm năng</p>
+                    <ul className="mt-1.5 space-y-1">{match.novelElements.map((item, index) => <li key={`${index}-${item}`}>• {item}</li>)}</ul>
+                  </div>
+                </div>
+                {match.evidence.length > 0 && (
+                  <div className="mt-3 rounded-lg border border-amber-100 bg-amber-50/60 p-3 text-xs text-slate-700">
+                    <p className="font-bold text-amber-900">Bằng chứng từ proposal</p>
+                    <ul className="mt-1.5 space-y-1.5">
+                      {match.evidence.map((item, index) => (
+                        <li key={`${index}-${item.source}-${item.quote}`}>
+                          <span className="font-semibold text-amber-800">{item.source === 'Current' ? 'Đề xuất hiện tại' : 'Đề xuất đối sánh'}:</span> “{item.quote}”
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </li>
             ))}
           </ol>

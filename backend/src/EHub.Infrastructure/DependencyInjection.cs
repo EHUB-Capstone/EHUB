@@ -35,7 +35,24 @@ public static class DependencyInjection
 
         services.AddScoped<IApplicationDbContext>(provider => provider.GetRequiredService<AppDbContext>());
         services.AddSingleton<IAiFeatureGate, ConfigurationAiFeatureGate>();
-        services.AddScoped<IProposalAnalysisProvider, MockProposalAnalysisProvider>();
+        services.AddSingleton<MockProposalAnalysisProvider>();
+        services.AddSingleton<ProposalAnalysisPromptBuilder>();
+        services.AddHttpClient<GeminiProposalAnalysisProvider>((provider, client) =>
+        {
+            var options = provider.GetRequiredService<Microsoft.Extensions.Options.IOptions<ProposalAnalysisOptions>>().Value;
+            client.BaseAddress = new Uri("https://generativelanguage.googleapis.com/");
+            client.Timeout = TimeSpan.FromSeconds(Math.Clamp(options.TimeoutSeconds, 5, 180));
+        });
+        services.AddScoped<IProposalAnalysisProvider>(provider =>
+        {
+            var options = provider.GetRequiredService<Microsoft.Extensions.Options.IOptions<ProposalAnalysisOptions>>().Value;
+            return options.Provider.Trim().ToLowerInvariant() switch
+            {
+                "mock" => provider.GetRequiredService<MockProposalAnalysisProvider>(),
+                "gemini" => provider.GetRequiredService<GeminiProposalAnalysisProvider>(),
+                _ => throw new InvalidOperationException("AI:Analysis:Provider must be Mock or Gemini.")
+            };
+        });
         services.AddSingleton<DeterministicLocalEmbeddingProvider>();
         services.AddHttpClient<GeminiEmbeddingProvider>((provider, client) =>
         {
@@ -129,6 +146,8 @@ public static class DependencyInjection
         services.Configure<PasswordResetOptions>(configuration.GetSection(PasswordResetOptions.SectionName));
         services.AddOptions<ProposalEmbeddingOptions>()
             .Bind(configuration.GetSection(ProposalEmbeddingOptions.SectionName));
+        services.AddOptions<ProposalAnalysisOptions>()
+            .Bind(configuration.GetSection(ProposalAnalysisOptions.SectionName));
         services.AddOptions<RegistrationOtpOptions>()
             .Bind(configuration.GetSection(RegistrationOtpOptions.SectionName))
             .Validate(options => options.ExpirationMinutes is >= 1 and <= 15,

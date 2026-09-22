@@ -167,6 +167,10 @@ public sealed class ProjectProposalAnalysisQueryHandler : IProjectProposalAnalys
             TfIdfSimilarity = match.TfIdfSimilarity,
             JaccardSimilarity = match.JaccardSimilarity,
             HybridSimilarity = Math.Max(0, match.HybridSimilarity),
+            Similarities = DeserializeItems(match.SimilaritiesJson),
+            Differences = DeserializeItems(match.DifferencesJson),
+            NovelElements = DeserializeItems(match.NovelElementsJson),
+            Evidence = DeserializeEvidence(match.EvidenceJson),
             SubmittedAtUtc = match.CandidateProposalVersion.CreatedAt
         };
     }
@@ -196,6 +200,20 @@ public sealed class ProjectProposalAnalysisQueryHandler : IProjectProposalAnalys
         catch (JsonException)
         {
             return new ProjectProposalHybridWeightsDto();
+        }
+    }
+
+    private static IReadOnlyCollection<ProjectProposalAnalysisEvidenceDto> DeserializeEvidence(string json)
+    {
+        try
+        {
+            return JsonSerializer.Deserialize<ProjectProposalAnalysisEvidenceDto[]>(
+                json,
+                new JsonSerializerOptions(JsonSerializerDefaults.Web)) ?? [];
+        }
+        catch (JsonException)
+        {
+            return [];
         }
     }
 

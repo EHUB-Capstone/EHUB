@@ -34,14 +34,49 @@ public sealed record ProposalAnalysisProviderResponse(
     ProjectProposalOverlapRisk OverlapRisk,
     IReadOnlyCollection<string> PotentialDifferentiators,
     IReadOnlyCollection<string> Limitations,
+    IReadOnlyCollection<ProposalAnalysisProviderMatch> Matches,
     string Provider,
     string Model,
     string PromptVersion,
     string OutputSchemaVersion);
+
+public sealed record ProposalAnalysisProviderMatch(
+    Guid ProposalVersionId,
+    IReadOnlyCollection<string> Similarities,
+    IReadOnlyCollection<string> Differences,
+    IReadOnlyCollection<string> NovelElements,
+    IReadOnlyCollection<ProposalAnalysisProviderEvidence> Evidence);
+
+public sealed record ProposalAnalysisProviderEvidence(
+    ProposalAnalysisEvidenceSource Source,
+    string Quote);
+
+public enum ProposalAnalysisEvidenceSource
+{
+    Current = 1,
+    Candidate = 2
+}
 
 public interface IProposalAnalysisProvider
 {
     Task<ProposalAnalysisProviderResponse> AnalyzeAsync(
         ProposalAnalysisProviderRequest request,
         CancellationToken cancellationToken = default);
+}
+
+public sealed class ProposalAnalysisProviderException : Exception
+{
+    public ProposalAnalysisProviderException(
+        string errorCode,
+        string message,
+        bool isTransient,
+        Exception? innerException = null)
+        : base(message, innerException)
+    {
+        ErrorCode = errorCode;
+        IsTransient = isTransient;
+    }
+
+    public string ErrorCode { get; }
+    public bool IsTransient { get; }
 }

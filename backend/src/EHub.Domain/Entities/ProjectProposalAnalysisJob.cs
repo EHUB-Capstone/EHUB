@@ -12,7 +12,7 @@ public class ProjectProposalAnalysisJob : BaseEntity
     public ProjectProposalAnalysisCandidateScope CandidateScope { get; set; } = ProjectProposalAnalysisCandidateScope.AllSystem;
     public bool IncludeCrossSemester { get; set; } = true;
     public ProjectProposalAnalysisLanguageMode LanguageMode { get; set; } = ProjectProposalAnalysisLanguageMode.VietnameseAndEnglish;
-    public string ConfigurationVersion { get; set; } = "proposal-analysis-config-v1";
+    public string ConfigurationVersion { get; set; } = "proposal-analysis-config-v2";
 
     public Guid RequestedByUserId { get; set; }
     public virtual User RequestedByUser { get; set; } = null!;

@@ -65,7 +65,17 @@ public sealed class ProjectProposalAnalysisMatchDto
     public double TfIdfSimilarity { get; init; }
     public double JaccardSimilarity { get; init; }
     public double HybridSimilarity { get; init; }
+    public IReadOnlyCollection<string> Similarities { get; init; } = Array.Empty<string>();
+    public IReadOnlyCollection<string> Differences { get; init; } = Array.Empty<string>();
+    public IReadOnlyCollection<string> NovelElements { get; init; } = Array.Empty<string>();
+    public IReadOnlyCollection<ProjectProposalAnalysisEvidenceDto> Evidence { get; init; } = Array.Empty<ProjectProposalAnalysisEvidenceDto>();
     public DateTime SubmittedAtUtc { get; init; }
+}
+
+public sealed class ProjectProposalAnalysisEvidenceDto
+{
+    public string Source { get; init; } = string.Empty;
+    public string Quote { get; init; } = string.Empty;
 }
 
 public sealed class ProjectProposalFieldWeightsDto
