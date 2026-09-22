@@ -105,6 +105,7 @@ public static class DependencyInjection
         services.AddScoped<EHub.Application.Features.Teams.ProjectDirections.IProjectDirectionHandler, EHub.Application.Features.Teams.ProjectDirections.ProjectDirectionHandler>();
         services.AddScoped<EHub.Application.Features.Classes.StudentSelfService.IStudentClassSelfServiceHandler, EHub.Application.Features.Classes.StudentSelfService.StudentClassSelfServiceHandler>();
         services.AddScoped<EHub.Application.Features.Workspaces.IProjectWorkspaceHandler, EHub.Application.Features.Workspaces.ProjectWorkspaceHandler>();
+        services.AddScoped<EHub.Application.Features.ProjectProposals.IProjectProposalHandler, EHub.Application.Features.ProjectProposals.ProjectProposalHandler>();
         services.AddScoped<EHub.Application.Features.Workspaces.IWorkspaceToolsHandler, EHub.Application.Features.Workspaces.WorkspaceToolsHandler>();
         services.AddScoped<IGetWorkspaceCheckpointOverviewQueryHandler, GetWorkspaceCheckpointOverviewQueryHandler>();
         services.AddScoped<EHub.Application.Features.Workspaces.CheckpointFiles.ICheckpointFileHandler, EHub.Application.Features.Workspaces.CheckpointFiles.CheckpointFileHandler>();

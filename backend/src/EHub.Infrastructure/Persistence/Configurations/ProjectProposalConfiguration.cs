@@ -61,6 +61,7 @@ public class ProjectProposalConfiguration : IEntityTypeConfiguration<ProjectProp
         builder.Property(pp => pp.SubmittedAt).HasColumnName("submitted_at");
         builder.Property(pp => pp.ApprovedAt).HasColumnName("approved_at");
         builder.Property(pp => pp.RejectedAt).HasColumnName("rejected_at");
+        builder.Property(pp => pp.Version).IsRowVersion().HasColumnName("xmin");
 
         builder.Property(pp => pp.CreatedById).HasColumnName("created_by_id");
         builder.Property(pp => pp.UpdatedById).HasColumnName("updated_by_id");

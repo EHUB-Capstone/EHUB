@@ -66,6 +66,7 @@ public class AppDbContext : DbContext, IApplicationDbContext
     public DbSet<DataBankAuditLog> DataBankAuditLogs => Set<DataBankAuditLog>();
     public DbSet<ProjectProposal> ProjectProposals => Set<ProjectProposal>();
     public DbSet<ProjectProposalVersion> ProjectProposalVersions => Set<ProjectProposalVersion>();
+    public DbSet<ProjectProposalReview> ProjectProposalReviews => Set<ProjectProposalReview>();
     public DbSet<ProjectComment> ProjectComments => Set<ProjectComment>();
     public DbSet<PitchDeck> PitchDecks => Set<PitchDeck>();
     public DbSet<ProjectShortcut> Shortcuts => Set<ProjectShortcut>();

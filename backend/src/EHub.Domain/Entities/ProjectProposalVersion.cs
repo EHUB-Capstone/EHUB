@@ -1,5 +1,6 @@
 using System;
 using EHub.Domain.Common;
+using EHub.Domain.Enums;
 
 namespace EHub.Domain.Entities;
 
@@ -10,10 +11,14 @@ public class ProjectProposalVersion : BaseEntity
 
     public int VersionNumber { get; set; }
     public string SnapshotJson { get; set; } = "{}";
+    public string SnapshotSchemaVersion { get; set; } = "project-proposal-snapshot-v1";
+    public ProjectProposalVersionPurpose Purpose { get; set; } = ProjectProposalVersionPurpose.DraftSave;
     public string? ChangeNote { get; set; }
 
     public Guid ChangedById { get; set; }
     public virtual User ChangedBy { get; set; } = null!;
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+    public virtual ICollection<ProjectProposalReview> Reviews { get; set; } = new List<ProjectProposalReview>();
 }

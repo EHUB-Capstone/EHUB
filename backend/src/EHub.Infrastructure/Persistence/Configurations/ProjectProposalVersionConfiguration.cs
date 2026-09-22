@@ -26,6 +26,17 @@ public class ProjectProposalVersionConfiguration : IEntityTypeConfiguration<Proj
             .HasColumnType("jsonb")
             .IsRequired();
 
+        builder.Property(pv => pv.SnapshotSchemaVersion)
+            .HasColumnName("snapshot_schema_version")
+            .HasMaxLength(100)
+            .IsRequired();
+
+        builder.Property(pv => pv.Purpose)
+            .HasColumnName("purpose")
+            .HasConversion<string>()
+            .HasMaxLength(30)
+            .IsRequired();
+
         builder.Property(pv => pv.ChangeNote)
             .HasColumnName("change_note")
             .HasMaxLength(1000);
@@ -44,6 +55,7 @@ public class ProjectProposalVersionConfiguration : IEntityTypeConfiguration<Proj
 
         builder.HasIndex(pv => pv.ChangedById);
         builder.HasIndex(pv => pv.CreatedAt);
+        builder.HasIndex(pv => new { pv.Purpose, pv.CreatedAt });
 
         // Relationships configuration
         builder.HasOne(pv => pv.ProjectProposal)

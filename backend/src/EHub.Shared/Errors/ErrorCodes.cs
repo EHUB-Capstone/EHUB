@@ -128,6 +128,13 @@ public static class ErrorCodes
     public const string MentorAssignmentConflict = "MENTOR_ASSIGNMENT_CONFLICT";
     public const string ProjectDirectionNotFound = "PROJECT_DIRECTION_NOT_FOUND";
     public const string ProjectDirectionStateInvalid = "PROJECT_DIRECTION_STATE_INVALID";
+    public const string ProjectProposalNotFound = "PROJECT_PROPOSAL_NOT_FOUND";
+    public const string ProjectProposalVersionNotFound = "PROJECT_PROPOSAL_VERSION_NOT_FOUND";
+    public const string ProjectProposalAccessDenied = "PROJECT_PROPOSAL_ACCESS_DENIED";
+    public const string ProjectProposalValidationError = "PROJECT_PROPOSAL_VALIDATION_ERROR";
+    public const string ProjectProposalStateInvalid = "PROJECT_PROPOSAL_STATE_INVALID";
+    public const string ProjectProposalDirectionNotApproved = "PROJECT_PROPOSAL_DIRECTION_NOT_APPROVED";
+    public const string ProjectProposalConcurrencyConflict = "PROJECT_PROPOSAL_CONCURRENCY_CONFLICT";
     public const string NotificationNotFound = "NOTIFICATION_NOT_FOUND";
     public const string ProductFeedbackNotFound = "PRODUCT_FEEDBACK_NOT_FOUND";
     public const string ProductFeedbackAccessDenied = "PRODUCT_FEEDBACK_ACCESS_DENIED";

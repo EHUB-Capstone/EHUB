@@ -185,6 +185,21 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
                         "Project direction reviewed", $"Your project direction was reviewed: {directionDecision}.", cancellationToken);
                 }
                 break;
+            case "ProjectProposal.Submitted.v1":
+                await AddForUsersAsync(message, data, "lecturerUserIds", NotificationType.ProjectProposalSubmitted,
+                    "Project proposal awaiting review", "A team submitted its detailed project proposal for your review.", cancellationToken);
+                break;
+            case "ProjectProposal.Reviewed.v1":
+                var projectProposalDecision = ReadString(data, "decision");
+                var projectProposalNotificationType = projectProposalDecision switch
+                {
+                    "Approved" => NotificationType.ProjectProposalApproved,
+                    "Rejected" => NotificationType.ProjectProposalRejected,
+                    _ => NotificationType.ProjectProposalNeedsRevision
+                };
+                await AddForUsersAsync(message, data, "studentUserIds", projectProposalNotificationType,
+                    "Project proposal reviewed", $"Your detailed project proposal was reviewed: {projectProposalDecision}.", cancellationToken);
+                break;
             case "Team.MentorAssignmentChanged.v1" when ReadString(data, "action") is "Assigned" or "Reassigned":
                 await AddForOptionalUserAsync(message, data, "mentorUserId", NotificationType.MentorAssigned,
                     "Mentor assignment", "You have been assigned to mentor a team.", cancellationToken);
@@ -514,11 +529,20 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
             return $"/lecturer/classes?{string.Join('&', query)}";
         }
 
+        if (message.Type == "ProjectProposal.Submitted.v1")
+        {
+            var teamId = ReadPayloadGuid(message.PayloadJson, "teamId");
+            return teamId.HasValue ? $"/workspace/teams/{teamId.Value}/proposal?preview=true" : null;
+        }
+
         return message.Type switch
         {
             "AccountApproval.Requested.v1" => "/admin/account-approvals",
             "TeamProposal.Submitted.v1" => $"/classes/{message.AggregateId}",
             "TeamProposal.Reviewed.v1" or "ProjectDirection.Reviewed.v1" => $"/student/classes/{message.AggregateId}",
+            "ProjectProposal.Reviewed.v1" => ReadPayloadGuid(message.PayloadJson, "teamId") is { } teamId
+                ? $"/workspace/teams/{teamId}/proposal"
+                : "/student/workspace",
             "Team.MentorAssignmentChanged.v1" => "/mentor/dashboard",
             _ => null
         };

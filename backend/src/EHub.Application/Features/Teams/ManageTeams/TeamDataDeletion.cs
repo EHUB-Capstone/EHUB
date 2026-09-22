@@ -41,6 +41,7 @@ internal static class TeamDataDeletion
         await db.Submissions.IgnoreQueryFilters().Where(x => submissions.Contains(x.Id)).ExecuteDeleteAsync(ct);
         await db.PitchDecks.IgnoreQueryFilters().Where(x => projects.Contains(x.ProjectId)).ExecuteDeleteAsync(ct);
         await db.ProjectComments.IgnoreQueryFilters().Where(x => proposals.Contains(x.ProjectProposalId)).ExecuteDeleteAsync(ct);
+        await db.ProjectProposalReviews.IgnoreQueryFilters().Where(x => proposals.Contains(x.ProjectProposalId)).ExecuteDeleteAsync(ct);
         await db.ProjectProposalVersions.IgnoreQueryFilters().Where(x => proposals.Contains(x.ProjectProposalId)).ExecuteDeleteAsync(ct);
         await db.ProjectProposals.IgnoreQueryFilters().Where(x => proposals.Contains(x.Id)).ExecuteDeleteAsync(ct);
         await db.TeamProposalHistory.IgnoreQueryFilters().Where(x => teamProposals.Contains(x.ProposalId)).ExecuteDeleteAsync(ct);

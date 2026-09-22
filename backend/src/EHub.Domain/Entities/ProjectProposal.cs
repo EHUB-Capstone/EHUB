@@ -40,6 +40,9 @@ public class ProjectProposal : AuditableEntity
     public DateTime? ApprovedAt { get; set; }
     public DateTime? RejectedAt { get; set; }
 
+    // PostgreSQL optimistic concurrency token mapped to the system xmin column.
+    public uint Version { get; set; }
+
     public Guid? CreatedById { get; set; }
     public virtual User? Creator { get; set; }
 
@@ -48,6 +51,7 @@ public class ProjectProposal : AuditableEntity
 
     // Navigation properties
     public virtual ICollection<ProjectProposalVersion> Versions { get; set; } = new List<ProjectProposalVersion>();
+    public virtual ICollection<ProjectProposalReview> Reviews { get; set; } = new List<ProjectProposalReview>();
     public virtual ICollection<ProjectComment> Comments { get; set; } = new List<ProjectComment>();
     public virtual ICollection<PitchDeck> PitchDecks { get; set; } = new List<PitchDeck>();
 }

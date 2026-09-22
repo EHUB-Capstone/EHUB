@@ -1125,7 +1125,11 @@ public sealed class ClassSafetyHotfixIntegrationTests
         using var stream = new MemoryStream();
         workbook.SaveAs(stream);
         stream.Position = 0;
-        IFormFile file = new FormFile(stream, 0, stream.Length, "file", "team-assignment.xlsx");
+        IFormFile file = new FormFile(stream, 0, stream.Length, "file", "team-assignment.xlsx")
+        {
+            Headers = new HeaderDictionary(),
+            ContentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        };
 
         var previewHandler = new PreviewImportStudentsCommandHandler(context);
         var preview = await previewHandler.HandleAsync(
