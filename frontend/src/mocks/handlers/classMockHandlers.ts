@@ -780,7 +780,17 @@ function registerRosterHandlers(mock: MockAdapter): void {
     ];
     getMockState().imports[sessionId] = { classId, consumed: false, rows };
     persistMockState();
-    return ok({ sessionId, totalRows: rows.length, validRowsCount: 1, errorRowsCount: 1, majorMismatchCount: 0, rows }, 'Student import preview generated.');
+    return ok({
+      sessionId,
+      importMode: 'StudentRoster',
+      totalRows: rows.length,
+      validRowsCount: 1,
+      errorRowsCount: 1,
+      majorMismatchCount: 0,
+      teamCount: 0,
+      teams: [],
+      rows,
+    }, 'Student import preview generated.');
   });
 
   mock.onPost(/^\/classes\/[^/]+\/import-students\/commit$/).reply((config) => {
@@ -816,7 +826,18 @@ function registerRosterHandlers(mock: MockAdapter): void {
     session.consumed = true;
     refreshClassCounts(classId);
     persistMockState();
-    return ok({ insertedCount, updatedCount, synchronizedMajorCount: 0, skippedCount: errors.length, errorCount: errors.length, errors }, 'Students imported successfully.');
+    return ok({
+      importMode: 'StudentRoster',
+      insertedCount,
+      updatedCount,
+      createdTeamCount: 0,
+      createdMembershipCount: 0,
+      createdProjectCount: 0,
+      synchronizedMajorCount: 0,
+      skippedCount: errors.length,
+      errorCount: errors.length,
+      errors,
+    }, 'Students imported successfully.');
   });
 }
 
@@ -856,6 +877,34 @@ function registerDownloads(mock: MockAdapter): void {
   const excelHeaders = { 'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' };
   mock.onGet('/classes/import-template').reply(() => [200, new Blob(['Mock E-HUB student import template']), excelHeaders]);
   mock.onGet('/classes/major-verification-template').reply(() => [200, new Blob(['Mock E-HUB major verification template']), excelHeaders]);
+  mock.onPost('/classes/bulk/export-excel').reply((config) => {
+    const guard = adminOnlyGuard();
+    if (guard) return guard;
+
+    const body = parseBody(config);
+    const semester = asString(body.semester).toUpperCase();
+    const year = asNumber(body.year, 0);
+    const classIds = asStringArray(body.classIds);
+    if (classIds.length === 0) return failure(400, 'VALIDATION_ERROR', 'Select at least one class to export.');
+    if (new Set(classIds).size !== classIds.length) return failure(400, 'VALIDATION_ERROR', 'Duplicate class IDs are not allowed.');
+
+    const selectedClasses = classIds.map(findClass);
+    if (selectedClasses.some((cls) => !cls)) return failure(404, 'CLASS_NOT_FOUND', 'One or more selected classes were not found.');
+    if (selectedClasses.some((cls) => cls!.semesterCode.toUpperCase() !== `${semester}${year}`)) {
+      return failure(400, 'VALIDATION_ERROR', 'Every selected class must belong to the requested semester and year.');
+    }
+
+    selectedClasses.sort((left, right) =>
+      (left!.subjectCode || '').localeCompare(right!.subjectCode || '', undefined, { numeric: true, sensitivity: 'base' }) ||
+      left!.classIndex - right!.classIndex ||
+      left!.classCode.localeCompare(right!.classCode, undefined, { numeric: true, sensitivity: 'base' }));
+
+    const rows = selectedClasses
+      .flatMap((cls) => (getMockState().rosters[cls!.id] || []).map((student) =>
+        `${student.rollNumber},${student.fullName},${student.majorCode || ''},${cls!.subjectCode},${cls!.classCode}`))
+      .join('\n');
+    return [200, new Blob([`RollNumber,Fullname,Chuyên ngành,SubjectCode,GroupName\n${rows}`]), excelHeaders];
+  });
   mock.onGet(/^\/classes\/[^/]+\/(export-excel|export-students)$/).reply((config) => {
     const classId = routeId(config, /^\/classes\/([^/]+)\/(export-excel|export-students)$/);
     const rows = (getMockState().rosters[classId] || []).map((student) => `${student.rollNumber},${student.fullName},${student.email},${student.majorCode || ''}`).join('\n');

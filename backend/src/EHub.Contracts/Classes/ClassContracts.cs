@@ -300,6 +300,13 @@ public sealed class ExportClassRosterRequest
     public string? Status { get; init; }
 }
 
+public sealed class ExportAdminClassDataRequest
+{
+    public string Semester { get; init; } = string.Empty;
+    public int Year { get; init; }
+    public IReadOnlyCollection<Guid> ClassIds { get; init; } = Array.Empty<Guid>();
+}
+
 public sealed class EnrollmentMajorLockResponse
 {
     public Guid ClassId { get; init; }
@@ -399,9 +406,14 @@ public sealed class SynchronizeProfileMajorsResponse
 public sealed class ImportStudentRowPreviewDto
 {
     public int RowNumber { get; init; }
+    public Guid? StudentId { get; init; }
     public string StudentCode { get; init; } = string.Empty;
     public string FullName { get; init; } = string.Empty;
     public string Email { get; init; } = string.Empty;
+    public string? GroupName { get; init; }
+    public string? ProjectName { get; init; }
+    public string? ZaloGroupUrl { get; init; }
+    public string? ProjectDescription { get; init; }
     public string MajorCode { get; init; } = string.Empty;
     public string? RegisteredMajorCode { get; init; }
     public string MajorComparisonStatus { get; init; } = "NotCompared";
@@ -415,11 +427,26 @@ public sealed class ImportStudentRowPreviewDto
 public sealed class ImportStudentsPreviewResponse
 {
     public Guid SessionId { get; init; }
+    public string ImportMode { get; init; } = "StudentRoster";
     public int TotalRows { get; init; }
     public int ValidRowsCount { get; init; }
     public int ErrorRowsCount { get; init; }
     public int MajorMismatchCount { get; init; }
+    public int TeamCount { get; init; }
+    public IReadOnlyCollection<ImportTeamPreviewDto> Teams { get; init; } = Array.Empty<ImportTeamPreviewDto>();
     public IReadOnlyCollection<ImportStudentRowPreviewDto> Rows { get; init; } = Array.Empty<ImportStudentRowPreviewDto>();
+}
+
+public sealed class ImportTeamPreviewDto
+{
+    public string TeamName { get; init; } = string.Empty;
+    public string ProjectName { get; init; } = string.Empty;
+    public string? ZaloGroupUrl { get; init; }
+    public string? Description { get; init; }
+    public int MemberCount { get; init; }
+    public int ValidMemberCount { get; init; }
+    public int ErrorMemberCount { get; init; }
+    public bool IsValid { get; init; }
 }
 
 public sealed class CommitImportStudentsRequest
@@ -430,8 +457,12 @@ public sealed class CommitImportStudentsRequest
 
 public sealed class ImportStudentsCommitResponse
 {
+    public string ImportMode { get; init; } = "StudentRoster";
     public int InsertedCount { get; init; }
     public int UpdatedCount { get; init; }
+    public int CreatedTeamCount { get; init; }
+    public int CreatedMembershipCount { get; init; }
+    public int CreatedProjectCount { get; init; }
     public int SkippedCount { get; init; }
     public int ErrorCount { get; init; }
     public int SynchronizedMajorCount { get; init; }

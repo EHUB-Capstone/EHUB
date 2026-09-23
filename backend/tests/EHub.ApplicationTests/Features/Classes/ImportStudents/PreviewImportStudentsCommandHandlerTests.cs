@@ -185,4 +185,50 @@ public class PreviewImportStudentsCommandHandlerTests
         result.Value[0].IsValid.Should().BeTrue();
     }
 
+    [Fact]
+    public void ParseWorkbook_WhenTeamColumnsArePresent_ReadsTeamAndProjectMetadata()
+    {
+        const string spreadsheetMl = """
+            <?xml version="1.0"?>
+            <Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+                      xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <Worksheet ss:Name="Sheet1">
+                <Table>
+                  <Row>
+                    <Cell><Data ss:Type="String">RollNumber</Data></Cell>
+                    <Cell><Data ss:Type="String">Fullname</Data></Cell>
+                    <Cell><Data ss:Type="String">Email</Data></Cell>
+                    <Cell><Data ss:Type="String">Group</Data></Cell>
+                    <Cell><Data ss:Type="String">Project</Data></Cell>
+                    <Cell><Data ss:Type="String">Zalo</Data></Cell>
+                    <Cell><Data ss:Type="String">Description</Data></Cell>
+                  </Row>
+                  <Row>
+                    <Cell><Data ss:Type="String">DE180225</Data></Cell>
+                    <Cell><Data ss:Type="String">Nguyen Van A</Data></Cell>
+                    <Cell><Data ss:Type="String">student@fpt.edu.vn</Data></Cell>
+                    <Cell><Data ss:Type="String">NextWave Tech</Data></Cell>
+                    <Cell><Data ss:Type="String">SnapPose</Data></Cell>
+                    <Cell><Data ss:Type="String">https://zalo.me/g/example</Data></Cell>
+                    <Cell><Data ss:Type="String">A sufficiently detailed project description.</Data></Cell>
+                  </Row>
+                </Table>
+              </Worksheet>
+            </Workbook>
+            """;
+        var bytes = System.Text.Encoding.UTF8.GetBytes(spreadsheetMl);
+        using var stream = new MemoryStream(bytes);
+        IFormFile file = new FormFile(stream, 0, stream.Length, "file", "team-assignment.xls");
+
+        var result = PreviewImportStudentsCommandHandler.ParseWorkbook(file);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.Should().ContainSingle();
+        result.Value[0].GroupName.Should().Be("NextWave Tech");
+        result.Value[0].ProjectName.Should().Be("SnapPose");
+        result.Value[0].ZaloGroupUrl.Should().Be("https://zalo.me/g/example");
+        result.Value[0].ProjectDescription.Should().Be("A sufficiently detailed project description.");
+        result.Value[0].IsValid.Should().BeTrue();
+    }
+
 }

@@ -6,7 +6,9 @@ import type {
   GetClassesParams,
   GetClassRosterParams,
   ExportClassRosterParams,
+  ExportAdminClassDataRequest,
   AddStudentToClassPayload,
+  CommitImportStudentsPayload,
 } from '../types/classes';
 
 export const classApi = {
@@ -51,11 +53,11 @@ export const classApi = {
 
   // ─── Students ────────────────────────────────────────────────────────────
   getStudents: (classId: string, params: GetClassRosterParams) => axiosClient.get(`/classes/${classId}/students`, { params }),
-  previewImportStudents: (classId, formData) =>
+  previewImportStudents: (classId: string, formData: FormData) =>
     axiosClient.post(`/classes/${classId}/import-students/preview`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     }),
-  commitImportStudents: (classId, payload) =>
+  commitImportStudents: (classId: string, payload: CommitImportStudentsPayload) =>
     axiosClient.post(`/classes/${classId}/import-students/commit`, payload),
   importStudents: (classId, formData) =>
     axiosClient.post(`/classes/${classId}/import-students/preview`, formData, {
@@ -65,6 +67,8 @@ export const classApi = {
     axiosClient.get('/classes/import-template', { responseType: 'blob' }),
   exportClassExcel: (classId: string, params: ExportClassRosterParams) =>
     axiosClient.get(`/classes/${classId}/export-excel`, { params, responseType: 'blob' }),
+  exportAdminClassData: (data: ExportAdminClassDataRequest) =>
+    axiosClient.post('/classes/bulk/export-excel', data, { responseType: 'blob' }),
 
   // Verify student majors against lecturer's Excel file
   verifyMajors: (classId, formData) =>

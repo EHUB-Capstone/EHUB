@@ -27,6 +27,7 @@ using EHub.Infrastructure.Persistence;
 using EHub.Shared.Constants;
 using EHub.Shared.Errors;
 using FluentAssertions;
+using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
@@ -1077,6 +1078,100 @@ public sealed class ClassSafetyHotfixIntegrationTests
         unchangedStudent.FullName.Should().Be(originalName);
         unchangedStudent.Email.Should().Be(originalEmail);
         unchangedStudent.MajorCode.Should().Be(MajorCodes.BIT_SE);
+    }
+
+    [Fact]
+    public async Task TeamAssignmentImport_CreatesTeamMembershipsAndProjectMetadata()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateClassSeedAsync(context, "team-assignment-import");
+        var majors = new[] { MajorCodes.BIT_SE, MajorCodes.BIT_SE, MajorCodes.BIT_SE, MajorCodes.BIT_SE };
+        var students = majors.Select((major, index) => new Student
+        {
+            RollNumber = $"TA{Guid.NewGuid():N}"[..10].ToUpperInvariant(),
+            FullName = $"Team Assignment Student {index + 1}",
+            Email = $"team-assignment-{Guid.NewGuid():N}@example.com",
+            MajorCode = major,
+            Status = StudentStatus.Active,
+            CreatedBy = seed.AdminId
+        }).ToArray();
+        foreach (var student in students)
+        {
+            student.NormalizedRollNumber = student.RollNumber;
+        }
+        context.Students.AddRange(students);
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        using var workbook = new XLWorkbook();
+        var worksheet = workbook.Worksheets.Add("Sheet1");
+        var headers = new[] { "RollNumber", "Fullname", "Email", "Group", "Project", "Zalo", "Description" };
+        for (var column = 0; column < headers.Length; column++)
+        {
+            worksheet.Cell(1, column + 1).Value = headers[column];
+        }
+        for (var index = 0; index < students.Length; index++)
+        {
+            var row = index + 2;
+            worksheet.Cell(row, 1).Value = students[index].NormalizedRollNumber;
+            worksheet.Cell(row, 2).Value = students[index].FullName;
+            worksheet.Cell(row, 3).Value = students[index].Email;
+            worksheet.Cell(row, 4).Value = "NextWave Tech";
+            worksheet.Cell(row, 5).Value = "SnapPose";
+        }
+        worksheet.Cell(2, 6).Value = "https://zalo.me/g/snap-pose";
+        worksheet.Cell(2, 7).Value = "An AI-assisted photography application for guided poses and better framing.";
+        using var stream = new MemoryStream();
+        workbook.SaveAs(stream);
+        stream.Position = 0;
+        IFormFile file = new FormFile(stream, 0, stream.Length, "file", "team-assignment.xlsx");
+
+        var previewHandler = new PreviewImportStudentsCommandHandler(context);
+        var preview = await previewHandler.HandleAsync(
+            seed.ClassId,
+            file,
+            seed.AdminId,
+            SystemRoles.Admin);
+
+        preview.IsSuccess.Should().BeTrue();
+        preview.Value.ImportMode.Should().Be("TeamAssignment");
+        preview.Value.ValidRowsCount.Should().Be(4);
+        preview.Value.TeamCount.Should().Be(1);
+        context.ChangeTracker.Clear();
+
+        var handler = new CommitImportStudentsCommandHandler(
+            context,
+            new EHub.Infrastructure.Persistence.UnitOfWork(context));
+        var result = await handler.HandleAsync(
+            seed.ClassId,
+            new CommitImportStudentsRequest { SessionId = preview.Value.SessionId },
+            seed.AdminId,
+            SystemRoles.Admin);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.ImportMode.Should().Be("TeamAssignment");
+        result.Value.InsertedCount.Should().Be(4);
+        result.Value.CreatedTeamCount.Should().Be(1);
+        result.Value.CreatedMembershipCount.Should().Be(4);
+        result.Value.CreatedProjectCount.Should().Be(1);
+        context.ChangeTracker.Clear();
+
+        var team = await context.Teams.AsNoTracking()
+            .Include(item => item.TeamMembers)
+            .Include(item => item.Project)
+            .SingleAsync(item => item.ClassId == seed.ClassId && item.TeamName == "NextWave Tech");
+        team.TeamMembers.Should().HaveCount(4);
+        (await context.ClassStudents.AsNoTracking().CountAsync(item =>
+            item.ClassId == seed.ClassId && item.EnrollmentStatus == EnrollmentStatus.Active)).Should().Be(4);
+        team.Project.Should().NotBeNull();
+        team.Project!.Name.Should().Be("SnapPose");
+        team.Project.ZaloGroupUrl.Should().Be("https://zalo.me/g/snap-pose");
+        team.Project.Description.Should().Be("An AI-assisted photography application for guided poses and better framing.");
+        (await context.ClassAuditLogs.AsNoTracking().AnyAsync(log =>
+            log.ClassId == seed.ClassId && log.Action == "TEAM_ASSIGNMENT_IMPORT_COMMITTED")).Should().BeTrue();
+        (await context.ClassImportSessions.AsNoTracking().SingleAsync(item => item.Id == preview.Value.SessionId))
+            .Status.Should().Be(ClassImportSessionStatus.Consumed);
     }
 
     [Fact]

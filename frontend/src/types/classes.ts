@@ -114,6 +114,12 @@ export interface ExportClassRosterParams {
   status?: 'Active' | 'Dropped' | 'Completed' | '';
 }
 
+export interface ExportAdminClassDataRequest {
+  semester: 'SP' | 'SU' | 'FA';
+  year: number;
+  classIds: string[];
+}
+
 export interface CreateBulkClassesRequest {
   courseId?: string;
   semesterId?: string;
@@ -162,6 +168,76 @@ export interface AddStudentToClassPayload {
   fullName: string;
   email: string;
   majorCode: string | null;
+}
+
+export type ClassImportMode = 'StudentRoster' | 'TeamAssignment';
+
+export interface ImportStudentRowPreview {
+  rowNumber: number;
+  studentId: string | null;
+  studentCode: string;
+  fullName: string;
+  email: string;
+  groupName: string | null;
+  projectName: string | null;
+  zaloGroupUrl: string | null;
+  projectDescription: string | null;
+  majorCode: string;
+  registeredMajorCode: string | null;
+  majorComparisonStatus: string;
+  majorWarningMessage: string | null;
+  needsMajorSync: boolean;
+  isValid: boolean;
+  status: string;
+  errorMessage: string | null;
+}
+
+export interface ImportTeamPreview {
+  teamName: string;
+  projectName: string;
+  zaloGroupUrl: string | null;
+  description: string | null;
+  memberCount: number;
+  validMemberCount: number;
+  errorMemberCount: number;
+  isValid: boolean;
+}
+
+export interface ImportStudentsPreviewResponse {
+  sessionId: string;
+  importMode: ClassImportMode;
+  totalRows: number;
+  validRowsCount: number;
+  errorRowsCount: number;
+  majorMismatchCount: number;
+  teamCount: number;
+  teams: ImportTeamPreview[];
+  rows: ImportStudentRowPreview[];
+}
+
+export interface CommitImportStudentsPayload {
+  sessionId: string;
+  synchronizeProfileMajors: boolean;
+}
+
+export interface ImportStudentCommitError {
+  rowNumber: number;
+  studentCode: string;
+  errorCode: string;
+  errorMessage: string;
+}
+
+export interface ImportStudentsCommitResponse {
+  importMode: ClassImportMode;
+  insertedCount: number;
+  updatedCount: number;
+  createdTeamCount: number;
+  createdMembershipCount: number;
+  createdProjectCount: number;
+  skippedCount: number;
+  errorCount: number;
+  synchronizedMajorCount: number;
+  errors: ImportStudentCommitError[];
 }
 
 export interface ClassCompletionPreview {

@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react';
 import toast from 'react-hot-toast';
 import { Loader2, X } from 'lucide-react';
 import { classApi } from '../../api/classApi';
-import { PROGRAM_GROUPS } from '../../constants/majors';
+import { TEAM_MAJOR_GROUPS } from '../../constants/majors';
 import {
   buildAddStudentPayload,
   validateAddStudentForm,
@@ -130,8 +130,8 @@ export default function AddStudentModal({ classId, onClose, onAdded }: AddStuden
               className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
             >
               <option value="">Use the student's registered major</option>
-              {PROGRAM_GROUPS.map(group => (
-                <optgroup key={group.code} label={`${group.code} - ${group.name}`}>
+              {TEAM_MAJOR_GROUPS.map(group => (
+                <optgroup key={group.key} label={group.label}>
                   {group.majors.map(major => (
                     <option key={major.code} value={major.code}>{major.code} - {major.name}</option>
                   ))}

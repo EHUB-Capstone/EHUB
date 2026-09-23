@@ -14,7 +14,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { AUTH_ERROR_CODES } from '../../types/auth';
 import { parseApiError } from '../../utils/apiError';
 import { classFeatureFlags } from '../../config/classFeatureFlags';
-import { requiresMajor } from '../../utils/requiresMajor';
+import { MAJOR_COMPLETION_PATH, requiresMajor } from '../../utils/requiresMajor';
 import {
   AUTH_FIELD_LIMITS,
   LOGIN_FIELDS,
@@ -100,7 +100,7 @@ const Login: React.FC = () => {
     else if (normalizedRoles.includes('STUDENT')) {
       navigate(
         requiresMajor({ roles, major })
-          ? '/settings'
+          ? MAJOR_COMPLETION_PATH
           : classFeatureFlags.studentSelfService ? '/student/classes' : '/student/workspace',
         { replace: true },
       );
