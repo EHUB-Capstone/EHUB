@@ -43,6 +43,15 @@ public sealed class SynchronizeSubjectCheckpointsHandler(
         var removed = existing
             .Where(item => !retainedNumbers.Contains(item.CheckpointNumber))
             .ToArray();
+        var removedCheckpointIds = removed.Select(item => item.Id).ToArray();
+        if (removedCheckpointIds.Length > 0 &&
+            (await context.ClassCheckpointSchedules.AnyAsync(
+                item => removedCheckpointIds.Contains(item.CheckpointId), cancellationToken) ||
+             await context.Submissions.AnyAsync(
+                item => removedCheckpointIds.Contains(item.CheckpointId), cancellationToken)))
+        {
+            return Failure("VALIDATION_ERROR", "A checkpoint with class schedules or submissions cannot be removed.");
+        }
         var removedRubricIds = removed
             .SelectMany(item => item.Rubrics)
             .Select(item => item.Id)
@@ -60,7 +69,6 @@ public sealed class SynchronizeSubjectCheckpointsHandler(
 
         if (removed.Length > 0)
         {
-            var removedCheckpointIds = removed.Select(item => item.Id).ToArray();
             await context.Checkpoints
                 .Where(item => removedCheckpointIds.Contains(item.Id))
                 .ExecuteDeleteAsync(cancellationToken);

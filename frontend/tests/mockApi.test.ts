@@ -1233,3 +1233,86 @@ test('mock manual enrollment preserves backend identity and explicit re-enroll r
     },
   );
 });
+
+test('lecturer checkpoint mock follows Admin definitions and shares class schedules with Student Workspace', async () => {
+  resetMockState();
+  const state = getMockState();
+  const cls = state.classes.find((item) => item.status === 'Active' && item.subjectCode === 'EXE101');
+  assert.ok(cls);
+  const team = state.teams.find((item) => item.classId === cls.id);
+  assert.ok(team);
+  state.curricula[cls.subjectCode].checkpoints.push({
+    number: 2,
+    title: 'Admin-added checkpoint',
+    shortDescription: 'Second milestone',
+    requirements: [],
+    rubrics: [],
+  });
+  state.sessionUserId = cls.primaryLecturerId;
+
+  const listed = await axiosClient.get('/lecturer/checkpoints', {
+    params: { semester: 'FA', year: 2026, classId: cls.id, checkpointNumber: 2 },
+  });
+  assert.deepEqual(listed.data.checkpoints.map((item: { number: number }) => item.number), [1, 2]);
+  assert.deepEqual(listed.data.schedules.map((item: { checkpointNumber: number }) => item.checkpointNumber), [2]);
+  const checkpointId = listed.data.schedules[0].checkpointId;
+  const start = new Date(Date.now() - 60_000).toISOString();
+  const end = new Date(Date.now() + 60_000).toISOString();
+  const saved = await axiosClient.put(`/lecturer/checkpoints/classes/${cls.id}/definitions/${checkpointId}/schedule`, {
+    startDateUtc: start,
+    endDateUtc: end,
+  });
+  assert.equal(saved.data.status, 'Open');
+
+  state.sessionUserId = team.leaderId;
+  const workspace = await axiosClient.get(`/workspace/checkpoints/teams/${team.id}`);
+  const second = workspace.data.checkpoints.find((item: { number: number }) => item.number === 2);
+  assert.equal(second.scheduleStatus, 'Open');
+  assert.equal(second.canUpload, true);
+  assert.equal(second.startDateUtc, start);
+
+  for (const [index, name] of ['first.pdf', 'revised.pdf'].entries()) {
+    const body = new FormData();
+    body.append('file', new File(['%PDF-test'], name, { type: 'application/pdf' }));
+    const uploaded = await axiosClient.post(
+      `/workspace/checkpoints/teams/${team.id}/checkpoints/2/upload`, body,
+      { headers: { 'Content-Type': 'multipart/form-data' } },
+    );
+    assert.equal(uploaded.data.versionNumber, index + 1);
+  }
+  const history = await axiosClient.get(`/workspace/checkpoints/teams/${team.id}`);
+  assert.deepEqual(history.data.submissions.find((item: { checkpointNumber: number }) =>
+    item.checkpointNumber === 2).files.map((file: { versionNumber: number }) => file.versionNumber), [1, 2]);
+});
+
+test('bulk checkpoint scheduling checks the visible class scope and updates all matching classes', async () => {
+  resetMockState();
+  const state = getMockState();
+  const first = state.classes.find((item) => item.status === 'Active' && item.subjectCode === 'EXE101');
+  assert.ok(first);
+  const second = { ...first, id: '00000000-0000-4000-8000-000000009999', classCode: 'EXE101-FA26-02', classIndex: 2 };
+  state.classes.push(second);
+  state.sessionUserId = first.primaryLecturerId;
+  const listed = await axiosClient.get('/lecturer/checkpoints', { params: { semester: 'FA', year: 2026 } });
+  const checkpointNumber = listed.data.schedules[0].checkpointNumber;
+  const startDateUtc = new Date(Date.now() - 60_000).toISOString();
+  const endDateUtc = new Date(Date.now() + 60_000).toISOString();
+  const payload = {
+    checkpointNumber, semester: 'FA', year: 2026, startDateUtc, endDateUtc,
+    expectedClassIds: [first.id, second.id],
+  };
+
+  await assert.rejects(
+    axiosClient.put('/lecturer/checkpoints/schedules/bulk', {
+      ...payload, expectedClassIds: [...payload.expectedClassIds, '00000000-0000-4000-8000-000000008888'],
+    }),
+    (error: unknown) => (error as { response?: { status?: number } }).response?.status === 403,
+  );
+  assert.equal(Object.keys(state.checkpointSchedules).length, 0);
+
+  const applied = await axiosClient.put('/lecturer/checkpoints/schedules/bulk', payload);
+  assert.equal(applied.data.appliedClassCount, 2);
+  assert.equal(applied.data.schedules.length, 2);
+  assert.deepEqual(new Set(applied.data.schedules.map((item: { startDateUtc: string }) => item.startDateUtc)), new Set([startDateUtc]));
+  assert.equal(Object.keys(state.checkpointSchedules).length, 2);
+});

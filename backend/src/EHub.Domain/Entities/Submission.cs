@@ -25,6 +25,8 @@ public class Submission : AuditableEntity
     public SubmissionStatus Status { get; set; } = SubmissionStatus.Draft;
     public DateTime? SubmittedAt { get; set; }
     public int VersionNumber { get; set; } = 1;
+    // PostgreSQL xmin protects version assignment when two uploads target the same draft.
+    public uint RowVersion { get; set; }
 
     // Navigation properties
     public virtual ICollection<SubmissionFile> Files { get; set; } = new List<SubmissionFile>();

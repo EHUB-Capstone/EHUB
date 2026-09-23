@@ -14,6 +14,7 @@ namespace EHub.Application.Features.Workspaces.CheckpointRequirements;
 
 public sealed class CheckpointRequirementHandler(
     IApplicationDbContext context,
+    IDateTimeProvider dateTimeProvider,
     IClassRealtimePublisher? realtimePublisher = null) : ICheckpointRequirementHandler
 {
     private const int MaximumContentLength = 5_000;
@@ -40,9 +41,18 @@ public sealed class CheckpointRequirementHandler(
         if (checkpoint is null || project is null)
             return Result.Failure<WorkspaceCheckpointSubmissionResponse>(ErrorCodes.WorkspaceNotFound, "The checkpoint workspace was not found.");
 
-        var availability = await ResolveAvailabilityAsync(team.Id, team.ClassId, checkpoint, cancellationToken);
-        if (!availability.CanSubmit)
-            return Result.Failure<WorkspaceCheckpointSubmissionResponse>(ErrorCodes.WorkspaceValidationError, availability.Reason ?? "This checkpoint is not open for submission.");
+        var schedule = await context.ClassCheckpointSchedules.AsNoTracking()
+            .FirstOrDefaultAsync(item => item.ClassId == team.ClassId && item.CheckpointId == checkpoint.Id, cancellationToken);
+        var now = EnsureUtc(dateTimeProvider.UtcNow);
+        if (schedule is null || now < schedule.StartDateUtc || now > schedule.EndDateUtc)
+        {
+            var message = schedule is null
+                ? "This checkpoint has not been scheduled for your class."
+                : now < schedule.StartDateUtc
+                    ? $"This checkpoint opens at {schedule.StartDateUtc:O}."
+                    : $"This checkpoint closed at {schedule.EndDateUtc:O}.";
+            return Result.Failure<WorkspaceCheckpointSubmissionResponse>(ErrorCodes.WorkspaceCheckpointNotOpen, message);
+        }
 
         var requiredLabels = DeserializeRequirements(checkpoint.RequirementsJson);
         var normalized = NormalizeAndValidate(request?.Contents, requiredLabels.Count);
@@ -51,7 +61,6 @@ public sealed class CheckpointRequirementHandler(
         var submission = await context.Submissions.Include(item => item.RequirementContents)
             .OrderByDescending(item => item.VersionNumber).ThenByDescending(item => item.CreatedAt)
             .FirstOrDefaultAsync(item => item.TeamId == teamId && item.CheckpointId == checkpoint.Id, cancellationToken);
-        var now = DateTime.UtcNow;
         if (submission is null)
         {
             submission = new Submission
@@ -127,17 +136,12 @@ public sealed class CheckpointRequirementHandler(
 
     private static bool IsRole(string role, string expected) => string.Equals(role, expected, StringComparison.OrdinalIgnoreCase);
 
-    private async Task<CheckpointAvailabilityResult> ResolveAvailabilityAsync(Guid teamId, Guid classId, Checkpoint checkpoint, CancellationToken cancellationToken)
+    private static DateTime EnsureUtc(DateTime value) => value.Kind switch
     {
-        var schedule = await context.Checkpoints.AsNoTracking().FirstOrDefaultAsync(item =>
-            item.ClassId == classId && item.CheckpointNumber == checkpoint.CheckpointNumber, cancellationToken);
-        var previousCheckpoint = await context.Checkpoints.AsNoTracking().Where(item =>
-                item.CourseId == checkpoint.CourseId && item.ClassId == null && item.CheckpointNumber < checkpoint.CheckpointNumber)
-            .OrderByDescending(item => item.CheckpointNumber).FirstOrDefaultAsync(cancellationToken);
-        var previousCompleted = previousCheckpoint is null || await context.Submissions.AsNoTracking().AnyAsync(item =>
-            item.TeamId == teamId && item.CheckpointId == previousCheckpoint.Id && item.Status == SubmissionStatus.Submitted, cancellationToken);
-        return CheckpointAvailabilityRules.Evaluate(schedule, previousCompleted, DateTime.UtcNow);
-    }
+        DateTimeKind.Utc => value,
+        DateTimeKind.Local => value.ToUniversalTime(),
+        _ => DateTime.SpecifyKind(value, DateTimeKind.Utc)
+    };
 
     private async Task<IReadOnlyCollection<Guid>> RecipientUserIdsAsync(Team team, CancellationToken cancellationToken)
     {

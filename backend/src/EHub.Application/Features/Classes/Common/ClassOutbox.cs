@@ -13,7 +13,8 @@ internal static class ClassOutbox
         string eventType,
         Guid classId,
         object data,
-        DateTime? occurredAtUtc = null)
+        DateTime? occurredAtUtc = null,
+        DateTime? availableAtUtc = null)
     {
         var eventId = Guid.NewGuid();
         var occurredAt = occurredAtUtc ?? DateTime.UtcNow;
@@ -24,7 +25,7 @@ internal static class ClassOutbox
             AggregateType = "Class",
             AggregateId = classId,
             OccurredAtUtc = occurredAt,
-            AvailableAtUtc = occurredAt,
+            AvailableAtUtc = availableAtUtc ?? occurredAt,
             PayloadJson = JsonSerializer.Serialize(new
             {
                 EventId = eventId,

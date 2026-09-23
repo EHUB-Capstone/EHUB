@@ -25,7 +25,8 @@ export function buildWorkspaceCheckpointOverview(
     if (!checkpoint) continue;
 
     const files = [...(submission.files || [])].sort(
-      (left, right) => Date.parse(right.uploadedAt) - Date.parse(left.uploadedAt),
+      (left, right) => right.versionNumber - left.versionNumber ||
+        Date.parse(right.uploadedAt) - Date.parse(left.uploadedAt),
     );
     const reqFilled = (submission.requirementContents || []).filter(
       (requirement) => String(requirement.content || '').trim().length > 0,

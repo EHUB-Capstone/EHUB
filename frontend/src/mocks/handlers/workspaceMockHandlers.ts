@@ -1,5 +1,6 @@
 import type MockAdapter from 'axios-mock-adapter';
 import { allocateId, allocateRowVersion, failure, getMockState, ok, parseBody, persistMockState, routeId } from '../mockHelpers.ts';
+import type { MockClass, MockCheckpointFile } from '../mockState.ts';
 
 const uuid = (value: number) => `00000000-0000-4000-8000-${String(value).padStart(12, '0')}`;
 
@@ -22,45 +23,6 @@ type MockShortcut = {
 const mockWeeklyTasks: MockWeeklyTask[] = [];
 const mockShortcuts = new Map<string, MockShortcut[]>();
 
-const checkpointConfig = [
-  {
-    number: 1,
-    title: 'Startup Idea & Team Formation',
-    shortDescription: 'Define your startup concept, choose your field, and establish clear member roles.',
-    icon: 'Users',
-    requirements: ['Team name', 'Startup idea', 'Member roles'],
-    rubrics: [
-      { key: 'idea-clarity', label: 'Startup Idea Clarity', description: 'How clear, focused, and understandable the idea is.', weight: 30, maxScore: 10, levels: [] },
-      { key: 'problem-fit', label: 'Problem & Customer Fit', description: 'Evidence that the idea addresses a meaningful customer problem.', weight: 40, maxScore: 10, levels: [] },
-      { key: 'team-readiness', label: 'Team Readiness', description: 'Roles and responsibilities are practical and well distributed.', weight: 30, maxScore: 10, levels: [] },
-    ],
-  },
-  {
-    number: 2,
-    title: 'Market Validation',
-    shortDescription: 'Conduct surveys and interviews, analyze the market, and validate product-market fit.',
-    icon: 'BarChart2',
-    requirements: ['Target customer', 'Interview findings', 'Market evidence'],
-    rubrics: [{ key: 'validation', label: 'Validation Quality', description: 'Strength and relevance of collected market evidence.', weight: 100, maxScore: 10, levels: [] }],
-  },
-  {
-    number: 3,
-    title: 'Product & Business Model',
-    shortDescription: 'Develop an MVP or prototype and outline your Business Model Canvas.',
-    icon: 'Layers',
-    requirements: ['Value proposition', 'MVP scope', 'Business model'],
-    rubrics: [{ key: 'business-model', label: 'Business Model', description: 'Coherence of the value proposition and operating model.', weight: 100, maxScore: 10, levels: [] }],
-  },
-  {
-    number: 4,
-    title: 'Final Pitch',
-    shortDescription: 'Prepare your final pitch deck and rehearse the presentation delivery.',
-    icon: 'TrendingUp',
-    requirements: ['Pitch narrative', 'Traction and evidence', 'Next steps'],
-    rubrics: [{ key: 'pitch', label: 'Pitch Quality', description: 'Clarity, evidence, and persuasiveness of the final pitch.', weight: 100, maxScore: 10, levels: [] }],
-  },
-];
-
 function teamById(teamId: string) {
   return getMockState().teams.find((team) => team.id === teamId);
 }
@@ -68,6 +30,56 @@ function teamById(teamId: string) {
 function classByTeam(teamId: string) {
   const team = teamById(teamId);
   return team ? getMockState().classes.find((item) => item.id === team.classId) : undefined;
+}
+
+function checkpointDefinitionsForClass(cls: MockClass) {
+  return (getMockState().curricula[cls.subjectCode]?.checkpoints || []).map((checkpoint) => ({
+    id: uuid(3000 + Number(cls.courseId.slice(-3)) * 10 + checkpoint.number),
+    courseId: cls.courseId,
+    number: checkpoint.number,
+    title: checkpoint.title,
+    shortDescription: checkpoint.shortDescription,
+    requirements: checkpoint.requirements,
+    rubrics: checkpoint.rubrics,
+  }));
+}
+
+function managedCheckpointClasses(lecturerId: string, params: Record<string, unknown>): MockClass[] {
+  const search = String(params.search || '').trim().toLowerCase();
+  return getMockState().classes.filter((cls) =>
+    cls.primaryLecturerId === lecturerId &&
+    (params.status ? cls.status === params.status : ['Active', 'Draft'].includes(cls.status)) &&
+    (!params.semester || cls.semesterCode.startsWith(String(params.semester).toUpperCase())) &&
+    (!params.year || cls.year === Number(params.year)) &&
+    (!params.subjectCode || cls.subjectCode === String(params.subjectCode).toUpperCase()) &&
+    (!search || `${cls.classCode} ${cls.subjectCode} ${cls.subjectName}`.toLowerCase().includes(search)));
+}
+
+function scheduleFor(classId: string, checkpointId: string) {
+  return getMockState().checkpointSchedules[`${classId}:${checkpointId}`];
+}
+
+function scheduleStatus(schedule: { startDateUtc: string; endDateUtc: string } | undefined) {
+  if (!schedule) return 'NotScheduled';
+  const now = Date.now();
+  if (now < Date.parse(schedule.startDateUtc)) return 'Upcoming';
+  return now <= Date.parse(schedule.endDateUtc) ? 'Open' : 'Closed';
+}
+
+function filesForCheckpoint(teamId: string, number: number): MockCheckpointFile[] {
+  const stored = getMockState().checkpointFiles[`${teamId}:${number}`];
+  if (stored) return stored.map((file, index) => ({ ...file, versionNumber: file.versionNumber ?? index + 1 }));
+  if (number !== 1 || teamId !== uuid(601)) return [];
+  const leader = getMockState().users.find((user) => user.id === teamById(teamId)?.leaderId);
+  return [{
+    _id: uuid(1201),
+    versionNumber: 1,
+    originalName: 'Startup-Idea-Phoenix-Founders.pdf',
+    fileType: 'pdf',
+    fileSize: 1_482_752,
+    uploadedAt: new Date(Date.now() - 86_400_000).toISOString(),
+    uploadedBy: { _id: leader?.id || '', name: leader?.name || 'Team leader' },
+  }];
 }
 
 function workspaceOption(teamId: string) {
@@ -100,6 +112,18 @@ function accessibleTeams() {
 
 function canAccessTeam(teamId: string) {
   return accessibleTeams().some((team) => team.id === teamId);
+}
+
+function canAccessCheckpointTeam(teamId: string) {
+  const state = getMockState();
+  const user = state.users.find((item) => item.id === state.sessionUserId);
+  const team = teamById(teamId);
+  const cls = classByTeam(teamId);
+  if (!user || !team || !cls) return false;
+  if (user.role === 'ADMIN') return true;
+  if (user.role === 'LECTURER') return cls.primaryLecturerId === user.id;
+  if (user.role === 'MENTOR') return team.currentMentorAssignment?.mentor.userId === user.id;
+  return team.members.some((member) => member.studentId === user.id);
 }
 
 function workspaceData(teamId: string) {
@@ -185,21 +209,25 @@ function workspaceData(teamId: string) {
 }
 
 function checkpointData(teamId: string) {
-  const team = teamById(teamId)!;
-  const uploader = getMockState().users.find((user) => user.id === team.leaderId);
+  const cls = classByTeam(teamId)!;
+  const checkpoints = checkpointDefinitionsForClass(cls);
   return {
-    subjectCode: classByTeam(teamId)?.subjectCode || '',
-    checkpoints: checkpointConfig,
-    submissions: checkpointConfig.map((checkpoint) => ({
+    subjectCode: cls.subjectCode,
+    checkpoints: checkpoints.map((checkpoint) => {
+      const schedule = scheduleFor(cls.id, checkpoint.id);
+      const status = scheduleStatus(schedule);
+      return {
+        ...checkpoint,
+        startDateUtc: schedule?.startDateUtc || null,
+        endDateUtc: schedule?.endDateUtc || null,
+        scheduleStatus: status,
+        canUpload: status === 'Open',
+      };
+    }),
+    submissions: checkpoints.map((checkpoint) => ({
       checkpointNumber: checkpoint.number,
-      files: checkpoint.number === 1 ? [{
-        _id: uuid(1201),
-        originalName: 'Startup-Idea-Phoenix-Founders.pdf',
-        fileType: 'pdf',
-        fileSize: 1_482_752,
-        uploadedAt: new Date(Date.now() - 86_400_000).toISOString(),
-        uploadedBy: { _id: uploader?.id, name: uploader?.name || 'Team leader' },
-      }] : [],
+      status: filesForCheckpoint(teamId, checkpoint.number).length > 0 ? 'Submitted' : 'NotSubmitted',
+      files: filesForCheckpoint(teamId, checkpoint.number),
       requirementContents: checkpoint.requirements.map((_, index) => ({
         index,
         content: checkpoint.number === 1
@@ -223,8 +251,10 @@ function checkpointData(teamId: string) {
   };
 }
 
-function evaluationSummary(checkpointNumber: number) {
-  const checkpoint = checkpointConfig.find((item) => item.number === checkpointNumber) || checkpointConfig[0];
+function evaluationSummary(teamId: string, checkpointNumber: number) {
+  const cls = classByTeam(teamId)!;
+  const checkpoint = checkpointDefinitionsForClass(cls).find((item) => item.number === checkpointNumber)!;
+  const rubrics = checkpoint.rubrics as Array<{ key: string; label: string; weight: number }>;
   const hasEvaluation = checkpointNumber === 1;
   const evaluation = {
     _id: uuid(1401),
@@ -236,7 +266,7 @@ function evaluationSummary(checkpointNumber: number) {
     weightedScore: 7.85,
     overallFeedback: 'Good early direction. Strengthen customer evidence and clarify the validation plan.',
     updatedAt: new Date(Date.now() - 21_600_000).toISOString(),
-    rubricScores: checkpoint.rubrics.map((criterion, index) => ({
+    rubricScores: rubrics.map((criterion, index) => ({
       criterionKey: criterion.key,
       criterionName: criterion.label,
       selectedLevel: index === 1 ? 'GOOD' : 'EXCELLENT',
@@ -267,6 +297,197 @@ function evaluationSummary(checkpointNumber: number) {
 }
 
 export function registerWorkspaceMockHandlers(mock: MockAdapter): void {
+  mock.onGet('/lecturer/checkpoints').reply((config) => {
+    const state = getMockState();
+    const lecturer = state.users.find((user) => user.id === state.sessionUserId);
+    if (lecturer?.role !== 'LECTURER') return failure(403, 'CLASS_ACCESS_DENIED', 'Lecturer access is required.');
+    const params = config.params || {};
+    const classes = managedCheckpointClasses(lecturer.id, params);
+    const definitions = Array.from(new Map(classes.flatMap(checkpointDefinitionsForClass)
+      .map((checkpoint) => [checkpoint.id, checkpoint])).values());
+    const selectedClasses = params.classId
+      ? classes.filter((cls) => cls.id === String(params.classId))
+      : classes;
+    const availableDefinitions = definitions.filter((checkpoint) =>
+      selectedClasses.some((cls) => cls.courseId === checkpoint.courseId));
+    const selectedDefinitions = availableDefinitions.filter((checkpoint) =>
+      (!params.checkpointId || checkpoint.id === String(params.checkpointId)) &&
+      (!params.checkpointNumber || checkpoint.number === Number(params.checkpointNumber)));
+    const schedules = selectedClasses.flatMap((cls) => selectedDefinitions
+      .filter((checkpoint) => checkpoint.courseId === cls.courseId)
+      .map((checkpoint) => {
+        const schedule = scheduleFor(cls.id, checkpoint.id);
+        return {
+          id: schedule?.id || null,
+          classId: cls.id,
+          classCode: cls.classCode,
+          checkpointId: checkpoint.id,
+          checkpointNumber: checkpoint.number,
+          checkpointTitle: checkpoint.title,
+          startDateUtc: schedule?.startDateUtc || null,
+          endDateUtc: schedule?.endDateUtc || null,
+          status: scheduleStatus(schedule),
+          canReopen: Boolean(schedule && Date.now() > Date.parse(schedule.endDateUtc)),
+          reopenCount: schedule?.reopenCount || 0,
+        };
+      }));
+    const submissions = selectedClasses.flatMap((cls) => state.teams
+      .filter((team) => team.classId === cls.id && team.status === 'Active')
+      .flatMap((team) => selectedDefinitions.filter((checkpoint) => checkpoint.courseId === cls.courseId)
+        .map((checkpoint) => {
+          const files = [...filesForCheckpoint(team.id, checkpoint.number)]
+            .sort((left, right) => Date.parse(left.uploadedAt) - Date.parse(right.uploadedAt));
+          const checkpointSchedule = scheduleFor(cls.id, checkpoint.id);
+          const status = scheduleStatus(checkpointSchedule);
+          return {
+            classId: cls.id,
+            classCode: cls.classCode,
+            teamId: team.id,
+            teamName: team.teamName,
+            checkpointId: checkpoint.id,
+            checkpointNumber: checkpoint.number,
+            checkpointTitle: checkpoint.title,
+            status: status === 'Upcoming' ? 'Upcoming' : files.length > 0 ? 'Submitted' : status === 'Open' ? 'Pending' : status,
+            latestSubmissionAtUtc: files.at(-1)?.uploadedAt || null,
+            earliestSubmittedFile: files[0] ? {
+              id: files[0]._id,
+              originalName: files[0].originalName,
+              uploadedAtUtc: files[0].uploadedAt,
+            } : null,
+          };
+        })));
+    return ok({
+      serverTimeUtc: new Date().toISOString(),
+      classes: classes.map((cls) => ({
+        id: cls.id, classCode: cls.classCode, subjectCode: cls.subjectCode,
+        subjectName: cls.subjectName, semesterCode: cls.semesterCode, year: cls.year,
+      })),
+      checkpoints: availableDefinitions.map(({ id, courseId, number, title, shortDescription }) => ({
+        id, courseId, number, title, shortDescription,
+      })),
+      schedules,
+      submissions,
+    }, 'Lecturer checkpoint overview retrieved.');
+  });
+
+  mock.onPut(/^\/lecturer\/checkpoints\/classes\/[^/]+\/definitions\/[^/]+\/schedule$/).reply((config) => {
+    const match = config.url?.match(/^\/lecturer\/checkpoints\/classes\/([^/]+)\/definitions\/([^/]+)\/schedule$/);
+    const classId = match?.[1] || '';
+    const checkpointId = match?.[2] || '';
+    const state = getMockState();
+    const lecturer = state.users.find((user) => user.id === state.sessionUserId);
+    const cls = state.classes.find((item) => item.id === classId);
+    if (lecturer?.role !== 'LECTURER' || cls?.primaryLecturerId !== lecturer.id)
+      return failure(403, 'CLASS_ACCESS_DENIED', 'You do not have permission to manage this class.');
+    const checkpoint = checkpointDefinitionsForClass(cls).find((item) => item.id === checkpointId);
+    if (!checkpoint) return failure(404, 'COMMON_NOT_FOUND', 'The checkpoint is not configured for this class subject.');
+    const body = parseBody(config);
+    const start = Date.parse(String(body.startDateUtc || ''));
+    const end = Date.parse(String(body.endDateUtc || ''));
+    if (!Number.isFinite(start) || !Number.isFinite(end) || start >= end)
+      return failure(400, 'VALIDATION_ERROR', 'Start date must be earlier than end date.');
+    const key = `${classId}:${checkpointId}`;
+    const previous = state.checkpointSchedules[key];
+    const reopened = Boolean(previous && Date.now() > Date.parse(previous.endDateUtc));
+    if (reopened && end <= Date.now())
+      return failure(400, 'VALIDATION_ERROR', 'A reopened checkpoint must end in the future.');
+    const schedule = {
+      id: previous?.id || allocateId(),
+      classId,
+      checkpointId,
+      startDateUtc: new Date(start).toISOString(),
+      endDateUtc: new Date(end).toISOString(),
+      reopenCount: (previous?.reopenCount || 0) + (reopened ? 1 : 0),
+    };
+    state.checkpointSchedules[key] = schedule;
+    state.audits[classId] ??= [];
+    state.audits[classId].push({
+      id: allocateId(),
+      action: reopened ? 'CheckpointReopened' : previous ? 'CheckpointScheduleUpdated' : 'CheckpointScheduled',
+      performedByUserId: lecturer.id,
+      performedByName: lecturer.name,
+      occurredAtUtc: new Date().toISOString(),
+      detailsJson: JSON.stringify({
+        checkpointId,
+        checkpointNumber: checkpoint.number,
+        oldStartDateUtc: previous?.startDateUtc || null,
+        oldEndDateUtc: previous?.endDateUtc || null,
+        newStartDateUtc: schedule.startDateUtc,
+        newEndDateUtc: schedule.endDateUtc,
+      }),
+    });
+    persistMockState();
+    return ok({
+      ...schedule,
+      classCode: cls.classCode,
+      checkpointNumber: checkpoint.number,
+      checkpointTitle: checkpoint.title,
+      status: scheduleStatus(schedule),
+      canReopen: Date.now() > end,
+    }, 'Checkpoint schedule saved.');
+  });
+
+  mock.onPut('/lecturer/checkpoints/schedules/bulk').reply((config) => {
+    const state = getMockState();
+    const lecturer = state.users.find((user) => user.id === state.sessionUserId);
+    if (lecturer?.role !== 'LECTURER') return failure(403, 'CLASS_ACCESS_DENIED', 'Lecturer access is required.');
+    const body = parseBody(config);
+    const checkpointNumber = Number(body.checkpointNumber);
+    const expected = Array.isArray(body.expectedClassIds) ? body.expectedClassIds.map(String) : [];
+    const classes = managedCheckpointClasses(lecturer.id, body);
+    const targets = classes.filter((cls) =>
+      checkpointDefinitionsForClass(cls).some((checkpoint) => checkpoint.number === checkpointNumber));
+    if (targets.length === 0)
+      return failure(404, 'COMMON_NOT_FOUND', 'This checkpoint is not configured for any class in your scope.');
+    if (expected.length === 0 || new Set(expected).size !== expected.length ||
+      expected.slice().sort().join('|') !== targets.map((cls) => cls.id).sort().join('|'))
+      return failure(403, 'CLASS_ACCESS_DENIED', 'The class selection changed or includes a class outside your scope. Refresh and try again.');
+    const start = Date.parse(String(body.startDateUtc || ''));
+    const end = Date.parse(String(body.endDateUtc || ''));
+    if (!Number.isFinite(start) || !Number.isFinite(end) || start >= end)
+      return failure(400, 'VALIDATION_ERROR', 'Start date must be earlier than end date.');
+    const now = Date.now();
+    if (end <= now && targets.some((cls) => {
+      const checkpointId = checkpointDefinitionsForClass(cls).find((item) => item.number === checkpointNumber)!.id;
+      const prior = scheduleFor(cls.id, checkpointId);
+      return prior && Date.parse(prior.endDateUtc) < now;
+    })) return failure(400, 'VALIDATION_ERROR', 'A reopened checkpoint must end in the future.');
+
+    const schedules = targets.map((cls) => {
+      const checkpoint = checkpointDefinitionsForClass(cls).find((item) => item.number === checkpointNumber)!;
+      const checkpointId = checkpoint.id;
+      const key = `${cls.id}:${checkpointId}`;
+      const previous = state.checkpointSchedules[key];
+      const reopened = Boolean(previous && Date.parse(previous.endDateUtc) < now);
+      const schedule = {
+        id: previous?.id || allocateId(), classId: cls.id, checkpointId,
+        startDateUtc: new Date(start).toISOString(), endDateUtc: new Date(end).toISOString(),
+        reopenCount: (previous?.reopenCount || 0) + (reopened ? 1 : 0),
+      };
+      state.checkpointSchedules[key] = schedule;
+      state.audits[cls.id] ??= [];
+      state.audits[cls.id].push({
+        id: allocateId(),
+        action: reopened ? 'CheckpointReopened' : previous ? 'CheckpointScheduleUpdated' : 'CheckpointScheduled',
+        performedByUserId: lecturer.id,
+        performedByName: lecturer.name,
+        occurredAtUtc: new Date(now).toISOString(),
+        detailsJson: JSON.stringify({
+          checkpointId, checkpointNumber: checkpoint.number,
+          oldStartDateUtc: previous?.startDateUtc || null, oldEndDateUtc: previous?.endDateUtc || null,
+          newStartDateUtc: schedule.startDateUtc, newEndDateUtc: schedule.endDateUtc,
+        }),
+      });
+      return {
+        ...schedule, classCode: cls.classCode, checkpointNumber: checkpoint.number,
+        checkpointTitle: checkpoint.title, status: scheduleStatus(schedule),
+        canReopen: now > end,
+      };
+    });
+    persistMockState();
+    return ok({ appliedClassCount: schedules.length, schedules }, 'Checkpoint schedule applied to all selected classes.');
+  });
+
   mock.onGet('/weekly-tasks').reply((config) => {
     const weekNumber = Number(config.params?.weekNumber || 1);
     const teamId = String(config.params?.teamId || '');
@@ -549,17 +770,65 @@ export function registerWorkspaceMockHandlers(mock: MockAdapter): void {
 
   mock.onGet(/^\/workspace\/checkpoints\/teams\/[^/]+$/).reply((config) => {
     const teamId = routeId(config, /^\/workspace\/checkpoints\/teams\/([^/]+)$/);
-    return teamById(teamId)
+    return canAccessCheckpointTeam(teamId)
       ? ok(checkpointData(teamId), 'Checkpoint data retrieved successfully.')
-      : failure(404, 'TEAM_NOT_FOUND', 'Team not found.');
+      : failure(403, 'WORKSPACE_ACCESS_DENIED', 'You do not have access to this team workspace.');
+  });
+
+  mock.onPost(/^\/workspace\/checkpoints\/teams\/[^/]+\/checkpoints\/\d+\/upload$/).reply((config) => {
+    const match = config.url?.match(/^\/workspace\/checkpoints\/teams\/([^/]+)\/checkpoints\/(\d+)\/upload$/);
+    const teamId = match?.[1] || '';
+    const number = Number(match?.[2]);
+    const state = getMockState();
+    const user = state.users.find((item) => item.id === state.sessionUserId);
+    const cls = classByTeam(teamId);
+    if (user?.role !== 'STUDENT' || !canAccessCheckpointTeam(teamId) || !cls)
+      return failure(403, 'WORKSPACE_ACCESS_DENIED', 'Only active team students can upload documents.');
+    const checkpoint = checkpointDefinitionsForClass(cls).find((item) => item.number === number);
+    if (!checkpoint) return failure(404, 'WORKSPACE_NOT_FOUND', 'The checkpoint workspace was not found.');
+    const schedule = scheduleFor(cls.id, checkpoint.id);
+    if (scheduleStatus(schedule) !== 'Open')
+      return failure(400, 'WORKSPACE_CHECKPOINT_NOT_OPEN', 'This checkpoint is not open for uploads.');
+    const file = config.data instanceof FormData ? config.data.get('file') : null;
+    if (!(file instanceof File)) return failure(400, 'WORKSPACE_VALIDATION_ERROR', 'A file is required.');
+    const extension = file.name.split('.').at(-1)?.toLowerCase() || '';
+    if (!['pdf', 'docx', 'pptx'].includes(extension) || file.size <= 0 || file.size > 15 * 1024 * 1024)
+      return failure(400, 'WORKSPACE_VALIDATION_ERROR', 'Only PDF, DOCX, and PPTX files up to 15 MB are accepted.');
+    const key = `${teamId}:${number}`;
+    const existingFiles = filesForCheckpoint(teamId, number);
+    const uploaded = {
+      _id: allocateId(),
+      versionNumber: Math.max(0, ...existingFiles.map((item) => item.versionNumber ?? 0)) + 1,
+      originalName: file.name,
+      fileType: extension,
+      fileSize: file.size,
+      uploadedAt: new Date().toISOString(),
+      uploadedBy: { _id: user.id, name: user.name },
+    };
+    state.checkpointFiles[key] ??= existingFiles;
+    state.checkpointFiles[key].push(uploaded);
+    persistMockState();
+    return ok(uploaded, 'File uploaded.');
+  });
+
+  mock.onGet(/^\/workspace\/checkpoints\/teams\/[^/]+\/checkpoints\/\d+\/files\/[^/]+\/download$/).reply((config) => {
+    const match = config.url?.match(/^\/workspace\/checkpoints\/teams\/([^/]+)\/checkpoints\/(\d+)\/files\/([^/]+)\/download$/);
+    const teamId = match?.[1] || '';
+    const number = Number(match?.[2]);
+    const fileId = match?.[3] || '';
+    if (!canAccessCheckpointTeam(teamId)) return failure(403, 'WORKSPACE_ACCESS_DENIED', 'You do not have access to this team workspace.');
+    const file = filesForCheckpoint(teamId, number).find((item) => item._id === fileId);
+    if (!file) return failure(404, 'COMMON_NOT_FOUND', 'Submitted file was not found.');
+    return [200, new Blob([`Mock submitted file: ${file.originalName}`], { type: 'application/octet-stream' }),
+      { 'content-type': 'application/octet-stream' }];
   });
 
   mock.onGet(/^\/evaluations\/team\/[^/]+\/checkpoints\/\d+\/summary$/).reply((config) => {
     const match = config.url?.match(/^\/evaluations\/team\/([^/]+)\/checkpoints\/(\d+)\/summary$/);
     const teamId = match?.[1] || '';
     const checkpointNumber = Number(match?.[2] || 1);
-    return teamById(teamId)
-      ? ok(evaluationSummary(checkpointNumber), 'Evaluation summary retrieved successfully.')
+    return canAccessCheckpointTeam(teamId) && checkpointDefinitionsForClass(classByTeam(teamId)!).some((item) => item.number === checkpointNumber)
+      ? ok(evaluationSummary(teamId, checkpointNumber), 'Evaluation summary retrieved successfully.')
       : failure(404, 'TEAM_NOT_FOUND', 'Team not found.');
   });
 }

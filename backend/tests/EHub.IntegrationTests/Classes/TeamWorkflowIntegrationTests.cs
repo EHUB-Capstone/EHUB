@@ -11,23 +11,33 @@ using EHub.Application.Features.Teams.TeamProposals;
 using EHub.Application.Features.Workspaces;
 using EHub.Application.Features.Workspaces.GetCheckpointOverview;
 using EHub.Application.Features.Workspaces.CheckpointRequirements;
+using EHub.Application.Features.Workspaces.CheckpointFiles;
+using EHub.Application.Features.Checkpoints.LecturerManagement;
+using EHub.Application.Common.Interfaces.Storage;
 using EHub.Application.Features.Workspaces.CheckpointEvaluations;
 using EHub.Application.Features.Admin.Users.ManageUsers;
 using EHub.Application.Common.Interfaces.Identity;
+using EHub.Application.Common.Interfaces.Services;
 using EHub.Contracts.Classes;
 using EHub.Contracts.Teams;
 using EHub.Contracts.Users;
 using EHub.Contracts.Workspaces;
+using EHub.Contracts.Checkpoints;
 using EHub.Domain.Entities;
 using EHub.Domain.Enums;
 using EHub.IntegrationTests.Common;
 using EHub.Infrastructure.Persistence;
+using EHub.Infrastructure.Persistence.Migrations;
 using EHub.Shared.Constants;
 using EHub.Shared.Errors;
+using EHub.Shared.Results;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Migrations.Operations;
 using Microsoft.Extensions.DependencyInjection;
 using System.Text.Json;
+using System.Net;
+using System.Net.Http.Headers;
 
 namespace EHub.IntegrationTests.Classes;
 
@@ -911,6 +921,7 @@ public sealed class TeamWorkflowIntegrationTests
         };
         submission.Files.Add(new SubmissionFile
         {
+            VersionNumber = 1,
             FileName = "startup-idea.pdf",
             OriginalName = "Startup Idea.pdf",
             FileUrl = "https://example.invalid/startup-idea.pdf",
@@ -972,20 +983,15 @@ public sealed class TeamWorkflowIntegrationTests
             CreatedById = seed.AdminId,
             CreatedBy = seed.AdminId
         };
-        var classSchedule = new Checkpoint
+        context.Checkpoints.Add(checkpoint);
+        context.ClassCheckpointSchedules.Add(new ClassCheckpointSchedule
         {
-            CourseId = courseId,
             ClassId = seed.ClassId,
-            Name = checkpoint.Name,
-            CheckpointNumber = checkpoint.CheckpointNumber,
-            RequirementsJson = checkpoint.RequirementsJson,
-            Status = CheckpointStatus.Open,
-            OpenDate = DateTime.UtcNow.AddMinutes(-1),
-            DueDate = DateTime.UtcNow.AddDays(1),
-            CreatedById = seed.AdminId,
+            Checkpoint = checkpoint,
+            StartDateUtc = DateTime.UtcNow.AddDays(-1),
+            EndDateUtc = DateTime.UtcNow.AddDays(1),
             CreatedBy = seed.AdminId
-        };
-        context.Checkpoints.AddRange(checkpoint, classSchedule);
+        });
         context.Projects.Add(new Project
         {
             TeamId = seed.TeamId!.Value,
@@ -997,7 +1003,9 @@ public sealed class TeamWorkflowIntegrationTests
         await context.SaveChangesAsync();
         context.ChangeTracker.Clear();
 
-        var handler = new CheckpointRequirementHandler(context);
+        var handler = new CheckpointRequirementHandler(
+            context,
+            scope.ServiceProvider.GetRequiredService<IDateTimeProvider>());
         var create = await handler.UpdateAsync(seed.TeamId.Value, checkpoint.CheckpointNumber,
             new UpdateWorkspaceCheckpointRequirementsRequest
             {
@@ -1045,6 +1053,543 @@ public sealed class TeamWorkflowIntegrationTests
             new UpdateWorkspaceCheckpointRequirementsRequest(), seed.LecturerId, SystemRoles.Lecturer);
         forbidden.IsFailure.Should().BeTrue();
         forbidden.Error.Code.Should().Be(ErrorCodes.WorkspaceAccessDenied);
+    }
+
+    [Fact]
+    public async Task LecturerSchedules_DriveWorkspaceUploadsAndPreserveSubmissionsOnReopen()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateSeedAsync(context, createProposal: false, createTeam: true);
+        var courseId = await context.Classes.Where(item => item.Id == seed.ClassId)
+            .Select(item => item.CourseId).SingleAsync();
+        var clock = new FixedCheckpointTimeProvider(DateTime.UtcNow);
+        var first = new Checkpoint
+        {
+            CourseId = courseId, Name = "Admin checkpoint one", CheckpointNumber = 1,
+            RequirementsJson = "[\"Business idea\"]",
+            Status = CheckpointStatus.Draft, CreatedById = seed.AdminId
+        };
+        var second = new Checkpoint
+        {
+            CourseId = courseId, Name = "Admin checkpoint two", CheckpointNumber = 2,
+            Status = CheckpointStatus.Draft, CreatedById = seed.AdminId
+        };
+        context.Checkpoints.AddRange(first, second);
+        context.Projects.Add(new Project
+        {
+            TeamId = seed.TeamId!.Value,
+            Name = "Checkpoint project",
+            Status = ProjectStatus.Draft,
+            CreatedById = seed.ProposerUserId
+        });
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        var manager = new LecturerCheckpointManagementHandler(context, clock);
+        var overview = await manager.GetAsync(new GetLecturerCheckpointsRequest
+        {
+            ClassId = seed.ClassId,
+            CheckpointNumber = 2
+        }, seed.LecturerId);
+        overview.IsSuccess.Should().BeTrue();
+        overview.Value.Checkpoints.Select(item => item.Number).Should().Contain(new[] { 1, 2 });
+        overview.Value.Schedules.Should().ContainSingle(item =>
+            item.ClassId == seed.ClassId && item.CheckpointId == second.Id && item.Status == "NotScheduled");
+        overview.Value.Submissions.Should().ContainSingle(item => item.TeamId == seed.TeamId && item.CheckpointId == second.Id);
+
+        var denied = await manager.SaveScheduleAsync(seed.ClassId, first.Id,
+            new SaveClassCheckpointScheduleRequest
+            {
+                StartDateUtc = clock.UtcNow.AddHours(-1),
+                EndDateUtc = clock.UtcNow.AddHours(1)
+            }, seed.MentorUserId);
+        denied.IsFailure.Should().BeTrue();
+        denied.Error.Code.Should().Be(ErrorCodes.ClassAccessDenied);
+
+        var invalid = await manager.SaveScheduleAsync(seed.ClassId, first.Id,
+            new SaveClassCheckpointScheduleRequest
+            {
+                StartDateUtc = clock.UtcNow,
+                EndDateUtc = clock.UtcNow
+            }, seed.LecturerId);
+        invalid.IsFailure.Should().BeTrue();
+
+        var open = await manager.SaveScheduleAsync(seed.ClassId, first.Id,
+            new SaveClassCheckpointScheduleRequest
+            {
+                StartDateUtc = clock.UtcNow.AddHours(-1),
+                EndDateUtc = clock.UtcNow.AddHours(1)
+            }, seed.LecturerId);
+        open.IsSuccess.Should().BeTrue();
+        open.Value.Status.Should().Be("Open");
+
+        var upcoming = await manager.SaveScheduleAsync(seed.ClassId, second.Id,
+            new SaveClassCheckpointScheduleRequest
+            {
+                StartDateUtc = clock.UtcNow.AddDays(1),
+                EndDateUtc = clock.UtcNow.AddDays(2)
+            }, seed.LecturerId);
+        upcoming.IsSuccess.Should().BeTrue();
+        upcoming.Value.Status.Should().Be("Upcoming");
+
+        var storage = new InMemoryCheckpointStorage();
+        var files = new CheckpointFileHandler(context, storage, clock);
+        static MemoryStream Pdf() => new("%PDF-test"u8.ToArray());
+
+        var tooEarly = await files.UploadAsync(seed.TeamId.Value, 2, Pdf(), "future.pdf", "application/pdf", 9,
+            seed.ProposerUserId, SystemRoles.Student);
+        tooEarly.IsFailure.Should().BeTrue();
+        tooEarly.Error.Code.Should().Be(ErrorCodes.WorkspaceCheckpointNotOpen);
+
+        var requirements = new CheckpointRequirementHandler(context, clock);
+        var draft = await requirements.UpdateAsync(seed.TeamId.Value, 1,
+            new UpdateWorkspaceCheckpointRequirementsRequest
+            {
+                Contents = [new WorkspaceCheckpointRequirementContentInput { Index = 0, Content = "Original idea" }]
+            }, seed.ProposerUserId, SystemRoles.Student);
+        draft.IsSuccess.Should().BeTrue();
+        draft.Value.Status.Should().Be("Draft");
+
+        var firstUpload = await files.UploadAsync(seed.TeamId.Value, 1, Pdf(), "first.pdf", "application/pdf", 9,
+            seed.ProposerUserId, SystemRoles.Student);
+        firstUpload.IsSuccess.Should().BeTrue();
+        firstUpload.Value.VersionNumber.Should().Be(1);
+        clock.UtcNow = clock.UtcNow.AddMinutes(10);
+        var latestUpload = await files.UploadAsync(seed.TeamId.Value, 1, Pdf(), "later.pdf", "application/pdf", 9,
+            seed.ProposerUserId, SystemRoles.Student);
+        latestUpload.IsSuccess.Should().BeTrue();
+        latestUpload.Value.VersionNumber.Should().Be(2);
+        (await context.Submissions.AsNoTracking().Where(item => item.TeamId == seed.TeamId && item.CheckpointId == first.Id)
+            .OrderBy(item => item.VersionNumber).Select(item => item.VersionNumber).ToArrayAsync())
+            .Should().Equal(1, 2);
+
+        var tracked = await manager.GetAsync(new GetLecturerCheckpointsRequest
+        {
+            ClassId = seed.ClassId,
+            CheckpointNumber = 1
+        }, seed.LecturerId);
+        var submission = tracked.Value.Submissions.Single(item => item.TeamId == seed.TeamId);
+        submission.Status.Should().Be("Submitted");
+        submission.LatestSubmissionAtUtc.Should().BeCloseTo(clock.UtcNow, TimeSpan.FromMilliseconds(1));
+        submission.EarliestSubmittedFile!.OriginalName.Should().Be("first.pdf");
+        var download = await files.DownloadAsync(seed.TeamId.Value, 1,
+            submission.EarliestSubmittedFile.Id, seed.LecturerId, SystemRoles.Lecturer);
+        download.IsSuccess.Should().BeTrue();
+        download.Value.OriginalName.Should().Be("first.pdf");
+
+        clock.UtcNow = clock.UtcNow.AddHours(2);
+        var closedUpload = await files.UploadAsync(seed.TeamId.Value, 1, Pdf(), "blocked.pdf", "application/pdf", 9,
+            seed.ProposerUserId, SystemRoles.Student);
+        closedUpload.IsFailure.Should().BeTrue();
+        closedUpload.Error.Code.Should().Be(ErrorCodes.WorkspaceCheckpointNotOpen);
+
+        var reopened = await manager.SaveScheduleAsync(seed.ClassId, first.Id,
+            new SaveClassCheckpointScheduleRequest
+            {
+                StartDateUtc = clock.UtcNow.AddMinutes(-5),
+                EndDateUtc = clock.UtcNow.AddHours(1)
+            }, seed.LecturerId);
+        reopened.IsSuccess.Should().BeTrue();
+        reopened.Value.Status.Should().Be("Open");
+        reopened.Value.ReopenCount.Should().Be(1);
+        (await context.SubmissionFiles.CountAsync(item => item.Submission.CheckpointId == first.Id)).Should().Be(2);
+        (await context.ClassAuditLogs.CountAsync(item => item.ClassId == seed.ClassId && item.Action == "CheckpointReopened"))
+            .Should().Be(1);
+
+        var reopenedUpload = await files.UploadAsync(seed.TeamId.Value, 1, Pdf(), "reopened.pdf", "application/pdf", 9,
+            seed.ProposerUserId, SystemRoles.Student);
+        reopenedUpload.IsSuccess.Should().BeTrue();
+        reopenedUpload.Value.VersionNumber.Should().Be(3);
+        (await context.SubmissionFiles.CountAsync(item => item.Submission.CheckpointId == first.Id)).Should().Be(3);
+        var versionHistory = await scope.ServiceProvider.GetRequiredService<IGetWorkspaceCheckpointOverviewQueryHandler>()
+            .HandleAsync(seed.TeamId.Value, seed.ProposerUserId, SystemRoles.Student);
+        versionHistory.IsSuccess.Should().BeTrue();
+        versionHistory.Value.Submissions.Single(item => item.CheckpointNumber == 1).Files
+            .OrderBy(item => item.VersionNumber).Select(item => new { item.VersionNumber, item.OriginalName })
+            .Should().Equal(new[]
+            {
+                new { VersionNumber = 1, OriginalName = "first.pdf" },
+                new { VersionNumber = 2, OriginalName = "later.pdf" },
+                new { VersionNumber = 3, OriginalName = "reopened.pdf" }
+            });
+        versionHistory.Value.Submissions.Single(item => item.CheckpointNumber == 1).RequirementContents
+            .Single().Content.Should().Be("Original idea");
+
+        var options = new DbContextOptionsBuilder<AppDbContext>()
+            .UseNpgsql(context.Database.GetConnectionString()).Options;
+        await using var firstContext = new AppDbContext(options);
+        await using var secondContext = new AppDbContext(options);
+        var firstWriter = await firstContext.Submissions.SingleAsync(item => item.TeamId == seed.TeamId &&
+            item.CheckpointId == first.Id && item.VersionNumber == 3);
+        var staleWriter = await secondContext.Submissions.SingleAsync(item => item.Id == firstWriter.Id);
+        firstWriter.Description = "First concurrent edit";
+        await firstContext.SaveChangesAsync();
+        staleWriter.Description = "Stale concurrent edit";
+        await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() => secondContext.SaveChangesAsync());
+    }
+
+    [Fact]
+    public async Task LegacyFilesSharingSubmission_DisplayDistinctVersions_AndNextUploadContinuesSequence()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateSeedAsync(context, createProposal: false, createTeam: true);
+        var courseId = await context.Classes.Where(item => item.Id == seed.ClassId)
+            .Select(item => item.CourseId).SingleAsync();
+        var clock = new FixedCheckpointTimeProvider(DateTime.UtcNow);
+        var checkpoint = new Checkpoint
+        {
+            CourseId = courseId, Name = "Legacy checkpoint", CheckpointNumber = 1,
+            Status = CheckpointStatus.Draft, CreatedById = seed.AdminId
+        };
+        var project = new Project
+        {
+            TeamId = seed.TeamId!.Value, Name = "Legacy project",
+            Status = ProjectStatus.Draft, CreatedById = seed.ProposerUserId
+        };
+        context.Checkpoints.Add(checkpoint);
+        context.Projects.Add(project);
+        await context.SaveChangesAsync();
+        var manager = new LecturerCheckpointManagementHandler(context, clock);
+        var scheduled = await manager.SaveScheduleAsync(seed.ClassId, checkpoint.Id,
+            new SaveClassCheckpointScheduleRequest
+            {
+                StartDateUtc = clock.UtcNow.AddHours(-1),
+                EndDateUtc = clock.UtcNow.AddHours(1)
+            }, seed.LecturerId);
+        scheduled.IsSuccess.Should().BeTrue();
+
+        var legacy = new Submission
+        {
+            ProjectId = project.Id, TeamId = seed.TeamId.Value, CheckpointId = checkpoint.Id,
+            Title = checkpoint.Name, Status = SubmissionStatus.Submitted,
+            SubmittedAt = clock.UtcNow.AddMinutes(-5), VersionNumber = 1,
+            CreatedAt = clock.UtcNow.AddMinutes(-10), CreatedBy = seed.ProposerUserId
+        };
+        context.Submissions.Add(legacy);
+        foreach (var (version, name, minutesAgo) in new[]
+                 { (1, "original.pdf", 10), (2, "revised.pdf", 5) })
+        {
+            context.SubmissionFiles.Add(new SubmissionFile
+            {
+                Submission = legacy, VersionNumber = version,
+                FileName = $"{Guid.NewGuid():N}.pdf", OriginalName = name,
+                FileUrl = "https://example.test/file", CloudinaryPublicId = Guid.NewGuid().ToString("N"),
+                MimeType = "application/pdf", FileSize = 9, FileType = SubmissionFileType.Report,
+                UploadedById = seed.ProposerUserId,
+                UploadedAt = clock.UtcNow.AddMinutes(-minutesAgo),
+                CreatedAt = clock.UtcNow.AddMinutes(-minutesAgo), CreatedBy = seed.ProposerUserId
+            });
+        }
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        // Replay the migration's data step against the legacy shape inside a
+        // rollback-only transaction: two old files had no per-file version.
+        await using (var transaction = await context.Database.BeginTransactionAsync())
+        {
+            await context.Database.ExecuteSqlRawAsync(
+                "DROP INDEX \"IX_submission_files_submission_id_version_number\"");
+            await context.Database.ExecuteSqlInterpolatedAsync(
+                $"UPDATE submission_files SET version_number = 0 WHERE submission_id = {legacy.Id}");
+            var backfillSql = new BackfillSubmissionFileVersions().UpOperations
+                .OfType<SqlOperation>().Single().Sql;
+            await context.Database.ExecuteSqlRawAsync(backfillSql);
+            (await context.SubmissionFiles.AsNoTracking()
+                .Where(item => item.SubmissionId == legacy.Id)
+                .OrderBy(item => item.UploadedAt)
+                .Select(item => item.VersionNumber).ToArrayAsync())
+                .Should().Equal(1, 2);
+            await transaction.RollbackAsync();
+        }
+        context.ChangeTracker.Clear();
+
+        var before = await scope.ServiceProvider.GetRequiredService<IGetWorkspaceCheckpointOverviewQueryHandler>()
+            .HandleAsync(seed.TeamId.Value, seed.ProposerUserId, SystemRoles.Student);
+        before.IsSuccess.Should().BeTrue();
+        before.Value.Submissions.Single(item => item.CheckpointNumber == 1).Files
+            .OrderBy(item => item.VersionNumber).Select(item => item.VersionNumber)
+            .Should().Equal(1, 2);
+
+        var files = new CheckpointFileHandler(context, new InMemoryCheckpointStorage(), clock);
+        using var pdf = new MemoryStream("%PDF-test"u8.ToArray());
+        var next = await files.UploadAsync(seed.TeamId.Value, 1, pdf, "new.pdf", "application/pdf", 9,
+            seed.ProposerUserId, SystemRoles.Student);
+        next.IsSuccess.Should().BeTrue();
+        next.Value.VersionNumber.Should().Be(3);
+        (await context.Submissions.AsNoTracking().Where(item => item.CheckpointId == checkpoint.Id)
+            .OrderBy(item => item.VersionNumber).Select(item => item.VersionNumber).ToArrayAsync())
+            .Should().Equal(1, 3);
+        (await context.SubmissionFiles.AsNoTracking().Where(item => item.Submission.CheckpointId == checkpoint.Id)
+            .OrderBy(item => item.VersionNumber).Select(item => item.VersionNumber).ToArrayAsync())
+            .Should().Equal(1, 2, 3);
+    }
+
+    [Fact]
+    public async Task CheckpointSchedule_QueuesStudentNoticeAndOnlyCurrentDeadlineReminder()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateSeedAsync(context, createProposal: false, createTeam: true);
+        var courseId = await context.Classes.Where(item => item.Id == seed.ClassId)
+            .Select(item => item.CourseId).SingleAsync();
+        var checkpoint = new Checkpoint
+        {
+            CourseId = courseId,
+            Name = "Checkpoint 2 - Market Validation",
+            CheckpointNumber = 2,
+            Status = CheckpointStatus.Draft,
+            CreatedById = seed.AdminId
+        };
+        context.Checkpoints.Add(checkpoint);
+        var project = new Project
+        {
+            TeamId = seed.TeamId!.Value,
+            Name = "Deadline notification project",
+            Status = ProjectStatus.Draft,
+            CreatedById = seed.ProposerUserId
+        };
+        context.Projects.Add(project);
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        var clock = new FixedCheckpointTimeProvider(DateTime.UtcNow);
+        var manager = new LecturerCheckpointManagementHandler(context, clock);
+        var start = clock.UtcNow.AddHours(-1);
+        var firstEnd = clock.UtcNow.AddDays(3);
+        var saved = await manager.SaveScheduleAsync(seed.ClassId, checkpoint.Id,
+            new SaveClassCheckpointScheduleRequest { StartDateUtc = start, EndDateUtc = firstEnd },
+            seed.LecturerId);
+        saved.IsSuccess.Should().BeTrue();
+
+        var notice = await context.OutboxMessages.SingleAsync(item => item.AggregateId == seed.ClassId &&
+            item.Type == CheckpointDeadlineEvents.ScheduleChanged);
+        var oldReminder = await context.OutboxMessages.SingleAsync(item => item.AggregateId == seed.ClassId &&
+            item.Type == CheckpointDeadlineEvents.DeadlineReminder);
+        oldReminder.AvailableAtUtc.Should().BeCloseTo(firstEnd.AddHours(-24), TimeSpan.FromMilliseconds(1));
+        (await context.Notifications.CountAsync(item => item.SourceEventId == notice.EventId)).Should().Be(0);
+
+        var dispatcher = scope.ServiceProvider.GetRequiredService<IOutboxEventDispatcher>();
+        await dispatcher.DispatchAsync(notice);
+        await dispatcher.DispatchAsync(notice);
+        var studentUserIds = await context.Students.AsNoTracking()
+            .Where(item => seed.StudentIds.Contains(item.Id))
+            .Select(item => item.UserId!.Value).ToArrayAsync();
+        var noticeRecipients = await context.Notifications.AsNoTracking()
+            .Where(item => item.SourceEventId == notice.EventId)
+            .Select(item => item.RecipientUserId).ToArrayAsync();
+        noticeRecipients.Should().BeEquivalentTo(studentUserIds);
+
+        var secondEnd = clock.UtcNow.AddDays(4);
+        var updated = await manager.SaveScheduleAsync(seed.ClassId, checkpoint.Id,
+            new SaveClassCheckpointScheduleRequest { StartDateUtc = start, EndDateUtc = secondEnd },
+            seed.LecturerId);
+        updated.IsSuccess.Should().BeTrue();
+        context.ChangeTracker.Clear();
+        var superseded = await context.OutboxMessages.SingleAsync(item => item.Id == oldReminder.Id);
+        superseded.Status.Should().Be(OutboxMessageStatus.Processed);
+        await dispatcher.DispatchAsync(superseded);
+        (await context.Notifications.CountAsync(item => item.SourceEventId == superseded.EventId)).Should().Be(0);
+
+        var activeReminder = await context.OutboxMessages.SingleAsync(item => item.AggregateId == seed.ClassId &&
+            item.Type == CheckpointDeadlineEvents.DeadlineReminder && item.Status == OutboxMessageStatus.Pending);
+        await dispatcher.DispatchAsync(activeReminder);
+        var reminderNotifications = await context.Notifications.AsNoTracking()
+            .Where(item => item.SourceEventId == activeReminder.EventId)
+            .Select(item => new { item.RecipientUserId, item.Type, item.Link }).ToArrayAsync();
+        reminderNotifications.Select(item => item.RecipientUserId).Should().BeEquivalentTo(studentUserIds);
+        reminderNotifications.Should().OnlyContain(item =>
+            item.Type == NotificationType.DeadlineReminder && item.Link == "/student/workspace");
+
+        var thirdEnd = clock.UtcNow.AddDays(5);
+        var revised = await manager.SaveScheduleAsync(seed.ClassId, checkpoint.Id,
+            new SaveClassCheckpointScheduleRequest { StartDateUtc = start, EndDateUtc = thirdEnd },
+            seed.LecturerId);
+        revised.IsSuccess.Should().BeTrue();
+        context.ChangeTracker.Clear();
+
+        context.Submissions.Add(new Submission
+        {
+            ProjectId = project.Id,
+            TeamId = seed.TeamId.Value,
+            CheckpointId = checkpoint.Id,
+            SubmittedById = seed.ProposerUserId,
+            Title = "Submitted before reminder",
+            Status = SubmissionStatus.Submitted,
+            SubmittedAt = clock.UtcNow
+        });
+        await context.SaveChangesAsync();
+        var newReminder = await context.OutboxMessages.SingleAsync(item => item.AggregateId == seed.ClassId &&
+            item.Type == CheckpointDeadlineEvents.DeadlineReminder && item.Status == OutboxMessageStatus.Pending);
+        await dispatcher.DispatchAsync(newReminder);
+        (await context.Notifications.CountAsync(item => item.SourceEventId == newReminder.EventId)).Should().Be(0,
+            "students whose team already submitted should not receive an approaching-deadline reminder");
+    }
+
+    [Fact]
+    public async Task LecturerBulkSchedule_ValidatesEveryClassAndAppliesOneWindowAtomically()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateSeedAsync(context, createProposal: false, createTeam: false);
+        var original = await context.Classes.AsNoTracking().SingleAsync(item => item.Id == seed.ClassId);
+        var secondClass = new Class
+        {
+            ClassCode = original.ClassCode[..^1] + "2",
+            Slug = original.Slug + "-2",
+            ClassIndex = 2,
+            CourseId = original.CourseId,
+            SemesterId = original.SemesterId,
+            PrimaryLecturerId = seed.LecturerId,
+            Status = ClassStatus.Active,
+            ScheduleJson = original.ScheduleJson,
+            CreatedById = seed.AdminId,
+            CreatedBy = seed.AdminId
+        };
+        var outsideClass = new Class
+        {
+            ClassCode = original.ClassCode[..^1] + "3",
+            Slug = original.Slug + "-3",
+            ClassIndex = 3,
+            CourseId = original.CourseId,
+            SemesterId = original.SemesterId,
+            PrimaryLecturerId = seed.AdminId,
+            Status = ClassStatus.Active,
+            ScheduleJson = original.ScheduleJson,
+            CreatedById = seed.AdminId,
+            CreatedBy = seed.AdminId
+        };
+        var checkpoint = new Checkpoint
+        {
+            CourseId = original.CourseId,
+            Name = "Admin checkpoint for bulk scheduling",
+            CheckpointNumber = 2,
+            Status = CheckpointStatus.Draft,
+            CreatedById = seed.AdminId
+        };
+        context.Classes.AddRange(secondClass, outsideClass);
+        context.Checkpoints.Add(checkpoint);
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        var clock = new FixedCheckpointTimeProvider(DateTime.UtcNow);
+        var handler = new LecturerCheckpointManagementHandler(context, clock);
+        var start = clock.UtcNow.AddHours(-1);
+        var end = clock.UtcNow.AddHours(1);
+        var denied = await handler.SaveBulkScheduleAsync(new BulkSaveClassCheckpointScheduleRequest
+        {
+            CheckpointNumber = checkpoint.CheckpointNumber,
+            ExpectedClassIds = [seed.ClassId, secondClass.Id, outsideClass.Id],
+            StartDateUtc = start,
+            EndDateUtc = end
+        }, seed.LecturerId);
+        denied.IsFailure.Should().BeTrue();
+        denied.Error.Code.Should().Be(ErrorCodes.ClassAccessDenied);
+        (await context.ClassCheckpointSchedules.CountAsync(item => item.CheckpointId == checkpoint.Id)).Should().Be(0);
+
+        var bulkRequest = new BulkSaveClassCheckpointScheduleRequest
+        {
+            CheckpointNumber = checkpoint.CheckpointNumber,
+            ExpectedClassIds = [seed.ClassId, secondClass.Id],
+            StartDateUtc = start,
+            EndDateUtc = end
+        };
+        var applied = await handler.SaveBulkScheduleAsync(bulkRequest, seed.LecturerId);
+        applied.IsSuccess.Should().BeTrue();
+        applied.Value.AppliedClassCount.Should().Be(2);
+        applied.Value.Schedules.Should().OnlyContain(item => item.Status == "Open" &&
+            item.StartDateUtc == start && item.EndDateUtc == end);
+        (await context.ClassCheckpointSchedules.CountAsync(item => item.CheckpointId == checkpoint.Id)).Should().Be(2);
+
+        var changed = await handler.SaveScheduleAsync(secondClass.Id, checkpoint.Id,
+            new SaveClassCheckpointScheduleRequest
+            {
+                StartDateUtc = clock.UtcNow.AddMinutes(-30),
+                EndDateUtc = clock.UtcNow.AddHours(2)
+            }, seed.LecturerId);
+        changed.IsSuccess.Should().BeTrue();
+        var different = await handler.GetAsync(new GetLecturerCheckpointsRequest
+        {
+            CheckpointId = checkpoint.Id
+        }, seed.LecturerId);
+        different.Value.Schedules.Select(item => item.EndDateUtc).Distinct().Should().HaveCount(2);
+
+        var synchronized = await handler.SaveBulkScheduleAsync(bulkRequest, seed.LecturerId);
+        synchronized.IsSuccess.Should().BeTrue();
+        synchronized.Value.Schedules.Select(item => item.EndDateUtc).Distinct().Should().ContainSingle();
+        clock.UtcNow = clock.UtcNow.AddHours(2);
+        var reopened = await handler.SaveBulkScheduleAsync(new BulkSaveClassCheckpointScheduleRequest
+        {
+            CheckpointNumber = checkpoint.CheckpointNumber,
+            ExpectedClassIds = [seed.ClassId, secondClass.Id],
+            StartDateUtc = clock.UtcNow.AddMinutes(-5),
+            EndDateUtc = clock.UtcNow.AddHours(1)
+        }, seed.LecturerId);
+        reopened.IsSuccess.Should().BeTrue();
+        reopened.Value.Schedules.Should().OnlyContain(item => item.Status == "Open" && item.ReopenCount == 1);
+        (await context.ClassAuditLogs.CountAsync(item =>
+            (item.ClassId == seed.ClassId || item.ClassId == secondClass.Id) && item.Action == "CheckpointReopened"))
+            .Should().Be(2);
+        (await context.ClassCheckpointSchedules.CountAsync(item => item.ClassId == outsideClass.Id)).Should().Be(0);
+    }
+
+    [Fact]
+    public async Task LecturerCheckpointEndpoints_RequireAuthenticationAndLecturerRole()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateSeedAsync(context, createProposal: false, createTeam: false);
+        var student = await context.Users.SingleAsync(item => item.Id == seed.ProposerUserId);
+        var lecturer = await context.Users.SingleAsync(item => item.Id == seed.LecturerId);
+        var tokenService = scope.ServiceProvider.GetRequiredService<IJwtTokenService>();
+        using var client = _factory.CreateClient();
+
+        using var anonymous = await client.GetAsync("/api/lecturer/checkpoints");
+        anonymous.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+
+        using var studentRequest = new HttpRequestMessage(HttpMethod.Get, "/api/lecturer/checkpoints");
+        studentRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer",
+            tokenService.GenerateAccessToken(student, [SystemRoles.Student]).Token);
+        using var forbidden = await client.SendAsync(studentRequest);
+        forbidden.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        using var lecturerRequest = new HttpRequestMessage(HttpMethod.Get, "/api/lecturer/checkpoints");
+        lecturerRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer",
+            tokenService.GenerateAccessToken(lecturer, [SystemRoles.Lecturer]).Token);
+        using var allowed = await client.SendAsync(lecturerRequest);
+        allowed.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        using var anonymousBulk = await client.PutAsync("/api/lecturer/checkpoints/schedules/bulk",
+            new StringContent("{}", System.Text.Encoding.UTF8, "application/json"));
+        anonymousBulk.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+
+        using var studentBulk = new HttpRequestMessage(HttpMethod.Put, "/api/lecturer/checkpoints/schedules/bulk")
+        {
+            Content = new StringContent("{}", System.Text.Encoding.UTF8, "application/json")
+        };
+        studentBulk.Headers.Authorization = new AuthenticationHeaderValue("Bearer",
+            tokenService.GenerateAccessToken(student, [SystemRoles.Student]).Token);
+        using var forbiddenBulk = await client.SendAsync(studentBulk);
+        forbiddenBulk.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    private sealed class FixedCheckpointTimeProvider(DateTime utcNow) : IDateTimeProvider
+    {
+        public DateTime UtcNow { get; set; } = utcNow;
+    }
+
+    private sealed class InMemoryCheckpointStorage : ISubmissionFileStorageService
+    {
+        public Task<Result<SubmissionFileUploadResult>> UploadAsync(Stream content, string fileName, string contentType,
+            Guid teamId, int checkpointNumber, CancellationToken cancellationToken = default) =>
+            Task.FromResult(Result.Success(new SubmissionFileUploadResult("https://example.test/file", Guid.NewGuid().ToString("N"))));
+
+        public Task<Result<SubmissionFileDownloadResult>> DownloadAsync(string secureUrl,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(Result.Success(new SubmissionFileDownloadResult("%PDF-test"u8.ToArray(), "application/pdf")));
+
+        public Task DeleteAsync(string publicId, CancellationToken cancellationToken = default) => Task.CompletedTask;
     }
 
     [Fact]

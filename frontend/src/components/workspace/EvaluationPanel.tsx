@@ -10,6 +10,8 @@ import PerformanceLevelBadge from '../evaluation/PerformanceLevelBadge';
 import { subscribeProjectDirectionRealtime } from '../../api/projectDirectionRealtime';
 
 const CHECKPOINTS = [1, 2, 3, 4];
+const EMPTY_EVALUATION = {};
+const EMPTY_CRITERIA = [];
 
 const roleLabel = (role) => ({
   ADMIN: 'Admin',
@@ -140,6 +142,36 @@ export default function EvaluationPanel({
   const checkpointTitle = checkpointData?.title || `Checkpoint ${selectedCheckpoint}`;
   const latestScore = summary?.averageScore ?? (evaluations[0]?.checkpointTotal || evaluations[0]?.weightedScore || 0);
 
+  if (embedded && canEdit) {
+    return (
+      <div className="p-3">
+        <RubricForm
+          key={`${selectedCheckpoint}-${activeEvaluation?._id || 'new'}`}
+          initialData={activeEvaluation || EMPTY_EVALUATION}
+          onSubmit={saveEvaluation}
+          readOnly={saving}
+          criteria={checkpointData?.rubrics || EMPTY_CRITERIA}
+          checkpointNumber={selectedCheckpoint}
+          checkpointTitle={checkpointTitle}
+          compact
+        />
+        {history.length > 0 && (
+          <details className="mt-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
+            <summary className="cursor-pointer font-semibold">Evaluation history ({history.length})</summary>
+            <div className="mt-2 space-y-2">
+              {history.map((item) => (
+                <div key={item._id} className="flex justify-between gap-2 border-t border-slate-100 pt-2">
+                  <span>{item.action} · {item.changedBy?.name || 'System'}</span>
+                  <span className="shrink-0">{new Date(item.createdAt).toLocaleString()}</span>
+                </div>
+              ))}
+            </div>
+          </details>
+        )}
+      </div>
+    );
+  }
+
   if (embedded) {
     return (
       <div className="space-y-4 p-4 sm:p-5">
@@ -194,10 +226,10 @@ export default function EvaluationPanel({
         {canEdit ? (
           <RubricForm
             key={`${selectedCheckpoint}-${activeEvaluation?._id || 'new'}`}
-            initialData={activeEvaluation || {}}
+            initialData={activeEvaluation || EMPTY_EVALUATION}
             onSubmit={saveEvaluation}
             readOnly={saving}
-            criteria={checkpointData?.rubrics || []}
+            criteria={checkpointData?.rubrics || EMPTY_CRITERIA}
             checkpointNumber={selectedCheckpoint}
             checkpointTitle={checkpointTitle}
             compact
@@ -339,7 +371,7 @@ export default function EvaluationPanel({
                 <div className="flex items-center justify-between gap-3 mb-4">
                   <div>
                     <h3 className="text-lg font-bold text-slate-900">Rubric scoring form</h3>
-                    <p className="text-sm text-slate-500">Select a level or input a score from 0 to 10.</p>
+                    <p className="text-sm text-slate-500">Enter a score for each criterion.</p>
                   </div>
                   {activeEvaluation?.status && (
                     <span className={`px-3 py-1 rounded-full text-xs font-bold ${activeEvaluation.status === 'SUBMITTED'
@@ -353,10 +385,10 @@ export default function EvaluationPanel({
 
                 <RubricForm
                   key={`${selectedCheckpoint}-${activeEvaluation?._id || 'new'}`}
-                  initialData={activeEvaluation || {}}
+                  initialData={activeEvaluation || EMPTY_EVALUATION}
                   onSubmit={saveEvaluation}
                   readOnly={saving}
-                  criteria={checkpointData?.rubrics || []}
+                  criteria={checkpointData?.rubrics || EMPTY_CRITERIA}
                   checkpointNumber={selectedCheckpoint}
                   checkpointTitle={checkpointTitle}
                 />

@@ -1,7 +1,7 @@
 using System.IO.Compression;
 using EHub.Application.Common.Interfaces.Persistence;
+using EHub.Application.Common.Interfaces.Services;
 using EHub.Application.Common.Interfaces.Storage;
-using EHub.Application.Features.Workspaces.CheckpointAvailability;
 using EHub.Contracts.Workspaces;
 using EHub.Domain.Entities;
 using EHub.Domain.Enums;
@@ -14,7 +14,8 @@ namespace EHub.Application.Features.Workspaces.CheckpointFiles;
 
 public sealed class CheckpointFileHandler(
     IApplicationDbContext context,
-    ISubmissionFileStorageService storage) : ICheckpointFileHandler
+    ISubmissionFileStorageService storage,
+    IDateTimeProvider dateTimeProvider) : ICheckpointFileHandler
 {
     private const long MaximumFileSize = 15 * 1024 * 1024;
     private static readonly Dictionary<string, string> AllowedTypes = new(StringComparer.OrdinalIgnoreCase)
@@ -40,10 +41,16 @@ public sealed class CheckpointFileHandler(
         var access = await ResolveAccessAsync(teamId, checkpointNumber, userId, role, cancellationToken);
         if (access.IsFailure) return Result.Failure<WorkspaceCheckpointFileResponse>(access.Error);
         if (!access.Value.IsMember) return Denied<WorkspaceCheckpointFileResponse>();
-
-        var availability = await ResolveAvailabilityAsync(teamId, access.Value.TeamClassId, access.Value.Checkpoint, cancellationToken);
-        if (!availability.CanSubmit)
-            return Invalid<WorkspaceCheckpointFileResponse>(availability.Reason ?? "This checkpoint is not open for submission.");
+        var now = EnsureUtc(dateTimeProvider.UtcNow);
+        if (access.Value.Schedule is null || now < access.Value.Schedule.StartDateUtc || now > access.Value.Schedule.EndDateUtc)
+        {
+            var message = access.Value.Schedule is null
+                ? "This checkpoint has not been scheduled for your class."
+                : now < access.Value.Schedule.StartDateUtc
+                    ? $"This checkpoint opens at {access.Value.Schedule.StartDateUtc:O}."
+                    : $"This checkpoint closed at {access.Value.Schedule.EndDateUtc:O}.";
+            return Result.Failure<WorkspaceCheckpointFileResponse>(ErrorCodes.WorkspaceCheckpointNotOpen, message);
+        }
 
         await using var uploadStream = new MemoryStream(bytes, writable: false);
         var storageResult = await storage.UploadAsync(uploadStream, SafeOriginalName(originalName), expectedContentType, teamId, checkpointNumber, cancellationToken);
@@ -51,60 +58,114 @@ public sealed class CheckpointFileHandler(
 
         try
         {
-            var submission = await context.Submissions
-                .OrderByDescending(item => item.VersionNumber).ThenByDescending(item => item.CreatedAt)
-                .FirstOrDefaultAsync(item => item.TeamId == teamId && item.CheckpointId == access.Value.Checkpoint.Id, cancellationToken);
-            var now = DateTime.UtcNow;
-            if (submission is null)
+            for (var attempt = 0; attempt < 3; attempt++)
             {
-                submission = new Submission
+                int? attemptedVersion = null;
+                Guid? reusedDraftId = null;
+                uint? observedRowVersion = null;
+                try
                 {
-                    ProjectId = access.Value.Project.Id,
-                    TeamId = teamId,
-                    CheckpointId = access.Value.Checkpoint.Id,
-                    SubmittedById = userId,
-                    Title = access.Value.Checkpoint.Name,
-                    Status = SubmissionStatus.Submitted,
-                    SubmittedAt = now,
-                    VersionNumber = 1,
-                    CreatedAt = now,
-                    CreatedBy = userId
-                };
-                context.Submissions.Add(submission);
-            }
-            else
-            {
-                submission.Status = SubmissionStatus.Submitted;
-                submission.SubmittedAt = now;
-                submission.SubmittedById = userId;
-                submission.UpdatedAt = now;
-                submission.UpdatedBy = userId;
-            }
+                    var latest = await context.Submissions
+                        .Include(item => item.RequirementContents)
+                        .OrderByDescending(item => item.VersionNumber).ThenByDescending(item => item.CreatedAt)
+                        .FirstOrDefaultAsync(item => item.TeamId == teamId && item.CheckpointId == access.Value.Checkpoint.Id, cancellationToken);
+                    var highestFileVersion = await context.SubmissionFiles.IgnoreQueryFilters().AsNoTracking()
+                        .Where(item => item.Submission.ProjectId == access.Value.Project.Id &&
+                            item.Submission.CheckpointId == access.Value.Checkpoint.Id)
+                        .MaxAsync(item => (int?)item.VersionNumber, cancellationToken) ?? 0;
+                    var reuseDraft = latest is not null && latest.Status == SubmissionStatus.Draft &&
+                        latest.SubmittedAt is null && latest.VersionNumber > highestFileVersion &&
+                        !await context.SubmissionFiles.AnyAsync(item => item.SubmissionId == latest.Id, cancellationToken);
+                    Submission submission;
+                    if (reuseDraft)
+                    {
+                        submission = latest!;
+                        reusedDraftId = submission.Id;
+                        observedRowVersion = submission.RowVersion;
+                        submission.Status = SubmissionStatus.Submitted;
+                        submission.SubmittedAt = now;
+                        submission.SubmittedById = userId;
+                        submission.UpdatedAt = now;
+                        submission.UpdatedBy = userId;
+                    }
+                    else
+                    {
+                        var highestVersion = await context.Submissions.IgnoreQueryFilters().AsNoTracking()
+                            .Where(item => item.ProjectId == access.Value.Project.Id &&
+                                item.CheckpointId == access.Value.Checkpoint.Id)
+                            .MaxAsync(item => (int?)item.VersionNumber, cancellationToken);
+                        submission = new Submission
+                        {
+                            ProjectId = access.Value.Project.Id,
+                            TeamId = teamId,
+                            CheckpointId = access.Value.Checkpoint.Id,
+                            SubmittedById = userId,
+                            Title = access.Value.Checkpoint.Name,
+                            Status = SubmissionStatus.Submitted,
+                            SubmittedAt = now,
+                            VersionNumber = Math.Max(highestVersion ?? 0, highestFileVersion) + 1,
+                            CreatedAt = now,
+                            CreatedBy = userId
+                        };
+                        if (latest is not null)
+                        {
+                            foreach (var previous in latest.RequirementContents)
+                            {
+                                submission.RequirementContents.Add(new SubmissionRequirementContent
+                                {
+                                    RequirementIndex = previous.RequirementIndex,
+                                    Content = previous.Content,
+                                    CreatedAt = now,
+                                    CreatedBy = userId
+                                });
+                            }
+                        }
+                        context.Submissions.Add(submission);
+                    }
+                    attemptedVersion = submission.VersionNumber;
 
-            var file = new SubmissionFile
-            {
-                Submission = submission,
-                FileName = $"{Guid.NewGuid():N}{extension.ToLowerInvariant()}",
-                OriginalName = SafeOriginalName(originalName),
-                FileUrl = storageResult.Value.SecureUrl,
-                CloudinaryPublicId = storageResult.Value.PublicId,
-                MimeType = expectedContentType,
-                FileSize = bytes.LongLength,
-                FileType = extension.Equals(".pptx", StringComparison.OrdinalIgnoreCase) ? SubmissionFileType.PitchDeck : SubmissionFileType.Report,
-                UploadedById = userId,
-                UploadedAt = now,
-                CreatedAt = now,
-                CreatedBy = userId
-            };
-            context.SubmissionFiles.Add(file);
-            await context.SaveChangesAsync(cancellationToken);
-            return Result.Success(Map(file, access.Value.UserName));
+                    var file = new SubmissionFile
+                    {
+                        Submission = submission,
+                        FileName = $"{Guid.NewGuid():N}{extension.ToLowerInvariant()}",
+                        OriginalName = SafeOriginalName(originalName),
+                        VersionNumber = submission.VersionNumber,
+                        FileUrl = storageResult.Value.SecureUrl,
+                        CloudinaryPublicId = storageResult.Value.PublicId,
+                        MimeType = expectedContentType,
+                        FileSize = bytes.LongLength,
+                        FileType = extension.Equals(".pptx", StringComparison.OrdinalIgnoreCase) ? SubmissionFileType.PitchDeck : SubmissionFileType.Report,
+                        UploadedById = userId,
+                        UploadedAt = now,
+                        CreatedAt = now,
+                        CreatedBy = userId
+                    };
+                    context.SubmissionFiles.Add(file);
+                    await context.SaveChangesAsync(cancellationToken);
+                    return Result.Success(Map(file, access.Value.UserName));
+                }
+                catch (DbUpdateException)
+                {
+                    context.ClearChanges();
+                    var conflictingVersion = reusedDraftId.HasValue
+                        ? await context.Submissions.AsNoTracking().AnyAsync(item => item.Id == reusedDraftId.Value &&
+                            item.RowVersion != observedRowVersion, cancellationToken)
+                        : attemptedVersion.HasValue && await context.Submissions.AsNoTracking()
+                            .AnyAsync(item => item.ProjectId == access.Value.Project.Id &&
+                                item.CheckpointId == access.Value.Checkpoint.Id &&
+                                item.VersionNumber == attemptedVersion.Value, cancellationToken);
+                    if (!conflictingVersion) throw;
+                }
+            }
         }
         catch
         {
             await storage.DeleteAsync(storageResult.Value.PublicId, cancellationToken);
             throw;
         }
+        await storage.DeleteAsync(storageResult.Value.PublicId, cancellationToken);
+        return Result.Failure<WorkspaceCheckpointFileResponse>(ErrorCodes.WorkspaceConcurrencyConflict,
+            "Another upload changed this checkpoint at the same time. Please retry.");
     }
 
     public async Task<Result<CheckpointFileDownload>> DownloadAsync(Guid teamId, int checkpointNumber, Guid fileId, Guid userId, string role, CancellationToken cancellationToken = default)
@@ -131,7 +192,7 @@ public sealed class CheckpointFileHandler(
             .FirstOrDefaultAsync(item => item.Id == fileId && item.Submission.TeamId == teamId && item.Submission.CheckpointId == access.Value.Checkpoint.Id, cancellationToken);
         if (file is null) return Result.Failure(ErrorCodes.CommonNotFoundError, "Submitted file was not found.");
         if (file.UploadedById != userId) return Result.Failure(ErrorCodes.WorkspaceAccessDenied, "You can only delete files you uploaded.");
-        file.IsDeleted = true; file.DeletedAt = DateTime.UtcNow; file.DeletedBy = userId;
+        file.IsDeleted = true; file.DeletedAt = EnsureUtc(dateTimeProvider.UtcNow); file.DeletedBy = userId;
         await context.SaveChangesAsync(cancellationToken);
         await storage.DeleteAsync(file.CloudinaryPublicId, cancellationToken);
         return Result.Success();
@@ -155,19 +216,9 @@ public sealed class CheckpointFileHandler(
         var checkpoint = await context.Checkpoints.AsNoTracking().FirstOrDefaultAsync(item => item.CourseId == team.Class.CourseId && item.ClassId == null && item.CheckpointNumber == checkpointNumber && item.Status != CheckpointStatus.Archived, cancellationToken);
         var project = await context.Projects.AsNoTracking().FirstOrDefaultAsync(item => item.TeamId == teamId, cancellationToken);
         if (checkpoint is null || project is null) return Result.Failure<Access>(ErrorCodes.WorkspaceNotFound, "The checkpoint workspace was not found.");
-        return Result.Success(new Access(checkpoint, project, team.ClassId, isMember, team.TeamMembers.FirstOrDefault(member => member.ClassStudent.Student.UserId == userId)?.ClassStudent.Student.FullName ?? string.Empty));
-    }
-
-    private async Task<CheckpointAvailabilityResult> ResolveAvailabilityAsync(Guid teamId, Guid classId, Checkpoint checkpoint, CancellationToken cancellationToken)
-    {
-        var schedule = await context.Checkpoints.AsNoTracking().FirstOrDefaultAsync(item =>
-            item.ClassId == classId && item.CheckpointNumber == checkpoint.CheckpointNumber, cancellationToken);
-        var previousCheckpoint = await context.Checkpoints.AsNoTracking().Where(item =>
-                item.CourseId == checkpoint.CourseId && item.ClassId == null && item.CheckpointNumber < checkpoint.CheckpointNumber)
-            .OrderByDescending(item => item.CheckpointNumber).FirstOrDefaultAsync(cancellationToken);
-        var previousCompleted = previousCheckpoint is null || await context.Submissions.AsNoTracking().AnyAsync(item =>
-            item.TeamId == teamId && item.CheckpointId == previousCheckpoint.Id && item.Status == SubmissionStatus.Submitted, cancellationToken);
-        return CheckpointAvailabilityRules.Evaluate(schedule, previousCompleted, DateTime.UtcNow);
+        var schedule = await context.ClassCheckpointSchedules.AsNoTracking()
+            .FirstOrDefaultAsync(item => item.ClassId == team.ClassId && item.CheckpointId == checkpoint.Id, cancellationToken);
+        return Result.Success(new Access(checkpoint, project, schedule, isMember, team.TeamMembers.FirstOrDefault(member => member.ClassStudent.Student.UserId == userId)?.ClassStudent.Student.FullName ?? string.Empty));
     }
 
     private static bool HasExpectedSignature(byte[] bytes, string extension)
@@ -185,11 +236,17 @@ public sealed class CheckpointFileHandler(
     }
 
     private static string SafeOriginalName(string name) => Path.GetFileName(name).Trim()[..Math.Min(Path.GetFileName(name).Trim().Length, 256)];
-    private static WorkspaceCheckpointFileResponse Map(SubmissionFile file, string userName) => new() { Id = file.Id, OriginalName = file.OriginalName, FileType = file.FileType.ToString(), FileSize = file.FileSize, UploadedAt = file.UploadedAt, UploadedBy = new WorkspaceCheckpointUserResponse { Id = file.UploadedById!.Value, Name = userName, Role = SystemRoles.Student } };
+    private static WorkspaceCheckpointFileResponse Map(SubmissionFile file, string userName) => new() { Id = file.Id, VersionNumber = file.VersionNumber, OriginalName = file.OriginalName, FileType = file.FileType.ToString(), FileSize = file.FileSize, UploadedAt = file.UploadedAt, UploadedBy = new WorkspaceCheckpointUserResponse { Id = file.UploadedById!.Value, Name = userName, Role = SystemRoles.Student } };
     private static bool IsSupportedRole(string role) => IsRole(role, SystemRoles.Admin) || IsRole(role, SystemRoles.Lecturer) || IsRole(role, SystemRoles.Mentor) || IsRole(role, SystemRoles.Student);
     private static bool IsStudent(string role) => IsRole(role, SystemRoles.Student);
     private static bool IsRole(string role, string expected) => string.Equals(role, expected, StringComparison.OrdinalIgnoreCase);
+    private static DateTime EnsureUtc(DateTime value) => value.Kind switch
+    {
+        DateTimeKind.Utc => value,
+        DateTimeKind.Local => value.ToUniversalTime(),
+        _ => DateTime.SpecifyKind(value, DateTimeKind.Utc)
+    };
     private static Result<T> Denied<T>() => Result.Failure<T>(ErrorCodes.WorkspaceAccessDenied, "You do not have access to this team workspace.");
     private static Result<T> Invalid<T>(string message) => Result.Failure<T>(ErrorCodes.WorkspaceValidationError, message);
-    private sealed record Access(Checkpoint Checkpoint, Project Project, Guid TeamClassId, bool IsMember, string UserName);
+    private sealed record Access(Checkpoint Checkpoint, Project Project, ClassCheckpointSchedule? Schedule, bool IsMember, string UserName);
 }

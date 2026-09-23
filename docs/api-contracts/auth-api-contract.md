@@ -130,7 +130,6 @@ Tất cả các API đều phản hồi theo cấu trúc thống nhất:
   "errors": null
 }
 ```
-
 ---
 
 ### 2.2. Đăng nhập Email & Password (Login)

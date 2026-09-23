@@ -47,6 +47,7 @@ public sealed class WorkspaceCheckpointFileResponse
 {
     [JsonPropertyName("_id")]
     public Guid Id { get; init; }
+    public int VersionNumber { get; init; }
     public string OriginalName { get; init; } = string.Empty;
     public string FileType { get; init; } = string.Empty;
     public long FileSize { get; init; }

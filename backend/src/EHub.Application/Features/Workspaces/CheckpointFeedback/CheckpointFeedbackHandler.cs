@@ -31,7 +31,9 @@ public sealed class CheckpointFeedbackHandler(IApplicationDbContext context, ICh
             submission = new Submission { ProjectId = project.Id, TeamId = teamId, CheckpointId = checkpoint.Id, Title = checkpoint.Name, Status = SubmissionStatus.Draft, VersionNumber = 1, CreatedAt = now, CreatedBy = userId };
             context.Submissions.Add(submission);
         }
-        if (request.ParentFeedbackId.HasValue && !await context.SubmissionFeedbacks.AnyAsync(item => item.Id == request.ParentFeedbackId && item.SubmissionId == submission.Id, cancellationToken))
+        if (request.ParentFeedbackId.HasValue && !await context.SubmissionFeedbacks.AnyAsync(item =>
+                item.Id == request.ParentFeedbackId && item.Submission.TeamId == teamId &&
+                item.Submission.CheckpointId == checkpoint.Id, cancellationToken))
             return Result.Failure<WorkspaceCheckpointFeedbackResponse>(ErrorCodes.WorkspaceValidationError, "The parent comment does not belong to this checkpoint.");
         var feedback = new SubmissionFeedback { Submission = submission, Content = content, CreatedById = userId, ParentFeedbackId = request.ParentFeedbackId, CreatedAt = now, CreatedBy = userId };
         context.SubmissionFeedbacks.Add(feedback);

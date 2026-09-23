@@ -54,5 +54,6 @@ public class Class : AuditableEntity
     public virtual ICollection<Milestone> Milestones { get; set; } = new List<Milestone>();
     public virtual ICollection<WeeklyTask> WeeklyTasks { get; set; } = new List<WeeklyTask>();
     public virtual ICollection<ClassAuditLog> AuditLogs { get; set; } = new List<ClassAuditLog>();
+    public virtual ICollection<ClassCheckpointSchedule> CheckpointSchedules { get; set; } = new List<ClassCheckpointSchedule>();
     public virtual ICollection<ClassImportSession> ImportSessions { get; set; } = new List<ClassImportSession>();
 }

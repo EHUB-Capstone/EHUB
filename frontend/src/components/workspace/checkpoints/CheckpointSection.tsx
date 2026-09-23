@@ -19,15 +19,17 @@ export default function CheckpointSection({
   const [configs, setConfigs] = useState([]);
   const [stats, setStats] = useState({});
   const [loading, setLoading] = useState(true);
-  const [selected, setSelected] = useState(null);
+  const [selectedNumber, setSelectedNumber] = useState(null);
   const [error, setError] = useState('');
 
-  const fetchStats = useCallback(async () => {
+  const fetchStats = useCallback(async (silent = false) => {
     if (!teamId) return;
-    setLoading(true);
-    setError('');
-    setConfigs([]);
-    setStats({});
+    if (!silent) {
+      setLoading(true);
+      setError('');
+      setConfigs([]);
+      setStats({});
+    }
     try {
       const res = await checkpointApi.getCheckpointData(String(teamId));
       if (!res.success) throw new Error('Checkpoint request failed');
@@ -38,34 +40,50 @@ export default function CheckpointSection({
       setConfigs(overview.checkpoints);
       setStats(overview.stats);
     } catch (e) {
-      setError(e?.response?.status === 404 || e?.status === 404
-        ? 'Checkpoints are not available on this server yet. Submission and feedback are unavailable.'
-        : 'Unable to load checkpoints. Please try again.');
+      if (!silent) {
+        setError(e?.response?.status === 404 || e?.status === 404
+          ? 'Checkpoints are not available on this server yet. Submission and feedback are unavailable.'
+          : 'Unable to load checkpoints. Please try again.');
+      }
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [teamId]);
 
   useEffect(() => {
     // Fetch checkpoint progress whenever the selected team changes.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    fetchStats();
+    void fetchStats();
+  }, [fetchStats]);
+
+  useEffect(() => {
+    const refresh = () => { if (!document.hidden) void fetchStats(true); };
+    const interval = window.setInterval(refresh, 60_000);
+    window.addEventListener('focus', refresh);
+    document.addEventListener('visibilitychange', refresh);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener('focus', refresh);
+      document.removeEventListener('visibilitychange', refresh);
+    };
   }, [fetchStats]);
 
   useEffect(() => subscribeProjectDirectionRealtime((event) => {
     if (event.eventType === 'CheckpointRequirementsUpdated' && String(event.teamId) === String(teamId)) {
-      void fetchStats();
+      void fetchStats(true);
     }
   }, (reconnected) => {
-    if (reconnected) void fetchStats();
+    if (reconnected) void fetchStats(true);
   }), [fetchStats, teamId]);
+
+  const selected = configs.find((checkpoint) => checkpoint.number === selectedNumber) || null;
 
   const completedCount = configs.filter((cp) => {
     const s = stats[cp.number];
     return (s?.count || 0) > 0 || (s?.reqFilled || 0) > 0;
   }).length;
 
-  if (error) return <section className="rounded-2xl border border-slate-200 bg-white p-5"><h2 className="mb-3 text-lg font-bold">Startup Checkpoints</h2><ErrorState message={error} onRetry={fetchStats} /></section>;
+  if (error) return <section className="rounded-2xl border border-slate-200 bg-white p-5"><h2 className="mb-3 text-lg font-bold">Startup Checkpoints</h2><ErrorState message={error} onRetry={() => void fetchStats()} /></section>;
 
   return (
     <>
@@ -123,7 +141,7 @@ export default function CheckpointSection({
                   checkpoint={cp}
                   submissionStats={stats}
                   isLast={index === configs.length - 1}
-                  onOpen={() => setSelected(cp)}
+                  onOpen={() => setSelectedNumber(cp.number)}
                 />
               ))}
             </div>
@@ -140,10 +158,10 @@ export default function CheckpointSection({
           isReadOnly={isReadOnly}
           proposalId={proposalId}
           pitchDeckId={pitchDeckId}
-          onRequirementsSaved={fetchStats}
+          onRequirementsSaved={() => void fetchStats(true)}
           onClose={() => {
-            setSelected(null);
-            fetchStats();
+            setSelectedNumber(null);
+            void fetchStats(true);
           }}
         />
       )}

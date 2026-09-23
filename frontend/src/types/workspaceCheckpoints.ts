@@ -2,6 +2,10 @@ export interface WorkspaceCheckpointConfig {
   number: number;
   title: string;
   shortDescription?: string | null;
+  startDateUtc?: string | null;
+  endDateUtc?: string | null;
+  scheduleStatus: 'NotScheduled' | 'Upcoming' | 'Open' | 'Closed';
+  canUpload: boolean;
   requirements: string[];
   rubrics?: unknown[];
   openDate?: string | null;
@@ -12,6 +16,7 @@ export interface WorkspaceCheckpointConfig {
 
 export interface WorkspaceCheckpointFile {
   _id: string;
+  versionNumber: number;
   originalName: string;
   fileType: string;
   fileSize: number;

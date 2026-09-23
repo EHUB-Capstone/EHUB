@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using EHub.Application.Common.Interfaces.Services;
+using EHub.Application.Features.Checkpoints.LecturerManagement;
 using EHub.Domain.Entities;
 using EHub.Domain.Enums;
 using EHub.Infrastructure.Persistence;
@@ -74,6 +75,12 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
                     "You have been added to a class",
                     $"You have been added to class {importedClassDetails.ClassCode}.", cancellationToken);
                 await QueueStudentImportEmailsAsync(message, data, importedClassDetails, cancellationToken);
+                break;
+            case CheckpointDeadlineEvents.ScheduleChanged:
+                await AddCheckpointDeadlineNotificationsAsync(message, data, false, cancellationToken);
+                break;
+            case CheckpointDeadlineEvents.DeadlineReminder:
+                await AddCheckpointDeadlineNotificationsAsync(message, data, true, cancellationToken);
                 break;
             case ClassEmailEventType:
                 await _emailService.SendClassNotificationAsync(
@@ -223,6 +230,78 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
         "Class.Restored.v1" or
         "Class.Completed.v1" or
         "Class.Reopened.v1";
+
+    private async Task AddCheckpointDeadlineNotificationsAsync(
+        OutboxMessage message,
+        JsonElement data,
+        bool isReminder,
+        CancellationToken cancellationToken)
+    {
+        var checkpointId = ReadGuid(data, "checkpointId");
+        if (!checkpointId.HasValue ||
+            !data.TryGetProperty("checkpointNumber", out var numberValue) ||
+            !numberValue.TryGetInt32(out var number) ||
+            !data.TryGetProperty("startDateUtc", out var startValue) ||
+            !startValue.TryGetDateTime(out var start) ||
+            !data.TryGetProperty("endDateUtc", out var endValue) ||
+            !endValue.TryGetDateTime(out var end))
+            return;
+
+        var schedule = await _context.ClassCheckpointSchedules.AsNoTracking()
+            .Where(item => item.ClassId == message.AggregateId && item.CheckpointId == checkpointId.Value)
+            .Select(item => new { item.StartDateUtc, item.EndDateUtc, item.Class.ClassCode })
+            .SingleOrDefaultAsync(cancellationToken);
+        // A newer schedule supersedes both pending reminders and unprocessed change events.
+        // PostgreSQL timestamps have microsecond precision; the payload may have finer ticks.
+        if (schedule is null || Math.Abs((schedule.StartDateUtc - start).Ticks) > 10 ||
+            Math.Abs((schedule.EndDateUtc - end).Ticks) > 10 || DateTime.UtcNow > schedule.EndDateUtc)
+            return;
+
+        var recipients = await _context.ClassStudents.AsNoTracking()
+            .Where(item => item.ClassId == message.AggregateId &&
+                item.EnrollmentStatus == EnrollmentStatus.Active &&
+                item.Student.Status == StudentStatus.Active &&
+                item.Student.UserId.HasValue && item.Student.User != null &&
+                item.Student.User.Status == UserStatus.Active)
+            .Select(item => item.Student.UserId!.Value)
+            .Distinct()
+            .ToArrayAsync(cancellationToken);
+
+        if (isReminder && recipients.Length > 0)
+        {
+            var submittedTeamIds = await _context.Submissions.AsNoTracking()
+                .Where(item => item.CheckpointId == checkpointId.Value &&
+                    item.Team.ClassId == message.AggregateId && item.SubmittedAt.HasValue &&
+                    (item.Status == SubmissionStatus.Submitted || item.Status == SubmissionStatus.Approved))
+                .Select(item => item.TeamId)
+                .Distinct()
+                .ToArrayAsync(cancellationToken);
+            if (submittedTeamIds.Length > 0)
+            {
+                var submittedUserIds = await _context.TeamMembers.AsNoTracking()
+                    .Where(item => item.ClassId == message.AggregateId && item.CountsTowardActiveTeam &&
+                        item.Team.Status == TeamStatus.Active && submittedTeamIds.Contains(item.TeamId) &&
+                        item.ClassStudent.Student.UserId.HasValue)
+                    .Select(item => item.ClassStudent.Student.UserId!.Value)
+                    .Distinct()
+                    .ToArrayAsync(cancellationToken);
+                recipients = recipients.Except(submittedUserIds).ToArray();
+            }
+        }
+
+        var deadline = schedule.EndDateUtc.ToString("dd/MM/yyyy HH:mm 'UTC'", System.Globalization.CultureInfo.InvariantCulture);
+        var label = $"Checkpoint {number}";
+        var title = isReminder ? $"{label} deadline approaching" : $"{label} schedule updated";
+        var body = isReminder
+            ? $"{label} for class {schedule.ClassCode} is due {deadline}. Open your workspace to submit before the deadline."
+            : $"{label} for class {schedule.ClassCode} is scheduled. Deadline: {deadline}. Open your workspace for the full schedule.";
+        foreach (var recipient in recipients)
+        {
+            await AddAsync(message, recipient,
+                isReminder ? NotificationType.DeadlineReminder : NotificationType.SystemAnnouncement,
+                title, body, cancellationToken);
+        }
+    }
 
     private async Task AddForOptionalUserAsync(
         OutboxMessage message,
@@ -520,6 +599,7 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
             "TeamProposal.Submitted.v1" => $"/classes/{message.AggregateId}",
             "TeamProposal.Reviewed.v1" or "ProjectDirection.Reviewed.v1" => $"/student/classes/{message.AggregateId}",
             "Team.MentorAssignmentChanged.v1" => "/mentor/dashboard",
+            CheckpointDeadlineEvents.ScheduleChanged or CheckpointDeadlineEvents.DeadlineReminder => "/student/workspace",
             _ => null
         };
     }

@@ -115,6 +115,25 @@ export interface MockCheckpoint {
   rubrics: Array<Record<string, unknown>>;
 }
 
+export interface MockClassCheckpointSchedule {
+  id: string;
+  classId: string;
+  checkpointId: string;
+  startDateUtc: string;
+  endDateUtc: string;
+  reopenCount: number;
+}
+
+export interface MockCheckpointFile {
+  _id: string;
+  versionNumber?: number;
+  originalName: string;
+  fileType: string;
+  fileSize: number;
+  uploadedAt: string;
+  uploadedBy: { _id: string; name: string };
+}
+
 export interface MockCurriculum {
   roadmapItems: MockRoadmapItem[];
   rubrics: MockRubric[];
@@ -284,6 +303,8 @@ export interface MockApiState {
   subjects: MockSubject[];
   startupIndustries: MockStartupIndustry[];
   curricula: Record<string, MockCurriculum>;
+  checkpointSchedules: Record<string, MockClassCheckpointSchedule>;
+  checkpointFiles: Record<string, MockCheckpointFile[]>;
   classes: MockClass[];
   rosters: Record<string, MockRosterStudent[]>;
   teams: MockTeam[];
@@ -462,6 +483,8 @@ const initialMockState: MockApiState = {
     subjects,
     startupIndustries,
     curricula: Object.fromEntries(subjects.map((subject) => [subject.subjectCode, curriculumFor(subject)])),
+    checkpointSchedules: {},
+    checkpointFiles: {},
     classes,
     rosters: { [classIds.active]: activeRoster, [classIds.draft]: draftRoster, [classIds.archived]: archivedRoster },
     teams,
