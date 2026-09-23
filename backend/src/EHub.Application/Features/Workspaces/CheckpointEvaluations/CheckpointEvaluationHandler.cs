@@ -26,12 +26,22 @@ public sealed class CheckpointEvaluationHandler(
 
         var item = evaluationContext.Value;
         var evaluations = await EvaluationQuery()
-            .Where(evaluation => evaluation.ProjectId == item.Project.Id && evaluation.RubricId == item.Rubric.Id && evaluation.SubmissionId == item.SubmissionId)
+            .Where(evaluation => evaluation.ProjectId == item.Project.Id && evaluation.RubricId == item.Rubric.Id)
             .OrderByDescending(evaluation => evaluation.UpdatedAt ?? evaluation.CreatedAt)
             .ToListAsync(cancellationToken);
+        // Older grades may still reference a particular submission version. Keep one current
+        // grade per lecturer/checkpoint, preferring an official grade over a legacy draft.
+        var currentEvaluations = evaluations
+            .GroupBy(evaluation => evaluation.EvaluatorId)
+            .Select(group => group
+                .OrderByDescending(evaluation => evaluation.Status is EvaluationStatus.Submitted or EvaluationStatus.Published)
+                .ThenByDescending(evaluation => evaluation.UpdatedAt ?? evaluation.CreatedAt)
+                .ThenByDescending(evaluation => evaluation.Id)
+                .First())
+            .ToList();
         var visibleEvaluations = CanGrade(role, item.Team, userId)
-            ? evaluations
-            : evaluations.Where(evaluation => evaluation.Status is EvaluationStatus.Submitted or EvaluationStatus.Published).ToList();
+            ? currentEvaluations
+            : currentEvaluations.Where(evaluation => evaluation.Status is EvaluationStatus.Submitted or EvaluationStatus.Published).ToList();
         var history = visibleEvaluations
             .SelectMany(evaluation => evaluation.Histories)
             .OrderByDescending(entry => entry.ChangedAt)
@@ -61,9 +71,15 @@ public sealed class CheckpointEvaluationHandler(
         var item = evaluationContext.Value;
         if (!CanGrade(role, item.Team, userId)) return Denied<WorkspaceCheckpointEvaluationResponse>("Only the assigned lecturer can grade this checkpoint.");
 
-        var existing = await EvaluationQuery(tracking: true).FirstOrDefaultAsync(evaluation =>
-            evaluation.ProjectId == item.Project.Id && evaluation.RubricId == item.Rubric.Id &&
-            evaluation.SubmissionId == item.SubmissionId && evaluation.EvaluatorId == userId, cancellationToken);
+        var existing = await EvaluationQuery(tracking: true)
+            .Where(evaluation =>
+                evaluation.ProjectId == item.Project.Id &&
+                evaluation.RubricId == item.Rubric.Id &&
+                evaluation.EvaluatorId == userId)
+            .OrderByDescending(evaluation => evaluation.Status == EvaluationStatus.Submitted || evaluation.Status == EvaluationStatus.Published)
+            .ThenByDescending(evaluation => evaluation.UpdatedAt ?? evaluation.CreatedAt)
+            .ThenByDescending(evaluation => evaluation.Id)
+            .FirstOrDefaultAsync(cancellationToken);
         if (existing is not null)
         {
             var updated = await SaveExistingAsync(existing, item, request, userId, cancellationToken);
@@ -78,7 +94,6 @@ public sealed class CheckpointEvaluationHandler(
         var evaluation = new Evaluation
         {
             ProjectId = item.Project.Id,
-            SubmissionId = item.SubmissionId,
             RubricId = item.Rubric.Id,
             EvaluatorId = userId,
             EvaluatorRole = EvaluatorRole.Lecturer,
@@ -136,6 +151,9 @@ public sealed class CheckpointEvaluationHandler(
         var now = DateTime.UtcNow;
         var becameSubmitted = evaluation.Status != EvaluationStatus.Submitted && validation.Value.Status == EvaluationStatus.Submitted;
         evaluation.Status = validation.Value.Status;
+        // Legacy evaluations can retain the ID of an older file version. A checkpoint grade
+        // must survive later submissions, so detach it when the lecturer next saves it.
+        evaluation.SubmissionId = null;
         evaluation.OverallFeedback = validation.Value.OverallFeedback;
         evaluation.TotalScore = validation.Value.TotalScore;
         evaluation.MaxTotalScore = 10;
@@ -176,12 +194,7 @@ public sealed class CheckpointEvaluationHandler(
         var project = await context.Projects.FirstOrDefaultAsync(item => item.TeamId == teamId, cancellationToken);
         if (project is null)
             return Result.Failure<EvaluationContext>(ErrorCodes.WorkspaceNotFound, "The team project was not found.");
-        var submissionId = await context.Submissions.AsNoTracking()
-            .Where(item => item.TeamId == teamId && item.CheckpointId == checkpoint.Id)
-            .OrderByDescending(item => item.VersionNumber).ThenByDescending(item => item.CreatedAt)
-            .Select(item => (Guid?)item.Id)
-            .FirstOrDefaultAsync(cancellationToken);
-        return Result.Success(new EvaluationContext(team, project, checkpoint, rubric, submissionId));
+        return Result.Success(new EvaluationContext(team, project, checkpoint, rubric));
     }
 
     private static Result<ValidatedSave> ValidateRequest(
@@ -249,10 +262,10 @@ public sealed class CheckpointEvaluationHandler(
         }
     }
 
-    private static void AddHistory(Evaluation evaluation, EvaluationHistoryAction action, Guid userId, DateTime now)
+    private void AddHistory(Evaluation evaluation, EvaluationHistoryAction action, Guid userId, DateTime now)
     {
         var nextVersion = evaluation.Histories.Count == 0 ? 1 : evaluation.Histories.Max(item => item.Version) + 1;
-        evaluation.Histories.Add(new EvaluationHistory
+        var history = new EvaluationHistory
         {
             Version = nextVersion,
             Action = action,
@@ -260,7 +273,10 @@ public sealed class CheckpointEvaluationHandler(
             ChangedById = userId,
             ChangedAt = now,
             CreatedAt = now
-        });
+        };
+        evaluation.Histories.Add(history);
+        // IDs are assigned before EF tracks the entity; mark the new history row explicitly.
+        context.EvaluationHistories.Add(history);
     }
 
     private async Task PublishUpdatedAsync(Team team, int checkpointNumber, CancellationToken cancellationToken)
@@ -370,7 +386,7 @@ public sealed class CheckpointEvaluationHandler(
     private static bool IsRole(string role, string expected) => string.Equals(role, expected, StringComparison.OrdinalIgnoreCase);
     private static Result<T> Denied<T>(string message) => Result.Failure<T>(ErrorCodes.WorkspaceAccessDenied, message);
 
-    private sealed record EvaluationContext(Team Team, Project Project, Checkpoint Checkpoint, Rubric Rubric, Guid? SubmissionId);
+    private sealed record EvaluationContext(Team Team, Project Project, Checkpoint Checkpoint, Rubric Rubric);
     private sealed record ValidatedScore(string CriterionKey, decimal Score, string? Comment);
     private sealed record ValidatedSave(EvaluationStatus Status, string? OverallFeedback, decimal TotalScore, IReadOnlyCollection<ValidatedScore> Scores);
 }

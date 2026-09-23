@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import {
   AlertCircle,
   CalendarClock,
+  ChevronDown,
   Download,
   FileText,
   Loader2,
@@ -82,6 +83,7 @@ export default function LecturerCheckpointManagement({
     initialCheckpointNumber ?? null,
   );
   const [loading, setLoading] = useState(true);
+  const [schedulesExpanded, setSchedulesExpanded] = useState(false);
   const [error, setError] = useState('');
   const [editing, setEditing] = useState<CheckpointScheduleGroup | null>(null);
   const [confirmingBulk, setConfirmingBulk] = useState(false);
@@ -260,17 +262,30 @@ export default function LecturerCheckpointManagement({
       </section>
 
       <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+        <div className={`flex items-center justify-between gap-3 px-5 py-4 ${schedulesExpanded ? 'border-b border-slate-100' : ''}`}>
           <div>
             <h2 className="font-bold text-slate-900">Checkpoint schedules</h2>
             <p className="mt-0.5 text-xs text-slate-500">Configure Admin-defined checkpoints for the classes you manage.</p>
           </div>
-          {loading && <Loader2 className="h-4 w-4 animate-spin text-primary" />}
+          <div className="flex shrink-0 items-center gap-2">
+            {loading && <Loader2 className="h-4 w-4 animate-spin text-primary" />}
+            <button
+              type="button"
+              aria-label={schedulesExpanded ? 'Collapse checkpoint schedules' : 'Expand checkpoint schedules'}
+              aria-expanded={schedulesExpanded}
+              aria-controls="lecturer-checkpoint-schedules"
+              onClick={() => setSchedulesExpanded(current => !current)}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-600 transition hover:border-primary hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+            >
+              <ChevronDown className={`h-4 w-4 transition-transform ${schedulesExpanded ? 'rotate-180' : ''}`} />
+            </button>
+          </div>
         </div>
-        {scheduleGroups.length === 0 ? (
-          <p className="p-8 text-center text-sm text-slate-500">No checkpoint definitions match the selected classes.</p>
-        ) : (
-          <div className="space-y-3 p-4">
+        <div id="lecturer-checkpoint-schedules" hidden={!schedulesExpanded}>
+            {scheduleGroups.length === 0 ? (
+              <p className="p-8 text-center text-sm text-slate-500">No checkpoint definitions match the selected classes.</p>
+            ) : (
+              <div className="space-y-3 p-4">
             {scheduleGroups.map(group => (
               <article key={group.checkpointNumber} className="rounded-xl border border-slate-200 p-4">
                 <div className="flex items-start justify-between gap-3">
@@ -316,8 +331,9 @@ export default function LecturerCheckpointManagement({
                 </button>
               </article>
             ))}
-          </div>
-        )}
+              </div>
+            )}
+        </div>
       </section>
 
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">

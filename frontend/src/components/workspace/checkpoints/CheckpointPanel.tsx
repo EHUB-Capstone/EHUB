@@ -504,7 +504,7 @@ export default function CheckpointPanel({
                     </div>
                     <p className="text-sm font-semibold text-slate-700">No documents yet</p>
                     <p className="text-xs text-slate-400 mt-1 max-w-sm">
-                      {isStudent && isEditable && isCheckpointOpen
+                      {isStudent && isEditable && checkpoint.canUpload
                         ? 'Upload milestone files using the form above.'
                         : isStudent && isEditable
                           ? checkpoint.availabilityReason || 'This checkpoint is not open for submission.'
