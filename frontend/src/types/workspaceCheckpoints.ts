@@ -4,6 +4,10 @@ export interface WorkspaceCheckpointConfig {
   shortDescription?: string | null;
   requirements: string[];
   rubrics?: unknown[];
+  openDate?: string | null;
+  dueDate?: string | null;
+  availabilityStatus?: string | null;
+  availabilityReason?: string | null;
 }
 
 export interface WorkspaceCheckpointFile {
@@ -22,6 +26,7 @@ export interface WorkspaceCheckpointRequirementContent {
 export interface WorkspaceCheckpointSubmission {
   checkpointNumber: number;
   status: string;
+  submittedAt?: string | null;
   files: WorkspaceCheckpointFile[];
   requirementContents: WorkspaceCheckpointRequirementContent[];
 }
@@ -38,4 +43,6 @@ export interface WorkspaceCheckpointStats {
   latest: WorkspaceCheckpointFile | null;
   reqFilled: number;
   reqTotal: number;
+  status?: string;
+  submittedAt?: string | null;
 }

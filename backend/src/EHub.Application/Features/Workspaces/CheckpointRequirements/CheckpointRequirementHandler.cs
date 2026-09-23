@@ -1,6 +1,7 @@
 using System.Text.Json;
 using EHub.Application.Common.Interfaces.Persistence;
 using EHub.Application.Common.Interfaces.Services;
+using EHub.Application.Features.Workspaces.CheckpointAvailability;
 using EHub.Contracts.Workspaces;
 using EHub.Domain.Entities;
 using EHub.Domain.Enums;
@@ -38,6 +39,10 @@ public sealed class CheckpointRequirementHandler(
         var project = await context.Projects.AsNoTracking().FirstOrDefaultAsync(item => item.TeamId == teamId, cancellationToken);
         if (checkpoint is null || project is null)
             return Result.Failure<WorkspaceCheckpointSubmissionResponse>(ErrorCodes.WorkspaceNotFound, "The checkpoint workspace was not found.");
+
+        var availability = await ResolveAvailabilityAsync(team.Id, team.ClassId, checkpoint, cancellationToken);
+        if (!availability.CanSubmit)
+            return Result.Failure<WorkspaceCheckpointSubmissionResponse>(ErrorCodes.WorkspaceValidationError, availability.Reason ?? "This checkpoint is not open for submission.");
 
         var requiredLabels = DeserializeRequirements(checkpoint.RequirementsJson);
         var normalized = NormalizeAndValidate(request?.Contents, requiredLabels.Count);
@@ -121,6 +126,18 @@ public sealed class CheckpointRequirementHandler(
     }
 
     private static bool IsRole(string role, string expected) => string.Equals(role, expected, StringComparison.OrdinalIgnoreCase);
+
+    private async Task<CheckpointAvailabilityResult> ResolveAvailabilityAsync(Guid teamId, Guid classId, Checkpoint checkpoint, CancellationToken cancellationToken)
+    {
+        var schedule = await context.Checkpoints.AsNoTracking().FirstOrDefaultAsync(item =>
+            item.ClassId == classId && item.CheckpointNumber == checkpoint.CheckpointNumber, cancellationToken);
+        var previousCheckpoint = await context.Checkpoints.AsNoTracking().Where(item =>
+                item.CourseId == checkpoint.CourseId && item.ClassId == null && item.CheckpointNumber < checkpoint.CheckpointNumber)
+            .OrderByDescending(item => item.CheckpointNumber).FirstOrDefaultAsync(cancellationToken);
+        var previousCompleted = previousCheckpoint is null || await context.Submissions.AsNoTracking().AnyAsync(item =>
+            item.TeamId == teamId && item.CheckpointId == previousCheckpoint.Id && item.Status == SubmissionStatus.Submitted, cancellationToken);
+        return CheckpointAvailabilityRules.Evaluate(schedule, previousCompleted, DateTime.UtcNow);
+    }
 
     private async Task<IReadOnlyCollection<Guid>> RecipientUserIdsAsync(Team team, CancellationToken cancellationToken)
     {

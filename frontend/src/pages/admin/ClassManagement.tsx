@@ -27,6 +27,7 @@ import { CLASS_LIST_PAGE_SIZE, getClassLifecyclePresentation } from '../../utils
 import type { ClassListResponse, ClassStatus, ClassViewModel } from '../../types/classes';
 import { canCreateClasses, canManageClass, hasClassRole } from '../../utils/classPermissions';
 import { executeBulkClassAction, type BulkClassActionResult } from '../../utils/bulkClassActions';
+import CheckpointControlPanel from '../../components/workspace/checkpoints/CheckpointControlPanel';
 
 const SEMESTERS = ['SP', 'SU', 'FA'];
 const CURRENT_YEAR = new Date().getFullYear();
@@ -121,6 +122,8 @@ export default function ClassManagement() {
   const [bulkExporting, setBulkExporting] = useState(false);
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkResult, setBulkResult] = useState<{ title: string; result: BulkClassActionResult } | null>(null);
+  const [checkpointDeadlineClassId, setCheckpointDeadlineClassId] = useState<string | null>(null);
+  const checkpointDeadlineClasses = classes.filter(canManageClassRecord);
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
@@ -429,8 +432,10 @@ export default function ClassManagement() {
         </div>
       </div>
 
-      {isLecturer && classFeatureFlags.projectDirection && (
-        <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1">
+      {(isAdmin || isLecturer) && (
+        <div className="flex flex-wrap items-center gap-3">
+          {isLecturer && classFeatureFlags.projectDirection && (
+            <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1">
           <button
             type="button"
             onClick={() => {
@@ -454,6 +459,16 @@ export default function ClassManagement() {
             className={`inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-semibold transition ${viewMode === 'overview' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
           >
             <ClipboardCheck className="h-4 w-4" /> Overview
+          </button>
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={() => setCheckpointDeadlineClassId(checkpointDeadlineClasses[0]?._id || null)}
+            disabled={loading || checkpointDeadlineClasses.length === 0}
+            className="inline-flex items-center gap-2 rounded-lg border border-orange-200 bg-orange-50 px-3 py-2 text-sm font-semibold text-orange-700 transition hover:bg-orange-100 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Calendar className="h-4 w-4" /> Checkpoint deadlines
           </button>
         </div>
       )}
@@ -846,6 +861,16 @@ export default function ClassManagement() {
           onClose={() => setShowBulk(false)}
           onCreated={handleBulkCreated}
         />
+      )}
+      {checkpointDeadlineClassId && (
+        <Modal
+          isOpen
+          onClose={() => setCheckpointDeadlineClassId(null)}
+          title="Checkpoint deadlines"
+          size="md"
+        >
+          <CheckpointControlPanel classId={checkpointDeadlineClassId} />
+        </Modal>
       )}
       {isAdmin && assignTarget && (
         <AssignLectureModal
