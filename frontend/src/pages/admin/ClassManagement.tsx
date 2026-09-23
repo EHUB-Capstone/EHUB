@@ -29,7 +29,6 @@ import { CLASS_LIST_PAGE_SIZE, getClassLifecyclePresentation } from '../../utils
 import type { ClassListResponse, ClassStatus, ClassViewModel } from '../../types/classes';
 import { canCreateClasses, canManageClass, hasClassRole } from '../../utils/classPermissions';
 import { executeBulkClassAction, type BulkClassActionResult } from '../../utils/bulkClassActions';
-import CheckpointControlPanel from '../../components/workspace/checkpoints/CheckpointControlPanel';
 
 const SEMESTERS = ['SP', 'SU', 'FA'];
 const CURRENT_YEAR = new Date().getFullYear();
@@ -127,8 +126,6 @@ export default function ClassManagement() {
   const [bulkExporting, setBulkExporting] = useState(false);
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkResult, setBulkResult] = useState<{ title: string; result: BulkClassActionResult } | null>(null);
-  const [checkpointDeadlineClassId, setCheckpointDeadlineClassId] = useState<string | null>(null);
-  const checkpointDeadlineClasses = classes.filter(canManageClassRecord);
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
@@ -477,16 +474,6 @@ export default function ClassManagement() {
             <CalendarClock className="h-4 w-4" /> Checkpoint
           </button>
         </div>
-      )}
-      {isLecturer && (
-        <button
-          type="button"
-          onClick={() => setCheckpointDeadlineClassId(checkpointDeadlineClasses[0]?._id || null)}
-          disabled={loading || checkpointDeadlineClasses.length === 0}
-          className="inline-flex items-center gap-2 rounded-lg border border-orange-200 bg-orange-50 px-3 py-2 text-sm font-semibold text-orange-700 transition hover:bg-orange-100 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          <Calendar className="h-4 w-4" /> Checkpoint deadlines
-        </button>
       )}
 
       {/* ── Filters ── */}
@@ -911,16 +898,7 @@ export default function ClassManagement() {
           onCreated={handleBulkCreated}
         />
       )}
-      {checkpointDeadlineClassId && (
-        <Modal
-          isOpen
-          onClose={() => setCheckpointDeadlineClassId(null)}
-          title="Checkpoint deadlines"
-          size="md"
-        >
-          <CheckpointControlPanel classId={checkpointDeadlineClassId} />
-        </Modal>
-      )}
+
       {isAdmin && assignTarget && (
         <AssignLectureModal
           classId={assignTarget._id}

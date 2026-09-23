@@ -1593,7 +1593,7 @@ public sealed class TeamWorkflowIntegrationTests
     }
 
     [Fact]
-    public async Task CheckpointEvaluation_UsesAdministratorRubricAndPersistsLecturerScores()
+    public async Task CheckpointEvaluation_PreservesLecturerScoreAfterNewSubmissionVersion()
     {
         using var scope = _factory.Services.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -1652,12 +1652,89 @@ public sealed class TeamWorkflowIntegrationTests
         saved.IsSuccess.Should().BeTrue();
         saved.Value.CheckpointTotal.Should().Be(8.6m);
         saved.Value.RubricScores.Select(item => item.CriterionKey).Should().Equal("clarity", "evidence");
+        (await context.Evaluations.AsNoTracking().SingleAsync(item => item.Id == saved.Value.Id))
+            .SubmissionId.Should().BeNull();
+
+        var projectId = await context.Projects.Where(item => item.TeamId == seed.TeamId.Value)
+            .Select(item => item.Id).SingleAsync();
+        var firstSubmission = new Submission
+        {
+            ProjectId = projectId, TeamId = seed.TeamId.Value, CheckpointId = checkpoint.Id,
+            Title = checkpoint.Name, Status = SubmissionStatus.Submitted, VersionNumber = 1,
+            SubmittedById = seed.ProposerUserId, SubmittedAt = DateTime.UtcNow,
+            CreatedAt = DateTime.UtcNow, CreatedBy = seed.ProposerUserId
+        };
+        context.Submissions.Add(firstSubmission);
+        await context.SaveChangesAsync();
+        var legacyEvaluation = await context.Evaluations.SingleAsync(item => item.Id == saved.Value.Id);
+        legacyEvaluation.SubmissionId = firstSubmission.Id;
+        await context.SaveChangesAsync();
+        context.Submissions.Add(new Submission
+        {
+            ProjectId = projectId, TeamId = seed.TeamId.Value, CheckpointId = checkpoint.Id,
+            Title = checkpoint.Name, Status = SubmissionStatus.Submitted, VersionNumber = 2,
+            SubmittedById = seed.ProposerUserId, SubmittedAt = DateTime.UtcNow,
+            CreatedAt = DateTime.UtcNow, CreatedBy = seed.ProposerUserId
+        });
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
 
         var studentSummary = await handler.GetSummaryAsync(seed.TeamId.Value, 1, seed.ProposerUserId, SystemRoles.Student);
         studentSummary.IsSuccess.Should().BeTrue();
         studentSummary.Value.Checkpoint.Rubrics.Select(item => item.Key).Should().Equal("clarity", "evidence");
         studentSummary.Value.Evaluations.Should().ContainSingle();
         studentSummary.Value.Evaluations.Single().CheckpointTotal.Should().Be(8.6m);
+        studentSummary.Value.Summary.AverageScore.Should().Be(8.6m);
+
+        var revised = await handler.SaveAsync(seed.TeamId.Value, 1,
+            new SaveWorkspaceCheckpointEvaluationRequest
+            {
+                Status = "SUBMITTED",
+                RubricScores = new[]
+                {
+                    new WorkspaceCheckpointCriterionScoreInput { CriterionKey = "clarity", Score = 10 },
+                    new WorkspaceCheckpointCriterionScoreInput { CriterionKey = "evidence", Score = 8 }
+                }
+            }, seed.LecturerId, SystemRoles.Lecturer);
+        revised.IsSuccess.Should().BeTrue();
+        revised.Value.Id.Should().Be(saved.Value.Id);
+        revised.Value.CheckpointTotal.Should().Be(9.2m);
+        (await context.Evaluations.CountAsync(item => item.ProjectId == projectId && item.RubricId == rubric.Id))
+            .Should().Be(1);
+        (await context.Evaluations.AsNoTracking().SingleAsync(item => item.Id == saved.Value.Id))
+            .SubmissionId.Should().BeNull();
+        var updatedById = await handler.UpdateAsync(saved.Value.Id,
+            new SaveWorkspaceCheckpointEvaluationRequest
+            {
+                Status = "SUBMITTED",
+                RubricScores = new[]
+                {
+                    new WorkspaceCheckpointCriterionScoreInput { CriterionKey = "clarity", Score = 10 },
+                    new WorkspaceCheckpointCriterionScoreInput { CriterionKey = "evidence", Score = 8 }
+                }
+            }, seed.LecturerId, SystemRoles.Lecturer);
+        updatedById.IsSuccess.Should().BeTrue();
+        updatedById.Value.Id.Should().Be(saved.Value.Id);
+        // A real PUT runs in a new request scope and changes already-submitted scores.
+        using (var updateScope = _factory.Services.CreateScope())
+        {
+            var updateHandler = updateScope.ServiceProvider.GetRequiredService<ICheckpointEvaluationHandler>();
+            var changedScore = await updateHandler.UpdateAsync(saved.Value.Id,
+                new SaveWorkspaceCheckpointEvaluationRequest
+                {
+                    Status = "SUBMITTED",
+                    RubricScores = new[]
+                    {
+                        new WorkspaceCheckpointCriterionScoreInput { CriterionKey = "clarity", Score = 7 },
+                        new WorkspaceCheckpointCriterionScoreInput { CriterionKey = "evidence", Score = 8 }
+                    }
+                }, seed.LecturerId, SystemRoles.Lecturer);
+            changedScore.IsSuccess.Should().BeTrue();
+            changedScore.Value.CheckpointTotal.Should().Be(7.4m);
+        }
+        context.ChangeTracker.Clear();
+        var revisedStudentSummary = await handler.GetSummaryAsync(seed.TeamId.Value, 1, seed.ProposerUserId, SystemRoles.Student);
+        revisedStudentSummary.Value.Evaluations.Single().CheckpointTotal.Should().Be(7.4m);
 
         var forbidden = await handler.SaveAsync(seed.TeamId.Value, 1,
             new SaveWorkspaceCheckpointEvaluationRequest(), seed.ProposerUserId, SystemRoles.Student);
