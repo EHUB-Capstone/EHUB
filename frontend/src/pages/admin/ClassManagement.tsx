@@ -476,17 +476,17 @@ export default function ClassManagement() {
           >
             <CalendarClock className="h-4 w-4" /> Checkpoint
           </button>
-            </div>
-          )}
-          <button
-            type="button"
-            onClick={() => setCheckpointDeadlineClassId(checkpointDeadlineClasses[0]?._id || null)}
-            disabled={loading || checkpointDeadlineClasses.length === 0}
-            className="inline-flex items-center gap-2 rounded-lg border border-orange-200 bg-orange-50 px-3 py-2 text-sm font-semibold text-orange-700 transition hover:bg-orange-100 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <Calendar className="h-4 w-4" /> Checkpoint deadlines
-          </button>
         </div>
+      )}
+      {isLecturer && (
+        <button
+          type="button"
+          onClick={() => setCheckpointDeadlineClassId(checkpointDeadlineClasses[0]?._id || null)}
+          disabled={loading || checkpointDeadlineClasses.length === 0}
+          className="inline-flex items-center gap-2 rounded-lg border border-orange-200 bg-orange-50 px-3 py-2 text-sm font-semibold text-orange-700 transition hover:bg-orange-100 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <Calendar className="h-4 w-4" /> Checkpoint deadlines
+        </button>
       )}
 
       {/* ── Filters ── */}
