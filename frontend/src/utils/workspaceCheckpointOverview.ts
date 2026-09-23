@@ -36,6 +36,8 @@ export function buildWorkspaceCheckpointOverview(
       latest: files[0] || null,
       reqFilled,
       reqTotal: checkpoint.requirements.length,
+      status: submission.status,
+      submittedAt: submission.submittedAt,
     };
   }
 
@@ -46,6 +48,8 @@ export function buildWorkspaceCheckpointOverview(
       latest: null,
       reqFilled: 0,
       reqTotal: checkpoint.requirements.length,
+      status: 'NotSubmitted',
+      submittedAt: null,
     };
   }
 

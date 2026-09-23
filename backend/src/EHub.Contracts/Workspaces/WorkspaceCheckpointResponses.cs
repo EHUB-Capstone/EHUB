@@ -18,6 +18,7 @@ public sealed class WorkspaceCheckpointSubmissionResponse
 {
     public int CheckpointNumber { get; init; }
     public string Status { get; init; } = string.Empty;
+    public DateTime? SubmittedAt { get; init; }
     public IReadOnlyCollection<WorkspaceCheckpointFileResponse> Files { get; init; } =
         Array.Empty<WorkspaceCheckpointFileResponse>();
     public IReadOnlyCollection<WorkspaceCheckpointRequirementContentResponse> RequirementContents { get; init; } =

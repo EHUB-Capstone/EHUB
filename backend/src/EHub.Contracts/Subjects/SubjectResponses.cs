@@ -187,6 +187,10 @@ public sealed class SubjectCheckpointResponse
     public bool CanUpload { get; init; }
     public IReadOnlyCollection<string> Requirements { get; init; } = Array.Empty<string>();
     public IReadOnlyCollection<SubjectCriterionResponse> Rubrics { get; init; } = Array.Empty<SubjectCriterionResponse>();
+    public DateTime? OpenDate { get; init; }
+    public DateTime? DueDate { get; init; }
+    public string? AvailabilityStatus { get; init; }
+    public string? AvailabilityReason { get; init; }
 }
 
 public sealed class SubjectCriterionResponse

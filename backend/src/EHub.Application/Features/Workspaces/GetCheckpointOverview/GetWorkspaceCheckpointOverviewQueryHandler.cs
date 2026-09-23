@@ -39,6 +39,7 @@ public sealed class GetWorkspaceCheckpointOverviewQueryHandler(
             {
                 team.ClassId,
                 team.Class.CourseId,
+                team.ClassId,
                 SubjectCode = team.Class.Course.Code
             })
             .SingleOrDefaultAsync(cancellationToken);
@@ -58,6 +59,11 @@ public sealed class GetWorkspaceCheckpointOverviewQueryHandler(
                 checkpoint.Status != CheckpointStatus.Archived)
             .OrderBy(checkpoint => checkpoint.CheckpointNumber)
             .ToListAsync(cancellationToken);
+
+        var classSchedules = await context.Checkpoints
+            .AsNoTracking()
+            .Where(checkpoint => checkpoint.ClassId == academicContext.ClassId)
+            .ToDictionaryAsync(checkpoint => checkpoint.CheckpointNumber, cancellationToken);
 
         var checkpointIds = checkpoints.Select(checkpoint => checkpoint.Id).ToArray();
         var schedules = checkpointIds.Length == 0
@@ -124,6 +130,7 @@ public sealed class GetWorkspaceCheckpointOverviewQueryHandler(
         var requirementContentsBySubmission = requirementContents
             .GroupBy(content => content.SubmissionId)
             .ToDictionary(group => group.Key, group => group.ToArray());
+        var now = DateTime.UtcNow;
 
         return Result.Success(new WorkspaceCheckpointOverviewResponse
         {
@@ -196,6 +203,7 @@ public sealed class GetWorkspaceCheckpointOverviewQueryHandler(
         ClassCheckpointSchedule? schedule,
         DateTime now)
     {
+        var availability = CheckpointAvailabilityRules.Evaluate(classSchedule, previousCompleted, now);
         var rubric = checkpoint.Rubrics
             .Where(item => item.ClassId == null)
             .OrderBy(item => item.Name)
@@ -223,7 +231,11 @@ public sealed class GetWorkspaceCheckpointOverviewQueryHandler(
                     Weight = criterion.Weight,
                     Levels = DeserializeArray<object>(criterion.LevelsJson).ToArray()
                 })
-                .ToArray() ?? Array.Empty<SubjectCriterionResponse>()
+                .ToArray() ?? Array.Empty<SubjectCriterionResponse>(),
+            OpenDate = classSchedule?.OpenDate,
+            DueDate = classSchedule?.DueDate,
+            AvailabilityStatus = availability.Status,
+            AvailabilityReason = availability.Reason
         };
     }
 
@@ -246,6 +258,7 @@ public sealed class GetWorkspaceCheckpointOverviewQueryHandler(
         {
             CheckpointNumber = checkpoint.CheckpointNumber,
             Status = submission.Status.ToString(),
+            SubmittedAt = submission.SubmittedAt,
             Files = files
                 .OrderByDescending(file => file.VersionNumber)
                 .ThenByDescending(file => file.UploadedAt)

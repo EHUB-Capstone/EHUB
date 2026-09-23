@@ -322,7 +322,9 @@ export default function CheckpointPanel({
                 subtitle={
                   canEditRequirements
                     ? 'Complete all fields, then save once at the bottom.'
-                    : 'Submitted answers from the team (read-only).'
+                    : isStudent && isEditable
+                      ? checkpoint.availabilityReason || 'This checkpoint is not open for submission.'
+                      : 'Submitted answers from the team (read-only).'
                 }
               >
                 Requirements
@@ -502,9 +504,11 @@ export default function CheckpointPanel({
                     </div>
                     <p className="text-sm font-semibold text-slate-700">No documents yet</p>
                     <p className="text-xs text-slate-400 mt-1 max-w-sm">
-                      {isStudent && isEditable
+                      {isStudent && isEditable && isCheckpointOpen
                         ? 'Upload milestone files using the form above.'
-                        : 'This team has not uploaded files for this checkpoint.'}
+                        : isStudent && isEditable
+                          ? checkpoint.availabilityReason || 'This checkpoint is not open for submission.'
+                          : 'This team has not uploaded files for this checkpoint.'}
                     </p>
                   </div>
                 ) : (

@@ -2,6 +2,7 @@ using System.IO.Compression;
 using EHub.Application.Common.Interfaces.Persistence;
 using EHub.Application.Common.Interfaces.Services;
 using EHub.Application.Common.Interfaces.Storage;
+using EHub.Application.Features.Workspaces.CheckpointAvailability;
 using EHub.Contracts.Workspaces;
 using EHub.Domain.Entities;
 using EHub.Domain.Enums;
@@ -51,6 +52,10 @@ public sealed class CheckpointFileHandler(
                     : $"This checkpoint closed at {access.Value.Schedule.EndDateUtc:O}.";
             return Result.Failure<WorkspaceCheckpointFileResponse>(ErrorCodes.WorkspaceCheckpointNotOpen, message);
         }
+
+        var availability = await ResolveAvailabilityAsync(teamId, access.Value.TeamClassId, access.Value.Checkpoint, cancellationToken);
+        if (!availability.CanSubmit)
+            return Invalid<WorkspaceCheckpointFileResponse>(availability.Reason ?? "This checkpoint is not open for submission.");
 
         await using var uploadStream = new MemoryStream(bytes, writable: false);
         var storageResult = await storage.UploadAsync(uploadStream, SafeOriginalName(originalName), expectedContentType, teamId, checkpointNumber, cancellationToken);
