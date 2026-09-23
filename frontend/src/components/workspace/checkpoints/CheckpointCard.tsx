@@ -7,6 +7,7 @@ import {
   FileText,
   ArrowRight,
   CheckCircle2,
+  Clock3,
 } from 'lucide-react';
 
 const ICONS = { Users, BarChart2, Layers, TrendingUp };
@@ -26,6 +27,13 @@ export default function CheckpointCard({
   const hasFiles = fileCount > 0;
   const hasRequirements = reqFilled > 0;
   const hasSubmission = hasFiles || hasRequirements;
+  const scheduleStyle = {
+    Open: 'bg-emerald-100 text-emerald-700',
+    Upcoming: 'bg-blue-100 text-blue-700',
+    Closed: 'bg-red-100 text-red-700',
+    NotScheduled: 'bg-slate-100 text-slate-600',
+  }[checkpoint.scheduleStatus] || 'bg-slate-100 text-slate-600';
+  const formatDate = (value) => value ? new Date(value).toLocaleString() : 'Not scheduled';
 
   return (
     <div className="relative pl-12 sm:pl-16">
@@ -84,14 +92,22 @@ export default function CheckpointCard({
             </p>
 
             <div className="mt-3 flex flex-wrap items-center gap-2">
+              <span className={`rounded-md px-2.5 py-1 text-[10px] font-bold ${scheduleStyle}`}>
+                {checkpoint.scheduleStatus}
+              </span>
               {reqTotal > 0 && (
                 <span className={`rounded-md px-2.5 py-1 text-[10px] font-bold ${hasRequirements ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
                   {reqFilled}/{reqTotal} requirements
                 </span>
               )}
               <span className={`rounded-md px-2.5 py-1 text-[10px] font-bold ${hasFiles ? 'bg-orange-100 text-orange-700' : 'bg-slate-100 text-slate-500'}`}>
-                  {fileCount} file{fileCount !== 1 ? 's' : ''}
+                {fileCount} file{fileCount !== 1 ? 's' : ''}
               </span>
+              {hasFiles && latest?.versionNumber > 0 && (
+                <span className="rounded-md bg-orange-100 px-2.5 py-1 text-[10px] font-bold text-orange-700">
+                  Latest: Version {latest.versionNumber}
+                </span>
+              )}
               {!hasSubmission && (
                 <span className="rounded-md bg-slate-100 px-2.5 py-1 text-[10px] font-medium text-slate-500">
                   Not submitted
@@ -104,10 +120,16 @@ export default function CheckpointCard({
                 </span>
               )}
             </div>
+            <p className="mt-2 flex items-center gap-1.5 text-[10px] text-slate-500">
+              <Clock3 className="h-3 w-3" />
+              {checkpoint.startDateUtc && checkpoint.endDateUtc
+                ? `${formatDate(checkpoint.startDateUtc)} → ${formatDate(checkpoint.endDateUtc)}`
+                : 'Your lecturer has not scheduled this checkpoint yet.'}
+            </p>
           </div>
 
           <span className="inline-flex shrink-0 items-center gap-1 self-end text-xs font-bold text-slate-500 group-hover:text-orange-600 sm:self-center">
-            Open
+            View
             <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
           </span>
         </div>

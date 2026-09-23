@@ -181,6 +181,10 @@ public sealed class SubjectCheckpointResponse
     public int Number { get; init; }
     public string Title { get; init; } = string.Empty;
     public string? ShortDescription { get; init; }
+    public DateTime? StartDateUtc { get; init; }
+    public DateTime? EndDateUtc { get; init; }
+    public string ScheduleStatus { get; init; } = "NotScheduled";
+    public bool CanUpload { get; init; }
     public IReadOnlyCollection<string> Requirements { get; init; } = Array.Empty<string>();
     public IReadOnlyCollection<SubjectCriterionResponse> Rubrics { get; init; } = Array.Empty<SubjectCriterionResponse>();
 }

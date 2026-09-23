@@ -3,7 +3,7 @@
 import axiosClient from './axiosClient';
 
 export const checkpointApi = {
-  // Subject-configured checkpoints plus the team's latest submission data
+  // Subject-configured checkpoints plus the team's submission history
   getCheckpointData: (teamId) =>
     axiosClient.get(`/workspace/checkpoints/teams/${teamId}`),
 

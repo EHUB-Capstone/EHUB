@@ -1,4 +1,5 @@
 using EHub.Application.Common.Interfaces.Persistence;
+using EHub.Application.Common.Interfaces.Services;
 using EHub.Application.Features.Workspaces.GetCheckpointOverview;
 using EHub.Shared.Errors;
 using FluentAssertions;
@@ -12,7 +13,8 @@ public sealed class GetWorkspaceCheckpointOverviewQueryHandlerTests
     public async Task HandleAsync_WhenRoleCannotAccessWorkspaces_ReturnsAccessDenied()
     {
         var handler = new GetWorkspaceCheckpointOverviewQueryHandler(
-            Substitute.For<IApplicationDbContext>());
+            Substitute.For<IApplicationDbContext>(),
+            Substitute.For<IDateTimeProvider>());
 
         var result = await handler.HandleAsync(
             Guid.NewGuid(),

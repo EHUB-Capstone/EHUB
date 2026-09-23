@@ -6,6 +6,7 @@ import {
   Plus, RefreshCw, Search, Filter, GraduationCap,
   Users, BookOpen, ChevronRight, ChevronLeft, Upload, Eye, Calendar, LayoutGrid, ClipboardCheck, AlertCircle, RotateCcw,
   Archive, UserRoundCheck, X, CircleCheck, Download, Loader2,
+  CalendarClock,
 } from 'lucide-react';
 import { AuthContext } from '../../context/AuthContext';
 import { classApi } from '../../api/classApi';
@@ -16,6 +17,7 @@ import BulkCreateModal from '../../components/class/BulkCreateModal';
 import AssignLectureModal from '../../components/class/AssignLectureModal';
 import ImportStudentsModal from '../../components/class/ImportStudentsModal';
 import ClassDirectionOverview from '../../components/class/ClassDirectionOverview';
+import LecturerCheckpointManagement from '../../components/class/LecturerCheckpointManagement';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import Modal from '../../components/ui/Modal';
 import Button from '../../components/ui/Button';
@@ -77,6 +79,7 @@ export default function ClassManagement() {
     if (value) next.set('search', value);
     else next.delete('search');
     next.delete('page');
+    if (next.get('tab') === 'checkpoint') next.delete('classId');
     setSearchParams(next, { replace: true });
   };
   const [filterSem, setFilterSem] = useState(searchParams.get('semester') || '');
@@ -93,9 +96,11 @@ export default function ClassManagement() {
     setSearch(appliedSearch);
     setPage(1);
   }
-  const viewMode = searchParams.get('tab') === 'overview' ? 'overview' : 'classes';
+  const requestedTab = searchParams.get('tab');
+  const viewMode = requestedTab === 'overview' ? 'overview' : requestedTab === 'checkpoint' ? 'checkpoint' : 'classes';
   const overviewClassId = searchParams.get('classId') || '';
   const overviewTeamId = searchParams.get('teamId') || '';
+  const checkpointNumber = Math.max(0, Number(searchParams.get('checkpointNumber')) || 0);
   const deepLinkSemester = viewMode === 'overview' && overviewClassId
     ? searchParams.get('semester') || ''
     : '';
@@ -202,13 +207,14 @@ export default function ClassManagement() {
     if (isAdmin && filterAssignment) next.set('assignment', filterAssignment);
     if (sort !== 'code') next.set('sort', sort);
     if (page > 1) next.set('page', String(page));
-    if (viewMode === 'overview') {
-      next.set('tab', 'overview');
+    if (viewMode === 'overview' || viewMode === 'checkpoint') {
+      next.set('tab', viewMode);
       if (overviewClassId) next.set('classId', overviewClassId);
-      if (overviewTeamId) next.set('teamId', overviewTeamId);
+      if (viewMode === 'overview' && overviewTeamId) next.set('teamId', overviewTeamId);
+      if (viewMode === 'checkpoint' && checkpointNumber > 0) next.set('checkpointNumber', String(checkpointNumber));
     }
     setSearchParams(next, { replace: true });
-  }, [appliedSearch, effectiveFilterSem, effectiveFilterYear, filterAssignment, filterStatus, filterSubj, isAdmin, overviewClassId, overviewTeamId, page, setSearchParams, sort, viewMode]);
+  }, [appliedSearch, checkpointNumber, effectiveFilterSem, effectiveFilterYear, filterAssignment, filterStatus, filterSubj, isAdmin, overviewClassId, overviewTeamId, page, setSearchParams, sort, viewMode]);
 
   useEffect(() => {
     setSelectedClassIds(new Set());
@@ -429,7 +435,7 @@ export default function ClassManagement() {
         </div>
       </div>
 
-      {isLecturer && classFeatureFlags.projectDirection && (
+      {isLecturer && (
         <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1">
           <button
             type="button"
@@ -444,7 +450,7 @@ export default function ClassManagement() {
           >
             <LayoutGrid className="h-4 w-4" /> Classes
           </button>
-          <button
+          {classFeatureFlags.projectDirection && <button
             type="button"
             onClick={() => {
               const next = new URLSearchParams(searchParams);
@@ -454,6 +460,18 @@ export default function ClassManagement() {
             className={`inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-semibold transition ${viewMode === 'overview' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
           >
             <ClipboardCheck className="h-4 w-4" /> Overview
+          </button>}
+          <button
+            type="button"
+            onClick={() => {
+              const next = new URLSearchParams(searchParams);
+              next.set('tab', 'checkpoint');
+              next.delete('teamId');
+              setSearchParams(next);
+            }}
+            className={`inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-semibold transition ${viewMode === 'checkpoint' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+          >
+            <CalendarClock className="h-4 w-4" /> Checkpoint
           </button>
         </div>
       )}
@@ -473,7 +491,13 @@ export default function ClassManagement() {
           </div>
           <select
             value={filterSubj}
-            onChange={(e) => { setFilterSubj(e.target.value); setPage(1); }}
+            onChange={(e) => {
+              setFilterSubj(e.target.value);
+              setPage(1);
+              const next = new URLSearchParams(searchParams);
+              next.delete('classId');
+              setSearchParams(next, { replace: true });
+            }}
             className="border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none bg-white focus:ring-2 focus:ring-primary/20 focus:border-primary"
           >
             <option value="">All Subjects</option>
@@ -511,7 +535,13 @@ export default function ClassManagement() {
           </select>
           <select
             value={filterStatus}
-            onChange={(e) => { setFilterStatus(e.target.value as ClassStatus | ''); setPage(1); }}
+            onChange={(e) => {
+              setFilterStatus(e.target.value as ClassStatus | '');
+              setPage(1);
+              const next = new URLSearchParams(searchParams);
+              next.delete('classId');
+              setSearchParams(next, { replace: true });
+            }}
             className="border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none bg-white focus:ring-2 focus:ring-primary/20 focus:border-primary"
           >
             <option value="">Active &amp; Draft</option>
@@ -551,7 +581,9 @@ export default function ClassManagement() {
           </button>
           <button type="button" onClick={() => {
             setSearch(''); setFilterSem(''); setFilterYear(''); setFilterSubj(''); setFilterStatus(''); setFilterAssignment(''); setSort('code'); setPage(1);
-            setSearchParams(new URLSearchParams(), { replace: true });
+            const next = new URLSearchParams();
+            if (viewMode !== 'classes') next.set('tab', viewMode);
+            setSearchParams(next, { replace: true });
           }} className="text-sm text-slate-400 hover:text-slate-600 px-2">
             Reset
           </button>
@@ -577,6 +609,25 @@ export default function ClassManagement() {
           onSelectedClassChange={(classId) => {
             const next = new URLSearchParams(searchParams);
             next.set('classId', classId);
+            next.delete('teamId');
+            setSearchParams(next, { replace: true });
+          }}
+        />
+      ) : isLecturer && viewMode === 'checkpoint' ? (
+        <LecturerCheckpointManagement
+          semester={effectiveFilterSem}
+          year={effectiveFilterYear}
+          subjectCode={filterSubj}
+          classStatus={filterStatus}
+          search={appliedSearch}
+          initialClassId={overviewClassId}
+          initialCheckpointNumber={checkpointNumber || undefined}
+          onSelectionChange={(classId, selectedCheckpointNumber) => {
+            const next = new URLSearchParams(searchParams);
+            if (classId) next.set('classId', classId);
+            else next.delete('classId');
+            if (selectedCheckpointNumber) next.set('checkpointNumber', String(selectedCheckpointNumber));
+            else next.delete('checkpointNumber');
             next.delete('teamId');
             setSearchParams(next, { replace: true });
           }}

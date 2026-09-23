@@ -29,4 +29,5 @@ public class Checkpoint : AuditableEntity
     // Navigation properties
     public virtual ICollection<Submission> Submissions { get; set; } = new List<Submission>();
     public virtual ICollection<Rubric> Rubrics { get; set; } = new List<Rubric>();
+    public virtual ICollection<ClassCheckpointSchedule> ClassSchedules { get; set; } = new List<ClassCheckpointSchedule>();
 }

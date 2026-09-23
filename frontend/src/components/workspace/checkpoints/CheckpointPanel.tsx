@@ -7,6 +7,7 @@ import {
   X, CheckCircle2, Award, FileText, Download, Trash2, Loader2,
   MessageSquare, ArrowLeft, Users, BarChart2, Layers, TrendingUp, Upload, Save,
   ClipboardList, Eye, ClipboardCheck, PanelRightOpen, PanelRightClose,
+  CalendarClock,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { checkpointApi } from '../../../api/checkpointApi';
@@ -76,7 +77,7 @@ export default function CheckpointPanel({
   const isStudent = user?.role?.toUpperCase() === 'STUDENT';
   const isLecturer = user?.role?.toUpperCase() === 'LECTURER';
   const [showEvaluation, setShowEvaluation] = useState(false);
-  const canEditRequirements = isStudent && isEditable;
+  const canEditRequirements = isStudent && isEditable && checkpoint?.canUpload;
   const Icon = ICONS[checkpoint?.icon] || FileText;
 
   const buildContentsMap = useCallback((sub) => {
@@ -443,7 +444,7 @@ export default function CheckpointPanel({
           {/* Main column */}
           <main className="flex-1 overflow-y-auto scrollbar-thin bg-orange-50/20">
             <div className="p-5 lg:p-8 max-w-4xl mx-auto w-full space-y-6">
-              {isEditable && isStudent && (
+              {isEditable && isStudent && checkpoint.canUpload && (
                 <section className="rounded-2xl border border-slate-200/60 bg-white p-5 shadow-sm space-y-4">
                   <SectionTitle
                     icon={Upload}
@@ -457,6 +458,26 @@ export default function CheckpointPanel({
                     onUploaded={fetchData}
                     variant="large"
                   />
+                </section>
+              )}
+
+              {isEditable && isStudent && !checkpoint.canUpload && (
+                <section className={`rounded-2xl border p-5 shadow-sm ${checkpoint.scheduleStatus === 'Closed' ? 'border-red-200 bg-red-50' : 'border-blue-200 bg-blue-50'}`}>
+                  <div className="flex items-start gap-3">
+                    <CalendarClock className={`mt-0.5 h-5 w-5 shrink-0 ${checkpoint.scheduleStatus === 'Closed' ? 'text-red-600' : 'text-blue-600'}`} />
+                    <div>
+                      <p className="font-bold text-slate-900">
+                        {checkpoint.scheduleStatus === 'Upcoming' ? 'Checkpoint not open yet' : checkpoint.scheduleStatus === 'Closed' ? 'Checkpoint closed' : 'Checkpoint not scheduled'}
+                      </p>
+                      <p className="mt-1 text-sm text-slate-600">
+                        {checkpoint.scheduleStatus === 'Upcoming'
+                          ? `Opens ${new Date(checkpoint.startDateUtc).toLocaleString()}.`
+                          : checkpoint.scheduleStatus === 'Closed'
+                            ? `The submission deadline was ${new Date(checkpoint.endDateUtc).toLocaleString()}.`
+                            : 'Your lecturer has not configured an upload window for this checkpoint.'}
+                      </p>
+                    </div>
+                  </div>
                 </section>
               )}
 
@@ -521,6 +542,11 @@ export default function CheckpointPanel({
                               <p className="text-xs text-slate-500 mt-1">
                                 {formatBytes(file.fileSize)} · {file.uploadedBy?.name || 'Unknown'}
                               </p>
+                              {file.versionNumber > 0 && (
+                                <span className="mt-1 inline-flex rounded-md bg-orange-100 px-2 py-0.5 text-[10px] font-bold text-orange-700">
+                                  Version {file.versionNumber}
+                                </span>
+                              )}
                               <p className="text-[10px] text-slate-400 mt-0.5">
                                 {new Date(file.uploadedAt).toLocaleString()}
                               </p>

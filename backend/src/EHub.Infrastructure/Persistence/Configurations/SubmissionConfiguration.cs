@@ -50,6 +50,10 @@ public class SubmissionConfiguration : IEntityTypeConfiguration<Submission>
             .HasColumnName("version_number")
             .IsRequired();
 
+        builder.Property(s => s.RowVersion)
+            .IsRowVersion()
+            .HasColumnName("xmin");
+
         // Unique Index: ProjectId + CheckpointId + VersionNumber
         builder.HasIndex(s => new { s.ProjectId, s.CheckpointId, s.VersionNumber })
             .IsUnique();

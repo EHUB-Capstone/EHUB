@@ -43,6 +43,7 @@ public class AppDbContext : DbContext, IApplicationDbContext
     public DbSet<ProjectTag> ProjectTags => Set<ProjectTag>();
     public DbSet<ProjectActivityLog> ProjectActivityLogs => Set<ProjectActivityLog>();
     public DbSet<Checkpoint> Checkpoints => Set<Checkpoint>();
+    public DbSet<ClassCheckpointSchedule> ClassCheckpointSchedules => Set<ClassCheckpointSchedule>();
     public DbSet<Submission> Submissions => Set<Submission>();
     public DbSet<SubmissionFile> SubmissionFiles => Set<SubmissionFile>();
     public DbSet<SubmissionRequirementContent> SubmissionRequirementContents => Set<SubmissionRequirementContent>();

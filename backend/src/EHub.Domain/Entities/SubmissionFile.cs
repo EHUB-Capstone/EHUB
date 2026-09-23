@@ -11,6 +11,7 @@ public class SubmissionFile : AuditableEntity
 
     public string FileName { get; set; } = string.Empty;
     public string OriginalName { get; set; } = string.Empty;
+    public int VersionNumber { get; set; } = 1;
     public string FileUrl { get; set; } = string.Empty;
     public string CloudinaryPublicId { get; set; } = string.Empty;
     public string MimeType { get; set; } = string.Empty;

@@ -4,6 +4,7 @@ import { useRef, useState } from 'react';
 import { UploadCloud, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { checkpointApi } from '../../../api/checkpointApi';
+import { parseApiError } from '../../../utils/apiError';
 
 const ALLOWED_EXT  = ['.pdf', '.docx', '.pptx'];
 const MAX_SIZE     = 15 * 1024 * 1024; // 15 MB (MongoDB document limit)
@@ -35,12 +36,13 @@ export default function FileUploadZone({ teamId, checkpointNumber, onUploaded, v
 
         const fd = new FormData();
         fd.append('file', file);
-        await checkpointApi.uploadFile(teamId, checkpointNumber, fd);
-        toast.success(`"${file.name}" uploaded!`);
+        const result = await checkpointApi.uploadFile(teamId, checkpointNumber, fd);
+        const version = result?.data?.versionNumber;
+        toast.success(`"${file.name}" uploaded${version ? ` as Version ${version}` : ''}!`);
       }
       onUploaded?.();
     } catch (e) {
-      toast.error(e?.response?.data?.error || e.message || 'Upload failed.');
+      toast.error(parseApiError(e, 'Upload failed.').message);
     } finally {
       setUploading(false);
       if (fileRef.current) fileRef.current.value = '';

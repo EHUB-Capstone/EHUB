@@ -1,5 +1,6 @@
 using System.Text.Json;
 using EHub.Application.Common.Interfaces.Persistence;
+using EHub.Application.Common.Interfaces.Services;
 using EHub.Contracts.Subjects;
 using EHub.Contracts.Workspaces;
 using EHub.Domain.Entities;
@@ -12,7 +13,8 @@ using Microsoft.EntityFrameworkCore;
 namespace EHub.Application.Features.Workspaces.GetCheckpointOverview;
 
 public sealed class GetWorkspaceCheckpointOverviewQueryHandler(
-    IApplicationDbContext context) : IGetWorkspaceCheckpointOverviewQueryHandler
+    IApplicationDbContext context,
+    IDateTimeProvider dateTimeProvider) : IGetWorkspaceCheckpointOverviewQueryHandler
 {
     public async Task<Result<WorkspaceCheckpointOverviewResponse>> HandleAsync(
         Guid teamId,
@@ -35,6 +37,7 @@ public sealed class GetWorkspaceCheckpointOverviewQueryHandler(
             .Where(team => team.Id == teamId)
             .Select(team => new
             {
+                team.ClassId,
                 team.Class.CourseId,
                 SubjectCode = team.Class.Course.Code
             })
@@ -57,6 +60,14 @@ public sealed class GetWorkspaceCheckpointOverviewQueryHandler(
             .ToListAsync(cancellationToken);
 
         var checkpointIds = checkpoints.Select(checkpoint => checkpoint.Id).ToArray();
+        var schedules = checkpointIds.Length == 0
+            ? Array.Empty<ClassCheckpointSchedule>()
+            : await context.ClassCheckpointSchedules
+                .AsNoTracking()
+                .Where(item => item.ClassId == academicContext.ClassId && checkpointIds.Contains(item.CheckpointId))
+                .ToArrayAsync(cancellationToken);
+        var scheduleByCheckpoint = schedules.ToDictionary(item => item.CheckpointId);
+        var now = EnsureUtc(dateTimeProvider.UtcNow);
         var submissions = checkpointIds.Length == 0
             ? Array.Empty<Submission>()
             : await context.Submissions
@@ -71,6 +82,9 @@ public sealed class GetWorkspaceCheckpointOverviewQueryHandler(
         var latestSubmissions = submissions
             .GroupBy(submission => submission.CheckpointId)
             .ToDictionary(group => group.Key, group => group.First());
+        var submissionsByCheckpoint = submissions
+            .GroupBy(submission => submission.CheckpointId)
+            .ToDictionary(group => group.Key, group => group.ToArray());
         var latestSubmissionIds = latestSubmissions.Values
             .Select(submission => submission.Id)
             .ToArray();
@@ -81,22 +95,24 @@ public sealed class GetWorkspaceCheckpointOverviewQueryHandler(
                 .Where(content => latestSubmissionIds.Contains(content.SubmissionId))
                 .OrderBy(content => content.RequirementIndex)
                 .ToArrayAsync(cancellationToken);
-        var files = latestSubmissionIds.Length == 0
+        var submissionIds = submissions.Select(submission => submission.Id).ToArray();
+        var files = submissionIds.Length == 0
             ? Array.Empty<SubmissionFile>()
             : await context.SubmissionFiles
                 .AsNoTracking()
                 .Include(file => file.UploadedBy)
-                .Where(file => latestSubmissionIds.Contains(file.SubmissionId))
+                .Include(file => file.Submission)
+                .Where(file => submissionIds.Contains(file.SubmissionId))
                 .OrderByDescending(file => file.UploadedAt)
                 .ToArrayAsync(cancellationToken);
-        var feedbacks = latestSubmissionIds.Length == 0
+        var feedbacks = submissionIds.Length == 0
             ? Array.Empty<SubmissionFeedback>()
             : await context.SubmissionFeedbacks
                 .AsNoTracking()
                 .Include(feedback => feedback.Creator)
                 .ThenInclude(user => user!.UserRoles)
                 .ThenInclude(userRole => userRole.Role)
-                .Where(feedback => latestSubmissionIds.Contains(feedback.SubmissionId))
+                .Where(feedback => submissionIds.Contains(feedback.SubmissionId))
                 .OrderBy(feedback => feedback.CreatedAt)
                 .ToArrayAsync(cancellationToken);
         var filesBySubmission = files
@@ -112,14 +128,19 @@ public sealed class GetWorkspaceCheckpointOverviewQueryHandler(
         return Result.Success(new WorkspaceCheckpointOverviewResponse
         {
             SubjectCode = academicContext.SubjectCode,
-            Checkpoints = checkpoints.Select(ToCheckpointResponse).ToArray(),
+            Checkpoints = checkpoints
+                .Select(checkpoint => ToCheckpointResponse(
+                    checkpoint,
+                    scheduleByCheckpoint.GetValueOrDefault(checkpoint.Id),
+                    now))
+                .ToArray(),
             Submissions = checkpoints
                 .Select(checkpoint => ToSubmissionResponse(
                     checkpoint,
                     latestSubmissions.GetValueOrDefault(checkpoint.Id),
                     FilesForCheckpoint(
                         checkpoint.Id,
-                        latestSubmissions,
+                        submissionsByCheckpoint,
                         filesBySubmission),
                     RequirementContentsForCheckpoint(
                         checkpoint.Id,
@@ -131,7 +152,7 @@ public sealed class GetWorkspaceCheckpointOverviewQueryHandler(
                     checkpoint,
                     FeedbacksForCheckpoint(
                         checkpoint.Id,
-                        latestSubmissions,
+                        submissionsByCheckpoint,
                         feedbacksBySubmission)))
                 .ToArray()
         });
@@ -170,7 +191,10 @@ public sealed class GetWorkspaceCheckpointOverviewQueryHandler(
         return null;
     }
 
-    private static SubjectCheckpointResponse ToCheckpointResponse(Checkpoint checkpoint)
+    private static SubjectCheckpointResponse ToCheckpointResponse(
+        Checkpoint checkpoint,
+        ClassCheckpointSchedule? schedule,
+        DateTime now)
     {
         var rubric = checkpoint.Rubrics
             .Where(item => item.ClassId == null)
@@ -182,6 +206,10 @@ public sealed class GetWorkspaceCheckpointOverviewQueryHandler(
             Number = checkpoint.CheckpointNumber,
             Title = checkpoint.Name,
             ShortDescription = checkpoint.Description,
+            StartDateUtc = schedule?.StartDateUtc,
+            EndDateUtc = schedule?.EndDateUtc,
+            ScheduleStatus = ScheduleStatus(schedule, now),
+            CanUpload = schedule is not null && now >= schedule.StartDateUtc && now <= schedule.EndDateUtc,
             Requirements = DeserializeArray<string>(checkpoint.RequirementsJson),
             Rubrics = rubric?.Criteria
                 .OrderBy(criterion => criterion.DisplayOrder)
@@ -219,10 +247,12 @@ public sealed class GetWorkspaceCheckpointOverviewQueryHandler(
             CheckpointNumber = checkpoint.CheckpointNumber,
             Status = submission.Status.ToString(),
             Files = files
-                .OrderByDescending(file => file.UploadedAt)
+                .OrderByDescending(file => file.VersionNumber)
+                .ThenByDescending(file => file.UploadedAt)
                 .Select(file => new WorkspaceCheckpointFileResponse
                 {
                     Id = file.Id,
+                    VersionNumber = file.VersionNumber,
                     OriginalName = file.OriginalName,
                     FileType = GetFileType(file.OriginalName),
                     FileSize = file.FileSize,
@@ -274,24 +304,22 @@ public sealed class GetWorkspaceCheckpointOverviewQueryHandler(
 
     private static IReadOnlyCollection<SubmissionFile> FilesForCheckpoint(
         Guid checkpointId,
-        IReadOnlyDictionary<Guid, Submission> latestSubmissions,
+        IReadOnlyDictionary<Guid, Submission[]> submissionsByCheckpoint,
         IReadOnlyDictionary<Guid, SubmissionFile[]> filesBySubmission)
     {
-        var submission = latestSubmissions.GetValueOrDefault(checkpointId);
-        return submission is null
-            ? Array.Empty<SubmissionFile>()
-            : filesBySubmission.GetValueOrDefault(submission.Id) ?? Array.Empty<SubmissionFile>();
+        return (submissionsByCheckpoint.GetValueOrDefault(checkpointId) ?? Array.Empty<Submission>())
+            .SelectMany(submission => filesBySubmission.GetValueOrDefault(submission.Id) ?? Array.Empty<SubmissionFile>())
+            .ToArray();
     }
 
     private static IReadOnlyCollection<SubmissionFeedback> FeedbacksForCheckpoint(
         Guid checkpointId,
-        IReadOnlyDictionary<Guid, Submission> latestSubmissions,
+        IReadOnlyDictionary<Guid, Submission[]> submissionsByCheckpoint,
         IReadOnlyDictionary<Guid, SubmissionFeedback[]> feedbacksBySubmission)
     {
-        var submission = latestSubmissions.GetValueOrDefault(checkpointId);
-        return submission is null
-            ? Array.Empty<SubmissionFeedback>()
-            : feedbacksBySubmission.GetValueOrDefault(submission.Id) ?? Array.Empty<SubmissionFeedback>();
+        return (submissionsByCheckpoint.GetValueOrDefault(checkpointId) ?? Array.Empty<Submission>())
+            .SelectMany(submission => feedbacksBySubmission.GetValueOrDefault(submission.Id) ?? Array.Empty<SubmissionFeedback>())
+            .ToArray();
     }
 
     private static IReadOnlyCollection<SubmissionRequirementContent> RequirementContentsForCheckpoint(
@@ -364,6 +392,20 @@ public sealed class GetWorkspaceCheckpointOverviewQueryHandler(
         IsRole(role, SystemRoles.Lecturer) ||
         IsRole(role, SystemRoles.Mentor) ||
         IsRole(role, SystemRoles.Student);
+
+    private static string ScheduleStatus(ClassCheckpointSchedule? schedule, DateTime now)
+    {
+        if (schedule is null) return "NotScheduled";
+        if (now < schedule.StartDateUtc) return "Upcoming";
+        return now <= schedule.EndDateUtc ? "Open" : "Closed";
+    }
+
+    private static DateTime EnsureUtc(DateTime value) => value.Kind switch
+    {
+        DateTimeKind.Utc => value,
+        DateTimeKind.Local => value.ToUniversalTime(),
+        _ => DateTime.SpecifyKind(value, DateTimeKind.Utc)
+    };
 
     private static Result<WorkspaceCheckpointOverviewResponse> AccessDenied() =>
         Result.Failure<WorkspaceCheckpointOverviewResponse>(new Error(

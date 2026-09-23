@@ -142,6 +142,7 @@ public static class ErrorCodes
     public const string WorkspaceTagInvalid = "WORKSPACE_TAG_INVALID";
     public const string WorkspaceTagDuplicated = "WORKSPACE_TAG_DUPLICATED";
     public const string WorkspaceConcurrencyConflict = "WORKSPACE_CONCURRENCY_CONFLICT";
+    public const string WorkspaceCheckpointNotOpen = "WORKSPACE_CHECKPOINT_NOT_OPEN";
     public const string WeeklyTaskNotFound = "WEEKLY_TASK_NOT_FOUND";
     public const string WeeklyTaskDuplicated = "WEEKLY_TASK_DUPLICATED";
     public const string ShortcutNotFound = "SHORTCUT_NOT_FOUND";

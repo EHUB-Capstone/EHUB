@@ -110,6 +110,8 @@ const NotificationDropdown = () => {
     switch (type) {
       case 'WORKSHOP':
       case 'SEMINAR':
+      case 'DeadlineReminder':
+      case 'DEADLINE_REMINDER':
         return <Calendar className="w-4 h-4 text-indigo-500" />;
       case 'EVALUATION':
         return <Brain className="w-4 h-4 text-emerald-500" />;

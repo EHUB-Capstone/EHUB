@@ -27,6 +27,13 @@ public class SubmissionFileConfiguration : IEntityTypeConfiguration<SubmissionFi
             .HasMaxLength(256)
             .IsRequired();
 
+        builder.Property(sf => sf.VersionNumber)
+            .HasColumnName("version_number")
+            .IsRequired();
+
+        builder.HasIndex(sf => new { sf.SubmissionId, sf.VersionNumber })
+            .IsUnique();
+
         builder.Property(sf => sf.FileUrl)
             .HasColumnName("file_url")
             .HasMaxLength(1000)
