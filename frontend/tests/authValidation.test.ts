@@ -310,21 +310,6 @@ test('field error map displays only the first FluentValidation error for each fi
     email: 'Email is required.',
   });
 });
-import {
-  getMajorCompletionRedirect,
-  MAJOR_COMPLETION_PATH,
-  requiresMajor,
-} from '../src/utils/requiresMajor.ts';
-
-test('students must save a supported major before navigating away from profile', () => {
-  for (const major of [undefined, null, '', ' ', 'UNDECLARED', 'UNKNOWN']) {
-    assert.equal(requiresMajor({ roles: ['Student'], major }), true);
-  }
-  assert.equal(requiresMajor({ roles: ['Student'], major: 'BBA_FIN' }), false);
-  assert.equal(requiresMajor({ roles: ['Student'], major: ' bit_se ' }), false);
-  assert.equal(requiresMajor({ roles: ['Lecturer'] }), false);
-  assert.equal(requiresMajor(null), false);
-});
 
 test('BBA_MC uses the Multimedia Communication display name in every major dropdown catalog', () => {
   const teamMajor = TEAM_MAJOR_GROUPS.flatMap(group => group.majors)
@@ -335,14 +320,4 @@ test('BBA_MC uses the Multimedia Communication display name in every major dropd
   assert.equal(teamMajor?.name, 'Multimedia Communication');
   assert.equal(programMajor?.name, 'Multimedia Communication');
   assert.equal(getMajorName('BBA_MC'), 'Multimedia Communication');
-});
-
-test('students missing a major can open profile but are redirected there from other pages', () => {
-  const studentWithoutMajor = { roles: ['Student'], major: null };
-
-  assert.equal(MAJOR_COMPLETION_PATH, '/profile');
-  assert.equal(getMajorCompletionRedirect(studentWithoutMajor, '/settings'), '/profile');
-  assert.equal(getMajorCompletionRedirect(studentWithoutMajor, '/student/classes'), '/profile');
-  assert.equal(getMajorCompletionRedirect(studentWithoutMajor, '/profile'), null);
-  assert.equal(getMajorCompletionRedirect({ roles: ['Student'], major: 'BIT_SE' }, '/settings'), null);
 });

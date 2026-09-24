@@ -20,6 +20,7 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
     private readonly AppDbContext _context;
     private readonly IClassChatMembershipSynchronizer _chatMembershipSynchronizer;
     private readonly IProjectDirectionRealtimePublisher _projectDirectionRealtimePublisher;
+    private readonly IClassRealtimePublisher _classRealtimePublisher;
     private readonly IEmailService _emailService;
     private readonly ILogger<NotificationOutboxEventDispatcher> _logger;
 
@@ -27,12 +28,14 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
         AppDbContext context,
         IClassChatMembershipSynchronizer chatMembershipSynchronizer,
         IProjectDirectionRealtimePublisher projectDirectionRealtimePublisher,
+        IClassRealtimePublisher classRealtimePublisher,
         IEmailService emailService,
         ILogger<NotificationOutboxEventDispatcher> logger)
     {
         _context = context;
         _chatMembershipSynchronizer = chatMembershipSynchronizer;
         _projectDirectionRealtimePublisher = projectDirectionRealtimePublisher;
+        _classRealtimePublisher = classRealtimePublisher;
         _emailService = emailService;
         _logger = logger;
     }
@@ -41,6 +44,8 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
     {
         IReadOnlyCollection<Guid> realtimeNotificationRecipients = [];
         Guid? realtimeNotificationTeamId = null;
+        Guid? majorUpdatedStudentId = null;
+        string? updatedMajorCode = null;
         using var document = JsonDocument.Parse(message.PayloadJson);
         if (!document.RootElement.TryGetProperty("data", out var data))
         {
@@ -154,6 +159,10 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
                     "Your team membership or leader assignment was updated.",
                     cancellationToken);
                 break;
+            case "Class.MajorUpdated.v1":
+                majorUpdatedStudentId = ReadGuid(data, "studentId");
+                updatedMajorCode = ReadString(data, "majorCode");
+                break;
             case "Team.LeaderAssigned.v1":
                 await AddForUsersAsync(
                     message,
@@ -211,6 +220,48 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
                 message.AggregateId,
                 realtimeNotificationTeamId.Value,
                 cancellationToken);
+        if (majorUpdatedStudentId.HasValue && !string.IsNullOrWhiteSpace(updatedMajorCode))
+            await PublishClassMajorUpdatedAsync(
+                message.AggregateId,
+                majorUpdatedStudentId.Value,
+                updatedMajorCode,
+                cancellationToken);
+    }
+
+    private async Task PublishClassMajorUpdatedAsync(
+        Guid classId,
+        Guid studentId,
+        string majorCode,
+        CancellationToken cancellationToken)
+    {
+        var studentRecipients = await _context.ClassStudents.AsNoTracking()
+            .Where(enrollment =>
+                enrollment.ClassId == classId &&
+                (enrollment.EnrollmentStatus == EnrollmentStatus.Active ||
+                 enrollment.EnrollmentStatus == EnrollmentStatus.Completed) &&
+                enrollment.Student.UserId.HasValue)
+            .Select(enrollment => enrollment.Student.UserId!.Value)
+            .ToArrayAsync(cancellationToken);
+        var assignedLecturers = await _context.ClassLecturers.AsNoTracking()
+            .Where(assignment => assignment.ClassId == classId)
+            .Select(assignment => assignment.LecturerId)
+            .ToArrayAsync(cancellationToken);
+        var primaryLecturerId = await _context.Classes.AsNoTracking()
+            .Where(item => item.Id == classId)
+            .Select(item => item.PrimaryLecturerId)
+            .SingleOrDefaultAsync(cancellationToken);
+        var recipients = studentRecipients
+            .Concat(assignedLecturers)
+            .Concat(primaryLecturerId.HasValue ? [primaryLecturerId.Value] : [])
+            .Distinct()
+            .ToArray();
+
+        await _classRealtimePublisher.PublishMajorUpdatedAsync(
+            recipients,
+            classId,
+            studentId,
+            majorCode,
+            cancellationToken);
     }
 
     private static bool RequiresChatSynchronization(string eventType) => eventType is

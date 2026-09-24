@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Mail, Key, User, ShieldCheck, Camera, Lock, ArrowLeft, Eye, EyeOff } from 'lucide-react';
+import { Mail, Key, User, ShieldCheck, Camera, ArrowLeft, Eye, EyeOff } from 'lucide-react';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
 import { changePassword, updateProfile } from '../../api/authApi';
@@ -51,10 +51,6 @@ const ProfileSettings = () => {
     e.preventDefault();
     if (isSavingProfile) return;
     if (!name.trim()) return toast.error('Name is required');
-    if (role === 'STUDENT') {
-      if (!major) return toast.error('Major is required for students.');
-    }
-
     setIsSavingProfile(true);
     try {
       const formData = new FormData();
@@ -62,7 +58,7 @@ const ProfileSettings = () => {
       if (avatarFile) {
         formData.append('avatar', avatarFile);
       }
-      if (role === 'STUDENT') {
+      if (role === 'STUDENT' && major) {
         formData.append('major', major);
       }
       const profile = await updateProfile(formData);
@@ -79,9 +75,6 @@ const ProfileSettings = () => {
         avatarInputRef.current.value = '';
       }
       toast.success('Profile updated successfully');
-      if (isMissingMajor && profile.majorCode) {
-        navigate(myClassesPath, { replace: true });
-      }
     } catch (err) {
       toast.error(parseApiError(err, 'Failed to update profile').message);
     } finally {
@@ -151,7 +144,7 @@ const ProfileSettings = () => {
           <div>
             <p className="font-semibold text-amber-800 text-sm">You have not selected a major.</p>
             <p className="text-xs text-amber-700 mt-0.5">
-              Select a <strong>Major</strong> below to access all system features.
+              Select a <strong>Major</strong> here or from your own row in a class before creating or joining a team.
             </p>
           </div>
         </motion.div>
@@ -240,22 +233,12 @@ const ProfileSettings = () => {
                 </div>
 
                 {role === 'STUDENT' && (
-                  <>
-                    {user?.isMajorLocked && (
-                      <div className="flex items-start gap-2 bg-red-50 p-3 rounded-xl border border-red-100 mb-2">
-                        <Lock className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
-                        <p className="text-xs text-red-700">
-                          Your major has been locked by the lecturer of a class you are attending and cannot be changed right now.
-                        </p>
-                      </div>
-                    )}
                     <div>
                       <label htmlFor="profile-major" className="block text-sm font-medium text-slate-700 mb-1.5">Major</label>
                       <select
                         id="profile-major"
-                        value={major} onChange={e => setMajor(e.target.value)} required
-                        disabled={user?.isMajorLocked}
-                        className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-slate-900 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed"
+                        value={major} onChange={e => setMajor(e.target.value)}
+                        className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-slate-900 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none"
                       >
                         <option value="">-- Select a major --</option>
                         {TEAM_MAJOR_GROUPS.map(group => (
@@ -267,7 +250,6 @@ const ProfileSettings = () => {
                         ))}
                       </select>
                     </div>
-                  </>
                 )}
 
                 <div className="pt-2 flex flex-col sm:flex-row gap-3">

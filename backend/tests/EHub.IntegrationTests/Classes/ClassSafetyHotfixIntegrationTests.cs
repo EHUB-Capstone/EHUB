@@ -768,7 +768,7 @@ public sealed class ClassSafetyHotfixIntegrationTests
     }
 
     [Fact]
-    public async Task AddingNewStudent_WithoutMajor_ReturnsValidationErrorWithoutCreatingProfile()
+    public async Task AddingNewStudent_WithoutMajor_CreatesUndeclaredEnrollmentAndLeavesProfileMajorEmpty()
     {
         using var scope = _factory.Services.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -788,11 +788,15 @@ public sealed class ClassSafetyHotfixIntegrationTests
             seed.LecturerId,
             SystemRoles.Lecturer);
 
-        result.IsFailure.Should().BeTrue();
-        result.Error.Code.Should().Be(ErrorCodes.ClassValidationError);
-        result.Error.Message.Should().Be("Major is required when creating a new student profile.");
+        result.IsSuccess.Should().BeTrue();
+        result.Value.MajorCode.Should().Be(MajorCodes.Undeclared);
+        result.Value.ProfileMajorCode.Should().BeNull();
         context.ChangeTracker.Clear();
-        (await context.Students.AsNoTracking().AnyAsync(item => item.NormalizedRollNumber == studentCode)).Should().BeFalse();
+        var student = await context.Students.AsNoTracking().SingleAsync(item => item.NormalizedRollNumber == studentCode);
+        student.MajorCode.Should().BeNull();
+        (await context.ClassStudents.AsNoTracking().SingleAsync(item =>
+            item.ClassId == seed.ClassId && item.StudentId == student.Id)).MajorCodeAtEnrollment
+            .Should().Be(MajorCodes.Undeclared);
     }
 
     [Fact]

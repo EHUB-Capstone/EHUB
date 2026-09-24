@@ -106,6 +106,18 @@ public sealed class StudentClassSelfServiceHandler : IStudentClassSelfServiceHan
                 EnrollmentStatus = item.EnrollmentStatus.ToString(),
                 TeamId = item.TeamMembers.Where(member => member.CountsTowardActiveTeam).Select(member => (Guid?)member.TeamId).FirstOrDefault()
             }).ToListAsync(cancellationToken);
+        var isOwnMajorLocked = await _context.ClassStudents.AsNoTracking()
+            .AnyAsync(item =>
+                item.StudentId == studentId.Value &&
+                item.EnrollmentStatus == EnrollmentStatus.Active &&
+                item.Class.IsEnrollmentMajorLocked &&
+                (item.Class.Status == ClassStatus.Draft ||
+                 item.Class.Status == ClassStatus.Active ||
+                 item.Class.Status == ClassStatus.Inactive),
+                cancellationToken);
+        var canEditOwnMajor = rosterStatus == EnrollmentStatus.Active &&
+            (targetClass.Status == ClassStatus.Draft || targetClass.Status == ClassStatus.Active) &&
+            !isOwnMajorLocked;
         var members = memberRows.Select(item => new StudentClassMemberDto
         {
             StudentId = item.StudentId,
@@ -116,6 +128,10 @@ public sealed class StudentClassSelfServiceHandler : IStudentClassSelfServiceHan
             MajorCode = StudentEnrollmentRules.ResolveEffectiveMajorCode(
                 item.EnrollmentMajorCode,
                 item.ProfileMajorCode) ?? string.Empty,
+            ProfileMajorCode = item.ProfileMajorCode,
+            EnrollmentMajorCode = item.EnrollmentMajorCode,
+            CanEditMajor = item.StudentId == studentId.Value && canEditOwnMajor,
+            IsMajorLocked = item.StudentId == studentId.Value && isOwnMajorLocked,
             EnrollmentStatus = item.EnrollmentStatus,
             TeamId = item.TeamId
         }).ToArray();

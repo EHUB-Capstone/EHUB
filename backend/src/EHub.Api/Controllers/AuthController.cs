@@ -16,6 +16,7 @@ using EHub.Application.Features.Auth.ResetPassword;
 using EHub.Application.Features.Auth.ResendRegistrationOtp;
 using EHub.Application.Features.Auth.VerifyRegistrationOtp;
 using EHub.Application.Features.Auth.UpdateProfile;
+using EHub.Application.Features.Auth.UpdateOwnMajor;
 using EHub.Application.Features.Auth.Common;
 using EHub.Api.Models.Auth;
 using EHub.Api.Extensions;
@@ -426,6 +427,10 @@ public sealed class AuthController : ControllerBase
                 ErrorCodes.CommonForbiddenError => StatusCode(
                     StatusCodes.Status403Forbidden,
                     ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code)),
+                ErrorCodes.ClassEnrollmentMajorLocked or
+                ErrorCodes.TeamMajorCompositionInvalid or
+                ErrorCodes.ClassConcurrencyConflict => Conflict(
+                    ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code)),
                 _ => BadRequest(
                     ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code))
             };
@@ -434,6 +439,39 @@ public sealed class AuthController : ControllerBase
         return Ok(ApiResponse<UpdateProfileResponse>.SuccessResponse(
             result.Value,
             "Profile updated successfully."));
+    }
+
+    [Authorize(Policy = SystemPolicies.AuthenticatedOnly)]
+    [HttpPut("update-major")]
+    public async Task<IActionResult> UpdateOwnMajor(
+        [FromBody] UpdateOwnMajorRequest request,
+        [FromServices] IUpdateOwnMajorCommandHandler commandHandler,
+        CancellationToken cancellationToken)
+    {
+        var result = await commandHandler.HandleAsync(request, cancellationToken);
+        if (result.IsFailure)
+        {
+            return result.Error.Code switch
+            {
+                ErrorCodes.CommonUnauthorizedError => Unauthorized(
+                    ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code)),
+                ErrorCodes.CommonForbiddenError => StatusCode(
+                    StatusCodes.Status403Forbidden,
+                    ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code)),
+                ErrorCodes.CommonNotFoundError => NotFound(
+                    ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code)),
+                ErrorCodes.ClassEnrollmentMajorLocked or
+                ErrorCodes.TeamMajorCompositionInvalid or
+                ErrorCodes.ClassConcurrencyConflict => Conflict(
+                    ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code)),
+                _ => BadRequest(
+                    ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code))
+            };
+        }
+
+        return Ok(ApiResponse<UpdateOwnMajorResponse>.SuccessResponse(
+            result.Value,
+            "Major updated successfully."));
     }
 
     [HttpPost("refresh-token")]

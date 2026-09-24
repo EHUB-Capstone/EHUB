@@ -253,6 +253,10 @@ public sealed class StudentClassMemberDto
     public string FullName { get; init; } = string.Empty;
     public string? Email { get; init; }
     public string MajorCode { get; init; } = string.Empty;
+    public string? ProfileMajorCode { get; init; }
+    public string EnrollmentMajorCode { get; init; } = string.Empty;
+    public bool CanEditMajor { get; init; }
+    public bool IsMajorLocked { get; init; }
     public string EnrollmentStatus { get; init; } = string.Empty;
     public Guid? TeamId { get; init; }
 }

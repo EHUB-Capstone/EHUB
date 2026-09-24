@@ -461,6 +461,11 @@ test('mock Google auth validates the request and mirrors backend business errors
   assert.equal(savedProfile.data.majorCode, 'BIT_SE');
   const currentGoogleUser = await axiosClient.get('/auth/me');
   assert.equal(currentGoogleUser.data.majorCode, 'BIT_SE');
+  const updatedMajor = await axiosClient.put('/auth/update-major', { majorCode: 'BIT_GD' });
+  assert.equal(updatedMajor.data.majorCode, 'BIT_GD');
+  assert.equal(updatedMajor.data.updatedEnrollmentCount, 0);
+  assert.deepEqual(updatedMajor.data.updatedClassIds, []);
+  assert.equal((await axiosClient.get('/auth/me')).data.majorCode, 'BIT_GD');
   await assert.rejects(
     axiosClient.post('/auth/google', { idToken: 'mock-google:blocked.mentor@ehub.local' }),
     (error: unknown) => {
@@ -1202,6 +1207,15 @@ test('mock manual enrollment preserves backend identity and explicit re-enroll r
     majorCode: null,
   });
   assert.equal(added.data.majorCode, 'BIT_SE');
+
+  const undeclared = await axiosClient.post(`/classes/${active.id}/students`, {
+    studentCode: 'NEW200100',
+    fullName: 'Undeclared Student',
+    email: 'undeclared@fpt.edu.vn',
+    majorCode: null,
+  });
+  assert.equal(undeclared.data.majorCode, 'UNDECLARED');
+  assert.equal(undeclared.data.profileMajorCode, null);
 
   await assert.rejects(
     axiosClient.post(`/classes/${active.id}/students`, {

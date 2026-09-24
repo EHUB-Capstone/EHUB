@@ -61,7 +61,7 @@ internal static class ExcelWorkbookSecurity
             return Failure("Classes.InvalidFileSignature", "The file extension does not match its Excel workbook signature.");
         }
 
-        var mime = file.ContentType?.Trim() ?? string.Empty;
+        var mime = file.Headers?.ContentType.ToString().Trim() ?? string.Empty;
         var mimeMatches = GenericMimeTypes.Contains(mime) || kind.Value switch
         {
             ExcelWorkbookKind.OpenXml => string.Equals(

@@ -91,6 +91,21 @@ export interface ClassRosterStudent {
   joinedAtUtc: string;
 }
 
+export interface StudentClassMember {
+  studentId: string;
+  userId: string | null;
+  rollNumber: string;
+  fullName: string;
+  email: string | null;
+  majorCode: string;
+  profileMajorCode: string | null;
+  enrollmentMajorCode: string;
+  canEditMajor: boolean;
+  isMajorLocked: boolean;
+  enrollmentStatus: string;
+  teamId: string | null;
+}
+
 export interface ClassRosterListResponse {
   items: ClassRosterStudent[];
   totalCount: number;

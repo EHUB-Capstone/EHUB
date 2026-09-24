@@ -60,6 +60,12 @@ export interface UpdateProfileResponse {
   majorCode: string | null;
 }
 
+export interface UpdateOwnMajorResponse {
+  majorCode: string;
+  updatedEnrollmentCount: number;
+  updatedClassIds: string[];
+}
+
 // ─── Request payloads ────────────────────────────────────────────────────────
 
 export interface RegisterPayload {

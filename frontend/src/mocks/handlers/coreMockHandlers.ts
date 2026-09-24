@@ -310,6 +310,41 @@ function registerAuthHandlers(mock: MockAdapter): void {
     return ok({ id: user.id, fullName: user.name, avatarUrl: user.avatar, majorCode: user.major }, 'Profile updated.');
   });
 
+  mock.onPut('/auth/update-major').reply((config) => {
+    const state = getMockState();
+    const user = state.users.find(item => item.id === state.sessionUserId);
+    if (!user) return failure(401, 'COMMON_UNAUTHORIZED', 'Unauthorized access.');
+    if (user.role !== 'STUDENT') return failure(403, 'COMMON_FORBIDDEN', 'Forbidden access.');
+    const majorCode = asString(parseBody(config).majorCode).trim().toUpperCase();
+    if (!ALL_TEAM_MAJOR_CODES.includes(majorCode)) {
+      return failure(400, 'AUTH_INVALID_MAJOR', 'Select a valid student major.');
+    }
+
+    const activeEnrollments = Object.entries(state.rosters).flatMap(([classId, roster]) => {
+      const cls = state.classes.find(item => item.id === classId);
+      if (!cls || !['Draft', 'Active', 'Inactive'].includes(cls.status)) return [];
+      const enrollment = roster.find(item =>
+        item.enrollmentStatus === 'Active' && (item.userId === user.id || item.studentId === user.id));
+      return enrollment ? [{ cls, enrollment }] : [];
+    });
+    if (activeEnrollments.some(({ cls }) => cls.isEnrollmentMajorLocked)) {
+      return failure(409, 'CLASS_ENROLLMENT_MAJOR_LOCKED', 'Your major is locked in an active class. Contact the assigned lecturer before changing it.');
+    }
+
+    user.major = majorCode;
+    activeEnrollments.forEach(({ enrollment }) => {
+      enrollment.majorCode = majorCode;
+      enrollment.profileMajorCode = majorCode;
+      enrollment.majorVerificationStatus = 'Unverified';
+    });
+    persistMockState();
+    return ok({
+      majorCode,
+      updatedEnrollmentCount: activeEnrollments.length,
+      updatedClassIds: activeEnrollments.map(({ cls }) => cls.id),
+    }, 'Major updated successfully.');
+  });
+
   mock.onPost('/auth/logout').reply(() => {
     getMockState().sessionUserId = null;
     persistMockState();

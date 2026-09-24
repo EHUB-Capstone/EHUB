@@ -183,9 +183,11 @@ Tất cả các API đều phản hồi theo cấu trúc thống nhất:
 #### Response (Thành công - tài khoản hiện có hoặc Student mới):
 *(Cấu hình phản hồi thành công tương tự như `/api/auth/login`)*
 
-Email Google đã xác minh chưa có tài khoản được tạo với vai trò Student và trạng thái Active. `user.majorCode` có thể là `null`. Student được chuyển tới `/settings` sau đăng nhập để hoàn tất chuyên ngành. Tài khoản hiện có giữ nguyên vai trò và các kiểm tra trạng thái.
+Email Google đã xác minh chưa có tài khoản được tạo với vai trò Student và trạng thái Active. `user.majorCode` có thể là `null`; Student vẫn được vào danh sách lớp và chọn chuyên ngành tại hồ sơ hoặc hàng của chính mình trong roster. Tài khoản hiện có giữ nguyên vai trò và các kiểm tra trạng thái.
 
-`PUT /api/auth/update-profile` yêu cầu xác thực, nhận multipart `fullName`, `major` (chuyên ngành hợp lệ của Student, tùy chọn khi chỉ sửa tên/ảnh), `avatar` (tùy chọn). Dữ liệu phản hồi gồm `id`, `fullName`, `avatarUrl`, `majorCode`. Chuyên ngành được chuẩn hóa chữ hoa và lưu vào hồ sơ Student của người gọi.
+`PUT /api/auth/update-profile` yêu cầu xác thực, nhận multipart `fullName`, `major` (chuyên ngành hợp lệ của Student, tùy chọn khi chỉ sửa tên/ảnh), `avatar` (tùy chọn). Dữ liệu phản hồi gồm `id`, `fullName`, `avatarUrl`, `majorCode`. Nếu có `major`, API dùng cùng chính sách cập nhật nguyên tử hồ sơ và các enrollment đang hoạt động.
+
+`PUT /api/auth/update-major` yêu cầu role Student, nhận JSON `{ "majorCode": "BIT_SE" }` và trả `majorCode`, `updatedEnrollmentCount`, `updatedClassIds`. Snapshot lớp Completed/Archived được giữ nguyên. API trả `409` khi chuyên ngành đang bị khóa, thay đổi phá vỡ cơ cấu major của team/proposal đang mở hoặc có xung đột đồng thời.
 
 ---
 

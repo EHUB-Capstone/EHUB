@@ -38,6 +38,6 @@ Sau khi gọi thành công các API Đăng nhập (`/login`, `/google`) hoặc �
     *   Frontend gọi API `POST /api/auth/google` truyền `idToken` vừa lấy được.
 3.  **Bước 3: Xử lý phản hồi từ Backend**
     *   Email Google đã xác minh chưa có tài khoản được backend tạo thành Student Active và cấp phiên đăng nhập ngay.
-    *   Student đăng nhập thành công được chuyển tới `/settings`, chọn chuyên ngành và lưu bằng `PUT /api/auth/update-profile` (multipart: `fullName`, `major`, `avatar` tùy chọn).
-    *   Cập nhật `majorCode` và `major` trong AuthContext bằng `majorCode` từ phản hồi để giao diện nhận hồ sơ mới ngay.
+    *   Student đăng nhập thành công được chuyển tới danh sách lớp ngay cả khi chưa có chuyên ngành. Student chọn chuyên ngành tại hồ sơ hoặc dropdown trên chính hàng của mình trong lớp.
+    *   Dropdown trong lớp gọi `PUT /api/auth/update-major`; trang hồ sơ tiếp tục dùng `PUT /api/auth/update-profile`. Cả hai luồng dùng chung chính sách backend và cập nhật `majorCode`/`major` trong AuthContext từ phản hồi.
     *   Tài khoản hiện có giữ nguyên vai trò và kiểm tra trạng thái; các vai trò ngoài Student giữ điều hướng hiện tại. Không dùng endpoint `complete-google-register`.
