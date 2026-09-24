@@ -20,6 +20,7 @@ import {
   isProjectDirectionSubmittedNotification,
 } from '../src/utils/notificationNavigation.ts';
 import {
+  buildProjectDirectionCreationDefaults,
   canSubmitProjectDirection,
   getProjectDirectionDecisionNotice,
   getProjectDirectionSubmitGuidance,
@@ -27,8 +28,35 @@ import {
   hasProjectDirectionChanged,
   isProjectDirectionConcurrencyConflict,
   isProjectProfileAvailable,
+  updateProjectDirectionIndustrySelection,
   updateProjectDirectionOverviewTeams,
 } from '../src/utils/projectDirectionSync.ts';
+
+test('missing project direction reuses the existing workspace as creation defaults', () => {
+  assert.deepEqual(buildProjectDirectionCreationDefaults({
+    projectName: '  RoomHub  ',
+    description: '  Verified student accommodation near campus.  ',
+    startupIndustries: ['PropTech', 'Education / EdTech'],
+  }, [
+    { id: 'industry-health', name: 'Healthcare / HealthTech' },
+    { id: 'industry-proptech', name: 'proptech' },
+    { id: 'industry-education', name: 'Education / EdTech' },
+  ]), {
+    title: 'RoomHub',
+    summary: 'Verified student accommodation near campus.',
+    startupIndustryIds: ['industry-proptech', 'industry-education'],
+  });
+});
+
+test('project direction startup industries can be selected, deselected, and never exceed three', () => {
+  let selected = updateProjectDirectionIndustrySelection([], 'industry-1', true);
+  selected = updateProjectDirectionIndustrySelection(selected, 'industry-2', true);
+  selected = updateProjectDirectionIndustrySelection(selected, 'industry-3', true);
+
+  assert.deepEqual(selected, ['industry-1', 'industry-2', 'industry-3']);
+  assert.deepEqual(updateProjectDirectionIndustrySelection(selected, 'industry-4', true), selected);
+  assert.deepEqual(updateProjectDirectionIndustrySelection(selected, 'industry-2', false), ['industry-1', 'industry-3']);
+});
 
 test('workspace keeps evaluation inside checkpoints and removes standalone evaluation and mentoring tabs', () => {
   assert.deepEqual(WORKSPACE_TABS, ['overview', 'roadmap', 'shortcut']);

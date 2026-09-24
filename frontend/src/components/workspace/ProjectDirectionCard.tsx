@@ -1,12 +1,13 @@
 // @ts-nocheck
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowRight, ChevronDown, FileText, FolderKanban, Loader2, RefreshCw, Save, Send, X } from 'lucide-react';
+import { ArrowRight, FileText, FolderKanban, Loader2, RefreshCw, Save, Send } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { teamApi } from '../../api/teamApi';
 import { startupIndustryApi } from '../../api/startupIndustryApi';
 import { unwrapApiData } from '../../utils/classMappers';
 import { parseApiError } from '../../utils/apiError';
 import {
+  buildProjectDirectionCreationDefaults,
   canSubmitProjectDirection,
   getProjectDirectionDecisionNotice,
   getProjectDirectionSubmitGuidance,
@@ -14,6 +15,7 @@ import {
   hasProjectDirectionChanged,
   isProjectDirectionConcurrencyConflict,
   isProjectProfileAvailable,
+  updateProjectDirectionIndustrySelection,
 } from '../../utils/projectDirectionSync';
 import { subscribeProjectDirectionRealtime } from '../../api/projectDirectionRealtime';
 
@@ -25,11 +27,11 @@ export default function ProjectDirectionCard({ team, project, canEdit, onOpenPro
   const [selectedIndustryIds, setSelectedIndustryIds] = useState([]);
   const [industriesLoading, setIndustriesLoading] = useState(true);
   const [industriesError, setIndustriesError] = useState('');
-  const [industriesOpen, setIndustriesOpen] = useState(false);
   const [industriesReload, setIndustriesReload] = useState(0);
   const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [activeAction, setActiveAction] = useState(null);
+  const [directionMissing, setDirectionMissing] = useState(false);
   const directionRef = useRef(null);
   const initializedIndustryRevisionRef = useRef('');
   const actionInFlightRef = useRef(false);
@@ -42,6 +44,7 @@ export default function ProjectDirectionCard({ team, project, canEdit, onOpenPro
     if (previous && !hasProjectDirectionChanged(previous, value)) return;
 
     directionRef.current = value;
+    setDirectionMissing(false);
     setDirection(value);
     setTitle(value.title || '');
     setSummary(value.summary || '');
@@ -93,14 +96,30 @@ export default function ProjectDirectionCard({ team, project, canEdit, onOpenPro
         applyDirection(value);
       } catch (error) {
         const parsed = parseApiError(error, 'Unable to load project direction.');
-        if (parsed.code !== 'PROJECT_DIRECTION_NOT_FOUND') toast.error(parsed.message);
+        if (parsed.code === 'PROJECT_DIRECTION_NOT_FOUND') {
+          const defaults = buildProjectDirectionCreationDefaults(project);
+          setDirectionMissing(true);
+          setTitle(defaults.title);
+          setSummary(defaults.summary);
+        } else {
+          toast.error(parsed.message);
+        }
       } finally {
         if (active) setLoading(false);
       }
     };
     load();
     return () => { active = false; };
-  }, [applyDirection, team._id]);
+  }, [applyDirection, project, team._id]);
+
+  useEffect(() => {
+    if (!directionMissing || industriesLoading || industriesError) return;
+    const revisionKey = `new:${team._id}:${project?.id || ''}`;
+    if (initializedIndustryRevisionRef.current === revisionKey) return;
+    const defaults = buildProjectDirectionCreationDefaults(project, industries);
+    setSelectedIndustryIds(defaults.startupIndustryIds);
+    initializedIndustryRevisionRef.current = revisionKey;
+  }, [directionMissing, industries, industriesError, industriesLoading, project, team._id]);
 
   useEffect(() => {
     if (direction?.status !== 'Submitted') return undefined;
@@ -218,6 +237,10 @@ export default function ProjectDirectionCard({ team, project, canEdit, onOpenPro
 
   const openEditor = async () => {
     if (actionInFlightRef.current) return;
+    if (directionMissing) {
+      setEditing(true);
+      return;
+    }
     actionInFlightRef.current = true;
     setActiveAction('refresh');
     try {
@@ -291,59 +314,42 @@ export default function ProjectDirectionCard({ team, project, canEdit, onOpenPro
             <label id="direction-startup-industry-label" className="text-xs font-semibold text-slate-600">
               Startup Industry <span className="text-red-500">*</span>
             </label>
-            <div className="relative mt-1.5">
-              <div className={`rounded-xl border bg-white p-2 transition focus-within:ring-2 focus-within:ring-primary/15 ${selectedIndustryIds.length === 0 && !industriesLoading ? 'border-red-300' : 'border-slate-200 focus-within:border-primary'}`}>
-                {selectedIndustryIds.length > 0 && (
-                  <div className="mb-2 flex flex-wrap gap-1.5">
-                    {selectedIndustryIds.map((id) => industries.find((industry) => industry.id === id)).filter(Boolean).map((industry) => (
-                      <span key={industry.id} className="inline-flex items-center gap-1 rounded-md bg-primary-50 px-2 py-1 text-xs font-semibold text-primary-700">
-                        {industry.name}
-                        <button
-                          type="button"
-                          onClick={() => setSelectedIndustryIds((current) => current.filter((id) => id !== industry.id))}
-                          disabled={busy}
-                          aria-label={`Remove ${industry.name}`}
-                          className="text-primary-400 hover:text-red-500 disabled:opacity-50"
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                )}
-                <button
-                  type="button"
-                  aria-labelledby="direction-startup-industry-label"
-                  aria-expanded={industriesOpen}
-                  aria-haspopup="listbox"
-                  disabled={busy || industriesLoading || Boolean(industriesError) || industries.length === 0}
-                  onClick={() => setIndustriesOpen((open) => !open)}
-                  className="flex w-full items-center justify-between gap-3 rounded-lg px-1 py-1 text-left text-sm text-slate-500 outline-none disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  <span>{industriesLoading ? 'Loading industries…' : selectedIndustryIds.length >= 3 ? 'Maximum 3 industries selected' : 'Select startup industries'}</span>
-                  {industriesLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ChevronDown className={`h-4 w-4 transition ${industriesOpen ? 'rotate-180' : ''}`} />}
-                </button>
-              </div>
-              {industriesOpen && (
-                <div role="listbox" aria-multiselectable="true" aria-labelledby="direction-startup-industry-label" className="relative z-20 mt-1 w-full rounded-xl border border-slate-200 bg-white p-1.5 shadow-lg">
+            <div
+              role="group"
+              aria-labelledby="direction-startup-industry-label"
+              className={`mt-1.5 rounded-xl border bg-white p-2 ${selectedIndustryIds.length === 0 && !industriesLoading ? 'border-red-300' : 'border-slate-200'}`}
+            >
+              {industriesLoading && (
+                <div className="flex items-center gap-2 px-2 py-3 text-sm text-slate-500" role="status">
+                  <Loader2 className="h-4 w-4 animate-spin" /> Loading industries…
+                </div>
+              )}
+              {!industriesLoading && !industriesError && industries.length === 0 && (
+                <p className="px-2 py-3 text-sm text-amber-700">No active startup industries are available. Ask an administrator to activate at least one industry.</p>
+              )}
+              {!industriesLoading && !industriesError && industries.length > 0 && (
+                <div className="grid max-h-56 gap-1 overflow-y-auto sm:grid-cols-2">
                   {industries.map((industry) => {
                     const selected = selectedIndustryIds.includes(industry.id);
-                    const disabled = !selected && selectedIndustryIds.length >= 3;
+                    const selectionLimitReached = !selected && selectedIndustryIds.length >= 3;
                     return (
-                      <button
+                      <label
                         key={industry.id}
-                        type="button"
-                        role="option"
-                        aria-selected={selected}
-                        disabled={busy || disabled}
-                        onClick={() => setSelectedIndustryIds((current) => selected
-                          ? current.filter((id) => id !== industry.id)
-                          : [...current, industry.id])}
-                        className={`block w-full rounded-lg px-3 py-2 text-left text-sm transition disabled:cursor-not-allowed disabled:opacity-40 ${selected ? 'bg-primary-50 text-primary-800' : 'text-slate-700 hover:bg-slate-50'}`}
+                        className={`flex cursor-pointer items-start gap-2 rounded-lg px-2.5 py-2 text-sm transition ${selected ? 'bg-primary-50 text-primary-800' : 'text-slate-700 hover:bg-slate-50'} ${busy || selectionLimitReached ? 'cursor-not-allowed opacity-50' : ''}`}
                       >
-                        <span className="font-semibold">{industry.name}</span>
-                        <span className="text-slate-500"> - {industry.description || 'No description'}</span>
-                      </button>
+                        <input
+                          type="checkbox"
+                          checked={selected}
+                          disabled={busy || selectionLimitReached}
+                          onChange={(event) => setSelectedIndustryIds((current) => updateProjectDirectionIndustrySelection(
+                            current,
+                            industry.id,
+                            event.target.checked,
+                          ))}
+                          className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
+                        />
+                        <span><span className="font-semibold">{industry.name}</span>{industry.description ? <span className="text-slate-500"> — {industry.description}</span> : null}</span>
+                      </label>
                     );
                   })}
                 </div>
@@ -374,7 +380,7 @@ export default function ProjectDirectionCard({ team, project, canEdit, onOpenPro
           {submitGuidance && <p role="status" className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">{submitGuidance}</p>}
         </div>
       ) : (
-        <div className="mt-4 space-y-3">{direction ? <><div><p className="text-xs font-bold uppercase tracking-wide text-slate-400">Project Name</p><h3 className="mt-1 font-semibold text-slate-900">{direction.title}</h3></div><div><p className="text-xs font-bold uppercase tracking-wide text-slate-400">Project description</p><p className="mt-1 whitespace-pre-wrap text-sm leading-7 text-slate-700">{direction.summary}</p></div>{canEdit && editableState && <p className="rounded-lg bg-primary-50 px-3 py-2 text-sm font-semibold text-primary-700">Click this Project Direction card to update the project information and Startup Industry.</p>}</> : <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">Create the project workspace to submit its project direction automatically.</p>}</div>
+        <div className="mt-4 space-y-3">{direction ? <><div><p className="text-xs font-bold uppercase tracking-wide text-slate-400">Project Name</p><h3 className="mt-1 font-semibold text-slate-900">{direction.title}</h3></div><div><p className="text-xs font-bold uppercase tracking-wide text-slate-400">Project description</p><p className="mt-1 whitespace-pre-wrap text-sm leading-7 text-slate-700">{direction.summary}</p></div>{canEdit && editableState && <p className="rounded-lg bg-primary-50 px-3 py-2 text-sm font-semibold text-primary-700">Click this Project Direction card to update the project information and Startup Industry.</p>}</> : <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">{canEdit ? 'Click this card to create the project direction from the existing workspace.' : 'The team has not created a project direction yet.'}</p>}</div>
       )}
       {(!canEdit || !editableState || !editing) && direction?.startupIndustries?.length > 0 && <div className="mt-4"><p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-400">Startup Industry</p><div className="flex flex-wrap gap-2">{direction.startupIndustries.map(industry => <span key={industry} className="rounded-full border border-primary-100 bg-primary-50 px-2.5 py-1 text-xs font-semibold text-primary-700">{industry}</span>)}</div></div>}
       {direction?.status === 'Submitted' && <div className="mt-4 flex items-center gap-2 text-xs font-medium text-slate-500"><span className="h-2 w-2 rounded-full bg-emerald-500" /> Waiting for lecturer decision · live updates enabled</div>}

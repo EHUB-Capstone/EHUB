@@ -15,6 +15,45 @@ export interface ProjectDirectionSyncValue {
   startupIndustries?: string[] | null;
 }
 
+interface ProjectDirectionCreationProject {
+  projectName?: string | null;
+  description?: string | null;
+  startupIndustries?: string[] | null;
+}
+
+interface StartupIndustryOption {
+  id: string;
+  name: string;
+}
+
+export const buildProjectDirectionCreationDefaults = (
+  project?: ProjectDirectionCreationProject | null,
+  industries: StartupIndustryOption[] = [],
+): { title: string; summary: string; startupIndustryIds: string[] } => {
+  const selectedNames = new Set((project?.startupIndustries || [])
+    .map((name) => name.trim().toLocaleUpperCase())
+    .filter(Boolean));
+
+  return {
+    title: (project?.projectName || '').trim(),
+    summary: (project?.description || '').trim(),
+    startupIndustryIds: industries
+      .filter((industry) => selectedNames.has(industry.name.trim().toLocaleUpperCase()))
+      .map((industry) => industry.id),
+  };
+};
+
+export const updateProjectDirectionIndustrySelection = (
+  selectedIds: string[],
+  industryId: string,
+  selected: boolean,
+  maximum = 3,
+): string[] => {
+  if (!selected) return selectedIds.filter((id) => id !== industryId);
+  if (selectedIds.includes(industryId) || selectedIds.length >= maximum) return selectedIds;
+  return [...selectedIds, industryId];
+};
+
 export const isProjectDirectionConcurrencyConflict = (code?: string | null): boolean => (
   code === 'CLASS_CONCURRENCY_CONFLICT' || code === 'PROJECT_DIRECTION_CONCURRENCY_CONFLICT'
 );
