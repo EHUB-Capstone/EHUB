@@ -11,9 +11,13 @@ using FluentAssertions;
 using EHub.Application.Common.Interfaces.Services;
 using EHub.Contracts.Auth;
 using EHub.Contracts.Common;
+using EHub.Contracts.Teams;
 using EHub.IntegrationTests.Common;
 using EHub.Infrastructure.Persistence;
 using EHub.Shared.Constants;
+using EHub.Shared.Errors;
+using EHub.Domain.Entities;
+using EHub.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -41,6 +45,16 @@ public class AuthIntegrationTests
         session.User.Roles.Should().ContainSingle().Which.Should().Be(SystemRoles.Student);
         session.User.MajorCode.Should().BeNull();
         _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", session.AccessToken);
+        var enrollmentIds = await SeedMajorUpdateEnrollmentsAsync(session.User.Id, false);
+        var classDetail = await _client.GetFromJsonAsync<ApiResponse<StudentClassDetailResponse>>(
+            $"/api/classes/my-class-detail/{enrollmentIds.ActiveClassId}");
+        classDetail!.Data!.Students.Should().ContainSingle();
+        classDetail.Data.Students.Single().Should().Match<StudentClassMemberDto>(member =>
+            member.StudentId == enrollmentIds.StudentId &&
+            member.ProfileMajorCode == null &&
+            member.EnrollmentMajorCode == MajorCodes.BIT_GD &&
+            member.CanEditMajor &&
+            !member.IsMajorLocked);
 
         using var form = new MultipartFormDataContent();
         form.Add(new StringContent("Google Student"), "fullName");
@@ -50,11 +64,234 @@ public class AuthIntegrationTests
         var me = await _client.GetFromJsonAsync<ApiResponse<CurrentUserResponse>>("/api/auth/me");
         me!.Data!.MajorCode.Should().Be("BIT_SE");
 
+        using (var verificationScope = _factory.Services.CreateScope())
+        {
+            var context = verificationScope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var activeEnrollment = await context.ClassStudents.AsNoTracking()
+                .SingleAsync(item => item.ClassId == enrollmentIds.ActiveClassId && item.StudentId == enrollmentIds.StudentId);
+            var completedEnrollment = await context.ClassStudents.AsNoTracking()
+                .SingleAsync(item => item.ClassId == enrollmentIds.CompletedClassId && item.StudentId == enrollmentIds.StudentId);
+            activeEnrollment.MajorCodeAtEnrollment.Should().Be("BIT_SE");
+            activeEnrollment.MajorVerificationStatus.Should().Be(EnrollmentMajorVerificationStatus.Unverified);
+            completedEnrollment.MajorCodeAtEnrollment.Should().Be("BIT_GD");
+            (await context.OutboxMessages.AnyAsync(message =>
+                message.Type == "Class.MajorUpdated.v1" && message.AggregateId == enrollmentIds.ActiveClassId))
+                .Should().BeTrue();
+        }
+
         var repeated = await _client.PostAsJsonAsync("/api/auth/google", new GoogleLoginRequest { IdToken = email });
         repeated.StatusCode.Should().Be(HttpStatusCode.OK);
         var secondSession = (await repeated.Content.ReadFromJsonAsync<ApiResponse<AuthResponse>>())!.Data!;
         secondSession.User.Id.Should().Be(session.User.Id);
         secondSession.User.MajorCode.Should().Be("BIT_SE");
+    }
+
+    [Fact]
+    public async Task UpdateMajor_Should_ReturnConflict_AndKeepDataUnchanged_WhenAnyActiveClassLocksMajors()
+    {
+        var email = $"google-locked-{Guid.NewGuid()}@example.com";
+        var login = await _client.PostAsJsonAsync("/api/auth/google", new GoogleLoginRequest { IdToken = email });
+        var session = (await login.Content.ReadFromJsonAsync<ApiResponse<AuthResponse>>())!.Data!;
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", session.AccessToken);
+        var enrollmentIds = await SeedMajorUpdateEnrollmentsAsync(session.User.Id, true);
+        var classDetail = await _client.GetFromJsonAsync<ApiResponse<StudentClassDetailResponse>>(
+            $"/api/classes/my-class-detail/{enrollmentIds.ActiveClassId}");
+        classDetail!.Data!.Students.Single().Should().Match<StudentClassMemberDto>(member =>
+            !member.CanEditMajor && member.IsMajorLocked);
+
+        var response = await _client.PutAsJsonAsync(
+            "/api/auth/update-major",
+            new UpdateOwnMajorRequest { MajorCode = "BIT_SE" });
+
+        response.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        var body = await response.Content.ReadFromJsonAsync<ApiResponse<object>>();
+        body!.Code.Should().Be(ErrorCodes.ClassEnrollmentMajorLocked);
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        (await context.Students.AsNoTracking().SingleAsync(item => item.Id == enrollmentIds.StudentId))
+            .MajorCode.Should().BeNull();
+        (await context.ClassStudents.AsNoTracking().SingleAsync(item =>
+            item.ClassId == enrollmentIds.ActiveClassId && item.StudentId == enrollmentIds.StudentId))
+            .MajorCodeAtEnrollment.Should().Be("BIT_GD");
+    }
+
+    [Fact]
+    public async Task UpdateMajor_Should_ReturnConflict_AndKeepDataUnchanged_WhenTeamWouldLoseBitMember()
+    {
+        var email = $"google-team-{Guid.NewGuid()}@example.com";
+        var login = await _client.PostAsJsonAsync("/api/auth/google", new GoogleLoginRequest { IdToken = email });
+        var session = (await login.Content.ReadFromJsonAsync<ApiResponse<AuthResponse>>())!.Data!;
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", session.AccessToken);
+        var enrollmentIds = await SeedMajorUpdateEnrollmentsAsync(session.User.Id, false);
+        await SeedTeamWithCurrentStudentAsOnlyBitMemberAsync(enrollmentIds.StudentId, enrollmentIds.ActiveClassId);
+
+        var response = await _client.PutAsJsonAsync(
+            "/api/auth/update-major",
+            new UpdateOwnMajorRequest { MajorCode = MajorCodes.BBA_MKT });
+
+        response.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        var body = await response.Content.ReadFromJsonAsync<ApiResponse<object>>();
+        body!.Code.Should().Be(ErrorCodes.TeamMajorCompositionInvalid);
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        (await context.Students.AsNoTracking().SingleAsync(item => item.Id == enrollmentIds.StudentId))
+            .MajorCode.Should().BeNull();
+        (await context.ClassStudents.AsNoTracking().SingleAsync(item =>
+            item.ClassId == enrollmentIds.ActiveClassId && item.StudentId == enrollmentIds.StudentId))
+            .MajorCodeAtEnrollment.Should().Be(MajorCodes.BIT_GD);
+    }
+
+    [Fact]
+    public async Task UpdateMajor_Should_ReturnUnauthorized_WhenTokenIsMissing()
+    {
+        _client.DefaultRequestHeaders.Authorization = null;
+
+        var response = await _client.PutAsJsonAsync(
+            "/api/auth/update-major",
+            new UpdateOwnMajorRequest { MajorCode = "BIT_SE" });
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    private async Task<(Guid StudentId, Guid ActiveClassId, Guid CompletedClassId)> SeedMajorUpdateEnrollmentsAsync(
+        Guid userId,
+        bool lockActiveClass)
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var student = await context.Students.SingleAsync(item => item.UserId == userId);
+        var semester = await context.Semesters.OrderBy(item => item.CreatedAt).FirstAsync();
+        var activeCourse = await context.Courses.OrderBy(item => item.CreatedAt).FirstAsync();
+        var nextClassIndex = (await context.Classes
+            .Where(item => item.SemesterId == semester.Id && item.CourseId == activeCourse.Id)
+            .MaxAsync(item => (int?)item.ClassIndex) ?? 0) + 1;
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+        var now = DateTime.UtcNow;
+        var completedCourse = new Course
+        {
+            Code = $"H{suffix}",
+            Name = $"Historical course {suffix}",
+            Status = CourseStatus.Active,
+            CreatedAt = now
+        };
+        var activeClass = new EHub.Domain.Entities.Class
+        {
+            ClassCode = $"AUTH-{suffix}",
+            Slug = $"auth-{suffix}",
+            ClassIndex = nextClassIndex,
+            SemesterId = semester.Id,
+            CourseId = activeCourse.Id,
+            IsEnrollmentMajorLocked = lockActiveClass,
+            Status = ClassStatus.Draft,
+            CreatedAt = now
+        };
+        var completedClass = new EHub.Domain.Entities.Class
+        {
+            ClassCode = $"HIST-{suffix}",
+            Slug = $"hist-{suffix}",
+            ClassIndex = 1,
+            SemesterId = semester.Id,
+            CourseId = completedCourse.Id,
+            Status = ClassStatus.Completed,
+            CompletedAtUtc = now,
+            CompletionReason = "Integration test history",
+            CreatedAt = now
+        };
+        context.Courses.Add(completedCourse);
+        context.Classes.AddRange(activeClass, completedClass);
+        context.ClassStudents.AddRange(
+            new ClassStudent
+            {
+                ClassId = activeClass.Id,
+                StudentId = student.Id,
+                SemesterId = semester.Id,
+                CourseId = activeCourse.Id,
+                EnrollmentStatus = EnrollmentStatus.Active,
+                CountsTowardCourseSemesterLimit = true,
+                MajorCodeAtEnrollment = "BIT_GD",
+                MajorVerificationStatus = EnrollmentMajorVerificationStatus.Matched,
+                CreatedAt = now,
+                UpdatedAt = now
+            },
+            new ClassStudent
+            {
+                ClassId = completedClass.Id,
+                StudentId = student.Id,
+                SemesterId = semester.Id,
+                CourseId = completedCourse.Id,
+                EnrollmentStatus = EnrollmentStatus.Completed,
+                CountsTowardCourseSemesterLimit = true,
+                CompletedAtUtc = now,
+                MajorCodeAtEnrollment = "BIT_GD",
+                MajorVerificationStatus = EnrollmentMajorVerificationStatus.Matched,
+                CreatedAt = now,
+                UpdatedAt = now
+            });
+        await context.SaveChangesAsync();
+        return (student.Id, activeClass.Id, completedClass.Id);
+    }
+
+    private async Task SeedTeamWithCurrentStudentAsOnlyBitMemberAsync(Guid currentStudentId, Guid classId)
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var enrollment = await context.ClassStudents.AsNoTracking()
+            .SingleAsync(item => item.ClassId == classId && item.StudentId == currentStudentId);
+        var now = DateTime.UtcNow;
+        var suffix = Guid.NewGuid().ToString("N")[..8].ToUpperInvariant();
+        var businessStudents = Enumerable.Range(1, 3).Select(index => new Student
+        {
+            RollNumber = $"BA{suffix}{index}",
+            NormalizedRollNumber = $"BA{suffix}{index}",
+            FullName = $"Business Student {index}",
+            Email = $"business-{suffix}-{index}@example.com".ToLowerInvariant(),
+            MajorCode = MajorCodes.BBA_MKT,
+            Status = StudentStatus.Active
+        }).ToArray();
+        var team = new Team
+        {
+            ClassId = classId,
+            TeamCode = $"T-{suffix}",
+            TeamName = $"Major Team {suffix}",
+            Status = TeamStatus.Active,
+            CreatedAt = now
+        };
+        context.Students.AddRange(businessStudents);
+        context.Teams.Add(team);
+        foreach (var student in businessStudents)
+        {
+            context.ClassStudents.Add(new ClassStudent
+            {
+                ClassId = classId,
+                StudentId = student.Id,
+                SemesterId = enrollment.SemesterId,
+                CourseId = enrollment.CourseId,
+                EnrollmentStatus = EnrollmentStatus.Active,
+                CountsTowardCourseSemesterLimit = true,
+                MajorCodeAtEnrollment = MajorCodes.BBA_MKT,
+                CreatedAt = now,
+                UpdatedAt = now
+            });
+            context.TeamMembers.Add(new TeamMember
+            {
+                TeamId = team.Id,
+                ClassId = classId,
+                StudentId = student.Id,
+                RoleInTeam = TeamMemberRole.Member,
+                CountsTowardActiveTeam = true,
+                JoinedAt = now
+            });
+        }
+        context.TeamMembers.Add(new TeamMember
+        {
+            TeamId = team.Id,
+            ClassId = classId,
+            StudentId = currentStudentId,
+            RoleInTeam = TeamMemberRole.Leader,
+            CountsTowardActiveTeam = true,
+            JoinedAt = now
+        });
+        await context.SaveChangesAsync();
     }
 
     private string ExtractRefreshToken(HttpResponseMessage response)

@@ -151,15 +151,14 @@ public sealed class AddStudentToClassCommandHandler : IAddStudentToClassCommandH
         {
             if (string.IsNullOrWhiteSpace(requestedMajorCode))
             {
-                return Failure(
-                    ErrorCodes.ClassValidationError,
-                    studentProfile == null
-                        ? "Major is required when creating a new student profile."
-                        : "The existing student profile has no valid registered major. Select a major for this enrollment.");
+                enrollmentMajorCode = MajorCodes.Undeclared;
+                majorSource = "Undeclared";
             }
-
-            enrollmentMajorCode = requestedMajorCode;
-            majorSource = studentProfile == null ? "ManualNewProfile" : "ManualEnrollment";
+            else
+            {
+                enrollmentMajorCode = requestedMajorCode;
+                majorSource = studentProfile == null ? "ManualNewProfile" : "ManualEnrollment";
+            }
         }
 
         if (studentProfile != null)
@@ -196,7 +195,7 @@ public sealed class AddStudentToClassCommandHandler : IAddStudentToClassCommandH
                 FullName = fullName,
                 Email = email,
                 UserId = matchingUser?.Id,
-                MajorCode = enrollmentMajorCode,
+                MajorCode = MajorCodes.IsValid(enrollmentMajorCode) ? enrollmentMajorCode : null,
                 Status = StudentStatus.Active,
                 CreatedBy = currentUserId
             };

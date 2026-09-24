@@ -2224,7 +2224,7 @@ public sealed class TeamWorkflowIntegrationTests
     }
 
     [Fact]
-    public async Task AssigningDirectoryStudentToClass_CreatesEnrollmentAndChatSyncOutboxEvent()
+    public async Task AssigningDirectoryStudentWithoutMajor_CreatesUndeclaredEnrollmentAndChatSyncOutboxEvent()
     {
         using var scope = _factory.Services.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -2237,7 +2237,7 @@ public sealed class TeamWorkflowIntegrationTests
             RollNumber = $"SE{Guid.NewGuid():N}"[..10].ToUpperInvariant(),
             FullName = studentUser.FullName,
             Email = studentUser.Email,
-            MajorCode = MajorCodes.BIT_SE,
+            MajorCode = null,
             Status = StudentStatus.Active,
             CreatedBy = seed.AdminId
         };
@@ -2258,7 +2258,9 @@ public sealed class TeamWorkflowIntegrationTests
         result.Value.AssignedStudentIds.Should().ContainSingle().Which.Should().Be(student.Id);
         context.ChangeTracker.Clear();
         (await context.ClassStudents.AsNoTracking().SingleAsync(item =>
-            item.ClassId == seed.ClassId && item.StudentId == student.Id)).EnrollmentStatus.Should().Be(EnrollmentStatus.Active);
+            item.ClassId == seed.ClassId && item.StudentId == student.Id)).Should().Match<ClassStudent>(item =>
+                item.EnrollmentStatus == EnrollmentStatus.Active &&
+                item.MajorCodeAtEnrollment == MajorCodes.Undeclared);
         (await context.OutboxMessages.AsNoTracking().AnyAsync(message =>
             message.AggregateId == seed.ClassId && message.Type == "Class.StudentEnrollmentAdded.v1")).Should().BeTrue();
     }

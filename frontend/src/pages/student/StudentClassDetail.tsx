@@ -9,18 +9,19 @@ import StudentTeamGeneratePanel from '../../components/class/StudentTeamGenerate
 import TeamSuggestionTooltip from '../../components/class/TeamSuggestionTooltip';
 import { useAuth } from '../../hooks/useAuth';
 import { unwrapApiData } from '../../utils/classMappers';
-import { entityId, normalizeManagedTeam, normalizeTeamProposal, getTeamMemberIds, mergeTeamsWithLinkedProposals } from '../../utils/teamManagement';
+import { entityId, normalizeManagedTeam, normalizeTeamProposal, getTeamMemberIds, mergeTeamsWithLinkedProposals, isMissingTeamMajor } from '../../utils/teamManagement';
 import ProjectDirectionModal from '../../components/class/ProjectDirectionModal';
 import { teamApi } from '../../api/teamApi';
 import { parseApiError } from '../../utils/apiError';
 import { formatSemesterCode } from '../../utils/semester';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import { subscribeProjectDirectionRealtime } from '../../api/projectDirectionRealtime';
+import { updateOwnMajor } from '../../api/authApi';
 
 export default function StudentClassDetail() {
   const { slug: id } = useParams();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, updateUser } = useAuth();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('classmates');
@@ -31,6 +32,7 @@ export default function StudentClassDetail() {
   const [proposalToCancel, setProposalToCancel] = useState(null);
   const [cancellationReason, setCancellationReason] = useState('');
   const [cancellingProposal, setCancellingProposal] = useState(false);
+  const [updatingMajor, setUpdatingMajor] = useState(false);
 
   const fetchClassDetail = useCallback(async () => {
     try {
@@ -131,10 +133,33 @@ export default function StudentClassDetail() {
       toast.error('Your student profile could not be found in this class.');
       return;
     }
+    if (isMissingTeamMajor(currentStudent.major)) {
+      toast.error('Select your major from your row before creating or joining a team.');
+      return;
+    }
 
     setProposalToRevise(null);
     setSelected([currentStudent._id]);
     setActiveTab('classmates');
+  };
+
+  const handleOwnMajorChange = async (_student, majorCode) => {
+    if (updatingMajor || !majorCode) return;
+    setUpdatingMajor(true);
+    try {
+      const result = await updateOwnMajor(majorCode);
+      updateUser({ major: result.majorCode, majorCode: result.majorCode });
+      toast.success(
+        result.updatedEnrollmentCount > 1
+          ? `Major updated in your profile and ${result.updatedEnrollmentCount} active classes.`
+          : 'Major updated successfully.',
+      );
+      await fetchClassDetail();
+    } catch (error) {
+      toast.error(parseApiError(error, 'Failed to update your major.').message);
+    } finally {
+      setUpdatingMajor(false);
+    }
   };
 
   const requestProposalCancellation = (proposal) => {
@@ -331,6 +356,9 @@ export default function StudentClassDetail() {
           onRefresh={fetchClassDetail}
           maxSelection={6}
           selectionDisabled={selectionDisabled}
+          editableStudentId={currentStudent?._id}
+          onMajorChange={handleOwnMajorChange}
+          updatingMajor={updatingMajor}
           toolbarAction={!selectionDisabled && selected.length === 0 ? (
             <div className="flex items-center gap-2">
               <button

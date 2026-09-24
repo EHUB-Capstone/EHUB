@@ -767,6 +767,10 @@ public sealed class TeamProposalHandler : ITeamProposalHandler
 
             return major;
         }).ToArray();
+        if (majors.Any(major => !MajorCodes.IsValid(major)))
+            return CompositionFailure(
+                "Every proposed member must select a valid major before joining a team.",
+                ErrorCodes.AuthStudentMajorRequired);
         if (!majors.Any(IsBusinessMajor) || !majors.Any(IsTechnologyMajor))
             return CompositionFailure("A team must include at least one GROUP_1 major and one GROUP_2 major.", ErrorCodes.TeamMajorCompositionInvalid);
         return Result.Success(enrollments);

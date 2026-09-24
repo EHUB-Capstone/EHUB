@@ -157,7 +157,9 @@ public sealed class NotificationEmailOutboxIntegrationTests(CustomWebApplication
         services.AddScoped(_ => new AppDbContext(options));
         services.AddSingleton<IEmailService>(sender);
         services.AddSingleton<IClassChatMembershipSynchronizer, NoOpChatSynchronizer>();
-        services.AddSingleton<IProjectDirectionRealtimePublisher, NoOpRealtimePublisher>();
+        var realtimePublisher = new NoOpRealtimePublisher();
+        services.AddSingleton<IProjectDirectionRealtimePublisher>(realtimePublisher);
+        services.AddSingleton<IClassRealtimePublisher>(realtimePublisher);
         services.AddScoped<NotificationOutboxEventDispatcher>();
         services.AddScoped<IOutboxEventDispatcher>(provider => failAfterProjection
             ? new FailAfterProjection(provider.GetRequiredService<NotificationOutboxEventDispatcher>())
@@ -262,9 +264,13 @@ public sealed class NotificationEmailOutboxIntegrationTests(CustomWebApplication
             Task.FromResult(new ChatMembershipSyncResponse { ClassId = classId });
     }
 
-    private sealed class NoOpRealtimePublisher : IProjectDirectionRealtimePublisher
+    private sealed class NoOpRealtimePublisher : IProjectDirectionRealtimePublisher, IClassRealtimePublisher
     {
         public Task PublishAsync(IReadOnlyCollection<Guid> recipientUserIds, string eventType, Guid classId, Guid teamId, ProjectDirectionDto direction, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task PublishNotificationReadyAsync(IReadOnlyCollection<Guid> recipientUserIds, Guid classId, Guid teamId, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task PublishMajorUpdatedAsync(IReadOnlyCollection<Guid> recipientUserIds, Guid classId, Guid studentId, string majorCode, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task PublishProposalReviewedAsync(IReadOnlyCollection<Guid> recipientUserIds, Guid classId, Guid proposalId, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task PublishCheckpointRequirementsUpdatedAsync(IReadOnlyCollection<Guid> recipientUserIds, Guid teamId, int checkpointNumber, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task PublishCheckpointEvaluationUpdatedAsync(IReadOnlyCollection<Guid> recipientUserIds, Guid teamId, int checkpointNumber, CancellationToken cancellationToken = default) => Task.CompletedTask;
     }
 }

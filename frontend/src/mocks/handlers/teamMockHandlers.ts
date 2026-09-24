@@ -312,6 +312,9 @@ function registerProposalHandlers(mock: MockAdapter): void {
     const groupOneMajors = new Set(['BBA_HM', 'BBA_FIN', 'BBA_IB', 'BBA_MC', 'BBA_MKT', 'BEN', 'BBA_TM']);
     const groupTwoMajors = new Set(['BIT_AI', 'BIT_GD', 'BIT_IA', 'BIT_SE']);
     const majors = selectedStudents.map((student) => student?.majorCode?.toUpperCase() || '');
+    if (majors.some((major) => !groupOneMajors.has(major) && !groupTwoMajors.has(major))) {
+      return failure(400, 'AUTH_STUDENT_MAJOR_REQUIRED', 'Every proposed member must select a valid major before joining a team.');
+    }
     if (!majors.some((major) => groupOneMajors.has(major)) || !majors.some((major) => groupTwoMajors.has(major))) {
       return failure(400, 'TEAM_MAJOR_COMPOSITION_INVALID', 'A team must include at least one GROUP_1 major and one GROUP_2 major.');
     }

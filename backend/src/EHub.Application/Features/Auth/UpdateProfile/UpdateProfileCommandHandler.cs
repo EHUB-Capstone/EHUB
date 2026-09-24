@@ -2,6 +2,7 @@ using EHub.Application.Common.Interfaces.Identity;
 using EHub.Application.Common.Interfaces.Persistence;
 using EHub.Application.Common.Interfaces.Services;
 using EHub.Application.Common.Interfaces.Storage;
+using EHub.Application.Features.Auth.UpdateOwnMajor;
 using EHub.Contracts.Auth;
 using EHub.Shared.Errors;
 using EHub.Shared.Results;
@@ -24,7 +25,7 @@ public sealed class UpdateProfileCommandHandler : IUpdateProfileCommandHandler
     private readonly IImageStorageService _imageStorageService;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IApplicationDbContext? _context;
-    private readonly IClassRealtimePublisher? _realtimePublisher;
+    private readonly IDateTimeProvider? _dateTimeProvider;
 
     public UpdateProfileCommandHandler(
         ICurrentUserService currentUserService,
@@ -33,7 +34,7 @@ public sealed class UpdateProfileCommandHandler : IUpdateProfileCommandHandler
         IImageStorageService imageStorageService,
         IUnitOfWork unitOfWork,
         IApplicationDbContext? context = null,
-        IClassRealtimePublisher? realtimePublisher = null)
+        IDateTimeProvider? dateTimeProvider = null)
     {
         _currentUserService = currentUserService;
         _userRepository = userRepository;
@@ -41,7 +42,7 @@ public sealed class UpdateProfileCommandHandler : IUpdateProfileCommandHandler
         _imageStorageService = imageStorageService;
         _unitOfWork = unitOfWork;
         _context = context;
-        _realtimePublisher = realtimePublisher;
+        _dateTimeProvider = dateTimeProvider;
     }
 
     public async Task<Result<UpdateProfileResponse>> HandleAsync(
@@ -87,6 +88,21 @@ public sealed class UpdateProfileCommandHandler : IUpdateProfileCommandHandler
         {
             return Result.Failure<UpdateProfileResponse>(ErrorCodes.CommonValidationError, "Select a valid student major.");
         }
+
+        if (command.Major is not null && student is not null && _context is not null)
+        {
+            var preparedMajorUpdate = await StudentMajorUpdatePolicy.PrepareAsync(
+                _context,
+                student,
+                user.Id,
+                command.Major,
+                _dateTimeProvider?.UtcNow ?? DateTime.UtcNow,
+                cancellationToken);
+            if (preparedMajorUpdate.IsFailure)
+            {
+                return Result.Failure<UpdateProfileResponse>(preparedMajorUpdate.Error);
+            }
+        }
         if (command.AvatarContent is not null)
         {
             var uploadResult = await _imageStorageService.UploadAvatarAsync(
@@ -110,7 +126,10 @@ public sealed class UpdateProfileCommandHandler : IUpdateProfileCommandHandler
 
         if (student is not null)
         {
-            if (command.Major is not null)
+            // Unit tests may construct the handler without the optional application
+            // context. Production always uses the shared policy above so profile and
+            // active enrollment majors are committed in one SaveChanges call.
+            if (command.Major is not null && _context is null)
             {
                 student.MajorCode = command.Major.Trim().ToUpperInvariant();
             }
@@ -119,23 +138,15 @@ public sealed class UpdateProfileCommandHandler : IUpdateProfileCommandHandler
             _studentRepository.Update(student);
         }
 
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
-
-        if (command.Major is not null && student is not null && _context is not null && _realtimePublisher is not null)
+        try
         {
-            var classIds = await _context.ClassStudents.AsNoTracking()
-                .Where(enrollment => enrollment.StudentId == student.Id &&
-                    (enrollment.EnrollmentStatus == EHub.Domain.Enums.EnrollmentStatus.Active ||
-                     enrollment.EnrollmentStatus == EHub.Domain.Enums.EnrollmentStatus.Completed))
-                .Select(enrollment => enrollment.ClassId)
-                .Distinct()
-                .ToArrayAsync(cancellationToken);
-            foreach (var classId in classIds)
-            {
-                var recipients = await ClassRecipientUserIdsAsync(classId, cancellationToken);
-                await _realtimePublisher.PublishMajorUpdatedAsync(
-                    recipients, classId, student.Id, student.MajorCode!, cancellationToken);
-            }
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return Result.Failure<UpdateProfileResponse>(
+                ErrorCodes.ClassConcurrencyConflict,
+                "Your class or team changed concurrently. Refresh and try again.");
         }
 
         return Result.Success(new UpdateProfileResponse
@@ -171,24 +182,6 @@ public sealed class UpdateProfileCommandHandler : IUpdateProfileCommandHandler
         }
 
         return true;
-    }
-
-    private async Task<IReadOnlyCollection<Guid>> ClassRecipientUserIdsAsync(Guid classId, CancellationToken cancellationToken)
-    {
-        var context = _context!;
-        var studentUserIds = await context.ClassStudents.AsNoTracking()
-            .Where(enrollment => enrollment.ClassId == classId &&
-                (enrollment.EnrollmentStatus == EHub.Domain.Enums.EnrollmentStatus.Active ||
-                 enrollment.EnrollmentStatus == EHub.Domain.Enums.EnrollmentStatus.Completed) &&
-                enrollment.Student.UserId.HasValue)
-            .Select(enrollment => enrollment.Student.UserId!.Value)
-            .ToArrayAsync(cancellationToken);
-        var lecturerUserIds = await context.Classes.AsNoTracking()
-            .Where(item => item.Id == classId)
-            .SelectMany(item => item.ClassLecturers.Select(assignment => assignment.LecturerId)
-                .Append(item.PrimaryLecturerId ?? Guid.Empty))
-            .ToArrayAsync(cancellationToken);
-        return studentUserIds.Concat(lecturerUserIds).Where(id => id != Guid.Empty).Distinct().ToArray();
     }
 
     private static bool HasImageSignature(Stream content)

@@ -77,5 +77,5 @@ Khi người dùng thực hiện Đăng nhập (Local hoặc Google):
 *   **Kiểm tra tính tồn tại:**
     *   Nếu email **đã tồn tại** $\rightarrow$ Kiểm tra trạng thái tài khoản (`Active` cấp token, `Pending` chặn).
     *   Nếu email **chưa tồn tại** $\rightarrow$ Tạo tài khoản Student Active với email đã được Google xác minh, liên kết hồ sơ sinh viên theo email nếu có, rồi cấp phiên đăng nhập. Không yêu cầu mật khẩu hoặc OTP đăng ký.
-*   Student đăng nhập Google thành công được chuyển tới `/settings` để chọn và lưu chuyên ngành qua `PUT /api/auth/update-profile` (multipart: `fullName`, `major`, `avatar` tùy chọn). Phản hồi chứa `majorCode`; frontend cập nhật hồ sơ trong bộ nhớ. Các vai trò khác giữ điều hướng hiện tại.
-*   Chuyên ngành hồ sơ không thay đổi chuyên ngành đã xác nhận trong từng lớp. Tài khoản chỉ có Google có thể dùng luồng quên mật khẩu để thiết lập mật khẩu nếu cần.
+*   Student đăng nhập Google thành công được chuyển tới danh sách lớp, không bị chặn ở trang hồ sơ khi chưa có chuyên ngành. Student có thể chọn chuyên ngành tại hồ sơ hoặc dropdown trên chính hàng của mình trong danh sách lớp.
+*   Cập nhật chuyên ngành đồng bộ hồ sơ và snapshot của các lớp đang hoạt động trong cùng một lần lưu. Lịch sử lớp đã hoàn thành không thay đổi; lớp đã khóa chuyên ngành hoặc thay đổi làm sai cơ cấu nhóm sẽ trả lỗi nghiệp vụ rõ ràng. Tài khoản chỉ có Google có thể dùng luồng quên mật khẩu để thiết lập mật khẩu nếu cần.

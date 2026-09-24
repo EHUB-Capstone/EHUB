@@ -352,6 +352,10 @@ public sealed class TeamManagementHandler : ITeamManagementHandler
 
             return major;
         }).ToArray();
+        if (majors.Any(major => !MajorCodes.IsValid(major)))
+            return Result.Failure<List<ClassStudent>>(new Error(
+                ErrorCodes.AuthStudentMajorRequired,
+                "Every team member must select a valid major before joining a team."));
         if (!majors.Any(IsBusinessMajor) || !majors.Any(IsTechnologyMajor))
             return Result.Failure<List<ClassStudent>>(new Error(ErrorCodes.TeamMajorCompositionInvalid, "A team must include at least one GROUP_1 major and one GROUP_2 major."));
         return Result.Success(enrollments);

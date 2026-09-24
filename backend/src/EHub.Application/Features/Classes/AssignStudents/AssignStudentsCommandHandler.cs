@@ -105,11 +105,9 @@ public sealed class AssignStudentsCommandHandler : IAssignStudentsCommandHandler
                     }
 
                     var major = StudentEnrollmentRules.ResolveEffectiveMajorCode(null, student.MajorCode);
-                    if (!MajorCodes.IsValid(major))
-                    {
-                        return ClassFailure(ErrorCodes.ClassValidationError,
-                            $"Student '{student.RollNumber ?? student.FullName}' has no valid registered major and cannot be assigned to a class.");
-                    }
+                    var enrollmentMajor = MajorCodes.IsValid(major)
+                        ? major!
+                        : MajorCodes.Undeclared;
 
                     await _context.ClassStudents.AddAsync(new ClassStudent
                     {
@@ -119,7 +117,7 @@ public sealed class AssignStudentsCommandHandler : IAssignStudentsCommandHandler
                         CourseId = targetClass.CourseId,
                         EnrollmentStatus = EnrollmentStatus.Active,
                         CountsTowardCourseSemesterLimit = true,
-                        MajorCodeAtEnrollment = major!,
+                        MajorCodeAtEnrollment = enrollmentMajor,
                         MajorVerificationStatus = EnrollmentMajorVerificationStatus.Unverified,
                         CreatedAt = now,
                         UpdatedAt = now
@@ -194,6 +192,17 @@ public sealed class AssignStudentsCommandHandler : IAssignStudentsCommandHandler
                 {
                     return TeamFailure(ErrorCodes.TeamMemberNotInClass,
                         "Every selected student must have an active enrollment in this class before team assignment.");
+                }
+
+                var missingMajor = enrollments.FirstOrDefault(enrollment =>
+                    !MajorCodes.IsValid(StudentEnrollmentRules.ResolveEffectiveMajorCode(
+                        enrollment.MajorCodeAtEnrollment,
+                        enrollment.Student.MajorCode)));
+                if (missingMajor != null)
+                {
+                    return TeamFailure(
+                        ErrorCodes.AuthStudentMajorRequired,
+                        $"Student '{missingMajor.Student.RollNumber ?? missingMajor.Student.FullName}' must select a valid major before joining a team.");
                 }
 
                 var studentIds = enrollments.Select(item => item.StudentId).Distinct().ToArray();

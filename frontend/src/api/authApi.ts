@@ -12,6 +12,7 @@ import type {
   ResetPasswordPayload,
   VerifyRegistrationOtpPayload,
   UpdateProfileResponse,
+  UpdateOwnMajorResponse,
 } from '../types/auth';
 
 // ─── POST /api/auth/register ──────────────────────────────────────────────
@@ -59,6 +60,12 @@ export async function updateProfile(formData: FormData): Promise<UpdateProfileRe
   const data = await axiosClient.put('/auth/update-profile', formData, {
     headers: { 'Content-Type': undefined },
   });
+  return data.data;
+}
+
+// ─── PUT /api/auth/update-major (Student only) ────────────────────────────
+export async function updateOwnMajor(majorCode: string): Promise<UpdateOwnMajorResponse> {
+  const data = await axiosClient.put('/auth/update-major', { majorCode });
   return data.data;
 }
 

@@ -2,7 +2,7 @@ import type MockAdapter from 'axios-mock-adapter';
 import type { AxiosRequestConfig } from 'axios';
 import type { ClassDto, ClassStatus } from '../../types/classes.ts';
 import type { MockClass, MockRosterStudent } from '../mockState.ts';
-import { PROGRAM_GROUPS } from '../../constants/majors.ts';
+import { ALL_TEAM_MAJOR_CODES, PROGRAM_GROUPS } from '../../constants/majors.ts';
 import {
   allocateId,
   allocateRowVersion,
@@ -236,7 +236,31 @@ function registerClassQueries(mock: MockAdapter): void {
     const currentEnrollment = (state.rosters[classId] || []).find((student) => student.userId === sessionUserId);
     const rosterStatus = currentEnrollment?.enrollmentStatus === 'Completed' ? 'Completed' : 'Active';
     const classSummary = studentClassSummary(cls, rosterStatus);
-    const students = (state.rosters[classId] || []).filter((student) => student.enrollmentStatus === rosterStatus).map((student) => ({ studentId: student.studentId, userId: student.userId, rollNumber: student.rollNumber, fullName: student.fullName, email: student.email, majorCode: student.majorCode, enrollmentStatus: student.enrollmentStatus, teamId: student.teamId }));
+    const ownMajorLocked = state.classes.some((item) =>
+      ['Draft', 'Active', 'Inactive'].includes(item.status)
+      && item.isEnrollmentMajorLocked
+      && (state.rosters[item.id] || []).some(student =>
+        student.enrollmentStatus === 'Active' && student.userId === sessionUserId));
+    const students = (state.rosters[classId] || []).filter((student) => student.enrollmentStatus === rosterStatus).map((student) => {
+      const isOwnRow = student.userId === sessionUserId;
+      const profileMajorCode = isOwnRow
+        ? state.users.find(user => user.id === sessionUserId)?.major || null
+        : student.profileMajorCode;
+      return {
+        studentId: student.studentId,
+        userId: student.userId,
+        rollNumber: student.rollNumber,
+        fullName: student.fullName,
+        email: student.email,
+        majorCode: student.majorCode,
+        profileMajorCode,
+        enrollmentMajorCode: student.majorCode,
+        canEditMajor: isOwnRow && rosterStatus === 'Active' && ['Draft', 'Active'].includes(cls.status) && !ownMajorLocked,
+        isMajorLocked: isOwnRow && ownMajorLocked,
+        enrollmentStatus: student.enrollmentStatus,
+        teamId: student.teamId,
+      };
+    });
     const teams = getMockState().teams.filter((team) => team.classId === classId);
     return ok({ class: classSummary, students, teams }, 'Student class detail retrieved.');
   });
@@ -556,7 +580,7 @@ function registerRosterHandlers(mock: MockAdapter): void {
         rollNumber: sourceRecord?.rollNumber || user.studentId || `MOCK-${state.sequence}`,
         fullName: sourceRecord?.fullName || user.name,
         email: sourceRecord?.email || user.email,
-        majorCode: sourceRecord?.majorCode || user.major,
+        majorCode: sourceRecord?.majorCode || user.major || 'UNDECLARED',
         profileMajorCode: sourceRecord?.profileMajorCode || user.major,
         majorVerificationStatus: sourceRecord?.majorVerificationStatus || 'Unverified',
         memberCode: sourceRecord?.memberCode || `MEM-${state.sequence}`,
@@ -590,6 +614,9 @@ function registerRosterHandlers(mock: MockAdapter): void {
     const selectedStudents = studentIds.map((studentId) => roster.find((student) => student.studentId === studentId && student.enrollmentStatus === 'Active'));
     if (selectedStudents.some((student) => !student)) {
       return failure(400, 'TEAM_MEMBER_NOT_IN_CLASS', 'Every selected student must belong to this class before team assignment.');
+    }
+    if (selectedStudents.some((student) => !student?.majorCode || !ALL_TEAM_MAJOR_CODES.includes(student.majorCode.toUpperCase()))) {
+      return failure(400, 'AUTH_STUDENT_MAJOR_REQUIRED', 'Every selected student must choose a valid major before joining a team.');
     }
     const conflictingStudent = selectedStudents.find((student) => student?.teamId && student.teamId !== teamId);
     if (conflictingStudent) return failure(409, 'TEAM_MEMBERSHIP_CONFLICT', `${conflictingStudent.fullName} already belongs to another team in this class.`);
@@ -659,12 +686,7 @@ function registerRosterHandlers(mock: MockAdapter): void {
     if (profileMajor && requestedMajor && profileMajor !== requestedMajor) {
       return failure(409, 'STUDENT_MAJOR_MISMATCH', `Selected major '${requestedMajor}' does not match the registered major '${profileMajor}'.`);
     }
-    const enrollmentMajor = profileMajor || requestedMajor;
-    if (!enrollmentMajor) {
-      return failure(400, 'CLASS_VALIDATION_ERROR', profileId
-        ? 'The existing student profile has no valid registered major. Select a major for this enrollment.'
-        : 'Major is required when creating a new student profile.');
-    }
+    const enrollmentMajor = profileMajor || requestedMajor || 'UNDECLARED';
 
     const existing = roster.find((student) =>
       student.studentId === profileId || student.rollNumber.toUpperCase() === code || student.email.toLowerCase() === email);
@@ -685,7 +707,7 @@ function registerRosterHandlers(mock: MockAdapter): void {
 
     const student: MockRosterStudent = {
       studentId: profileId || allocateId(), userId: user?.id || null, rollNumber: code, fullName, email,
-      majorCode: enrollmentMajor, profileMajorCode: profileMajor || enrollmentMajor,
+      majorCode: enrollmentMajor, profileMajorCode: profileMajor || requestedMajor || null,
       majorVerificationStatus: 'Unverified', memberCode: `MEM-${state.sequence}`,
       enrollmentStatus: 'Active', teamId: null, teamName: null, isTeamLeader: false,
       joinedAtUtc: new Date().toISOString(),
