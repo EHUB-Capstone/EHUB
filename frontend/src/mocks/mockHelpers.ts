@@ -25,6 +25,7 @@ function loadState(): MockApiState {
       authPasswords: parsed.authPasswords ?? {},
       pendingRegistrations: parsed.pendingRegistrations ?? [],
       notifications: parsed.notifications ?? defaults.notifications,
+      formations: parsed.formations ?? [],
       semesterStaffAssignments: parsed.semesterStaffAssignments ?? defaults.semesterStaffAssignments,
       checkpointSchedules: parsed.checkpointSchedules ?? {},
       checkpointFiles: parsed.checkpointFiles ?? {},

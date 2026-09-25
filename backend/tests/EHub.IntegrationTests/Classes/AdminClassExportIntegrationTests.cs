@@ -142,7 +142,19 @@ public sealed class AdminClassExportIntegrationTests
         workbook.Worksheets.Should().ContainSingle();
         var worksheet = workbook.Worksheet("Class Roster");
         worksheet.Cell(1, 1).GetString().Should().Be("RollNumber");
+        worksheet.Cell(2, 3).GetString().Should().Be("BIT_SE");
         worksheet.Cell(2, 5).GetString().Should().Be(seed.Classes[0].ClassCode);
+    }
+
+    [Fact]
+    public async Task AdminExport_UsesTheSameEffectiveMajorAsTheClassRoster()
+    {
+        var seed = await CreateExportSeedAsync();
+        var token = GenerateToken(seed.Admin, SystemRoles.Admin);
+        using var export = await ExportAsync(token, seed.SemesterCode, seed.Year, [seed.Classes[0].Id]);
+        using var workbook = new XLWorkbook(export);
+
+        workbook.Worksheet("Class Roster").Cell(2, 3).GetString().Should().Be("BIT_SE");
     }
 
     private async Task<MemoryStream> ExportAsync(
@@ -288,7 +300,7 @@ public sealed class AdminClassExportIntegrationTests
                 NormalizedRollNumber = $"{unique}{index + 1:00}",
                 FullName = $"Export Student {index + 1}",
                 Email = $"export-{unique}-{index + 1}@example.com",
-                MajorCode = "SE",
+                MajorCode = index == 0 ? "BIT_SE" : "SE",
                 Status = StudentStatus.Active,
                 CreatedBy = admin.Id
             };
@@ -301,7 +313,7 @@ public sealed class AdminClassExportIntegrationTests
                 StudentId = student.Id,
                 SemesterId = semester.Id,
                 CourseId = classes[index].CourseId,
-                MajorCodeAtEnrollment = "SE",
+                MajorCodeAtEnrollment = index == 0 ? MajorCodes.Undeclared : "SE",
                 EnrollmentStatus = EnrollmentStatus.Active,
                 CountsTowardCourseSemesterLimit = true
             });

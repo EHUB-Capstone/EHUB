@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -69,6 +70,38 @@ public sealed class ClassRosterExportWorkbookBuilderTests
         worksheet.Cell(3, 7).GetString().Should().BeEmpty();
         worksheet.Cell(3, 8).GetString().Should().BeEmpty();
         worksheet.Cell(3, 9).GetString().Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Build_MajorMatchesClassRosterEnrollmentProfileAndRegisteredEmailFallback()
+    {
+        var section = CreateSection("EXE201", 8, "DE180182");
+        var enrollment = section.Roster.Single();
+        enrollment.MajorCodeAtEnrollment = "UNDECLARED";
+        enrollment.Student.MajorCode = "BIT_SE";
+
+        using (var workbook = OpenWorkbook(ClassRosterExportWorkbookBuilder.Build([section])))
+        {
+            workbook.Worksheet(ClassRosterExportWorkbookBuilder.WorksheetName)
+                .Cell(2, 3).GetString().Should().Be("BIT_SE");
+        }
+
+        enrollment.Student.MajorCode = null;
+        enrollment.Student.Email = "student@example.test";
+        using (var workbook = OpenWorkbook(ClassRosterExportWorkbookBuilder.Build(
+            [section], new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["student@example.test"] = "BBA_MC"
+            })))
+        {
+            workbook.Worksheet(ClassRosterExportWorkbookBuilder.WorksheetName)
+                .Cell(2, 3).GetString().Should().Be("BBA_MC");
+        }
+
+        enrollment.MajorCodeAtEnrollment = "BBA_FIN";
+        using var officialWorkbook = OpenWorkbook(ClassRosterExportWorkbookBuilder.Build([section]));
+        officialWorkbook.Worksheet(ClassRosterExportWorkbookBuilder.WorksheetName)
+            .Cell(2, 3).GetString().Should().Be("BBA_FIN");
     }
 
     private static ClassRosterExportSection CreateSection(string courseCode, int classIndex, string rollNumber)

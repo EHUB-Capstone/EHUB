@@ -383,6 +383,7 @@ public sealed class MajorVerificationRowDto
     public string Email { get; init; } = string.Empty;
     public string? MajorInFile { get; init; }
     public string? MajorInDb { get; init; }
+    public string? MajorInProfile { get; init; }
     public string Status { get; init; } = string.Empty;
     public string? Message { get; init; }
 }
@@ -393,6 +394,8 @@ public sealed class VerifyClassMajorsResponse
     public IReadOnlyCollection<MajorVerificationRowDto> Mismatched { get; init; } = Array.Empty<MajorVerificationRowDto>();
     public IReadOnlyCollection<MajorVerificationRowDto> Missing { get; init; } = Array.Empty<MajorVerificationRowDto>();
     public IReadOnlyCollection<MajorVerificationRowDto> NotFound { get; init; } = Array.Empty<MajorVerificationRowDto>();
+    public int SynchronizedEnrollmentCount { get; init; }
+    public int SynchronizedProfileCount { get; init; }
 }
 
 public sealed class SynchronizeProfileMajorsResponse

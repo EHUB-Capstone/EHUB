@@ -122,6 +122,10 @@ public static class ErrorCodes
     public const string TeamProposalInvalid = "TEAM_PROPOSAL_INVALID";
     public const string TeamProposalStateInvalid = "TEAM_PROPOSAL_STATE_INVALID";
     public const string TeamProposalMembershipConflict = "TEAM_PROPOSAL_MEMBERSHIP_CONFLICT";
+    public const string TeamFormationRequired = "TEAM_FORMATION_REQUIRED";
+    public const string TeamFormationNotFound = "TEAM_FORMATION_NOT_FOUND";
+    public const string TeamFormationStateInvalid = "TEAM_FORMATION_STATE_INVALID";
+    public const string TeamFormationReservationConflict = "TEAM_FORMATION_RESERVATION_CONFLICT";
     public const string TeamApprovalConflict = "TEAM_APPROVAL_CONFLICT";
     public const string MentorNotAvailable = "MENTOR_NOT_AVAILABLE";
     public const string MentorCapacityReached = "MENTOR_CAPACITY_REACHED";

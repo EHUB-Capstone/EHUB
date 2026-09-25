@@ -30,6 +30,8 @@ public interface IApplicationDbContext
     DbSet<TeamProposal> TeamProposals { get; }
     DbSet<TeamProposalMember> TeamProposalMembers { get; }
     DbSet<TeamProposalHistory> TeamProposalHistory { get; }
+    DbSet<TeamFormation> TeamFormations { get; }
+    DbSet<TeamFormationInvitation> TeamFormationInvitations { get; }
     DbSet<ProjectDirection> ProjectDirections { get; }
     DbSet<ProjectDirectionReview> ProjectDirectionReviews { get; }
     DbSet<Project> Projects { get; }

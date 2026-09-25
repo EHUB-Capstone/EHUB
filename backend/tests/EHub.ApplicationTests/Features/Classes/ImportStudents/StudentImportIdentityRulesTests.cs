@@ -83,4 +83,26 @@ public sealed class StudentImportIdentityRulesTests
         changed.Should().BeTrue();
         profile.Email.Should().Be("kienltde180359@fpt.edu.vn");
     }
+
+    [Fact]
+    public void ExistingProfileWithDifferentLinkedAccountEmail_IsAConflict()
+    {
+        var profile = new Student
+        {
+            RollNumber = "DE180359",
+            NormalizedRollNumber = "DE180359",
+            FullName = "Le Trung Kien",
+            User = new User { Email = "another.student@fpt.edu.vn" }
+        };
+
+        var hasConflict = StudentImportIdentityRules.HasConflict(
+            1,
+            0,
+            profile,
+            null,
+            "DE180359",
+            "kienltde180359@fpt.edu.vn");
+
+        hasConflict.Should().BeTrue();
+    }
 }

@@ -71,12 +71,13 @@ export default function CreateProjectWorkspaceForm({ team, proposal, classInfo, 
     const nextErrors = validateProjectWorkspace(draft);
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) {
-      toast.error('Please complete the required project information.');
+      toast.error('Please complete the required team and project information.');
       return;
     }
     setSubmitting(true);
     try {
       await workspaceApi.createWorkspace(teamId, {
+        teamName: draft.teamName.trim(),
         projectName: draft.projectName.trim(),
         description: draft.description.trim(),
         startupIndustryIds: draft.startupIndustryIds,
@@ -101,9 +102,10 @@ export default function CreateProjectWorkspaceForm({ team, proposal, classInfo, 
       </div>
       <div className="grid gap-4 p-5 sm:grid-cols-2">
         <div className="sm:col-span-2">
-          <label htmlFor="workspace-team-name" className="mb-1.5 block text-xs font-semibold text-slate-700">Team name</label>
-          <input id="workspace-team-name" value={creationDefaults.teamName} readOnly aria-readonly="true" className="w-full cursor-not-allowed rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-600 outline-none" />
-          <p className="mt-1 text-xs text-slate-400">Team name comes from the submitted team proposal.</p>
+          <label htmlFor="workspace-team-name" className="mb-1.5 block text-xs font-semibold text-slate-700">Team name <span className="text-red-500">*</span></label>
+          <input id="workspace-team-name" value={draft.teamName} onChange={(event) => setField('teamName', event.target.value)} maxLength={100} className={`w-full rounded-xl border px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/15 ${errors.teamName ? 'border-red-300' : 'border-slate-200 focus:border-primary'}`} />
+          <p className="mt-1 text-xs text-slate-400">Pre-filled from your team. You can change it before creating the workspace.</p>
+          {errors.teamName && <p className="mt-1 text-xs text-red-600">{errors.teamName}</p>}
         </div>
         <div className="sm:col-span-2">
           <label htmlFor="workspace-project-name" className="mb-1.5 block text-xs font-semibold text-slate-700">Project name <span className="text-red-500">*</span></label>

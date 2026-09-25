@@ -1,4 +1,5 @@
 export interface ProjectWorkspaceDraft {
+  teamName: string;
   projectName: string;
   description: string;
   startupIndustryIds: string[];
@@ -28,9 +29,9 @@ interface WorkspaceCreationProposalSource {
 export const resolveWorkspaceCreationDefaults = (
   team: WorkspaceCreationTeamSource,
   proposal?: WorkspaceCreationProposalSource | null,
-): { teamName: string; draft: ProjectWorkspaceDraft } => ({
-  teamName: proposal?.teamName?.trim() || team.teamName?.trim() || team.name?.trim() || '',
+): { draft: ProjectWorkspaceDraft } => ({
   draft: {
+    teamName: team.teamName?.trim() || team.name?.trim() || proposal?.teamName?.trim() || '',
     projectName: proposal?.projectName?.trim() || team.teamName?.trim() || team.name?.trim() || '',
     description: proposal?.projectDescription?.trim() || proposal?.description?.trim() || '',
     startupIndustryIds: [],
@@ -59,8 +60,10 @@ export const appendWorkspaceTag = (values: string[], rawValue: string): { values
 
 export const validateProjectWorkspace = (draft: ProjectWorkspaceDraft): ProjectWorkspaceErrors => {
   const errors: ProjectWorkspaceErrors = {};
+  const teamNameLength = draft.teamName.trim().length;
   const nameLength = draft.projectName.trim().length;
   const descriptionLength = draft.description.trim().length;
+  if (teamNameLength < 3 || teamNameLength > 100) errors.teamName = 'Team name must be 3–100 characters.';
   if (nameLength < 3 || nameLength > 200) errors.projectName = 'Project name must be 3–200 characters.';
   if (descriptionLength < 20 || descriptionLength > 2_000) errors.description = 'Description must be 20–2000 characters.';
   if (draft.startupIndustryIds.length < 1 || draft.startupIndustryIds.length > 3) {

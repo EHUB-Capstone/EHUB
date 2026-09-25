@@ -258,6 +258,12 @@ export default function ProjectDirectionCard({ team, project, canEdit, onOpenPro
               </div>
             ))}
           </div>
+          {latestReview?.comment && (
+            <div role="status" aria-live="polite" className="mt-4 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3">
+              <p className="text-xs font-bold uppercase text-blue-700">Lecturer review · {latestReview.toStatus}</p>
+              <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-blue-900">{latestReview.comment}</p>
+            </div>
+          )}
           <p className="mt-3 text-xs font-semibold text-emerald-700">Open the profile to view details{canEdit ? ' or update it' : ''}</p>
         </div>
       </button>

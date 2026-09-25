@@ -1,4 +1,5 @@
 import type { ClassDto, ClassRosterStudent, ClassStatus } from '../types/classes.ts';
+import type { TeamFormation } from '../types/teamFormation.ts';
 
 export interface MockUser {
   id: string;
@@ -309,6 +310,7 @@ export interface MockApiState {
   rosters: Record<string, MockRosterStudent[]>;
   teams: MockTeam[];
   proposals: MockProposal[];
+  formations: TeamFormation[];
   directions: MockProjectDirection[];
   audits: Record<string, MockAuditEntry[]>;
   imports: Record<string, MockImportSession>;
@@ -493,6 +495,7 @@ const initialMockState: MockApiState = {
       members: activeRoster.slice(8, 10).map((student, index) => ({ studentId: student.studentId, rollNumber: student.rollNumber, fullName: student.fullName, majorCode: student.majorCode || '', isLeader: index === 0 })),
       rowVersion: 'rv-20', history: [{ id: id(802), fromStatus: 'Draft', toStatus: 'Pending', action: 'SUBMITTED', comment: null, performedByUserId: activeRoster[8].userId || activeRoster[8].studentId, occurredAtUtc: isoAgo(1) }],
     }],
+    formations: [],
     directions: [{ id: id(901), teamId: id(601), title: 'Student Services Marketplace', summary: 'Validate trust, fulfillment time, and willingness to pay before building the full marketplace.', startupIndustries: ['Technology & Software'], status: 'Submitted', submittedAtUtc: isoAgo(2), reviewedAtUtc: null, rowVersion: 'rv-30', reviews: [] }],
     audits: {
       [classIds.active]: [{ id: id(951), action: 'CLASS_CREATED', performedByUserId: id(1), performedByName: 'Nguyễn Minh Admin', occurredAtUtc: isoAgo(45), detailsJson: JSON.stringify({ status: 'Active' }) }],

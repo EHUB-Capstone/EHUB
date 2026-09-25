@@ -35,8 +35,9 @@ const NotificationDropdown = () => {
   useEffect(() => {
     fetchNotifications();
     const unsubscribe = subscribeProjectDirectionRealtime((event) => {
-      if (event.eventType === 'ProjectDirectionNotificationReady') void fetchNotifications();
-    });
+      if (event.eventType === 'ProjectDirectionNotificationReady' || event.eventType === 'TeamFormationChanged')
+        void fetchNotifications();
+    }, () => { void fetchNotifications(); });
     // Backup refresh for notification types that do not have a realtime event yet.
     const interval = setInterval(fetchNotifications, 30000);
     return () => {

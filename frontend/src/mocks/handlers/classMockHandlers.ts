@@ -2,7 +2,7 @@ import type MockAdapter from 'axios-mock-adapter';
 import type { AxiosRequestConfig } from 'axios';
 import type { ClassDto, ClassStatus } from '../../types/classes.ts';
 import type { MockClass, MockRosterStudent } from '../mockState.ts';
-import { ALL_TEAM_MAJOR_CODES, PROGRAM_GROUPS } from '../../constants/majors.ts';
+import { PROGRAM_GROUPS, TEAM_MAJOR_GROUPS } from '../../constants/majors.ts';
 import {
   allocateId,
   allocateRowVersion,
@@ -47,6 +47,16 @@ function addAudit(classId: string, action: string, details: Record<string, unkno
     occurredAtUtc: new Date().toISOString(),
     detailsJson: JSON.stringify(details),
   });
+}
+
+function applyImportedMockName(email: string, fullName: string): void {
+  const state = getMockState();
+  Object.values(state.rosters).flat().forEach((student) => {
+    if (student.email.toLowerCase() === email.toLowerCase()) student.fullName = fullName;
+  });
+  const user = state.users.find((candidate) =>
+    candidate.role === 'STUDENT' && candidate.email.toLowerCase() === email.toLowerCase());
+  if (user) user.name = fullName;
 }
 
 function adminOnlyGuard() {
@@ -615,15 +625,21 @@ function registerRosterHandlers(mock: MockAdapter): void {
     if (selectedStudents.some((student) => !student)) {
       return failure(400, 'TEAM_MEMBER_NOT_IN_CLASS', 'Every selected student must belong to this class before team assignment.');
     }
-    if (selectedStudents.some((student) => !student?.majorCode || !ALL_TEAM_MAJOR_CODES.includes(student.majorCode.toUpperCase()))) {
-      return failure(400, 'AUTH_STUDENT_MAJOR_REQUIRED', 'Every selected student must choose a valid major before joining a team.');
-    }
     const conflictingStudent = selectedStudents.find((student) => student?.teamId && student.teamId !== teamId);
     if (conflictingStudent) return failure(409, 'TEAM_MEMBERSHIP_CONFLICT', `${conflictingStudent.fullName} already belongs to another team in this class.`);
 
     const existingIds = new Set(team.members.map((member) => member.studentId));
     const additions = selectedStudents.filter((student): student is MockRosterStudent => Boolean(student && !existingIds.has(student.studentId)));
     if (team.members.length + additions.length > 6) return failure(400, 'TEAM_MEMBER_LIMIT_EXCEEDED', 'This assignment would exceed the 6-student team limit.');
+    if (team.members.length + additions.length < 4) return failure(400, 'CLASS_VALIDATION_ERROR', 'A team must contain 4 to 6 members.');
+    const resultingMajors = [...team.members.map((member) => member.majorCode), ...additions.map((student) => student.majorCode)];
+    const hasMajorGroup = (groupKey: string) => {
+      const group = TEAM_MAJOR_GROUPS.find((item) => item.key === groupKey);
+      return group?.majors.some((major) => resultingMajors.some((code) => code?.toUpperCase() === major.code)) ?? false;
+    };
+    if (!hasMajorGroup('GROUP_1') || !hasMajorGroup('GROUP_2')) {
+      return failure(400, 'TEAM_MAJOR_COMPOSITION_INVALID', 'A team must include at least one GROUP_1 major and one GROUP_2 major.');
+    }
     if (!team.leaderId && additions.length > 0) team.leaderId = additions[0].studentId;
     additions.forEach((student) => team.members.push(memberFromStudent(student, team.leaderId || student.studentId)));
     team.members.forEach((member) => {
@@ -775,16 +791,43 @@ function registerRosterHandlers(mock: MockAdapter): void {
   mock.onPost(/^\/classes\/[^/]+\/students\/[^/]+\/drop$/).reply((config) => changeEnrollment(config, 'Dropped'));
   mock.onPost(/^\/classes\/[^/]+\/students\/[^/]+\/re-enroll$/).reply((config) => changeEnrollment(config, 'Active'));
 
+  mock.onPost(/^\/classes\/[^/]+\/major-verification\/preview$/).reply((config) => {
+    const classId = routeId(config, /^\/classes\/([^/]+)\/major-verification\/preview$/);
+    const guard = classMutationGuard(classId);
+    if (guard) return guard;
+    const rows = (getMockState().rosters[classId] || []).filter((student) => student.enrollmentStatus === 'Active');
+    const matched = rows.filter((_, index) => index % 4 !== 3).map((student, index) => ({ rowNumber: index + 2, studentId: student.studentId, rollNumber: student.rollNumber, fullName: student.fullName, email: student.email, majorInFile: student.majorCode, majorInDb: student.majorCode, majorInProfile: student.profileMajorCode, status: 'Matched', message: null }));
+    const mismatched = rows.filter((_, index) => index % 4 === 3).map((student, index) => ({ rowNumber: index + 2, studentId: student.studentId, rollNumber: student.rollNumber, fullName: student.fullName, email: student.email, majorInFile: student.majorCode === 'BIT_SE' ? 'BBA_IB' : 'BIT_SE', majorInDb: student.majorCode, majorInProfile: student.profileMajorCode, status: 'Mismatched', message: 'Major in file differs from enrollment major.' }));
+    return ok({ matched, mismatched, missing: [], notFound: [], synchronizedEnrollmentCount: 0, synchronizedProfileCount: 0 }, 'Major changes previewed without updating the class.');
+  });
+
   mock.onPost(/^\/classes\/[^/]+\/major-verification$/).reply((config) => {
     const classId = routeId(config, /^\/classes\/([^/]+)\/major-verification$/);
     const guard = classMutationGuard(classId);
     if (guard) return guard;
     const rows = (getMockState().rosters[classId] || []).filter((student) => student.enrollmentStatus === 'Active');
-    const matched = rows.filter((_, index) => index % 4 !== 3).map((student, index) => ({ rowNumber: index + 2, studentId: student.studentId, rollNumber: student.rollNumber, fullName: student.fullName, email: student.email, majorInFile: student.majorCode, majorInDb: student.majorCode, status: 'Matched', message: null }));
-    const mismatched = rows.filter((_, index) => index % 4 === 3).map((student, index) => ({ rowNumber: index + 2, studentId: student.studentId, rollNumber: student.rollNumber, fullName: student.fullName, email: student.email, majorInFile: student.majorCode === 'BIT_SE' ? 'BBA_IB' : 'BIT_SE', majorInDb: student.majorCode, status: 'Mismatched', message: 'Major in file differs from enrollment major.' }));
-    matched.forEach((row) => { const student = rows.find((item) => item.studentId === row.studentId); if (student) student.majorVerificationStatus = 'Verified'; });
+    const matched = rows.filter((_, index) => index % 4 !== 3).map((student, index) => ({ rowNumber: index + 2, studentId: student.studentId, rollNumber: student.rollNumber, fullName: student.fullName, email: student.email, majorInFile: student.majorCode, majorInDb: student.majorCode, majorInProfile: student.profileMajorCode, status: 'Matched', message: null }));
+    const mismatched = rows.filter((_, index) => index % 4 === 3).map((student, index) => ({ rowNumber: index + 2, studentId: student.studentId, rollNumber: student.rollNumber, fullName: student.fullName, email: student.email, majorInFile: student.majorCode === 'BIT_SE' ? 'BBA_IB' : 'BIT_SE', majorInDb: student.majorCode, majorInProfile: student.profileMajorCode, status: 'Mismatched', message: 'Major in file differs from enrollment major.' }));
+    matched.forEach((row) => { const student = rows.find((item) => item.studentId === row.studentId); if (student) student.majorVerificationStatus = 'Matched'; });
+    mismatched.forEach((row) => { const student = rows.find((item) => item.studentId === row.studentId); if (student) student.majorVerificationStatus = 'Mismatched'; });
     persistMockState();
-    return ok({ matched, mismatched, missing: [], notFound: [] }, 'Student majors verified successfully.');
+    return ok({ matched, mismatched, missing: [], notFound: [], synchronizedEnrollmentCount: 0, synchronizedProfileCount: 0 }, 'Student majors verified successfully.');
+  });
+
+  mock.onPost(/^\/classes\/[^/]+\/major-verification\/synchronize$/).reply((config) => {
+    const classId = routeId(config, /^\/classes\/([^/]+)\/major-verification\/synchronize$/);
+    const guard = classMutationGuard(classId);
+    if (guard) return guard;
+    const rows = (getMockState().rosters[classId] || []).filter((student) => student.enrollmentStatus === 'Active');
+    const matched = rows.map((student, index) => {
+      const major = index % 4 === 3 ? (student.majorCode === 'BIT_SE' ? 'BBA_IB' : 'BIT_SE') : student.majorCode;
+      student.majorCode = major;
+      student.profileMajorCode = major;
+      student.majorVerificationStatus = 'Matched';
+      return { rowNumber: index + 2, studentId: student.studentId, rollNumber: student.rollNumber, fullName: student.fullName, email: student.email, majorInFile: major, majorInDb: major, majorInProfile: major, status: 'Matched', message: null };
+    });
+    persistMockState();
+    return ok({ matched, mismatched: [], missing: [], notFound: [], synchronizedEnrollmentCount: rows.length, synchronizedProfileCount: rows.length }, 'Enrollment and profile majors synchronized from the verification file.');
   });
 
   mock.onPost(/^\/classes\/[^/]+\/import-students\/preview$/).reply((config) => {
@@ -833,16 +876,27 @@ function registerRosterHandlers(mock: MockAdapter): void {
         student.email.toLowerCase() === row.email.toLowerCase());
       if (existing?.enrollmentStatus === 'Dropped') {
         existing.enrollmentStatus = 'Active';
+        applyImportedMockName(row.email, row.fullName);
         existing.majorCode = row.majorCode;
         existing.majorVerificationStatus = 'Unverified';
         updatedCount++;
         continue;
       }
       if (existing) {
-        errors.push({ rowNumber: row.rowNumber, studentCode: row.studentCode, errorCode: 'STUDENT_ALREADY_ENROLLED', errorMessage: 'Student already has an enrollment in this class.' });
+        if (existing.enrollmentStatus === 'Completed') {
+          errors.push({ rowNumber: row.rowNumber, studentCode: row.studentCode, errorCode: 'STUDENT_ALREADY_ENROLLED', errorMessage: 'Student has already completed this class.' });
+          continue;
+        }
+        const user = getMockState().users.find((candidate) => candidate.role === 'STUDENT' && candidate.email.toLowerCase() === row.email.toLowerCase());
+        if (existing.fullName !== row.fullName || (user && user.name !== row.fullName)) {
+          applyImportedMockName(row.email, row.fullName);
+          updatedCount++;
+        }
         continue;
       }
-      roster.push({ studentId: allocateId(), userId: null, rollNumber: row.studentCode, fullName: row.fullName, email: row.email, majorCode: row.majorCode, profileMajorCode: null, majorVerificationStatus: 'Unverified', memberCode: `MEM-${getMockState().sequence}`, enrollmentStatus: 'Active', teamId: null, teamName: null, isTeamLeader: false, joinedAtUtc: new Date().toISOString() });
+      const linkedUser = getMockState().users.find((user) => user.role === 'STUDENT' && user.email.toLowerCase() === row.email.toLowerCase());
+      roster.push({ studentId: allocateId(), userId: linkedUser?.id || null, rollNumber: row.studentCode, fullName: row.fullName, email: row.email, majorCode: row.majorCode, profileMajorCode: null, majorVerificationStatus: 'Unverified', memberCode: `MEM-${getMockState().sequence}`, enrollmentStatus: 'Active', teamId: null, teamName: null, isTeamLeader: false, joinedAtUtc: new Date().toISOString() });
+      applyImportedMockName(row.email, row.fullName);
       insertedCount++;
     }
     session.consumed = true;

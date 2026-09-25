@@ -487,6 +487,7 @@ public sealed class PreviewImportStudentsCommandHandler : IPreviewImportStudents
         var emails = validRows.Select(row => row.Email).ToArray();
         var profiles = await _context.Students
             .AsNoTracking()
+            .Include(student => student.User)
             .Where(student =>
                 (student.NormalizedRollNumber != null && codes.Contains(student.NormalizedRollNumber)) ||
                 (student.RollNumber != null && codes.Contains(student.RollNumber)) ||
@@ -577,9 +578,9 @@ public sealed class PreviewImportStudentsCommandHandler : IPreviewImportStudents
                         rows[index] = WithStatus(row, "ReEnroll");
                     }
                 }
-                else if (currentEnrollment != null && currentEnrollment.EnrollmentStatus != EnrollmentStatus.Dropped)
+                else if (currentEnrollment?.EnrollmentStatus == EnrollmentStatus.Completed)
                 {
-                    error = $"Student '{row.StudentCode}' already has an enrollment in this class.";
+                    error = $"Student '{row.StudentCode}' has already completed this class.";
                 }
                 else
                 {
@@ -596,6 +597,10 @@ public sealed class PreviewImportStudentsCommandHandler : IPreviewImportStudents
                     else if (currentEnrollment?.EnrollmentStatus == EnrollmentStatus.Dropped)
                     {
                         rows[index] = WithStatus(row, "ReEnroll");
+                    }
+                    else if (currentEnrollment?.EnrollmentStatus == EnrollmentStatus.Active)
+                    {
+                        rows[index] = WithStatus(row, "UpdateProfile");
                     }
                 }
             }

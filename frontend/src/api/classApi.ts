@@ -71,9 +71,19 @@ export const classApi = {
     axiosClient.post('/classes/bulk/export-excel', data, { responseType: 'blob' }),
 
   // Verify student majors against lecturer's Excel file
+  previewMajors: (classId, formData) =>
+    runClassFeatureRequest(classFeatureFlags.majorVerification, 'Class major preview', () =>
+      axiosClient.post(`/classes/${classId}/major-verification/preview`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      })),
   verifyMajors: (classId, formData) =>
     runClassFeatureRequest(classFeatureFlags.majorVerification, 'Class major verification', () =>
       axiosClient.post(`/classes/${classId}/major-verification`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      })),
+  synchronizeMajorsFromFile: (classId, formData) =>
+    runClassFeatureRequest(classFeatureFlags.majorVerification, 'Class major synchronization', () =>
+      axiosClient.post(`/classes/${classId}/major-verification/synchronize`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       })),
   getMajorVerificationTemplate: () =>

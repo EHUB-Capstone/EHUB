@@ -666,7 +666,7 @@ export default function ClassDetail() {
 
         {canManageClass && showActionsMenu && (
           <div className="flex flex-wrap items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50/70 p-2.5 transition-all">
-            {isFeatureVisible(classFeatureFlags.chatBackfill) && (
+            {/* {isFeatureVisible(classFeatureFlags.chatBackfill) && (
               <ClassActionButton
                 icon={MessagesSquare}
                 loading={backfilling}
@@ -675,10 +675,10 @@ export default function ClassDetail() {
               >
                 {backfilling ? 'Repairing...' : 'Repair Chats'}
               </ClassActionButton>
-            )}
+            )} */}
 
             <ClassActionButton icon={Download} loading={exporting} onClick={handleExportExcel} disabled={exporting}>
-              Export
+              Export Class Data
             </ClassActionButton>
 
             {!isReadOnly && (
@@ -687,9 +687,9 @@ export default function ClassDetail() {
                   Add student
                 </ClassActionButton>
 
-                <ClassActionButton icon={UserRoundCheck} tone="secondary" onClick={() => openStudentAssignment('CLASS')}>
+                {/* <ClassActionButton icon={UserRoundCheck} tone="secondary" onClick={() => openStudentAssignment('CLASS')}>
                   Assign students
-                </ClassActionButton>
+                </ClassActionButton> */}
 
                 <ClassActionButton
                   icon={Trash2}
@@ -717,7 +717,7 @@ export default function ClassDetail() {
                 tone="indigo"
                 onClick={() => runFeatureAction(classFeatureFlags.majorVerification, 'Major verification', () => setShowVerify(true))}
               >
-                Verify majors
+                Verify / sync majors
               </ClassActionButton>
             )}
 
@@ -1081,6 +1081,7 @@ export default function ClassDetail() {
         <VerifyMajorModal
           classId={loadedClassId}
           onClose={() => setShowVerify(false)}
+          onUpdated={() => void fetchData()}
         />
       )}
 

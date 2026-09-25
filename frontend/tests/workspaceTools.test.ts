@@ -12,7 +12,7 @@ import {
   normalizeFilters,
 } from '../src/features/execution-board/boardUtils.ts';
 import { taskProgress } from '../src/utils/taskProgress.ts';
-import { groupWorkspacesByClass, normalizeAccessibleWorkspaces } from '../src/utils/workspaceHub.ts';
+import { filterWorkspaces, groupWorkspacesByClass, normalizeAccessibleWorkspaces, parseWorkspaceSemester, resolveWorkspaceSemesterScope } from '../src/utils/workspaceHub.ts';
 
 test('workspace hub reads the accessible workspace array from the API envelope', () => {
   const workspaces = [{
@@ -57,6 +57,51 @@ test('workspace hub groups teams by class code and sorts class and team names na
 
   assert.deepEqual(groups.map(group => group.classCode), ['SE2', 'SE10']);
   assert.deepEqual(groups[1].workspaces.map(workspace => workspace.teamName), ['Team 1', 'Team 10']);
+  assert.deepEqual(groupWorkspacesByClass(groups.flatMap(group => group.workspaces), 'class-desc').map(group => group.classCode), ['SE10', 'SE2']);
+  assert.deepEqual(groupWorkspacesByClass(groups.flatMap(group => group.workspaces), 'team-desc')[1].workspaces.map(workspace => workspace.teamName), ['Team 10', 'Team 1']);
+});
+
+test('workspace hub filters by the same semester and year used in class links', () => {
+  const base = {
+    courseCode: 'EXE201',
+    accessMode: 'READ_WRITE' as const,
+    isArchived: false,
+    isCurrent: true,
+    hasWorkspace: true,
+  };
+  const workspaces = [
+    { ...base, teamId: 'team-1', teamName: 'Phoenix', classId: 'class-1', classCode: 'EXE201_8', semester: 'FA2026' },
+    { ...base, teamId: 'team-2', teamName: 'Orbit', classId: 'class-2', classCode: 'EXE101_1', courseCode: 'EXE101', semester: 'FA26', hasWorkspace: false },
+    { ...base, teamId: 'team-3', teamName: 'Atlas', classId: 'class-3', classCode: 'EXE201_3', semester: 'SP2027', accessMode: 'READ_ONLY' as const },
+  ];
+
+  assert.deepEqual(parseWorkspaceSemester('FA2026'), { semester: 'FA', year: '2026' });
+  assert.deepEqual(parseWorkspaceSemester('FA26'), { semester: 'FA', year: '2026' });
+  assert.deepEqual(filterWorkspaces(workspaces, { semester: 'FA', year: '2026' }).map(team => team.teamId), ['team-1', 'team-2']);
+  assert.deepEqual(filterWorkspaces(workspaces, { semester: 'all', year: 'all' }).map(team => team.teamId), ['team-1', 'team-2', 'team-3']);
+  assert.deepEqual(filterWorkspaces(workspaces, { semester: 'none', year: 'none' }), []);
+  assert.deepEqual(filterWorkspaces(workspaces, { search: 'PHOENIX', subject: 'EXE201', workspaceStatus: 'created', access: 'READ_WRITE' }).map(team => team.teamId), ['team-1']);
+  assert.deepEqual(filterWorkspaces(workspaces, { workspaceStatus: 'not-created' }).map(team => team.teamId), ['team-2']);
+  assert.deepEqual(filterWorkspaces(workspaces, { access: 'READ_ONLY' }).map(team => team.teamId), ['team-3']);
+});
+
+test('workspace hub defaults to the active semester without overriding explicit filters', () => {
+  const active = { semester: 'FA', year: 2026 };
+  assert.deepEqual(resolveWorkspaceSemesterScope(new URLSearchParams(), active), {
+    semester: 'FA', year: '2026', isDefault: true,
+  });
+  assert.deepEqual(resolveWorkspaceSemesterScope(new URLSearchParams('search=team'), active), {
+    semester: 'FA', year: '2026', isDefault: true,
+  });
+  assert.deepEqual(resolveWorkspaceSemesterScope(new URLSearchParams('semester=SP&year=2025'), active), {
+    semester: 'SP', year: '2025', isDefault: false,
+  });
+  assert.deepEqual(resolveWorkspaceSemesterScope(new URLSearchParams('semester=all&year=all'), active), {
+    semester: 'all', year: 'all', isDefault: false,
+  });
+  assert.deepEqual(resolveWorkspaceSemesterScope(new URLSearchParams(), null), {
+    semester: 'none', year: 'none', isDefault: true,
+  });
 });
 
 test('table and board summary use API progress instead of status estimates', () => {

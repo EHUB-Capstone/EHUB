@@ -108,6 +108,21 @@ internal sealed class OutboxProcessorBackgroundService : BackgroundService
             await context.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
 
+            try
+            {
+                await dispatcher.PublishAfterCommitAsync(message, cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception exception)
+            {
+                // The outbox is already committed. A best-effort realtime hint must not
+                // make an idempotent notification projection run a second time.
+                _logger.LogWarning(exception, "Unable to publish realtime hint for outbox event {OutboxEventId}", message.EventId);
+            }
+
             _logger.LogInformation(
                 "Processed outbox event {OutboxEventId} {OutboxEventType}",
                 message.EventId,
