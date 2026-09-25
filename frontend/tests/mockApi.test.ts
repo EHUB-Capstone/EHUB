@@ -61,7 +61,8 @@ test('admin class export mock rejects a selected class outside the requested sem
 
 test('workspace active semester is available to mentors but not students or anonymous users', async () => {
   resetMockState();
-  await assert.rejects(axiosClient.get('/workspace/active-semester'),
+  // Inspect the endpoint's 401 directly; the shared browser client otherwise tries to refresh a session.
+  await assert.rejects(axiosClient.get('/workspace/active-semester', { _retry: true }),
     (error: unknown) => (error as { response?: { status?: number } }).response?.status === 401);
 
   await axiosClient.post('/auth/login', { email: 'khoa.mentor@ehub.local', password: 'Mock123!' });
