@@ -30,12 +30,41 @@ public sealed class VerifyClassMajorsCommandHandler : IVerifyClassMajorsCommandH
         _context = context;
     }
 
+    public async Task<Result<VerifyClassMajorsResponse>> PreviewAsync(
+        Guid classId,
+        IFormFile file,
+        Guid currentUserId,
+        string currentUserRole,
+        CancellationToken cancellationToken = default)
+        => await ProcessAsync(classId, file, currentUserId, currentUserRole,
+            synchronize: false, previewOnly: true, cancellationToken);
+
     public async Task<Result<VerifyClassMajorsResponse>> HandleAsync(
         Guid classId,
         IFormFile file,
         Guid currentUserId,
         string currentUserRole,
         CancellationToken cancellationToken = default)
+        => await ProcessAsync(classId, file, currentUserId, currentUserRole,
+            synchronize: false, previewOnly: false, cancellationToken);
+
+    public async Task<Result<VerifyClassMajorsResponse>> SynchronizeAsync(
+        Guid classId,
+        IFormFile file,
+        Guid currentUserId,
+        string currentUserRole,
+        CancellationToken cancellationToken = default)
+        => await ProcessAsync(classId, file, currentUserId, currentUserRole,
+            synchronize: true, previewOnly: false, cancellationToken);
+
+    private async Task<Result<VerifyClassMajorsResponse>> ProcessAsync(
+        Guid classId,
+        IFormFile file,
+        Guid currentUserId,
+        string currentUserRole,
+        bool synchronize,
+        bool previewOnly,
+        CancellationToken cancellationToken)
     {
         if (!ClassAuthorizationRules.IsStaff(currentUserRole))
         {
@@ -62,6 +91,11 @@ public sealed class VerifyClassMajorsCommandHandler : IVerifyClassMajorsCommandH
         if (mutationError != null)
         {
             return Failure(mutationError.Code, mutationError.Message);
+        }
+
+        if (synchronize && targetClass.IsEnrollmentMajorLocked)
+        {
+            return Failure(ErrorCodes.ClassEnrollmentMajorLocked, "Unlock major updates before synchronizing the official file.");
         }
 
         if (file == null || file.Length == 0)
@@ -93,6 +127,17 @@ public sealed class VerifyClassMajorsCommandHandler : IVerifyClassMajorsCommandH
             .Where(group => group.Count() > 1)
             .Select(group => group.Key)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (synchronize && duplicateCodes.Count > 0)
+        {
+            return Failure(ErrorCodes.ClassValidationError, "The file contains duplicate RollNumber values. No majors were changed.");
+        }
+
+        if (synchronize && sourceRows.Any(row =>
+                string.IsNullOrWhiteSpace(row.StudentCode) || !MajorCodes.IsValid(row.MajorCode)))
+        {
+            return Failure(ErrorCodes.ClassValidationError, "Every file row needs a RollNumber and a valid major. No majors were changed.");
+        }
+
         var sourceByCode = sourceRows
             .Where(row => !string.IsNullOrWhiteSpace(row.StudentCode) && !duplicateCodes.Contains(row.StudentCode))
             .ToDictionary(row => row.StudentCode, StringComparer.OrdinalIgnoreCase);
@@ -105,12 +150,40 @@ public sealed class VerifyClassMajorsCommandHandler : IVerifyClassMajorsCommandH
             .OrderBy(enrollment => enrollment.Student.RollNumber)
             .ToListAsync(cancellationToken);
 
+        if (synchronize && !enrollments.Any(enrollment => sourceByCode.ContainsKey(
+                (enrollment.Student.NormalizedRollNumber ?? enrollment.Student.RollNumber ?? string.Empty).Trim())))
+        {
+            return Failure(ErrorCodes.ClassValidationError, "No RollNumber in the file matches an active student in this class.");
+        }
+
+        // An older imported enrollment can still point to an unlinked Student row.
+        // Update only a uniquely linked profile with the same roster email in that case.
+        var linkedProfilesByEmail = new Dictionary<string, Student>(StringComparer.OrdinalIgnoreCase);
+        if (synchronize || previewOnly)
+        {
+            var rosterEmails = enrollments
+                .Where(enrollment => !string.IsNullOrWhiteSpace(enrollment.Student.Email))
+                .Select(enrollment => enrollment.Student.Email!.Trim().ToLowerInvariant())
+                .Distinct()
+                .ToArray();
+            linkedProfilesByEmail = (await _context.Students
+                    .Where(student => student.UserId.HasValue && student.Email != null &&
+                        rosterEmails.Contains(student.Email.ToLower()))
+                    .ToListAsync(cancellationToken))
+                .Where(student => !string.IsNullOrWhiteSpace(student.Email))
+                .GroupBy(student => student.Email!.Trim(), StringComparer.OrdinalIgnoreCase)
+                .Where(group => group.Count() == 1)
+                .ToDictionary(group => group.Key, group => group.Single(), StringComparer.OrdinalIgnoreCase);
+        }
+
         var matched = new List<MajorVerificationRowDto>();
         var mismatched = new List<MajorVerificationRowDto>();
         var missing = new List<MajorVerificationRowDto>();
         var notFound = new List<MajorVerificationRowDto>();
         var rosterCodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var verifiedAt = DateTime.UtcNow;
+        var synchronizedEnrollmentCount = 0;
+        var synchronizedProfileCount = 0;
 
         foreach (var enrollment in enrollments)
         {
@@ -149,10 +222,53 @@ public sealed class VerifyClassMajorsCommandHandler : IVerifyClassMajorsCommandH
                 message = "The imported major differs from the enrollment snapshot.";
             }
 
-            enrollment.MajorVerificationStatus = status;
-            enrollment.MajorVerifiedAtUtc = verifiedAt;
-            enrollment.MajorVerifiedByUserId = currentUserId;
-            enrollment.UpdatedAt = verifiedAt;
+            Student? linkedProfile = null;
+            if (!enrollment.Student.UserId.HasValue &&
+                !string.IsNullOrWhiteSpace(enrollment.Student.Email) &&
+                linkedProfilesByEmail.TryGetValue(enrollment.Student.Email.Trim(), out var registeredProfile) &&
+                (string.IsNullOrWhiteSpace(registeredProfile.NormalizedRollNumber ?? registeredProfile.RollNumber) ||
+                 string.Equals(registeredProfile.NormalizedRollNumber ?? registeredProfile.RollNumber,
+                     studentCode, StringComparison.OrdinalIgnoreCase)) &&
+                registeredProfile.Id != enrollment.Student.Id)
+            {
+                linkedProfile = registeredProfile;
+            }
+            var profileMajorBefore = (linkedProfile ?? enrollment.Student).MajorCode;
+
+            if (synchronize && source != null && MajorCodes.IsValid(source.MajorCode))
+            {
+                if (!string.Equals(enrollment.MajorCodeAtEnrollment, source.MajorCode, StringComparison.OrdinalIgnoreCase))
+                {
+                    enrollment.MajorCodeAtEnrollment = source.MajorCode;
+                    synchronizedEnrollmentCount++;
+                }
+
+                var profilesToUpdate = new List<Student> { enrollment.Student };
+                if (linkedProfile != null)
+                {
+                    profilesToUpdate.Add(linkedProfile);
+                }
+
+                foreach (var profile in profilesToUpdate)
+                {
+                    if (string.Equals(profile.MajorCode, source.MajorCode, StringComparison.OrdinalIgnoreCase)) continue;
+                    profile.MajorCode = source.MajorCode;
+                    profile.UpdatedAt = verifiedAt;
+                    profile.UpdatedBy = currentUserId;
+                    synchronizedProfileCount++;
+                }
+
+                status = EnrollmentMajorVerificationStatus.Matched;
+                message = null;
+            }
+
+            if (!previewOnly)
+            {
+                enrollment.MajorVerificationStatus = status;
+                enrollment.MajorVerifiedAtUtc = verifiedAt;
+                enrollment.MajorVerifiedByUserId = currentUserId;
+                enrollment.UpdatedAt = verifiedAt;
+            }
 
             AddToBucket(new MajorVerificationRowDto
             {
@@ -163,6 +279,7 @@ public sealed class VerifyClassMajorsCommandHandler : IVerifyClassMajorsCommandH
                 Email = enrollment.Student.Email ?? string.Empty,
                 MajorInFile = source?.MajorCode,
                 MajorInDb = enrollment.MajorCodeAtEnrollment,
+                MajorInProfile = synchronize ? (linkedProfile ?? enrollment.Student).MajorCode : profileMajorBefore,
                 Status = status.ToString(),
                 Message = message
             }, status, matched, mismatched, missing, notFound);
@@ -184,36 +301,43 @@ public sealed class VerifyClassMajorsCommandHandler : IVerifyClassMajorsCommandH
             });
         }
 
-        _context.ClassAuditLogs.Add(new ClassAuditLog
+        if (!previewOnly)
         {
-            ClassId = classId,
-            Action = "ENROLLMENT_MAJORS_VERIFIED",
-            PerformedByUserId = currentUserId,
-            OccurredAtUtc = verifiedAt,
-            DetailsJson = JsonSerializer.Serialize(new
+            _context.ClassAuditLogs.Add(new ClassAuditLog
             {
-                FileName = Path.GetFileName(file.FileName),
+                ClassId = classId,
+                Action = synchronize ? "ENROLLMENT_MAJORS_SYNCHRONIZED_FROM_FILE" : "ENROLLMENT_MAJORS_VERIFIED",
+                PerformedByUserId = currentUserId,
+                OccurredAtUtc = verifiedAt,
+                DetailsJson = JsonSerializer.Serialize(new
+                {
+                    FileName = Path.GetFileName(file.FileName),
+                    MatchedCount = matched.Count,
+                    MismatchedCount = mismatched.Count,
+                    MissingCount = missing.Count,
+                    NotFoundCount = notFound.Count,
+                    SynchronizedEnrollmentCount = synchronizedEnrollmentCount,
+                    SynchronizedProfileCount = synchronizedProfileCount
+                })
+            });
+            ClassOutbox.Enqueue(_context, synchronize ? "Class.EnrollmentMajorsSynchronizedFromFile.v1" : "Class.EnrollmentMajorsVerified.v1", classId, new
+            {
                 MatchedCount = matched.Count,
                 MismatchedCount = mismatched.Count,
                 MissingCount = missing.Count,
-                NotFoundCount = notFound.Count
-            })
-        });
-        ClassOutbox.Enqueue(_context, "Class.EnrollmentMajorsVerified.v1", classId, new
-        {
-            MatchedCount = matched.Count,
-            MismatchedCount = mismatched.Count,
-            MissingCount = missing.Count,
-            NotFoundCount = notFound.Count
-        }, verifiedAt);
+                NotFoundCount = notFound.Count,
+                SynchronizedEnrollmentCount = synchronizedEnrollmentCount,
+                SynchronizedProfileCount = synchronizedProfileCount
+            }, verifiedAt);
 
-        try
-        {
-            await _context.SaveChangesAsync(cancellationToken);
-        }
-        catch (DbUpdateConcurrencyException)
-        {
-            return Failure(ErrorCodes.ClassConcurrencyConflict, "The roster changed concurrently. Refresh and verify the file again.");
+            try
+            {
+                await _context.SaveChangesAsync(cancellationToken);
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                return Failure(ErrorCodes.ClassConcurrencyConflict, "The roster changed concurrently. Refresh and verify the file again.");
+            }
         }
 
         return Result.Success(new VerifyClassMajorsResponse
@@ -221,7 +345,9 @@ public sealed class VerifyClassMajorsCommandHandler : IVerifyClassMajorsCommandH
             Matched = matched,
             Mismatched = mismatched,
             Missing = missing,
-            NotFound = notFound
+            NotFound = notFound,
+            SynchronizedEnrollmentCount = synchronizedEnrollmentCount,
+            SynchronizedProfileCount = synchronizedProfileCount
         });
     }
 

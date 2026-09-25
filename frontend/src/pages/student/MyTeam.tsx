@@ -1,12 +1,16 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Users, Shield, MessageSquare, AlertCircle, Calendar, Star, Loader2, Sparkles, ArrowRight, Crown } from 'lucide-react';
+import { Users, Shield, AlertCircle, Calendar, Star, Loader2, Sparkles, ArrowRight, Crown } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { classApi } from '../../api/classApi';
+import { teamFormationApi } from '../../api/teamFormationApi';
+import type { TeamFormation } from '../../types/teamFormation';
 import EmptyState from '../../components/ui/EmptyState';
 import { getDisplayTeamName } from '../../utils/teamDisplay';
 import { unwrapApiData } from '../../utils/classMappers';
 import { entityId, getTeamMembers, normalizeManagedTeam } from '../../utils/teamManagement';
+import PendingTeamFormationView from './PendingTeamFormationView';
+import { subscribeProjectDirectionRealtime } from '../../api/projectDirectionRealtime';
 
 const majorColor = (major) => {
   const palette = [
@@ -26,30 +30,52 @@ export default function MyTeam() {
   const [data, setData] = useState(null);
   const [currentClasses, setCurrentClasses] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [formations, setFormations] = useState<TeamFormation[]>([]);
+  const [formationError, setFormationError] = useState(false);
+  const [selectedFormationId, setSelectedFormationId] = useState<string | null>(null);
   const navigate = useNavigate();
 
-  useEffect(() => {
-    const fetchTeam = async () => {
-      try {
-        const res = await classApi.getMyTeam();
-        const payload = unwrapApiData<any>(res as any);
-        if (!payload?.team) {
-          setData(payload || null);
-          const classesResponse = await classApi.getMyClasses('Current');
-          const classesPayload = unwrapApiData<any>(classesResponse as any);
-          setCurrentClasses(Array.isArray(classesPayload?.classes) ? classesPayload.classes : []);
-        } else {
-          const team = normalizeManagedTeam(payload.team);
-          setData({ ...payload, team, members: getTeamMembers(team) });
-        }
-      } catch (err) {
-        toast.error(err?.message || 'Failed to load your team details');
-      } finally {
-        setLoading(false);
+  const fetchTeam = useCallback(async (showLoading = true) => {
+    if (showLoading) setLoading(true);
+    try {
+      const res = await classApi.getMyTeam();
+      const payload = unwrapApiData<any>(res as any);
+      if (!payload?.team) {
+        setData(payload || null);
+        const classesResponse = await classApi.getMyClasses('Current');
+        const classesPayload = unwrapApiData<any>(classesResponse as any);
+        setCurrentClasses(Array.isArray(classesPayload?.classes) ? classesPayload.classes : []);
+      } else {
+        const team = normalizeManagedTeam(payload.team);
+        setData({ ...payload, team, members: getTeamMembers(team) });
       }
-    };
-    fetchTeam();
+    } catch (err) {
+      toast.error(err?.message || 'Failed to load your team details');
+    }
+    try {
+      const response = await teamFormationApi.mine();
+      const payload = unwrapApiData<TeamFormation[]>(response);
+      setFormations(Array.isArray(payload) ? payload : []);
+      setFormationError(false);
+    } catch {
+      setFormationError(true);
+    } finally {
+      if (showLoading) setLoading(false);
+    }
   }, []);
+
+  useEffect(() => { void fetchTeam(); }, [fetchTeam]);
+
+  useEffect(() => subscribeProjectDirectionRealtime((event) => {
+    if (event.eventType === 'TeamFormationChanged') void fetchTeam(false);
+  }, () => {
+    void fetchTeam(false);
+  }), [fetchTeam]);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => { void fetchTeam(false); }, 30_000);
+    return () => window.clearInterval(interval);
+  }, [fetchTeam]);
 
   if (loading) {
     return (
@@ -64,11 +90,39 @@ export default function MyTeam() {
   const team      = data?.team;
   const cls       = data?.class;
   const members   = Array.isArray(data?.members) ? data.members : [];
-  const chatGroup = data?.chatGroup || data?.team?.chatGroupId || data?.team?.chatGroup;
   const lecturer  = cls?.lectureId;
   const mentor    = team?.currentMentorAssignment?.mentor;
   const displayTeamName = getDisplayTeamName(team) || 'Unnamed Team';
   const leaderId = entityId(team?.leaderId);
+  const pendingFormations = formations.filter(formation => formation.status === 'Pending');
+  const selectedFormation = pendingFormations.find(formation => formation.id === selectedFormationId)
+    ?? (!team ? pendingFormations[0] : null);
+  const showViewSwitcher = pendingFormations.length + (team ? 1 : 0) > 1;
+  const viewControls = (
+    <>
+      {formationError && <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+        Could not load invitations. <button type="button" onClick={() => void fetchTeam()} className="font-semibold underline">Retry</button>
+      </div>}
+      {showViewSwitcher && <div className="flex flex-wrap gap-2" role="group" aria-label="Choose team or invitation">
+        {team && <button type="button" aria-pressed={!selectedFormation} onClick={() => setSelectedFormationId(null)}
+          className={`rounded-lg border px-3 py-2 text-sm font-semibold ${!selectedFormation ? 'border-primary bg-primary-50 text-primary' : 'border-slate-200 bg-white text-slate-600'}`}>
+          Active team
+        </button>}
+        {pendingFormations.map(formation => <button key={formation.id} type="button"
+          aria-pressed={selectedFormation?.id === formation.id} onClick={() => setSelectedFormationId(formation.id)}
+          className={`rounded-lg border px-3 py-2 text-sm font-semibold ${selectedFormation?.id === formation.id ? 'border-primary bg-primary-50 text-primary' : 'border-slate-200 bg-white text-slate-600'}`}>
+          Invitation · {formation.classCode}
+        </button>)}
+      </div>}
+    </>
+  );
+
+  if (selectedFormation) {
+    return <div className="mx-auto max-w-4xl space-y-6">
+      {viewControls}
+      <PendingTeamFormationView formation={selectedFormation} onChanged={fetchTeam} />
+    </div>;
+  }
 
   if (!team) {
     return (
@@ -78,11 +132,12 @@ export default function MyTeam() {
           <p className="text-sm text-slate-500 mt-1">View and collaborate with your startup team members.</p>
         </div>
 
+        {viewControls}
         <div className="bg-white rounded-2xl border border-slate-200/60 p-8 shadow-sm">
           <EmptyState
             icon={Users}
             title="You have not been assigned to a team yet"
-            description="Choose one of your current classes to create a 4–6 student team proposal for lecturer approval."
+            description="Choose one of your current classes to invite 4–6 students to form a team."
             action={currentClasses.length === 0 ? {
               label: 'View my classes',
               onClick: () => navigate('/student/classes'),
@@ -99,7 +154,7 @@ export default function MyTeam() {
                 >
                   <span className="min-w-0">
                     <span className="block truncate text-sm font-bold text-slate-800">{item.classCode}</span>
-                    <span className="block truncate text-xs text-slate-500">{item.subjectCode} · Create team proposal</span>
+                    <span className="block truncate text-xs text-slate-500">{item.subjectCode} · Create team formation</span>
                   </span>
                   <ArrowRight className="h-4 w-4 shrink-0 text-primary" />
                 </button>
@@ -113,6 +168,7 @@ export default function MyTeam() {
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
+      {viewControls}
       {/* Header */}
       <div className="flex justify-between items-start flex-wrap gap-4">
         <div>
@@ -151,25 +207,6 @@ export default function MyTeam() {
                 &ldquo;{team.description}&rdquo;
               </p>
             )}
-
-            {/* Chat status */}
-            <div className="flex items-center justify-between p-3 rounded-xl border border-slate-100 bg-white/80 backdrop-blur-xs">
-              <div className="flex items-center gap-2">
-                <div className={`w-2.5 h-2.5 rounded-full ${chatGroup ? 'bg-green-500 animate-pulse' : 'bg-slate-300'}`} />
-                <span className="text-xs font-semibold text-slate-600">
-                  {chatGroup ? 'Team Chat Active' : 'Team Chat not configured'}
-                </span>
-              </div>
-              {chatGroup && (
-                <button
-                  onClick={() => navigate(`/chat?groupId=${chatGroup._id}`)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-white hover:bg-primary-600 active:scale-95 transition-all text-xs font-bold rounded-lg cursor-pointer shadow-xs"
-                >
-                  <MessageSquare className="w-3.5 h-3.5" />
-                  Chat Now
-                </button>
-              )}
-            </div>
 
             {/* Startup Workspace Link */}
             <div className="pt-2">

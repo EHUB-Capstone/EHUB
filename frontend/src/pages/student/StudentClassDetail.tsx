@@ -3,13 +3,16 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowRight, ChevronLeft, GraduationCap, Users, Mail, Loader2, LayoutGrid, Lock, Rocket, UserPlus } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { classApi } from '../../api/classApi';
+import { teamFormationApi } from '../../api/teamFormationApi';
 import TeamList from '../../components/class/TeamList';
 import StudentTable from '../../components/class/StudentTable';
 import StudentTeamGeneratePanel from '../../components/class/StudentTeamGeneratePanel';
+import TeamFormationCard from '../../components/class/TeamFormationCard';
+import type { TeamFormation } from '../../types/teamFormation';
 import TeamSuggestionTooltip from '../../components/class/TeamSuggestionTooltip';
 import { useAuth } from '../../hooks/useAuth';
 import { unwrapApiData } from '../../utils/classMappers';
-import { entityId, normalizeManagedTeam, normalizeTeamProposal, getTeamMemberIds, mergeTeamsWithLinkedProposals, isMissingTeamMajor } from '../../utils/teamManagement';
+import { entityId, normalizeManagedTeam, normalizeTeamProposal, getTeamMemberIds, mergeTeamsWithLinkedProposals } from '../../utils/teamManagement';
 import ProjectDirectionModal from '../../components/class/ProjectDirectionModal';
 import { teamApi } from '../../api/teamApi';
 import { parseApiError } from '../../utils/apiError';
@@ -27,6 +30,8 @@ export default function StudentClassDetail() {
   const [activeTab, setActiveTab] = useState('classmates');
   const [selected, setSelected] = useState([]);
   const [proposals, setProposals] = useState([]);
+  const [formations, setFormations] = useState<TeamFormation[]>([]);
+  const [formationError, setFormationError] = useState(false);
   const [proposalToRevise, setProposalToRevise] = useState(null);
   const [directionTeam, setDirectionTeam] = useState(null);
   const [proposalToCancel, setProposalToCancel] = useState(null);
@@ -58,6 +63,14 @@ export default function StudentClassDetail() {
       setData({ ...detail, students: normalizedStudents, teams: normalizedTeams });
       const proposalData = unwrapApiData(proposalResponse);
       setProposals((Array.isArray(proposalData) ? proposalData : []).map(normalizeTeamProposal));
+      try {
+        const formationResponse = await teamFormationApi.mine(currentClassId);
+        const formationData = unwrapApiData<TeamFormation[]>(formationResponse);
+        setFormations(Array.isArray(formationData) ? formationData : []);
+        setFormationError(false);
+      } catch {
+        setFormationError(true);
+      }
     } catch (err) {
       toast.error(err?.message || 'Failed to load class details');
       navigate('/student/classes');
@@ -73,12 +86,13 @@ export default function StudentClassDetail() {
 
   useEffect(() => subscribeProjectDirectionRealtime((event) => {
     const currentClassId = String(data?.class?.id || data?.class?._id || '');
-    if (currentClassId && (event.eventType === 'ClassMajorUpdated' || event.eventType === 'TeamProposalReviewed')
+    if (currentClassId && (event.eventType === 'ClassMajorUpdated' || event.eventType === 'TeamProposalReviewed'
+      || event.eventType === 'TeamFormationChanged')
       && String(event.classId) === currentClassId) {
       void fetchClassDetail();
     }
-  }, (reconnected) => {
-    if (reconnected) void fetchClassDetail();
+  }, () => {
+    void fetchClassDetail();
   }), [data?.class?.id, data?.class?._id, fetchClassDetail]);
 
   if (loading) {
@@ -104,6 +118,7 @@ export default function StudentClassDetail() {
       || (user?.email && s.email?.toLowerCase() === user.email.toLowerCase());
   });
   const hasTeam = Boolean(currentStudent?.teamId);
+  const hasPendingFormation = formations.some(formation => formation.status === 'Pending');
   const reservedProposal = proposals.find((proposal) => {
     const status = String(proposal.status || '').toUpperCase();
     return ['DRAFT', 'PENDING', 'NEEDS_REVISION', 'NEEDSREVISION'].includes(status)
@@ -119,6 +134,7 @@ export default function StudentClassDetail() {
   const isPendingProjectProposal = reservedProposalStatus === 'PENDING' && Boolean(reservedProposalTeamId);
   const selectionDisabled = isReadOnly
     || (hasTeam && !canEditReservedProposal)
+    || hasPendingFormation
     || Boolean(reservedProposal && !canEditReservedProposal);
 
   const handleTeamCreated = async () => {
@@ -133,11 +149,6 @@ export default function StudentClassDetail() {
       toast.error('Your student profile could not be found in this class.');
       return;
     }
-    if (isMissingTeamMajor(currentStudent.major)) {
-      toast.error('Select your major from your row before creating or joining a team.');
-      return;
-    }
-
     setProposalToRevise(null);
     setSelected([currentStudent._id]);
     setActiveTab('classmates');
@@ -266,12 +277,12 @@ export default function StudentClassDetail() {
         </div>
       )}
 
-      {!isReadOnly && !hasTeam && !reservedProposal && selected.length === 0 && (
+      {!isReadOnly && !hasTeam && !reservedProposal && !hasPendingFormation && selected.length === 0 && (
         <div className="flex flex-col gap-3 rounded-xl border border-primary-100 bg-primary-50/60 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-sm font-semibold text-slate-800">You do not have a team in this class yet</p>
             <p className="mt-0.5 text-xs text-slate-600">
-              Choose 4–6 eligible classmates and a leader. Your team is created immediately; only the project proposal needs lecturer review.
+              Choose 4–6 classmates and a leader. Your team is created only after everyone accepts the invitation.
             </p>
           </div>
           <button
@@ -283,6 +294,13 @@ export default function StudentClassDetail() {
           </button>
         </div>
       )}
+
+      {formationError && <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+        Could not load team invitations. <button type="button" onClick={() => void fetchClassDetail()} className="font-semibold underline">Retry</button>
+      </div>}
+      {formations.filter(formation => formation.status === 'Pending').map(formation => (
+        <TeamFormationCard key={formation.id} formation={formation} onChanged={fetchClassDetail} />
+      ))}
 
       {!isReadOnly && reservedProposal && !canEditReservedProposal && (
         <div className="flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 sm:flex-row sm:items-center sm:justify-between">

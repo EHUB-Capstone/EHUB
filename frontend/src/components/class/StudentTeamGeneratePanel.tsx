@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import { Users, AlertTriangle, CheckCircle2, Crown, Loader2, AlertCircle, Send, X } from 'lucide-react';
-import { classApi } from '../../api/classApi';
 import { teamApi } from '../../api/teamApi';
+import { teamFormationApi } from '../../api/teamFormationApi';
 import { unwrapApiData } from '../../utils/classMappers';
 import { isMissingTeamMajor, validateTeamSelection } from '../../utils/teamManagement';
 import TeamSuggestionTooltip from './TeamSuggestionTooltip';
@@ -137,7 +137,7 @@ export default function StudentTeamGeneratePanel({
     const hasCurrentUser = !requireCurrentStudentMembership || selected.includes(currentStudentId);
 
     const hasLeader = teamSelection.isTeamLeaderValid;
-    const isFormValid = isGroupNameValid && isProjectNameValid && isDescriptionValid && hasCurrentUser && hasLeader;
+    const isFormValid = isGroupNameValid && (!proposal || (isProjectNameValid && isDescriptionValid)) && hasCurrentUser && hasLeader;
 
     return {
       selectedStudents,
@@ -151,7 +151,7 @@ export default function StudentTeamGeneratePanel({
       hasCurrentUser,
       hasLeader,
     };
-  }, [selected, students, groupName, projectName, description, isProjectNameSameAsGroup, currentStudentId, requireCurrentStudentMembership, selectedLeaderId]);
+  }, [selected, students, groupName, projectName, description, isProjectNameSameAsGroup, currentStudentId, requireCurrentStudentMembership, selectedLeaderId, proposal]);
 
   const {
     selectedStudents, studentCount, uniqueMajors,
@@ -160,11 +160,10 @@ export default function StudentTeamGeneratePanel({
   } = validation;
   const canSubmit = isFormValid && isFullyValid;
   const selectedLeader = selectedStudents.find(student => student._id === selectedLeaderId);
-  const confirmedProjectName = isProjectNameSameAsGroup ? groupName.trim() : projectName.trim();
 
   const requestSubmission = () => {
     if (submitting || !canSubmit) {
-      toast.error('Complete the required team and project information.');
+      toast.error('Complete the required team information.');
       return;
     }
 
@@ -178,7 +177,7 @@ export default function StudentTeamGeneratePanel({
 
   const handleSubmit = async () => {
     if (submitting || !canSubmit) {
-      toast.error('Complete the required team and project information.');
+      toast.error('Complete the required team information.');
       return;
     }
 
@@ -196,18 +195,15 @@ export default function StudentTeamGeneratePanel({
         const draft = unwrapApiData<any>(response);
         await teamApi.submitProposal(draft.id, draft.rowVersion);
       } else {
-        await classApi.submitTeamProposal(classId, {
-          studentIds: selected,
+        await teamFormationApi.create(classId, {
+          memberStudentIds: selected,
           leaderStudentId: selectedLeaderId,
-          groupName: groupName.trim(),
-          projectName: isProjectNameSameAsGroup ? groupName.trim() : projectName.trim(),
-          isProjectNameSameAsGroup,
-          description: description.trim(),
+          teamName: groupName.trim(),
         });
       }
 
       toast.success(
-        proposal ? 'Project proposal resubmitted. Your team is unchanged.' : 'Team created. The project proposal is awaiting lecturer review.',
+        proposal ? 'Project proposal resubmitted. Your team is unchanged.' : 'Invitations sent. Your team will be created after everyone accepts.',
       );
       
       // Reset form
@@ -231,7 +227,7 @@ export default function StudentTeamGeneratePanel({
       <div className="hidden">
         <div>
           <h3 className="text-lg font-bold text-slate-900">Create team</h3>
-          <p className="mt-0.5 text-xs text-slate-500">Teams are active immediately. Project proposals require lecturer approval.</p>
+          <p className="mt-0.5 text-xs text-slate-500">The team becomes active after all selected members accept.</p>
         </div>
         {suggestionInfo && (
           <TeamSuggestionTooltip>
@@ -274,12 +270,12 @@ export default function StudentTeamGeneratePanel({
               >
                 <option value="">Select a team member</option>
                 {selectedStudents.map(student => (
-                  <option key={student._id} value={student._id}>{student.fullName}</option>
+                  <option key={student._id} value={student._id}>{student.fullName} ({student.rollNumber || 'No student code'})</option>
                 ))}
               </select>
             </div>
 
-            <div>
+            {proposal && <div>
               <label className="mb-1.5 flex items-center justify-between gap-2 text-xs font-semibold text-slate-600">
                 <span>Project name <span className="text-red-500">*</span></span>
                 <span className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-slate-500">
@@ -306,9 +302,9 @@ export default function StudentTeamGeneratePanel({
               {!isProjectNameSameAsGroup && projectName.length > 0 && projectName.trim().length < 3 && (
                 <p className="mt-1 text-xs text-red-500">Project name must be 3–60 characters.</p>
               )}
-            </div>
+            </div>}
 
-            <div>
+            {proposal && <div>
               <label className="mb-1.5 block text-xs font-semibold text-slate-600">
                 Project description <span className="text-red-500">*</span>
               </label>
@@ -329,7 +325,7 @@ export default function StudentTeamGeneratePanel({
                 </span>
                 <span className="text-xs text-slate-400">{description.length}/500</span>
               </div>
-            </div>
+            </div>}
           </div>
         )}
 
@@ -387,7 +383,7 @@ export default function StudentTeamGeneratePanel({
               <div className="mt-1.5 flex items-start gap-2 text-[10px] text-amber-700">
                 <AlertCircle className="w-4 h-4 text-amber-500 shrink-0" />
                 <p className="text-xs text-amber-700">
-                  {missingMajorCount} selected student(s) have no declared major.
+                  {missingMajorCount} selected student(s) have no declared major and do not count toward either major group.
                 </p>
               </div>
             )}
@@ -412,7 +408,7 @@ export default function StudentTeamGeneratePanel({
               className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
             >
               <option value="">Select leader</option>
-              {selectedStudents.map(student => <option key={student._id} value={student._id}>{student.fullName}</option>)}
+              {selectedStudents.map(student => <option key={student._id} value={student._id}>{student.fullName} ({student.rollNumber || 'No student code'})</option>)}
             </select>
             <button
               type="button"
@@ -428,7 +424,7 @@ export default function StudentTeamGeneratePanel({
                 (isFullyValid ? <CheckCircle2 className="w-4 h-4" /> : <Send className="w-4 h-4" />)
               }
               {isFullyValid
-                ? (proposal ? 'Resubmit project proposal' : 'Create Team')
+                ? (proposal ? 'Resubmit project proposal' : 'Send invitations')
                 : 'Requirements not met'}
             </button>
           </div>
@@ -457,7 +453,7 @@ export default function StudentTeamGeneratePanel({
                   Confirm team information
                 </h2>
                 <p className="mt-1 text-sm text-slate-500">
-                  Review all information carefully before creating the team.
+                  Review the members before sending invitations. The team will not be created yet.
                 </p>
               </div>
               <button
@@ -476,14 +472,6 @@ export default function StudentTeamGeneratePanel({
                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                   <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Team name</dt>
                   <dd className="mt-1 break-words text-sm font-semibold text-slate-900">{groupName.trim()}</dd>
-                </div>
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                  <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Project name</dt>
-                  <dd className="mt-1 break-words text-sm font-semibold text-slate-900">{confirmedProjectName}</dd>
-                </div>
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 sm:col-span-2">
-                  <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Project description</dt>
-                  <dd className="mt-1 whitespace-pre-wrap break-words text-sm leading-6 text-slate-700">{description.trim()}</dd>
                 </div>
               </dl>
 
@@ -524,8 +512,8 @@ export default function StudentTeamGeneratePanel({
               <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
                 <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
                 <p>
-                  The team will be activated immediately. The project proposal will remain Pending until it is reviewed.
-                  {selectedLeader && <> The proposal will be recorded on behalf of <strong>{selectedLeader.fullName}</strong>.</>}
+                  Each selected member must accept before the team is created.
+                  {selectedLeader && <> <strong>{selectedLeader.fullName} ({selectedLeader.rollNumber || 'No student code'})</strong> will be the Team Leader after formation is complete.</>}
                 </p>
               </div>
             </div>
@@ -546,7 +534,7 @@ export default function StudentTeamGeneratePanel({
                 className="inline-flex items-center justify-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm font-bold text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-                {submitting ? 'Creating team…' : 'Confirm & Create Team'}
+                {submitting ? 'Sending invitations…' : 'Confirm & Send Invitations'}
               </button>
             </footer>
           </div>

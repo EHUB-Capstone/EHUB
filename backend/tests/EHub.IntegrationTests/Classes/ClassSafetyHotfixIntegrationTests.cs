@@ -19,6 +19,7 @@ using EHub.Application.Features.Classes.UpdateClass;
 using EHub.Application.Features.Classes.UpdateClassSchedule;
 using EHub.Contracts.Classes;
 using EHub.Contracts.Common;
+using EHub.Contracts.Auth;
 using EHub.Contracts.Subjects;
 using EHub.Domain.Entities;
 using EHub.Domain.Enums;
@@ -853,11 +854,20 @@ public sealed class ClassSafetyHotfixIntegrationTests
 
         var importedProfile = await context.Students.AsNoTracking()
             .SingleAsync(student => student.NormalizedRollNumber == studentCode);
+        importedProfile.FullName.Should().Be("Imported Student");
         var enrollment = await context.ClassStudents.AsNoTracking()
             .SingleAsync(item => item.ClassId == seed.ClassId && item.StudentId == importedProfile.Id);
         enrollment.MajorCodeAtEnrollment.Should().Be(MajorCodes.BIT_SE);
         (await context.ClassImportSessions.AsNoTracking().SingleAsync(item => item.Id == previewBody.Data.SessionId))
             .Status.Should().Be(ClassImportSessionStatus.Consumed);
+
+        var googleLogin = await _client.PostAsJsonAsync("/api/auth/google", new GoogleLoginRequest { IdToken = studentEmail });
+        googleLogin.StatusCode.Should().Be(HttpStatusCode.OK);
+        var googleSession = await googleLogin.Content.ReadFromJsonAsync<ApiResponse<AuthResponse>>();
+        googleSession!.Data!.User.FullName.Should().Be("Imported Student");
+        context.ChangeTracker.Clear();
+        (await context.Students.AsNoTracking().SingleAsync(student => student.Id == importedProfile.Id))
+            .UserId.Should().Be(googleSession.Data.User.Id);
     }
 
     [Fact]
@@ -955,38 +965,15 @@ public sealed class ClassSafetyHotfixIntegrationTests
         var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var seed = await CreateClassSeedAsync(context, "import-missing-roll-number");
         var lecturer = await context.Users.SingleAsync(user => user.Id == seed.LecturerId);
-        var studentRole = await context.Roles.SingleAsync(role => role.Name == SystemRoles.Student);
         var token = GenerateToken(scope.ServiceProvider, lecturer, SystemRoles.Lecturer);
         var studentCode = "SE" + Guid.NewGuid().ToString("N")[..8].ToUpperInvariant();
         var studentEmail = $"missing-roll-{Guid.NewGuid():N}@example.com";
-        var studentUser = new User
-        {
-            FullName = "Registered Student Missing Roll Number",
-            Email = studentEmail,
-            NormalizedEmail = studentEmail.ToLowerInvariant(),
-            PasswordHash = "integration-test-only",
-            Status = UserStatus.Active,
-            IsEmailVerified = true
-        };
-        studentUser.UserRoles.Add(new UserRole
-        {
-            UserId = studentUser.Id,
-            User = studentUser,
-            RoleId = studentRole.Id,
-            Role = studentRole
-        });
-        var student = new Student
-        {
-            UserId = studentUser.Id,
-            User = studentUser,
-            FullName = studentUser.FullName,
-            Email = studentEmail,
-            MajorCode = MajorCodes.BIT_SE,
-            Status = StudentStatus.Active,
-            CreatedBy = seed.AdminId
-        };
-        context.Students.Add(student);
-        await context.SaveChangesAsync();
+        var googleLogin = await _client.PostAsJsonAsync("/api/auth/google", new GoogleLoginRequest { IdToken = studentEmail });
+        googleLogin.StatusCode.Should().Be(HttpStatusCode.OK);
+        var googleSession = await googleLogin.Content.ReadFromJsonAsync<ApiResponse<AuthResponse>>();
+        googleSession!.Data!.User.FullName.Should().Be("Google Test User");
+        var student = await context.Students.AsNoTracking()
+            .SingleAsync(item => item.UserId == googleSession.Data.User.Id);
         var studentId = student.Id;
         context.ChangeTracker.Clear();
 
@@ -1024,9 +1011,91 @@ public sealed class ClassSafetyHotfixIntegrationTests
         var completedProfile = await context.Students.AsNoTracking().SingleAsync(item => item.Id == studentId);
         completedProfile.RollNumber.Should().Be(studentCode);
         completedProfile.NormalizedRollNumber.Should().Be(studentCode);
-        completedProfile.UserId.Should().Be(studentUser.Id);
+        completedProfile.UserId.Should().Be(googleSession.Data.User.Id);
+        completedProfile.FullName.Should().Be("Imported Student");
+        (await context.Users.AsNoTracking().SingleAsync(item => item.Id == googleSession.Data.User.Id))
+            .FullName.Should().Be("Imported Student");
         (await context.ClassStudents.AsNoTracking().AnyAsync(item =>
             item.ClassId == seed.ClassId && item.StudentId == studentId)).Should().BeTrue();
+
+        var secondLogin = await _client.PostAsJsonAsync("/api/auth/google", new GoogleLoginRequest { IdToken = studentEmail });
+        secondLogin.StatusCode.Should().Be(HttpStatusCode.OK);
+        (await secondLogin.Content.ReadFromJsonAsync<ApiResponse<AuthResponse>>())!
+            .Data!.User.FullName.Should().Be("Imported Student");
+    }
+
+    [Fact]
+    public async Task ReimportActiveStudent_UpdatesStudentAndUserNamesWithoutChangingEnrollment()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateClassSeedAsync(context, "reimport-name");
+        var lecturer = await context.Users.SingleAsync(user => user.Id == seed.LecturerId);
+        var token = GenerateToken(scope.ServiceProvider, lecturer, SystemRoles.Lecturer);
+        var studentCode = "SE" + Guid.NewGuid().ToString("N")[..8].ToUpperInvariant();
+        var studentEmail = $"reimport-{Guid.NewGuid():N}@example.com";
+
+        var googleLogin = await _client.PostAsJsonAsync("/api/auth/google", new GoogleLoginRequest { IdToken = studentEmail });
+        googleLogin.StatusCode.Should().Be(HttpStatusCode.OK);
+        var googleSession = await googleLogin.Content.ReadFromJsonAsync<ApiResponse<AuthResponse>>();
+        var studentUserId = googleSession!.Data!.User.Id;
+        var student = await context.Students.SingleAsync(item => item.UserId == studentUserId);
+        var targetClass = await context.Classes.AsNoTracking().SingleAsync(item => item.Id == seed.ClassId);
+        student.RollNumber = studentCode;
+        student.NormalizedRollNumber = studentCode;
+        context.ClassStudents.Add(new ClassStudent
+        {
+            ClassId = seed.ClassId,
+            StudentId = student.Id,
+            SemesterId = targetClass.SemesterId,
+            CourseId = targetClass.CourseId,
+            EnrollmentStatus = EnrollmentStatus.Active,
+            CountsTowardCourseSemesterLimit = true,
+            MajorCodeAtEnrollment = MajorCodes.BIT_SE
+        });
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        using var multipart = new MultipartFormDataContent();
+        var fileContent = new ByteArrayContent(CreateImportWorkbook(studentCode, studentEmail, MajorCodes.BIT_SE));
+        fileContent.Headers.ContentType = new MediaTypeHeaderValue("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        multipart.Add(fileContent, "file", "students.xlsx");
+        using var previewRequest = new HttpRequestMessage(HttpMethod.Post, $"/api/classes/{seed.ClassId}/import-students/preview")
+        {
+            Content = multipart
+        };
+        previewRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        var previewResponse = await _client.SendAsync(previewRequest);
+        var previewBody = await previewResponse.Content.ReadFromJsonAsync<ApiResponse<ImportStudentsPreviewResponse>>();
+        previewResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        previewBody!.Data!.Rows.Should().ContainSingle(row => row.IsValid && row.Status == "UpdateProfile");
+
+        using var commitRequest = new HttpRequestMessage(HttpMethod.Post, $"/api/classes/{seed.ClassId}/import-students/commit")
+        {
+            Content = JsonContent.Create(new CommitImportStudentsRequest { SessionId = previewBody.Data.SessionId })
+        };
+        commitRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        var commitResponse = await _client.SendAsync(commitRequest);
+        var commitBody = await commitResponse.Content.ReadFromJsonAsync<ApiResponse<ImportStudentsCommitResponse>>();
+        commitResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        commitBody!.Data!.InsertedCount.Should().Be(0);
+        commitBody.Data.UpdatedCount.Should().Be(1);
+        commitBody.Data.ErrorCount.Should().Be(0);
+
+        context.ChangeTracker.Clear();
+        (await context.Students.AsNoTracking().SingleAsync(item => item.Id == student.Id))
+            .FullName.Should().Be("Imported Student");
+        (await context.Users.AsNoTracking().SingleAsync(item => item.Id == studentUserId))
+            .FullName.Should().Be("Imported Student");
+        (await context.ClassStudents.AsNoTracking().Where(item => item.ClassId == seed.ClassId && item.StudentId == student.Id)
+            .ToListAsync()).Should().ContainSingle(item =>
+                item.EnrollmentStatus == EnrollmentStatus.Active && item.MajorCodeAtEnrollment == MajorCodes.BIT_SE);
+
+        using var rosterRequest = CreateAuthorizedGetRequest($"/api/classes/{seed.ClassId}/students", token);
+        var rosterResponse = await _client.SendAsync(rosterRequest);
+        var rosterBody = await rosterResponse.Content.ReadFromJsonAsync<ApiResponse<ClassRosterListResponse>>();
+        rosterResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        rosterBody!.Data!.Items.Should().ContainSingle(item => item.StudentId == student.Id && item.FullName == "Imported Student");
     }
 
     [Fact]
@@ -1119,7 +1188,7 @@ public sealed class ClassSafetyHotfixIntegrationTests
         {
             var row = index + 2;
             worksheet.Cell(row, 1).Value = students[index].NormalizedRollNumber;
-            worksheet.Cell(row, 2).Value = students[index].FullName;
+            worksheet.Cell(row, 2).Value = index == 0 ? "Imported Team Member" : students[index].FullName;
             worksheet.Cell(row, 3).Value = students[index].Email;
             worksheet.Cell(row, 4).Value = "NextWave Tech";
             worksheet.Cell(row, 5).Value = "SnapPose";
@@ -1166,6 +1235,8 @@ public sealed class ClassSafetyHotfixIntegrationTests
             .Include(item => item.Project)
             .SingleAsync(item => item.ClassId == seed.ClassId && item.TeamName == "NextWave Tech");
         team.TeamMembers.Should().HaveCount(4);
+        (await context.Students.AsNoTracking().SingleAsync(item => item.Id == students[0].Id))
+            .FullName.Should().Be("Imported Team Member");
         (await context.ClassStudents.AsNoTracking().CountAsync(item =>
             item.ClassId == seed.ClassId && item.EnrollmentStatus == EnrollmentStatus.Active)).Should().Be(4);
         team.Project.Should().NotBeNull();
@@ -1408,6 +1479,112 @@ public sealed class ClassSafetyHotfixIntegrationTests
         (await context.ChatGroups.AsNoTracking().SingleAsync(item => item.Id == group.Id)).IsReadOnly.Should().BeTrue();
         (await context.ClassAuditLogs.AsNoTracking().CountAsync(item =>
             item.ClassId == seed.ClassId && item.Action == "CHAT_MEMBERSHIPS_REPAIRED")).Should().Be(4);
+    }
+
+    [Fact]
+    public async Task OfficialMajorFile_SynchronizesEnrollmentAndProfile_WithoutImportingTeams()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateClassSeedAsync(context, "official-major-file");
+        var lecturer = await context.Users.SingleAsync(user => user.Id == seed.LecturerId);
+        var otherLecturer = await CreateLecturerAsync(context, "other-major-file");
+        var assignedToken = GenerateToken(scope.ServiceProvider, lecturer, SystemRoles.Lecturer);
+        var otherToken = GenerateToken(scope.ServiceProvider, otherLecturer, SystemRoles.Lecturer);
+        var targetClass = await context.Classes.AsNoTracking().SingleAsync(item => item.Id == seed.ClassId);
+        var rollNumber = "SE" + Guid.NewGuid().ToString("N")[..8].ToUpperInvariant();
+        var student = new Student
+        {
+            RollNumber = rollNumber,
+            NormalizedRollNumber = rollNumber,
+            FullName = "Synthetic Major Student",
+            Email = $"major-file-{Guid.NewGuid():N}@example.com",
+            MajorCode = MajorCodes.BIT_AI,
+            Status = StudentStatus.Active,
+            CreatedBy = seed.AdminId
+        };
+        context.Students.Add(student);
+        context.ClassStudents.Add(new ClassStudent
+        {
+            ClassId = seed.ClassId,
+            StudentId = student.Id,
+            Student = student,
+            SemesterId = targetClass.SemesterId,
+            CourseId = targetClass.CourseId,
+            EnrollmentStatus = EnrollmentStatus.Active,
+            CountsTowardCourseSemesterLimit = true,
+            MajorCodeAtEnrollment = MajorCodes.Undeclared
+        });
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        var workbook = CreateOfficialMajorWorkbook(rollNumber, MajorCodes.BBA_FIN);
+        var url = $"/api/classes/{seed.ClassId}/major-verification/synchronize";
+        var previewUrl = $"/api/classes/{seed.ClassId}/major-verification/preview";
+
+        using var previewContent = CreateMajorUpload(workbook);
+        using var previewRequest = new HttpRequestMessage(HttpMethod.Post, previewUrl) { Content = previewContent };
+        previewRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", assignedToken);
+        var previewResponse = await _client.SendAsync(previewRequest);
+        previewResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        var preview = await previewResponse.Content.ReadFromJsonAsync<ApiResponse<VerifyClassMajorsResponse>>();
+        preview!.Data!.Mismatched.Should().ContainSingle();
+        var previewRow = preview.Data.Mismatched.Single();
+        previewRow.MajorInDb.Should().Be(MajorCodes.Undeclared);
+        previewRow.MajorInProfile.Should().Be(MajorCodes.BIT_AI);
+        previewRow.MajorInFile.Should().Be(MajorCodes.BBA_FIN);
+        (await context.ClassStudents.AsNoTracking().SingleAsync(item =>
+            item.ClassId == seed.ClassId && item.StudentId == student.Id))
+            .MajorVerificationStatus.Should().Be(EnrollmentMajorVerificationStatus.Unverified);
+        (await context.ClassAuditLogs.AsNoTracking().CountAsync(item =>
+            item.ClassId == seed.ClassId && item.Action == "ENROLLMENT_MAJORS_VERIFIED")).Should().Be(0);
+
+        using var forbiddenPreviewContent = CreateMajorUpload(workbook);
+        using var forbiddenPreviewRequest = new HttpRequestMessage(HttpMethod.Post, previewUrl) { Content = forbiddenPreviewContent };
+        forbiddenPreviewRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", otherToken);
+        (await _client.SendAsync(forbiddenPreviewRequest)).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        using var duplicateContent = CreateMajorUpload(CreateOfficialMajorWorkbook(rollNumber, MajorCodes.BBA_FIN, duplicateRoll: true));
+        using var duplicateRequest = new HttpRequestMessage(HttpMethod.Post, url) { Content = duplicateContent };
+        duplicateRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", assignedToken);
+        (await _client.SendAsync(duplicateRequest)).StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await context.Students.AsNoTracking().SingleAsync(item => item.Id == student.Id)).MajorCode.Should().Be(MajorCodes.BIT_AI);
+
+        using var unauthenticatedContent = CreateMajorUpload(workbook);
+        (await _client.PostAsync(url, unauthenticatedContent)).StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+
+        using var forbiddenContent = CreateMajorUpload(workbook);
+        using var forbiddenRequest = new HttpRequestMessage(HttpMethod.Post, url) { Content = forbiddenContent };
+        forbiddenRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", otherToken);
+        (await _client.SendAsync(forbiddenRequest)).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        using var allowedContent = CreateMajorUpload(workbook);
+        using var allowedRequest = new HttpRequestMessage(HttpMethod.Post, url) { Content = allowedContent };
+        allowedRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", assignedToken);
+        var response = await _client.SendAsync(allowedRequest);
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<ApiResponse<VerifyClassMajorsResponse>>();
+        body!.Data!.SynchronizedEnrollmentCount.Should().Be(1);
+        body.Data.SynchronizedProfileCount.Should().Be(1);
+        body.Data.Matched.Should().ContainSingle();
+
+        context.ChangeTracker.Clear();
+        (await context.Students.AsNoTracking().SingleAsync(item => item.Id == student.Id)).MajorCode.Should().Be(MajorCodes.BBA_FIN);
+        var enrollment = await context.ClassStudents.AsNoTracking()
+            .SingleAsync(item => item.ClassId == seed.ClassId && item.StudentId == student.Id);
+        enrollment.MajorCodeAtEnrollment.Should().Be(MajorCodes.BBA_FIN);
+        enrollment.MajorVerificationStatus.Should().Be(EnrollmentMajorVerificationStatus.Matched);
+        (await context.Teams.AsNoTracking().CountAsync(item => item.ClassId == seed.ClassId)).Should().Be(0);
+
+        var classToLock = await context.Classes.SingleAsync(item => item.Id == seed.ClassId);
+        classToLock.IsEnrollmentMajorLocked = true;
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+        using var lockedContent = CreateMajorUpload(CreateOfficialMajorWorkbook(rollNumber, MajorCodes.BIT_SE));
+        using var lockedRequest = new HttpRequestMessage(HttpMethod.Post, url) { Content = lockedContent };
+        lockedRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", assignedToken);
+        (await _client.SendAsync(lockedRequest)).StatusCode.Should().Be(HttpStatusCode.Conflict);
+        (await context.Students.AsNoTracking().SingleAsync(item => item.Id == student.Id)).MajorCode.Should().Be(MajorCodes.BBA_FIN);
     }
 
     [Fact]
@@ -2184,6 +2361,35 @@ public sealed class ClassSafetyHotfixIntegrationTests
         using var stream = new MemoryStream();
         workbook.SaveAs(stream);
         return stream.ToArray();
+    }
+
+    private static byte[] CreateOfficialMajorWorkbook(string rollNumber, string majorCode, bool duplicateRoll = false)
+    {
+        using var workbook = new XLWorkbook();
+        var worksheet = workbook.Worksheets.Add("Class Roster");
+        worksheet.Cell(1, 1).Value = "RollNumber";
+        worksheet.Cell(1, 2).Value = "Chuyên ngành";
+        worksheet.Cell(1, 3).Value = "GroupName";
+        worksheet.Cell(2, 1).Value = rollNumber;
+        worksheet.Cell(2, 2).Value = majorCode;
+        worksheet.Cell(2, 3).Value = "IGNORED_TEAM";
+        if (duplicateRoll)
+        {
+            worksheet.Cell(3, 1).Value = rollNumber;
+            worksheet.Cell(3, 2).Value = majorCode;
+        }
+        using var stream = new MemoryStream();
+        workbook.SaveAs(stream);
+        return stream.ToArray();
+    }
+
+    private static MultipartFormDataContent CreateMajorUpload(byte[] workbook)
+    {
+        var content = new MultipartFormDataContent();
+        var file = new ByteArrayContent(workbook);
+        file.Headers.ContentType = new MediaTypeHeaderValue("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        content.Add(file, "file", "official-majors.xlsx");
+        return content;
     }
 
     private sealed record ClassSeed(

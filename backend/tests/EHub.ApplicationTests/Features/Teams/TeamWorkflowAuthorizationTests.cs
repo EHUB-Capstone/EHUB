@@ -45,6 +45,19 @@ public sealed class TeamWorkflowAuthorizationTests
     }
 
     [Fact]
+    public async Task StudentCannotUseLegacyProposalCreationEndpoints()
+    {
+        var handler = new TeamProposalHandler(_context, _unitOfWork);
+        var draft = await handler.CreateAsync(Guid.NewGuid(), new CreateTeamProposalRequest(), Guid.NewGuid(), SystemRoles.Student);
+        var immediate = await handler.SubmitStudentProposalAsync(Guid.NewGuid(), new SubmitStudentTeamProposalRequest(), Guid.NewGuid(), SystemRoles.Student);
+
+        draft.IsFailure.Should().BeTrue();
+        draft.Error.Code.Should().Be(ErrorCodes.TeamFormationRequired);
+        immediate.IsFailure.Should().BeTrue();
+        immediate.Error.Code.Should().Be(ErrorCodes.TeamFormationRequired);
+    }
+
+    [Fact]
     public async Task AdminCannotReviewProjectDirectionOnBehalfOfAssignedLecturer()
     {
         var handler = new ProjectDirectionHandler(_context);

@@ -600,6 +600,16 @@ export function registerWorkspaceMockHandlers(mock: MockAdapter): void {
     'Accessible workspaces retrieved successfully.',
   ));
 
+  mock.onGet('/workspace/active-semester').reply(() => {
+    const state = getMockState();
+    const user = state.users.find((item) => item.id === state.sessionUserId);
+    if (!user) return failure(401, 'COMMON_UNAUTHORIZED', 'Unauthorized access.');
+    if (!['ADMIN', 'LECTURER', 'MENTOR'].includes(user.role))
+      return failure(403, 'COMMON_FORBIDDEN', 'Forbidden access.');
+    const currentSemester = state.semesters.find((item) => item.status === 'Active') || null;
+    return ok({ currentSemester, availableYears: [], isDecember: false }, 'Current semester retrieved successfully.');
+  });
+
   mock.onGet('/team-workspaces/current').reply(() => {
     const first = accessibleTeams()[0];
     if (!first) return ok(null, 'No team workspace is available.');
@@ -634,11 +644,16 @@ export function registerWorkspaceMockHandlers(mock: MockAdapter): void {
     }
     if (team.projectName) return failure(409, 'WORKSPACE_ALREADY_EXISTS', 'This team already has an active project workspace.');
     const body = parseBody(config);
+    const teamName = String(body.teamName ?? team.teamName).trim();
     const projectName = String(body.projectName || '').trim();
     const description = String(body.description || '').trim();
     const startupIndustryIds = Array.isArray(body.startupIndustryIds) ? body.startupIndustryIds.map(String) : [];
-    if (projectName.length < 3 || description.length < 20) {
+    if (teamName.length < 3 || teamName.length > 100 || projectName.length < 3 || description.length < 20) {
       return failure(400, 'WORKSPACE_VALIDATION_ERROR', 'Required project workspace information is missing or invalid.');
+    }
+    if (state.teams.some((item) => item.classId === team.classId && item.id !== team.id &&
+      item.teamName.toLowerCase() === teamName.toLowerCase())) {
+      return failure(409, 'TEAM_NAME_DUPLICATED', 'A team with this name already exists in the class.');
     }
     const activeIndustries = state.startupIndustries.filter((industry) => (
       industry.status === 'active' && startupIndustryIds.includes(industry.id)
@@ -648,6 +663,8 @@ export function registerWorkspaceMockHandlers(mock: MockAdapter): void {
       || activeIndustries.length !== startupIndustryIds.length) {
       return failure(400, 'WORKSPACE_VALIDATION_ERROR', 'Select between 1 and 3 active startup industries.');
     }
+    const teamNameChanged = team.teamName !== teamName;
+    team.teamName = teamName;
     team.projectName = projectName;
     team.projectDescription = description;
     team.startupIndustryIds = startupIndustryIds;
@@ -661,7 +678,7 @@ export function registerWorkspaceMockHandlers(mock: MockAdapter): void {
       summary: 'Created the project workspace.',
       actorUserId: currentUser.id,
       actorName: currentUser.name,
-      changedFields: ['projectName', 'description', 'startupIndustries'],
+      changedFields: teamNameChanged ? ['teamName', 'projectName', 'description', 'startupIndustries'] : ['projectName', 'description', 'startupIndustries'],
       occurredAtUtc: createdAtUtc,
     }];
     let direction = state.directions.find((item) => item.teamId === teamId);

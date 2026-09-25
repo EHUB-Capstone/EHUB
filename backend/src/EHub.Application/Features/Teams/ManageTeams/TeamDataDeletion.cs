@@ -27,6 +27,7 @@ internal static class TeamDataDeletion
         var evaluations = db.Evaluations.IgnoreQueryFilters().Where(x => projects.Contains(x.ProjectId) || (x.SubmissionId.HasValue && submissions.Contains(x.SubmissionId.Value))).Select(x => x.Id);
         var proposals = db.ProjectProposals.IgnoreQueryFilters().Where(x => x.TeamId == teamId || projects.Contains(x.ProjectId)).Select(x => x.Id);
         var teamProposals = db.TeamProposals.IgnoreQueryFilters().Where(x => x.ApprovedTeamId == teamId).Select(x => x.Id);
+        var formations = db.TeamFormations.IgnoreQueryFilters().Where(x => x.CompletedTeamId == teamId).Select(x => x.Id);
         var directions = db.ProjectDirections.IgnoreQueryFilters().Where(x => x.TeamId == teamId).Select(x => x.Id);
         var chats = db.ChatGroups.IgnoreQueryFilters().Where(x => x.TeamId == teamId).Select(x => x.Id);
         var mentors = db.MentorAssignments.IgnoreQueryFilters().Where(x => x.TeamId == teamId).Select(x => x.Id);
@@ -46,6 +47,8 @@ internal static class TeamDataDeletion
         await db.TeamProposalHistory.IgnoreQueryFilters().Where(x => teamProposals.Contains(x.ProposalId)).ExecuteDeleteAsync(ct);
         await db.TeamProposalMembers.IgnoreQueryFilters().Where(x => teamProposals.Contains(x.ProposalId)).ExecuteDeleteAsync(ct);
         await db.TeamProposals.IgnoreQueryFilters().Where(x => teamProposals.Contains(x.Id)).ExecuteDeleteAsync(ct);
+        await db.TeamFormationInvitations.Where(x => formations.Contains(x.FormationId)).ExecuteDeleteAsync(ct);
+        await db.TeamFormations.IgnoreQueryFilters().Where(x => formations.Contains(x.Id)).ExecuteDeleteAsync(ct);
         await db.ProjectDirectionReviews.IgnoreQueryFilters().Where(x => directions.Contains(x.ProjectDirectionId)).ExecuteDeleteAsync(ct);
         await db.ProjectDirections.IgnoreQueryFilters().Where(x => directions.Contains(x.Id)).ExecuteDeleteAsync(ct);
         await db.ChatMessages.IgnoreQueryFilters().Where(x => chats.Contains(x.ChatGroupId)).ExecuteDeleteAsync(ct);

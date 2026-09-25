@@ -251,18 +251,26 @@ function registerAuthHandlers(mock: MockAdapter): void {
     }
 
     const email = identity.email.trim().toLowerCase();
-    let user = getMockState().users.find((item) => item.email.toLowerCase() === email);
+    const state = getMockState();
+    const rosterStudents = Object.values(state.rosters)
+      .flat()
+      .filter((student) => student.email.toLowerCase() === email);
+    let user = state.users.find((item) => item.email.toLowerCase() === email);
     if (!user) {
       const id = allocateId();
-      user = { id, _id: id, email, name: email, role: 'STUDENT', status: 'APPROVED',
+      user = { id, _id: id, email, name: rosterStudents[0]?.fullName || email, role: 'STUDENT', status: 'APPROVED',
         major: null, avatar: null, studentId: null, programGroup: null, phone: null,
         createdAt: new Date().toISOString(), lastSeen: null };
-      getMockState().users.push(user);
+      state.users.push(user);
     }
     const statusFailure = accountStatusFailure(user);
     if (statusFailure) return statusFailure;
 
-    getMockState().sessionUserId = user.id;
+    if (user.role === 'STUDENT') {
+      if (rosterStudents[0]?.fullName) user.name = rosterStudents[0].fullName;
+      rosterStudents.forEach((student) => { student.userId = user.id; });
+    }
+    state.sessionUserId = user.id;
     persistMockState();
     return ok(authResponse(user), 'Google login successfully');
   });

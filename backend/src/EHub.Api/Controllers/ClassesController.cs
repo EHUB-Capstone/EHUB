@@ -579,6 +579,27 @@ public sealed class ClassesController : ControllerBase
         return Ok(ApiResponse<ClassAuditLogListResponse>.SuccessResponse(result.Value, "Class audit trail retrieved successfully."));
     }
 
+    [HttpPost("{id:guid}/major-verification/preview")]
+    public async Task<IActionResult> PreviewClassMajors(
+        Guid id,
+        IFormFile file,
+        [FromServices] IVerifyClassMajorsCommandHandler commandHandler,
+        CancellationToken cancellationToken)
+    {
+        var result = await commandHandler.PreviewAsync(
+            id,
+            file,
+            _currentUserService.UserId ?? Guid.Empty,
+            GetCurrentUserRole(),
+            cancellationToken);
+
+        if (result.IsFailure) return ToClassErrorResponse(result.Error);
+
+        return Ok(ApiResponse<VerifyClassMajorsResponse>.SuccessResponse(
+            result.Value,
+            "Major changes previewed without updating the class."));
+    }
+
     [HttpPost("{id:guid}/major-verification")]
     public async Task<IActionResult> VerifyClassMajors(
         Guid id,
@@ -601,6 +622,27 @@ public sealed class ClassesController : ControllerBase
         return Ok(ApiResponse<VerifyClassMajorsResponse>.SuccessResponse(
             result.Value,
             "Enrollment majors verified successfully."));
+    }
+
+    [HttpPost("{id:guid}/major-verification/synchronize")]
+    public async Task<IActionResult> SynchronizeClassMajorsFromFile(
+        Guid id,
+        IFormFile file,
+        [FromServices] IVerifyClassMajorsCommandHandler commandHandler,
+        CancellationToken cancellationToken)
+    {
+        var result = await commandHandler.SynchronizeAsync(
+            id,
+            file,
+            _currentUserService.UserId ?? Guid.Empty,
+            GetCurrentUserRole(),
+            cancellationToken);
+
+        if (result.IsFailure) return ToClassErrorResponse(result.Error);
+
+        return Ok(ApiResponse<VerifyClassMajorsResponse>.SuccessResponse(
+            result.Value,
+            "Enrollment and profile majors synchronized from the verification file."));
     }
 
     [HttpGet("major-verification-template")]

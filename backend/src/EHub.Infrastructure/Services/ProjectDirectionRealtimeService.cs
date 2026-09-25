@@ -103,6 +103,9 @@ public sealed class ProjectDirectionRealtimeService(
     public Task PublishProposalReviewedAsync(IReadOnlyCollection<Guid> recipientUserIds, Guid classId, Guid proposalId, CancellationToken cancellationToken = default) =>
         PublishPayloadAsync(recipientUserIds, JsonSerializer.SerializeToUtf8Bytes(new { eventType = "TeamProposalReviewed", classId, proposalId }, JsonOptions));
 
+    public Task PublishTeamFormationChangedAsync(IReadOnlyCollection<Guid> recipientUserIds, Guid classId, Guid formationId, CancellationToken cancellationToken = default) =>
+        PublishPayloadAsync(recipientUserIds, JsonSerializer.SerializeToUtf8Bytes(new { eventType = "TeamFormationChanged", classId, formationId }, JsonOptions));
+
     public Task PublishCheckpointRequirementsUpdatedAsync(IReadOnlyCollection<Guid> recipientUserIds, Guid teamId, int checkpointNumber, CancellationToken cancellationToken = default) =>
         PublishPayloadAsync(recipientUserIds, JsonSerializer.SerializeToUtf8Bytes(new { eventType = "CheckpointRequirementsUpdated", teamId, checkpointNumber }, JsonOptions));
 

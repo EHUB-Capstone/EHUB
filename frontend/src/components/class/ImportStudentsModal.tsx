@@ -176,7 +176,7 @@ export default function ImportStudentsModal({
       } else if (result.errorCount > 0) {
         toast.error(`No students were imported. ${result.errorCount} rows require attention.`);
       } else {
-        toast.error('No students were imported. Preview the file again and verify its rows.');
+        toast('Import completed; no profile or enrollment changes were needed.');
       }
     } catch (err: unknown) {
       toast.error(parseApiError(err, 'Failed to commit student import.').message);
@@ -268,7 +268,7 @@ export default function ImportStudentsModal({
               <div className="flex items-start gap-2.5 rounded-xl border border-slate-200 bg-slate-50 p-3.5">
                 <Info className="mt-0.5 h-4 w-4 shrink-0 text-secondary" />
                 <div className="text-xs leading-5 text-slate-600">
-                  <p><strong className="text-slate-700">Required columns:</strong> StudentCode (RollNumber), FullName, Email</p>
+                  <p><strong className="text-slate-700">Required columns:</strong> StudentCode (RollNumber), FullName, Email. The file name updates the student's class roster and profile name.</p>
                   <p><strong className="text-slate-700">MajorCode:</strong> Optional for legacy files; missing values are imported as unverified.</p>
                   <p><strong className="text-slate-700">Team assignment:</strong> Add Group and Project. EHUB adds or re-enrolls students in the class before creating teams; Zalo and Description may appear once per Group.</p>
                   <p><strong className="text-slate-700">Automatic mode:</strong> If no Group value is present, EHUB keeps the existing student roster import flow.</p>
@@ -383,7 +383,7 @@ export default function ImportStudentsModal({
                 <h3 className="mt-3 text-lg font-bold text-slate-900">
                   {commitHasChanges
                     ? commitResult.importMode === 'TeamAssignment' ? 'Teams and projects created successfully' : 'Import committed successfully'
-                    : commitResult.importMode === 'TeamAssignment' ? 'No teams were created' : 'No students were imported'}
+                    : commitResult.importMode === 'TeamAssignment' ? 'No teams were created' : commitResult.errorCount > 0 ? 'No students were imported' : 'No changes were needed'}
                 </h3>
                 <p className="mt-1 text-sm text-slate-600">
                   {commitResult.importMode === 'TeamAssignment'
@@ -551,6 +551,10 @@ function StudentRowsTable({
                   ) : row.status === 'ReEnroll' ? (
                     <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-1 font-semibold text-blue-700">
                       <RotateCcw className="h-3 w-3" /> Ready to re-enroll
+                    </span>
+                  ) : row.status === 'UpdateProfile' ? (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-1 font-semibold text-blue-700">
+                      <CheckCircle2 className="h-3 w-3" /> Ready to update profile
                     </span>
                   ) : row.majorComparisonStatus?.startsWith('AwaitingRegistration') ? (
                     <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-1 font-semibold text-slate-600">

@@ -126,6 +126,14 @@ public sealed class ProjectWorkspaceHandler : IProjectWorkspaceHandler
                 if (team.Project != null || await _context.Projects.AnyAsync(project => project.TeamId == teamId, transactionCancellationToken))
                     return Failure<ProjectWorkspaceDto>(ErrorCodes.WorkspaceAlreadyExists, "This team already has an active project workspace.");
 
+                var requestedTeamName = (request.TeamName ?? team.TeamName).Trim();
+                if (requestedTeamName.Length is < 3 or > 100)
+                    return Failure<ProjectWorkspaceDto>(ErrorCodes.WorkspaceValidationError, "Team name must be between 3 and 100 characters.");
+                if (!string.Equals(team.TeamName, requestedTeamName, StringComparison.Ordinal) &&
+                    await _context.Teams.AsNoTracking().AnyAsync(item => item.ClassId == team.ClassId &&
+                        item.Id != team.Id && item.TeamName.ToLower() == requestedTeamName.ToLower(), transactionCancellationToken))
+                    return Failure<ProjectWorkspaceDto>(ErrorCodes.TeamNameDuplicated, "A team with this name already exists in the class.");
+
                 var activeIndustries = await _context.StartupIndustries
                     .AsNoTracking()
                     .Where(industry => industry.Status == StartupIndustryStatus.Active && industryIds.Contains(industry.Id))
@@ -140,6 +148,13 @@ public sealed class ProjectWorkspaceHandler : IProjectWorkspaceHandler
                     .ToArray();
 
                 var now = DateTime.UtcNow;
+                var teamNameChanged = !string.Equals(team.TeamName, requestedTeamName, StringComparison.Ordinal);
+                if (teamNameChanged)
+                {
+                    team.TeamName = requestedTeamName;
+                    team.UpdatedAt = now;
+                    team.UpdatedBy = userId;
+                }
                 var project = new Project
                 {
                     TeamId = team.Id,
@@ -190,7 +205,9 @@ public sealed class ProjectWorkspaceHandler : IProjectWorkspaceHandler
                     ActorUserId = userId,
                     Action = "WORKSPACE_CREATED",
                     Summary = "Created the project workspace.",
-                    ChangedFieldsJson = JsonSerializer.Serialize(new[] { "projectName", "description", "startupIndustries" }),
+                    ChangedFieldsJson = JsonSerializer.Serialize(teamNameChanged
+                        ? new[] { "teamName", "projectName", "description", "startupIndustries" }
+                        : new[] { "projectName", "description", "startupIndustries" }),
                     OccurredAtUtc = now
                 });
 

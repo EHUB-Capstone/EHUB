@@ -194,17 +194,6 @@ public sealed class AssignStudentsCommandHandler : IAssignStudentsCommandHandler
                         "Every selected student must have an active enrollment in this class before team assignment.");
                 }
 
-                var missingMajor = enrollments.FirstOrDefault(enrollment =>
-                    !MajorCodes.IsValid(StudentEnrollmentRules.ResolveEffectiveMajorCode(
-                        enrollment.MajorCodeAtEnrollment,
-                        enrollment.Student.MajorCode)));
-                if (missingMajor != null)
-                {
-                    return TeamFailure(
-                        ErrorCodes.AuthStudentMajorRequired,
-                        $"Student '{missingMajor.Student.RollNumber ?? missingMajor.Student.FullName}' must select a valid major before joining a team.");
-                }
-
                 var studentIds = enrollments.Select(item => item.StudentId).Distinct().ToArray();
                 var conflictingMember = await _context.TeamMembers.AsNoTracking()
                     .AnyAsync(item => item.ClassId == classId && studentIds.Contains(item.StudentId) &&
@@ -222,6 +211,25 @@ public sealed class AssignStudentsCommandHandler : IAssignStudentsCommandHandler
                 {
                     return TeamFailure(ErrorCodes.TeamMemberLimitExceeded,
                         "This assignment would exceed the 6-student team limit.");
+                }
+
+                var resultingEnrollments = activeMembers.Select(item => item.ClassStudent)
+                    .Concat(additions)
+                    .ToArray();
+                if (resultingEnrollments.Length < 4)
+                {
+                    return TeamFailure(ErrorCodes.ClassValidationError,
+                        "A team must contain 4 to 6 members.");
+                }
+
+                var resultingMajors = resultingEnrollments.Select(item =>
+                    StudentEnrollmentRules.ResolveEffectiveMajorCode(
+                        item.MajorCodeAtEnrollment,
+                        item.Student.MajorCode)).ToArray();
+                if (!resultingMajors.Any(IsGroupOneMajor) || !resultingMajors.Any(IsGroupTwoMajor))
+                {
+                    return TeamFailure(ErrorCodes.TeamMajorCompositionInvalid,
+                        "A team must include at least one GROUP_1 major and one GROUP_2 major.");
                 }
 
                 var now = DateTime.UtcNow;
@@ -347,6 +355,14 @@ public sealed class AssignStudentsCommandHandler : IAssignStudentsCommandHandler
 
     private static Guid[] NormalizeIds(IReadOnlyCollection<Guid>? studentIds) =>
         (studentIds ?? Array.Empty<Guid>()).Where(id => id != Guid.Empty).Distinct().ToArray();
+
+    private static bool IsGroupOneMajor(string? major) =>
+        MajorCodes.IsValid(major) &&
+        (major!.StartsWith("BBA_", StringComparison.OrdinalIgnoreCase) ||
+         string.Equals(major, MajorCodes.BEN, StringComparison.OrdinalIgnoreCase));
+
+    private static bool IsGroupTwoMajor(string? major) =>
+        MajorCodes.IsValid(major) && major!.StartsWith("BIT_", StringComparison.OrdinalIgnoreCase);
 
     private static (string Code, string Message)? ValidateManager(
         Class targetClass,

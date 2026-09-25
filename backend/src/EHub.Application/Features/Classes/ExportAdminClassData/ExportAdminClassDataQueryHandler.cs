@@ -3,6 +3,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using EHub.Application.Common.Interfaces.Persistence;
+using EHub.Application.Features.Classes.Common;
 using EHub.Application.Features.Classes.ExportClassRoster;
 using EHub.Contracts.Classes;
 using EHub.Domain.Entities;
@@ -93,6 +94,9 @@ public sealed class ExportAdminClassDataQueryHandler : IExportAdminClassDataQuer
                 (completedClassIds.Contains(enrollment.ClassId) && enrollment.EnrollmentStatus == EnrollmentStatus.Completed))
             .ToListAsync(cancellationToken);
 
+        var registeredMajorByEmail = await RegisteredStudentMajorResolver.LoadByEmailAsync(
+            _context, roster.Select(enrollment => enrollment.Student.Email), cancellationToken);
+
         var rosterByClass = roster
             .GroupBy(enrollment => enrollment.ClassId)
             .ToDictionary(group => group.Key, group => group.ToArray());
@@ -102,7 +106,7 @@ public sealed class ExportAdminClassDataQueryHandler : IExportAdminClassDataQuer
                 rosterByClass.GetValueOrDefault(@class.Id) ?? Array.Empty<ClassStudent>()))
             .ToArray();
 
-        var bytes = ClassRosterExportWorkbookBuilder.Build(sections);
+        var bytes = ClassRosterExportWorkbookBuilder.Build(sections, registeredMajorByEmail);
         var semesterCode = ToSemesterCode(semester);
         var fileName = $"{semesterCode}{request.Year}_class_data.xlsx";
 

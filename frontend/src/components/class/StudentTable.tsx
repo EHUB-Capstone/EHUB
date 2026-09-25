@@ -146,7 +146,7 @@ export default function StudentTable({
   const toggleAll = () => {
     if (selectionDisabled) return;
     const unassigned = filtered
-      .filter(s => !s.teamId && s.enrollmentStatus === 'Active' && !isMissingTeamMajor(s.major))
+      .filter(s => !s.teamId && s.enrollmentStatus === 'Active')
       .map(s => s._id);
     const allSelected = unassigned.length > 0 && unassigned.every(id => selected.includes(id));
     if (allSelected) {
@@ -168,12 +168,11 @@ export default function StudentTable({
     }
   };
 
-  const canSelect = (s) => !selectionDisabled && !s.teamId && s.enrollmentStatus === 'Active' && !isMissingTeamMajor(s.major);
+  const canSelect = (s) => !selectionDisabled && !s.teamId && s.enrollmentStatus === 'Active';
   const getSelectionBlockReason = (s) => {
     if (selectionDisabled) return 'Selection is disabled.';
     if (s.teamId) return 'This student is already assigned or reserved by another team.';
     if (s.enrollmentStatus !== 'Active') return 'Only active enrollments can be selected.';
-    if (isMissingTeamMajor(s.major)) return 'This student must select a major before joining a team.';
     return '';
   };
 
@@ -269,7 +268,7 @@ export default function StudentTable({
                     <input
                       type="checkbox"
                       className="rounded"
-                      checked={filtered.filter(s => !s.teamId && s.enrollmentStatus === 'Active' && !isMissingTeamMajor(s.major)).length > 0 && filtered.filter(s => !s.teamId && s.enrollmentStatus === 'Active' && !isMissingTeamMajor(s.major)).every(s => selected.includes(s._id))}
+                      checked={filtered.filter(s => !s.teamId && s.enrollmentStatus === 'Active').length > 0 && filtered.filter(s => !s.teamId && s.enrollmentStatus === 'Active').every(s => selected.includes(s._id))}
                       onChange={toggleAll}
                     />
                   </th>
@@ -365,7 +364,7 @@ export default function StudentTable({
                             {mLabel}
                           </span>
                           <span className="text-[10px] font-medium text-slate-400">
-                            {s.majorVerificationStatus || 'Unverified'}
+                            {s.majorVerificationStatus === 'Matched' ? 'Verified' : (s.majorVerificationStatus || 'Unverified')}
                           </span>
                           {s.hasMajorMismatch && (
                             <span

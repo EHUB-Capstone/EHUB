@@ -115,6 +115,30 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
                         cancellationToken);
                 }
                 break;
+            case "TeamFormation.Invited.v1":
+                await AddForStudentsAsync(message, data, "studentIds", "Team invitation",
+                    "You have been invited to join a team. Open My Team to respond.", cancellationToken);
+                break;
+            case "TeamFormation.Accepted.v1":
+                var creatorStudentId = ReadGuid(data, "creatorStudentId");
+                if (creatorStudentId.HasValue)
+                {
+                    var creatorUserId = await _context.Students.AsNoTracking()
+                        .Where(item => item.Id == creatorStudentId.Value).Select(item => item.UserId)
+                        .FirstOrDefaultAsync(cancellationToken);
+                    if (creatorUserId.HasValue)
+                        await AddAsync(message, creatorUserId.Value, NotificationType.SystemAnnouncement,
+                            "Team invitation accepted", "A member accepted your team invitation.", cancellationToken);
+                }
+                break;
+            case "TeamFormation.Cancelled.v1":
+                await AddForStudentsAsync(message, data, "studentIds", "Team formation cancelled",
+                    "This team formation was cancelled. Open My Team for details.", cancellationToken);
+                break;
+            case "TeamFormation.Completed.v1":
+                await AddForStudentsAsync(message, data, "studentIds", "Your team is ready",
+                    "All members accepted. Your team is now active.", cancellationToken);
+                break;
             case "TeamProposal.Reviewed.v1":
                 var proposalDecision = ReadString(data, "decision");
                 var notificationType = proposalDecision == "Approved"
@@ -365,6 +389,41 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
     {
         if (data.TryGetProperty(propertyName, out var property) && property.ValueKind != JsonValueKind.Null && property.TryGetGuid(out var userId))
             await AddAsync(message, userId, type, title, body, cancellationToken);
+    }
+
+    public async Task PublishAfterCommitAsync(OutboxMessage message, CancellationToken cancellationToken = default)
+    {
+        if (message.Type is not ("TeamFormation.Invited.v1" or "TeamFormation.Accepted.v1" or
+            "TeamFormation.Cancelled.v1" or "TeamFormation.Completed.v1")) return;
+        using var document = JsonDocument.Parse(message.PayloadJson);
+        if (!document.RootElement.TryGetProperty("data", out var data)) return;
+        var formationId = ReadGuid(data, "formationId");
+        if (!formationId.HasValue) return;
+        var recipients = await _context.TeamFormationInvitations.AsNoTracking()
+            .Where(invitation => invitation.FormationId == formationId.Value && invitation.ClassId == message.AggregateId &&
+                invitation.ClassStudent.Student.UserId.HasValue)
+            .Select(invitation => invitation.ClassStudent.Student.UserId!.Value)
+            .Distinct()
+            .ToArrayAsync(cancellationToken);
+        if (recipients.Length > 0)
+            await _classRealtimePublisher.PublishTeamFormationChangedAsync(recipients, message.AggregateId, formationId.Value, cancellationToken);
+    }
+
+    private async Task AddForStudentsAsync(
+        OutboxMessage message,
+        JsonElement data,
+        string propertyName,
+        string title,
+        string body,
+        CancellationToken cancellationToken)
+    {
+        var studentIds = ReadGuids(data, propertyName);
+        if (studentIds.Length == 0) return;
+        var userIds = await _context.Students.AsNoTracking()
+            .Where(item => studentIds.Contains(item.Id) && item.UserId.HasValue)
+            .Select(item => item.UserId!.Value).Distinct().ToArrayAsync(cancellationToken);
+        foreach (var userId in userIds)
+            await AddAsync(message, userId, NotificationType.SystemAnnouncement, title, body, cancellationToken);
     }
 
     private async Task QueueClassCreatedEmailAsync(
@@ -649,6 +708,8 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
             "AccountApproval.Requested.v1" => "/admin/account-approvals",
             "TeamProposal.Submitted.v1" => $"/classes/{message.AggregateId}",
             "TeamProposal.Reviewed.v1" or "ProjectDirection.Reviewed.v1" => $"/student/classes/{message.AggregateId}",
+            "TeamFormation.Invited.v1" or "TeamFormation.Accepted.v1" or
+                "TeamFormation.Cancelled.v1" or "TeamFormation.Completed.v1" => "/student/team",
             "Team.MentorAssignmentChanged.v1" => "/mentor/dashboard",
             CheckpointDeadlineEvents.ScheduleChanged or CheckpointDeadlineEvents.DeadlineReminder => "/student/workspace",
             _ => null

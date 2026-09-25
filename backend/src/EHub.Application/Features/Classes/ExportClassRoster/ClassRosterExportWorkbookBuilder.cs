@@ -3,8 +3,10 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using ClosedXML.Excel;
+using EHub.Application.Features.Classes.Common;
 using EHub.Domain.Entities;
 using EHub.Domain.Enums;
+using EHub.Shared.Constants;
 
 namespace EHub.Application.Features.Classes.ExportClassRoster;
 
@@ -20,7 +22,9 @@ internal static class ClassRosterExportWorkbookBuilder
     private const double ProjectNameMaxWidth = 25;
     private const double DescriptionMaxWidth = 50;
 
-    internal static byte[] Build(IReadOnlyCollection<ClassRosterExportSection> sections)
+    internal static byte[] Build(
+        IReadOnlyCollection<ClassRosterExportSection> sections,
+        IReadOnlyDictionary<string, string>? registeredMajorByEmail = null)
     {
         using var workbook = new XLWorkbook();
         var worksheet = workbook.Worksheets.Add(WorksheetName);
@@ -31,7 +35,7 @@ internal static class ClassRosterExportWorkbookBuilder
         var rowIndex = 2;
         foreach (var section in sections)
         {
-            rowIndex = WriteRoster(worksheet, rowIndex, section);
+            rowIndex = WriteRoster(worksheet, rowIndex, section, registeredMajorByEmail);
         }
 
         ApplyColumnSizing(worksheet, rowIndex - 1);
@@ -64,7 +68,8 @@ internal static class ClassRosterExportWorkbookBuilder
     private static int WriteRoster(
         IXLWorksheet worksheet,
         int startRowIndex,
-        ClassRosterExportSection section)
+        ClassRosterExportSection section,
+        IReadOnlyDictionary<string, string>? registeredMajorByEmail)
     {
         var rosterRows = section.Roster
             .Select(enrollment =>
@@ -99,7 +104,17 @@ internal static class ClassRosterExportWorkbookBuilder
 
             worksheet.Cell(rowIndex, 1).Value = enrollment.Student.RollNumber ?? string.Empty;
             worksheet.Cell(rowIndex, 2).Value = enrollment.Student.FullName;
-            worksheet.Cell(rowIndex, 3).Value = enrollment.MajorCodeAtEnrollment;
+            var profileMajorCode = string.IsNullOrWhiteSpace(enrollment.Student.MajorCode)
+                ? null
+                : enrollment.Student.MajorCode.Trim().ToUpperInvariant();
+            if (!MajorCodes.IsValid(profileMajorCode) &&
+                !string.IsNullOrWhiteSpace(enrollment.Student.Email) &&
+                registeredMajorByEmail?.TryGetValue(enrollment.Student.Email, out var registeredMajorCode) == true)
+            {
+                profileMajorCode = registeredMajorCode;
+            }
+            worksheet.Cell(rowIndex, 3).Value = StudentEnrollmentRules.ResolveEffectiveMajorCode(
+                enrollment.MajorCodeAtEnrollment, profileMajorCode) ?? string.Empty;
             worksheet.Cell(rowIndex, 4).Value = section.Class.Course?.Code ?? string.Empty;
             worksheet.Cell(rowIndex, 5).Value = section.Class.ClassCode;
             worksheet.Cell(rowIndex, 6).Value = string.Empty;

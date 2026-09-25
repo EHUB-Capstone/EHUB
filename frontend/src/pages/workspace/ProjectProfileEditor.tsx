@@ -114,6 +114,7 @@ export default function ProjectProfileEditor() {
   const currentMember = workspace?.members.find((member) => userIdOf(member.userId) === currentUserId);
   const isLeader = Boolean(currentMember && String(currentMember.studentId) === String(workspace?.team.leaderId || ''));
   const isApproved = isProjectProfileAvailable(direction);
+  const latestReview = direction?.reviews?.[0];
   const canEdit = isApproved && isLeader;
   const workspacePath = user?.role === 'STUDENT' ? `/student/workspace/${teamId}` : `/workspace/teams/${teamId}`;
   const originalDraft = workspace?.project ? toDraft(workspace.project) : emptyDraft;
@@ -178,6 +179,11 @@ export default function ProjectProfileEditor() {
         </header>
 
         {!isLeader && <div className="mx-6 mt-5 flex items-start gap-2 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-800"><LockKeyhole className="mt-0.5 h-4 w-4 shrink-0" /><p>You can view the latest profile. Only the team leader can update it.</p></div>}
+
+        {latestReview?.comment && <div className="mx-6 mt-5 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3" role="status">
+          <p className="text-xs font-bold uppercase text-blue-700">Lecturer review · {latestReview.toStatus}</p>
+          <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-blue-900">{latestReview.comment}</p>
+        </div>}
 
         <div className="grid gap-5 p-6">
           <ProfileField id="projectName" label="Project name" value={draft.projectName} error={errors.projectName} maxLength={200} readOnly={!canEdit} onChange={setField} />

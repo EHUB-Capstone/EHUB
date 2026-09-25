@@ -227,10 +227,12 @@ test('keeps an unlinked proposal visible as a standalone proposal card', () => {
 
 test('validates required project workspace information', () => {
   const errors = validateProjectWorkspace({
+    teamName: '',
     projectName: '',
     description: 'too short',
     startupIndustryIds: [],
   });
+  assert.equal(errors.teamName, 'Team name must be 3–100 characters.');
   assert.equal(errors.projectName, 'Project name must be 3–200 characters.');
   assert.equal(errors.description, 'Description must be 20–2000 characters.');
   assert.equal(errors.startupIndustryIds, 'Select between 1 and 3 startup industries.');
@@ -238,12 +240,14 @@ test('validates required project workspace information', () => {
 
 test('accepts one to three startup industries for a project workspace', () => {
   assert.deepEqual(validateProjectWorkspace({
+    teamName: 'Renamed team',
     projectName: 'Valid project',
     description: 'A sufficiently detailed project workspace description.',
     startupIndustryIds: ['industry-1', 'industry-2', 'industry-3'],
   }), {});
 
   const errors = validateProjectWorkspace({
+    teamName: 'Renamed team',
     projectName: 'Valid project',
     description: 'A sufficiently detailed project workspace description.',
     startupIndustryIds: ['1', '2', '3', '4'],
@@ -261,7 +265,7 @@ test('workspace creation defaults come from the linked student proposal', () => 
     },
   );
 
-  assert.equal(defaults.teamName, 'Student Venture Team');
+  assert.equal(defaults.draft.teamName, 'Fallback team');
   assert.equal(defaults.draft.projectName, 'Student Venture Project');
   assert.equal(defaults.draft.description, 'A balanced student-created proposal ready for lecturer review.');
 });
