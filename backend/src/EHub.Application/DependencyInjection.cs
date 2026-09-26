@@ -60,6 +60,7 @@ public static class DependencyInjection
         services.AddScoped<IRejectUserCommandHandler, RejectUserCommandHandler>();
         services.AddScoped<IUserManagementHandler, UserManagementHandler>();
         services.AddScoped<EHub.Application.Features.Admin.Users.ImportLecturers.ILecturerImportHandler, EHub.Application.Features.Admin.Users.ImportLecturers.LecturerImportHandler>();
+        services.AddScoped<EHub.Application.Features.Admin.Mentors.IMentorAdminHandler, EHub.Application.Features.Admin.Mentors.MentorAdminHandler>();
 
         services.AddScoped<IGetAdminDashboardQueryHandler, GetAdminDashboardQueryHandler>();
         services.AddScoped<ITrackingQueryHandler, TrackingQueryHandler>();

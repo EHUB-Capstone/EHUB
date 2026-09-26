@@ -135,7 +135,7 @@ export function refreshClassCounts(classId: string): void {
   cls.teamCount = state.teams.filter((team) => team.classId === classId && team.status.toLowerCase() === 'active').length;
   const mentors = state.teams
     .filter((team) => team.classId === classId)
-    .map((team) => team.currentMentorAssignment)
+    .flatMap((team) => team.currentMentorAssignments)
     .filter((assignment) => assignment && (usesCompletedRoster || assignment.status === 'Active'))
     .map((assignment) => assignment!.mentor);
   cls.mentors = [...new Map(mentors.map((mentor) => [mentor.mentorProfileId, mentor])).values()];

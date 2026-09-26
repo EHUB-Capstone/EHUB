@@ -105,7 +105,7 @@ function accessibleTeams() {
   if (!currentUser) return [];
   if (currentUser.role === 'ADMIN' || currentUser.role === 'LECTURER') return state.teams;
   if (currentUser.role === 'MENTOR') {
-    return state.teams.filter((team) => team.currentMentorAssignment?.mentor.userId === currentUser.id);
+    return state.teams.filter((team) => team.currentMentorAssignments.some(assignment => assignment.mentor.userId === currentUser.id));
   }
   return state.teams.filter((team) => team.members.some((member) => member.studentId === currentUser.id));
 }
@@ -122,7 +122,7 @@ function canAccessCheckpointTeam(teamId: string) {
   if (!user || !team || !cls) return false;
   if (user.role === 'ADMIN') return true;
   if (user.role === 'LECTURER') return cls.primaryLecturerId === user.id;
-  if (user.role === 'MENTOR') return team.currentMentorAssignment?.mentor.userId === user.id;
+  if (user.role === 'MENTOR') return team.currentMentorAssignments.some(assignment => assignment.mentor.userId === user.id);
   return team.members.some((member) => member.studentId === user.id);
 }
 
@@ -131,8 +131,10 @@ function workspaceData(teamId: string) {
   const team = teamById(teamId)!;
   const cls = classByTeam(teamId)!;
   const lecturer = state.users.find((user) => user.id === cls.primaryLecturerId) || null;
-  const mentorUserId = team.currentMentorAssignment?.mentor.userId;
-  const mentor = mentorUserId ? state.users.find((user) => user.id === mentorUserId) || null : null;
+  const mentors = team.currentMentorAssignments.map(assignment => ({
+    assignment,
+    user: state.users.find(user => user.id === assignment.mentor.userId),
+  })).filter(item => item.user);
   const proposal = state.proposals.find((item) => item.approvedTeamId === teamId) || null;
   const projectCreatedAtUtc = team.projectCreatedAtUtc || '2026-08-20T08:00:00.000Z';
   const members = team.members.map((member) => {
@@ -168,7 +170,8 @@ function workspaceData(teamId: string) {
     },
     members,
     lecturer: lecturer ? { _id: lecturer.id, name: lecturer.name, email: lecturer.email } : null,
-    mentor: mentor ? { _id: mentor.id, name: mentor.name, email: mentor.email } : null,
+    mentor: mentors[0]?.user ? { _id: mentors[0].user.id, name: mentors[0].user.name, email: mentors[0].user.email, label: mentors[0].assignment.slot } : null,
+    mentors: mentors.map(item => ({ _id: item.user!.id, name: item.user!.name, email: item.user!.email, label: item.assignment.slot })),
     project: team.projectName ? {
       _id: uuid(1000 + Number(team.id.slice(-3))),
       teamId: team.id,

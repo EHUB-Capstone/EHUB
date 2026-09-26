@@ -18,6 +18,9 @@ public sealed class MentorSummaryDto
     public string FullName { get; init; } = string.Empty;
     public string Email { get; init; } = string.Empty;
     public string? Organization { get; init; }
+    public string MentorType { get; init; } = string.Empty;
+    public string? Department { get; init; }
+    public string? JobTitle { get; init; }
 }
 
 public sealed class MentorAssignmentDto
@@ -31,14 +34,13 @@ public sealed class MentorAssignmentDto
     public DateTime AssignedAtUtc { get; init; }
     public DateTime? EndedAtUtc { get; init; }
     public string? Note { get; init; }
+    public string Slot { get; init; } = string.Empty;
 }
 
 public sealed class MentorCandidateDto
 {
     public MentorSummaryDto Mentor { get; init; } = new();
     public int ActiveTeamCount { get; init; }
-    public int MaxTeams { get; init; }
-    public bool HasCapacity { get; init; }
 }
 
 public sealed class TeamDto
@@ -54,6 +56,7 @@ public sealed class TeamDto
     public bool HasChatGroup { get; init; }
     public Guid? LeaderId { get; init; }
     public IReadOnlyCollection<TeamMemberDto> Members { get; init; } = Array.Empty<TeamMemberDto>();
+    public IReadOnlyCollection<MentorAssignmentDto> CurrentMentorAssignments { get; init; } = Array.Empty<MentorAssignmentDto>();
     public MentorAssignmentDto? CurrentMentorAssignment { get; init; }
     public string RowVersion { get; init; } = string.Empty;
 }
@@ -82,6 +85,7 @@ public sealed class AssignMentorRequest
 
 public sealed class EndMentorAssignmentRequest
 {
+    public Guid AssignmentId { get; init; }
     public string Reason { get; init; } = string.Empty;
 }
 

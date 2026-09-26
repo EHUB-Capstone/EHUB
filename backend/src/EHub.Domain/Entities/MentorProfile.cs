@@ -15,8 +15,16 @@ public class MentorProfile : AuditableEntity
     public string? Organization { get; set; }
     public string? LinkedInUrl { get; set; }
 
+    public MentorType Type { get; set; } = MentorType.Enterprise;
+    public DateOnly? DateOfBirth { get; set; }
+    public string? ContractType { get; set; }
+    public string? EducationLevel { get; set; }
+    public string? CurrentAddress { get; set; }
+    public string? FptEmail { get; set; }
+    public string? Department { get; set; }
+    public string? JobTitle { get; set; }
+
     public MentorProfileStatus Status { get; set; } = MentorProfileStatus.Active;
-    public int MaxTeams { get; set; } = 3;
 
     // Navigation properties
     public virtual ICollection<MentorAssignment> Assignments { get; set; } = new List<MentorAssignment>();

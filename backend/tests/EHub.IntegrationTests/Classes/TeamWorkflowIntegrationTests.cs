@@ -479,7 +479,7 @@ public sealed class TeamWorkflowIntegrationTests
     }
 
     [Fact]
-    public async Task ReassigningMentor_EndsThePreviousAssignmentAndKeepsOneActiveSource()
+    public async Task AssigningMentor_DoesNotReplaceAnOccupiedMentorSlot()
     {
         using var scope = _factory.Services.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -491,7 +491,6 @@ public sealed class TeamWorkflowIntegrationTests
             User = replacementUser,
             Organization = "Replacement Mentor Org",
             Status = MentorProfileStatus.Active,
-            MaxTeams = 3,
             CreatedBy = seed.AdminId
         };
         context.MentorProfiles.Add(replacementProfile);
@@ -520,16 +519,60 @@ public sealed class TeamWorkflowIntegrationTests
             seed.AdminId,
             SystemRoles.Admin);
 
-        result.IsSuccess.Should().BeTrue();
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be(ErrorCodes.MentorAssignmentConflict);
+        result.Error.Message.Should().Contain("End the current assignment");
         context.ChangeTracker.Clear();
         var assignments = await context.MentorAssignments.AsNoTracking()
             .Where(assignment => assignment.TeamId == seed.TeamId)
             .ToListAsync();
-        assignments.Count(assignment => assignment.Status == MentorAssignmentStatus.Active && assignment.EndedAt == null)
-            .Should().Be(1);
-        assignments.Single(assignment => assignment.Status == MentorAssignmentStatus.Active).MentorProfileId
-            .Should().Be(replacementProfile.Id);
-        assignments.Should().Contain(assignment => assignment.Status == MentorAssignmentStatus.Ended && assignment.EndedAt != null);
+        assignments.Should().ContainSingle();
+        assignments.Single().MentorProfileId.Should().NotBe(replacementProfile.Id);
+        assignments.Single().Status.Should().Be(MentorAssignmentStatus.Active);
+        assignments.Single().EndedAt.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task AssigningAcademicMentor_PreservesExistingEnterpriseMentor()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateSeedAsync(context, createProposal: false, createTeam: true);
+        var academicUser = await CreateUserAsync(context, SystemRoles.Mentor, "academic-mentor");
+        var academicProfile = new MentorProfile
+        {
+            UserId = academicUser.Id,
+            User = academicUser,
+            Type = MentorType.Academic,
+            Department = "Bộ môn CNTT",
+            Status = MentorProfileStatus.Active,
+            CreatedBy = seed.AdminId
+        };
+        context.MentorProfiles.Add(academicProfile);
+        var semesterId = await context.Classes.Where(item => item.Id == seed.ClassId).Select(item => item.SemesterId).SingleAsync();
+        context.SemesterStaffAssignments.Add(new SemesterStaffAssignment
+        {
+            SemesterId = semesterId,
+            UserId = academicUser.Id,
+            User = academicUser,
+            Role = SemesterStaffRole.Mentor,
+            Status = SemesterStaffStatus.Active,
+            CreatedBy = seed.AdminId
+        });
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+        var handler = new MentorAssignmentHandler(context, scope.ServiceProvider.GetRequiredService<EHub.Application.Common.Interfaces.Persistence.IUnitOfWork>());
+
+        var result = await handler.AssignAsync(seed.TeamId!.Value, new AssignMentorRequest { MentorProfileId = academicProfile.Id }, seed.AdminId, SystemRoles.Admin);
+
+        result.IsSuccess.Should().BeTrue(result.IsFailure ? result.Error.Message : string.Empty);
+        context.ChangeTracker.Clear();
+        var active = await context.MentorAssignments.AsNoTracking()
+            .Where(item => item.TeamId == seed.TeamId && item.Status == MentorAssignmentStatus.Active && item.EndedAt == null)
+            .ToListAsync();
+        active.Should().HaveCount(2);
+        active.Should().ContainSingle(item => item.Slot == MentorType.Enterprise);
+        active.Should().ContainSingle(item => item.Slot == MentorType.Academic && item.MentorProfileId == academicProfile.Id);
     }
 
     [Fact]
@@ -688,7 +731,7 @@ public sealed class TeamWorkflowIntegrationTests
         var profile = await context.MentorProfiles.AsNoTracking()
             .SingleAsync(item => item.UserId == result.Value.Id);
         profile.Status.Should().Be(MentorProfileStatus.Active);
-        profile.MaxTeams.Should().BeGreaterThan(0);
+        profile.Type.Should().Be(MentorType.Enterprise);
     }
 
     [Fact]
@@ -2880,7 +2923,6 @@ public sealed class TeamWorkflowIntegrationTests
             User = mentorUser,
             Organization = "Integration Mentor Org",
             Status = MentorProfileStatus.Active,
-            MaxTeams = 3,
             CreatedBy = admin.Id
         };
         context.MentorProfiles.Add(mentorProfile);

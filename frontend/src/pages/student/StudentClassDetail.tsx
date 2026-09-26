@@ -18,8 +18,24 @@ import { teamApi } from '../../api/teamApi';
 import { parseApiError } from '../../utils/apiError';
 import { formatSemesterCode } from '../../utils/semester';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
+import Modal from '../../components/ui/Modal';
 import { subscribeProjectDirectionRealtime } from '../../api/projectDirectionRealtime';
 import { updateOwnMajor } from '../../api/authApi';
+import type { ClassMentorSummary } from '../../types/classes';
+
+const mentorInitials = (fullName: string) => fullName
+  .trim()
+  .split(/\s+/)
+  .filter(Boolean)
+  .slice(-2)
+  .map(part => part[0]?.toUpperCase())
+  .join('') || 'M';
+
+const mentorRoleLabel = (mentorType?: string) => {
+  if (mentorType === 'Academic') return 'Academic mentor';
+  if (mentorType === 'Enterprise') return 'Enterprise mentor';
+  return 'Mentor';
+};
 
 export default function StudentClassDetail() {
   const { slug: id } = useParams();
@@ -38,6 +54,7 @@ export default function StudentClassDetail() {
   const [cancellationReason, setCancellationReason] = useState('');
   const [cancellingProposal, setCancellingProposal] = useState(false);
   const [updatingMajor, setUpdatingMajor] = useState(false);
+  const [isMentorModalOpen, setIsMentorModalOpen] = useState(false);
 
   const fetchClassDetail = useCallback(async () => {
     try {
@@ -110,6 +127,13 @@ export default function StudentClassDetail() {
   const teams    = Array.isArray(data?.teams) ? data.teams : [];
   const displayedTeams = mergeTeamsWithLinkedProposals(teams, proposals);
   const lecturer = cls?.lectureId;
+  const classMentors: ClassMentorSummary[] = Array.isArray(cls?.mentors)
+    ? [...cls.mentors].sort((left, right) => {
+        const typeOrder = { Enterprise: 0, Academic: 1 } as Record<string, number>;
+        const byType = (typeOrder[left.mentorType || ''] ?? 2) - (typeOrder[right.mentorType || ''] ?? 2);
+        return byType || (left.fullName || '').localeCompare(right.fullName || '', 'vi');
+      })
+    : [];
   const isReadOnly = cls?.classStatus === 'Completed' || cls?.classStatus === 'Archived';
   const currentUserId = (user?._id || user?.id || '').toString();
   const currentStudent = students.find(s => {
@@ -216,52 +240,121 @@ export default function StudentClassDetail() {
       </button>
 
       {/* Hero Header */}
-      <div className="bg-white rounded-2xl border border-slate-200/60 p-6 shadow-sm flex flex-wrap justify-between items-start gap-4">
-        <div className="flex items-start gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-primary-500 to-secondary flex items-center justify-center text-white shrink-0 shadow-sm">
-            <GraduationCap className="w-6 h-6" />
+      <div className="rounded-2xl border border-slate-200/60 bg-white p-6 shadow-sm">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+          <div className="flex min-w-0 items-start gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-primary-500 to-secondary flex items-center justify-center text-white shrink-0 shadow-sm">
+              <GraduationCap className="w-6 h-6" />
+            </div>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs font-semibold px-2 py-0.5 bg-primary-50 text-primary border border-primary-100 rounded-md uppercase">
+                  {cls?.subjectCode}
+                </span>
+                <span className="text-xs font-semibold px-2 py-0.5 bg-slate-100 text-slate-500 border border-slate-200/40 rounded-md">
+                  {formatSemesterCode(cls?.semester, cls?.year)}
+                </span>
+              </div>
+              <h1 className="text-2xl font-bold text-slate-900 mt-1.5">{cls?.classCode}</h1>
+              <p className="text-sm text-slate-500 mt-0.5">{cls?.description || 'Classroom for Startup Idea Development.'}</p>
+            </div>
           </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-semibold px-2 py-0.5 bg-primary-50 text-primary border border-primary-100 rounded-md uppercase">
-                {cls?.subjectCode}
-              </span>
-              <span className="text-xs font-semibold px-2 py-0.5 bg-slate-100 text-slate-500 border border-slate-200/40 rounded-md">
-                {formatSemesterCode(cls?.semester, cls?.year)}
-              </span>
+
+          <div className="grid w-full gap-3 sm:grid-cols-2 lg:w-auto">
+            {lecturer && (
+              <div className="min-w-0 rounded-xl border border-slate-100 bg-slate-50 p-4 sm:min-w-[230px]">
+                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Lecturer</p>
+                <p className="font-bold text-slate-800 text-sm mt-1">{lecturer.name}</p>
+                <p className="text-xs text-slate-400 mt-0.5 flex items-center gap-1">
+                  <Mail className="w-3.5 h-3.5 shrink-0 text-slate-300" />
+                  <span className="truncate" title={lecturer.email}>{lecturer.email}</span>
+                </p>
+              </div>
+            )}
+
+            <div className="min-w-0 rounded-xl border border-slate-100 bg-slate-50 p-4 sm:min-w-[230px]">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Mentors</p>
+                <span className="flex h-6 min-w-6 items-center justify-center rounded-full bg-primary-50 px-1.5 text-[11px] font-bold text-primary">
+                  {classMentors.length}
+                </span>
+              </div>
+              {classMentors.length > 0 ? (
+                <div className="mt-2 flex items-center justify-between gap-4">
+                  <div className="flex -space-x-2" aria-hidden="true">
+                    {classMentors.slice(0, 3).map(mentor => (
+                      <span
+                        key={mentor.mentorProfileId || mentor.userId || mentor.email}
+                        className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-white bg-gradient-to-br from-primary-100 to-secondary/20 text-[10px] font-bold text-primary"
+                      >
+                        {mentorInitials(mentor.fullName || 'Mentor')}
+                      </span>
+                    ))}
+                    {classMentors.length > 3 && (
+                      <span className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-white bg-slate-200 text-[10px] font-bold text-slate-600">
+                        +{classMentors.length - 3}
+                      </span>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsMentorModalOpen(true)}
+                    className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-primary transition hover:text-primary-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 rounded-md"
+                  >
+                    View mentors <ArrowRight className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ) : (
+                <p className="mt-2 text-xs text-slate-400">No mentors assigned yet</p>
+              )}
             </div>
-            <h1 className="text-2xl font-bold text-slate-900 mt-1.5">{cls?.classCode}</h1>
-            <p className="text-sm text-slate-500 mt-0.5">{cls?.description || 'Classroom for Startup Idea Development.'}</p>
           </div>
-        </div>
-
-        <div className="flex flex-wrap gap-3 shrink-0">
-          {/* Lecturer card */}
-          {lecturer && (
-            <div className="bg-slate-50 rounded-xl p-4 border border-slate-100 min-w-[220px]">
-              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Lecturer</p>
-              <p className="font-bold text-slate-800 text-sm mt-1">{lecturer.name}</p>
-              <p className="text-xs text-slate-400 mt-0.5 flex items-center gap-1">
-                <Mail className="w-3.5 h-3.5 text-slate-300" />
-                {lecturer.email}
-              </p>
-            </div>
-          )}
-
-          {/* Mentors card */}
-          {cls?.mentors && cls.mentors.length > 0 && (
-            <div className="bg-slate-50 rounded-xl p-4 border border-slate-100 min-w-[220px] max-w-[280px]">
-              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Mentors</p>
-              <p className="font-bold text-slate-800 text-sm mt-1 truncate">
-                {cls.mentors.map(m => m.fullName || 'Unknown').join(', ')}
-              </p>
-              <p className="text-xs text-slate-400 mt-0.5">
-                {cls.mentors.length} assigned to class
-              </p>
-            </div>
-          )}
         </div>
       </div>
+
+      <Modal
+        isOpen={isMentorModalOpen}
+        onClose={() => setIsMentorModalOpen(false)}
+        title="Class mentors"
+        size="lg"
+      >
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+          <p className="text-sm text-slate-500">
+            Mentors supporting <span className="font-semibold text-slate-700">{cls?.classCode}</span>
+          </p>
+          <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-600">
+            {classMentors.length} {classMentors.length === 1 ? 'mentor' : 'mentors'}
+          </span>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          {classMentors.map(mentor => {
+            const fullName = mentor.fullName || 'Unknown mentor';
+            const affiliation = mentor.department || mentor.organization;
+            return (
+              <article key={mentor.mentorProfileId || mentor.userId || mentor.email} className="flex min-w-0 items-start gap-3 rounded-xl border border-slate-200/80 bg-slate-50/70 p-3.5">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary-100 to-secondary/20 text-xs font-bold text-primary ring-2 ring-white">
+                  {mentorInitials(fullName)}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-start gap-1.5">
+                    <h3 className="min-w-0 text-sm font-bold leading-5 text-slate-800">{fullName}</h3>
+                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${mentor.mentorType === 'Academic' ? 'bg-blue-50 text-blue-700' : mentor.mentorType === 'Enterprise' ? 'bg-orange-50 text-orange-700' : 'bg-slate-100 text-slate-600'}`}>
+                      {mentorRoleLabel(mentor.mentorType)}
+                    </span>
+                  </div>
+                  {mentor.jobTitle && <p className="mt-1 text-xs font-medium text-slate-600">{mentor.jobTitle}</p>}
+                  {affiliation && <p className="mt-0.5 text-xs leading-4 text-slate-400">{affiliation}</p>}
+                  <a href={`mailto:${mentor.email}`} className="mt-1.5 flex min-w-0 items-center gap-1 text-xs text-slate-400 transition hover:text-primary" title={mentor.email}>
+                    <Mail className="h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate">{mentor.email}</span>
+                  </a>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      </Modal>
 
       {isReadOnly && (
         <div className="flex items-start gap-2.5 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">

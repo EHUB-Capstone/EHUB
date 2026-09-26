@@ -60,6 +60,16 @@ public static class ErrorCodes
     public const string LecturerImportSessionAlreadyProcessing = "LECTURER_IMPORT_SESSION_ALREADY_PROCESSING";
     public const string LecturerImportNoActionableRows = "LECTURER_IMPORT_NO_ACTIONABLE_ROWS";
     public const string LecturerImportConflict = "LECTURER_IMPORT_CONFLICT";
+    public const string MentorImportFileInvalid = "MENTOR_IMPORT_FILE_INVALID";
+    public const string MentorImportSessionInvalid = "MENTOR_IMPORT_SESSION_INVALID";
+    public const string MentorImportSessionExpired = "MENTOR_IMPORT_SESSION_EXPIRED";
+    public const string MentorImportSessionAlreadyProcessing = "MENTOR_IMPORT_SESSION_ALREADY_PROCESSING";
+    public const string MentorImportConflict = "MENTOR_IMPORT_CONFLICT";
+    public const string MentorAllocationInvalid = "MENTOR_ALLOCATION_INVALID";
+    public const string MentorAllocationSessionInvalid = "MENTOR_ALLOCATION_SESSION_INVALID";
+    public const string MentorAllocationSessionExpired = "MENTOR_ALLOCATION_SESSION_EXPIRED";
+    public const string MentorAllocationSessionAlreadyProcessing = "MENTOR_ALLOCATION_SESSION_ALREADY_PROCESSING";
+    public const string MentorAllocationConflict = "MENTOR_ALLOCATION_CONFLICT";
 
     // Class management error codes
     public const string ClassAccessDenied = "CLASS_ACCESS_DENIED";

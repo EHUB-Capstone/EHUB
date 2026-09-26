@@ -17,6 +17,10 @@ export interface ClassMentorSummary {
   userId: string;
   fullName: string;
   email: string;
+  organization?: string | null;
+  mentorType?: 'Enterprise' | 'Academic' | string;
+  department?: string | null;
+  jobTitle?: string | null;
 }
 
 export interface ClassDto {

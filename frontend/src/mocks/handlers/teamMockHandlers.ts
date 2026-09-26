@@ -82,10 +82,9 @@ function isActiveSemesterMentor(classId: string, userId: string): boolean {
 }
 
 function activeMentorTeamCount(userId: string): number {
-  return getMockState().teams.filter((team) => (
-    team.currentMentorAssignment?.mentor.userId === userId
-    && team.currentMentorAssignment.status === 'Active'
-  )).length;
+  return getMockState().teams.filter((team) =>
+    team.currentMentorAssignments.some((assignment) => assignment.mentor.userId === userId && assignment.status === 'Active'))
+    .length;
 }
 
 function registerTeamQueries(mock: MockAdapter): void {
@@ -110,7 +109,10 @@ function registerTeamQueries(mock: MockAdapter): void {
   mock.onGet(/^\/classes\/[^/]+\/mentors$/).reply((config) => {
     const classId = routeId(config, /^\/classes\/([^/]+)\/mentors$/);
     if (!findClass(classId)) return failure(404, 'CLASS_NOT_FOUND', 'Class not found.');
-    const mentors = getMockState().teams.filter((team) => team.classId === classId && team.currentMentorAssignment?.status === 'Active').map((team) => team.currentMentorAssignment!.mentor);
+    const mentors = getMockState().teams.filter((team) => team.classId === classId)
+      .flatMap((team) => team.currentMentorAssignments)
+      .filter((assignment) => assignment.status === 'Active')
+      .map((assignment) => assignment.mentor);
     return ok([...new Map(mentors.map((mentor) => [mentor.mentorProfileId, mentor])).values()], 'Class mentors retrieved successfully.');
   });
 
@@ -122,9 +124,9 @@ function registerTeamQueries(mock: MockAdapter): void {
       && user.status === 'APPROVED'
       && isActiveSemesterMentor(classId, user.id)
     )).map((user) => {
-      const mentor: MockMentor = { mentorProfileId: user.id, userId: user.id, fullName: user.name, email: user.email, organization: 'E-HUB Partner Network' };
+      const mentor: MockMentor = { mentorProfileId: user.id, userId: user.id, fullName: user.name, email: user.email, organization: 'E-HUB Partner Network', mentorType: 'Enterprise' };
       const activeTeamCount = activeMentorTeamCount(user.id);
-      return { mentor, activeTeamCount, maxTeams: 4, hasCapacity: activeTeamCount < 4 };
+      return { mentor, activeTeamCount };
     });
     return ok(candidates, 'Mentor candidates retrieved successfully.');
   });
@@ -132,7 +134,7 @@ function registerTeamQueries(mock: MockAdapter): void {
   mock.onGet(/^\/teams\/[^/]+\/mentor-assignments$/).reply((config) => {
     const team = teamById(routeId(config, /^\/teams\/([^/]+)\/mentor-assignments$/));
     if (!team) return failure(404, 'TEAM_NOT_FOUND', 'Team not found.');
-    return ok(team.currentMentorAssignment ? [team.currentMentorAssignment] : [], 'Mentor assignments retrieved successfully.');
+    return ok(team.currentMentorAssignments, 'Mentor assignments retrieved successfully.');
   });
 
   mock.onGet(/^\/classes\/[^/]+\/team-proposals$/).reply((config) => {
@@ -240,17 +242,22 @@ function registerTeamMutations(mock: MockAdapter): void {
     if (!isActiveSemesterMentor(team.classId, mentorUser.id)) {
       return failure(400, 'MENTOR_NOT_AVAILABLE', "The selected mentor is not active in this semester's teaching staff list.");
     }
-    if (team.currentMentorAssignment?.mentor.userId === mentorUser.id && team.currentMentorAssignment.status === 'Active') {
-      return ok(team.currentMentorAssignment, 'Mentor is already assigned to this team.');
+    const same = team.currentMentorAssignments.find((assignment) => assignment.mentor.userId === mentorUser.id && assignment.status === 'Active');
+    if (same) {
+      return ok(same, 'Mentor is already assigned to this team.');
     }
-    if (activeMentorTeamCount(mentorUser.id) >= 4) {
-      return failure(409, 'MENTOR_CAPACITY_REACHED', 'The selected mentor has reached the maximum active team capacity.');
+    const mentor: MockMentor = { mentorProfileId: mentorUser.id, userId: mentorUser.id, fullName: mentorUser.name, email: mentorUser.email, organization: 'E-HUB Partner Network', mentorType: 'Enterprise' };
+    const occupiedSlot = team.currentMentorAssignments.some((assignment) =>
+      assignment.slot === mentor.mentorType && assignment.status === 'Active');
+    if (occupiedSlot) {
+      return failure(409, 'MENTOR_ASSIGNMENT_CONFLICT', `This team already has an active ${mentor.mentorType} mentor. End the current assignment before assigning a replacement.`);
     }
-    const mentor: MockMentor = { mentorProfileId: mentorUser.id, userId: mentorUser.id, fullName: mentorUser.name, email: mentorUser.email, organization: 'E-HUB Partner Network' };
-    team.currentMentorAssignment = { assignmentId: allocateId(), teamId: team.id, teamName: team.teamName, classId: team.classId, mentor, status: 'Active', assignedAtUtc: new Date().toISOString(), endedAtUtc: null, note: asString(body.note) || null };
+    const assignment = { assignmentId: allocateId(), teamId: team.id, teamName: team.teamName, classId: team.classId, mentor, status: 'Active' as const, assignedAtUtc: new Date().toISOString(), endedAtUtc: null, note: asString(body.note) || null, slot: mentor.mentorType };
+    team.currentMentorAssignments.push(assignment);
+    team.currentMentorAssignment = assignment;
     refreshClassCounts(team.classId);
     persistMockState();
-    return ok(team.currentMentorAssignment, 'Mentor assigned successfully.');
+    return ok(assignment, 'Mentor assigned successfully.');
   });
 
   mock.onPost(/^\/teams\/[^/]+\/mentor-assignments\/end$/).reply((config) => {
@@ -258,9 +265,13 @@ function registerTeamMutations(mock: MockAdapter): void {
     if (!team) return failure(404, 'TEAM_NOT_FOUND', 'Team not found.');
     const guard = classMutationGuard(team.classId);
     if (guard) return guard;
-    if (!team.currentMentorAssignment) return failure(404, 'MENTOR_ASSIGNMENT_NOT_FOUND', 'There is no active mentor assignment.');
-    team.currentMentorAssignment.status = 'Ended';
-    team.currentMentorAssignment.endedAtUtc = new Date().toISOString();
+    const body = parseBody(config);
+    const assignment = team.currentMentorAssignments.find(item => item.assignmentId === asString(body.assignmentId) && item.status === 'Active');
+    if (!assignment) return failure(404, 'MENTOR_ASSIGNMENT_NOT_FOUND', 'There is no active mentor assignment.');
+    assignment.status = 'Ended';
+    assignment.endedAtUtc = new Date().toISOString();
+    team.currentMentorAssignments = team.currentMentorAssignments.filter(item => item.status === 'Active');
+    team.currentMentorAssignment = team.currentMentorAssignments[0] || null;
     refreshClassCounts(team.classId);
     persistMockState();
     return ok(null, 'Mentor assignment ended successfully.');
@@ -361,6 +372,7 @@ function registerProposalHandlers(mock: MockAdapter): void {
       leaderId,
       members: selectedStudents.map((student) => memberFromStudent(student!, leaderId)),
       currentMentorAssignment: null,
+      currentMentorAssignments: [],
       rowVersion: allocateRowVersion(),
     };
     proposal.approvedTeamId = teamId;
@@ -433,7 +445,7 @@ function registerProposalHandlers(mock: MockAdapter): void {
         const id = allocateId();
         const roster = getMockState().rosters[proposal.classId] || [];
         const leaderId = proposal.members.find((member) => member.isLeader)?.studentId || proposal.members[0]?.studentId || '';
-        team = { id, classId: proposal.classId, teamCode: `${findClass(proposal.classId)?.subjectCode || 'TEAM'}-T${getMockState().teams.length + 1}`, teamName: proposal.teamName, description: null, status: 'Active', leaderId, members: proposal.members.map((member) => roster.find((student) => student.studentId === member.studentId)).filter(Boolean).map((student) => memberFromStudent(student!, leaderId)), currentMentorAssignment: null, rowVersion: allocateRowVersion() };
+        team = { id, classId: proposal.classId, teamCode: `${findClass(proposal.classId)?.subjectCode || 'TEAM'}-T${getMockState().teams.length + 1}`, teamName: proposal.teamName, description: null, status: 'Active', leaderId, members: proposal.members.map((member) => roster.find((student) => student.studentId === member.studentId)).filter(Boolean).map((student) => memberFromStudent(student!, leaderId)), currentMentorAssignment: null, currentMentorAssignments: [], rowVersion: allocateRowVersion() };
         getMockState().teams.push(team);
         updateRosterTeamLinks(proposal.classId, team);
         proposal.approvedTeamId = id;
@@ -548,7 +560,7 @@ function registerFormationHandlers(mock: MockAdapter): void {
         teamCode: `${findClass(formation.classId)?.classCode || 'TEAM'}_TEAM_${state.teams.filter(item => item.classId === formation.classId).length + 1}`,
         teamName: formation.teamName, description: null, projectName: null, projectDescription: null,
         status: 'Active', leaderId, members: selected.map(item => memberFromStudent(item!, leaderId)),
-        currentMentorAssignment: null, rowVersion: allocateRowVersion(),
+        currentMentorAssignment: null, currentMentorAssignments: [], rowVersion: allocateRowVersion(),
       };
       state.teams.push(team);
       updateRosterTeamLinks(formation.classId, team);

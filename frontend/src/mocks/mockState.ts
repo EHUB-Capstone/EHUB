@@ -165,6 +165,7 @@ export interface MockMentor {
   fullName: string;
   email: string;
   organization: string | null;
+  mentorType: 'Enterprise' | 'Academic';
 }
 
 export interface MockMentorAssignment {
@@ -177,6 +178,7 @@ export interface MockMentorAssignment {
   assignedAtUtc: string;
   endedAtUtc: string | null;
   note: string | null;
+  slot: 'Enterprise' | 'Academic';
 }
 
 export interface MockTeam {
@@ -209,6 +211,7 @@ export interface MockTeam {
   leaderId: string | null;
   members: MockTeamMember[];
   currentMentorAssignment: MockMentorAssignment | null;
+  currentMentorAssignments: MockMentorAssignment[];
   rowVersion: string;
 }
 
@@ -463,10 +466,11 @@ const memberFromRoster = (student: MockRosterStudent, leaderId: string): MockTea
   joinedAtUtc: student.joinedAtUtc,
 });
 
-const mentor: MockMentor = { mentorProfileId: id(4), userId: id(4), fullName: 'Phạm Anh Khoa', email: 'khoa.mentor@ehub.local', organization: 'E-HUB Ventures' };
+const mentor: MockMentor = { mentorProfileId: id(4), userId: id(4), fullName: 'Phạm Anh Khoa', email: 'khoa.mentor@ehub.local', organization: 'E-HUB Ventures', mentorType: 'Enterprise' };
+const mentorAssignment: MockMentorAssignment = { assignmentId: id(701), teamId: id(601), teamName: 'Phoenix Founders', classId: classIds.active, mentor, status: 'Active', assignedAtUtc: isoAgo(20), endedAtUtc: null, note: 'Focus on customer validation.', slot: 'Enterprise' };
 const teams: MockTeam[] = [
-  { id: id(601), classId: classIds.active, teamCode: 'EXE-T01', teamName: 'Phoenix Founders', description: 'Marketplace for trusted student services.', projectName: 'Campus Connect', projectDescription: 'A trusted marketplace that helps students discover and book verified campus services.', status: 'Active', leaderId: activeRoster[0].studentId, members: activeRoster.slice(0, 4).map((student) => memberFromRoster(student, activeRoster[0].studentId)), currentMentorAssignment: { assignmentId: id(701), teamId: id(601), teamName: 'Phoenix Founders', classId: classIds.active, mentor, status: 'Active', assignedAtUtc: isoAgo(20), endedAtUtc: null, note: 'Focus on customer validation.' }, rowVersion: 'rv-10' },
-  { id: id(602), classId: classIds.active, teamCode: 'EXE-T02', teamName: 'GreenByte', description: 'Smart energy insights for small offices.', status: 'Active', leaderId: activeRoster[4].studentId, members: activeRoster.slice(4, 8).map((student) => memberFromRoster(student, activeRoster[4].studentId)), currentMentorAssignment: null, rowVersion: 'rv-11' },
+  { id: id(601), classId: classIds.active, teamCode: 'EXE-T01', teamName: 'Phoenix Founders', description: 'Marketplace for trusted student services.', projectName: 'Campus Connect', projectDescription: 'A trusted marketplace that helps students discover and book verified campus services.', status: 'Active', leaderId: activeRoster[0].studentId, members: activeRoster.slice(0, 4).map((student) => memberFromRoster(student, activeRoster[0].studentId)), currentMentorAssignment: mentorAssignment, currentMentorAssignments: [mentorAssignment], rowVersion: 'rv-10' },
+  { id: id(602), classId: classIds.active, teamCode: 'EXE-T02', teamName: 'GreenByte', description: 'Smart energy insights for small offices.', status: 'Active', leaderId: activeRoster[4].studentId, members: activeRoster.slice(4, 8).map((student) => memberFromRoster(student, activeRoster[4].studentId)), currentMentorAssignment: null, currentMentorAssignments: [], rowVersion: 'rv-11' },
 ];
 
 const initialMockState: MockApiState = {

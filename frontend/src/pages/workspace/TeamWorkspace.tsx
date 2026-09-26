@@ -157,6 +157,7 @@ export default function TeamWorkspace() {
   }
 
   const { team, class: cls, members, lecturer, mentor, proposal, latestDeck, project } = data;
+  const mentors = Array.isArray(data.mentors) ? data.mentors : mentor ? [mentor] : [];
   const privilegedRoles = ['ADMIN', 'LECTURER', 'MENTOR'];
   const isTeamMember = members && members.some((member) =>
     String(member.userId?._id || member.userId || '') === String(user?._id || user?.id || ''));
@@ -321,17 +322,17 @@ export default function TeamWorkspace() {
 
               {/* Mentor */}
               <div className="bg-slate-50/50 rounded-xl p-3 border border-slate-100">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Mentor</p>
-                {mentor ? (
-                  <div className="flex items-center gap-2.5 mt-1.5">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Mentors</p>
+                {mentors.length ? (
+                  <div className="mt-1.5 space-y-2.5">{mentors.map(currentMentor => <div key={currentMentor.id || currentMentor._id || currentMentor.email} className="flex items-center gap-2.5">
                     <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center text-amber-600 font-semibold text-xs">
-                      {mentor.name?.charAt(0)}
+                      {currentMentor.name?.charAt(0)}
                     </div>
                     <div className="min-w-0">
-                      <p className="text-sm font-semibold text-slate-700 truncate">{mentor.name}</p>
-                      <p className="text-xs text-slate-400 truncate flex items-center gap-1"><Mail className="w-3 h-3" />{mentor.email}</p>
+                      <p className="text-sm font-semibold text-slate-700 truncate">{currentMentor.name}</p>
+                      <p className="text-xs text-slate-400 truncate flex items-center gap-1"><Mail className="w-3 h-3" />{currentMentor.label ? `${currentMentor.label} · ` : ''}{currentMentor.email}</p>
                     </div>
-                  </div>
+                  </div>)}</div>
                 ) : (
                   <p className="text-xs text-slate-400 mt-1 italic">No mentor assigned yet</p>
                 )}

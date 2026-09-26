@@ -575,7 +575,9 @@ export default function ClassDetail() {
 
   const getUniqueMentors = () => {
     const teamMentors = safeTeams
-      .map(team => team.currentMentorAssignment?.mentor)
+      .flatMap(team => Array.isArray(team.currentMentorAssignments)
+        ? team.currentMentorAssignments.map(assignment => assignment.mentor)
+        : team.currentMentorAssignment?.mentor ? [team.currentMentorAssignment.mentor] : [])
       .filter(Boolean)
       .map(mentor => ({ _id: mentor.mentorProfileId, name: mentor.fullName, email: mentor.email }));
     const seen = new Set();

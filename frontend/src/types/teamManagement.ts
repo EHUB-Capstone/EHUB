@@ -52,6 +52,7 @@ export interface ManagedTeam {
   approvedTeamId?: EntityReference;
   linkedProposal?: ManagedTeam;
   currentMentorAssignment?: MentorAssignment | null;
+  currentMentorAssignments?: MentorAssignment[];
 }
 
 export interface MentorAssignment {
@@ -63,7 +64,11 @@ export interface MentorAssignment {
     fullName: string;
     email: string;
     organization?: string | null;
+    mentorType: 'Enterprise' | 'Academic';
+    department?: string | null;
+    jobTitle?: string | null;
   };
+  slot: 'Enterprise' | 'Academic';
   status: string;
   assignedAtUtc: string;
   endedAtUtc?: string | null;
@@ -73,8 +78,6 @@ export interface MentorAssignment {
 export interface MentorCandidate {
   mentor: MentorAssignment['mentor'];
   activeTeamCount: number;
-  maxTeams: number;
-  hasCapacity: boolean;
 }
 
 export interface TeamClassOption {

@@ -7,6 +7,7 @@ import {
 import toast from 'react-hot-toast';
 import { subjectApi } from '../../api/subjectApi';
 import SemesterDateRangePicker from '../../components/admin/SemesterDateRangePicker';
+import MentorAdministrationCard from '../../components/admin/MentorAdministrationCard';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
@@ -609,6 +610,7 @@ const SubjectManagement = () => {
       members: visibleStaff.filter(member => member.role === 'MENTOR'),
     },
   ].filter(section => staffRole === 'ALL' || section.role === staffRole);
+  const selectedSemesterRecord = semesters.find(item => item.semester === selectedSemester && Number(item.year) === selectedYear);
 
   return (
     <div className="space-y-6">
@@ -777,6 +779,11 @@ const SubjectManagement = () => {
       ) : (
         <section className="space-y-5">
           <div className="flex flex-col gap-3 rounded-2xl border border-slate-200/70 bg-white p-4 shadow-sm md:flex-row md:items-end md:justify-between"><div className="flex flex-col gap-3 sm:flex-row"><label className="text-xs font-semibold uppercase text-slate-400">Semester<select value={selectedSemester} onChange={(event) => setSelectedSemester(event.target.value as SemesterCode)} className="mt-1.5 block rounded-xl border border-slate-200 px-3 py-2 text-sm font-normal text-slate-700 outline-none"><option value="SP">SP (Spring)</option><option value="SU">SU (Summer)</option><option value="FA">FA (Fall)</option></select></label><label className="text-xs font-semibold uppercase text-slate-400">Year<select value={selectedYear} onChange={(event) => setSelectedYear(Number(event.target.value))} className="mt-1.5 block rounded-xl border border-slate-200 px-3 py-2 text-sm font-normal text-slate-700 outline-none">{availableYears.map((year) => <option key={year} value={year}>{year}</option>)}</select></label></div><Button variant="outline" icon={Users} onClick={() => navigate('/admin/classes')}>Manage Assignments</Button></div>
+          <MentorAdministrationCard
+            semesterId={selectedSemesterRecord?.id}
+            semesterLabel={`${selectedSemester} ${selectedYear}`}
+            onImportCommitted={() => loadStaff(selectedSemester, selectedYear)}
+          />
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">{staffStats.map(({ label, value, icon: Icon, style }) => <div key={label} className="rounded-xl border border-slate-200/70 bg-white p-4 shadow-sm"><div className={`flex h-9 w-9 items-center justify-center rounded-lg ${style}`}><Icon className="h-4 w-4" /></div><p className="mt-3 text-2xl font-bold text-slate-900">{value}</p><p className="text-sm text-slate-500">{label}</p></div>)}</div>
           <div className="flex flex-col gap-3 sm:flex-row"><div className="relative flex-1"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input value={staffSearch} onChange={(event) => setStaffSearch(event.target.value)} placeholder="Search name, email, class or subject code..." className="w-full rounded-xl border border-slate-200 bg-white py-2 pl-10 pr-4 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20" /></div><select value={staffRole} onChange={(event) => setStaffRole(event.target.value as typeof staffRole)} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none"><option value="ALL">All roles</option><option value="LECTURER">Lecturers only</option><option value="MENTOR">Mentors only</option></select></div>
           {staffLoading ? (
