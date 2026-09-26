@@ -223,7 +223,10 @@ public sealed class StudentClassSelfServiceHandler : IStudentClassSelfServiceHan
                     UserId = assignment.MentorProfile.UserId,
                     FullName = assignment.MentorProfile.User.FullName,
                     Email = assignment.MentorProfile.User.Email,
-                    Organization = assignment.MentorProfile.Organization
+                    Organization = assignment.MentorProfile.Organization,
+                    MentorType = assignment.MentorProfile.Type.ToString(),
+                    Department = assignment.MentorProfile.Department,
+                    JobTitle = assignment.MentorProfile.JobTitle
                 }
             })
             .ToListAsync(cancellationToken);
