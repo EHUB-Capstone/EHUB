@@ -96,6 +96,8 @@ public sealed class ExportAdminClassDataQueryHandler : IExportAdminClassDataQuer
 
         var registeredMajorByEmail = await RegisteredStudentMajorResolver.LoadByEmailAsync(
             _context, roster.Select(enrollment => enrollment.Student.Email), cancellationToken);
+        var mentorsByTeam = await ClassRosterMentorResolver.LoadByTeamAsync(
+            _context, orderedClasses.Select(@class => @class.Id), cancellationToken);
 
         var rosterByClass = roster
             .GroupBy(enrollment => enrollment.ClassId)
@@ -103,7 +105,8 @@ public sealed class ExportAdminClassDataQueryHandler : IExportAdminClassDataQuer
         var sections = orderedClasses
             .Select(@class => new ClassRosterExportSection(
                 @class,
-                rosterByClass.GetValueOrDefault(@class.Id) ?? Array.Empty<ClassStudent>()))
+                rosterByClass.GetValueOrDefault(@class.Id) ?? Array.Empty<ClassStudent>(),
+                mentorsByTeam))
             .ToArray();
 
         var bytes = ClassRosterExportWorkbookBuilder.Build(sections, registeredMajorByEmail);

@@ -73,6 +73,28 @@ public sealed class ClassRosterExportWorkbookBuilderTests
     }
 
     [Fact]
+    public void Build_TeamRows_WritesBothMentorSlotsOnFirstTeamRowOnly()
+    {
+        var section = CreateTeamSection();
+        var teamId = section.Roster.First().TeamMembers.Single().TeamId;
+        section = section with
+        {
+            MentorsByTeam = new Dictionary<Guid, ClassRosterMentorNames>
+            {
+                [teamId] = new("Enterprise Mentor", "Academic Mentor")
+            }
+        };
+
+        using var workbook = OpenWorkbook(ClassRosterExportWorkbookBuilder.Build([section]));
+        var worksheet = workbook.Worksheet(ClassRosterExportWorkbookBuilder.WorksheetName);
+
+        worksheet.Cell(2, 10).GetString().Should().Be("Enterprise Mentor");
+        worksheet.Cell(2, 11).GetString().Should().Be("Academic Mentor");
+        worksheet.Cell(3, 10).GetString().Should().BeEmpty();
+        worksheet.Cell(3, 11).GetString().Should().BeEmpty();
+    }
+
+    [Fact]
     public void Build_MajorMatchesClassRosterEnrollmentProfileAndRegisteredEmailFallback()
     {
         var section = CreateSection("EXE201", 8, "DE180182");

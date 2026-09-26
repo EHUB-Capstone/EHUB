@@ -12,7 +12,12 @@ namespace EHub.Application.Features.Classes.ExportClassRoster;
 
 internal sealed record ClassRosterExportSection(
     Class Class,
-    IReadOnlyCollection<ClassStudent> Roster);
+    IReadOnlyCollection<ClassStudent> Roster,
+    IReadOnlyDictionary<Guid, ClassRosterMentorNames>? MentorsByTeam = null);
+
+internal sealed record ClassRosterMentorNames(
+    string Enterprise,
+    string Academic);
 
 internal static class ClassRosterExportWorkbookBuilder
 {
@@ -126,6 +131,13 @@ internal static class ClassRosterExportWorkbookBuilder
             {
                 worksheet.Cell(rowIndex, 7).Value = project?.Name ?? string.Empty;
                 worksheet.Cell(rowIndex, 8).Value = project?.Description ?? string.Empty;
+
+                if (row.Team != null &&
+                    section.MentorsByTeam?.TryGetValue(row.Team.Id, out var mentors) == true)
+                {
+                    worksheet.Cell(rowIndex, 10).Value = mentors.Enterprise;
+                    worksheet.Cell(rowIndex, 11).Value = mentors.Academic;
+                }
 
                 var zaloUrl = project?.ZaloGroupUrl;
                 if (!string.IsNullOrWhiteSpace(zaloUrl))
