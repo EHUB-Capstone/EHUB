@@ -170,13 +170,14 @@ public sealed class MentorAssignmentHandler : IMentorAssignmentHandler
                 var same = current.FirstOrDefault(item => item.MentorProfileId == mentor.Id);
                 if (same != null) return Result.Success(TeamMappings.ToMentorAssignmentDto(same));
 
-                var now = DateTime.UtcNow;
-                foreach (var existing in current)
+                if (current.Count > 0)
                 {
-                    existing.Status = MentorAssignmentStatus.Ended;
-                    existing.EndedAt = now;
+                    return Failure(
+                        ErrorCodes.MentorAssignmentConflict,
+                        $"This team already has an active {mentor.Type} mentor. End the current assignment before assigning a replacement.");
                 }
 
+                var now = DateTime.UtcNow;
                 var assignment = new MentorAssignment
                 {
                     MentorProfileId = mentor.Id,
@@ -194,7 +195,7 @@ public sealed class MentorAssignmentHandler : IMentorAssignmentHandler
                 _context.ClassAuditLogs.Add(new ClassAuditLog
                 {
                     ClassId = team.ClassId,
-                    Action = current.Count == 0 ? "MENTOR_ASSIGNED" : "MENTOR_REASSIGNED",
+                    Action = "MENTOR_ASSIGNED",
                     PerformedByUserId = userId,
                     OccurredAtUtc = now,
                     DetailsJson = JsonSerializer.Serialize(new { TeamId = team.Id, MentorProfileId = mentor.Id, Slot = mentor.Type.ToString() })
@@ -205,7 +206,7 @@ public sealed class MentorAssignmentHandler : IMentorAssignmentHandler
                     MentorProfileId = mentor.Id,
                     MentorUserId = mentor.UserId,
                     Slot = mentor.Type.ToString(),
-                    Action = current.Count == 0 ? "Assigned" : "Reassigned"
+                    Action = "Assigned"
                 }, now);
                 await _context.SaveChangesAsync(transactionCancellationToken);
                 return Result.Success(TeamMappings.ToMentorAssignmentDto(assignment));

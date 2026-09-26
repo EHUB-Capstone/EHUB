@@ -851,6 +851,25 @@ test('mock team management supports proposal creation, update, duplicate prevent
     },
   );
 
+  state.semesterStaffAssignments.push({
+    id: 'test-second-semester-mentor',
+    semesterId: targetClass.semesterId,
+    userId: outsideSemesterMentor.id,
+    role: 'MENTOR',
+    status: 'ACTIVE',
+  });
+  await assert.rejects(
+    axiosClient.post(`/teams/${createdTeam.id}/mentor-assignments`, {
+      mentorProfileId: outsideSemesterMentor.id,
+    }),
+    (error: unknown) => {
+      const response = (error as { response?: { status?: number; data?: { code?: string } } }).response;
+      return response?.status === 409 && response.data?.code === 'MENTOR_ASSIGNMENT_CONFLICT';
+    },
+  );
+  assert.equal(createdTeam.currentMentorAssignments.length, 1);
+  assert.equal(createdTeam.currentMentorAssignments[0].mentor.mentorProfileId, mentorId);
+
   const updated = await axiosClient.put(`/teams/${createdTeam.id}/members`, {
     teamName: 'Launch Lab Updated',
     description: 'Latest team information.',

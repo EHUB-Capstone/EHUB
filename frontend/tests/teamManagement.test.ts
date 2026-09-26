@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { ManagedTeam, TeamDraft, TeamStudent } from '../src/types/teamManagement.ts';
 import {
+  canAssignMentorTypeToTeam,
   getTeamProject,
   mergeTeamsWithLinkedProposals,
   normalizeManagedTeam,
@@ -17,6 +18,34 @@ import {
   validateProjectProfile,
   validateProjectWorkspace,
 } from '../src/utils/projectWorkspace.ts';
+
+test('offers only active teams with the selected mentor slot still open', () => {
+  const enterpriseAssignment = {
+    assignmentId: 'enterprise-assignment',
+    teamId: 'team-1',
+    mentor: {
+      mentorProfileId: 'enterprise-mentor',
+      userId: 'enterprise-user',
+      fullName: 'Enterprise Mentor',
+      email: 'enterprise@example.com',
+      mentorType: 'Enterprise' as const,
+    },
+    slot: 'Enterprise' as const,
+    status: 'Active',
+    assignedAtUtc: new Date().toISOString(),
+  };
+  const team: ManagedTeam = {
+    _id: 'team-1',
+    teamName: 'Launch Team',
+    status: 'APPROVED',
+    currentMentorAssignments: [enterpriseAssignment],
+  };
+
+  assert.equal(canAssignMentorTypeToTeam(team, 'Enterprise'), false);
+  assert.equal(canAssignMentorTypeToTeam(team, 'Academic'), true);
+  assert.equal(canAssignMentorTypeToTeam({ ...team, status: 'Archived' }, 'Academic'), false);
+  assert.equal(canAssignMentorTypeToTeam({ ...team, currentMentorAssignments: [{ ...enterpriseAssignment, status: 'Ended' }] }, 'Enterprise'), true);
+});
 
 test('uses imported enrollment major before the temporary profile major', () => {
   assert.equal(resolveEffectiveTeamMajor(' bba_mkt ', 'BIT_SE'), 'BBA_MKT');

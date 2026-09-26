@@ -479,7 +479,7 @@ public sealed class TeamWorkflowIntegrationTests
     }
 
     [Fact]
-    public async Task ReassigningMentor_EndsThePreviousAssignmentAndKeepsOneActiveSource()
+    public async Task AssigningMentor_DoesNotReplaceAnOccupiedMentorSlot()
     {
         using var scope = _factory.Services.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -519,16 +519,17 @@ public sealed class TeamWorkflowIntegrationTests
             seed.AdminId,
             SystemRoles.Admin);
 
-        result.IsSuccess.Should().BeTrue();
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be(ErrorCodes.MentorAssignmentConflict);
+        result.Error.Message.Should().Contain("End the current assignment");
         context.ChangeTracker.Clear();
         var assignments = await context.MentorAssignments.AsNoTracking()
             .Where(assignment => assignment.TeamId == seed.TeamId)
             .ToListAsync();
-        assignments.Count(assignment => assignment.Status == MentorAssignmentStatus.Active && assignment.EndedAt == null)
-            .Should().Be(1);
-        assignments.Single(assignment => assignment.Status == MentorAssignmentStatus.Active).MentorProfileId
-            .Should().Be(replacementProfile.Id);
-        assignments.Should().Contain(assignment => assignment.Status == MentorAssignmentStatus.Ended && assignment.EndedAt != null);
+        assignments.Should().ContainSingle();
+        assignments.Single().MentorProfileId.Should().NotBe(replacementProfile.Id);
+        assignments.Single().Status.Should().Be(MentorAssignmentStatus.Active);
+        assignments.Single().EndedAt.Should().BeNull();
     }
 
     [Fact]

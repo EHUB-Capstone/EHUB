@@ -5,7 +5,7 @@ import { classApi } from '../../api/classApi';
 import { teamApi } from '../../api/teamApi';
 import { unwrapApiData } from '../../utils/classMappers';
 import { parseApiError } from '../../utils/apiError';
-import { normalizeManagedTeam } from '../../utils/teamManagement';
+import { canAssignMentorTypeToTeam, normalizeManagedTeam } from '../../utils/teamManagement';
 import type { ManagedTeam, MentorAssignment, MentorCandidate } from '../../types/teamManagement';
 import type { ApiEnvelope } from '../../types/classes';
 import ConfirmDialog from '../ui/ConfirmDialog';
@@ -148,7 +148,11 @@ export default function AssignMentorsModal({ classId, currentMentors: _currentMe
     m.email?.toLowerCase().includes(mentorSearchTerm.toLowerCase())
   );
 
-  const filteredTeams = teams.filter(team =>
+  const selectedMentor = mentors.find(mentor => mentor._id === selectedMentorId);
+  const eligibleTeams = selectedMentor
+    ? teams.filter(team => canAssignMentorTypeToTeam(team, selectedMentor.mentorType))
+    : [];
+  const filteredTeams = eligibleTeams.filter(team =>
     team.teamName?.toLowerCase().includes(teamSearchTerm.toLowerCase()) ||
     team.teamCode?.toLowerCase().includes(teamSearchTerm.toLowerCase()) ||
     team.groupName?.toLowerCase().includes(teamSearchTerm.toLowerCase())
@@ -287,6 +291,11 @@ export default function AssignMentorsModal({ classId, currentMentors: _currentMe
                   <div className="mb-2 flex items-center gap-2">
                     <span className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold ${selectedMentorId ? 'bg-primary text-white' : 'bg-slate-200 text-slate-500'}`}>2</span>
                     <h3 className="text-xs font-semibold text-slate-700">Select team</h3>
+                    {selectedMentor && (
+                      <span className={`ml-auto rounded-full px-2 py-0.5 text-[10px] font-semibold ${selectedMentor.mentorType === 'Academic' ? 'bg-blue-50 text-blue-700' : 'bg-orange-50 text-orange-700'}`}>
+                        Needs {selectedMentor.mentorType}
+                      </span>
+                    )}
                   </div>
                   <div className="relative mb-2">
                     <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -307,7 +316,15 @@ export default function AssignMentorsModal({ classId, currentMentors: _currentMe
                         <p className="mt-1 text-[10px] text-slate-400">Available teams will appear here.</p>
                       </div>
                     ) : filteredTeams.length === 0 ? (
-                      <p className="py-8 text-center text-xs text-slate-400">No teams found</p>
+                      <div className="flex h-full flex-col items-center justify-center px-5 text-center">
+                        <Users className="mb-2 h-7 w-7 text-slate-300" />
+                        <p className="text-xs font-medium text-slate-500">
+                          {teamSearchTerm ? 'No matching teams found' : `All active teams already have an ${selectedMentor?.mentorType} mentor`}
+                        </p>
+                        <p className="mt-1 text-[10px] text-slate-400">
+                          {teamSearchTerm ? 'Try a different team name or code.' : 'End an existing assignment first if you need to replace a mentor.'}
+                        </p>
+                      </div>
                     ) : filteredTeams.map(team => {
                       const isChecked = selectedTeamId === team._id;
                       return (

@@ -247,12 +247,11 @@ function registerTeamMutations(mock: MockAdapter): void {
       return ok(same, 'Mentor is already assigned to this team.');
     }
     const mentor: MockMentor = { mentorProfileId: mentorUser.id, userId: mentorUser.id, fullName: mentorUser.name, email: mentorUser.email, organization: 'E-HUB Partner Network', mentorType: 'Enterprise' };
-    team.currentMentorAssignments.forEach((assignment) => {
-      if (assignment.slot === mentor.mentorType && assignment.status === 'Active') {
-        assignment.status = 'Ended';
-        assignment.endedAtUtc = new Date().toISOString();
-      }
-    });
+    const occupiedSlot = team.currentMentorAssignments.some((assignment) =>
+      assignment.slot === mentor.mentorType && assignment.status === 'Active');
+    if (occupiedSlot) {
+      return failure(409, 'MENTOR_ASSIGNMENT_CONFLICT', `This team already has an active ${mentor.mentorType} mentor. End the current assignment before assigning a replacement.`);
+    }
     const assignment = { assignmentId: allocateId(), teamId: team.id, teamName: team.teamName, classId: team.classId, mentor, status: 'Active' as const, assignedAtUtc: new Date().toISOString(), endedAtUtc: null, note: asString(body.note) || null, slot: mentor.mentorType };
     team.currentMentorAssignments.push(assignment);
     team.currentMentorAssignment = assignment;

@@ -1,6 +1,7 @@
 import type {
   EntityReference,
   ManagedTeam,
+  MentorAssignment,
   TeamDraft,
   TeamDraftValidation,
   TeamMember,
@@ -11,6 +12,15 @@ import { getTeamGroupFromMajor, TEAM_MAJOR_GROUPS } from '../constants/majors.ts
 
 export const TEAM_MEMBER_LIMIT = 6;
 export const TEAM_MEMBER_MINIMUM = 4;
+
+export function canAssignMentorTypeToTeam(team: ManagedTeam, mentorType: MentorAssignment['slot']): boolean {
+  const teamStatus = team.status?.trim().toLowerCase();
+  const isAssignableTeam = !teamStatus || teamStatus === 'active' || teamStatus === 'approved';
+  if (!isAssignableTeam) return false;
+
+  return !(team.currentMentorAssignments || []).some(assignment =>
+    assignment.status.trim().toLowerCase() === 'active' && assignment.slot === mentorType);
+}
 
 const MISSING_MAJOR_CODES = new Set(['UNDECLARED', 'MISSING', 'UNKNOWN', 'N/A', 'NA', 'NONE', 'NULL']);
 
