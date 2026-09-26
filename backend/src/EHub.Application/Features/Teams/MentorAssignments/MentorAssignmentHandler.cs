@@ -54,11 +54,12 @@ public sealed class MentorAssignmentHandler : IMentorAssignmentHandler
                     UserId = profile.UserId,
                     FullName = profile.User.FullName,
                     Email = profile.User.Email,
-                    Organization = profile.Organization
+                    Organization = profile.Organization,
+                    MentorType = profile.Type.ToString(),
+                    Department = profile.Department,
+                    JobTitle = profile.JobTitle
                 },
-                ActiveTeamCount = profile.Assignments.Count(assignment => assignment.Status == MentorAssignmentStatus.Active && assignment.EndedAt == null),
-                MaxTeams = profile.MaxTeams,
-                HasCapacity = profile.Assignments.Count(assignment => assignment.Status == MentorAssignmentStatus.Active && assignment.EndedAt == null) < profile.MaxTeams
+                ActiveTeamCount = profile.Assignments.Count(assignment => assignment.Status == MentorAssignmentStatus.Active && assignment.EndedAt == null && assignment.Team.Class.SemesterId == targetClass.SemesterId)
             })
             .ToListAsync(cancellationToken);
         return Result.Success<IReadOnlyCollection<MentorCandidateDto>>(candidates);
@@ -164,15 +165,10 @@ public sealed class MentorAssignmentHandler : IMentorAssignmentHandler
 
                 var current = await _context.MentorAssignments
                     .Include(item => item.Team).Include(item => item.MentorProfile).ThenInclude(profile => profile.User)
-                    .Where(item => item.TeamId == teamId && item.Status == MentorAssignmentStatus.Active && item.EndedAt == null)
+                    .Where(item => item.TeamId == teamId && item.Slot == mentor.Type && item.Status == MentorAssignmentStatus.Active && item.EndedAt == null)
                     .ToListAsync(transactionCancellationToken);
                 var same = current.FirstOrDefault(item => item.MentorProfileId == mentor.Id);
                 if (same != null) return Result.Success(TeamMappings.ToMentorAssignmentDto(same));
-
-                var activeTeamCount = await _context.MentorAssignments.AsNoTracking()
-                    .CountAsync(item => item.MentorProfileId == mentor.Id && item.Status == MentorAssignmentStatus.Active && item.EndedAt == null, transactionCancellationToken);
-                if (activeTeamCount >= mentor.MaxTeams)
-                    return Failure(ErrorCodes.MentorCapacityReached, "The selected mentor has reached the maximum active team capacity.");
 
                 var now = DateTime.UtcNow;
                 foreach (var existing in current)
@@ -189,6 +185,7 @@ public sealed class MentorAssignmentHandler : IMentorAssignmentHandler
                     Team = team,
                     AssignedById = userId,
                     AssignedAt = now,
+                    Slot = mentor.Type,
                     Status = MentorAssignmentStatus.Active,
                     Note = request.Note?.Trim(),
                     CreatedBy = userId
@@ -200,13 +197,14 @@ public sealed class MentorAssignmentHandler : IMentorAssignmentHandler
                     Action = current.Count == 0 ? "MENTOR_ASSIGNED" : "MENTOR_REASSIGNED",
                     PerformedByUserId = userId,
                     OccurredAtUtc = now,
-                    DetailsJson = JsonSerializer.Serialize(new { TeamId = team.Id, MentorProfileId = mentor.Id })
+                    DetailsJson = JsonSerializer.Serialize(new { TeamId = team.Id, MentorProfileId = mentor.Id, Slot = mentor.Type.ToString() })
                 });
                 ClassOutbox.Enqueue(_context, "Team.MentorAssignmentChanged.v1", team.ClassId, new
                 {
                     TeamId = team.Id,
                     MentorProfileId = mentor.Id,
                     MentorUserId = mentor.UserId,
+                    Slot = mentor.Type.ToString(),
                     Action = current.Count == 0 ? "Assigned" : "Reassigned"
                 }, now);
                 await _context.SaveChangesAsync(transactionCancellationToken);
@@ -229,8 +227,10 @@ public sealed class MentorAssignmentHandler : IMentorAssignmentHandler
         if (string.IsNullOrWhiteSpace(request.Reason) || request.Reason.Trim().Length is < 3 or > 1_000)
             return Result.Failure(new Error(ErrorCodes.ClassValidationError, "A reason between 3 and 1000 characters is required."));
 
+        if (request.AssignmentId == Guid.Empty)
+            return Result.Failure(new Error(ErrorCodes.ClassValidationError, "Assignment id is required."));
         var current = await _context.MentorAssignments.Include(item => item.Team).ThenInclude(item => item.Class)
-            .FirstOrDefaultAsync(item => item.TeamId == teamId && item.Status == MentorAssignmentStatus.Active && item.EndedAt == null, cancellationToken);
+            .FirstOrDefaultAsync(item => item.Id == request.AssignmentId && item.TeamId == teamId && item.Status == MentorAssignmentStatus.Active && item.EndedAt == null, cancellationToken);
         if (current == null) return Result.Success();
 
         var isAdmin = IsRole(role, SystemRoles.Admin);
@@ -252,7 +252,7 @@ public sealed class MentorAssignmentHandler : IMentorAssignmentHandler
             Action = "MENTOR_ASSIGNMENT_ENDED",
             PerformedByUserId = userId,
             OccurredAtUtc = now,
-            DetailsJson = JsonSerializer.Serialize(new { TeamId = teamId, current.MentorProfileId, Reason = request.Reason.Trim() })
+            DetailsJson = JsonSerializer.Serialize(new { TeamId = teamId, current.MentorProfileId, Slot = current.Slot.ToString(), Reason = request.Reason.Trim() })
         });
         ClassOutbox.Enqueue(_context, "Team.MentorAssignmentChanged.v1", current.Team.ClassId, new { TeamId = teamId, Action = "Ended" }, now);
         await _context.SaveChangesAsync(cancellationToken);

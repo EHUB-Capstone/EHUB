@@ -6,10 +6,28 @@ import { teamApi } from '../../api/teamApi';
 import { unwrapApiData } from '../../utils/classMappers';
 import { parseApiError } from '../../utils/apiError';
 import { normalizeManagedTeam } from '../../utils/teamManagement';
+import type { ManagedTeam, MentorAssignment, MentorCandidate } from '../../types/teamManagement';
+import type { ApiEnvelope } from '../../types/classes';
 
-export default function AssignMentorsModal({ classId, currentMentors: _currentMentors = [], onClose, onAssigned }) {
-  const [mentors, setMentors] = useState([]);
-  const [teams, setTeams] = useState([]);
+interface AssignMentorsModalProps {
+  classId: string;
+  currentMentors?: unknown[];
+  onClose: () => void;
+  onAssigned: () => Promise<void> | void;
+}
+
+interface MentorOption {
+  _id: string;
+  name: string;
+  email: string;
+  organization?: string | null;
+  mentorType: 'Enterprise' | 'Academic';
+  activeTeamCount: number;
+}
+
+export default function AssignMentorsModal({ classId, currentMentors: _currentMentors = [], onClose, onAssigned }: AssignMentorsModalProps) {
+  const [mentors, setMentors] = useState<MentorOption[]>([]);
+  const [teams, setTeams] = useState<ManagedTeam[]>([]);
   const [selectedMentorId, setSelectedMentorId] = useState('');
   const [selectedTeamId, setSelectedTeamId] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
@@ -26,16 +44,15 @@ export default function AssignMentorsModal({ classId, currentMentors: _currentMe
           classApi.getTeams(classId),
         ]);
 
-        const mentorCandidates = unwrapApiData<any[]>(mentorRes as any) || [];
+        const mentorCandidates = unwrapApiData<MentorCandidate[]>(mentorRes as ApiEnvelope<MentorCandidate[]> | MentorCandidate[]) || [];
         const teamData = unwrapApiData(teamRes) || [];
         const mentorList = mentorCandidates.map(candidate => ({
           _id: candidate.mentor.mentorProfileId,
           name: candidate.mentor.fullName,
           email: candidate.mentor.email,
           organization: candidate.mentor.organization,
-          hasCapacity: candidate.hasCapacity,
+          mentorType: candidate.mentor.mentorType,
           activeTeamCount: candidate.activeTeamCount,
-          maxTeams: candidate.maxTeams,
         }));
         const teamList = (Array.isArray(teamData) ? teamData : []).map(normalizeManagedTeam);
 
@@ -50,7 +67,7 @@ export default function AssignMentorsModal({ classId, currentMentors: _currentMe
     fetchData();
   }, [classId]);
 
-  const handleMentorChange = async (mentorId) => {
+  const handleMentorChange = async (mentorId: string) => {
     setSelectedMentorId(mentorId);
     setSelectedTeamId('');
 
@@ -91,15 +108,19 @@ export default function AssignMentorsModal({ classId, currentMentors: _currentMe
     }
   };
 
-  const handleEndAssignment = async (team) => {
-    const reason = window.prompt(`Reason for ending ${team.currentMentorAssignment?.mentor?.fullName || 'this mentor'}'s assignment?`);
+  const handleEndAssignment = async (team: ManagedTeam, assignment: MentorAssignment) => {
+    const reason = window.prompt(`Reason for ending ${assignment.mentor.fullName}'s ${assignment.slot} assignment?`);
     if (!reason) return;
-    setEndingTeamId(team._id);
+    setEndingTeamId(assignment.assignmentId);
     try {
-      await teamApi.endMentorAssignment(team._id, reason);
+      await teamApi.endMentorAssignment(team._id, assignment.assignmentId, reason);
       toast.success('Mentor assignment ended');
       setTeams(current => current.map(item => item._id === team._id
-        ? { ...item, currentMentorAssignment: null, mentorId: null }
+        ? {
+            ...item,
+            currentMentorAssignments: (item.currentMentorAssignments || []).filter(currentAssignment => currentAssignment.assignmentId !== assignment.assignmentId),
+            currentMentorAssignment: item.currentMentorAssignment?.assignmentId === assignment.assignmentId ? null : item.currentMentorAssignment,
+          }
         : item));
       await onAssigned();
     } catch (error) {
@@ -155,18 +176,18 @@ export default function AssignMentorsModal({ classId, currentMentors: _currentMe
             </div>
           ) : (
             <div className="space-y-4">
-              {teams.some(team => team.currentMentorAssignment) && (
+              {teams.some(team => (team.currentMentorAssignments?.length || 0) > 0) && (
                 <div>
                   <label className="mb-1.5 block text-xs font-semibold text-slate-600">Current assignments</label>
                   <div className="space-y-1.5 rounded-xl border border-slate-100 bg-slate-50/50 p-2.5">
-                    {teams.filter(team => team.currentMentorAssignment).map(team => (
-                      <div key={team._id} className="flex items-center justify-between gap-3 rounded-lg bg-white px-3 py-2 text-xs">
-                        <span className="min-w-0 truncate"><strong>{team.teamName}</strong> · {team.currentMentorAssignment.mentor.fullName}</span>
-                        <button type="button" disabled={endingTeamId === team._id} onClick={() => handleEndAssignment(team)} className="shrink-0 font-semibold text-red-600 hover:text-red-700 disabled:opacity-50">
-                          {endingTeamId === team._id ? 'Ending…' : 'End'}
+                    {teams.flatMap(team => (team.currentMentorAssignments || []).map(assignment => (
+                      <div key={assignment.assignmentId} className="flex items-center justify-between gap-3 rounded-lg bg-white px-3 py-2 text-xs">
+                        <span className="min-w-0 truncate"><strong>{team.teamName}</strong> · {assignment.mentor.fullName} <span className="text-slate-400">({assignment.slot})</span></span>
+                        <button type="button" disabled={endingTeamId === assignment.assignmentId} onClick={() => handleEndAssignment(team, assignment)} className="shrink-0 font-semibold text-red-600 hover:text-red-700 disabled:opacity-50">
+                          {endingTeamId === assignment.assignmentId ? 'Ending…' : 'End'}
                         </button>
                       </div>
-                    ))}
+                    )))}
                   </div>
                 </div>
               )}
@@ -182,8 +203,7 @@ export default function AssignMentorsModal({ classId, currentMentors: _currentMe
                         <button
                           key={m._id}
                           type="button"
-                          onClick={() => m.hasCapacity && handleMentorChange(m._id)}
-                          disabled={!m.hasCapacity}
+                          onClick={() => handleMentorChange(m._id)}
                           className={`w-full flex items-center justify-between p-2.5 rounded-xl border text-left transition-all ${
                             isChecked
                               ? 'bg-primary-50/40 border-primary/20 shadow-xs'
@@ -196,7 +216,7 @@ export default function AssignMentorsModal({ classId, currentMentors: _currentMe
                             </div>
                             <div className="min-w-0">
                               <p className="text-xs font-semibold text-slate-800 truncate">{m.name}</p>
-                              <p className="text-[10px] text-slate-400 truncate">{m.email} · {m.activeTeamCount}/{m.maxTeams} teams</p>
+                              <p className="text-[10px] text-slate-400 truncate">{m.email} · {m.mentorType} · {m.activeTeamCount} teams this semester</p>
                             </div>
                           </div>
                           {isChecked && (

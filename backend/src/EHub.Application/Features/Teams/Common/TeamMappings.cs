@@ -9,10 +9,12 @@ internal static class TeamMappings
 {
     public static TeamDto ToDto(Team team)
     {
-        var activeAssignment = team.MentorAssignments
+        var activeAssignments = team.MentorAssignments
             .Where(assignment => assignment.Status == MentorAssignmentStatus.Active && assignment.EndedAt == null)
-            .OrderByDescending(assignment => assignment.AssignedAt)
-            .FirstOrDefault();
+            .OrderBy(assignment => assignment.Slot)
+            .ThenByDescending(assignment => assignment.AssignedAt)
+            .Select(ToMentorAssignmentDto)
+            .ToArray();
         var members = team.TeamMembers
             .Where(member => member.CountsTowardActiveTeam)
             .OrderBy(member => member.RoleInTeam == TeamMemberRole.Leader ? 0 : 1)
@@ -33,7 +35,8 @@ internal static class TeamMappings
             HasChatGroup = team.ChatGroups.Any(group => !group.IsReadOnly),
             LeaderId = members.FirstOrDefault(member => member.RoleInTeam == TeamMemberRole.Leader.ToString())?.StudentId,
             Members = members,
-            CurrentMentorAssignment = activeAssignment == null ? null : ToMentorAssignmentDto(activeAssignment),
+            CurrentMentorAssignments = activeAssignments,
+            CurrentMentorAssignment = activeAssignments.FirstOrDefault(),
             RowVersion = team.Version.ToString()
         };
     }
@@ -63,11 +66,15 @@ internal static class TeamMappings
             UserId = assignment.MentorProfile.UserId,
             FullName = assignment.MentorProfile.User.FullName,
             Email = assignment.MentorProfile.User.Email,
-            Organization = assignment.MentorProfile.Organization
+            Organization = assignment.MentorProfile.Organization,
+            MentorType = assignment.MentorProfile.Type.ToString(),
+            Department = assignment.MentorProfile.Department,
+            JobTitle = assignment.MentorProfile.JobTitle
         },
         Status = assignment.Status.ToString(),
         AssignedAtUtc = assignment.AssignedAt,
         EndedAtUtc = assignment.EndedAt,
-        Note = assignment.Note
+        Note = assignment.Note,
+        Slot = assignment.Slot.ToString()
     };
 }

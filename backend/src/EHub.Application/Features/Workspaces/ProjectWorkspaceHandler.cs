@@ -510,8 +510,17 @@ public sealed class ProjectWorkspaceHandler : IProjectWorkspaceHandler
 
     private static ProjectWorkspaceDetailDto MapDetail(Team team)
     {
-        var activeMentor = team.MentorAssignments.FirstOrDefault(assignment =>
-            assignment.Status == MentorAssignmentStatus.Active && assignment.EndedAt == null);
+        var activeMentors = team.MentorAssignments.Where(assignment =>
+                assignment.Status == MentorAssignmentStatus.Active && assignment.EndedAt == null)
+            .OrderBy(assignment => assignment.Slot)
+            .Select(assignment => new WorkspacePersonDto
+            {
+                Id = assignment.MentorProfile.UserId,
+                Name = assignment.MentorProfile.User.FullName,
+                Email = assignment.MentorProfile.User.Email,
+                Label = assignment.Slot.ToString()
+            })
+            .ToArray();
         var leader = team.TeamMembers.FirstOrDefault(member =>
             member.CountsTowardActiveTeam && member.RoleInTeam == TeamMemberRole.Leader);
         var proposal = team.ApprovedProposals
@@ -554,12 +563,8 @@ public sealed class ProjectWorkspaceHandler : IProjectWorkspaceHandler
                 Name = team.Class.PrimaryLecturer.FullName,
                 Email = team.Class.PrimaryLecturer.Email
             },
-            Mentor = activeMentor == null ? null : new WorkspacePersonDto
-            {
-                Id = activeMentor.MentorProfile.UserId,
-                Name = activeMentor.MentorProfile.User.FullName,
-                Email = activeMentor.MentorProfile.User.Email
-            },
+            Mentor = activeMentors.FirstOrDefault(),
+            Mentors = activeMentors,
             Proposal = proposal == null ? null : new WorkspaceProjectProposalDto
             {
                 Id = proposal.Id,

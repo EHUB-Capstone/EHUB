@@ -151,6 +151,12 @@ export function validateTeamSelection(
 }
 
 export function normalizeManagedTeam(source: any): ManagedTeam {
+  const currentMentorAssignments = Array.isArray(source?.currentMentorAssignments)
+    ? source.currentMentorAssignments
+    : source?.currentMentorAssignment
+      ? [source.currentMentorAssignment]
+      : [];
+  const primaryMentorAssignment = currentMentorAssignments[0] || null;
   const members: TeamMember[] = (Array.isArray(source?.members) ? source.members : []).map((member: any) => ({
     studentId: {
       _id: String(member.studentId || member.id || ''),
@@ -176,14 +182,15 @@ export function normalizeManagedTeam(source: any): ManagedTeam {
     teamMembers: members,
     memberIds: members.map(teamMemberStudentId),
     rowVersion: source?.rowVersion || '',
-    mentorId: source?.currentMentorAssignment?.mentor
+    mentorId: primaryMentorAssignment?.mentor
       ? {
-          _id: source.currentMentorAssignment.mentor.mentorProfileId,
-          id: source.currentMentorAssignment.mentor.mentorProfileId,
-          name: source.currentMentorAssignment.mentor.fullName,
+          _id: primaryMentorAssignment.mentor.mentorProfileId,
+          id: primaryMentorAssignment.mentor.mentorProfileId,
+          name: primaryMentorAssignment.mentor.fullName,
         }
       : null,
-    currentMentorAssignment: source?.currentMentorAssignment || null,
+    currentMentorAssignment: primaryMentorAssignment,
+    currentMentorAssignments,
   };
 }
 

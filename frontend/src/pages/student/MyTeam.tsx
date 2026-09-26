@@ -91,7 +91,11 @@ export default function MyTeam() {
   const cls       = data?.class;
   const members   = Array.isArray(data?.members) ? data.members : [];
   const lecturer  = cls?.lectureId;
-  const mentor    = team?.currentMentorAssignment?.mentor;
+  const mentorAssignments = Array.isArray(team?.currentMentorAssignments)
+    ? team.currentMentorAssignments
+    : team?.currentMentorAssignment
+      ? [team.currentMentorAssignment]
+      : [];
   const displayTeamName = getDisplayTeamName(team) || 'Unnamed Team';
   const leaderId = entityId(team?.leaderId);
   const pendingFormations = formations.filter(formation => formation.status === 'Pending');
@@ -301,23 +305,26 @@ export default function MyTeam() {
           <div className="bg-white rounded-2xl border border-slate-200/60 p-5 shadow-sm space-y-4">
             <div className="flex items-center gap-2">
               <Star className="w-4 h-4 text-primary" />
-              <h3 className="font-bold text-slate-800 text-xs uppercase tracking-wider">Startup Mentor</h3>
+              <h3 className="font-bold text-slate-800 text-xs uppercase tracking-wider">Team Mentors</h3>
             </div>
-            {mentor ? (
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-primary-100 flex items-center justify-center text-primary font-bold text-sm shrink-0">
-                  {mentor.fullName?.charAt(0)?.toUpperCase() || 'M'}
+            {mentorAssignments.length > 0 ? (
+              <div className="space-y-3">
+                {mentorAssignments.map(assignment => <div key={assignment.assignmentId} className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-primary-100 flex items-center justify-center text-primary font-bold text-sm shrink-0">
+                    {assignment.mentor.fullName?.charAt(0)?.toUpperCase() || 'M'}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="font-bold text-slate-800 text-sm truncate">{assignment.mentor.fullName}</p>
+                    <p className="text-xs text-slate-400 truncate mt-0.5">{assignment.slot} · {assignment.mentor.email}</p>
+                  </div>
                 </div>
-                <div className="min-w-0">
-                  <p className="font-bold text-slate-800 text-sm truncate">{mentor.fullName}</p>
-                  <p className="text-xs text-slate-400 truncate mt-0.5">{mentor.email}</p>
-                </div>
+                )}
               </div>
             ) : (
               <div className="flex items-start gap-2 bg-amber-50 rounded-xl p-3 border border-amber-100">
                 <AlertCircle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
                 <p className="text-xs text-amber-700">
-                  No mentor assigned to your team yet. Your lecturer will assign one soon.
+                  No mentors assigned to your team yet. Your lecturer will assign an enterprise and an academic mentor soon.
                 </p>
               </div>
             )}
