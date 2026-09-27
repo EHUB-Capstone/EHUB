@@ -54,6 +54,51 @@ public sealed class ClassRosterExportWorkbookBuilderTests
     }
 
     [Fact]
+    public void Build_WritesImportedSemesterGroupIndependentlyFromTeamName()
+    {
+        var section = CreateSection("EXE201", 8, "DE180182");
+        section.Roster.Single().SemesterGroupName = "EXE201g_8G1";
+
+        using var workbook = OpenWorkbook(ClassRosterExportWorkbookBuilder.Build([section]));
+        var worksheet = workbook.Worksheet(ClassRosterExportWorkbookBuilder.WorksheetName);
+
+        worksheet.Cell(1, 6).GetString().Should().Be("Group FA26");
+        worksheet.Cell(2, 6).GetString().Should().Be("EXE201g_8G1");
+    }
+
+    [Fact]
+    public void Build_OrdersActiveTeamsByImportedSemesterGroupUsingNaturalNumbers()
+    {
+        var section = CreateSection("EXE201", 8, "DE180110");
+        var group10 = section.Roster.Single();
+        group10.SemesterGroupName = "EXE201g_8G10";
+        AddTeamMembership(group10, CreateTeam(section.Class, "Team Ten"));
+
+        var group2Team = CreateTeam(section.Class, "Team Two");
+        var group2First = CreateEnrollment(section.Class, "DE180102", "EXE201g_8G2");
+        var group2Second = CreateEnrollment(section.Class, "DE180103", "EXE201g_8G2");
+        AddTeamMembership(group2First, group2Team);
+        AddTeamMembership(group2Second, group2Team);
+
+        var group1 = CreateEnrollment(section.Class, "DE180101", "EXE201g_8G1");
+        AddTeamMembership(group1, CreateTeam(section.Class, "Team One"));
+        var unassigned = CreateEnrollment(section.Class, "DE180199", "EXE201g_8G3");
+        section = section with { Roster = [group10, group2First, unassigned, group1, group2Second] };
+
+        using var workbook = OpenWorkbook(ClassRosterExportWorkbookBuilder.Build([section]));
+        var worksheet = workbook.Worksheet(ClassRosterExportWorkbookBuilder.WorksheetName);
+
+        worksheet.Range(2, 6, 6, 6).Cells().Select(cell => cell.GetString()).Should().Equal(
+            "EXE201g_8G1",
+            "EXE201g_8G2",
+            "EXE201g_8G2",
+            "EXE201g_8G3",
+            "EXE201g_8G10");
+        worksheet.Range(2, 1, 6, 1).Cells().Select(cell => cell.GetString()).Should().Equal(
+            "DE180101", "DE180102", "DE180103", "DE180199", "DE180110");
+    }
+
+    [Fact]
     public void Build_TeamRows_PreservesProjectAndZaloFormattingOnFirstTeamRowOnly()
     {
         var section = CreateTeamSection();
@@ -192,6 +237,32 @@ public sealed class ClassRosterExportWorkbookBuilderTests
         AddTeamMembership(secondEnrollment, team);
 
         return new ClassRosterExportSection(section.Class, [firstEnrollment, secondEnrollment]);
+    }
+
+    private static Team CreateTeam(Class @class, string teamName) => new()
+    {
+        Class = @class,
+        ClassId = @class.Id,
+        TeamCode = $"{teamName}-{Guid.NewGuid():N}",
+        TeamName = teamName,
+        Status = TeamStatus.Active
+    };
+
+    private static ClassStudent CreateEnrollment(Class @class, string rollNumber, string? semesterGroupName)
+    {
+        var student = new Student { RollNumber = rollNumber, FullName = $"Student {rollNumber}" };
+        return new ClassStudent
+        {
+            Class = @class,
+            ClassId = @class.Id,
+            Student = student,
+            StudentId = student.Id,
+            SemesterId = @class.SemesterId,
+            CourseId = @class.CourseId,
+            MajorCodeAtEnrollment = "SE",
+            SemesterGroupName = semesterGroupName,
+            EnrollmentStatus = EnrollmentStatus.Active
+        };
     }
 
     private static void AddTeamMembership(ClassStudent enrollment, Team team)

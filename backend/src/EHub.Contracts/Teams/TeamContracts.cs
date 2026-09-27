@@ -177,6 +177,9 @@ public sealed class ProjectDirectionDto
     public Guid TeamId { get; init; }
     public string Title { get; init; } = string.Empty;
     public string Summary { get; init; } = string.Empty;
+    public bool IsProjectProfileChangeProposal { get; init; }
+    public string? CurrentTitle { get; init; }
+    public string? CurrentSummary { get; init; }
     public IReadOnlyCollection<string> StartupIndustries { get; init; } = Array.Empty<string>();
     public string Status { get; init; } = string.Empty;
     public DateTime? SubmittedAtUtc { get; init; }
@@ -201,7 +204,7 @@ public sealed class ProjectDirectionStateRequest
 public sealed class ReviewProjectDirectionRequest
 {
     public string Decision { get; init; } = string.Empty;
-    public string Comment { get; init; } = string.Empty;
+    public string? Comment { get; init; }
     public string RowVersion { get; init; } = string.Empty;
 }
 
@@ -259,10 +262,12 @@ public sealed class StudentClassMemberDto
     public string MajorCode { get; init; } = string.Empty;
     public string? ProfileMajorCode { get; init; }
     public string EnrollmentMajorCode { get; init; } = string.Empty;
+    public string MajorVerificationStatus { get; init; } = string.Empty;
     public bool CanEditMajor { get; init; }
     public bool IsMajorLocked { get; init; }
     public string EnrollmentStatus { get; init; } = string.Empty;
     public Guid? TeamId { get; init; }
+    public bool HasPendingTeamInvitation { get; init; }
 }
 
 public sealed class MyTeamResponse

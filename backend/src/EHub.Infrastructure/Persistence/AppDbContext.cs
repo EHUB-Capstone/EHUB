@@ -56,6 +56,7 @@ public class AppDbContext : DbContext, IApplicationDbContext
     public DbSet<RubricCriterion> RubricCriteria => Set<RubricCriterion>();
     public DbSet<Evaluation> Evaluations => Set<Evaluation>();
     public DbSet<EvaluationDetail> EvaluationDetails => Set<EvaluationDetail>();
+    public DbSet<EvaluationMemberScore> EvaluationMemberScores => Set<EvaluationMemberScore>();
     public DbSet<EvaluationHistory> EvaluationHistories => Set<EvaluationHistory>();
     public DbSet<MentorProfile> MentorProfiles => Set<MentorProfile>();
     public DbSet<MentorAssignment> MentorAssignments => Set<MentorAssignment>();

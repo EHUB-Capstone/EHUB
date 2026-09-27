@@ -97,6 +97,7 @@ public static class DependencyInjection
         services.AddScoped<EHub.Application.Features.Classes.GetImportTemplate.IGetImportTemplateQueryHandler, EHub.Application.Features.Classes.GetImportTemplate.GetImportTemplateQueryHandler>();
         services.AddScoped<EHub.Application.Features.Classes.GetMajorVerificationTemplate.IGetMajorVerificationTemplateQueryHandler, EHub.Application.Features.Classes.GetMajorVerificationTemplate.GetMajorVerificationTemplateQueryHandler>();
         services.AddScoped<EHub.Application.Features.Classes.VerifyClassMajors.IVerifyClassMajorsCommandHandler, EHub.Application.Features.Classes.VerifyClassMajors.VerifyClassMajorsCommandHandler>();
+        services.AddScoped<EHub.Application.Features.Classes.ImportSemesterGroups.IImportSemesterGroupsCommandHandler, EHub.Application.Features.Classes.ImportSemesterGroups.ImportSemesterGroupsCommandHandler>();
         services.AddScoped<EHub.Application.Features.Classes.SynchronizeProfileMajors.ISynchronizeProfileMajorsCommandHandler, EHub.Application.Features.Classes.SynchronizeProfileMajors.SynchronizeProfileMajorsCommandHandler>();
         services.AddScoped<EHub.Application.Features.Classes.SetEnrollmentMajorLock.ISetEnrollmentMajorLockCommandHandler, EHub.Application.Features.Classes.SetEnrollmentMajorLock.SetEnrollmentMajorLockCommandHandler>();
         services.AddScoped<EHub.Application.Features.Classes.ClassLifecycle.IClassLifecycleCommandHandler, EHub.Application.Features.Classes.ClassLifecycle.ClassLifecycleCommandHandler>();

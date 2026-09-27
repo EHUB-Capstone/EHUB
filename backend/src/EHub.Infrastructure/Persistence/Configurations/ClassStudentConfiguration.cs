@@ -36,6 +36,10 @@ public class ClassStudentConfiguration : IEntityTypeConfiguration<ClassStudent>
             .HasColumnName("member_code")
             .HasMaxLength(50);
 
+        builder.Property(cs => cs.SemesterGroupName)
+            .HasColumnName("semester_group_name")
+            .HasMaxLength(100);
+
         builder.Property(cs => cs.EnrollmentStatus)
             .HasColumnName("enrollment_status")
             .HasConversion<string>()

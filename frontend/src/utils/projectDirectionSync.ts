@@ -12,6 +12,9 @@ export interface ProjectDirectionSyncValue {
   reviews?: ProjectDirectionReviewLike[] | null;
   title?: string | null;
   summary?: string | null;
+  isProjectProfileChangeProposal?: boolean;
+  currentTitle?: string | null;
+  currentSummary?: string | null;
   startupIndustries?: string[] | null;
 }
 
@@ -65,6 +68,9 @@ const haveSameValues = (left: string[], right: string[]): boolean => {
 interface ProjectDirectionOverviewTeam {
   _id: string;
   projectDirectionStatus?: string | null;
+  projectDirectionIsProfileChangeProposal?: boolean;
+  projectDirectionCurrentTitle?: string | null;
+  projectDirectionCurrentSummary?: string | null;
   [key: string]: unknown;
 }
 
@@ -86,11 +92,34 @@ export const isProjectProfileAvailable = (
   direction?: ProjectDirectionSyncValue | null,
 ): boolean => direction?.status === 'Approved';
 
+interface ProjectProfileIdentityLike {
+  projectName?: string | null;
+  description?: string | null;
+}
+
+export const getApprovedProjectProfileDisplay = (
+  direction?: ProjectDirectionSyncValue | null,
+  project?: ProjectProfileIdentityLike | null,
+): { projectName: string; description: string } => ({
+  projectName: direction?.status === 'Approved' && direction.title?.trim()
+    ? direction.title
+    : project?.projectName || '',
+  description: direction?.status === 'Approved' && direction.summary?.trim()
+    ? direction.summary
+    : project?.description || '',
+});
+
 export const getProjectDirectionDecisionNotice = (
   current?: ProjectDirectionSyncValue | null,
   incoming?: ProjectDirectionSyncValue | null,
 ): string => {
   if (current?.status !== 'Submitted') return '';
+  if (current.isProjectProfileChangeProposal && incoming?.status === 'Approved') {
+    return 'Lecturer approved your Project Profile changes. The approved profile is now updated.';
+  }
+  if (current.isProjectProfileChangeProposal && incoming?.status === 'NeedsRevision') {
+    return 'Lecturer requested revisions to your Project Profile changes. The approved profile remains unchanged.';
+  }
   if (incoming?.status === 'Approved') return 'Lecturer approved your project direction.';
   if (incoming?.status === 'NeedsRevision') return 'Lecturer reviewed your project direction and requested changes.';
   return '';
@@ -111,6 +140,9 @@ export const updateProjectDirectionOverviewTeams = <T extends ProjectDirectionOv
     ...team,
     projectDirection: direction.summary || '',
     projectDirectionTitle: direction.title || '',
+    projectDirectionIsProfileChangeProposal: Boolean(direction.isProjectProfileChangeProposal),
+    projectDirectionCurrentTitle: direction.currentTitle || '',
+    projectDirectionCurrentSummary: direction.currentSummary || '',
     projectDirectionStartupIndustries: direction.startupIndustries || [],
     projectDirectionStatus,
     projectDirectionReviewComment: direction.reviews?.[0]?.comment || null,

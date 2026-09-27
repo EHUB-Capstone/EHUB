@@ -36,5 +36,6 @@ public class Evaluation : AuditableEntity
 
     // Navigation properties
     public virtual ICollection<EvaluationDetail> Details { get; set; } = new List<EvaluationDetail>();
+    public virtual ICollection<EvaluationMemberScore> MemberScores { get; set; } = new List<EvaluationMemberScore>();
     public virtual ICollection<EvaluationHistory> Histories { get; set; } = new List<EvaluationHistory>();
 }

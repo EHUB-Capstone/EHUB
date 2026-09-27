@@ -4,6 +4,8 @@ import type { ManagedTeam, TeamDraft, TeamStudent } from '../src/types/teamManag
 import {
   canAssignMentorTypeToTeam,
   getTeamProject,
+  isMissingTeamMajor,
+  isVerifiedEnrollmentMajor,
   mergeTeamsWithLinkedProposals,
   normalizeManagedTeam,
   normalizeTeamProposal,
@@ -54,6 +56,22 @@ test('uses imported enrollment major before the temporary profile major', () => 
 test('falls back to the registration profile major while enrollment major is missing', () => {
   assert.equal(resolveEffectiveTeamMajor('UNDECLARED', ' bit_se '), 'BIT_SE');
   assert.equal(resolveEffectiveTeamMajor('', 'BEN'), 'BEN');
+});
+
+test('class setup treats blank and legacy sentinel majors as action required', () => {
+  assert.equal(isMissingTeamMajor(null), true);
+  assert.equal(isMissingTeamMajor(''), true);
+  assert.equal(isMissingTeamMajor('UNDECLARED'), true);
+  assert.equal(isMissingTeamMajor(' bit_se '), false);
+});
+
+test('class setup treats only a matched enrollment major as verified', () => {
+  assert.equal(isVerifiedEnrollmentMajor('Matched'), true);
+  assert.equal(isVerifiedEnrollmentMajor(' matched '), true);
+  assert.equal(isVerifiedEnrollmentMajor('Verified'), false);
+  assert.equal(isVerifiedEnrollmentMajor('Unverified'), false);
+  assert.equal(isVerifiedEnrollmentMajor('Mismatched'), false);
+  assert.equal(isVerifiedEnrollmentMajor(null), false);
 });
 
 const students: TeamStudent[] = [

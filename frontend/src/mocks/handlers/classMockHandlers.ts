@@ -238,9 +238,10 @@ function registerClassQueries(mock: MockAdapter): void {
   });
 
   mock.onGet(/^\/classes\/my-class-detail\/[^/]+$/).reply((config) => {
-    const classId = routeId(config, /^\/classes\/my-class-detail\/([^/]+)$/);
-    const cls = findClass(classId);
+    const classIdentifier = routeId(config, /^\/classes\/my-class-detail\/([^/]+)$/);
+    const cls = findClass(classIdentifier);
     if (!cls) return failure(404, 'CLASS_NOT_FOUND', 'Class not found.');
+    const classId = cls.id;
     const state = getMockState();
     const sessionUserId = state.users.find((user) => user.id === state.sessionUserId && user.role === 'STUDENT')?.id;
     const currentEnrollment = (state.rosters[classId] || []).find((student) => student.userId === sessionUserId);
@@ -253,6 +254,10 @@ function registerClassQueries(mock: MockAdapter): void {
         student.enrollmentStatus === 'Active' && student.userId === sessionUserId));
     const students = (state.rosters[classId] || []).filter((student) => student.enrollmentStatus === rosterStatus).map((student) => {
       const isOwnRow = student.userId === sessionUserId;
+      const hasPendingTeamInvitation = rosterStatus === 'Active' && state.formations.some(formation =>
+        formation.classId === classId
+        && formation.status === 'Pending'
+        && formation.invitations.some(invitation => invitation.studentId === student.studentId));
       const profileMajorCode = isOwnRow
         ? state.users.find(user => user.id === sessionUserId)?.major || null
         : student.profileMajorCode;
@@ -265,10 +270,12 @@ function registerClassQueries(mock: MockAdapter): void {
         majorCode: student.majorCode,
         profileMajorCode,
         enrollmentMajorCode: student.majorCode,
+        majorVerificationStatus: student.majorVerificationStatus,
         canEditMajor: isOwnRow && rosterStatus === 'Active' && ['Draft', 'Active'].includes(cls.status) && !ownMajorLocked,
         isMajorLocked: isOwnRow && ownMajorLocked,
         enrollmentStatus: student.enrollmentStatus,
         teamId: student.teamId,
+        hasPendingTeamInvitation,
       };
     });
     const teams = getMockState().teams.filter((team) => team.classId === classId);
@@ -594,6 +601,7 @@ function registerRosterHandlers(mock: MockAdapter): void {
         profileMajorCode: sourceRecord?.profileMajorCode || user.major,
         majorVerificationStatus: sourceRecord?.majorVerificationStatus || 'Unverified',
         memberCode: sourceRecord?.memberCode || `MEM-${state.sequence}`,
+        semesterGroupName: null,
         enrollmentStatus: 'Active',
         teamId: null,
         teamName: null,
@@ -725,6 +733,7 @@ function registerRosterHandlers(mock: MockAdapter): void {
       studentId: profileId || allocateId(), userId: user?.id || null, rollNumber: code, fullName, email,
       majorCode: enrollmentMajor, profileMajorCode: profileMajor || requestedMajor || null,
       majorVerificationStatus: 'Unverified', memberCode: `MEM-${state.sequence}`,
+      semesterGroupName: null,
       enrollmentStatus: 'Active', teamId: null, teamName: null, isTeamLeader: false,
       joinedAtUtc: new Date().toISOString(),
     };
@@ -790,6 +799,53 @@ function registerRosterHandlers(mock: MockAdapter): void {
 
   mock.onPost(/^\/classes\/[^/]+\/students\/[^/]+\/drop$/).reply((config) => changeEnrollment(config, 'Dropped'));
   mock.onPost(/^\/classes\/[^/]+\/students\/[^/]+\/re-enroll$/).reply((config) => changeEnrollment(config, 'Active'));
+
+  const semesterGroupReport = (classId: string, apply: boolean) => {
+    const rows = (getMockState().rosters[classId] || [])
+      .filter((student) => student.enrollmentStatus === 'Active')
+      .map((student, index) => {
+        const importedGroupName = `MOCK-G${Math.floor(index / 5) + 1}`;
+        const currentGroupName = student.semesterGroupName || null;
+        const status = currentGroupName === importedGroupName ? 'Unchanged' : 'Changed';
+        if (apply) student.semesterGroupName = importedGroupName;
+        return {
+          rowNumber: index + 2,
+          studentId: student.studentId,
+          rollNumber: student.rollNumber,
+          fullName: student.fullName,
+          currentGroupName,
+          importedGroupName,
+          status,
+          isValid: true,
+          message: null,
+        };
+      });
+    const changedRowsCount = rows.filter((row) => row.status === 'Changed').length;
+    return {
+      expectedColumnName: 'Group FA26',
+      totalRows: rows.length,
+      changedRowsCount,
+      unchangedRowsCount: rows.length - changedRowsCount,
+      errorRowsCount: 0,
+      updatedCount: apply ? changedRowsCount : 0,
+      rows,
+    };
+  };
+
+  mock.onPost(/^\/classes\/[^/]+\/semester-groups\/preview$/).reply((config) => {
+    const classId = routeId(config, /^\/classes\/([^/]+)\/semester-groups\/preview$/);
+    const guard = classMutationGuard(classId);
+    return guard || ok(semesterGroupReport(classId, false), 'Semester group changes previewed without updating the class.');
+  });
+
+  mock.onPost(/^\/classes\/[^/]+\/semester-groups\/import$/).reply((config) => {
+    const classId = routeId(config, /^\/classes\/([^/]+)\/semester-groups\/import$/);
+    const guard = classMutationGuard(classId);
+    if (guard) return guard;
+    const result = semesterGroupReport(classId, true);
+    persistMockState();
+    return ok(result, `Imported ${result.updatedCount} semester group value(s).`);
+  });
 
   mock.onPost(/^\/classes\/[^/]+\/major-verification\/preview$/).reply((config) => {
     const classId = routeId(config, /^\/classes\/([^/]+)\/major-verification\/preview$/);
@@ -895,7 +951,7 @@ function registerRosterHandlers(mock: MockAdapter): void {
         continue;
       }
       const linkedUser = getMockState().users.find((user) => user.role === 'STUDENT' && user.email.toLowerCase() === row.email.toLowerCase());
-      roster.push({ studentId: allocateId(), userId: linkedUser?.id || null, rollNumber: row.studentCode, fullName: row.fullName, email: row.email, majorCode: row.majorCode, profileMajorCode: null, majorVerificationStatus: 'Unverified', memberCode: `MEM-${getMockState().sequence}`, enrollmentStatus: 'Active', teamId: null, teamName: null, isTeamLeader: false, joinedAtUtc: new Date().toISOString() });
+      roster.push({ studentId: allocateId(), userId: linkedUser?.id || null, rollNumber: row.studentCode, fullName: row.fullName, email: row.email, majorCode: row.majorCode, profileMajorCode: null, majorVerificationStatus: 'Unverified', memberCode: `MEM-${getMockState().sequence}`, semesterGroupName: null, enrollmentStatus: 'Active', teamId: null, teamName: null, isTeamLeader: false, joinedAtUtc: new Date().toISOString() });
       applyImportedMockName(row.email, row.fullName);
       insertedCount++;
     }

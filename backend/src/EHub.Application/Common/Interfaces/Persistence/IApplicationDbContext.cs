@@ -49,6 +49,7 @@ public interface IApplicationDbContext
     DbSet<RubricCriterion> RubricCriteria { get; }
     DbSet<Evaluation> Evaluations { get; }
     DbSet<EvaluationDetail> EvaluationDetails { get; }
+    DbSet<EvaluationMemberScore> EvaluationMemberScores { get; }
     DbSet<EvaluationHistory> EvaluationHistories { get; }
     DbSet<MentorProfile> MentorProfiles { get; }
     DbSet<MentorAssignment> MentorAssignments { get; }

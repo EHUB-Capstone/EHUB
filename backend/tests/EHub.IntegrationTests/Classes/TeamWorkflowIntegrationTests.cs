@@ -1960,6 +1960,8 @@ public sealed class TeamWorkflowIntegrationTests
         saved.IsSuccess.Should().BeTrue();
         saved.Value.CheckpointTotal.Should().Be(8.6m);
         saved.Value.RubricScores.Select(item => item.CriterionKey).Should().Equal("clarity", "evidence");
+        saved.Value.MemberScores.Should().HaveCount(seed.StudentIds.Count());
+        saved.Value.MemberScores.Should().OnlyContain(item => item.Score == 8.6m && !item.IsOverridden);
         (await context.Evaluations.AsNoTracking().SingleAsync(item => item.Id == saved.Value.Id))
             .SubmissionId.Should().BeNull();
 
@@ -1998,6 +2000,10 @@ public sealed class TeamWorkflowIntegrationTests
             new SaveWorkspaceCheckpointEvaluationRequest
             {
                 Status = "SUBMITTED",
+                MemberScoreOverrides = new[]
+                {
+                    new WorkspaceCheckpointMemberScoreInput { StudentId = seed.StudentIds[0], Score = 7 }
+                },
                 RubricScores = new[]
                 {
                     new WorkspaceCheckpointCriterionScoreInput { CriterionKey = "clarity", Score = 10 },
@@ -2007,6 +2013,10 @@ public sealed class TeamWorkflowIntegrationTests
         revised.IsSuccess.Should().BeTrue();
         revised.Value.Id.Should().Be(saved.Value.Id);
         revised.Value.CheckpointTotal.Should().Be(9.2m);
+        revised.Value.MemberScores.Single(item => item.StudentId == seed.StudentIds[0]).Should().Match<WorkspaceCheckpointEvaluationMemberScoreResponse>(
+            item => item.Score == 7m && item.IsOverridden);
+        revised.Value.MemberScores.Where(item => item.StudentId != seed.StudentIds[0])
+            .Should().OnlyContain(item => item.Score == 9.2m && !item.IsOverridden);
         (await context.Evaluations.CountAsync(item => item.ProjectId == projectId && item.RubricId == rubric.Id))
             .Should().Be(1);
         (await context.Evaluations.AsNoTracking().SingleAsync(item => item.Id == saved.Value.Id))
@@ -2015,6 +2025,10 @@ public sealed class TeamWorkflowIntegrationTests
             new SaveWorkspaceCheckpointEvaluationRequest
             {
                 Status = "SUBMITTED",
+                MemberScoreOverrides = new[]
+                {
+                    new WorkspaceCheckpointMemberScoreInput { StudentId = seed.StudentIds[0], Score = 7 }
+                },
                 RubricScores = new[]
                 {
                     new WorkspaceCheckpointCriterionScoreInput { CriterionKey = "clarity", Score = 10 },
@@ -2031,6 +2045,10 @@ public sealed class TeamWorkflowIntegrationTests
                 new SaveWorkspaceCheckpointEvaluationRequest
                 {
                     Status = "SUBMITTED",
+                    MemberScoreOverrides = new[]
+                    {
+                        new WorkspaceCheckpointMemberScoreInput { StudentId = seed.StudentIds[0], Score = 7 }
+                    },
                     RubricScores = new[]
                     {
                         new WorkspaceCheckpointCriterionScoreInput { CriterionKey = "clarity", Score = 7 },
@@ -2039,6 +2057,58 @@ public sealed class TeamWorkflowIntegrationTests
                 }, seed.LecturerId, SystemRoles.Lecturer);
             changedScore.IsSuccess.Should().BeTrue();
             changedScore.Value.CheckpointTotal.Should().Be(7.4m);
+            changedScore.Value.MemberScores.Single(item => item.StudentId == seed.StudentIds[0]).Should()
+                .Match<WorkspaceCheckpointEvaluationMemberScoreResponse>(item => item.Score == 7m && item.IsOverridden);
+            changedScore.Value.MemberScores.Where(item => item.StudentId != seed.StudentIds[0])
+                .Should().OnlyContain(item => item.Score == 7.4m && !item.IsOverridden);
+
+            var reset = await updateHandler.UpdateAsync(saved.Value.Id,
+                new SaveWorkspaceCheckpointEvaluationRequest
+                {
+                    Status = "SUBMITTED",
+                    RubricScores = new[]
+                    {
+                        new WorkspaceCheckpointCriterionScoreInput { CriterionKey = "clarity", Score = 7 },
+                        new WorkspaceCheckpointCriterionScoreInput { CriterionKey = "evidence", Score = 8 }
+                    }
+                }, seed.LecturerId, SystemRoles.Lecturer);
+            reset.IsSuccess.Should().BeTrue();
+            reset.Value.MemberScores.Should().OnlyContain(item => item.Score == 7.4m && !item.IsOverridden);
+
+            var overrideAfterReset = await updateHandler.UpdateAsync(saved.Value.Id,
+                new SaveWorkspaceCheckpointEvaluationRequest
+                {
+                    Status = "SUBMITTED",
+                    MemberScoreOverrides = new[]
+                    {
+                        new WorkspaceCheckpointMemberScoreInput { StudentId = seed.StudentIds[0], Score = 6.5m }
+                    },
+                    RubricScores = new[]
+                    {
+                        new WorkspaceCheckpointCriterionScoreInput { CriterionKey = "clarity", Score = 7 },
+                        new WorkspaceCheckpointCriterionScoreInput { CriterionKey = "evidence", Score = 8 }
+                    }
+                }, seed.LecturerId, SystemRoles.Lecturer);
+            overrideAfterReset.IsSuccess.Should().BeTrue();
+            overrideAfterReset.Value.MemberScores.Single(item => item.StudentId == seed.StudentIds[0]).Should()
+                .Match<WorkspaceCheckpointEvaluationMemberScoreResponse>(item => item.Score == 6.5m && item.IsOverridden);
+
+            var outsideTeam = await updateHandler.UpdateAsync(saved.Value.Id,
+                new SaveWorkspaceCheckpointEvaluationRequest
+                {
+                    Status = "SUBMITTED",
+                    MemberScoreOverrides = new[]
+                    {
+                        new WorkspaceCheckpointMemberScoreInput { StudentId = Guid.NewGuid(), Score = 5 }
+                    },
+                    RubricScores = new[]
+                    {
+                        new WorkspaceCheckpointCriterionScoreInput { CriterionKey = "clarity", Score = 7 },
+                        new WorkspaceCheckpointCriterionScoreInput { CriterionKey = "evidence", Score = 8 }
+                    }
+                }, seed.LecturerId, SystemRoles.Lecturer);
+            outsideTeam.IsFailure.Should().BeTrue();
+            outsideTeam.Error.Code.Should().Be(ErrorCodes.WorkspaceValidationError);
         }
         context.ChangeTracker.Clear();
         var revisedStudentSummary = await handler.GetSummaryAsync(seed.TeamId.Value, 1, seed.ProposerUserId, SystemRoles.Student);
@@ -2276,6 +2346,19 @@ public sealed class TeamWorkflowIntegrationTests
         (await handler.CreateAsync(seed.TeamId!.Value, initial, seed.ProposerUserId, SystemRoles.Student))
             .IsSuccess.Should().BeTrue();
         context.ChangeTracker.Clear();
+        var directionHandler = new ProjectDirectionHandler(context);
+        var initialDirection = await directionHandler.GetAsync(seed.TeamId.Value, seed.ProposerUserId, SystemRoles.Student);
+        var initialApproval = await directionHandler.ReviewAsync(
+            seed.TeamId.Value,
+            new ReviewProjectDirectionRequest
+            {
+                Decision = "Approved",
+                RowVersion = initialDirection.Value.RowVersion
+            },
+            seed.LecturerId,
+            SystemRoles.Lecturer);
+        initialApproval.IsSuccess.Should().BeTrue(initialApproval.IsFailure ? initialApproval.Error.Message : string.Empty);
+        context.ChangeTracker.Clear();
 
         var invalid = await handler.UpdateAsync(
             seed.TeamId.Value,
@@ -2327,6 +2410,57 @@ public sealed class TeamWorkflowIntegrationTests
         updated.Value.Solution.Should().Contain("verified marketplace");
         updated.Value.TargetUsers.Should().BeEmpty();
         updated.Value.ZaloGroupUrl.Should().Be("https://zalo.me/g/campus-circular");
+        updated.Value.ProjectName.Should().Be(initial.ProjectName);
+        updated.Value.Description.Should().Be(initial.Description);
+
+        context.ChangeTracker.Clear();
+        var pendingProfileChange = await directionHandler.GetAsync(seed.TeamId.Value, seed.ProposerUserId, SystemRoles.Student);
+        pendingProfileChange.Value.Status.Should().Be(nameof(ProjectDirectionStatus.Submitted));
+        pendingProfileChange.Value.IsProjectProfileChangeProposal.Should().BeTrue();
+        pendingProfileChange.Value.CurrentTitle.Should().Be(initial.ProjectName);
+        pendingProfileChange.Value.Title.Should().Be("Campus Circular Hub");
+        var requestedRevision = await directionHandler.ReviewAsync(
+            seed.TeamId.Value,
+            new ReviewProjectDirectionRequest
+            {
+                Decision = "NeedsRevision",
+                Comment = "Clarify the revised project identity.",
+                RowVersion = pendingProfileChange.Value.RowVersion
+            },
+            seed.LecturerId,
+            SystemRoles.Lecturer);
+        requestedRevision.IsSuccess.Should().BeTrue();
+        context.ChangeTracker.Clear();
+        (await context.Projects.AsNoTracking().SingleAsync(project => project.TeamId == seed.TeamId))
+            .Name.Should().Be(initial.ProjectName);
+
+        var revisedProfileChange = await directionHandler.SaveAsync(
+            seed.TeamId.Value,
+            new SaveProjectDirectionRequest
+            {
+                Title = "Campus Circular Hub",
+                Summary = "The revised project profile clearly helps campuses reuse equipment safely.",
+                RowVersion = requestedRevision.Value.RowVersion
+            },
+            seed.ProposerUserId,
+            SystemRoles.Student);
+        revisedProfileChange.IsSuccess.Should().BeTrue();
+        var resubmittedProfileChange = await directionHandler.SubmitAsync(
+            seed.TeamId.Value,
+            new ProjectDirectionStateRequest { RowVersion = revisedProfileChange.Value.RowVersion },
+            seed.ProposerUserId,
+            SystemRoles.Student);
+        resubmittedProfileChange.IsSuccess.Should().BeTrue();
+        var approvedProfileChange = await directionHandler.ReviewAsync(
+            seed.TeamId.Value,
+            new ReviewProjectDirectionRequest
+            {
+                Decision = "Approved",
+                RowVersion = resubmittedProfileChange.Value.RowVersion
+            },
+            seed.LecturerId,
+            SystemRoles.Lecturer);
+        approvedProfileChange.IsSuccess.Should().BeTrue();
 
         context.ChangeTracker.Clear();
         var memberUserId = (await context.Students.AsNoTracking()
@@ -2337,8 +2471,8 @@ public sealed class TeamWorkflowIntegrationTests
             seed.TeamId.Value,
             new UpdateProjectWorkspaceRequest
             {
-                ProjectName = updated.Value.ProjectName,
-                Description = updated.Value.Description,
+                ProjectName = "Campus Circular Hub",
+                Description = "The revised project profile clearly helps campuses reuse equipment safely.",
                 Problem = updated.Value.Problem,
                 Solution = updated.Value.Solution,
                 TargetUsers = updated.Value.TargetUsers,
@@ -2354,6 +2488,7 @@ public sealed class TeamWorkflowIntegrationTests
         var detail = await handler.GetDetailAsync(seed.TeamId.Value, memberUserId, SystemRoles.Student);
         detail.IsSuccess.Should().BeTrue();
         detail.Value.Project!.ProjectName.Should().Be("Campus Circular Hub");
+        detail.Value.Project.Description.Should().Be("The revised project profile clearly helps campuses reuse equipment safely.");
         detail.Value.Project.TargetUsers.Should().BeEmpty();
         detail.Value.Project.ZaloGroupUrl.Should().Be("https://zalo.me/g/campus-circular");
         detail.Value.Class.Id.Should().Be(seed.ClassId);
@@ -2361,7 +2496,7 @@ public sealed class TeamWorkflowIntegrationTests
         detail.Value.Class.SemesterId.Should().NotBeEmpty();
         detail.Value.Members.Should().HaveCount(4);
         detail.Value.Activities.Select(activity => activity.Action)
-            .Should().ContainInOrder("PROJECT_PROFILE_UPDATED", "WORKSPACE_CREATED");
+            .Should().ContainInOrder("PROJECT_PROFILE_CHANGE_APPROVED", "PROJECT_PROFILE_CHANGE_PROPOSED", "PROJECT_PROFILE_UPDATED", "WORKSPACE_CREATED");
         detail.Value.Activities.First().ChangedFields.Should().Contain("projectName");
         detail.Value.Activities.First().ActorName.Should().NotBe("System");
 
@@ -2405,6 +2540,43 @@ public sealed class TeamWorkflowIntegrationTests
 
         result.IsFailure.Should().BeTrue();
         result.Error.Code.Should().Be(ErrorCodes.ClassAccessDenied);
+    }
+
+    [Theory]
+    [InlineData("Approved")]
+    [InlineData("NeedsRevision")]
+    public async Task ProjectDirectionReview_AllowsMissingComment(string decision)
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateSeedAsync(context, createProposal: false, createTeam: true);
+        var direction = new ProjectDirection
+        {
+            TeamId = seed.TeamId!.Value,
+            Title = "Direction with optional review comment",
+            Summary = "A sufficiently detailed project direction ready for lecturer review.",
+            Status = ProjectDirectionStatus.Submitted,
+            SubmittedAtUtc = DateTime.UtcNow,
+            CreatedBy = seed.ProposerUserId
+        };
+        context.ProjectDirections.Add(direction);
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+        direction = await context.ProjectDirections.AsNoTracking().SingleAsync(item => item.Id == direction.Id);
+
+        var result = await new ProjectDirectionHandler(context).ReviewAsync(
+            seed.TeamId.Value,
+            new ReviewProjectDirectionRequest
+            {
+                Decision = decision,
+                RowVersion = direction.Version.ToString()
+            },
+            seed.LecturerId,
+            SystemRoles.Lecturer);
+
+        result.IsSuccess.Should().BeTrue(result.IsFailure ? result.Error.Message : string.Empty);
+        result.Value.Status.Should().Be(decision);
+        result.Value.Reviews.Should().ContainSingle(review => review.Comment == string.Empty);
     }
 
     [Fact]

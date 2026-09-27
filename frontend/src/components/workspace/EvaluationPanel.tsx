@@ -151,6 +151,7 @@ export default function EvaluationPanel({
           onSubmit={saveEvaluation}
           readOnly={saving}
           criteria={checkpointData?.rubrics || EMPTY_CRITERIA}
+          members={checkpointData?.members || EMPTY_CRITERIA}
           checkpointNumber={selectedCheckpoint}
           checkpointTitle={checkpointTitle}
           compact
@@ -230,6 +231,7 @@ export default function EvaluationPanel({
             onSubmit={saveEvaluation}
             readOnly={saving}
             criteria={checkpointData?.rubrics || EMPTY_CRITERIA}
+            members={checkpointData?.members || EMPTY_CRITERIA}
             checkpointNumber={selectedCheckpoint}
             checkpointTitle={checkpointTitle}
             compact
@@ -389,6 +391,7 @@ export default function EvaluationPanel({
                   onSubmit={saveEvaluation}
                   readOnly={saving}
                   criteria={checkpointData?.rubrics || EMPTY_CRITERIA}
+                  members={checkpointData?.members || EMPTY_CRITERIA}
                   checkpointNumber={selectedCheckpoint}
                   checkpointTitle={checkpointTitle}
                 />

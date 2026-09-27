@@ -613,6 +613,9 @@ function registerDirectionHandlers(mock: MockAdapter): void {
       revisedIndustries = selectedIndustries.map((industry) => industry!.name);
     }
     const industriesChanged = [...revisedIndustries].sort().join('|') !== [...(direction?.startupIndustries || [])].sort().join('|');
+    if (direction?.isProjectProfileChangeProposal && industriesChanged) {
+      return failure(400, 'VALIDATION_ERROR', 'Startup Industry cannot be changed as part of a Project Profile name or description change request.');
+    }
     if (direction?.status === 'NeedsRevision' && revisedTitle === direction.title && revisedSummary === direction.summary && !industriesChanged) {
       return failure(400, 'VALIDATION_ERROR', 'Change the project direction before saving the requested revision.');
     }
@@ -625,7 +628,7 @@ function registerDirectionHandlers(mock: MockAdapter): void {
     direction.startupIndustries = revisedIndustries;
     direction.status = 'Draft';
     direction.rowVersion = allocateRowVersion();
-    if (team.projectName) {
+    if (team.projectName && !direction.isProjectProfileChangeProposal) {
       team.projectName = revisedTitle;
       team.projectDescription = revisedSummary;
       team.startupIndustries = revisedIndustries;
@@ -644,11 +647,38 @@ function registerDirectionHandlers(mock: MockAdapter): void {
     if (direction.status !== 'Submitted') return failure(409, 'PROJECT_DIRECTION_STATE_INVALID', 'Only submitted directions can be reviewed.');
     const fromStatus = direction.status;
     const toStatus = asString(body.decision, 'NeedsRevision');
+    if (direction.isProjectProfileChangeProposal && toStatus === 'Approved') {
+      const team = teamById(teamId);
+      if (team) {
+        const changedFields = [
+          team.projectName !== direction.title && 'projectName',
+          (team.projectDescription || '') !== direction.summary && 'description',
+        ].filter(Boolean) as string[];
+        const occurredAtUtc = new Date().toISOString();
+        team.projectName = direction.title;
+        team.projectDescription = direction.summary;
+        team.projectUpdatedAtUtc = occurredAtUtc;
+        team.projectActivities = [{
+          id: allocateId(),
+          action: 'PROJECT_PROFILE_CHANGE_APPROVED',
+          summary: 'Approved Project Profile changes.',
+          actorUserId: getMockState().users.find((user) => user.role === 'LECTURER')?.id || null,
+          actorName: 'Lecturer',
+          changedFields,
+          occurredAtUtc,
+        }, ...(team.projectActivities || [])];
+      }
+    }
     direction.status = toStatus;
     direction.reviewedAtUtc = new Date().toISOString();
     direction.rowVersion = allocateRowVersion();
     const review: MockDirectionReview = { id: allocateId(), fromStatus, toStatus, comment: asString(body.comment), reviewedByUserId: getMockState().users.find((user) => user.role === 'LECTURER')?.id || allocateId(), occurredAtUtc: new Date().toISOString() };
     direction.reviews.unshift(review);
+    if (toStatus === 'Approved') {
+      direction.isProjectProfileChangeProposal = false;
+      direction.currentTitle = null;
+      direction.currentSummary = null;
+    }
     persistMockState();
     return ok(direction, 'Project direction reviewed successfully.');
   });
