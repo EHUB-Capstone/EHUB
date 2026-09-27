@@ -601,6 +601,7 @@ function registerRosterHandlers(mock: MockAdapter): void {
         profileMajorCode: sourceRecord?.profileMajorCode || user.major,
         majorVerificationStatus: sourceRecord?.majorVerificationStatus || 'Unverified',
         memberCode: sourceRecord?.memberCode || `MEM-${state.sequence}`,
+        semesterGroupName: null,
         enrollmentStatus: 'Active',
         teamId: null,
         teamName: null,
@@ -732,6 +733,7 @@ function registerRosterHandlers(mock: MockAdapter): void {
       studentId: profileId || allocateId(), userId: user?.id || null, rollNumber: code, fullName, email,
       majorCode: enrollmentMajor, profileMajorCode: profileMajor || requestedMajor || null,
       majorVerificationStatus: 'Unverified', memberCode: `MEM-${state.sequence}`,
+      semesterGroupName: null,
       enrollmentStatus: 'Active', teamId: null, teamName: null, isTeamLeader: false,
       joinedAtUtc: new Date().toISOString(),
     };
@@ -949,7 +951,7 @@ function registerRosterHandlers(mock: MockAdapter): void {
         continue;
       }
       const linkedUser = getMockState().users.find((user) => user.role === 'STUDENT' && user.email.toLowerCase() === row.email.toLowerCase());
-      roster.push({ studentId: allocateId(), userId: linkedUser?.id || null, rollNumber: row.studentCode, fullName: row.fullName, email: row.email, majorCode: row.majorCode, profileMajorCode: null, majorVerificationStatus: 'Unverified', memberCode: `MEM-${getMockState().sequence}`, enrollmentStatus: 'Active', teamId: null, teamName: null, isTeamLeader: false, joinedAtUtc: new Date().toISOString() });
+      roster.push({ studentId: allocateId(), userId: linkedUser?.id || null, rollNumber: row.studentCode, fullName: row.fullName, email: row.email, majorCode: row.majorCode, profileMajorCode: null, majorVerificationStatus: 'Unverified', memberCode: `MEM-${getMockState().sequence}`, semesterGroupName: null, enrollmentStatus: 'Active', teamId: null, teamName: null, isTeamLeader: false, joinedAtUtc: new Date().toISOString() });
       applyImportedMockName(row.email, row.fullName);
       insertedCount++;
     }

@@ -424,6 +424,7 @@ const rosterStudent = (user: MockUser, index: number, teamId: string | null): Mo
   profileMajorCode: user.major,
   majorVerificationStatus: index % 3 === 0 ? 'Matched' : 'Unverified',
   memberCode: `MEM-${String(index).padStart(3, '0')}`,
+  semesterGroupName: null,
   enrollmentStatus: 'Active',
   teamId,
   teamName: teamId === id(601) ? 'Phoenix Founders' : teamId === id(602) ? 'GreenByte' : null,
