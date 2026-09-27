@@ -728,6 +728,10 @@ export function registerWorkspaceMockHandlers(mock: MockAdapter): void {
       return failure(403, 'WORKSPACE_LEADER_REQUIRED', 'Only the active team leader can update this project profile.');
     }
     if (!team.projectName) return failure(404, 'WORKSPACE_NOT_FOUND', 'This team does not have a project workspace.');
+    const direction = state.directions.find((item) => item.teamId === teamId);
+    if (direction?.status !== 'Approved') {
+      return failure(400, 'PROJECT_DIRECTION_STATE_INVALID', 'The project profile can only be updated after its project direction is approved.');
+    }
 
     const body = parseBody(config);
     const projectName = String(body.projectName || '').trim();
@@ -754,9 +758,11 @@ export function registerWorkspaceMockHandlers(mock: MockAdapter): void {
       || !isValidZaloGroupUrl) {
       return failure(400, 'WORKSPACE_VALIDATION_ERROR', 'Required project workspace information is missing or invalid.');
     }
-    const changedFields = [
+    const proposedFields = [
       team.projectName !== projectName && 'projectName',
       (team.projectDescription || '') !== description && 'description',
+    ].filter(Boolean) as string[];
+    const immediateFields = [
       (team.projectProblem || '') !== problem && 'problem',
       (team.projectSolution || '') !== solution && 'solution',
       (team.projectTargetUsers || '') !== targetUsers && 'targetUsers',
@@ -764,23 +770,42 @@ export function registerWorkspaceMockHandlers(mock: MockAdapter): void {
       JSON.stringify(team.keywords || []) !== JSON.stringify(keywords) && 'keywords',
     ].filter(Boolean) as string[];
 
-    team.projectName = projectName;
-    team.projectDescription = description;
     team.projectProblem = problem;
     team.projectSolution = solution;
     team.projectTargetUsers = targetUsers;
     team.projectZaloGroupUrl = zaloGroupUrl;
     team.keywords = keywords;
-    if (changedFields.length > 0) {
+    if (immediateFields.length > 0) {
       const occurredAtUtc = new Date().toISOString();
       team.projectUpdatedAtUtc = occurredAtUtc;
       team.projectActivities = [{
         id: uuid(1701 + (team.projectActivities?.length || 0)),
         action: 'PROJECT_PROFILE_UPDATED',
-        summary: 'Updated ' + changedFields.join(', ') + '.',
+        summary: 'Updated ' + immediateFields.join(', ') + '.',
         actorUserId: currentUser.id,
         actorName: currentUser.name,
-        changedFields,
+        changedFields: immediateFields,
+        occurredAtUtc,
+      }, ...(team.projectActivities || [])];
+    }
+    if (proposedFields.length > 0) {
+      const occurredAtUtc = new Date().toISOString();
+      direction.title = projectName;
+      direction.summary = description;
+      direction.status = 'Submitted';
+      direction.submittedAtUtc = occurredAtUtc;
+      direction.reviewedAtUtc = null;
+      direction.isProjectProfileChangeProposal = true;
+      direction.currentTitle = team.projectName;
+      direction.currentSummary = team.projectDescription || '';
+      direction.rowVersion = allocateRowVersion();
+      team.projectActivities = [{
+        id: uuid(1801 + (team.projectActivities?.length || 0)),
+        action: 'PROJECT_PROFILE_CHANGE_PROPOSED',
+        summary: 'Submitted proposed Project Profile changes for lecturer review.',
+        actorUserId: currentUser.id,
+        actorName: currentUser.name,
+        changedFields: proposedFields,
         occurredAtUtc,
       }, ...(team.projectActivities || [])];
     }

@@ -8,6 +8,7 @@ import { unwrapApiData } from '../../utils/classMappers';
 import { parseApiError } from '../../utils/apiError';
 import {
   canSubmitProjectDirection,
+  getApprovedProjectProfileDisplay,
   getProjectDirectionDecisionNotice,
   getProjectDirectionSubmitGuidance,
   hasUnsavedProjectDirectionChanges,
@@ -35,6 +36,7 @@ export default function ProjectDirectionCard({ team, project, canEdit, onOpenPro
   const actionInFlightRef = useRef(false);
   const busy = activeAction !== null;
   const editableState = !direction || ['Draft', 'NeedsRevision'].includes(direction.status);
+  const isProfileChangeProposal = Boolean(direction?.isProjectProfileChangeProposal);
 
   const applyDirection = useCallback((value, announceDecision = false) => {
     if (!value) return;
@@ -135,7 +137,7 @@ export default function ProjectDirectionCard({ team, project, canEdit, onOpenPro
       const payload = {
         title: title.trim(),
         summary: summary.trim(),
-        startupIndustryIds: selectedIndustryIds,
+        ...(isProfileChangeProposal ? {} : { startupIndustryIds: selectedIndustryIds }),
       };
       let response;
       try {
@@ -201,20 +203,23 @@ export default function ProjectDirectionCard({ team, project, canEdit, onOpenPro
     }
   };
 
-  const selectedIndustryNames = selectedIndustryIds
-    .map((id) => industries.find((industry) => industry.id === id)?.name)
-    .filter(Boolean);
+  const selectedIndustryNames = isProfileChangeProposal
+    ? (direction?.startupIndustries || [])
+    : selectedIndustryIds
+      .map((id) => industries.find((industry) => industry.id === id)?.name)
+      .filter(Boolean);
   const valid = title.trim().length >= 3
     && summary.trim().length >= 20
     && summary.trim().length <= 2000
-    && selectedIndustryIds.length >= 1
-    && selectedIndustryIds.length <= 3
-    && !industriesLoading
-    && !industriesError;
+    && (isProfileChangeProposal || (selectedIndustryIds.length >= 1
+      && selectedIndustryIds.length <= 3
+      && !industriesLoading
+      && !industriesError));
   const hasUnsavedChanges = hasUnsavedProjectDirectionChanges(direction, title, summary, selectedIndustryNames);
   const canSubmit = canSubmitProjectDirection(direction, title, summary, selectedIndustryNames);
   const submitGuidance = getProjectDirectionSubmitGuidance(direction, title, summary, selectedIndustryNames);
   const latestReview = direction?.reviews?.[0];
+  const approvedProfile = getApprovedProjectProfileDisplay(direction, project);
 
   const openEditor = async () => {
     if (actionInFlightRef.current) return;
@@ -245,7 +250,7 @@ export default function ProjectDirectionCard({ team, project, canEdit, onOpenPro
           <span className="rounded-full border border-emerald-200 bg-white px-2.5 py-1 text-xs font-semibold text-emerald-700">Approved</span>
         </div>
         <div className="px-6 py-5">
-          <div className="flex items-start justify-between gap-4"><div className="min-w-0"><h3 className="truncate font-semibold text-slate-900">{project?.projectName || direction.title}</h3><p className="mt-1 line-clamp-2 text-sm leading-6 text-slate-600">{project?.description || direction.summary}</p></div><ArrowRight className="mt-1 h-5 w-5 shrink-0 text-slate-400 transition group-hover:translate-x-1 group-hover:text-emerald-600" /></div>
+          <div className="flex items-start justify-between gap-4"><div className="min-w-0"><h3 className="truncate font-semibold text-slate-900">{approvedProfile.projectName}</h3><p className="mt-1 line-clamp-2 text-sm leading-6 text-slate-600">{approvedProfile.description}</p></div><ArrowRight className="mt-1 h-5 w-5 shrink-0 text-slate-400 transition group-hover:translate-x-1 group-hover:text-emerald-600" /></div>
           <div className="mt-4 grid gap-3 sm:grid-cols-3">
             {[
               ['Problem', project?.problem],
@@ -284,7 +289,7 @@ export default function ProjectDirectionCard({ team, project, canEdit, onOpenPro
       className={`rounded-2xl border border-slate-200/60 bg-white p-6 shadow-sm ${canEdit && editableState && !editing ? 'cursor-pointer transition hover:border-primary-200 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-primary/20' : ''}`}
     >
       <div className="flex items-start justify-between gap-4 border-b border-slate-100 pb-4">
-        <div className="flex items-center gap-2"><FileText className="h-5 w-5 text-primary" /><div><h2 className="text-lg font-bold text-slate-800">Project Direction</h2><p className="mt-0.5 text-xs text-slate-500">Project information submitted to the assigned lecturer for review.</p></div></div>
+        <div className="flex items-center gap-2"><FileText className="h-5 w-5 text-primary" /><div><h2 className="text-lg font-bold text-slate-800">{isProfileChangeProposal ? 'Project Profile change request' : 'Project Direction'}</h2><p className="mt-0.5 text-xs text-slate-500">{isProfileChangeProposal ? 'The approved profile remains unchanged until the lecturer approves this request.' : 'Project information submitted to the assigned lecturer for review.'}</p></div></div>
         <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-600">{direction?.status || 'Not created'}</span>
       </div>
       {loading ? <div className="flex min-h-40 items-center justify-center"><Loader2 className="h-5 w-5 animate-spin text-primary" /></div> : canEdit && editableState && editing ? (
@@ -307,7 +312,7 @@ export default function ProjectDirectionCard({ team, project, canEdit, onOpenPro
                         <button
                           type="button"
                           onClick={() => setSelectedIndustryIds((current) => current.filter((id) => id !== industry.id))}
-                          disabled={busy}
+                        disabled={busy || isProfileChangeProposal}
                           aria-label={`Remove ${industry.name}`}
                           className="text-primary-400 hover:text-red-500 disabled:opacity-50"
                         >
@@ -322,7 +327,7 @@ export default function ProjectDirectionCard({ team, project, canEdit, onOpenPro
                   aria-labelledby="direction-startup-industry-label"
                   aria-expanded={industriesOpen}
                   aria-haspopup="listbox"
-                  disabled={busy || industriesLoading || Boolean(industriesError) || industries.length === 0}
+                  disabled={busy || isProfileChangeProposal || industriesLoading || Boolean(industriesError) || industries.length === 0}
                   onClick={() => setIndustriesOpen((open) => !open)}
                   className="flex w-full items-center justify-between gap-3 rounded-lg px-1 py-1 text-left text-sm text-slate-500 outline-none disabled:cursor-not-allowed disabled:opacity-60"
                 >
@@ -380,11 +385,11 @@ export default function ProjectDirectionCard({ team, project, canEdit, onOpenPro
           {submitGuidance && <p role="status" className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">{submitGuidance}</p>}
         </div>
       ) : (
-        <div className="mt-4 space-y-3">{direction ? <><div><p className="text-xs font-bold uppercase tracking-wide text-slate-400">Project Name</p><h3 className="mt-1 font-semibold text-slate-900">{direction.title}</h3></div><div><p className="text-xs font-bold uppercase tracking-wide text-slate-400">Project description</p><p className="mt-1 whitespace-pre-wrap text-sm leading-7 text-slate-700">{direction.summary}</p></div>{canEdit && editableState && <p className="rounded-lg bg-primary-50 px-3 py-2 text-sm font-semibold text-primary-700">Click this Project Direction card to update the project information and Startup Industry.</p>}</> : <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">Create the project workspace to submit its project direction automatically.</p>}</div>
+          <div className="mt-4 space-y-3">{direction ? <>{isProfileChangeProposal ? <div className="grid gap-3 lg:grid-cols-2"><div className="rounded-xl border border-slate-200 bg-slate-50 p-4"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Current approved profile</p><p className="mt-3 text-xs font-semibold text-slate-500">Project name</p><p className="mt-1 font-semibold text-slate-900">{direction.currentTitle}</p><p className="mt-3 text-xs font-semibold text-slate-500">Description</p><p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-slate-700">{direction.currentSummary}</p></div><div className="rounded-xl border border-violet-200 bg-violet-50/50 p-4"><p className="text-xs font-bold uppercase tracking-wide text-violet-700">Proposed change</p><p className="mt-3 text-xs font-semibold text-violet-600">Project name</p><p className="mt-1 font-semibold text-slate-900">{direction.title}</p><p className="mt-3 text-xs font-semibold text-violet-600">Description</p><p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-slate-700">{direction.summary}</p></div></div> : <><div><p className="text-xs font-bold uppercase tracking-wide text-slate-400">Project Name</p><h3 className="mt-1 font-semibold text-slate-900">{direction.title}</h3></div><div><p className="text-xs font-bold uppercase tracking-wide text-slate-400">Project description</p><p className="mt-1 whitespace-pre-wrap text-sm leading-7 text-slate-700">{direction.summary}</p></div></>}{canEdit && editableState && <p className="rounded-lg bg-primary-50 px-3 py-2 text-sm font-semibold text-primary-700">Click this {isProfileChangeProposal ? 'change request' : 'Project Direction card'} to update the proposed Project name and Description.</p>}</> : <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">Create the project workspace to submit its project direction automatically.</p>}</div>
       )}
       {(!canEdit || !editableState || !editing) && direction?.startupIndustries?.length > 0 && <div className="mt-4"><p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-400">Startup Industry</p><div className="flex flex-wrap gap-2">{direction.startupIndustries.map(industry => <span key={industry} className="rounded-full border border-primary-100 bg-primary-50 px-2.5 py-1 text-xs font-semibold text-primary-700">{industry}</span>)}</div></div>}
-      {direction?.status === 'Submitted' && <div className="mt-4 flex items-center gap-2 text-xs font-medium text-slate-500"><span className="h-2 w-2 rounded-full bg-emerald-500" /> Waiting for lecturer decision · live updates enabled</div>}
-      {latestReview && <div role="status" aria-live="polite" className="mt-4 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3"><p className="text-xs font-bold uppercase text-blue-700">Latest lecturer review · {latestReview.toStatus}</p><p className="mt-1 text-sm leading-6 text-blue-900">{latestReview.comment}</p></div>}
+      {direction?.status === 'Submitted' && <div className="mt-4 flex items-center gap-2 text-xs font-medium text-slate-500"><span className="h-2 w-2 rounded-full bg-emerald-500" /> {isProfileChangeProposal ? 'Pending lecturer approval · the current Project Profile is unchanged' : 'Waiting for lecturer decision · live updates enabled'}</div>}
+      {direction?.status !== 'Submitted' && latestReview && <div role="status" aria-live="polite" className="mt-4 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3"><p className="text-xs font-bold uppercase text-blue-700">Latest lecturer review · {latestReview.toStatus}</p>{latestReview.comment && <p className="mt-1 text-sm leading-6 text-blue-900">{latestReview.comment}</p>}</div>}
     </section>
   );
 }

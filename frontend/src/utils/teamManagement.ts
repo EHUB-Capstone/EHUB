@@ -57,6 +57,10 @@ export function isMissingTeamMajor(major: string | null | undefined): boolean {
   return !code || MISSING_MAJOR_CODES.has(code);
 }
 
+export function isVerifiedEnrollmentMajor(status: string | null | undefined): boolean {
+  return status?.trim().toUpperCase() === 'MATCHED';
+}
+
 export function resolveEffectiveTeamMajor(
   enrollmentMajor: string | null | undefined,
   profileMajor: string | null | undefined,

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Lock } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { teamFormationApi } from '../../api/teamFormationApi';
 import type { TeamFormation } from '../../types/teamFormation';
@@ -8,9 +9,10 @@ import ConfirmDialog from '../ui/ConfirmDialog';
 interface Props {
   formation: TeamFormation;
   onChanged: () => void | Promise<void>;
+  acceptDisabledReason?: string;
 }
 
-export default function TeamFormationCard({ formation, onChanged }: Props) {
+export default function TeamFormationCard({ formation, onChanged, acceptDisabledReason }: Props) {
   const [working, setWorking] = useState(false);
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
   const ownInvitation = formation.invitations.find(item => item.studentId === formation.myStudentId);
@@ -64,15 +66,23 @@ export default function TeamFormationCard({ formation, onChanged }: Props) {
         ))}
       </ul>
       {pending && (ownInvitation?.status === 'Pending' || isCreator) && (
-        <div className="mt-4 flex flex-wrap gap-2">
-          {ownInvitation?.status === 'Pending' && <>
-            <button type="button" disabled={working} onClick={() => void act('accept')}
-              className="rounded-lg bg-green-600 px-3 py-2 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50">Accept</button>
-            <button type="button" disabled={working} onClick={() => void act('decline')}
-              className="rounded-lg border border-red-200 px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50">Decline</button>
-          </>}
-          {isCreator && <button type="button" disabled={working} onClick={() => setCancelConfirmOpen(true)}
-            className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">Cancel formation</button>}
+        <div className="mt-4">
+          {ownInvitation?.status === 'Pending' && acceptDisabledReason && (
+            <div className="mb-3 flex items-start gap-2 rounded-lg border border-orange-200 bg-orange-50 px-3 py-2 text-xs text-orange-800">
+              <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <span>{acceptDisabledReason}</span>
+            </div>
+          )}
+          <div className="flex flex-wrap gap-2">
+            {ownInvitation?.status === 'Pending' && <>
+              <button type="button" disabled={working || Boolean(acceptDisabledReason)} onClick={() => void act('accept')}
+                className="rounded-lg bg-green-600 px-3 py-2 text-sm font-semibold text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50">Accept</button>
+              <button type="button" disabled={working} onClick={() => void act('decline')}
+                className="rounded-lg border border-red-200 px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50">Decline</button>
+            </>}
+            {isCreator && <button type="button" disabled={working} onClick={() => setCancelConfirmOpen(true)}
+              className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">Cancel formation</button>}
+          </div>
         </div>
       )}
     </section>

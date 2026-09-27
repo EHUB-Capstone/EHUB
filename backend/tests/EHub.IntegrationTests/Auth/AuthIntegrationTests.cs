@@ -53,6 +53,7 @@ public class AuthIntegrationTests
             member.StudentId == enrollmentIds.StudentId &&
             member.ProfileMajorCode == null &&
             member.EnrollmentMajorCode == MajorCodes.BIT_GD &&
+            member.MajorVerificationStatus == nameof(EnrollmentMajorVerificationStatus.Matched) &&
             member.CanEditMajor &&
             !member.IsMajorLocked);
 
@@ -78,6 +79,25 @@ public class AuthIntegrationTests
                 message.Type == "Class.MajorUpdated.v1" && message.AggregateId == enrollmentIds.ActiveClassId))
                 .Should().BeTrue();
         }
+
+        var unverifiedClassDetail = await _client.GetFromJsonAsync<ApiResponse<StudentClassDetailResponse>>(
+            $"/api/classes/my-class-detail/{enrollmentIds.ActiveClassId}");
+        unverifiedClassDetail!.Data!.Students.Single().MajorVerificationStatus.Should().Be(
+            nameof(EnrollmentMajorVerificationStatus.Unverified));
+
+        using (var verificationScope = _factory.Services.CreateScope())
+        {
+            var context = verificationScope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var enrollmentToVerify = await context.ClassStudents.SingleAsync(item =>
+                item.ClassId == enrollmentIds.ActiveClassId && item.StudentId == enrollmentIds.StudentId);
+            enrollmentToVerify.MajorVerificationStatus = EnrollmentMajorVerificationStatus.Matched;
+            await context.SaveChangesAsync();
+        }
+
+        var verifiedClassDetail = await _client.GetFromJsonAsync<ApiResponse<StudentClassDetailResponse>>(
+            $"/api/classes/my-class-detail/{enrollmentIds.ActiveClassId}");
+        verifiedClassDetail!.Data!.Students.Single().MajorVerificationStatus.Should().Be(
+            nameof(EnrollmentMajorVerificationStatus.Matched));
 
         var repeated = await _client.PostAsJsonAsync("/api/auth/google", new GoogleLoginRequest { IdToken = email });
         repeated.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -151,6 +171,82 @@ public class AuthIntegrationTests
             new UpdateOwnMajorRequest { MajorCode = "BIT_SE" });
 
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task StudentClassDetail_Should_MarkClassmatesReservedByPendingTeamInvitations()
+    {
+        var email = $"google-reservation-{Guid.NewGuid()}@example.com";
+        var login = await _client.PostAsJsonAsync("/api/auth/google", new GoogleLoginRequest { IdToken = email });
+        var session = (await login.Content.ReadFromJsonAsync<ApiResponse<AuthResponse>>())!.Data!;
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", session.AccessToken);
+        var enrollmentIds = await SeedMajorUpdateEnrollmentsAsync(session.User.Id, false);
+
+        Guid reservedStudentId;
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var creatorEnrollment = await context.ClassStudents.AsNoTracking().SingleAsync(item =>
+                item.ClassId == enrollmentIds.ActiveClassId && item.StudentId == enrollmentIds.StudentId);
+            var now = DateTime.UtcNow;
+            var suffix = Guid.NewGuid().ToString("N")[..8].ToUpperInvariant();
+            var reservedStudent = new Student
+            {
+                RollNumber = $"RS{suffix}",
+                NormalizedRollNumber = $"RS{suffix}",
+                FullName = "Reserved Classmate",
+                Email = $"reserved-{suffix}@example.com".ToLowerInvariant(),
+                MajorCode = MajorCodes.BBA_MKT,
+                Status = StudentStatus.Active,
+                CreatedAt = now
+            };
+            var reservedEnrollment = new ClassStudent
+            {
+                ClassId = enrollmentIds.ActiveClassId,
+                StudentId = reservedStudent.Id,
+                Student = reservedStudent,
+                SemesterId = creatorEnrollment.SemesterId,
+                CourseId = creatorEnrollment.CourseId,
+                EnrollmentStatus = EnrollmentStatus.Active,
+                CountsTowardCourseSemesterLimit = true,
+                MajorCodeAtEnrollment = MajorCodes.BBA_MKT,
+                CreatedAt = now,
+                UpdatedAt = now
+            };
+            var formation = new TeamFormation
+            {
+                ClassId = enrollmentIds.ActiveClassId,
+                CreatorStudentId = enrollmentIds.StudentId,
+                ProposedLeaderStudentId = enrollmentIds.StudentId,
+                TeamName = $"Reservation {suffix}",
+                NormalizedTeamName = $"reservation {suffix}".ToLowerInvariant(),
+                Status = TeamFormationStatus.Pending,
+                CreatedAt = now,
+                CreatedBy = session.User.Id
+            };
+            formation.Invitations.Add(new TeamFormationInvitation
+            {
+                FormationId = formation.Id,
+                Formation = formation,
+                ClassId = enrollmentIds.ActiveClassId,
+                StudentId = reservedStudent.Id,
+                ClassStudent = reservedEnrollment,
+                Status = TeamInvitationStatus.Pending
+            });
+            reservedStudentId = reservedStudent.Id;
+            context.Students.Add(reservedStudent);
+            context.ClassStudents.Add(reservedEnrollment);
+            context.TeamFormations.Add(formation);
+            await context.SaveChangesAsync();
+        }
+
+        var classDetail = await _client.GetFromJsonAsync<ApiResponse<StudentClassDetailResponse>>(
+            $"/api/classes/my-class-detail/{enrollmentIds.ActiveClassId}");
+
+        classDetail!.Data!.Students.Single(member => member.StudentId == enrollmentIds.StudentId)
+            .HasPendingTeamInvitation.Should().BeFalse();
+        classDetail.Data.Students.Single(member => member.StudentId == reservedStudentId)
+            .HasPendingTeamInvitation.Should().BeTrue();
     }
 
     private async Task<(Guid StudentId, Guid ActiveClassId, Guid CompletedClassId)> SeedMajorUpdateEnrollmentsAsync(

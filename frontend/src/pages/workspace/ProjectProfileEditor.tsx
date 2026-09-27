@@ -144,12 +144,31 @@ export default function ProjectProfileEditor() {
         zaloGroupUrl: draft.zaloGroupUrl.trim(),
         keywords: workspace.project.keywords || [],
       };
+      const requestsProjectIdentityChange = payload.projectName !== workspace.project.projectName.trim()
+        || payload.description !== workspace.project.description.trim();
       const response = await workspaceApi.updateWorkspaceProfile(teamId, payload);
       const updated = unwrapApiData<ProjectWorkspaceProfile>(response);
-      if (!hasPersistedProjectProfile(payload, updated)) {
+      const expectedPersistedProfile = requestsProjectIdentityChange
+        ? { ...payload, projectName: updated.projectName, description: updated.description }
+        : payload;
+      if (!hasPersistedProjectProfile(expectedPersistedProfile, updated)) {
         throw new Error('The server response did not contain all saved project profile fields.');
       }
       setWorkspace((current) => current ? { ...current, project: updated } : current);
+      if (requestsProjectIdentityChange) {
+        const directionResponse = await teamApi.getProjectDirection(teamId);
+        const pendingDirection = unwrapApiData<ProjectDirectionSyncValue>(directionResponse);
+        if (pendingDirection.status !== 'Submitted'
+          || !pendingDirection.isProjectProfileChangeProposal
+          || pendingDirection.title?.trim() !== payload.projectName
+          || pendingDirection.summary?.trim() !== payload.description) {
+          throw new Error('The Project Profile change request was not created correctly.');
+        }
+        setDirection(pendingDirection);
+        toast.success('Project name and Description changes were submitted for lecturer approval. The approved profile remains unchanged until then.');
+        navigate(workspacePath);
+        return;
+      }
       setDraft(toDraft(updated));
       toast.success('Project profile updated successfully.');
     } catch (error) {
@@ -186,6 +205,7 @@ export default function ProjectProfileEditor() {
         </div>}
 
         <div className="grid gap-5 p-6">
+          {canEdit && <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"><p className="font-semibold">Project name and Description require lecturer approval.</p><p className="mt-1 text-xs leading-5 text-amber-800">Saving a change to either field creates a new change request. The currently approved values remain active while the request is Pending or needs revision.</p></div>}
           <ProfileField id="projectName" label="Project name" value={draft.projectName} error={errors.projectName} maxLength={200} readOnly={!canEdit} onChange={setField} />
           <ProfileField id="description" label="Description" value={draft.description} error={errors.description} maxLength={2000} multiline readOnly={!canEdit} onChange={setField} />
           <ProfileField id="problem" label="Problem" value={draft.problem} error={errors.problem} maxLength={2000} multiline readOnly={!canEdit} onChange={setField} />
@@ -194,7 +214,7 @@ export default function ProjectProfileEditor() {
           <ProfileField id="zaloGroupUrl" label="Zalo group link" value={draft.zaloGroupUrl} error={errors.zaloGroupUrl} maxLength={500} required={false} placeholder="https://zalo.me/g/..." type="url" readOnly={!canEdit} onChange={setField} />
         </div>
 
-        {canEdit && <footer className="flex items-center justify-between gap-3 border-t border-slate-100 bg-slate-50/70 px-6 py-4"><p className="text-xs text-slate-500">Changes are immediately visible to authorized workspace viewers.</p><button type="button" onClick={() => void save()} disabled={saving || !hasChanges} className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} {saving ? 'Saving…' : 'Save profile'}</button></footer>}
+        {canEdit && <footer className="flex items-center justify-between gap-3 border-t border-slate-100 bg-slate-50/70 px-6 py-4"><p className="text-xs text-slate-500">Name and Description require approval; other changes save immediately.</p><button type="button" onClick={() => void save()} disabled={saving || !hasChanges} className="inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-xl bg-primary px-5 py-2.5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} {saving ? 'Saving…' : 'Save profile'}</button></footer>}
       </section>
     </div>
   );

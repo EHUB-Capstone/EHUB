@@ -81,6 +81,14 @@ public sealed class SaveWorkspaceCheckpointEvaluationRequest
         Array.Empty<WorkspaceCheckpointCriterionScoreInput>();
     public string? OverallFeedback { get; init; }
     public string Status { get; init; } = "DRAFT";
+    public IReadOnlyCollection<WorkspaceCheckpointMemberScoreInput> MemberScoreOverrides { get; init; } =
+        Array.Empty<WorkspaceCheckpointMemberScoreInput>();
+}
+
+public sealed class WorkspaceCheckpointMemberScoreInput
+{
+    public Guid StudentId { get; init; }
+    public decimal Score { get; init; }
 }
 
 public sealed class WorkspaceCheckpointCriterionScoreInput
@@ -107,6 +115,15 @@ public sealed class WorkspaceCheckpointEvaluationConfigResponse
     public string? ShortDescription { get; init; }
     public IReadOnlyCollection<WorkspaceCheckpointEvaluationCriterionResponse> Rubrics { get; init; } =
         Array.Empty<WorkspaceCheckpointEvaluationCriterionResponse>();
+    public IReadOnlyCollection<WorkspaceCheckpointEvaluationMemberResponse> Members { get; init; } =
+        Array.Empty<WorkspaceCheckpointEvaluationMemberResponse>();
+}
+
+public sealed class WorkspaceCheckpointEvaluationMemberResponse
+{
+    public Guid StudentId { get; init; }
+    public string FullName { get; init; } = string.Empty;
+    public string RollNumber { get; init; } = string.Empty;
 }
 
 public sealed class WorkspaceCheckpointEvaluationCriterionResponse
@@ -131,6 +148,15 @@ public sealed class WorkspaceCheckpointEvaluationResponse
     public DateTime UpdatedAt { get; init; }
     public IReadOnlyCollection<WorkspaceCheckpointCriterionScoreResponse> RubricScores { get; init; } =
         Array.Empty<WorkspaceCheckpointCriterionScoreResponse>();
+    public IReadOnlyCollection<WorkspaceCheckpointEvaluationMemberScoreResponse> MemberScores { get; init; } =
+        Array.Empty<WorkspaceCheckpointEvaluationMemberScoreResponse>();
+}
+
+public sealed class WorkspaceCheckpointEvaluationMemberScoreResponse
+{
+    public Guid StudentId { get; init; }
+    public decimal Score { get; init; }
+    public bool IsOverridden { get; init; }
 }
 
 public sealed class WorkspaceCheckpointCriterionScoreResponse

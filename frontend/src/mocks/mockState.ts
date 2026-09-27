@@ -266,6 +266,9 @@ export interface MockProjectDirection {
   status: string;
   submittedAtUtc: string | null;
   reviewedAtUtc: string | null;
+  isProjectProfileChangeProposal?: boolean;
+  currentTitle?: string | null;
+  currentSummary?: string | null;
   rowVersion: string;
   reviews: MockDirectionReview[];
 }
@@ -419,7 +422,7 @@ const rosterStudent = (user: MockUser, index: number, teamId: string | null): Mo
   email: user.email,
   majorCode: user.major,
   profileMajorCode: user.major,
-  majorVerificationStatus: index % 3 === 0 ? 'Verified' : 'Unverified',
+  majorVerificationStatus: index % 3 === 0 ? 'Matched' : 'Unverified',
   memberCode: `MEM-${String(index).padStart(3, '0')}`,
   enrollmentStatus: 'Active',
   teamId,

@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using ClosedXML.Excel;
 using EHub.Application.Features.Classes.Common;
+using EHub.Application.Features.Classes.ExportAdminClassData;
 using EHub.Domain.Entities;
 using EHub.Domain.Enums;
 using EHub.Shared.Constants;
@@ -35,7 +36,7 @@ internal static class ClassRosterExportWorkbookBuilder
         var worksheet = workbook.Worksheets.Add(WorksheetName);
         var semesterCode = sections.FirstOrDefault()?.Class.Semester?.Code;
 
-        WriteHeader(worksheet, $"Group {ShortenSemesterCode(semesterCode)}");
+        WriteHeader(worksheet, SemesterGroupColumn.GetHeader(semesterCode));
 
         var rowIndex = 2;
         foreach (var section in sections)
@@ -92,7 +93,37 @@ internal static class ClassRosterExportWorkbookBuilder
                     Project = team?.Project
                 };
             })
-            .OrderBy(row => row.Team == null ? 1 : 0)
+            .ToList();
+
+        var semesterGroupByTeamId = rosterRows
+            .Where(row => row.Team != null)
+            .GroupBy(row => row.Team!.Id)
+            .ToDictionary(
+                group => group.Key,
+                group => group
+                    .Select(row => row.Enrollment.SemesterGroupName?.Trim())
+                    .Where(groupName => !string.IsNullOrWhiteSpace(groupName))
+                    .OrderBy(groupName => groupName, NaturalCodeComparer.Instance)
+                    .FirstOrDefault());
+
+        var hasSemesterGroupData = rosterRows.Any(row =>
+            !string.IsNullOrWhiteSpace(row.Enrollment.SemesterGroupName));
+
+        rosterRows = rosterRows
+            .OrderBy(row => hasSemesterGroupData
+                ? string.IsNullOrWhiteSpace(row.Team == null
+                    ? row.Enrollment.SemesterGroupName
+                    : semesterGroupByTeamId[row.Team.Id]) ? 1 : 0
+                : row.Team == null ? 1 : 0)
+            .ThenBy(
+                row => hasSemesterGroupData
+                    ? row.Team == null
+                        ? row.Enrollment.SemesterGroupName?.Trim()
+                        : semesterGroupByTeamId[row.Team.Id]
+                    : null,
+                NaturalCodeComparer.Instance)
+            .ThenBy(row => hasSemesterGroupData && row.Team == null ? 1 : 0)
+            .ThenBy(row => hasSemesterGroupData ? row.Team?.TeamName : null, NaturalCodeComparer.Instance)
             .ThenBy(row => row.Team?.Id)
             .ThenBy(row => row.Enrollment.Student.RollNumber)
             .ThenBy(row => row.Enrollment.Student.FullName)
@@ -122,7 +153,7 @@ internal static class ClassRosterExportWorkbookBuilder
                 enrollment.MajorCodeAtEnrollment, profileMajorCode) ?? string.Empty;
             worksheet.Cell(rowIndex, 4).Value = section.Class.Course?.Code ?? string.Empty;
             worksheet.Cell(rowIndex, 5).Value = section.Class.ClassCode;
-            worksheet.Cell(rowIndex, 6).Value = string.Empty;
+            worksheet.Cell(rowIndex, 6).Value = enrollment.SemesterGroupName ?? string.Empty;
             worksheet.Cell(rowIndex, 10).Value = string.Empty;
             worksheet.Cell(rowIndex, 11).Value = string.Empty;
 
@@ -259,20 +290,4 @@ internal static class ClassRosterExportWorkbookBuilder
         return Math.Max(1, lineCount);
     }
 
-    private static string ShortenSemesterCode(string? code)
-    {
-        if (string.IsNullOrWhiteSpace(code))
-        {
-            return string.Empty;
-        }
-
-        var letters = new string(code.Where(char.IsLetter).ToArray());
-        var digits = new string(code.Where(char.IsDigit).ToArray());
-        if (digits.Length >= 2)
-        {
-            digits = digits[^2..];
-        }
-
-        return letters + digits;
-    }
 }

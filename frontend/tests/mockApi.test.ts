@@ -104,6 +104,17 @@ test('mock official major synchronization updates class enrollment and profile w
   assert.ok((getMockState().rosters[cls.id] || []).every((student) =>
     student.enrollmentStatus !== 'Active' ||
     (student.majorCode === student.profileMajorCode && student.majorVerificationStatus === 'Matched')));
+
+  const linkedStudent = (getMockState().rosters[cls.id] || []).find((student) =>
+    student.enrollmentStatus === 'Active' && student.userId);
+  assert.ok(linkedStudent);
+  const studentUser = getMockState().users.find((user) => user.id === linkedStudent.userId);
+  assert.ok(studentUser);
+  await axiosClient.post('/auth/login', { email: studentUser.email, password: 'Mock123!' });
+  const studentDetail = await axiosClient.get(`/classes/my-class-detail/${cls.slug}`);
+  assert.ok(studentDetail.data.students.length > 0);
+  assert.ok(studentDetail.data.students.every((student: { majorVerificationStatus: string }) =>
+    student.majorVerificationStatus === 'Matched'));
 });
 
 test('managed users include class and group data from the active semester', async () => {
@@ -798,6 +809,19 @@ test('mock student self-service separates current classes from completed history
     cls.classStatus === 'Archived' && cls.enrollmentStatus === 'Completed'));
 });
 
+test('mock student class detail resolves the canonical slug before loading its roster', async () => {
+  resetMockState();
+  await axiosClient.post('/auth/login', { email: 'se200001@fpt.edu.vn', password: 'Mock123!' });
+  const targetClass = getMockState().classes.find((cls) => cls.slug === 'fa2026-exe101-1');
+  assert.ok(targetClass);
+
+  const detail = await axiosClient.get(`/classes/my-class-detail/${targetClass.slug}`);
+  assert.equal(detail.data.class.id, targetClass.id);
+  assert.ok(detail.data.students.length > 0);
+  assert.ok(detail.data.students.some((student: { email: string; canEditMajor: boolean }) =>
+    student.email === 'se200001@fpt.edu.vn' && student.canEditMajor));
+});
+
 test('mock team management supports proposal creation, update, duplicate prevention, project detail and delete', async () => {
   resetMockState();
   await axiosClient.post('/auth/login', { email: 'admin@ehub.local', password: 'Mock123!' });
@@ -937,6 +961,10 @@ test('mock student formation creates a team only after every invited member acce
   assert.equal(response.data.invitations.find((member: { isProposedLeader: boolean }) => member.isProposedLeader)?.studentId, memberIds[1]);
   assert.equal(state.teams.some((team) => team.teamName === 'Student Venture Team'), false);
 
+  const classDetail = await axiosClient.get(`/classes/my-class-detail/${targetClass.slug}`);
+  assert.ok(classDetail.data.students.every((student: { hasPendingTeamInvitation: boolean }) =>
+    student.hasPendingTeamInvitation));
+
   await assert.rejects(
     axiosClient.post(`/classes/${targetClass.id}/team-formations`, {
       memberStudentIds: memberIds,
@@ -1054,8 +1082,16 @@ test('mock team leader creates one project workspace linked to its academic cont
   assert.equal(revisedDirection.data.status, 'Draft');
   assert.deepEqual(revisedDirection.data.startupIndustries, [created.data.startupIndustries[0]]);
   assert.deepEqual(team.startupIndustries, [created.data.startupIndustries[0]]);
+  const resubmittedDirection = await axiosClient.post(`/teams/${team.id}/project-direction/submit`, {
+    rowVersion: revisedDirection.data.rowVersion,
+  });
+  const initialApproval = await axiosClient.post(`/teams/${team.id}/project-direction/review`, {
+    decision: 'Approved',
+    rowVersion: resubmittedDirection.data.rowVersion,
+  });
+  assert.equal(initialApproval.data.status, 'Approved');
 
-  await axiosClient.put(`/workspace/teams/${team.id}/profile`, {
+  const profileUpdate = await axiosClient.put(`/workspace/teams/${team.id}/profile`, {
     projectName: 'Energy Insight Platform',
     description: 'The latest project profile helps small offices reduce their energy usage.',
     problem: 'Small offices cannot clearly identify the equipment driving energy waste.',
@@ -1064,6 +1100,17 @@ test('mock team leader creates one project workspace linked to its academic cont
     zaloGroupUrl: 'https://zalo.me/g/greenbyte-team',
     keywords: ['energy', 'efficiency'],
   });
+  assert.equal(profileUpdate.data.projectName, 'Energy Insight Workspace');
+  const pendingProfileChange = await axiosClient.get(`/teams/${team.id}/project-direction`);
+  assert.equal(pendingProfileChange.data.status, 'Submitted');
+  assert.equal(pendingProfileChange.data.isProjectProfileChangeProposal, true);
+  assert.equal(pendingProfileChange.data.currentTitle, 'Energy Insight Workspace');
+  assert.equal(pendingProfileChange.data.title, 'Energy Insight Platform');
+  const profileChangeApproval = await axiosClient.post(`/teams/${team.id}/project-direction/review`, {
+    decision: 'Approved',
+    rowVersion: pendingProfileChange.data.rowVersion,
+  });
+  assert.equal(profileChangeApproval.data.status, 'Approved');
   const latest = await axiosClient.get(`/workspace/teams/${team.id}`);
   assert.equal(latest.data.project.projectName, 'Energy Insight Platform');
   assert.equal(latest.data.project.targetUsers, 'Small office owners and facility managers');
@@ -1071,7 +1118,7 @@ test('mock team leader creates one project workspace linked to its academic cont
   assert.equal(latest.data.class.subjectCode, cls?.subjectCode);
   assert.equal(latest.data.class.semesterCode, cls?.semesterCode);
   assert.ok(latest.data.members.length > 0);
-  assert.equal(latest.data.activities[0].action, 'PROJECT_PROFILE_UPDATED');
+  assert.equal(latest.data.activities[0].action, 'PROJECT_PROFILE_CHANGE_APPROVED');
   assert.ok(latest.data.activities[0].changedFields.includes('projectName'));
 
   await assert.rejects(

@@ -275,6 +275,8 @@ public sealed class ProjectWorkspaceHandler : IProjectWorkspaceHandler
                     return Failure<ProjectWorkspaceDto>(ErrorCodes.WorkspaceLeaderRequired, "Only the active team leader can update this project profile.");
                 if (team.Project == null)
                     return Failure<ProjectWorkspaceDto>(ErrorCodes.WorkspaceNotFound, "This team does not have a project workspace.");
+                if (team.ProjectDirection?.Status != ProjectDirectionStatus.Approved)
+                    return Failure<ProjectWorkspaceDto>(ErrorCodes.ProjectDirectionStateInvalid, "The project profile can only be updated after its project direction is approved.");
 
                 var validation = ValidateProfile(request);
                 if (validation != null) return Result.Failure<ProjectWorkspaceDto>(validation);
@@ -287,44 +289,87 @@ public sealed class ProjectWorkspaceHandler : IProjectWorkspaceHandler
                 var nextSolution = (request.Solution ?? string.Empty).Trim();
                 var nextTargetUsers = (request.TargetUsers ?? string.Empty).Trim();
                 var nextZaloGroupUrl = (request.ZaloGroupUrl ?? string.Empty).Trim();
-                var changedFields = new List<string>();
-                if (!string.Equals(project.Name, nextName, StringComparison.Ordinal)) changedFields.Add("projectName");
-                if (!string.Equals(project.Description ?? string.Empty, nextDescription, StringComparison.Ordinal)) changedFields.Add("description");
-                if (!string.Equals(project.Problem ?? string.Empty, nextProblem, StringComparison.Ordinal)) changedFields.Add("problem");
-                if (!string.Equals(project.Solution ?? string.Empty, nextSolution, StringComparison.Ordinal)) changedFields.Add("solution");
-                if (!string.Equals(project.TargetUsers ?? string.Empty, nextTargetUsers, StringComparison.Ordinal)) changedFields.Add("targetUsers");
-                if (!string.Equals(project.ZaloGroupUrl ?? string.Empty, nextZaloGroupUrl, StringComparison.Ordinal)) changedFields.Add("zaloGroupUrl");
-                if (!SameTags(project.ProjectTags, ProjectTagType.Keyword, keywords)) changedFields.Add("keywords");
-                if (changedFields.Count == 0) return Result.Success(MapProject(project, team));
-
-                project.Name = nextName;
-                project.Description = nextDescription;
-                project.Problem = nextProblem;
-                project.Solution = nextSolution;
-                project.TargetUsers = nextTargetUsers;
-                project.ZaloGroupUrl = nextZaloGroupUrl;
-                project.UpdatedBy = userId;
                 var now = DateTime.UtcNow;
-                SyncTags(project, ProjectTagType.Keyword, keywords, userId, now);
-                var activity = new ProjectActivityLog
+                var proposedFields = new List<string>();
+                if (!string.Equals(project.Name, nextName, StringComparison.Ordinal)) proposedFields.Add("projectName");
+                if (!string.Equals(project.Description ?? string.Empty, nextDescription, StringComparison.Ordinal)) proposedFields.Add("description");
+
+                var immediateFields = new List<string>();
+                if (!string.Equals(project.Problem ?? string.Empty, nextProblem, StringComparison.Ordinal)) immediateFields.Add("problem");
+                if (!string.Equals(project.Solution ?? string.Empty, nextSolution, StringComparison.Ordinal)) immediateFields.Add("solution");
+                if (!string.Equals(project.TargetUsers ?? string.Empty, nextTargetUsers, StringComparison.Ordinal)) immediateFields.Add("targetUsers");
+                if (!string.Equals(project.ZaloGroupUrl ?? string.Empty, nextZaloGroupUrl, StringComparison.Ordinal)) immediateFields.Add("zaloGroupUrl");
+                if (!SameTags(project.ProjectTags, ProjectTagType.Keyword, keywords)) immediateFields.Add("keywords");
+                if (proposedFields.Count == 0 && immediateFields.Count == 0)
+                    return Result.Success(MapProject(project, team));
+
+                if (immediateFields.Count > 0)
                 {
-                    ProjectId = project.Id,
-                    Project = project,
-                    ActorUserId = userId,
-                    Action = "PROJECT_PROFILE_UPDATED",
-                    Summary = $"Updated {string.Join(", ", changedFields.Select(ToDisplayField))}.",
-                    ChangedFieldsJson = JsonSerializer.Serialize(changedFields),
-                    OccurredAtUtc = now
-                };
-                _context.ProjectActivityLogs.Add(activity);
-                project.ActivityLogs.Add(activity);
-                ClassOutbox.Enqueue(_context, "ProjectWorkspace.ProfileUpdated.v1", team.ClassId, new
+                    project.Problem = nextProblem;
+                    project.Solution = nextSolution;
+                    project.TargetUsers = nextTargetUsers;
+                    project.ZaloGroupUrl = nextZaloGroupUrl;
+                    project.UpdatedBy = userId;
+                    project.UpdatedAt = now;
+                    SyncTags(project, ProjectTagType.Keyword, keywords, userId, now);
+                    var activity = new ProjectActivityLog
+                    {
+                        ProjectId = project.Id,
+                        Project = project,
+                        ActorUserId = userId,
+                        Action = "PROJECT_PROFILE_UPDATED",
+                        Summary = $"Updated {string.Join(", ", immediateFields.Select(ToDisplayField))}.",
+                        ChangedFieldsJson = JsonSerializer.Serialize(immediateFields),
+                        OccurredAtUtc = now
+                    };
+                    _context.ProjectActivityLogs.Add(activity);
+                    project.ActivityLogs.Add(activity);
+                    ClassOutbox.Enqueue(_context, "ProjectWorkspace.ProfileUpdated.v1", team.ClassId, new
+                    {
+                        ProjectId = project.Id,
+                        TeamId = team.Id,
+                        ChangedFields = immediateFields,
+                        UpdatedByUserId = userId
+                    }, now);
+                }
+
+                if (proposedFields.Count > 0)
                 {
-                    ProjectId = project.Id,
-                    TeamId = team.Id,
-                    ChangedFields = changedFields,
-                    UpdatedByUserId = userId
-                }, now);
+                    var direction = team.ProjectDirection;
+                    direction.Title = nextName;
+                    direction.Summary = nextDescription;
+                    direction.Status = ProjectDirectionStatus.Submitted;
+                    direction.SubmittedAtUtc = now;
+                    direction.ReviewedAtUtc = null;
+                    direction.ReviewedByUserId = null;
+                    direction.UpdatedBy = userId;
+                    direction.UpdatedAt = now;
+
+                    var proposalActivity = new ProjectActivityLog
+                    {
+                        ProjectId = project.Id,
+                        Project = project,
+                        ActorUserId = userId,
+                        Action = "PROJECT_PROFILE_CHANGE_PROPOSED",
+                        Summary = $"Submitted proposed changes to {string.Join(" and ", proposedFields.Select(ToDisplayField))} for lecturer review.",
+                        ChangedFieldsJson = JsonSerializer.Serialize(proposedFields),
+                        OccurredAtUtc = now
+                    };
+                    _context.ProjectActivityLogs.Add(proposalActivity);
+                    project.ActivityLogs.Add(proposalActivity);
+                    ClassOutbox.Enqueue(_context, "ProjectDirection.Submitted.v1", team.ClassId, new
+                    {
+                        TeamId = team.Id,
+                        ProjectDirectionId = direction.Id,
+                        LecturerUserId = team.Class.PrimaryLecturerId,
+                        IsProjectProfileChangeProposal = true,
+                        CurrentTitle = project.Name,
+                        ProposedTitle = nextName,
+                        CurrentSummary = project.Description ?? string.Empty,
+                        ProposedSummary = nextDescription
+                    }, now);
+                }
+
                 await _context.SaveChangesAsync(transactionCancellationToken);
                 return Result.Success(MapProject(project, team));
             }, cancellationToken);

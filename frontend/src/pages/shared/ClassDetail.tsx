@@ -25,6 +25,7 @@ import EditScheduleModal from '../../components/class/EditScheduleModal';
 import AssignLectureModal from '../../components/class/AssignLectureModal';
 import AssignMentorsModal from '../../components/class/AssignMentorsModal';
 import VerifyMajorModal from '../../components/class/VerifyMajorModal';
+import ImportSemesterGroupsModal from '../../components/class/ImportSemesterGroupsModal';
 import AddStudentModal from '../../components/class/AddStudentModal';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import { getTeamMemberIds, mergeTeamsWithLinkedProposals, normalizeManagedTeam, normalizeTeamProposal, resolveEffectiveTeamMajor } from '../../utils/teamManagement';
@@ -97,6 +98,7 @@ export default function ClassDetail() {
   const [showAssignLecturer, setShowAssignLecturer] = useState(false);
   const [showAssignMentors, setShowAssignMentors] = useState(false);
   const [showVerify, setShowVerify] = useState(false);
+  const [showSemesterGroupImport, setShowSemesterGroupImport] = useState(false);
   const [reviewTeam, setReviewTeam] = useState(null);
   const [teamToDelete, setTeamToDelete] = useState(null);
   const [directionTeam, setDirectionTeam] = useState(null);
@@ -211,6 +213,7 @@ export default function ClassDetail() {
           profileMajorCode: registeredMajor || null,
           hasMajorMismatch,
           majorVerificationStatus: s.majorVerificationStatus || 'Unverified',
+          semesterGroupName: s.semesterGroupName || null,
           enrollmentStatus: s.enrollmentStatus || 'Active',
           classId: currentClassId,
           teamId: s.teamId || null,
@@ -725,6 +728,19 @@ export default function ClassDetail() {
 
             {!isReadOnly && (
               <ClassActionButton
+                icon={Upload}
+                tone="secondary"
+                onClick={() => {
+                  setShowActionsMenu(false);
+                  setShowSemesterGroupImport(true);
+                }}
+              >
+                Import semester groups
+              </ClassActionButton>
+            )}
+
+            {!isReadOnly && (
+              <ClassActionButton
                 icon={cls.isMajorLocked ? Lock : Unlock}
                 tone={cls.isMajorLocked ? 'danger' : 'success'}
                 loading={togglingLock}
@@ -1084,6 +1100,14 @@ export default function ClassDetail() {
           classId={loadedClassId}
           onClose={() => setShowVerify(false)}
           onUpdated={() => void fetchData()}
+        />
+      )}
+
+      {!isReadOnly && showSemesterGroupImport && canManageClass && (
+        <ImportSemesterGroupsModal
+          classId={loadedClassId}
+          onClose={() => setShowSemesterGroupImport(false)}
+          onImported={() => void fetchData()}
         />
       )}
 

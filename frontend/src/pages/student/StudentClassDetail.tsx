@@ -8,11 +8,12 @@ import TeamList from '../../components/class/TeamList';
 import StudentTable from '../../components/class/StudentTable';
 import StudentTeamGeneratePanel from '../../components/class/StudentTeamGeneratePanel';
 import TeamFormationCard from '../../components/class/TeamFormationCard';
+import StudentMajorActionCard, { type StudentMajorNextAction } from '../../components/class/StudentMajorActionCard';
 import type { TeamFormation } from '../../types/teamFormation';
 import TeamSuggestionTooltip from '../../components/class/TeamSuggestionTooltip';
 import { useAuth } from '../../hooks/useAuth';
 import { unwrapApiData } from '../../utils/classMappers';
-import { entityId, normalizeManagedTeam, normalizeTeamProposal, getTeamMemberIds, mergeTeamsWithLinkedProposals } from '../../utils/teamManagement';
+import { entityId, normalizeManagedTeam, normalizeTeamProposal, getTeamMemberIds, isMissingTeamMajor, isVerifiedEnrollmentMajor, mergeTeamsWithLinkedProposals } from '../../utils/teamManagement';
 import ProjectDirectionModal from '../../components/class/ProjectDirectionModal';
 import { teamApi } from '../../api/teamApi';
 import { parseApiError } from '../../utils/apiError';
@@ -142,6 +143,8 @@ export default function StudentClassDetail() {
       || (user?.email && s.email?.toLowerCase() === user.email.toLowerCase());
   });
   const hasTeam = Boolean(currentStudent?.teamId);
+  const majorActionRequired = Boolean(currentStudent && isMissingTeamMajor(currentStudent.major));
+  const majorVerified = isVerifiedEnrollmentMajor(currentStudent?.majorVerificationStatus);
   const hasPendingFormation = formations.some(formation => formation.status === 'Pending');
   const reservedProposal = proposals.find((proposal) => {
     const status = String(proposal.status || '').toUpperCase();
@@ -157,6 +160,7 @@ export default function StudentClassDetail() {
   const reservedProposalTeamId = entityId(reservedProposal?.approvedTeamId);
   const isPendingProjectProposal = reservedProposalStatus === 'PENDING' && Boolean(reservedProposalTeamId);
   const selectionDisabled = isReadOnly
+    || majorActionRequired
     || (hasTeam && !canEditReservedProposal)
     || hasPendingFormation
     || Boolean(reservedProposal && !canEditReservedProposal);
@@ -169,6 +173,12 @@ export default function StudentClassDetail() {
   };
 
   const startTeamProposal = () => {
+    if (majorActionRequired) {
+      toast.error('Select your major before creating a team.');
+      document.getElementById('major-action-card')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      document.getElementById('select-major-action')?.focus();
+      return;
+    }
     if (!currentStudent?._id) {
       toast.error('Your student profile could not be found in this class.');
       return;
@@ -179,7 +189,7 @@ export default function StudentClassDetail() {
   };
 
   const handleOwnMajorChange = async (_student, majorCode) => {
-    if (updatingMajor || !majorCode) return;
+    if (updatingMajor || !majorCode) return false;
     setUpdatingMajor(true);
     try {
       const result = await updateOwnMajor(majorCode);
@@ -190,8 +200,10 @@ export default function StudentClassDetail() {
           : 'Major updated successfully.',
       );
       await fetchClassDetail();
+      return true;
     } catch (error) {
       toast.error(parseApiError(error, 'Failed to update your major.').message);
+      return false;
     } finally {
       setUpdatingMajor(false);
     }
@@ -228,6 +240,65 @@ export default function StudentClassDetail() {
       setCancellingProposal(false);
     }
   };
+
+  const scrollToTeamSection = (targetId: string) => {
+    window.requestAnimationFrame(() => {
+      document.getElementById(targetId)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+  };
+
+  const openReservedProposal = () => {
+    const needsRevision = ['NEEDS_REVISION', 'NEEDSREVISION'].includes(reservedProposalStatus);
+    if (needsRevision && reservedProposal) {
+      setProposalToRevise(reservedProposal);
+      setSelected(getTeamMemberIds(reservedProposal));
+      setActiveTab('classmates');
+    } else {
+      setActiveTab('teams');
+    }
+    scrollToTeamSection('class-team-tabs');
+  };
+
+  const workspaceTeamId = entityId(currentStudent?.teamId) || reservedProposalTeamId;
+  const majorNextAction: StudentMajorNextAction | undefined = (() => {
+    if (!majorVerified) return undefined;
+    if (workspaceTeamId) {
+      return {
+        label: 'Open Startup Workspace',
+        kind: 'workspace',
+        onClick: () => navigate(`/student/workspace/${workspaceTeamId}`),
+      };
+    }
+    if (isReadOnly) return undefined;
+    if (formationError) {
+      return {
+        label: 'Retry Team Status',
+        kind: 'retry',
+        onClick: () => { void fetchClassDetail(); },
+      };
+    }
+    if (hasPendingFormation) {
+      return {
+        label: 'Review Team Invitation',
+        kind: 'review',
+        onClick: () => scrollToTeamSection('pending-team-formation'),
+      };
+    }
+    if (reservedProposal) {
+      return {
+        label: ['NEEDS_REVISION', 'NEEDSREVISION'].includes(reservedProposalStatus)
+          ? 'Continue Team Setup'
+          : 'View Team Proposal',
+        kind: 'review',
+        onClick: openReservedProposal,
+      };
+    }
+    return {
+      label: 'Create a Team',
+      kind: 'team',
+      onClick: startTeamProposal,
+    };
+  })();
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
@@ -356,6 +427,19 @@ export default function StudentClassDetail() {
         </div>
       </Modal>
 
+      {currentStudent && (
+        <StudentMajorActionCard
+          currentMajor={currentStudent.major}
+          verificationStatus={currentStudent.majorVerificationStatus}
+          canEdit={Boolean(currentStudent.canEditMajor) && !isReadOnly}
+          isLocked={Boolean(currentStudent.isMajorLocked)}
+          updating={updatingMajor}
+          lecturerName={lecturer?.name}
+          nextAction={majorNextAction}
+          onSave={majorCode => handleOwnMajorChange(currentStudent, majorCode)}
+        />
+      )}
+
       {isReadOnly && (
         <div className="flex items-start gap-2.5 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
           <Lock className="mt-0.5 h-4 w-4 shrink-0" />
@@ -370,20 +454,28 @@ export default function StudentClassDetail() {
         </div>
       )}
 
-      {!isReadOnly && !hasTeam && !reservedProposal && !hasPendingFormation && selected.length === 0 && (
+      {!isReadOnly && !majorVerified && !hasTeam && !reservedProposal && !hasPendingFormation && selected.length === 0 && (
         <div className="flex flex-col gap-3 rounded-xl border border-primary-100 bg-primary-50/60 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-sm font-semibold text-slate-800">You do not have a team in this class yet</p>
+            <p className="text-sm font-semibold text-slate-800">
+              {majorActionRequired ? 'Team actions are locked until you select your major' : 'You do not have a team in this class yet'}
+            </p>
             <p className="mt-0.5 text-xs text-slate-600">
-              Choose 4–6 classmates and a leader. Your team is created only after everyone accepts the invitation.
+              {majorActionRequired
+                ? 'Complete the required step above to create a team or accept a team invitation.'
+                : 'Choose 4–6 classmates and a leader. Your team is created only after everyone accepts the invitation.'}
             </p>
           </div>
           <button
             type="button"
             onClick={startTeamProposal}
-            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-primary px-3.5 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-primary-600"
+            disabled={majorActionRequired}
+            className={`inline-flex shrink-0 items-center justify-center gap-2 rounded-lg px-3.5 py-2 text-xs font-bold shadow-sm transition ${majorActionRequired
+              ? 'cursor-not-allowed border border-slate-200 bg-white text-slate-500 shadow-none'
+              : 'bg-primary text-white hover:bg-primary-600'}`}
           >
-            <UserPlus className="h-4 w-4" /> Create team
+            {majorActionRequired ? <Lock className="h-4 w-4" /> : <UserPlus className="h-4 w-4" />}
+            {majorActionRequired ? 'Select major first' : 'Create team'}
           </button>
         </div>
       )}
@@ -391,8 +483,14 @@ export default function StudentClassDetail() {
       {formationError && <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
         Could not load team invitations. <button type="button" onClick={() => void fetchClassDetail()} className="font-semibold underline">Retry</button>
       </div>}
-      {formations.filter(formation => formation.status === 'Pending').map(formation => (
-        <TeamFormationCard key={formation.id} formation={formation} onChanged={fetchClassDetail} />
+      {formations.filter(formation => formation.status === 'Pending').map((formation, index) => (
+        <div key={formation.id} id={index === 0 ? 'pending-team-formation' : undefined}>
+          <TeamFormationCard
+            formation={formation}
+            onChanged={fetchClassDetail}
+            acceptDisabledReason={majorActionRequired ? 'Select your major before accepting this team invitation.' : undefined}
+          />
+        </div>
       ))}
 
       {!isReadOnly && reservedProposal && !canEditReservedProposal && (
@@ -407,7 +505,7 @@ export default function StudentClassDetail() {
                   : 'You cannot join another proposal while this one is open. View it in the Class Teams tab.'}
             </p>
           </div>
-          {isPendingProjectProposal && (
+          {isPendingProjectProposal && !majorVerified && (
             <button
               type="button"
               onClick={() => navigate(`/student/workspace/${reservedProposalTeamId}`)}
@@ -433,7 +531,7 @@ export default function StudentClassDetail() {
       )}
 
       {/* Tabs */}
-      <div className="flex border-b border-slate-200">
+      <div id="class-team-tabs" className="flex border-b border-slate-200">
         <button
           onClick={() => setActiveTab('classmates')}
           className={`px-5 py-3 text-sm font-semibold border-b-2 transition-all flex items-center gap-2 ${
@@ -467,9 +565,6 @@ export default function StudentClassDetail() {
           onRefresh={fetchClassDetail}
           maxSelection={6}
           selectionDisabled={selectionDisabled}
-          editableStudentId={currentStudent?._id}
-          onMajorChange={handleOwnMajorChange}
-          updatingMajor={updatingMajor}
           toolbarAction={!selectionDisabled && selected.length === 0 ? (
             <div className="flex items-center gap-2">
               <button

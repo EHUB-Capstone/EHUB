@@ -218,6 +218,7 @@ public sealed class ClassStudentDto
     public string? ProfileMajorCode { get; init; }
     public string MajorVerificationStatus { get; init; } = "Unverified";
     public string? MemberCode { get; init; }
+    public string? SemesterGroupName { get; init; }
     public string EnrollmentStatus { get; init; } = string.Empty;
     public Guid? TeamId { get; init; }
     public string? TeamName { get; init; }
@@ -396,6 +397,30 @@ public sealed class VerifyClassMajorsResponse
     public IReadOnlyCollection<MajorVerificationRowDto> NotFound { get; init; } = Array.Empty<MajorVerificationRowDto>();
     public int SynchronizedEnrollmentCount { get; init; }
     public int SynchronizedProfileCount { get; init; }
+}
+
+public sealed class SemesterGroupImportRowDto
+{
+    public int RowNumber { get; init; }
+    public Guid? StudentId { get; init; }
+    public string RollNumber { get; init; } = string.Empty;
+    public string FullName { get; init; } = string.Empty;
+    public string? CurrentGroupName { get; init; }
+    public string? ImportedGroupName { get; init; }
+    public string Status { get; init; } = string.Empty;
+    public bool IsValid { get; init; }
+    public string? Message { get; init; }
+}
+
+public sealed class SemesterGroupImportResponse
+{
+    public string ExpectedColumnName { get; init; } = string.Empty;
+    public int TotalRows { get; init; }
+    public int ChangedRowsCount { get; init; }
+    public int UnchangedRowsCount { get; init; }
+    public int ErrorRowsCount { get; init; }
+    public int UpdatedCount { get; init; }
+    public IReadOnlyCollection<SemesterGroupImportRowDto> Rows { get; init; } = Array.Empty<SemesterGroupImportRowDto>();
 }
 
 public sealed class SynchronizeProfileMajorsResponse

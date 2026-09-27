@@ -47,11 +47,12 @@ public sealed class CheckpointEvaluationHandler(
             .OrderByDescending(entry => entry.ChangedAt)
             .ToArray();
         var submitted = visibleEvaluations.Where(evaluation => evaluation.Status is EvaluationStatus.Submitted or EvaluationStatus.Published).ToArray();
+        var canGrade = CanGrade(role, item.Team, userId);
 
         return Result.Success(new WorkspaceCheckpointEvaluationSummaryResponse
         {
-            Checkpoint = ToCheckpointResponse(item.Checkpoint, item.Rubric),
-            Evaluations = visibleEvaluations.Select(ToEvaluationResponse).ToArray(),
+            Checkpoint = ToCheckpointResponse(item.Checkpoint, item.Rubric, canGrade ? item.Team : null),
+            Evaluations = visibleEvaluations.Select(evaluation => ToEvaluationResponse(evaluation, canGrade ? item.Team : null)).ToArray(),
             History = history.Select(ToHistoryResponse).ToArray(),
             Summary = new WorkspaceCheckpointEvaluationAggregateResponse
             {
@@ -87,7 +88,7 @@ public sealed class CheckpointEvaluationHandler(
             return updated;
         }
 
-        var validation = ValidateRequest(request, item.Rubric.Criteria);
+        var validation = ValidateRequest(request, item.Rubric.Criteria, item.Team);
         if (validation.IsFailure) return Result.Failure<WorkspaceCheckpointEvaluationResponse>(validation.Error);
 
         var now = DateTime.UtcNow;
@@ -107,14 +108,15 @@ public sealed class CheckpointEvaluationHandler(
             PublishedAt = validation.Value.Status == EvaluationStatus.Submitted ? now : null
         };
         AddOrUpdateDetails(evaluation, item.Rubric.Criteria, validation.Value.Scores, userId, now);
+        AddOrUpdateMemberScores(evaluation, validation.Value.MemberScoreOverrides, userId, now);
         AddHistory(evaluation, validation.Value.Status == EvaluationStatus.Submitted
             ? EvaluationHistoryAction.Submitted
-            : EvaluationHistoryAction.Created, userId, now);
+            : EvaluationHistoryAction.Created, validation.Value.MemberScoreOverrides, userId, now);
         context.Evaluations.Add(evaluation);
         await context.SaveChangesAsync(cancellationToken);
         var saved = await EvaluationQuery().SingleAsync(item => item.Id == evaluation.Id, cancellationToken);
         await PublishUpdatedAsync(item.Team, checkpointNumber, cancellationToken);
-        return Result.Success(ToEvaluationResponse(saved));
+        return Result.Success(ToEvaluationResponse(saved, item.Team));
     }
 
     public async Task<Result<WorkspaceCheckpointEvaluationResponse>> UpdateAsync(
@@ -145,7 +147,7 @@ public sealed class CheckpointEvaluationHandler(
     {
         if (!CanGrade(SystemRoles.Lecturer, evaluationContext.Team, userId))
             return Denied<WorkspaceCheckpointEvaluationResponse>("Only the assigned lecturer can grade this checkpoint.");
-        var validation = ValidateRequest(request, evaluationContext.Rubric.Criteria);
+        var validation = ValidateRequest(request, evaluationContext.Rubric.Criteria, evaluationContext.Team);
         if (validation.IsFailure) return Result.Failure<WorkspaceCheckpointEvaluationResponse>(validation.Error);
 
         var now = DateTime.UtcNow;
@@ -165,9 +167,11 @@ public sealed class CheckpointEvaluationHandler(
             evaluation.PublishedAt = now;
         }
         AddOrUpdateDetails(evaluation, evaluationContext.Rubric.Criteria, validation.Value.Scores, userId, now);
-        AddHistory(evaluation, becameSubmitted ? EvaluationHistoryAction.Submitted : EvaluationHistoryAction.Updated, userId, now);
+        AddOrUpdateMemberScores(evaluation, validation.Value.MemberScoreOverrides, userId, now);
+        AddHistory(evaluation, becameSubmitted ? EvaluationHistoryAction.Submitted : EvaluationHistoryAction.Updated,
+            validation.Value.MemberScoreOverrides, userId, now);
         await context.SaveChangesAsync(cancellationToken);
-        return Result.Success(ToEvaluationResponse(evaluation));
+        return Result.Success(ToEvaluationResponse(evaluation, evaluationContext.Team));
     }
 
     private async Task<Result<EvaluationContext>> LoadContextAsync(
@@ -198,7 +202,7 @@ public sealed class CheckpointEvaluationHandler(
     }
 
     private static Result<ValidatedSave> ValidateRequest(
-        SaveWorkspaceCheckpointEvaluationRequest? request, ICollection<RubricCriterion> criteria)
+        SaveWorkspaceCheckpointEvaluationRequest? request, ICollection<RubricCriterion> criteria, Team team)
     {
         var overallFeedback = request?.OverallFeedback?.Trim();
         if (overallFeedback?.Length > MaximumOverallFeedbackLength)
@@ -222,7 +226,19 @@ public sealed class CheckpointEvaluationHandler(
         var normalized = inputs.Where(item => item.Score.HasValue).Select(item => new ValidatedScore(
             item.CriterionKey.Trim(), item.Score!.Value, item.Comment?.Trim())).ToArray();
         var total = normalized.Sum(item => item.Score * criteriaByKey[item.CriterionKey].Weight / 100m);
-        return Result.Success(new ValidatedSave(status, overallFeedback, Math.Round(total, 2), normalized));
+        var memberInputs = request?.MemberScoreOverrides ?? Array.Empty<WorkspaceCheckpointMemberScoreInput>();
+        if (memberInputs.GroupBy(item => item.StudentId).Any(group => group.Count() > 1))
+            return Result.Failure<ValidatedSave>(ErrorCodes.WorkspaceValidationError, "A team member can only have one individual score override.");
+        if (memberInputs.Any(item => item.Score is < 0 or > 10))
+            return Result.Failure<ValidatedSave>(ErrorCodes.WorkspaceValidationError, "Each individual member score must be between 0 and 10.");
+        var activeStudentIds = team.TeamMembers
+            .Where(item => item.CountsTowardActiveTeam && item.ClassStudent.EnrollmentStatus == EnrollmentStatus.Active)
+            .Select(item => item.StudentId)
+            .ToHashSet();
+        if (memberInputs.Any(item => !activeStudentIds.Contains(item.StudentId)))
+            return Result.Failure<ValidatedSave>(ErrorCodes.WorkspaceValidationError, "One or more individual scores belong to a student outside this team.");
+        var memberScores = memberInputs.Select(item => new ValidatedMemberScore(item.StudentId, Math.Round(item.Score, 2))).ToArray();
+        return Result.Success(new ValidatedSave(status, overallFeedback, Math.Round(total, 2), normalized, memberScores));
     }
 
     private void AddOrUpdateDetails(Evaluation evaluation, ICollection<RubricCriterion> criteria,
@@ -262,14 +278,58 @@ public sealed class CheckpointEvaluationHandler(
         }
     }
 
-    private void AddHistory(Evaluation evaluation, EvaluationHistoryAction action, Guid userId, DateTime now)
+    private void AddOrUpdateMemberScores(Evaluation evaluation,
+        IReadOnlyCollection<ValidatedMemberScore> scores, Guid userId, DateTime now)
+    {
+        var requestedByStudent = scores.ToDictionary(item => item.StudentId);
+        foreach (var removed in evaluation.MemberScores
+                     .Where(item => !requestedByStudent.ContainsKey(item.StudentId))
+                     .ToArray())
+        {
+            evaluation.MemberScores.Remove(removed);
+            context.EvaluationMemberScores.Remove(removed);
+        }
+
+        var existingByStudent = evaluation.MemberScores.ToDictionary(item => item.StudentId);
+        foreach (var score in scores)
+        {
+            if (existingByStudent.TryGetValue(score.StudentId, out var existing))
+            {
+                existing.Score = score.Score;
+                existing.UpdatedAt = now;
+                existing.UpdatedBy = userId;
+            }
+            else
+            {
+                var memberScore = new EvaluationMemberScore
+                {
+                    StudentId = score.StudentId,
+                    Score = score.Score,
+                    CreatedAt = now,
+                    CreatedBy = userId
+                };
+                evaluation.MemberScores.Add(memberScore);
+                // IDs are assigned before EF tracks the entity, so explicitly mark new overrides as Added.
+                context.EvaluationMemberScores.Add(memberScore);
+            }
+        }
+    }
+
+    private void AddHistory(Evaluation evaluation, EvaluationHistoryAction action,
+        IReadOnlyCollection<ValidatedMemberScore> memberScoreOverrides, Guid userId, DateTime now)
     {
         var nextVersion = evaluation.Histories.Count == 0 ? 1 : evaluation.Histories.Max(item => item.Version) + 1;
         var history = new EvaluationHistory
         {
             Version = nextVersion,
             Action = action,
-            SnapshotJson = JsonSerializer.Serialize(new { evaluation.Status, evaluation.TotalScore, evaluation.OverallFeedback }),
+            SnapshotJson = JsonSerializer.Serialize(new
+            {
+                evaluation.Status,
+                evaluation.TotalScore,
+                evaluation.OverallFeedback,
+                MemberScoreOverrides = memberScoreOverrides.OrderBy(item => item.StudentId)
+            }),
             ChangedById = userId,
             ChangedAt = now,
             CreatedAt = now
@@ -314,10 +374,12 @@ public sealed class CheckpointEvaluationHandler(
             .Include(item => item.Rubric).ThenInclude(item => item.Checkpoint)
             .Include(item => item.Evaluator)
             .Include(item => item.Details).ThenInclude(item => item.RubricCriterion)
+            .Include(item => item.MemberScores)
             .Include(item => item.Histories).ThenInclude(item => item.ChangedBy);
     }
 
-    private static WorkspaceCheckpointEvaluationConfigResponse ToCheckpointResponse(Checkpoint checkpoint, Rubric rubric) => new()
+    private static WorkspaceCheckpointEvaluationConfigResponse ToCheckpointResponse(
+        Checkpoint checkpoint, Rubric rubric, Team? team) => new()
     {
         Number = checkpoint.CheckpointNumber,
         Title = checkpoint.Name,
@@ -330,10 +392,18 @@ public sealed class CheckpointEvaluationHandler(
             Weight = item.Weight,
             MaxScore = item.MaxScore,
             Levels = DeserializeLevels(item.LevelsJson)
-        }).ToArray()
+        }).ToArray(),
+        Members = team is null
+            ? Array.Empty<WorkspaceCheckpointEvaluationMemberResponse>()
+            : ActiveMembers(team).Select(item => new WorkspaceCheckpointEvaluationMemberResponse
+            {
+                StudentId = item.StudentId,
+                FullName = item.ClassStudent.Student.FullName,
+                RollNumber = item.ClassStudent.Student.RollNumber ?? string.Empty
+            }).ToArray()
     };
 
-    private static WorkspaceCheckpointEvaluationResponse ToEvaluationResponse(Evaluation evaluation) => new()
+    private static WorkspaceCheckpointEvaluationResponse ToEvaluationResponse(Evaluation evaluation, Team? team) => new()
     {
         Id = evaluation.Id,
         LecturerId = ToUserResponse(evaluation.Evaluator),
@@ -348,8 +418,25 @@ public sealed class CheckpointEvaluationHandler(
             CriterionName = item.RubricCriterion.Name,
             Score = item.Score,
             Comment = item.Comment
-        }).ToArray()
+        }).ToArray(),
+        MemberScores = team is null
+            ? Array.Empty<WorkspaceCheckpointEvaluationMemberScoreResponse>()
+            : ActiveMembers(team).Select(member =>
+            {
+                var scoreOverride = evaluation.MemberScores.FirstOrDefault(item => item.StudentId == member.StudentId);
+                return new WorkspaceCheckpointEvaluationMemberScoreResponse
+                {
+                    StudentId = member.StudentId,
+                    Score = scoreOverride?.Score ?? evaluation.TotalScore,
+                    IsOverridden = scoreOverride is not null
+                };
+            }).ToArray()
     };
+
+    private static IEnumerable<TeamMember> ActiveMembers(Team team) => team.TeamMembers
+        .Where(item => item.CountsTowardActiveTeam && item.ClassStudent.EnrollmentStatus == EnrollmentStatus.Active)
+        .OrderBy(item => item.ClassStudent.Student.FullName)
+        .ThenBy(item => item.StudentId);
 
     private static WorkspaceCheckpointEvaluationHistoryResponse ToHistoryResponse(EvaluationHistory history) => new()
     {
@@ -388,5 +475,7 @@ public sealed class CheckpointEvaluationHandler(
 
     private sealed record EvaluationContext(Team Team, Project Project, Checkpoint Checkpoint, Rubric Rubric);
     private sealed record ValidatedScore(string CriterionKey, decimal Score, string? Comment);
-    private sealed record ValidatedSave(EvaluationStatus Status, string? OverallFeedback, decimal TotalScore, IReadOnlyCollection<ValidatedScore> Scores);
+    private sealed record ValidatedMemberScore(Guid StudentId, decimal Score);
+    private sealed record ValidatedSave(EvaluationStatus Status, string? OverallFeedback, decimal TotalScore,
+        IReadOnlyCollection<ValidatedScore> Scores, IReadOnlyCollection<ValidatedMemberScore> MemberScoreOverrides);
 }

@@ -208,21 +208,31 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
                     cancellationToken);
                 break;
             case "ProjectDirection.Submitted.v1":
+                var isProfileChangeSubmission = ReadBoolean(data, "isProjectProfileChangeProposal");
                 await AddForOptionalUserAsync(message, data, "lecturerUserId", NotificationType.ProjectDirectionSubmitted,
-                    "Project direction awaiting review", "A team submitted its project direction for your review.", cancellationToken);
+                    isProfileChangeSubmission ? "Project Profile change awaiting review" : "Project direction awaiting review",
+                    isProfileChangeSubmission
+                        ? "A team submitted changes to its Project name or Description for your review."
+                        : "A team submitted its project direction for your review.", cancellationToken);
                 var lecturerUserId = ReadGuid(data, "lecturerUserId");
                 if (lecturerUserId.HasValue) realtimeNotificationRecipients = [lecturerUserId.Value];
                 realtimeNotificationTeamId = ReadGuid(data, "teamId");
                 break;
             case "ProjectDirection.Reviewed.v1":
                 var directionDecision = ReadString(data, "decision");
+                var isProfileChangeReview = ReadBoolean(data, "isProjectProfileChangeProposal");
                 realtimeNotificationRecipients = ReadGuids(data, "studentUserIds");
                 realtimeNotificationTeamId = ReadGuid(data, "teamId");
                 foreach (var userId in realtimeNotificationRecipients)
                 {
                     await AddAsync(message, userId,
                         directionDecision == "Approved" ? NotificationType.ProjectDirectionApproved : NotificationType.ProjectDirectionNeedsRevision,
-                        "Project direction reviewed", $"Your project direction was reviewed: {directionDecision}.", cancellationToken);
+                        isProfileChangeReview ? "Project Profile change reviewed" : "Project direction reviewed",
+                        isProfileChangeReview
+                            ? directionDecision == "Approved"
+                                ? "Your proposed Project Profile changes were approved and are now applied."
+                                : "Your proposed Project Profile changes need revision. The approved profile remains unchanged."
+                            : $"Your project direction was reviewed: {directionDecision}.", cancellationToken);
                 }
                 break;
             case "Team.MentorAssignmentChanged.v1" when ReadString(data, "action") is "Assigned" or "Reassigned":
@@ -703,6 +713,13 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
             return $"/lecturer/classes?{string.Join('&', query)}";
         }
 
+        if (message.Type == "ProjectDirection.Reviewed.v1"
+            && ReadPayloadBoolean(message.PayloadJson, "isProjectProfileChangeProposal"))
+        {
+            var teamId = ReadPayloadGuid(message.PayloadJson, "teamId");
+            return teamId.HasValue ? $"/student/workspace/{teamId.Value}" : "/student/workspace";
+        }
+
         return message.Type switch
         {
             "AccountApproval.Requested.v1" => "/admin/account-approvals",
@@ -724,6 +741,13 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
             && property.TryGetGuid(out var value)
                 ? value
                 : null;
+    }
+
+    private static bool ReadPayloadBoolean(string payloadJson, string propertyName)
+    {
+        using var document = JsonDocument.Parse(payloadJson);
+        return document.RootElement.TryGetProperty("data", out var data)
+            && ReadBoolean(data, propertyName);
     }
 
     private static string ReadString(JsonElement data, string propertyName) =>

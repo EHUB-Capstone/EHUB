@@ -21,6 +21,7 @@ import {
 } from '../src/utils/notificationNavigation.ts';
 import {
   canSubmitProjectDirection,
+  getApprovedProjectProfileDisplay,
   getProjectDirectionDecisionNotice,
   getProjectDirectionSubmitGuidance,
   hasUnsavedProjectDirectionChanges,
@@ -190,6 +191,37 @@ test('project direction live synchronization detects and announces lecturer deci
   assert.equal(isProjectProfileAvailable(submitted), false);
   assert.equal(isProjectProfileAvailable(needsRevision), false);
   assert.equal(isProjectProfileAvailable(approved), true);
+
+  const pendingProfileChange = { ...submitted, isProjectProfileChangeProposal: true };
+  assert.equal(
+    getProjectDirectionDecisionNotice(pendingProfileChange, approved),
+    'Lecturer approved your Project Profile changes. The approved profile is now updated.',
+  );
+  assert.equal(
+    getProjectDirectionDecisionNotice(pendingProfileChange, needsRevision),
+    'Lecturer requested revisions to your Project Profile changes. The approved profile remains unchanged.',
+  );
+});
+
+test('approved Project Profile displays the values from the latest realtime decision', () => {
+  const staleWorkspaceProject = {
+    projectName: 'EHUB',
+    description: 'The previously approved description.',
+  };
+  const approvedDirection = {
+    status: 'Approved',
+    title: 'SMEP',
+    summary: 'The newly approved description.',
+  };
+
+  assert.deepEqual(getApprovedProjectProfileDisplay(approvedDirection, staleWorkspaceProject), {
+    projectName: 'SMEP',
+    description: 'The newly approved description.',
+  });
+  assert.deepEqual(getApprovedProjectProfileDisplay(
+    { ...approvedDirection, status: 'Submitted' },
+    staleWorkspaceProject,
+  ), staleWorkspaceProject);
 });
 
 test('project direction requires requested revisions to be changed and saved before submit', () => {
@@ -257,6 +289,9 @@ test('lecturer review updates only the reviewed team without reloading the overv
     projectDirectionRowVersion: '11',
     projectDirection: 'Approved summary',
     projectDirectionTitle: 'Approved direction',
+    projectDirectionIsProfileChangeProposal: false,
+    projectDirectionCurrentTitle: '',
+    projectDirectionCurrentSummary: '',
     projectDirectionStartupIndustries: ['Healthcare / HealthTech', 'Education / EdTech'],
     projectDirectionReviewComment: 'Proceed with this scope.',
   });
@@ -271,4 +306,18 @@ test('lecturer review updates only the reviewed team without reloading the overv
   });
   assert.equal(submittedResult[1].projectDirectionStatus, 'PENDING');
   assert.equal(submittedResult[1].projectDirectionRowVersion, '21');
+
+  const profileChangeResult = updateProjectDirectionOverviewTeams(submittedResult, 'team-2', {
+    title: 'Proposed project name',
+    summary: 'Proposed project description with enough detail.',
+    currentTitle: 'Approved project name',
+    currentSummary: 'The currently approved project description.',
+    isProjectProfileChangeProposal: true,
+    status: 'Submitted',
+    rowVersion: '22',
+    reviews: [],
+  });
+  assert.equal(profileChangeResult[1].projectDirectionIsProfileChangeProposal, true);
+  assert.equal(profileChangeResult[1].projectDirectionCurrentTitle, 'Approved project name');
+  assert.equal(profileChangeResult[1].projectDirectionTitle, 'Proposed project name');
 });

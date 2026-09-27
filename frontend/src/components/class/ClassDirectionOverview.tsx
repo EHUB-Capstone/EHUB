@@ -102,6 +102,9 @@ export default function ClassDirectionOverview({ semester, year, initialClassId 
           leaderName: typeof leader?.studentId === 'object' ? leader.studentId.fullName : 'Not assigned',
           projectDirection: direction?.summary || '',
           projectDirectionTitle: direction?.title || '',
+          projectDirectionIsProfileChangeProposal: Boolean(direction?.isProjectProfileChangeProposal),
+          projectDirectionCurrentTitle: direction?.currentTitle || '',
+          projectDirectionCurrentSummary: direction?.currentSummary || '',
           projectDirectionStartupIndustries: direction?.startupIndustries || [],
           projectDirectionStatus: status,
           projectDirectionReviewComment: direction?.reviews?.[0]?.comment || null,
@@ -191,8 +194,8 @@ export default function ClassDirectionOverview({ semester, year, initialClassId 
 
   const review = async (teamId, decision) => {
     const comment = (comments[teamId] || '').trim();
-    if (comment.length < 3) {
-      toast.error('Please enter a review comment');
+    if (comment.length > 0 && comment.length < 3) {
+      toast.error('Review comment must be at least 3 characters when provided');
       return;
     }
     reviewInFlightRef.current = true;
@@ -273,6 +276,7 @@ export default function ClassDirectionOverview({ semester, year, initialClassId 
           {displayedTeams.map((team) => {
             const status = team.projectDirectionStatus || 'NOT_SUBMITTED';
             const hasDirection = Boolean(team.projectDirection);
+            const isProfileChangeProposal = Boolean(team.projectDirectionIsProfileChangeProposal);
             const startupIndustries = Array.isArray(team.projectDirectionStartupIndustries)
               ? team.projectDirectionStartupIndustries
               : [];
@@ -287,6 +291,7 @@ export default function ClassDirectionOverview({ semester, year, initialClassId 
                     <p className="mt-0.5 text-xs text-slate-500">
                       Team: {team.teamName || 'Unnamed team'} · Leader: {team.leaderName}
                     </p>
+                    {isProfileChangeProposal && <span className="mt-2 inline-flex rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-xs font-bold text-violet-700">Project Profile change request</span>}
                   </div>
                   <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${statusStyles[status]}`}>
                     {statusLabels[status] || status}
@@ -295,7 +300,26 @@ export default function ClassDirectionOverview({ semester, year, initialClassId 
 
                 {hasDirection ? (
                   <>
-                    <p className="mt-4 whitespace-pre-wrap text-sm leading-7 text-slate-700">{team.projectDirection}</p>
+                    {isProfileChangeProposal ? (
+                      <div className="mt-4 grid gap-3 lg:grid-cols-2">
+                        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                          <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Current approved profile</p>
+                          <p className="mt-3 text-xs font-semibold text-slate-500">Project name</p>
+                          <p className="mt-1 font-semibold text-slate-900">{team.projectDirectionCurrentTitle}</p>
+                          <p className="mt-3 text-xs font-semibold text-slate-500">Description</p>
+                          <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-slate-700">{team.projectDirectionCurrentSummary}</p>
+                        </div>
+                        <div className="rounded-xl border border-violet-200 bg-violet-50/50 p-4">
+                          <p className="text-xs font-bold uppercase tracking-wide text-violet-700">Proposed change</p>
+                          <p className="mt-3 text-xs font-semibold text-violet-600">Project name</p>
+                          <p className="mt-1 font-semibold text-slate-900">{team.projectDirectionTitle}</p>
+                          <p className="mt-3 text-xs font-semibold text-violet-600">Description</p>
+                          <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-slate-700">{team.projectDirection}</p>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="mt-4 whitespace-pre-wrap text-sm leading-7 text-slate-700">{team.projectDirection}</p>
+                    )}
                     {startupIndustries.length > 0 && (
                       <div className="mt-4">
                         <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Startup Industry</p>
@@ -319,14 +343,14 @@ export default function ClassDirectionOverview({ semester, year, initialClassId 
                     )}
                     <div className="mt-4">
                       <label className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-slate-600">
-                        <MessageSquareText className="h-3.5 w-3.5" /> Review comment
+                        <MessageSquareText className="h-3.5 w-3.5" /> Review comment <span className="font-normal text-slate-400">(optional)</span>
                       </label>
                       <textarea
                         value={comments[team._id] || ''}
                         onChange={(event) => setComments((current) => ({ ...current, [team._id]: event.target.value }))}
                         rows={3}
                         maxLength={1000}
-                        placeholder="Explain what is approved or what the team should revise..."
+                        placeholder="Optional: explain what is approved or what the team should revise..."
                         className="w-full resize-y rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/15"
                       />
                       <div className="mt-2 flex flex-wrap justify-end gap-2">

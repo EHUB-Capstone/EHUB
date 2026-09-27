@@ -1588,6 +1588,93 @@ public sealed class ClassSafetyHotfixIntegrationTests
     }
 
     [Fact]
+    public async Task SemesterGroupFile_PreviewsAndImportsByRollNumber_WithAccessAndValidationChecks()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateClassSeedAsync(context, "semester-groups");
+        var lecturer = await context.Users.SingleAsync(user => user.Id == seed.LecturerId);
+        var otherLecturer = await CreateLecturerAsync(context, "other-semester-groups");
+        var assignedToken = GenerateToken(scope.ServiceProvider, lecturer, SystemRoles.Lecturer);
+        var otherToken = GenerateToken(scope.ServiceProvider, otherLecturer, SystemRoles.Lecturer);
+        var classScope = await context.Classes.AsNoTracking()
+            .Where(item => item.Id == seed.ClassId)
+            .Select(item => new { item.SemesterId, item.CourseId, SemesterCode = item.Semester.Code })
+            .SingleAsync();
+        var letters = new string(classScope.SemesterCode.Where(char.IsLetter).ToArray()).ToUpperInvariant();
+        var digits = new string(classScope.SemesterCode.Where(char.IsDigit).ToArray());
+        var expectedHeader = $"Group {letters}{(digits.Length > 2 ? digits[^2..] : digits)}";
+        var rollNumber = "SE" + Guid.NewGuid().ToString("N")[..8].ToUpperInvariant();
+        var student = new Student
+        {
+            RollNumber = rollNumber,
+            NormalizedRollNumber = rollNumber,
+            FullName = "Semester Group Student",
+            Email = $"semester-group-{Guid.NewGuid():N}@example.com",
+            MajorCode = MajorCodes.BIT_SE,
+            Status = StudentStatus.Active,
+            CreatedBy = seed.AdminId
+        };
+        context.Students.Add(student);
+        context.ClassStudents.Add(new ClassStudent
+        {
+            ClassId = seed.ClassId,
+            StudentId = student.Id,
+            Student = student,
+            SemesterId = classScope.SemesterId,
+            CourseId = classScope.CourseId,
+            EnrollmentStatus = EnrollmentStatus.Active,
+            CountsTowardCourseSemesterLimit = true,
+            MajorCodeAtEnrollment = MajorCodes.BIT_SE
+        });
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        var workbook = CreateSemesterGroupWorkbook(expectedHeader, rollNumber, "EXE201g_8G1");
+        var previewUrl = $"/api/classes/{seed.ClassId}/semester-groups/preview";
+        var importUrl = $"/api/classes/{seed.ClassId}/semester-groups/import";
+
+        using var previewContent = CreateMajorUpload(workbook);
+        using var previewRequest = new HttpRequestMessage(HttpMethod.Post, previewUrl) { Content = previewContent };
+        previewRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", assignedToken);
+        var previewResponse = await _client.SendAsync(previewRequest);
+        previewResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        var preview = await previewResponse.Content.ReadFromJsonAsync<ApiResponse<SemesterGroupImportResponse>>();
+        preview!.Data!.ExpectedColumnName.Should().Be(expectedHeader);
+        preview.Data.ChangedRowsCount.Should().Be(1);
+        preview.Data.ErrorRowsCount.Should().Be(0);
+        (await context.ClassStudents.AsNoTracking().SingleAsync(item =>
+            item.ClassId == seed.ClassId && item.StudentId == student.Id)).SemesterGroupName.Should().BeNull();
+
+        using var invalidContent = CreateMajorUpload(CreateSemesterGroupWorkbook("Group WRONG", rollNumber, "EXE201g_8G1"));
+        using var invalidRequest = new HttpRequestMessage(HttpMethod.Post, previewUrl) { Content = invalidContent };
+        invalidRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", assignedToken);
+        (await _client.SendAsync(invalidRequest)).StatusCode.Should().Be(HttpStatusCode.BadRequest);
+
+        using var unauthenticatedContent = CreateMajorUpload(workbook);
+        (await _client.PostAsync(importUrl, unauthenticatedContent)).StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+
+        using var forbiddenContent = CreateMajorUpload(workbook);
+        using var forbiddenRequest = new HttpRequestMessage(HttpMethod.Post, importUrl) { Content = forbiddenContent };
+        forbiddenRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", otherToken);
+        (await _client.SendAsync(forbiddenRequest)).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        using var importContent = CreateMajorUpload(workbook);
+        using var importRequest = new HttpRequestMessage(HttpMethod.Post, importUrl) { Content = importContent };
+        importRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", assignedToken);
+        var importResponse = await _client.SendAsync(importRequest);
+        importResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        var imported = await importResponse.Content.ReadFromJsonAsync<ApiResponse<SemesterGroupImportResponse>>();
+        imported!.Data!.UpdatedCount.Should().Be(1);
+
+        context.ChangeTracker.Clear();
+        (await context.ClassStudents.AsNoTracking().SingleAsync(item =>
+            item.ClassId == seed.ClassId && item.StudentId == student.Id)).SemesterGroupName.Should().Be("EXE201g_8G1");
+        (await context.ClassAuditLogs.AsNoTracking().CountAsync(item =>
+            item.ClassId == seed.ClassId && item.Action == "SEMESTER_GROUPS_IMPORTED")).Should().Be(1);
+    }
+
+    [Fact]
     public async Task AssignedLecturer_CanManageMajorLifecycleRepairAndAudit_WhileOtherLecturerCannot()
     {
         using var scope = _factory.Services.CreateScope();
@@ -2378,6 +2465,19 @@ public sealed class ClassSafetyHotfixIntegrationTests
             worksheet.Cell(3, 1).Value = rollNumber;
             worksheet.Cell(3, 2).Value = majorCode;
         }
+        using var stream = new MemoryStream();
+        workbook.SaveAs(stream);
+        return stream.ToArray();
+    }
+
+    private static byte[] CreateSemesterGroupWorkbook(string groupHeader, string rollNumber, string groupName)
+    {
+        using var workbook = new XLWorkbook();
+        var worksheet = workbook.Worksheets.Add("Class Roster");
+        worksheet.Cell(1, 1).Value = "RollNumber";
+        worksheet.Cell(1, 2).Value = groupHeader;
+        worksheet.Cell(2, 1).Value = rollNumber;
+        worksheet.Cell(2, 2).Value = groupName;
         using var stream = new MemoryStream();
         workbook.SaveAs(stream);
         return stream.ToArray();

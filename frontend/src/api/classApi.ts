@@ -59,6 +59,14 @@ export const classApi = {
     }),
   commitImportStudents: (classId: string, payload: CommitImportStudentsPayload) =>
     axiosClient.post(`/classes/${classId}/import-students/commit`, payload),
+  previewSemesterGroups: (classId: string, formData: FormData) =>
+    axiosClient.post(`/classes/${classId}/semester-groups/preview`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+  importSemesterGroups: (classId: string, formData: FormData) =>
+    axiosClient.post(`/classes/${classId}/semester-groups/import`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
   importStudents: (classId, formData) =>
     axiosClient.post(`/classes/${classId}/import-students/preview`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
