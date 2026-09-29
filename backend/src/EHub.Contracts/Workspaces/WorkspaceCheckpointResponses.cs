@@ -21,6 +21,8 @@ public sealed class WorkspaceCheckpointSubmissionResponse
     public DateTime? SubmittedAt { get; init; }
     public IReadOnlyCollection<WorkspaceCheckpointFileResponse> Files { get; init; } =
         Array.Empty<WorkspaceCheckpointFileResponse>();
+    public IReadOnlyCollection<WorkspaceCheckpointLinkResponse> Links { get; init; } =
+        Array.Empty<WorkspaceCheckpointLinkResponse>();
     public IReadOnlyCollection<WorkspaceCheckpointRequirementContentResponse> RequirementContents { get; init; } =
         Array.Empty<WorkspaceCheckpointRequirementContentResponse>();
 }
@@ -53,6 +55,17 @@ public sealed class WorkspaceCheckpointFileResponse
     public long FileSize { get; init; }
     public DateTime UploadedAt { get; init; }
     public WorkspaceCheckpointUserResponse? UploadedBy { get; init; }
+}
+
+public sealed class WorkspaceCheckpointLinkResponse
+{
+    [JsonPropertyName("_id")]
+    public Guid Id { get; init; }
+    public int VersionNumber { get; init; }
+    public string Name { get; init; } = string.Empty;
+    public string Url { get; init; } = string.Empty;
+    public DateTime SubmittedAt { get; init; }
+    public WorkspaceCheckpointUserResponse SubmittedBy { get; init; } = new();
 }
 
 public sealed class WorkspaceCheckpointFeedbackResponse
@@ -113,10 +126,33 @@ public sealed class WorkspaceCheckpointEvaluationConfigResponse
     public int Number { get; init; }
     public string Title { get; init; } = string.Empty;
     public string? ShortDescription { get; init; }
+    public decimal CourseWeight { get; init; }
     public IReadOnlyCollection<WorkspaceCheckpointEvaluationCriterionResponse> Rubrics { get; init; } =
         Array.Empty<WorkspaceCheckpointEvaluationCriterionResponse>();
     public IReadOnlyCollection<WorkspaceCheckpointEvaluationMemberResponse> Members { get; init; } =
         Array.Empty<WorkspaceCheckpointEvaluationMemberResponse>();
+}
+
+public sealed class SaveCourseAssessmentEvaluationRequest
+{
+    public decimal Score { get; init; }
+}
+
+public sealed class CourseAssessmentEvaluationListResponse
+{
+    public IReadOnlyCollection<CourseAssessmentEvaluationResponse> Assessments { get; init; } =
+        Array.Empty<CourseAssessmentEvaluationResponse>();
+}
+
+public sealed class CourseAssessmentEvaluationResponse
+{
+    public Guid AssessmentId { get; init; }
+    public string Name { get; init; } = string.Empty;
+    public decimal Weight { get; init; }
+    public Guid? EvaluationId { get; init; }
+    public decimal? Score { get; init; }
+    public string Status { get; init; } = "NOT_GRADED";
+    public DateTime? UpdatedAt { get; init; }
 }
 
 public sealed class WorkspaceCheckpointEvaluationMemberResponse

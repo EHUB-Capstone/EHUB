@@ -30,12 +30,99 @@ import {
   isProjectProfileAvailable,
   updateProjectDirectionOverviewTeams,
 } from '../src/utils/projectDirectionSync.ts';
+import {
+  canAccessEvaluationRankings,
+  calculateWeightedCourseScore,
+  filterEvaluationRecords,
+  filterTeamsBySemester,
+  resolveEvaluationMemberScore,
+  resolveActiveEvaluationSemester,
+  selectLatestOfficialEvaluation,
+} from '../src/utils/evaluationGrading.ts';
+
+test('course score applies checkpoint and other-assessment weights and reports missing grades', () => {
+  assert.deepEqual(calculateWeightedCourseScore([
+    { score: 8, weight: 10 },
+    { score: 7, weight: 20 },
+    { score: 9, weight: 15 },
+    { score: 8.5, weight: 40 },
+    { score: 10, weight: 15 },
+  ]), { score: 8.45, complete: true });
+  assert.deepEqual(calculateWeightedCourseScore([
+    { score: 8, weight: 85 },
+    { score: null, weight: 15 },
+  ]), { score: 6.8, complete: false });
+  assert.deepEqual(calculateWeightedCourseScore([
+    { score: 7.5, weight: 85 },
+    { score: 9, weight: 15 },
+  ]), { score: 7.73, complete: true });
+});
+
+test('evaluation rankings are restricted to admin and lecturer roles', () => {
+  assert.equal(canAccessEvaluationRankings('ADMIN'), true);
+  assert.equal(canAccessEvaluationRankings('lecturer'), true);
+  assert.equal(canAccessEvaluationRankings('MENTOR'), false);
+  assert.equal(canAccessEvaluationRankings('STUDENT'), false);
+  assert.equal(canAccessEvaluationRankings(undefined), false);
+});
 
 test('workspace keeps evaluation inside checkpoints and removes standalone evaluation and mentoring tabs', () => {
   assert.deepEqual(WORKSPACE_TABS, ['overview', 'roadmap', 'shortcut']);
   assert.equal(resolveWorkspaceTab('?tab=roadmap'), 'roadmap');
   assert.equal(resolveWorkspaceTab('?tab=evaluation'), 'overview');
   assert.equal(resolveWorkspaceTab('?tab=mentoring'), 'overview');
+});
+
+test('evaluation grading defaults to the active semester and filters the visible role scope', () => {
+  const teams = [
+    { teamId: 'team-1', teamName: 'Alpha', projectName: 'Campus Connect', semesterGroupName: 'Group 01', classId: 'class-1', classCode: 'SE01', courseCode: 'PRM', semester: 'FA2026', accessMode: 'READ_WRITE', isArchived: false, isCurrent: true, hasWorkspace: true },
+    { teamId: 'team-2', teamName: 'Beta', classId: 'class-2', classCode: 'SE02', courseCode: 'PRM', semester: 'SU2026', accessMode: 'READ_ONLY', isArchived: false, isCurrent: false, hasWorkspace: true },
+  ];
+  assert.deepEqual(resolveActiveEvaluationSemester(teams), { semester: 'FA', year: '2026' });
+  assert.deepEqual(filterTeamsBySemester(teams, 'FA', '2026').map(team => team.teamId), ['team-1']);
+
+  const records = [{
+    key: 'record-1',
+    team: teams[0],
+    checkpoint: { number: 1, title: 'Problem validation' },
+    evaluation: {
+      _id: 'evaluation-1',
+      lecturerId: { _id: 'lecturer-1', name: 'Lecturer One' },
+      evaluatorRole: 'LECTURER',
+      status: 'SUBMITTED',
+      checkpointTotal: 8.5,
+      overallFeedback: 'Strong validation evidence.',
+      updatedAt: '2026-09-01T00:00:00Z',
+      rubricScores: [{ criterionKey: 'evidence', criterionName: 'Evidence', score: 8.5, comment: 'Clear interviews.' }],
+      memberScores: [],
+    },
+    status: 'SUBMITTED',
+  }];
+
+  assert.equal(filterEvaluationRecords(records, { search: 'interviews', status: 'SUBMITTED' }).length, 1);
+  assert.equal(filterEvaluationRecords(records, { search: 'campus connect' }).length, 1);
+  assert.equal(filterEvaluationRecords(records, { search: 'group 01' }).length, 1);
+  assert.equal(filterEvaluationRecords(records, { teamId: 'team-2' }).length, 0);
+});
+
+test('evaluation grading selects the newest official evaluation and applies member overrides', () => {
+  const base = {
+    lecturerId: { _id: 'lecturer-1', name: 'Lecturer One' },
+    evaluatorRole: 'LECTURER',
+    checkpointTotal: 8.5,
+    overallFeedback: '',
+    rubricScores: [],
+    memberScores: [{ studentId: 'student-1', score: 7.25, isOverridden: true }],
+  };
+  const selected = selectLatestOfficialEvaluation([
+    { ...base, _id: 'draft', status: 'DRAFT', updatedAt: '2026-09-04T00:00:00Z' },
+    { ...base, _id: 'older', status: 'SUBMITTED', updatedAt: '2026-09-01T00:00:00Z' },
+    { ...base, _id: 'newer', status: 'PUBLISHED', updatedAt: '2026-09-03T00:00:00Z' },
+  ]);
+
+  assert.equal(selected?._id, 'newer');
+  assert.deepEqual(resolveEvaluationMemberScore(selected, 'student-1'), { score: 7.25, isOverridden: true });
+  assert.deepEqual(resolveEvaluationMemberScore(selected, 'student-2'), { score: 8.5, isOverridden: false });
 });
 
 test('ClassDetail presents Archive for an active class and Restore for an archived class', () => {
@@ -122,6 +209,9 @@ test('workspace checkpoint overview uses configured totals and counts any entere
       { _id: 'older', originalName: 'older.pdf', fileType: 'pdf', fileSize: 10, uploadedAt: '2026-09-01T00:00:00Z' },
       { _id: 'latest', originalName: 'latest.pdf', fileType: 'pdf', fileSize: 20, uploadedAt: '2026-09-02T00:00:00Z' },
     ],
+    links: [
+      { _id: 'link', versionNumber: 3, name: 'Demo', url: 'https://demo.example.com', submittedAt: '2026-09-03T00:00:00Z', submittedBy: { _id: 'student', name: 'Student' } },
+    ],
   }]);
 
   assert.equal(result.checkpoints.length, 2);
@@ -129,6 +219,7 @@ test('workspace checkpoint overview uses configured totals and counts any entere
   assert.equal(result.checkpoints[1].icon, 'BarChart2');
   assert.deepEqual(result.stats[1], {
     count: 2,
+    linkCount: 1,
     latest: {
       _id: 'latest',
       originalName: 'latest.pdf',
@@ -136,6 +227,7 @@ test('workspace checkpoint overview uses configured totals and counts any entere
       fileSize: 20,
       uploadedAt: '2026-09-02T00:00:00Z',
     },
+    latestVersion: 3,
     reqFilled: 1,
     reqTotal: 2,
     status: 'Draft',
@@ -143,7 +235,9 @@ test('workspace checkpoint overview uses configured totals and counts any entere
   });
   assert.deepEqual(result.stats[2], {
     count: 0,
+    linkCount: 0,
     latest: null,
+    latestVersion: null,
     reqFilled: 0,
     reqTotal: 1,
     status: 'NotSubmitted',

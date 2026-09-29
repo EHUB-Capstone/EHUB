@@ -18,6 +18,11 @@ public class SubmissionFile : AuditableEntity
     public long FileSize { get; set; }
     public SubmissionFileType FileType { get; set; } = SubmissionFileType.Report;
 
+    public string? PreviewPdfUrl { get; set; }
+    public string? PreviewPdfPublicId { get; set; }
+    public int? PreviewSourceVersionNumber { get; set; }
+    public DateTime? PreviewGeneratedAt { get; set; }
+
     public Guid? UploadedById { get; set; }
     public virtual User? UploadedBy { get; set; }
     public DateTime UploadedAt { get; set; } = DateTime.UtcNow;

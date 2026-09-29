@@ -83,6 +83,16 @@ public static class DependencyInjection
         services.AddScoped<IImageStorageService, CloudinaryImageStorageService>();
         services.AddHttpClient("CloudinarySubmissionFiles", client => client.Timeout = TimeSpan.FromSeconds(30));
         services.AddScoped<ISubmissionFileStorageService, CloudinarySubmissionFileStorageService>();
+        services.AddOptions<DocumentPreviewOptions>()
+            .Bind(configuration.GetSection(DocumentPreviewOptions.SectionName))
+            .Validate(options => !string.IsNullOrWhiteSpace(options.LibreOfficeExecutablePath),
+                "DocumentPreview:LibreOfficeExecutablePath is required.")
+            .Validate(options => options.ConversionTimeoutSeconds is >= 10 and <= 300,
+                "DocumentPreview:ConversionTimeoutSeconds must be between 10 and 300.")
+            .Validate(options => options.MaximumConcurrentConversions is >= 1 and <= 4,
+                "DocumentPreview:MaximumConcurrentConversions must be between 1 and 4.")
+            .ValidateOnStart();
+        services.AddSingleton<IDocumentPreviewConverter, LibreOfficeDocumentPreviewConverter>();
         
         services.Configure<EmailOptions>(configuration.GetSection(EmailOptions.SectionName));
         var emailProvider = configuration["Email:Provider"];

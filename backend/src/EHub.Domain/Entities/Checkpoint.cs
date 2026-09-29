@@ -17,6 +17,7 @@ public class Checkpoint : AuditableEntity
     public int CheckpointNumber { get; set; }
     public string? Description { get; set; }
     public string RequirementsJson { get; set; } = "[]";
+    public decimal CourseWeight { get; set; }
 
     public DateTime? OpenDate { get; set; }
     public DateTime? DueDate { get; set; }

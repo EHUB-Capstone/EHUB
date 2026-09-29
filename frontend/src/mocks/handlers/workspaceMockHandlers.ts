@@ -1,6 +1,7 @@
 import type MockAdapter from 'axios-mock-adapter';
 import { allocateId, allocateRowVersion, failure, getMockState, ok, parseBody, persistMockState, routeId } from '../mockHelpers.ts';
-import type { MockClass, MockCheckpointFile } from '../mockState.ts';
+import type { MockClass, MockCheckpointFile, MockCheckpointLink } from '../mockState.ts';
+import { normalizeCheckpointLinkUrl, validateCheckpointLinkUrl } from '../../utils/checkpointLink.ts';
 
 const uuid = (value: number) => `00000000-0000-4000-8000-${String(value).padStart(12, '0')}`;
 
@@ -39,6 +40,7 @@ function checkpointDefinitionsForClass(cls: MockClass) {
     number: checkpoint.number,
     title: checkpoint.title,
     shortDescription: checkpoint.shortDescription,
+    courseWeight: checkpoint.courseWeight,
     requirements: checkpoint.requirements,
     rubrics: checkpoint.rubrics,
   }));
@@ -80,6 +82,10 @@ function filesForCheckpoint(teamId: string, number: number): MockCheckpointFile[
     uploadedAt: new Date(Date.now() - 86_400_000).toISOString(),
     uploadedBy: { _id: leader?.id || '', name: leader?.name || 'Team leader' },
   }];
+}
+
+function linksForCheckpoint(teamId: string, number: number): MockCheckpointLink[] {
+  return getMockState().checkpointLinks[`${teamId}:${number}`] || [];
 }
 
 function workspaceOption(teamId: string) {
@@ -229,8 +235,9 @@ function checkpointData(teamId: string) {
     }),
     submissions: checkpoints.map((checkpoint) => ({
       checkpointNumber: checkpoint.number,
-      status: filesForCheckpoint(teamId, checkpoint.number).length > 0 ? 'Submitted' : 'NotSubmitted',
+      status: filesForCheckpoint(teamId, checkpoint.number).length > 0 || linksForCheckpoint(teamId, checkpoint.number).length > 0 ? 'Submitted' : 'NotSubmitted',
       files: filesForCheckpoint(teamId, checkpoint.number),
+      links: linksForCheckpoint(teamId, checkpoint.number),
       requirementContents: checkpoint.requirements.map((_, index) => ({
         index,
         content: checkpoint.number === 1
@@ -259,11 +266,12 @@ function evaluationSummary(teamId: string, checkpointNumber: number) {
   const checkpoint = checkpointDefinitionsForClass(cls).find((item) => item.number === checkpointNumber)!;
   const rubrics = checkpoint.rubrics as Array<{ key: string; label: string; weight: number }>;
   const hasEvaluation = checkpointNumber === 1;
+  const members = teamById(teamId)?.members || [];
   const evaluation = {
     _id: uuid(1401),
     lecturerId: { _id: uuid(2), name: 'Trần Thu Giang' },
     evaluatorRole: 'LECTURER',
-    status: 'DRAFT',
+    status: 'SUBMITTED',
     checkpointNumber,
     checkpointTotal: 7.85,
     weightedScore: 7.85,
@@ -278,6 +286,11 @@ function evaluationSummary(teamId: string, checkpointNumber: number) {
       weightedScore: Number((((index === 1 ? 7.5 : 8.5) * criterion.weight) / 100).toFixed(2)),
       comment: index === 1 ? 'Include more direct customer quotes and quantified findings.' : 'Clear and focused.',
     })),
+    memberScores: members.map((member, index) => ({
+      studentId: member.studentId,
+      score: index === 0 ? 7.5 : 7.85,
+      isOverridden: index === 0,
+    })),
   };
 
   return {
@@ -285,13 +298,13 @@ function evaluationSummary(teamId: string, checkpointNumber: number) {
     evaluations: hasEvaluation ? [evaluation] : [],
     summary: {
       evaluationCount: hasEvaluation ? 1 : 0,
-      submittedCount: 0,
+      submittedCount: hasEvaluation ? 1 : 0,
       averageScore: hasEvaluation ? evaluation.checkpointTotal : 0,
       overallPerformance: { level: hasEvaluation ? 'GOOD' : 'Unscored', label: hasEvaluation ? 'Good' : 'Not scored' },
     },
     history: hasEvaluation ? [{
       _id: uuid(1501),
-      action: 'DRAFT_SAVED',
+      action: 'SUBMITTED',
       version: 1,
       changedBy: { _id: uuid(2), name: 'Trần Thu Giang' },
       createdAt: evaluation.updatedAt,
@@ -340,8 +353,12 @@ export function registerWorkspaceMockHandlers(mock: MockAdapter): void {
         .map((checkpoint) => {
           const files = [...filesForCheckpoint(team.id, checkpoint.number)]
             .sort((left, right) => Date.parse(left.uploadedAt) - Date.parse(right.uploadedAt));
+          const links = [...linksForCheckpoint(team.id, checkpoint.number)]
+            .sort((left, right) => Date.parse(right.submittedAt) - Date.parse(left.submittedAt));
           const checkpointSchedule = scheduleFor(cls.id, checkpoint.id);
           const status = scheduleStatus(checkpointSchedule);
+          const latestActivity = [...files.map(file => file.uploadedAt), ...links.map(link => link.submittedAt)]
+            .sort((left, right) => Date.parse(right) - Date.parse(left))[0] || null;
           return {
             classId: cls.id,
             classCode: cls.classCode,
@@ -350,13 +367,20 @@ export function registerWorkspaceMockHandlers(mock: MockAdapter): void {
             checkpointId: checkpoint.id,
             checkpointNumber: checkpoint.number,
             checkpointTitle: checkpoint.title,
-            status: status === 'Upcoming' ? 'Upcoming' : files.length > 0 ? 'Submitted' : status === 'Open' ? 'Pending' : status,
-            latestSubmissionAtUtc: files.at(-1)?.uploadedAt || null,
+            status: status === 'Upcoming' ? 'Upcoming' : files.length > 0 || links.length > 0 ? 'Submitted' : status === 'Open' ? 'Pending' : status,
+            latestSubmissionAtUtc: latestActivity,
             earliestSubmittedFile: files[0] ? {
               id: files[0]._id,
               originalName: files[0].originalName,
               uploadedAtUtc: files[0].uploadedAt,
             } : null,
+            submittedLinks: links.map(link => ({
+              id: link._id,
+              name: link.name,
+              url: link.url,
+              versionNumber: link.versionNumber,
+              submittedAtUtc: link.submittedAt,
+            })),
           };
         })));
     return ok({
@@ -824,6 +848,9 @@ export function registerWorkspaceMockHandlers(mock: MockAdapter): void {
     const match = config.url?.match(/^\/workspace\/checkpoints\/teams\/([^/]+)\/checkpoints\/(\d+)\/upload$/);
     const teamId = match?.[1] || '';
     const number = Number(match?.[2]);
+    const contentType = String(config.headers?.['Content-Type'] ?? '').toLowerCase();
+    if (!contentType.startsWith('multipart/form-data'))
+      return failure(415, 'UNSUPPORTED_MEDIA_TYPE', 'Upload requests must use multipart/form-data.');
     const state = getMockState();
     const user = state.users.find((item) => item.id === state.sessionUserId);
     const cls = classByTeam(teamId);
@@ -841,9 +868,10 @@ export function registerWorkspaceMockHandlers(mock: MockAdapter): void {
       return failure(400, 'WORKSPACE_VALIDATION_ERROR', 'Only PDF, DOCX, and PPTX files up to 15 MB are accepted.');
     const key = `${teamId}:${number}`;
     const existingFiles = filesForCheckpoint(teamId, number);
+    const existingLinks = linksForCheckpoint(teamId, number);
     const uploaded = {
       _id: allocateId(),
-      versionNumber: Math.max(0, ...existingFiles.map((item) => item.versionNumber ?? 0)) + 1,
+      versionNumber: Math.max(0, ...existingFiles.map((item) => item.versionNumber ?? 0), ...existingLinks.map((item) => item.versionNumber ?? 0)) + 1,
       originalName: file.name,
       fileType: extension,
       fileSize: file.size,
@@ -854,6 +882,103 @@ export function registerWorkspaceMockHandlers(mock: MockAdapter): void {
     state.checkpointFiles[key].push(uploaded);
     persistMockState();
     return ok(uploaded, 'File uploaded.');
+  });
+
+  mock.onPost(/^\/workspace\/checkpoints\/teams\/[^/]+\/checkpoints\/\d+\/links$/).reply((config) => {
+    const match = config.url?.match(/^\/workspace\/checkpoints\/teams\/([^/]+)\/checkpoints\/(\d+)\/links$/);
+    const teamId = match?.[1] || '';
+    const number = Number(match?.[2]);
+    const state = getMockState();
+    const user = state.users.find((item) => item.id === state.sessionUserId);
+    const cls = classByTeam(teamId);
+    if (user?.role !== 'STUDENT' || !canAccessCheckpointTeam(teamId) || !cls)
+      return failure(403, 'WORKSPACE_ACCESS_DENIED', 'Only active team students can submit links.');
+    const checkpoint = checkpointDefinitionsForClass(cls).find((item) => item.number === number);
+    if (!checkpoint) return failure(404, 'WORKSPACE_NOT_FOUND', 'The checkpoint workspace was not found.');
+    if (scheduleStatus(scheduleFor(cls.id, checkpoint.id)) !== 'Open')
+      return failure(400, 'WORKSPACE_CHECKPOINT_NOT_OPEN', 'This checkpoint is not open for submissions.');
+    const body = parseBody(config);
+    const name = String(body.name || '').trim();
+    const rawUrl = String(body.url || '');
+    const urlError = validateCheckpointLinkUrl(rawUrl);
+    if (!name || name.length > 100 || urlError)
+      return failure(400, 'WORKSPACE_VALIDATION_ERROR', urlError || 'Link name is required and must not exceed 100 characters.');
+    const url = normalizeCheckpointLinkUrl(rawUrl);
+    const existingLinks = linksForCheckpoint(teamId, number);
+    if (existingLinks.length >= 10)
+      return failure(400, 'WORKSPACE_VALIDATION_ERROR', 'A checkpoint can contain at most 10 active links.');
+    if (existingLinks.some(item => item.url.toLowerCase() === url.toLowerCase()))
+      return failure(400, 'WORKSPACE_VALIDATION_ERROR', 'This URL has already been submitted for the checkpoint.');
+    const existingFiles = filesForCheckpoint(teamId, number);
+    const submitted: MockCheckpointLink = {
+      _id: allocateId(),
+      versionNumber: Math.max(0, ...existingFiles.map(item => item.versionNumber ?? 0), ...existingLinks.map(item => item.versionNumber ?? 0)) + 1,
+      name,
+      url,
+      submittedAt: new Date().toISOString(),
+      submittedBy: { _id: user.id, name: user.name },
+    };
+    state.checkpointLinks[`${teamId}:${number}`] ??= existingLinks;
+    state.checkpointLinks[`${teamId}:${number}`].push(submitted);
+    persistMockState();
+    return ok(submitted, 'Link submitted.');
+  });
+
+  mock.onPut(/^\/workspace\/checkpoints\/teams\/[^/]+\/checkpoints\/\d+\/links\/[^/]+$/).reply((config) => {
+    const match = config.url?.match(/^\/workspace\/checkpoints\/teams\/([^/]+)\/checkpoints\/(\d+)\/links\/([^/]+)$/);
+    const teamId = match?.[1] || '';
+    const number = Number(match?.[2]);
+    const linkId = match?.[3] || '';
+    const state = getMockState();
+    const user = state.users.find((item) => item.id === state.sessionUserId);
+    const cls = classByTeam(teamId);
+    const checkpoint = cls && checkpointDefinitionsForClass(cls).find((item) => item.number === number);
+    if (user?.role !== 'STUDENT' || !canAccessCheckpointTeam(teamId) || !cls || !checkpoint)
+      return failure(403, 'WORKSPACE_ACCESS_DENIED', 'Only active team students can update submitted links.');
+    if (scheduleStatus(scheduleFor(cls.id, checkpoint.id)) !== 'Open')
+      return failure(400, 'WORKSPACE_CHECKPOINT_NOT_OPEN', 'This checkpoint is not open for submissions.');
+    const links = linksForCheckpoint(teamId, number);
+    const link = links.find(item => item._id === linkId);
+    if (!link) return failure(404, 'COMMON_NOT_FOUND', 'Submitted link was not found.');
+    if (link.submittedBy._id !== user.id)
+      return failure(403, 'WORKSPACE_ACCESS_DENIED', 'You can only update links you submitted.');
+    const body = parseBody(config);
+    const name = String(body.name || '').trim();
+    const rawUrl = String(body.url || '');
+    const urlError = validateCheckpointLinkUrl(rawUrl);
+    if (!name || name.length > 100 || urlError)
+      return failure(400, 'WORKSPACE_VALIDATION_ERROR', urlError || 'Link name is required and must not exceed 100 characters.');
+    const url = normalizeCheckpointLinkUrl(rawUrl);
+    if (links.some(item => item._id !== linkId && item.url.toLowerCase() === url.toLowerCase()))
+      return failure(400, 'WORKSPACE_VALIDATION_ERROR', 'This URL has already been submitted for the checkpoint.');
+    link.name = name;
+    link.url = url;
+    persistMockState();
+    return ok(link, 'Submitted link updated.');
+  });
+
+  mock.onDelete(/^\/workspace\/checkpoints\/teams\/[^/]+\/checkpoints\/\d+\/links\/[^/]+$/).reply((config) => {
+    const match = config.url?.match(/^\/workspace\/checkpoints\/teams\/([^/]+)\/checkpoints\/(\d+)\/links\/([^/]+)$/);
+    const teamId = match?.[1] || '';
+    const number = Number(match?.[2]);
+    const linkId = match?.[3] || '';
+    const state = getMockState();
+    const user = state.users.find((item) => item.id === state.sessionUserId);
+    const cls = classByTeam(teamId);
+    const checkpoint = cls && checkpointDefinitionsForClass(cls).find((item) => item.number === number);
+    if (user?.role !== 'STUDENT' || !canAccessCheckpointTeam(teamId) || !cls || !checkpoint)
+      return failure(403, 'WORKSPACE_ACCESS_DENIED', 'Only active team students can delete submitted links.');
+    if (scheduleStatus(scheduleFor(cls.id, checkpoint.id)) !== 'Open')
+      return failure(400, 'WORKSPACE_CHECKPOINT_NOT_OPEN', 'This checkpoint is not open for submissions.');
+    const key = `${teamId}:${number}`;
+    const links = linksForCheckpoint(teamId, number);
+    const link = links.find(item => item._id === linkId);
+    if (!link) return failure(404, 'COMMON_NOT_FOUND', 'Submitted link was not found.');
+    if (link.submittedBy._id !== user.id)
+      return failure(403, 'WORKSPACE_ACCESS_DENIED', 'You can only delete links you submitted.');
+    state.checkpointLinks[key] = links.filter(item => item._id !== linkId);
+    persistMockState();
+    return ok({}, 'Submitted link deleted.');
   });
 
   mock.onGet(/^\/workspace\/checkpoints\/teams\/[^/]+\/checkpoints\/\d+\/files\/[^/]+\/download$/).reply((config) => {
@@ -868,12 +993,87 @@ export function registerWorkspaceMockHandlers(mock: MockAdapter): void {
       { 'content-type': 'application/octet-stream' }];
   });
 
-  mock.onGet(/^\/evaluations\/team\/[^/]+\/checkpoints\/\d+\/summary$/).reply((config) => {
-    const match = config.url?.match(/^\/evaluations\/team\/([^/]+)\/checkpoints\/(\d+)\/summary$/);
+  mock.onGet(/^\/workspace\/checkpoints\/teams\/[^/]+\/checkpoints\/\d+\/files\/[^/]+\/preview$/).reply((config) => {
+    const match = config.url?.match(/^\/workspace\/checkpoints\/teams\/([^/]+)\/checkpoints\/(\d+)\/files\/([^/]+)\/preview$/);
+    const teamId = match?.[1] || '';
+    const number = Number(match?.[2]);
+    const fileId = match?.[3] || '';
+    if (!canAccessCheckpointTeam(teamId)) return failure(403, 'WORKSPACE_ACCESS_DENIED', 'You do not have access to this team workspace.');
+    const file = filesForCheckpoint(teamId, number).find((item) => item._id === fileId);
+    if (!file) return failure(404, 'COMMON_NOT_FOUND', 'Submitted file was not found.');
+    const extension = file.originalName.split('.').at(-1)?.toLowerCase();
+    if (!['pdf', 'docx', 'pptx'].includes(extension || ''))
+      return failure(415, 'WORKSPACE_FILE_PREVIEW_UNSUPPORTED', 'This file format cannot be previewed.');
+    return [200, new Blob(['%PDF-1.4\n%%EOF'], { type: 'application/pdf' }), { 'content-type': 'application/pdf' }];
+  });
+
+  mock.onDelete(/^\/workspace\/checkpoints\/teams\/[^/]+\/checkpoints\/\d+\/files\/[^/]+$/).reply((config) => {
+    const match = config.url?.match(/^\/workspace\/checkpoints\/teams\/([^/]+)\/checkpoints\/(\d+)\/files\/([^/]+)$/);
+    const teamId = match?.[1] || '';
+    const number = Number(match?.[2]);
+    const fileId = match?.[3] || '';
+    const state = getMockState();
+    const user = state.users.find((item) => item.id === state.sessionUserId);
+    const cls = classByTeam(teamId);
+    const checkpoint = cls && checkpointDefinitionsForClass(cls).find((item) => item.number === number);
+    if (user?.role !== 'STUDENT' || !canAccessCheckpointTeam(teamId) || !cls || !checkpoint)
+      return failure(403, 'WORKSPACE_ACCESS_DENIED', 'Only active team students can delete submitted files.');
+    if (scheduleStatus(scheduleFor(cls.id, checkpoint.id)) !== 'Open')
+      return failure(400, 'WORKSPACE_CHECKPOINT_NOT_OPEN', 'This checkpoint is not open for submissions.');
+    const key = `${teamId}:${number}`;
+    const files = filesForCheckpoint(teamId, number);
+    const file = files.find(item => item._id === fileId);
+    if (!file) return failure(404, 'COMMON_NOT_FOUND', 'Submitted file was not found.');
+    if (file.uploadedBy._id !== user.id)
+      return failure(403, 'WORKSPACE_ACCESS_DENIED', 'You can only delete files you uploaded.');
+    state.checkpointFiles[key] = files.filter(item => item._id !== fileId);
+    persistMockState();
+    return ok({}, 'File deleted.');
+  });
+
+  mock.onGet(/^\/workspace\/checkpoints\/teams\/[^/]+\/checkpoints\/\d+\/evaluation-summary$/).reply((config) => {
+    const match = config.url?.match(/^\/workspace\/checkpoints\/teams\/([^/]+)\/checkpoints\/(\d+)\/evaluation-summary$/);
     const teamId = match?.[1] || '';
     const checkpointNumber = Number(match?.[2] || 1);
     return canAccessCheckpointTeam(teamId) && checkpointDefinitionsForClass(classByTeam(teamId)!).some((item) => item.number === checkpointNumber)
       ? ok(evaluationSummary(teamId, checkpointNumber), 'Evaluation summary retrieved successfully.')
       : failure(404, 'TEAM_NOT_FOUND', 'Team not found.');
+  });
+
+  mock.onGet(/^\/workspace\/checkpoints\/teams\/[^/]+\/course-assessments$/).reply((config) => {
+    const teamId = routeId(config, /^\/workspace\/checkpoints\/teams\/([^/]+)\/course-assessments$/);
+    const cls = classByTeam(teamId);
+    if (!cls || !canAccessCheckpointTeam(teamId)) return failure(403, 'WORKSPACE_ACCESS_DENIED', 'You do not have access to this team.');
+    const state = getMockState();
+    const assessments = (state.curricula[cls.subjectCode]?.otherAssessments || []).map(item => {
+      const score = state.courseAssessmentScores[`${teamId}:${item._id}`];
+      return {
+        assessmentId: item._id,
+        name: item.name,
+        weight: item.weight,
+        evaluationId: score === undefined ? null : item._id,
+        score: score === undefined ? null : score,
+        status: score === undefined ? 'NOT_GRADED' : 'SUBMITTED',
+        updatedAt: score === undefined ? null : new Date().toISOString(),
+      };
+    });
+    return ok({ assessments }, 'Course assessments retrieved.');
+  });
+
+  mock.onPut(/^\/workspace\/checkpoints\/teams\/[^/]+\/course-assessments\/[^/]+$/).reply((config) => {
+    const match = config.url?.match(/^\/workspace\/checkpoints\/teams\/([^/]+)\/course-assessments\/([^/]+)$/);
+    const teamId = match?.[1] || '';
+    const assessmentId = match?.[2] || '';
+    const state = getMockState();
+    const user = state.users.find(item => item.id === state.sessionUserId);
+    const cls = classByTeam(teamId);
+    if (!cls || user?.role !== 'LECTURER' || cls.primaryLecturerId !== user.id) return failure(403, 'WORKSPACE_ACCESS_DENIED', 'Only an assigned lecturer can grade this assessment.');
+    const assessment = state.curricula[cls.subjectCode]?.otherAssessments.find(item => item._id === assessmentId);
+    if (!assessment) return failure(404, 'COMMON_NOT_FOUND', 'The course assessment was not found.');
+    const score = Number(parseBody(config).score);
+    if (!Number.isFinite(score) || score < 0 || score > 10) return failure(400, 'WORKSPACE_VALIDATION_ERROR', 'The assessment score must be between 0 and 10.');
+    state.courseAssessmentScores[`${teamId}:${assessmentId}`] = score;
+    persistMockState();
+    return ok({ assessmentId, name: assessment.name, weight: assessment.weight, evaluationId: assessmentId, score, status: 'SUBMITTED', updatedAt: new Date().toISOString() }, 'Course assessment score saved.');
   });
 }

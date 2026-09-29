@@ -27,7 +27,7 @@ import {
   routeId,
 } from '../mockHelpers.ts';
 
-const emptyCurriculum = (): MockCurriculum => ({ roadmapItems: [], rubrics: [], checkpoints: [] });
+const emptyCurriculum = (): MockCurriculum => ({ roadmapItems: [], rubrics: [], checkpoints: [], otherAssessments: [] });
 
 function isValidSemesterDateRange(semester: string, year: number, startDate: string, endDate: string): boolean {
   const startMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(startDate);
@@ -1016,8 +1016,18 @@ function registerSubjectHandlers(mock: MockAdapter): void {
     const subjectCode = subjectCodeFrom(config, /^\/subjects\/([^/]+)\/checkpoints$/);
     const curriculum = getMockState().curricula[subjectCode];
     if (!curriculum) return failure(404, 'SUBJECT_NOT_FOUND', 'Subject not found.');
-    const checkpoints = parseBody(config).checkpoints;
+    const body = parseBody(config);
+    const checkpoints = body.checkpoints;
+    const otherAssessments = Array.isArray(body.otherAssessments) ? body.otherAssessments : [];
+    const totalWeight = (Array.isArray(checkpoints) ? checkpoints : []).reduce((sum, item) => sum + asNumber(item.courseWeight, 0), 0)
+      + otherAssessments.reduce((sum, item) => sum + asNumber(item.weight, 0), 0);
+    if (Math.abs(totalWeight - 100) > 0.001) return failure(400, 'VALIDATION_ERROR', `Checkpoint and other assessment weights must total exactly 100.0% (currently ${totalWeight.toFixed(1)}%).`);
     curriculum.checkpoints = Array.isArray(checkpoints) ? checkpoints as MockCurriculum['checkpoints'] : [];
+    curriculum.otherAssessments = otherAssessments.map((item) => ({
+      _id: asString(item._id) || allocateId(),
+      name: asString(item.name).trim(),
+      weight: asNumber(item.weight, 0),
+    }));
     persistMockState();
     const subject = getMockState().subjects.find((item) => item.subjectCode === subjectCode)!;
     return ok({ subject, ...curriculum }, 'Subject checkpoints synchronized successfully.');

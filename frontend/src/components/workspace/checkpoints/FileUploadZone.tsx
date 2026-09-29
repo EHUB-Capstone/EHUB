@@ -4,47 +4,73 @@ import { useRef, useState } from 'react';
 import { UploadCloud, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { checkpointApi } from '../../../api/checkpointApi';
-import { parseApiError } from '../../../utils/apiError';
-
-const ALLOWED_EXT  = ['.pdf', '.docx', '.pptx'];
-const MAX_SIZE     = 15 * 1024 * 1024; // 15 MB (MongoDB document limit)
+import {
+  checkpointUploadFailureMessage,
+  validateCheckpointUploadFile,
+} from '../../../utils/checkpointUpload';
 
 export default function FileUploadZone({ teamId, checkpointNumber, onUploaded, variant = 'default' }) {
   const isLarge = variant === 'large';
   const [dragging,   setDragging]   = useState(false);
   const [uploading,  setUploading]  = useState(false);
+  const [uploadState, setUploadState] = useState(null);
   const fileRef = useRef(null);
+  const uploadInProgressRef = useRef(false);
 
   const processFiles = async (rawFiles) => {
     const files = Array.from(rawFiles);
-    if (!files.length) return;
+    if (!files.length || uploadInProgressRef.current) return;
 
+    const validFiles = [];
+    for (const file of files) {
+      const validationMessage = validateCheckpointUploadFile(file);
+      if (validationMessage) {
+        toast.error(validationMessage);
+      } else {
+        validFiles.push(file);
+      }
+    }
+    if (!validFiles.length) return;
+
+    uploadInProgressRef.current = true;
     setUploading(true);
+    let uploadedCount = 0;
     try {
-      for (const file of files) {
-        // Client-side size check
-        if (file.size > MAX_SIZE) {
-          toast.error(`"${file.name}" exceeds the 15 MB limit.`);
-          continue;
-        }
-        // Client-side extension check
-        const ext = file.name.slice(file.name.lastIndexOf('.')).toLowerCase();
-        if (!ALLOWED_EXT.includes(ext)) {
-          toast.error(`"${file.name}" — unsupported format. Use ${ALLOWED_EXT.join(', ')}.`);
-          continue;
-        }
-
+      for (let index = 0; index < validFiles.length; index += 1) {
+        const file = validFiles[index];
+        setUploadState({ fileName: file.name, index: index + 1, total: validFiles.length, percent: 0 });
         const fd = new FormData();
         fd.append('file', file);
-        const result = await checkpointApi.uploadFile(teamId, checkpointNumber, fd);
-        const version = result?.data?.versionNumber;
-        toast.success(`"${file.name}" uploaded${version ? ` as Version ${version}` : ''}!`);
+        try {
+          const result = await checkpointApi.uploadFile(teamId, checkpointNumber, fd, {
+            onUploadProgress: ({ loaded, total }) => {
+              const progressTotal = total || file.size;
+              const percent = progressTotal > 0
+                ? Math.min(100, Math.round((loaded / progressTotal) * 100))
+                : 0;
+              setUploadState({
+                fileName: file.name,
+                index: index + 1,
+                total: validFiles.length,
+                percent,
+              });
+            },
+          });
+          uploadedCount += 1;
+          const version = result?.data?.versionNumber;
+          toast.success(`"${file.name}" uploaded${version ? ` as Version ${version}` : ''}!`);
+        } catch (error) {
+          toast.error(checkpointUploadFailureMessage(error, file.name));
+        }
       }
-      onUploaded?.();
-    } catch (e) {
-      toast.error(parseApiError(e, 'Upload failed.').message);
+
+      if (uploadedCount > 0) {
+        await onUploaded?.();
+      }
     } finally {
+      uploadInProgressRef.current = false;
       setUploading(false);
+      setUploadState(null);
       if (fileRef.current) fileRef.current.value = '';
     }
   };
@@ -57,7 +83,7 @@ export default function FileUploadZone({ teamId, checkpointNumber, onUploaded, v
       onDrop={(e) => {
         e.preventDefault();
         setDragging(false);
-        processFiles(e.dataTransfer.files);
+        if (!uploading) processFiles(e.dataTransfer.files);
       }}
       className={`
         relative border-2 border-dashed flex flex-col items-center justify-center gap-2 cursor-pointer select-none
@@ -81,7 +107,18 @@ export default function FileUploadZone({ teamId, checkpointNumber, onUploaded, v
       {uploading ? (
         <>
           <Loader2 className="w-7 h-7 text-orange-500 animate-spin" />
-          <p className="text-xs font-semibold text-slate-600">Uploading…</p>
+          <p className="max-w-full truncate text-xs font-semibold text-slate-600">
+            {uploadState?.percent === 100 ? 'Processing' : 'Uploading'} {uploadState?.index}/{uploadState?.total}: {uploadState?.fileName}
+          </p>
+          <div className="h-1.5 w-full max-w-64 overflow-hidden rounded-full bg-slate-200" role="progressbar" aria-label="File upload progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow={uploadState?.percent ?? 0}>
+            <div
+              className="h-full rounded-full bg-orange-500 transition-[width] duration-200"
+              style={{ width: `${uploadState?.percent ?? 0}%` }}
+            />
+          </div>
+          <p className="text-[10px] text-slate-400">
+            {uploadState?.percent === 100 ? 'Saving and validating file…' : `${uploadState?.percent ?? 0}%`}
+          </p>
         </>
       ) : (
         <>

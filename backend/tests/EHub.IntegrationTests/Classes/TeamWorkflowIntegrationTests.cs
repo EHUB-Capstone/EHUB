@@ -13,6 +13,7 @@ using EHub.Application.Features.Workspaces;
 using EHub.Application.Features.Workspaces.GetCheckpointOverview;
 using EHub.Application.Features.Workspaces.CheckpointRequirements;
 using EHub.Application.Features.Workspaces.CheckpointFiles;
+using EHub.Application.Features.Workspaces.CheckpointLinks;
 using EHub.Application.Features.Checkpoints.LecturerManagement;
 using EHub.Application.Common.Interfaces.Storage;
 using EHub.Application.Features.Workspaces.CheckpointEvaluations;
@@ -1442,7 +1443,7 @@ public sealed class TeamWorkflowIntegrationTests
         upcoming.Value.Status.Should().Be("Upcoming");
 
         var storage = new InMemoryCheckpointStorage();
-        var files = new CheckpointFileHandler(context, storage, clock);
+        var files = new CheckpointFileHandler(context, storage, clock, new SuccessfulPreviewConverter());
         static MemoryStream Pdf() => new("%PDF-test"u8.ToArray());
 
         var tooEarly = await files.UploadAsync(seed.TeamId.Value, 2, Pdf(), "future.pdf", "application/pdf", 9,
@@ -1510,6 +1511,57 @@ public sealed class TeamWorkflowIntegrationTests
         reopenedUpload.IsSuccess.Should().BeTrue();
         reopenedUpload.Value.VersionNumber.Should().Be(3);
         (await context.SubmissionFiles.CountAsync(item => item.Submission.CheckpointId == first.Id)).Should().Be(3);
+        var links = new CheckpointLinkHandler(context, clock, new SaveWorkspaceCheckpointLinkRequestValidator());
+        var submittedLink = await links.CreateAsync(seed.TeamId.Value, 1,
+            new SaveWorkspaceCheckpointLinkRequest { Name = "Prototype", Url = "demo.example.com/prototype" },
+            seed.ProposerUserId, SystemRoles.Student);
+        submittedLink.IsSuccess.Should().BeTrue();
+        submittedLink.Value.VersionNumber.Should().Be(4);
+        submittedLink.Value.Url.Should().Be("https://demo.example.com/prototype");
+        var otherMemberUserId = await context.TeamMembers.AsNoTracking()
+            .Where(item => item.TeamId == seed.TeamId && item.StudentId == seed.StudentIds[1])
+            .Select(item => item.ClassStudent.Student.UserId!.Value)
+            .SingleAsync();
+        var deniedLinkUpdate = await links.UpdateAsync(seed.TeamId.Value, 1, submittedLink.Value.Id,
+            new SaveWorkspaceCheckpointLinkRequest { Name = "Changed by teammate", Url = "https://demo.example.com/other" },
+            otherMemberUserId, SystemRoles.Student);
+        deniedLinkUpdate.IsFailure.Should().BeTrue();
+        deniedLinkUpdate.Error.Code.Should().Be(ErrorCodes.WorkspaceAccessDenied);
+        var deniedFileDelete = await files.DeleteAsync(seed.TeamId.Value, 1, reopenedUpload.Value.Id,
+            otherMemberUserId, SystemRoles.Student);
+        deniedFileDelete.IsFailure.Should().BeTrue();
+        deniedFileDelete.Error.Code.Should().Be(ErrorCodes.WorkspaceAccessDenied);
+        var updatedLink = await links.UpdateAsync(seed.TeamId.Value, 1, submittedLink.Value.Id,
+            new SaveWorkspaceCheckpointLinkRequest { Name = "Prototype demo", Url = "https://demo.example.com/v2" },
+            seed.ProposerUserId, SystemRoles.Student);
+        updatedLink.IsSuccess.Should().BeTrue();
+        updatedLink.Value.Name.Should().Be("Prototype demo");
+        Guid? deletableLinkId = null;
+        for (var linkNumber = 2; linkNumber <= 10; linkNumber++)
+        {
+            var additionalLink = await links.CreateAsync(seed.TeamId.Value, 1,
+                new SaveWorkspaceCheckpointLinkRequest
+                {
+                    Name = $"Evidence {linkNumber}",
+                    Url = $"https://evidence{linkNumber}.example.com"
+                }, seed.ProposerUserId, SystemRoles.Student);
+            additionalLink.IsSuccess.Should().BeTrue();
+            if (linkNumber == 2) deletableLinkId = additionalLink.Value.Id;
+        }
+        var overLimit = await links.CreateAsync(seed.TeamId.Value, 1,
+            new SaveWorkspaceCheckpointLinkRequest { Name = "Too many", Url = "https://overflow.example.com" },
+            seed.ProposerUserId, SystemRoles.Student);
+        overLimit.IsFailure.Should().BeTrue();
+        overLimit.Error.Code.Should().Be(ErrorCodes.WorkspaceValidationError);
+        var deletedBeforeDeadline = await links.DeleteAsync(seed.TeamId.Value, 1, deletableLinkId!.Value,
+            seed.ProposerUserId, SystemRoles.Student);
+        deletedBeforeDeadline.IsSuccess.Should().BeTrue();
+        var replacementLink = await links.CreateAsync(seed.TeamId.Value, 1,
+            new SaveWorkspaceCheckpointLinkRequest { Name = "Replacement evidence", Url = "https://replacement.example.com" },
+            seed.ProposerUserId, SystemRoles.Student);
+        replacementLink.IsSuccess.Should().BeTrue();
+        replacementLink.Value.VersionNumber.Should().Be(14);
+
         var versionHistory = await scope.ServiceProvider.GetRequiredService<IGetWorkspaceCheckpointOverviewQueryHandler>()
             .HandleAsync(seed.TeamId.Value, seed.ProposerUserId, SystemRoles.Student);
         versionHistory.IsSuccess.Should().BeTrue();
@@ -1523,18 +1575,174 @@ public sealed class TeamWorkflowIntegrationTests
             });
         versionHistory.Value.Submissions.Single(item => item.CheckpointNumber == 1).RequirementContents
             .Single().Content.Should().Be("Original idea");
+        versionHistory.Value.Submissions.Single(item => item.CheckpointNumber == 1).Links
+            .Should().HaveCount(10).And.Contain(item => item.Name == "Prototype demo" && item.VersionNumber == 4);
+        var lecturerLinks = await manager.GetAsync(new GetLecturerCheckpointsRequest
+        {
+            ClassId = seed.ClassId,
+            CheckpointNumber = 1
+        }, seed.LecturerId);
+        lecturerLinks.Value.Submissions.Single(item => item.TeamId == seed.TeamId).SubmittedLinks
+            .Should().HaveCount(10).And.Contain(item => item.Name == "Prototype demo");
+
+        clock.UtcNow = clock.UtcNow.AddHours(2);
+        var closedLinkDelete = await links.DeleteAsync(seed.TeamId.Value, 1, submittedLink.Value.Id,
+            seed.ProposerUserId, SystemRoles.Student);
+        closedLinkDelete.IsFailure.Should().BeTrue();
+        closedLinkDelete.Error.Code.Should().Be(ErrorCodes.WorkspaceCheckpointNotOpen);
+        var closedFileDelete = await files.DeleteAsync(seed.TeamId.Value, 1, reopenedUpload.Value.Id,
+            seed.ProposerUserId, SystemRoles.Student);
+        closedFileDelete.IsFailure.Should().BeTrue();
+        closedFileDelete.Error.Code.Should().Be(ErrorCodes.WorkspaceCheckpointNotOpen);
 
         var options = new DbContextOptionsBuilder<AppDbContext>()
             .UseNpgsql(context.Database.GetConnectionString()).Options;
         await using var firstContext = new AppDbContext(options);
         await using var secondContext = new AppDbContext(options);
         var firstWriter = await firstContext.Submissions.SingleAsync(item => item.TeamId == seed.TeamId &&
-            item.CheckpointId == first.Id && item.VersionNumber == 3);
+            item.CheckpointId == first.Id && item.VersionNumber == 14);
         var staleWriter = await secondContext.Submissions.SingleAsync(item => item.Id == firstWriter.Id);
         firstWriter.Description = "First concurrent edit";
         await firstContext.SaveChangesAsync();
         staleWriter.Description = "Stale concurrent edit";
         await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() => secondContext.SaveChangesAsync());
+    }
+
+    [Fact]
+    public async Task CheckpointFilePreview_EnforcesAccessConvertsSupportedFilesAndCachesPerFileVersion()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateSeedAsync(context, createProposal: false, createTeam: true);
+        var courseId = await context.Classes.Where(item => item.Id == seed.ClassId)
+            .Select(item => item.CourseId).SingleAsync();
+        var checkpoint = new Checkpoint
+        {
+            CourseId = courseId,
+            Name = "Preview checkpoint",
+            CheckpointNumber = 1,
+            Status = CheckpointStatus.Draft,
+            CreatedById = seed.AdminId
+        };
+        var project = new Project
+        {
+            TeamId = seed.TeamId!.Value,
+            Name = "Preview project",
+            Status = ProjectStatus.Draft,
+            CreatedById = seed.ProposerUserId
+        };
+        var submission = new Submission
+        {
+            Project = project,
+            TeamId = seed.TeamId.Value,
+            Checkpoint = checkpoint,
+            SubmittedById = seed.ProposerUserId,
+            Title = checkpoint.Name,
+            Status = SubmissionStatus.Submitted,
+            SubmittedAt = DateTime.UtcNow,
+            VersionNumber = 1,
+            CreatedBy = seed.ProposerUserId
+        };
+        context.AddRange(checkpoint, project, submission);
+
+        SubmissionFile AddFile(string name, int version, string sourceKey)
+        {
+            var file = new SubmissionFile
+            {
+                Submission = submission,
+                VersionNumber = version,
+                FileName = $"{Guid.NewGuid():N}{Path.GetExtension(name)}",
+                OriginalName = name,
+                FileUrl = $"https://example.test/source/{sourceKey}",
+                CloudinaryPublicId = $"source-{sourceKey}",
+                MimeType = name.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase)
+                    ? "application/pdf"
+                    : "application/vnd.openxmlformats-officedocument",
+                FileSize = 20,
+                FileType = SubmissionFileType.Report,
+                UploadedById = seed.ProposerUserId,
+                UploadedAt = DateTime.UtcNow,
+                CreatedBy = seed.ProposerUserId
+            };
+            context.SubmissionFiles.Add(file);
+            return file;
+        }
+
+        var pdfFile = AddFile("report.pdf", 1, "pdf");
+        var docxFile = AddFile("plan.docx", 2, "docx-v2");
+        var pptxFile = AddFile("pitch.pptx", 3, "pptx-v3");
+        var newerDocxFile = AddFile("plan-v4.docx", 4, "docx-v4");
+        var unsupportedFile = AddFile("notes.txt", 5, "txt");
+        var corruptFile = AddFile("corrupt.docx", 6, "corrupt");
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        var storage = new PreviewTestStorage();
+        storage.Seed(pdfFile.FileUrl, "%PDF-original"u8.ToArray(), "application/pdf");
+        storage.Seed(docxFile.FileUrl, "docx-source-v2"u8.ToArray(), "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+        storage.Seed(pptxFile.FileUrl, "pptx-source-v3"u8.ToArray(), "application/vnd.openxmlformats-officedocument.presentationml.presentation");
+        storage.Seed(newerDocxFile.FileUrl, "docx-source-v4"u8.ToArray(), "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+        storage.Seed(unsupportedFile.FileUrl, "text"u8.ToArray(), "text/plain");
+        storage.Seed(corruptFile.FileUrl, "corrupt"u8.ToArray(), "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+        var converter = new CountingPreviewConverter();
+        var handler = new CheckpointFileHandler(context, storage, new FixedCheckpointTimeProvider(DateTime.UtcNow), converter);
+
+        var pdf = await handler.PreviewAsync(seed.TeamId.Value, 1, pdfFile.Id,
+            seed.ProposerUserId, SystemRoles.Student);
+        pdf.IsSuccess.Should().BeTrue();
+        pdf.Value.Content.AsSpan(0, 5).SequenceEqual("%PDF-"u8).Should().BeTrue();
+        converter.ConversionCount.Should().Be(0);
+
+        var docxFirst = await handler.PreviewAsync(seed.TeamId.Value, 1, docxFile.Id,
+            seed.ProposerUserId, SystemRoles.Student);
+        docxFirst.IsSuccess.Should().BeTrue();
+        docxFirst.Value.FromCache.Should().BeFalse();
+        converter.ConversionCount.Should().Be(1);
+        storage.PreviewUploadCount.Should().Be(1);
+
+        var docxSecond = await handler.PreviewAsync(seed.TeamId.Value, 1, docxFile.Id,
+            seed.ProposerUserId, SystemRoles.Student);
+        docxSecond.IsSuccess.Should().BeTrue();
+        docxSecond.Value.FromCache.Should().BeTrue();
+        converter.ConversionCount.Should().Be(1);
+        storage.PreviewUploadCount.Should().Be(1);
+
+        var pptx = await handler.PreviewAsync(seed.TeamId.Value, 1, pptxFile.Id,
+            seed.LecturerId, SystemRoles.Lecturer);
+        pptx.IsSuccess.Should().BeTrue();
+        converter.ConversionCount.Should().Be(2);
+
+        var newerVersion = await handler.PreviewAsync(seed.TeamId.Value, 1, newerDocxFile.Id,
+            seed.ProposerUserId, SystemRoles.Student);
+        newerVersion.IsSuccess.Should().BeTrue();
+        newerVersion.Value.FromCache.Should().BeFalse();
+        converter.ConversionCount.Should().Be(3);
+        (await context.SubmissionFiles.AsNoTracking().SingleAsync(item => item.Id == docxFile.Id))
+            .PreviewSourceVersionNumber.Should().Be(2);
+        (await context.SubmissionFiles.AsNoTracking().SingleAsync(item => item.Id == newerDocxFile.Id))
+            .PreviewSourceVersionNumber.Should().Be(4);
+
+        var denied = await handler.PreviewAsync(seed.TeamId.Value, 1, docxFile.Id,
+            Guid.NewGuid(), SystemRoles.Student);
+        denied.IsFailure.Should().BeTrue();
+        denied.Error.Code.Should().Be(ErrorCodes.WorkspaceAccessDenied);
+
+        var missing = await handler.PreviewAsync(seed.TeamId.Value, 1, Guid.NewGuid(),
+            seed.ProposerUserId, SystemRoles.Student);
+        missing.IsFailure.Should().BeTrue();
+        missing.Error.Code.Should().Be(ErrorCodes.CommonNotFoundError);
+
+        var unsupported = await handler.PreviewAsync(seed.TeamId.Value, 1, unsupportedFile.Id,
+            seed.ProposerUserId, SystemRoles.Student);
+        unsupported.IsFailure.Should().BeTrue();
+        unsupported.Error.Code.Should().Be(ErrorCodes.WorkspaceFilePreviewUnsupported);
+        (await handler.DownloadAsync(seed.TeamId.Value, 1, unsupportedFile.Id,
+            seed.ProposerUserId, SystemRoles.Student)).IsSuccess.Should().BeTrue();
+
+        var corrupt = await handler.PreviewAsync(seed.TeamId.Value, 1, corruptFile.Id,
+            seed.ProposerUserId, SystemRoles.Student);
+        corrupt.IsFailure.Should().BeTrue();
+        corrupt.Error.Code.Should().Be(ErrorCodes.WorkspaceFilePreviewConversionFailed);
     }
 
     [Fact]
@@ -1620,7 +1828,7 @@ public sealed class TeamWorkflowIntegrationTests
             .OrderBy(item => item.VersionNumber).Select(item => item.VersionNumber)
             .Should().Equal(1, 2);
 
-        var files = new CheckpointFileHandler(context, new InMemoryCheckpointStorage(), clock);
+        var files = new CheckpointFileHandler(context, new InMemoryCheckpointStorage(), clock, new SuccessfulPreviewConverter());
         using var pdf = new MemoryStream("%PDF-test"u8.ToArray());
         var next = await files.UploadAsync(seed.TeamId.Value, 1, pdf, "new.pdf", "application/pdf", 9,
             seed.ProposerUserId, SystemRoles.Student);
@@ -1900,6 +2108,73 @@ public sealed class TeamWorkflowIntegrationTests
         public Task DeleteAsync(string publicId, CancellationToken cancellationToken = default) => Task.CompletedTask;
     }
 
+    private sealed class SuccessfulPreviewConverter : IDocumentPreviewConverter
+    {
+        public Task<Result<DocumentPreviewConversionResult>> ConvertToPdfAsync(
+            byte[] sourceContent,
+            string sourceExtension,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(Result.Success(new DocumentPreviewConversionResult("%PDF-preview"u8.ToArray())));
+    }
+
+    private sealed class CountingPreviewConverter : IDocumentPreviewConverter
+    {
+        public int ConversionCount { get; private set; }
+
+        public Task<Result<DocumentPreviewConversionResult>> ConvertToPdfAsync(
+            byte[] sourceContent,
+            string sourceExtension,
+            CancellationToken cancellationToken = default)
+        {
+            ConversionCount++;
+            if (sourceContent.AsSpan().SequenceEqual("corrupt"u8))
+            {
+                return Task.FromResult(Result.Failure<DocumentPreviewConversionResult>(
+                    ErrorCodes.WorkspaceFilePreviewConversionFailed,
+                    "The document could not be converted for preview."));
+            }
+
+            return Task.FromResult(Result.Success(
+                new DocumentPreviewConversionResult(System.Text.Encoding.UTF8.GetBytes(
+                    $"%PDF-{sourceExtension}-{ConversionCount}"))));
+        }
+    }
+
+    private sealed class PreviewTestStorage : ISubmissionFileStorageService
+    {
+        private readonly Dictionary<string, SubmissionFileDownloadResult> content = new(StringComparer.Ordinal);
+        public int PreviewUploadCount { get; private set; }
+
+        public void Seed(string url, byte[] bytes, string contentType) =>
+            content[url] = new SubmissionFileDownloadResult(bytes, contentType);
+
+        public async Task<Result<SubmissionFileUploadResult>> UploadAsync(
+            Stream source,
+            string fileName,
+            string contentType,
+            Guid teamId,
+            int checkpointNumber,
+            CancellationToken cancellationToken = default)
+        {
+            await using var buffer = new MemoryStream();
+            await source.CopyToAsync(buffer, cancellationToken);
+            PreviewUploadCount++;
+            var publicId = $"preview-{PreviewUploadCount}";
+            var url = $"https://example.test/{publicId}";
+            content[url] = new SubmissionFileDownloadResult(buffer.ToArray(), contentType);
+            return Result.Success(new SubmissionFileUploadResult(url, publicId));
+        }
+
+        public Task<Result<SubmissionFileDownloadResult>> DownloadAsync(
+            string secureUrl,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(content.TryGetValue(secureUrl, out var stored)
+                ? Result.Success(stored)
+                : Result.Failure<SubmissionFileDownloadResult>(ErrorCodes.CommonNotFoundError, "Stored file was not found."));
+
+        public Task DeleteAsync(string publicId, CancellationToken cancellationToken = default) => Task.CompletedTask;
+    }
+
     [Fact]
     public async Task CheckpointEvaluation_PreservesLecturerScoreAfterNewSubmissionVersion()
     {
@@ -1992,8 +2267,12 @@ public sealed class TeamWorkflowIntegrationTests
         var studentSummary = await handler.GetSummaryAsync(seed.TeamId.Value, 1, seed.ProposerUserId, SystemRoles.Student);
         studentSummary.IsSuccess.Should().BeTrue();
         studentSummary.Value.Checkpoint.Rubrics.Select(item => item.Key).Should().Equal("clarity", "evidence");
+        studentSummary.Value.Checkpoint.Members.Should().HaveCount(seed.StudentIds.Count());
         studentSummary.Value.Evaluations.Should().ContainSingle();
         studentSummary.Value.Evaluations.Single().CheckpointTotal.Should().Be(8.6m);
+        studentSummary.Value.Evaluations.Single().MemberScores.Should().HaveCount(seed.StudentIds.Count());
+        studentSummary.Value.Evaluations.Single().MemberScores.Should()
+            .OnlyContain(item => item.Score == 8.6m && !item.IsOverridden);
         studentSummary.Value.Summary.AverageScore.Should().Be(8.6m);
 
         var revised = await handler.SaveAsync(seed.TeamId.Value, 1,
@@ -2113,6 +2392,8 @@ public sealed class TeamWorkflowIntegrationTests
         context.ChangeTracker.Clear();
         var revisedStudentSummary = await handler.GetSummaryAsync(seed.TeamId.Value, 1, seed.ProposerUserId, SystemRoles.Student);
         revisedStudentSummary.Value.Evaluations.Single().CheckpointTotal.Should().Be(7.4m);
+        revisedStudentSummary.Value.Evaluations.Single().MemberScores.Single(item => item.StudentId == seed.StudentIds[0])
+            .Should().Match<WorkspaceCheckpointEvaluationMemberScoreResponse>(item => item.Score == 6.5m && item.IsOverridden);
 
         var forbidden = await handler.SaveAsync(seed.TeamId.Value, 1,
             new SaveWorkspaceCheckpointEvaluationRequest(), seed.ProposerUserId, SystemRoles.Student);

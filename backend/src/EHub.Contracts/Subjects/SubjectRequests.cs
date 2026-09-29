@@ -97,6 +97,8 @@ public sealed class SaveRubricCriterionRequest
 public sealed class SaveSubjectCheckpointsRequest
 {
     public IReadOnlyCollection<SubjectCheckpointRequest> Checkpoints { get; init; } = Array.Empty<SubjectCheckpointRequest>();
+    public IReadOnlyCollection<SubjectOtherAssessmentRequest> OtherAssessments { get; init; } =
+        Array.Empty<SubjectOtherAssessmentRequest>();
 }
 
 public sealed class SubjectCheckpointRequest
@@ -104,8 +106,16 @@ public sealed class SubjectCheckpointRequest
     public int Number { get; init; }
     public string Title { get; init; } = string.Empty;
     public string? ShortDescription { get; init; }
+    public decimal CourseWeight { get; init; }
     public IReadOnlyCollection<string> Requirements { get; init; } = Array.Empty<string>();
     public IReadOnlyCollection<SubjectCriterionRequest> Rubrics { get; init; } = Array.Empty<SubjectCriterionRequest>();
+}
+
+public sealed class SubjectOtherAssessmentRequest
+{
+    public Guid? Id { get; init; }
+    public string Name { get; init; } = string.Empty;
+    public decimal Weight { get; init; }
 }
 
 public sealed class SubjectCriterionRequest

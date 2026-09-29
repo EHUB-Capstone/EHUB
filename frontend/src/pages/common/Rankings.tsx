@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { useState, useEffect } from 'react';
+import { useCallback, useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { motion } from 'framer-motion';
 import { rankingApi } from '../../api/rankingApi';
@@ -8,7 +8,7 @@ import { toClassViewModel, unwrapApiData } from '../../utils/classMappers';
 import { useAuth } from '../../hooks/useAuth';
 import RankingTable from '../../components/workspace/RankingTable';
 import LoadingSkeleton from '../../components/ui/LoadingSkeleton';
-import { Trophy, Medal, Star, Filter } from 'lucide-react';
+import { Trophy, Medal, Filter } from 'lucide-react';
 
 const Rankings = () => {
   const { user } = useAuth();
@@ -18,9 +18,9 @@ const Rankings = () => {
   const [loading, setLoading] = useState(true);
 
   const isAdmin = user?.role === 'ADMIN';
-  const isLecturerOrMentor = ['LECTURER', 'MENTOR'].includes(user?.role);
+  const isLecturer = user?.role === 'LECTURER';
 
-  const fetchRankings = async () => {
+  const fetchRankings = useCallback(async () => {
     setLoading(true);
     try {
       let res;
@@ -28,10 +28,8 @@ const Rankings = () => {
         res = await rankingApi.getClass(selectedClass);
       } else if (isAdmin) {
         res = await rankingApi.getGlobal();
-      } else if (isLecturerOrMentor) {
-        res = await rankingApi.getMyTeams();
       } else {
-        res = await rankingApi.getMyClass();
+        res = await rankingApi.getMyTeams();
       }
       const data = res.data || res || [];
       setRankings(Array.isArray(data) ? data : []);
@@ -40,11 +38,11 @@ const Rankings = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [isAdmin, selectedClass]);
 
   useEffect(() => {
     const loadClasses = async () => {
-      if (isAdmin || isLecturerOrMentor) {
+      if (isAdmin || isLecturer) {
         try {
           const res = await classApi.getAll();
           const payload = unwrapApiData(res);
@@ -56,11 +54,11 @@ const Rankings = () => {
       }
     };
     loadClasses();
-  }, [isAdmin, isLecturerOrMentor]);
+  }, [isAdmin, isLecturer]);
 
   useEffect(() => {
     fetchRankings();
-  }, [selectedClass]);
+  }, [fetchRankings]);
 
   if (loading && rankings.length === 0) return <LoadingSkeleton />;
 
@@ -87,8 +85,8 @@ const Rankings = () => {
           </p>
         </div>
 
-        {/* Class Filter (Admin/Lecturer/Mentor only) */}
-        {(isAdmin || isLecturerOrMentor) && classes.length > 0 && (
+        {/* Class Filter (Admin/Lecturer only) */}
+        {(isAdmin || isLecturer) && classes.length > 0 && (
           <div className="flex items-center gap-2 bg-white border border-slate-200/60 px-3 py-1.5 rounded-xl shadow-sm shrink-0">
             <Filter className="w-4 h-4 text-slate-400" />
             <select

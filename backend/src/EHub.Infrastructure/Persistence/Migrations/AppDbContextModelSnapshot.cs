@@ -434,6 +434,12 @@ namespace EHub.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("course_id");
 
+                    b.Property<decimal>("CourseWeight")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("decimal(6,2)")
+                        .HasDefaultValue(0m)
+                        .HasColumnName("course_weight");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
@@ -4304,6 +4310,12 @@ namespace EHub.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("course_id");
 
+                    b.Property<decimal>("CourseWeight")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("decimal(6,2)")
+                        .HasDefaultValue(0m)
+                        .HasColumnName("course_weight");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
@@ -5322,6 +5334,24 @@ namespace EHub.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(256)")
                         .HasColumnName("original_name");
 
+                    b.Property<DateTime?>("PreviewGeneratedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("preview_generated_at");
+
+                    b.Property<string>("PreviewPdfPublicId")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("preview_pdf_public_id");
+
+                    b.Property<string>("PreviewPdfUrl")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("preview_pdf_url");
+
+                    b.Property<int?>("PreviewSourceVersionNumber")
+                        .HasColumnType("integer")
+                        .HasColumnName("preview_source_version_number");
+
                     b.Property<Guid>("SubmissionId")
                         .HasColumnType("uuid")
                         .HasColumnName("submission_id");
@@ -5354,6 +5384,81 @@ namespace EHub.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("submission_files", (string)null);
+                });
+
+            modelBuilder.Entity("EHub.Domain.Entities.SubmissionLink", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deleted_at");
+
+                    b.Property<Guid?>("DeletedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("deleted_by");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("is_deleted");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("name");
+
+                    b.Property<Guid>("SubmissionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("submission_id");
+
+                    b.Property<DateTime>("SubmittedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("submitted_at");
+
+                    b.Property<Guid>("SubmittedById")
+                        .HasColumnType("uuid")
+                        .HasColumnName("submitted_by_id");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
+                    b.Property<string>("Url")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("url");
+
+                    b.Property<int>("VersionNumber")
+                        .HasColumnType("integer")
+                        .HasColumnName("version_number");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SubmittedById");
+
+                    b.HasIndex("SubmissionId", "VersionNumber")
+                        .IsUnique();
+
+                    b.ToTable("submission_links", (string)null);
                 });
 
             modelBuilder.Entity("EHub.Domain.Entities.SubmissionRequirementContent", b =>
@@ -7790,6 +7895,25 @@ namespace EHub.Infrastructure.Persistence.Migrations
                     b.Navigation("UploadedBy");
                 });
 
+            modelBuilder.Entity("EHub.Domain.Entities.SubmissionLink", b =>
+                {
+                    b.HasOne("EHub.Domain.Entities.Submission", "Submission")
+                        .WithMany("Links")
+                        .HasForeignKey("SubmissionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("EHub.Domain.Entities.User", "SubmittedBy")
+                        .WithMany()
+                        .HasForeignKey("SubmittedById")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Submission");
+
+                    b.Navigation("SubmittedBy");
+                });
+
             modelBuilder.Entity("EHub.Domain.Entities.SubmissionRequirementContent", b =>
                 {
                     b.HasOne("EHub.Domain.Entities.Submission", "Submission")
@@ -8311,6 +8435,8 @@ namespace EHub.Infrastructure.Persistence.Migrations
                     b.Navigation("Feedbacks");
 
                     b.Navigation("Files");
+
+                    b.Navigation("Links");
 
                     b.Navigation("RequirementContents");
                 });

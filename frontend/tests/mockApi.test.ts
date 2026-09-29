@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { adminApprovalApi } from '../src/api/adminApprovalApi.ts';
 import axiosClient from '../src/api/axiosClient.ts';
+import { checkpointApi } from '../src/api/checkpointApi.ts';
 import { enableApiMocks } from '../src/mocks/mockApi.ts';
 import { getMockState, resetMockState } from '../src/mocks/mockHelpers.ts';
 import { getApprovalStats, registrationToApprovalRequest } from '../src/utils/accountApproval.ts';
@@ -1407,15 +1408,62 @@ test('lecturer checkpoint mock follows Admin definitions and shares class schedu
   for (const [index, name] of ['first.pdf', 'revised.pdf'].entries()) {
     const body = new FormData();
     body.append('file', new File(['%PDF-test'], name, { type: 'application/pdf' }));
-    const uploaded = await axiosClient.post(
-      `/workspace/checkpoints/teams/${team.id}/checkpoints/2/upload`, body,
-      { headers: { 'Content-Type': 'multipart/form-data' } },
-    );
+    const uploaded = await checkpointApi.uploadFile(team.id, 2, body, {
+      onUploadProgress: () => undefined,
+    });
     assert.equal(uploaded.data.versionNumber, index + 1);
   }
+  const submittedLink = await axiosClient.post(
+    `/workspace/checkpoints/teams/${team.id}/checkpoints/2/links`,
+    { name: 'Prototype', url: 'https://demo.example.com/prototype' },
+  );
+  assert.equal(submittedLink.data.versionNumber, 3);
+  const updatedLink = await axiosClient.put(
+    `/workspace/checkpoints/teams/${team.id}/checkpoints/2/links/${submittedLink.data._id}`,
+    { name: 'Prototype demo', url: 'https://demo.example.com/v2' },
+  );
+  assert.equal(updatedLink.data.name, 'Prototype demo');
   const history = await axiosClient.get(`/workspace/checkpoints/teams/${team.id}`);
   assert.deepEqual(history.data.submissions.find((item: { checkpointNumber: number }) =>
     item.checkpointNumber === 2).files.map((file: { versionNumber: number }) => file.versionNumber), [1, 2]);
+  assert.equal(history.data.submissions.find((item: { checkpointNumber: number }) =>
+    item.checkpointNumber === 2).links[0].url, 'https://demo.example.com/v2');
+  const firstPreviewFileId = history.data.submissions.find((item: { checkpointNumber: number }) =>
+    item.checkpointNumber === 2).files[0]._id;
+  const preview = await axiosClient.get(
+    `/workspace/checkpoints/teams/${team.id}/checkpoints/2/files/${firstPreviewFileId}/preview`,
+    { responseType: 'blob' },
+  );
+  assert.equal(preview.type, 'application/pdf');
+
+  state.sessionUserId = cls.primaryLecturerId;
+  const lecturerView = await axiosClient.get('/lecturer/checkpoints', {
+    params: { classId: cls.id, checkpointNumber: 2 },
+  });
+  assert.equal(lecturerView.data.submissions.find((item: { teamId: string }) =>
+    item.teamId === team.id).submittedLinks[0].name, 'Prototype demo');
+  state.sessionUserId = team.leaderId;
+
+  const evaluation = await axiosClient.get(
+    `/workspace/checkpoints/teams/${team.id}/checkpoints/1/evaluation-summary`,
+  );
+  assert.equal(evaluation.data.checkpoint.number, 1);
+  assert.ok(Array.isArray(evaluation.data.evaluations));
+  assert.equal(evaluation.data.evaluations[0]?.status, 'SUBMITTED');
+  assert.equal(evaluation.data.evaluations[0]?.memberScores.length, team.members.length);
+  assert.equal(evaluation.data.evaluations[0]?.memberScores[0]?.isOverridden, true);
+
+  state.checkpointSchedules[`${cls.id}:${checkpointId}`].endDateUtc = new Date(Date.now() - 1_000).toISOString();
+  await assert.rejects(
+    axiosClient.delete(`/workspace/checkpoints/teams/${team.id}/checkpoints/2/links/${submittedLink.data._id}`),
+    (error: unknown) => (error as { response?: { data?: { code?: string } } }).response?.data?.code === 'WORKSPACE_CHECKPOINT_NOT_OPEN',
+  );
+  const firstFileId = history.data.submissions.find((item: { checkpointNumber: number }) =>
+    item.checkpointNumber === 2).files[0]._id;
+  await assert.rejects(
+    axiosClient.delete(`/workspace/checkpoints/teams/${team.id}/checkpoints/2/files/${firstFileId}`),
+    (error: unknown) => (error as { response?: { data?: { code?: string } } }).response?.data?.code === 'WORKSPACE_CHECKPOINT_NOT_OPEN',
+  );
 });
 
 test('bulk checkpoint scheduling checks the visible class scope and updates all matching classes', async () => {
@@ -1448,4 +1496,35 @@ test('bulk checkpoint scheduling checks the visible class scope and updates all 
   assert.equal(applied.data.schedules.length, 2);
   assert.deepEqual(new Set(applied.data.schedules.map((item: { startDateUtc: string }) => item.startDateUtc)), new Set([startDateUtc]));
   assert.equal(Object.keys(state.checkpointSchedules).length, 2);
+});
+
+test('course assessments expose configured weights and enforce lecturer grading access', async () => {
+  resetMockState();
+  const state = getMockState();
+  const team = state.teams[0];
+  const assessment = state.curricula.EXE101.otherAssessments[0];
+
+  await axiosClient.post('/auth/login', { email: 'admin@ehub.local', password: 'Mock123!' });
+  const initial = await axiosClient.get(`/workspace/checkpoints/teams/${team.id}/course-assessments`);
+  assert.equal(initial.data.assessments[0].name, 'Constructivism Presentations');
+  assert.equal(initial.data.assessments[0].weight, 15);
+  assert.equal(initial.data.assessments[0].score, null);
+  await assert.rejects(
+    axiosClient.put(`/workspace/checkpoints/teams/${team.id}/course-assessments/${assessment._id}`, { score: 9 }),
+    (error: unknown) => (error as { response?: { status?: number } }).response?.status === 403,
+  );
+
+  await axiosClient.post('/auth/login', { email: 'giang.lecturer@ehub.local', password: 'Mock123!' });
+  await assert.rejects(
+    axiosClient.put(`/workspace/checkpoints/teams/${team.id}/course-assessments/${assessment._id}`, { score: 11 }),
+    (error: unknown) => (error as { response?: { status?: number } }).response?.status === 400,
+  );
+  const saved = await axiosClient.put(
+    `/workspace/checkpoints/teams/${team.id}/course-assessments/${assessment._id}`,
+    { score: 9 },
+  );
+  assert.equal(saved.data.score, 9);
+  const refreshed = await axiosClient.get(`/workspace/checkpoints/teams/${team.id}/course-assessments`);
+  assert.equal(refreshed.data.assessments[0].score, 9);
+  assert.equal(refreshed.data.assessments[0].status, 'SUBMITTED');
 });

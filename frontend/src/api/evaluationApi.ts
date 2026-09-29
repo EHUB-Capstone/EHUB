@@ -35,6 +35,12 @@ export const evaluationApi = {
   getCheckpointHistory: async (teamId, checkpointNumber) => {
     return axiosClient.get(`/evaluations/team/${teamId}/checkpoints/${checkpointNumber}/history`);
   },
+  getCourseAssessments: async (teamId) => {
+    return axiosClient.get(`/workspace/checkpoints/teams/${teamId}/course-assessments`);
+  },
+  saveCourseAssessment: async (teamId, assessmentId, score) => {
+    return axiosClient.put(`/workspace/checkpoints/teams/${teamId}/course-assessments/${assessmentId}`, { score });
+  },
   createCheckpointEvaluation: async (teamId, checkpointNumber, evaluationData) => {
     return axiosClient.post(`/workspace/checkpoints/teams/${teamId}/checkpoints/${checkpointNumber}/evaluations`, evaluationData);
   },
@@ -56,6 +62,8 @@ export const {
   getCheckpointEvaluations,
   getCheckpointSummary,
   getCheckpointHistory,
+  getCourseAssessments,
+  saveCourseAssessment,
   createCheckpointEvaluation,
   updateCheckpointEvaluation,
   submitCheckpointEvaluation,

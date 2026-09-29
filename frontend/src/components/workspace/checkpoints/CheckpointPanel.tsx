@@ -7,7 +7,7 @@ import {
   X, CheckCircle2, Award, FileText, Download, Trash2, Loader2,
   MessageSquare, ArrowLeft, Users, BarChart2, Layers, TrendingUp, Upload, Save,
   ClipboardList, Eye, ClipboardCheck, PanelRightOpen, PanelRightClose,
-  CalendarClock,
+  CalendarClock, Link2, ExternalLink, Pencil,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { checkpointApi } from '../../../api/checkpointApi';
@@ -15,9 +15,12 @@ import { useAuth } from '../../../hooks/useAuth';
 import Button from '../../ui/Button';
 import ConfirmDialog from '../../ui/ConfirmDialog';
 import FileUploadZone from './FileUploadZone';
+import CheckpointLinkForm from './CheckpointLinkForm';
+import CheckpointFilePreviewModal from './CheckpointFilePreviewModal';
 import FeedbackThread from './FeedbackThread';
 import EvaluationPanel from '../EvaluationPanel';
 import { subscribeProjectDirectionRealtime } from '../../../api/projectDirectionRealtime';
+import { isCheckpointFilePreviewable } from '../../../utils/checkpointUpload';
 
 const ICONS = { Users, BarChart2, Layers, TrendingUp };
 
@@ -33,6 +36,10 @@ const FILE_TYPE_STYLES = {
   pdf: { bg: 'bg-red-50', text: 'text-red-600', label: 'PDF' },
   docx: { bg: 'bg-blue-50', text: 'text-blue-600', label: 'DOCX' },
   pptx: { bg: 'bg-orange-50', text: 'text-orange-600', label: 'PPTX' },
+};
+
+const displayLinkHost = (url) => {
+  try { return new URL(url).hostname; } catch { return url; }
 };
 
 function SectionTitle({ icon: Icon, children, count, subtitle }) {
@@ -67,13 +74,18 @@ export default function CheckpointPanel({
 }) {
   const { user } = useAuth();
   const [files, setFiles] = useState([]);
+  const [links, setLinks] = useState([]);
   const [feedbacks, setFeedbacks] = useState([]);
   const [requirementContents, setRequirementContents] = useState({});
   const [savingRequirements, setSavingRequirements] = useState(false);
   const [loading, setLoading] = useState(true);
   const [downloadingId, setDownloadingId] = useState(null);
+  const [previewFile, setPreviewFile] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
+  const [editingLink, setEditingLink] = useState(null);
+  const [deleteLinkTarget, setDeleteLinkTarget] = useState(null);
+  const [deletingLink, setDeletingLink] = useState(false);
   const isStudent = user?.role?.toUpperCase() === 'STUDENT';
   const isLecturer = user?.role?.toUpperCase() === 'LECTURER';
   const [showEvaluation, setShowEvaluation] = useState(false);
@@ -101,6 +113,7 @@ export default function CheckpointPanel({
           (s) => Number(s.checkpointNumber) === Number(checkpoint.number)
         );
         setFiles(sub?.files || []);
+        setLinks(sub?.links || []);
         setRequirementContents(buildContentsMap(sub));
         setFeedbacks(
           res.data.feedbacks.filter(
@@ -152,13 +165,13 @@ export default function CheckpointPanel({
 
   useEffect(() => {
     document.body.style.overflow = 'hidden';
-    const onKey = (e) => e.key === 'Escape' && onClose();
+    const onKey = (e) => e.key === 'Escape' && !previewFile && onClose();
     window.addEventListener('keydown', onKey);
     return () => {
       document.body.style.overflow = '';
       window.removeEventListener('keydown', onKey);
     };
-  }, [onClose]);
+  }, [onClose, previewFile]);
 
   const reqFilledCount = useMemo(
     () =>
@@ -203,6 +216,24 @@ export default function CheckpointPanel({
 
   const handleRequirementChange = (index, value) => {
     setRequirementContents((prev) => ({ ...prev, [index]: value }));
+  };
+
+  const handleDeleteLink = async (linkId) => {
+    setDeletingLink(true);
+    try {
+      const res = await checkpointApi.deleteLink(teamId, checkpoint.number, linkId);
+      if (res.success) {
+        setLinks((current) => current.filter((link) => link._id !== linkId));
+        setDeleteLinkTarget(null);
+        if (editingLink?._id === linkId) setEditingLink(null);
+        toast.success('Submitted link deleted.');
+        onRequirementsSaved?.();
+      }
+    } catch (error) {
+      toast.error(error?.response?.data?.message || 'Unable to delete the submitted link.');
+    } finally {
+      setDeletingLink(false);
+    }
   };
 
   const handleSaveAllRequirements = async () => {
@@ -463,6 +494,28 @@ export default function CheckpointPanel({
                 </section>
               )}
 
+              {isEditable && isStudent && checkpoint.canUpload && (
+                <section className="rounded-2xl border border-slate-200/60 bg-white p-5 shadow-sm space-y-4">
+                  <SectionTitle
+                    icon={Link2}
+                    subtitle="Name the resource and submit a public HTTPS link"
+                  >
+                    Submit a link
+                  </SectionTitle>
+                  {links.length < 10 ? (
+                    <CheckpointLinkForm
+                      teamId={String(teamId)}
+                      checkpointNumber={checkpoint.number}
+                      onSaved={fetchData}
+                    />
+                  ) : (
+                    <p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-800">
+                      This checkpoint already has the maximum of 10 active links. Delete one of your links before adding another.
+                    </p>
+                  )}
+                </section>
+              )}
+
               {isEditable && isStudent && !checkpoint.canUpload && (
                 <section className={`rounded-2xl border p-5 shadow-sm ${checkpoint.scheduleStatus === 'Closed' ? 'border-red-200 bg-red-50' : 'border-blue-200 bg-blue-50'}`}>
                   <div className="flex items-start gap-3">
@@ -515,8 +568,7 @@ export default function CheckpointPanel({
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {files.map((file) => {
                       const isOwner = file.uploadedBy?._id === user?._id;
-                      const isAdmin = user?.role?.toUpperCase() === 'ADMIN';
-                      const canDelete = isStudent && (isOwner || isAdmin);
+                      const canDelete = isStudent && checkpoint.canUpload && isOwner;
                       const style = FILE_TYPE_STYLES[file.fileType] || {
                         bg: 'bg-slate-50',
                         text: 'text-slate-600',
@@ -528,7 +580,7 @@ export default function CheckpointPanel({
                           key={file._id}
                           className="flex flex-col p-4 rounded-xl border border-slate-200/80 bg-slate-50/30 hover:border-primary-200 hover:bg-white transition-all"
                         >
-                          <div className="flex items-start gap-3">
+                          <div className="flex flex-1 items-start gap-3">
                             <div
                               className={`w-11 h-11 rounded-lg ${style.bg} flex items-center justify-center shrink-0`}
                             >
@@ -558,6 +610,16 @@ export default function CheckpointPanel({
                           </div>
 
                           <div className="flex gap-2 mt-3 pt-3 border-t border-slate-200/80">
+                            {isCheckpointFilePreviewable(file.originalName) && (
+                              <button
+                                type="button"
+                                onClick={() => setPreviewFile(file)}
+                                className="flex-1 inline-flex items-center justify-center gap-2 py-2 rounded-lg border border-primary-200 bg-white text-primary text-xs font-bold hover:bg-primary-50 transition-all"
+                              >
+                                <Eye className="w-3.5 h-3.5" />
+                                Preview
+                              </button>
+                            )}
                             <button
                               type="button"
                               onClick={() => handleDownload(file)}
@@ -583,6 +645,85 @@ export default function CheckpointPanel({
                             )}
                           </div>
                         </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </section>
+
+              <section className="rounded-2xl border border-slate-200/60 bg-white p-5 shadow-sm space-y-4">
+                <SectionTitle
+                  icon={Link2}
+                  count={loading ? '…' : links.length}
+                  subtitle="External resources submitted for this checkpoint"
+                >
+                  Submitted links
+                </SectionTitle>
+
+                {loading ? (
+                  <div className="flex justify-center rounded-xl border border-dashed border-slate-200 py-10">
+                    <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                  </div>
+                ) : links.length === 0 ? (
+                  <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/50 px-6 py-10 text-center">
+                    <Link2 className="mx-auto h-7 w-7 text-slate-300" />
+                    <p className="mt-2 text-sm font-semibold text-slate-700">No submitted links yet</p>
+                    <p className="mt-1 text-xs text-slate-400">
+                      {isStudent && checkpoint.canUpload ? 'Submit a public HTTPS resource using the form above.' : 'Links submitted by the team will appear here.'}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {links.map((link) => {
+                      const isOwner = link.submittedBy?._id === user?._id;
+                      const canManage = isStudent && checkpoint.canUpload && isOwner;
+                      const isEditing = canManage && editingLink?._id === link._id;
+
+                      if (isEditing) {
+                        return (
+                          <article key={link._id} className="rounded-xl border border-primary-200 bg-primary-50/30 p-4 shadow-sm ring-1 ring-primary-100">
+                            <div className="mb-4 flex items-center gap-2 text-sm font-bold text-slate-800">
+                              <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-primary-100 bg-white">
+                                <Pencil className="h-4 w-4 text-primary" />
+                              </span>
+                              Edit submitted link
+                            </div>
+                            <CheckpointLinkForm
+                              teamId={String(teamId)}
+                              checkpointNumber={checkpoint.number}
+                              editingLink={link}
+                              onCancelEdit={() => setEditingLink(null)}
+                              onSaved={fetchData}
+                            />
+                          </article>
+                        );
+                      }
+
+                      return (
+                        <article key={link._id} className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-slate-50/30 p-4 sm:flex-row sm:items-center">
+                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-primary-100 bg-primary-50">
+                            <Link2 className="h-4 w-4 text-primary" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <a href={link.url} target="_blank" rel="noopener noreferrer" className="inline-flex max-w-full items-center gap-1.5 font-bold text-slate-800 hover:text-primary">
+                              <span className="truncate">{link.name}</span><ExternalLink className="h-3.5 w-3.5 shrink-0" />
+                            </a>
+                            <p className="truncate text-xs text-slate-500" title={link.url}>{displayLinkHost(link.url)}</p>
+                            <p className="mt-1 text-[10px] text-slate-400">
+                              Version {link.versionNumber} · {link.submittedBy?.name || 'Unknown'} · {new Date(link.submittedAt).toLocaleString()}
+                            </p>
+                          </div>
+                          {canManage && (
+                            <div className="flex shrink-0 gap-2">
+                              <button type="button" onClick={() => setEditingLink(link)} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600 hover:border-primary hover:text-primary">
+                                <Pencil className="h-3.5 w-3.5" /> Edit
+                              </button>
+                              <button type="button" onClick={() => setDeleteLinkTarget(link)} className="rounded-lg border border-slate-200 px-3 py-2 text-slate-500 hover:border-red-200 hover:bg-red-50 hover:text-red-600" aria-label={`Delete ${link.name}`}>
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </div>
+                          )}
+                        </article>
                       );
                     })}
                   </div>
@@ -681,6 +822,21 @@ export default function CheckpointPanel({
         description={`“${deleteTarget?.originalName || 'This file'}” will be permanently removed from this checkpoint.`}
         confirmText="Delete file"
         isSubmitting={deleting}
+      />
+      <ConfirmDialog
+        isOpen={Boolean(deleteLinkTarget)}
+        onClose={() => { if (!deletingLink) setDeleteLinkTarget(null); }}
+        onConfirm={() => { if (deleteLinkTarget) return handleDeleteLink(deleteLinkTarget._id); }}
+        title="Delete submitted link?"
+        description={`“${deleteLinkTarget?.name || 'This link'}” will be removed from this checkpoint.`}
+        confirmText="Delete link"
+        isSubmitting={deletingLink}
+      />
+      <CheckpointFilePreviewModal
+        teamId={String(teamId)}
+        checkpointNumber={checkpoint.number}
+        file={previewFile}
+        onClose={() => setPreviewFile(null)}
       />
     </div>
   );

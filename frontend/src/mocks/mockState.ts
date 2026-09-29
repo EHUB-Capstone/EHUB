@@ -112,8 +112,15 @@ export interface MockCheckpoint {
   number: number;
   title: string;
   shortDescription: string | null;
+  courseWeight: number;
   requirements: string[];
   rubrics: Array<Record<string, unknown>>;
+}
+
+export interface MockOtherAssessment {
+  _id: string;
+  name: string;
+  weight: number;
 }
 
 export interface MockClassCheckpointSchedule {
@@ -135,10 +142,20 @@ export interface MockCheckpointFile {
   uploadedBy: { _id: string; name: string };
 }
 
+export interface MockCheckpointLink {
+  _id: string;
+  versionNumber: number;
+  name: string;
+  url: string;
+  submittedAt: string;
+  submittedBy: { _id: string; name: string };
+}
+
 export interface MockCurriculum {
   roadmapItems: MockRoadmapItem[];
   rubrics: MockRubric[];
   checkpoints: MockCheckpoint[];
+  otherAssessments: MockOtherAssessment[];
 }
 
 export interface MockClass extends ClassDto {
@@ -312,6 +329,8 @@ export interface MockApiState {
   curricula: Record<string, MockCurriculum>;
   checkpointSchedules: Record<string, MockClassCheckpointSchedule>;
   checkpointFiles: Record<string, MockCheckpointFile[]>;
+  checkpointLinks: Record<string, MockCheckpointLink[]>;
+  courseAssessmentScores: Record<string, number>;
   classes: MockClass[];
   rosters: Record<string, MockRosterStudent[]>;
   teams: MockTeam[];
@@ -390,7 +409,7 @@ const curriculumFor = (subject: MockSubject): MockCurriculum => ({
     name: 'Checkpoint 1 rubric',
     description: 'Problem validation and evidence quality.',
     status: 'ACTIVE',
-    totalWeight: 100,
+    totalWeight: 85,
     checkpointNumber: 1,
     criteria: [
       { _id: id(280 + Number(subject._id.slice(-2))), name: 'Problem clarity', description: 'The problem is specific and evidence-backed.', maxScore: 10, weight: 50, displayOrder: 1 },
@@ -401,9 +420,14 @@ const curriculumFor = (subject: MockSubject): MockCurriculum => ({
     number: 1,
     title: 'Problem validation',
     shortDescription: 'Validate a meaningful customer problem.',
+    courseWeight: 85,
     requirements: ['Interview at least five target users', 'Submit an insight summary'],
-    rubrics: [{ key: 'problem-clarity', label: 'Problem clarity', description: 'Clear problem statement', weight: 50, levels: [] }],
+    rubrics: [
+      { key: 'problem-clarity', label: 'Problem clarity', description: 'Clear problem statement', weight: 50, levels: [] },
+      { key: 'customer-evidence', label: 'Customer evidence', description: 'Evidence from target users', weight: 50, levels: [] },
+    ],
   }],
+  otherAssessments: [{ _id: id(340 + Number(subject._id.slice(-2))), name: 'Constructivism Presentations', weight: 15 }],
 });
 
 const classIds = { active: id(401), draft: id(402), archived: id(403) };
@@ -495,6 +519,8 @@ const initialMockState: MockApiState = {
     curricula: Object.fromEntries(subjects.map((subject) => [subject.subjectCode, curriculumFor(subject)])),
     checkpointSchedules: {},
     checkpointFiles: {},
+    checkpointLinks: {},
+    courseAssessmentScores: {},
     classes,
     rosters: { [classIds.active]: activeRoster, [classIds.draft]: draftRoster, [classIds.archived]: archivedRoster },
     teams,

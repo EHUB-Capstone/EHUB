@@ -105,6 +105,15 @@ public sealed class GetWorkspaceCheckpointOverviewQueryHandler(
                 .Where(file => submissionIds.Contains(file.SubmissionId))
                 .OrderByDescending(file => file.UploadedAt)
                 .ToArrayAsync(cancellationToken);
+        var links = submissionIds.Length == 0
+            ? Array.Empty<SubmissionLink>()
+            : await context.SubmissionLinks
+                .AsNoTracking()
+                .Include(link => link.SubmittedBy)
+                .Include(link => link.Submission)
+                .Where(link => submissionIds.Contains(link.SubmissionId))
+                .OrderByDescending(link => link.SubmittedAt)
+                .ToArrayAsync(cancellationToken);
         var feedbacks = submissionIds.Length == 0
             ? Array.Empty<SubmissionFeedback>()
             : await context.SubmissionFeedbacks
@@ -117,6 +126,9 @@ public sealed class GetWorkspaceCheckpointOverviewQueryHandler(
                 .ToArrayAsync(cancellationToken);
         var filesBySubmission = files
             .GroupBy(file => file.SubmissionId)
+            .ToDictionary(group => group.Key, group => group.ToArray());
+        var linksBySubmission = links
+            .GroupBy(link => link.SubmissionId)
             .ToDictionary(group => group.Key, group => group.ToArray());
         var feedbacksBySubmission = feedbacks
             .GroupBy(feedback => feedback.SubmissionId)
@@ -141,6 +153,10 @@ public sealed class GetWorkspaceCheckpointOverviewQueryHandler(
                         checkpoint.Id,
                         submissionsByCheckpoint,
                         filesBySubmission),
+                    LinksForCheckpoint(
+                        checkpoint.Id,
+                        submissionsByCheckpoint,
+                        linksBySubmission),
                     RequirementContentsForCheckpoint(
                         checkpoint.Id,
                         latestSubmissions,
@@ -205,6 +221,7 @@ public sealed class GetWorkspaceCheckpointOverviewQueryHandler(
             Number = checkpoint.CheckpointNumber,
             Title = checkpoint.Name,
             ShortDescription = checkpoint.Description,
+            CourseWeight = checkpoint.CourseWeight,
             StartDateUtc = schedule?.StartDateUtc,
             EndDateUtc = schedule?.EndDateUtc,
             ScheduleStatus = ScheduleStatus(schedule, now),
@@ -230,6 +247,7 @@ public sealed class GetWorkspaceCheckpointOverviewQueryHandler(
         Checkpoint checkpoint,
         Submission? submission,
         IReadOnlyCollection<SubmissionFile> files,
+        IReadOnlyCollection<SubmissionLink> links,
         IReadOnlyCollection<SubmissionRequirementContent> requirementContents)
     {
         if (submission is null)
@@ -264,6 +282,24 @@ public sealed class GetWorkspaceCheckpointOverviewQueryHandler(
                             Id = file.UploadedBy.Id,
                             Name = file.UploadedBy.FullName
                         }
+                })
+                .ToArray(),
+            Links = links
+                .OrderByDescending(link => link.VersionNumber)
+                .ThenByDescending(link => link.SubmittedAt)
+                .Select(link => new WorkspaceCheckpointLinkResponse
+                {
+                    Id = link.Id,
+                    VersionNumber = link.VersionNumber,
+                    Name = link.Name,
+                    Url = link.Url,
+                    SubmittedAt = link.SubmittedAt,
+                    SubmittedBy = new WorkspaceCheckpointUserResponse
+                    {
+                        Id = link.SubmittedById,
+                        Name = link.SubmittedBy.FullName,
+                        Role = SystemRoles.Student
+                    }
                 })
                 .ToArray(),
             RequirementContents = requirementContents
@@ -309,6 +345,16 @@ public sealed class GetWorkspaceCheckpointOverviewQueryHandler(
     {
         return (submissionsByCheckpoint.GetValueOrDefault(checkpointId) ?? Array.Empty<Submission>())
             .SelectMany(submission => filesBySubmission.GetValueOrDefault(submission.Id) ?? Array.Empty<SubmissionFile>())
+            .ToArray();
+    }
+
+    private static IReadOnlyCollection<SubmissionLink> LinksForCheckpoint(
+        Guid checkpointId,
+        IReadOnlyDictionary<Guid, Submission[]> submissionsByCheckpoint,
+        IReadOnlyDictionary<Guid, SubmissionLink[]> linksBySubmission)
+    {
+        return (submissionsByCheckpoint.GetValueOrDefault(checkpointId) ?? Array.Empty<Submission>())
+            .SelectMany(submission => linksBySubmission.GetValueOrDefault(submission.Id) ?? Array.Empty<SubmissionLink>())
             .ToArray();
     }
 

@@ -9,6 +9,7 @@ import {
   Loader2,
   RotateCcw,
   ExternalLink,
+  Eye,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { lecturerCheckpointApi } from '../../api/lecturerCheckpointApi';
@@ -28,6 +29,8 @@ import {
 } from '../../utils/checkpointDateTime';
 import CheckpointDateTimeField from './CheckpointDateTimeField';
 import Modal from '../ui/Modal';
+import CheckpointFilePreviewModal from '../workspace/checkpoints/CheckpointFilePreviewModal';
+import { isCheckpointFilePreviewable } from '../../utils/checkpointUpload';
 
 interface Props {
   semester: string;
@@ -91,6 +94,11 @@ export default function LecturerCheckpointManagement({
   const [endDate, setEndDate] = useState('');
   const [saving, setSaving] = useState(false);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [previewTarget, setPreviewTarget] = useState<{
+    teamId: string;
+    checkpointNumber: number;
+    file: { _id: string; originalName: string };
+  } | null>(null);
 
   useEffect(() => {
     setSelectedClassId(initialClassId);
@@ -348,7 +356,7 @@ export default function LecturerCheckpointManagement({
             <table className="min-w-full divide-y divide-slate-200 text-sm">
               <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
                 <tr>
-                  <th className="px-4 py-3">Class</th><th className="px-4 py-3">Team / Group</th><th className="px-4 py-3">Checkpoint</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Latest Submission</th><th className="px-4 py-3">Earliest Submitted File</th><th className="px-4 py-3">Action</th>
+                  <th className="px-4 py-3">Class</th><th className="px-4 py-3">Team / Group</th><th className="px-4 py-3">Checkpoint</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Latest Submission</th><th className="px-4 py-3">Earliest Submitted File</th><th className="px-4 py-3">Submitted Links</th><th className="px-4 py-3">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -367,6 +375,18 @@ export default function LecturerCheckpointManagement({
                         </div>
                       ) : '—'}
                     </td>
+                    <td className="min-w-56 max-w-72 px-4 py-3 text-slate-600">
+                      {item.submittedLinks?.length ? (
+                        <div className="space-y-1.5">
+                          {item.submittedLinks.slice(0, 3).map(link => (
+                            <a key={link.id} href={link.url} target="_blank" rel="noopener noreferrer" title={link.url} className="flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline">
+                              <span className="max-w-48 truncate">{link.name}</span><ExternalLink className="h-3 w-3 shrink-0" />
+                            </a>
+                          ))}
+                          {item.submittedLinks.length > 3 && <span className="text-xs text-slate-400">+{item.submittedLinks.length - 3} more in workspace</span>}
+                        </div>
+                      ) : '—'}
+                    </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
                         <Link
@@ -376,15 +396,30 @@ export default function LecturerCheckpointManagement({
                           <ExternalLink className="h-3.5 w-3.5" /> View
                         </Link>
                       {item.earliestSubmittedFile ? (
-                        <button
-                          type="button"
-                          disabled={downloadingId === item.earliestSubmittedFile.id}
-                          onClick={() => void downloadEarliest(item.teamId, item.checkpointNumber, item.earliestSubmittedFile!.id, item.earliestSubmittedFile!.originalName)}
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:border-primary hover:text-primary disabled:opacity-50"
-                        >
-                          {downloadingId === item.earliestSubmittedFile.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-                          Download
-                        </button>
+                        <>
+                          {isCheckpointFilePreviewable(item.earliestSubmittedFile.originalName) && (
+                            <button
+                              type="button"
+                              onClick={() => setPreviewTarget({
+                                teamId: item.teamId,
+                                checkpointNumber: item.checkpointNumber,
+                                file: { _id: item.earliestSubmittedFile!.id, originalName: item.earliestSubmittedFile!.originalName },
+                              })}
+                              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:border-primary hover:text-primary"
+                            >
+                              <Eye className="h-3.5 w-3.5" /> Preview
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            disabled={downloadingId === item.earliestSubmittedFile.id}
+                            onClick={() => void downloadEarliest(item.teamId, item.checkpointNumber, item.earliestSubmittedFile!.id, item.earliestSubmittedFile!.originalName)}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:border-primary hover:text-primary disabled:opacity-50"
+                          >
+                            {downloadingId === item.earliestSubmittedFile.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+                            Download
+                          </button>
+                        </>
                       ) : <FileText className="h-4 w-4 text-slate-300" />}
                       </div>
                     </td>
@@ -460,6 +495,12 @@ export default function LecturerCheckpointManagement({
           )}
         </div>
       </Modal>
+      <CheckpointFilePreviewModal
+        teamId={previewTarget?.teamId ?? ''}
+        checkpointNumber={previewTarget?.checkpointNumber ?? 0}
+        file={previewTarget?.file ?? null}
+        onClose={() => setPreviewTarget(null)}
+      />
     </div>
   );
 }

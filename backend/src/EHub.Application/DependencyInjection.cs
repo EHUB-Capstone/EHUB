@@ -116,10 +116,12 @@ public static class DependencyInjection
         services.AddScoped<IGetWorkspaceCheckpointOverviewQueryHandler, GetWorkspaceCheckpointOverviewQueryHandler>();
         services.AddScoped<ILecturerCheckpointManagementHandler, LecturerCheckpointManagementHandler>();
         services.AddScoped<EHub.Application.Features.Workspaces.CheckpointFiles.ICheckpointFileHandler, EHub.Application.Features.Workspaces.CheckpointFiles.CheckpointFileHandler>();
+        services.AddScoped<EHub.Application.Features.Workspaces.CheckpointLinks.ICheckpointLinkHandler, EHub.Application.Features.Workspaces.CheckpointLinks.CheckpointLinkHandler>();
         services.AddScoped<EHub.Application.Features.Workspaces.CheckpointRequirements.ICheckpointRequirementHandler, EHub.Application.Features.Workspaces.CheckpointRequirements.CheckpointRequirementHandler>();
         services.AddScoped<EHub.Application.Features.Workspaces.CheckpointFeedback.ICheckpointFeedbackHandler, EHub.Application.Features.Workspaces.CheckpointFeedback.CheckpointFeedbackHandler>();
 
         services.AddScoped<EHub.Application.Features.Workspaces.CheckpointEvaluations.ICheckpointEvaluationHandler, EHub.Application.Features.Workspaces.CheckpointEvaluations.CheckpointEvaluationHandler>();
+        services.AddScoped<EHub.Application.Features.Workspaces.CourseAssessmentEvaluations.ICourseAssessmentEvaluationHandler, EHub.Application.Features.Workspaces.CourseAssessmentEvaluations.CourseAssessmentEvaluationHandler>();
 
         services.AddScoped<EHub.Application.Features.ProductFeedback.IProductFeedbackHandler, EHub.Application.Features.ProductFeedback.ProductFeedbackHandler>();
 

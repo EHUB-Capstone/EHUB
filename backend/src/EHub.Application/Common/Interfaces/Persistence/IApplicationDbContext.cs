@@ -43,6 +43,7 @@ public interface IApplicationDbContext
     DbSet<ClassCheckpointSchedule> ClassCheckpointSchedules { get; }
     DbSet<Submission> Submissions { get; }
     DbSet<SubmissionFile> SubmissionFiles { get; }
+    DbSet<SubmissionLink> SubmissionLinks { get; }
     DbSet<SubmissionRequirementContent> SubmissionRequirementContents { get; }
     DbSet<SubmissionFeedback> SubmissionFeedbacks { get; }
     DbSet<Rubric> Rubrics { get; }

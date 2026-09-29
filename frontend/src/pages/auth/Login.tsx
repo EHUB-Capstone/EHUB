@@ -282,7 +282,7 @@ const Login: React.FC = () => {
           </div>
 
           <h1 className="text-[28px] font-extrabold text-[#0F172A] dark:text-slate-50 mb-1.5 tracking-tight">Welcome back</h1>
-          <p className="text-[#64748B] dark:text-slate-400 text-[14px] mb-7">Sign in to your EHub account</p>
+          <p className="text-[#64748B] dark:text-slate-400 text-[14px] mb-7">Sign in with your FPT Google account</p>
 
           {/* Alert banners */}
           {pendingApproval && (

@@ -50,6 +50,7 @@ public class AppDbContext : DbContext, IApplicationDbContext
     public DbSet<ClassCheckpointSchedule> ClassCheckpointSchedules => Set<ClassCheckpointSchedule>();
     public DbSet<Submission> Submissions => Set<Submission>();
     public DbSet<SubmissionFile> SubmissionFiles => Set<SubmissionFile>();
+    public DbSet<SubmissionLink> SubmissionLinks => Set<SubmissionLink>();
     public DbSet<SubmissionRequirementContent> SubmissionRequirementContents => Set<SubmissionRequirementContent>();
     public DbSet<SubmissionFeedback> SubmissionFeedbacks => Set<SubmissionFeedback>();
     public DbSet<Rubric> Rubrics => Set<Rubric>();
