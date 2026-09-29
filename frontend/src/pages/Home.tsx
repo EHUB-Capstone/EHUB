@@ -86,11 +86,17 @@ const Home: React.FC = () => {
 
           {/* Right actions */}
           <div className="flex items-center gap-3">
-            <Link to="/login" className="hidden sm:block text-sm font-semibold tracking-[-0.01em] transition-colors duration-180 ease-out text-[#64748B] hover:text-[#0F172A] dark:text-slate-400 dark:hover:text-white">
+            <Link
+              to="/login"
+              className="hidden sm:flex items-center px-5 py-2 rounded-[14px] text-sm font-semibold text-white bg-[linear-gradient(135deg,#EA6A12,#D97706)] shadow-[0_10px_28px_rgba(234,106,18,0.18)] hover:-translate-y-[2px] hover:shadow-[0_14px_36px_rgba(234,106,18,0.22)] transition-all duration-200 ease-out"
+            >
               Sign in
             </Link>
 
-            <Link to="/register" className="hidden sm:flex items-center gap-1.5 px-5 py-2 rounded-[14px] text-sm font-semibold text-white bg-[linear-gradient(135deg,#EA6A12,#D97706)] shadow-[0_10px_28px_rgba(234,106,18,0.18)] hover:-translate-y-[2px] hover:shadow-[0_14px_36px_rgba(234,106,18,0.22)] transition-all duration-200 ease-out">
+            <Link
+              to="/register"
+              className="hidden sm:flex items-center gap-1.5 px-5 py-2 rounded-[14px] text-sm font-semibold text-[#EA6A12] border border-[#EA6A12] bg-transparent hover:bg-orange-50 hover:-translate-y-[2px] transition-all duration-200 ease-out"
+            >
               Sign Up <ArrowRight size={14} />
             </Link>
 
@@ -116,8 +122,21 @@ const Home: React.FC = () => {
                 onClick={() => setMobileMenuOpen(false)}
                 className="text-sm font-semibold text-[#64748B] dark:text-slate-400">{item}</a>
             ))}
-            <Link to="/login" className="text-sm font-semibold text-[#64748B] dark:text-slate-400" onClick={() => setMobileMenuOpen(false)}>Sign in</Link>
-            <Link to="/register" className="text-sm font-semibold text-white bg-[linear-gradient(135deg,#EA6A12,#D97706)] text-center px-4 py-2.5 rounded-[14px]" onClick={() => setMobileMenuOpen(false)}>Get Started</Link>
+            <Link
+              to="/login"
+              className="text-sm font-semibold text-white bg-[linear-gradient(135deg,#EA6A12,#D97706)] text-center px-4 py-2.5 rounded-[14px]"
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              Sign in
+            </Link>
+
+            <Link
+              to="/register"
+              className="text-sm font-semibold text-[#EA6A12] border border-[#EA6A12] bg-transparent text-center px-4 py-2.5 rounded-[14px]"
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              Get Started
+            </Link>
           </motion.div>
         )}
       </header>
@@ -163,12 +182,17 @@ const Home: React.FC = () => {
 
                 <motion.div initial="hidden" animate="visible" variants={fadeUp} custom={3}
                   className="flex flex-wrap gap-4">
-                  <Link to="/register"
-                    className="flex h-14 items-center gap-2 px-8 rounded-[14px] text-[15px] font-semibold text-white bg-[linear-gradient(135deg,#EA6A12,#D97706)] shadow-[0_10px_28px_rgba(234,106,18,0.18)] hover:-translate-y-[2px] hover:shadow-[0_14px_36px_rgba(234,106,18,0.22)] transition-all duration-200 ease-out">
+                  <Link
+                    to="/register"
+                    className="flex h-14 items-center gap-2 px-8 rounded-[14px] text-[15px] font-semibold text-[#EA6A12] bg-transparent border border-[#EA6A12] hover:bg-orange-50 hover:-translate-y-[2px] transition-all duration-200 ease-out"
+                  >
                     Sign up <ArrowRight size={18} />
                   </Link>
-                  <Link to="/login"
-                    className="flex h-14 items-center px-8 rounded-[14px] text-[15px] font-semibold transition-colors duration-200 ease-out border border-[#E5E7EB] bg-white hover:bg-[#F8FAFC] text-[#0F172A] dark:border-white/10 dark:bg-[#111827]/80 dark:hover:bg-white/10 dark:text-[#F8FAFC]">
+
+                  <Link
+                    to="/login"
+                    className="flex h-14 items-center px-8 rounded-[14px] text-[15px] font-semibold text-white bg-[linear-gradient(135deg,#EA6A12,#D97706)] shadow-[0_10px_28px_rgba(234,106,18,0.18)] hover:-translate-y-[2px] hover:shadow-[0_14px_36px_rgba(234,106,18,0.22)] transition-all duration-200 ease-out"
+                  >
                     Sign in
                   </Link>
                 </motion.div>
@@ -311,12 +335,17 @@ const Home: React.FC = () => {
               Join students and educators already using EHub to build, evaluate, and grow the next generation of startups.
             </p>
             <div className="flex flex-wrap justify-center gap-4">
-              <Link to="/register"
-                className="flex items-center gap-2 px-8 py-4 rounded-xl text-base font-bold text-white bg-[#F97316] shadow-[0_18px_42px_rgba(249,115,22,0.22)] hover:bg-[#EA6A12] hover:-translate-y-0.5 transition-all duration-200">
+              <Link
+                to="/register"
+                className="flex items-center gap-2 px-8 py-4 rounded-xl text-base font-bold text-[#F97316] border border-[#F97316] bg-transparent hover:bg-orange-50 hover:-translate-y-0.5 transition-all duration-200"
+              >
                 Sign up <ArrowRight size={18} />
               </Link>
-              <Link to="/login"
-                className="px-8 py-4 rounded-xl text-base font-semibold transition-colors duration-200 border border-[#E5E7EB] bg-white hover:bg-[#F8FAFC] text-[#0F172A] dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10 dark:text-white">
+
+              <Link
+                to="/login"
+                className="px-8 py-4 rounded-xl text-base font-semibold text-white bg-[#F97316] shadow-[0_18px_42px_rgba(249,115,22,0.22)] hover:bg-[#EA6A12] hover:-translate-y-0.5 transition-all duration-200"
+              >
                 Sign in
               </Link>
             </div>

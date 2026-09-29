@@ -6,7 +6,7 @@
   "scripts": {
     "test:workspace": "node --experimental-strip-types --test tests/workspaceTools.test.ts",
     "dev": "vite",
-    "test": "node --experimental-strip-types --test tests/studentImport.test.ts tests/addStudent.test.ts tests/teamManagement.test.ts tests/studentAssignment.test.ts tests/accountApproval.test.ts tests/classFeatureFlags.test.ts tests/releaseFeatureFlags.test.ts tests/classMappers.test.ts tests/classComponents.test.ts tests/classPermissions.test.ts tests/authValidation.test.ts tests/mockApi.test.ts tests/bulkClassAssignments.test.ts tests/bulkClassActions.test.ts tests/workspaceTools.test.ts tests/lecturerCheckpointSchedules.test.ts tests/checkpointDateTime.test.ts",
+    "test": "node --experimental-strip-types --test tests/studentImport.test.ts tests/addStudent.test.ts tests/teamManagement.test.ts tests/studentAssignment.test.ts tests/accountApproval.test.ts tests/classFeatureFlags.test.ts tests/releaseFeatureFlags.test.ts tests/classMappers.test.ts tests/classComponents.test.ts tests/classPermissions.test.ts tests/authValidation.test.ts tests/mockApi.test.ts tests/bulkClassAssignments.test.ts tests/bulkClassActions.test.ts tests/workspaceTools.test.ts tests/lecturerCheckpointSchedules.test.ts tests/checkpointDateTime.test.ts tests/checkpointFilePreview.test.ts",
     "type-check": "tsc -b",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
@@ -24,6 +24,7 @@
     "clsx": "^2.1.1",
     "framer-motion": "^12.42.2",
     "lucide-react": "^1.23.0",
+    "pdfjs-dist": "^6.3.289",
     "postcss": "^8.5.16",
     "postcss-loader": "^8.2.1",
     "react": "^19.2.7",

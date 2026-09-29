@@ -21,7 +21,7 @@ public sealed class SynchronizeSubjectCheckpointsHandler(
         SaveSubjectCheckpointsRequest request,
         CancellationToken cancellationToken = default)
     {
-        var validationError = Validate(request.Checkpoints);
+        var validationError = Validate(request.Checkpoints, request.OtherAssessments);
         if (validationError is not null)
         {
             return Failure("VALIDATION_ERROR", validationError);
@@ -38,6 +38,10 @@ public sealed class SynchronizeSubjectCheckpointsHandler(
             .Include(item => item.Rubrics)
             .ThenInclude(item => item.Criteria)
             .Where(item => item.CourseId == course.Id && item.ClassId == null)
+            .ToListAsync(cancellationToken);
+        var existingOtherAssessments = await context.Rubrics
+            .Include(item => item.Criteria)
+            .Where(item => item.CourseId == course.Id && item.ClassId == null && item.CheckpointId == null)
             .ToListAsync(cancellationToken);
         var retainedNumbers = request.Checkpoints.Select(item => item.Number).ToArray();
         var removed = existing
@@ -94,6 +98,7 @@ public sealed class SynchronizeSubjectCheckpointsHandler(
             checkpoint.RequirementsJson = JsonSerializer.Serialize(input.Requirements
                 .Select(item => item.Trim())
                 .Where(item => item.Length > 0));
+            checkpoint.CourseWeight = input.CourseWeight;
             checkpoint.UpdatedBy = currentUser.UserId;
 
             var rubric = checkpoint.Rubrics.FirstOrDefault(item => item.ClassId == null);
@@ -110,6 +115,9 @@ public sealed class SynchronizeSubjectCheckpointsHandler(
                 };
                 await context.Rubrics.AddAsync(rubric, cancellationToken);
             }
+
+            rubric.TotalWeight = 100;
+            rubric.UpdatedBy = currentUser.UserId;
 
             await context.RubricCriteria
                 .Where(item => item.RubricId == rubric.Id)
@@ -132,13 +140,84 @@ public sealed class SynchronizeSubjectCheckpointsHandler(
             }
         }
 
+        var requestedOtherAssessmentIds = request.OtherAssessments
+            .Where(item => item.Id.HasValue)
+            .Select(item => item.Id!.Value)
+            .ToHashSet();
+        var removedOtherAssessments = existingOtherAssessments
+            .Where(item => !requestedOtherAssessmentIds.Contains(item.Id))
+            .ToArray();
+        var removedOtherAssessmentIds = removedOtherAssessments.Select(item => item.Id).ToArray();
+        if (removedOtherAssessmentIds.Length > 0 &&
+            await context.Evaluations.AnyAsync(item => removedOtherAssessmentIds.Contains(item.RubricId), cancellationToken))
+        {
+            return Failure("VALIDATION_ERROR", "An other assessment with saved grades cannot be removed.");
+        }
+
+        if (removedOtherAssessmentIds.Length > 0)
+        {
+            await context.RubricCriteria
+                .Where(item => removedOtherAssessmentIds.Contains(item.RubricId))
+                .ExecuteDeleteAsync(cancellationToken);
+            await context.Rubrics
+                .Where(item => removedOtherAssessmentIds.Contains(item.Id))
+                .ExecuteDeleteAsync(cancellationToken);
+        }
+
+        foreach (var input in request.OtherAssessments)
+        {
+            var assessment = input.Id.HasValue
+                ? existingOtherAssessments.FirstOrDefault(item => item.Id == input.Id.Value)
+                : null;
+            if (input.Id.HasValue && assessment is null)
+            {
+                return Failure("VALIDATION_ERROR", "One or more other assessments no longer exist.");
+            }
+
+            if (assessment is null)
+            {
+                assessment = new Rubric
+                {
+                    CourseId = course.Id,
+                    Name = input.Name.Trim(),
+                    Status = RubricStatus.Active,
+                    TotalWeight = 100,
+                    CourseWeight = input.Weight,
+                    CreatedById = currentUser.UserId,
+                };
+                await context.Rubrics.AddAsync(assessment, cancellationToken);
+                await context.RubricCriteria.AddAsync(new RubricCriterion
+                {
+                    Rubric = assessment,
+                    Name = input.Name.Trim(),
+                    Key = "score",
+                    Weight = 100,
+                    MaxScore = 10,
+                    DisplayOrder = 1,
+                    LevelsJson = "[]",
+                    CreatedBy = currentUser.UserId,
+                }, cancellationToken);
+            }
+            else
+            {
+                assessment.Name = input.Name.Trim();
+                assessment.TotalWeight = 100;
+                assessment.CourseWeight = input.Weight;
+                assessment.Status = RubricStatus.Active;
+                assessment.UpdatedBy = currentUser.UserId;
+            }
+        }
+
         await context.SaveChangesAsync(cancellationToken);
         return await curriculumQuery.GetAsync(code, cancellationToken);
     }
 
-    private static string? Validate(IEnumerable<SubjectCheckpointRequest> checkpoints)
+    private static string? Validate(
+        IEnumerable<SubjectCheckpointRequest> checkpoints,
+        IEnumerable<SubjectOtherAssessmentRequest> otherAssessments)
     {
         var values = checkpoints.ToArray();
+        var otherValues = otherAssessments.ToArray();
         if (values.Length == 0) return "At least one checkpoint is required.";
         if (values.Select(item => item.Number).Distinct().Count() != values.Length ||
             values.Any(item => item.Number is < 1 or > 10))
@@ -149,12 +228,24 @@ public sealed class SynchronizeSubjectCheckpointsHandler(
         foreach (var checkpoint in values)
         {
             if (string.IsNullOrWhiteSpace(checkpoint.Title)) return $"Checkpoint {checkpoint.Number} title is required.";
+            if (checkpoint.CourseWeight is <= 0 or > 100) return $"Checkpoint {checkpoint.Number} course weight must be greater than 0 and no more than 100%.";
             if (checkpoint.Rubrics.Count == 0) return $"Checkpoint {checkpoint.Number} needs at least one rubric criterion.";
             if (checkpoint.Rubrics.Any(item => string.IsNullOrWhiteSpace(item.Key) || !Regex.IsMatch(item.Key, "^[A-Za-z][A-Za-z0-9_-]*$"))) return $"Checkpoint {checkpoint.Number} contains an invalid rubric key.";
             if (checkpoint.Rubrics.GroupBy(item => item.Key, StringComparer.OrdinalIgnoreCase).Any(group => group.Count() > 1)) return $"Checkpoint {checkpoint.Number} contains duplicate rubric keys.";
             if (checkpoint.Rubrics.Any(item => string.IsNullOrWhiteSpace(item.Label) || item.Weight <= 0 || item.Weight > 100)) return $"Checkpoint {checkpoint.Number} contains an invalid rubric criterion.";
             if (checkpoint.Rubrics.Sum(item => item.Weight) != 100) return $"Checkpoint {checkpoint.Number} rubric weights must total 100%.";
         }
+
+        if (otherValues.Any(item => string.IsNullOrWhiteSpace(item.Name) || item.Weight is <= 0 or > 100))
+            return "Each other assessment needs a name and a weight greater than 0 and no more than 100%.";
+        if (otherValues.GroupBy(item => item.Name.Trim(), StringComparer.OrdinalIgnoreCase).Any(group => group.Count() > 1))
+            return "Other assessment names must be unique.";
+        if (otherValues.Where(item => item.Id.HasValue).GroupBy(item => item.Id).Any(group => group.Count() > 1))
+            return "An other assessment can only appear once.";
+
+        var courseWeight = values.Sum(item => item.CourseWeight) + otherValues.Sum(item => item.Weight);
+        if (courseWeight != 100)
+            return $"Checkpoint and other assessment weights must total exactly 100.0% (currently {courseWeight:0.0}%).";
 
         return null;
     }

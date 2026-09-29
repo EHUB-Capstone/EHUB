@@ -28,12 +28,18 @@ export function buildWorkspaceCheckpointOverview(
       (left, right) => right.versionNumber - left.versionNumber ||
         Date.parse(right.uploadedAt) - Date.parse(left.uploadedAt),
     );
+    const links = [...(submission.links || [])].sort(
+      (left, right) => right.versionNumber - left.versionNumber ||
+        Date.parse(right.submittedAt) - Date.parse(left.submittedAt),
+    );
     const reqFilled = (submission.requirementContents || []).filter(
       (requirement) => String(requirement.content || '').trim().length > 0,
     ).length;
     stats[checkpointNumber] = {
       count: files.length,
+      linkCount: links.length,
       latest: files[0] || null,
+      latestVersion: Math.max(files[0]?.versionNumber || 0, links[0]?.versionNumber || 0) || null,
       reqFilled,
       reqTotal: checkpoint.requirements.length,
       status: submission.status,
@@ -45,7 +51,9 @@ export function buildWorkspaceCheckpointOverview(
     const checkpointNumber = Number(checkpoint.number);
     stats[checkpointNumber] ??= {
       count: 0,
+      linkCount: 0,
       latest: null,
+      latestVersion: null,
       reqFilled: 0,
       reqTotal: checkpoint.requirements.length,
       status: 'NotSubmitted',

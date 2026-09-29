@@ -30,6 +30,7 @@ public class Submission : AuditableEntity
 
     // Navigation properties
     public virtual ICollection<SubmissionFile> Files { get; set; } = new List<SubmissionFile>();
+    public virtual ICollection<SubmissionLink> Links { get; set; } = new List<SubmissionLink>();
     public virtual ICollection<SubmissionRequirementContent> RequirementContents { get; set; } = new List<SubmissionRequirementContent>();
     public virtual ICollection<SubmissionFeedback> Feedbacks { get; set; } = new List<SubmissionFeedback>();
     public virtual ICollection<Evaluation> Evaluations { get; set; } = new List<Evaluation>();

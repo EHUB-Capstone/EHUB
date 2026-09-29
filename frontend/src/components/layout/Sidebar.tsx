@@ -4,22 +4,20 @@ import { useAuth } from '../../hooks/useAuth';
 import { cn } from '../../utils/cn';
 import logo from '../../assets/logo.png';
 import {
-  LayoutDashboard, Users, GraduationCap, Trophy, CalendarDays,
-  Kanban, Brain, Video, Rocket, LogOut, Plus, X, MessageSquare, Database, BookOpen, ShieldCheck, Factory
+  LayoutDashboard, Users, GraduationCap, CalendarDays,
+  Kanban, Brain, Video, Rocket, LogOut, Plus, X, MessageSquare, Database, BookOpen, ShieldCheck, Factory,
+  ClipboardCheck,
 } from 'lucide-react';
 import { classFeatureFlags } from '../../config/classFeatureFlags';
-import { releaseFeatureFlags } from '../../config/releaseFeatureFlags';
 
 const iconMap: Record<string, LucideIcon> = {
   dashboard: LayoutDashboard,
   group: Users,
   school: GraduationCap,
-  leaderboard: Trophy,
   calendar_month: CalendarDays,
   view_kanban: Kanban,
   analytics: Brain,
   event: CalendarDays,
-  military_tech: Trophy,
   rocket_launch: Rocket,
   task_alt: Kanban,
   video_chat: Video,
@@ -28,6 +26,7 @@ const iconMap: Record<string, LucideIcon> = {
   book_open: BookOpen,
   factory: Factory,
   account_approval: ShieldCheck,
+  grading: ClipboardCheck,
 };
 
 interface SidebarProps {
@@ -70,8 +69,8 @@ const Sidebar = ({ mobileOpen, onMobileClose }: SidebarProps) => {
       // ...(releaseFeatureFlags.dataBank ? [{ path: '/lecturer/data-bank', icon: 'database', label: 'Data Bank' }] : []),
       // ...(releaseFeatureFlags.workshops ? [{ path: '/workshops', icon: 'calendar_month', label: 'Workshops' }] : []),
       // ...(releaseFeatureFlags.chat ? [{ path: '/chat', icon: 'chat', label: 'Group Chat' }] : []),
-      // ...(releaseFeatureFlags.rankings ? [{ path: '/rankings', icon: 'leaderboard', label: 'Rankings' }] : []),
       // ...(releaseFeatureFlags.mentoring ? [{ path: '/sessions', icon: 'calendar_month', label: 'Schedules' }] : []),
+      { path: '/evaluation-grading', icon: 'grading', label: 'Evaluation & Grading' },
     ],
     LECTURER: [
       // ...(releaseFeatureFlags.roleDashboards ? [{ path: '/lecturer', icon: 'dashboard', label: 'Dashboard' }] : []),
@@ -84,7 +83,7 @@ const Sidebar = ({ mobileOpen, onMobileClose }: SidebarProps) => {
       // { path: '/executionboard', icon: 'view_kanban', label: 'Execution Board' },
       // ...(releaseFeatureFlags.evaluations ? [{ path: '/evaluations', icon: 'analytics', label: 'Evaluation Reports' }] : []),
       // ...(releaseFeatureFlags.mentoring ? [{ path: '/sessions', icon: 'event', label: 'Sessions' }] : []),
-      // ...(releaseFeatureFlags.rankings ? [{ path: '/rankings', icon: 'military_tech', label: 'Rankings' }] : []),
+      { path: '/evaluation-grading', icon: 'grading', label: 'Evaluation & Grading' },
     ],
     MENTOR: [
       // ...(releaseFeatureFlags.roleDashboards ? [{ path: '/mentor', icon: 'dashboard', label: 'Dashboard' }] : []),
@@ -93,7 +92,7 @@ const Sidebar = ({ mobileOpen, onMobileClose }: SidebarProps) => {
       // ...(releaseFeatureFlags.workshops ? [{ path: '/workshops', icon: 'calendar_month', label: 'Workshops' }] : []),
       // ...(releaseFeatureFlags.chat ? [{ path: '/chat', icon: 'chat', label: 'Group Chat' }] : []),
       // ...(releaseFeatureFlags.mentoring ? [{ path: '/sessions', icon: 'event', label: 'Sessions' }] : []),
-      // ...(releaseFeatureFlags.rankings ? [{ path: '/rankings', icon: 'military_tech', label: 'Rankings' }] : []),
+      { path: '/evaluation-grading', icon: 'grading', label: 'Evaluation & Grading' },
     ],
     STUDENT: [
       ...(classFeatureFlags.studentSelfService
@@ -106,11 +105,11 @@ const Sidebar = ({ mobileOpen, onMobileClose }: SidebarProps) => {
       { path: '/feedback', icon: 'chat', label: 'Send feedback' },
       // ...(releaseFeatureFlags.roleDashboards ? [{ path: '/student', icon: 'dashboard', label: 'Dashboard' }] : []),
       // ...(releaseFeatureFlags.workshops ? [{ path: '/workshops', icon: 'calendar_month', label: 'Workshops' }] : []),
-      // ...(releaseFeatureFlags.rankings ? [{ path: '/rankings', icon: 'military_tech', label: 'Rankings' }] : []),
       // ...(releaseFeatureFlags.chat ? [{ path: '/chat', icon: 'chat', label: 'Group Chat' }] : []),
       // ...(releaseFeatureFlags.startupIdeas ? [{ path: '/student/idea/new', icon: 'rocket_launch', label: 'My Idea' }] : []),
       { path: '/executionboard', icon: 'task_alt', label: 'Execution Board' },
       // ...(releaseFeatureFlags.mentoring ? [{ path: '/sessions', icon: 'video_chat', label: 'Mentoring' }] : []),
+      { path: '/evaluation-grading', icon: 'grading', label: 'Evaluation & Grading' },
     ],
   };
 

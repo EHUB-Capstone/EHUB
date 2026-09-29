@@ -51,8 +51,8 @@ public sealed class CheckpointEvaluationHandler(
 
         return Result.Success(new WorkspaceCheckpointEvaluationSummaryResponse
         {
-            Checkpoint = ToCheckpointResponse(item.Checkpoint, item.Rubric, canGrade ? item.Team : null),
-            Evaluations = visibleEvaluations.Select(evaluation => ToEvaluationResponse(evaluation, canGrade ? item.Team : null)).ToArray(),
+            Checkpoint = ToCheckpointResponse(item.Checkpoint, item.Rubric, item.Team),
+            Evaluations = visibleEvaluations.Select(evaluation => ToEvaluationResponse(evaluation, item.Team)).ToArray(),
             History = history.Select(ToHistoryResponse).ToArray(),
             Summary = new WorkspaceCheckpointEvaluationAggregateResponse
             {
@@ -384,6 +384,7 @@ public sealed class CheckpointEvaluationHandler(
         Number = checkpoint.CheckpointNumber,
         Title = checkpoint.Name,
         ShortDescription = checkpoint.Description,
+        CourseWeight = checkpoint.CourseWeight,
         Rubrics = rubric.Criteria.OrderBy(item => item.DisplayOrder).Select(item => new WorkspaceCheckpointEvaluationCriterionResponse
         {
             Key = item.Key,

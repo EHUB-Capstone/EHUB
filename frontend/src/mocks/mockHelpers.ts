@@ -29,6 +29,7 @@ function loadState(): MockApiState {
       semesterStaffAssignments: parsed.semesterStaffAssignments ?? defaults.semesterStaffAssignments,
       checkpointSchedules: parsed.checkpointSchedules ?? {},
       checkpointFiles: parsed.checkpointFiles ?? {},
+      checkpointLinks: parsed.checkpointLinks ?? {},
     };
   } catch {
     window.localStorage.removeItem(STORAGE_KEY);

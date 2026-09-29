@@ -59,6 +59,20 @@ public class SubmissionFileConfiguration : IEntityTypeConfiguration<SubmissionFi
             .HasMaxLength(30)
             .IsRequired();
 
+        builder.Property(sf => sf.PreviewPdfUrl)
+            .HasColumnName("preview_pdf_url")
+            .HasMaxLength(1000);
+
+        builder.Property(sf => sf.PreviewPdfPublicId)
+            .HasColumnName("preview_pdf_public_id")
+            .HasMaxLength(256);
+
+        builder.Property(sf => sf.PreviewSourceVersionNumber)
+            .HasColumnName("preview_source_version_number");
+
+        builder.Property(sf => sf.PreviewGeneratedAt)
+            .HasColumnName("preview_generated_at");
+
         builder.Property(sf => sf.UploadedById)
             .HasColumnName("uploaded_by_id");
 

@@ -38,6 +38,14 @@ export interface LecturerCheckpointFile {
   uploadedAtUtc: string;
 }
 
+export interface LecturerCheckpointLink {
+  id: string;
+  name: string;
+  url: string;
+  versionNumber: number;
+  submittedAtUtc: string;
+}
+
 export interface LecturerCheckpointSubmission {
   classId: string;
   classCode: string;
@@ -49,6 +57,7 @@ export interface LecturerCheckpointSubmission {
   status: CheckpointSubmissionStatus;
   latestSubmissionAtUtc?: string | null;
   earliestSubmittedFile?: LecturerCheckpointFile | null;
+  submittedLinks: LecturerCheckpointLink[];
 }
 
 export interface LecturerCheckpointOverview {

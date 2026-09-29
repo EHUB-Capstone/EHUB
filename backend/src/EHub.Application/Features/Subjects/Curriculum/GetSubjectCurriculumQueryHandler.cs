@@ -69,6 +69,15 @@ public sealed class GetSubjectCurriculumQueryHandler(IApplicationDbContext conte
             RoadmapItems = roadmapItems,
             Rubrics = rubrics.Select(ToRubricResponse).ToArray(),
             Checkpoints = checkpoints.Select(ToCheckpointResponse).ToArray(),
+            OtherAssessments = rubrics
+                .Where(item => item.CheckpointId == null)
+                .Select(item => new SubjectOtherAssessmentResponse
+                {
+                    Id = item.Id,
+                    Name = item.Name,
+                    Weight = item.CourseWeight,
+                })
+                .ToArray(),
         });
     }
 
@@ -110,6 +119,7 @@ public sealed class GetSubjectCurriculumQueryHandler(IApplicationDbContext conte
             Number = checkpoint.CheckpointNumber,
             Title = checkpoint.Name,
             ShortDescription = checkpoint.Description,
+            CourseWeight = checkpoint.CourseWeight,
             Requirements = JsonSerializer.Deserialize<string[]>(checkpoint.RequirementsJson) ?? Array.Empty<string>(),
             Rubrics = rubric?.Criteria
                 .OrderBy(item => item.DisplayOrder)

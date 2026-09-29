@@ -1,9 +1,11 @@
 using EHub.Application.Common.Interfaces.Identity;
 using EHub.Application.Features.Workspaces.GetCheckpointOverview;
 using EHub.Application.Features.Workspaces.CheckpointFiles;
+using EHub.Application.Features.Workspaces.CheckpointLinks;
 using EHub.Application.Features.Workspaces.CheckpointFeedback;
 using EHub.Application.Features.Workspaces.CheckpointEvaluations;
 using EHub.Application.Features.Workspaces.CheckpointRequirements;
+using EHub.Application.Features.Workspaces.CourseAssessmentEvaluations;
 using EHub.Contracts.Common;
 using EHub.Contracts.Workspaces;
 using EHub.Shared.Constants;
@@ -20,6 +22,8 @@ namespace EHub.Api.Controllers;
 public sealed class WorkspaceCheckpointsController(
     ICurrentUserService currentUser) : ControllerBase
 {
+    private const long MaximumUploadRequestSize = 16 * 1024 * 1024;
+
     [HttpGet("teams/{teamId:guid}")]
     public async Task<IActionResult> GetOverview(
         Guid teamId,
@@ -36,7 +40,9 @@ public sealed class WorkspaceCheckpointsController(
     }
 
     [HttpPost("teams/{teamId:guid}/checkpoints/{checkpointNumber:int}/upload")]
-    [RequestSizeLimit(15 * 1024 * 1024)]
+    [Consumes("multipart/form-data")]
+    [RequestSizeLimit(MaximumUploadRequestSize)]
+    [RequestFormLimits(MultipartBodyLengthLimit = MaximumUploadRequestSize)]
     public async Task<IActionResult> UploadFile(
         Guid teamId,
         int checkpointNumber,
@@ -58,12 +64,56 @@ public sealed class WorkspaceCheckpointsController(
         return ToErrorResponse(result.Error);
     }
 
+    [HttpGet("teams/{teamId:guid}/checkpoints/{checkpointNumber:int}/files/{fileId:guid}/preview")]
+    public async Task<IActionResult> PreviewFile(
+        Guid teamId,
+        int checkpointNumber,
+        Guid fileId,
+        [FromServices] ICheckpointFileHandler handler,
+        CancellationToken cancellationToken)
+    {
+        var result = await handler.PreviewAsync(teamId, checkpointNumber, fileId, UserId, Role, cancellationToken);
+        if (result.IsFailure) return ToErrorResponse(result.Error);
+
+        Response.Headers.CacheControl = "private, no-store";
+        Response.Headers.XContentTypeOptions = "nosniff";
+        return File(result.Value.Content, "application/pdf", enableRangeProcessing: true);
+    }
+
     [HttpDelete("teams/{teamId:guid}/checkpoints/{checkpointNumber:int}/files/{fileId:guid}")]
     public async Task<IActionResult> DeleteFile(Guid teamId, int checkpointNumber, Guid fileId, [FromServices] ICheckpointFileHandler handler, CancellationToken cancellationToken)
     {
         var result = await handler.DeleteAsync(teamId, checkpointNumber, fileId, UserId, Role, cancellationToken);
         if (result.IsSuccess) return Ok(ApiResponse<object>.SuccessResponse(new { }, "File deleted."));
         return ToErrorResponse(result.Error);
+    }
+
+    [HttpPost("teams/{teamId:guid}/checkpoints/{checkpointNumber:int}/links")]
+    public async Task<IActionResult> CreateLink(Guid teamId, int checkpointNumber,
+        [FromBody] SaveWorkspaceCheckpointLinkRequest request,
+        [FromServices] ICheckpointLinkHandler handler, CancellationToken cancellationToken)
+    {
+        var result = await handler.CreateAsync(teamId, checkpointNumber, request, UserId, Role, cancellationToken);
+        return ToLinkResponse(result, "Link submitted.");
+    }
+
+    [HttpPut("teams/{teamId:guid}/checkpoints/{checkpointNumber:int}/links/{linkId:guid}")]
+    public async Task<IActionResult> UpdateLink(Guid teamId, int checkpointNumber, Guid linkId,
+        [FromBody] SaveWorkspaceCheckpointLinkRequest request,
+        [FromServices] ICheckpointLinkHandler handler, CancellationToken cancellationToken)
+    {
+        var result = await handler.UpdateAsync(teamId, checkpointNumber, linkId, request, UserId, Role, cancellationToken);
+        return ToLinkResponse(result, "Submitted link updated.");
+    }
+
+    [HttpDelete("teams/{teamId:guid}/checkpoints/{checkpointNumber:int}/links/{linkId:guid}")]
+    public async Task<IActionResult> DeleteLink(Guid teamId, int checkpointNumber, Guid linkId,
+        [FromServices] ICheckpointLinkHandler handler, CancellationToken cancellationToken)
+    {
+        var result = await handler.DeleteAsync(teamId, checkpointNumber, linkId, UserId, Role, cancellationToken);
+        return result.IsSuccess
+            ? Ok(ApiResponse<object>.SuccessResponse(new { }, "Submitted link deleted."))
+            : ToErrorResponse(result.Error);
     }
 
     [HttpPut("teams/{teamId:guid}/checkpoints/{checkpointNumber:int}/requirements")]
@@ -123,6 +173,34 @@ public sealed class WorkspaceCheckpointsController(
             : ToErrorResponse(result.Error);
     }
 
+    [HttpGet("teams/{teamId:guid}/course-assessments")]
+    public async Task<IActionResult> GetCourseAssessments(
+        Guid teamId,
+        [FromServices] ICourseAssessmentEvaluationHandler handler,
+        CancellationToken cancellationToken)
+    {
+        var result = await handler.GetAsync(teamId, UserId, Role, cancellationToken);
+        return result.IsSuccess
+            ? Ok(ApiResponse<CourseAssessmentEvaluationListResponse>.SuccessResponse(
+                result.Value, "Course assessments retrieved."))
+            : ToErrorResponse(result.Error);
+    }
+
+    [HttpPut("teams/{teamId:guid}/course-assessments/{assessmentId:guid}")]
+    public async Task<IActionResult> SaveCourseAssessment(
+        Guid teamId,
+        Guid assessmentId,
+        [FromBody] SaveCourseAssessmentEvaluationRequest request,
+        [FromServices] ICourseAssessmentEvaluationHandler handler,
+        CancellationToken cancellationToken)
+    {
+        var result = await handler.SaveAsync(teamId, assessmentId, request, UserId, Role, cancellationToken);
+        return result.IsSuccess
+            ? Ok(ApiResponse<CourseAssessmentEvaluationResponse>.SuccessResponse(
+                result.Value, "Course assessment score saved."))
+            : ToErrorResponse(result.Error);
+    }
+
     private Guid UserId => currentUser.UserId ?? Guid.Empty;
 
     private string Role
@@ -177,6 +255,11 @@ public sealed class WorkspaceCheckpointsController(
             ? new OkObjectResult(ApiResponse<WorkspaceCheckpointFileResponse>.SuccessResponse(result.Value, message))
             : ToErrorResponse(result.Error);
 
+    private static IActionResult ToLinkResponse(Result<WorkspaceCheckpointLinkResponse> result, string message) =>
+        result.IsSuccess
+            ? new OkObjectResult(ApiResponse<WorkspaceCheckpointLinkResponse>.SuccessResponse(result.Value, message))
+            : ToErrorResponse(result.Error);
+
     private static IActionResult ToFeedbackResponse(Result<WorkspaceCheckpointFeedbackResponse> result) =>
         result.IsSuccess
             ? new OkObjectResult(ApiResponse<WorkspaceCheckpointFeedbackResponse>.SuccessResponse(result.Value, "Feedback posted."))
@@ -189,6 +272,12 @@ public sealed class WorkspaceCheckpointsController(
             ? new ObjectResult(response) { StatusCode = StatusCodes.Status403Forbidden }
             : error.Code is ErrorCodes.CommonNotFoundError or ErrorCodes.WorkspaceNotFound
                 ? new NotFoundObjectResult(response)
+                : error.Code == ErrorCodes.WorkspaceFilePreviewUnsupported
+                    ? new ObjectResult(response) { StatusCode = StatusCodes.Status415UnsupportedMediaType }
+                    : error.Code == ErrorCodes.WorkspaceFilePreviewConversionFailed
+                        ? new ObjectResult(response) { StatusCode = StatusCodes.Status422UnprocessableEntity }
+                        : error.Code == ErrorCodes.WorkspaceFilePreviewUnavailable
+                            ? new ObjectResult(response) { StatusCode = StatusCodes.Status503ServiceUnavailable }
                 : new BadRequestObjectResult(response);
     }
 
