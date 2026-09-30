@@ -262,35 +262,50 @@ function checkpointData(teamId: string) {
 }
 
 function evaluationSummary(teamId: string, checkpointNumber: number) {
+  const state = getMockState();
   const cls = classByTeam(teamId)!;
   const checkpoint = checkpointDefinitionsForClass(cls).find((item) => item.number === checkpointNumber)!;
   const rubrics = checkpoint.rubrics as Array<{ key: string; label: string; weight: number }>;
   const hasEvaluation = checkpointNumber === 1;
   const members = teamById(teamId)?.members || [];
+  const evaluationId = uuid(140000 + Number(teamId.slice(-3)) * 10 + checkpointNumber);
+  const status = state.evaluationPublicationStatuses[evaluationId] || 'SUBMITTED';
+  const currentUser = state.users.find(user => user.id === state.sessionUserId);
+  const isInternal = currentUser?.role === 'ADMIN' || currentUser?.role === 'LECTURER';
+  const scoresPublished = status === 'PUBLISHED';
+  const canViewTeamScore = isInternal || scoresPublished;
+  const currentStudentId = Object.values(state.rosters).flat()
+    .find(student => student.userId === currentUser?.id)?.studentId;
   const evaluation = {
-    _id: uuid(1401),
+    _id: evaluationId,
     lecturerId: { _id: uuid(2), name: 'Trần Thu Giang' },
     evaluatorRole: 'LECTURER',
-    status: 'SUBMITTED',
+    status,
     checkpointNumber,
-    checkpointTotal: 7.85,
-    weightedScore: 7.85,
+    ...(canViewTeamScore ? { checkpointTotal: 7.85 } : {}),
     overallFeedback: 'Good early direction. Strengthen customer evidence and clarify the validation plan.',
     updatedAt: new Date(Date.now() - 21_600_000).toISOString(),
     rubricScores: rubrics.map((criterion, index) => ({
       criterionKey: criterion.key,
       criterionName: criterion.label,
-      selectedLevel: index === 1 ? 'GOOD' : 'EXCELLENT',
-      scoreMode: 'LEVEL',
-      score: index === 1 ? 7.5 : 8.5,
-      weightedScore: Number((((index === 1 ? 7.5 : 8.5) * criterion.weight) / 100).toFixed(2)),
+      ...(isInternal || (currentUser?.role === 'STUDENT' && scoresPublished)
+        ? { score: index === 1 ? 7.5 : 8.5 }
+        : {}),
       comment: index === 1 ? 'Include more direct customer quotes and quantified findings.' : 'Clear and focused.',
     })),
-    memberScores: members.map((member, index) => ({
-      studentId: member.studentId,
-      score: index === 0 ? 7.5 : 7.85,
-      isOverridden: index === 0,
-    })),
+    ...(isInternal ? {
+      memberScores: members.map((member, index) => ({
+        studentId: member.studentId,
+        score: index === 0 ? 7.5 : 7.85,
+        isOverridden: index === 0,
+      })),
+    } : currentUser?.role === 'STUDENT' && scoresPublished ? {
+      memberScores: members.filter(member => member.studentId === currentStudentId).map((member, index) => ({
+        studentId: member.studentId,
+        score: index === 0 ? 7.5 : 7.85,
+        isOverridden: index === 0,
+      })),
+    } : {}),
   };
 
   return {
@@ -299,8 +314,7 @@ function evaluationSummary(teamId: string, checkpointNumber: number) {
     summary: {
       evaluationCount: hasEvaluation ? 1 : 0,
       submittedCount: hasEvaluation ? 1 : 0,
-      averageScore: hasEvaluation ? evaluation.checkpointTotal : 0,
-      overallPerformance: { level: hasEvaluation ? 'GOOD' : 'Unscored', label: hasEvaluation ? 'Good' : 'Not scored' },
+      ...(hasEvaluation && canViewTeamScore ? { averageScore: 7.85 } : {}),
     },
     history: hasEvaluation ? [{
       _id: uuid(1501),
@@ -308,11 +322,106 @@ function evaluationSummary(teamId: string, checkpointNumber: number) {
       version: 1,
       changedBy: { _id: uuid(2), name: 'Trần Thu Giang' },
       createdAt: evaluation.updatedAt,
+      changes: isInternal ? [
+        { category: 'STATUS', field: 'status', label: 'Status', previousValue: null, currentValue: 'SUBMITTED' },
+        { category: 'SCORE', field: 'totalScore', label: 'Team score', previousValue: null, currentValue: '7.85' },
+        { category: 'FEEDBACK', field: 'overallFeedback', label: 'Overall feedback', previousValue: null, currentValue: 'Good early direction. Strengthen customer evidence and clarify the validation plan.' },
+        ...rubrics.flatMap((criterion, index) => [
+          { category: 'SCORE', field: `rubricScore:${criterion.key}`, label: `${criterion.label} score`, previousValue: null, currentValue: index === 1 ? '7.5' : '8.5' },
+          { category: 'FEEDBACK', field: `rubricComment:${criterion.key}`, label: `${criterion.label} comment`, previousValue: null, currentValue: index === 1 ? 'Include more direct customer quotes and quantified findings.' : 'Clear and focused.' },
+        ]),
+        ...members.map((member, index) => ({ category: 'SCORE', field: `memberScore:${member.studentId}`, label: `${member.fullName} (${member.rollNumber}) score`, previousValue: null, currentValue: index === 0 ? '7.5' : '7.85' })),
+      ] : [],
     }] : [],
   };
 }
 
 export function registerWorkspaceMockHandlers(mock: MockAdapter): void {
+  mock.onGet('/rankings').reply((config) => {
+    const state = getMockState();
+    const currentUser = state.users.find(user => user.id === state.sessionUserId);
+    if (!currentUser || !['ADMIN', 'LECTURER'].includes(currentUser.role)) {
+      return failure(403, 'WORKSPACE_ACCESS_DENIED', 'Only administrators and lecturers can view team rankings.');
+    }
+
+    const scopedClasses = state.classes.filter(cls => currentUser.role === 'ADMIN' || cls.primaryLecturerId === currentUser.id);
+    const availableSemesterIds = new Set(scopedClasses.map(cls => cls.semesterId));
+    const availableSemesters = state.semesters
+      .filter(item => availableSemesterIds.has(item.id))
+      .sort((left, right) => Number(right.status === 'Active') - Number(left.status === 'Active') || right.year - left.year)
+      .map(item => ({ id: item.id, semester: item.semester, year: item.year, code: `${item.semester}${item.year}`, isActive: item.status === 'Active' }));
+    const requestedSemester = String(config.params?.semester || '').toUpperCase();
+    const requestedYear = Number(config.params?.year || 0);
+    const activeSemester = availableSemesters.find(item => item.isActive) || null;
+    const selectedSemester = availableSemesters.find(item =>
+      (!requestedSemester || item.semester === requestedSemester || item.code === requestedSemester) &&
+      (!requestedYear || item.year === requestedYear)) || activeSemester || availableSemesters[0] || null;
+    const selectedClasses = selectedSemester
+      ? scopedClasses.filter(cls => cls.semesterId === selectedSemester.id)
+      : [];
+    const selectedClassIds = new Set(selectedClasses.map(cls => cls.id));
+    const items = state.teams.filter(team => team.status === 'Active' && selectedClassIds.has(team.classId)).map(team => {
+      const cls = state.classes.find(item => item.id === team.classId)!;
+      const curriculum = state.curricula[cls.subjectCode];
+      const checkpoints = (curriculum?.checkpoints || []).map(checkpoint => {
+        const evaluationId = uuid(140000 + Number(team.id.slice(-3)) * 10 + checkpoint.number);
+        const status = state.evaluationPublicationStatuses[evaluationId] || 'SUBMITTED';
+        return {
+          checkpointId: uuid(3000 + Number(cls.courseId.slice(-3)) * 10 + checkpoint.number),
+          number: checkpoint.number,
+          title: checkpoint.title,
+          weight: checkpoint.courseWeight,
+          score: checkpoint.number === 1 ? 7.85 : null,
+          status: checkpoint.number === 1 ? status : 'NOT_GRADED',
+        };
+      });
+      const assessments = (curriculum?.otherAssessments || []).map(assessment => {
+        const score = state.courseAssessmentScores[`${team.id}:${assessment._id}`];
+        const evaluationId = `${team.id}--${assessment._id}`;
+        return {
+          assessmentId: assessment._id,
+          name: assessment.name,
+          weight: assessment.weight,
+          score: score ?? null,
+          status: score === undefined ? 'NOT_GRADED' : state.evaluationPublicationStatuses[evaluationId] || 'SUBMITTED',
+        };
+      });
+      const components = [...checkpoints, ...assessments];
+      const complete = components.length > 0 && components.every(item => item.score !== null);
+      const published = complete && components.every(item => item.status === 'PUBLISHED');
+      const hasGradedComponent = components.some(item => item.score !== null);
+      const courseTotal = hasGradedComponent
+        ? Math.round(components.reduce((sum, item) => sum + Number(item.score) * item.weight / 100, 0) * 100) / 100
+        : null;
+      return {
+        teamId: team.id,
+        teamName: team.teamName,
+        teamCode: team.teamCode,
+        projectName: team.projectName || '',
+        projectDescription: team.projectDescription || team.description || '',
+        semesterGroupName: [...new Set((state.rosters[cls.id] || [])
+          .filter(student => student.teamId === team.id && student.semesterGroupName?.trim())
+          .map(student => student.semesterGroupName!.trim()))]
+          .sort((left, right) => left.localeCompare(right, undefined, { numeric: true }))
+          .join(', '),
+        classId: cls.id,
+        classCode: cls.classCode,
+        courseCode: cls.subjectCode,
+        semester: cls.semesterCode,
+        year: cls.year,
+        checkpoints,
+        assessments,
+        courseTotal,
+        status: !complete ? 'INCOMPLETE' : published ? 'PUBLISHED' : 'READY_TO_PUBLISH',
+        completedComponentCount: components.filter(item => item.score !== null).length,
+        publishedComponentCount: components.filter(item => item.score !== null && item.status === 'PUBLISHED').length,
+        totalComponentCount: components.length,
+        lastUpdatedAt: components.some(item => item.score !== null) ? new Date().toISOString() : null,
+      };
+    });
+    return ok({ activeSemester, selectedSemester, availableSemesters, items }, 'Team rankings retrieved.');
+  });
+
   mock.onGet('/lecturer/checkpoints').reply((config) => {
     const state = getMockState();
     const lecturer = state.users.find((user) => user.id === state.sessionUserId);
@@ -374,6 +483,11 @@ export function registerWorkspaceMockHandlers(mock: MockAdapter): void {
               originalName: files[0].originalName,
               uploadedAtUtc: files[0].uploadedAt,
             } : null,
+            submittedFiles: files.map(file => ({
+              id: file._id,
+              originalName: file.originalName,
+              uploadedAtUtc: file.uploadedAt,
+            })),
             submittedLinks: links.map(link => ({
               id: link._id,
               name: link.name,
@@ -674,8 +788,18 @@ export function registerWorkspaceMockHandlers(mock: MockAdapter): void {
     const teamName = String(body.teamName ?? team.teamName).trim();
     const projectName = String(body.projectName || '').trim();
     const description = String(body.description || '').trim();
+    const zaloGroupUrl = String(body.zaloGroupUrl || '').trim();
     const startupIndustryIds = Array.isArray(body.startupIndustryIds) ? body.startupIndustryIds.map(String) : [];
-    if (teamName.length < 3 || teamName.length > 100 || projectName.length < 3 || description.length < 20) {
+    let isValidZaloGroupUrl = false;
+    if (zaloGroupUrl.length > 0 && zaloGroupUrl.length <= 500) {
+      try {
+        const url = new URL(zaloGroupUrl);
+        isValidZaloGroupUrl = url.protocol === 'https:' && (url.hostname === 'zalo.me' || url.hostname.endsWith('.zalo.me'));
+      } catch {
+        isValidZaloGroupUrl = false;
+      }
+    }
+    if (teamName.length < 3 || teamName.length > 100 || projectName.length < 3 || description.length < 20 || !isValidZaloGroupUrl) {
       return failure(400, 'WORKSPACE_VALIDATION_ERROR', 'Required project workspace information is missing or invalid.');
     }
     if (state.teams.some((item) => item.classId === team.classId && item.id !== team.id &&
@@ -694,6 +818,7 @@ export function registerWorkspaceMockHandlers(mock: MockAdapter): void {
     team.teamName = teamName;
     team.projectName = projectName;
     team.projectDescription = description;
+    team.projectZaloGroupUrl = zaloGroupUrl;
     team.startupIndustryIds = startupIndustryIds;
     team.startupIndustries = startupIndustryIds.map((id) => activeIndustries.find((industry) => industry.id === id)!.name);
     const createdAtUtc = new Date().toISOString();
@@ -705,7 +830,7 @@ export function registerWorkspaceMockHandlers(mock: MockAdapter): void {
       summary: 'Created the project workspace.',
       actorUserId: currentUser.id,
       actorName: currentUser.name,
-      changedFields: teamNameChanged ? ['teamName', 'projectName', 'description', 'startupIndustries'] : ['projectName', 'description', 'startupIndustries'],
+      changedFields: teamNameChanged ? ['teamName', 'projectName', 'description', 'zaloGroupUrl', 'startupIndustries'] : ['projectName', 'description', 'zaloGroupUrl', 'startupIndustries'],
       occurredAtUtc: createdAtUtc,
     }];
     let direction = state.directions.find((item) => item.teamId === teamId);
@@ -736,7 +861,7 @@ export function registerWorkspaceMockHandlers(mock: MockAdapter): void {
     const project = {
       _id: uuid(1601), teamId, classId: team.classId, subjectId: classByTeam(teamId)!.courseId,
       semesterId: classByTeam(teamId)!.semesterId, projectName, description,
-      problem: '', solution: '', targetUsers: '', zaloGroupUrl: '', keywords: [], startupIndustries: team.startupIndustries,
+      problem: '', solution: '', targetUsers: '', zaloGroupUrl, keywords: [], startupIndustries: team.startupIndustries,
       status: 'Draft', createdAtUtc, updatedAtUtc: null,
     };
     return ok(project, 'Project workspace created.');
@@ -1045,15 +1170,33 @@ export function registerWorkspaceMockHandlers(mock: MockAdapter): void {
     const cls = classByTeam(teamId);
     if (!cls || !canAccessCheckpointTeam(teamId)) return failure(403, 'WORKSPACE_ACCESS_DENIED', 'You do not have access to this team.');
     const state = getMockState();
+    const currentUser = state.users.find(user => user.id === state.sessionUserId);
+    const isInternal = currentUser?.role === 'ADMIN' || currentUser?.role === 'LECTURER';
+    const team = teamById(teamId)!;
     const assessments = (state.curricula[cls.subjectCode]?.otherAssessments || []).map(item => {
       const score = state.courseAssessmentScores[`${teamId}:${item._id}`];
+      const evaluationId = `${teamId}--${item._id}`;
+      const status = score === undefined ? 'NOT_GRADED' : state.evaluationPublicationStatuses[evaluationId] || 'SUBMITTED';
+      const visibleMembers = isInternal
+        ? team.members
+        : currentUser?.role === 'STUDENT' && status === 'PUBLISHED'
+          ? team.members.filter(member => member.studentId === currentUser.id)
+          : [];
       return {
         assessmentId: item._id,
         name: item.name,
         weight: item.weight,
-        evaluationId: score === undefined ? null : item._id,
-        score: score === undefined ? null : score,
-        status: score === undefined ? 'NOT_GRADED' : 'SUBMITTED',
+        evaluationId: score === undefined ? null : evaluationId,
+        evaluatorId: score === undefined ? null : cls.primaryLecturerId,
+        ...((isInternal || status === 'PUBLISHED') && score !== undefined ? { score } : {}),
+        ...(score !== undefined && visibleMembers.length > 0 ? {
+          memberScores: visibleMembers.map(member => {
+            const key = `${teamId}:${item._id}:${member.studentId}`;
+            const hasOverride = Object.prototype.hasOwnProperty.call(state.courseAssessmentMemberScores, key);
+            return { studentId: member.studentId, score: hasOverride ? state.courseAssessmentMemberScores[key] : score, isOverridden: hasOverride };
+          }),
+        } : {}),
+        status,
         updatedAt: score === undefined ? null : new Date().toISOString(),
       };
     });
@@ -1070,10 +1213,73 @@ export function registerWorkspaceMockHandlers(mock: MockAdapter): void {
     if (!cls || user?.role !== 'LECTURER' || cls.primaryLecturerId !== user.id) return failure(403, 'WORKSPACE_ACCESS_DENIED', 'Only an assigned lecturer can grade this assessment.');
     const assessment = state.curricula[cls.subjectCode]?.otherAssessments.find(item => item._id === assessmentId);
     if (!assessment) return failure(404, 'COMMON_NOT_FOUND', 'The course assessment was not found.');
-    const score = Number(parseBody(config).score);
+    const body = parseBody(config);
+    const score = Number(body.score);
     if (!Number.isFinite(score) || score < 0 || score > 10) return failure(400, 'WORKSPACE_VALIDATION_ERROR', 'The assessment score must be between 0 and 10.');
+    const team = teamById(teamId)!;
+    const memberScores = Array.isArray(body.memberScores) ? body.memberScores as Array<{ studentId?: unknown; score?: unknown }> : [];
+    const studentIds = memberScores.map(item => String(item.studentId || ''));
+    if (new Set(studentIds).size !== studentIds.length) return failure(400, 'WORKSPACE_VALIDATION_ERROR', 'A team member can only have one individual assessment score.');
+    if (memberScores.some(item => !team.members.some(member => member.studentId === item.studentId))) return failure(400, 'WORKSPACE_VALIDATION_ERROR', 'One or more individual scores belong to a student outside this team.');
+    if (memberScores.some(item => !Number.isFinite(Number(item.score)) || Number(item.score) < 0 || Number(item.score) > 10)) return failure(400, 'WORKSPACE_VALIDATION_ERROR', 'Each individual member score must be between 0 and 10.');
+    const evaluationId = `${teamId}--${assessmentId}`;
     state.courseAssessmentScores[`${teamId}:${assessmentId}`] = score;
+    Object.keys(state.courseAssessmentMemberScores)
+      .filter(key => key.startsWith(`${teamId}:${assessmentId}:`))
+      .forEach(key => delete state.courseAssessmentMemberScores[key]);
+    memberScores.forEach(item => {
+      const memberScore = Number(item.score);
+      if (memberScore !== score) state.courseAssessmentMemberScores[`${teamId}:${assessmentId}:${String(item.studentId)}`] = memberScore;
+    });
+    state.evaluationPublicationStatuses[evaluationId] = 'SUBMITTED';
     persistMockState();
-    return ok({ assessmentId, name: assessment.name, weight: assessment.weight, evaluationId: assessmentId, score, status: 'SUBMITTED', updatedAt: new Date().toISOString() }, 'Course assessment score saved.');
+    return ok({ assessmentId, name: assessment.name, weight: assessment.weight, evaluationId, evaluatorId: user.id, score, memberScores: team.members.map(member => { const key = `${teamId}:${assessmentId}:${member.studentId}`; const hasOverride = Object.prototype.hasOwnProperty.call(state.courseAssessmentMemberScores, key); return { studentId: member.studentId, score: hasOverride ? state.courseAssessmentMemberScores[key] : score, isOverridden: hasOverride }; }), status: 'SUBMITTED', updatedAt: new Date().toISOString() }, 'Course assessment score saved.');
+  });
+
+  mock.onPut(/^\/workspace\/checkpoints\/evaluations\/[^/]+\/publish$/).reply((config) => {
+    const evaluationId = routeId(config, /^\/workspace\/checkpoints\/evaluations\/([^/]+)\/publish$/);
+    const state = getMockState();
+    const user = state.users.find(item => item.id === state.sessionUserId);
+    if (user?.role !== 'LECTURER') return failure(403, 'WORKSPACE_ACCESS_DENIED', 'Only the assigned lecturer can publish this evaluation.');
+    state.evaluationPublicationStatuses[evaluationId] = 'PUBLISHED';
+    persistMockState();
+    return ok({ _id: evaluationId, status: 'PUBLISHED', publishedAt: new Date().toISOString() }, 'Evaluation published.');
+  });
+
+  mock.onPut(/^\/workspace\/checkpoints\/evaluations\/[^/]+\/unpublish$/).reply((config) => {
+    const evaluationId = routeId(config, /^\/workspace\/checkpoints\/evaluations\/([^/]+)\/unpublish$/);
+    const state = getMockState();
+    const user = state.users.find(item => item.id === state.sessionUserId);
+    if (user?.role !== 'LECTURER') return failure(403, 'WORKSPACE_ACCESS_DENIED', 'Only the assigned lecturer can hide published scores.');
+    if (state.evaluationPublicationStatuses[evaluationId] !== 'PUBLISHED') return failure(400, 'WORKSPACE_VALIDATION_ERROR', 'Only a published evaluation can be hidden.');
+    state.evaluationPublicationStatuses[evaluationId] = 'SUBMITTED';
+    persistMockState();
+    return ok({ _id: evaluationId, status: 'SUBMITTED', updatedAt: new Date().toISOString() }, 'Published scores hidden.');
+  });
+
+  mock.onPut('/workspace/checkpoints/evaluations/publication/bulk').reply((config) => {
+    const state = getMockState();
+    const user = state.users.find(item => item.id === state.sessionUserId);
+    if (user?.role !== 'LECTURER') return failure(403, 'WORKSPACE_ACCESS_DENIED', 'Only an assigned lecturer can update evaluation publication.');
+    const body = parseBody(config);
+    const action = String(body.action || '').toUpperCase();
+    const evaluationIds = [...new Set(Array.isArray(body.evaluationIds) ? body.evaluationIds.map(String) : [])];
+    if (!['PUBLISH', 'UNPUBLISH'].includes(action) || evaluationIds.length === 0 || evaluationIds.length > 200) {
+      return failure(400, 'WORKSPACE_VALIDATION_ERROR', 'Select between 1 and 200 evaluations and a valid publication action.');
+    }
+    const targetStatus = action === 'PUBLISH' ? 'PUBLISHED' : 'SUBMITTED';
+    let changedCount = 0;
+    evaluationIds.forEach(evaluationId => {
+      if (state.evaluationPublicationStatuses[evaluationId] !== targetStatus) changedCount += 1;
+      state.evaluationPublicationStatuses[evaluationId] = targetStatus;
+    });
+    persistMockState();
+    return ok({
+      action,
+      targetStatus,
+      requestedCount: evaluationIds.length,
+      changedCount,
+      unchangedCount: evaluationIds.length - changedCount,
+    }, 'Evaluation publication statuses updated.');
   });
 }

@@ -65,6 +65,8 @@ export default function CheckpointPanel({
   checkpoint,
   checkpointCount,
   teamId,
+  workspaceClassName,
+  workspaceTeamName,
   isEditable,
   isReadOnly = false,
   proposalId,
@@ -298,6 +300,25 @@ export default function CheckpointPanel({
                   <h1 className="text-lg sm:text-2xl font-bold mt-0.5 leading-tight">
                     {checkpoint.title}
                   </h1>
+                  {(workspaceClassName || workspaceTeamName) && (
+                    <div className="mt-2 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs font-semibold text-slate-900">
+                      {workspaceClassName && (
+                        <span className="inline-flex min-w-0 items-center gap-1.5">
+                          <span>Class</span>
+                          <span className="max-w-48 truncate" title={workspaceClassName}>{workspaceClassName}</span>
+                        </span>
+                      )}
+                      {workspaceClassName && workspaceTeamName && (
+                        <span className="text-slate-900" aria-hidden="true">•</span>
+                      )}
+                      {workspaceTeamName && (
+                        <span className="inline-flex min-w-0 items-center gap-1.5">
+                          <span>Team</span>
+                          <span className="max-w-64 truncate" title={workspaceTeamName}>{workspaceTeamName}</span>
+                        </span>
+                      )}
+                    </div>
+                  )}
                   <p className="text-xs sm:text-sm text-slate-600 mt-1.5 leading-relaxed line-clamp-2 hidden sm:block">
                     {checkpoint.shortDescription}
                   </p>

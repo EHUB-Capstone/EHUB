@@ -5,11 +5,12 @@ import {
   CalendarClock,
   ChevronDown,
   Download,
-  FileText,
+  Edit3,
   Loader2,
   RotateCcw,
   ExternalLink,
   Eye,
+  X,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { lecturerCheckpointApi } from '../../api/lecturerCheckpointApi';
@@ -31,6 +32,7 @@ import CheckpointDateTimeField from './CheckpointDateTimeField';
 import Modal from '../ui/Modal';
 import CheckpointFilePreviewModal from '../workspace/checkpoints/CheckpointFilePreviewModal';
 import { isCheckpointFilePreviewable } from '../../utils/checkpointUpload';
+import EvaluationPanel from '../workspace/EvaluationPanel';
 
 interface Props {
   semester: string;
@@ -98,6 +100,13 @@ export default function LecturerCheckpointManagement({
     teamId: string;
     checkpointNumber: number;
     file: { _id: string; originalName: string };
+  } | null>(null);
+  const [evaluationTarget, setEvaluationTarget] = useState<{
+    teamId: string;
+    teamName: string;
+    classCode: string;
+    checkpointNumber: number;
+    checkpointTitle: string;
   } | null>(null);
 
   useEffect(() => {
@@ -197,7 +206,7 @@ export default function LecturerCheckpointManagement({
     }
   };
 
-  const downloadEarliest = async (
+  const downloadFile = async (
     teamId: string,
     checkpointNumber: number,
     fileId: string,
@@ -347,7 +356,7 @@ export default function LecturerCheckpointManagement({
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="border-b border-slate-100 px-5 py-4">
           <h2 className="font-bold text-slate-900">Team submissions</h2>
-          <p className="mt-0.5 text-xs text-slate-500">Latest activity and the earliest submitted file for each team and checkpoint.</p>
+          <p className="mt-0.5 text-xs text-slate-500">Submitted files and links for each team and checkpoint.</p>
         </div>
         {overview.submissions.length === 0 ? (
           <p className="p-8 text-center text-sm text-slate-500">No teams match the current filters.</p>
@@ -356,22 +365,58 @@ export default function LecturerCheckpointManagement({
             <table className="min-w-full divide-y divide-slate-200 text-sm">
               <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
                 <tr>
-                  <th className="px-4 py-3">Class</th><th className="px-4 py-3">Team / Group</th><th className="px-4 py-3">Checkpoint</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Latest Submission</th><th className="px-4 py-3">Earliest Submitted File</th><th className="px-4 py-3">Submitted Links</th><th className="px-4 py-3">Action</th>
+                  <th className="px-4 py-3">Class</th><th className="px-4 py-3">Team</th><th className="px-4 py-3">Checkpoint</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Submitted File</th><th className="px-4 py-3">Submitted Links</th><th className="px-4 py-3">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {overview.submissions.map(item => (
+                {overview.submissions.map(item => {
+                  const submittedFiles = item.submittedFiles?.length
+                    ? item.submittedFiles
+                    : item.earliestSubmittedFile ? [item.earliestSubmittedFile] : [];
+                  return (
                   <tr key={`${item.teamId}-${item.checkpointId}`} className="hover:bg-slate-50/70">
                     <td className="whitespace-nowrap px-4 py-3 font-semibold text-slate-800">{item.classCode}</td>
                     <td className="px-4 py-3 text-slate-700">{item.teamName}</td>
                     <td className="min-w-52 px-4 py-3 text-slate-700">{formatLecturerCheckpointName(item.checkpointNumber)}</td>
                     <td className="px-4 py-3"><span className={`rounded-full px-2.5 py-1 text-xs font-bold ${statusStyles[item.status] || statusStyles.NotScheduled}`}>{item.status}</span></td>
-                    <td className="whitespace-nowrap px-4 py-3 text-slate-600">{formatDateTime(item.latestSubmissionAtUtc)}</td>
-                    <td className="max-w-64 px-4 py-3 text-slate-600">
-                      {item.earliestSubmittedFile ? (
-                        <div>
-                          <span className="block truncate font-medium" title={item.earliestSubmittedFile.originalName}>{item.earliestSubmittedFile.originalName}</span>
-                          <span className="block text-xs text-slate-400">{formatDateTime(item.earliestSubmittedFile.uploadedAtUtc)}</span>
+                    <td className="min-w-72 max-w-96 px-4 py-3 text-slate-600">
+                      {submittedFiles.length ? (
+                        <div className="space-y-2">
+                          {submittedFiles.map(file => (
+                            <div key={file.id} className="flex items-center gap-2 rounded-lg border border-slate-100 bg-slate-50/70 px-2.5 py-2">
+                              <div className="min-w-0 flex-1">
+                                <span className="block truncate font-medium" title={file.originalName}>{file.originalName}</span>
+                                <span className="block text-xs text-slate-400">{formatDateTime(file.uploadedAtUtc)}</span>
+                              </div>
+                              <div className="flex shrink-0 items-center gap-1">
+                                {isCheckpointFilePreviewable(file.originalName) && (
+                                  <button
+                                    type="button"
+                                    title="Preview file"
+                                    aria-label={`Preview ${file.originalName}`}
+                                    onClick={() => setPreviewTarget({
+                                      teamId: item.teamId,
+                                      checkpointNumber: item.checkpointNumber,
+                                      file: { _id: file.id, originalName: file.originalName },
+                                    })}
+                                    className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-500 transition hover:bg-white hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+                                  >
+                                    <Eye className="h-3.5 w-3.5" />
+                                  </button>
+                                )}
+                                <button
+                                  type="button"
+                                  title="Download file"
+                                  aria-label={`Download ${file.originalName}`}
+                                  disabled={downloadingId === file.id}
+                                  onClick={() => void downloadFile(item.teamId, item.checkpointNumber, file.id, file.originalName)}
+                                  className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-500 transition hover:bg-white hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 disabled:opacity-50"
+                                >
+                                  {downloadingId === file.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+                                </button>
+                              </div>
+                            </div>
+                          ))}
                         </div>
                       ) : '—'}
                     </td>
@@ -395,36 +440,24 @@ export default function LecturerCheckpointManagement({
                         >
                           <ExternalLink className="h-3.5 w-3.5" /> View
                         </Link>
-                      {item.earliestSubmittedFile ? (
-                        <>
-                          {isCheckpointFilePreviewable(item.earliestSubmittedFile.originalName) && (
-                            <button
-                              type="button"
-                              onClick={() => setPreviewTarget({
-                                teamId: item.teamId,
-                                checkpointNumber: item.checkpointNumber,
-                                file: { _id: item.earliestSubmittedFile!.id, originalName: item.earliestSubmittedFile!.originalName },
-                              })}
-                              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:border-primary hover:text-primary"
-                            >
-                              <Eye className="h-3.5 w-3.5" /> Preview
-                            </button>
-                          )}
-                          <button
-                            type="button"
-                            disabled={downloadingId === item.earliestSubmittedFile.id}
-                            onClick={() => void downloadEarliest(item.teamId, item.checkpointNumber, item.earliestSubmittedFile!.id, item.earliestSubmittedFile!.originalName)}
-                            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:border-primary hover:text-primary disabled:opacity-50"
-                          >
-                            {downloadingId === item.earliestSubmittedFile.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-                            Download
-                          </button>
-                        </>
-                      ) : <FileText className="h-4 w-4 text-slate-300" />}
+                        <button
+                          type="button"
+                          onClick={() => setEvaluationTarget({
+                            teamId: item.teamId,
+                            teamName: item.teamName,
+                            classCode: item.classCode,
+                            checkpointNumber: item.checkpointNumber,
+                            checkpointTitle: item.checkpointTitle,
+                          })}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-primary/30 bg-primary-50 px-2.5 py-1.5 text-xs font-semibold text-primary hover:border-primary"
+                        >
+                          <Edit3 className="h-3.5 w-3.5" /> Grade
+                        </button>
                       </div>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -501,6 +534,37 @@ export default function LecturerCheckpointManagement({
         file={previewTarget?.file ?? null}
         onClose={() => setPreviewTarget(null)}
       />
+      {evaluationTarget && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/50 p-3 backdrop-blur-sm sm:p-6" role="dialog" aria-modal="true" aria-labelledby="checkpoint-evaluation-dialog-title">
+          <div className="flex max-h-[94vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 shadow-2xl">
+            <div className="flex items-center justify-between gap-4 border-b border-slate-200 bg-white px-5 py-4">
+              <div className="min-w-0">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-primary">{evaluationTarget.classCode} · {evaluationTarget.teamName}</p>
+                <h2 id="checkpoint-evaluation-dialog-title" className="truncate text-lg font-black text-slate-900">
+                  Grade · Checkpoint {evaluationTarget.checkpointNumber}: {evaluationTarget.checkpointTitle}
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEvaluationTarget(null)}
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+                aria-label="Close grading dialog"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="overflow-y-auto">
+              <EvaluationPanel
+                teamId={evaluationTarget.teamId}
+                proposalId={undefined}
+                pitchDeckId={undefined}
+                checkpointNumber={evaluationTarget.checkpointNumber}
+                embedded
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

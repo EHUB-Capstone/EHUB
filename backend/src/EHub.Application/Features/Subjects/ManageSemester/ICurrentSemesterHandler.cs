@@ -12,6 +12,7 @@ public interface ICurrentSemesterHandler
     Task<Result<SemesterResponse>> UpdateDatesAsync(Guid semesterId, UpdateSemesterDatesRequest request, CancellationToken cancellationToken = default);
     Task<Result<CurrentSemesterResponse>> SetAsync(SetCurrentSemesterRequest request, CancellationToken cancellationToken = default);
     Task<Result<CurrentSemesterResponse>> CorrectAsync(CorrectActiveSemesterRequest request, CancellationToken cancellationToken = default);
+    Task<Result<CurrentSemesterResponse>> TransitionAsync(TransitionSemesterRequest request, CancellationToken cancellationToken = default);
     Task<Result<SemesterCompletionPreviewResponse>> PreviewCompletionAsync(Guid semesterId, CancellationToken cancellationToken = default);
     Task<Result<SemesterResponse>> CompleteAsync(Guid semesterId, ChangeSemesterLifecycleRequest request, CancellationToken cancellationToken = default);
     Task<Result<SemesterResponse>> ReopenAsync(Guid semesterId, ChangeSemesterLifecycleRequest request, CancellationToken cancellationToken = default);

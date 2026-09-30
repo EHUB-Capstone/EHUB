@@ -57,6 +57,7 @@ export interface LecturerCheckpointSubmission {
   status: CheckpointSubmissionStatus;
   latestSubmissionAtUtc?: string | null;
   earliestSubmittedFile?: LecturerCheckpointFile | null;
+  submittedFiles: LecturerCheckpointFile[];
   submittedLinks: LecturerCheckpointLink[];
 }
 

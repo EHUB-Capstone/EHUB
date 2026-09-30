@@ -148,10 +148,13 @@ export const MentorRubricRow = ({ criterionName, weight, level, label, comment }
  * Displays overall performance level + per-criterion level badges + feedback.
  * No numeric score is rendered anywhere.
  */
-export const MentorEvaluationCard = ({ evaluation }) => {
+export const MentorEvaluationCard = ({ evaluation, showIndividualScore = false }) => {
   const rubricScores = evaluation?.rubricScores || [];
   const overallLevel = evaluation?.overallLevel || 'Unscored';
   const overallLabel = evaluation?.overallLabel || '';
+  const teamScore = evaluation?.checkpointTotal;
+  const ownScore = showIndividualScore ? evaluation?.memberScores?.[0]?.score : null;
+  const hasPublishedTeamScore = teamScore !== null && teamScore !== undefined;
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-slate-50 overflow-hidden">
@@ -180,6 +183,23 @@ export const MentorEvaluationCard = ({ evaluation }) => {
         </div>
       </div>
 
+      <div className={`grid gap-2 border-b border-slate-200 p-4 ${showIndividualScore ? 'sm:grid-cols-2' : ''}`}>
+        <div className="rounded-xl border border-orange-100 bg-orange-50 p-3">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-orange-500">Team score</p>
+          <p className={`mt-1 font-black ${hasPublishedTeamScore ? 'text-xl text-primary' : 'text-sm text-slate-400'}`}>
+            {hasPublishedTeamScore ? `${Number(teamScore).toFixed(2)} / 10` : 'Pending publication'}
+          </p>
+        </div>
+        {showIndividualScore && (
+          <div className="rounded-xl border border-blue-100 bg-blue-50 p-3">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-blue-500">My score</p>
+            <p className={`mt-1 font-black ${ownScore !== null && ownScore !== undefined ? 'text-xl text-blue-700' : 'text-sm text-slate-400'}`}>
+              {ownScore !== null && ownScore !== undefined ? `${Number(ownScore).toFixed(2)} / 10` : 'Pending publication'}
+            </p>
+          </div>
+        )}
+      </div>
+
       {/* Per-criterion level badges */}
       {rubricScores.length > 0 && (
         <div className="p-4 space-y-3">
@@ -201,7 +221,7 @@ export const MentorEvaluationCard = ({ evaluation }) => {
         </div>
       )}
 
-      {/* Feedback text — fully visible to Mentor */}
+      {/* Feedback text is non-sensitive and is visible immediately after submit. */}
       {evaluation?.overallFeedback && (
         <div className="p-4 border-t border-slate-200 space-y-2 text-sm">
           <p className="text-slate-600 whitespace-pre-wrap">

@@ -355,6 +355,9 @@ public sealed class SemesterTeachingStaffCommandHandler : ISemesterTeachingStaff
 
     private static Error? GetSemesterMutationError(Semester semester) => semester.Status switch
     {
+        SemesterStatus.Closing => new Error(
+            ErrorCodes.SemesterInvalidState,
+            "Teaching staff of a closing semester cannot be changed."),
         SemesterStatus.Completed => new Error(
             ErrorCodes.SemesterInvalidState,
             "Teaching staff of a completed semester cannot be changed."),

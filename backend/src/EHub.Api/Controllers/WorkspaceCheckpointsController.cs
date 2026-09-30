@@ -173,6 +173,48 @@ public sealed class WorkspaceCheckpointsController(
             : ToErrorResponse(result.Error);
     }
 
+    [HttpPut("evaluations/{evaluationId:guid}/publish")]
+    [Authorize(Policy = SystemPolicies.LecturerOnly)]
+    public async Task<IActionResult> PublishEvaluation(
+        Guid evaluationId,
+        [FromServices] ICheckpointEvaluationHandler handler,
+        CancellationToken cancellationToken)
+    {
+        var result = await handler.PublishAsync(evaluationId, UserId, Role, cancellationToken);
+        return result.IsSuccess
+            ? Ok(ApiResponse<WorkspaceEvaluationPublicationResponse>.SuccessResponse(
+                result.Value, "Evaluation published."))
+            : ToErrorResponse(result.Error);
+    }
+
+    [HttpPut("evaluations/{evaluationId:guid}/unpublish")]
+    [Authorize(Policy = SystemPolicies.LecturerOnly)]
+    public async Task<IActionResult> UnpublishEvaluation(
+        Guid evaluationId,
+        [FromServices] ICheckpointEvaluationHandler handler,
+        CancellationToken cancellationToken)
+    {
+        var result = await handler.UnpublishAsync(evaluationId, UserId, Role, cancellationToken);
+        return result.IsSuccess
+            ? Ok(ApiResponse<WorkspaceEvaluationUnpublicationResponse>.SuccessResponse(
+                result.Value, "Published scores hidden."))
+            : ToErrorResponse(result.Error);
+    }
+
+    [HttpPut("evaluations/publication/bulk")]
+    [Authorize(Policy = SystemPolicies.LecturerOnly)]
+    public async Task<IActionResult> UpdateEvaluationPublicationBatch(
+        [FromBody] BulkWorkspaceEvaluationPublicationRequest request,
+        [FromServices] ICheckpointEvaluationHandler handler,
+        CancellationToken cancellationToken)
+    {
+        var result = await handler.UpdatePublicationBatchAsync(request, UserId, Role, cancellationToken);
+        return result.IsSuccess
+            ? Ok(ApiResponse<BulkWorkspaceEvaluationPublicationResponse>.SuccessResponse(
+                result.Value, "Evaluation publication statuses updated."))
+            : ToErrorResponse(result.Error);
+    }
+
     [HttpGet("teams/{teamId:guid}/course-assessments")]
     public async Task<IActionResult> GetCourseAssessments(
         Guid teamId,

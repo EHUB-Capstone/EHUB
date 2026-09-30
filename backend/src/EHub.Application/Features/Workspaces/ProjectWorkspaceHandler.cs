@@ -102,7 +102,7 @@ public sealed class ProjectWorkspaceHandler : IProjectWorkspaceHandler
             return Failure<ProjectWorkspaceDto>(ErrorCodes.WorkspaceAccessDenied, "Only the active team leader can create a project workspace.");
 
         var industryIds = request.StartupIndustryIds ?? Array.Empty<Guid>();
-        var validation = ValidateCreate(request.ProjectName, request.Description, industryIds);
+        var validation = ValidateCreate(request.ProjectName, request.Description, request.ZaloGroupUrl, industryIds);
         if (validation != null) return Result.Failure<ProjectWorkspaceDto>(validation);
         try
         {
@@ -161,6 +161,7 @@ public sealed class ProjectWorkspaceHandler : IProjectWorkspaceHandler
                     Team = team,
                     Name = (request.ProjectName ?? string.Empty).Trim(),
                     Description = (request.Description ?? string.Empty).Trim(),
+                    ZaloGroupUrl = (request.ZaloGroupUrl ?? string.Empty).Trim(),
                     Status = ProjectStatus.Draft,
                     CreatedById = userId,
                     CreatedBy = userId,
@@ -206,8 +207,8 @@ public sealed class ProjectWorkspaceHandler : IProjectWorkspaceHandler
                     Action = "WORKSPACE_CREATED",
                     Summary = "Created the project workspace.",
                     ChangedFieldsJson = JsonSerializer.Serialize(teamNameChanged
-                        ? new[] { "teamName", "projectName", "description", "startupIndustries" }
-                        : new[] { "projectName", "description", "startupIndustries" }),
+                        ? new[] { "teamName", "projectName", "description", "zaloGroupUrl", "startupIndustries" }
+                        : new[] { "projectName", "description", "zaloGroupUrl", "startupIndustries" }),
                     OccurredAtUtc = now
                 });
 
@@ -427,12 +428,18 @@ public sealed class ProjectWorkspaceHandler : IProjectWorkspaceHandler
     private static Error? ValidateCreate(
         string? projectName,
         string? description,
+        string? zaloGroupUrl,
         IReadOnlyCollection<Guid> startupIndustryIds)
     {
         if ((projectName ?? string.Empty).Trim().Length is < 3 or > 200)
             return new Error(ErrorCodes.WorkspaceValidationError, "Project name must be between 3 and 200 characters.");
         if ((description ?? string.Empty).Trim().Length is < 20 or > 2_000)
             return new Error(ErrorCodes.WorkspaceValidationError, "Project description must be between 20 and 2000 characters.");
+        var normalizedZaloGroupUrl = (zaloGroupUrl ?? string.Empty).Trim();
+        if (normalizedZaloGroupUrl.Length == 0)
+            return new Error(ErrorCodes.WorkspaceValidationError, "Zalo group link is required.");
+        if (normalizedZaloGroupUrl.Length > 500 || !IsValidZaloUrl(normalizedZaloGroupUrl))
+            return new Error(ErrorCodes.WorkspaceValidationError, "Zalo group link must be a valid HTTPS URL on zalo.me.");
         if (startupIndustryIds.Count is < 1 or > 3)
             return new Error(ErrorCodes.WorkspaceValidationError, "Select between 1 and 3 startup industries.");
         if (startupIndustryIds.Any(industryId => industryId == Guid.Empty) || startupIndustryIds.Distinct().Count() != startupIndustryIds.Count)
@@ -444,15 +451,19 @@ public sealed class ProjectWorkspaceHandler : IProjectWorkspaceHandler
     {
         var commonValidation = Validate(request.ProjectName, request.Description, request.Keywords);
         if (commonValidation != null) return commonValidation;
-        if ((request.Problem ?? string.Empty).Trim().Length is < 20 or > 2_000)
-            return new Error(ErrorCodes.WorkspaceValidationError, "Project problem must be between 20 and 2000 characters.");
-        if ((request.Solution ?? string.Empty).Trim().Length is < 20 or > 2_000)
-            return new Error(ErrorCodes.WorkspaceValidationError, "Project solution must be between 20 and 2000 characters.");
+        var problemLength = (request.Problem ?? string.Empty).Trim().Length;
+        if (problemLength > 0 && (problemLength is < 20 or > 2_000))
+            return new Error(ErrorCodes.WorkspaceValidationError, "Project problem must be between 20 and 2000 characters when provided.");
+        var solutionLength = (request.Solution ?? string.Empty).Trim().Length;
+        if (solutionLength > 0 && (solutionLength is < 20 or > 2_000))
+            return new Error(ErrorCodes.WorkspaceValidationError, "Project solution must be between 20 and 2000 characters when provided.");
         var targetUsersLength = (request.TargetUsers ?? string.Empty).Trim().Length;
         if (targetUsersLength > 0 && targetUsersLength is < 3 or > 2_000)
             return new Error(ErrorCodes.WorkspaceValidationError, "Target users must be between 3 and 2000 characters when provided.");
         var zaloGroupUrl = (request.ZaloGroupUrl ?? string.Empty).Trim();
-        if (zaloGroupUrl.Length > 500 || (zaloGroupUrl.Length > 0 && !IsValidZaloUrl(zaloGroupUrl)))
+        if (zaloGroupUrl.Length == 0)
+            return new Error(ErrorCodes.WorkspaceValidationError, "Zalo group link is required.");
+        if (zaloGroupUrl.Length > 500 || !IsValidZaloUrl(zaloGroupUrl))
             return new Error(ErrorCodes.WorkspaceValidationError, "Zalo group link must be a valid HTTPS URL on zalo.me.");
         return null;
     }

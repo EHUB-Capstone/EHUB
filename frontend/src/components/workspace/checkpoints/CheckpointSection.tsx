@@ -11,6 +11,8 @@ import { subscribeProjectDirectionRealtime } from '../../../api/projectDirection
 
 export default function CheckpointSection({
   teamId,
+  workspaceClassName,
+  workspaceTeamName,
   isEditable,
   isReadOnly = false,
   proposalId,
@@ -154,6 +156,8 @@ export default function CheckpointSection({
           checkpoint={selected}
           checkpointCount={configs.length}
           teamId={teamId}
+          workspaceClassName={workspaceClassName}
+          workspaceTeamName={workspaceTeamName}
           isEditable={isEditable}
           isReadOnly={isReadOnly}
           proposalId={proposalId}

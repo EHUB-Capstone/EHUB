@@ -19,6 +19,7 @@ using EHub.Application.Features.Auth.VerifyRegistrationOtp;
 using EHub.Application.Features.Dashboard.GetAdminDashboard;
 using EHub.Application.Features.Notifications.GetNotifications;
 using EHub.Application.Features.Notifications.MarkNotificationRead;
+using EHub.Application.Features.Rankings.TeamRankings;
 using EHub.Application.Features.Subjects.Curriculum;
 using EHub.Application.Features.Subjects.ManageSemester;
 using EHub.Application.Features.Subjects.ManageSubjects;
@@ -64,6 +65,7 @@ public static class DependencyInjection
 
         services.AddScoped<IGetAdminDashboardQueryHandler, GetAdminDashboardQueryHandler>();
         services.AddScoped<ITrackingQueryHandler, TrackingQueryHandler>();
+        services.AddScoped<ITeamRankingQueryHandler, TeamRankingQueryHandler>();
         services.AddScoped<IGetNotificationsQueryHandler, GetNotificationsQueryHandler>();
         services.AddScoped<IMarkNotificationReadCommandHandler, MarkNotificationReadCommandHandler>();
 

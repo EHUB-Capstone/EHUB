@@ -141,6 +141,20 @@ public sealed class SubjectsController : ControllerBase
                 "Active semester corrected successfully."));
     }
 
+    [HttpPost("current-semester/transition")]
+    [Authorize(Policy = SystemPolicies.AdminOnly)]
+    public async Task<IActionResult> TransitionCurrentSemester(
+        [FromBody] TransitionSemesterRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await _semesterHandler.TransitionAsync(request, cancellationToken);
+        return result.IsFailure
+            ? ToSemesterErrorResponse(result.Error)
+            : Ok(ApiResponse<CurrentSemesterResponse>.SuccessResponse(
+                result.Value!,
+                "Semester transition completed successfully."));
+    }
+
     [HttpGet("semesters")]
     public async Task<IActionResult> GetSemesters(CancellationToken cancellationToken)
     {

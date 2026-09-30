@@ -1,4 +1,5 @@
 using EHub.Application.Common.Interfaces.Persistence;
+using EHub.Application.Features.Workspaces.CheckpointEvaluations;
 using EHub.Contracts.Workspaces;
 using EHub.Domain.Entities;
 using EHub.Domain.Enums;
@@ -31,6 +32,7 @@ public sealed class CourseAssessmentEvaluationHandler(IApplicationDbContext cont
             ? Array.Empty<Evaluation>()
             : await context.Evaluations
                 .AsNoTracking()
+                .Include(item => item.MemberScores)
                 .Where(item => item.ProjectId == team.Project.Id && assessmentIds.Contains(item.RubricId))
                 .OrderByDescending(item => item.UpdatedAt ?? item.CreatedAt)
                 .ToArrayAsync(cancellationToken);
@@ -46,7 +48,7 @@ public sealed class CourseAssessmentEvaluationHandler(IApplicationDbContext cont
                     .OrderByDescending(item => item.Status is EvaluationStatus.Submitted or EvaluationStatus.Published)
                     .ThenByDescending(item => item.UpdatedAt ?? item.CreatedAt)
                     .FirstOrDefault();
-                return ToResponse(assessment, evaluation);
+                return ToResponse(assessment, evaluation, team, userId, role);
             }).ToArray(),
         });
     }
@@ -69,6 +71,17 @@ public sealed class CourseAssessmentEvaluationHandler(IApplicationDbContext cont
             return Result.Failure<CourseAssessmentEvaluationResponse>(
                 ErrorCodes.WorkspaceNotFound, "The team project was not found.");
 
+        var activeStudentIds = ActiveMembers(team).Select(item => item.StudentId).ToHashSet();
+        if (request.MemberScores.GroupBy(item => item.StudentId).Any(group => group.Count() > 1))
+            return Result.Failure<CourseAssessmentEvaluationResponse>(
+                ErrorCodes.WorkspaceValidationError, "A team member can only have one individual assessment score.");
+        if (request.MemberScores.Any(item => item.Score is < 0 or > 10))
+            return Result.Failure<CourseAssessmentEvaluationResponse>(
+                ErrorCodes.WorkspaceValidationError, "Each individual member score must be between 0 and 10.");
+        if (request.MemberScores.Any(item => !activeStudentIds.Contains(item.StudentId)))
+            return Result.Failure<CourseAssessmentEvaluationResponse>(
+                ErrorCodes.WorkspaceValidationError, "One or more individual scores belong to a student outside this team.");
+
         var assessment = await context.Rubrics.FirstOrDefaultAsync(item =>
             item.Id == assessmentId && item.CourseId == team.Class.CourseId && item.ClassId == null &&
             item.CheckpointId == null && item.Status == RubricStatus.Active, cancellationToken);
@@ -77,6 +90,7 @@ public sealed class CourseAssessmentEvaluationHandler(IApplicationDbContext cont
                 ErrorCodes.CommonNotFoundError, "The course assessment was not found.");
 
         var evaluation = await context.Evaluations
+            .Include(item => item.MemberScores)
             .Where(item => item.ProjectId == team.Project.Id && item.RubricId == assessment.Id &&
                            item.EvaluatorId == userId)
             .OrderByDescending(item => item.UpdatedAt ?? item.CreatedAt)
@@ -94,7 +108,7 @@ public sealed class CourseAssessmentEvaluationHandler(IApplicationDbContext cont
                 MaxTotalScore = 10,
                 Status = EvaluationStatus.Submitted,
                 SubmittedAt = now,
-                PublishedAt = now,
+                PublishedAt = null,
                 CreatedAt = now,
                 CreatedBy = userId,
             };
@@ -106,13 +120,15 @@ public sealed class CourseAssessmentEvaluationHandler(IApplicationDbContext cont
             evaluation.MaxTotalScore = 10;
             evaluation.Status = EvaluationStatus.Submitted;
             evaluation.SubmittedAt ??= now;
-            evaluation.PublishedAt = now;
+            evaluation.PublishedAt = null;
             evaluation.UpdatedAt = now;
             evaluation.UpdatedBy = userId;
         }
 
+        AddOrUpdateMemberScores(evaluation, request.MemberScores, request.Score, userId, now);
+
         await context.SaveChangesAsync(cancellationToken);
-        return Result.Success(ToResponse(assessment, evaluation));
+        return Result.Success(ToResponse(assessment, evaluation, team, userId, role));
     }
 
     private async Task<Result<Team>> LoadTeamAsync(
@@ -129,16 +145,100 @@ public sealed class CourseAssessmentEvaluationHandler(IApplicationDbContext cont
             : Denied<Team>("You do not have access to this team's course assessments.");
     }
 
-    private static CourseAssessmentEvaluationResponse ToResponse(Rubric assessment, Evaluation? evaluation) => new()
+    private void AddOrUpdateMemberScores(
+        Evaluation evaluation,
+        IReadOnlyCollection<WorkspaceCheckpointMemberScoreInput> memberScores,
+        decimal teamScore,
+        Guid userId,
+        DateTime now)
+    {
+        var overrides = memberScores
+            .Where(item => Math.Round(item.Score, 2) != Math.Round(teamScore, 2))
+            .ToDictionary(item => item.StudentId, item => Math.Round(item.Score, 2));
+
+        foreach (var removed in evaluation.MemberScores
+                     .Where(item => !overrides.ContainsKey(item.StudentId))
+                     .ToArray())
+        {
+            evaluation.MemberScores.Remove(removed);
+            context.EvaluationMemberScores.Remove(removed);
+        }
+
+        var existingByStudent = evaluation.MemberScores.ToDictionary(item => item.StudentId);
+        foreach (var (studentId, score) in overrides)
+        {
+            if (existingByStudent.TryGetValue(studentId, out var existing))
+            {
+                existing.Score = score;
+                existing.UpdatedAt = now;
+                existing.UpdatedBy = userId;
+                continue;
+            }
+
+            var memberScore = new EvaluationMemberScore
+            {
+                StudentId = studentId,
+                Score = score,
+                CreatedAt = now,
+                CreatedBy = userId,
+            };
+            evaluation.MemberScores.Add(memberScore);
+            context.EvaluationMemberScores.Add(memberScore);
+        }
+    }
+
+    private static CourseAssessmentEvaluationResponse ToResponse(
+        Rubric assessment, Evaluation? evaluation, Team team, Guid userId, string role) => new()
     {
         AssessmentId = assessment.Id,
         Name = assessment.Name,
         Weight = assessment.CourseWeight,
         EvaluationId = evaluation?.Id,
-        Score = evaluation?.TotalScore,
+        EvaluatorId = evaluation?.EvaluatorId,
+        Score = evaluation is not null && EvaluationVisibilityRules.CanViewTeamScore(role, evaluation.Status)
+            ? evaluation.TotalScore
+            : null,
+        MemberScores = VisibleMemberScores(evaluation, team, userId, role),
         Status = evaluation?.Status.ToString().ToUpperInvariant() ?? "NOT_GRADED",
         UpdatedAt = evaluation?.UpdatedAt ?? evaluation?.CreatedAt,
     };
+
+    private static IReadOnlyCollection<WorkspaceCheckpointEvaluationMemberScoreResponse>? VisibleMemberScores(
+        Evaluation? evaluation, Team team, Guid userId, string role)
+    {
+        if (evaluation is null) return null;
+
+        IEnumerable<TeamMember> members;
+        if (EvaluationVisibilityRules.CanViewAllMemberScores(role))
+        {
+            members = ActiveMembers(team);
+        }
+        else if (EvaluationVisibilityRules.CanViewOwnMemberScore(role, evaluation.Status))
+        {
+            members = ActiveMembers(team)
+                .Where(member => member.ClassStudent.Student.UserId == userId);
+        }
+        else
+        {
+            return null;
+        }
+
+        return members.Select(member =>
+        {
+            var scoreOverride = evaluation.MemberScores.FirstOrDefault(item => item.StudentId == member.StudentId);
+            return new WorkspaceCheckpointEvaluationMemberScoreResponse
+            {
+                StudentId = member.StudentId,
+                Score = scoreOverride?.Score ?? evaluation.TotalScore,
+                IsOverridden = scoreOverride is not null,
+            };
+        }).ToArray();
+    }
+
+    private static IEnumerable<TeamMember> ActiveMembers(Team team) => team.TeamMembers
+        .Where(item => item.CountsTowardActiveTeam && item.ClassStudent.EnrollmentStatus == EnrollmentStatus.Active)
+        .OrderBy(item => item.ClassStudent.Student.FullName)
+        .ThenBy(item => item.StudentId);
 
     private static bool CanView(string role, Team team, Guid userId) =>
         IsRole(role, SystemRoles.Admin) ||

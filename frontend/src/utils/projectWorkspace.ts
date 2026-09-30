@@ -2,6 +2,7 @@ export interface ProjectWorkspaceDraft {
   teamName: string;
   projectName: string;
   description: string;
+  zaloGroupUrl: string;
   startupIndustryIds: string[];
 }
 
@@ -34,6 +35,7 @@ export const resolveWorkspaceCreationDefaults = (
     teamName: team.teamName?.trim() || team.name?.trim() || proposal?.teamName?.trim() || '',
     projectName: proposal?.projectName?.trim() || team.teamName?.trim() || team.name?.trim() || '',
     description: proposal?.projectDescription?.trim() || proposal?.description?.trim() || '',
+    zaloGroupUrl: '',
     startupIndustryIds: [],
   },
 });
@@ -63,9 +65,23 @@ export const validateProjectWorkspace = (draft: ProjectWorkspaceDraft): ProjectW
   const teamNameLength = draft.teamName.trim().length;
   const nameLength = draft.projectName.trim().length;
   const descriptionLength = draft.description.trim().length;
+  const zaloGroupUrl = draft.zaloGroupUrl.trim();
   if (teamNameLength < 3 || teamNameLength > 100) errors.teamName = 'Team name must be 3–100 characters.';
   if (nameLength < 3 || nameLength > 200) errors.projectName = 'Project name must be 3–200 characters.';
   if (descriptionLength < 20 || descriptionLength > 2_000) errors.description = 'Description must be 20–2000 characters.';
+  if (!zaloGroupUrl) {
+    errors.zaloGroupUrl = 'Zalo group link is required.';
+  } else {
+    try {
+      const url = new URL(zaloGroupUrl);
+      const isZaloHost = url.hostname === 'zalo.me' || url.hostname.endsWith('.zalo.me');
+      if (url.protocol !== 'https:' || !isZaloHost || zaloGroupUrl.length > 500) {
+        errors.zaloGroupUrl = 'Enter a valid HTTPS link on zalo.me.';
+      }
+    } catch {
+      errors.zaloGroupUrl = 'Enter a valid HTTPS link on zalo.me.';
+    }
+  }
   if (draft.startupIndustryIds.length < 1 || draft.startupIndustryIds.length > 3) {
     errors.startupIndustryIds = 'Select between 1 and 3 startup industries.';
   }
@@ -104,12 +120,18 @@ export const validateProjectProfile = (draft: ProjectProfileDraft): ProjectProfi
   };
   if (lengths.projectName < 3 || lengths.projectName > 200) errors.projectName = 'Project name must be 3–200 characters.';
   if (lengths.description < 20 || lengths.description > 2_000) errors.description = 'Description must be 20–2000 characters.';
-  if (lengths.problem < 20 || lengths.problem > 2_000) errors.problem = 'Problem must be 20–2000 characters.';
-  if (lengths.solution < 20 || lengths.solution > 2_000) errors.solution = 'Solution must be 20–2000 characters.';
+  if (lengths.problem > 0 && (lengths.problem < 20 || lengths.problem > 2_000)) {
+    errors.problem = 'Problem must be 20–2000 characters when provided.';
+  }
+  if (lengths.solution > 0 && (lengths.solution < 20 || lengths.solution > 2_000)) {
+    errors.solution = 'Solution must be 20–2000 characters when provided.';
+  }
   if (lengths.targetUsers > 0 && (lengths.targetUsers < 3 || lengths.targetUsers > 2_000)) {
     errors.targetUsers = 'Target users must be 3–2000 characters when provided.';
   }
-  if (lengths.zaloGroupUrl > 0) {
+  if (lengths.zaloGroupUrl === 0) {
+    errors.zaloGroupUrl = 'Zalo group link is required.';
+  } else {
     try {
       const url = new URL(draft.zaloGroupUrl.trim());
       const isZaloHost = url.hostname === 'zalo.me' || url.hostname.endsWith('.zalo.me');

@@ -7,5 +7,6 @@ public enum EvaluationHistoryAction
     Submitted,
     Published,
     Locked,
-    Reopened
+    Reopened,
+    Unpublished
 }

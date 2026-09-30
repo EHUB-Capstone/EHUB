@@ -28,6 +28,15 @@ public sealed class CorrectActiveSemesterRequest
     public string Reason { get; init; } = string.Empty;
 }
 
+public sealed class TransitionSemesterRequest
+{
+    public Guid CurrentSemesterId { get; init; }
+    public string CurrentRowVersion { get; init; } = string.Empty;
+    public Guid TargetSemesterId { get; init; }
+    public string TargetRowVersion { get; init; } = string.Empty;
+    public string Reason { get; init; } = string.Empty;
+}
+
 public sealed class PlanSemesterRequest
 {
     public string Semester { get; init; } = string.Empty;

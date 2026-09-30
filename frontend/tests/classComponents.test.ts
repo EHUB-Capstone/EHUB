@@ -39,6 +39,65 @@ import {
   resolveActiveEvaluationSemester,
   selectLatestOfficialEvaluation,
 } from '../src/utils/evaluationGrading.ts';
+import { filterTeamRankingRows, rankTeamResults } from '../src/utils/teamRankings.ts';
+import type { TeamRankingItem } from '../src/types/rankings.ts';
+
+const rankingItem = (
+  teamId: string,
+  score: number | null,
+  status: TeamRankingItem['status'],
+  checkpointScore = score,
+): TeamRankingItem => ({
+  teamId,
+  teamName: `Team ${teamId}`,
+  teamCode: `CODE-${teamId}`,
+  projectName: `Project ${teamId}`,
+  projectDescription: `Description ${teamId}`,
+  semesterGroupName: `Group ${teamId}`,
+  classId: 'class-1',
+  classCode: 'EXE201_8',
+  courseCode: 'EXE201',
+  semester: 'FA2026',
+  year: 2026,
+  checkpoints: [{ checkpointId: 'checkpoint-1', number: 1, title: 'Checkpoint 1', weight: 100, score: checkpointScore, status: status === 'PUBLISHED' ? 'PUBLISHED' : status === 'READY_TO_PUBLISH' ? 'SUBMITTED' : 'NOT_GRADED' }],
+  assessments: [],
+  courseTotal: score,
+  status,
+  completedComponentCount: score === null ? 0 : 1,
+  publishedComponentCount: status === 'PUBLISHED' ? 1 : 0,
+  totalComponentCount: 1,
+});
+
+test('team rankings use current team totals regardless of publication and preserve ties', () => {
+  const rows = rankTeamResults([
+    rankingItem('a', 8.5, 'PUBLISHED'),
+    rankingItem('b', 9, 'READY_TO_PUBLISH'),
+    rankingItem('c', 8.5, 'PUBLISHED'),
+    rankingItem('d', 7, 'PUBLISHED'),
+  ], 'course');
+
+  assert.deepEqual(rows.map(row => [row.teamId, row.rank]), [['b', 1], ['a', 2], ['c', 2], ['d', 4]]);
+});
+
+test('checkpoint ranking uses checkpointTotal and ranking filters do not renumber teams', () => {
+  const rows = rankTeamResults([
+    rankingItem('a', 6, 'PUBLISHED', 9),
+    rankingItem('b', 9, 'PUBLISHED', 8),
+  ], 'checkpoint:1');
+  const filtered = filterTeamRankingRows(rows, { search: 'description b', teamId: '', status: '' });
+
+  assert.deepEqual(rows.map(row => [row.teamId, row.rank, row.rankingScore]), [['a', 1, 9], ['b', 2, 8]]);
+  assert.deepEqual(filtered.map(row => [row.teamId, row.rank]), [['b', 2]]);
+});
+
+test('submitted checkpoint scores are rankable for lecturer and admin views', () => {
+  const rows = rankTeamResults([
+    rankingItem('a', 6, 'READY_TO_PUBLISH', 9),
+    rankingItem('b', 9, 'PUBLISHED', 8),
+  ], 'checkpoint:1');
+
+  assert.deepEqual(rows.map(row => [row.teamId, row.rank, row.rankingScore]), [['a', 1, 9], ['b', 2, 8]]);
+});
 
 test('course score applies checkpoint and other-assessment weights and reports missing grades', () => {
   assert.deepEqual(calculateWeightedCourseScore([
@@ -75,7 +134,7 @@ test('workspace keeps evaluation inside checkpoints and removes standalone evalu
 
 test('evaluation grading defaults to the active semester and filters the visible role scope', () => {
   const teams = [
-    { teamId: 'team-1', teamName: 'Alpha', projectName: 'Campus Connect', semesterGroupName: 'Group 01', classId: 'class-1', classCode: 'SE01', courseCode: 'PRM', semester: 'FA2026', accessMode: 'READ_WRITE', isArchived: false, isCurrent: true, hasWorkspace: true },
+    { teamId: 'team-1', teamName: 'Alpha', projectName: 'Campus Connect', projectDescription: 'Connect students across campus.', semesterGroupName: 'Group 01', classId: 'class-1', classCode: 'SE01', courseCode: 'PRM', semester: 'FA2026', accessMode: 'READ_WRITE', isArchived: false, isCurrent: true, hasWorkspace: true },
     { teamId: 'team-2', teamName: 'Beta', classId: 'class-2', classCode: 'SE02', courseCode: 'PRM', semester: 'SU2026', accessMode: 'READ_ONLY', isArchived: false, isCurrent: false, hasWorkspace: true },
   ];
   assert.deepEqual(resolveActiveEvaluationSemester(teams), { semester: 'FA', year: '2026' });
@@ -101,11 +160,12 @@ test('evaluation grading defaults to the active semester and filters the visible
 
   assert.equal(filterEvaluationRecords(records, { search: 'interviews', status: 'SUBMITTED' }).length, 1);
   assert.equal(filterEvaluationRecords(records, { search: 'campus connect' }).length, 1);
+  assert.equal(filterEvaluationRecords(records, { search: 'connect students' }).length, 1);
   assert.equal(filterEvaluationRecords(records, { search: 'group 01' }).length, 1);
   assert.equal(filterEvaluationRecords(records, { teamId: 'team-2' }).length, 0);
 });
 
-test('evaluation grading selects the newest official evaluation and applies member overrides', () => {
+test('evaluation grading selects the newest official evaluation and never infers an undisclosed member score', () => {
   const base = {
     lecturerId: { _id: 'lecturer-1', name: 'Lecturer One' },
     evaluatorRole: 'LECTURER',
@@ -122,7 +182,7 @@ test('evaluation grading selects the newest official evaluation and applies memb
 
   assert.equal(selected?._id, 'newer');
   assert.deepEqual(resolveEvaluationMemberScore(selected, 'student-1'), { score: 7.25, isOverridden: true });
-  assert.deepEqual(resolveEvaluationMemberScore(selected, 'student-2'), { score: 8.5, isOverridden: false });
+  assert.deepEqual(resolveEvaluationMemberScore(selected, 'student-2'), { score: null, isOverridden: false });
 });
 
 test('ClassDetail presents Archive for an active class and Restore for an archived class', () => {

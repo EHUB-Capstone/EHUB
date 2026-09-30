@@ -114,9 +114,39 @@ const Sidebar = ({ mobileOpen, onMobileClose }: SidebarProps) => {
   };
 
   const items = navItems[role] || navItems.STUDENT;
+  const feedbackItem = items.find((item) => item.path === '/feedback');
+  const navigationItems = items.filter((item) => item.path !== '/feedback');
 
   const handleNavClick = () => {
     if (onMobileClose) onMobileClose();
+  };
+
+  const renderNavItem = (item: NavItem) => {
+    const IconComp = iconMap[item.icon] || LayoutDashboard;
+    return (
+      <NavLink
+        key={item.path}
+        to={item.path}
+        end={item.path === '/admin' || item.path === '/lecturer' || item.path === '/mentor' || item.path === '/student'}
+        onClick={handleNavClick}
+        className={({ isActive }) => cn(
+          'flex items-center gap-3 rounded-xl transition-all duration-200 group relative px-3 py-2.5',
+          isActive
+            ? 'bg-primary-50 text-primary font-semibold shadow-xs'
+            : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
+        )}
+      >
+        {({ isActive }) => (
+          <>
+            {isActive && (
+              <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 bg-primary rounded-r-full" />
+            )}
+            <IconComp className={cn('w-[18px] h-[18px] shrink-0 transition-colors', isActive ? 'text-primary' : 'text-slate-400 group-hover:text-slate-600')} />
+            <span className="text-[13px] truncate">{item.label}</span>
+          </>
+        )}
+      </NavLink>
+    );
   };
 
   return (
@@ -148,33 +178,7 @@ const Sidebar = ({ mobileOpen, onMobileClose }: SidebarProps) => {
       {/* Navigation */}
       <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto scrollbar-thin">
         <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider px-3 mb-3 mt-1">Navigation</p>
-        {items.map((item) => {
-          const IconComp = iconMap[item.icon] || LayoutDashboard;
-          return (
-            <NavLink
-              key={item.path}
-              to={item.path}
-              end={item.path === '/admin' || item.path === '/lecturer' || item.path === '/mentor' || item.path === '/student'}
-              onClick={handleNavClick}
-              className={({ isActive }) => cn(
-                'flex items-center gap-3 rounded-xl transition-all duration-200 group relative px-3 py-2.5',
-                isActive
-                  ? 'bg-primary-50 text-primary font-semibold shadow-xs'
-                  : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
-              )}
-            >
-              {({ isActive }) => (
-                <>
-                  {isActive && (
-                    <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 bg-primary rounded-r-full" />
-                  )}
-                  <IconComp className={cn('w-[18px] h-[18px] shrink-0 transition-colors', isActive ? 'text-primary' : 'text-slate-400 group-hover:text-slate-600')} />
-                  <span className="text-[13px] truncate">{item.label}</span>
-                </>
-              )}
-            </NavLink>
-          );
-        })}
+        {navigationItems.map(renderNavItem)}
       </nav>
 
       {/* Bottom Section */}
@@ -188,6 +192,8 @@ const Sidebar = ({ mobileOpen, onMobileClose }: SidebarProps) => {
             New Idea
           </button>
         )}
+
+        {feedbackItem && renderNavItem(feedbackItem)}
 
         <button
           onClick={handleLogout}

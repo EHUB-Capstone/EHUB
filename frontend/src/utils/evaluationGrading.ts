@@ -63,6 +63,7 @@ export function filterEvaluationRecords(
       record.team.teamName,
       record.team.teamCode,
       record.team.projectName,
+      record.team.projectDescription,
       record.team.semesterGroupName,
       record.team.classCode,
       record.team.courseCode,
@@ -97,9 +98,9 @@ export function resolveEvaluationMemberScore(
   studentId: string,
 ): { score: number | null; isOverridden: boolean } {
   if (!evaluation) return { score: null, isOverridden: false };
-  const memberScore = evaluation.memberScores.find(item => item.studentId === studentId);
+  const memberScore = evaluation.memberScores?.find(item => item.studentId === studentId);
   return {
-    score: memberScore?.score ?? evaluation.checkpointTotal,
+    score: memberScore?.score ?? null,
     isOverridden: Boolean(memberScore?.isOverridden),
   };
 }

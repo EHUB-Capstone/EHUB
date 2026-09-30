@@ -4,6 +4,7 @@ import type {
   SemesterCode,
   SemesterLifecyclePayload,
   SubjectStatus,
+  TransitionSemesterPayload,
   UpdateSemesterDatesPayload,
 } from '../types/subjects';
 
@@ -32,6 +33,8 @@ export const subjectApi = {
     axiosClient.put(`/subjects/semesters/${id}/dates`, data),
   updateCurrentSemester: (semester: SemesterCode, year: number) =>
     axiosClient.post('/subjects/current-semester', { semester, year }),
+  transitionSemester: (data: TransitionSemesterPayload) =>
+    axiosClient.post('/subjects/current-semester/transition', data),
   getSemesterCompletionPreview: (id: string) => axiosClient.get(`/subjects/semesters/${id}/completion-preview`),
   completeSemester: (id: string, data: SemesterLifecyclePayload) =>
     axiosClient.post(`/subjects/semesters/${id}/complete`, data),

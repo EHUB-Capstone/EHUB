@@ -5,6 +5,7 @@ public sealed class CreateProjectWorkspaceRequest
     public string? TeamName { get; init; }
     public string ProjectName { get; init; } = string.Empty;
     public string Description { get; init; } = string.Empty;
+    public string ZaloGroupUrl { get; init; } = string.Empty;
     public IReadOnlyCollection<Guid> StartupIndustryIds { get; init; } = Array.Empty<Guid>();
 }
 
