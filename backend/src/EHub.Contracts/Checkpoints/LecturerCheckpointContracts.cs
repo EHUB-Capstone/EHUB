@@ -100,6 +100,8 @@ public sealed class LecturerCheckpointSubmissionResponse
     public string Status { get; init; } = string.Empty;
     public DateTime? LatestSubmissionAtUtc { get; init; }
     public LecturerCheckpointFileResponse? EarliestSubmittedFile { get; init; }
+    public IReadOnlyCollection<LecturerCheckpointFileResponse> SubmittedFiles { get; init; } =
+        Array.Empty<LecturerCheckpointFileResponse>();
     public IReadOnlyCollection<LecturerCheckpointLinkResponse> SubmittedLinks { get; init; } =
         Array.Empty<LecturerCheckpointLinkResponse>();
 }

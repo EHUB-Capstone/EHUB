@@ -28,6 +28,8 @@ import {
 } from '../mockHelpers.ts';
 
 const emptyCurriculum = (): MockCurriculum => ({ roadmapItems: [], rubrics: [], checkpoints: [], otherAssessments: [] });
+const checkpointEvaluationId = (teamId: string, checkpointNumber: number) =>
+  `00000000-0000-4000-8000-${String(140000 + Number(teamId.slice(-3)) * 10 + checkpointNumber).padStart(12, '0')}`;
 
 function isValidSemesterDateRange(semester: string, year: number, startDate: string, endDate: string): boolean {
   const startMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(startDate);
@@ -744,6 +746,16 @@ function semesterCompletionPreview(semesterId: string) {
   const countStatus = (status: string) => classes.filter((item) => item.status === status).length;
   const activeEnrollmentCount = classes.reduce((count, cls) =>
     count + (state.rosters[cls.id] || []).filter((student) => student.enrollmentStatus === 'Active').length, 0);
+  const blockingClasses = classes
+    .map(cls => ({
+      classId: cls.id,
+      classCode: cls.classCode,
+      slug: cls.slug,
+      status: cls.status,
+      activeEnrollmentCount: (state.rosters[cls.id] || [])
+        .filter(student => student.enrollmentStatus === 'Active').length,
+    }))
+    .filter(item => ['Draft', 'Active', 'Inactive'].includes(item.status) || item.activeEnrollmentCount > 0);
   const draftClassCount = countStatus('Draft');
   const activeClassCount = countStatus('Active');
   const inactiveClassCount = countStatus('Inactive');
@@ -767,6 +779,7 @@ function semesterCompletionPreview(semesterId: string) {
     activeEnrollmentCount,
     processingImportSessionCount: 0,
     blockers,
+    blockingClasses,
     rowVersion: semester.rowVersion,
   };
 }
@@ -876,6 +889,38 @@ function registerSubjectHandlers(mock: MockAdapter): void {
     return ok({ currentSemester: semester, availableYears: [...new Set(state.semesters.map((item) => item.year))], isDecember: false }, 'Active semester updated successfully.');
   });
 
+  mock.onPost('/subjects/current-semester/transition').reply((config) => {
+    const body = parseBody(config);
+    const state = getMockState();
+    const current = state.semesters.find(item => item.id === asString(body.currentSemesterId));
+    const target = state.semesters.find(item => item.id === asString(body.targetSemesterId));
+    const reason = asString(body.reason).trim();
+    if (reason.length < 3 || reason.length > 500)
+      return failure(400, 'CLASS_VALIDATION_ERROR', 'Reason must contain between 3 and 500 characters.');
+    if (!current || !target)
+      return failure(404, 'SEMESTER_NOT_FOUND', 'The current or target semester was not found.');
+    if (asString(body.currentRowVersion) !== current.rowVersion || asString(body.targetRowVersion) !== target.rowVersion)
+      return failure(409, 'SEMESTER_CONCURRENCY_CONFLICT', 'A semester changed concurrently. Reload and try again.');
+    if (current.status !== 'Active' || target.status !== 'Planned')
+      return failure(409, 'SEMESTER_INVALID_STATE', 'The semester transition is no longer valid.');
+    const today = new Date().toISOString().slice(0, 10);
+    if (!current.endDate || today <= current.endDate)
+      return failure(409, 'SEMESTER_ACTIVATION_BLOCKED', 'The current semester can move to Closing only after its configured end date.');
+    if (!target.startDate || !target.endDate || today < target.startDate || today > target.endDate)
+      return failure(409, 'SEMESTER_ACTIVATION_BLOCKED', 'The target semester can become active only between its configured start and end dates.');
+    current.status = 'Closing';
+    current.rowVersion = allocateRowVersion();
+    target.status = 'Active';
+    target.rowVersion = allocateRowVersion();
+    state.currentSemester = { semester: target.semester, year: target.year };
+    persistMockState();
+    return ok({
+      currentSemester: target,
+      availableYears: [...new Set(state.semesters.map(item => item.year))],
+      isDecember: new Date().getMonth() === 11,
+    }, 'Semester transition completed successfully.');
+  });
+
   mock.onPost('/subjects/semesters').reply((config) => {
     const body = parseBody(config);
     const semesterCode = asString(body.semester).toUpperCase() as 'SP' | 'SU' | 'FA';
@@ -974,15 +1019,16 @@ function registerSubjectHandlers(mock: MockAdapter): void {
       semester.completionReason = null;
       state.currentSemester = { semester: semester.semester, year: semester.year };
     } else {
-      if (semester.status !== 'Active')
-        return failure(409, 'SEMESTER_INVALID_STATE', 'Only the active semester can be completed.');
+      if (semester.status !== 'Active' && semester.status !== 'Closing')
+        return failure(409, 'SEMESTER_INVALID_STATE', 'Only an active or closing semester can be completed.');
       const preview = semesterCompletionPreview(semester.id)!;
       if (preview.blockers.length)
         return failure(409, 'SEMESTER_COMPLETION_BLOCKED', preview.blockers.join(' '));
+      const wasActive = semester.status === 'Active';
       semester.status = 'Completed';
       semester.completedAtUtc = new Date().toISOString();
       semester.completionReason = reason;
-      state.currentSemester = null;
+      if (wasActive) state.currentSemester = null;
     }
     semester.rowVersion = allocateRowVersion();
     persistMockState();
@@ -1271,13 +1317,21 @@ function registerDashboardHandlers(mock: MockAdapter): void {
     const teams = state.teams.filter((team) =>
       team.currentMentorAssignment?.status === 'Active'
       && team.currentMentorAssignment.mentor.userId === state.sessionUserId);
+    const publishedTeams = teams.filter(team =>
+      state.evaluationPublicationStatuses[checkpointEvaluationId(team.id, 1)] === 'PUBLISHED');
     return ok({
       myTeams: teams.length,
       pendingReviews: state.directions.filter((direction) => teams.some((team) => team.id === direction.teamId) && direction.status === 'Submitted').length,
       upcomingSessions: teams.length,
-      averageScore: teams.length ? 88 : 0,
+      averageScore: publishedTeams.length ? 88 : null,
       taskProgress: teams.length ? 72 : 0,
-      recentEvaluations: teams.slice(0, 2).map((team, index) => ({ _id: `mock-evaluation-${team.id}`, teamId: { teamName: team.teamName }, totalScore: 84 + index * 3 })),
+      recentEvaluations: teams.slice(0, 2).map((team, index) => ({
+        _id: `mock-evaluation-${team.id}`,
+        teamId: { teamName: team.teamName },
+        ...(state.evaluationPublicationStatuses[checkpointEvaluationId(team.id, 1)] === 'PUBLISHED'
+          ? { totalScore: 84 + index * 3 }
+          : {}),
+      })),
       recentSessions: teams.slice(0, 2).map((team, index) => ({ _id: `mock-mentor-session-${team.id}`, title: 'Mentoring checkpoint', teamId: { teamName: team.teamName }, meetingDate: new Date(Date.now() - (index + 1) * 86_400_000).toISOString() })),
     }, 'Mentor dashboard retrieved successfully.');
   });
@@ -1290,6 +1344,9 @@ function registerDashboardHandlers(mock: MockAdapter): void {
     const cls = enrollment ? state.classes.find((item) => item.id === enrollment.classId) : undefined;
     const team = enrollment ? state.teams.find((item) => item.id === enrollment.student.teamId) : undefined;
     const direction = team ? state.directions.find((item) => item.teamId === team.id) : undefined;
+    const scorePublished = team
+      ? state.evaluationPublicationStatuses[checkpointEvaluationId(team.id, 1)] === 'PUBLISHED'
+      : false;
     const weekNumber = Math.min(10, Math.max(1, asNumber(new URLSearchParams(config.url?.split('?')[1] || '').get('weekNumber'), 1)));
 
     return ok({
@@ -1312,7 +1369,10 @@ function registerDashboardHandlers(mock: MockAdapter): void {
         status: direction?.status?.toUpperCase() || 'DRAFT',
       } : null,
       aiAnalysis: team ? { aiScore: 78 } : null,
-      latestEvaluation: team ? { totalScore: 84.5, comment: 'Strong validation plan; clarify the primary customer segment.' } : null,
+      latestEvaluation: team ? {
+        ...(scorePublished ? { totalScore: 84.5 } : {}),
+        comment: 'Strong validation plan; clarify the primary customer segment.',
+      } : null,
       milestones: team ? [
         { _id: `mock-milestone-${team.id}-1`, title: 'Interview five target users', status: 'DONE', dueDate: new Date(Date.now() - 86_400_000).toISOString() },
         { _id: `mock-milestone-${team.id}-2`, title: 'Synthesize validation evidence', status: 'IN_PROGRESS', dueDate: new Date(Date.now() + 4 * 86_400_000).toISOString() },

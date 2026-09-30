@@ -135,6 +135,11 @@ const SubjectManagement = () => {
   } | null>(null);
   const [semesterLifecycleReason, setSemesterLifecycleReason] = useState('');
   const [semesterLifecycleBusy, setSemesterLifecycleBusy] = useState(false);
+  const [semesterTransitionTarget, setSemesterTransitionTarget] = useState<{
+    current: SemesterDto;
+    target: SemesterDto;
+  } | null>(null);
+  const [semesterTransitionReason, setSemesterTransitionReason] = useState('');
   const staffRequestId = useRef(0);
 
   useEffect(() => {
@@ -471,16 +476,38 @@ const SubjectManagement = () => {
     }
   };
 
-  const openCompleteSemester = async () => {
-    if (!currentSemester) return;
+  const openCompleteSemester = async (semester: SemesterDto) => {
     setSemesterLifecycleBusy(true);
     try {
-      const preview = responseData(await subjectApi.getSemesterCompletionPreview(currentSemester.id));
-      setSemesterLifecycleTarget({ semester: currentSemester, action: 'complete', preview });
+      const preview = responseData(await subjectApi.getSemesterCompletionPreview(semester.id));
+      setSemesterLifecycleTarget({ semester, action: 'complete', preview });
     } catch (error) {
       toast.error(parseApiError(error, 'Failed to preview semester completion').message);
     } finally {
       setSemesterLifecycleBusy(false);
+    }
+  };
+
+  const confirmSemesterTransition = async () => {
+    if (!semesterTransitionTarget) return;
+    setSavingSemester(true);
+    try {
+      const { current, target } = semesterTransitionTarget;
+      await subjectApi.transitionSemester({
+        currentSemesterId: current.id,
+        currentRowVersion: current.rowVersion,
+        targetSemesterId: target.id,
+        targetRowVersion: target.rowVersion,
+        reason: semesterTransitionReason.trim(),
+      });
+      toast.success(`${semesterLabel(target)} activated; ${semesterLabel(current)} moved to Closing`);
+      setSemesterTransitionTarget(null);
+      setSemesterTransitionReason('');
+      await loadSemester();
+    } catch (error) {
+      toast.error(parseApiError(error, 'Failed to transition semesters').message);
+    } finally {
+      setSavingSemester(false);
     }
   };
 
@@ -539,6 +566,7 @@ const SubjectManagement = () => {
     : null;
   const plannedSemestersForScheduleYear = useMemo(() => semesters.filter(item =>
     item.status === 'Planned' && Number(item.year) === semesterScheduleYear), [semesters, semesterScheduleYear]);
+  const closingSemesters = useMemo(() => semesters.filter(item => item.status === 'Closing'), [semesters]);
   const semesterScheduleBlockedRanges = useMemo(() => semesters
     .filter(item => item.id !== editingSemesterSchedule?.id
       && Boolean(item.startDate)
@@ -683,7 +711,7 @@ const SubjectManagement = () => {
               <p className="mt-2 rounded-lg bg-red-50 px-2.5 py-2 text-xs leading-5 text-red-700">This Active semester has passed its configured end date. Complete it or correct its dates before creating classes.</p>
             )}
             {currentSemester && (
-              <Button variant="outline" className="mt-3 w-full" onClick={() => void openCompleteSemester()} isLoading={semesterLifecycleBusy}>
+              <Button variant="outline" className="mt-3 w-full" onClick={() => void openCompleteSemester(currentSemester)} isLoading={semesterLifecycleBusy}>
                 Complete Active Semester
               </Button>
             )}
@@ -723,6 +751,9 @@ const SubjectManagement = () => {
                   ) : plannedSemestersForScheduleYear.map(item => {
                     const timing = semesterTiming(item);
                     const canActivate = !currentSemester && timing === 'In progress';
+                    const canTransition = Boolean(currentSemester)
+                      && semesterTiming(currentSemester!) === 'Ended'
+                      && timing === 'In progress';
                     return (
                       <div key={item.id} className="rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-2 text-xs">
                         <div className="flex items-start justify-between gap-2">
@@ -735,12 +766,25 @@ const SubjectManagement = () => {
                         </div>
                         <button
                           type="button"
-                          disabled={!canActivate || savingSemester}
-                          onClick={() => void activateSemester(item)}
+                          disabled={(!canActivate && !canTransition) || savingSemester}
+                          onClick={() => {
+                            if (canTransition && currentSemester) {
+                              setSemesterTransitionTarget({ current: currentSemester, target: item });
+                              setSemesterTransitionReason('');
+                              return;
+                            }
+                            void activateSemester(item);
+                          }}
                           className="mt-2 w-full rounded-lg border border-primary-200 bg-white px-2 py-1.5 font-semibold text-primary disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400"
-                          title={currentSemester ? 'Complete the active semester first' : timing !== 'In progress' ? 'Activation is available only between the configured dates' : 'Activate semester'}
+                          title={timing !== 'In progress'
+                            ? 'Activation is available only between the configured dates'
+                            : currentSemester && semesterTiming(currentSemester) !== 'Ended'
+                              ? 'The active semester must reach its configured end date before transition'
+                              : canTransition
+                                ? `Activate ${semesterLabel(item)} and move ${semesterLabel(currentSemester!)} to Closing`
+                                : 'Activate semester'}
                         >
-                          Activate
+                          {canTransition ? 'Transition & activate' : 'Activate'}
                         </button>
                       </div>
                     );
@@ -748,6 +792,31 @@ const SubjectManagement = () => {
                 </div>
               </div>
             </div>
+            {closingSemesters.length > 0 && (
+              <div className="mt-4 border-t border-slate-100 pt-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-amber-600">Closing semesters</p>
+                <div className="mt-2 space-y-2">
+                  {closingSemesters.map(item => (
+                    <div key={item.id} className="rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-2 text-xs">
+                      <div className="flex items-center justify-between gap-2">
+                        <div>
+                          <p className="font-semibold text-amber-900">{semesterLabel(item)}</p>
+                          <p className="mt-0.5 text-[11px] text-amber-700">Resolve remaining classes, then complete this semester.</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => void openCompleteSemester(item)}
+                          disabled={semesterLifecycleBusy}
+                          className="shrink-0 rounded-md border border-amber-300 bg-white px-2 py-1 font-semibold text-amber-800 disabled:opacity-50"
+                        >
+                          Review blockers
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             {semesters.some(item => item.status === 'Completed') && (
               <div className="mt-4 border-t border-slate-100 pt-3">
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Completed history</p>
@@ -1056,6 +1125,51 @@ const SubjectManagement = () => {
         onReasonChange={setSemesterLifecycleReason}
         reasonRequired
         confirmDisabled={semesterLifecycleTarget?.action === 'complete' && (semesterLifecycleTarget.preview?.blockers?.length ?? 0) > 0}
+        details={semesterLifecycleTarget?.action === 'complete' && (semesterLifecycleTarget.preview?.blockingClasses?.length ?? 0) > 0 ? (
+          <div className="w-full space-y-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-left">
+            <p className="text-xs font-semibold uppercase tracking-wide text-amber-800">Classes requiring action</p>
+            {semesterLifecycleTarget?.preview?.blockingClasses.map(item => (
+              <Link
+                key={item.classId}
+                to={`/classes/${item.slug || item.classId}`}
+                className="flex items-center justify-between gap-3 rounded-lg border border-amber-100 bg-white px-3 py-2 text-sm transition hover:border-primary-200 hover:text-primary"
+              >
+                <span className="min-w-0">
+                  <span className="block truncate font-semibold">{item.classCode}</span>
+                  <span className="block text-xs text-slate-500">{item.status} · {item.activeEnrollmentCount} active enrollment(s)</span>
+                </span>
+                <span className="shrink-0 text-xs font-semibold">Open class →</span>
+              </Link>
+            ))}
+            <Link
+              to={`/admin/classes?semester=${semesterLifecycleTarget.semester.semester}&year=${semesterLifecycleTarget.semester.year}`}
+              className="block text-center text-xs font-semibold text-primary hover:underline"
+            >
+              View all classes in {semesterLabel(semesterLifecycleTarget.semester)}
+            </Link>
+          </div>
+        ) : undefined}
+      />
+      <ConfirmDialog
+        isOpen={Boolean(semesterTransitionTarget)}
+        onClose={() => {
+          if (!savingSemester) {
+            setSemesterTransitionTarget(null);
+            setSemesterTransitionReason('');
+          }
+        }}
+        onConfirm={confirmSemesterTransition}
+        title={semesterTransitionTarget ? `Start ${semesterLabel(semesterTransitionTarget.target)}?` : 'Transition semesters?'}
+        description={semesterTransitionTarget
+          ? `${semesterLabel(semesterTransitionTarget.target)} will become Active. ${semesterLabel(semesterTransitionTarget.current)} will move to Closing so its remaining classes can be resolved without blocking the new semester.`
+          : ''}
+        confirmText="Transition semesters"
+        confirmVariant="primary"
+        isSubmitting={savingSemester}
+        reason={semesterTransitionReason}
+        onReasonChange={setSemesterTransitionReason}
+        reasonLabel="Reason for transition"
+        reasonRequired
       />
     </div>
   );

@@ -1,6 +1,7 @@
 import Modal from './Modal';
 import Button, { type ButtonVariant } from './Button';
 import { AlertTriangle } from 'lucide-react';
+import type { ReactNode } from 'react';
 
 interface ConfirmDialogProps {
   isOpen: boolean;
@@ -19,6 +20,7 @@ interface ConfirmDialogProps {
   confirmDisabled?: boolean;
   size?: 'sm' | 'md' | 'lg' | 'xl';
   actionLayout?: 'equal' | 'confirmWide';
+  details?: ReactNode;
 }
 
 const ConfirmDialog = ({
@@ -38,6 +40,7 @@ const ConfirmDialog = ({
   confirmDisabled = false,
   size = 'md',
   actionLayout = 'equal',
+  details,
 }: ConfirmDialogProps) => {
   const reasonInvalid = reasonRequired && (reason?.trim().length ?? 0) < 3;
   const actionLayoutClass = actionLayout === 'confirmWide'
@@ -55,6 +58,7 @@ const ConfirmDialog = ({
         </div>
         <h3 className="text-xl font-bold text-slate-900">{title}</h3>
         <p className="text-slate-500">{description}</p>
+        {details}
         {onReasonChange && (
           <label className="w-full text-left">
             <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">{reasonLabel}</span>

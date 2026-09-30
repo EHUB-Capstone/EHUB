@@ -264,7 +264,7 @@ public sealed class CurrentSemesterHandler : ICurrentSemesterHandler
                 if (existingActive != null)
                     return Failure<CurrentSemesterResponse>(
                         ErrorCodes.SemesterActivationBlocked,
-                        $"Complete {ToTermCode(existingActive.Term)} {existingActive.Year} before activating another semester.");
+                        $"Complete {ToTermCode(existingActive.Term)} {existingActive.Year}, or transition it to Closing after its end date, before activating another semester.");
                 if (semester?.Status is SemesterStatus.Completed or SemesterStatus.Archived)
                     return Failure<CurrentSemesterResponse>(
                         ErrorCodes.SemesterInvalidState,
@@ -423,6 +423,121 @@ public sealed class CurrentSemesterHandler : ICurrentSemesterHandler
         }
     }
 
+    public async Task<Result<CurrentSemesterResponse>> TransitionAsync(
+        TransitionSemesterRequest request,
+        CancellationToken token = default)
+    {
+        if (!IsAdmin())
+            return Failure<CurrentSemesterResponse>(
+                ErrorCodes.ClassAccessDenied,
+                "Only an administrator can transition semesters.");
+        if (request.CurrentSemesterId == Guid.Empty || request.TargetSemesterId == Guid.Empty ||
+            request.CurrentSemesterId == request.TargetSemesterId)
+            return Failure<CurrentSemesterResponse>(
+                ErrorCodes.ClassValidationError,
+                "Different current and target semesters are required.");
+        if (!uint.TryParse(request.CurrentRowVersion, out var expectedCurrentVersion) ||
+            !uint.TryParse(request.TargetRowVersion, out var expectedTargetVersion))
+            return Failure<CurrentSemesterResponse>(
+                ErrorCodes.ClassValidationError,
+                "Valid row versions are required for both semesters.");
+
+        var reason = request.Reason?.Trim();
+        if (string.IsNullOrWhiteSpace(reason) || reason.Length is < 3 or > 500)
+            return Failure<CurrentSemesterResponse>(
+                ErrorCodes.ClassValidationError,
+                "Reason must contain between 3 and 500 characters.");
+
+        try
+        {
+            return await _unitOfWork.ExecuteInSerializableTransactionAsync(async cancellationToken =>
+            {
+                var currentSemester = await _context.Semesters
+                    .FirstOrDefaultAsync(item => item.Id == request.CurrentSemesterId, cancellationToken);
+                var targetSemester = await _context.Semesters
+                    .FirstOrDefaultAsync(item => item.Id == request.TargetSemesterId, cancellationToken);
+
+                if (currentSemester == null || targetSemester == null)
+                    return Failure<CurrentSemesterResponse>(
+                        ErrorCodes.SemesterNotFound,
+                        "The current or target semester was not found.");
+                if (currentSemester.Version != expectedCurrentVersion ||
+                    targetSemester.Version != expectedTargetVersion)
+                    return Failure<CurrentSemesterResponse>(
+                        ErrorCodes.SemesterConcurrencyConflict,
+                        "A semester changed concurrently. Reload and try again.");
+                if (currentSemester.Status != SemesterStatus.Active)
+                    return Failure<CurrentSemesterResponse>(
+                        ErrorCodes.SemesterInvalidState,
+                        "The selected current semester is no longer active.");
+                if (targetSemester.Status != SemesterStatus.Planned)
+                    return Failure<CurrentSemesterResponse>(
+                        ErrorCodes.SemesterInvalidState,
+                        "Only a planned semester can become active during a transition.");
+                if (targetSemester.Year < currentSemester.Year ||
+                    targetSemester.Year == currentSemester.Year && targetSemester.Term <= currentSemester.Term)
+                    return Failure<CurrentSemesterResponse>(
+                        ErrorCodes.SemesterInvalidState,
+                        "The transition target must be academically later than the current semester.");
+
+                var now = DateTime.UtcNow;
+                var today = DateOnly.FromDateTime(now);
+                if (!currentSemester.EndDate.HasValue || today <= currentSemester.EndDate.Value)
+                    return Failure<CurrentSemesterResponse>(
+                        ErrorCodes.SemesterActivationBlocked,
+                        "The current semester can move to Closing only after its configured end date.");
+                if (!targetSemester.StartDate.HasValue || !targetSemester.EndDate.HasValue ||
+                    today < targetSemester.StartDate.Value || today > targetSemester.EndDate.Value)
+                    return Failure<CurrentSemesterResponse>(
+                        ErrorCodes.SemesterActivationBlocked,
+                        "The target semester can become active only between its configured start and end dates.");
+
+                currentSemester.Status = SemesterStatus.Closing;
+                currentSemester.UpdatedBy = _currentUser.UserId;
+                AddAuditAndOutbox(
+                    currentSemester,
+                    "SEMESTER_TRANSITIONED_TO_CLOSING",
+                    "Semester.TransitionedToClosing.v1",
+                    reason);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+                targetSemester.Status = SemesterStatus.Active;
+                targetSemester.UpdatedBy = _currentUser.UserId;
+                AddAuditAndOutbox(
+                    targetSemester,
+                    "SEMESTER_ACTIVATED_BY_TRANSITION",
+                    "Semester.ActivatedByTransition.v1",
+                    reason);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+                return await BuildCurrentResponseAsync(targetSemester, now, cancellationToken);
+            }, token);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return Failure<CurrentSemesterResponse>(
+                ErrorCodes.SemesterConcurrencyConflict,
+                "A semester changed concurrently. Reload and try again.");
+        }
+        catch (SerializableTransactionConflictException)
+        {
+            return Failure<CurrentSemesterResponse>(
+                ErrorCodes.SemesterConcurrencyConflict,
+                "Another semester operation completed first. Reload and try again.");
+        }
+        catch (DbUpdateException exception)
+        {
+            _logger.LogWarning(
+                exception,
+                "Could not transition semester {CurrentSemesterId} to {TargetSemesterId}",
+                request.CurrentSemesterId,
+                request.TargetSemesterId);
+            return Failure<CurrentSemesterResponse>(
+                ErrorCodes.SemesterActivationBlocked,
+                "The semester transition conflicts with current academic data. Reload and try again.");
+        }
+    }
+
     public async Task<Result<SemesterCompletionPreviewResponse>> PreviewCompletionAsync(
         Guid semesterId,
         CancellationToken token = default)
@@ -494,8 +609,8 @@ public sealed class CurrentSemesterHandler : ICurrentSemesterHandler
                 }
                 else
                 {
-                    if (semester.Status != SemesterStatus.Active)
-                        return Failure<SemesterResponse>(ErrorCodes.SemesterInvalidState, "Only the active semester can be completed.");
+                    if (semester.Status is not (SemesterStatus.Active or SemesterStatus.Closing))
+                        return Failure<SemesterResponse>(ErrorCodes.SemesterInvalidState, "Only an active or closing semester can be completed.");
 
                     var preview = await BuildPreviewAsync(semester, cancellationToken);
                     if (preview.Blockers.Count > 0)
@@ -541,6 +656,23 @@ public sealed class CurrentSemesterHandler : ICurrentSemesterHandler
             .CountAsync(item => item.Class.SemesterId == semester.Id &&
                 item.Status == ClassImportSessionStatus.Processing &&
                 item.ExpiresAtUtc > DateTime.UtcNow, token);
+        var blockingClasses = await _context.Classes.AsNoTracking()
+            .Where(item => item.SemesterId == semester.Id &&
+                (item.Status == ClassStatus.Draft ||
+                 item.Status == ClassStatus.Active ||
+                 item.Status == ClassStatus.Inactive ||
+                 item.ClassStudents.Any(student => student.EnrollmentStatus == EnrollmentStatus.Active)))
+            .OrderBy(item => item.ClassCode)
+            .Select(item => new SemesterCompletionClassBlockerResponse
+            {
+                ClassId = item.Id,
+                ClassCode = item.ClassCode,
+                Slug = item.Slug,
+                Status = item.Status.ToString(),
+                ActiveEnrollmentCount = item.ClassStudents.Count(student =>
+                    student.EnrollmentStatus == EnrollmentStatus.Active)
+            })
+            .ToArrayAsync(token);
 
         var draft = statusCounts.GetValueOrDefault(ClassStatus.Draft);
         var active = statusCounts.GetValueOrDefault(ClassStatus.Active);
@@ -568,6 +700,7 @@ public sealed class CurrentSemesterHandler : ICurrentSemesterHandler
             ActiveEnrollmentCount = activeEnrollments,
             ProcessingImportSessionCount = processingImports,
             Blockers = blockers,
+            BlockingClasses = blockingClasses,
             RowVersion = semester.Version.ToString(),
         };
     }

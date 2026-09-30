@@ -288,6 +288,8 @@ export default function TeamWorkspace() {
             {/* Startup Checkpoints */}
             <CheckpointSection 
               teamId={String(team._id)} 
+              workspaceClassName={cls?.classCode}
+              workspaceTeamName={displayTeamName}
               isEditable={isEditable}
               isReadOnly={isReadOnly}
               proposalId={proposal?._id}

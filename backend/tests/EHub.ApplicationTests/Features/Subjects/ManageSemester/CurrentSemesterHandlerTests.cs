@@ -90,6 +90,53 @@ public sealed class CurrentSemesterHandlerTests
         reasonResult.Error.Code.Should().Be(ErrorCodes.ClassValidationError);
     }
 
+    [Fact]
+    public async Task TransitionAsync_WhenCallerIsNotAdmin_ReturnsAccessDenied()
+    {
+        _currentUser.Roles.Returns(new[] { SystemRoles.Lecturer });
+
+        var result = await _handler.TransitionAsync(ValidTransitionRequest());
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be(ErrorCodes.ClassAccessDenied);
+    }
+
+    [Fact]
+    public async Task TransitionAsync_WhenIdentifiersVersionsOrReasonAreInvalid_ReturnsValidationError()
+    {
+        _currentUser.Roles.Returns(new[] { SystemRoles.Admin });
+        var semesterId = Guid.NewGuid();
+
+        var sameSemester = await _handler.TransitionAsync(new TransitionSemesterRequest
+        {
+            CurrentSemesterId = semesterId,
+            CurrentRowVersion = "1",
+            TargetSemesterId = semesterId,
+            TargetRowVersion = "2",
+            Reason = "Start the next academic semester"
+        });
+        var invalidVersion = await _handler.TransitionAsync(new TransitionSemesterRequest
+        {
+            CurrentSemesterId = Guid.NewGuid(),
+            CurrentRowVersion = "stale",
+            TargetSemesterId = Guid.NewGuid(),
+            TargetRowVersion = "2",
+            Reason = "Start the next academic semester"
+        });
+        var invalidReason = await _handler.TransitionAsync(new TransitionSemesterRequest
+        {
+            CurrentSemesterId = Guid.NewGuid(),
+            CurrentRowVersion = "1",
+            TargetSemesterId = Guid.NewGuid(),
+            TargetRowVersion = "2",
+            Reason = "x"
+        });
+
+        sameSemester.Error.Code.Should().Be(ErrorCodes.ClassValidationError);
+        invalidVersion.Error.Code.Should().Be(ErrorCodes.ClassValidationError);
+        invalidReason.Error.Code.Should().Be(ErrorCodes.ClassValidationError);
+    }
+
     private static CorrectActiveSemesterRequest ValidRequest() => new()
     {
         CurrentSemesterId = Guid.NewGuid(),
@@ -97,5 +144,14 @@ public sealed class CurrentSemesterHandlerTests
         TargetSemesterId = Guid.NewGuid(),
         TargetRowVersion = "2",
         Reason = "Correct invalid active semester"
+    };
+
+    private static TransitionSemesterRequest ValidTransitionRequest() => new()
+    {
+        CurrentSemesterId = Guid.NewGuid(),
+        CurrentRowVersion = "1",
+        TargetSemesterId = Guid.NewGuid(),
+        TargetRowVersion = "2",
+        Reason = "Start the next academic semester"
     };
 }

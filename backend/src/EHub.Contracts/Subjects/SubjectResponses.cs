@@ -74,7 +74,18 @@ public sealed class SemesterCompletionPreviewResponse
     public int ActiveEnrollmentCount { get; init; }
     public int ProcessingImportSessionCount { get; init; }
     public IReadOnlyCollection<string> Blockers { get; init; } = Array.Empty<string>();
+    public IReadOnlyCollection<SemesterCompletionClassBlockerResponse> BlockingClasses { get; init; } =
+        Array.Empty<SemesterCompletionClassBlockerResponse>();
     public string RowVersion { get; init; } = string.Empty;
+}
+
+public sealed class SemesterCompletionClassBlockerResponse
+{
+    public Guid ClassId { get; init; }
+    public string ClassCode { get; init; } = string.Empty;
+    public string Slug { get; init; } = string.Empty;
+    public string Status { get; init; } = string.Empty;
+    public int ActiveEnrollmentCount { get; init; }
 }
 
 public sealed class TeachingAssignmentResponse

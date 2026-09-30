@@ -21,6 +21,69 @@ const roleLabel = (role) => ({
   USER: 'Student',
 }[role] || role || 'User');
 
+const historyCategoryStyle = {
+  STATUS: 'border-slate-200 bg-slate-100 text-slate-600',
+  SCORE: 'border-blue-200 bg-blue-50 text-blue-700',
+  FEEDBACK: 'border-amber-200 bg-amber-50 text-amber-700',
+};
+
+function HistoryValue({ value }) {
+  return value === null || value === undefined || value === ''
+    ? <span className="italic text-slate-400">Not set</span>
+    : <span className="whitespace-pre-wrap break-words text-slate-700">{value}</span>;
+}
+
+function EvaluationHistoryEntries({ history, compact = false }) {
+  if (history.length === 0) {
+    return <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-4 text-center text-sm text-slate-500">No history available yet.</p>;
+  }
+
+  return (
+    <div className={compact ? 'space-y-2' : 'space-y-3'}>
+      {history.map((item) => (
+        <details key={item._id} className="group rounded-xl border border-slate-200 bg-slate-50 open:bg-white">
+          <summary className={`cursor-pointer list-none rounded-xl ${compact ? 'px-3 py-2.5' : 'p-3'} marker:hidden [&::-webkit-details-marker]:hidden`}>
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-bold uppercase tracking-wider text-slate-600">{item.action}</span>
+                  <span className="rounded-md bg-white px-1.5 py-0.5 text-[10px] font-bold text-slate-400 ring-1 ring-slate-200">v{item.version}</span>
+                </div>
+                <p className="mt-1 truncate font-semibold text-slate-900">{item.changedBy?.name || 'System'}</p>
+                <p className="text-slate-500">{new Date(item.createdAt).toLocaleString()}</p>
+              </div>
+              <span className="shrink-0 rounded-lg border border-slate-200 bg-white px-2 py-1 font-semibold text-primary group-open:hidden">View details</span>
+              <span className="hidden shrink-0 rounded-lg border border-slate-200 bg-white px-2 py-1 font-semibold text-slate-600 group-open:inline">Hide details</span>
+            </div>
+          </summary>
+          <div className={`border-t border-slate-200 ${compact ? 'p-3' : 'p-4'}`}>
+            {item.note && <p className="mb-3 whitespace-pre-wrap rounded-lg bg-slate-50 p-2.5 text-slate-600">{item.note}</p>}
+            {item.changes?.length ? (
+              <div className="space-y-2">
+                {item.changes.map((change, index) => (
+                  <div key={`${change.field}-${index}`} className="rounded-lg border border-slate-200 bg-white p-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className={`rounded-full border px-2 py-0.5 text-[9px] font-black uppercase tracking-wider ${historyCategoryStyle[change.category] || historyCategoryStyle.STATUS}`}>{change.category}</span>
+                      <span className="font-bold text-slate-800">{change.label}</span>
+                    </div>
+                    <div className="mt-2 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:items-start">
+                      <div className="min-w-0 rounded-md bg-slate-50 px-2.5 py-2"><p className="mb-1 text-[9px] font-bold uppercase tracking-wider text-slate-400">Before</p><HistoryValue value={change.previousValue} /></div>
+                      <span className="hidden pt-7 text-slate-300 sm:block">→</span>
+                      <div className="min-w-0 rounded-md bg-blue-50/50 px-2.5 py-2"><p className="mb-1 text-[9px] font-bold uppercase tracking-wider text-blue-400">After</p><HistoryValue value={change.currentValue} /></div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-slate-500">No score or feedback changes are visible for this version.</p>
+            )}
+          </div>
+        </details>
+      ))}
+    </div>
+  );
+}
+
 export default function EvaluationPanel({
   teamId,
   proposalId,
@@ -156,19 +219,10 @@ export default function EvaluationPanel({
           checkpointTitle={checkpointTitle}
           compact
         />
-        {history.length > 0 && (
-          <details className="mt-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
-            <summary className="cursor-pointer font-semibold">Evaluation history ({history.length})</summary>
-            <div className="mt-2 space-y-2">
-              {history.map((item) => (
-                <div key={item._id} className="flex justify-between gap-2 border-t border-slate-100 pt-2">
-                  <span>{item.action} · {item.changedBy?.name || 'System'}</span>
-                  <span className="shrink-0">{new Date(item.createdAt).toLocaleString()}</span>
-                </div>
-              ))}
-            </div>
-          </details>
-        )}
+        <section className="mt-3 rounded-xl border border-slate-200 bg-white p-3 text-xs text-slate-600">
+          <div className="mb-2 flex items-center gap-2"><History className="h-4 w-4 text-primary" /><h3 className="font-bold text-slate-900">Evaluation history ({history.length})</h3></div>
+          <EvaluationHistoryEntries history={history} compact />
+        </section>
       </div>
     );
   }
@@ -187,7 +241,7 @@ export default function EvaluationPanel({
                 {canEdit
                   ? 'Score this submission without leaving the workspace.'
                   : isMentor || isStudent
-                    ? 'Review the published performance and feedback.'
+                    ? 'Review feedback and any scores that have been published.'
                     : `${roleLabel(user?.role)} access is read-only.`}
               </p>
             </div>
@@ -249,7 +303,7 @@ export default function EvaluationPanel({
             ) : (isMentor || isStudent) ? (
               <div className="space-y-3">
                 {evaluations.map((evaluation) => (
-                  <MentorEvaluationCard key={evaluation._id} evaluation={evaluation} />
+                  <MentorEvaluationCard key={evaluation._id} evaluation={evaluation} showIndividualScore={isStudent} />
                 ))}
               </div>
             ) : (
@@ -277,20 +331,9 @@ export default function EvaluationPanel({
             <h3 className="font-bold text-slate-900">Evaluation history</h3>
           </div>
           {history.length === 0 ? (
-            <p className="text-sm text-slate-500">No history available yet.</p>
+            <EvaluationHistoryEntries history={history} />
           ) : (
-            <div className="space-y-2">
-              {history.map((item) => (
-                <div key={item._id} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                  <div className="flex items-center justify-between gap-2 text-xs text-slate-400">
-                    <span className="font-bold uppercase tracking-wider">{item.action}</span>
-                    <span>v{item.version}</span>
-                  </div>
-                  <p className="mt-1 text-sm font-semibold text-slate-900">{item.changedBy?.name || 'System'}</p>
-                  <p className="text-xs text-slate-500">{new Date(item.createdAt).toLocaleString()}</p>
-                </div>
-              ))}
-            </div>
+            <EvaluationHistoryEntries history={history} />
           )}
         </section>
       </div>
@@ -404,7 +447,7 @@ export default function EvaluationPanel({
                   <h3 className="text-lg font-bold text-slate-900">Evaluation summary</h3>
                   <p className="text-sm text-slate-500">
                     {(isMentor || isStudent)
-                      ? 'Performance levels only, no numeric scores.'
+                      ? 'Feedback is available after submit; numeric scores appear only after publication.'
                       : `${roleLabel(user?.role)} access is read-only.`}
                   </p>
                 </div>
@@ -421,7 +464,7 @@ export default function EvaluationPanel({
                 /* ── MENTOR / STUDENT VIEW: badges only, no numeric scores ── */
                 <div className="space-y-4">
                   {evaluations.map((ev) => (
-                    <MentorEvaluationCard key={ev._id} evaluation={ev} />
+                    <MentorEvaluationCard key={ev._id} evaluation={ev} showIndividualScore={isStudent} />
                   ))}
                 </div>
               ) : (
@@ -493,21 +536,9 @@ export default function EvaluationPanel({
               <h3 className="font-bold text-slate-900">Evaluation history</h3>
             </div>
             {history.length === 0 ? (
-              <p className="text-sm text-slate-500">No history available yet.</p>
+              <EvaluationHistoryEntries history={history} />
             ) : (
-              <div className="space-y-3 max-h-[440px] overflow-y-auto pr-1">
-                {history.map((item) => (
-                  <div key={item._id} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="text-xs font-bold uppercase tracking-wider text-slate-400">{item.action}</p>
-                      <p className="text-xs text-slate-400">v{item.version}</p>
-                    </div>
-                    <p className="mt-1 text-sm font-semibold text-slate-900">{item.changedBy?.name || 'System'}</p>
-                    <p className="text-xs text-slate-500">{new Date(item.createdAt).toLocaleString()}</p>
-                    {item.note && <p className="mt-2 text-sm text-slate-600">{item.note}</p>}
-                  </div>
-                ))}
-              </div>
+              <div className="max-h-[620px] overflow-y-auto pr-1"><EvaluationHistoryEntries history={history} /></div>
             )}
           </div>
 

@@ -17,6 +17,7 @@ using EHub.Application.Features.Workspaces.CheckpointLinks;
 using EHub.Application.Features.Checkpoints.LecturerManagement;
 using EHub.Application.Common.Interfaces.Storage;
 using EHub.Application.Features.Workspaces.CheckpointEvaluations;
+using EHub.Application.Features.Workspaces.CourseAssessmentEvaluations;
 using EHub.Application.Features.Admin.Users.ManageUsers;
 using EHub.Application.Common.Interfaces.Identity;
 using EHub.Application.Common.Interfaces.Services;
@@ -890,6 +891,7 @@ public sealed class TeamWorkflowIntegrationTests
             {
                 ProjectName = workspaceDetail.Value.Proposal.ProjectName,
                 Description = workspaceDetail.Value.Proposal.ProjectDescription,
+                ZaloGroupUrl = "https://zalo.me/g/student-venture",
                 StartupIndustryIds = new[] { seed.StartupIndustryIds[0] }
             }, leaderUserId!.Value, SystemRoles.Student);
         workspace.IsSuccess.Should().BeTrue($"{workspace.Error.Code}: {workspace.Error.Message}");
@@ -1030,6 +1032,7 @@ public sealed class TeamWorkflowIntegrationTests
             {
                 ProjectName = "Campus Circular",
                 Description = "A student marketplace that helps campuses reuse equipment safely.",
+                ZaloGroupUrl = "https://zalo.me/g/campus-circular",
                 StartupIndustryIds = seed.StartupIndustryIds[..2]
             },
             seed.ProposerUserId,
@@ -1047,7 +1050,10 @@ public sealed class TeamWorkflowIntegrationTests
         var targetClass = await context.Classes.AsNoTracking().SingleAsync(item => item.Id == seed.ClassId);
         result.Value.SubjectId.Should().Be(targetClass.CourseId);
         result.Value.SemesterId.Should().Be(targetClass.SemesterId);
+        result.Value.ZaloGroupUrl.Should().Be("https://zalo.me/g/campus-circular");
         (await context.Projects.AsNoTracking().CountAsync(project => project.TeamId == seed.TeamId)).Should().Be(1);
+        (await context.Projects.AsNoTracking().SingleAsync(project => project.TeamId == seed.TeamId))
+            .ZaloGroupUrl.Should().Be("https://zalo.me/g/campus-circular");
         var submittedDirection = await context.ProjectDirections.AsNoTracking()
             .SingleAsync(direction => direction.TeamId == seed.TeamId);
         submittedDirection.Title.Should().Be("Campus Circular");
@@ -1084,6 +1090,7 @@ public sealed class TeamWorkflowIntegrationTests
             {
                 ProjectName = "Campus Circular",
                 Description = "A student marketplace that helps campuses reuse equipment safely.",
+                ZaloGroupUrl = "https://zalo.me/g/campus-circular",
                 StartupIndustryIds = seed.StartupIndustryIds[..2]
             },
             seed.ProposerUserId,
@@ -1482,6 +1489,7 @@ public sealed class TeamWorkflowIntegrationTests
         submission.Status.Should().Be("Submitted");
         submission.LatestSubmissionAtUtc.Should().BeCloseTo(clock.UtcNow, TimeSpan.FromMilliseconds(1));
         submission.EarliestSubmittedFile!.OriginalName.Should().Be("first.pdf");
+        submission.SubmittedFiles.Select(item => item.OriginalName).Should().Equal("first.pdf", "later.pdf");
         var download = await files.DownloadAsync(seed.TeamId.Value, 1,
             submission.EarliestSubmittedFile.Id, seed.LecturerId, SystemRoles.Lecturer);
         download.IsSuccess.Should().BeTrue();
@@ -2235,10 +2243,12 @@ public sealed class TeamWorkflowIntegrationTests
         saved.IsSuccess.Should().BeTrue();
         saved.Value.CheckpointTotal.Should().Be(8.6m);
         saved.Value.RubricScores.Select(item => item.CriterionKey).Should().Equal("clarity", "evidence");
-        saved.Value.MemberScores.Should().HaveCount(seed.StudentIds.Count());
+        saved.Value.MemberScores!.Should().HaveCount(seed.StudentIds.Count());
         saved.Value.MemberScores.Should().OnlyContain(item => item.Score == 8.6m && !item.IsOverridden);
-        (await context.Evaluations.AsNoTracking().SingleAsync(item => item.Id == saved.Value.Id))
-            .SubmissionId.Should().BeNull();
+        var submittedEvaluation = await context.Evaluations.AsNoTracking().SingleAsync(item => item.Id == saved.Value.Id);
+        submittedEvaluation.SubmissionId.Should().BeNull();
+        submittedEvaluation.Status.Should().Be(EvaluationStatus.Submitted);
+        submittedEvaluation.PublishedAt.Should().BeNull();
 
         var projectId = await context.Projects.Where(item => item.TeamId == seed.TeamId.Value)
             .Select(item => item.Id).SingleAsync();
@@ -2269,11 +2279,76 @@ public sealed class TeamWorkflowIntegrationTests
         studentSummary.Value.Checkpoint.Rubrics.Select(item => item.Key).Should().Equal("clarity", "evidence");
         studentSummary.Value.Checkpoint.Members.Should().HaveCount(seed.StudentIds.Count());
         studentSummary.Value.Evaluations.Should().ContainSingle();
-        studentSummary.Value.Evaluations.Single().CheckpointTotal.Should().Be(8.6m);
-        studentSummary.Value.Evaluations.Single().MemberScores.Should().HaveCount(seed.StudentIds.Count());
-        studentSummary.Value.Evaluations.Single().MemberScores.Should()
-            .OnlyContain(item => item.Score == 8.6m && !item.IsOverridden);
-        studentSummary.Value.Summary.AverageScore.Should().Be(8.6m);
+        studentSummary.Value.Evaluations.Single().CheckpointTotal.Should().BeNull();
+        studentSummary.Value.Evaluations.Single().MemberScores.Should().BeNull();
+        studentSummary.Value.Evaluations.Single().RubricScores.Should().OnlyContain(item => item.Score == null);
+        studentSummary.Value.Evaluations.Single().OverallFeedback.Should().Be("Strong evidence and a clear startup direction.");
+        studentSummary.Value.Summary.AverageScore.Should().BeNull();
+
+        var mentorSummaryBeforePublish = await handler.GetSummaryAsync(
+            seed.TeamId.Value, 1, seed.MentorUserId, SystemRoles.Mentor);
+        mentorSummaryBeforePublish.IsSuccess.Should().BeTrue();
+        mentorSummaryBeforePublish.Value.Evaluations.Single().CheckpointTotal.Should().BeNull();
+        mentorSummaryBeforePublish.Value.Evaluations.Single().MemberScores.Should().BeNull();
+        mentorSummaryBeforePublish.Value.Evaluations.Single().OverallFeedback.Should().NotBeNullOrWhiteSpace();
+
+        (await handler.PublishAsync(saved.Value.Id, seed.ProposerUserId, SystemRoles.Student))
+            .Error.Code.Should().Be(ErrorCodes.WorkspaceAccessDenied);
+        (await handler.PublishAsync(saved.Value.Id, seed.MentorUserId, SystemRoles.Mentor))
+            .Error.Code.Should().Be(ErrorCodes.WorkspaceAccessDenied);
+        var published = await handler.PublishAsync(saved.Value.Id, seed.LecturerId, SystemRoles.Lecturer);
+        published.IsSuccess.Should().BeTrue();
+        published.Value.Status.Should().Be("PUBLISHED");
+
+        context.ChangeTracker.Clear();
+        var publishedStudentSummary = await handler.GetSummaryAsync(
+            seed.TeamId.Value, 1, seed.ProposerUserId, SystemRoles.Student);
+        publishedStudentSummary.Value.Evaluations.Single().CheckpointTotal.Should().Be(8.6m);
+        publishedStudentSummary.Value.Evaluations.Single().MemberScores.Should().ContainSingle();
+        publishedStudentSummary.Value.Evaluations.Single().MemberScores!.Single().StudentId.Should().Be(seed.StudentIds[0]);
+        publishedStudentSummary.Value.Evaluations.Single().RubricScores
+            .Should().OnlyContain(item => item.Score.HasValue);
+        publishedStudentSummary.Value.Summary.AverageScore.Should().Be(8.6m);
+
+        var secondStudentUserId = await context.Students.AsNoTracking()
+            .Where(item => item.Id == seed.StudentIds[1])
+            .Select(item => item.UserId!.Value)
+            .SingleAsync();
+        var secondStudentSummary = await handler.GetSummaryAsync(
+            seed.TeamId.Value, 1, secondStudentUserId, SystemRoles.Student);
+        secondStudentSummary.Value.Evaluations.Single().MemberScores.Should().ContainSingle();
+        secondStudentSummary.Value.Evaluations.Single().MemberScores!.Single().StudentId.Should().Be(seed.StudentIds[1]);
+
+        var publishedMentorSummary = await handler.GetSummaryAsync(
+            seed.TeamId.Value, 1, seed.MentorUserId, SystemRoles.Mentor);
+        publishedMentorSummary.Value.Evaluations.Single().CheckpointTotal.Should().Be(8.6m);
+        publishedMentorSummary.Value.Evaluations.Single().MemberScores.Should().BeNull();
+        publishedMentorSummary.Value.Evaluations.Single().RubricScores
+            .Should().OnlyContain(item => item.Score == null);
+
+        (await handler.UnpublishAsync(saved.Value.Id, seed.ProposerUserId, SystemRoles.Student))
+            .Error.Code.Should().Be(ErrorCodes.WorkspaceAccessDenied);
+        (await handler.UnpublishAsync(saved.Value.Id, seed.MentorUserId, SystemRoles.Mentor))
+            .Error.Code.Should().Be(ErrorCodes.WorkspaceAccessDenied);
+        var hidden = await handler.UnpublishAsync(saved.Value.Id, seed.LecturerId, SystemRoles.Lecturer);
+        hidden.IsSuccess.Should().BeTrue();
+        hidden.Value.Status.Should().Be("SUBMITTED");
+
+        context.ChangeTracker.Clear();
+        var hiddenStudentSummary = await handler.GetSummaryAsync(
+            seed.TeamId.Value, 1, seed.ProposerUserId, SystemRoles.Student);
+        hiddenStudentSummary.Value.Evaluations.Single().CheckpointTotal.Should().BeNull();
+        hiddenStudentSummary.Value.Evaluations.Single().MemberScores.Should().BeNull();
+        hiddenStudentSummary.Value.Evaluations.Single().RubricScores
+            .Should().OnlyContain(item => item.Score == null);
+        var hiddenLecturerSummary = await handler.GetSummaryAsync(
+            seed.TeamId.Value, 1, seed.LecturerId, SystemRoles.Lecturer);
+        hiddenLecturerSummary.Value.History.Should().Contain(item =>
+            item.Action == "UNPUBLISHED" && item.Changes.Any(change =>
+                change.Field == "status" && change.PreviousValue == "PUBLISHED" && change.CurrentValue == "SUBMITTED"));
+
+        var publishedAgain = await handler.PublishAsync(saved.Value.Id, seed.LecturerId, SystemRoles.Lecturer);
+        publishedAgain.IsSuccess.Should().BeTrue();
 
         var revised = await handler.SaveAsync(seed.TeamId.Value, 1,
             new SaveWorkspaceCheckpointEvaluationRequest
@@ -2292,9 +2367,9 @@ public sealed class TeamWorkflowIntegrationTests
         revised.IsSuccess.Should().BeTrue();
         revised.Value.Id.Should().Be(saved.Value.Id);
         revised.Value.CheckpointTotal.Should().Be(9.2m);
-        revised.Value.MemberScores.Single(item => item.StudentId == seed.StudentIds[0]).Should().Match<WorkspaceCheckpointEvaluationMemberScoreResponse>(
+        revised.Value.MemberScores!.Single(item => item.StudentId == seed.StudentIds[0]).Should().Match<WorkspaceCheckpointEvaluationMemberScoreResponse>(
             item => item.Score == 7m && item.IsOverridden);
-        revised.Value.MemberScores.Where(item => item.StudentId != seed.StudentIds[0])
+        revised.Value.MemberScores!.Where(item => item.StudentId != seed.StudentIds[0])
             .Should().OnlyContain(item => item.Score == 9.2m && !item.IsOverridden);
         (await context.Evaluations.CountAsync(item => item.ProjectId == projectId && item.RubricId == rubric.Id))
             .Should().Be(1);
@@ -2336,9 +2411,9 @@ public sealed class TeamWorkflowIntegrationTests
                 }, seed.LecturerId, SystemRoles.Lecturer);
             changedScore.IsSuccess.Should().BeTrue();
             changedScore.Value.CheckpointTotal.Should().Be(7.4m);
-            changedScore.Value.MemberScores.Single(item => item.StudentId == seed.StudentIds[0]).Should()
+            changedScore.Value.MemberScores!.Single(item => item.StudentId == seed.StudentIds[0]).Should()
                 .Match<WorkspaceCheckpointEvaluationMemberScoreResponse>(item => item.Score == 7m && item.IsOverridden);
-            changedScore.Value.MemberScores.Where(item => item.StudentId != seed.StudentIds[0])
+            changedScore.Value.MemberScores!.Where(item => item.StudentId != seed.StudentIds[0])
                 .Should().OnlyContain(item => item.Score == 7.4m && !item.IsOverridden);
 
             var reset = await updateHandler.UpdateAsync(saved.Value.Id,
@@ -2352,7 +2427,7 @@ public sealed class TeamWorkflowIntegrationTests
                     }
                 }, seed.LecturerId, SystemRoles.Lecturer);
             reset.IsSuccess.Should().BeTrue();
-            reset.Value.MemberScores.Should().OnlyContain(item => item.Score == 7.4m && !item.IsOverridden);
+            reset.Value.MemberScores!.Should().OnlyContain(item => item.Score == 7.4m && !item.IsOverridden);
 
             var overrideAfterReset = await updateHandler.UpdateAsync(saved.Value.Id,
                 new SaveWorkspaceCheckpointEvaluationRequest
@@ -2369,8 +2444,22 @@ public sealed class TeamWorkflowIntegrationTests
                     }
                 }, seed.LecturerId, SystemRoles.Lecturer);
             overrideAfterReset.IsSuccess.Should().BeTrue();
-            overrideAfterReset.Value.MemberScores.Single(item => item.StudentId == seed.StudentIds[0]).Should()
+            overrideAfterReset.Value.MemberScores!.Single(item => item.StudentId == seed.StudentIds[0]).Should()
                 .Match<WorkspaceCheckpointEvaluationMemberScoreResponse>(item => item.Score == 6.5m && item.IsOverridden);
+
+            var auditSummary = await updateHandler.GetSummaryAsync(
+                seed.TeamId.Value, 1, seed.LecturerId, SystemRoles.Lecturer);
+            auditSummary.IsSuccess.Should().BeTrue();
+            auditSummary.Value.History.Select(item => item.CreatedAt).Should().BeInDescendingOrder();
+            auditSummary.Value.History.Select(item => item.Version).Should().BeInDescendingOrder();
+            auditSummary.Value.History.Should().Contain(item => item.Changes.Any(change =>
+                change.Field == "totalScore" && change.PreviousValue == "8.6" && change.CurrentValue == "9.2"));
+            auditSummary.Value.History.Should().Contain(item => item.Changes.Any(change =>
+                change.Field == "overallFeedback" && change.PreviousValue == "Strong evidence and a clear startup direction." && change.CurrentValue == null));
+            auditSummary.Value.History.Should().Contain(item => item.Changes.Any(change =>
+                change.Field == "rubricScore:clarity" && change.PreviousValue == "10" && change.CurrentValue == "7"));
+            auditSummary.Value.History.Should().Contain(item => item.Changes.Any(change =>
+                change.Field == $"memberScore:{seed.StudentIds[0]}" && change.CurrentValue == "6.5"));
 
             var outsideTeam = await updateHandler.UpdateAsync(saved.Value.Id,
                 new SaveWorkspaceCheckpointEvaluationRequest
@@ -2391,14 +2480,355 @@ public sealed class TeamWorkflowIntegrationTests
         }
         context.ChangeTracker.Clear();
         var revisedStudentSummary = await handler.GetSummaryAsync(seed.TeamId.Value, 1, seed.ProposerUserId, SystemRoles.Student);
-        revisedStudentSummary.Value.Evaluations.Single().CheckpointTotal.Should().Be(7.4m);
-        revisedStudentSummary.Value.Evaluations.Single().MemberScores.Single(item => item.StudentId == seed.StudentIds[0])
+        revisedStudentSummary.Value.Evaluations.Single().CheckpointTotal.Should().BeNull();
+        revisedStudentSummary.Value.Evaluations.Single().MemberScores.Should().BeNull();
+
+        var republished = await handler.PublishAsync(saved.Value.Id, seed.LecturerId, SystemRoles.Lecturer);
+        republished.IsSuccess.Should().BeTrue();
+        context.ChangeTracker.Clear();
+        var republishedStudentSummary = await handler.GetSummaryAsync(seed.TeamId.Value, 1, seed.ProposerUserId, SystemRoles.Student);
+        republishedStudentSummary.Value.Evaluations.Single().CheckpointTotal.Should().Be(7.4m);
+        republishedStudentSummary.Value.Evaluations.Single().MemberScores!.Single(item => item.StudentId == seed.StudentIds[0])
             .Should().Match<WorkspaceCheckpointEvaluationMemberScoreResponse>(item => item.Score == 6.5m && item.IsOverridden);
 
         var forbidden = await handler.SaveAsync(seed.TeamId.Value, 1,
             new SaveWorkspaceCheckpointEvaluationRequest(), seed.ProposerUserId, SystemRoles.Student);
         forbidden.IsFailure.Should().BeTrue();
         forbidden.Error.Code.Should().Be(ErrorCodes.WorkspaceAccessDenied);
+    }
+
+    [Fact]
+    public async Task CourseAssessmentScore_IsHiddenUntilLecturerPublishesIt()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateSeedAsync(context, createProposal: false, createTeam: true);
+        var courseId = await context.Classes.Where(item => item.Id == seed.ClassId)
+            .Select(item => item.CourseId).SingleAsync();
+        var assessment = new Rubric
+        {
+            CourseId = courseId,
+            Name = "Final pitch assessment",
+            Status = RubricStatus.Active,
+            CourseWeight = 20,
+            TotalWeight = 100,
+            CreatedById = seed.AdminId,
+        };
+        context.Rubrics.Add(assessment);
+        context.Projects.Add(new Project
+        {
+            TeamId = seed.TeamId!.Value,
+            Name = "Course assessment project",
+            Description = "Project used to verify score publication.",
+            Status = ProjectStatus.Draft,
+            CreatedById = seed.ProposerUserId,
+            CreatedBy = seed.ProposerUserId,
+        });
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        var assessmentHandler = scope.ServiceProvider.GetRequiredService<ICourseAssessmentEvaluationHandler>();
+        var saved = await assessmentHandler.SaveAsync(
+            seed.TeamId.Value, assessment.Id,
+            new SaveCourseAssessmentEvaluationRequest
+            {
+                Score = 8.5m,
+                MemberScores = new[]
+                {
+                    new WorkspaceCheckpointMemberScoreInput { StudentId = seed.StudentIds[0], Score = 6.5m }
+                }
+            },
+            seed.LecturerId, SystemRoles.Lecturer);
+        saved.IsSuccess.Should().BeTrue();
+        saved.Value.Status.Should().Be("SUBMITTED");
+        saved.Value.Score.Should().Be(8.5m);
+        saved.Value.MemberScores!.Single(item => item.StudentId == seed.StudentIds[0]).Should()
+            .Match<WorkspaceCheckpointEvaluationMemberScoreResponse>(item => item.Score == 6.5m && item.IsOverridden);
+        saved.Value.MemberScores!.Where(item => item.StudentId != seed.StudentIds[0]).Should()
+            .OnlyContain(item => item.Score == 8.5m && !item.IsOverridden);
+
+        var outsideTeam = await assessmentHandler.SaveAsync(
+            seed.TeamId.Value, assessment.Id,
+            new SaveCourseAssessmentEvaluationRequest
+            {
+                Score = 8.5m,
+                MemberScores = new[]
+                {
+                    new WorkspaceCheckpointMemberScoreInput { StudentId = Guid.NewGuid(), Score = 7m }
+                }
+            },
+            seed.LecturerId, SystemRoles.Lecturer);
+        outsideTeam.IsFailure.Should().BeTrue();
+        outsideTeam.Error.Code.Should().Be(ErrorCodes.WorkspaceValidationError);
+
+        var studentBeforePublish = await assessmentHandler.GetAsync(
+            seed.TeamId.Value, seed.ProposerUserId, SystemRoles.Student);
+        studentBeforePublish.Value.Assessments.Single().Score.Should().BeNull();
+        studentBeforePublish.Value.Assessments.Single().MemberScores.Should().BeNull();
+        studentBeforePublish.Value.Assessments.Single().Status.Should().Be("SUBMITTED");
+
+        var mentorBeforePublish = await assessmentHandler.GetAsync(
+            seed.TeamId.Value, seed.MentorUserId, SystemRoles.Mentor);
+        mentorBeforePublish.Value.Assessments.Single().Score.Should().BeNull();
+        mentorBeforePublish.Value.Assessments.Single().MemberScores.Should().BeNull();
+
+        var publicationHandler = scope.ServiceProvider.GetRequiredService<ICheckpointEvaluationHandler>();
+        var published = await publicationHandler.PublishAsync(
+            saved.Value.EvaluationId!.Value, seed.LecturerId, SystemRoles.Lecturer);
+        published.IsSuccess.Should().BeTrue();
+
+        context.ChangeTracker.Clear();
+        var studentAfterPublish = await assessmentHandler.GetAsync(
+            seed.TeamId.Value, seed.ProposerUserId, SystemRoles.Student);
+        studentAfterPublish.Value.Assessments.Single().Score.Should().Be(8.5m);
+        studentAfterPublish.Value.Assessments.Single().MemberScores!.Should().ContainSingle()
+            .Which.Should().Match<WorkspaceCheckpointEvaluationMemberScoreResponse>(item =>
+                item.StudentId == seed.StudentIds[0] && item.Score == 6.5m && item.IsOverridden);
+
+        var mentorAfterPublish = await assessmentHandler.GetAsync(
+            seed.TeamId.Value, seed.MentorUserId, SystemRoles.Mentor);
+        mentorAfterPublish.Value.Assessments.Single().Score.Should().Be(8.5m);
+        mentorAfterPublish.Value.Assessments.Single().MemberScores.Should().BeNull();
+
+        var revised = await assessmentHandler.SaveAsync(
+            seed.TeamId.Value, assessment.Id,
+            new SaveCourseAssessmentEvaluationRequest { Score = 7.25m },
+            seed.LecturerId, SystemRoles.Lecturer);
+        revised.IsSuccess.Should().BeTrue();
+        revised.Value.Status.Should().Be("SUBMITTED");
+
+        context.ChangeTracker.Clear();
+        var studentAfterRevision = await assessmentHandler.GetAsync(
+            seed.TeamId.Value, seed.ProposerUserId, SystemRoles.Student);
+        studentAfterRevision.Value.Assessments.Single().Score.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task BulkEvaluationPublication_UpdatesAllScoresAndWritesAuditHistory()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateSeedAsync(context, createProposal: false, createTeam: true);
+        var courseId = await context.Classes.Where(item => item.Id == seed.ClassId)
+            .Select(item => item.CourseId).SingleAsync();
+        var assessments = new[]
+        {
+            new Rubric
+            {
+                CourseId = courseId, Name = "Batch assessment one", Status = RubricStatus.Active,
+                CourseWeight = 10, TotalWeight = 100, CreatedById = seed.AdminId,
+            },
+            new Rubric
+            {
+                CourseId = courseId, Name = "Batch assessment two", Status = RubricStatus.Active,
+                CourseWeight = 15, TotalWeight = 100, CreatedById = seed.AdminId,
+            },
+        };
+        context.Rubrics.AddRange(assessments);
+        context.Projects.Add(new Project
+        {
+            TeamId = seed.TeamId!.Value,
+            Name = "Bulk publication project",
+            Description = "Project used to verify batch score publication.",
+            Status = ProjectStatus.Draft,
+            CreatedById = seed.ProposerUserId,
+            CreatedBy = seed.ProposerUserId,
+        });
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        var assessmentHandler = scope.ServiceProvider.GetRequiredService<ICourseAssessmentEvaluationHandler>();
+        var saved = new List<CourseAssessmentEvaluationResponse>();
+        foreach (var assessment in assessments)
+        {
+            var result = await assessmentHandler.SaveAsync(
+                seed.TeamId.Value, assessment.Id,
+                new SaveCourseAssessmentEvaluationRequest { Score = 8m },
+                seed.LecturerId, SystemRoles.Lecturer);
+            result.IsSuccess.Should().BeTrue();
+            saved.Add(result.Value);
+        }
+        var evaluationIds = saved.Select(item => item.EvaluationId!.Value).ToArray();
+
+        var publicationHandler = scope.ServiceProvider.GetRequiredService<ICheckpointEvaluationHandler>();
+        var published = await publicationHandler.UpdatePublicationBatchAsync(
+            new BulkWorkspaceEvaluationPublicationRequest
+            {
+                Action = "PUBLISH",
+                EvaluationIds = evaluationIds.Concat([evaluationIds[0]]).ToArray(),
+            }, seed.LecturerId, SystemRoles.Lecturer);
+        published.IsSuccess.Should().BeTrue();
+        published.Value.RequestedCount.Should().Be(2);
+        published.Value.ChangedCount.Should().Be(2);
+        published.Value.UnchangedCount.Should().Be(0);
+        published.Value.TargetStatus.Should().Be("PUBLISHED");
+
+        context.ChangeTracker.Clear();
+        (await context.Evaluations.AsNoTracking().Where(item => evaluationIds.Contains(item.Id)).ToArrayAsync())
+            .Should().OnlyContain(item => item.Status == EvaluationStatus.Published && item.PublishedAt.HasValue);
+        (await context.EvaluationHistories.AsNoTracking().Where(item => evaluationIds.Contains(item.EvaluationId)).ToArrayAsync())
+            .Should().OnlyContain(item => item.Action == EvaluationHistoryAction.Published);
+
+        var retry = await publicationHandler.UpdatePublicationBatchAsync(
+            new BulkWorkspaceEvaluationPublicationRequest { Action = "PUBLISH", EvaluationIds = evaluationIds },
+            seed.LecturerId, SystemRoles.Lecturer);
+        retry.IsSuccess.Should().BeTrue();
+        retry.Value.ChangedCount.Should().Be(0);
+        retry.Value.UnchangedCount.Should().Be(2);
+
+        var hidden = await publicationHandler.UpdatePublicationBatchAsync(
+            new BulkWorkspaceEvaluationPublicationRequest { Action = "UNPUBLISH", EvaluationIds = evaluationIds },
+            seed.LecturerId, SystemRoles.Lecturer);
+        hidden.IsSuccess.Should().BeTrue();
+        hidden.Value.ChangedCount.Should().Be(2);
+        hidden.Value.TargetStatus.Should().Be("SUBMITTED");
+
+        context.ChangeTracker.Clear();
+        var studentView = await assessmentHandler.GetAsync(
+            seed.TeamId.Value, seed.ProposerUserId, SystemRoles.Student);
+        studentView.IsSuccess.Should().BeTrue();
+        var hiddenAssessments = studentView.Value.Assessments
+            .Where(item => assessments.Select(value => value.Id).Contains(item.AssessmentId)).ToArray();
+        hiddenAssessments.Should().HaveCount(2);
+        hiddenAssessments.Should().OnlyContain(item =>
+            item.Status == "SUBMITTED" && item.Score == null && item.MemberScores == null);
+        var histories = await context.EvaluationHistories.AsNoTracking()
+            .Where(item => evaluationIds.Contains(item.EvaluationId)).ToArrayAsync();
+        histories.Count(item => item.Action == EvaluationHistoryAction.Published).Should().Be(2);
+        histories.Count(item => item.Action == EvaluationHistoryAction.Unpublished).Should().Be(2);
+
+        var atomicFailure = await publicationHandler.UpdatePublicationBatchAsync(
+            new BulkWorkspaceEvaluationPublicationRequest
+            {
+                Action = "PUBLISH",
+                EvaluationIds = new[] { evaluationIds[0], Guid.NewGuid() },
+            }, seed.LecturerId, SystemRoles.Lecturer);
+        atomicFailure.IsFailure.Should().BeTrue();
+        atomicFailure.Error.Code.Should().Be(ErrorCodes.CommonNotFoundError);
+        (await context.Evaluations.AsNoTracking().SingleAsync(item => item.Id == evaluationIds[0]))
+            .Status.Should().Be(EvaluationStatus.Submitted);
+
+        var forbidden = await publicationHandler.UpdatePublicationBatchAsync(
+            new BulkWorkspaceEvaluationPublicationRequest { Action = "PUBLISH", EvaluationIds = evaluationIds },
+            seed.ProposerUserId, SystemRoles.Student);
+        forbidden.IsFailure.Should().BeTrue();
+        forbidden.Error.Code.Should().Be(ErrorCodes.WorkspaceAccessDenied);
+    }
+
+    [Fact]
+    public async Task EvaluationPublicationEndpoints_RequireAuthenticationAndLecturerRole()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateSeedAsync(context, createProposal: false, createTeam: false);
+        var student = await context.Users.SingleAsync(item => item.Id == seed.ProposerUserId);
+        var lecturer = await context.Users.SingleAsync(item => item.Id == seed.LecturerId);
+        var tokenService = scope.ServiceProvider.GetRequiredService<IJwtTokenService>();
+        using var client = _factory.CreateClient();
+        var url = $"/api/workspace/checkpoints/evaluations/{Guid.NewGuid()}/publish";
+
+        using var anonymous = await client.PutAsync(url,
+            new StringContent("{}", System.Text.Encoding.UTF8, "application/json"));
+        anonymous.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+
+        using var studentRequest = new HttpRequestMessage(HttpMethod.Put, url)
+        {
+            Content = new StringContent("{}", System.Text.Encoding.UTF8, "application/json"),
+        };
+        studentRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer",
+            tokenService.GenerateAccessToken(student, [SystemRoles.Student]).Token);
+        using var forbidden = await client.SendAsync(studentRequest);
+        forbidden.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        using var lecturerRequest = new HttpRequestMessage(HttpMethod.Put, url)
+        {
+            Content = new StringContent("{}", System.Text.Encoding.UTF8, "application/json"),
+        };
+        lecturerRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer",
+            tokenService.GenerateAccessToken(lecturer, [SystemRoles.Lecturer]).Token);
+        using var notFound = await client.SendAsync(lecturerRequest);
+        notFound.StatusCode.Should().Be(HttpStatusCode.NotFound);
+
+        var unpublishUrl = $"/api/workspace/checkpoints/evaluations/{Guid.NewGuid()}/unpublish";
+        using var anonymousUnpublish = await client.PutAsync(unpublishUrl,
+            new StringContent("{}", System.Text.Encoding.UTF8, "application/json"));
+        anonymousUnpublish.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+
+        using var studentUnpublishRequest = new HttpRequestMessage(HttpMethod.Put, unpublishUrl)
+        {
+            Content = new StringContent("{}", System.Text.Encoding.UTF8, "application/json"),
+        };
+        studentUnpublishRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer",
+            tokenService.GenerateAccessToken(student, [SystemRoles.Student]).Token);
+        using var forbiddenUnpublish = await client.SendAsync(studentUnpublishRequest);
+        forbiddenUnpublish.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        using var lecturerUnpublishRequest = new HttpRequestMessage(HttpMethod.Put, unpublishUrl)
+        {
+            Content = new StringContent("{}", System.Text.Encoding.UTF8, "application/json"),
+        };
+        lecturerUnpublishRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer",
+            tokenService.GenerateAccessToken(lecturer, [SystemRoles.Lecturer]).Token);
+        using var unpublishNotFound = await client.SendAsync(lecturerUnpublishRequest);
+        unpublishNotFound.StatusCode.Should().Be(HttpStatusCode.NotFound);
+
+        const string bulkUrl = "/api/workspace/checkpoints/evaluations/publication/bulk";
+        var bulkPayload = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            action = "PUBLISH",
+            evaluationIds = new[] { Guid.NewGuid() },
+        });
+        using var anonymousBulk = await client.PutAsync(bulkUrl,
+            new StringContent(bulkPayload, System.Text.Encoding.UTF8, "application/json"));
+        anonymousBulk.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+
+        using var studentBulkRequest = new HttpRequestMessage(HttpMethod.Put, bulkUrl)
+        {
+            Content = new StringContent(bulkPayload, System.Text.Encoding.UTF8, "application/json"),
+        };
+        studentBulkRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer",
+            tokenService.GenerateAccessToken(student, [SystemRoles.Student]).Token);
+        using var forbiddenBulk = await client.SendAsync(studentBulkRequest);
+        forbiddenBulk.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        using var lecturerBulkRequest = new HttpRequestMessage(HttpMethod.Put, bulkUrl)
+        {
+            Content = new StringContent(bulkPayload, System.Text.Encoding.UTF8, "application/json"),
+        };
+        lecturerBulkRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer",
+            tokenService.GenerateAccessToken(lecturer, [SystemRoles.Lecturer]).Token);
+        using var bulkNotFound = await client.SendAsync(lecturerBulkRequest);
+        bulkNotFound.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task TeamRankingsEndpoint_IsAvailableOnlyToAdminAndLecturer()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateSeedAsync(context, createProposal: false, createTeam: true);
+        var student = await context.Users.SingleAsync(item => item.Id == seed.ProposerUserId);
+        var lecturer = await context.Users.SingleAsync(item => item.Id == seed.LecturerId);
+        var tokenService = scope.ServiceProvider.GetRequiredService<IJwtTokenService>();
+        using var client = _factory.CreateClient();
+
+        using var anonymous = await client.GetAsync("/api/rankings");
+        anonymous.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+
+        using var studentRequest = new HttpRequestMessage(HttpMethod.Get, "/api/rankings");
+        studentRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer",
+            tokenService.GenerateAccessToken(student, [SystemRoles.Student]).Token);
+        using var forbidden = await client.SendAsync(studentRequest);
+        forbidden.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        using var lecturerRequest = new HttpRequestMessage(HttpMethod.Get, "/api/rankings");
+        lecturerRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer",
+            tokenService.GenerateAccessToken(lecturer, [SystemRoles.Lecturer]).Token);
+        using var allowed = await client.SendAsync(lecturerRequest);
+        allowed.StatusCode.Should().Be(HttpStatusCode.OK);
+        var payload = await allowed.Content.ReadAsStringAsync();
+        payload.Should().NotContain("memberScores");
+        payload.Should().Contain("\"projectDescription\":");
     }
 
     [Fact]
@@ -2463,6 +2893,7 @@ public sealed class TeamWorkflowIntegrationTests
             TeamName = "Renamed Founder Team",
             ProjectName = "Founder Workspace",
             Description = "A complete project workspace description for the team.",
+            ZaloGroupUrl = "https://zalo.me/g/founder-workspace",
             StartupIndustryIds = new[] { seed.StartupIndustryIds[0] }
         };
 
@@ -2474,12 +2905,26 @@ public sealed class TeamWorkflowIntegrationTests
         nonLeader.IsFailure.Should().BeTrue();
         nonLeader.Error.Code.Should().Be(ErrorCodes.WorkspaceLeaderRequired);
 
+        var missingZaloGroupLink = await handler.CreateAsync(
+            seed.TeamId.Value,
+            new CreateProjectWorkspaceRequest
+            {
+                ProjectName = validRequest.ProjectName,
+                Description = validRequest.Description,
+                StartupIndustryIds = validRequest.StartupIndustryIds
+            },
+            seed.ProposerUserId,
+            SystemRoles.Student);
+        missingZaloGroupLink.IsFailure.Should().BeTrue();
+        missingZaloGroupLink.Error.Code.Should().Be(ErrorCodes.WorkspaceValidationError);
+
         var invalidIndustries = await handler.CreateAsync(
             seed.TeamId.Value,
             new CreateProjectWorkspaceRequest
             {
                 ProjectName = validRequest.ProjectName,
                 Description = validRequest.Description,
+                ZaloGroupUrl = validRequest.ZaloGroupUrl,
                 StartupIndustryIds = new[] { seed.StartupIndustryIds[0], seed.StartupIndustryIds[0] }
             },
             seed.ProposerUserId,
@@ -2493,6 +2938,7 @@ public sealed class TeamWorkflowIntegrationTests
             {
                 ProjectName = validRequest.ProjectName,
                 Description = validRequest.Description,
+                ZaloGroupUrl = validRequest.ZaloGroupUrl,
                 StartupIndustryIds = new[] { seed.StartupIndustryIds[2] }
             },
             seed.ProposerUserId,
@@ -2505,7 +2951,8 @@ public sealed class TeamWorkflowIntegrationTests
             new CreateProjectWorkspaceRequest
             {
                 ProjectName = validRequest.ProjectName,
-                Description = validRequest.Description
+                Description = validRequest.Description,
+                ZaloGroupUrl = validRequest.ZaloGroupUrl
             },
             seed.ProposerUserId,
             SystemRoles.Student);
@@ -2537,6 +2984,7 @@ public sealed class TeamWorkflowIntegrationTests
             {
                 ProjectName = "Approved Direction",
                 Description = "A student project workspace with a lecturer approval comment.",
+                ZaloGroupUrl = "https://zalo.me/g/approved-direction",
                 StartupIndustryIds = seed.StartupIndustryIds[..1]
             },
             seed.ProposerUserId,
@@ -2589,6 +3037,7 @@ public sealed class TeamWorkflowIntegrationTests
             TeamName = "x",
             ProjectName = "Valid Project",
             Description = "A sufficiently detailed project description for this workspace.",
+            ZaloGroupUrl = "https://zalo.me/g/valid-project",
             StartupIndustryIds = [seed.StartupIndustryIds[0]]
         }, seed.ProposerUserId, SystemRoles.Student);
         invalid.IsFailure.Should().BeTrue();
@@ -2599,6 +3048,7 @@ public sealed class TeamWorkflowIntegrationTests
             TeamName = "taken team name",
             ProjectName = "Valid Project",
             Description = "A sufficiently detailed project description for this workspace.",
+            ZaloGroupUrl = "https://zalo.me/g/valid-project",
             StartupIndustryIds = [seed.StartupIndustryIds[0]]
         }, seed.ProposerUserId, SystemRoles.Student);
         duplicate.IsFailure.Should().BeTrue();
@@ -2622,6 +3072,7 @@ public sealed class TeamWorkflowIntegrationTests
         {
             ProjectName = "Campus Circular",
             Description = "A student marketplace that helps campuses reuse equipment safely.",
+            ZaloGroupUrl = "https://zalo.me/g/campus-circular",
             StartupIndustryIds = new[] { seed.StartupIndustryIds[0] }
         };
         (await handler.CreateAsync(seed.TeamId!.Value, initial, seed.ProposerUserId, SystemRoles.Student))
@@ -2656,14 +3107,31 @@ public sealed class TeamWorkflowIntegrationTests
         invalid.IsFailure.Should().BeTrue();
         invalid.Error.Code.Should().Be(ErrorCodes.WorkspaceValidationError);
 
+        var missingZaloLink = await handler.UpdateAsync(
+            seed.TeamId.Value,
+            new UpdateProjectWorkspaceRequest
+            {
+                ProjectName = "Campus Circular Hub",
+                Description = "The latest student marketplace profile for safe campus equipment reuse.",
+                Problem = string.Empty,
+                Solution = string.Empty,
+                TargetUsers = string.Empty,
+                ZaloGroupUrl = string.Empty
+            },
+            seed.ProposerUserId,
+            SystemRoles.Student);
+        missingZaloLink.IsFailure.Should().BeTrue();
+        missingZaloLink.Error.Code.Should().Be(ErrorCodes.WorkspaceValidationError);
+        missingZaloLink.Error.Message.Should().Contain("required");
+
         var invalidZaloLink = await handler.UpdateAsync(
             seed.TeamId.Value,
             new UpdateProjectWorkspaceRequest
             {
                 ProjectName = "Campus Circular Hub",
                 Description = "The latest student marketplace profile for safe campus equipment reuse.",
-                Problem = "Students cannot reliably find safe ways to reuse equipment across campus.",
-                Solution = "A verified marketplace connects students and supports trustworthy exchanges.",
+                Problem = string.Empty,
+                Solution = string.Empty,
                 TargetUsers = string.Empty,
                 ZaloGroupUrl = "https://example.com/not-zalo"
             },

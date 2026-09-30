@@ -26,6 +26,25 @@ const initialRows = (criteria, initialData) => {
   });
 };
 
+const evaluationStatusPresentation = {
+  DRAFT: {
+    label: 'Draft',
+    className: 'border-amber-200 bg-amber-50 text-amber-700',
+  },
+  SUBMITTED: {
+    label: 'Submitted',
+    className: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+  },
+  PUBLISHED: {
+    label: 'Published',
+    className: 'border-blue-200 bg-blue-50 text-blue-700',
+  },
+  NOT_GRADED: {
+    label: 'Not graded',
+    className: 'border-slate-200 bg-slate-50 text-slate-500',
+  },
+};
+
 export default function RubricForm({
   initialData,
   onSubmit,
@@ -47,6 +66,9 @@ export default function RubricForm({
       .map((item) => [item.studentId, String(item.score)])));
   const [attemptedSubmit, setAttemptedSubmit] = useState(false);
   const isSubmitted = initialData?.status === 'SUBMITTED' || initialData?.status === 'PUBLISHED';
+  const evaluationStatus = String(initialData?.status || 'NOT_GRADED').toUpperCase();
+  const statusPresentation = evaluationStatusPresentation[evaluationStatus]
+    || evaluationStatusPresentation.NOT_GRADED;
 
   useEffect(() => {
     // Keep existing scores and comments visible when loading or switching evaluations.
@@ -151,7 +173,16 @@ export default function RubricForm({
       <div className="mb-3 flex items-center justify-between gap-3">
         <div className="min-w-0">
           <h3 className="truncate text-sm font-bold text-slate-900">{title} · Enter scores</h3>
-          <p className="text-xs text-slate-500">Type a score for each criterion.{initialData?.status ? ` · ${initialData.status}` : ''}</p>
+          <p className="text-xs text-slate-500">Type a score for each criterion.</p>
+          <div className="mt-2 flex items-center gap-2">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Evaluation status</span>
+            <span
+              aria-label={`Evaluation status: ${statusPresentation.label}`}
+              className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${statusPresentation.className}`}
+            >
+              {statusPresentation.label}
+            </span>
+          </div>
         </div>
         {!hideSensitiveScores && (
           <div className="shrink-0 rounded-xl bg-blue-50 px-3 py-1.5 text-right">

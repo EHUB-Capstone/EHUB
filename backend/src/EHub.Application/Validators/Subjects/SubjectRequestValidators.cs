@@ -66,6 +66,30 @@ public sealed class CorrectActiveSemesterRequestValidator : AbstractValidator<Co
     }
 }
 
+public sealed class TransitionSemesterRequestValidator : AbstractValidator<TransitionSemesterRequest>
+{
+    public TransitionSemesterRequestValidator()
+    {
+        RuleFor(x => x.CurrentSemesterId).NotEmpty();
+        RuleFor(x => x.TargetSemesterId)
+            .NotEmpty()
+            .NotEqual(x => x.CurrentSemesterId)
+            .WithMessage("The target semester must be different from the current semester.");
+        RuleFor(x => x.CurrentRowVersion)
+            .NotEmpty()
+            .Matches("^[0-9]+$")
+            .WithMessage("Current rowVersion must be valid.");
+        RuleFor(x => x.TargetRowVersion)
+            .NotEmpty()
+            .Matches("^[0-9]+$")
+            .WithMessage("Target rowVersion must be valid.");
+        RuleFor(x => x.Reason)
+            .NotEmpty()
+            .MinimumLength(3)
+            .MaximumLength(500);
+    }
+}
+
 public sealed class PlanSemesterRequestValidator : AbstractValidator<PlanSemesterRequest>
 {
     public PlanSemesterRequestValidator()

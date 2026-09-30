@@ -61,7 +61,7 @@ export interface MockSemester {
   id: string;
   semester: 'SP' | 'SU' | 'FA';
   year: number;
-  status: 'Planned' | 'Active' | 'Completed' | 'Archived';
+  status: 'Planned' | 'Active' | 'Closing' | 'Completed' | 'Archived';
   startDate: string | null;
   endDate: string | null;
   completedAtUtc: string | null;
@@ -331,6 +331,8 @@ export interface MockApiState {
   checkpointFiles: Record<string, MockCheckpointFile[]>;
   checkpointLinks: Record<string, MockCheckpointLink[]>;
   courseAssessmentScores: Record<string, number>;
+  courseAssessmentMemberScores: Record<string, number>;
+  evaluationPublicationStatuses: Record<string, 'SUBMITTED' | 'PUBLISHED'>;
   classes: MockClass[];
   rosters: Record<string, MockRosterStudent[]>;
   teams: MockTeam[];
@@ -521,6 +523,8 @@ const initialMockState: MockApiState = {
     checkpointFiles: {},
     checkpointLinks: {},
     courseAssessmentScores: {},
+    courseAssessmentMemberScores: {},
+    evaluationPublicationStatuses: {},
     classes,
     rosters: { [classIds.active]: activeRoster, [classIds.draft]: draftRoster, [classIds.archived]: archivedRoster },
     teams,

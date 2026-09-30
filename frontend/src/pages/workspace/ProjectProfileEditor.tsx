@@ -60,9 +60,9 @@ function ProfileField({ id, label, value, error, maxLength, multiline = false, r
     <div>
       <label htmlFor={`project-profile-${id}`} className="text-sm font-semibold text-slate-700">{label} {required && <span className="text-red-500">*</span>}</label>
       {multiline ? (
-        <textarea id={`project-profile-${id}`} value={value} onChange={(event) => onChange(id, event.target.value)} disabled={readOnly} rows={5} maxLength={maxLength} placeholder={placeholder} aria-invalid={Boolean(error)} aria-describedby={error ? `project-profile-${id}-error` : undefined} className={`${classes} resize-y`} />
+        <textarea id={`project-profile-${id}`} value={value} onChange={(event) => onChange(id, event.target.value)} disabled={readOnly} required={required} rows={5} maxLength={maxLength} placeholder={placeholder} aria-invalid={Boolean(error)} aria-describedby={error ? `project-profile-${id}-error` : undefined} className={`${classes} resize-y`} />
       ) : (
-        <input id={`project-profile-${id}`} type={type} value={value} onChange={(event) => onChange(id, event.target.value)} disabled={readOnly} maxLength={maxLength} placeholder={placeholder} aria-invalid={Boolean(error)} aria-describedby={error ? `project-profile-${id}-error` : undefined} className={classes} />
+        <input id={`project-profile-${id}`} type={type} value={value} onChange={(event) => onChange(id, event.target.value)} disabled={readOnly} required={required} maxLength={maxLength} placeholder={placeholder} aria-invalid={Boolean(error)} aria-describedby={error ? `project-profile-${id}-error` : undefined} className={classes} />
       )}
       <div className="mt-1 flex min-h-5 justify-between gap-3 text-xs">
         <span id={`project-profile-${id}-error`} className="text-red-600">{error}</span>
@@ -208,10 +208,10 @@ export default function ProjectProfileEditor() {
           {canEdit && <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"><p className="font-semibold">Project name and Description require lecturer approval.</p><p className="mt-1 text-xs leading-5 text-amber-800">Saving a change to either field creates a new change request. The currently approved values remain active while the request is Pending or needs revision.</p></div>}
           <ProfileField id="projectName" label="Project name" value={draft.projectName} error={errors.projectName} maxLength={200} readOnly={!canEdit} onChange={setField} />
           <ProfileField id="description" label="Description" value={draft.description} error={errors.description} maxLength={2000} multiline readOnly={!canEdit} onChange={setField} />
-          <ProfileField id="problem" label="Problem" value={draft.problem} error={errors.problem} maxLength={2000} multiline readOnly={!canEdit} onChange={setField} />
-          <ProfileField id="solution" label="Solution" value={draft.solution} error={errors.solution} maxLength={2000} multiline readOnly={!canEdit} onChange={setField} />
+          <ProfileField id="problem" label="Problem" value={draft.problem} error={errors.problem} maxLength={2000} multiline required={false} readOnly={!canEdit} onChange={setField} />
+          <ProfileField id="solution" label="Solution" value={draft.solution} error={errors.solution} maxLength={2000} multiline required={false} readOnly={!canEdit} onChange={setField} />
           <ProfileField id="targetUsers" label="Target users" value={draft.targetUsers} error={errors.targetUsers} maxLength={2000} multiline required={false} readOnly={!canEdit} onChange={setField} />
-          <ProfileField id="zaloGroupUrl" label="Zalo group link" value={draft.zaloGroupUrl} error={errors.zaloGroupUrl} maxLength={500} required={false} placeholder="https://zalo.me/g/..." type="url" readOnly={!canEdit} onChange={setField} />
+          <ProfileField id="zaloGroupUrl" label="Zalo group link" value={draft.zaloGroupUrl} error={errors.zaloGroupUrl} maxLength={500} placeholder="https://zalo.me/g/..." type="url" readOnly={!canEdit} onChange={setField} />
         </div>
 
         {canEdit && <footer className="flex items-center justify-between gap-3 border-t border-slate-100 bg-slate-50/70 px-6 py-4"><p className="text-xs text-slate-500">Name and Description require approval; other changes save immediately.</p><button type="button" onClick={() => void save()} disabled={saving || !hasChanges} className="inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-xl bg-primary px-5 py-2.5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} {saving ? 'Saving…' : 'Save profile'}</button></footer>}

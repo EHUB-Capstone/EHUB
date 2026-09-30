@@ -136,6 +136,8 @@ public sealed class WorkspaceCheckpointEvaluationConfigResponse
 public sealed class SaveCourseAssessmentEvaluationRequest
 {
     public decimal Score { get; init; }
+    public IReadOnlyCollection<WorkspaceCheckpointMemberScoreInput> MemberScores { get; init; } =
+        Array.Empty<WorkspaceCheckpointMemberScoreInput>();
 }
 
 public sealed class CourseAssessmentEvaluationListResponse
@@ -150,7 +152,11 @@ public sealed class CourseAssessmentEvaluationResponse
     public string Name { get; init; } = string.Empty;
     public decimal Weight { get; init; }
     public Guid? EvaluationId { get; init; }
+    public Guid? EvaluatorId { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public decimal? Score { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyCollection<WorkspaceCheckpointEvaluationMemberScoreResponse>? MemberScores { get; init; }
     public string Status { get; init; } = "NOT_GRADED";
     public DateTime? UpdatedAt { get; init; }
 }
@@ -179,13 +185,14 @@ public sealed class WorkspaceCheckpointEvaluationResponse
     public WorkspaceCheckpointUserResponse LecturerId { get; init; } = new();
     public string EvaluatorRole { get; init; } = string.Empty;
     public string Status { get; init; } = string.Empty;
-    public decimal CheckpointTotal { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public decimal? CheckpointTotal { get; init; }
     public string? OverallFeedback { get; init; }
     public DateTime UpdatedAt { get; init; }
     public IReadOnlyCollection<WorkspaceCheckpointCriterionScoreResponse> RubricScores { get; init; } =
         Array.Empty<WorkspaceCheckpointCriterionScoreResponse>();
-    public IReadOnlyCollection<WorkspaceCheckpointEvaluationMemberScoreResponse> MemberScores { get; init; } =
-        Array.Empty<WorkspaceCheckpointEvaluationMemberScoreResponse>();
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyCollection<WorkspaceCheckpointEvaluationMemberScoreResponse>? MemberScores { get; init; }
 }
 
 public sealed class WorkspaceCheckpointEvaluationMemberScoreResponse
@@ -199,7 +206,8 @@ public sealed class WorkspaceCheckpointCriterionScoreResponse
 {
     public string CriterionKey { get; init; } = string.Empty;
     public string CriterionName { get; init; } = string.Empty;
-    public decimal Score { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public decimal? Score { get; init; }
     public string? Comment { get; init; }
 }
 
@@ -212,11 +220,54 @@ public sealed class WorkspaceCheckpointEvaluationHistoryResponse
     public WorkspaceCheckpointUserResponse ChangedBy { get; init; } = new();
     public DateTime CreatedAt { get; init; }
     public string? Note { get; init; }
+    public IReadOnlyCollection<WorkspaceCheckpointEvaluationHistoryChangeResponse> Changes { get; init; } =
+        Array.Empty<WorkspaceCheckpointEvaluationHistoryChangeResponse>();
+}
+
+public sealed class WorkspaceCheckpointEvaluationHistoryChangeResponse
+{
+    public string Category { get; init; } = string.Empty;
+    public string Field { get; init; } = string.Empty;
+    public string Label { get; init; } = string.Empty;
+    public string? PreviousValue { get; init; }
+    public string? CurrentValue { get; init; }
 }
 
 public sealed class WorkspaceCheckpointEvaluationAggregateResponse
 {
     public int EvaluationCount { get; init; }
     public int SubmittedCount { get; init; }
-    public decimal AverageScore { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public decimal? AverageScore { get; init; }
+}
+
+public sealed class WorkspaceEvaluationPublicationResponse
+{
+    [JsonPropertyName("_id")]
+    public Guid Id { get; init; }
+    public string Status { get; init; } = string.Empty;
+    public DateTime PublishedAt { get; init; }
+}
+
+public sealed class WorkspaceEvaluationUnpublicationResponse
+{
+    [JsonPropertyName("_id")]
+    public Guid Id { get; init; }
+    public string Status { get; init; } = string.Empty;
+    public DateTime UpdatedAt { get; init; }
+}
+
+public sealed class BulkWorkspaceEvaluationPublicationRequest
+{
+    public string Action { get; init; } = string.Empty;
+    public IReadOnlyCollection<Guid> EvaluationIds { get; init; } = Array.Empty<Guid>();
+}
+
+public sealed class BulkWorkspaceEvaluationPublicationResponse
+{
+    public string Action { get; init; } = string.Empty;
+    public string TargetStatus { get; init; } = string.Empty;
+    public int RequestedCount { get; init; }
+    public int ChangedCount { get; init; }
+    public int UnchangedCount { get; init; }
 }

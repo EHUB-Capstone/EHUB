@@ -1,5 +1,5 @@
 export type SemesterCode = 'SP' | 'SU' | 'FA';
-export type SemesterStatus = 'Planned' | 'Active' | 'Completed' | 'Archived';
+export type SemesterStatus = 'Planned' | 'Active' | 'Closing' | 'Completed' | 'Archived';
 export type SubjectStatus = 'active' | 'disabled';
 
 export interface SubjectDto {
@@ -58,11 +58,28 @@ export interface SemesterCompletionPreview {
   activeEnrollmentCount: number;
   processingImportSessionCount: number;
   blockers: string[];
+  blockingClasses: SemesterCompletionClassBlocker[];
   rowVersion: string;
+}
+
+export interface SemesterCompletionClassBlocker {
+  classId: string;
+  classCode: string;
+  slug: string;
+  status: 'Draft' | 'Active' | 'Inactive' | 'Completed' | 'Archived';
+  activeEnrollmentCount: number;
 }
 
 export interface SemesterLifecyclePayload {
   rowVersion: string;
+  reason: string;
+}
+
+export interface TransitionSemesterPayload {
+  currentSemesterId: string;
+  currentRowVersion: string;
+  targetSemesterId: string;
+  targetRowVersion: string;
   reason: string;
 }
 

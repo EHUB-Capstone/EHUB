@@ -570,10 +570,11 @@ public sealed class LecturerCheckpointManagementHandler(
         var latest = submissions
             .OrderByDescending(item => item.SubmittedAt ?? item.CreatedAt)
             .FirstOrDefault();
-        var earliestFile = submissions
+        var submittedFiles = submissions
             .SelectMany(item => filesBySubmission.GetValueOrDefault(item.Id) ?? Array.Empty<FileRow>())
             .OrderBy(item => item.UploadedAt)
-            .FirstOrDefault();
+            .ToArray();
+        var earliestFile = submittedFiles.FirstOrDefault();
         var links = submissions
             .SelectMany(item => linksBySubmission.GetValueOrDefault(item.Id) ?? Array.Empty<LinkRow>())
             .OrderByDescending(item => item.VersionNumber)
@@ -597,6 +598,12 @@ public sealed class LecturerCheckpointManagementHandler(
                 OriginalName = earliestFile.OriginalName,
                 UploadedAtUtc = earliestFile.UploadedAt
             },
+            SubmittedFiles = submittedFiles.Select(file => new LecturerCheckpointFileResponse
+            {
+                Id = file.Id,
+                OriginalName = file.OriginalName,
+                UploadedAtUtc = file.UploadedAt
+            }).ToArray(),
             SubmittedLinks = links.Select(link => new LecturerCheckpointLinkResponse
             {
                 Id = link.Id,

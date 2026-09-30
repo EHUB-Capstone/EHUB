@@ -38,14 +38,23 @@ export const evaluationApi = {
   getCourseAssessments: async (teamId) => {
     return axiosClient.get(`/workspace/checkpoints/teams/${teamId}/course-assessments`);
   },
-  saveCourseAssessment: async (teamId, assessmentId, score) => {
-    return axiosClient.put(`/workspace/checkpoints/teams/${teamId}/course-assessments/${assessmentId}`, { score });
+  saveCourseAssessment: async (teamId, assessmentId, data) => {
+    return axiosClient.put(`/workspace/checkpoints/teams/${teamId}/course-assessments/${assessmentId}`, data);
   },
   createCheckpointEvaluation: async (teamId, checkpointNumber, evaluationData) => {
     return axiosClient.post(`/workspace/checkpoints/teams/${teamId}/checkpoints/${checkpointNumber}/evaluations`, evaluationData);
   },
   updateCheckpointEvaluation: async (evaluationId, evaluationData) => {
     return axiosClient.put(`/workspace/checkpoints/evaluations/${evaluationId}`, evaluationData);
+  },
+  publishEvaluation: async (evaluationId) => {
+    return axiosClient.put(`/workspace/checkpoints/evaluations/${evaluationId}/publish`, {});
+  },
+  unpublishEvaluation: async (evaluationId) => {
+    return axiosClient.put(`/workspace/checkpoints/evaluations/${evaluationId}/unpublish`, {});
+  },
+  updatePublicationBatch: async (data) => {
+    return axiosClient.put('/workspace/checkpoints/evaluations/publication/bulk', data);
   },
   submitCheckpointEvaluation: async (evaluationId) => {
     return axiosClient.put(`/evaluations/team/${evaluationId}/submit`, {});
@@ -66,5 +75,8 @@ export const {
   saveCourseAssessment,
   createCheckpointEvaluation,
   updateCheckpointEvaluation,
+  publishEvaluation,
+  unpublishEvaluation,
+  updatePublicationBatch,
   submitCheckpointEvaluation,
 } = evaluationApi;

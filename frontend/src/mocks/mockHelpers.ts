@@ -30,6 +30,9 @@ function loadState(): MockApiState {
       checkpointSchedules: parsed.checkpointSchedules ?? {},
       checkpointFiles: parsed.checkpointFiles ?? {},
       checkpointLinks: parsed.checkpointLinks ?? {},
+      courseAssessmentScores: parsed.courseAssessmentScores ?? {},
+      courseAssessmentMemberScores: parsed.courseAssessmentMemberScores ?? {},
+      evaluationPublicationStatuses: parsed.evaluationPublicationStatuses ?? {},
     };
   } catch {
     window.localStorage.removeItem(STORAGE_KEY);

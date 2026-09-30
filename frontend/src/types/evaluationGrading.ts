@@ -11,7 +11,7 @@ export interface EvaluationGradingUser {
 export interface EvaluationCriterionScore {
   criterionKey: string;
   criterionName: string;
-  score: number;
+  score?: number | null;
   comment?: string | null;
 }
 
@@ -33,6 +33,7 @@ export interface EvaluationTeamMember {
 export interface EvaluationTeam extends WorkspaceOption {
   teamCode?: string;
   projectName?: string;
+  projectDescription?: string;
   semesterGroupName?: string;
   members?: EvaluationTeamMember[];
 }
@@ -42,11 +43,11 @@ export interface CheckpointEvaluation {
   lecturerId: EvaluationGradingUser;
   evaluatorRole: string;
   status: Exclude<EvaluationGradingStatus, 'NOT_GRADED'>;
-  checkpointTotal: number;
+  checkpointTotal?: number | null;
   overallFeedback?: string | null;
   updatedAt: string;
   rubricScores: EvaluationCriterionScore[];
-  memberScores: EvaluationMemberScore[];
+  memberScores?: EvaluationMemberScore[];
 }
 
 export interface EvaluationCheckpoint {
@@ -54,6 +55,13 @@ export interface EvaluationCheckpoint {
   title: string;
   shortDescription?: string | null;
   courseWeight: number;
+  rubrics?: Array<{
+    key: string;
+    label: string;
+    description?: string | null;
+    weight: number;
+    maxScore: number;
+  }>;
 }
 
 export interface CourseAssessmentEvaluation {
@@ -61,7 +69,9 @@ export interface CourseAssessmentEvaluation {
   name: string;
   weight: number;
   evaluationId?: string | null;
+  evaluatorId?: string | null;
   score?: number | null;
+  memberScores?: EvaluationMemberScore[];
   status: EvaluationGradingStatus;
   updatedAt?: string | null;
 }
@@ -76,7 +86,7 @@ export interface CheckpointEvaluationSummary {
   summary: {
     evaluationCount: number;
     submittedCount: number;
-    averageScore: number;
+    averageScore?: number | null;
   };
 }
 

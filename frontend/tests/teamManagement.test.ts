@@ -277,11 +277,13 @@ test('validates required project workspace information', () => {
     teamName: '',
     projectName: '',
     description: 'too short',
+    zaloGroupUrl: '',
     startupIndustryIds: [],
   });
   assert.equal(errors.teamName, 'Team name must be 3–100 characters.');
   assert.equal(errors.projectName, 'Project name must be 3–200 characters.');
   assert.equal(errors.description, 'Description must be 20–2000 characters.');
+  assert.equal(errors.zaloGroupUrl, 'Zalo group link is required.');
   assert.equal(errors.startupIndustryIds, 'Select between 1 and 3 startup industries.');
 });
 
@@ -290,6 +292,7 @@ test('accepts one to three startup industries for a project workspace', () => {
     teamName: 'Renamed team',
     projectName: 'Valid project',
     description: 'A sufficiently detailed project workspace description.',
+    zaloGroupUrl: 'https://zalo.me/g/valid-project',
     startupIndustryIds: ['industry-1', 'industry-2', 'industry-3'],
   }), {});
 
@@ -297,6 +300,7 @@ test('accepts one to three startup industries for a project workspace', () => {
     teamName: 'Renamed team',
     projectName: 'Valid project',
     description: 'A sufficiently detailed project workspace description.',
+    zaloGroupUrl: 'https://zalo.me/g/valid-project',
     startupIndustryIds: ['1', '2', '3', '4'],
   });
   assert.equal(errors.startupIndustryIds, 'Select between 1 and 3 startup industries.');
@@ -315,9 +319,25 @@ test('workspace creation defaults come from the linked student proposal', () => 
   assert.equal(defaults.draft.teamName, 'Fallback team');
   assert.equal(defaults.draft.projectName, 'Student Venture Project');
   assert.equal(defaults.draft.description, 'A balanced student-created proposal ready for lecturer review.');
+  assert.equal(defaults.draft.zaloGroupUrl, '');
 });
 
-test('project profile requires name, description, problem, and solution, while target users is optional', () => {
+test('project workspace creation requires an HTTPS zalo.me link', () => {
+  const draft = {
+    teamName: 'Campus Circular Team',
+    projectName: 'Campus Circular',
+    description: 'A sufficiently detailed project workspace description.',
+    zaloGroupUrl: '',
+    startupIndustryIds: ['industry-1'],
+  };
+
+  assert.match(validateProjectWorkspace(draft).zaloGroupUrl || '', /required/);
+  assert.equal(validateProjectWorkspace({ ...draft, zaloGroupUrl: 'https://zalo.me/g/campus-circular' }).zaloGroupUrl, undefined);
+  assert.match(validateProjectWorkspace({ ...draft, zaloGroupUrl: 'https://example.com/team' }).zaloGroupUrl || '', /zalo\.me/);
+  assert.match(validateProjectWorkspace({ ...draft, zaloGroupUrl: 'http://zalo.me/g/campus-circular' }).zaloGroupUrl || '', /HTTPS/);
+});
+
+test('project profile requires name, description, and Zalo link while problem, solution, and target users are optional', () => {
   const invalid = validateProjectProfile({
     projectName: 'x',
     description: '',
@@ -326,16 +346,27 @@ test('project profile requires name, description, problem, and solution, while t
     targetUsers: '',
     zaloGroupUrl: '',
   });
-  assert.deepEqual(Object.keys(invalid).sort(), ['description', 'problem', 'projectName', 'solution']);
+  assert.deepEqual(Object.keys(invalid).sort(), ['description', 'projectName', 'zaloGroupUrl']);
 
   assert.deepEqual(validateProjectProfile({
     projectName: 'Campus Circular Hub',
     description: 'A complete description of the approved project profile.',
-    problem: 'Students struggle to reuse useful equipment safely on campus.',
-    solution: 'A verified marketplace supports safe exchanges between students.',
+    problem: '',
+    solution: '',
     targetUsers: '',
     zaloGroupUrl: 'https://zalo.me/g/campus-circular',
   }), {});
+
+  const optionalFieldErrors = validateProjectProfile({
+    projectName: 'Campus Circular Hub',
+    description: 'A complete description of the approved project profile.',
+    problem: 'Too short',
+    solution: 'Also too short',
+    targetUsers: '',
+    zaloGroupUrl: 'https://zalo.me/g/campus-circular',
+  });
+  assert.match(optionalFieldErrors.problem || '', /when provided/);
+  assert.match(optionalFieldErrors.solution || '', /when provided/);
 });
 
 test('project profile success requires the server to return every persisted field', () => {
@@ -353,7 +384,7 @@ test('project profile success requires the server to return every persisted fiel
   assert.equal(hasPersistedProjectProfile(draft, { ...draft, zaloGroupUrl: '' }), false);
 });
 
-test('project profile accepts only optional HTTPS zalo.me links', () => {
+test('project profile requires an HTTPS zalo.me link', () => {
   const draft = {
     projectName: 'Campus Circular Hub',
     description: 'A complete description of the approved project profile.',
@@ -363,7 +394,7 @@ test('project profile accepts only optional HTTPS zalo.me links', () => {
     zaloGroupUrl: '',
   };
 
-  assert.equal(validateProjectProfile(draft).zaloGroupUrl, undefined);
+  assert.match(validateProjectProfile(draft).zaloGroupUrl || '', /required/);
   assert.equal(validateProjectProfile({ ...draft, zaloGroupUrl: 'https://zalo.me/g/campus-circular' }).zaloGroupUrl, undefined);
   assert.match(validateProjectProfile({ ...draft, zaloGroupUrl: 'https://example.com/team' }).zaloGroupUrl || '', /zalo\.me/);
   assert.match(validateProjectProfile({ ...draft, zaloGroupUrl: 'http://zalo.me/g/campus-circular' }).zaloGroupUrl || '', /HTTPS/);
