@@ -9,6 +9,7 @@ import {
   ClipboardCheck,
 } from 'lucide-react';
 import { classFeatureFlags } from '../../config/classFeatureFlags';
+import { releaseFeatureFlags } from '../../config/releaseFeatureFlags';
 
 const iconMap: Record<string, LucideIcon> = {
   dashboard: LayoutDashboard,
@@ -73,7 +74,7 @@ const Sidebar = ({ mobileOpen, onMobileClose }: SidebarProps) => {
       { path: '/evaluation-grading', icon: 'grading', label: 'Evaluation & Grading' },
     ],
     LECTURER: [
-      // ...(releaseFeatureFlags.roleDashboards ? [{ path: '/lecturer', icon: 'dashboard', label: 'Dashboard' }] : []),
+      ...(releaseFeatureFlags.roleDashboards ? [{ path: '/lecturer', icon: 'dashboard', label: 'Dashboard' }] : []),
       { path: '/lecturer/classes', icon: 'school', label: 'My Classes' },
       { path: '/workspace', icon: 'view_kanban', label: 'Startup Workspace' },
       { path: '/feedback', icon: 'chat', label: 'Send feedback' },

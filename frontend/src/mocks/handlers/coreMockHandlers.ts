@@ -28,6 +28,8 @@ import {
 } from '../mockHelpers.ts';
 
 const emptyCurriculum = (): MockCurriculum => ({ roadmapItems: [], rubrics: [], checkpoints: [], otherAssessments: [] });
+const checkpointDefinitionId = (courseId: string, checkpointNumber: number) =>
+  `00000000-0000-4000-8000-${String(3000 + Number(courseId.slice(-3)) * 10 + checkpointNumber).padStart(12, '0')}`;
 const checkpointEvaluationId = (teamId: string, checkpointNumber: number) =>
   `00000000-0000-4000-8000-${String(140000 + Number(teamId.slice(-3)) * 10 + checkpointNumber).padStart(12, '0')}`;
 
@@ -1267,6 +1269,196 @@ function registerDashboardHandlers(mock: MockAdapter): void {
       ideasByStatus: [{ status: 'DRAFT', count: 4 }, { status: 'VALIDATING', count: 6 }, { status: 'APPROVED', count: 4 }],
       topTeams: state.teams.slice(0, 8).map((team, index) => ({ startupName: team.teamName, team: { name: team.teamName, classId: { classCode: state.classes.find((cls) => cls.id === team.classId)?.classCode || '-' } }, avgScore: 8.7 - index * 0.6 })),
     }, 'Admin dashboard retrieved successfully.');
+  });
+
+  mock.onGet('/dashboard/academic-overview').reply((config) => {
+    const state = getMockState();
+    const params = requestParams(config);
+    const requestedSemesterId = asString(params.semesterId);
+    const requestedCourseId = asString(params.courseId);
+    const requestedClassId = asString(params.classId);
+    const selectedSemester = requestedSemesterId
+      ? state.semesters.find((semester) => semester.id === requestedSemesterId && semester.status !== 'Archived')
+      : state.semesters.find((semester) => semester.status === 'Active');
+    if (!selectedSemester) {
+      return failure(400, 'SEMESTER_NOT_FOUND', requestedSemesterId
+        ? 'The selected semester does not exist or is archived.'
+        : 'No active semester is configured for the academic overview.');
+    }
+
+    const semesterCode = `${selectedSemester.semester}${selectedSemester.year}`;
+    const assignedClasses = state.classes.filter((cls) => {
+      const semester = state.semesters.find((item) => item.id === cls.semesterId);
+      return cls.primaryLecturerId === state.sessionUserId
+        && cls.status !== 'Archived'
+        && semester?.status !== 'Archived';
+    });
+    if (requestedClassId && !assignedClasses.some((cls) => cls.id === requestedClassId)) {
+      return failure(403, 'CLASS_ACCESS_DENIED', 'You do not have access to the selected class.');
+    }
+
+    const semesterClasses = assignedClasses.filter((cls) => cls.semesterId === selectedSemester.id);
+    if (requestedCourseId && !semesterClasses.some((cls) => cls.courseId === requestedCourseId)) {
+      return failure(400, 'VALIDATION_ERROR', 'The selected subject is not available in the selected semester.');
+    }
+    const selectedClass = requestedClassId
+      ? assignedClasses.find((cls) => cls.id === requestedClassId)
+      : undefined;
+    if (selectedClass && (selectedClass.semesterId !== selectedSemester.id
+      || (requestedCourseId && selectedClass.courseId !== requestedCourseId))) {
+      return failure(400, 'VALIDATION_ERROR', 'The selected class does not match the selected semester and subject.');
+    }
+
+    const classes = semesterClasses.filter((cls) =>
+      (!requestedCourseId || cls.courseId === requestedCourseId)
+      && (!requestedClassId || cls.id === requestedClassId));
+    const classIds = new Set(classes.map((cls) => cls.id));
+    const teams = state.teams.filter((team) => classIds.has(team.classId) && team.status === 'Active');
+    const teamIds = new Set(teams.map((team) => team.id));
+    const projects = teams.filter((team) => Boolean(team.projectName?.trim()));
+
+    const submittedTeamCheckpoints = new Set<string>();
+    for (const [key, files] of Object.entries(state.checkpointFiles)) {
+      if (files.length > 0 && teamIds.has(key.split(':')[0])) submittedTeamCheckpoints.add(key);
+    }
+    for (const [key, links] of Object.entries(state.checkpointLinks)) {
+      if (links.length > 0 && teamIds.has(key.split(':')[0])) submittedTeamCheckpoints.add(key);
+    }
+
+    const finalizedEvaluations = teams.reduce((count, team) => {
+      const cls = state.classes.find((item) => item.id === team.classId);
+      const checkpoints = cls ? state.curricula[cls.subjectCode]?.checkpoints ?? [] : [];
+      return count + checkpoints.filter((checkpoint) =>
+        Boolean(state.evaluationPublicationStatuses[checkpointEvaluationId(team.id, checkpoint.number)]))
+        .length;
+    }, 0);
+    const checkpointProgressRows = classes.flatMap((cls) => {
+      const classTeams = teams.filter((team) => team.classId === cls.id);
+      return (state.curricula[cls.subjectCode]?.checkpoints ?? []).map((checkpoint) => ({
+        checkpointId: checkpointDefinitionId(cls.courseId, checkpoint.number),
+        courseCode: cls.subjectCode,
+        checkpointNumber: checkpoint.number,
+        title: checkpoint.title,
+        expectedTeams: classTeams.length,
+        submittedTeams: classTeams.filter((team) =>
+          submittedTeamCheckpoints.has(`${team.id}:${checkpoint.number}`)).length,
+        evaluatedProjects: classTeams.filter((team) =>
+          Boolean(state.evaluationPublicationStatuses[checkpointEvaluationId(team.id, checkpoint.number)])).length,
+        missedDeadlineTeams: 0,
+      }));
+    });
+    const allCheckpointProgress = [...checkpointProgressRows.reduce((groups, item) => {
+      const current = groups.get(item.checkpointId);
+      groups.set(item.checkpointId, current
+        ? {
+            ...current,
+            expectedTeams: current.expectedTeams + item.expectedTeams,
+            submittedTeams: current.submittedTeams + item.submittedTeams,
+            evaluatedProjects: current.evaluatedProjects + item.evaluatedProjects,
+            missedDeadlineTeams: current.missedDeadlineTeams + item.missedDeadlineTeams,
+          }
+        : item);
+      return groups;
+    }, new Map<string, (typeof checkpointProgressRows)[number]>()).values()];
+    const scopedSchedules = Object.values(state.checkpointSchedules)
+      .filter((schedule) => classIds.has(schedule.classId) && Number.isFinite(Date.parse(schedule.endDateUtc)));
+    const currentTime = Date.now();
+    const nearestSchedule = scopedSchedules
+      .filter((schedule) => Date.parse(schedule.endDateUtc) >= currentTime)
+      .sort((left, right) => Date.parse(left.endDateUtc) - Date.parse(right.endDateUtc))[0]
+      ?? scopedSchedules
+        .filter((schedule) => Date.parse(schedule.endDateUtc) < currentTime)
+        .sort((left, right) => Date.parse(right.endDateUtc) - Date.parse(left.endDateUtc))[0];
+    const checkpointProgress = nearestSchedule
+      ? allCheckpointProgress.filter((item) => item.checkpointId === nearestSchedule.checkpointId)
+      : [];
+    const classBreakdown = classes.map((cls) => {
+      const classTeams = teams.filter((team) => team.classId === cls.id);
+      const classTeamIds = new Set(classTeams.map((team) => team.id));
+      return {
+        classId: cls.id,
+        classCode: cls.classCode,
+        teams: classTeams.length,
+        projects: classTeams.filter((team) => Boolean(team.projectName?.trim())).length,
+        submissions: [...submittedTeamCheckpoints].filter((key) => classTeamIds.has(key.split(':')[0])).length,
+        evaluations: classTeams.reduce((count, team) => {
+          const checkpoints = state.curricula[cls.subjectCode]?.checkpoints ?? [];
+          return count + checkpoints.filter((checkpoint) =>
+            Boolean(state.evaluationPublicationStatuses[checkpointEvaluationId(team.id, checkpoint.number)]))
+            .length;
+        }, 0),
+        potentialProjects: 0,
+      };
+    });
+    const pendingEvaluations = [...submittedTeamCheckpoints].filter((key) => {
+      const separator = key.lastIndexOf(':');
+      const teamId = key.slice(0, separator);
+      const checkpointNumber = Number(key.slice(separator + 1));
+      return !state.evaluationPublicationStatuses[checkpointEvaluationId(teamId, checkpointNumber)];
+    }).length;
+    const currentWeek = new Date();
+    currentWeek.setUTCHours(0, 0, 0, 0);
+    currentWeek.setUTCDate(currentWeek.getUTCDate() - ((currentWeek.getUTCDay() + 6) % 7));
+    const activityTrend = Array.from({ length: 8 }, (_, index) => ({
+      weekStartUtc: new Date(currentWeek.getTime() - (7 - index) * 7 * 86_400_000).toISOString(),
+      submissions: 0,
+      evaluations: 0,
+    }));
+
+    return ok({
+      scope: {
+        semesterId: selectedSemester.id,
+        semesterCode,
+        semesterName: `${selectedSemester.semester} ${selectedSemester.year}`,
+        courseId: requestedCourseId || null,
+        subjectCode: requestedCourseId ? semesterClasses.find((cls) => cls.courseId === requestedCourseId)?.subjectCode ?? null : null,
+        subjectName: requestedCourseId ? semesterClasses.find((cls) => cls.courseId === requestedCourseId)?.subjectName ?? null : null,
+        classId: requestedClassId || null,
+        classCode: selectedClass?.classCode ?? null,
+      },
+      filterOptions: {
+        semesters: state.semesters
+          .filter((semester) => semester.status !== 'Archived'
+            && (semester.id === selectedSemester.id || assignedClasses.some((cls) => cls.semesterId === semester.id)))
+          .sort((left, right) => right.year - left.year || left.semester.localeCompare(right.semester))
+          .map((semester) => ({
+            id: semester.id,
+            code: `${semester.semester}${semester.year}`,
+            name: `${semester.semester} ${semester.year}`,
+            year: semester.year,
+            isActive: semester.status === 'Active',
+          })),
+        subjects: [...new Map(semesterClasses.map((cls) => [cls.courseId, {
+          id: cls.courseId,
+          code: cls.subjectCode,
+          name: cls.subjectName,
+        }])).values()].sort((left, right) => left.code.localeCompare(right.code)),
+        classes: semesterClasses
+          .filter((cls) => !requestedCourseId || cls.courseId === requestedCourseId)
+          .sort((left, right) => left.classCode.localeCompare(right.classCode))
+          .map((cls) => ({ id: cls.id, code: cls.classCode, courseId: cls.courseId })),
+      },
+      metrics: {
+        totalClasses: classes.length,
+        totalTeams: teams.length,
+        totalProjects: projects.length,
+        totalSubmissions: submittedTeamCheckpoints.size,
+        totalEvaluations: finalizedEvaluations,
+        totalPotentialProjects: 0,
+      },
+      attention: {
+        missedDeadlines: 0,
+        pendingEvaluations,
+      },
+      activityTrend,
+      checkpointProgress,
+      classes: classBreakdown,
+      topTeams: [],
+      lastUpdatedAtUtc: new Date().toISOString(),
+      hasAssignedClasses: assignedClasses.length > 0,
+      hasMatchingClasses: classes.length > 0,
+      hasClasses: classes.length > 0,
+    }, 'Academic overview retrieved successfully.');
   });
 
   mock.onGet('/dashboard/lecturer').reply(() => {
