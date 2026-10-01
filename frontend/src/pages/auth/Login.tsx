@@ -94,7 +94,7 @@ const Login: React.FC = () => {
   const redirectByRole = (roles: string[]) => {
     const normalizedRoles = roles.map(normalizeRole);
     if (normalizedRoles.includes('ADMIN'))         navigate('/admin');
-    else if (normalizedRoles.includes('LECTURER')) navigate('/lecturer/classes');
+    else if (normalizedRoles.includes('LECTURER')) navigate('/lecturer');
     else if (normalizedRoles.includes('MENTOR'))   navigate('/mentor');
     else if (normalizedRoles.includes('STUDENT')) {
       navigate(classFeatureFlags.studentSelfService ? '/student/classes' : '/student/workspace', { replace: true });
