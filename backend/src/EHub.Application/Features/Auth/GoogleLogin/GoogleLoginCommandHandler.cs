@@ -96,18 +96,20 @@ public class GoogleLoginCommandHandler : IGoogleLoginCommandHandler
             if (role is null)
                 return Result.Failure<AuthSessionResult>(AuthErrors.InvalidRole);
 
+            var student = await _studentRepository.GetUnlinkedByEmailAsync(normalizedEmail, cancellationToken);
             user = new User
             {
                 Email = normalizedEmail,
                 NormalizedEmail = normalizedEmail,
-                FullName = string.IsNullOrWhiteSpace(googleUser.FullName) ? normalizedEmail : googleUser.FullName.Trim(),
+                FullName = !string.IsNullOrWhiteSpace(student?.FullName)
+                    ? student.FullName
+                    : string.IsNullOrWhiteSpace(googleUser.FullName) ? normalizedEmail : googleUser.FullName.Trim(),
                 IsEmailVerified = true,
                 Status = UserStatus.Active
             };
             await _userRepository.AddAsync(user, cancellationToken);
             await _userRoleRepository.AddAsync(new UserRole { UserId = user.Id, RoleId = role.Id }, cancellationToken);
 
-            var student = await _studentRepository.GetUnlinkedByEmailAsync(normalizedEmail, cancellationToken);
             if (student is null)
             {
                 await _studentRepository.AddAsync(new Student
@@ -173,6 +175,17 @@ public class GoogleLoginCommandHandler : IGoogleLoginCommandHandler
         var roles = isNewUser ? new[] { SystemRoles.Student } : user.UserRoles
             .Select(userRole => userRole.Role.Name)
             .ToArray();
+
+        if (!isNewUser && roles.Contains(SystemRoles.Student))
+        {
+            var student = await _studentRepository.GetByUserIdAsync(user.Id, cancellationToken);
+            if (!string.IsNullOrWhiteSpace(student?.FullName) &&
+                !string.Equals(user.FullName, student.FullName, StringComparison.Ordinal))
+            {
+                user.FullName = student.FullName;
+                _userRepository.Update(user);
+            }
+        }
 
         // 6. Generate and save tokens
         var accessToken = _jwtTokenService.GenerateAccessToken(user, roles);

@@ -101,10 +101,15 @@ public sealed class ExportClassRosterQueryHandler : IExportClassRosterQueryHandl
             .ThenBy(cs => cs.Student.FullName)
             .ToListAsync(cancellationToken);
 
+        var registeredMajorByEmail = await RegisteredStudentMajorResolver.LoadByEmailAsync(
+            _context, roster.Select(enrollment => enrollment.Student.Email), cancellationToken);
+        var mentorsByTeam = await ClassRosterMentorResolver.LoadByTeamAsync(
+            _context, [classId], cancellationToken);
+
         var bytes = ClassRosterExportWorkbookBuilder.Build(
         [
-            new ClassRosterExportSection(targetClass, roster)
-        ]);
+            new ClassRosterExportSection(targetClass, roster, mentorsByTeam)
+        ], registeredMajorByEmail);
 
         var scopeSuffix = string.Equals(normalizedScope, "Active", StringComparison.OrdinalIgnoreCase)
             ? "active"

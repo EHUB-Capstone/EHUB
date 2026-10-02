@@ -60,6 +60,16 @@ public static class ErrorCodes
     public const string LecturerImportSessionAlreadyProcessing = "LECTURER_IMPORT_SESSION_ALREADY_PROCESSING";
     public const string LecturerImportNoActionableRows = "LECTURER_IMPORT_NO_ACTIONABLE_ROWS";
     public const string LecturerImportConflict = "LECTURER_IMPORT_CONFLICT";
+    public const string MentorImportFileInvalid = "MENTOR_IMPORT_FILE_INVALID";
+    public const string MentorImportSessionInvalid = "MENTOR_IMPORT_SESSION_INVALID";
+    public const string MentorImportSessionExpired = "MENTOR_IMPORT_SESSION_EXPIRED";
+    public const string MentorImportSessionAlreadyProcessing = "MENTOR_IMPORT_SESSION_ALREADY_PROCESSING";
+    public const string MentorImportConflict = "MENTOR_IMPORT_CONFLICT";
+    public const string MentorAllocationInvalid = "MENTOR_ALLOCATION_INVALID";
+    public const string MentorAllocationSessionInvalid = "MENTOR_ALLOCATION_SESSION_INVALID";
+    public const string MentorAllocationSessionExpired = "MENTOR_ALLOCATION_SESSION_EXPIRED";
+    public const string MentorAllocationSessionAlreadyProcessing = "MENTOR_ALLOCATION_SESSION_ALREADY_PROCESSING";
+    public const string MentorAllocationConflict = "MENTOR_ALLOCATION_CONFLICT";
 
     // Class management error codes
     public const string ClassAccessDenied = "CLASS_ACCESS_DENIED";
@@ -122,6 +132,10 @@ public static class ErrorCodes
     public const string TeamProposalInvalid = "TEAM_PROPOSAL_INVALID";
     public const string TeamProposalStateInvalid = "TEAM_PROPOSAL_STATE_INVALID";
     public const string TeamProposalMembershipConflict = "TEAM_PROPOSAL_MEMBERSHIP_CONFLICT";
+    public const string TeamFormationRequired = "TEAM_FORMATION_REQUIRED";
+    public const string TeamFormationNotFound = "TEAM_FORMATION_NOT_FOUND";
+    public const string TeamFormationStateInvalid = "TEAM_FORMATION_STATE_INVALID";
+    public const string TeamFormationReservationConflict = "TEAM_FORMATION_RESERVATION_CONFLICT";
     public const string TeamApprovalConflict = "TEAM_APPROVAL_CONFLICT";
     public const string MentorNotAvailable = "MENTOR_NOT_AVAILABLE";
     public const string MentorCapacityReached = "MENTOR_CAPACITY_REACHED";
@@ -144,6 +158,12 @@ public static class ErrorCodes
     public const string WorkspaceTagDuplicated = "WORKSPACE_TAG_DUPLICATED";
     public const string WorkspaceConcurrencyConflict = "WORKSPACE_CONCURRENCY_CONFLICT";
     public const string WorkspaceCheckpointNotOpen = "WORKSPACE_CHECKPOINT_NOT_OPEN";
+    public const string WorkspaceFilePreviewUnsupported = "WORKSPACE_FILE_PREVIEW_UNSUPPORTED";
+    public const string WorkspaceFilePreviewConversionFailed = "WORKSPACE_FILE_PREVIEW_CONVERSION_FAILED";
+    public const string WorkspaceFilePreviewUnavailable = "WORKSPACE_FILE_PREVIEW_UNAVAILABLE";
+    public const string WorkspaceUploadSessionExpired = "WORKSPACE_UPLOAD_SESSION_EXPIRED";
+    public const string WorkspaceUploadObjectMissing = "WORKSPACE_UPLOAD_OBJECT_MISSING";
+    public const string WorkspaceUploadTooManyPending = "WORKSPACE_UPLOAD_TOO_MANY_PENDING";
     public const string WeeklyTaskNotFound = "WEEKLY_TASK_NOT_FOUND";
     public const string WeeklyTaskDuplicated = "WEEKLY_TASK_DUPLICATED";
     public const string ShortcutNotFound = "SHORTCUT_NOT_FOUND";

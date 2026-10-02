@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { adminApprovalApi } from '../src/api/adminApprovalApi.ts';
 import axiosClient from '../src/api/axiosClient.ts';
+import { checkpointApi } from '../src/api/checkpointApi.ts';
 import { enableApiMocks } from '../src/mocks/mockApi.ts';
 import { getMockState, resetMockState } from '../src/mocks/mockHelpers.ts';
 import { getApprovalStats, registrationToApprovalRequest } from '../src/utils/accountApproval.ts';
@@ -9,6 +10,66 @@ import { generateCriterionKey, resolveCriterionKey } from '../src/utils/rubricKe
 
 resetMockState();
 enableApiMocks();
+
+test('submission analytics mock counts files and links, includes teams without workspaces, and uses the current deadline', async () => {
+  resetMockState();
+  await axiosClient.post('/auth/login', { email: 'giang.lecturer@ehub.local', password: 'Mock123!' });
+  const overview = await axiosClient.get('/lecturer/checkpoints', { params: { semester: 'FA', year: 2026 } });
+  const cls = overview.data.classes[0];
+  const definition = overview.data.checkpoints[0];
+  const state = getMockState();
+  const teams = state.teams.filter(team => team.classId === cls.id && team.status === 'Active');
+  assert.ok(teams.length >= 2);
+  for (const team of teams) {
+    state.checkpointFiles[`${team.id}:${definition.number}`] = [];
+    state.checkpointLinks[`${team.id}:${definition.number}`] = [];
+  }
+  const uploadedAt = new Date(Date.now() - 2 * 86400000).toISOString();
+  const file = { _id: 'analytics-file-1', originalName: 'submission.pdf', fileType: 'pdf', fileSize: 100,
+    uploadedAt, uploadedBy: { _id: state.sessionUserId || '', name: 'Mock submitter' } };
+  state.checkpointFiles[`${teams[0].id}:${definition.number}`] = [file, { ...file, _id: 'analytics-file-2' }];
+  state.checkpointSchedules[`${cls.id}:${definition.id}`] = {
+    id: 'analytics-schedule', classId: cls.id, checkpointId: definition.id, startDateUtc: uploadedAt,
+    endDateUtc: new Date(Date.now() - 86400000).toISOString(), reopenCount: 0,
+  };
+  const params = { semester: 'FA', year: 2026, classId: cls.id, checkpointNumber: definition.number };
+  const response = await axiosClient.get('/dashboard/submission-analytics', { params });
+  assert.equal(response.data.expectedCount, teams.length);
+  assert.equal(response.data.submittedCount, 1);
+  assert.equal(response.data.notSubmittedCount, teams.length - 1);
+  assert.equal(response.data.missingCount, teams.length - 1);
+  assert.ok(response.data.items.some((item: { hasWorkspace: boolean }) => !item.hasWorkspace));
+  const links = [{ _id: 'analytics-link', versionNumber: 1, name: 'Submission', url: 'https://example.test/submission',
+    submittedAt: uploadedAt, submittedBy: { _id: state.sessionUserId || '', name: 'Mock submitter' } }];
+  state.checkpointFiles[`${teams[0].id}:${definition.number}`] = [];
+  state.checkpointLinks[`${teams[0].id}:${definition.number}`] = links;
+  const linkOnly = await axiosClient.get('/dashboard/submission-analytics', { params: { ...params, teamId: teams[0].id } });
+  assert.equal(linkOnly.data.expectedCount, 1);
+  assert.equal(linkOnly.data.submittedCount, 1);
+  state.checkpointSchedules[`${cls.id}:${definition.id}`].endDateUtc = new Date(Date.now() + 86400000).toISOString();
+  const reopened = await axiosClient.get('/dashboard/submission-analytics', { params });
+  assert.equal(reopened.data.missingCount, 0);
+  assert.equal(reopened.data.notSubmittedCount, teams.length - 1);
+  const otherYear = await axiosClient.get('/dashboard/submission-analytics', { params: { ...params, year: 2025 } });
+  assert.equal(otherYear.data.expectedCount, 0);
+  resetMockState();
+});
+
+test('submission analytics mock enforces authentication, roles, validation, and lecturer resource access', async () => {
+  resetMockState();
+  const hasStatus = (status: number) => (error: unknown) => (error as { response?: { status?: number } }).response?.status === status;
+  await assert.rejects(axiosClient.get('/dashboard/submission-analytics', { _retry: true }), hasStatus(401));
+  await axiosClient.post('/auth/login', { email: 'se200001@fpt.edu.vn', password: 'Mock123!' });
+  await assert.rejects(axiosClient.get('/dashboard/submission-analytics'), hasStatus(403));
+  await axiosClient.post('/auth/login', { email: 'giang.lecturer@ehub.local', password: 'Mock123!' });
+  await assert.rejects(axiosClient.get('/dashboard/submission-analytics', { params: { checkpointNumber: 0 } }), hasStatus(400));
+  await assert.rejects(axiosClient.get('/dashboard/submission-analytics', { params: { classId: 'unknown-class' } }), hasStatus(403));
+  await assert.rejects(axiosClient.get('/dashboard/submission-analytics', { params: { teamId: 'unknown-team' } }), hasStatus(403));
+  await axiosClient.post('/auth/login', { email: 'admin@ehub.local', password: 'Mock123!' });
+  const admin = await axiosClient.get('/dashboard/submission-analytics');
+  assert.ok(admin.data.expectedCount > 0);
+  resetMockState();
+});
 
 test('criterion key follows label changes until the key is manually customized', () => {
   assert.equal(generateCriterionKey('Problem clarity'), 'problemClarity');
@@ -77,6 +138,64 @@ test('admin class export mock rejects a selected class outside the requested sem
       return response?.status === 400 && response.data?.code === 'VALIDATION_ERROR';
     },
   );
+});
+
+test('workspace active semester is available to mentors but not students or anonymous users', async () => {
+  resetMockState();
+  // Inspect the endpoint's 401 directly; the shared browser client otherwise tries to refresh a session.
+  await assert.rejects(axiosClient.get('/workspace/active-semester', { _retry: true }),
+    (error: unknown) => (error as { response?: { status?: number } }).response?.status === 401);
+
+  await axiosClient.post('/auth/login', { email: 'khoa.mentor@ehub.local', password: 'Mock123!' });
+  const response = await axiosClient.get('/workspace/active-semester');
+  assert.equal(response.data.currentSemester?.id, getMockState().semesters.find(item => item.status === 'Active')?.id);
+
+  await axiosClient.post('/auth/login', { email: 'se200001@fpt.edu.vn', password: 'Mock123!' });
+  await assert.rejects(axiosClient.get('/workspace/active-semester'),
+    (error: unknown) => (error as { response?: { status?: number } }).response?.status === 403);
+});
+
+test('mock official major synchronization updates class enrollment and profile without team changes', async () => {
+  resetMockState();
+  await axiosClient.post('/auth/login', { email: 'admin@ehub.local', password: 'Mock123!' });
+  const cls = getMockState().classes.find((item) =>
+    (getMockState().rosters[item.id] || []).some((student) => student.enrollmentStatus === 'Active'));
+  assert.ok(cls);
+  const beforeTeams = getMockState().teams.filter((team) => team.classId === cls.id).length;
+  const formData = new FormData();
+  formData.append('file', new Blob(['mock']), 'official-majors.xlsx');
+
+  const beforeMajors = (getMockState().rosters[cls.id] || []).map((student) => ({
+    major: student.majorCode,
+    profileMajor: student.profileMajorCode,
+    status: student.majorVerificationStatus,
+  }));
+  const preview = await axiosClient.post(`/classes/${cls.id}/major-verification/preview`, formData);
+  assert.ok(preview.data.matched.length + preview.data.mismatched.length > 0);
+  assert.ok(preview.data.matched[0]?.majorInProfile !== undefined);
+  assert.deepEqual((getMockState().rosters[cls.id] || []).map((student) => ({
+    major: student.majorCode,
+    profileMajor: student.profileMajorCode,
+    status: student.majorVerificationStatus,
+  })), beforeMajors);
+
+  const response = await axiosClient.post(`/classes/${cls.id}/major-verification/synchronize`, formData);
+  assert.ok(response.data.matched.length > 0);
+  assert.equal(getMockState().teams.filter((team) => team.classId === cls.id).length, beforeTeams);
+  assert.ok((getMockState().rosters[cls.id] || []).every((student) =>
+    student.enrollmentStatus !== 'Active' ||
+    (student.majorCode === student.profileMajorCode && student.majorVerificationStatus === 'Matched')));
+
+  const linkedStudent = (getMockState().rosters[cls.id] || []).find((student) =>
+    student.enrollmentStatus === 'Active' && student.userId);
+  assert.ok(linkedStudent);
+  const studentUser = getMockState().users.find((user) => user.id === linkedStudent.userId);
+  assert.ok(studentUser);
+  await axiosClient.post('/auth/login', { email: studentUser.email, password: 'Mock123!' });
+  const studentDetail = await axiosClient.get(`/classes/my-class-detail/${cls.slug}`);
+  assert.ok(studentDetail.data.students.length > 0);
+  assert.ok(studentDetail.data.students.every((student: { majorVerificationStatus: string }) =>
+    student.majorVerificationStatus === 'Matched'));
 });
 
 test('managed users include class and group data from the active semester', async () => {
@@ -771,6 +890,19 @@ test('mock student self-service separates current classes from completed history
     cls.classStatus === 'Archived' && cls.enrollmentStatus === 'Completed'));
 });
 
+test('mock student class detail resolves the canonical slug before loading its roster', async () => {
+  resetMockState();
+  await axiosClient.post('/auth/login', { email: 'se200001@fpt.edu.vn', password: 'Mock123!' });
+  const targetClass = getMockState().classes.find((cls) => cls.slug === 'fa2026-exe101-1');
+  assert.ok(targetClass);
+
+  const detail = await axiosClient.get(`/classes/my-class-detail/${targetClass.slug}`);
+  assert.equal(detail.data.class.id, targetClass.id);
+  assert.ok(detail.data.students.length > 0);
+  assert.ok(detail.data.students.some((student: { email: string; canEditMajor: boolean }) =>
+    student.email === 'se200001@fpt.edu.vn' && student.canEditMajor));
+});
+
 test('mock team management supports proposal creation, update, duplicate prevention, project detail and delete', async () => {
   resetMockState();
   await axiosClient.post('/auth/login', { email: 'admin@ehub.local', password: 'Mock123!' });
@@ -824,6 +956,25 @@ test('mock team management supports proposal creation, update, duplicate prevent
     },
   );
 
+  state.semesterStaffAssignments.push({
+    id: 'test-second-semester-mentor',
+    semesterId: targetClass.semesterId,
+    userId: outsideSemesterMentor.id,
+    role: 'MENTOR',
+    status: 'ACTIVE',
+  });
+  await assert.rejects(
+    axiosClient.post(`/teams/${createdTeam.id}/mentor-assignments`, {
+      mentorProfileId: outsideSemesterMentor.id,
+    }),
+    (error: unknown) => {
+      const response = (error as { response?: { status?: number; data?: { code?: string } } }).response;
+      return response?.status === 409 && response.data?.code === 'MENTOR_ASSIGNMENT_CONFLICT';
+    },
+  );
+  assert.equal(createdTeam.currentMentorAssignments.length, 1);
+  assert.equal(createdTeam.currentMentorAssignments[0].mentor.mentorProfileId, mentorId);
+
   const updated = await axiosClient.put(`/teams/${createdTeam.id}/members`, {
     teamName: 'Launch Lab Updated',
     description: 'Latest team information.',
@@ -867,7 +1018,7 @@ test('mock team management supports proposal creation, update, duplicate prevent
   assert.ok(roster.every((student) => student.teamId === null));
 });
 
-test('mock student creates a team immediately while its project proposal awaits review', async () => {
+test('mock student formation creates a team only after every invited member accepts', async () => {
   resetMockState();
   const state = getMockState();
   const targetClass = state.classes.find((item) => item.status === 'Draft');
@@ -878,47 +1029,109 @@ test('mock student creates a team immediately while its project proposal awaits 
   assert.ok(proposingStudent);
 
   await axiosClient.post('/auth/login', { email: proposingStudent.email, password: 'Mock123!' });
+  roster[0].majorCode = 'UNDECLARED';
   const memberIds = roster.map((student) => student.studentId);
-  const response = await axiosClient.post(`/classes/${targetClass.id}/teams/student-proposal`, {
-    studentIds: memberIds,
+  const response = await axiosClient.post(`/classes/${targetClass.id}/team-formations`, {
+    memberStudentIds: memberIds,
     leaderStudentId: memberIds[1],
-    groupName: 'Student Venture Team',
-    projectName: 'Student Venture Project',
-    isProjectNameSameAsGroup: false,
-    description: 'A balanced student-created proposal for lecturer review.',
+    teamName: 'Student Venture Team',
   });
 
   assert.equal(response.data.status, 'Pending');
-  assert.equal(response.data.members.length, 4);
-  assert.equal(response.data.members.find((member: { isLeader: boolean }) => member.isLeader)?.studentId, memberIds[1]);
-  assert.ok(state.proposals.some((proposal) => proposal.id === response.data.id));
-  const createdTeam = state.teams.find((team) => team.id === response.data.approvedTeamId);
-  assert.ok(createdTeam);
-  assert.equal(createdTeam.projectName, null);
-  assert.ok(roster.every((student) => student.teamId === createdTeam.id));
+  assert.equal(response.data.invitations.length, 4);
+  assert.equal(response.data.invitations.find((member: { isProposedLeader: boolean }) => member.isProposedLeader)?.studentId, memberIds[1]);
+  assert.equal(state.teams.some((team) => team.teamName === 'Student Venture Team'), false);
 
-  const workspace = await axiosClient.get(`/workspace/teams/${createdTeam.id}`);
-  assert.equal(workspace.data.team.teamName, 'Student Venture Team');
-  assert.equal(workspace.data.proposal.projectName, 'Student Venture Project');
-  assert.equal(workspace.data.proposal.projectDescription, 'A balanced student-created proposal for lecturer review.');
+  const classDetail = await axiosClient.get(`/classes/my-class-detail/${targetClass.slug}`);
+  assert.ok(classDetail.data.students.every((student: { hasPendingTeamInvitation: boolean }) =>
+    student.hasPendingTeamInvitation));
 
   await assert.rejects(
-    axiosClient.post(`/classes/${targetClass.id}/teams/student-proposal`, {
-      studentIds: memberIds,
+    axiosClient.post(`/classes/${targetClass.id}/team-formations`, {
+      memberStudentIds: memberIds,
       leaderStudentId: memberIds[0],
-      groupName: 'Second Open Proposal',
-      projectName: 'Second Open Project',
-      isProjectNameSameAsGroup: false,
-      description: 'This request must be blocked because the members are reserved.',
+      teamName: 'Second Open Formation',
     }),
     (error: unknown) => {
       const apiError = (error as { response?: { status?: number; data?: { code?: string } } }).response;
-      return apiError?.status === 409 && apiError.data?.code === 'TEAM_MEMBERSHIP_CONFLICT';
+      return apiError?.status === 409 && apiError.data?.code === 'TEAM_FORMATION_RESERVATION_CONFLICT';
     },
   );
+
+  for (const memberId of memberIds.slice(1)) {
+    const member = state.users.find((user) => user.id === memberId);
+    assert.ok(member);
+    await axiosClient.post('/auth/login', { email: member.email, password: 'Mock123!' });
+    const invitations = await axiosClient.get('/team-formations/invitations/pending');
+    assert.ok(invitations.data.some((formation: { id: string }) => formation.id === response.data.id));
+    await axiosClient.post(`/team-formations/${response.data.id}/accept`);
+    if (memberId !== memberIds.at(-1)) assert.equal(state.teams.some((team) => team.teamName === 'Student Venture Team'), false);
+  }
+
+  const createdTeam = state.teams.find((team) => team.teamName === 'Student Venture Team');
+  assert.ok(createdTeam);
+  assert.equal(createdTeam.projectName, null);
+  assert.equal(createdTeam.leaderId, memberIds[1]);
+  assert.ok(roster.every((student) => student.teamId === createdTeam.id));
+  assert.equal(state.formations.find((formation) => formation.id === response.data.id)?.status, 'Completed');
 });
 
-test('mock class managers create the same pending project proposal on behalf of the team leader', async () => {
+test('mock class managers create active teams directly without formations or proposals', async () => {
+  for (const role of ['ADMIN', 'LECTURER'] as const) {
+    resetMockState();
+    const state = getMockState();
+    const targetClass = state.classes.find((item) => item.status === 'Draft');
+    assert.ok(targetClass);
+    const roster = state.rosters[targetClass.id];
+    const actor = state.users.find((user) => user.role === role);
+    assert.ok(actor);
+    if (role === 'LECTURER') targetClass.primaryLecturerId = actor.id;
+
+    await axiosClient.post('/auth/login', { email: actor.email, password: 'Mock123!' });
+    const memberIds = roster.map((student) => student.studentId);
+    const leaderId = memberIds[1];
+    const proposalCount = state.proposals.length;
+    const formationCount = state.formations.length;
+    const response = await axiosClient.post(`/classes/${targetClass.id}/teams`, {
+      teamName: `Direct Manager ${role}`,
+      memberStudentIds: memberIds,
+      leaderStudentId: leaderId,
+    });
+
+    assert.equal(response.data.status, 'Active');
+    assert.equal(response.data.leaderId, leaderId);
+    assert.equal(response.data.members.length, 4);
+    assert.equal(state.proposals.length, proposalCount);
+    assert.equal(state.formations.length, formationCount);
+    assert.ok(roster.every((student) => student.teamId === response.data.id));
+  }
+});
+
+test('mock direct class-manager team endpoint rejects student accounts', async () => {
+  resetMockState();
+  const state = getMockState();
+  const targetClass = state.classes.find((item) => item.status === 'Draft');
+  assert.ok(targetClass);
+  const roster = state.rosters[targetClass.id];
+  const student = state.users.find((user) => user.id === roster[0].userId);
+  assert.ok(student);
+  await axiosClient.post('/auth/login', { email: student.email, password: 'Mock123!' });
+
+  await assert.rejects(
+    axiosClient.post(`/classes/${targetClass.id}/teams`, {
+      teamName: 'Student Bypass Attempt',
+      memberStudentIds: roster.map((item) => item.studentId),
+      leaderStudentId: roster[0].studentId,
+    }),
+    (error: unknown) => {
+      const response = (error as { response?: { status?: number; data?: { code?: string } } }).response;
+      return response?.status === 403 && response.data?.code === 'CLASS_ACCESS_DENIED';
+    },
+  );
+  assert.equal(state.teams.some((team) => team.teamName === 'Student Bypass Attempt'), false);
+});
+
+test('mock legacy class-manager proposal endpoint still creates its pending project proposal', async () => {
   for (const role of ['ADMIN', 'LECTURER'] as const) {
     resetMockState();
     const state = getMockState();
@@ -964,22 +1177,29 @@ test('mock team leader creates one project workspace linked to its academic cont
     axiosClient.post(`/workspace/teams/${team.id}`, {
       projectName: 'Energy Insight Workspace',
       description: 'A project that helps small offices understand their energy usage.',
+      zaloGroupUrl: 'https://zalo.me/g/energy-insight',
       startupIndustryIds: [],
     }),
     (error: unknown) => (error as { response?: { status?: number; data?: { code?: string } } }).response?.data?.code === 'WORKSPACE_VALIDATION_ERROR',
   );
 
   const created = await axiosClient.post(`/workspace/teams/${team.id}`, {
+    teamName: 'Energy Insight Team',
     projectName: 'Energy Insight Workspace',
     description: 'A project that helps small offices understand their energy usage.',
+    zaloGroupUrl: 'https://zalo.me/g/energy-insight',
     startupIndustryIds: state.startupIndustries.filter((industry) => industry.status === 'active').slice(0, 2).map((industry) => industry.id),
   });
   const cls = state.classes.find((item) => item.id === team.classId);
   assert.equal(created.data.teamId, team.id);
+  assert.equal(team.teamName, 'Energy Insight Team');
   assert.equal(created.data.classId, team.classId);
   assert.equal(created.data.subjectId, cls?.courseId);
   assert.equal(created.data.startupIndustries.length, 2);
+  assert.equal(created.data.zaloGroupUrl, 'https://zalo.me/g/energy-insight');
   assert.equal(created.data.semesterId, cls?.semesterId);
+  const createdWorkspace = await axiosClient.get(`/workspace/teams/${team.id}`);
+  assert.equal(createdWorkspace.data.project.zaloGroupUrl, 'https://zalo.me/g/energy-insight');
   const submittedDirection = await axiosClient.get(`/teams/${team.id}/project-direction`);
   assert.equal(submittedDirection.data.status, 'Submitted');
   assert.equal(submittedDirection.data.title, 'Energy Insight Workspace');
@@ -1003,8 +1223,16 @@ test('mock team leader creates one project workspace linked to its academic cont
   assert.equal(revisedDirection.data.status, 'Draft');
   assert.deepEqual(revisedDirection.data.startupIndustries, [created.data.startupIndustries[0]]);
   assert.deepEqual(team.startupIndustries, [created.data.startupIndustries[0]]);
+  const resubmittedDirection = await axiosClient.post(`/teams/${team.id}/project-direction/submit`, {
+    rowVersion: revisedDirection.data.rowVersion,
+  });
+  const initialApproval = await axiosClient.post(`/teams/${team.id}/project-direction/review`, {
+    decision: 'Approved',
+    rowVersion: resubmittedDirection.data.rowVersion,
+  });
+  assert.equal(initialApproval.data.status, 'Approved');
 
-  await axiosClient.put(`/workspace/teams/${team.id}/profile`, {
+  const profileUpdate = await axiosClient.put(`/workspace/teams/${team.id}/profile`, {
     projectName: 'Energy Insight Platform',
     description: 'The latest project profile helps small offices reduce their energy usage.',
     problem: 'Small offices cannot clearly identify the equipment driving energy waste.',
@@ -1013,6 +1241,17 @@ test('mock team leader creates one project workspace linked to its academic cont
     zaloGroupUrl: 'https://zalo.me/g/greenbyte-team',
     keywords: ['energy', 'efficiency'],
   });
+  assert.equal(profileUpdate.data.projectName, 'Energy Insight Workspace');
+  const pendingProfileChange = await axiosClient.get(`/teams/${team.id}/project-direction`);
+  assert.equal(pendingProfileChange.data.status, 'Submitted');
+  assert.equal(pendingProfileChange.data.isProjectProfileChangeProposal, true);
+  assert.equal(pendingProfileChange.data.currentTitle, 'Energy Insight Workspace');
+  assert.equal(pendingProfileChange.data.title, 'Energy Insight Platform');
+  const profileChangeApproval = await axiosClient.post(`/teams/${team.id}/project-direction/review`, {
+    decision: 'Approved',
+    rowVersion: pendingProfileChange.data.rowVersion,
+  });
+  assert.equal(profileChangeApproval.data.status, 'Approved');
   const latest = await axiosClient.get(`/workspace/teams/${team.id}`);
   assert.equal(latest.data.project.projectName, 'Energy Insight Platform');
   assert.equal(latest.data.project.targetUsers, 'Small office owners and facility managers');
@@ -1020,13 +1259,14 @@ test('mock team leader creates one project workspace linked to its academic cont
   assert.equal(latest.data.class.subjectCode, cls?.subjectCode);
   assert.equal(latest.data.class.semesterCode, cls?.semesterCode);
   assert.ok(latest.data.members.length > 0);
-  assert.equal(latest.data.activities[0].action, 'PROJECT_PROFILE_UPDATED');
+  assert.equal(latest.data.activities[0].action, 'PROJECT_PROFILE_CHANGE_APPROVED');
   assert.ok(latest.data.activities[0].changedFields.includes('projectName'));
 
   await assert.rejects(
     axiosClient.post(`/workspace/teams/${team.id}`, {
       projectName: 'Duplicate Workspace',
       description: 'This second project workspace must be rejected by the API.',
+      zaloGroupUrl: 'https://zalo.me/g/duplicate-workspace',
       startupIndustryIds: [state.startupIndustries.find((industry) => industry.status === 'active')!.id],
     }),
     (error: unknown) => (error as { response?: { status?: number; data?: { code?: string } } }).response?.data?.code === 'WORKSPACE_ALREADY_EXISTS',
@@ -1063,6 +1303,7 @@ test('mock student assignment keeps class, team and user detail consistent', asy
     && !state.rosters[activeClass.id].some((candidate) => candidate.studentId === student.studentId));
   assert.ok(draftOnlyStudent);
   assert.ok(otherDraftOnlyStudent);
+  draftOnlyStudent.majorCode = 'UNDECLARED';
 
   await axiosClient.post(`/classes/${activeClass.id}/students/assign`, {
     studentIds: [draftOnlyStudent.studentId],
@@ -1108,6 +1349,9 @@ test('mock semester lifecycle returns typed records and backend-style blockers',
   const preview = await axiosClient.get(`/subjects/semesters/${current.data.currentSemester.id}/completion-preview`);
   assert.ok(preview.data.blockers.length > 0);
   assert.ok(preview.data.activeClassCount > 0);
+  assert.ok(preview.data.blockingClasses.length > 0);
+  assert.ok(preview.data.blockingClasses.every((item: { classId?: string; classCode?: string; slug?: string }) =>
+    item.classId && item.classCode && item.slug));
 
   await assert.rejects(
     axiosClient.post(`/subjects/semesters/${current.data.currentSemester.id}/complete`, {
@@ -1119,6 +1363,42 @@ test('mock semester lifecycle returns typed records and backend-style blockers',
       return response?.status === 409 && response.data?.code === 'SEMESTER_COMPLETION_BLOCKED';
     },
   );
+});
+
+test('mock semester transition keeps the expired semester open for closeout', async () => {
+  resetMockState();
+  await axiosClient.post('/auth/login', { email: 'admin@ehub.local', password: 'Mock123!' });
+  const state = getMockState();
+  const current = state.semesters.find(item => item.status === 'Active');
+  assert.ok(current);
+  const today = new Date();
+  const todayValue = today.toISOString().slice(0, 10);
+  const yesterdayValue = new Date(today.getTime() - 86_400_000).toISOString().slice(0, 10);
+  current.endDate = yesterdayValue;
+  const target = {
+    id: '00000000-0000-4000-8000-000000009991',
+    semester: current.semester === 'FA' ? 'SP' as const : 'FA' as const,
+    year: current.semester === 'FA' ? current.year + 1 : current.year,
+    status: 'Planned' as const,
+    startDate: todayValue,
+    endDate: new Date(today.getTime() + 30 * 86_400_000).toISOString().slice(0, 10),
+    completedAtUtc: null,
+    completionReason: null,
+    rowVersion: 'rv-transition-target',
+  };
+  state.semesters.push(target);
+
+  const response = await axiosClient.post('/subjects/current-semester/transition', {
+    currentSemesterId: current.id,
+    currentRowVersion: current.rowVersion,
+    targetSemesterId: target.id,
+    targetRowVersion: target.rowVersion,
+    reason: 'Start the next academic semester while closing prior classes',
+  });
+
+  assert.equal(response.data.currentSemester.id, target.id);
+  assert.equal(current.status, 'Closing');
+  assert.equal(target.status, 'Active');
 });
 
 test('mock semester schedule supports admin planning and date correction', async () => {
@@ -1306,17 +1586,124 @@ test('lecturer checkpoint mock follows Admin definitions and shares class schedu
   assert.equal(second.startDateUtc, start);
 
   for (const [index, name] of ['first.pdf', 'revised.pdf'].entries()) {
-    const body = new FormData();
-    body.append('file', new File(['%PDF-test'], name, { type: 'application/pdf' }));
-    const uploaded = await axiosClient.post(
-      `/workspace/checkpoints/teams/${team.id}/checkpoints/2/upload`, body,
-      { headers: { 'Content-Type': 'multipart/form-data' } },
-    );
+    const file = new File(['%PDF-test'], name, { type: 'application/pdf' });
+    const created = await checkpointApi.initiateUpload(team.id, 2, {
+      fileName: file.name,
+      contentType: file.type,
+      size: file.size,
+    });
+    await checkpointApi.putToPresignedUrl(created.data, file, { onUploadProgress: () => undefined });
+    const uploaded = await checkpointApi.completeUpload(team.id, 2, created.data.uploadId);
     assert.equal(uploaded.data.versionNumber, index + 1);
   }
+  const submittedLink = await axiosClient.post(
+    `/workspace/checkpoints/teams/${team.id}/checkpoints/2/links`,
+    { name: 'Prototype', url: 'https://demo.example.com/prototype' },
+  );
+  assert.equal(submittedLink.data.versionNumber, 3);
+  const updatedLink = await axiosClient.put(
+    `/workspace/checkpoints/teams/${team.id}/checkpoints/2/links/${submittedLink.data._id}`,
+    { name: 'Prototype demo', url: 'https://demo.example.com/v2' },
+  );
+  assert.equal(updatedLink.data.name, 'Prototype demo');
   const history = await axiosClient.get(`/workspace/checkpoints/teams/${team.id}`);
   assert.deepEqual(history.data.submissions.find((item: { checkpointNumber: number }) =>
     item.checkpointNumber === 2).files.map((file: { versionNumber: number }) => file.versionNumber), [1, 2]);
+  assert.equal(history.data.submissions.find((item: { checkpointNumber: number }) =>
+    item.checkpointNumber === 2).links[0].url, 'https://demo.example.com/v2');
+  const firstPreviewFileId = history.data.submissions.find((item: { checkpointNumber: number }) =>
+    item.checkpointNumber === 2).files[0]._id;
+  const preview = await axiosClient.get(
+    `/workspace/checkpoints/teams/${team.id}/checkpoints/2/files/${firstPreviewFileId}/preview`,
+    { responseType: 'blob' },
+  );
+  assert.equal(preview.type, 'application/pdf');
+
+  state.sessionUserId = cls.primaryLecturerId;
+  const lecturerView = await axiosClient.get('/lecturer/checkpoints', {
+    params: { classId: cls.id, checkpointNumber: 2 },
+  });
+  const lecturerSubmission = lecturerView.data.submissions.find((item: { teamId: string }) =>
+    item.teamId === team.id);
+  assert.equal(lecturerSubmission.submittedLinks[0].name, 'Prototype demo');
+  assert.deepEqual(
+    lecturerSubmission.submittedFiles.map((file: { originalName: string }) => file.originalName),
+    ['first.pdf', 'revised.pdf'],
+  );
+  state.sessionUserId = team.leaderId;
+
+  const evaluation = await axiosClient.get(
+    `/workspace/checkpoints/teams/${team.id}/checkpoints/1/evaluation-summary`,
+  );
+  assert.equal(evaluation.data.checkpoint.number, 1);
+  assert.ok(Array.isArray(evaluation.data.evaluations));
+  assert.equal(evaluation.data.evaluations[0]?.status, 'SUBMITTED');
+  assert.equal(evaluation.data.evaluations[0]?.checkpointTotal, undefined);
+  assert.equal(evaluation.data.evaluations[0]?.memberScores, undefined);
+  assert.equal(evaluation.data.evaluations[0]?.rubricScores[0]?.score, undefined);
+  assert.ok(evaluation.data.evaluations[0]?.overallFeedback);
+  const gradingBatch = await axiosClient.post('/workspace/checkpoints/evaluation-grading', {
+    teamIds: [team.id, team.id],
+  });
+  assert.equal(gradingBatch.data.teams.length, 1);
+  assert.equal(gradingBatch.data.teams[0].teamId, team.id);
+  assert.equal(gradingBatch.data.teams[0].checkpoints[0].history, undefined);
+  assert.equal(gradingBatch.data.teams[0].checkpoints[0].evaluations[0]?.checkpointTotal, undefined);
+
+  state.sessionUserId = cls.primaryLecturerId;
+  await axiosClient.put(`/workspace/checkpoints/evaluations/${evaluation.data.evaluations[0]._id}/publish`, {});
+  state.sessionUserId = team.leaderId;
+  const publishedEvaluation = await axiosClient.get(
+    `/workspace/checkpoints/teams/${team.id}/checkpoints/1/evaluation-summary`,
+  );
+  assert.equal(publishedEvaluation.data.evaluations[0]?.status, 'PUBLISHED');
+  assert.equal(publishedEvaluation.data.evaluations[0]?.checkpointTotal, 7.85);
+  assert.equal(publishedEvaluation.data.evaluations[0]?.memberScores.length, 1);
+  assert.equal(typeof publishedEvaluation.data.evaluations[0]?.rubricScores[0]?.score, 'number');
+  const publishedBatch = await axiosClient.post('/workspace/checkpoints/evaluation-grading', { teamIds: [team.id] });
+  assert.equal(publishedBatch.data.teams[0].checkpoints[0].evaluations[0]?.checkpointTotal, 7.85);
+
+  state.sessionUserId = cls.primaryLecturerId;
+  await axiosClient.put(`/workspace/checkpoints/evaluations/${evaluation.data.evaluations[0]._id}/unpublish`, {});
+  state.sessionUserId = team.leaderId;
+  const hiddenEvaluation = await axiosClient.get(
+    `/workspace/checkpoints/teams/${team.id}/checkpoints/1/evaluation-summary`,
+  );
+  assert.equal(hiddenEvaluation.data.evaluations[0]?.status, 'SUBMITTED');
+  assert.equal(hiddenEvaluation.data.evaluations[0]?.checkpointTotal, undefined);
+  assert.equal(hiddenEvaluation.data.evaluations[0]?.memberScores, undefined);
+  assert.equal(hiddenEvaluation.data.evaluations[0]?.rubricScores[0]?.score, undefined);
+
+  state.sessionUserId = cls.primaryLecturerId;
+  const bulkPublished = await axiosClient.put('/workspace/checkpoints/evaluations/publication/bulk', {
+    action: 'PUBLISH',
+    evaluationIds: [evaluation.data.evaluations[0]._id, evaluation.data.evaluations[0]._id],
+  });
+  assert.equal(bulkPublished.data.requestedCount, 1);
+  assert.equal(bulkPublished.data.changedCount, 1);
+  const bulkPublishRetry = await axiosClient.put('/workspace/checkpoints/evaluations/publication/bulk', {
+    action: 'PUBLISH',
+    evaluationIds: [evaluation.data.evaluations[0]._id],
+  });
+  assert.equal(bulkPublishRetry.data.changedCount, 0);
+  assert.equal(bulkPublishRetry.data.unchangedCount, 1);
+  await axiosClient.put('/workspace/checkpoints/evaluations/publication/bulk', {
+    action: 'UNPUBLISH',
+    evaluationIds: [evaluation.data.evaluations[0]._id],
+  });
+  state.sessionUserId = team.leaderId;
+
+  state.checkpointSchedules[`${cls.id}:${checkpointId}`].endDateUtc = new Date(Date.now() - 1_000).toISOString();
+  await assert.rejects(
+    axiosClient.delete(`/workspace/checkpoints/teams/${team.id}/checkpoints/2/links/${submittedLink.data._id}`),
+    (error: unknown) => (error as { response?: { data?: { code?: string } } }).response?.data?.code === 'WORKSPACE_CHECKPOINT_NOT_OPEN',
+  );
+  const firstFileId = history.data.submissions.find((item: { checkpointNumber: number }) =>
+    item.checkpointNumber === 2).files[0]._id;
+  await assert.rejects(
+    axiosClient.delete(`/workspace/checkpoints/teams/${team.id}/checkpoints/2/files/${firstFileId}`),
+    (error: unknown) => (error as { response?: { data?: { code?: string } } }).response?.data?.code === 'WORKSPACE_CHECKPOINT_NOT_OPEN',
+  );
 });
 
 test('bulk checkpoint scheduling checks the visible class scope and updates all matching classes', async () => {
@@ -1349,4 +1736,101 @@ test('bulk checkpoint scheduling checks the visible class scope and updates all 
   assert.equal(applied.data.schedules.length, 2);
   assert.deepEqual(new Set(applied.data.schedules.map((item: { startDateUtc: string }) => item.startDateUtc)), new Set([startDateUtc]));
   assert.equal(Object.keys(state.checkpointSchedules).length, 2);
+});
+
+test('course assessments expose configured weights and enforce lecturer grading access', async () => {
+  resetMockState();
+  const state = getMockState();
+  const team = state.teams[0];
+  const assessment = state.curricula.EXE101.otherAssessments[0];
+
+  await axiosClient.post('/auth/login', { email: 'admin@ehub.local', password: 'Mock123!' });
+  const initial = await axiosClient.get(`/workspace/checkpoints/teams/${team.id}/course-assessments`);
+  assert.equal(initial.data.assessments[0].name, 'Constructivism Presentations');
+  assert.equal(initial.data.assessments[0].weight, 15);
+  assert.equal(initial.data.assessments[0].score, undefined);
+  await assert.rejects(
+    axiosClient.put(`/workspace/checkpoints/teams/${team.id}/course-assessments/${assessment._id}`, { score: 9 }),
+    (error: unknown) => (error as { response?: { status?: number } }).response?.status === 403,
+  );
+
+  await axiosClient.post('/auth/login', { email: 'giang.lecturer@ehub.local', password: 'Mock123!' });
+  await assert.rejects(
+    axiosClient.put(`/workspace/checkpoints/teams/${team.id}/course-assessments/${assessment._id}`, { score: 11 }),
+    (error: unknown) => (error as { response?: { status?: number } }).response?.status === 400,
+  );
+  const saved = await axiosClient.put(
+    `/workspace/checkpoints/teams/${team.id}/course-assessments/${assessment._id}`,
+    {
+      score: 9,
+      memberScores: team.members.map((member, index) => ({
+        studentId: member.studentId,
+        score: index === 0 ? 7.5 : 9,
+      })),
+    },
+  );
+  assert.equal(saved.data.score, 9);
+  assert.equal(saved.data.memberScores.length, team.members.length);
+  assert.equal(saved.data.memberScores[0].score, 7.5);
+  assert.equal(saved.data.memberScores[0].isOverridden, true);
+  const refreshed = await axiosClient.get(`/workspace/checkpoints/teams/${team.id}/course-assessments`);
+  assert.equal(refreshed.data.assessments[0].score, 9);
+  assert.equal(refreshed.data.assessments[0].memberScores[0].score, 7.5);
+  assert.equal(refreshed.data.assessments[0].status, 'SUBMITTED');
+
+  state.sessionUserId = team.leaderId;
+  const studentBeforePublish = await axiosClient.get(`/workspace/checkpoints/teams/${team.id}/course-assessments`);
+  assert.equal(studentBeforePublish.data.assessments[0].score, undefined);
+  assert.equal(studentBeforePublish.data.assessments[0].memberScores, undefined);
+
+  state.sessionUserId = state.classes.find(item => item.id === team.classId)?.primaryLecturerId || null;
+  await axiosClient.put(`/workspace/checkpoints/evaluations/${refreshed.data.assessments[0].evaluationId}/publish`, {});
+  state.sessionUserId = team.leaderId;
+  const studentAfterPublish = await axiosClient.get(`/workspace/checkpoints/teams/${team.id}/course-assessments`);
+  assert.equal(studentAfterPublish.data.assessments[0].score, 9);
+  assert.equal(studentAfterPublish.data.assessments[0].memberScores.length, 1);
+  assert.equal(studentAfterPublish.data.assessments[0].memberScores[0].score, 7.5);
+  assert.equal(studentAfterPublish.data.assessments[0].status, 'PUBLISHED');
+
+  state.sessionUserId = state.classes.find(item => item.id === team.classId)?.primaryLecturerId || null;
+  await axiosClient.put(`/workspace/checkpoints/evaluations/${refreshed.data.assessments[0].evaluationId}/unpublish`, {});
+  state.sessionUserId = team.leaderId;
+  const studentAfterHide = await axiosClient.get(`/workspace/checkpoints/teams/${team.id}/course-assessments`);
+  assert.equal(studentAfterHide.data.assessments[0].score, undefined);
+  assert.equal(studentAfterHide.data.assessments[0].memberScores, undefined);
+  assert.equal(studentAfterHide.data.assessments[0].status, 'SUBMITTED');
+});
+
+test('team rankings are staff-only and expose team totals without individual member scores', async () => {
+  resetMockState();
+  await axiosClient.post('/auth/login', { email: 'se200001@fpt.edu.vn', password: 'Mock123!' });
+  await assert.rejects(
+    axiosClient.get('/rankings'),
+    (error: unknown) => (error as { response?: { status?: number } }).response?.status === 403,
+  );
+
+  await axiosClient.post('/auth/login', { email: 'giang.lecturer@ehub.local', password: 'Mock123!' });
+  const rankingState = getMockState();
+  const rankingClass = rankingState.classes.find(cls => cls.primaryLecturerId === rankingState.sessionUserId)!;
+  const rankingTeam = rankingState.teams.find(team => team.classId === rankingClass.id && team.status === 'Active')!;
+  const rankingAssessment = rankingState.curricula[rankingClass.subjectCode].otherAssessments[0];
+  rankingState.courseAssessmentScores[`${rankingTeam.id}:${rankingAssessment._id}`] = 10;
+  const response = await axiosClient.get('/rankings');
+  assert.equal(response.data.selectedSemester.semester, 'FA');
+  assert.ok(response.data.items.length > 0);
+  assert.equal(response.data.items[0].checkpoints[0].score, 7.85);
+  assert.equal(typeof response.data.items[0].projectDescription, 'string');
+  assert.equal(typeof response.data.items[0].semesterGroupName, 'string');
+  assert.equal('memberScores' in response.data.items[0], false);
+  const rankedTeam = response.data.items.find((item: { teamId: string }) => item.teamId === rankingTeam.id);
+  const checkpointTotal = rankedTeam.checkpoints.reduce(
+    (sum: number, checkpoint: { score: number | null; weight: number }) =>
+      sum + Number(checkpoint.score) * checkpoint.weight / 100,
+    0,
+  );
+  assert.equal(rankedTeam.assessments[0].score, 10);
+  assert.equal(rankedTeam.courseTotal, Math.round(checkpointTotal * 100) / 100);
+  assert.equal(rankedTeam.totalComponentCount, rankedTeam.checkpoints.length);
+  assert.equal(response.data.items.every((item: { classId: string }) =>
+    getMockState().classes.find(cls => cls.id === item.classId)?.primaryLecturerId === getMockState().sessionUserId), true);
 });

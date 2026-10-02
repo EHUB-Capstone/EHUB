@@ -12,7 +12,67 @@ import {
   normalizeFilters,
 } from '../src/features/execution-board/boardUtils.ts';
 import { taskProgress } from '../src/utils/taskProgress.ts';
-import { groupWorkspacesByClass, normalizeAccessibleWorkspaces } from '../src/utils/workspaceHub.ts';
+import { filterWorkspaces, groupWorkspacesByClass, normalizeAccessibleWorkspaces, parseWorkspaceSemester, resolveWorkspaceSemesterScope } from '../src/utils/workspaceHub.ts';
+import {
+  CHECKPOINT_UPLOAD_MAX_FILE_SIZE,
+  CHECKPOINT_UPLOAD_TIMEOUT_MS,
+  checkpointUploadFailureMessage,
+  isCheckpointFilePreviewable,
+  validateCheckpointUploadFile,
+} from '../src/utils/checkpointUpload.ts';
+import {
+  normalizeCheckpointLinkUrl,
+  validateCheckpointLinkUrl,
+} from '../src/utils/checkpointLink.ts';
+
+test('checkpoint links accept only normalized public HTTPS URLs', () => {
+  assert.equal(validateCheckpointLinkUrl('drive.google.com/file/example'), null);
+  assert.equal(normalizeCheckpointLinkUrl('drive.google.com/file/example'), 'https://drive.google.com/file/example');
+  for (const value of [
+    'http://example.com',
+    'https://localhost/demo',
+    'https://127.0.0.1/demo',
+    'https://192.168.1.2/demo',
+    'https://user:password@example.com/demo',
+    'javascript:alert(1)',
+  ]) {
+    assert.notEqual(validateCheckpointLinkUrl(value), null, value);
+  }
+});
+
+test('checkpoint uploads validate empty, oversized, and unsupported files before sending', () => {
+  assert.equal(validateCheckpointUploadFile({ name: 'report.pdf', size: 1 }), null);
+  assert.equal(validateCheckpointUploadFile({ name: 'REPORT.PDF', size: CHECKPOINT_UPLOAD_MAX_FILE_SIZE }), null);
+  assert.match(validateCheckpointUploadFile({ name: 'empty.pdf', size: 0 }) ?? '', /empty/);
+  assert.match(validateCheckpointUploadFile({ name: 'large.pdf', size: CHECKPOINT_UPLOAD_MAX_FILE_SIZE + 1 }) ?? '', /100 MB/);
+  assert.match(validateCheckpointUploadFile({ name: 'malware.exe', size: 1 }) ?? '', /unsupported format/);
+});
+
+test('checkpoint preview is offered only for PDF, DOCX, and PPTX files', () => {
+  assert.equal(isCheckpointFilePreviewable('report.PDF'), true);
+  assert.equal(isCheckpointFilePreviewable('plan.docx'), true);
+  assert.equal(isCheckpointFilePreviewable('pitch.pptx'), true);
+  assert.equal(isCheckpointFilePreviewable('archive.zip'), false);
+  assert.equal(isCheckpointFilePreviewable('report.pdf.exe'), false);
+});
+
+test('checkpoint uploads explain timeout and request-size failures per file', () => {
+  assert.equal(CHECKPOINT_UPLOAD_TIMEOUT_MS, 90_000);
+  assert.match(checkpointUploadFailureMessage({ code: 'ECONNABORTED' }, 'pitch.pptx'), /too long/);
+  assert.match(checkpointUploadFailureMessage({ response: { status: 413 } }, 'pitch.pptx'), /100 MB/);
+  assert.equal(
+    checkpointUploadFailureMessage({ response: { data: { message: 'Checkpoint is closed.' } } }, 'pitch.pptx'),
+    'Checkpoint is closed.',
+  );
+  assert.match(
+    checkpointUploadFailureMessage({ code: 'ERR_NETWORK' }, 'report.docx'),
+    /backend is running/,
+  );
+  assert.match(
+    checkpointUploadFailureMessage({ response: { status: 500 } }, 'report.docx'),
+    /server could not process/,
+  );
+});
 
 test('workspace hub reads the accessible workspace array from the API envelope', () => {
   const workspaces = [{
@@ -57,6 +117,51 @@ test('workspace hub groups teams by class code and sorts class and team names na
 
   assert.deepEqual(groups.map(group => group.classCode), ['SE2', 'SE10']);
   assert.deepEqual(groups[1].workspaces.map(workspace => workspace.teamName), ['Team 1', 'Team 10']);
+  assert.deepEqual(groupWorkspacesByClass(groups.flatMap(group => group.workspaces), 'class-desc').map(group => group.classCode), ['SE10', 'SE2']);
+  assert.deepEqual(groupWorkspacesByClass(groups.flatMap(group => group.workspaces), 'team-desc')[1].workspaces.map(workspace => workspace.teamName), ['Team 10', 'Team 1']);
+});
+
+test('workspace hub filters by the same semester and year used in class links', () => {
+  const base = {
+    courseCode: 'EXE201',
+    accessMode: 'READ_WRITE' as const,
+    isArchived: false,
+    isCurrent: true,
+    hasWorkspace: true,
+  };
+  const workspaces = [
+    { ...base, teamId: 'team-1', teamName: 'Phoenix', classId: 'class-1', classCode: 'EXE201_8', semester: 'FA2026' },
+    { ...base, teamId: 'team-2', teamName: 'Orbit', classId: 'class-2', classCode: 'EXE101_1', courseCode: 'EXE101', semester: 'FA26', hasWorkspace: false },
+    { ...base, teamId: 'team-3', teamName: 'Atlas', classId: 'class-3', classCode: 'EXE201_3', semester: 'SP2027', accessMode: 'READ_ONLY' as const },
+  ];
+
+  assert.deepEqual(parseWorkspaceSemester('FA2026'), { semester: 'FA', year: '2026' });
+  assert.deepEqual(parseWorkspaceSemester('FA26'), { semester: 'FA', year: '2026' });
+  assert.deepEqual(filterWorkspaces(workspaces, { semester: 'FA', year: '2026' }).map(team => team.teamId), ['team-1', 'team-2']);
+  assert.deepEqual(filterWorkspaces(workspaces, { semester: 'all', year: 'all' }).map(team => team.teamId), ['team-1', 'team-2', 'team-3']);
+  assert.deepEqual(filterWorkspaces(workspaces, { semester: 'none', year: 'none' }), []);
+  assert.deepEqual(filterWorkspaces(workspaces, { search: 'PHOENIX', subject: 'EXE201', workspaceStatus: 'created', access: 'READ_WRITE' }).map(team => team.teamId), ['team-1']);
+  assert.deepEqual(filterWorkspaces(workspaces, { workspaceStatus: 'not-created' }).map(team => team.teamId), ['team-2']);
+  assert.deepEqual(filterWorkspaces(workspaces, { access: 'READ_ONLY' }).map(team => team.teamId), ['team-3']);
+});
+
+test('workspace hub defaults to the active semester without overriding explicit filters', () => {
+  const active = { semester: 'FA', year: 2026 };
+  assert.deepEqual(resolveWorkspaceSemesterScope(new URLSearchParams(), active), {
+    semester: 'FA', year: '2026', isDefault: true,
+  });
+  assert.deepEqual(resolveWorkspaceSemesterScope(new URLSearchParams('search=team'), active), {
+    semester: 'FA', year: '2026', isDefault: true,
+  });
+  assert.deepEqual(resolveWorkspaceSemesterScope(new URLSearchParams('semester=SP&year=2025'), active), {
+    semester: 'SP', year: '2025', isDefault: false,
+  });
+  assert.deepEqual(resolveWorkspaceSemesterScope(new URLSearchParams('semester=all&year=all'), active), {
+    semester: 'all', year: 'all', isDefault: false,
+  });
+  assert.deepEqual(resolveWorkspaceSemesterScope(new URLSearchParams(), null), {
+    semester: 'none', year: 'none', isDefault: true,
+  });
 });
 
 test('table and board summary use API progress instead of status estimates', () => {

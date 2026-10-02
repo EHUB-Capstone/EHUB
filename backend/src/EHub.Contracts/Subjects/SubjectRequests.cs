@@ -28,6 +28,15 @@ public sealed class CorrectActiveSemesterRequest
     public string Reason { get; init; } = string.Empty;
 }
 
+public sealed class TransitionSemesterRequest
+{
+    public Guid CurrentSemesterId { get; init; }
+    public string CurrentRowVersion { get; init; } = string.Empty;
+    public Guid TargetSemesterId { get; init; }
+    public string TargetRowVersion { get; init; } = string.Empty;
+    public string Reason { get; init; } = string.Empty;
+}
+
 public sealed class PlanSemesterRequest
 {
     public string Semester { get; init; } = string.Empty;
@@ -97,6 +106,8 @@ public sealed class SaveRubricCriterionRequest
 public sealed class SaveSubjectCheckpointsRequest
 {
     public IReadOnlyCollection<SubjectCheckpointRequest> Checkpoints { get; init; } = Array.Empty<SubjectCheckpointRequest>();
+    public IReadOnlyCollection<SubjectOtherAssessmentRequest> OtherAssessments { get; init; } =
+        Array.Empty<SubjectOtherAssessmentRequest>();
 }
 
 public sealed class SubjectCheckpointRequest
@@ -104,8 +115,16 @@ public sealed class SubjectCheckpointRequest
     public int Number { get; init; }
     public string Title { get; init; } = string.Empty;
     public string? ShortDescription { get; init; }
+    public decimal CourseWeight { get; init; }
     public IReadOnlyCollection<string> Requirements { get; init; } = Array.Empty<string>();
     public IReadOnlyCollection<SubjectCriterionRequest> Rubrics { get; init; } = Array.Empty<SubjectCriterionRequest>();
+}
+
+public sealed class SubjectOtherAssessmentRequest
+{
+    public Guid? Id { get; init; }
+    public string Name { get; init; } = string.Empty;
+    public decimal Weight { get; init; }
 }
 
 public sealed class SubjectCriterionRequest

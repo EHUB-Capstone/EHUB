@@ -103,9 +103,19 @@ public sealed class StudentClassSelfServiceHandler : IStudentClassSelfServiceHan
                 FullName = item.Student.FullName, Email = item.Student.Email,
                 EnrollmentMajorCode = item.MajorCodeAtEnrollment,
                 ProfileMajorCode = item.Student.MajorCode,
+                MajorVerificationStatus = item.MajorVerificationStatus.ToString(),
                 EnrollmentStatus = item.EnrollmentStatus.ToString(),
                 TeamId = item.TeamMembers.Where(member => member.CountsTowardActiveTeam).Select(member => (Guid?)member.TeamId).FirstOrDefault()
             }).ToListAsync(cancellationToken);
+        var reservedStudentIds = rosterStatus == EnrollmentStatus.Active
+            ? await _context.TeamFormationInvitations.AsNoTracking()
+                .Where(invitation =>
+                    invitation.ClassId == classId &&
+                    invitation.ReservationReleasedAtUtc == null)
+                .Select(invitation => invitation.StudentId)
+                .Distinct()
+                .ToHashSetAsync(cancellationToken)
+            : new HashSet<Guid>();
         var isOwnMajorLocked = await _context.ClassStudents.AsNoTracking()
             .AnyAsync(item =>
                 item.StudentId == studentId.Value &&
@@ -130,10 +140,12 @@ public sealed class StudentClassSelfServiceHandler : IStudentClassSelfServiceHan
                 item.ProfileMajorCode) ?? string.Empty,
             ProfileMajorCode = item.ProfileMajorCode,
             EnrollmentMajorCode = item.EnrollmentMajorCode,
+            MajorVerificationStatus = item.MajorVerificationStatus,
             CanEditMajor = item.StudentId == studentId.Value && canEditOwnMajor,
             IsMajorLocked = item.StudentId == studentId.Value && isOwnMajorLocked,
             EnrollmentStatus = item.EnrollmentStatus,
-            TeamId = item.TeamId
+            TeamId = item.TeamId,
+            HasPendingTeamInvitation = reservedStudentIds.Contains(item.StudentId)
         }).ToArray();
         var teams = await TeamQuery().Where(item => item.ClassId == classId && item.Status == TeamStatus.Active).OrderBy(item => item.TeamCode).ToListAsync(cancellationToken);
         var mentorsByClass = await LoadMentorsByClassAsync([classId], cancellationToken);
@@ -223,7 +235,10 @@ public sealed class StudentClassSelfServiceHandler : IStudentClassSelfServiceHan
                     UserId = assignment.MentorProfile.UserId,
                     FullName = assignment.MentorProfile.User.FullName,
                     Email = assignment.MentorProfile.User.Email,
-                    Organization = assignment.MentorProfile.Organization
+                    Organization = assignment.MentorProfile.Organization,
+                    MentorType = assignment.MentorProfile.Type.ToString(),
+                    Department = assignment.MentorProfile.Department,
+                    JobTitle = assignment.MentorProfile.JobTitle
                 }
             })
             .ToListAsync(cancellationToken);

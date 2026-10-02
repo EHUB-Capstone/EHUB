@@ -43,7 +43,9 @@ public static class DependencyInjection
         services.AddScoped<IApplicationDbContext>(provider => provider.GetRequiredService<AppDbContext>());
         services.AddHostedService<ClassImportSessionCleanupService>();
         services.AddHostedService<LecturerImportSessionCleanupService>();
+        services.AddHostedService<MentorAdminSessionCleanupService>();
         services.AddHostedService<PendingRegistrationCleanupService>();
+        services.AddHostedService<PendingSubmissionUploadCleanupService>();
         services.AddScoped<IOutboxEventDispatcher, NotificationOutboxEventDispatcher>();
         services.AddScoped<IClassChatMembershipSynchronizer, ClassChatMembershipSynchronizer>();
         services.AddSingleton<ProjectDirectionRealtimeService>();
@@ -92,6 +94,24 @@ public static class DependencyInjection
         services.AddHttpClient("CloudinarySubmissionFiles", client => client.Timeout = TimeSpan.FromSeconds(30));
         services.AddScoped<ISubmissionFileStorageService, CloudinarySubmissionFileStorageService>();
         services.AddScoped<IMentorDocumentStorageService, CloudinaryMentorDocumentStorageService>();
+        services.AddOptions<R2Options>()
+            .Bind(configuration.GetSection(R2Options.SectionName))
+            .Validate(options => !string.IsNullOrWhiteSpace(options.AccountId), "R2:AccountId is required.")
+            .Validate(options => !string.IsNullOrWhiteSpace(options.AccessKeyId), "R2:AccessKeyId is required.")
+            .Validate(options => !string.IsNullOrWhiteSpace(options.SecretAccessKey), "R2:SecretAccessKey is required.")
+            .Validate(options => !string.IsNullOrWhiteSpace(options.BucketName), "R2:BucketName is required.")
+            .ValidateOnStart();
+        services.AddSingleton<ISubmissionObjectStorage, R2SubmissionObjectStorage>();
+        services.AddOptions<DocumentPreviewOptions>()
+            .Bind(configuration.GetSection(DocumentPreviewOptions.SectionName))
+            .Validate(options => !string.IsNullOrWhiteSpace(options.LibreOfficeExecutablePath),
+                "DocumentPreview:LibreOfficeExecutablePath is required.")
+            .Validate(options => options.ConversionTimeoutSeconds is >= 10 and <= 300,
+                "DocumentPreview:ConversionTimeoutSeconds must be between 10 and 300.")
+            .Validate(options => options.MaximumConcurrentConversions is >= 1 and <= 4,
+                "DocumentPreview:MaximumConcurrentConversions must be between 1 and 4.")
+            .ValidateOnStart();
+        services.AddSingleton<IDocumentPreviewConverter, LibreOfficeDocumentPreviewConverter>();
         
         services.Configure<EmailOptions>(configuration.GetSection(EmailOptions.SectionName));
         var emailProvider = configuration["Email:Provider"];

@@ -25,9 +25,14 @@ function loadState(): MockApiState {
       authPasswords: parsed.authPasswords ?? {},
       pendingRegistrations: parsed.pendingRegistrations ?? [],
       notifications: parsed.notifications ?? defaults.notifications,
+      formations: parsed.formations ?? [],
       semesterStaffAssignments: parsed.semesterStaffAssignments ?? defaults.semesterStaffAssignments,
       checkpointSchedules: parsed.checkpointSchedules ?? {},
       checkpointFiles: parsed.checkpointFiles ?? {},
+      checkpointLinks: parsed.checkpointLinks ?? {},
+      courseAssessmentScores: parsed.courseAssessmentScores ?? {},
+      courseAssessmentMemberScores: parsed.courseAssessmentMemberScores ?? {},
+      evaluationPublicationStatuses: parsed.evaluationPublicationStatuses ?? {},
     };
   } catch {
     window.localStorage.removeItem(STORAGE_KEY);
@@ -134,7 +139,7 @@ export function refreshClassCounts(classId: string): void {
   cls.teamCount = state.teams.filter((team) => team.classId === classId && team.status.toLowerCase() === 'active').length;
   const mentors = state.teams
     .filter((team) => team.classId === classId)
-    .map((team) => team.currentMentorAssignment)
+    .flatMap((team) => team.currentMentorAssignments)
     .filter((assignment) => assignment && (usesCompletedRoster || assignment.status === 'Active'))
     .map((assignment) => assignment!.mentor);
   cls.mentors = [...new Map(mentors.map((mentor) => [mentor.mentorProfileId, mentor])).values()];

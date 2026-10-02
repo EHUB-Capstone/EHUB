@@ -22,6 +22,7 @@ using EHub.Application.Features.Classes.GetClassRoster;
 using EHub.Application.Features.Classes.GetImportTemplate;
 using EHub.Application.Features.Classes.GetMajorVerificationTemplate;
 using EHub.Application.Features.Classes.ImportStudents;
+using EHub.Application.Features.Classes.ImportSemesterGroups;
 using EHub.Application.Features.Classes.RemoveStudentFromClass;
 using EHub.Application.Features.Classes.ReEnrollStudent;
 using EHub.Application.Features.Classes.DropAllStudents;
@@ -579,6 +580,27 @@ public sealed class ClassesController : ControllerBase
         return Ok(ApiResponse<ClassAuditLogListResponse>.SuccessResponse(result.Value, "Class audit trail retrieved successfully."));
     }
 
+    [HttpPost("{id:guid}/major-verification/preview")]
+    public async Task<IActionResult> PreviewClassMajors(
+        Guid id,
+        IFormFile file,
+        [FromServices] IVerifyClassMajorsCommandHandler commandHandler,
+        CancellationToken cancellationToken)
+    {
+        var result = await commandHandler.PreviewAsync(
+            id,
+            file,
+            _currentUserService.UserId ?? Guid.Empty,
+            GetCurrentUserRole(),
+            cancellationToken);
+
+        if (result.IsFailure) return ToClassErrorResponse(result.Error);
+
+        return Ok(ApiResponse<VerifyClassMajorsResponse>.SuccessResponse(
+            result.Value,
+            "Major changes previewed without updating the class."));
+    }
+
     [HttpPost("{id:guid}/major-verification")]
     public async Task<IActionResult> VerifyClassMajors(
         Guid id,
@@ -603,12 +625,73 @@ public sealed class ClassesController : ControllerBase
             "Enrollment majors verified successfully."));
     }
 
+    [HttpPost("{id:guid}/major-verification/synchronize")]
+    public async Task<IActionResult> SynchronizeClassMajorsFromFile(
+        Guid id,
+        IFormFile file,
+        [FromServices] IVerifyClassMajorsCommandHandler commandHandler,
+        CancellationToken cancellationToken)
+    {
+        var result = await commandHandler.SynchronizeAsync(
+            id,
+            file,
+            _currentUserService.UserId ?? Guid.Empty,
+            GetCurrentUserRole(),
+            cancellationToken);
+
+        if (result.IsFailure) return ToClassErrorResponse(result.Error);
+
+        return Ok(ApiResponse<VerifyClassMajorsResponse>.SuccessResponse(
+            result.Value,
+            "Enrollment and profile majors synchronized from the verification file."));
+    }
+
     [HttpGet("major-verification-template")]
     public IActionResult GetMajorVerificationTemplate(
         [FromServices] IGetMajorVerificationTemplateQueryHandler queryHandler)
     {
         var result = queryHandler.Handle();
         return File(result.Value.FileBytes, result.Value.ContentType, result.Value.FileName);
+    }
+
+    [HttpPost("{id:guid}/semester-groups/preview")]
+    public async Task<IActionResult> PreviewSemesterGroups(
+        Guid id,
+        IFormFile file,
+        [FromServices] IImportSemesterGroupsCommandHandler commandHandler,
+        CancellationToken cancellationToken)
+    {
+        var result = await commandHandler.PreviewAsync(
+            id,
+            file,
+            _currentUserService.UserId ?? Guid.Empty,
+            GetCurrentUserRole(),
+            cancellationToken);
+        if (result.IsFailure) return ToClassErrorResponse(result.Error);
+
+        return Ok(ApiResponse<SemesterGroupImportResponse>.SuccessResponse(
+            result.Value,
+            "Semester group changes previewed without updating the class."));
+    }
+
+    [HttpPost("{id:guid}/semester-groups/import")]
+    public async Task<IActionResult> ImportSemesterGroups(
+        Guid id,
+        IFormFile file,
+        [FromServices] IImportSemesterGroupsCommandHandler commandHandler,
+        CancellationToken cancellationToken)
+    {
+        var result = await commandHandler.ImportAsync(
+            id,
+            file,
+            _currentUserService.UserId ?? Guid.Empty,
+            GetCurrentUserRole(),
+            cancellationToken);
+        if (result.IsFailure) return ToClassErrorResponse(result.Error);
+
+        return Ok(ApiResponse<SemesterGroupImportResponse>.SuccessResponse(
+            result.Value,
+            $"Imported {result.Value.UpdatedCount} semester group value(s)."));
     }
 
     [HttpPost("{id:guid}/students/synchronize-profile-majors")]

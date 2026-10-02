@@ -12,6 +12,7 @@ import ErrorBoundary from './components/ui/ErrorBoundary';
 import { classFeatureFlags } from './config/classFeatureFlags';
 import { classRouteAccess } from './config/classAccessPolicy';
 import { releaseFeatureFlags } from './config/releaseFeatureFlags';
+import { evaluationRankingRoles } from './utils/evaluationGrading';
 
 const Home = lazy(() => import('./pages/Home'));
 const Login = lazy(() => import('./pages/auth/Login'));
@@ -22,7 +23,6 @@ const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'));
 const ClassManagement = lazy(() => import('./pages/admin/ClassManagement'));
 const SubjectManagement = lazy(() => import('./pages/admin/SubjectManagement'));
 const SubjectDetail = lazy(() => import('./pages/admin/SubjectDetail'));
-const StartupIndustryManagement = lazy(() => import('./pages/admin/StartupIndustryManagement'));
 const UserManagement = lazy(() => import('./pages/admin/UserManagement'));
 const AccountApprovals = lazy(() => import('./pages/admin/AccountApprovals'));
 const LecturerDashboard = lazy(() => import('./pages/lecturer/LecturerDashboard'));
@@ -40,7 +40,6 @@ const AIAnalysis = lazy(() => import('./pages/common/AIAnalysis'));
 const ExecutionBoard = lazy(() => import('./pages/common/ExecutionBoard'));
 const GroupChat = lazy(() => import('./pages/common/GroupChat'));
 const IdeaDetail = lazy(() => import('./pages/common/IdeaDetail'));
-const Rankings = lazy(() => import('./pages/common/Rankings'));
 const StartupWorkspaceHub = lazy(() => import('./pages/workspace/StartupWorkspaceHub'));
 const TeamWorkspace = lazy(() => import('./pages/workspace/TeamWorkspace'));
 const ProposalEditor = lazy(() => import('./pages/workspace/ProposalEditor'));
@@ -52,6 +51,7 @@ const Forbidden = lazy(() => import('./pages/shared/Forbidden'));
 const NotFound = lazy(() => import('./pages/shared/NotFound'));
 const ProfileSettings = lazy(() => import('./pages/shared/ProfileSettings'));
 const FeedbackPage = lazy(() => import('./pages/shared/FeedbackPage'));
+const EvaluationGrading = lazy(() => import('./pages/shared/EvaluationGrading'));
 
 const PageFallback = () => (
   <div className="flex min-h-56 items-center justify-center" role="status" aria-label="Loading page">
@@ -101,7 +101,7 @@ function App(): React.ReactElement {
                   <Route path="/admin/classes" element={<ProtectedRoute allowedRoles={['ADMIN']}><ClassManagement /></ProtectedRoute>} />
                   <Route path="/admin/subjects" element={<ProtectedRoute allowedRoles={['ADMIN']}><SubjectManagement /></ProtectedRoute>} />
                   <Route path="/admin/subjects/:subjectCode" element={<ProtectedRoute allowedRoles={['ADMIN']}><SubjectDetail /></ProtectedRoute>} />
-                  <Route path="/admin/startup-industries" element={<ProtectedRoute allowedRoles={['ADMIN']}><StartupIndustryManagement /></ProtectedRoute>} />
+                  <Route path="/admin/startup-industries" element={<ProtectedRoute allowedRoles={['ADMIN']}><Navigate to="/admin/subjects?tab=industries" replace /></ProtectedRoute>} />
                   <Route path="/admin/feedback" element={<ProtectedRoute allowedRoles={['ADMIN']}><FeedbackPage admin /></ProtectedRoute>} />
 
                   <Route path="/lecturer" element={<ProtectedRoute allowedRoles={[...classRouteAccess.lecturerArea]}>{releaseFeatureFlags.roleDashboards ? <LecturerDashboard /> : <Navigate to="/lecturer/classes" replace />}</ProtectedRoute>} />
@@ -136,7 +136,7 @@ function App(): React.ReactElement {
                   <Route path="/workspace/teams/:teamId/proposal" element={<ProposalEditor />} />
                   <Route path="/workspace/teams/:teamId/project-profile" element={<ProjectProfileEditor />} />
 
-                  {releaseFeatureFlags.rankings && <Route path="/rankings" element={<Rankings />} />}
+                  {releaseFeatureFlags.rankings && <Route path="/rankings" element={<ProtectedRoute allowedRoles={[...evaluationRankingRoles]}><Navigate to="/evaluation-grading?tab=rankings" replace /></ProtectedRoute>} />}
                   {releaseFeatureFlags.evaluations && <Route path="/evaluations" element={<IdeaDetail />} />}
                   <Route path="/executionboard" element={<ExecutionBoard />} />
                   {releaseFeatureFlags.mentoring && <Route path="/sessions" element={<MentoringSessionsPage />} />}
@@ -144,6 +144,7 @@ function App(): React.ReactElement {
                   {releaseFeatureFlags.chat && <Route path="/chat" element={<GroupChat />} />}
                   <Route path="/settings" element={<ProfileSettings />} />
                   <Route path="/feedback" element={<ProtectedRoute allowedRoles={['STUDENT','LECTURER','MENTOR']}><FeedbackPage /></ProtectedRoute>} />
+                  <Route path="/evaluation-grading" element={<ProtectedRoute allowedRoles={['ADMIN', 'LECTURER', 'MENTOR', 'STUDENT']}><EvaluationGrading /></ProtectedRoute>} />
                   <Route path="/profile" element={<ProfileSettings />} />
                 </Route>
 

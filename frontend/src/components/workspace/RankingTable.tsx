@@ -1,174 +1,124 @@
-// @ts-nocheck
-import { Trophy, TrendingUp, CheckCircle, Brain, Kanban, FileText, Layout } from 'lucide-react';
+import { Award, CheckCircle2, Clock3, Trophy } from 'lucide-react';
+import type {
+  TeamRankingCheckpoint,
+  TeamRankingScoreScope,
+  TeamRankingStatus,
+  TeamRankingViewItem,
+} from '../../types/rankings';
 
-const RankingTable = ({ rankings }) => {
-  if (!Array.isArray(rankings) || rankings.length === 0) {
+interface RankingTableProps {
+  rankings: TeamRankingViewItem[];
+  checkpoints: Array<Pick<TeamRankingCheckpoint, 'number' | 'title'>>;
+  scoreScope: TeamRankingScoreScope;
+}
+
+const statusStyle: Record<TeamRankingStatus, string> = {
+  PUBLISHED: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+  READY_TO_PUBLISH: 'border-amber-200 bg-amber-50 text-amber-700',
+  INCOMPLETE: 'border-slate-200 bg-slate-50 text-slate-500',
+};
+
+const statusLabel: Record<TeamRankingStatus, string> = {
+  PUBLISHED: 'Published',
+  READY_TO_PUBLISH: 'Ready to publish',
+  INCOMPLETE: 'In progress',
+};
+
+function scoreText(score: number | null | undefined): string {
+  return score === null || score === undefined ? '—' : Number(score).toFixed(2);
+}
+
+function RankBadge({ rank }: { rank: number | null }) {
+  if (rank === 1) return <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-amber-100 text-lg">🥇</span>;
+  if (rank === 2) return <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-slate-200 text-lg">🥈</span>;
+  if (rank === 3) return <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-orange-100 text-lg">🥉</span>;
+  return <span className="inline-flex h-8 min-w-8 items-center justify-center rounded-xl bg-slate-100 px-2 text-xs font-black text-slate-600">{rank ?? '—'}</span>;
+}
+
+export default function RankingTable({ rankings, checkpoints, scoreScope }: RankingTableProps) {
+  if (rankings.length === 0) {
     return (
-      <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-12 text-center text-slate-400">
-        <Trophy className="w-12 h-12 mx-auto mb-3 text-slate-200" />
-        <h3 className="font-semibold text-slate-700 text-sm">No Rankings Available</h3>
-        <p className="text-xs text-slate-400 mt-1">There are no startup scores calculated in this class/system yet.</p>
+      <div className="rounded-2xl border border-slate-200/70 bg-white p-12 text-center shadow-sm">
+        <Trophy className="mx-auto h-12 w-12 text-slate-200" />
+        <h3 className="mt-3 text-sm font-bold text-slate-700">No matching team rankings</h3>
+        <p className="mt-1 text-xs text-slate-400">Try another search term or filter.</p>
       </div>
     );
   }
 
-  const getRankBadge = (rank) => {
-    if (rank === 1) {
-      return (
-        <span className="w-6 h-6 rounded-full bg-amber-100 border border-amber-200 flex items-center justify-center font-bold text-xs text-amber-700 shadow-sm ring-4 ring-amber-50">
-          🥇
-        </span>
-      );
-    }
-    if (rank === 2) {
-      return (
-        <span className="w-6 h-6 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center font-bold text-xs text-slate-600 shadow-sm ring-4 ring-slate-50">
-          🥈
-        </span>
-      );
-    }
-    if (rank === 3) {
-      return (
-        <span className="w-6 h-6 rounded-full bg-amber-50 shadow-sm ring-4 ring-amber-50 border border-amber-200 flex items-center justify-center font-bold text-xs text-amber-800">
-          🥉
-        </span>
-      );
-    }
-    return (
-      <span className="w-6 h-6 rounded-full bg-slate-50 border border-slate-100 flex items-center justify-center font-bold text-xs text-slate-500">
-        {rank}
-      </span>
-    );
-  };
-
   return (
-    <div className="bg-white border border-slate-200/60 rounded-2xl shadow-sm overflow-hidden">
+    <div className="overflow-hidden rounded-2xl border border-slate-200/70 bg-white shadow-sm">
       <div className="overflow-x-auto">
-        <table className="w-full text-left border-collapse">
+        <table className="min-w-max border-separate border-spacing-0 text-left text-sm">
           <thead>
-            <tr className="bg-slate-50/70 border-b border-slate-100 text-slate-400 text-[10px] font-bold uppercase tracking-wider">
-              <th className="px-6 py-4 text-center w-16">Rank</th>
-              <th className="px-6 py-4">Startup / Team</th>
-              <th className="px-6 py-4">Class</th>
-              <th className="px-6 py-4">
-                <div className="flex items-center gap-1">
-                  <Brain className="w-3.5 h-3.5 text-slate-400" />
-                  <span>Evaluation (60%)</span>
-                </div>
-              </th>
-              <th className="px-6 py-4">
-                <div className="flex items-center gap-1">
-                  <Kanban className="w-3.5 h-3.5 text-slate-400" />
-                  <span>Sprint (25%)</span>
-                </div>
-              </th>
-              <th className="px-6 py-4">
-                <div className="flex items-center gap-1">
-                  <FileText className="w-3.5 h-3.5 text-slate-400" />
-                  <span>Proposal (10%)</span>
-                </div>
-              </th>
-              <th className="px-6 py-4">
-                <div className="flex items-center gap-1">
-                  <Layout className="w-3.5 h-3.5 text-slate-400" />
-                  <span>Deck (5%)</span>
-                </div>
-              </th>
-              <th className="px-6 py-4 text-right pr-8">
-                <div className="flex items-center justify-end gap-1 font-bold text-primary">
-                  <TrendingUp className="w-3.5 h-3.5" />
-                  <span>Total Score</span>
-                </div>
-              </th>
+            <tr className="text-[10px] font-black uppercase tracking-wider text-slate-500">
+              <th className="sticky left-0 z-30 w-20 border-b border-r border-slate-200 bg-slate-50 px-4 py-4 text-center">Rank</th>
+              <th className="sticky left-20 z-30 w-[320px] min-w-[320px] border-b border-r border-slate-200 bg-slate-50 px-5 py-4">Team</th>
+              <th className="min-w-[140px] border-b border-r border-slate-200 bg-slate-50 px-4 py-4">Class</th>
+              {checkpoints.map(checkpoint => {
+                const selected = scoreScope === `checkpoint:${checkpoint.number}`;
+                return (
+                  <th key={checkpoint.number} className={`min-w-[150px] border-b border-r border-slate-200 px-4 py-4 text-center ${selected ? 'bg-orange-50 text-primary' : 'bg-orange-50/40'}`}>
+                    <p>Checkpoint {checkpoint.number}</p>
+                    <p className="mt-1 max-w-[145px] truncate text-[9px] font-semibold normal-case tracking-normal text-slate-500" title={checkpoint.title}>{checkpoint.title}</p>
+                  </th>
+                );
+              })}
+              <th className={`min-w-[150px] border-b border-r border-slate-200 px-4 py-4 text-center ${scoreScope === 'course' ? 'bg-emerald-100/70 text-emerald-800' : 'bg-emerald-50 text-emerald-700'}`}>Checkpoint Total</th>
+              <th className="min-w-[150px] border-b border-r border-slate-200 bg-slate-50 px-4 py-4 text-center">Completion</th>
+              <th className="min-w-[170px] border-b border-slate-200 bg-slate-50 px-4 py-4 text-center">Ranking status</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100 text-sm">
-            {rankings.map((r, index) => {
-              const rank = index + 1;
-              return (
-                <tr
-                  key={r.teamId}
-                  className={`hover:bg-slate-50/50 transition-colors ${rank <= 3 ? 'bg-primary-50/5' : ''}`}
-                >
-                  <td className="px-6 py-4 text-center">
-                    <div className="flex justify-center">{getRankBadge(rank)}</div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div>
-                      <h4 className="font-bold text-slate-800 leading-tight">
-                        {r.startupName}
-                      </h4>
-                      <p className="text-xs text-slate-400 font-semibold mt-0.5">
-                        Team: {r.teamName} ({r.teamCode})
-                      </p>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="bg-slate-100 text-slate-600 text-xs px-2 py-1 rounded-md font-semibold">
-                      {r.className}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="space-y-1">
-                      <span className="font-bold text-slate-700">{r.scores?.evaluationScore}%</span>
-                      <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-emerald-500 rounded-full"
-                          style={{ width: `${r.scores?.evaluationScore || 0}%` }}
-                        />
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="space-y-1">
-                      <span className="font-bold text-slate-700">{Math.round(r.scores?.sprintProgress)}%</span>
-                      <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-sky-500 rounded-full"
-                          style={{ width: `${r.scores?.sprintProgress || 0}%` }}
-                        />
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    {r.scores?.proposalScore === 100 ? (
-                      <span className="inline-flex items-center gap-1 text-xs text-emerald-600 font-bold bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">
-                        <CheckCircle className="w-3 h-3" /> Submitted
-                      </span>
-                    ) : r.scores?.proposalScore === 55 ? (
-                      <span className="inline-flex items-center gap-1 text-xs text-amber-600 font-bold bg-amber-50 px-2 py-0.5 rounded-full border border-amber-100">
-                        Draft
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 text-xs text-slate-400 font-medium bg-slate-50 px-2 py-0.5 rounded-full border border-slate-100">
-                        Missing
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-6 py-4">
-                    {r.scores?.deckScore === 100 ? (
-                      <span className="inline-flex items-center gap-1 text-xs text-emerald-600 font-bold bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">
-                        <CheckCircle className="w-3 h-3" /> Active
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 text-xs text-slate-400 font-medium bg-slate-50 px-2 py-0.5 rounded-full border border-slate-100">
-                        Missing
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 text-right pr-8">
-                    <span className="inline-block bg-primary text-white text-xs font-black px-3 py-1.5 rounded-xl shadow-glow-primary">
-                      {r.finalScore} / 100
-                    </span>
-                  </td>
-                </tr>
-              );
-            })}
+          <tbody>
+            {rankings.map(item => (
+              <tr key={item.teamId} className="group">
+                <td className="sticky left-0 z-20 border-b border-r border-slate-200 bg-white px-4 py-4 text-center group-hover:bg-slate-50">
+                  <div className="flex justify-center"><RankBadge rank={item.rank} /></div>
+                </td>
+                <td className="sticky left-20 z-20 w-[320px] min-w-[320px] align-top border-b border-r border-slate-200 bg-white px-5 py-4 group-hover:bg-slate-50">
+                  <p className="whitespace-normal break-words font-black leading-5 text-slate-900">{item.projectName || 'No project name'}</p>
+                  <p className="mt-1.5 whitespace-normal break-words text-xs font-medium leading-5 text-slate-500">{item.projectDescription || 'No project description'}</p>
+                </td>
+                <td className="border-b border-r border-slate-200 px-4 py-4">
+                  <p className="font-bold text-slate-800">{item.classCode}</p>
+                  <p className="mt-1 text-xs text-slate-400">{item.courseCode} · {item.semester}</p>
+                </td>
+                {checkpoints.map(checkpoint => {
+                  const result = item.checkpoints.find(entry => entry.number === checkpoint.number);
+                  const selected = scoreScope === `checkpoint:${checkpoint.number}`;
+                  return (
+                    <td key={checkpoint.number} className={`border-b border-r border-slate-200 px-4 py-4 text-center ${selected ? 'bg-orange-50/40' : ''}`}>
+                      <p className={`text-base font-black ${result?.score === null || result?.score === undefined ? 'text-slate-300' : result.status === 'PUBLISHED' ? 'text-slate-900' : 'text-amber-700'}`}>{scoreText(result?.score)}</p>
+                      {result?.status === 'SUBMITTED' && <p className="mt-1 text-[9px] font-bold uppercase text-amber-600">Not published</p>}
+                      {result?.status === 'PUBLISHED' && <p className="mt-1 text-[9px] font-bold uppercase text-emerald-600">Published</p>}
+                    </td>
+                  );
+                })}
+                <td className={`border-b border-r border-slate-200 px-4 py-4 text-center ${scoreScope === 'course' ? 'bg-emerald-50/70' : 'bg-emerald-50/30'}`}>
+                  <p className={`text-lg font-black ${item.courseTotal === null ? 'text-slate-300' : 'text-emerald-700'}`}>{scoreText(item.courseTotal)}</p>
+                  <p className="mt-1 text-[9px] font-bold uppercase text-slate-400">out of 10</p>
+                </td>
+                <td className="border-b border-r border-slate-200 px-4 py-4 text-center">
+                  <div className="flex items-center justify-center gap-1.5 font-bold text-slate-700">
+                    {item.completedComponentCount === item.totalComponentCount && item.totalComponentCount > 0
+                      ? <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                      : <Clock3 className="h-4 w-4 text-amber-500" />}
+                    {item.completedComponentCount}/{item.totalComponentCount}
+                  </div>
+                  <p className="mt-1 text-[9px] font-semibold uppercase text-slate-400">checkpoints graded</p>
+                </td>
+                <td className="border-b border-slate-200 px-4 py-4 text-center">
+                  <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase ${statusStyle[item.rankingStatus]}`}>
+                    {item.rankingStatus === 'PUBLISHED' && <Award className="h-3 w-3" />}
+                    {statusLabel[item.rankingStatus]}
+                  </span>
+                  {item.rank === null && <p className="mt-2 text-[10px] text-slate-400">No graded score</p>}
+                </td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
     </div>
   );
-};
-
-export default RankingTable;
+}

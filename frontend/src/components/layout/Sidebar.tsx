@@ -4,8 +4,9 @@ import { useAuth } from '../../hooks/useAuth';
 import { cn } from '../../utils/cn';
 import logo from '../../assets/logo.png';
 import {
-  LayoutDashboard, Users, GraduationCap, Trophy, CalendarDays,
-  Kanban, Brain, Video, Rocket, LogOut, Plus, X, MessageSquare, Database, BookOpen, ShieldCheck, Factory
+  LayoutDashboard, Users, GraduationCap, CalendarDays,
+  Kanban, Brain, Video, Rocket, LogOut, Plus, X, MessageSquare, Database, BookOpen, ShieldCheck, Factory,
+  ClipboardCheck,
 } from 'lucide-react';
 import { classFeatureFlags } from '../../config/classFeatureFlags';
 import { releaseFeatureFlags } from '../../config/releaseFeatureFlags';
@@ -14,12 +15,10 @@ const iconMap: Record<string, LucideIcon> = {
   dashboard: LayoutDashboard,
   group: Users,
   school: GraduationCap,
-  leaderboard: Trophy,
   calendar_month: CalendarDays,
   view_kanban: Kanban,
   analytics: Brain,
   event: CalendarDays,
-  military_tech: Trophy,
   rocket_launch: Rocket,
   task_alt: Kanban,
   video_chat: Video,
@@ -28,6 +27,7 @@ const iconMap: Record<string, LucideIcon> = {
   book_open: BookOpen,
   factory: Factory,
   account_approval: ShieldCheck,
+  grading: ClipboardCheck,
 };
 
 interface SidebarProps {
@@ -61,7 +61,6 @@ const Sidebar = ({ mobileOpen, onMobileClose }: SidebarProps) => {
     ADMIN: [
       { path: '/admin', icon: 'dashboard', label: 'Overview' },
       { path: '/admin/subjects', icon: 'book_open', label: 'Subject Management' },
-      { path: '/admin/startup-industries', icon: 'factory', label: 'Startup Industry Management' },
       { path: '/admin/users', icon: 'group', label: 'Users' },
       { path: '/admin/account-approvals', icon: 'account_approval', label: 'Account Approvals' },
       { path: '/admin/classes', icon: 'school', label: 'Classes' },
@@ -72,11 +71,11 @@ const Sidebar = ({ mobileOpen, onMobileClose }: SidebarProps) => {
       // ...(releaseFeatureFlags.dataBank ? [{ path: '/lecturer/data-bank', icon: 'database', label: 'Data Bank' }] : []),
       // ...(releaseFeatureFlags.workshops ? [{ path: '/workshops', icon: 'calendar_month', label: 'Workshops' }] : []),
       // ...(releaseFeatureFlags.chat ? [{ path: '/chat', icon: 'chat', label: 'Group Chat' }] : []),
-      // ...(releaseFeatureFlags.rankings ? [{ path: '/rankings', icon: 'leaderboard', label: 'Rankings' }] : []),
       // ...(releaseFeatureFlags.mentoring ? [{ path: '/sessions', icon: 'calendar_month', label: 'Schedules' }] : []),
+      { path: '/evaluation-grading', icon: 'grading', label: 'Evaluation & Grading' },
     ],
     LECTURER: [
-      // ...(releaseFeatureFlags.roleDashboards ? [{ path: '/lecturer', icon: 'dashboard', label: 'Dashboard' }] : []),
+      ...(releaseFeatureFlags.roleDashboards ? [{ path: '/lecturer', icon: 'dashboard', label: 'Dashboard' }] : []),
       { path: '/lecturer/classes', icon: 'school', label: 'My Classes' },
       { path: '/mentors', icon: 'group', label: 'Mentor Directory' },
       ...(releaseFeatureFlags.mentoring ? [{ path: '/sessions', icon: 'calendar_month', label: 'Mentoring Sessions' }] : []),
@@ -88,7 +87,7 @@ const Sidebar = ({ mobileOpen, onMobileClose }: SidebarProps) => {
       // { path: '/executionboard', icon: 'view_kanban', label: 'Execution Board' },
       // ...(releaseFeatureFlags.evaluations ? [{ path: '/evaluations', icon: 'analytics', label: 'Evaluation Reports' }] : []),
       // ...(releaseFeatureFlags.mentoring ? [{ path: '/sessions', icon: 'event', label: 'Sessions' }] : []),
-      // ...(releaseFeatureFlags.rankings ? [{ path: '/rankings', icon: 'military_tech', label: 'Rankings' }] : []),
+      { path: '/evaluation-grading', icon: 'grading', label: 'Evaluation & Grading' },
     ],
     MENTOR: [
       ...(releaseFeatureFlags.roleDashboards ? [{ path: '/mentor', icon: 'dashboard', label: 'Mentor Overview' }] : []),
@@ -100,7 +99,7 @@ const Sidebar = ({ mobileOpen, onMobileClose }: SidebarProps) => {
       // ...(releaseFeatureFlags.workshops ? [{ path: '/workshops', icon: 'calendar_month', label: 'Workshops' }] : []),
       // ...(releaseFeatureFlags.chat ? [{ path: '/chat', icon: 'chat', label: 'Group Chat' }] : []),
       // ...(releaseFeatureFlags.mentoring ? [{ path: '/sessions', icon: 'event', label: 'Sessions' }] : []),
-      // ...(releaseFeatureFlags.rankings ? [{ path: '/rankings', icon: 'military_tech', label: 'Rankings' }] : []),
+      { path: '/evaluation-grading', icon: 'grading', label: 'Evaluation & Grading' },
     ],
     STUDENT: [
       ...(classFeatureFlags.studentSelfService
@@ -114,18 +113,48 @@ const Sidebar = ({ mobileOpen, onMobileClose }: SidebarProps) => {
       { path: '/feedback', icon: 'chat', label: 'Send feedback' },
       // ...(releaseFeatureFlags.roleDashboards ? [{ path: '/student', icon: 'dashboard', label: 'Dashboard' }] : []),
       // ...(releaseFeatureFlags.workshops ? [{ path: '/workshops', icon: 'calendar_month', label: 'Workshops' }] : []),
-      // ...(releaseFeatureFlags.rankings ? [{ path: '/rankings', icon: 'military_tech', label: 'Rankings' }] : []),
       // ...(releaseFeatureFlags.chat ? [{ path: '/chat', icon: 'chat', label: 'Group Chat' }] : []),
       // ...(releaseFeatureFlags.startupIdeas ? [{ path: '/student/idea/new', icon: 'rocket_launch', label: 'My Idea' }] : []),
       { path: '/executionboard', icon: 'task_alt', label: 'Execution Board' },
       // ...(releaseFeatureFlags.mentoring ? [{ path: '/sessions', icon: 'video_chat', label: 'Mentoring' }] : []),
+      { path: '/evaluation-grading', icon: 'grading', label: 'Evaluation & Grading' },
     ],
   };
 
   const items = navItems[role] || navItems.STUDENT;
+  const feedbackItem = items.find((item) => item.path === '/feedback');
+  const navigationItems = items.filter((item) => item.path !== '/feedback');
 
   const handleNavClick = () => {
     if (onMobileClose) onMobileClose();
+  };
+
+  const renderNavItem = (item: NavItem) => {
+    const IconComp = iconMap[item.icon] || LayoutDashboard;
+    return (
+      <NavLink
+        key={item.path}
+        to={item.path}
+        end={item.path === '/admin' || item.path === '/lecturer' || item.path === '/mentor' || item.path === '/student'}
+        onClick={handleNavClick}
+        className={({ isActive }) => cn(
+          'flex items-center gap-3 rounded-xl transition-all duration-200 group relative px-3 py-2.5',
+          isActive
+            ? 'bg-primary-50 text-primary font-semibold shadow-xs'
+            : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
+        )}
+      >
+        {({ isActive }) => (
+          <>
+            {isActive && (
+              <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 bg-primary rounded-r-full" />
+            )}
+            <IconComp className={cn('w-[18px] h-[18px] shrink-0 transition-colors', isActive ? 'text-primary' : 'text-slate-400 group-hover:text-slate-600')} />
+            <span className="text-[13px] truncate">{item.label}</span>
+          </>
+        )}
+      </NavLink>
+    );
   };
 
   return (
@@ -157,33 +186,7 @@ const Sidebar = ({ mobileOpen, onMobileClose }: SidebarProps) => {
       {/* Navigation */}
       <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto scrollbar-thin">
         <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider px-3 mb-3 mt-1">Navigation</p>
-        {items.map((item) => {
-          const IconComp = iconMap[item.icon] || LayoutDashboard;
-          return (
-            <NavLink
-              key={item.path}
-              to={item.path}
-              end={item.path === '/admin' || item.path === '/lecturer' || item.path === '/mentor' || item.path === '/student'}
-              onClick={handleNavClick}
-              className={({ isActive }) => cn(
-                'flex items-center gap-3 rounded-xl transition-all duration-200 group relative px-3 py-2.5',
-                isActive
-                  ? 'bg-primary-50 text-primary font-semibold shadow-xs'
-                  : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
-              )}
-            >
-              {({ isActive }) => (
-                <>
-                  {isActive && (
-                    <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 bg-primary rounded-r-full" />
-                  )}
-                  <IconComp className={cn('w-[18px] h-[18px] shrink-0 transition-colors', isActive ? 'text-primary' : 'text-slate-400 group-hover:text-slate-600')} />
-                  <span className="text-[13px] truncate">{item.label}</span>
-                </>
-              )}
-            </NavLink>
-          );
-        })}
+        {navigationItems.map(renderNavItem)}
       </nav>
 
       {/* Bottom Section */}
@@ -197,6 +200,8 @@ const Sidebar = ({ mobileOpen, onMobileClose }: SidebarProps) => {
             New Idea
           </button>
         )}
+
+        {feedbackItem && renderNavItem(feedbackItem)}
 
         <button
           onClick={handleLogout}

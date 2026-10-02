@@ -201,8 +201,7 @@ public sealed class VerifyRegistrationOtpCommandHandler : IVerifyRegistrationOtp
                 new MentorProfile
                 {
                     UserId = user.Id,
-                    Status = MentorProfileStatus.Active,
-                    MaxTeams = 3
+                    Status = MentorProfileStatus.Active
                 },
                 cancellationToken);
         }

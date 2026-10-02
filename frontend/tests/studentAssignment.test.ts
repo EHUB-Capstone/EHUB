@@ -50,17 +50,18 @@ test('prepares a selected student for class assignment', () => {
 });
 
 test('assigns a class student to a team and updates both student and team detail data', () => {
-  const availableStudents = students.map((student) => (
-    student._id === 'student-2' ? { ...student, teamId: null } : student
-  ));
-  const availableTeams = teams.map((team) => (
-    team._id === 'team-2' ? { ...team, members: [], memberIds: [] } : team
-  ));
+  const availableStudents: AssignableStudent[] = [
+    { ...students[0], major: 'BBA_FIN', teamId: null },
+    { ...students[1], major: 'BIT_SE', teamId: null },
+    { _id: 'student-4', fullName: 'Missing Major', major: null, classId: 'class-1' },
+    { _id: 'student-5', fullName: 'Another Member', major: 'BIT_AI', classId: 'class-1' },
+  ];
+  const availableTeams = [{ ...teams[1], members: [], memberIds: [] }];
   const draft: StudentAssignmentDraft = {
     mode: 'TEAM',
     classId: 'class-1',
     teamId: 'team-2',
-    studentIds: ['student-2'],
+    studentIds: ['student-1', 'student-2', 'student-4', 'student-5'],
   };
 
   const validation = validateStudentAssignment(draft, availableStudents, availableTeams);
@@ -70,7 +71,27 @@ test('assigns a class student to a team and updates both student and team detail
 
   assert.equal(validation.isValid, true);
   assert.equal(assigned?.teamId, 'team-2');
-  assert.deepEqual(getTeamMemberIds(updatedTeam!), ['student-2']);
+  assert.deepEqual(getTeamMemberIds(updatedTeam!), ['student-1', 'student-2', 'student-4', 'student-5']);
+});
+
+test('requires the resulting team to have 4–6 members and both major groups', () => {
+  const availableStudents: AssignableStudent[] = [
+    { ...students[0], major: 'BBA_FIN', teamId: null },
+    { ...students[1], major: 'BIT_SE', teamId: null },
+    { _id: 'student-4', fullName: 'Missing Major', major: null, classId: 'class-1' },
+    { _id: 'student-5', fullName: 'Another Member', major: 'BIT_AI', classId: 'class-1' },
+  ];
+  const emptyTeam: ManagedTeam = { _id: 'empty-team', classId: 'class-1', teamName: 'Empty Team', members: [] };
+  const baseDraft: StudentAssignmentDraft = {
+    mode: 'TEAM', classId: 'class-1', teamId: emptyTeam._id, studentIds: ['student-1', 'student-2', 'student-4'],
+  };
+
+  assert.match(validateStudentAssignment(baseDraft, availableStudents, [emptyTeam]).errors.studentIds || '', /4–6/);
+  const withoutBusiness = validateStudentAssignment({
+    ...baseDraft,
+    studentIds: ['student-2', 'student-4', 'student-5', 'student-6'],
+  }, [...availableStudents, { _id: 'student-6', fullName: 'Another Missing Major', major: null, classId: 'class-1' }], [emptyTeam]);
+  assert.match(withoutBusiness.errors.studentIds || '', /GROUP_1.*GROUP_2/);
 });
 
 test('blocks team assignment when a selected student does not belong to the class', () => {

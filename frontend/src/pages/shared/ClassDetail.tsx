@@ -25,6 +25,7 @@ import EditScheduleModal from '../../components/class/EditScheduleModal';
 import AssignLectureModal from '../../components/class/AssignLectureModal';
 import AssignMentorsModal from '../../components/class/AssignMentorsModal';
 import VerifyMajorModal from '../../components/class/VerifyMajorModal';
+import ImportSemesterGroupsModal from '../../components/class/ImportSemesterGroupsModal';
 import AddStudentModal from '../../components/class/AddStudentModal';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import { getTeamMemberIds, mergeTeamsWithLinkedProposals, normalizeManagedTeam, normalizeTeamProposal, resolveEffectiveTeamMajor } from '../../utils/teamManagement';
@@ -97,6 +98,7 @@ export default function ClassDetail() {
   const [showAssignLecturer, setShowAssignLecturer] = useState(false);
   const [showAssignMentors, setShowAssignMentors] = useState(false);
   const [showVerify, setShowVerify] = useState(false);
+  const [showSemesterGroupImport, setShowSemesterGroupImport] = useState(false);
   const [reviewTeam, setReviewTeam] = useState(null);
   const [teamToDelete, setTeamToDelete] = useState(null);
   const [directionTeam, setDirectionTeam] = useState(null);
@@ -211,6 +213,7 @@ export default function ClassDetail() {
           profileMajorCode: registeredMajor || null,
           hasMajorMismatch,
           majorVerificationStatus: s.majorVerificationStatus || 'Unverified',
+          semesterGroupName: s.semesterGroupName || null,
           enrollmentStatus: s.enrollmentStatus || 'Active',
           classId: currentClassId,
           teamId: s.teamId || null,
@@ -269,7 +272,8 @@ export default function ClassDetail() {
   // Refresh only when the server confirms this class changed, or after reconnecting.
   useEffect(() => subscribeProjectDirectionRealtime((event) => {
     const currentClassId = String(cls?.id || cls?._id || '');
-    if (currentClassId && (event.eventType === 'ClassMajorUpdated' || event.eventType === 'TeamProposalReviewed')
+    if (currentClassId && (event.eventType === 'ClassMajorUpdated' || event.eventType === 'TeamProposalReviewed'
+      || event.eventType === 'TeamCreated')
       && String(event.classId) === currentClassId) {
       void fetchData();
     }
@@ -575,7 +579,9 @@ export default function ClassDetail() {
 
   const getUniqueMentors = () => {
     const teamMentors = safeTeams
-      .map(team => team.currentMentorAssignment?.mentor)
+      .flatMap(team => Array.isArray(team.currentMentorAssignments)
+        ? team.currentMentorAssignments.map(assignment => assignment.mentor)
+        : team.currentMentorAssignment?.mentor ? [team.currentMentorAssignment.mentor] : [])
       .filter(Boolean)
       .map(mentor => ({ _id: mentor.mentorProfileId, name: mentor.fullName, email: mentor.email }));
     const seen = new Set();
@@ -666,7 +672,7 @@ export default function ClassDetail() {
 
         {canManageClass && showActionsMenu && (
           <div className="flex flex-wrap items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50/70 p-2.5 transition-all">
-            {isFeatureVisible(classFeatureFlags.chatBackfill) && (
+            {/* {isFeatureVisible(classFeatureFlags.chatBackfill) && (
               <ClassActionButton
                 icon={MessagesSquare}
                 loading={backfilling}
@@ -675,10 +681,10 @@ export default function ClassDetail() {
               >
                 {backfilling ? 'Repairing...' : 'Repair Chats'}
               </ClassActionButton>
-            )}
+            )} */}
 
             <ClassActionButton icon={Download} loading={exporting} onClick={handleExportExcel} disabled={exporting}>
-              Export
+              Export Class Data
             </ClassActionButton>
 
             {!isReadOnly && (
@@ -687,9 +693,9 @@ export default function ClassDetail() {
                   Add student
                 </ClassActionButton>
 
-                <ClassActionButton icon={UserRoundCheck} tone="secondary" onClick={() => openStudentAssignment('CLASS')}>
+                {/* <ClassActionButton icon={UserRoundCheck} tone="secondary" onClick={() => openStudentAssignment('CLASS')}>
                   Assign students
-                </ClassActionButton>
+                </ClassActionButton> */}
 
                 <ClassActionButton
                   icon={Trash2}
@@ -717,7 +723,20 @@ export default function ClassDetail() {
                 tone="indigo"
                 onClick={() => runFeatureAction(classFeatureFlags.majorVerification, 'Major verification', () => setShowVerify(true))}
               >
-                Verify majors
+                Verify / sync majors
+              </ClassActionButton>
+            )}
+
+            {!isReadOnly && (
+              <ClassActionButton
+                icon={Upload}
+                tone="secondary"
+                onClick={() => {
+                  setShowActionsMenu(false);
+                  setShowSemesterGroupImport(true);
+                }}
+              >
+                Import semester groups
               </ClassActionButton>
             )}
 
@@ -881,7 +900,7 @@ export default function ClassDetail() {
         </div>
       </div>
 
-      {/* ── Inline team proposal flow shared by students and class managers ── */}
+      {/* ── Direct team creation for administrators and the assigned lecturer ── */}
       {teamControlsVisible && selected.length > 0 && tab === 'students' && canManageClass && (
         <div className="sticky top-20 z-20 rounded-2xl bg-white/80 shadow-xl backdrop-blur-md">
           <StudentTeamGeneratePanel
@@ -890,6 +909,7 @@ export default function ClassDetail() {
             students={selectedTeamStudents}
             onTeamCreated={handleTeamCreated}
             requireCurrentStudentMembership={false}
+            creationMode="direct"
           />
         </div>
       )}
@@ -1081,6 +1101,15 @@ export default function ClassDetail() {
         <VerifyMajorModal
           classId={loadedClassId}
           onClose={() => setShowVerify(false)}
+          onUpdated={() => void fetchData()}
+        />
+      )}
+
+      {!isReadOnly && showSemesterGroupImport && canManageClass && (
+        <ImportSemesterGroupsModal
+          classId={loadedClassId}
+          onClose={() => setShowSemesterGroupImport(false)}
+          onImported={() => void fetchData()}
         />
       )}
 

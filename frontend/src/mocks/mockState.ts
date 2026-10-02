@@ -1,4 +1,5 @@
 import type { ClassDto, ClassRosterStudent, ClassStatus } from '../types/classes.ts';
+import type { TeamFormation } from '../types/teamFormation.ts';
 
 export interface MockUser {
   id: string;
@@ -60,7 +61,7 @@ export interface MockSemester {
   id: string;
   semester: 'SP' | 'SU' | 'FA';
   year: number;
-  status: 'Planned' | 'Active' | 'Completed' | 'Archived';
+  status: 'Planned' | 'Active' | 'Closing' | 'Completed' | 'Archived';
   startDate: string | null;
   endDate: string | null;
   completedAtUtc: string | null;
@@ -111,8 +112,15 @@ export interface MockCheckpoint {
   number: number;
   title: string;
   shortDescription: string | null;
+  courseWeight: number;
   requirements: string[];
   rubrics: Array<Record<string, unknown>>;
+}
+
+export interface MockOtherAssessment {
+  _id: string;
+  name: string;
+  weight: number;
 }
 
 export interface MockClassCheckpointSchedule {
@@ -130,14 +138,25 @@ export interface MockCheckpointFile {
   originalName: string;
   fileType: string;
   fileSize: number;
+  canDirectDownload?: boolean;
   uploadedAt: string;
   uploadedBy: { _id: string; name: string };
+}
+
+export interface MockCheckpointLink {
+  _id: string;
+  versionNumber: number;
+  name: string;
+  url: string;
+  submittedAt: string;
+  submittedBy: { _id: string; name: string };
 }
 
 export interface MockCurriculum {
   roadmapItems: MockRoadmapItem[];
   rubrics: MockRubric[];
   checkpoints: MockCheckpoint[];
+  otherAssessments: MockOtherAssessment[];
 }
 
 export interface MockClass extends ClassDto {
@@ -164,6 +183,7 @@ export interface MockMentor {
   fullName: string;
   email: string;
   organization: string | null;
+  mentorType: 'Enterprise' | 'Academic';
 }
 
 export interface MockMentorAssignment {
@@ -176,6 +196,7 @@ export interface MockMentorAssignment {
   assignedAtUtc: string;
   endedAtUtc: string | null;
   note: string | null;
+  slot: 'Enterprise' | 'Academic';
 }
 
 export interface MockTeam {
@@ -208,6 +229,7 @@ export interface MockTeam {
   leaderId: string | null;
   members: MockTeamMember[];
   currentMentorAssignment: MockMentorAssignment | null;
+  currentMentorAssignments: MockMentorAssignment[];
   rowVersion: string;
 }
 
@@ -262,6 +284,9 @@ export interface MockProjectDirection {
   status: string;
   submittedAtUtc: string | null;
   reviewedAtUtc: string | null;
+  isProjectProfileChangeProposal?: boolean;
+  currentTitle?: string | null;
+  currentSummary?: string | null;
   rowVersion: string;
   reviews: MockDirectionReview[];
 }
@@ -305,10 +330,15 @@ export interface MockApiState {
   curricula: Record<string, MockCurriculum>;
   checkpointSchedules: Record<string, MockClassCheckpointSchedule>;
   checkpointFiles: Record<string, MockCheckpointFile[]>;
+  checkpointLinks: Record<string, MockCheckpointLink[]>;
+  courseAssessmentScores: Record<string, number>;
+  courseAssessmentMemberScores: Record<string, number>;
+  evaluationPublicationStatuses: Record<string, 'SUBMITTED' | 'PUBLISHED'>;
   classes: MockClass[];
   rosters: Record<string, MockRosterStudent[]>;
   teams: MockTeam[];
   proposals: MockProposal[];
+  formations: TeamFormation[];
   directions: MockProjectDirection[];
   audits: Record<string, MockAuditEntry[]>;
   imports: Record<string, MockImportSession>;
@@ -382,7 +412,7 @@ const curriculumFor = (subject: MockSubject): MockCurriculum => ({
     name: 'Checkpoint 1 rubric',
     description: 'Problem validation and evidence quality.',
     status: 'ACTIVE',
-    totalWeight: 100,
+    totalWeight: 85,
     checkpointNumber: 1,
     criteria: [
       { _id: id(280 + Number(subject._id.slice(-2))), name: 'Problem clarity', description: 'The problem is specific and evidence-backed.', maxScore: 10, weight: 50, displayOrder: 1 },
@@ -393,9 +423,14 @@ const curriculumFor = (subject: MockSubject): MockCurriculum => ({
     number: 1,
     title: 'Problem validation',
     shortDescription: 'Validate a meaningful customer problem.',
+    courseWeight: 85,
     requirements: ['Interview at least five target users', 'Submit an insight summary'],
-    rubrics: [{ key: 'problem-clarity', label: 'Problem clarity', description: 'Clear problem statement', weight: 50, levels: [] }],
+    rubrics: [
+      { key: 'problem-clarity', label: 'Problem clarity', description: 'Clear problem statement', weight: 50, levels: [] },
+      { key: 'customer-evidence', label: 'Customer evidence', description: 'Evidence from target users', weight: 50, levels: [] },
+    ],
   }],
+  otherAssessments: [{ _id: id(340 + Number(subject._id.slice(-2))), name: 'Constructivism Presentations', weight: 15 }],
 });
 
 const classIds = { active: id(401), draft: id(402), archived: id(403) };
@@ -414,8 +449,9 @@ const rosterStudent = (user: MockUser, index: number, teamId: string | null): Mo
   email: user.email,
   majorCode: user.major,
   profileMajorCode: user.major,
-  majorVerificationStatus: index % 3 === 0 ? 'Verified' : 'Unverified',
+  majorVerificationStatus: index % 3 === 0 ? 'Matched' : 'Unverified',
   memberCode: `MEM-${String(index).padStart(3, '0')}`,
+  semesterGroupName: null,
   enrollmentStatus: 'Active',
   teamId,
   teamName: teamId === id(601) ? 'Phoenix Founders' : teamId === id(602) ? 'GreenByte' : null,
@@ -461,10 +497,11 @@ const memberFromRoster = (student: MockRosterStudent, leaderId: string): MockTea
   joinedAtUtc: student.joinedAtUtc,
 });
 
-const mentor: MockMentor = { mentorProfileId: id(4), userId: id(4), fullName: 'Phạm Anh Khoa', email: 'khoa.mentor@ehub.local', organization: 'E-HUB Ventures' };
+const mentor: MockMentor = { mentorProfileId: id(4), userId: id(4), fullName: 'Phạm Anh Khoa', email: 'khoa.mentor@ehub.local', organization: 'E-HUB Ventures', mentorType: 'Enterprise' };
+const mentorAssignment: MockMentorAssignment = { assignmentId: id(701), teamId: id(601), teamName: 'Phoenix Founders', classId: classIds.active, mentor, status: 'Active', assignedAtUtc: isoAgo(20), endedAtUtc: null, note: 'Focus on customer validation.', slot: 'Enterprise' };
 const teams: MockTeam[] = [
-  { id: id(601), classId: classIds.active, teamCode: 'EXE-T01', teamName: 'Phoenix Founders', description: 'Marketplace for trusted student services.', projectName: 'Campus Connect', projectDescription: 'A trusted marketplace that helps students discover and book verified campus services.', status: 'Active', leaderId: activeRoster[0].studentId, members: activeRoster.slice(0, 4).map((student) => memberFromRoster(student, activeRoster[0].studentId)), currentMentorAssignment: { assignmentId: id(701), teamId: id(601), teamName: 'Phoenix Founders', classId: classIds.active, mentor, status: 'Active', assignedAtUtc: isoAgo(20), endedAtUtc: null, note: 'Focus on customer validation.' }, rowVersion: 'rv-10' },
-  { id: id(602), classId: classIds.active, teamCode: 'EXE-T02', teamName: 'GreenByte', description: 'Smart energy insights for small offices.', status: 'Active', leaderId: activeRoster[4].studentId, members: activeRoster.slice(4, 8).map((student) => memberFromRoster(student, activeRoster[4].studentId)), currentMentorAssignment: null, rowVersion: 'rv-11' },
+  { id: id(601), classId: classIds.active, teamCode: 'EXE-T01', teamName: 'Phoenix Founders', description: 'Marketplace for trusted student services.', projectName: 'Campus Connect', projectDescription: 'A trusted marketplace that helps students discover and book verified campus services.', status: 'Active', leaderId: activeRoster[0].studentId, members: activeRoster.slice(0, 4).map((student) => memberFromRoster(student, activeRoster[0].studentId)), currentMentorAssignment: mentorAssignment, currentMentorAssignments: [mentorAssignment], rowVersion: 'rv-10' },
+  { id: id(602), classId: classIds.active, teamCode: 'EXE-T02', teamName: 'GreenByte', description: 'Smart energy insights for small offices.', status: 'Active', leaderId: activeRoster[4].studentId, members: activeRoster.slice(4, 8).map((student) => memberFromRoster(student, activeRoster[4].studentId)), currentMentorAssignment: null, currentMentorAssignments: [], rowVersion: 'rv-11' },
 ];
 
 const initialMockState: MockApiState = {
@@ -485,6 +522,10 @@ const initialMockState: MockApiState = {
     curricula: Object.fromEntries(subjects.map((subject) => [subject.subjectCode, curriculumFor(subject)])),
     checkpointSchedules: {},
     checkpointFiles: {},
+    checkpointLinks: {},
+    courseAssessmentScores: {},
+    courseAssessmentMemberScores: {},
+    evaluationPublicationStatuses: {},
     classes,
     rosters: { [classIds.active]: activeRoster, [classIds.draft]: draftRoster, [classIds.archived]: archivedRoster },
     teams,
@@ -493,6 +534,7 @@ const initialMockState: MockApiState = {
       members: activeRoster.slice(8, 10).map((student, index) => ({ studentId: student.studentId, rollNumber: student.rollNumber, fullName: student.fullName, majorCode: student.majorCode || '', isLeader: index === 0 })),
       rowVersion: 'rv-20', history: [{ id: id(802), fromStatus: 'Draft', toStatus: 'Pending', action: 'SUBMITTED', comment: null, performedByUserId: activeRoster[8].userId || activeRoster[8].studentId, occurredAtUtc: isoAgo(1) }],
     }],
+    formations: [],
     directions: [{ id: id(901), teamId: id(601), title: 'Student Services Marketplace', summary: 'Validate trust, fulfillment time, and willingness to pay before building the full marketplace.', startupIndustries: ['Technology & Software'], status: 'Submitted', submittedAtUtc: isoAgo(2), reviewedAtUtc: null, rowVersion: 'rv-30', reviews: [] }],
     audits: {
       [classIds.active]: [{ id: id(951), action: 'CLASS_CREATED', performedByUserId: id(1), performedByName: 'Nguyễn Minh Admin', occurredAtUtc: isoAgo(45), detailsJson: JSON.stringify({ status: 'Active' }) }],

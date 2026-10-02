@@ -7,6 +7,7 @@ import {
 import { classApi } from '../../api/classApi';
 import { PROGRAM_GROUPS, getMajorName } from '../../constants/majors';
 import { parseApiError } from '../../utils/apiError';
+import ConfirmDialog from '../ui/ConfirmDialog';
 
 const downloadTemplate = async () => {
   const response = await classApi.getMajorVerificationTemplate();
@@ -22,11 +23,15 @@ const downloadTemplate = async () => {
 };
 
 // ─── Status badge ──────────────────────────────────────────────────────────────
-const StatusBadge = ({ status }) => {
+const StatusBadge = ({ status, applied, profileWillChange }) => {
+  if (applied && (status === 'matched' || status === 'mismatched'))
+    return <span className="flex items-center gap-1 px-2 py-0.5 text-xs font-semibold bg-green-100 text-green-700 rounded-full"><CheckCircle2 className="w-3 h-3" />Verified</span>;
+  if (status === 'matched' && profileWillChange)
+    return <span className="flex items-center gap-1 px-2 py-0.5 text-xs font-semibold bg-amber-100 text-amber-700 rounded-full"><AlertTriangle className="w-3 h-3" />Profile will change</span>;
   if (status === 'matched')
-    return <span className="flex items-center gap-1 px-2 py-0.5 text-xs font-semibold bg-green-100 text-green-700 rounded-full"><CheckCircle2 className="w-3 h-3" />Matched</span>;
+    return <span className="flex items-center gap-1 px-2 py-0.5 text-xs font-semibold bg-green-100 text-green-700 rounded-full"><CheckCircle2 className="w-3 h-3" />Class matches</span>;
   if (status === 'mismatched')
-    return <span className="flex items-center gap-1 px-2 py-0.5 text-xs font-semibold bg-red-100 text-red-600 rounded-full"><AlertTriangle className="w-3 h-3" />Sai</span>;
+    return <span className="flex items-center gap-1 px-2 py-0.5 text-xs font-semibold bg-red-100 text-red-600 rounded-full"><AlertTriangle className="w-3 h-3" />Will change</span>;
   if (status === 'missing')
     return <span className="flex items-center gap-1 px-2 py-0.5 text-xs font-semibold bg-amber-100 text-amber-700 rounded-full"><AlertTriangle className="w-3 h-3" />Missing</span>;
   return <span className="flex items-center gap-1 px-2 py-0.5 text-xs font-semibold bg-slate-100 text-slate-500 rounded-full"><HelpCircle className="w-3 h-3" />Not found</span>;
@@ -76,27 +81,31 @@ function MajorSelect({ currentMajor, onSave }) {
 
 // ─── Tab labels ────────────────────────────────────────────────────────────────
 const TABS = [
-  { key: 'mismatched', label: 'Sai',         color: 'text-red-600',    bg: 'bg-red-50',    border: 'border-red-200' },
+  { key: 'mismatched', label: 'Class will change', color: 'text-red-600', bg: 'bg-red-50', border: 'border-red-200' },
   { key: 'missing',    label: 'Missing',      color: 'text-amber-600',  bg: 'bg-amber-50',  border: 'border-amber-200' },
-  { key: 'matched',    label: 'Matched',      color: 'text-green-600',  bg: 'bg-green-50',  border: 'border-green-200' },
+  { key: 'matched',    label: 'Class matches', color: 'text-green-600', bg: 'bg-green-50', border: 'border-green-200' },
   { key: 'notFound',   label: 'Not found',    color: 'text-slate-500',  bg: 'bg-slate-50',  border: 'border-slate-200' },
 ];
 
+const majorDiffers = (before, after) =>
+  String(before || '').trim().toUpperCase() !== String(after || '').trim().toUpperCase();
+
 // ─── Main Component ────────────────────────────────────────────────────────────
-export default function VerifyMajorModal({ classId, onClose }) {
+export default function VerifyMajorModal({ classId, onClose, onUpdated }) {
   const inputRef           = useRef(null);
   const [file, setFile]    = useState(null);
   const [loading, setLoading] = useState(false);
+  const [applying, setApplying] = useState(false);
   const [report, setReport]   = useState(null);
+  const [appliedSummary, setAppliedSummary] = useState<{ enrollments: number; profiles: number } | null>(null);
+  const [showApplyConfirm, setShowApplyConfirm] = useState(false);
   const [activeTab, setActiveTab] = useState('mismatched');
   const [search, setSearch]       = useState('');
   const [savingId, setSavingId]   = useState(null); // studentId being saved
 
-  // Local state for mismatched items so we can mark them corrected
-  const [corrected, setCorrected] = useState({}); // { studentId: newMajor }
-
   const handleFileDrop = (e) => {
     e.preventDefault();
+    if (applying) return;
     const dropped = e.dataTransfer?.files[0] || e.target.files[0];
     if (!dropped) return;
     if (!/\.(xlsx|xls)$/i.test(dropped.name)) {
@@ -105,26 +114,56 @@ export default function VerifyMajorModal({ classId, onClose }) {
     }
     setFile(dropped);
     setReport(null);
-    setCorrected({});
+    setAppliedSummary(null);
+    setShowApplyConfirm(false);
   };
 
-  const handleVerify = async () => {
+  const handlePreview = async () => {
     if (!file) { toast.error('Please select a file.'); return; }
     setLoading(true);
     try {
       const fd = new FormData();
       fd.append('file', file);
-      const res: any = await classApi.verifyMajors(classId, fd);
+      const res: any = await classApi.previewMajors(classId, fd);
       const data = res?.data || res;
       setReport(data);
       // Default to first tab that has data
       const firstWithData = TABS.find(t => (data[t.key] || []).length > 0);
       setActiveTab(firstWithData?.key || 'matched');
-      toast.success('Major verification completed.');
+      setAppliedSummary(null);
+      toast.success('Preview ready. No majors have been changed.');
     } catch (e) {
-      toast.error(parseApiError(e, 'Major verification failed.').message);
+      toast.error(parseApiError(e, 'Unable to preview major changes.').message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleApply = async () => {
+    if (!showApplyConfirm || !file || !report || applying || savingId || appliedSummary) return;
+
+    setApplying(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const response = await classApi.synchronizeMajorsFromFile(classId, formData);
+      const payload = (response as { data?: unknown }).data || response;
+      const data = payload as {
+        notFound?: unknown[];
+        synchronizedEnrollmentCount?: number;
+        synchronizedProfileCount?: number;
+      };
+      setAppliedSummary({
+        enrollments: data.synchronizedEnrollmentCount || 0,
+        profiles: data.synchronizedProfileCount || 0,
+      });
+      setShowApplyConfirm(false);
+      toast.success(`Updated ${data.synchronizedEnrollmentCount || 0} class major(s) and ${data.synchronizedProfileCount || 0} profile major(s).`);
+      onUpdated?.();
+    } catch (error) {
+      toast.error(parseApiError(error, 'Unable to synchronize majors from the file.').message);
+    } finally {
+      setApplying(false);
     }
   };
 
@@ -134,14 +173,16 @@ export default function VerifyMajorModal({ classId, onClose }) {
     setSavingId(studentId);
     try {
       await classApi.updateStudentMajor(classId, studentId, newMajor, reason);
-      setCorrected(prev => ({ ...prev, [studentId]: newMajor }));
-      toast.success(`Major updated to ${newMajor}.`);
+      setReport(null);
+      setAppliedSummary(null);
+      toast.success(`Major updated to ${newMajor}. Preview again before applying the file.`);
+      onUpdated?.();
     } catch (e) {
       toast.error(parseApiError(e, 'Failed to update the major.').message);
     } finally {
       setSavingId(null);
     }
-  }, [classId]);
+  }, [classId, onUpdated]);
 
   // ── Render rows for active tab ──
   const activeRows = report ? (report[activeTab] || []) : [];
@@ -152,8 +193,12 @@ export default function VerifyMajorModal({ classId, onClose }) {
         )
       )
     : activeRows;
+  const previewRows = report ? [...(report.matched || []), ...(report.mismatched || [])] : [];
+  const classChanges = previewRows.filter(row => majorDiffers(row.majorInDb, row.majorInFile)).length;
+  const profileChanges = previewRows.filter(row => majorDiffers(row.majorInProfile, row.majorInFile)).length;
 
   return (
+    <>
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
 
@@ -161,8 +206,8 @@ export default function VerifyMajorModal({ classId, onClose }) {
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-slate-100">
           <div>
-            <h2 className="text-xl font-bold text-slate-900">Verify Majors</h2>
-            <p className="text-sm text-slate-400 mt-0.5">Upload an Excel file to compare each student's enrollment major</p>
+            <h2 className="text-xl font-bold text-slate-900">Verify / Sync Majors</h2>
+            <p className="text-sm text-slate-400 mt-0.5">Upload the official Excel file to compare majors, then apply them to the class and profiles.</p>
           </div>
           <button onClick={onClose} className="p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-all">
             <X className="w-5 h-5" />
@@ -214,6 +259,12 @@ export default function VerifyMajorModal({ classId, onClose }) {
           {/* Results */}
           {report && (
             <div className="space-y-4">
+              <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-3 text-sm text-indigo-900">
+                {appliedSummary
+                  ? `Verified and updated ${appliedSummary.enrollments} class major(s) and ${appliedSummary.profiles} profile major(s). The table below retains the before/after preview.`
+                  : `Preview only — no data has changed. The official file would change ${classChanges} class major(s) and ${profileChanges} profile major(s). Review before verifying and updating. Manual correction saves immediately and requires a new preview.`}
+                {' '}Other columns, including GroupName, are ignored.
+              </div>
               {/* Summary cards */}
               <div className="grid grid-cols-4 gap-3">
                 {TABS.map(t => {
@@ -259,23 +310,21 @@ export default function VerifyMajorModal({ classId, onClose }) {
                       <tr>
                         <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Student</th>
                         <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Student code</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Trong file</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Enrollment major</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Before · Class</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Before · Profile</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">After · Official file (code)</th>
                         <th className="px-4 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
-                        {activeTab === 'mismatched' && (
-                          <th className="px-4 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">Correct</th>
+                        {activeTab === 'mismatched' && !appliedSummary && (
+                          <th className="px-4 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">Correct now</th>
                         )}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50">
                       {filteredRows.map((row, i) => {
-                        const isCorrected   = !!corrected[row.studentId];
-                        const correctedMajor = corrected[row.studentId];
                         const isSaving      = savingId === row.studentId;
-                        const dbMajorDisplay = isCorrected ? correctedMajor : row.majorInDB;
 
                         return (
-                          <tr key={i} className={`hover:bg-slate-50 transition-colors ${isCorrected ? 'opacity-60' : ''}`}>
+                          <tr key={i} className="hover:bg-slate-50 transition-colors">
                             <td className="px-4 py-3">
                               <div>
                                 <p className="font-medium text-slate-800 text-xs">{row.fullName}</p>
@@ -284,40 +333,31 @@ export default function VerifyMajorModal({ classId, onClose }) {
                             </td>
                             <td className="px-4 py-3 font-mono text-xs text-slate-500">{row.rollNumber}</td>
                             <td className="px-4 py-3">
-                              {row.majorInFile ? (
-                                <span className="font-mono text-xs font-semibold text-primary">
-                                  {row.majorInFile}
-                                  {getMajorName(row.majorInFile) && (
-                                    <span className="font-normal text-slate-400 ml-1">— {getMajorName(row.majorInFile)}</span>
-                                  )}
-                                </span>
-                              ) : <span className="text-xs text-slate-400">—</span>}
+                              <span className="font-mono text-xs text-slate-700">{row.majorInDb || '—'}</span>
                             </td>
                             <td className="px-4 py-3">
-                              {dbMajorDisplay ? (
-                                <span className={`font-mono text-xs font-semibold ${isCorrected ? 'text-green-600' : activeTab === 'mismatched' ? 'text-red-500' : 'text-slate-700'}`}>
-                                  {dbMajorDisplay}
-                                  {getMajorName(dbMajorDisplay) && (
-                                    <span className="font-normal text-slate-400 ml-1">— {getMajorName(dbMajorDisplay)}</span>
-                                  )}
-                                </span>
+                              <span className="font-mono text-xs text-slate-700">{row.majorInProfile || '—'}</span>
+                            </td>
+                            <td className="px-4 py-3">
+                              {row.majorInFile ? (
+                                <abbr
+                                  title={getMajorName(row.majorInFile) ?? undefined}
+                                  className={`font-mono text-xs font-semibold no-underline ${majorDiffers(row.majorInDb, row.majorInFile) || majorDiffers(row.majorInProfile, row.majorInFile) ? 'text-primary' : 'text-slate-700'}`}
+                                >
+                                  {row.majorInFile}
+                                </abbr>
                               ) : <span className="text-xs text-amber-500 font-medium">Missing</span>}
                             </td>
                             <td className="px-4 py-3 text-center">
-                              {isCorrected
-                                ? <span className="flex items-center justify-center gap-1 px-2 py-0.5 text-xs font-semibold bg-green-100 text-green-700 rounded-full"><CheckCircle2 className="w-3 h-3" />Corrected</span>
-                                : <StatusBadge status={activeTab} />
-                              }
+                              <StatusBadge status={activeTab} applied={Boolean(appliedSummary)} profileWillChange={majorDiffers(row.majorInProfile, row.majorInFile)} />
                             </td>
-                            {activeTab === 'mismatched' && (
+                            {activeTab === 'mismatched' && !appliedSummary && (
                               <td className="px-4 py-3 text-center">
-                                {isCorrected ? (
-                                  <span className="text-xs text-green-500">✓</span>
-                                ) : isSaving ? (
+                                {isSaving ? (
                                   <Loader2 className="w-4 h-4 animate-spin text-primary mx-auto" />
                                 ) : row.studentId ? (
                                   <MajorSelect
-                                    currentMajor={row.majorInDB || ''}
+                                    currentMajor={row.majorInDb || ''}
                                     onSave={(m) => handleCorrect(row.studentId, m)}
                                   />
                                 ) : (
@@ -338,28 +378,50 @@ export default function VerifyMajorModal({ classId, onClose }) {
 
         {/* Footer */}
         <div className="flex gap-3 p-6 pt-0 border-t border-slate-100">
-          <button onClick={onClose} className="flex-1 px-4 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-600 hover:bg-slate-50 transition-all">
+          <button onClick={onClose} disabled={applying} className="flex-1 px-4 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-600 hover:bg-slate-50 transition-all disabled:opacity-50">
             Close
           </button>
           {!report && (
             <button
-              onClick={handleVerify}
+              onClick={handlePreview}
               disabled={!file || loading}
               className="flex-1 px-4 py-2.5 bg-indigo-500 text-white rounded-xl text-sm font-medium hover:bg-indigo-600 disabled:opacity-50 transition-all flex items-center justify-center gap-2"
             >
-              {loading ? <><Loader2 className="w-4 h-4 animate-spin" /> Verifying...</> : <>Verify majors</>}
+              {loading ? <><Loader2 className="w-4 h-4 animate-spin" /> Preparing preview...</> : <>Preview changes</>}
             </button>
           )}
           {report && (
-            <button
-              onClick={() => { setReport(null); setFile(null); setCorrected({}); }}
-              className="flex-1 px-4 py-2.5 bg-indigo-500 text-white rounded-xl text-sm font-medium hover:bg-indigo-600 transition-all"
-            >
-              Verify again
-            </button>
+            <>
+              <button
+                onClick={() => { setReport(null); setFile(null); setAppliedSummary(null); setShowApplyConfirm(false); }}
+                disabled={applying}
+                className="flex-1 px-4 py-2.5 border border-indigo-200 text-indigo-700 rounded-xl text-sm font-medium hover:bg-indigo-50 disabled:opacity-50"
+              >
+                Choose another file
+              </button>
+              <button
+                onClick={() => setShowApplyConfirm(true)}
+                disabled={applying || Boolean(savingId) || Boolean(appliedSummary) || !file || ((report.matched?.length || 0) + (report.mismatched?.length || 0) === 0)}
+                className="flex-1 px-4 py-2.5 bg-indigo-500 text-white rounded-xl text-sm font-medium hover:bg-indigo-600 disabled:opacity-50"
+              >
+                {applying ? 'Verifying and updating...' : appliedSummary ? 'Verified' : 'Verify majors & update'}
+              </button>
+            </>
           )}
         </div>
       </div>
     </div>
+    <ConfirmDialog
+      isOpen={showApplyConfirm}
+      onClose={() => { if (!applying) setShowApplyConfirm(false); }}
+      onConfirm={handleApply}
+      isSubmitting={applying}
+      title="Verify and update majors?"
+      description={`Apply official majors from this file to ${previewRows.length} active class student(s) and their profiles?${report?.notFound?.length ? ` ${report.notFound.length} unmatched file/class row(s) will not receive a major.` : ''} Existing majors will be replaced.`}
+      confirmText="Verify majors & update"
+      cancelText="Cancel"
+      confirmVariant="gradient"
+    />
+    </>
   );
 }

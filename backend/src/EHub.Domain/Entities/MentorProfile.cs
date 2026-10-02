@@ -14,7 +14,11 @@ public class MentorProfile : AuditableEntity
     public string? Bio { get; set; }
     public string? Organization { get; set; }
     public string? LinkedInUrl { get; set; }
-    public string MentorType { get; set; } = "Unspecified";
+    public string MentorType
+    {
+        get => Type == EHub.Domain.Enums.MentorType.Enterprise ? "Business" : "IT";
+        set => Type = value == "IT" ? EHub.Domain.Enums.MentorType.Academic : EHub.Domain.Enums.MentorType.Enterprise;
+    }
     public string? Experience { get; set; }
     public string? PortfolioUrl { get; set; }
     public string? CvStorageUrl { get; set; }
@@ -24,8 +28,16 @@ public class MentorProfile : AuditableEntity
     public string? PortfolioPublicId { get; set; }
     public string? PortfolioFileName { get; set; }
 
+    public MentorType Type { get; set; } = EHub.Domain.Enums.MentorType.Enterprise;
+    public DateOnly? DateOfBirth { get; set; }
+    public string? ContractType { get; set; }
+    public string? EducationLevel { get; set; }
+    public string? CurrentAddress { get; set; }
+    public string? FptEmail { get; set; }
+    public string? Department { get; set; }
+    public string? JobTitle { get; set; }
+
     public MentorProfileStatus Status { get; set; } = MentorProfileStatus.Active;
-    public int MaxTeams { get; set; } = 3;
 
     // Navigation properties
     public virtual ICollection<MentorAssignment> Assignments { get; set; } = new List<MentorAssignment>();

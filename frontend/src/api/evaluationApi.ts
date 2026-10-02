@@ -32,14 +32,32 @@ export const evaluationApi = {
   getCheckpointSummary: async (teamId, checkpointNumber) => {
     return axiosClient.get(`/workspace/checkpoints/teams/${teamId}/checkpoints/${checkpointNumber}/evaluation-summary`);
   },
+  getGradingBatch: async (teamIds: string[]) => {
+    return axiosClient.post('/workspace/checkpoints/evaluation-grading', { teamIds });
+  },
   getCheckpointHistory: async (teamId, checkpointNumber) => {
     return axiosClient.get(`/evaluations/team/${teamId}/checkpoints/${checkpointNumber}/history`);
+  },
+  getCourseAssessments: async (teamId) => {
+    return axiosClient.get(`/workspace/checkpoints/teams/${teamId}/course-assessments`);
+  },
+  saveCourseAssessment: async (teamId, assessmentId, data) => {
+    return axiosClient.put(`/workspace/checkpoints/teams/${teamId}/course-assessments/${assessmentId}`, data);
   },
   createCheckpointEvaluation: async (teamId, checkpointNumber, evaluationData) => {
     return axiosClient.post(`/workspace/checkpoints/teams/${teamId}/checkpoints/${checkpointNumber}/evaluations`, evaluationData);
   },
   updateCheckpointEvaluation: async (evaluationId, evaluationData) => {
     return axiosClient.put(`/workspace/checkpoints/evaluations/${evaluationId}`, evaluationData);
+  },
+  publishEvaluation: async (evaluationId) => {
+    return axiosClient.put(`/workspace/checkpoints/evaluations/${evaluationId}/publish`, {});
+  },
+  unpublishEvaluation: async (evaluationId) => {
+    return axiosClient.put(`/workspace/checkpoints/evaluations/${evaluationId}/unpublish`, {});
+  },
+  updatePublicationBatch: async (data) => {
+    return axiosClient.put('/workspace/checkpoints/evaluations/publication/bulk', data);
   },
   submitCheckpointEvaluation: async (evaluationId) => {
     return axiosClient.put(`/evaluations/team/${evaluationId}/submit`, {});
@@ -55,8 +73,14 @@ export const {
   submitTeamEvaluation,
   getCheckpointEvaluations,
   getCheckpointSummary,
+  getGradingBatch,
   getCheckpointHistory,
+  getCourseAssessments,
+  saveCourseAssessment,
   createCheckpointEvaluation,
   updateCheckpointEvaluation,
+  publishEvaluation,
+  unpublishEvaluation,
+  updatePublicationBatch,
   submitCheckpointEvaluation,
 } = evaluationApi;

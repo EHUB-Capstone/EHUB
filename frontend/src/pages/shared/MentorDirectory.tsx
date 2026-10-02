@@ -51,7 +51,7 @@ export default function MentorDirectory() {
         <p className="text-sm text-slate-700">{profile.bio || 'No biography yet.'}</p>
         <div className="flex flex-wrap gap-1">{profile.expertise.map(skill => <span key={skill} className="rounded-full bg-indigo-50 px-2 py-1 text-xs text-indigo-800">{skill}</span>)}</div>
         <dl className="grid grid-cols-2 gap-2 border-t pt-3 text-sm sm:grid-cols-4">
-          <div><dt className="text-slate-500">Active teams</dt><dd className="font-semibold">{profile.activeTeamCount}/{profile.maxTeams}</dd></div>
+          <div><dt className="text-slate-500">Active teams</dt><dd className="font-semibold">{profile.activeTeamCount}</dd></div>
           <div><dt className="text-slate-500">Assignments</dt><dd className="font-semibold">{profile.totalAssignments}</dd></div>
           <div><dt className="text-slate-500">Sessions</dt><dd className="font-semibold">{profile.totalSessions}</dd></div>
           <div><dt className="text-slate-500">Student rating</dt><dd className="font-semibold">{profile.averageFeedbackRating?.toFixed(1) ?? '—'}</dd></div></dl>

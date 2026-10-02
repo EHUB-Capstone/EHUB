@@ -20,6 +20,7 @@ public class Rubric : AuditableEntity
     public virtual Checkpoint? Checkpoint { get; set; }
 
     public decimal TotalWeight { get; set; } = 100;
+    public decimal CourseWeight { get; set; }
 
     public RubricStatus Status { get; set; } = RubricStatus.Draft;
 

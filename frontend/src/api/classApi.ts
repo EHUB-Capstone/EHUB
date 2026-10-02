@@ -10,6 +10,7 @@ import type {
   AddStudentToClassPayload,
   CommitImportStudentsPayload,
 } from '../types/classes';
+import type { CreateClassManagerTeamRequest } from '../types/teamManagement';
 
 export const classApi = {
   // ─── Class CRUD ───────────────────────────────────────────────────────────
@@ -59,6 +60,14 @@ export const classApi = {
     }),
   commitImportStudents: (classId: string, payload: CommitImportStudentsPayload) =>
     axiosClient.post(`/classes/${classId}/import-students/commit`, payload),
+  previewSemesterGroups: (classId: string, formData: FormData) =>
+    axiosClient.post(`/classes/${classId}/semester-groups/preview`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+  importSemesterGroups: (classId: string, formData: FormData) =>
+    axiosClient.post(`/classes/${classId}/semester-groups/import`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
   importStudents: (classId, formData) =>
     axiosClient.post(`/classes/${classId}/import-students/preview`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
@@ -71,9 +80,19 @@ export const classApi = {
     axiosClient.post('/classes/bulk/export-excel', data, { responseType: 'blob' }),
 
   // Verify student majors against lecturer's Excel file
+  previewMajors: (classId, formData) =>
+    runClassFeatureRequest(classFeatureFlags.majorVerification, 'Class major preview', () =>
+      axiosClient.post(`/classes/${classId}/major-verification/preview`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      })),
   verifyMajors: (classId, formData) =>
     runClassFeatureRequest(classFeatureFlags.majorVerification, 'Class major verification', () =>
       axiosClient.post(`/classes/${classId}/major-verification`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      })),
+  synchronizeMajorsFromFile: (classId, formData) =>
+    runClassFeatureRequest(classFeatureFlags.majorVerification, 'Class major synchronization', () =>
+      axiosClient.post(`/classes/${classId}/major-verification/synchronize`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       })),
   getMajorVerificationTemplate: () =>
@@ -107,6 +126,9 @@ export const classApi = {
   // ─── Teams ───────────────────────────────────────────────────────────────
   getTeams:      (classId) => runClassFeatureRequest(classFeatureFlags.teamManagement, 'Class team management', () =>
     axiosClient.get(`/classes/${classId}/teams`)),
+  createTeam: (classId: string, payload: CreateClassManagerTeamRequest) =>
+    runClassFeatureRequest(classFeatureFlags.teamManagement, 'Class team management', () =>
+      axiosClient.post(`/classes/${classId}/teams`, payload)),
   getTeamProposals: (classId) => runClassFeatureRequest(classFeatureFlags.teamManagement, 'Class team management', () =>
     axiosClient.get(`/classes/${classId}/team-proposals`)),
   submitTeamProposal: (classId, payload) =>

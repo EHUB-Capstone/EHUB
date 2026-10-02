@@ -5,7 +5,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { Mail, Key, User, ShieldCheck, Camera, ArrowLeft, Eye, EyeOff } from 'lucide-react';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
-import { changePassword, updateProfile } from '../../api/authApi';
+import { changePassword, getCurrentUser, updateProfile } from '../../api/authApi';
 import toast from 'react-hot-toast';
 import { motion } from 'framer-motion';
 import { TEAM_MAJOR_GROUPS, ALL_TEAM_MAJOR_CODES } from '../../constants/majors';
@@ -15,7 +15,7 @@ const roleBadgeVariant = { ADMIN: 'Approved', LECTURER: 'Submitted', MENTOR: 'Re
 const roleLabel = { ADMIN: 'Administrator', LECTURER: 'Lecturer', MENTOR: 'Mentor', STUDENT: 'Student' };
 
 const ProfileSettings = () => {
-  const { user, updateUser } = useAuth();
+  const { user, updateUser, refreshUser } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const activeTab = location.pathname === '/settings' ? 'password' : 'profile';
@@ -30,9 +30,11 @@ const ProfileSettings = () => {
   
   // Profile state
   const [name, setName] = useState(user?.name || '');
+  const nameEditedRef = useRef(false);
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const [major, setMajor] = useState(user?.major || '');
+  const majorEditedRef = useRef(false);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
 
   // Password state
@@ -46,6 +48,17 @@ const ProfileSettings = () => {
 
   const role = user?.role?.toUpperCase() || 'STUDENT';
   const myClassesPath = role === 'STUDENT' ? '/student/classes' : role === 'ADMIN' ? '/admin/classes' : '/lecturer/classes';
+
+  useEffect(() => {
+    if (role === 'STUDENT') {
+      void refreshUser().catch(() => toast.error('Unable to refresh profile information. Reload to retry.'));
+    }
+  }, [refreshUser, role]);
+
+  useEffect(() => {
+    if (!nameEditedRef.current) setName(user?.name || '');
+    if (!majorEditedRef.current) setMajor(user?.major || '');
+  }, [user?.name, user?.major]);
 
   const handleUpdateProfile = async (e) => {
     e.preventDefault();
@@ -70,13 +83,27 @@ const ProfileSettings = () => {
         majorCode: profile.majorCode,
         major: profile.majorCode,
       });
+      nameEditedRef.current = false;
+      majorEditedRef.current = false;
       setAvatarFile(null);
       if (avatarInputRef.current) {
         avatarInputRef.current.value = '';
       }
       toast.success('Profile updated successfully');
     } catch (err) {
-      toast.error(parseApiError(err, 'Failed to update profile').message);
+      const error = parseApiError(err, 'Failed to update profile');
+      toast.error(error.message);
+      if (role === 'STUDENT' && (error.code === 'MAJOR_LOCKED' || error.code === 'CLASS_ENROLLMENT_MAJOR_LOCKED')) {
+        majorEditedRef.current = false;
+        setMajor(user?.majorCode ?? user?.major ?? '');
+        try {
+          const currentUser = await getCurrentUser();
+          setMajor(currentUser.majorCode ?? '');
+          updateUser({ majorCode: currentUser.majorCode, major: currentUser.majorCode });
+        } catch {
+          toast.error('Unable to refresh your saved major. Reload to verify it.');
+        }
+      }
     } finally {
       setIsSavingProfile(false);
     }
@@ -220,7 +247,7 @@ const ProfileSettings = () => {
 
                 <div>
                   <label htmlFor="profile-name" className="block text-sm font-medium text-slate-700 mb-1.5">Full Name</label>
-                  <input id="profile-name" type="text" value={name} onChange={e => setName(e.target.value)} placeholder="Your name" className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-slate-900 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none" />
+                  <input id="profile-name" type="text" value={name} onChange={e => { nameEditedRef.current = true; setName(e.target.value); }} placeholder="Your name" className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-slate-900 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none" />
                 </div>
 
                 <div>
@@ -237,7 +264,8 @@ const ProfileSettings = () => {
                       <label htmlFor="profile-major" className="block text-sm font-medium text-slate-700 mb-1.5">Major</label>
                       <select
                         id="profile-major"
-                        value={major} onChange={e => setMajor(e.target.value)}
+                        value={major} onChange={e => { majorEditedRef.current = true; setMajor(e.target.value); }}
+                        disabled={isSavingProfile}
                         className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-slate-900 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none"
                       >
                         <option value="">-- Select a major --</option>

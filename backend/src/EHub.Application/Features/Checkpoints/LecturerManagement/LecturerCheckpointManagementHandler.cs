@@ -162,6 +162,13 @@ public sealed class LecturerCheckpointManagementHandler(
                 .Where(item => submissionIds.Contains(item.SubmissionId))
                 .Select(item => new FileRow(item.Id, item.SubmissionId, item.OriginalName, item.UploadedAt))
                 .ToArrayAsync(cancellationToken);
+        var linkRows = submissionIds.Length == 0
+            ? Array.Empty<LinkRow>()
+            : await context.SubmissionLinks
+                .AsNoTracking()
+                .Where(item => submissionIds.Contains(item.SubmissionId))
+                .Select(item => new LinkRow(item.Id, item.SubmissionId, item.Name, item.Url, item.VersionNumber, item.SubmittedAt))
+                .ToArrayAsync(cancellationToken);
 
         var now = EnsureUtc(dateTimeProvider.UtcNow);
         var schedules = selectedClasses
@@ -180,6 +187,9 @@ public sealed class LecturerCheckpointManagementHandler(
         var filesBySubmission = fileRows
             .GroupBy(item => item.SubmissionId)
             .ToDictionary(group => group.Key, group => group.ToArray());
+        var linksBySubmission = linkRows
+            .GroupBy(item => item.SubmissionId)
+            .ToDictionary(group => group.Key, group => group.ToArray());
         var classById = selectedClasses.ToDictionary(item => item.Id);
 
         var submissionResponses = teams
@@ -192,6 +202,7 @@ public sealed class LecturerCheckpointManagementHandler(
                     scheduleByKey.GetValueOrDefault((team.ClassId, checkpoint.Id)),
                     submissionsByKey.GetValueOrDefault((team.Id, checkpoint.Id)) ?? Array.Empty<SubmissionRow>(),
                     filesBySubmission,
+                    linksBySubmission,
                     now)))
             .ToArray();
 
@@ -553,15 +564,22 @@ public sealed class LecturerCheckpointManagementHandler(
         ClassCheckpointSchedule? schedule,
         IReadOnlyCollection<SubmissionRow> submissions,
         IReadOnlyDictionary<Guid, FileRow[]> filesBySubmission,
+        IReadOnlyDictionary<Guid, LinkRow[]> linksBySubmission,
         DateTime now)
     {
         var latest = submissions
             .OrderByDescending(item => item.SubmittedAt ?? item.CreatedAt)
             .FirstOrDefault();
-        var earliestFile = submissions
+        var submittedFiles = submissions
             .SelectMany(item => filesBySubmission.GetValueOrDefault(item.Id) ?? Array.Empty<FileRow>())
             .OrderBy(item => item.UploadedAt)
-            .FirstOrDefault();
+            .ToArray();
+        var earliestFile = submittedFiles.FirstOrDefault();
+        var links = submissions
+            .SelectMany(item => linksBySubmission.GetValueOrDefault(item.Id) ?? Array.Empty<LinkRow>())
+            .OrderByDescending(item => item.VersionNumber)
+            .ThenByDescending(item => item.SubmittedAt)
+            .ToArray();
 
         return new LecturerCheckpointSubmissionResponse
         {
@@ -579,7 +597,21 @@ public sealed class LecturerCheckpointManagementHandler(
                 Id = earliestFile.Id,
                 OriginalName = earliestFile.OriginalName,
                 UploadedAtUtc = earliestFile.UploadedAt
-            }
+            },
+            SubmittedFiles = submittedFiles.Select(file => new LecturerCheckpointFileResponse
+            {
+                Id = file.Id,
+                OriginalName = file.OriginalName,
+                UploadedAtUtc = file.UploadedAt
+            }).ToArray(),
+            SubmittedLinks = links.Select(link => new LecturerCheckpointLinkResponse
+            {
+                Id = link.Id,
+                Name = link.Name,
+                Url = link.Url,
+                VersionNumber = link.VersionNumber,
+                SubmittedAtUtc = link.SubmittedAt
+            }).ToArray()
         };
     }
 
@@ -620,4 +652,5 @@ public sealed class LecturerCheckpointManagementHandler(
     private sealed record TeamRow(Guid Id, Guid ClassId, string Name);
     private sealed record SubmissionRow(Guid Id, Guid TeamId, Guid CheckpointId, SubmissionStatus Status, DateTime? SubmittedAt, DateTime CreatedAt);
     private sealed record FileRow(Guid Id, Guid SubmissionId, string OriginalName, DateTime UploadedAt);
+    private sealed record LinkRow(Guid Id, Guid SubmissionId, string Name, string Url, int VersionNumber, DateTime SubmittedAt);
 }

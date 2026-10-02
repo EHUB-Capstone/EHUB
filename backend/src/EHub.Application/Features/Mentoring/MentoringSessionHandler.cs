@@ -36,9 +36,14 @@ public sealed class MentoringSessionHandler(IApplicationDbContext context, IDate
     {
         var invalid = Validate(request);
         if (invalid is not null) return Bad<MentoringSessionResponse>(invalid);
-        var assignment = await context.MentorAssignments.Include(x => x.Team).ThenInclude(x => x.Class)
-            .Include(x => x.MentorProfile).FirstOrDefaultAsync(x => x.TeamId == request.TeamId &&
-                x.Status == MentorAssignmentStatus.Active && x.EndedAt == null, ct);
+        var candidates = await context.MentorAssignments.Include(x => x.Team).ThenInclude(x => x.Class)
+            .Include(x => x.MentorProfile).Where(x => x.TeamId == request.TeamId &&
+                x.Status == MentorAssignmentStatus.Active && x.EndedAt == null &&
+                (!request.MentorAssignmentId.HasValue || x.Id == request.MentorAssignmentId.Value) &&
+                (role != SystemRoles.Mentor || x.MentorProfile.UserId == userId)).ToListAsync(ct);
+        if (candidates.Count > 1) return Bad<MentoringSessionResponse>("Choose the mentor assignment for this session.");
+        var assignment = candidates.SingleOrDefault();
+        if (assignment is null && role == SystemRoles.Mentor) return Forbidden<MentoringSessionResponse>();
         if (assignment is null) return Result.Failure<MentoringSessionResponse>(ErrorCodes.MentorNotAvailable, "Team has no active mentor.");
         if (!CanManage(assignment, userId, role)) return Forbidden<MentoringSessionResponse>();
         if (assignment.Team.Status != TeamStatus.Active || assignment.Team.Class.Status != ClassStatus.Active)
@@ -64,7 +69,7 @@ public sealed class MentoringSessionHandler(IApplicationDbContext context, IDate
         var session = await LoadAsync(id, ct);
         if (session is null) return NotFound<MentoringSessionResponse>();
         if (!CanManage(session.MentorAssignment, userId, role)) return Forbidden<MentoringSessionResponse>();
-        if (session.MentorAssignment.TeamId != request.TeamId || session.Status != MentoringSessionStatus.Scheduled)
+        if ((request.MentorAssignmentId.HasValue && request.MentorAssignmentId != session.MentorAssignmentId) || session.MentorAssignment.TeamId != request.TeamId || session.Status != MentoringSessionStatus.Scheduled)
             return Bad<MentoringSessionResponse>("Only a scheduled session for the same team can be edited.");
         if (session.MentorAssignment.Team.Class.Status != ClassStatus.Active)
             return Bad<MentoringSessionResponse>("Archived or completed classes cannot change sessions.");

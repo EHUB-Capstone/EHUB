@@ -20,8 +20,8 @@ public sealed class MentorFitScorerTests
     [Fact]
     public void RelevantExpertiseRanksAboveUnrelatedExpertise()
     {
-        var aiMentor = new MentorProfile { Expertise = ["AI", "Data"], MaxTeams = 3 };
-        var marketingMentor = new MentorProfile { Expertise = ["Marketing"], MaxTeams = 3 };
+        var aiMentor = new MentorProfile { Expertise = ["AI", "Data"] };
+        var marketingMentor = new MentorProfile { Expertise = ["Marketing"] };
 
         var relevant = MentorFitScorer.Score(aiMentor, "AI data platform for student teams", 0.8, 0);
         var unrelated = MentorFitScorer.Score(marketingMentor, "AI data platform for student teams", 0.3, 0);
@@ -31,15 +31,15 @@ public sealed class MentorFitScorerTests
     }
 
     [Fact]
-    public void FullCapacityIsExplicitWithoutDistortingRelevanceScore()
+    public void ActiveTeamCountDoesNotLimitMatching()
     {
-        var mentor = new MentorProfile { Expertise = ["Product"], MaxTeams = 1 };
+        var mentor = new MentorProfile { Expertise = ["Product"] };
         var available = MentorFitScorer.Score(mentor, "Product planning", 0.7, 0);
         var full = MentorFitScorer.Score(mentor, "Product planning", 0.7, 1);
 
         available.Score.Should().Be(full.Score);
-        full.HasCapacity.Should().BeFalse();
-        full.Reasons.Should().Contain("Đã đủ số nhóm");
+        full.HasCapacity.Should().BeTrue();
+        full.Reasons.Should().Contain("Đang phụ trách 1 nhóm");
     }
 
     [Theory]

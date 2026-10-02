@@ -2,12 +2,15 @@
 // frontend/src/api/workspaceApi.js
 import axiosClient from './axiosClient';
 import type { ApiEnvelope, WorkspaceOption } from '../types/workspaceTools';
+import type { CurrentSemesterResponse } from '../types/subjects';
+import type { ProjectWorkspaceDraft } from '../utils/projectWorkspace';
 
 export const workspaceApi = {
   getMyWorkspace: () => axiosClient.get('/workspace/my-team'),
   getAccessibleTeams: (): Promise<ApiEnvelope<WorkspaceOption[]>> => axiosClient.get('/workspace/accessible-teams'),
+  getActiveSemester: (): Promise<ApiEnvelope<CurrentSemesterResponse>> => axiosClient.get('/workspace/active-semester'),
   getTeamWorkspace: (teamId) => axiosClient.get(`/workspace/teams/${teamId}`),
-  createWorkspace: (teamId, payload) => axiosClient.post(`/workspace/teams/${teamId}`, payload),
+  createWorkspace: (teamId: string, payload: ProjectWorkspaceDraft) => axiosClient.post(`/workspace/teams/${teamId}`, payload),
   updateWorkspaceProfile: (teamId, payload) => axiosClient.put(`/workspace/teams/${teamId}/profile`, payload),
   createProposal: (teamId, payload) => axiosClient.post(`/workspace/teams/${teamId}/proposal`, payload),
   getProposal: (teamId) => axiosClient.get(`/workspace/teams/${teamId}/proposal`),

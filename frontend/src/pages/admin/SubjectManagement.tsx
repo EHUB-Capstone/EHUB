@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
-  BookOpen, Calendar, CheckCircle2, ChevronLeft, ChevronRight, Edit3, Filter, GraduationCap, Plus,
+  BookOpen, Calendar, CheckCircle2, ChevronLeft, ChevronRight, Edit3, Factory, Filter, GraduationCap, Plus,
   LockKeyhole, RefreshCw, Search, ShieldAlert, Sparkles, Users,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { subjectApi } from '../../api/subjectApi';
 import SemesterDateRangePicker from '../../components/admin/SemesterDateRangePicker';
+import MentorAdministrationCard from '../../components/admin/MentorAdministrationCard';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
@@ -14,6 +15,7 @@ import EmptyState from '../../components/ui/EmptyState';
 import LoadingSkeleton from '../../components/ui/LoadingSkeleton';
 import Modal from '../../components/ui/Modal';
 import { parseApiError } from '../../utils/apiError';
+import StartupIndustryManagement from './StartupIndustryManagement';
 import type {
   SemesterCode,
   SemesterCompletionPreview,
@@ -83,7 +85,10 @@ function semesterDateRangeError(
 
 const SubjectManagement = () => {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<'subjects' | 'staff'>('subjects');
+  const [searchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState<'subjects' | 'staff' | 'industries'>(
+    searchParams.get('tab') === 'industries' ? 'industries' : 'subjects',
+  );
   const [subjects, setSubjects] = useState<SubjectDto[]>([]);
   const [subjectsLoading, setSubjectsLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -134,6 +139,11 @@ const SubjectManagement = () => {
   } | null>(null);
   const [semesterLifecycleReason, setSemesterLifecycleReason] = useState('');
   const [semesterLifecycleBusy, setSemesterLifecycleBusy] = useState(false);
+  const [semesterTransitionTarget, setSemesterTransitionTarget] = useState<{
+    current: SemesterDto;
+    target: SemesterDto;
+  } | null>(null);
+  const [semesterTransitionReason, setSemesterTransitionReason] = useState('');
   const staffRequestId = useRef(0);
 
   useEffect(() => {
@@ -470,16 +480,38 @@ const SubjectManagement = () => {
     }
   };
 
-  const openCompleteSemester = async () => {
-    if (!currentSemester) return;
+  const openCompleteSemester = async (semester: SemesterDto) => {
     setSemesterLifecycleBusy(true);
     try {
-      const preview = responseData(await subjectApi.getSemesterCompletionPreview(currentSemester.id));
-      setSemesterLifecycleTarget({ semester: currentSemester, action: 'complete', preview });
+      const preview = responseData(await subjectApi.getSemesterCompletionPreview(semester.id));
+      setSemesterLifecycleTarget({ semester, action: 'complete', preview });
     } catch (error) {
       toast.error(parseApiError(error, 'Failed to preview semester completion').message);
     } finally {
       setSemesterLifecycleBusy(false);
+    }
+  };
+
+  const confirmSemesterTransition = async () => {
+    if (!semesterTransitionTarget) return;
+    setSavingSemester(true);
+    try {
+      const { current, target } = semesterTransitionTarget;
+      await subjectApi.transitionSemester({
+        currentSemesterId: current.id,
+        currentRowVersion: current.rowVersion,
+        targetSemesterId: target.id,
+        targetRowVersion: target.rowVersion,
+        reason: semesterTransitionReason.trim(),
+      });
+      toast.success(`${semesterLabel(target)} activated; ${semesterLabel(current)} moved to Closing`);
+      setSemesterTransitionTarget(null);
+      setSemesterTransitionReason('');
+      await loadSemester();
+    } catch (error) {
+      toast.error(parseApiError(error, 'Failed to transition semesters').message);
+    } finally {
+      setSavingSemester(false);
     }
   };
 
@@ -538,6 +570,7 @@ const SubjectManagement = () => {
     : null;
   const plannedSemestersForScheduleYear = useMemo(() => semesters.filter(item =>
     item.status === 'Planned' && Number(item.year) === semesterScheduleYear), [semesters, semesterScheduleYear]);
+  const closingSemesters = useMemo(() => semesters.filter(item => item.status === 'Closing'), [semesters]);
   const semesterScheduleBlockedRanges = useMemo(() => semesters
     .filter(item => item.id !== editingSemesterSchedule?.id
       && Boolean(item.startDate)
@@ -609,22 +642,29 @@ const SubjectManagement = () => {
       members: visibleStaff.filter(member => member.role === 'MENTOR'),
     },
   ].filter(section => staffRole === 'ALL' || section.role === staffRole);
+  const selectedSemesterRecord = semesters.find(item => item.semester === selectedSemester && Number(item.year) === selectedYear);
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 sm:text-3xl">
-            {activeTab === 'subjects' ? 'Subject & Semester' : 'Lecturers & Mentors'}
+            {activeTab === 'subjects' ? 'Subject & Semester' : activeTab === 'industries' ? 'Startup Industries' : 'Lecturers & Mentors'}
           </h1>
           <p className="mt-1 text-slate-500">
-            {activeTab === 'subjects' ? 'Manage academic subjects and the active semester.' : 'Review teaching assignments for each semester.'}
+            {activeTab === 'subjects'
+              ? 'Manage academic subjects and the active semester.'
+              : activeTab === 'industries'
+                ? 'Manage the standardized startup industries used across E-HUB projects.'
+                : 'Review teaching assignments for each semester.'}
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Button variant="outline" icon={RefreshCw} onClick={() => void refresh()}>Refresh</Button>
-          {activeTab === 'subjects' && <Button icon={Plus} onClick={openAdd}>Add Subject</Button>}
-        </div>
+        {activeTab !== 'industries' && (
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" icon={RefreshCw} onClick={() => void refresh()}>Refresh</Button>
+            {activeTab === 'subjects' && <Button icon={Plus} onClick={openAdd}>Add Subject</Button>}
+          </div>
+        )}
       </div>
 
       <div className="inline-flex w-full gap-1 overflow-x-auto rounded-xl bg-slate-100 p-1 sm:w-auto">
@@ -634,9 +674,14 @@ const SubjectManagement = () => {
         <button type="button" onClick={openStaffTab} className={`inline-flex shrink-0 items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition ${activeTab === 'staff' ? 'bg-white text-primary shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
           <Users className="h-4 w-4" /> Lecturers & Mentors by Semester
         </button>
+        <button type="button" onClick={() => setActiveTab('industries')} className={`inline-flex shrink-0 items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition ${activeTab === 'industries' ? 'bg-white text-primary shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+          <Factory className="h-4 w-4" /> Startup Industries
+        </button>
       </div>
 
-      {activeTab === 'subjects' ? (
+      {activeTab === 'industries' ? (
+        <StartupIndustryManagement embedded />
+      ) : activeTab === 'subjects' ? (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-4">
           <div className="space-y-4 lg:col-span-3">
             <div className="flex flex-col gap-3 sm:flex-row">
@@ -681,7 +726,7 @@ const SubjectManagement = () => {
               <p className="mt-2 rounded-lg bg-red-50 px-2.5 py-2 text-xs leading-5 text-red-700">This Active semester has passed its configured end date. Complete it or correct its dates before creating classes.</p>
             )}
             {currentSemester && (
-              <Button variant="outline" className="mt-3 w-full" onClick={() => void openCompleteSemester()} isLoading={semesterLifecycleBusy}>
+              <Button variant="outline" className="mt-3 w-full" onClick={() => void openCompleteSemester(currentSemester)} isLoading={semesterLifecycleBusy}>
                 Complete Active Semester
               </Button>
             )}
@@ -721,6 +766,9 @@ const SubjectManagement = () => {
                   ) : plannedSemestersForScheduleYear.map(item => {
                     const timing = semesterTiming(item);
                     const canActivate = !currentSemester && timing === 'In progress';
+                    const canTransition = Boolean(currentSemester)
+                      && semesterTiming(currentSemester!) === 'Ended'
+                      && timing === 'In progress';
                     return (
                       <div key={item.id} className="rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-2 text-xs">
                         <div className="flex items-start justify-between gap-2">
@@ -733,12 +781,25 @@ const SubjectManagement = () => {
                         </div>
                         <button
                           type="button"
-                          disabled={!canActivate || savingSemester}
-                          onClick={() => void activateSemester(item)}
+                          disabled={(!canActivate && !canTransition) || savingSemester}
+                          onClick={() => {
+                            if (canTransition && currentSemester) {
+                              setSemesterTransitionTarget({ current: currentSemester, target: item });
+                              setSemesterTransitionReason('');
+                              return;
+                            }
+                            void activateSemester(item);
+                          }}
                           className="mt-2 w-full rounded-lg border border-primary-200 bg-white px-2 py-1.5 font-semibold text-primary disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400"
-                          title={currentSemester ? 'Complete the active semester first' : timing !== 'In progress' ? 'Activation is available only between the configured dates' : 'Activate semester'}
+                          title={timing !== 'In progress'
+                            ? 'Activation is available only between the configured dates'
+                            : currentSemester && semesterTiming(currentSemester) !== 'Ended'
+                              ? 'The active semester must reach its configured end date before transition'
+                              : canTransition
+                                ? `Activate ${semesterLabel(item)} and move ${semesterLabel(currentSemester!)} to Closing`
+                                : 'Activate semester'}
                         >
-                          Activate
+                          {canTransition ? 'Transition & activate' : 'Activate'}
                         </button>
                       </div>
                     );
@@ -746,6 +807,31 @@ const SubjectManagement = () => {
                 </div>
               </div>
             </div>
+            {closingSemesters.length > 0 && (
+              <div className="mt-4 border-t border-slate-100 pt-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-amber-600">Closing semesters</p>
+                <div className="mt-2 space-y-2">
+                  {closingSemesters.map(item => (
+                    <div key={item.id} className="rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-2 text-xs">
+                      <div className="flex items-center justify-between gap-2">
+                        <div>
+                          <p className="font-semibold text-amber-900">{semesterLabel(item)}</p>
+                          <p className="mt-0.5 text-[11px] text-amber-700">Resolve remaining classes, then complete this semester.</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => void openCompleteSemester(item)}
+                          disabled={semesterLifecycleBusy}
+                          className="shrink-0 rounded-md border border-amber-300 bg-white px-2 py-1 font-semibold text-amber-800 disabled:opacity-50"
+                        >
+                          Review blockers
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             {semesters.some(item => item.status === 'Completed') && (
               <div className="mt-4 border-t border-slate-100 pt-3">
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Completed history</p>
@@ -777,6 +863,11 @@ const SubjectManagement = () => {
       ) : (
         <section className="space-y-5">
           <div className="flex flex-col gap-3 rounded-2xl border border-slate-200/70 bg-white p-4 shadow-sm md:flex-row md:items-end md:justify-between"><div className="flex flex-col gap-3 sm:flex-row"><label className="text-xs font-semibold uppercase text-slate-400">Semester<select value={selectedSemester} onChange={(event) => setSelectedSemester(event.target.value as SemesterCode)} className="mt-1.5 block rounded-xl border border-slate-200 px-3 py-2 text-sm font-normal text-slate-700 outline-none"><option value="SP">SP (Spring)</option><option value="SU">SU (Summer)</option><option value="FA">FA (Fall)</option></select></label><label className="text-xs font-semibold uppercase text-slate-400">Year<select value={selectedYear} onChange={(event) => setSelectedYear(Number(event.target.value))} className="mt-1.5 block rounded-xl border border-slate-200 px-3 py-2 text-sm font-normal text-slate-700 outline-none">{availableYears.map((year) => <option key={year} value={year}>{year}</option>)}</select></label></div><Button variant="outline" icon={Users} onClick={() => navigate('/admin/classes')}>Manage Assignments</Button></div>
+          <MentorAdministrationCard
+            semesterId={selectedSemesterRecord?.id}
+            semesterLabel={`${selectedSemester} ${selectedYear}`}
+            onImportCommitted={() => loadStaff(selectedSemester, selectedYear)}
+          />
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">{staffStats.map(({ label, value, icon: Icon, style }) => <div key={label} className="rounded-xl border border-slate-200/70 bg-white p-4 shadow-sm"><div className={`flex h-9 w-9 items-center justify-center rounded-lg ${style}`}><Icon className="h-4 w-4" /></div><p className="mt-3 text-2xl font-bold text-slate-900">{value}</p><p className="text-sm text-slate-500">{label}</p></div>)}</div>
           <div className="flex flex-col gap-3 sm:flex-row"><div className="relative flex-1"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input value={staffSearch} onChange={(event) => setStaffSearch(event.target.value)} placeholder="Search name, email, class or subject code..." className="w-full rounded-xl border border-slate-200 bg-white py-2 pl-10 pr-4 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20" /></div><select value={staffRole} onChange={(event) => setStaffRole(event.target.value as typeof staffRole)} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none"><option value="ALL">All roles</option><option value="LECTURER">Lecturers only</option><option value="MENTOR">Mentors only</option></select></div>
           {staffLoading ? (
@@ -1049,6 +1140,51 @@ const SubjectManagement = () => {
         onReasonChange={setSemesterLifecycleReason}
         reasonRequired
         confirmDisabled={semesterLifecycleTarget?.action === 'complete' && (semesterLifecycleTarget.preview?.blockers?.length ?? 0) > 0}
+        details={semesterLifecycleTarget?.action === 'complete' && (semesterLifecycleTarget.preview?.blockingClasses?.length ?? 0) > 0 ? (
+          <div className="w-full space-y-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-left">
+            <p className="text-xs font-semibold uppercase tracking-wide text-amber-800">Classes requiring action</p>
+            {semesterLifecycleTarget?.preview?.blockingClasses.map(item => (
+              <Link
+                key={item.classId}
+                to={`/classes/${item.slug || item.classId}`}
+                className="flex items-center justify-between gap-3 rounded-lg border border-amber-100 bg-white px-3 py-2 text-sm transition hover:border-primary-200 hover:text-primary"
+              >
+                <span className="min-w-0">
+                  <span className="block truncate font-semibold">{item.classCode}</span>
+                  <span className="block text-xs text-slate-500">{item.status} · {item.activeEnrollmentCount} active enrollment(s)</span>
+                </span>
+                <span className="shrink-0 text-xs font-semibold">Open class →</span>
+              </Link>
+            ))}
+            <Link
+              to={`/admin/classes?semester=${semesterLifecycleTarget.semester.semester}&year=${semesterLifecycleTarget.semester.year}`}
+              className="block text-center text-xs font-semibold text-primary hover:underline"
+            >
+              View all classes in {semesterLabel(semesterLifecycleTarget.semester)}
+            </Link>
+          </div>
+        ) : undefined}
+      />
+      <ConfirmDialog
+        isOpen={Boolean(semesterTransitionTarget)}
+        onClose={() => {
+          if (!savingSemester) {
+            setSemesterTransitionTarget(null);
+            setSemesterTransitionReason('');
+          }
+        }}
+        onConfirm={confirmSemesterTransition}
+        title={semesterTransitionTarget ? `Start ${semesterLabel(semesterTransitionTarget.target)}?` : 'Transition semesters?'}
+        description={semesterTransitionTarget
+          ? `${semesterLabel(semesterTransitionTarget.target)} will become Active. ${semesterLabel(semesterTransitionTarget.current)} will move to Closing so its remaining classes can be resolved without blocking the new semester.`
+          : ''}
+        confirmText="Transition semesters"
+        confirmVariant="primary"
+        isSubmitting={savingSemester}
+        reason={semesterTransitionReason}
+        onReasonChange={setSemesterTransitionReason}
+        reasonLabel="Reason for transition"
+        reasonRequired
       />
     </div>
   );

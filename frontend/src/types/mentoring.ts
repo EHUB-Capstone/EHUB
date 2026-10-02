@@ -11,7 +11,7 @@ export interface MentorProfile {
   portfolioUrl: string | null;
   cvFileName: string | null;
   portfolioFileName: string | null;
-  maxTeams: number;
+  maxTeams: number | null;
   status: string;
   activeTeamCount: number;
   totalAssignments: number;
@@ -57,6 +57,7 @@ export interface MentoringSession {
 }
 
 export interface SaveMentoringSession {
+  mentorAssignmentId?: string;
   teamId: string;
   title: string;
   description: string;

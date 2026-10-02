@@ -54,9 +54,48 @@ Prepare these values without sending them through chat or committing them:
 | JWT/OTP | two independent random secrets | Authentication and OTP hashing |
 | Google | web client ID | Google Sign-In on the production origin |
 | Email | sender, SMTP host/user/app password | OTP and password-reset email |
-| Cloudinary | cloud name, API key, API secret | Avatar and project file storage |
+| Cloudinary | cloud name, API key, API secret | Avatars and submission files uploaded before R2 |
+| Cloudflare R2 | account ID, access key ID, secret access key, bucket name | Private storage for new submission documents |
 | Bootstrap admin | email, one-time password, name | First administrator only |
 | Feature switches | explicit true/false values | Pages included in the pilot build |
+
+### Cloudflare R2 bucket for submission documents
+
+New submission documents (PDF, DOCX, PPTX, up to 100 MB) are uploaded by the
+browser straight to a private R2 bucket through a presigned URL. The API never
+receives the file bytes, so Nginx `client_max_body_size` (12 MB) does not apply
+to them and must not be raised for this feature.
+
+1. Create a bucket for production (for example `ehub-submissions-prod`). Keep it
+   private: do not enable the `r2.dev` subdomain or a custom public domain.
+2. Create an R2 API token with **Object Read & Write**, scoped to that bucket
+   only. Store the access key ID and secret in `.env.production` as
+   `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY`. The account ID is
+   `R2_ACCOUNT_ID`; the bucket name is `R2_BUCKET_NAME`. Use a separate bucket
+   and token for each environment.
+3. Add this CORS policy to the bucket (Settings, CORS Policy). Browsers upload
+   with `PUT`, so the production origin must be listed exactly, without a
+   trailing slash:
+
+   ```json
+   [
+     {
+       "AllowedOrigins": ["https://e-hub.com.vn"],
+       "AllowedMethods": ["PUT"],
+       "AllowedHeaders": ["Content-Type"],
+       "ExposeHeaders": ["ETag"],
+       "MaxAgeSeconds": 3600
+     }
+   ]
+   ```
+
+4. Downloads of large files use short-lived presigned `GET` links opened as a
+   normal browser navigation, so no extra CORS rule is needed for them.
+
+The backend validates the size, type and file signature again when the upload
+is completed, deletes objects that fail validation, and a background job removes
+uploads that were never completed (about 70 minutes after they start). Files
+uploaded before R2 stay on Cloudinary and keep working; they are not migrated.
 
 Google Identity Services must allow the production origin
 `https://e-hub.com.vn`. The `www` hostname redirects to the canonical apex
@@ -282,6 +321,13 @@ Stop writes, preserve logs, and choose one of these reviewed incident actions:
 2. restore the verified pre-release dump, accepting loss of data written after
    that backup.
 
+Rolling the application back to a release from before R2 support makes
+submission files already stored in R2 unreadable (that code only knows
+Cloudinary). Prefer a forward fix. If a rollback is unavoidable, leave the R2
+bucket and the new database rows untouched so the files are available again once
+the fixed release is deployed. The R2 migration only adds a table and two
+columns and is backward-compatible for the database itself.
+
 Production database restoration must be performed with a second team member
 checking the selected database and backup filename. This prevents a routine
 application rollback from becoming accidental production data loss.
@@ -316,5 +362,9 @@ restore verification.
 4. Admin, lecturer and student smoke tests pass without mock APIs.
 5. Pre-release PostgreSQL dump exists outside the VPS and its hash matches.
 6. Team records the deployed SHA, backup filename and responsible operator.
-7. After the first manual process is proven, publish immutable images to GHCR
+7. Submission upload smoke test on the real origin: upload a PDF larger than
+   10 MB and a DOCX, preview both, download the large file, then delete it. A
+   browser console CORS error on the `PUT` means the bucket CORS policy does not
+   list `https://e-hub.com.vn`.
+8. After the first manual process is proven, publish immutable images to GHCR
    and add an approval-controlled deployment workflow instead of SSH auto-deploy.

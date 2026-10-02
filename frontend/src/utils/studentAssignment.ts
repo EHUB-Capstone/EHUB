@@ -6,11 +6,14 @@ import type {
   StudentDirectoryRecord,
 } from '../types/studentAssignment';
 import type { ManagedTeam, TeamMember } from '../types/teamManagement';
+import { getTeamGroupFromMajor } from '../constants/majors.ts';
 import {
   buildStudentTeamAssignments,
   entityId,
   getTeamMemberIds,
+  getTeamMembers,
   TEAM_MEMBER_LIMIT,
+  TEAM_MEMBER_MINIMUM,
 } from './teamManagement.ts';
 
 export function studentBelongsToClass(student: AssignableStudent, classId: string): boolean {
@@ -139,6 +142,17 @@ export function validateStudentAssignment(
       const nextMemberIds = new Set([...getTeamMemberIds(targetTeam), ...studentIds]);
       if (nextMemberIds.size > TEAM_MEMBER_LIMIT) {
         errors.studentIds = `This assignment would exceed the ${TEAM_MEMBER_LIMIT}-student team limit.`;
+      } else if (nextMemberIds.size < TEAM_MEMBER_MINIMUM && !errors.studentIds) {
+        errors.studentIds = `A team must contain ${TEAM_MEMBER_MINIMUM}–${TEAM_MEMBER_LIMIT} students.`;
+      } else if (!errors.studentIds) {
+        const existingMembers = new Map(getTeamMembers(targetTeam, students)
+          .map((student) => [student._id, student]));
+        const resultingMajors = [...nextMemberIds].map((studentId) =>
+          studentMap.get(studentId)?.major ?? existingMembers.get(studentId)?.major);
+        if (!resultingMajors.some((major) => getTeamGroupFromMajor(major) === 'GROUP_1') ||
+            !resultingMajors.some((major) => getTeamGroupFromMajor(major) === 'GROUP_2')) {
+          errors.studentIds = 'A team must include at least one GROUP_1 major and one GROUP_2 major.';
+        }
       }
     }
   }

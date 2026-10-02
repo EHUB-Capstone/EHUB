@@ -14,7 +14,7 @@ public sealed class MentorProfileResponse
     public string? PortfolioUrl { get; init; }
     public string? CvFileName { get; init; }
     public string? PortfolioFileName { get; init; }
-    public int MaxTeams { get; init; }
+    public int? MaxTeams { get; init; }
     public string Status { get; init; } = string.Empty;
     public int ActiveTeamCount { get; init; }
     public int TotalAssignments { get; init; }

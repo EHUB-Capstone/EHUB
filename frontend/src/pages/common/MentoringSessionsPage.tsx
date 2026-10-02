@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useState } from 'react';
 import { mentorSupportApi } from '../../api/mentorSupportApi';
+import type { MentorAssignment } from '../../types/teamManagement';
+import { normalizeManagedTeam } from '../../utils/teamManagement';
 import { teamApi } from '../../api/teamApi';
 import { useAuth } from '../../hooks/useAuth';
 import type { MentoringFeedback, MentoringSession, SaveMentoringSession } from '../../types/mentoring';
 import { parseApiError } from '../../utils/apiError';
 import { unwrapApiData } from '../../utils/classMappers';
 
-interface TeamOption { id: string; teamName: string; teamCode?: string }
+interface TeamOption { id: string; teamName: string; teamCode?: string; assignments: MentorAssignment[] }
 const emptyForm: SaveMentoringSession = { teamId: '', title: '', description: '', startAt: '', endAt: '', location: '', meetingUrl: '' };
 
 export default function MentoringSessionsPage() {
@@ -34,12 +36,12 @@ export default function MentoringSessionsPage() {
       setSessions(sessionList);
       const raw = unwrapApiData<unknown>(teamResponse);
       const list = Array.isArray(raw) ? raw : [];
-      setTeams(list.filter((item: Record<string, unknown>) => Boolean(item.currentMentorAssignment) && item.status === 'Active')
-        .map((item: Record<string, unknown>) => ({ id: String(item.id ?? ''),
-        teamName: String(item.teamName ?? 'Team'), teamCode: String(item.teamCode ?? '') })));
+      setTeams(list.map(normalizeManagedTeam).filter(item => (item.currentMentorAssignments?.length || 0) > 0 && item.status === 'Active')
+        .map(item => ({ id: item._id, teamName: item.teamName, teamCode: item.teamCode ?? '',
+          assignments: (item.currentMentorAssignments ?? []).filter(a => user?.role !== 'MENTOR' || a.mentor.userId === user.id) })));
     } catch (cause) { setError(parseApiError(cause, 'Could not load mentoring sessions').message); }
     finally { setLoading(false); }
-  }, [teamId]);
+  }, [teamId, user?.role, user?.id]);
   useEffect(() => { void Promise.resolve().then(load); }, [load]);
 
   const save = async (event: React.FormEvent) => {
@@ -102,7 +104,7 @@ export default function MentoringSessionsPage() {
       const date = new Date(value);
       return new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
     };
-    setForm({ teamId: session.teamId, title: session.title, description: session.description ?? '',
+    setForm({ mentorAssignmentId: session.mentorAssignmentId, teamId: session.teamId, title: session.title, description: session.description ?? '',
       startAt: local(session.startAt), endAt: local(session.endAt), location: session.location ?? '', meetingUrl: session.meetingUrl ?? '' });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -114,8 +116,10 @@ export default function MentoringSessionsPage() {
     {notice && <p role="status" className="rounded-lg bg-green-50 p-3 text-green-800">{notice}</p>}
     {canManage && <form onSubmit={save} className="grid gap-3 rounded-xl border bg-white p-5 sm:grid-cols-2">
       <h2 className="text-lg font-semibold sm:col-span-2">{editingId ? 'Edit session' : 'Schedule session'}</h2>
-      <label className="text-sm">Team<select required value={form.teamId} onChange={event => setForm({ ...form, teamId: event.target.value })} className="mt-1 block w-full rounded-lg border p-2">
+      <label className="text-sm">Team<select required value={form.teamId} onChange={event => setForm({ ...form, teamId: event.target.value, mentorAssignmentId: undefined })} className="mt-1 block w-full rounded-lg border p-2">
         <option value="">Choose team</option>{teams.map(team => <option key={team.id} value={team.id}>{team.teamName} {team.teamCode}</option>)}</select></label>
+      <label className="text-sm">Mentor<select required disabled={Boolean(editingId)} value={form.mentorAssignmentId ?? ''} onChange={event => setForm({ ...form, mentorAssignmentId: event.target.value })} className="mt-1 block w-full rounded-lg border p-2">
+        <option value="">Choose mentor</option>{teams.find(team => team.id === form.teamId)?.assignments.map(a => <option key={a.assignmentId} value={a.assignmentId}>{a.mentor.fullName} · {a.slot}</option>)}</select></label>
       <label className="text-sm">Title<input required maxLength={200} value={form.title} onChange={event => setForm({ ...form, title: event.target.value })} className="mt-1 block w-full rounded-lg border p-2" /></label>
       <label className="text-sm">Starts<input required type="datetime-local" value={form.startAt} onChange={event => setForm({ ...form, startAt: event.target.value })} className="mt-1 block w-full rounded-lg border p-2" /></label>
       <label className="text-sm">Ends<input required type="datetime-local" value={form.endAt} onChange={event => setForm({ ...form, endAt: event.target.value })} className="mt-1 block w-full rounded-lg border p-2" /></label>

@@ -10,3 +10,12 @@ export function formatSemesterCode(
 
   return `${compactSemester}${yearText}`;
 }
+
+export function shortenSemesterCode(code: string | null | undefined): string {
+  const normalizedCode = String(code ?? '').trim().toUpperCase();
+  if (!normalizedCode) return '';
+
+  const letters = normalizedCode.match(/[A-Z]/g)?.join('') ?? '';
+  const digits = normalizedCode.match(/\d/g)?.join('') ?? '';
+  return `${letters}${digits.length >= 2 ? digits.slice(-2) : digits}`;
+}

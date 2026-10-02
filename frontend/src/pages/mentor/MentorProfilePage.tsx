@@ -89,7 +89,7 @@ export default function MentorProfilePage() {
     {notice && <p role="status" className="rounded-lg bg-green-50 p-3 text-green-800">{notice}</p>}
     <form onSubmit={save} className="space-y-4 rounded-xl border border-slate-200 bg-white p-5">
       <div><label htmlFor="mentor-type" className="block text-sm font-medium">Mentor type</label>
-        <select id="mentor-type" required value={draft.mentorType} onChange={event => setDraft({ ...draft, mentorType: event.target.value as MentorProfile['mentorType'] })} className="mt-1 w-full rounded-lg border p-2">
+        <select disabled title="Managed by the administrator" id="mentor-type" required value={draft.mentorType} onChange={event => setDraft({ ...draft, mentorType: event.target.value as MentorProfile['mentorType'] })} className="mt-1 w-full rounded-lg border p-2">
           <option value="Unspecified">Select type</option><option value="Business">Business mentor</option><option value="IT">IT lecturer or technical mentor</option>
         </select></div>
       <div><label htmlFor="mentor-expertise" className="block text-sm font-medium">Expertise (comma separated)</label>

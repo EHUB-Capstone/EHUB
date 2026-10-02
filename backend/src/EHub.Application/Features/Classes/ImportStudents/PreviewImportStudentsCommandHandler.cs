@@ -249,12 +249,6 @@ public sealed class PreviewImportStudentsCommandHandler : IPreviewImportStudents
                 new Error("Classes.WorksheetEmpty", "The Excel worksheet contains no data."));
         }
 
-        if (rowElements.Length - 1 > MaximumDataRows)
-        {
-            return Result.Failure<List<ImportStudentRowPreviewDto>>(
-                new Error("Classes.TooManyRows", $"An import can contain at most {MaximumDataRows} data rows."));
-        }
-
         var rows = new List<SpreadsheetRow>(rowElements.Length);
         var nextRowNumber = 1;
         foreach (var rowElement in rowElements)
@@ -262,7 +256,19 @@ public sealed class PreviewImportStudentsCommandHandler : IPreviewImportStudents
             var explicitRowNumber = ParsePositiveIndex(rowElement.Attribute(spreadsheet + "Index")?.Value);
             var rowNumber = explicitRowNumber ?? nextRowNumber;
             nextRowNumber = rowNumber + 1;
-            rows.Add(new SpreadsheetRow(rowNumber, ReadSpreadsheetMlCells(rowElement, spreadsheet)));
+            var cells = ReadSpreadsheetMlCells(rowElement, spreadsheet);
+            if (rows.Count > 0 && IsEmptyRow(cells))
+            {
+                continue;
+            }
+
+            if (rows.Count > MaximumDataRows)
+            {
+                return Result.Failure<List<ImportStudentRowPreviewDto>>(
+                    new Error("Classes.TooManyRows", $"An import can contain at most {MaximumDataRows} data rows."));
+            }
+
+            rows.Add(new SpreadsheetRow(rowNumber, cells));
         }
 
         return ParseRows(rows, expectedClassCode);
@@ -326,17 +332,21 @@ public sealed class PreviewImportStudentsCommandHandler : IPreviewImportStudents
         while (reader.Read())
         {
             rowNumber++;
-            if (rowNumber - 1 > MaximumDataRows)
+            var cells = Enumerable.Range(0, reader.FieldCount)
+                .Select(column => GetCellText(reader.GetValue(column)))
+                .ToArray();
+            if (IsEmptyRow(cells))
+            {
+                continue;
+            }
+
+            if (rows.Count > MaximumDataRows)
             {
                 return Result.Failure<List<ImportStudentRowPreviewDto>>(
                     new Error("Classes.TooManyRows", $"An import can contain at most {MaximumDataRows} data rows."));
             }
 
-            rows.Add(new SpreadsheetRow(
-                rowNumber,
-                Enumerable.Range(0, reader.FieldCount)
-                    .Select(column => GetCellText(reader.GetValue(column)))
-                    .ToArray()));
+            rows.Add(new SpreadsheetRow(rowNumber, cells));
         }
 
         return ParseRows(rows, expectedClassCode);
@@ -370,7 +380,7 @@ public sealed class PreviewImportStudentsCommandHandler : IPreviewImportStudents
             var rawEmail = GetCellText(sourceRow.Cells, columns.Email);
             var rawMajor = columns.MajorCode >= 0
                 ? GetCellText(sourceRow.Cells, columns.MajorCode)
-                : MajorCodes.Undeclared;
+                : string.Empty;
             var rawClassCode = columns.ClassCode >= 0
                 ? GetCellText(sourceRow.Cells, columns.ClassCode)
                 : string.Empty;
@@ -471,6 +481,9 @@ public sealed class PreviewImportStudentsCommandHandler : IPreviewImportStudents
         return Result.Success(rows);
     }
 
+    private static bool IsEmptyRow(IEnumerable<string> cells) =>
+        cells.All(string.IsNullOrWhiteSpace);
+
     private async Task ApplyDatabaseValidationAsync(
         List<ImportStudentRowPreviewDto> rows,
         Class targetClass,
@@ -487,6 +500,7 @@ public sealed class PreviewImportStudentsCommandHandler : IPreviewImportStudents
         var emails = validRows.Select(row => row.Email).ToArray();
         var profiles = await _context.Students
             .AsNoTracking()
+            .Include(student => student.User)
             .Where(student =>
                 (student.NormalizedRollNumber != null && codes.Contains(student.NormalizedRollNumber)) ||
                 (student.RollNumber != null && codes.Contains(student.RollNumber)) ||
@@ -577,9 +591,9 @@ public sealed class PreviewImportStudentsCommandHandler : IPreviewImportStudents
                         rows[index] = WithStatus(row, "ReEnroll");
                     }
                 }
-                else if (currentEnrollment != null && currentEnrollment.EnrollmentStatus != EnrollmentStatus.Dropped)
+                else if (currentEnrollment?.EnrollmentStatus == EnrollmentStatus.Completed)
                 {
-                    error = $"Student '{row.StudentCode}' already has an enrollment in this class.";
+                    error = $"Student '{row.StudentCode}' has already completed this class.";
                 }
                 else
                 {
@@ -596,6 +610,10 @@ public sealed class PreviewImportStudentsCommandHandler : IPreviewImportStudents
                     else if (currentEnrollment?.EnrollmentStatus == EnrollmentStatus.Dropped)
                     {
                         rows[index] = WithStatus(row, "ReEnroll");
+                    }
+                    else if (currentEnrollment?.EnrollmentStatus == EnrollmentStatus.Active)
+                    {
+                        rows[index] = WithStatus(row, "UpdateProfile");
                     }
                 }
             }

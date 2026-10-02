@@ -1,10 +1,11 @@
 import MockAdapter from 'axios-mock-adapter';
 import axiosClient from '../api/axiosClient.ts';
+import storageClient from '../api/storageClient.ts';
 import { registerClassMockHandlers } from './handlers/classMockHandlers.ts';
 import { registerCoreMockHandlers } from './handlers/coreMockHandlers.ts';
 import { registerTeamMockHandlers } from './handlers/teamMockHandlers.ts';
-import { registerWorkspaceMockHandlers } from './handlers/workspaceMockHandlers.ts';
 import { registerMentoringMockHandlers } from './handlers/mentoringMockHandlers.ts';
+import { registerStorageMockHandlers, registerWorkspaceMockHandlers } from './handlers/workspaceMockHandlers.ts';
 import { resetMockState } from './mockHelpers.ts';
 
 declare global {
@@ -16,6 +17,7 @@ declare global {
 }
 
 let activeMock: MockAdapter | null = null;
+let activeStorageMock: MockAdapter | null = null;
 
 export function enableApiMocks(): void {
   if (activeMock) return;
@@ -30,6 +32,8 @@ export function enableApiMocks(): void {
   registerTeamMockHandlers(activeMock);
   registerWorkspaceMockHandlers(activeMock);
   registerMentoringMockHandlers(activeMock);
+  activeStorageMock = new MockAdapter(storageClient, { delayResponse: 400, onNoMatch: 'passthrough' });
+  registerStorageMockHandlers(activeStorageMock);
 
   if (typeof window !== 'undefined') {
     window.__EHUB_MOCK_API__ = {

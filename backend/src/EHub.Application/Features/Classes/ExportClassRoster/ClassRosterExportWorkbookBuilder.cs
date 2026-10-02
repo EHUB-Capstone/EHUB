@@ -3,14 +3,22 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using ClosedXML.Excel;
+using EHub.Application.Features.Classes.Common;
+using EHub.Application.Features.Classes.ExportAdminClassData;
 using EHub.Domain.Entities;
 using EHub.Domain.Enums;
+using EHub.Shared.Constants;
 
 namespace EHub.Application.Features.Classes.ExportClassRoster;
 
 internal sealed record ClassRosterExportSection(
     Class Class,
-    IReadOnlyCollection<ClassStudent> Roster);
+    IReadOnlyCollection<ClassStudent> Roster,
+    IReadOnlyDictionary<Guid, ClassRosterMentorNames>? MentorsByTeam = null);
+
+internal sealed record ClassRosterMentorNames(
+    string Enterprise,
+    string Academic);
 
 internal static class ClassRosterExportWorkbookBuilder
 {
@@ -20,18 +28,20 @@ internal static class ClassRosterExportWorkbookBuilder
     private const double ProjectNameMaxWidth = 25;
     private const double DescriptionMaxWidth = 50;
 
-    internal static byte[] Build(IReadOnlyCollection<ClassRosterExportSection> sections)
+    internal static byte[] Build(
+        IReadOnlyCollection<ClassRosterExportSection> sections,
+        IReadOnlyDictionary<string, string>? registeredMajorByEmail = null)
     {
         using var workbook = new XLWorkbook();
         var worksheet = workbook.Worksheets.Add(WorksheetName);
         var semesterCode = sections.FirstOrDefault()?.Class.Semester?.Code;
 
-        WriteHeader(worksheet, $"Group {ShortenSemesterCode(semesterCode)}");
+        WriteHeader(worksheet, SemesterGroupColumn.GetHeader(semesterCode));
 
         var rowIndex = 2;
         foreach (var section in sections)
         {
-            rowIndex = WriteRoster(worksheet, rowIndex, section);
+            rowIndex = WriteRoster(worksheet, rowIndex, section, registeredMajorByEmail);
         }
 
         ApplyColumnSizing(worksheet, rowIndex - 1);
@@ -64,7 +74,8 @@ internal static class ClassRosterExportWorkbookBuilder
     private static int WriteRoster(
         IXLWorksheet worksheet,
         int startRowIndex,
-        ClassRosterExportSection section)
+        ClassRosterExportSection section,
+        IReadOnlyDictionary<string, string>? registeredMajorByEmail)
     {
         var rosterRows = section.Roster
             .Select(enrollment =>
@@ -82,7 +93,37 @@ internal static class ClassRosterExportWorkbookBuilder
                     Project = team?.Project
                 };
             })
-            .OrderBy(row => row.Team == null ? 1 : 0)
+            .ToList();
+
+        var semesterGroupByTeamId = rosterRows
+            .Where(row => row.Team != null)
+            .GroupBy(row => row.Team!.Id)
+            .ToDictionary(
+                group => group.Key,
+                group => group
+                    .Select(row => row.Enrollment.SemesterGroupName?.Trim())
+                    .Where(groupName => !string.IsNullOrWhiteSpace(groupName))
+                    .OrderBy(groupName => groupName, NaturalCodeComparer.Instance)
+                    .FirstOrDefault());
+
+        var hasSemesterGroupData = rosterRows.Any(row =>
+            !string.IsNullOrWhiteSpace(row.Enrollment.SemesterGroupName));
+
+        rosterRows = rosterRows
+            .OrderBy(row => hasSemesterGroupData
+                ? string.IsNullOrWhiteSpace(row.Team == null
+                    ? row.Enrollment.SemesterGroupName
+                    : semesterGroupByTeamId[row.Team.Id]) ? 1 : 0
+                : row.Team == null ? 1 : 0)
+            .ThenBy(
+                row => hasSemesterGroupData
+                    ? row.Team == null
+                        ? row.Enrollment.SemesterGroupName?.Trim()
+                        : semesterGroupByTeamId[row.Team.Id]
+                    : null,
+                NaturalCodeComparer.Instance)
+            .ThenBy(row => hasSemesterGroupData && row.Team == null ? 1 : 0)
+            .ThenBy(row => hasSemesterGroupData ? row.Team?.TeamName : null, NaturalCodeComparer.Instance)
             .ThenBy(row => row.Team?.Id)
             .ThenBy(row => row.Enrollment.Student.RollNumber)
             .ThenBy(row => row.Enrollment.Student.FullName)
@@ -99,10 +140,20 @@ internal static class ClassRosterExportWorkbookBuilder
 
             worksheet.Cell(rowIndex, 1).Value = enrollment.Student.RollNumber ?? string.Empty;
             worksheet.Cell(rowIndex, 2).Value = enrollment.Student.FullName;
-            worksheet.Cell(rowIndex, 3).Value = enrollment.MajorCodeAtEnrollment;
+            var profileMajorCode = string.IsNullOrWhiteSpace(enrollment.Student.MajorCode)
+                ? null
+                : enrollment.Student.MajorCode.Trim().ToUpperInvariant();
+            if (!MajorCodes.IsValid(profileMajorCode) &&
+                !string.IsNullOrWhiteSpace(enrollment.Student.Email) &&
+                registeredMajorByEmail?.TryGetValue(enrollment.Student.Email, out var registeredMajorCode) == true)
+            {
+                profileMajorCode = registeredMajorCode;
+            }
+            worksheet.Cell(rowIndex, 3).Value = StudentEnrollmentRules.ResolveEffectiveMajorCode(
+                enrollment.MajorCodeAtEnrollment, profileMajorCode) ?? string.Empty;
             worksheet.Cell(rowIndex, 4).Value = section.Class.Course?.Code ?? string.Empty;
             worksheet.Cell(rowIndex, 5).Value = section.Class.ClassCode;
-            worksheet.Cell(rowIndex, 6).Value = string.Empty;
+            worksheet.Cell(rowIndex, 6).Value = enrollment.SemesterGroupName ?? string.Empty;
             worksheet.Cell(rowIndex, 10).Value = string.Empty;
             worksheet.Cell(rowIndex, 11).Value = string.Empty;
 
@@ -111,6 +162,13 @@ internal static class ClassRosterExportWorkbookBuilder
             {
                 worksheet.Cell(rowIndex, 7).Value = project?.Name ?? string.Empty;
                 worksheet.Cell(rowIndex, 8).Value = project?.Description ?? string.Empty;
+
+                if (row.Team != null &&
+                    section.MentorsByTeam?.TryGetValue(row.Team.Id, out var mentors) == true)
+                {
+                    worksheet.Cell(rowIndex, 10).Value = mentors.Enterprise;
+                    worksheet.Cell(rowIndex, 11).Value = mentors.Academic;
+                }
 
                 var zaloUrl = project?.ZaloGroupUrl;
                 if (!string.IsNullOrWhiteSpace(zaloUrl))
@@ -232,20 +290,4 @@ internal static class ClassRosterExportWorkbookBuilder
         return Math.Max(1, lineCount);
     }
 
-    private static string ShortenSemesterCode(string? code)
-    {
-        if (string.IsNullOrWhiteSpace(code))
-        {
-            return string.Empty;
-        }
-
-        var letters = new string(code.Where(char.IsLetter).ToArray());
-        var digits = new string(code.Where(char.IsDigit).ToArray());
-        if (digits.Length >= 2)
-        {
-            digits = digits[^2..];
-        }
-
-        return letters + digits;
-    }
 }

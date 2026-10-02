@@ -142,7 +142,24 @@ public sealed class AdminClassExportIntegrationTests
         workbook.Worksheets.Should().ContainSingle();
         var worksheet = workbook.Worksheet("Class Roster");
         worksheet.Cell(1, 1).GetString().Should().Be("RollNumber");
+        worksheet.Cell(2, 3).GetString().Should().Be("BIT_SE");
         worksheet.Cell(2, 5).GetString().Should().Be(seed.Classes[0].ClassCode);
+        worksheet.Cell(2, 10).GetString().Should().Be(seed.EnterpriseMentorName);
+        worksheet.Cell(2, 11).GetString().Should().Be(seed.AcademicMentorName);
+    }
+
+    [Fact]
+    public async Task AdminExport_UsesTheSameEffectiveMajorAsTheClassRoster()
+    {
+        var seed = await CreateExportSeedAsync();
+        var token = GenerateToken(seed.Admin, SystemRoles.Admin);
+        using var export = await ExportAsync(token, seed.SemesterCode, seed.Year, [seed.Classes[0].Id]);
+        using var workbook = new XLWorkbook(export);
+
+        var worksheet = workbook.Worksheet("Class Roster");
+        worksheet.Cell(2, 3).GetString().Should().Be("BIT_SE");
+        worksheet.Cell(2, 10).GetString().Should().Be(seed.EnterpriseMentorName);
+        worksheet.Cell(2, 11).GetString().Should().Be(seed.AcademicMentorName);
     }
 
     private async Task<MemoryStream> ExportAsync(
@@ -280,6 +297,7 @@ public sealed class AdminClassExportIntegrationTests
         context.Classes.AddRange(classes);
         context.Classes.Add(outOfScopeClass);
 
+        ClassStudent? firstEnrollment = null;
         for (var index = 0; index < classes.Length; index++)
         {
             var student = new Student
@@ -288,12 +306,12 @@ public sealed class AdminClassExportIntegrationTests
                 NormalizedRollNumber = $"{unique}{index + 1:00}",
                 FullName = $"Export Student {index + 1}",
                 Email = $"export-{unique}-{index + 1}@example.com",
-                MajorCode = "SE",
+                MajorCode = index == 0 ? "BIT_SE" : "SE",
                 Status = StudentStatus.Active,
                 CreatedBy = admin.Id
             };
             context.Students.Add(student);
-            context.ClassStudents.Add(new ClassStudent
+            var enrollment = new ClassStudent
             {
                 Class = classes[index],
                 ClassId = classes[index].Id,
@@ -301,14 +319,112 @@ public sealed class AdminClassExportIntegrationTests
                 StudentId = student.Id,
                 SemesterId = semester.Id,
                 CourseId = classes[index].CourseId,
-                MajorCodeAtEnrollment = "SE",
+                MajorCodeAtEnrollment = index == 0 ? MajorCodes.Undeclared : "SE",
                 EnrollmentStatus = EnrollmentStatus.Active,
                 CountsTowardCourseSemesterLimit = true
-            });
+            };
+            context.ClassStudents.Add(enrollment);
+            if (index == 0)
+            {
+                firstEnrollment = enrollment;
+            }
         }
 
+        var enterpriseMentorName = $"Enterprise Mentor {unique}";
+        var academicMentorName = $"Academic Mentor {unique}";
+        var enterpriseUser = CreateMentorUser(unique, "enterprise", enterpriseMentorName);
+        var academicUser = CreateMentorUser(unique, "academic", academicMentorName);
+        var enterpriseProfile = new MentorProfile
+        {
+            User = enterpriseUser,
+            UserId = enterpriseUser.Id,
+            Type = MentorType.Enterprise,
+            Status = MentorProfileStatus.Active,
+            CreatedBy = admin.Id
+        };
+        var academicProfile = new MentorProfile
+        {
+            User = academicUser,
+            UserId = academicUser.Id,
+            Type = MentorType.Academic,
+            Status = MentorProfileStatus.Active,
+            CreatedBy = admin.Id
+        };
+        var team = new Team
+        {
+            Class = classes[0],
+            ClassId = classes[0].Id,
+            TeamCode = $"{classes[0].ClassCode}-T1",
+            TeamName = $"Export Team {unique}",
+            Status = TeamStatus.Active,
+            CreatedById = admin.Id,
+            CreatedBy = admin.Id
+        };
+        team.TeamMembers.Add(new TeamMember
+        {
+            Team = team,
+            TeamId = team.Id,
+            ClassId = classes[0].Id,
+            StudentId = firstEnrollment!.StudentId,
+            ClassStudent = firstEnrollment,
+            CountsTowardActiveTeam = true,
+            CreatedById = admin.Id,
+            CreatedBy = admin
+        });
+        team.MentorAssignments.Add(new MentorAssignment
+        {
+            Team = team,
+            TeamId = team.Id,
+            MentorProfile = enterpriseProfile,
+            MentorProfileId = enterpriseProfile.Id,
+            AssignedBy = admin,
+            AssignedById = admin.Id,
+            AssignedAt = DateTime.UtcNow.AddMinutes(-1),
+            Slot = MentorType.Enterprise,
+            Status = MentorAssignmentStatus.Active,
+            CreatedBy = admin.Id
+        });
+        team.MentorAssignments.Add(new MentorAssignment
+        {
+            Team = team,
+            TeamId = team.Id,
+            MentorProfile = academicProfile,
+            MentorProfileId = academicProfile.Id,
+            AssignedBy = admin,
+            AssignedById = admin.Id,
+            AssignedAt = DateTime.UtcNow,
+            Slot = MentorType.Academic,
+            Status = MentorAssignmentStatus.Active,
+            CreatedBy = admin.Id
+        });
+        context.Users.AddRange(enterpriseUser, academicUser);
+        context.MentorProfiles.AddRange(enterpriseProfile, academicProfile);
+        context.Teams.Add(team);
+
         await context.SaveChangesAsync();
-        return new ExportSeed("FA", year, admin, lecturer, classes, outOfScopeClass.Id);
+        return new ExportSeed(
+            "FA",
+            year,
+            admin,
+            lecturer,
+            classes,
+            outOfScopeClass.Id,
+            enterpriseMentorName,
+            academicMentorName);
+    }
+
+    private static User CreateMentorUser(string unique, string type, string fullName)
+    {
+        var email = $"export-{type}-mentor-{unique}@example.com";
+        return new User
+        {
+            FullName = fullName,
+            Email = email,
+            NormalizedEmail = email.ToLowerInvariant(),
+            PasswordHash = "integration-test-only",
+            Status = UserStatus.Active,
+            IsEmailVerified = true
+        };
     }
 
     private static Class CreateClass(
@@ -355,5 +471,7 @@ public sealed class AdminClassExportIntegrationTests
         User Admin,
         User Lecturer,
         IReadOnlyList<Class> Classes,
-        Guid OutOfScopeClassId);
+        Guid OutOfScopeClassId,
+        string EnterpriseMentorName,
+        string AcademicMentorName);
 }

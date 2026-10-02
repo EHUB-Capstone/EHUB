@@ -106,6 +106,7 @@ public class GoogleLoginCommandHandlerTests
         _studentRepository.GetByUserIdAsync(userId, Arg.Any<CancellationToken>()).Returns(new Student
         {
             UserId = userId,
+            FullName = "Imported Student Name",
             MajorCode = MajorCodes.BIT_SE
         });
 
@@ -115,7 +116,9 @@ public class GoogleLoginCommandHandlerTests
         Assert.Equal("access_token", result.Value.AccessToken);
         Assert.Equal("raw_refresh_token", result.Value.RefreshToken);
         Assert.Equal(UserStatus.Active.ToString(), result.Value.User?.Status);
+        Assert.Equal("Imported Student Name", result.Value.User?.FullName);
         Assert.Equal(MajorCodes.BIT_SE, result.Value.User?.MajorCode);
+        _userRepository.Received(1).Update(Arg.Is<User>(candidate => candidate != null && candidate.FullName == "Imported Student Name"));
 
         await _refreshTokenRepository.Received(1).AddAsync(Arg.Any<EHub.Domain.Entities.RefreshToken>(), Arg.Any<CancellationToken>());
         await _unitOfWork.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
@@ -190,7 +193,7 @@ public class GoogleLoginCommandHandlerTests
         {
             RawToken = "refresh", TokenHash = "hash", ExpiresAt = DateTime.UtcNow.AddDays(7)
         });
-        var rosterStudent = new Student { Email = googleUserInfo.Email, MajorCode = MajorCodes.BIT_SE };
+        var rosterStudent = new Student { Email = googleUserInfo.Email, FullName = "Imported Student Name", MajorCode = MajorCodes.BIT_SE };
         if (hasRosterProfile)
         {
             _studentRepository.GetUnlinkedByEmailAsync(googleUserInfo.Email, Arg.Any<CancellationToken>()).Returns(rosterStudent);
@@ -201,6 +204,7 @@ public class GoogleLoginCommandHandlerTests
 
         Assert.True(result.IsSuccess);
         Assert.Equal(new[] { SystemRoles.Student }, result.Value.User.Roles);
+        Assert.Equal(hasRosterProfile ? "Imported Student Name" : googleUserInfo.FullName, result.Value.User.FullName);
         Assert.Equal(hasRosterProfile ? MajorCodes.BIT_SE : null, result.Value.User.MajorCode);
         await _userRepository.Received(1).AddAsync(Arg.Is<User>(u => u != null && u.IsEmailVerified && u.Status == UserStatus.Active), Arg.Any<CancellationToken>());
         if (hasRosterProfile)

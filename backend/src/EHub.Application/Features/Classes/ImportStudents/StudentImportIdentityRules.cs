@@ -29,6 +29,13 @@ internal static class StudentImportIdentityRules
             return true;
         }
 
+        var linkedUserEmail = (profileByCode ?? profileByEmail)?.User?.Email;
+        if (!string.IsNullOrWhiteSpace(linkedUserEmail) &&
+            !string.Equals(linkedUserEmail, email, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
         var existingStudentCode = GetStudentCode(profileByEmail);
         return !string.IsNullOrWhiteSpace(existingStudentCode) &&
                !string.Equals(existingStudentCode, studentCode, StringComparison.OrdinalIgnoreCase);

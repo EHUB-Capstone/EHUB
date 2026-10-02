@@ -101,6 +101,7 @@ public sealed class GetClassRosterQueryHandler : IGetClassRosterQueryHandler
                 ProfileMajorCode = cs.Student.MajorCode,
                 MajorVerificationStatus = cs.MajorVerificationStatus.ToString(),
                 MemberCode = cs.MemberCode,
+                SemesterGroupName = cs.SemesterGroupName,
                 EnrollmentStatus = cs.EnrollmentStatus.ToString(),
                 TeamId = cs.TeamMembers
                     .Where(tm => tm.CountsTowardActiveTeam && tm.Team.Status == TeamStatus.Active)
@@ -151,6 +152,7 @@ public sealed class GetClassRosterQueryHandler : IGetClassRosterQueryHandler
                     ProfileMajorCode = profileMajorCode,
                     MajorVerificationStatus = row.MajorVerificationStatus,
                     MemberCode = row.MemberCode,
+                    SemesterGroupName = row.SemesterGroupName,
                     EnrollmentStatus = row.EnrollmentStatus,
                     TeamId = row.TeamId,
                     TeamName = row.TeamName,
@@ -182,6 +184,7 @@ public sealed class GetClassRosterQueryHandler : IGetClassRosterQueryHandler
         public string? ProfileMajorCode { get; init; }
         public string MajorVerificationStatus { get; init; } = string.Empty;
         public string? MemberCode { get; init; }
+        public string? SemesterGroupName { get; init; }
         public string EnrollmentStatus { get; init; } = string.Empty;
         public Guid? TeamId { get; init; }
         public string? TeamName { get; init; }

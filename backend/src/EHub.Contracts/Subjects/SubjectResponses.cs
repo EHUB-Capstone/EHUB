@@ -74,7 +74,18 @@ public sealed class SemesterCompletionPreviewResponse
     public int ActiveEnrollmentCount { get; init; }
     public int ProcessingImportSessionCount { get; init; }
     public IReadOnlyCollection<string> Blockers { get; init; } = Array.Empty<string>();
+    public IReadOnlyCollection<SemesterCompletionClassBlockerResponse> BlockingClasses { get; init; } =
+        Array.Empty<SemesterCompletionClassBlockerResponse>();
     public string RowVersion { get; init; } = string.Empty;
+}
+
+public sealed class SemesterCompletionClassBlockerResponse
+{
+    public Guid ClassId { get; init; }
+    public string ClassCode { get; init; } = string.Empty;
+    public string Slug { get; init; } = string.Empty;
+    public string Status { get; init; } = string.Empty;
+    public int ActiveEnrollmentCount { get; init; }
 }
 
 public sealed class TeachingAssignmentResponse
@@ -174,6 +185,8 @@ public sealed class SubjectCurriculumResponse
     public IReadOnlyCollection<RoadmapItemResponse> RoadmapItems { get; init; } = Array.Empty<RoadmapItemResponse>();
     public IReadOnlyCollection<CourseRubricResponse> Rubrics { get; init; } = Array.Empty<CourseRubricResponse>();
     public IReadOnlyCollection<SubjectCheckpointResponse> Checkpoints { get; init; } = Array.Empty<SubjectCheckpointResponse>();
+    public IReadOnlyCollection<SubjectOtherAssessmentResponse> OtherAssessments { get; init; } =
+        Array.Empty<SubjectOtherAssessmentResponse>();
 }
 
 public sealed class SubjectCheckpointResponse
@@ -181,6 +194,7 @@ public sealed class SubjectCheckpointResponse
     public int Number { get; init; }
     public string Title { get; init; } = string.Empty;
     public string? ShortDescription { get; init; }
+    public decimal CourseWeight { get; init; }
     public DateTime? StartDateUtc { get; init; }
     public DateTime? EndDateUtc { get; init; }
     public string ScheduleStatus { get; init; } = "NotScheduled";
@@ -191,6 +205,14 @@ public sealed class SubjectCheckpointResponse
     public DateTime? DueDate { get; init; }
     public string? AvailabilityStatus { get; init; }
     public string? AvailabilityReason { get; init; }
+}
+
+public sealed class SubjectOtherAssessmentResponse
+{
+    [JsonPropertyName("_id")]
+    public Guid Id { get; init; }
+    public string Name { get; init; } = string.Empty;
+    public decimal Weight { get; init; }
 }
 
 public sealed class SubjectCriterionResponse

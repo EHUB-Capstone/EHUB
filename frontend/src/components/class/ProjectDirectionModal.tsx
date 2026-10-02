@@ -85,7 +85,7 @@ export default function ProjectDirectionModal({ team, role, currentStudentId = '
   };
 
   const review = async () => {
-    if (comment.trim().length < 3 || comment.trim().length > 1000) {
+    if (comment.trim().length > 0 && (comment.trim().length < 3 || comment.trim().length > 1000)) {
       toast.error('Review comment must be between 3 and 1000 characters.');
       return;
     }
@@ -137,8 +137,8 @@ export default function ProjectDirectionModal({ team, role, currentStudentId = '
                 <button type="button" onClick={() => setDecision('Approved')} className={`flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold ${decision === 'Approved' ? 'border-green-400 bg-green-50 text-green-700' : 'border-slate-200 bg-white text-slate-600'}`}><CheckCircle2 className="h-4 w-4" /> Approve</button>
                 <button type="button" onClick={() => setDecision('NeedsRevision')} className={`flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold ${decision === 'NeedsRevision' ? 'border-amber-400 bg-amber-50 text-amber-700' : 'border-slate-200 bg-white text-slate-600'}`}><FilePenLine className="h-4 w-4" /> Request changes</button>
               </div>
-              <textarea value={comment} onChange={event => setComment(event.target.value)} maxLength={1000} rows={3} placeholder="Required: 3–1000 characters" className="mt-3 w-full resize-none rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-primary" />
-              <div className="mt-2 flex justify-end"><button type="button" onClick={review} disabled={submitting || comment.trim().length < 3} className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Submit review</button></div>
+              <textarea value={comment} onChange={event => setComment(event.target.value)} maxLength={1000} rows={3} placeholder="Optional: 3–1000 characters" className="mt-3 w-full resize-none rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-primary" />
+              <div className="mt-2 flex justify-end"><button type="button" onClick={review} disabled={submitting || (comment.trim().length > 0 && comment.trim().length < 3)} className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Submit review</button></div>
             </section>}
 
             {direction?.reviews?.length > 0 && <section><h4 className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-500">Review history</h4><div className="space-y-2">{direction.reviews.map(review => <div key={review.id} className="rounded-xl border border-slate-100 bg-slate-50 p-3"><div className="flex justify-between gap-3 text-xs font-semibold text-slate-700"><span>{formatStatus(review.fromStatus)} → {formatStatus(review.toStatus)}</span><span className="text-slate-400">{new Date(review.occurredAtUtc).toLocaleString()}</span></div><p className="mt-1 text-sm text-slate-600">{review.comment}</p></div>)}</div></section>}

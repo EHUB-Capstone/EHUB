@@ -1,5 +1,6 @@
 using System;
 using System.Threading.Tasks;
+using ClosedXML.Excel;
 using EHub.Application.Common.Interfaces.Persistence;
 using EHub.Application.Features.Classes.ImportStudents;
 using EHub.Contracts.Classes;
@@ -229,6 +230,38 @@ public class PreviewImportStudentsCommandHandlerTests
         result.Value[0].ZaloGroupUrl.Should().Be("https://zalo.me/g/example");
         result.Value[0].ProjectDescription.Should().Be("A sufficiently detailed project description.");
         result.Value[0].IsValid.Should().BeTrue();
+    }
+
+    [Fact]
+    public void ParseWorkbook_WhenFormattedRowsHaveNoCellData_IgnoresThem()
+    {
+        using var workbook = new XLWorkbook();
+        var worksheet = workbook.Worksheets.Add("Students");
+        worksheet.Cell(1, 1).Value = "RollNumber";
+        worksheet.Cell(1, 2).Value = "FullName";
+        worksheet.Cell(1, 3).Value = "Email";
+        for (var row = 2; row <= 13; row++)
+        {
+            worksheet.Cell(row, 1).Value = $"DE{180000 + row}";
+            worksheet.Cell(row, 2).Value = $"Student {row}";
+            worksheet.Cell(row, 3).Value = $"student{row}@fpt.edu.vn";
+        }
+
+        // Simulate a template whose formatting extends far below its actual data.
+        worksheet.Range("A14:I998").Style.Fill.BackgroundColor = XLColor.White;
+
+        using var stream = new MemoryStream();
+        workbook.SaveAs(stream);
+        stream.Position = 0;
+        IFormFile file = new FormFile(stream, 0, stream.Length, "file", "formatted-empty-rows.xlsx");
+
+        var result = PreviewImportStudentsCommandHandler.ParseWorkbook(file);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.Should().HaveCount(12);
+        result.Value.Select(row => row.RowNumber).Should().Equal(Enumerable.Range(2, 12));
+        result.Value.Should().OnlyContain(row =>
+            row.MajorCode == MajorCodes.Undeclared && row.IsValid);
     }
 
 }

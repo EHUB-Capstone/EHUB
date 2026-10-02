@@ -25,8 +25,8 @@ public sealed class MentoringWorkflowTests
         var lecturer = new User { FullName = "Lecturer", Email = "lecturer@example.test" };
         var mentor = new User { FullName = "AI Mentor", Email = "mentor@example.test" };
         var other = new User { FullName = "Marketing Mentor", Email = "marketing@example.test" };
-        var profile = new MentorProfile { User = mentor, UserId = mentor.Id, Expertise = ["AI", "Data"], MaxTeams = 2 };
-        var otherProfile = new MentorProfile { User = other, UserId = other.Id, Expertise = ["Marketing"], MaxTeams = 2 };
+        var profile = new MentorProfile { User = mentor, UserId = mentor.Id, Expertise = ["AI", "Data"] };
+        var otherProfile = new MentorProfile { User = other, UserId = other.Id, Expertise = ["Marketing"], Type = MentorType.Academic };
         var semester = new Semester { Code = "FA26", Name = "Fall 2026", Year = 2026 };
         var course = new Course { Code = "EXE101", Name = "Startup" };
         var group = new Team { TeamName = "AI Data Platform", TeamCode = "T1", Description = "AI data product",
@@ -54,6 +54,13 @@ public sealed class MentoringWorkflowTests
         allowed.Value.Should().HaveCount(2);
         allowed.Value.First().Mentor.Id.Should().Be(profile.Id);
         allowed.Value.First().FitScore.Should().BeGreaterThan(allowed.Value.Last().FitScore);
+        var occupied = new MentorAssignment { Team = group, MentorProfile = profile, Slot = MentorType.Enterprise };
+        context.MentorAssignments.Add(occupied);
+        await context.SaveChangesAsync();
+        var remaining = await handler.RecommendAsync(group.Id, lecturer.Id, SystemRoles.Lecturer, default);
+        remaining.Value.Should().ContainSingle().Which.Mentor.Id.Should().Be(otherProfile.Id);
+        context.MentorAssignments.Remove(occupied);
+        await context.SaveChangesAsync();
         var directory = await handler.GetDirectoryAsync(lecturer.Id, SystemRoles.Lecturer, default);
         directory.Value.Should().HaveCount(2);
 
@@ -74,7 +81,7 @@ public sealed class MentoringWorkflowTests
     {
         await using var context = Context();
         var mentor = new User { FullName = "Mentor", Email = "mentor@example.test" };
-        var profile = new MentorProfile { User = mentor, UserId = mentor.Id, MaxTeams = 2 };
+        var profile = new MentorProfile { User = mentor, UserId = mentor.Id };
         var group = new Team { TeamName = "Team", TeamCode = "T1", Status = TeamStatus.Active,
             Class = new Class { ClassCode = "EXE101-1", Semester = new Semester { Code = "FA26", Name = "Fall 2026", Year = 2026 },
                 Course = new Course { Code = "EXE101", Name = "Startup" }, Status = ClassStatus.Active } };
@@ -122,5 +129,38 @@ public sealed class MentoringWorkflowTests
         completed.IsSuccess.Should().BeTrue();
         outsider.Error.Code.Should().Be(ErrorCodes.ClassAccessDenied);
         feedback.IsSuccess.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task DualMentorSessionsRequireExplicitAssignmentForStaffAndSelectOwnForMentor()
+    {
+        await using var context = Context();
+        var enterprise = new MentorProfile { User = new User { FullName = "Enterprise", Email = "e@example.test" } };
+        var academic = new MentorProfile { Type = MentorType.Academic, User = new User { FullName = "Academic", Email = "a@example.test" } };
+        var team = new Team { TeamName = "Demo", TeamCode = "T2", Class = new Class {
+            ClassCode = "DEMO", Status = ClassStatus.Active,
+            Semester = new Semester { Code = "FA26", Name = "Fall", Year = 2026 },
+            Course = new Course { Code = "EXE101", Name = "Startup" } } };
+        var first = new MentorAssignment { Team = team, MentorProfile = enterprise, Slot = MentorType.Enterprise };
+        var second = new MentorAssignment { Team = team, MentorProfile = academic, Slot = MentorType.Academic };
+        context.MentorAssignments.AddRange(first, second);
+        await context.SaveChangesAsync();
+        var clock = Substitute.For<IDateTimeProvider>();
+        clock.UtcNow.Returns(DateTime.UtcNow);
+        var handler = new MentoringSessionHandler(context, clock);
+        var start = DateTimeOffset.UtcNow.AddDays(1);
+        var request = new SaveMentoringSessionRequest { TeamId = team.Id, Title = "Review", StartAt = start, EndAt = start.AddHours(1) };
+        var ambiguous = await handler.CreateAsync(request, Guid.NewGuid(), SystemRoles.Admin, default);
+        ambiguous.IsFailure.Should().BeTrue();
+        var own = await handler.CreateAsync(request, academic.UserId, SystemRoles.Mentor, default);
+        own.IsSuccess.Should().BeTrue();
+        own.Value.MentorAssignmentId.Should().Be(second.Id);
+        var explicitRequest = new SaveMentoringSessionRequest { TeamId = team.Id, MentorAssignmentId = first.Id,
+            Title = "Business review", StartAt = start, EndAt = start.AddHours(1) };
+        var wrongMentor = await handler.CreateAsync(explicitRequest, academic.UserId, SystemRoles.Mentor, default);
+        wrongMentor.Error.Code.Should().Be(ErrorCodes.ClassAccessDenied);
+        var allowed = await handler.CreateAsync(explicitRequest, Guid.NewGuid(), SystemRoles.Admin, default);
+        allowed.IsSuccess.Should().BeTrue();
+        allowed.Value.MentorAssignmentId.Should().Be(first.Id);
     }
 }

@@ -17,6 +17,10 @@ export interface ClassMentorSummary {
   userId: string;
   fullName: string;
   email: string;
+  organization?: string | null;
+  mentorType?: 'Enterprise' | 'Academic' | string;
+  department?: string | null;
+  jobTitle?: string | null;
 }
 
 export interface ClassDto {
@@ -84,6 +88,7 @@ export interface ClassRosterStudent {
   profileMajorCode: string | null;
   majorVerificationStatus: string;
   memberCode: string | null;
+  semesterGroupName: string | null;
   enrollmentStatus: string;
   teamId: string | null;
   teamName: string | null;
@@ -100,10 +105,12 @@ export interface StudentClassMember {
   majorCode: string;
   profileMajorCode: string | null;
   enrollmentMajorCode: string;
+  majorVerificationStatus: string;
   canEditMajor: boolean;
   isMajorLocked: boolean;
   enrollmentStatus: string;
   teamId: string | null;
+  hasPendingTeamInvitation: boolean;
 }
 
 export interface ClassRosterListResponse {
@@ -253,6 +260,28 @@ export interface ImportStudentsCommitResponse {
   errorCount: number;
   synchronizedMajorCount: number;
   errors: ImportStudentCommitError[];
+}
+
+export interface SemesterGroupImportRow {
+  rowNumber: number;
+  studentId: string | null;
+  rollNumber: string;
+  fullName: string;
+  currentGroupName: string | null;
+  importedGroupName: string | null;
+  status: 'Changed' | 'Unchanged' | 'Invalid' | 'Duplicate' | 'NotFound';
+  isValid: boolean;
+  message: string | null;
+}
+
+export interface SemesterGroupImportResponse {
+  expectedColumnName: string;
+  totalRows: number;
+  changedRowsCount: number;
+  unchangedRowsCount: number;
+  errorRowsCount: number;
+  updatedCount: number;
+  rows: SemesterGroupImportRow[];
 }
 
 export interface ClassCompletionPreview {

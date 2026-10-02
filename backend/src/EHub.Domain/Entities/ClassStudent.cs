@@ -20,6 +20,10 @@ public class ClassStudent
 
     public string? MemberCode { get; set; }
 
+    // Semester-specific group imported from the official class roster
+    // (for example, the "Group FA26" column). This is independent of TeamName.
+    public string? SemesterGroupName { get; set; }
+
     public EnrollmentStatus EnrollmentStatus { get; set; } = EnrollmentStatus.Active;
     public bool CountsTowardCourseSemesterLimit { get; set; } = true;
     public DateTime? CompletedAtUtc { get; set; }

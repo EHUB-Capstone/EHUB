@@ -102,7 +102,7 @@ public sealed class ProjectWorkspaceHandler : IProjectWorkspaceHandler
             return Failure<ProjectWorkspaceDto>(ErrorCodes.WorkspaceAccessDenied, "Only the active team leader can create a project workspace.");
 
         var industryIds = request.StartupIndustryIds ?? Array.Empty<Guid>();
-        var validation = ValidateCreate(request.ProjectName, request.Description, industryIds);
+        var validation = ValidateCreate(request.ProjectName, request.Description, request.ZaloGroupUrl, industryIds);
         if (validation != null) return Result.Failure<ProjectWorkspaceDto>(validation);
         try
         {
@@ -126,6 +126,14 @@ public sealed class ProjectWorkspaceHandler : IProjectWorkspaceHandler
                 if (team.Project != null || await _context.Projects.AnyAsync(project => project.TeamId == teamId, transactionCancellationToken))
                     return Failure<ProjectWorkspaceDto>(ErrorCodes.WorkspaceAlreadyExists, "This team already has an active project workspace.");
 
+                var requestedTeamName = (request.TeamName ?? team.TeamName).Trim();
+                if (requestedTeamName.Length is < 3 or > 100)
+                    return Failure<ProjectWorkspaceDto>(ErrorCodes.WorkspaceValidationError, "Team name must be between 3 and 100 characters.");
+                if (!string.Equals(team.TeamName, requestedTeamName, StringComparison.Ordinal) &&
+                    await _context.Teams.AsNoTracking().AnyAsync(item => item.ClassId == team.ClassId &&
+                        item.Id != team.Id && item.TeamName.ToLower() == requestedTeamName.ToLower(), transactionCancellationToken))
+                    return Failure<ProjectWorkspaceDto>(ErrorCodes.TeamNameDuplicated, "A team with this name already exists in the class.");
+
                 var activeIndustries = await _context.StartupIndustries
                     .AsNoTracking()
                     .Where(industry => industry.Status == StartupIndustryStatus.Active && industryIds.Contains(industry.Id))
@@ -140,12 +148,20 @@ public sealed class ProjectWorkspaceHandler : IProjectWorkspaceHandler
                     .ToArray();
 
                 var now = DateTime.UtcNow;
+                var teamNameChanged = !string.Equals(team.TeamName, requestedTeamName, StringComparison.Ordinal);
+                if (teamNameChanged)
+                {
+                    team.TeamName = requestedTeamName;
+                    team.UpdatedAt = now;
+                    team.UpdatedBy = userId;
+                }
                 var project = new Project
                 {
                     TeamId = team.Id,
                     Team = team,
                     Name = (request.ProjectName ?? string.Empty).Trim(),
                     Description = (request.Description ?? string.Empty).Trim(),
+                    ZaloGroupUrl = (request.ZaloGroupUrl ?? string.Empty).Trim(),
                     Status = ProjectStatus.Draft,
                     CreatedById = userId,
                     CreatedBy = userId,
@@ -190,7 +206,9 @@ public sealed class ProjectWorkspaceHandler : IProjectWorkspaceHandler
                     ActorUserId = userId,
                     Action = "WORKSPACE_CREATED",
                     Summary = "Created the project workspace.",
-                    ChangedFieldsJson = JsonSerializer.Serialize(new[] { "projectName", "description", "startupIndustries" }),
+                    ChangedFieldsJson = JsonSerializer.Serialize(teamNameChanged
+                        ? new[] { "teamName", "projectName", "description", "zaloGroupUrl", "startupIndustries" }
+                        : new[] { "projectName", "description", "zaloGroupUrl", "startupIndustries" }),
                     OccurredAtUtc = now
                 });
 
@@ -258,6 +276,8 @@ public sealed class ProjectWorkspaceHandler : IProjectWorkspaceHandler
                     return Failure<ProjectWorkspaceDto>(ErrorCodes.WorkspaceLeaderRequired, "Only the active team leader can update this project profile.");
                 if (team.Project == null)
                     return Failure<ProjectWorkspaceDto>(ErrorCodes.WorkspaceNotFound, "This team does not have a project workspace.");
+                if (team.ProjectDirection?.Status != ProjectDirectionStatus.Approved)
+                    return Failure<ProjectWorkspaceDto>(ErrorCodes.ProjectDirectionStateInvalid, "The project profile can only be updated after its project direction is approved.");
 
                 var validation = ValidateProfile(request);
                 if (validation != null) return Result.Failure<ProjectWorkspaceDto>(validation);
@@ -270,44 +290,87 @@ public sealed class ProjectWorkspaceHandler : IProjectWorkspaceHandler
                 var nextSolution = (request.Solution ?? string.Empty).Trim();
                 var nextTargetUsers = (request.TargetUsers ?? string.Empty).Trim();
                 var nextZaloGroupUrl = (request.ZaloGroupUrl ?? string.Empty).Trim();
-                var changedFields = new List<string>();
-                if (!string.Equals(project.Name, nextName, StringComparison.Ordinal)) changedFields.Add("projectName");
-                if (!string.Equals(project.Description ?? string.Empty, nextDescription, StringComparison.Ordinal)) changedFields.Add("description");
-                if (!string.Equals(project.Problem ?? string.Empty, nextProblem, StringComparison.Ordinal)) changedFields.Add("problem");
-                if (!string.Equals(project.Solution ?? string.Empty, nextSolution, StringComparison.Ordinal)) changedFields.Add("solution");
-                if (!string.Equals(project.TargetUsers ?? string.Empty, nextTargetUsers, StringComparison.Ordinal)) changedFields.Add("targetUsers");
-                if (!string.Equals(project.ZaloGroupUrl ?? string.Empty, nextZaloGroupUrl, StringComparison.Ordinal)) changedFields.Add("zaloGroupUrl");
-                if (!SameTags(project.ProjectTags, ProjectTagType.Keyword, keywords)) changedFields.Add("keywords");
-                if (changedFields.Count == 0) return Result.Success(MapProject(project, team));
-
-                project.Name = nextName;
-                project.Description = nextDescription;
-                project.Problem = nextProblem;
-                project.Solution = nextSolution;
-                project.TargetUsers = nextTargetUsers;
-                project.ZaloGroupUrl = nextZaloGroupUrl;
-                project.UpdatedBy = userId;
                 var now = DateTime.UtcNow;
-                SyncTags(project, ProjectTagType.Keyword, keywords, userId, now);
-                var activity = new ProjectActivityLog
+                var proposedFields = new List<string>();
+                if (!string.Equals(project.Name, nextName, StringComparison.Ordinal)) proposedFields.Add("projectName");
+                if (!string.Equals(project.Description ?? string.Empty, nextDescription, StringComparison.Ordinal)) proposedFields.Add("description");
+
+                var immediateFields = new List<string>();
+                if (!string.Equals(project.Problem ?? string.Empty, nextProblem, StringComparison.Ordinal)) immediateFields.Add("problem");
+                if (!string.Equals(project.Solution ?? string.Empty, nextSolution, StringComparison.Ordinal)) immediateFields.Add("solution");
+                if (!string.Equals(project.TargetUsers ?? string.Empty, nextTargetUsers, StringComparison.Ordinal)) immediateFields.Add("targetUsers");
+                if (!string.Equals(project.ZaloGroupUrl ?? string.Empty, nextZaloGroupUrl, StringComparison.Ordinal)) immediateFields.Add("zaloGroupUrl");
+                if (!SameTags(project.ProjectTags, ProjectTagType.Keyword, keywords)) immediateFields.Add("keywords");
+                if (proposedFields.Count == 0 && immediateFields.Count == 0)
+                    return Result.Success(MapProject(project, team));
+
+                if (immediateFields.Count > 0)
                 {
-                    ProjectId = project.Id,
-                    Project = project,
-                    ActorUserId = userId,
-                    Action = "PROJECT_PROFILE_UPDATED",
-                    Summary = $"Updated {string.Join(", ", changedFields.Select(ToDisplayField))}.",
-                    ChangedFieldsJson = JsonSerializer.Serialize(changedFields),
-                    OccurredAtUtc = now
-                };
-                _context.ProjectActivityLogs.Add(activity);
-                project.ActivityLogs.Add(activity);
-                ClassOutbox.Enqueue(_context, "ProjectWorkspace.ProfileUpdated.v1", team.ClassId, new
+                    project.Problem = nextProblem;
+                    project.Solution = nextSolution;
+                    project.TargetUsers = nextTargetUsers;
+                    project.ZaloGroupUrl = nextZaloGroupUrl;
+                    project.UpdatedBy = userId;
+                    project.UpdatedAt = now;
+                    SyncTags(project, ProjectTagType.Keyword, keywords, userId, now);
+                    var activity = new ProjectActivityLog
+                    {
+                        ProjectId = project.Id,
+                        Project = project,
+                        ActorUserId = userId,
+                        Action = "PROJECT_PROFILE_UPDATED",
+                        Summary = $"Updated {string.Join(", ", immediateFields.Select(ToDisplayField))}.",
+                        ChangedFieldsJson = JsonSerializer.Serialize(immediateFields),
+                        OccurredAtUtc = now
+                    };
+                    _context.ProjectActivityLogs.Add(activity);
+                    project.ActivityLogs.Add(activity);
+                    ClassOutbox.Enqueue(_context, "ProjectWorkspace.ProfileUpdated.v1", team.ClassId, new
+                    {
+                        ProjectId = project.Id,
+                        TeamId = team.Id,
+                        ChangedFields = immediateFields,
+                        UpdatedByUserId = userId
+                    }, now);
+                }
+
+                if (proposedFields.Count > 0)
                 {
-                    ProjectId = project.Id,
-                    TeamId = team.Id,
-                    ChangedFields = changedFields,
-                    UpdatedByUserId = userId
-                }, now);
+                    var direction = team.ProjectDirection;
+                    direction.Title = nextName;
+                    direction.Summary = nextDescription;
+                    direction.Status = ProjectDirectionStatus.Submitted;
+                    direction.SubmittedAtUtc = now;
+                    direction.ReviewedAtUtc = null;
+                    direction.ReviewedByUserId = null;
+                    direction.UpdatedBy = userId;
+                    direction.UpdatedAt = now;
+
+                    var proposalActivity = new ProjectActivityLog
+                    {
+                        ProjectId = project.Id,
+                        Project = project,
+                        ActorUserId = userId,
+                        Action = "PROJECT_PROFILE_CHANGE_PROPOSED",
+                        Summary = $"Submitted proposed changes to {string.Join(" and ", proposedFields.Select(ToDisplayField))} for lecturer review.",
+                        ChangedFieldsJson = JsonSerializer.Serialize(proposedFields),
+                        OccurredAtUtc = now
+                    };
+                    _context.ProjectActivityLogs.Add(proposalActivity);
+                    project.ActivityLogs.Add(proposalActivity);
+                    ClassOutbox.Enqueue(_context, "ProjectDirection.Submitted.v1", team.ClassId, new
+                    {
+                        TeamId = team.Id,
+                        ProjectDirectionId = direction.Id,
+                        LecturerUserId = team.Class.PrimaryLecturerId,
+                        IsProjectProfileChangeProposal = true,
+                        CurrentTitle = project.Name,
+                        ProposedTitle = nextName,
+                        CurrentSummary = project.Description ?? string.Empty,
+                        ProposedSummary = nextDescription
+                    }, now);
+                }
+
                 await _context.SaveChangesAsync(transactionCancellationToken);
                 return Result.Success(MapProject(project, team));
             }, cancellationToken);
@@ -365,12 +428,18 @@ public sealed class ProjectWorkspaceHandler : IProjectWorkspaceHandler
     private static Error? ValidateCreate(
         string? projectName,
         string? description,
+        string? zaloGroupUrl,
         IReadOnlyCollection<Guid> startupIndustryIds)
     {
         if ((projectName ?? string.Empty).Trim().Length is < 3 or > 200)
             return new Error(ErrorCodes.WorkspaceValidationError, "Project name must be between 3 and 200 characters.");
         if ((description ?? string.Empty).Trim().Length is < 20 or > 2_000)
             return new Error(ErrorCodes.WorkspaceValidationError, "Project description must be between 20 and 2000 characters.");
+        var normalizedZaloGroupUrl = (zaloGroupUrl ?? string.Empty).Trim();
+        if (normalizedZaloGroupUrl.Length == 0)
+            return new Error(ErrorCodes.WorkspaceValidationError, "Zalo group link is required.");
+        if (normalizedZaloGroupUrl.Length > 500 || !IsValidZaloUrl(normalizedZaloGroupUrl))
+            return new Error(ErrorCodes.WorkspaceValidationError, "Zalo group link must be a valid HTTPS URL on zalo.me.");
         if (startupIndustryIds.Count is < 1 or > 3)
             return new Error(ErrorCodes.WorkspaceValidationError, "Select between 1 and 3 startup industries.");
         if (startupIndustryIds.Any(industryId => industryId == Guid.Empty) || startupIndustryIds.Distinct().Count() != startupIndustryIds.Count)
@@ -382,15 +451,19 @@ public sealed class ProjectWorkspaceHandler : IProjectWorkspaceHandler
     {
         var commonValidation = Validate(request.ProjectName, request.Description, request.Keywords);
         if (commonValidation != null) return commonValidation;
-        if ((request.Problem ?? string.Empty).Trim().Length is < 20 or > 2_000)
-            return new Error(ErrorCodes.WorkspaceValidationError, "Project problem must be between 20 and 2000 characters.");
-        if ((request.Solution ?? string.Empty).Trim().Length is < 20 or > 2_000)
-            return new Error(ErrorCodes.WorkspaceValidationError, "Project solution must be between 20 and 2000 characters.");
+        var problemLength = (request.Problem ?? string.Empty).Trim().Length;
+        if (problemLength > 0 && (problemLength is < 20 or > 2_000))
+            return new Error(ErrorCodes.WorkspaceValidationError, "Project problem must be between 20 and 2000 characters when provided.");
+        var solutionLength = (request.Solution ?? string.Empty).Trim().Length;
+        if (solutionLength > 0 && (solutionLength is < 20 or > 2_000))
+            return new Error(ErrorCodes.WorkspaceValidationError, "Project solution must be between 20 and 2000 characters when provided.");
         var targetUsersLength = (request.TargetUsers ?? string.Empty).Trim().Length;
         if (targetUsersLength > 0 && targetUsersLength is < 3 or > 2_000)
             return new Error(ErrorCodes.WorkspaceValidationError, "Target users must be between 3 and 2000 characters when provided.");
         var zaloGroupUrl = (request.ZaloGroupUrl ?? string.Empty).Trim();
-        if (zaloGroupUrl.Length > 500 || (zaloGroupUrl.Length > 0 && !IsValidZaloUrl(zaloGroupUrl)))
+        if (zaloGroupUrl.Length == 0)
+            return new Error(ErrorCodes.WorkspaceValidationError, "Zalo group link is required.");
+        if (zaloGroupUrl.Length > 500 || !IsValidZaloUrl(zaloGroupUrl))
             return new Error(ErrorCodes.WorkspaceValidationError, "Zalo group link must be a valid HTTPS URL on zalo.me.");
         return null;
     }
@@ -493,8 +566,17 @@ public sealed class ProjectWorkspaceHandler : IProjectWorkspaceHandler
 
     private static ProjectWorkspaceDetailDto MapDetail(Team team)
     {
-        var activeMentor = team.MentorAssignments.FirstOrDefault(assignment =>
-            assignment.Status == MentorAssignmentStatus.Active && assignment.EndedAt == null);
+        var activeMentors = team.MentorAssignments.Where(assignment =>
+                assignment.Status == MentorAssignmentStatus.Active && assignment.EndedAt == null)
+            .OrderBy(assignment => assignment.Slot)
+            .Select(assignment => new WorkspacePersonDto
+            {
+                Id = assignment.MentorProfile.UserId,
+                Name = assignment.MentorProfile.User.FullName,
+                Email = assignment.MentorProfile.User.Email,
+                Label = assignment.Slot.ToString()
+            })
+            .ToArray();
         var leader = team.TeamMembers.FirstOrDefault(member =>
             member.CountsTowardActiveTeam && member.RoleInTeam == TeamMemberRole.Leader);
         var proposal = team.ApprovedProposals
@@ -537,12 +619,8 @@ public sealed class ProjectWorkspaceHandler : IProjectWorkspaceHandler
                 Name = team.Class.PrimaryLecturer.FullName,
                 Email = team.Class.PrimaryLecturer.Email
             },
-            Mentor = activeMentor == null ? null : new WorkspacePersonDto
-            {
-                Id = activeMentor.MentorProfile.UserId,
-                Name = activeMentor.MentorProfile.User.FullName,
-                Email = activeMentor.MentorProfile.User.Email
-            },
+            Mentor = activeMentors.FirstOrDefault(),
+            Mentors = activeMentors,
             Proposal = proposal == null ? null : new WorkspaceProjectProposalDto
             {
                 Id = proposal.Id,

@@ -15,9 +15,9 @@ function currentUser() {
 function mentorProfile(userId: string): MentorProfile | undefined {
   const user = getMockState().users.find(item => item.id === userId && item.role === 'MENTOR');
   if (!user) return undefined;
-  return profiles.get(userId) ?? { id: userId, userId, fullName: user.name, mentorType: 'Unspecified',
+  return profiles.get(userId) ?? { id: userId, userId, fullName: user.name, mentorType: 'Business',
     expertise: [], bio: null, experience: null, organization: null, linkedInUrl: null, portfolioUrl: null,
-    cvFileName: null, portfolioFileName: null, maxTeams: 3, status: 'Active', activeTeamCount: 0,
+    cvFileName: null, portfolioFileName: null, maxTeams: null, status: 'Active', activeTeamCount: 0,
     totalAssignments: 0, totalSessions: 0, averageFeedbackRating: null };
 }
 
@@ -84,7 +84,8 @@ export function registerMentoringMockHandlers(mock: MockAdapter): void {
       const mentor = mentorProfile(user.id)!;
       const matches = mentor.expertise.filter(skill => text.includes(skill.toLowerCase()));
       const activeTeamCount = getMockState().teams.filter(item => item.currentMentorAssignment?.mentor.userId === user.id).length;
-      const hasCapacity = activeTeamCount < mentor.maxTeams;
+      const slot = 'Enterprise';
+      const hasCapacity = !(team.currentMentorAssignments ?? []).some(a => a.slot === slot);
       return { mentor, fitScore: Math.round(30 * Math.min(1, matches.length / 2)),
         reasons: [...matches.map(skill => `Chuyên môn phù hợp: ${skill}`), hasCapacity ? 'Còn khả năng nhận nhóm' : 'Đã đủ số nhóm'],
         activeTeamCount, hasCapacity };
@@ -99,7 +100,7 @@ export function registerMentoringMockHandlers(mock: MockAdapter): void {
     const body = parseBody(config);
     const teamId = asString(body.teamId);
     if (!accessibleTeam(teamId) || currentUser()?.role === 'STUDENT') return failure(403, 'CLASS_ACCESS_DENIED', 'Access denied.');
-    const item: MentoringSession = { id: allocateId(), teamId, mentorAssignmentId: teamId, title: asString(body.title),
+    const item: MentoringSession = { id: allocateId(), teamId, mentorAssignmentId: asString(body.mentorAssignmentId) || teamId, title: asString(body.title),
       description: asString(body.description), startAt: asString(body.startAt), endAt: asString(body.endAt),
       location: asString(body.location), meetingUrl: asString(body.meetingUrl), status: 'Scheduled', notes: null, actionItems: [] };
     sessions.push(item); return ok(item);

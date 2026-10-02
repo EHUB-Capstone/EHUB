@@ -1,6 +1,8 @@
 using EHub.Application.Common.Interfaces.Identity;
+using EHub.Application.Features.Subjects.ManageSemester;
 using EHub.Application.Features.Workspaces;
 using EHub.Contracts.Common;
+using EHub.Contracts.Subjects;
 using EHub.Contracts.Workspaces;
 using EHub.Shared.Constants;
 using EHub.Shared.Errors;
@@ -27,6 +29,19 @@ public sealed class ProjectWorkspacesController : ControllerBase
         [FromServices] IProjectWorkspaceHandler handler,
         CancellationToken cancellationToken) =>
         ToResponse(await handler.GetAccessibleAsync(UserId, Role, cancellationToken), "Accessible workspaces retrieved.");
+
+    [HttpGet("workspace/active-semester")]
+    [Authorize(Roles = SystemRoles.Admin + "," + SystemRoles.Lecturer + "," + SystemRoles.Mentor)]
+    public async Task<IActionResult> GetWorkspaceActiveSemester(
+        [FromServices] ICurrentSemesterHandler handler,
+        CancellationToken cancellationToken)
+    {
+        var result = await handler.GetAsync(cancellationToken);
+        return result.IsFailure
+            ? BadRequest(ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code))
+            : Ok(ApiResponse<CurrentSemesterResponse>.SuccessResponse(
+                result.Value!, "Current semester retrieved successfully."));
+    }
 
     [HttpGet("team-workspaces/current")]
     public async Task<IActionResult> GetCurrentWorkspace(
@@ -92,7 +107,7 @@ public sealed class ProjectWorkspacesController : ControllerBase
         {
             ErrorCodes.WorkspaceAccessDenied or ErrorCodes.WorkspaceLeaderRequired => StatusCode(StatusCodes.Status403Forbidden, failure),
             ErrorCodes.TeamNotFound or ErrorCodes.WorkspaceNotFound => NotFound(failure),
-            ErrorCodes.WorkspaceAlreadyExists or ErrorCodes.WorkspaceConcurrencyConflict or ErrorCodes.ClassArchived or ErrorCodes.ClassCompleted => Conflict(failure),
+            ErrorCodes.WorkspaceAlreadyExists or ErrorCodes.WorkspaceConcurrencyConflict or ErrorCodes.TeamNameDuplicated or ErrorCodes.ClassArchived or ErrorCodes.ClassCompleted => Conflict(failure),
             _ => BadRequest(failure)
         };
     }

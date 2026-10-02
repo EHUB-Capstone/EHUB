@@ -1,6 +1,8 @@
 import type MockAdapter from 'axios-mock-adapter';
 import type { AxiosRequestConfig } from 'axios';
 import type { MockDirectionReview, MockMentor, MockProposal, MockProposalMember, MockTeam } from '../mockState.ts';
+import type { TeamFormation } from '../../types/teamFormation.ts';
+import { TEAM_MAJOR_GROUPS } from '../../constants/majors.ts';
 import {
   allocateId,
   allocateRowVersion,
@@ -80,10 +82,9 @@ function isActiveSemesterMentor(classId: string, userId: string): boolean {
 }
 
 function activeMentorTeamCount(userId: string): number {
-  return getMockState().teams.filter((team) => (
-    team.currentMentorAssignment?.mentor.userId === userId
-    && team.currentMentorAssignment.status === 'Active'
-  )).length;
+  return getMockState().teams.filter((team) =>
+    team.currentMentorAssignments.some((assignment) => assignment.mentor.userId === userId && assignment.status === 'Active'))
+    .length;
 }
 
 function registerTeamQueries(mock: MockAdapter): void {
@@ -108,7 +109,10 @@ function registerTeamQueries(mock: MockAdapter): void {
   mock.onGet(/^\/classes\/[^/]+\/mentors$/).reply((config) => {
     const classId = routeId(config, /^\/classes\/([^/]+)\/mentors$/);
     if (!findClass(classId)) return failure(404, 'CLASS_NOT_FOUND', 'Class not found.');
-    const mentors = getMockState().teams.filter((team) => team.classId === classId && team.currentMentorAssignment?.status === 'Active').map((team) => team.currentMentorAssignment!.mentor);
+    const mentors = getMockState().teams.filter((team) => team.classId === classId)
+      .flatMap((team) => team.currentMentorAssignments)
+      .filter((assignment) => assignment.status === 'Active')
+      .map((assignment) => assignment.mentor);
     return ok([...new Map(mentors.map((mentor) => [mentor.mentorProfileId, mentor])).values()], 'Class mentors retrieved successfully.');
   });
 
@@ -120,9 +124,9 @@ function registerTeamQueries(mock: MockAdapter): void {
       && user.status === 'APPROVED'
       && isActiveSemesterMentor(classId, user.id)
     )).map((user) => {
-      const mentor: MockMentor = { mentorProfileId: user.id, userId: user.id, fullName: user.name, email: user.email, organization: 'E-HUB Partner Network' };
+      const mentor: MockMentor = { mentorProfileId: user.id, userId: user.id, fullName: user.name, email: user.email, organization: 'E-HUB Partner Network', mentorType: 'Enterprise' };
       const activeTeamCount = activeMentorTeamCount(user.id);
-      return { mentor, activeTeamCount, maxTeams: 4, hasCapacity: activeTeamCount < 4 };
+      return { mentor, activeTeamCount };
     });
     return ok(candidates, 'Mentor candidates retrieved successfully.');
   });
@@ -130,7 +134,7 @@ function registerTeamQueries(mock: MockAdapter): void {
   mock.onGet(/^\/teams\/[^/]+\/mentor-assignments$/).reply((config) => {
     const team = teamById(routeId(config, /^\/teams\/([^/]+)\/mentor-assignments$/));
     if (!team) return failure(404, 'TEAM_NOT_FOUND', 'Team not found.');
-    return ok(team.currentMentorAssignment ? [team.currentMentorAssignment] : [], 'Mentor assignments retrieved successfully.');
+    return ok(team.currentMentorAssignments, 'Mentor assignments retrieved successfully.');
   });
 
   mock.onGet(/^\/classes\/[^/]+\/team-proposals$/).reply((config) => {
@@ -153,6 +157,90 @@ function registerTeamQueries(mock: MockAdapter): void {
 }
 
 function registerTeamMutations(mock: MockAdapter): void {
+  mock.onPost(/^\/classes\/[^/]+\/teams$/).reply((config) => {
+    const classId = routeId(config, /^\/classes\/([^/]+)\/teams$/);
+    const guard = classMutationGuard(classId);
+    if (guard) return guard;
+
+    const state = getMockState();
+    const currentUser = state.users.find((user) => user.id === state.sessionUserId);
+    const canManageClass = currentUser?.role === 'ADMIN'
+      || (currentUser?.role === 'LECTURER' && findClass(classId)?.primaryLecturerId === currentUser.id);
+    if (!currentUser || !canManageClass) {
+      return failure(403, 'CLASS_ACCESS_DENIED', 'Only an administrator or the assigned lecturer can create a team for this class.');
+    }
+
+    const body = parseBody(config);
+    const rawMemberIds = asStringArray(body.memberStudentIds);
+    const memberIds = [...new Set(rawMemberIds)];
+    const leaderId = asString(body.leaderStudentId);
+    const teamName = asString(body.teamName).trim();
+    if (rawMemberIds.length !== memberIds.length || memberIds.length < 4 || memberIds.length > 6 || !memberIds.includes(leaderId)) {
+      return failure(400, 'CLASS_VALIDATION_ERROR', 'A team needs 4–6 unique students and a leader selected from its members.');
+    }
+    if (teamName.length < 3 || teamName.length > 60) {
+      return failure(400, 'CLASS_VALIDATION_ERROR', 'Team name must be between 3 and 60 characters.');
+    }
+
+    const roster = state.rosters[classId] || [];
+    const selectedStudents = memberIds.map((studentId) =>
+      roster.find((student) => student.studentId === studentId && student.enrollmentStatus === 'Active'));
+    if (selectedStudents.some((student) => !student)) {
+      return failure(400, 'CLASS_VALIDATION_ERROR', 'Every team member must have an active enrollment in this class.');
+    }
+    if (hasMemberConflict(classId, memberIds)) {
+      return failure(409, 'TEAM_MEMBERSHIP_CONFLICT', 'A selected student already belongs to another active team in this class.');
+    }
+    const openProposalStatuses = new Set(['Draft', 'Pending', 'NeedsRevision']);
+    if (state.proposals.some((proposal) => proposal.classId === classId
+      && openProposalStatuses.has(proposal.status)
+      && proposal.members.some((member) => memberIds.includes(member.studentId)))) {
+      return failure(409, 'TEAM_PROPOSAL_MEMBERSHIP_CONFLICT', 'A selected student belongs to an open team proposal.');
+    }
+    if (state.formations.some((formation) => formation.classId === classId
+      && formation.status === 'Pending'
+      && formation.invitations.some((invitation) => memberIds.includes(invitation.studentId)))) {
+      return failure(409, 'TEAM_FORMATION_RESERVATION_CONFLICT', 'A selected student belongs to a pending team formation.');
+    }
+
+    const groupOneMajors = new Set(['BBA_HM', 'BBA_FIN', 'BBA_IB', 'BBA_MC', 'BBA_MKT', 'BEN', 'BBA_TM']);
+    const groupTwoMajors = new Set(['BIT_AI', 'BIT_GD', 'BIT_IA', 'BIT_SE']);
+    const majors = selectedStudents.map((student) => student?.majorCode?.toUpperCase() || '');
+    if (!majors.some((major) => groupOneMajors.has(major)) || !majors.some((major) => groupTwoMajors.has(major))) {
+      return failure(400, 'TEAM_MAJOR_COMPOSITION_INVALID', 'A team must include at least one GROUP_1 major and one GROUP_2 major.');
+    }
+    if (hasDuplicateTeamName(classId, teamName)
+      || state.proposals.some((proposal) => proposal.classId === classId
+        && proposal.teamName.trim().toLowerCase() === teamName.toLowerCase()
+        && !['Rejected', 'Cancelled'].includes(proposal.status))
+      || state.formations.some((formation) => formation.classId === classId
+        && formation.status === 'Pending'
+        && formation.teamName.trim().toLowerCase() === teamName.toLowerCase())) {
+      return failure(409, 'TEAM_NAME_DUPLICATED', 'A team, open proposal, or pending formation already uses this name in the class.');
+    }
+
+    const team: MockTeam = {
+      id: allocateId(),
+      classId,
+      teamCode: `${findClass(classId)?.classCode || 'TEAM'}_TEAM_${state.teams.filter((item) => item.classId === classId).length + 1}`,
+      teamName,
+      description: null,
+      projectName: null,
+      projectDescription: null,
+      status: 'Active',
+      leaderId,
+      members: selectedStudents.map((student) => memberFromStudent(student!, leaderId)),
+      currentMentorAssignment: null,
+      currentMentorAssignments: [],
+      rowVersion: allocateRowVersion(),
+    };
+    state.teams.push(team);
+    updateRosterTeamLinks(classId, team);
+    refreshClassCounts(classId);
+    persistMockState();
+    return ok(team, 'Team created successfully.');
+  });
+
   mock.onPut(/^\/teams\/[^/]+\/members$/).reply((config) => {
     const teamId = routeId(config, /^\/teams\/([^/]+)\/members$/);
     const team = teamById(teamId);
@@ -171,6 +259,13 @@ function registerTeamMutations(mock: MockAdapter): void {
     const roster = getMockState().rosters[team.classId] || [];
     const members = memberIds.map((studentId) => roster.find((student) => student.studentId === studentId)).filter(Boolean).map((student) => memberFromStudent(student!, leaderId));
     if (members.length !== memberIds.length) return failure(400, 'TEAM_MEMBER_NOT_IN_CLASS', 'Every team member must be enrolled in the class.');
+    const hasMajorGroup = (groupKey: string) => {
+      const group = TEAM_MAJOR_GROUPS.find((item) => item.key === groupKey);
+      return group?.majors.some((major) => members.some((member) => member.majorCode?.toUpperCase() === major.code)) ?? false;
+    };
+    if (!hasMajorGroup('GROUP_1') || !hasMajorGroup('GROUP_2')) {
+      return failure(400, 'TEAM_MAJOR_COMPOSITION_INVALID', 'A team must include at least one GROUP_1 major and one GROUP_2 major.');
+    }
     const oldMemberIds = team.members.map((member) => member.studentId);
     team.teamName = teamName;
     team.description = asString(body.description, team.description || '') || null;
@@ -231,17 +326,22 @@ function registerTeamMutations(mock: MockAdapter): void {
     if (!isActiveSemesterMentor(team.classId, mentorUser.id)) {
       return failure(400, 'MENTOR_NOT_AVAILABLE', "The selected mentor is not active in this semester's teaching staff list.");
     }
-    if (team.currentMentorAssignment?.mentor.userId === mentorUser.id && team.currentMentorAssignment.status === 'Active') {
-      return ok(team.currentMentorAssignment, 'Mentor is already assigned to this team.');
+    const same = team.currentMentorAssignments.find((assignment) => assignment.mentor.userId === mentorUser.id && assignment.status === 'Active');
+    if (same) {
+      return ok(same, 'Mentor is already assigned to this team.');
     }
-    if (activeMentorTeamCount(mentorUser.id) >= 4) {
-      return failure(409, 'MENTOR_CAPACITY_REACHED', 'The selected mentor has reached the maximum active team capacity.');
+    const mentor: MockMentor = { mentorProfileId: mentorUser.id, userId: mentorUser.id, fullName: mentorUser.name, email: mentorUser.email, organization: 'E-HUB Partner Network', mentorType: 'Enterprise' };
+    const occupiedSlot = team.currentMentorAssignments.some((assignment) =>
+      assignment.slot === mentor.mentorType && assignment.status === 'Active');
+    if (occupiedSlot) {
+      return failure(409, 'MENTOR_ASSIGNMENT_CONFLICT', `This team already has an active ${mentor.mentorType} mentor. End the current assignment before assigning a replacement.`);
     }
-    const mentor: MockMentor = { mentorProfileId: mentorUser.id, userId: mentorUser.id, fullName: mentorUser.name, email: mentorUser.email, organization: 'E-HUB Partner Network' };
-    team.currentMentorAssignment = { assignmentId: allocateId(), teamId: team.id, teamName: team.teamName, classId: team.classId, mentor, status: 'Active', assignedAtUtc: new Date().toISOString(), endedAtUtc: null, note: asString(body.note) || null };
+    const assignment = { assignmentId: allocateId(), teamId: team.id, teamName: team.teamName, classId: team.classId, mentor, status: 'Active' as const, assignedAtUtc: new Date().toISOString(), endedAtUtc: null, note: asString(body.note) || null, slot: mentor.mentorType };
+    team.currentMentorAssignments.push(assignment);
+    team.currentMentorAssignment = assignment;
     refreshClassCounts(team.classId);
     persistMockState();
-    return ok(team.currentMentorAssignment, 'Mentor assigned successfully.');
+    return ok(assignment, 'Mentor assigned successfully.');
   });
 
   mock.onPost(/^\/teams\/[^/]+\/mentor-assignments\/end$/).reply((config) => {
@@ -249,9 +349,13 @@ function registerTeamMutations(mock: MockAdapter): void {
     if (!team) return failure(404, 'TEAM_NOT_FOUND', 'Team not found.');
     const guard = classMutationGuard(team.classId);
     if (guard) return guard;
-    if (!team.currentMentorAssignment) return failure(404, 'MENTOR_ASSIGNMENT_NOT_FOUND', 'There is no active mentor assignment.');
-    team.currentMentorAssignment.status = 'Ended';
-    team.currentMentorAssignment.endedAtUtc = new Date().toISOString();
+    const body = parseBody(config);
+    const assignment = team.currentMentorAssignments.find(item => item.assignmentId === asString(body.assignmentId) && item.status === 'Active');
+    if (!assignment) return failure(404, 'MENTOR_ASSIGNMENT_NOT_FOUND', 'There is no active mentor assignment.');
+    assignment.status = 'Ended';
+    assignment.endedAtUtc = new Date().toISOString();
+    team.currentMentorAssignments = team.currentMentorAssignments.filter(item => item.status === 'Active');
+    team.currentMentorAssignment = team.currentMentorAssignments[0] || null;
     refreshClassCounts(team.classId);
     persistMockState();
     return ok(null, 'Mentor assignment ended successfully.');
@@ -266,6 +370,7 @@ function registerProposalHandlers(mock: MockAdapter): void {
 
     const state = getMockState();
     const currentUser = state.users.find((user) => user.id === state.sessionUserId);
+    if (currentUser?.role === 'STUDENT') return failure(409, 'TEAM_FORMATION_REQUIRED', 'Students must use team formation.');
     const body = parseBody(config);
     const memberIds = [...new Set(asStringArray(body.studentIds))];
     const leaderId = asString(body.leaderStudentId);
@@ -275,17 +380,11 @@ function registerProposalHandlers(mock: MockAdapter): void {
       : asString(body.projectName).trim();
     const description = asString(body.description).trim();
     const roster = state.rosters[classId] || [];
-    const currentEnrollment = currentUser?.role === 'STUDENT'
-      ? roster.find((student) => student.userId === currentUser.id && student.enrollmentStatus === 'Active')
-      : null;
     const canManageClass = currentUser?.role === 'ADMIN'
       || (currentUser?.role === 'LECTURER' && findClass(classId)?.primaryLecturerId === currentUser.id);
 
-    if (!currentUser || (currentUser.role !== 'STUDENT' && !canManageClass)) {
-      return failure(403, 'CLASS_ACCESS_DENIED', 'Only a student, administrator, or assigned lecturer can submit a team proposal.');
-    }
-    if (currentUser.role === 'STUDENT' && (!currentEnrollment || !memberIds.includes(currentEnrollment.studentId))) {
-      return failure(403, 'CLASS_ACCESS_DENIED', 'The proposing student must be actively enrolled and included in the proposal.');
+    if (!currentUser || !canManageClass) {
+      return failure(403, 'CLASS_ACCESS_DENIED', 'Only an administrator or assigned lecturer can submit a team proposal.');
     }
     if (memberIds.length < 4 || memberIds.length > 6 || !memberIds.includes(leaderId)) {
       return failure(400, 'TEAM_PROPOSAL_INVALID', 'A proposal needs 4–6 unique students and a leader selected from its members.');
@@ -312,9 +411,6 @@ function registerProposalHandlers(mock: MockAdapter): void {
     const groupOneMajors = new Set(['BBA_HM', 'BBA_FIN', 'BBA_IB', 'BBA_MC', 'BBA_MKT', 'BEN', 'BBA_TM']);
     const groupTwoMajors = new Set(['BIT_AI', 'BIT_GD', 'BIT_IA', 'BIT_SE']);
     const majors = selectedStudents.map((student) => student?.majorCode?.toUpperCase() || '');
-    if (majors.some((major) => !groupOneMajors.has(major) && !groupTwoMajors.has(major))) {
-      return failure(400, 'AUTH_STUDENT_MAJOR_REQUIRED', 'Every proposed member must select a valid major before joining a team.');
-    }
     if (!majors.some((major) => groupOneMajors.has(major)) || !majors.some((major) => groupTwoMajors.has(major))) {
       return failure(400, 'TEAM_MAJOR_COMPOSITION_INVALID', 'A team must include at least one GROUP_1 major and one GROUP_2 major.');
     }
@@ -328,7 +424,7 @@ function registerProposalHandlers(mock: MockAdapter): void {
     const proposal: MockProposal = {
       id: allocateId(),
       classId,
-      proposedByStudentId: currentUser.role === 'STUDENT' ? currentEnrollment!.studentId : leaderId,
+      proposedByStudentId: leaderId,
       teamName,
       description,
       projectName,
@@ -360,6 +456,7 @@ function registerProposalHandlers(mock: MockAdapter): void {
       leaderId,
       members: selectedStudents.map((student) => memberFromStudent(student!, leaderId)),
       currentMentorAssignment: null,
+      currentMentorAssignments: [],
       rowVersion: allocateRowVersion(),
     };
     proposal.approvedTeamId = teamId;
@@ -372,6 +469,8 @@ function registerProposalHandlers(mock: MockAdapter): void {
   });
 
   mock.onPost(/^\/classes\/[^/]+\/team-proposals$/).reply((config) => {
+    const currentUser = getMockState().users.find((user) => user.id === getMockState().sessionUserId);
+    if (currentUser?.role === 'STUDENT') return failure(409, 'TEAM_FORMATION_REQUIRED', 'Students must use team formation.');
     const classId = routeId(config, /^\/classes\/([^/]+)\/team-proposals$/);
     const guard = classMutationGuard(classId);
     if (guard) return guard;
@@ -430,7 +529,7 @@ function registerProposalHandlers(mock: MockAdapter): void {
         const id = allocateId();
         const roster = getMockState().rosters[proposal.classId] || [];
         const leaderId = proposal.members.find((member) => member.isLeader)?.studentId || proposal.members[0]?.studentId || '';
-        team = { id, classId: proposal.classId, teamCode: `${findClass(proposal.classId)?.subjectCode || 'TEAM'}-T${getMockState().teams.length + 1}`, teamName: proposal.teamName, description: null, status: 'Active', leaderId, members: proposal.members.map((member) => roster.find((student) => student.studentId === member.studentId)).filter(Boolean).map((student) => memberFromStudent(student!, leaderId)), currentMentorAssignment: null, rowVersion: allocateRowVersion() };
+        team = { id, classId: proposal.classId, teamCode: `${findClass(proposal.classId)?.subjectCode || 'TEAM'}-T${getMockState().teams.length + 1}`, teamName: proposal.teamName, description: null, status: 'Active', leaderId, members: proposal.members.map((member) => roster.find((student) => student.studentId === member.studentId)).filter(Boolean).map((student) => memberFromStudent(student!, leaderId)), currentMentorAssignment: null, currentMentorAssignments: [], rowVersion: allocateRowVersion() };
         getMockState().teams.push(team);
         updateRosterTeamLinks(proposal.classId, team);
         proposal.approvedTeamId = id;
@@ -443,6 +542,118 @@ function registerProposalHandlers(mock: MockAdapter): void {
     proposal.history.unshift({ id: allocateId(), fromStatus: previousStatus, toStatus: proposal.status, action: 'REVIEWED', comment: proposal.latestReviewComment, performedByUserId: getMockState().users.find((user) => user.role === 'LECTURER')?.id || allocateId(), occurredAtUtc: new Date().toISOString() });
     persistMockState();
     return ok(proposal, 'Team proposal reviewed successfully.');
+  });
+}
+
+function registerFormationHandlers(mock: MockAdapter): void {
+  const currentStudent = () => {
+    const state = getMockState();
+    const user = state.users.find(item => item.id === state.sessionUserId);
+    return user?.role === 'STUDENT' ? user.id : null;
+  };
+  const ownFormation = (formationId: string) => getMockState().formations.find(item => item.id === formationId);
+
+  mock.onGet('/team-formations/mine').reply((config) => {
+    const studentId = currentStudent();
+    if (!studentId) return failure(403, 'CLASS_ACCESS_DENIED', 'Student account required.');
+    const classId = asString(config.params?.classId);
+    return ok(getMockState().formations.filter(item =>
+      (!classId || item.classId === classId) && item.invitations.some(invitation => invitation.studentId === studentId))
+      .map(item => ({ ...item, myStudentId: studentId })));
+  });
+  mock.onGet('/team-formations/invitations/pending').reply(() => {
+    const studentId = currentStudent();
+    if (!studentId) return failure(403, 'CLASS_ACCESS_DENIED', 'Student account required.');
+    return ok(getMockState().formations.filter(item => item.status === 'Pending' &&
+      item.invitations.some(invitation => invitation.studentId === studentId && invitation.status === 'Pending'))
+      .map(item => ({ ...item, myStudentId: studentId })));
+  });
+  mock.onGet(/^\/team-formations\/[^/]+$/).reply((config) => {
+    const studentId = currentStudent();
+    const formation = ownFormation(routeId(config, /^\/team-formations\/([^/]+)$/));
+    if (!formation) return failure(404, 'TEAM_FORMATION_NOT_FOUND', 'Formation not found.');
+    if (!studentId || !formation.invitations.some(item => item.studentId === studentId))
+      return failure(403, 'CLASS_ACCESS_DENIED', 'This formation is not yours.');
+    return ok({ ...formation, myStudentId: studentId });
+  });
+  mock.onPost(/^\/classes\/[^/]+\/team-formations$/).reply((config) => {
+    const classId = routeId(config, /^\/classes\/([^/]+)\/team-formations$/);
+    const guard = classMutationGuard(classId);
+    if (guard) return guard;
+    const state = getMockState();
+    const creatorId = currentStudent();
+    if (!creatorId) return failure(403, 'CLASS_ACCESS_DENIED', 'Student account required.');
+    const body = parseBody(config);
+    const teamName = asString(body.teamName).trim();
+    const ids = asStringArray(body.memberStudentIds);
+    const leaderId = asString(body.leaderStudentId);
+    if (ids.length < 4 || ids.length > 6 || new Set(ids).size !== ids.length ||
+      !ids.includes(creatorId) || !ids.includes(leaderId) || teamName.length < 3 || teamName.length > 60)
+      return failure(400, 'VALIDATION_ERROR', 'Formation requires 4–6 unique members, creator, leader, and a valid team name.');
+    const roster = state.rosters[classId] || [];
+    const selected = ids.map(id => roster.find(student => student.studentId === id && student.enrollmentStatus === 'Active'));
+    if (selected.some(student => !student)) return failure(400, 'VALIDATION_ERROR', 'Every member must be enrolled.');
+    const groupOne = new Set(['BBA_HM', 'BBA_FIN', 'BBA_IB', 'BBA_MC', 'BBA_MKT', 'BEN', 'BBA_TM']);
+    const groupTwo = new Set(['BIT_AI', 'BIT_GD', 'BIT_IA', 'BIT_SE']);
+    if (!selected.some(student => groupOne.has(student?.majorCode || '')) ||
+      !selected.some(student => groupTwo.has(student?.majorCode || '')))
+      return failure(400, 'TEAM_MAJOR_COMPOSITION_INVALID', 'Both major groups are required.');
+    if (selected.some(student => student?.teamId) || state.formations.some(item => item.classId === classId &&
+      item.status === 'Pending' && item.invitations.some(invitation => ids.includes(invitation.studentId))))
+      return failure(409, 'TEAM_FORMATION_RESERVATION_CONFLICT', 'A member is already in a team or pending formation.');
+    if (hasDuplicateTeamName(classId, teamName) || state.formations.some(item => item.classId === classId &&
+      item.status === 'Pending' && item.teamName.toLowerCase() === teamName.toLowerCase()))
+      return failure(409, 'TEAM_NAME_DUPLICATED', 'Team name is already in use.');
+    const now = new Date().toISOString();
+    const formation: TeamFormation = {
+      id: allocateId(), classId, classCode: findClass(classId)?.classCode || '', teamName,
+      creatorStudentId: creatorId, myStudentId: creatorId, proposedLeaderStudentId: leaderId,
+      status: 'Pending', completedTeamId: null, createdAtUtc: now,
+      invitations: selected.map(student => ({
+        studentId: student!.studentId, fullName: student!.fullName, rollNumber: student!.rollNumber,
+        status: student!.studentId === creatorId ? 'Accepted' : 'Pending',
+        isCreator: student!.studentId === creatorId, isProposedLeader: student!.studentId === leaderId,
+      })),
+    };
+    state.formations.unshift(formation);
+    persistMockState();
+    return created(formation, 'Invitations sent.');
+  });
+  mock.onPost(/^\/team-formations\/[^/]+\/(accept|decline|cancel)$/).reply((config) => {
+    const formation = ownFormation(routeId(config, /^\/team-formations\/([^/]+)\/(accept|decline|cancel)$/));
+    const action = routeId(config, /^\/team-formations\/([^/]+)\/(accept|decline|cancel)$/, 2);
+    const studentId = currentStudent();
+    if (!formation) return failure(404, 'TEAM_FORMATION_NOT_FOUND', 'Formation not found.');
+    if (!studentId) return failure(403, 'CLASS_ACCESS_DENIED', 'Student account required.');
+    const invitation = formation.invitations.find(item => item.studentId === studentId);
+    if (!invitation || (action === 'cancel' && formation.creatorStudentId !== studentId))
+      return failure(403, 'CLASS_ACCESS_DENIED', 'You cannot act on this formation.');
+    if (formation.status !== 'Pending' || (action !== 'cancel' && invitation.status !== 'Pending'))
+      return failure(409, 'TEAM_FORMATION_STATE_INVALID', 'Formation is no longer pending.');
+    if (action === 'accept') invitation.status = 'Accepted';
+    if (action === 'decline') invitation.status = 'Declined';
+    if (action !== 'accept') formation.status = 'Cancelled';
+    if (formation.invitations.every(item => item.status === 'Accepted')) {
+      const state = getMockState();
+      const leaderId = formation.proposedLeaderStudentId;
+      const roster = state.rosters[formation.classId] || [];
+      const selected = formation.invitations.map(item => roster.find(student => student.studentId === item.studentId));
+      if (selected.some(item => !item || item.teamId)) return failure(409, 'TEAM_MEMBERSHIP_CONFLICT', 'A member joined another team.');
+      const team: MockTeam = {
+        id: allocateId(), classId: formation.classId,
+        teamCode: `${findClass(formation.classId)?.classCode || 'TEAM'}_TEAM_${state.teams.filter(item => item.classId === formation.classId).length + 1}`,
+        teamName: formation.teamName, description: null, projectName: null, projectDescription: null,
+        status: 'Active', leaderId, members: selected.map(item => memberFromStudent(item!, leaderId)),
+        currentMentorAssignment: null, currentMentorAssignments: [], rowVersion: allocateRowVersion(),
+      };
+      state.teams.push(team);
+      updateRosterTeamLinks(formation.classId, team);
+      formation.status = 'Completed';
+      formation.completedTeamId = team.id;
+      refreshClassCounts(formation.classId);
+    }
+    persistMockState();
+    return ok({ ...formation, myStudentId: studentId });
   });
 }
 
@@ -486,6 +697,9 @@ function registerDirectionHandlers(mock: MockAdapter): void {
       revisedIndustries = selectedIndustries.map((industry) => industry!.name);
     }
     const industriesChanged = [...revisedIndustries].sort().join('|') !== [...(direction?.startupIndustries || [])].sort().join('|');
+    if (direction?.isProjectProfileChangeProposal && industriesChanged) {
+      return failure(400, 'VALIDATION_ERROR', 'Startup Industry cannot be changed as part of a Project Profile name or description change request.');
+    }
     if (direction?.status === 'NeedsRevision' && revisedTitle === direction.title && revisedSummary === direction.summary && !industriesChanged) {
       return failure(400, 'VALIDATION_ERROR', 'Change the project direction before saving the requested revision.');
     }
@@ -498,7 +712,7 @@ function registerDirectionHandlers(mock: MockAdapter): void {
     direction.startupIndustries = revisedIndustries;
     direction.status = 'Draft';
     direction.rowVersion = allocateRowVersion();
-    if (team.projectName) {
+    if (team.projectName && !direction.isProjectProfileChangeProposal) {
       team.projectName = revisedTitle;
       team.projectDescription = revisedSummary;
       team.startupIndustries = revisedIndustries;
@@ -517,11 +731,38 @@ function registerDirectionHandlers(mock: MockAdapter): void {
     if (direction.status !== 'Submitted') return failure(409, 'PROJECT_DIRECTION_STATE_INVALID', 'Only submitted directions can be reviewed.');
     const fromStatus = direction.status;
     const toStatus = asString(body.decision, 'NeedsRevision');
+    if (direction.isProjectProfileChangeProposal && toStatus === 'Approved') {
+      const team = teamById(teamId);
+      if (team) {
+        const changedFields = [
+          team.projectName !== direction.title && 'projectName',
+          (team.projectDescription || '') !== direction.summary && 'description',
+        ].filter(Boolean) as string[];
+        const occurredAtUtc = new Date().toISOString();
+        team.projectName = direction.title;
+        team.projectDescription = direction.summary;
+        team.projectUpdatedAtUtc = occurredAtUtc;
+        team.projectActivities = [{
+          id: allocateId(),
+          action: 'PROJECT_PROFILE_CHANGE_APPROVED',
+          summary: 'Approved Project Profile changes.',
+          actorUserId: getMockState().users.find((user) => user.role === 'LECTURER')?.id || null,
+          actorName: 'Lecturer',
+          changedFields,
+          occurredAtUtc,
+        }, ...(team.projectActivities || [])];
+      }
+    }
     direction.status = toStatus;
     direction.reviewedAtUtc = new Date().toISOString();
     direction.rowVersion = allocateRowVersion();
     const review: MockDirectionReview = { id: allocateId(), fromStatus, toStatus, comment: asString(body.comment), reviewedByUserId: getMockState().users.find((user) => user.role === 'LECTURER')?.id || allocateId(), occurredAtUtc: new Date().toISOString() };
     direction.reviews.unshift(review);
+    if (toStatus === 'Approved') {
+      direction.isProjectProfileChangeProposal = false;
+      direction.currentTitle = null;
+      direction.currentSummary = null;
+    }
     persistMockState();
     return ok(direction, 'Project direction reviewed successfully.');
   });
@@ -541,6 +782,7 @@ function directionState(config: AxiosRequestConfig, status: 'Submitted') {
 }
 
 export function registerTeamMockHandlers(mock: MockAdapter): void {
+  registerFormationHandlers(mock);
   registerTeamQueries(mock);
   registerTeamMutations(mock);
   registerProposalHandlers(mock);

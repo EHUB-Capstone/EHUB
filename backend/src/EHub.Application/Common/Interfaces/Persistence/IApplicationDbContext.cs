@@ -22,6 +22,8 @@ public interface IApplicationDbContext
     DbSet<ClassAuditLog> ClassAuditLogs { get; }
     DbSet<ClassImportSession> ClassImportSessions { get; }
     DbSet<LecturerImportSession> LecturerImportSessions { get; }
+    DbSet<MentorImportSession> MentorImportSessions { get; }
+    DbSet<MentorAllocationSession> MentorAllocationSessions { get; }
     DbSet<OutboxMessage> OutboxMessages { get; }
     DbSet<Student> Students { get; }
     DbSet<ClassStudent> ClassStudents { get; }
@@ -30,6 +32,8 @@ public interface IApplicationDbContext
     DbSet<TeamProposal> TeamProposals { get; }
     DbSet<TeamProposalMember> TeamProposalMembers { get; }
     DbSet<TeamProposalHistory> TeamProposalHistory { get; }
+    DbSet<TeamFormation> TeamFormations { get; }
+    DbSet<TeamFormationInvitation> TeamFormationInvitations { get; }
     DbSet<ProjectDirection> ProjectDirections { get; }
     DbSet<ProjectDirectionReview> ProjectDirectionReviews { get; }
     DbSet<Project> Projects { get; }
@@ -39,12 +43,15 @@ public interface IApplicationDbContext
     DbSet<ClassCheckpointSchedule> ClassCheckpointSchedules { get; }
     DbSet<Submission> Submissions { get; }
     DbSet<SubmissionFile> SubmissionFiles { get; }
+    DbSet<SubmissionUploadSession> SubmissionUploadSessions { get; }
+    DbSet<SubmissionLink> SubmissionLinks { get; }
     DbSet<SubmissionRequirementContent> SubmissionRequirementContents { get; }
     DbSet<SubmissionFeedback> SubmissionFeedbacks { get; }
     DbSet<Rubric> Rubrics { get; }
     DbSet<RubricCriterion> RubricCriteria { get; }
     DbSet<Evaluation> Evaluations { get; }
     DbSet<EvaluationDetail> EvaluationDetails { get; }
+    DbSet<EvaluationMemberScore> EvaluationMemberScores { get; }
     DbSet<EvaluationHistory> EvaluationHistories { get; }
     DbSet<MentorProfile> MentorProfiles { get; }
     DbSet<MentorAssignment> MentorAssignments { get; }

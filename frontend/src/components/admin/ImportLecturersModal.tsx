@@ -283,9 +283,9 @@ function LecturerRowsTable({ rows }: { rows: LecturerImportRow[] }) {
   };
   return (
     <div className="overflow-hidden rounded-xl border border-slate-200"><div className="max-h-80 overflow-auto">
-      <table className="w-full min-w-[920px] text-left text-xs">
-        <thead className="sticky top-0 z-10 bg-slate-50 text-slate-500"><tr><th className="px-3 py-2.5">Row</th><th className="px-3 py-2.5">Lecturer</th><th className="px-3 py-2.5">Position</th><th className="px-3 py-2.5">Google login email</th><th className="px-3 py-2.5">Contact email</th><th className="px-3 py-2.5">Result</th></tr></thead>
-        <tbody className="divide-y divide-slate-100 bg-white">{rows.map((row) => <tr key={row.rowNumber} className={!row.isValid ? 'bg-red-50/50' : 'hover:bg-slate-50'}><td className="px-3 py-3 font-mono text-slate-400">{row.rowNumber}</td><td className="px-3 py-3 font-semibold text-slate-700">{row.fullName || '—'}</td><td className="px-3 py-3 text-slate-600">{row.position || '—'}</td><td className="px-3 py-3 text-slate-700">{row.googleEmail || '—'}</td><td className="px-3 py-3 text-slate-600">{row.contactEmail || '—'}</td><td className="px-3 py-3"><span className={`inline-flex rounded-full px-2 py-1 font-semibold ${statusStyle[row.status]}`}>{row.status}</span>{row.message && <p className="mt-1 max-w-xs leading-4 text-slate-500">{row.message}</p>}</td></tr>)}</tbody>
+      <table className="w-full min-w-[760px] text-left text-xs">
+        <thead className="sticky top-0 z-10 bg-slate-50 text-slate-500"><tr><th className="px-3 py-2.5">Row</th><th className="px-3 py-2.5">Lecturer</th><th className="px-3 py-2.5">Position</th><th className="px-3 py-2.5">Google login email</th><th className="px-3 py-2.5">Result</th></tr></thead>
+        <tbody className="divide-y divide-slate-100 bg-white">{rows.map((row) => <tr key={row.rowNumber} className={!row.isValid ? 'bg-red-50/50' : 'hover:bg-slate-50'}><td className="px-3 py-3 font-mono text-slate-400">{row.rowNumber}</td><td className="px-3 py-3 font-semibold text-slate-700">{row.fullName || '—'}</td><td className="px-3 py-3 text-slate-600">{row.position || '—'}</td><td className="px-3 py-3 text-slate-700">{row.googleEmail || '—'}</td><td className="px-3 py-3"><span className={`inline-flex rounded-full px-2 py-1 font-semibold ${statusStyle[row.status]}`}>{row.status}</span>{row.message && <p className="mt-1 max-w-xs leading-4 text-slate-500">{row.message}</p>}</td></tr>)}</tbody>
       </table>
     </div></div>
   );

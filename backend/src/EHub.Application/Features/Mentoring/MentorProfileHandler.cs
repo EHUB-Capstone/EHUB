@@ -112,7 +112,9 @@ public sealed class MentorProfileHandler(IApplicationDbContext context, IMentorD
         if (profile is null)
             return Result.Failure<MentorProfileResponse>(ErrorCodes.CommonNotFoundError, "Mentor profile was not found.");
 
-        profile.MentorType = request.MentorType;
+        if (profile.MentorType != request.MentorType)
+            return Result.Failure<MentorProfileResponse>(ErrorCodes.CommonValidationError,
+                "Mentor type is managed by the administrator.");
         profile.Expertise = request.Expertise.Select(x => x.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
         profile.Bio = request.Bio?.Trim();
         profile.Experience = request.Experience?.Trim();
@@ -176,7 +178,10 @@ public sealed class MentorProfileHandler(IApplicationDbContext context, IMentorD
             .GroupBy(x => x.MentorProfileId).Select(g => new { Id = g.Key, Count = g.Count() })
             .ToDictionaryAsync(x => x.Id, x => x.Count, cancellationToken);
 
-        profiles = profiles.Where(x => counts.GetValueOrDefault(x.Id) < x.MaxTeams).ToList();
+        var occupiedSlots = await context.MentorAssignments.AsNoTracking()
+            .Where(x => x.TeamId == teamId && x.Status == MentorAssignmentStatus.Active && x.EndedAt == null)
+            .Select(x => x.Slot).ToListAsync(cancellationToken);
+        profiles = profiles.Where(x => !occupiedSlots.Contains(x.Type)).ToList();
         var projectDetails = new[] { team.Project?.Technology, team.Project?.StartupField,
             team.ProjectDirection?.Summary, team.Project?.Description, team.Project?.Problem,
             team.Project?.Solution, team.Description }.Where(x => !string.IsNullOrWhiteSpace(x))
@@ -223,6 +228,6 @@ public sealed class MentorProfileHandler(IApplicationDbContext context, IMentorD
         Bio = x.Bio, Experience = x.Experience, Organization = x.Organization,
         LinkedInUrl = x.LinkedInUrl, PortfolioUrl = x.PortfolioUrl, CvFileName = x.CvFileName,
         PortfolioFileName = x.PortfolioFileName,
-        MaxTeams = x.MaxTeams, Status = x.Status.ToString(), ActiveTeamCount = activeTeams,
+        MaxTeams = null, Status = x.Status.ToString(), ActiveTeamCount = activeTeams,
         TotalAssignments = totalAssignments, TotalSessions = totalSessions, AverageFeedbackRating = averageRating };
 }

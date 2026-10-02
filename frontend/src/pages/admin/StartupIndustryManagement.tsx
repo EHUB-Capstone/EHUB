@@ -12,6 +12,7 @@ import {
 import toast from 'react-hot-toast';
 import { startupIndustryApi } from '../../api/startupIndustryApi';
 import Badge from '../../components/ui/Badge';
+import Button from '../../components/ui/Button';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import EmptyState from '../../components/ui/EmptyState';
 import ErrorState from '../../components/ui/ErrorState';
@@ -72,7 +73,12 @@ function sortIndustries(
   });
 }
 
-export default function StartupIndustryManagement(): React.ReactElement {
+interface StartupIndustryManagementProps {
+  /** Rendered as a tab inside another page: the host page owns the title. */
+  embedded?: boolean;
+}
+
+export default function StartupIndustryManagement({ embedded = false }: StartupIndustryManagementProps = {}): React.ReactElement {
   const [industries, setIndustries] = useState<StartupIndustryDto[]>([]);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -237,11 +243,17 @@ export default function StartupIndustryManagement(): React.ReactElement {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Startup Industry Management"
-        subtitle="Manage the standardized startup industries used across E-HUB projects."
-        action={{ label: 'Add Industry', icon: Plus, variant: 'primary', onClick: openCreateForm }}
-      />
+      {embedded ? (
+        <div className="flex justify-end">
+          <Button icon={Plus} onClick={openCreateForm}>Add Industry</Button>
+        </div>
+      ) : (
+        <PageHeader
+          title="Startup Industry Management"
+          subtitle="Manage the standardized startup industries used across E-HUB projects."
+          action={{ label: 'Add Industry', icon: Plus, variant: 'primary', onClick: openCreateForm }}
+        />
+      )}
 
       <section
         className="overflow-hidden rounded-2xl border border-slate-200/70 bg-white shadow-card"

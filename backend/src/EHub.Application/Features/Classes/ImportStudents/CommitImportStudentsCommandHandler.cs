@@ -187,6 +187,7 @@ public sealed class CommitImportStudentsCommandHandler : ICommitImportStudentsCo
         var codes = rows.Select(row => row.StudentCode).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var emails = rows.Select(row => row.Email).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var profiles = await _context.Students
+            .Include(student => student.User)
             .Where(student =>
                 (student.NormalizedRollNumber != null && codes.Contains(student.NormalizedRollNumber)) ||
                 (student.RollNumber != null && codes.Contains(student.RollNumber)) ||
@@ -246,12 +247,12 @@ public sealed class CommitImportStudentsCommandHandler : ICommitImportStudentsCo
                 ? null
                 : enrollments.FirstOrDefault(enrollment =>
                     enrollment.StudentId == profile.Id && enrollment.ClassId == targetClass.Id);
-            if (currentEnrollment != null && currentEnrollment.EnrollmentStatus != EnrollmentStatus.Dropped)
+            if (currentEnrollment?.EnrollmentStatus == EnrollmentStatus.Completed)
             {
                 errors.Add(RowError(
                     row,
                     ErrorCodes.ClassStudentAlreadyEnrolled,
-                    "Student already has an enrollment in this class."));
+                    "Student has already completed this class."));
                 continue;
             }
 
@@ -271,6 +272,7 @@ public sealed class CommitImportStudentsCommandHandler : ICommitImportStudentsCo
             }
 
             var rowUpdated = false;
+            var enrollmentChanged = false;
             if (profile == null)
             {
                 profile = new Student
@@ -298,6 +300,11 @@ public sealed class CommitImportStudentsCommandHandler : ICommitImportStudentsCo
                     rowUpdated = true;
                 }
 
+                if (ApplyImportedName(profile, row.FullName, currentUserId, DateTime.UtcNow))
+                {
+                    rowUpdated = true;
+                }
+
                 if (synchronizeProfileMajors &&
                     profile.UserId.HasValue &&
                     MajorCodes.IsValid(row.MajorCode))
@@ -310,11 +317,12 @@ public sealed class CommitImportStudentsCommandHandler : ICommitImportStudentsCo
                         profile.UpdatedAt = DateTime.UtcNow;
                         profile.UpdatedBy = currentUserId;
                         synchronizedMajorCount++;
+                        rowUpdated = true;
                     }
                 }
             }
 
-            if (currentEnrollment != null)
+            if (currentEnrollment?.EnrollmentStatus == EnrollmentStatus.Dropped)
             {
                 currentEnrollment.EnrollmentStatus = EnrollmentStatus.Active;
                 currentEnrollment.CountsTowardCourseSemesterLimit = true;
@@ -327,8 +335,9 @@ public sealed class CommitImportStudentsCommandHandler : ICommitImportStudentsCo
                 currentEnrollment.UpdatedAt = DateTime.UtcNow;
                 rowUpdated = true;
                 reEnrolledCount++;
+                enrollmentChanged = true;
             }
-            else
+            else if (currentEnrollment == null)
             {
                 currentEnrollment = new ClassStudent
                 {
@@ -346,6 +355,7 @@ public sealed class CommitImportStudentsCommandHandler : ICommitImportStudentsCo
                 _context.ClassStudents.Add(currentEnrollment);
                 enrollments.Add(currentEnrollment);
                 insertedCount++;
+                enrollmentChanged = true;
             }
 
             if (rowUpdated)
@@ -353,7 +363,10 @@ public sealed class CommitImportStudentsCommandHandler : ICommitImportStudentsCo
                 updatedCount++;
             }
 
-            importedStudents.Add((profile.Email ?? row.Email, profile.FullName, profile.UserId));
+            if (rowUpdated || enrollmentChanged)
+            {
+                importedStudents.Add((profile.Email ?? row.Email, profile.FullName, profile.UserId));
+            }
         }
 
         session.Status = ClassImportSessionStatus.Consumed;
@@ -420,6 +433,7 @@ public sealed class CommitImportStudentsCommandHandler : ICommitImportStudentsCo
         var codes = rows.Select(row => row.StudentCode).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var emails = rows.Select(row => row.Email).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var profiles = await _context.Students
+            .Include(student => student.User)
             .Where(student =>
                 (student.NormalizedRollNumber != null && codes.Contains(student.NormalizedRollNumber)) ||
                 (student.RollNumber != null && codes.Contains(student.RollNumber)) ||
@@ -626,13 +640,21 @@ public sealed class CommitImportStudentsCommandHandler : ICommitImportStudentsCo
                     profilesByCode[row.StudentCode] = [profile];
                     profilesByEmail[row.Email] = [profile];
                 }
-                else if (StudentImportIdentityRules.CompleteMissingIdentity(profile, row.StudentCode, row.Email))
+                else
                 {
-                    profile.UpdatedAt = now;
-                    profile.UpdatedBy = currentUserId;
-                    profilesByCode[row.StudentCode] = [profile];
-                    profilesByEmail[row.Email] = [profile];
-                    rowUpdated = true;
+                    if (StudentImportIdentityRules.CompleteMissingIdentity(profile, row.StudentCode, row.Email))
+                    {
+                        profile.UpdatedAt = now;
+                        profile.UpdatedBy = currentUserId;
+                        profilesByCode[row.StudentCode] = [profile];
+                        profilesByEmail[row.Email] = [profile];
+                        rowUpdated = true;
+                    }
+
+                    if (ApplyImportedName(profile, row.FullName, currentUserId, now))
+                    {
+                        rowUpdated = true;
+                    }
                 }
 
                 if (enrollment == null)
@@ -908,6 +930,28 @@ public sealed class CommitImportStudentsCommandHandler : ICommitImportStudentsCo
         {
             // The lease permits recovery if infrastructure is unavailable here.
         }
+    }
+
+    private static bool ApplyImportedName(Student profile, string fullName, Guid currentUserId, DateTime now)
+    {
+        var changed = false;
+        if (!string.Equals(profile.FullName, fullName, StringComparison.Ordinal))
+        {
+            profile.FullName = fullName;
+            profile.UpdatedAt = now;
+            profile.UpdatedBy = currentUserId;
+            changed = true;
+        }
+
+        if (profile.User != null && !string.Equals(profile.User.FullName, fullName, StringComparison.Ordinal))
+        {
+            profile.User.FullName = fullName;
+            profile.User.UpdatedAt = now;
+            profile.User.UpdatedBy = currentUserId;
+            changed = true;
+        }
+
+        return changed;
     }
 
     private static ImportStudentCommitErrorDto RowError(

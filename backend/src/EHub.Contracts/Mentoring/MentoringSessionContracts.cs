@@ -18,6 +18,7 @@ public sealed class MentoringSessionResponse
 
 public sealed class SaveMentoringSessionRequest
 {
+    public Guid? MentorAssignmentId { get; init; }
     public Guid TeamId { get; init; }
     public string Title { get; init; } = string.Empty;
     public string? Description { get; init; }

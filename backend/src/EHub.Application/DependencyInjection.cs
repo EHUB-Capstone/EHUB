@@ -17,8 +17,11 @@ using EHub.Application.Features.Auth.ResetPassword;
 using EHub.Application.Features.Auth.ResendRegistrationOtp;
 using EHub.Application.Features.Auth.VerifyRegistrationOtp;
 using EHub.Application.Features.Dashboard.GetAdminDashboard;
+using EHub.Application.Features.Dashboard.GetAcademicOverview;
+using EHub.Application.Features.Dashboard.GetSubmissionAnalytics;
 using EHub.Application.Features.Notifications.GetNotifications;
 using EHub.Application.Features.Notifications.MarkNotificationRead;
+using EHub.Application.Features.Rankings.TeamRankings;
 using EHub.Application.Features.Subjects.Curriculum;
 using EHub.Application.Features.Subjects.ManageSemester;
 using EHub.Application.Features.Subjects.ManageSubjects;
@@ -61,9 +64,13 @@ public static class DependencyInjection
         services.AddScoped<IRejectUserCommandHandler, RejectUserCommandHandler>();
         services.AddScoped<IUserManagementHandler, UserManagementHandler>();
         services.AddScoped<EHub.Application.Features.Admin.Users.ImportLecturers.ILecturerImportHandler, EHub.Application.Features.Admin.Users.ImportLecturers.LecturerImportHandler>();
+        services.AddScoped<EHub.Application.Features.Admin.Mentors.IMentorAdminHandler, EHub.Application.Features.Admin.Mentors.MentorAdminHandler>();
 
         services.AddScoped<IGetAdminDashboardQueryHandler, GetAdminDashboardQueryHandler>();
+        services.AddScoped<IGetAcademicOverviewQueryHandler, GetAcademicOverviewQueryHandler>();
+        services.AddScoped<IGetSubmissionAnalyticsQueryHandler, GetSubmissionAnalyticsQueryHandler>();
         services.AddScoped<ITrackingQueryHandler, TrackingQueryHandler>();
+        services.AddScoped<ITeamRankingQueryHandler, TeamRankingQueryHandler>();
         services.AddScoped<IGetNotificationsQueryHandler, GetNotificationsQueryHandler>();
         services.AddScoped<IMarkNotificationReadCommandHandler, MarkNotificationReadCommandHandler>();
 
@@ -99,6 +106,7 @@ public static class DependencyInjection
         services.AddScoped<EHub.Application.Features.Classes.GetImportTemplate.IGetImportTemplateQueryHandler, EHub.Application.Features.Classes.GetImportTemplate.GetImportTemplateQueryHandler>();
         services.AddScoped<EHub.Application.Features.Classes.GetMajorVerificationTemplate.IGetMajorVerificationTemplateQueryHandler, EHub.Application.Features.Classes.GetMajorVerificationTemplate.GetMajorVerificationTemplateQueryHandler>();
         services.AddScoped<EHub.Application.Features.Classes.VerifyClassMajors.IVerifyClassMajorsCommandHandler, EHub.Application.Features.Classes.VerifyClassMajors.VerifyClassMajorsCommandHandler>();
+        services.AddScoped<EHub.Application.Features.Classes.ImportSemesterGroups.IImportSemesterGroupsCommandHandler, EHub.Application.Features.Classes.ImportSemesterGroups.ImportSemesterGroupsCommandHandler>();
         services.AddScoped<EHub.Application.Features.Classes.SynchronizeProfileMajors.ISynchronizeProfileMajorsCommandHandler, EHub.Application.Features.Classes.SynchronizeProfileMajors.SynchronizeProfileMajorsCommandHandler>();
         services.AddScoped<EHub.Application.Features.Classes.SetEnrollmentMajorLock.ISetEnrollmentMajorLockCommandHandler, EHub.Application.Features.Classes.SetEnrollmentMajorLock.SetEnrollmentMajorLockCommandHandler>();
         services.AddScoped<EHub.Application.Features.Classes.ClassLifecycle.IClassLifecycleCommandHandler, EHub.Application.Features.Classes.ClassLifecycle.ClassLifecycleCommandHandler>();
@@ -109,6 +117,7 @@ public static class DependencyInjection
         services.AddScoped<EHub.Application.Features.Teams.ManageTeams.ITeamManagementHandler, EHub.Application.Features.Teams.ManageTeams.TeamManagementHandler>();
         services.AddScoped<EHub.Application.Features.Teams.MentorAssignments.IMentorAssignmentHandler, EHub.Application.Features.Teams.MentorAssignments.MentorAssignmentHandler>();
         services.AddScoped<EHub.Application.Features.Teams.TeamProposals.ITeamProposalHandler, EHub.Application.Features.Teams.TeamProposals.TeamProposalHandler>();
+        services.AddScoped<EHub.Application.Features.Teams.TeamFormations.ITeamFormationHandler, EHub.Application.Features.Teams.TeamFormations.TeamFormationHandler>();
         services.AddScoped<EHub.Application.Features.Teams.ProjectDirections.IProjectDirectionHandler, EHub.Application.Features.Teams.ProjectDirections.ProjectDirectionHandler>();
         services.AddScoped<EHub.Application.Features.Classes.StudentSelfService.IStudentClassSelfServiceHandler, EHub.Application.Features.Classes.StudentSelfService.StudentClassSelfServiceHandler>();
         services.AddScoped<EHub.Application.Features.Workspaces.IProjectWorkspaceHandler, EHub.Application.Features.Workspaces.ProjectWorkspaceHandler>();
@@ -116,10 +125,13 @@ public static class DependencyInjection
         services.AddScoped<IGetWorkspaceCheckpointOverviewQueryHandler, GetWorkspaceCheckpointOverviewQueryHandler>();
         services.AddScoped<ILecturerCheckpointManagementHandler, LecturerCheckpointManagementHandler>();
         services.AddScoped<EHub.Application.Features.Workspaces.CheckpointFiles.ICheckpointFileHandler, EHub.Application.Features.Workspaces.CheckpointFiles.CheckpointFileHandler>();
+        services.AddScoped<EHub.Application.Features.Workspaces.CheckpointFiles.ICheckpointFileUploadHandler, EHub.Application.Features.Workspaces.CheckpointFiles.CheckpointFileUploadHandler>();
+        services.AddScoped<EHub.Application.Features.Workspaces.CheckpointLinks.ICheckpointLinkHandler, EHub.Application.Features.Workspaces.CheckpointLinks.CheckpointLinkHandler>();
         services.AddScoped<EHub.Application.Features.Workspaces.CheckpointRequirements.ICheckpointRequirementHandler, EHub.Application.Features.Workspaces.CheckpointRequirements.CheckpointRequirementHandler>();
         services.AddScoped<EHub.Application.Features.Workspaces.CheckpointFeedback.ICheckpointFeedbackHandler, EHub.Application.Features.Workspaces.CheckpointFeedback.CheckpointFeedbackHandler>();
 
         services.AddScoped<EHub.Application.Features.Workspaces.CheckpointEvaluations.ICheckpointEvaluationHandler, EHub.Application.Features.Workspaces.CheckpointEvaluations.CheckpointEvaluationHandler>();
+        services.AddScoped<EHub.Application.Features.Workspaces.CourseAssessmentEvaluations.ICourseAssessmentEvaluationHandler, EHub.Application.Features.Workspaces.CourseAssessmentEvaluations.CourseAssessmentEvaluationHandler>();
 
         services.AddScoped<EHub.Application.Features.ProductFeedback.IProductFeedbackHandler, EHub.Application.Features.ProductFeedback.ProductFeedbackHandler>();
 

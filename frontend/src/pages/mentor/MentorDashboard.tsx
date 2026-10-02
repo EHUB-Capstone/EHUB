@@ -48,7 +48,7 @@ const MentorDashboard = () => {
         <StatCard title="My Teams" value={myTeams || 0} icon={Users} color="primary" change="Assigned teams" trend="flat" />
         <StatCard title="Pending Reviews" value={pendingReviews || 0} icon={ClipboardList} color="warning" change="Need action" trend={pendingReviews > 0 ? 'up' : 'flat'} />
         <StatCard title="Upcoming Sessions" value={upcomingSessions || 0} icon={Calendar} color="secondary" change="Scheduled" trend="up" />
-        <StatCard title="Avg Rating" value={averageScore || 0} icon={Star} color="success" change="Out of 100" trend="flat" />
+        <StatCard title="Avg Rating" value={averageScore ?? '—'} icon={Star} color="success" change={averageScore == null ? 'Scores not published' : 'Out of 100'} trend="flat" />
       </motion.div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -69,7 +69,7 @@ const MentorDashboard = () => {
                   <div key={evalu._id} className="flex items-center justify-between p-4 rounded-xl border border-slate-100">
                     <div className="min-w-0 flex-1">
                       <h4 className="font-semibold text-slate-900 truncate">Evaluation for {evalu.teamId?.teamName || 'Team'}</h4>
-                      <p className="text-sm text-slate-500">Score: {evalu.totalScore}</p>
+                      <p className="text-sm text-slate-500">{evalu.totalScore == null ? 'Score pending publication' : `Team score: ${evalu.totalScore}`}</p>
                     </div>
                     <div className="flex items-center gap-2 shrink-0 ml-3">
                       <Badge variant="Approved" size="xs">Evaluated</Badge>

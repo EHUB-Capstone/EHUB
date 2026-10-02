@@ -2,8 +2,10 @@ namespace EHub.Contracts.Workspaces;
 
 public sealed class CreateProjectWorkspaceRequest
 {
+    public string? TeamName { get; init; }
     public string ProjectName { get; init; } = string.Empty;
     public string Description { get; init; } = string.Empty;
+    public string ZaloGroupUrl { get; init; } = string.Empty;
     public IReadOnlyCollection<Guid> StartupIndustryIds { get; init; } = Array.Empty<Guid>();
 }
 
@@ -86,6 +88,7 @@ public sealed class WorkspacePersonDto
     public Guid Id { get; init; }
     public string Name { get; init; } = string.Empty;
     public string Email { get; init; } = string.Empty;
+    public string? Label { get; init; }
 }
 
 public sealed class WorkspaceProjectProposalDto
@@ -104,6 +107,7 @@ public sealed class ProjectWorkspaceDetailDto
     public IReadOnlyCollection<WorkspaceMemberDto> Members { get; init; } = Array.Empty<WorkspaceMemberDto>();
     public WorkspacePersonDto? Lecturer { get; init; }
     public WorkspacePersonDto? Mentor { get; init; }
+    public IReadOnlyCollection<WorkspacePersonDto> Mentors { get; init; } = Array.Empty<WorkspacePersonDto>();
     public WorkspaceProjectProposalDto? Proposal { get; init; }
     public ProjectWorkspaceDto? Project { get; init; }
     public IReadOnlyCollection<ProjectActivityDto> Activities { get; init; } = Array.Empty<ProjectActivityDto>();

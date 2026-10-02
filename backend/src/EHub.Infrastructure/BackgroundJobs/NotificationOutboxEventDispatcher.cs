@@ -115,6 +115,35 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
                         cancellationToken);
                 }
                 break;
+            case "TeamFormation.Invited.v1":
+                await AddForStudentsAsync(message, data, "studentIds", "Team invitation",
+                    "You have been invited to join a team. Open My Team to respond.", cancellationToken);
+                break;
+            case "TeamFormation.Accepted.v1":
+                var creatorStudentId = ReadGuid(data, "creatorStudentId");
+                if (creatorStudentId.HasValue)
+                {
+                    var creatorUserId = await _context.Students.AsNoTracking()
+                        .Where(item => item.Id == creatorStudentId.Value).Select(item => item.UserId)
+                        .FirstOrDefaultAsync(cancellationToken);
+                    if (creatorUserId.HasValue)
+                        await AddAsync(message, creatorUserId.Value, NotificationType.SystemAnnouncement,
+                            "Team invitation accepted", "A member accepted your team invitation.", cancellationToken);
+                }
+                break;
+            case "TeamFormation.Cancelled.v1":
+                await AddForStudentsAsync(message, data, "studentIds", "Team formation cancelled",
+                    "This team formation was cancelled. Open My Team for details.", cancellationToken);
+                break;
+            case "TeamFormation.Completed.v1":
+                await AddForStudentsAsync(message, data, "studentIds", "Your team is ready",
+                    "All members accepted. Your team is now active.", cancellationToken);
+                break;
+            case "Team.Created.v1" when ReadString(data, "source") == "ClassManager":
+                await AddForUsersAsync(message, data, "studentUserIds", NotificationType.SystemAnnouncement,
+                    "Your team is ready",
+                    "Your class manager created your team. Open My Team to view it.", cancellationToken);
+                break;
             case "TeamProposal.Reviewed.v1":
                 var proposalDecision = ReadString(data, "decision");
                 var notificationType = proposalDecision == "Approved"
@@ -184,21 +213,31 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
                     cancellationToken);
                 break;
             case "ProjectDirection.Submitted.v1":
+                var isProfileChangeSubmission = ReadBoolean(data, "isProjectProfileChangeProposal");
                 await AddForOptionalUserAsync(message, data, "lecturerUserId", NotificationType.ProjectDirectionSubmitted,
-                    "Project direction awaiting review", "A team submitted its project direction for your review.", cancellationToken);
+                    isProfileChangeSubmission ? "Project Profile change awaiting review" : "Project direction awaiting review",
+                    isProfileChangeSubmission
+                        ? "A team submitted changes to its Project name or Description for your review."
+                        : "A team submitted its project direction for your review.", cancellationToken);
                 var lecturerUserId = ReadGuid(data, "lecturerUserId");
                 if (lecturerUserId.HasValue) realtimeNotificationRecipients = [lecturerUserId.Value];
                 realtimeNotificationTeamId = ReadGuid(data, "teamId");
                 break;
             case "ProjectDirection.Reviewed.v1":
                 var directionDecision = ReadString(data, "decision");
+                var isProfileChangeReview = ReadBoolean(data, "isProjectProfileChangeProposal");
                 realtimeNotificationRecipients = ReadGuids(data, "studentUserIds");
                 realtimeNotificationTeamId = ReadGuid(data, "teamId");
                 foreach (var userId in realtimeNotificationRecipients)
                 {
                     await AddAsync(message, userId,
                         directionDecision == "Approved" ? NotificationType.ProjectDirectionApproved : NotificationType.ProjectDirectionNeedsRevision,
-                        "Project direction reviewed", $"Your project direction was reviewed: {directionDecision}.", cancellationToken);
+                        isProfileChangeReview ? "Project Profile change reviewed" : "Project direction reviewed",
+                        isProfileChangeReview
+                            ? directionDecision == "Approved"
+                                ? "Your proposed Project Profile changes were approved and are now applied."
+                                : "Your proposed Project Profile changes need revision. The approved profile remains unchanged."
+                            : $"Your project direction was reviewed: {directionDecision}.", cancellationToken);
                 }
                 break;
             case "Team.MentorAssignmentChanged.v1" when ReadString(data, "action") is "Assigned" or "Reassigned":
@@ -365,6 +404,54 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
     {
         if (data.TryGetProperty(propertyName, out var property) && property.ValueKind != JsonValueKind.Null && property.TryGetGuid(out var userId))
             await AddAsync(message, userId, type, title, body, cancellationToken);
+    }
+
+    public async Task PublishAfterCommitAsync(OutboxMessage message, CancellationToken cancellationToken = default)
+    {
+        if (message.Type == "Team.Created.v1")
+        {
+            using var teamDocument = JsonDocument.Parse(message.PayloadJson);
+            if (!teamDocument.RootElement.TryGetProperty("data", out var teamData) ||
+                ReadString(teamData, "source") != "ClassManager") return;
+            var teamId = ReadGuid(teamData, "teamId");
+            var teamRecipients = ReadGuids(teamData, "studentUserIds");
+            if (teamId.HasValue && teamRecipients.Length > 0)
+                await _classRealtimePublisher.PublishTeamCreatedAsync(
+                    teamRecipients, message.AggregateId, teamId.Value, cancellationToken);
+            return;
+        }
+
+        if (message.Type is not ("TeamFormation.Invited.v1" or "TeamFormation.Accepted.v1" or
+            "TeamFormation.Cancelled.v1" or "TeamFormation.Completed.v1")) return;
+        using var document = JsonDocument.Parse(message.PayloadJson);
+        if (!document.RootElement.TryGetProperty("data", out var data)) return;
+        var formationId = ReadGuid(data, "formationId");
+        if (!formationId.HasValue) return;
+        var recipients = await _context.TeamFormationInvitations.AsNoTracking()
+            .Where(invitation => invitation.FormationId == formationId.Value && invitation.ClassId == message.AggregateId &&
+                invitation.ClassStudent.Student.UserId.HasValue)
+            .Select(invitation => invitation.ClassStudent.Student.UserId!.Value)
+            .Distinct()
+            .ToArrayAsync(cancellationToken);
+        if (recipients.Length > 0)
+            await _classRealtimePublisher.PublishTeamFormationChangedAsync(recipients, message.AggregateId, formationId.Value, cancellationToken);
+    }
+
+    private async Task AddForStudentsAsync(
+        OutboxMessage message,
+        JsonElement data,
+        string propertyName,
+        string title,
+        string body,
+        CancellationToken cancellationToken)
+    {
+        var studentIds = ReadGuids(data, propertyName);
+        if (studentIds.Length == 0) return;
+        var userIds = await _context.Students.AsNoTracking()
+            .Where(item => studentIds.Contains(item.Id) && item.UserId.HasValue)
+            .Select(item => item.UserId!.Value).Distinct().ToArrayAsync(cancellationToken);
+        foreach (var userId in userIds)
+            await AddAsync(message, userId, NotificationType.SystemAnnouncement, title, body, cancellationToken);
     }
 
     private async Task QueueClassCreatedEmailAsync(
@@ -644,11 +731,20 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
             return $"/lecturer/classes?{string.Join('&', query)}";
         }
 
+        if (message.Type == "ProjectDirection.Reviewed.v1"
+            && ReadPayloadBoolean(message.PayloadJson, "isProjectProfileChangeProposal"))
+        {
+            var teamId = ReadPayloadGuid(message.PayloadJson, "teamId");
+            return teamId.HasValue ? $"/student/workspace/{teamId.Value}" : "/student/workspace";
+        }
+
         return message.Type switch
         {
             "AccountApproval.Requested.v1" => "/admin/account-approvals",
             "TeamProposal.Submitted.v1" => $"/classes/{message.AggregateId}",
             "TeamProposal.Reviewed.v1" or "ProjectDirection.Reviewed.v1" => $"/student/classes/{message.AggregateId}",
+            "TeamFormation.Invited.v1" or "TeamFormation.Accepted.v1" or
+                "TeamFormation.Cancelled.v1" or "TeamFormation.Completed.v1" => "/student/team",
             "Team.MentorAssignmentChanged.v1" => "/mentor/dashboard",
             CheckpointDeadlineEvents.ScheduleChanged or CheckpointDeadlineEvents.DeadlineReminder => "/student/workspace",
             _ => null
@@ -663,6 +759,13 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
             && property.TryGetGuid(out var value)
                 ? value
                 : null;
+    }
+
+    private static bool ReadPayloadBoolean(string payloadJson, string propertyName)
+    {
+        using var document = JsonDocument.Parse(payloadJson);
+        return document.RootElement.TryGetProperty("data", out var data)
+            && ReadBoolean(data, propertyName);
     }
 
     private static string ReadString(JsonElement data, string propertyName) =>

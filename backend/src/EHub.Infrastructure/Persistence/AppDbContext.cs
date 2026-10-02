@@ -29,6 +29,8 @@ public class AppDbContext : DbContext, IApplicationDbContext
     public DbSet<ClassAuditLog> ClassAuditLogs => Set<ClassAuditLog>();
     public DbSet<ClassImportSession> ClassImportSessions => Set<ClassImportSession>();
     public DbSet<LecturerImportSession> LecturerImportSessions => Set<LecturerImportSession>();
+    public DbSet<MentorImportSession> MentorImportSessions => Set<MentorImportSession>();
+    public DbSet<MentorAllocationSession> MentorAllocationSessions => Set<MentorAllocationSession>();
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
     public DbSet<Student> Students => Set<Student>();
     public DbSet<ClassStudent> ClassStudents => Set<ClassStudent>();
@@ -37,6 +39,8 @@ public class AppDbContext : DbContext, IApplicationDbContext
     public DbSet<TeamProposal> TeamProposals => Set<TeamProposal>();
     public DbSet<TeamProposalMember> TeamProposalMembers => Set<TeamProposalMember>();
     public DbSet<TeamProposalHistory> TeamProposalHistory => Set<TeamProposalHistory>();
+    public DbSet<TeamFormation> TeamFormations => Set<TeamFormation>();
+    public DbSet<TeamFormationInvitation> TeamFormationInvitations => Set<TeamFormationInvitation>();
     public DbSet<ProjectDirection> ProjectDirections => Set<ProjectDirection>();
     public DbSet<ProjectDirectionReview> ProjectDirectionReviews => Set<ProjectDirectionReview>();
     public DbSet<Project> Projects => Set<Project>();
@@ -46,12 +50,15 @@ public class AppDbContext : DbContext, IApplicationDbContext
     public DbSet<ClassCheckpointSchedule> ClassCheckpointSchedules => Set<ClassCheckpointSchedule>();
     public DbSet<Submission> Submissions => Set<Submission>();
     public DbSet<SubmissionFile> SubmissionFiles => Set<SubmissionFile>();
+    public DbSet<SubmissionUploadSession> SubmissionUploadSessions => Set<SubmissionUploadSession>();
+    public DbSet<SubmissionLink> SubmissionLinks => Set<SubmissionLink>();
     public DbSet<SubmissionRequirementContent> SubmissionRequirementContents => Set<SubmissionRequirementContent>();
     public DbSet<SubmissionFeedback> SubmissionFeedbacks => Set<SubmissionFeedback>();
     public DbSet<Rubric> Rubrics => Set<Rubric>();
     public DbSet<RubricCriterion> RubricCriteria => Set<RubricCriterion>();
     public DbSet<Evaluation> Evaluations => Set<Evaluation>();
     public DbSet<EvaluationDetail> EvaluationDetails => Set<EvaluationDetail>();
+    public DbSet<EvaluationMemberScore> EvaluationMemberScores => Set<EvaluationMemberScore>();
     public DbSet<EvaluationHistory> EvaluationHistories => Set<EvaluationHistory>();
     public DbSet<MentorProfile> MentorProfiles => Set<MentorProfile>();
     public DbSet<MentorEmbedding> MentorEmbeddings => Set<MentorEmbedding>();

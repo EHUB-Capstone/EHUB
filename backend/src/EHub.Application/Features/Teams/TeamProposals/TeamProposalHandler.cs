@@ -71,58 +71,12 @@ public sealed class TeamProposalHandler : ITeamProposalHandler
         return Result.Success<IReadOnlyCollection<TeamProposalDto>>(proposals.Select(ToDto).ToArray());
     }
 
-    public async Task<Result<TeamProposalDto>> CreateAsync(
-        Guid classId, CreateTeamProposalRequest request, Guid userId, string role, CancellationToken cancellationToken = default)
-    {
-        if (!IsRole(role, SystemRoles.Student)) return Failure(ErrorCodes.ClassAccessDenied, "Only a student can create a team proposal.");
-        var studentId = await GetStudentIdAsync(userId, cancellationToken);
-        if (!studentId.HasValue) return Failure(ErrorCodes.ClassAccessDenied, "The current account is not linked to a student profile.");
-        if (!request.MemberIds.Contains(studentId.Value)) return Failure(ErrorCodes.ClassAccessDenied, "The proposing student must be included in the proposal.");
-
-        var composition = await LoadAndValidateCompositionAsync(
-            classId,
-            request.MemberIds,
-            request.LeaderStudentId,
-            null,
-            cancellationToken);
-        if (composition.IsFailure) return Failure(composition.Error.Code, composition.Error.Message);
-        var nameError = ValidateStudentSubmissionText(
-            request.TeamName,
-            request.ProjectName ?? string.Empty,
-            request.Description ?? string.Empty);
-        if (nameError != null) return Failure(nameError.Value.Code, nameError.Value.Message);
-        var now = DateTime.UtcNow;
-        var proposal = new TeamProposal
-        {
-            ClassId = classId,
-            ProposedByStudentId = studentId.Value,
-            TeamName = request.TeamName.Trim(),
-            Description = request.Description?.Trim(),
-            ProjectName = request.ProjectName?.Trim(),
-            Status = TeamProposalStatus.Draft,
-            CreatedBy = userId
-        };
-        foreach (var enrollment in composition.Value)
-        {
-            proposal.Members.Add(new TeamProposalMember
-            {
-                ProposalId = proposal.Id,
-                Proposal = proposal,
-                ClassId = classId,
-                StudentId = enrollment.StudentId,
-                ClassStudent = enrollment,
-                IsLeader = enrollment.StudentId == request.LeaderStudentId,
-                IsIncluded = true,
-                CountsTowardOpenProposal = true
-            });
-        }
-        _context.TeamProposals.Add(proposal);
-        AddHistory(proposal, null, TeamProposalStatus.Draft, "Created", null, userId, now);
-        ClassOutbox.Enqueue(_context, "TeamProposal.Created.v1", classId, new { ProposalId = proposal.Id }, now);
-        try { await _context.SaveChangesAsync(cancellationToken); }
-        catch (DbUpdateException) { return Failure(ErrorCodes.TeamProposalMembershipConflict, "A selected student already belongs to another open proposal."); }
-        return Result.Success(ToDto(proposal));
-    }
+    public Task<Result<TeamProposalDto>> CreateAsync(
+        Guid classId, CreateTeamProposalRequest request, Guid userId, string role, CancellationToken cancellationToken = default) =>
+        Task.FromResult(IsRole(role, SystemRoles.Student)
+            ? Failure(ErrorCodes.TeamFormationRequired,
+                "Students must create a team formation instead of a new team proposal draft.")
+            : Failure(ErrorCodes.ClassAccessDenied, "Only students could create a team proposal draft."));
 
     public async Task<Result<TeamProposalDto>> SubmitStudentProposalAsync(
         Guid classId,
@@ -134,6 +88,8 @@ public sealed class TeamProposalHandler : ITeamProposalHandler
         var isStudent = IsRole(role, SystemRoles.Student);
         var isAdmin = IsRole(role, SystemRoles.Admin);
         var isLecturer = IsRole(role, SystemRoles.Lecturer);
+        if (isStudent)
+            return Failure(ErrorCodes.TeamFormationRequired, "Students must create a team formation and collect member consent.");
         if (!isStudent && !isAdmin && !isLecturer)
         {
             return Failure(ErrorCodes.ClassAccessDenied, "Only a student, administrator, or assigned lecturer can submit a team proposal.");
@@ -767,10 +723,6 @@ public sealed class TeamProposalHandler : ITeamProposalHandler
 
             return major;
         }).ToArray();
-        if (majors.Any(major => !MajorCodes.IsValid(major)))
-            return CompositionFailure(
-                "Every proposed member must select a valid major before joining a team.",
-                ErrorCodes.AuthStudentMajorRequired);
         if (!majors.Any(IsBusinessMajor) || !majors.Any(IsTechnologyMajor))
             return CompositionFailure("A team must include at least one GROUP_1 major and one GROUP_2 major.", ErrorCodes.TeamMajorCompositionInvalid);
         return Result.Success(enrollments);

@@ -3,8 +3,8 @@ import toast from 'react-hot-toast';
 import { Search, Users, AlertTriangle, UserMinus, RotateCcw, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
 import EmptyState from '../ui/EmptyState';
 import { getMajorName, TEAM_MAJOR_GROUPS } from '../../constants/majors';
-import { getDisplayGroupName } from '../../utils/teamDisplay';
 import { isMissingTeamMajor } from '../../utils/teamManagement';
+import { shortenSemesterCode } from '../../utils/semester';
 
 /**
  * Get display label for a major code.
@@ -61,6 +61,10 @@ export default function StudentTable({
 }) {
   const students = useMemo(() => (Array.isArray(rawStudents) ? rawStudents : []), [rawStudents]);
   const teams = useMemo(() => (Array.isArray(rawTeams) ? rawTeams : []), [rawTeams]);
+  const semesterCode = shortenSemesterCode(
+    _cls?.semesterCode || `${_cls?.semester || ''}${_cls?.year || ''}`,
+  );
+  const groupColumnLabel = semesterCode ? `Group ${semesterCode}` : 'Group';
   const [search, setSearch] = useState(serverQuery?.search || '');
 
   const teamMap = useMemo(() => {
@@ -146,7 +150,7 @@ export default function StudentTable({
   const toggleAll = () => {
     if (selectionDisabled) return;
     const unassigned = filtered
-      .filter(s => !s.teamId && s.enrollmentStatus === 'Active' && !isMissingTeamMajor(s.major))
+      .filter(s => !s.teamId && !s.hasPendingTeamInvitation && s.enrollmentStatus === 'Active')
       .map(s => s._id);
     const allSelected = unassigned.length > 0 && unassigned.every(id => selected.includes(id));
     if (allSelected) {
@@ -168,12 +172,12 @@ export default function StudentTable({
     }
   };
 
-  const canSelect = (s) => !selectionDisabled && !s.teamId && s.enrollmentStatus === 'Active' && !isMissingTeamMajor(s.major);
+  const canSelect = (s) => !selectionDisabled && !s.teamId && !s.hasPendingTeamInvitation && s.enrollmentStatus === 'Active';
   const getSelectionBlockReason = (s) => {
-    if (selectionDisabled) return 'Selection is disabled.';
-    if (s.teamId) return 'This student is already assigned or reserved by another team.';
+    if (s.teamId) return 'This student is already assigned to another team.';
+    if (s.hasPendingTeamInvitation) return 'Pending another invitation — this student cannot be selected until the current invitation is resolved.';
     if (s.enrollmentStatus !== 'Active') return 'Only active enrollments can be selected.';
-    if (isMissingTeamMajor(s.major)) return 'This student must select a major before joining a team.';
+    if (selectionDisabled) return 'Selection is disabled.';
     return '';
   };
 
@@ -269,7 +273,7 @@ export default function StudentTable({
                     <input
                       type="checkbox"
                       className="rounded"
-                      checked={filtered.filter(s => !s.teamId && s.enrollmentStatus === 'Active' && !isMissingTeamMajor(s.major)).length > 0 && filtered.filter(s => !s.teamId && s.enrollmentStatus === 'Active' && !isMissingTeamMajor(s.major)).every(s => selected.includes(s._id))}
+                      checked={filtered.filter(s => !s.teamId && !s.hasPendingTeamInvitation && s.enrollmentStatus === 'Active').length > 0 && filtered.filter(s => !s.teamId && !s.hasPendingTeamInvitation && s.enrollmentStatus === 'Active').every(s => selected.includes(s._id))}
                       onChange={toggleAll}
                     />
                   </th>
@@ -277,7 +281,7 @@ export default function StudentTable({
                 <th className="min-w-[220px] px-3 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-slate-500">Student</th>
                 <th className="hidden px-3 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-slate-500 sm:table-cell">Roll No.</th>
                 <th className="px-3 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-slate-500">Major</th>
-                <th className="hidden px-3 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-slate-500 lg:table-cell">GroupName</th>
+                <th className="hidden px-3 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-slate-500 lg:table-cell">{groupColumnLabel}</th>
                 {!hideProjectName && (
                   <th className="hidden px-3 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-slate-500 2xl:table-cell">Project Name</th>
                 )}
@@ -304,7 +308,7 @@ export default function StudentTable({
                 const isFirstInTeam = s.teamId && (!prevStudent || prevStudent.teamId?.toString() !== s.teamId.toString());
 
                 // Add border top if it's a new team block
-                const rowClass = `transition-colors ${selectable ? 'cursor-pointer hover:bg-slate-50' : ''} ${isSelected ? 'bg-primary-50' : ''} ${isFirstInTeam ? 'border-t-2 border-slate-200' : ''}`;
+                const rowClass = `transition-colors ${selectable ? 'cursor-pointer hover:bg-slate-50' : s.hasPendingTeamInvitation ? 'cursor-not-allowed bg-amber-50/40' : ''} ${isSelected ? 'bg-primary-50' : ''} ${isFirstInTeam ? 'border-t-2 border-slate-200' : ''}`;
 
                 return (
                   <tr key={s._id} onClick={() => selectable && toggleSelect(s._id)} className={rowClass} title={selectionBlockReason}>
@@ -365,7 +369,7 @@ export default function StudentTable({
                             {mLabel}
                           </span>
                           <span className="text-[10px] font-medium text-slate-400">
-                            {s.majorVerificationStatus || 'Unverified'}
+                            {s.majorVerificationStatus === 'Matched' ? 'Verified' : (s.majorVerificationStatus || 'Unverified')}
                           </span>
                           {s.hasMajorMismatch && (
                             <span
@@ -392,7 +396,7 @@ export default function StudentTable({
                     </td>
 
                     <td className="hidden px-3 py-2.5 text-xs font-medium text-slate-500 lg:table-cell">
-                      {(!s.teamId || isFirstInTeam) ? (getDisplayGroupName(team) || '—') : ''}
+                      {s.semesterGroupName || '-'}
                     </td>
 
                     {!hideProjectName && (
@@ -401,9 +405,9 @@ export default function StudentTable({
                       </td>
                     )}
 
-                    <td className="hidden px-3 py-2.5 text-xs text-slate-500 2xl:table-cell" title={team?.description}>
+                    <td className="hidden px-3 py-2.5 text-xs text-slate-500 2xl:table-cell" title={team?.projectDescription || team?.description}>
                       {(!s.teamId || isFirstInTeam) ? (
-                        <div className="line-clamp-2 max-w-sm">{team?.description || '—'}</div>
+                        <div className="max-w-sm whitespace-pre-wrap break-words leading-5">{team?.projectDescription || team?.description || '—'}</div>
                       ) : ''}
                     </td>
 
@@ -419,6 +423,13 @@ export default function StudentTable({
                           ) : (
                             <span className="rounded-full bg-green-100 px-1.5 py-0.5 text-[11px] font-semibold text-green-700">Approved</span>
                           )
+                        ) : s.hasPendingTeamInvitation ? (
+                          <span
+                            className="inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[11px] font-semibold text-amber-800"
+                            title="This student is currently reserved by another pending team invitation."
+                          >
+                            Pending another invitation
+                          </span>
                         ) : (
                           <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[11px] font-semibold text-slate-500">Unassigned</span>
                         )

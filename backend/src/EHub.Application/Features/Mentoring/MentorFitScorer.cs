@@ -23,11 +23,11 @@ public static class MentorFitScorer
         var semanticFit = Math.Max(0, semanticSimilarity);
         var score = (int)Math.Round(100 * (0.7 * semanticFit + 0.3 * keywordFit),
             MidpointRounding.AwayFromZero);
-        var hasCapacity = activeTeamCount < profile.MaxTeams;
+        var hasCapacity = true;
         var reasons = new List<string>();
         if (semanticFit >= 0.5) reasons.Add("Hồ sơ có nội dung liên quan đến dự án");
         reasons.AddRange(expertiseMatches.Select(x => $"Chuyên môn phù hợp: {x}"));
-        reasons.Add(hasCapacity ? "Còn khả năng nhận nhóm" : "Đã đủ số nhóm");
+        reasons.Add($"Đang phụ trách {activeTeamCount} nhóm");
         return (score, reasons.ToArray(), hasCapacity);
     }
 

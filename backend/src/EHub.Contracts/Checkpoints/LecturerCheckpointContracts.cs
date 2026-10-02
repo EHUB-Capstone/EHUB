@@ -100,6 +100,10 @@ public sealed class LecturerCheckpointSubmissionResponse
     public string Status { get; init; } = string.Empty;
     public DateTime? LatestSubmissionAtUtc { get; init; }
     public LecturerCheckpointFileResponse? EarliestSubmittedFile { get; init; }
+    public IReadOnlyCollection<LecturerCheckpointFileResponse> SubmittedFiles { get; init; } =
+        Array.Empty<LecturerCheckpointFileResponse>();
+    public IReadOnlyCollection<LecturerCheckpointLinkResponse> SubmittedLinks { get; init; } =
+        Array.Empty<LecturerCheckpointLinkResponse>();
 }
 
 public sealed class LecturerCheckpointFileResponse
@@ -107,4 +111,13 @@ public sealed class LecturerCheckpointFileResponse
     public Guid Id { get; init; }
     public string OriginalName { get; init; } = string.Empty;
     public DateTime UploadedAtUtc { get; init; }
+}
+
+public sealed class LecturerCheckpointLinkResponse
+{
+    public Guid Id { get; init; }
+    public string Name { get; init; } = string.Empty;
+    public string Url { get; init; } = string.Empty;
+    public int VersionNumber { get; init; }
+    public DateTime SubmittedAtUtc { get; init; }
 }

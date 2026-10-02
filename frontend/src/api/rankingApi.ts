@@ -1,9 +1,7 @@
-// @ts-nocheck
 import axiosClient from './axiosClient';
+import type { TeamRankingResponse } from '../types/rankings';
 
 export const rankingApi = {
-  getGlobal: () => axiosClient.get('/rankings'),
-  getClass: (classId) => axiosClient.get(`/rankings/class/${classId}`),
-  getMyClass: () => axiosClient.get('/rankings/my-class'),
-  getMyTeams: () => axiosClient.get('/rankings/my-teams'),
+  getTeams: (params?: { semester?: string; year?: number }) =>
+    axiosClient.get('/rankings', { params }) as Promise<TeamRankingResponse>,
 };

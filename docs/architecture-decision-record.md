@@ -25,7 +25,7 @@ Tài liệu này ghi nhận các quyết định kiến trúc và công nghệ c
     2.  `EHub.Shared`: Kiểu dữ liệu dùng chung (Result, Constants, Errors).
     3.  `EHub.Contracts`: Định nghĩa Request/Response DTO cố định làm API contract.
     4.  `EHub.Application`: Use cases, service interfaces, validators, CQRS/MediatR (nếu có). Phụ thuộc vào `Domain`, `Contracts`, `Shared`.
-    5.  `EHub.Infrastructure`: Hiện thực các interfaces (EF Core PostgreSQL DbContext, Repositories, JWT, Cloudinary). Phụ thuộc vào `Application`, `Domain`, `Shared`.
+    5.  `EHub.Infrastructure`: Hiện thực các interfaces (EF Core PostgreSQL DbContext, Repositories, JWT, Cloudinary, Cloudflare R2). Phụ thuộc vào `Application`, `Domain`, `Shared`.
     6.  `EHub.Api`: RESTful API Controllers, Global Middlewares, App configurations. Phụ thuộc vào tất cả các layer còn lại.
 *   **Hệ quả:**
     *   Bảo vệ logic nghiệp vụ (Domain & Application) khỏi sự thay đổi của công nghệ bên ngoài.

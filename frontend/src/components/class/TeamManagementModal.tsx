@@ -281,7 +281,7 @@ export default function TeamManagementModal({
                 </div>
                 <p className="mt-2 text-xs text-slate-500">{students.length} total students · {formationSummary.unassignedStudentCount} without a team</p>
                 {formationSummary.majorCodes.length > 0 && <p className="mt-1 text-xs text-slate-500">Majors: {formationSummary.majorCodes.join(', ')}</p>}
-                {formationSummary.missingMajorStudents.length > 0 && <p className="mt-1 text-xs font-medium text-amber-700">{formationSummary.missingMajorStudents.length} selected student(s) have no major and do not satisfy a major-group check.</p>}
+                {formationSummary.missingMajorStudents.length > 0 && <p className="mt-1 text-xs font-medium text-amber-700">{formationSummary.missingMajorStudents.length} selected student(s) have no major and do not count toward either major group.</p>}
               </div>
 
               <div className="flex-1 space-y-2 overflow-y-auto p-3">

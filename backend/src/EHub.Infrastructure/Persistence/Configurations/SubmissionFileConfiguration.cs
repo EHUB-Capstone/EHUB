@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using EHub.Domain.Entities;
+using EHub.Domain.Enums;
 
 namespace EHub.Infrastructure.Persistence.Configurations;
 
@@ -44,6 +45,17 @@ public class SubmissionFileConfiguration : IEntityTypeConfiguration<SubmissionFi
             .HasMaxLength(256)
             .IsRequired();
 
+        builder.Property(sf => sf.StorageProvider)
+            .HasColumnName("storage_provider")
+            .HasConversion<string>()
+            .HasMaxLength(20)
+            .HasDefaultValue(SubmissionStorageProvider.Cloudinary)
+            .IsRequired();
+
+        builder.Property(sf => sf.StorageKey)
+            .HasColumnName("storage_key")
+            .HasMaxLength(512);
+
         builder.Property(sf => sf.MimeType)
             .HasColumnName("mime_type")
             .HasMaxLength(100)
@@ -58,6 +70,20 @@ public class SubmissionFileConfiguration : IEntityTypeConfiguration<SubmissionFi
             .HasConversion<string>()
             .HasMaxLength(30)
             .IsRequired();
+
+        builder.Property(sf => sf.PreviewPdfUrl)
+            .HasColumnName("preview_pdf_url")
+            .HasMaxLength(1000);
+
+        builder.Property(sf => sf.PreviewPdfPublicId)
+            .HasColumnName("preview_pdf_public_id")
+            .HasMaxLength(256);
+
+        builder.Property(sf => sf.PreviewSourceVersionNumber)
+            .HasColumnName("preview_source_version_number");
+
+        builder.Property(sf => sf.PreviewGeneratedAt)
+            .HasColumnName("preview_generated_at");
 
         builder.Property(sf => sf.UploadedById)
             .HasColumnName("uploaded_by_id");

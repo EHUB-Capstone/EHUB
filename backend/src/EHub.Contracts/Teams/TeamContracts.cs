@@ -18,6 +18,9 @@ public sealed class MentorSummaryDto
     public string FullName { get; init; } = string.Empty;
     public string Email { get; init; } = string.Empty;
     public string? Organization { get; init; }
+    public string MentorType { get; init; } = string.Empty;
+    public string? Department { get; init; }
+    public string? JobTitle { get; init; }
 }
 
 public sealed class MentorAssignmentDto
@@ -31,14 +34,13 @@ public sealed class MentorAssignmentDto
     public DateTime AssignedAtUtc { get; init; }
     public DateTime? EndedAtUtc { get; init; }
     public string? Note { get; init; }
+    public string Slot { get; init; } = string.Empty;
 }
 
 public sealed class MentorCandidateDto
 {
     public MentorSummaryDto Mentor { get; init; } = new();
     public int ActiveTeamCount { get; init; }
-    public int MaxTeams { get; init; }
-    public bool HasCapacity { get; init; }
 }
 
 public sealed class TeamDto
@@ -54,8 +56,16 @@ public sealed class TeamDto
     public bool HasChatGroup { get; init; }
     public Guid? LeaderId { get; init; }
     public IReadOnlyCollection<TeamMemberDto> Members { get; init; } = Array.Empty<TeamMemberDto>();
+    public IReadOnlyCollection<MentorAssignmentDto> CurrentMentorAssignments { get; init; } = Array.Empty<MentorAssignmentDto>();
     public MentorAssignmentDto? CurrentMentorAssignment { get; init; }
     public string RowVersion { get; init; } = string.Empty;
+}
+
+public sealed class CreateClassManagerTeamRequest
+{
+    public string TeamName { get; init; } = string.Empty;
+    public IReadOnlyCollection<Guid> MemberStudentIds { get; init; } = Array.Empty<Guid>();
+    public Guid LeaderStudentId { get; init; }
 }
 
 public sealed class UpdateTeamMembersRequest
@@ -82,6 +92,7 @@ public sealed class AssignMentorRequest
 
 public sealed class EndMentorAssignmentRequest
 {
+    public Guid AssignmentId { get; init; }
     public string Reason { get; init; } = string.Empty;
 }
 
@@ -173,6 +184,9 @@ public sealed class ProjectDirectionDto
     public Guid TeamId { get; init; }
     public string Title { get; init; } = string.Empty;
     public string Summary { get; init; } = string.Empty;
+    public bool IsProjectProfileChangeProposal { get; init; }
+    public string? CurrentTitle { get; init; }
+    public string? CurrentSummary { get; init; }
     public IReadOnlyCollection<string> StartupIndustries { get; init; } = Array.Empty<string>();
     public string Status { get; init; } = string.Empty;
     public DateTime? SubmittedAtUtc { get; init; }
@@ -197,7 +211,7 @@ public sealed class ProjectDirectionStateRequest
 public sealed class ReviewProjectDirectionRequest
 {
     public string Decision { get; init; } = string.Empty;
-    public string Comment { get; init; } = string.Empty;
+    public string? Comment { get; init; }
     public string RowVersion { get; init; } = string.Empty;
 }
 
@@ -255,10 +269,12 @@ public sealed class StudentClassMemberDto
     public string MajorCode { get; init; } = string.Empty;
     public string? ProfileMajorCode { get; init; }
     public string EnrollmentMajorCode { get; init; } = string.Empty;
+    public string MajorVerificationStatus { get; init; } = string.Empty;
     public bool CanEditMajor { get; init; }
     public bool IsMajorLocked { get; init; }
     public string EnrollmentStatus { get; init; } = string.Empty;
     public Guid? TeamId { get; init; }
+    public bool HasPendingTeamInvitation { get; init; }
 }
 
 public sealed class MyTeamResponse
