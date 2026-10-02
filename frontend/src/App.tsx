@@ -27,7 +27,10 @@ const UserManagement = lazy(() => import('./pages/admin/UserManagement'));
 const AccountApprovals = lazy(() => import('./pages/admin/AccountApprovals'));
 const LecturerDashboard = lazy(() => import('./pages/lecturer/LecturerDashboard'));
 const LecturerClasses = lazy(() => import('./pages/lecturer/LecturerClasses'));
-const MentorDashboard = lazy(() => import('./pages/mentor/MentorDashboard'));
+const MentorDashboard = lazy(() => import('./pages/mentor/MentorOverview'));
+const MentorProfilePage = lazy(() => import('./pages/mentor/MentorProfilePage'));
+const MentorDirectory = lazy(() => import('./pages/shared/MentorDirectory'));
+const MentoringSessionsPage = lazy(() => import('./pages/common/MentoringSessionsPage'));
 const StudentDashboard = lazy(() => import('./pages/student/StudentDashboard'));
 const IdeaForm = lazy(() => import('./pages/student/IdeaForm'));
 const MyClasses = lazy(() => import('./pages/student/MyClasses'));
@@ -37,7 +40,6 @@ const AIAnalysis = lazy(() => import('./pages/common/AIAnalysis'));
 const ExecutionBoard = lazy(() => import('./pages/common/ExecutionBoard'));
 const GroupChat = lazy(() => import('./pages/common/GroupChat'));
 const IdeaDetail = lazy(() => import('./pages/common/IdeaDetail'));
-const MentoringSessions = lazy(() => import('./pages/common/MentoringSessions'));
 const Rankings = lazy(() => import('./pages/common/Rankings'));
 const StartupWorkspaceHub = lazy(() => import('./pages/workspace/StartupWorkspaceHub'));
 const TeamWorkspace = lazy(() => import('./pages/workspace/TeamWorkspace'));
@@ -106,6 +108,8 @@ function App(): React.ReactElement {
                   <Route path="/lecturer/classes" element={<ProtectedRoute allowedRoles={[...classRouteAccess.lecturerArea]}><LecturerClasses /></ProtectedRoute>} />
                   {releaseFeatureFlags.dataBank && <Route path="/lecturer/data-bank" element={<ProtectedRoute allowedRoles={['ADMIN', 'LECTURER']}><DataBankPage /></ProtectedRoute>} />}
                   <Route path="/mentor" element={<ProtectedRoute allowedRoles={['MENTOR']}>{releaseFeatureFlags.roleDashboards ? <MentorDashboard /> : <Navigate to="/workspace" replace />}</ProtectedRoute>} />
+                  <Route path="/mentor/profile" element={<ProtectedRoute allowedRoles={['MENTOR']}><MentorProfilePage /></ProtectedRoute>} />
+                  <Route path="/mentors" element={<ProtectedRoute allowedRoles={['ADMIN', 'LECTURER']}><MentorDirectory /></ProtectedRoute>} />
 
                   <Route path="/classes/:slug" element={<ProtectedRoute allowedRoles={[...classRouteAccess.classDetail]}><ClassDetail /></ProtectedRoute>} />
 
@@ -135,7 +139,7 @@ function App(): React.ReactElement {
                   {releaseFeatureFlags.rankings && <Route path="/rankings" element={<Rankings />} />}
                   {releaseFeatureFlags.evaluations && <Route path="/evaluations" element={<IdeaDetail />} />}
                   <Route path="/executionboard" element={<ExecutionBoard />} />
-                  {releaseFeatureFlags.mentoring && <Route path="/sessions" element={<MentoringSessions />} />}
+                  {releaseFeatureFlags.mentoring && <Route path="/sessions" element={<MentoringSessionsPage />} />}
                   {releaseFeatureFlags.workshops && <Route path="/workshops" element={<Workshops />} />}
                   {releaseFeatureFlags.chat && <Route path="/chat" element={<GroupChat />} />}
                   <Route path="/settings" element={<ProfileSettings />} />

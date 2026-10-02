@@ -6,6 +6,9 @@ import { teamApi } from '../../api/teamApi';
 import { unwrapApiData } from '../../utils/classMappers';
 import { parseApiError } from '../../utils/apiError';
 import { normalizeManagedTeam } from '../../utils/teamManagement';
+import { mentorSupportApi } from '../../api/mentorSupportApi';
+import type { MentorRecommendation } from '../../types/mentoring';
+import { Link } from 'react-router-dom';
 
 export default function AssignMentorsModal({ classId, currentMentors: _currentMentors = [], onClose, onAssigned }) {
   const [mentors, setMentors] = useState([]);
@@ -17,6 +20,21 @@ export default function AssignMentorsModal({ classId, currentMentors: _currentMe
   const [teamsLoading, setTeamsLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [endingTeamId, setEndingTeamId] = useState('');
+  const [recommendationAttempt, setRecommendationAttempt] = useState(0);
+  const [recommendationResult, setRecommendationResult] = useState<{ teamId: string; items: MentorRecommendation[]; error: string }>({ teamId: '', items: [], error: '' });
+  const recommendationsLoading = Boolean(selectedTeamId && recommendationResult.teamId !== selectedTeamId);
+  const recommendations = recommendationResult.teamId === selectedTeamId ? recommendationResult.items : [];
+  const recommendationsError = recommendationResult.teamId === selectedTeamId ? recommendationResult.error : '';
+
+  useEffect(() => {
+    if (!selectedTeamId) return;
+    let active = true;
+    const controller = new AbortController();
+    mentorSupportApi.getRecommendations(selectedTeamId, controller.signal)
+      .then(items => { if (active) setRecommendationResult({ teamId: selectedTeamId, items, error: '' }); })
+      .catch(error => { if (active) setRecommendationResult({ teamId: selectedTeamId, items: [], error: parseApiError(error, 'Could not load recommendations').message }); });
+    return () => { active = false; controller.abort(); };
+  }, [selectedTeamId, recommendationAttempt]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -124,12 +142,13 @@ export default function AssignMentorsModal({ classId, currentMentors: _currentMe
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/40 backdrop-blur-xs animate-fade-in" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl shadow-float w-full max-w-lg overflow-hidden animate-scale-in">
+      <div className="relative bg-white rounded-2xl shadow-float w-full max-w-lg max-h-[95vh] overflow-y-auto animate-scale-in">
         {/* Header */}
         <div className="flex items-center justify-between p-5 border-b border-slate-100">
           <div>
             <h2 className="text-lg font-bold text-slate-900">Assign Mentor to Team</h2>
             <p className="text-xs text-slate-400 mt-0.5 font-medium">Choose a mentor first, then select a team</p>
+            <Link to="/mentors" onClick={onClose} className="text-xs text-indigo-700 underline">Open mentor directory</Link>
           </div>
           <button onClick={onClose} className="p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-all">
             <X className="w-5 h-5" />
@@ -264,6 +283,25 @@ export default function AssignMentorsModal({ classId, currentMentors: _currentMe
                   <span className="text-slate-700 font-semibold">{selectedMentor.name}</span>
                 </div>
               )}
+              {selectedTeamId && <section className="rounded-xl border border-indigo-100 bg-indigo-50/50 p-3" aria-label="Mentor recommendations">
+                <h3 className="text-sm font-semibold text-slate-900">Suggested mentors for this team</h3>
+                <p className="mt-1 text-xs text-slate-600">Scores use project descriptions, tags and mentor expertise. A lecturer makes the final choice.</p>
+                {recommendationsLoading ? <p className="mt-2 text-xs">Calculating recommendations…</p> :
+                  recommendationsError ? <div role="alert" className="mt-2 text-xs text-red-700">{recommendationsError}
+                    <button type="button" className="ml-2 underline" onClick={() => {
+                      setRecommendationResult({ teamId: '', items: [], error: '' });
+                      setRecommendationAttempt(value => value + 1);
+                    }}>Thử lại</button>
+                  </div> :
+                  recommendations.length === 0 ? <p className="mt-2 text-xs">No eligible mentors in this semester.</p> :
+                  <div className="mt-2 max-h-44 space-y-2 overflow-y-auto">{recommendations.slice(0, 5).map(item =>
+                    <button key={item.mentor.id} type="button" disabled={!item.hasCapacity}
+                      onClick={() => setSelectedMentorId(item.mentor.id)}
+                      className="w-full rounded-lg border bg-white p-2 text-left text-xs disabled:opacity-50">
+                      <span className="font-semibold">{item.mentor.fullName}</span> · Điểm xếp hạng {item.fitScore}/100 · {item.mentor.mentorType}
+                      <span className="block text-slate-600">{item.reasons.join(' · ')}</span>
+                    </button>)}</div>}
+              </section>}
             </div>
           )}
         </div>

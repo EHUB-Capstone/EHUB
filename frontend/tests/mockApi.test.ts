@@ -25,6 +25,26 @@ test('mock authentication opens an admin session for protected UI testing', asyn
   assert.equal(me.data.email, 'admin@ehub.local');
 });
 
+test('mentor matching mock returns ranked candidates for an accessible team', async () => {
+  resetMockState();
+  await axiosClient.post('/auth/login', { email: 'admin@ehub.local', password: 'Mock123!' });
+  const team = getMockState().teams[0];
+  const response = await axiosClient.get(`/mentoring/teams/${team.id}/recommendations`);
+  assert.equal(response.success, true);
+  assert.ok(Array.isArray(response.data));
+  assert.ok(response.data.every((item: { reasons: string[]; fitScore: number }) =>
+    item.reasons.length > 0 && item.fitScore >= 0));
+});
+
+test('student cannot open the mentor directory mock', async () => {
+  resetMockState();
+  const student = getMockState().users.find(user => user.role === 'STUDENT' && user.status === 'APPROVED');
+  assert.ok(student);
+  await axiosClient.post('/auth/login', { email: student.email, password: 'Mock123!' });
+  await assert.rejects(axiosClient.get('/mentoring/directory'),
+    (error: unknown) => (error as { response?: { status?: number } }).response?.status === 403);
+});
+
 test('admin class export accepts selected classes from one semester and returns one Excel blob', async () => {
   resetMockState();
   await axiosClient.post('/auth/login', { email: 'admin@ehub.local', password: 'Mock123!' });

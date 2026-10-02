@@ -16,6 +16,8 @@ using EHub.Infrastructure.BackgroundJobs;
 using CloudinaryDotNet;
 using EHub.Application.Common.Interfaces.Storage;
 using EHub.Infrastructure.Storage;
+using EHub.Infrastructure.Mentoring;
+using Pgvector.EntityFrameworkCore;
 
 namespace EHub.Infrastructure;
 
@@ -29,7 +31,14 @@ public static class DependencyInjection
 
         services.AddDbContext<AppDbContext>(options =>
             options.UseNpgsql(connectionString,
-                b => b.MigrationsAssembly(typeof(AppDbContext).Assembly.FullName)));
+                b => { b.MigrationsAssembly(typeof(AppDbContext).Assembly.FullName); b.UseVector(); }));
+
+        services.AddHttpClient<IMentorEmbeddingSearch, OllamaMentorEmbeddingSearch>(client =>
+        {
+            var baseUrl = configuration["Mentoring:OllamaBaseUrl"] ?? "http://localhost:11434";
+            client.BaseAddress = new Uri(baseUrl.EndsWith('/') ? baseUrl : baseUrl + "/", UriKind.Absolute);
+            client.Timeout = TimeSpan.FromSeconds(90);
+        });
 
         services.AddScoped<IApplicationDbContext>(provider => provider.GetRequiredService<AppDbContext>());
         services.AddHostedService<ClassImportSessionCleanupService>();
@@ -82,6 +91,7 @@ public static class DependencyInjection
         services.AddScoped<IImageStorageService, CloudinaryImageStorageService>();
         services.AddHttpClient("CloudinarySubmissionFiles", client => client.Timeout = TimeSpan.FromSeconds(30));
         services.AddScoped<ISubmissionFileStorageService, CloudinarySubmissionFileStorageService>();
+        services.AddScoped<IMentorDocumentStorageService, CloudinaryMentorDocumentStorageService>();
         
         services.Configure<EmailOptions>(configuration.GetSection(EmailOptions.SectionName));
         var emailProvider = configuration["Email:Provider"];

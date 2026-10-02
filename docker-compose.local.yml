@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: postgres:18
+    image: pgvector/pgvector:0.8.6-pg18
     container_name: ehub-postgres
     environment:
       POSTGRES_DB: ehub_db
@@ -29,6 +29,8 @@ services:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_URLS: http://+:8080
       ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=ehub_db;Username=ehub_user;Password=ehub_password
+      Mentoring__OllamaBaseUrl: http://ollama:11434
+      Mentoring__EmbeddingModel: bge-m3
       Jwt__Issuer: EHub.Api
       Jwt__Audience: EHub.Client
       Jwt__Secret: ${JWT_SECRET}
@@ -81,8 +83,18 @@ services:
     networks:
       - ehub-network
 
+  ollama:
+    profiles:
+      - full
+    image: ollama/ollama:0.34.0
+    volumes:
+      - ehub_ollama_data:/root/.ollama
+    networks:
+      - ehub-network
+
 volumes:
   ehub_postgres_data:
+  ehub_ollama_data:
 
 networks:
   ehub-network:

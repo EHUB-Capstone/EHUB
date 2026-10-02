@@ -33,6 +33,7 @@ using EHub.Shared.Errors;
 using EHub.Shared.Results;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
+using Pgvector.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Migrations.Operations;
 using Microsoft.Extensions.DependencyInjection;
 using System.Text.Json;
@@ -60,7 +61,7 @@ public sealed class TeamWorkflowIntegrationTests
         seedContext.ChangeTracker.Clear();
         var rowVersion = (await seedContext.TeamProposals.AsNoTracking().SingleAsync(item => item.Id == seed.ProposalId)).Version.ToString();
         var options = new DbContextOptionsBuilder<AppDbContext>()
-            .UseNpgsql(seedContext.Database.GetConnectionString())
+            .UseNpgsql(_factory.TestConnectionString, b => b.UseVector())
             .Options;
 
         await using var firstContext = new AppDbContext(options);
@@ -1217,7 +1218,7 @@ public sealed class TeamWorkflowIntegrationTests
             .Single().Content.Should().Be("Original idea");
 
         var options = new DbContextOptionsBuilder<AppDbContext>()
-            .UseNpgsql(context.Database.GetConnectionString()).Options;
+            .UseNpgsql(_factory.TestConnectionString, b => b.UseVector()).Options;
         await using var firstContext = new AppDbContext(options);
         await using var secondContext = new AppDbContext(options);
         var firstWriter = await firstContext.Submissions.SingleAsync(item => item.TeamId == seed.TeamId &&

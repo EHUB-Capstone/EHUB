@@ -28,6 +28,7 @@ using EHub.Application.Features.Subjects.Rubrics;
 using EHub.Application.Features.Subjects.TeachingStaff;
 using EHub.Application.Features.StartupIndustries.ManageStartupIndustries;
 using EHub.Application.Features.Tracking;
+using EHub.Application.Features.Mentoring;
 using EHub.Application.Features.Workspaces.GetCheckpointOverview;
 using EHub.Application.Features.Checkpoints.LecturerManagement;
 using FluentValidation;
@@ -75,6 +76,8 @@ public static class DependencyInjection
         services.AddScoped<ISubjectRoadmapHandler, SubjectRoadmapHandler>();
         services.AddScoped<ISubjectRubricHandler, SubjectRubricHandler>();
         services.AddScoped<IStartupIndustryManagementHandler, StartupIndustryManagementHandler>();
+        services.AddScoped<IMentorProfileHandler, MentorProfileHandler>();
+        services.AddScoped<IMentoringSessionHandler, MentoringSessionHandler>();
 
         services.AddScoped<EHub.Application.Features.Classes.GetClasses.IGetClassesQueryHandler, EHub.Application.Features.Classes.GetClasses.GetClassesQueryHandler>();
         services.AddScoped<EHub.Application.Features.Classes.CreateClass.ICreateClassCommandHandler, EHub.Application.Features.Classes.CreateClass.CreateClassCommandHandler>();

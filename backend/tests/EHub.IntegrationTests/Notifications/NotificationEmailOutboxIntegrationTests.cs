@@ -10,6 +10,7 @@ using EHub.Infrastructure.Persistence;
 using EHub.IntegrationTests.Common;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
+using Pgvector.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -149,9 +150,8 @@ public sealed class NotificationEmailOutboxIntegrationTests(CustomWebApplication
 
     private ServiceProvider CreateServices(RecordingEmailService sender, bool failAfterProjection = false)
     {
-        using var scope = factory.Services.CreateScope();
-        var connectionString = scope.ServiceProvider.GetRequiredService<AppDbContext>().Database.GetConnectionString();
-        var options = new DbContextOptionsBuilder<AppDbContext>().UseNpgsql(connectionString).Options;
+        var connectionString = factory.TestConnectionString;
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseNpgsql(connectionString, b => b.UseVector()).Options;
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddScoped(_ => new AppDbContext(options));

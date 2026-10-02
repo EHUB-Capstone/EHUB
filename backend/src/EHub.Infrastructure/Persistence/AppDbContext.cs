@@ -54,10 +54,12 @@ public class AppDbContext : DbContext, IApplicationDbContext
     public DbSet<EvaluationDetail> EvaluationDetails => Set<EvaluationDetail>();
     public DbSet<EvaluationHistory> EvaluationHistories => Set<EvaluationHistory>();
     public DbSet<MentorProfile> MentorProfiles => Set<MentorProfile>();
+    public DbSet<MentorEmbedding> MentorEmbeddings => Set<MentorEmbedding>();
     public DbSet<MentorAssignment> MentorAssignments => Set<MentorAssignment>();
     public DbSet<MentoringSession> MentoringSessions => Set<MentoringSession>();
     public DbSet<MentoringActionItem> MentoringActionItems => Set<MentoringActionItem>();
     public DbSet<MentoringAttendance> MentoringAttendances => Set<MentoringAttendance>();
+    public DbSet<MentoringFeedback> MentoringFeedback => Set<MentoringFeedback>();
     public DbSet<AcademicDataset> AcademicDatasets => Set<AcademicDataset>();
     public DbSet<DataBankColumn> DataBankColumns => Set<DataBankColumn>();
     public DbSet<DataBankImportBatch> DataBankImportBatches => Set<DataBankImportBatch>();
@@ -89,6 +91,10 @@ public class AppDbContext : DbContext, IApplicationDbContext
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);
+        if (Database.ProviderName == "Microsoft.EntityFrameworkCore.InMemory")
+            modelBuilder.Ignore<MentorEmbedding>();
+        else
+            modelBuilder.HasPostgresExtension("vector");
         base.OnModelCreating(modelBuilder);
     }
 

@@ -12,6 +12,8 @@
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
     <PackageReference Include="NSubstitute" Version="6.0.0" />
     <PackageReference Include="FluentAssertions" Version="8.0.1" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="10.0.9" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.9" />
     <PackageReference Include="xunit" Version="2.9.3" />
     <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
   </ItemGroup>
@@ -25,6 +27,7 @@
     <ProjectReference Include="..\..\src\EHub.Domain\EHub.Domain.csproj" />
     <ProjectReference Include="..\..\src\EHub.Contracts\EHub.Contracts.csproj" />
     <ProjectReference Include="..\..\src\EHub.Shared\EHub.Shared.csproj" />
+    <ProjectReference Include="..\..\src\EHub.Infrastructure\EHub.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

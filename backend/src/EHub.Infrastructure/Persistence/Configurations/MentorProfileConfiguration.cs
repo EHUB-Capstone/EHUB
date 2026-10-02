@@ -33,6 +33,16 @@ public class MentorProfileConfiguration : IEntityTypeConfiguration<MentorProfile
             .HasColumnName("linkedin_url")
             .HasMaxLength(500);
 
+        builder.Property(mp => mp.MentorType).HasColumnName("mentor_type").HasMaxLength(30).IsRequired().HasDefaultValue("Unspecified");
+        builder.Property(mp => mp.Experience).HasColumnName("experience").HasMaxLength(4000);
+        builder.Property(mp => mp.PortfolioUrl).HasColumnName("portfolio_url").HasMaxLength(1000);
+        builder.Property(mp => mp.CvStorageUrl).HasColumnName("cv_storage_url").HasMaxLength(1000);
+        builder.Property(mp => mp.CvPublicId).HasColumnName("cv_public_id").HasMaxLength(500);
+        builder.Property(mp => mp.CvFileName).HasColumnName("cv_file_name").HasMaxLength(255);
+        builder.Property(mp => mp.PortfolioStorageUrl).HasColumnName("portfolio_storage_url").HasMaxLength(1000);
+        builder.Property(mp => mp.PortfolioPublicId).HasColumnName("portfolio_public_id").HasMaxLength(500);
+        builder.Property(mp => mp.PortfolioFileName).HasColumnName("portfolio_file_name").HasMaxLength(255);
+
         builder.Property(mp => mp.Status)
             .HasColumnName("status")
             .HasConversion<string>()

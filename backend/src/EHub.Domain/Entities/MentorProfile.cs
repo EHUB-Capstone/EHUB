@@ -14,6 +14,15 @@ public class MentorProfile : AuditableEntity
     public string? Bio { get; set; }
     public string? Organization { get; set; }
     public string? LinkedInUrl { get; set; }
+    public string MentorType { get; set; } = "Unspecified";
+    public string? Experience { get; set; }
+    public string? PortfolioUrl { get; set; }
+    public string? CvStorageUrl { get; set; }
+    public string? CvPublicId { get; set; }
+    public string? CvFileName { get; set; }
+    public string? PortfolioStorageUrl { get; set; }
+    public string? PortfolioPublicId { get; set; }
+    public string? PortfolioFileName { get; set; }
 
     public MentorProfileStatus Status { get; set; } = MentorProfileStatus.Active;
     public int MaxTeams { get; set; } = 3;

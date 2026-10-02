@@ -126,6 +126,7 @@ public static class ErrorCodes
     public const string MentorNotAvailable = "MENTOR_NOT_AVAILABLE";
     public const string MentorCapacityReached = "MENTOR_CAPACITY_REACHED";
     public const string MentorAssignmentConflict = "MENTOR_ASSIGNMENT_CONFLICT";
+    public const string MentorMatchingUnavailable = "MENTOR_MATCHING_UNAVAILABLE";
     public const string ProjectDirectionNotFound = "PROJECT_DIRECTION_NOT_FOUND";
     public const string ProjectDirectionStateInvalid = "PROJECT_DIRECTION_STATE_INVALID";
     public const string NotificationNotFound = "NOTIFICATION_NOT_FOUND";

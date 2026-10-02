@@ -29,6 +29,7 @@ using EHub.Shared.Errors;
 using FluentAssertions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
+using Pgvector.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -1213,7 +1214,7 @@ public sealed class ClassSafetyHotfixIntegrationTests
         seedContext.ChangeTracker.Clear();
 
         var options = new DbContextOptionsBuilder<AppDbContext>()
-            .UseNpgsql(seedContext.Database.GetConnectionString())
+            .UseNpgsql(_factory.TestConnectionString, b => b.UseVector())
             .AddInterceptors(new ThrowWhenEnrollmentIsInsertedInterceptor())
             .Options;
         await using var failingContext = new AppDbContext(options);
@@ -1265,8 +1266,8 @@ public sealed class ClassSafetyHotfixIntegrationTests
         await seedContext.SaveChangesAsync();
         seedContext.ChangeTracker.Clear();
 
-        var connectionString = seedContext.Database.GetConnectionString();
-        var options = new DbContextOptionsBuilder<AppDbContext>().UseNpgsql(connectionString).Options;
+        var connectionString = _factory.TestConnectionString;
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseNpgsql(connectionString, b => b.UseVector()).Options;
         await using var firstContext = new AppDbContext(options);
         await using var secondContext = new AppDbContext(options);
         var request = new AddStudentToClassRequest

@@ -52,6 +52,7 @@ internal static class TeamDataDeletion
         await db.ChatGroupMembers.IgnoreQueryFilters().Where(x => chats.Contains(x.ChatGroupId)).ExecuteDeleteAsync(ct);
         await db.ChatGroups.IgnoreQueryFilters().Where(x => chats.Contains(x.Id)).ExecuteDeleteAsync(ct);
         await db.MentoringAttendances.IgnoreQueryFilters().Where(x => sessions.Contains(x.MentoringSessionId)).ExecuteDeleteAsync(ct);
+        await db.MentoringFeedback.IgnoreQueryFilters().Where(x => sessions.Contains(x.MentoringSessionId)).ExecuteDeleteAsync(ct);
         await db.MentoringActionItems.IgnoreQueryFilters().Where(x => sessions.Contains(x.MentoringSessionId)).ExecuteDeleteAsync(ct);
         await db.MentoringSessions.IgnoreQueryFilters().Where(x => sessions.Contains(x.Id)).ExecuteDeleteAsync(ct);
         await db.MentorAssignments.IgnoreQueryFilters().Where(x => mentors.Contains(x.Id)).ExecuteDeleteAsync(ct);
