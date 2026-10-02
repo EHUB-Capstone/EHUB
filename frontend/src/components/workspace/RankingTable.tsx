@@ -64,7 +64,7 @@ export default function RankingTable({ rankings, checkpoints, scoreScope }: Rank
                   </th>
                 );
               })}
-              <th className={`min-w-[150px] border-b border-r border-slate-200 px-4 py-4 text-center ${scoreScope === 'course' ? 'bg-emerald-100/70 text-emerald-800' : 'bg-emerald-50 text-emerald-700'}`}>Course Total</th>
+              <th className={`min-w-[150px] border-b border-r border-slate-200 px-4 py-4 text-center ${scoreScope === 'course' ? 'bg-emerald-100/70 text-emerald-800' : 'bg-emerald-50 text-emerald-700'}`}>Checkpoint Total</th>
               <th className="min-w-[150px] border-b border-r border-slate-200 bg-slate-50 px-4 py-4 text-center">Completion</th>
               <th className="min-w-[170px] border-b border-slate-200 bg-slate-50 px-4 py-4 text-center">Ranking status</th>
             </tr>
@@ -105,7 +105,7 @@ export default function RankingTable({ rankings, checkpoints, scoreScope }: Rank
                       : <Clock3 className="h-4 w-4 text-amber-500" />}
                     {item.completedComponentCount}/{item.totalComponentCount}
                   </div>
-                  <p className="mt-1 text-[9px] font-semibold uppercase text-slate-400">components graded</p>
+                  <p className="mt-1 text-[9px] font-semibold uppercase text-slate-400">checkpoints graded</p>
                 </td>
                 <td className="border-b border-slate-200 px-4 py-4 text-center">
                   <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase ${statusStyle[item.rankingStatus]}`}>

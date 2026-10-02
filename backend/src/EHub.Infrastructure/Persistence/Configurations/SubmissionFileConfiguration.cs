@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using EHub.Domain.Entities;
+using EHub.Domain.Enums;
 
 namespace EHub.Infrastructure.Persistence.Configurations;
 
@@ -43,6 +44,17 @@ public class SubmissionFileConfiguration : IEntityTypeConfiguration<SubmissionFi
             .HasColumnName("cloudinary_public_id")
             .HasMaxLength(256)
             .IsRequired();
+
+        builder.Property(sf => sf.StorageProvider)
+            .HasColumnName("storage_provider")
+            .HasConversion<string>()
+            .HasMaxLength(20)
+            .HasDefaultValue(SubmissionStorageProvider.Cloudinary)
+            .IsRequired();
+
+        builder.Property(sf => sf.StorageKey)
+            .HasColumnName("storage_key")
+            .HasMaxLength(512);
 
         builder.Property(sf => sf.MimeType)
             .HasColumnName("mime_type")

@@ -32,6 +32,9 @@ export const evaluationApi = {
   getCheckpointSummary: async (teamId, checkpointNumber) => {
     return axiosClient.get(`/workspace/checkpoints/teams/${teamId}/checkpoints/${checkpointNumber}/evaluation-summary`);
   },
+  getGradingBatch: async (teamIds: string[]) => {
+    return axiosClient.post('/workspace/checkpoints/evaluation-grading', { teamIds });
+  },
   getCheckpointHistory: async (teamId, checkpointNumber) => {
     return axiosClient.get(`/evaluations/team/${teamId}/checkpoints/${checkpointNumber}/history`);
   },
@@ -70,6 +73,7 @@ export const {
   submitTeamEvaluation,
   getCheckpointEvaluations,
   getCheckpointSummary,
+  getGradingBatch,
   getCheckpointHistory,
   getCourseAssessments,
   saveCourseAssessment,

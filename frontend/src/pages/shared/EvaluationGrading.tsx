@@ -2,13 +2,14 @@ import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } f
 import { Navigate, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
-  Award, BookOpenCheck, CheckCircle2, ChevronDown, ChevronUp, ClipboardCheck, Edit3, Filter,
+  AlertTriangle, Award, BookOpenCheck, CheckCircle2, ChevronDown, ChevronUp, ClipboardCheck, Clock, Edit3, Filter,
   EyeOff, Loader2, MessageSquareText, RefreshCw, Search, Send, Trophy, Users, X,
 } from 'lucide-react';
-import { checkpointApi } from '../../api/checkpointApi';
-import { classApi } from '../../api/classApi';
 import { evaluationApi } from '../../api/evaluationApi';
 import { workspaceApi } from '../../api/workspaceApi';
+import { submissionAnalyticsApi } from '../../api/submissionAnalyticsApi';
+import type { SubmissionAnalyticsResponse } from '../../types/submissionAnalytics';
+import { includeTeamsWithoutWorkspace, matchesSubmissionStatus, submissionKey } from '../../utils/submissionAnalytics';
 import EvaluationPanel from '../../components/workspace/EvaluationPanel';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import EmptyState from '../../components/ui/EmptyState';
@@ -17,12 +18,10 @@ import { releaseFeatureFlags } from '../../config/releaseFeatureFlags';
 import { useAuth } from '../../hooks/useAuth';
 import Rankings from '../common/Rankings';
 import type {
-  CheckpointEvaluationSummary, CourseAssessmentEvaluation, CourseAssessmentEvaluationList, EvaluationCheckpoint,
-  EvaluationGradingRecord, EvaluationGradingStatus, EvaluationTeam, EvaluationTeamMember,
+  CourseAssessmentEvaluation, EvaluationCheckpoint, EvaluationGradingBatchResponse,
+  EvaluationGradingRecord, EvaluationGradingStatus, EvaluationTeam,
 } from '../../types/evaluationGrading';
-import type { ClassRosterListResponse, ClassRosterStudent } from '../../types/classes';
 import type { ApiEnvelope, WorkspaceOption } from '../../types/workspaceTools';
-import type { WorkspaceCheckpointOverviewResponse } from '../../types/workspaceCheckpoints';
 import { parseApiError } from '../../utils/apiError';
 import {
   calculateWeightedCourseScore, canAccessEvaluationRankings, evaluationStatusLabel, filterEvaluationRecords, filterTeamsBySemester,
@@ -46,6 +45,7 @@ const statusStyle: Record<EvaluationGradingStatus, string> = {
 };
 
 const MAX_BULK_PUBLICATION_COUNT = 200;
+const MAX_GRADING_BATCH_TEAM_COUNT = 200;
 type PublicationAction = 'publish' | 'unpublish';
 
 interface PublicationConfirmation {
@@ -53,24 +53,6 @@ interface PublicationConfirmation {
   evaluationIds: string[];
   teamCount: number;
   scope: 'single' | 'filtered';
-}
-
-interface EvaluationWorkspaceDetail {
-  team?: { teamCode?: string };
-  members?: EvaluationTeamMember[];
-  project?: { projectName?: string; description?: string | null } | null;
-  proposal?: { projectName?: string; projectDescription?: string | null } | null;
-}
-
-interface TeamCheckpointOverview {
-  team: EvaluationTeam;
-  checkpoints: EvaluationCheckpoint[];
-  assessments: CourseAssessmentEvaluation[];
-}
-
-interface SummaryJob {
-  team: EvaluationTeam;
-  checkpoint: EvaluationCheckpoint;
 }
 
 interface EvaluationTeamGroup {
@@ -87,43 +69,6 @@ interface EvaluationClassGroup {
   checkpoints: EvaluationCheckpoint[];
   assessments: CourseAssessmentEvaluation[];
   teams: EvaluationTeamGroup[];
-}
-
-async function mapWithConcurrency<T, R>(
-  items: T[],
-  limit: number,
-  task: (item: T) => Promise<R>,
-): Promise<PromiseSettledResult<R>[]> {
-  const results: PromiseSettledResult<R>[] = new Array(items.length);
-  let nextIndex = 0;
-  const worker = async () => {
-    while (nextIndex < items.length) {
-      const index = nextIndex++;
-      try {
-        results[index] = { status: 'fulfilled', value: await task(items[index]) };
-      } catch (reason) {
-        results[index] = { status: 'rejected', reason };
-      }
-    }
-  };
-  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
-  return results;
-}
-
-async function loadClassRoster(classId: string): Promise<ClassRosterStudent[]> {
-  const firstPage = await classApi.getStudents(classId, { page: 1, pageSize: 100 }) as ApiEnvelope<ClassRosterListResponse>;
-  if (!firstPage.success) throw new Error(firstPage.message || 'Unable to load class roster.');
-  const firstData = firstPage.data;
-  const remainingPages = Array.from(
-    { length: Math.max(0, Number(firstData?.totalPages || 1) - 1) },
-    (_, index) => index + 2,
-  );
-  const remainingResponses = await Promise.all(remainingPages.map(async page => {
-    const response = await classApi.getStudents(classId, { page, pageSize: 100 }) as ApiEnvelope<ClassRosterListResponse>;
-    if (!response.success) throw new Error(response.message || 'Unable to load class roster.');
-    return response.data?.items || [];
-  }));
-  return [...(firstData?.items || []), ...remainingResponses.flat()];
 }
 
 function normalizeStatus(value: string | undefined): Exclude<EvaluationGradingStatus, 'NOT_GRADED'> {
@@ -416,6 +361,9 @@ export default function EvaluationGrading() {
   const [bulkPublicationSubmitting, setBulkPublicationSubmitting] = useState(false);
   const [publicationConfirmation, setPublicationConfirmation] = useState<PublicationConfirmation | null>(null);
   const recordsRequestId = useRef(0);
+  const [submissionAnalytics, setSubmissionAnalytics] = useState<SubmissionAnalyticsResponse | null>(null);
+  const [loadingSubmissions, setLoadingSubmissions] = useState(false);
+  const [submissionError, setSubmissionError] = useState('');
 
   const appliedSearch = searchParams.get('search') || '';
   const [search, setSearch] = useState(appliedSearch);
@@ -427,6 +375,7 @@ export default function EvaluationGrading() {
 
   const role = String(user?.role || 'STUDENT').toUpperCase();
   const canEdit = role === 'LECTURER';
+  const canViewSubmissions = role === 'LECTURER' || role === 'ADMIN';
   const canViewCourseTotal = role !== 'MENTOR';
   const currentUserId = user?.id || '';
   const canViewRankings = releaseFeatureFlags.rankings && canAccessEvaluationRankings(role);
@@ -440,6 +389,34 @@ export default function EvaluationGrading() {
   const teamId = searchParams.get('teamId') || '';
   const checkpoint = searchParams.get('checkpoint') || '';
   const status = searchParams.get('status') || '';
+  const submissionStatus = searchParams.get('submissionStatus') || '';
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setSubmissionAnalytics(null);
+    setSubmissionError('');
+    if (!canViewSubmissions || loadingTeams || semester === 'none' || year === 'none' || activeTab !== 'results') {
+      setLoadingSubmissions(false);
+      return () => controller.abort();
+    }
+    setLoadingSubmissions(true);
+    submissionAnalyticsApi.get({
+      semester: semester === 'all' ? undefined : semester,
+      year: year === 'all' ? undefined : Number(year),
+      classId: classId || undefined,
+      teamId: teamId || undefined,
+      checkpointNumber: checkpoint ? Number(checkpoint) : undefined,
+    }, controller.signal).then(response => {
+      if (controller.signal.aborted) return;
+      if (!response.success) throw new Error(response.message || 'Unable to load submission analytics.');
+      setSubmissionAnalytics(response.data);
+    }).catch((error: unknown) => {
+      if (!controller.signal.aborted) setSubmissionError(parseApiError(error, 'Unable to load submission analytics.').message);
+    }).finally(() => {
+      if (!controller.signal.aborted) setLoadingSubmissions(false);
+    });
+    return () => controller.abort();
+  }, [activeTab, canViewSubmissions, loadingTeams, semester, year, classId, teamId, checkpoint, reloadKey]);
 
   const updateFilter = useCallback((key: string, value: string) => {
     const next = new URLSearchParams(searchParams);
@@ -500,109 +477,69 @@ export default function EvaluationGrading() {
       setLoadingRecords(true);
       setErrorMessage('');
       const eligibleTeams = scopedTeams.filter(team => team.hasWorkspace);
-      const rosterClassIds = (role === 'ADMIN' || role === 'LECTURER')
-        ? [...new Set(eligibleTeams.map(team => team.classId))]
-        : [];
-      const rosterPromise = mapWithConcurrency(rosterClassIds, 3, async classId => ({
-        classId,
-        students: await loadClassRoster(classId),
-      }));
-      const overviewPromise = mapWithConcurrency<WorkspaceOption, TeamCheckpointOverview>(eligibleTeams, 4, async team => {
-        const [checkpointResponse, workspaceResponse, assessmentResponse] = await Promise.all([
-          checkpointApi.getCheckpointData(team.teamId) as Promise<ApiEnvelope<WorkspaceCheckpointOverviewResponse>>,
-          workspaceApi.getTeamWorkspace(team.teamId) as Promise<ApiEnvelope<EvaluationWorkspaceDetail>>,
-          evaluationApi.getCourseAssessments(team.teamId) as Promise<ApiEnvelope<CourseAssessmentEvaluationList>>,
-        ]);
-        if (!checkpointResponse.success) throw new Error(checkpointResponse.message || `Unable to load checkpoints for ${team.teamName}.`);
-        if (!workspaceResponse.success) throw new Error(workspaceResponse.message || `Unable to load members for ${team.teamName}.`);
-        if (!assessmentResponse.success) throw new Error(assessmentResponse.message || `Unable to load course assessments for ${team.teamName}.`);
-        return {
-          team: {
-            ...team,
-            teamCode: workspaceResponse.data?.team?.teamCode || '',
-            projectName: workspaceResponse.data?.project?.projectName?.trim()
-              || workspaceResponse.data?.proposal?.projectName?.trim()
-              || '',
-            projectDescription: workspaceResponse.data?.project?.description?.trim()
-              || workspaceResponse.data?.proposal?.projectDescription?.trim()
-              || '',
-            members: Array.isArray(workspaceResponse.data?.members) ? workspaceResponse.data.members : [],
-          },
-          checkpoints: (checkpointResponse.data?.checkpoints || []).map(item => ({
-            number: item.number,
-            title: item.title,
-            shortDescription: item.shortDescription,
-            courseWeight: Number(item.courseWeight || 0),
-          })),
-          assessments: Array.isArray(assessmentResponse.data?.assessments) ? assessmentResponse.data.assessments : [],
-        };
-      });
-      const [rosterResults, overviewResults] = await Promise.all([rosterPromise, overviewPromise]);
-      const semesterGroupsByTeam = new Map<string, Set<string>>();
-      rosterResults.forEach(result => {
-        if (result.status !== 'fulfilled') return;
-        result.value.students.forEach(student => {
-          const teamKey = String(student.teamId || '').toLowerCase();
-          const groupName = student.semesterGroupName?.trim();
-          if (!teamKey || !groupName) return;
-          const groupNames = semesterGroupsByTeam.get(teamKey) || new Set<string>();
-          groupNames.add(groupName);
-          semesterGroupsByTeam.set(teamKey, groupNames);
-        });
-      });
-      const overviews = overviewResults
-        .filter((result): result is PromiseFulfilledResult<TeamCheckpointOverview> => result.status === 'fulfilled')
-        .map(result => ({
-          ...result.value,
-          team: {
-            ...result.value.team,
-            semesterGroupName: [...(semesterGroupsByTeam.get(result.value.team.teamId.toLowerCase()) || [])].join(', '),
-          },
-        }));
-      const jobs: SummaryJob[] = overviews.flatMap(item =>
-        item.checkpoints.map(checkpointItem => ({ team: item.team, checkpoint: checkpointItem })),
-      );
-      const summaryResults = await mapWithConcurrency(jobs, 6, async job => {
-        const response = await evaluationApi.getCheckpointSummary(job.team.teamId, job.checkpoint.number) as ApiEnvelope<CheckpointEvaluationSummary>;
-        if (!response.success) throw new Error(response.message || `Unable to load ${job.checkpoint.title}.`);
-        return { job, summary: response.data };
-      });
+      if (eligibleTeams.length === 0) {
+        if (requestId !== recordsRequestId.current) return;
+        setRecords([]);
+        setAssessmentsByTeam(new Map());
+        setPartialFailureCount(0);
+        return;
+      }
+      const teamIds = eligibleTeams.map(team => team.teamId);
+      const batchResponses = await Promise.all(Array.from(
+        { length: Math.ceil(teamIds.length / MAX_GRADING_BATCH_TEAM_COUNT) },
+        (_, index) => evaluationApi.getGradingBatch(teamIds.slice(
+          index * MAX_GRADING_BATCH_TEAM_COUNT,
+          (index + 1) * MAX_GRADING_BATCH_TEAM_COUNT,
+        )) as Promise<ApiEnvelope<EvaluationGradingBatchResponse>>,
+      ));
+      const failedResponse = batchResponses.find(item => !item.success);
+      if (failedResponse) throw new Error(failedResponse.message || 'Unable to load evaluation grading data.');
+      const optionsByTeamId = new Map(eligibleTeams.map(team => [team.teamId.toLowerCase(), team]));
+      const teamSnapshots = batchResponses.flatMap(item => Array.isArray(item.data?.teams) ? item.data.teams : []);
 
       const nextRecords: EvaluationGradingRecord[] = [];
-      summaryResults.forEach(result => {
-        if (result.status !== 'fulfilled') return;
-        const { job, summary } = result.value;
-        const normalizedEvaluations = (Array.isArray(summary?.evaluations) ? summary.evaluations : []).map(evaluation => ({
-          ...evaluation,
-          status: normalizeStatus(evaluation.status),
-          rubricScores: Array.isArray(evaluation.rubricScores) ? evaluation.rubricScores : [],
-          memberScores: Array.isArray(evaluation.memberScores) ? evaluation.memberScores : [],
-        }));
-        const evaluation = selectLatestOfficialEvaluation(normalizedEvaluations);
-        nextRecords.push({
-          key: `${job.team.teamId}-${job.checkpoint.number}-${evaluation?._id || 'not-graded'}`,
-          team: job.team,
-          checkpoint: summary?.checkpoint || job.checkpoint,
-          evaluation,
-          status: evaluation?.status || 'NOT_GRADED',
+      const nextAssessmentsByTeam = new Map<string, CourseAssessmentEvaluation[]>();
+      teamSnapshots.forEach(snapshot => {
+        const option = optionsByTeamId.get(snapshot.teamId.toLowerCase());
+        if (!option) return;
+        const team: EvaluationTeam = {
+          ...option,
+          teamCode: snapshot.teamCode || '',
+          projectName: snapshot.projectName?.trim() || '',
+          projectDescription: snapshot.projectDescription?.trim() || '',
+          semesterGroupName: snapshot.semesterGroupName?.trim() || '',
+          members: Array.isArray(snapshot.members) ? snapshot.members : [],
+        };
+        nextAssessmentsByTeam.set(team.teamId, Array.isArray(snapshot.assessments) ? snapshot.assessments : []);
+        (Array.isArray(snapshot.checkpoints) ? snapshot.checkpoints : []).forEach(item => {
+          const normalizedEvaluations = (Array.isArray(item.evaluations) ? item.evaluations : []).map(evaluation => ({
+            ...evaluation,
+            status: normalizeStatus(evaluation.status),
+            rubricScores: Array.isArray(evaluation.rubricScores) ? evaluation.rubricScores : [],
+            memberScores: Array.isArray(evaluation.memberScores) ? evaluation.memberScores : [],
+          }));
+          const evaluation = selectLatestOfficialEvaluation(normalizedEvaluations);
+          nextRecords.push({
+            key: `${team.teamId}-${item.checkpoint.number}-${evaluation?._id || 'not-graded'}`,
+            team,
+            checkpoint: item.checkpoint,
+            evaluation,
+            status: evaluation?.status || 'NOT_GRADED',
+          });
         });
       });
 
       if (requestId !== recordsRequestId.current) return;
       setRecords(nextRecords);
-      setAssessmentsByTeam(new Map(overviews.map(item => [item.team.teamId, item.assessments])));
-      setPartialFailureCount(
-        rosterResults.filter(result => result.status === 'rejected').length +
-        overviewResults.filter(result => result.status === 'rejected').length +
-        summaryResults.filter(result => result.status === 'rejected').length,
-      );
+      setAssessmentsByTeam(nextAssessmentsByTeam);
+      setPartialFailureCount(0);
     } catch (error: unknown) {
       if (requestId !== recordsRequestId.current) return;
       setErrorMessage(parseApiError(error, 'Unable to load evaluation and grading data.').message);
     } finally {
       if (requestId === recordsRequestId.current) setLoadingRecords(false);
     }
-  }, [role, semester, year]);
+  }, [semester, year]);
 
   const scopedTeams = useMemo(
     () => semester === 'none' || year === 'none' ? [] : filterTeamsBySemester(teams, semester, year),
@@ -627,15 +564,22 @@ export default function EvaluationGrading() {
   const checkpointOptions = useMemo(() => {
     const unique = new Map<number, string>();
     records.forEach(record => unique.set(record.checkpoint.number, record.checkpoint.title));
+    submissionAnalytics?.items.forEach(item => unique.set(item.checkpointNumber, item.checkpointTitle));
     return [...unique.entries()].sort((left, right) => left[0] - right[0]);
-  }, [records]);
+  }, [records, submissionAnalytics]);
   const semesterOptions = useMemo(() => [...new Set(teams.map(team => parseWorkspaceSemester(team.semester)?.semester).filter((value): value is string => Boolean(value)))].sort(), [teams]);
   const yearOptions = useMemo(() => [...new Set(teams.map(team => parseWorkspaceSemester(team.semester)?.year).filter((value): value is string => Boolean(value)))].sort().reverse(), [teams]);
 
   const activeFilters = useMemo(() => ({ search: appliedSearch, classId, teamId, checkpoint, status }), [appliedSearch, checkpoint, classId, status, teamId]);
   const deferredFilters = useDeferredValue(activeFilters);
   const isFilterPending = deferredFilters !== activeFilters;
-  const filteredRecords = useMemo(() => filterEvaluationRecords(records, deferredFilters), [deferredFilters, records]);
+  const submissionsByKey = useMemo(() => new Map((submissionAnalytics?.items || []).map(item =>
+    [submissionKey(item.teamId, item.checkpointNumber), item])), [submissionAnalytics]);
+  const resultRecords = useMemo(() => includeTeamsWithoutWorkspace(records, submissionAnalytics?.items || [], scopedTeams),
+    [records, submissionAnalytics, scopedTeams]);
+  const filteredRecords = useMemo(() => filterEvaluationRecords(resultRecords, deferredFilters)
+    .filter(record => !canViewSubmissions || matchesSubmissionStatus(submissionsByKey.get(submissionKey(record.team.teamId, record.checkpoint.number)), submissionStatus)),
+    [deferredFilters, resultRecords, canViewSubmissions, submissionsByKey, submissionStatus]);
   const classGroups = useMemo(() => groupEvaluationRecords(filteredRecords, assessmentsByTeam), [assessmentsByTeam, filteredRecords]);
   const bulkPublicationTargets = useMemo(() => {
     const publishIds = new Set<string>();
@@ -741,7 +685,7 @@ export default function EvaluationGrading() {
       <header className="overflow-hidden rounded-2xl border border-orange-100 bg-gradient-to-r from-orange-50 via-white to-blue-50/60 p-5 shadow-sm sm:p-6">
         <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
           <div className="flex items-start gap-4"><div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-orange-500 text-white shadow-md shadow-orange-200/60"><ClipboardCheck className="h-6 w-6" /></div><div><div className="flex flex-wrap items-center gap-2"><h1 className="text-2xl font-black tracking-tight text-slate-900">Evaluation &amp; Grading</h1><span className="rounded-full border border-primary-100 bg-primary-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-primary">{role}</span></div><p className="mt-1 max-w-2xl text-sm text-slate-500">{roleDescription[role] || roleDescription.STUDENT}</p></div></div>
-          {activeTab === 'results' && <button type="button" onClick={retry} disabled={loadingRecords} className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-600 shadow-sm transition-colors hover:border-primary/30 hover:text-primary disabled:cursor-not-allowed disabled:opacity-60"><RefreshCw className={`h-4 w-4 ${loadingRecords ? 'animate-spin' : ''}`} /> Refresh</button>}
+          {activeTab === 'results' && <button type="button" onClick={retry} disabled={loadingRecords || loadingSubmissions} className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-600 shadow-sm transition-colors hover:border-primary/30 hover:text-primary disabled:cursor-not-allowed disabled:opacity-60"><RefreshCw className={`h-4 w-4 ${loadingRecords || loadingSubmissions ? 'animate-spin' : ''}`} /> Refresh</button>}
         </div>
       </header>
 
@@ -751,8 +695,35 @@ export default function EvaluationGrading() {
       </nav>
 
       {activeTab === 'rankings' ? <Rankings /> : <>
-      <section className="grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label="Evaluation summary">
-        {summaryCards.map(item => { const Icon = item.icon; return <div key={item.label} className="rounded-2xl border border-slate-200/70 bg-white p-4 shadow-sm sm:p-5"><div className={`mb-3 flex h-9 w-9 items-center justify-center rounded-xl border ${item.color}`}><Icon className="h-4 w-4" /></div><p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">{item.label}</p><p className="mt-1 text-2xl font-black text-slate-900">{item.value}<span className="text-xs font-semibold text-slate-400">{'suffix' in item ? item.suffix : ''}</span></p></div>; })}
+      <section className="space-y-3" aria-label="Results summary">
+        {canViewSubmissions && (
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div><h2 className="text-sm font-bold text-slate-800">Results overview</h2><p className="mt-1 text-xs text-slate-500">Submission counts follow the semester, year, class, team and checkpoint filters. Each team is counted once per checkpoint.</p></div>
+            {submissionAnalytics && <p className="text-xs text-slate-400">Updated {new Date(submissionAnalytics.serverTimeUtc).toLocaleString()}</p>}
+          </div>
+        )}
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label="Evaluation summary" aria-busy={canViewSubmissions && loadingSubmissions}>
+          {canViewSubmissions && (submissionError ? (
+            <div className="col-span-full"><ErrorState title="Unable to load submission completion" message={submissionError} onRetry={retry} /></div>
+          ) : (
+            <>
+              {[
+                { label: 'Expected submissions', count: submissionAnalytics?.expectedCount, filter: '', icon: Users, color: 'text-blue-600 bg-blue-50' },
+                { label: 'Submitted', count: submissionAnalytics?.submittedCount, filter: 'Submitted', icon: CheckCircle2, color: 'text-emerald-600 bg-emerald-50' },
+                { label: 'Not submitted', count: submissionAnalytics?.notSubmittedCount, filter: 'NotSubmitted', icon: Clock, color: 'text-amber-600 bg-amber-50' },
+                { label: 'Missing', count: submissionAnalytics?.missingCount, filter: 'Missing', icon: AlertTriangle, color: 'text-red-600 bg-red-50' },
+              ].map(item => { const Icon = item.icon; return (
+                <button key={item.label} type="button" onClick={() => updateFilter('submissionStatus', item.filter)} disabled={loadingSubmissions || !submissionAnalytics}
+                  aria-pressed={submissionStatus === item.filter} className={`rounded-2xl border bg-white p-4 text-left shadow-sm transition-colors disabled:opacity-60 sm:p-5 ${submissionStatus === item.filter ? 'border-primary ring-1 ring-primary/20' : 'border-slate-200/70 hover:border-primary/40'}`}>
+                  <span className={`mb-3 flex h-9 w-9 items-center justify-center rounded-xl ${item.color}`}><Icon className="h-4 w-4" /></span>
+                  <span className="block text-[11px] font-bold uppercase tracking-wider text-slate-400">{item.label}</span>
+                  <span className="mt-1 block text-2xl font-black text-slate-900">{loadingSubmissions ? <Loader2 className="h-6 w-6 animate-spin" aria-label="Loading submissions" /> : item.count ?? '—'}</span>
+                </button>
+              ); })}
+            </>
+          ))}
+          {summaryCards.map(item => { const Icon = item.icon; return <div key={item.label} className="rounded-2xl border border-slate-200/70 bg-white p-4 shadow-sm sm:p-5"><div className={`mb-3 flex h-9 w-9 items-center justify-center rounded-xl border ${item.color}`}><Icon className="h-4 w-4" /></div><p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">{item.label}</p><p className="mt-1 text-2xl font-black text-slate-900">{item.value}<span className="text-xs font-semibold text-slate-400">{'suffix' in item ? item.suffix : ''}</span></p></div>; })}
+        </div>
       </section>
 
       <section className="rounded-2xl border border-slate-200/70 bg-white p-4 shadow-sm" aria-label="Evaluation filters">
@@ -764,6 +735,7 @@ export default function EvaluationGrading() {
           <select value={teamId} onChange={event => updateFilter('teamId', event.target.value)} aria-label="Filter by team" className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 sm:w-[180px]"><option value="">All teams</option>{teamOptions.map(team => <option key={team.teamId} value={team.teamId}>{team.teamName}</option>)}</select>
           <select value={checkpoint} onChange={event => updateFilter('checkpoint', event.target.value)} aria-label="Filter by checkpoint" className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 sm:w-[210px]"><option value="">All checkpoints</option>{checkpointOptions.map(([number, title]) => <option key={number} value={number}>CP {number} · {title}</option>)}</select>
           <select value={status} onChange={event => updateFilter('status', event.target.value)} aria-label="Filter by status" className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 sm:w-[150px]"><option value="">All statuses</option>{(['SUBMITTED', 'PUBLISHED', 'NOT_GRADED'] as EvaluationGradingStatus[]).map(value => <option key={value} value={value}>{evaluationStatusLabel(value)}</option>)}</select>
+          {canViewSubmissions && <select value={submissionStatus} onChange={event => updateFilter('submissionStatus', event.target.value)} aria-label="Filter by submission status" className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm sm:w-[180px]"><option value="">All submissions</option><option value="Submitted">Submitted</option><option value="NotSubmitted">Not submitted</option><option value="Missing">Missing</option></select>}
           <button type="submit" className="inline-flex items-center gap-2 rounded-xl bg-secondary px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-secondary-700"><Filter className="h-4 w-4" /> Search</button>
           <button type="button" onClick={resetFilters} className="px-2 text-sm font-medium text-slate-400 hover:text-slate-700">Reset</button>
         </form>
@@ -804,10 +776,10 @@ export default function EvaluationGrading() {
       {partialFailureCount > 0 && <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800" role="status">Some evaluation data could not be loaded ({partialFailureCount} request{partialFailureCount === 1 ? '' : 's'}). Refresh to try again.</div>}
       {errorMessage && teams.length > 0 && <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">{errorMessage}</div>}
 
-      {loadingRecords && records.length === 0 ? (
+      {(loadingRecords && records.length === 0) || (loadingSubmissions && (resultRecords.length === 0 || submissionStatus)) ? (
         <div className="flex min-h-64 flex-col items-center justify-center rounded-2xl border border-slate-200/70 bg-white"><Loader2 className="h-8 w-8 animate-spin text-primary" /><p className="mt-3 text-sm font-medium text-slate-500">Loading scores and feedback…</p></div>
       ) : classGroups.length === 0 ? (
-        <div className="rounded-2xl border border-slate-200/70 bg-white shadow-sm"><EmptyState icon={BookOpenCheck} title={semester === 'none' || year === 'none' ? 'No active semester' : records.length === 0 ? 'No evaluation data yet' : 'No matching evaluations'} description={semester === 'none' || year === 'none' ? 'There is no active semester available for your current team scope. Select another semester and year to continue.' : records.length === 0 ? 'No workspace checkpoints are available for the selected semester, or grading has not been configured yet.' : 'Try a different search term or filter.'} /></div>
+        <div className="rounded-2xl border border-slate-200/70 bg-white shadow-sm"><EmptyState icon={BookOpenCheck} title={semester === 'none' || year === 'none' ? 'No active semester' : resultRecords.length === 0 ? 'No checkpoint results yet' : 'No matching results'} description={semester === 'none' || year === 'none' ? 'There is no active semester available for your current team scope. Select another semester and year to continue.' : resultRecords.length === 0 ? 'No checkpoint results are available for the selected scope.' : 'Try a different search term or filter.'} /></div>
       ) : (
         <section className="relative min-h-64 max-w-full space-y-6 overflow-hidden" aria-label="Evaluation results" aria-busy={loadingRecords || isFilterPending}>
           <div className="flex min-h-7 items-center justify-end gap-3"><div className="flex items-center gap-2 text-sm font-medium text-slate-500">{(loadingRecords || isFilterPending) && <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" aria-hidden="true" />}<span>{loadingRecords ? 'Updating…' : `${classGroups.length} class${classGroups.length === 1 ? '' : 'es'}`}</span></div></div>
@@ -834,11 +806,12 @@ export default function EvaluationGrading() {
                           : allMembers;
                       const members = visibleMembers.length || role === 'MENTOR' || role === 'STUDENT'
                         ? visibleMembers
-                        : [{ studentId: `empty-${teamGroup.team.teamId}`, fullName: 'No active members', rollNumber: '' }];
+                        : [{ studentId: `empty-${teamGroup.team.teamId}`, fullName: teamGroup.team.hasWorkspace ? 'No active members' : 'Member details unavailable', rollNumber: '' }];
                       return (
                         <tbody key={teamGroup.team.teamId} className="group/team">
                           <tr className="bg-slate-50/80">
                             <th scope="rowgroup" className="sticky left-0 z-20 align-top border-b border-r border-t border-slate-200 bg-slate-50 px-5 py-4 text-left">
+                              <p className="mb-1 text-xs font-bold text-secondary">{teamGroup.team.teamName}</p>
                               <p className="whitespace-normal break-words text-sm font-black leading-5 text-slate-900">{teamGroup.team.projectName || 'No project name'}</p>
                               <p className="mt-1.5 whitespace-normal break-words text-xs font-medium leading-5 text-slate-500">{teamGroup.team.projectDescription || 'No project description'}</p>
                             </th>
@@ -849,8 +822,14 @@ export default function EvaluationGrading() {
                             })}
                             {classGroup.checkpoints.map(item => {
                               const record = teamGroup.recordsByCheckpoint.get(item.number);
+                              const submission = submissionsByKey.get(submissionKey(teamGroup.team.teamId, item.number));
                               return (
                                 <td key={item.number} className="border-b border-r border-t border-slate-200 bg-orange-50/30 px-3 py-3 text-center align-middle">
+                                  {canViewSubmissions && submission && <div className="mb-2 border-b border-orange-100 pb-2 text-[10px]">
+                                    <span className={`inline-flex rounded-full px-2 py-0.5 font-bold ${submission.status === 'Submitted' ? 'bg-emerald-50 text-emerald-700' : submission.status === 'Missing' ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-700'}`}>Submission: {submission.status === 'NotSubmitted' ? 'Not submitted' : submission.status}</span>
+                                    <p className="mt-1 text-slate-500">{submission.deadlineUtc ? `Deadline: ${new Date(submission.deadlineUtc).toLocaleString()}` : 'Deadline not configured'}</p>
+                                    {submission.submittedAtUtc && <p className="mt-0.5 text-slate-500">Submitted: {new Date(submission.submittedAtUtc).toLocaleString()}</p>}
+                                  </div>}
                                   {record?.evaluation ? (
                                     <div className="flex min-h-24 flex-col items-center justify-center">
                                       {record.evaluation.checkpointTotal === null || record.evaluation.checkpointTotal === undefined ? <><span className="text-xl font-black text-slate-300">—</span><span className="mt-1 text-[10px] font-bold uppercase tracking-wide text-slate-400">Score pending publication</span></> : <><span className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Team score</span><p className="mt-0.5 text-xl font-black text-primary">{Number(record.evaluation.checkpointTotal).toFixed(2)}</p></>}
@@ -864,7 +843,8 @@ export default function EvaluationGrading() {
                                     <div className="flex min-h-24 flex-col items-center justify-center">
                                       <span className="text-xl font-black text-slate-300">—</span>
                                       <span className="mt-1 text-[10px] font-bold uppercase tracking-wide text-slate-400">Not graded</span>
-                                      {canEdit && teamGroup.team.accessMode !== 'READ_ONLY' && record && <button type="button" onClick={() => setEditingRecord(record)} className="mt-1.5 inline-flex items-center gap-1 text-[10px] font-bold text-primary hover:underline"><Edit3 className="h-3 w-3" /> Start grading</button>}
+                                      {!teamGroup.team.hasWorkspace && <span className="mt-1 text-[10px] text-slate-400">Workspace not created</span>}
+                                      {canEdit && teamGroup.team.hasWorkspace && teamGroup.team.accessMode !== 'READ_ONLY' && record && <button type="button" onClick={() => setEditingRecord(record)} className="mt-1.5 inline-flex items-center gap-1 text-[10px] font-bold text-primary hover:underline"><Edit3 className="h-3 w-3" /> Start grading</button>}
                                     </div>
                                   )}
                                 </td>

@@ -3,6 +3,7 @@ import toast from 'react-hot-toast';
 import { Users, AlertTriangle, CheckCircle2, Crown, Loader2, AlertCircle, Send, X } from 'lucide-react';
 import { teamApi } from '../../api/teamApi';
 import { teamFormationApi } from '../../api/teamFormationApi';
+import { classApi } from '../../api/classApi';
 import { unwrapApiData } from '../../utils/classMappers';
 import { isMissingTeamMajor, validateTeamSelection } from '../../utils/teamManagement';
 import TeamSuggestionTooltip from './TeamSuggestionTooltip';
@@ -62,6 +63,7 @@ export default function StudentTeamGeneratePanel({
   currentStudentId = '',
   requireCurrentStudentMembership = true,
   proposal = null,
+  creationMode = 'formation',
 }) {
   const [submitting, setSubmitting] = useState(false);
   const students = useMemo(() => (Array.isArray(rawStudents) ? rawStudents : []), [rawStudents]);
@@ -160,6 +162,7 @@ export default function StudentTeamGeneratePanel({
   } = validation;
   const canSubmit = isFormValid && isFullyValid;
   const selectedLeader = selectedStudents.find(student => student._id === selectedLeaderId);
+  const createsTeamDirectly = creationMode === 'direct' && !proposal;
 
   const requestSubmission = () => {
     if (submitting || !canSubmit) {
@@ -195,15 +198,27 @@ export default function StudentTeamGeneratePanel({
         const draft = unwrapApiData<any>(response);
         await teamApi.submitProposal(draft.id, draft.rowVersion);
       } else {
-        await teamFormationApi.create(classId, {
-          memberStudentIds: selected,
-          leaderStudentId: selectedLeaderId,
-          teamName: groupName.trim(),
-        });
+        if (createsTeamDirectly) {
+          await classApi.createTeam(classId, {
+            memberStudentIds: selected,
+            leaderStudentId: selectedLeaderId,
+            teamName: groupName.trim(),
+          });
+        } else {
+          await teamFormationApi.create(classId, {
+            memberStudentIds: selected,
+            leaderStudentId: selectedLeaderId,
+            teamName: groupName.trim(),
+          });
+        }
       }
 
       toast.success(
-        proposal ? 'Project proposal resubmitted. Your team is unchanged.' : 'Invitations sent. Your team will be created after everyone accepts.',
+        proposal
+          ? 'Project proposal resubmitted. Your team is unchanged.'
+          : createsTeamDirectly
+            ? 'Team created successfully. Students can view it immediately.'
+            : 'Invitations sent. Your team will be created after everyone accepts.',
       );
       
       // Reset form
@@ -227,7 +242,11 @@ export default function StudentTeamGeneratePanel({
       <div className="hidden">
         <div>
           <h3 className="text-lg font-bold text-slate-900">Create team</h3>
-          <p className="mt-0.5 text-xs text-slate-500">The team becomes active after all selected members accept.</p>
+          <p className="mt-0.5 text-xs text-slate-500">
+            {createsTeamDirectly
+              ? 'The team becomes active immediately after creation.'
+              : 'The team becomes active after all selected members accept.'}
+          </p>
         </div>
         {suggestionInfo && (
           <TeamSuggestionTooltip>
@@ -424,7 +443,7 @@ export default function StudentTeamGeneratePanel({
                 (isFullyValid ? <CheckCircle2 className="w-4 h-4" /> : <Send className="w-4 h-4" />)
               }
               {isFullyValid
-                ? (proposal ? 'Resubmit project proposal' : 'Send invitations')
+                ? (proposal ? 'Resubmit project proposal' : createsTeamDirectly ? 'Create team' : 'Send invitations')
                 : 'Requirements not met'}
             </button>
           </div>
@@ -453,7 +472,9 @@ export default function StudentTeamGeneratePanel({
                   Confirm team information
                 </h2>
                 <p className="mt-1 text-sm text-slate-500">
-                  Review the members before sending invitations. The team will not be created yet.
+                  {createsTeamDirectly
+                    ? 'Review the members before creating the active team.'
+                    : 'Review the members before sending invitations. The team will not be created yet.'}
                 </p>
               </div>
               <button
@@ -512,8 +533,13 @@ export default function StudentTeamGeneratePanel({
               <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
                 <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
                 <p>
-                  Each selected member must accept before the team is created.
-                  {selectedLeader && <> <strong>{selectedLeader.fullName} ({selectedLeader.rollNumber || 'No student code'})</strong> will be the Team Leader after formation is complete.</>}
+                  {createsTeamDirectly
+                    ? 'The team and all memberships will be created immediately. Student confirmation is not required.'
+                    : 'Each selected member must accept before the team is created.'}
+                  {selectedLeader && <>
+                    {' '}<strong>{selectedLeader.fullName} ({selectedLeader.rollNumber || 'No student code'})</strong>
+                    {createsTeamDirectly ? ' will be assigned as Team Leader.' : ' will be the Team Leader after formation is complete.'}
+                  </>}
                 </p>
               </div>
             </div>
@@ -534,7 +560,9 @@ export default function StudentTeamGeneratePanel({
                 className="inline-flex items-center justify-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm font-bold text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-                {submitting ? 'Sending invitations…' : 'Confirm & Send Invitations'}
+                {submitting
+                  ? createsTeamDirectly ? 'Creating team…' : 'Sending invitations…'
+                  : createsTeamDirectly ? 'Confirm & Create Team' : 'Confirm & Send Invitations'}
               </button>
             </footer>
           </div>

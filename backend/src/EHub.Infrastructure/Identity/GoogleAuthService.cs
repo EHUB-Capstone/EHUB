@@ -1,6 +1,7 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Google.Apis.Auth;
 using EHub.Application.Common.Interfaces.Identity;
@@ -13,10 +14,12 @@ namespace EHub.Infrastructure.Identity;
 public class GoogleAuthService : IGoogleAuthService
 {
     private readonly GoogleOptions _googleOptions;
+    private readonly ILogger<GoogleAuthService> _logger;
 
-    public GoogleAuthService(IOptions<GoogleOptions> googleOptions)
+    public GoogleAuthService(IOptions<GoogleOptions> googleOptions, ILogger<GoogleAuthService> logger)
     {
         _googleOptions = googleOptions.Value;
+        _logger = logger;
     }
 
     public async Task<Result<GoogleUserInfo>> VerifyIdTokenAsync(
@@ -51,8 +54,12 @@ public class GoogleAuthService : IGoogleAuthService
 
             return Result.Success(userInfo);
         }
-        catch (Exception)
+        catch (Exception exception)
         {
+            _logger.LogWarning(
+                "Google ID token validation failed: {ExceptionType}: {Reason}",
+                exception.GetType().Name,
+                exception.Message);
             return Result.Failure<GoogleUserInfo>(AuthErrors.InvalidGoogleToken);
         }
     }

@@ -19,6 +19,183 @@ public sealed class CheckpointEvaluationHandler(
     private const int MaximumOverallFeedbackLength = 2_000;
     private const int MaximumCriterionCommentLength = 1_000;
     private const int MaximumBulkPublicationCount = 200;
+    private const int MaximumGradingBatchTeamCount = 200;
+
+    public async Task<Result<EvaluationGradingBatchResponse>> GetGradingBatchAsync(
+        EvaluationGradingBatchRequest request, Guid userId, string role,
+        CancellationToken cancellationToken = default)
+    {
+        var requestedTeamIds = request?.TeamIds ?? Array.Empty<Guid>();
+        if (requestedTeamIds.Count > MaximumGradingBatchTeamCount || requestedTeamIds.Any(id => id == Guid.Empty))
+            return Result.Failure<EvaluationGradingBatchResponse>(
+                ErrorCodes.WorkspaceValidationError,
+                $"Select up to {MaximumGradingBatchTeamCount} valid teams at once.");
+        var teamIds = requestedTeamIds.Distinct().ToArray();
+        if (teamIds.Length == 0)
+            return Result.Success(new EvaluationGradingBatchResponse());
+
+        var teamQuery = context.Teams
+            .AsNoTracking()
+            .Where(team => teamIds.Contains(team.Id) && team.Status == TeamStatus.Active);
+        if (IsRole(role, SystemRoles.Lecturer))
+        {
+            teamQuery = teamQuery.Where(team =>
+                team.Class.PrimaryLecturerId == userId ||
+                team.Class.ClassLecturers.Any(assignment => assignment.LecturerId == userId));
+        }
+        else if (IsRole(role, SystemRoles.Mentor))
+        {
+            teamQuery = teamQuery.Where(team => team.MentorAssignments.Any(assignment =>
+                assignment.MentorProfile.UserId == userId &&
+                assignment.Status == MentorAssignmentStatus.Active && assignment.EndedAt == null));
+        }
+        else if (IsRole(role, SystemRoles.Student))
+        {
+            teamQuery = teamQuery.Where(team => team.TeamMembers.Any(member =>
+                member.CountsTowardActiveTeam &&
+                member.ClassStudent.EnrollmentStatus == EnrollmentStatus.Active &&
+                member.ClassStudent.Student.UserId == userId));
+        }
+        else if (!IsRole(role, SystemRoles.Admin))
+        {
+            return Denied<EvaluationGradingBatchResponse>("You do not have access to evaluation grading data.");
+        }
+
+        var teams = await teamQuery
+            .Include(team => team.Class).ThenInclude(targetClass => targetClass.Course)
+            .Include(team => team.Class).ThenInclude(targetClass => targetClass.ClassLecturers)
+            .Include(team => team.TeamMembers).ThenInclude(member => member.ClassStudent).ThenInclude(enrollment => enrollment.Student)
+            .Include(team => team.MentorAssignments).ThenInclude(assignment => assignment.MentorProfile)
+            .Include(team => team.Project)
+            .Include(team => team.ApprovedProposals)
+            .OrderBy(team => team.Class.ClassCode)
+            .ThenBy(team => team.TeamName)
+            .ToArrayAsync(cancellationToken);
+        if (teams.Length != teamIds.Length)
+            return Denied<EvaluationGradingBatchResponse>("One or more requested teams are unavailable or outside your access scope.");
+
+        var courseIds = teams.Select(team => team.Class.CourseId).Distinct().ToArray();
+        var checkpoints = await context.Checkpoints
+            .AsNoTracking()
+            .Where(checkpoint => checkpoint.CourseId.HasValue && courseIds.Contains(checkpoint.CourseId.Value) &&
+                                 checkpoint.ClassId == null && checkpoint.Status != CheckpointStatus.Archived)
+            .Include(checkpoint => checkpoint.Rubrics.Where(rubric =>
+                rubric.ClassId == null && rubric.Status == RubricStatus.Active))
+            .ThenInclude(rubric => rubric.Criteria)
+            .OrderBy(checkpoint => checkpoint.CheckpointNumber)
+            .ToArrayAsync(cancellationToken);
+        var assessments = await context.Rubrics
+            .AsNoTracking()
+            .Where(rubric => rubric.CourseId.HasValue && courseIds.Contains(rubric.CourseId.Value) &&
+                             rubric.ClassId == null && rubric.CheckpointId == null &&
+                             rubric.Status == RubricStatus.Active)
+            .OrderBy(rubric => rubric.Name)
+            .ToArrayAsync(cancellationToken);
+
+        var checkpointRubrics = checkpoints
+            .Select(checkpoint => checkpoint.Rubrics.FirstOrDefault(rubric => rubric.Criteria.Count > 0))
+            .Where(rubric => rubric is not null)
+            .Cast<Rubric>()
+            .ToArray();
+        var rubricIds = checkpointRubrics.Select(rubric => rubric.Id)
+            .Concat(assessments.Select(assessment => assessment.Id))
+            .Distinct()
+            .ToArray();
+        var projectIds = teams.Where(team => team.Project is not null)
+            .Select(team => team.Project!.Id)
+            .Distinct()
+            .ToArray();
+        var evaluations = projectIds.Length == 0 || rubricIds.Length == 0
+            ? Array.Empty<Evaluation>()
+            : await context.Evaluations
+                .AsNoTracking()
+                .Where(evaluation => projectIds.Contains(evaluation.ProjectId) && rubricIds.Contains(evaluation.RubricId))
+                .Include(evaluation => evaluation.Evaluator)
+                .Include(evaluation => evaluation.Details).ThenInclude(detail => detail.RubricCriterion)
+                .Include(evaluation => evaluation.MemberScores)
+                .OrderByDescending(evaluation => evaluation.UpdatedAt ?? evaluation.CreatedAt)
+                .ToArrayAsync(cancellationToken);
+        var evaluationsByProjectAndRubric = evaluations.ToLookup(evaluation => (evaluation.ProjectId, evaluation.RubricId));
+
+        var responseTeams = teams.Select(team =>
+        {
+            var canGrade = CanGrade(role, team, userId);
+            var teamCheckpoints = checkpoints
+                .Where(checkpoint => checkpoint.CourseId == team.Class.CourseId)
+                .Select(checkpoint => (Checkpoint: checkpoint, Rubric: checkpoint.Rubrics.FirstOrDefault(rubric => rubric.Criteria.Count > 0)))
+                .Where(item => item.Rubric is not null)
+                .Select(item =>
+                {
+                    var candidates = team.Project is null
+                        ? Array.Empty<Evaluation>()
+                        : evaluationsByProjectAndRubric[(team.Project.Id, item.Rubric!.Id)].ToArray();
+                    var current = candidates
+                        .GroupBy(evaluation => evaluation.EvaluatorId)
+                        .Select(group => group
+                            .OrderByDescending(evaluation => evaluation.Status is EvaluationStatus.Submitted or EvaluationStatus.Published)
+                            .ThenByDescending(evaluation => evaluation.UpdatedAt ?? evaluation.CreatedAt)
+                            .ThenByDescending(evaluation => evaluation.Id)
+                            .First())
+                        .Where(evaluation => canGrade || evaluation.Status is EvaluationStatus.Submitted or EvaluationStatus.Published)
+                        .Select(evaluation => ToEvaluationResponse(evaluation, team, userId, role))
+                        .ToArray();
+                    return new EvaluationGradingCheckpointResponse
+                    {
+                        Checkpoint = ToCheckpointResponse(item.Checkpoint, item.Rubric!, team),
+                        Evaluations = current
+                    };
+                })
+                .ToArray();
+            var teamAssessments = assessments
+                .Where(assessment => assessment.CourseId == team.Class.CourseId)
+                .Select(assessment =>
+                {
+                    var evaluation = team.Project is null
+                        ? null
+                        : evaluationsByProjectAndRubric[(team.Project.Id, assessment.Id)]
+                            .Where(item => canGrade || item.Status is EvaluationStatus.Submitted or EvaluationStatus.Published)
+                            .OrderByDescending(item => item.Status is EvaluationStatus.Submitted or EvaluationStatus.Published)
+                            .ThenByDescending(item => item.UpdatedAt ?? item.CreatedAt)
+                            .FirstOrDefault();
+                    return ToCourseAssessmentResponse(assessment, evaluation, team, userId, role);
+                })
+                .ToArray();
+            var proposal = team.ApprovedProposals.OrderByDescending(item => item.CreatedAt).FirstOrDefault();
+            var semesterGroups = ActiveMembers(team)
+                .Select(member => member.ClassStudent.SemesterGroupName?.Trim())
+                .Where(value => !string.IsNullOrWhiteSpace(value))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(value => value)
+                .ToArray();
+
+            return new EvaluationGradingTeamResponse
+            {
+                TeamId = team.Id,
+                TeamCode = team.TeamCode,
+                ProjectName = team.Project?.Name ?? proposal?.ProjectName ?? proposal?.TeamName,
+                ProjectDescription = team.Project?.Description ?? proposal?.Description,
+                SemesterGroupName = string.Join(", ", semesterGroups),
+                Members = team.TeamMembers
+                    .Where(member => member.CountsTowardActiveTeam)
+                    .OrderBy(member => member.ClassStudent.Student.FullName)
+                    .ThenBy(member => member.StudentId)
+                    .Select(member => new EvaluationGradingTeamMemberResponse
+                    {
+                        StudentId = member.StudentId,
+                        UserId = member.ClassStudent.Student.UserId,
+                        FullName = member.ClassStudent.Student.FullName,
+                        RollNumber = member.ClassStudent.Student.RollNumber ?? string.Empty,
+                        MajorCode = member.ClassStudent.MajorCodeAtEnrollment,
+                        RoleInTeam = member.RoleInTeam.ToString()
+                    })
+                    .ToArray(),
+                Checkpoints = teamCheckpoints,
+                Assessments = teamAssessments
+            };
+        }).ToArray();
+
+        return Result.Success(new EvaluationGradingBatchResponse { Teams = responseTeams });
+    }
 
     public async Task<Result<WorkspaceCheckpointEvaluationSummaryResponse>> GetSummaryAsync(
         Guid teamId, int checkpointNumber, Guid userId, string role, CancellationToken cancellationToken = default)
@@ -589,6 +766,25 @@ public sealed class CheckpointEvaluationHandler(
             .Include(item => item.Details).ThenInclude(item => item.RubricCriterion)
             .Include(item => item.MemberScores)
             .Include(item => item.Histories).ThenInclude(item => item.ChangedBy);
+    }
+
+    private static CourseAssessmentEvaluationResponse ToCourseAssessmentResponse(
+        Rubric assessment, Evaluation? evaluation, Team team, Guid userId, string role)
+    {
+        var canViewScore = evaluation is not null &&
+                           EvaluationVisibilityRules.CanViewTeamScore(role, evaluation.Status);
+        return new CourseAssessmentEvaluationResponse
+        {
+            AssessmentId = assessment.Id,
+            Name = assessment.Name,
+            Weight = assessment.CourseWeight,
+            EvaluationId = evaluation?.Id,
+            EvaluatorId = evaluation?.EvaluatorId,
+            Score = canViewScore ? evaluation!.TotalScore : null,
+            MemberScores = evaluation is null ? null : VisibleMemberScores(evaluation, team, userId, role),
+            Status = evaluation?.Status.ToString().ToUpperInvariant() ?? "NOT_GRADED",
+            UpdatedAt = evaluation is null ? null : evaluation.UpdatedAt ?? evaluation.CreatedAt
+        };
     }
 
     private static WorkspaceCheckpointEvaluationConfigResponse ToCheckpointResponse(

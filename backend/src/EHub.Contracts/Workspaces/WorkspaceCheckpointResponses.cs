@@ -53,6 +53,8 @@ public sealed class WorkspaceCheckpointFileResponse
     public string OriginalName { get; init; } = string.Empty;
     public string FileType { get; init; } = string.Empty;
     public long FileSize { get; init; }
+    /// <summary>True when the file should be fetched through <c>download-url</c> instead of the proxy download endpoint.</summary>
+    public bool CanDirectDownload { get; init; }
     public DateTime UploadedAt { get; init; }
     public WorkspaceCheckpointUserResponse? UploadedBy { get; init; }
 }
@@ -239,6 +241,49 @@ public sealed class WorkspaceCheckpointEvaluationAggregateResponse
     public int SubmittedCount { get; init; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public decimal? AverageScore { get; init; }
+}
+
+public sealed class EvaluationGradingBatchRequest
+{
+    public IReadOnlyCollection<Guid> TeamIds { get; init; } = Array.Empty<Guid>();
+}
+
+public sealed class EvaluationGradingBatchResponse
+{
+    public IReadOnlyCollection<EvaluationGradingTeamResponse> Teams { get; init; } =
+        Array.Empty<EvaluationGradingTeamResponse>();
+}
+
+public sealed class EvaluationGradingTeamResponse
+{
+    public Guid TeamId { get; init; }
+    public string TeamCode { get; init; } = string.Empty;
+    public string? ProjectName { get; init; }
+    public string? ProjectDescription { get; init; }
+    public string? SemesterGroupName { get; init; }
+    public IReadOnlyCollection<EvaluationGradingTeamMemberResponse> Members { get; init; } =
+        Array.Empty<EvaluationGradingTeamMemberResponse>();
+    public IReadOnlyCollection<EvaluationGradingCheckpointResponse> Checkpoints { get; init; } =
+        Array.Empty<EvaluationGradingCheckpointResponse>();
+    public IReadOnlyCollection<CourseAssessmentEvaluationResponse> Assessments { get; init; } =
+        Array.Empty<CourseAssessmentEvaluationResponse>();
+}
+
+public sealed class EvaluationGradingTeamMemberResponse
+{
+    public Guid StudentId { get; init; }
+    public Guid? UserId { get; init; }
+    public string FullName { get; init; } = string.Empty;
+    public string RollNumber { get; init; } = string.Empty;
+    public string? MajorCode { get; init; }
+    public string RoleInTeam { get; init; } = string.Empty;
+}
+
+public sealed class EvaluationGradingCheckpointResponse
+{
+    public WorkspaceCheckpointEvaluationConfigResponse Checkpoint { get; init; } = new();
+    public IReadOnlyCollection<WorkspaceCheckpointEvaluationResponse> Evaluations { get; init; } =
+        Array.Empty<WorkspaceCheckpointEvaluationResponse>();
 }
 
 public sealed class WorkspaceEvaluationPublicationResponse

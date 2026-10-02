@@ -64,6 +64,12 @@ interface TeamFormationChangedRealtimeEvent {
   formationId: string;
 }
 
+interface TeamCreatedRealtimeEvent {
+  eventType: 'TeamCreated';
+  classId: string;
+  teamId: string;
+}
+
 interface CheckpointRequirementsUpdatedRealtimeEvent {
   eventType: 'CheckpointRequirementsUpdated';
   teamId: string;
@@ -84,6 +90,7 @@ export type ProjectDirectionRealtimeEvent =
   | ClassMajorUpdatedRealtimeEvent
   | TeamProposalReviewedRealtimeEvent
   | TeamFormationChangedRealtimeEvent
+  | TeamCreatedRealtimeEvent
   | CheckpointRequirementsUpdatedRealtimeEvent
   | CheckpointEvaluationUpdatedRealtimeEvent;
 
@@ -155,9 +162,10 @@ const connect = () => {
       const event = JSON.parse(String(message.data)) as ProjectDirectionRealtimeEvent;
       if (!event?.eventType) return;
       if (event.eventType === 'ClassMajorUpdated' || event.eventType === 'TeamProposalReviewed'
-        || event.eventType === 'TeamFormationChanged') {
+        || event.eventType === 'TeamFormationChanged' || event.eventType === 'TeamCreated') {
         if (!event.classId) return;
         if (event.eventType === 'TeamFormationChanged' && !event.formationId) return;
+        if (event.eventType === 'TeamCreated' && !event.teamId) return;
       } else if (!event.teamId) return;
       if (event.eventType !== 'ProjectDirectionNotificationReady'
         && event.eventType !== 'CheckpointFeedbackPosted'
@@ -167,6 +175,7 @@ const connect = () => {
         && event.eventType !== 'ClassMajorUpdated'
         && event.eventType !== 'TeamProposalReviewed'
         && event.eventType !== 'TeamFormationChanged'
+        && event.eventType !== 'TeamCreated'
         && !event.direction) return;
       handlers.forEach((handler) => handler(event));
     } catch {

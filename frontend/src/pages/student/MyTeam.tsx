@@ -67,7 +67,7 @@ export default function MyTeam() {
   useEffect(() => { void fetchTeam(); }, [fetchTeam]);
 
   useEffect(() => subscribeProjectDirectionRealtime((event) => {
-    if (event.eventType === 'TeamFormationChanged') void fetchTeam(false);
+    if (event.eventType === 'TeamFormationChanged' || event.eventType === 'TeamCreated') void fetchTeam(false);
   }, () => {
     void fetchTeam(false);
   }), [fetchTeam]);

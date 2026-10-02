@@ -2,6 +2,7 @@ import type MockAdapter from 'axios-mock-adapter';
 import { allocateId, allocateRowVersion, failure, getMockState, ok, parseBody, persistMockState, routeId } from '../mockHelpers.ts';
 import type { MockClass, MockCheckpointFile, MockCheckpointLink } from '../mockState.ts';
 import { normalizeCheckpointLinkUrl, validateCheckpointLinkUrl } from '../../utils/checkpointLink.ts';
+import type { SubmissionAnalyticsItem } from '../../types/submissionAnalytics';
 
 const uuid = (value: number) => `00000000-0000-4000-8000-${String(value).padStart(12, '0')}`;
 
@@ -336,6 +337,73 @@ function evaluationSummary(teamId: string, checkpointNumber: number) {
   };
 }
 
+function courseAssessmentData(teamId: string) {
+  const state = getMockState();
+  const cls = classByTeam(teamId)!;
+  const currentUser = state.users.find(user => user.id === state.sessionUserId);
+  const isInternal = currentUser?.role === 'ADMIN' || currentUser?.role === 'LECTURER';
+  const team = teamById(teamId)!;
+  const assessments = (state.curricula[cls.subjectCode]?.otherAssessments || []).map(item => {
+    const score = state.courseAssessmentScores[`${teamId}:${item._id}`];
+    const evaluationId = `${teamId}--${item._id}`;
+    const status = score === undefined ? 'NOT_GRADED' : state.evaluationPublicationStatuses[evaluationId] || 'SUBMITTED';
+    const visibleMembers = isInternal
+      ? team.members
+      : currentUser?.role === 'STUDENT' && status === 'PUBLISHED'
+        ? team.members.filter(member => member.studentId === currentUser.id)
+        : [];
+    return {
+      assessmentId: item._id,
+      name: item.name,
+      weight: item.weight,
+      evaluationId: score === undefined ? null : evaluationId,
+      evaluatorId: score === undefined ? null : cls.primaryLecturerId,
+      ...((isInternal || status === 'PUBLISHED') && score !== undefined ? { score } : {}),
+      ...(score !== undefined && visibleMembers.length > 0 ? {
+        memberScores: visibleMembers.map(member => {
+          const key = `${teamId}:${item._id}:${member.studentId}`;
+          const hasOverride = Object.prototype.hasOwnProperty.call(state.courseAssessmentMemberScores, key);
+          return { studentId: member.studentId, score: hasOverride ? state.courseAssessmentMemberScores[key] : score, isOverridden: hasOverride };
+        }),
+      } : {}),
+      status,
+      updatedAt: score === undefined ? null : new Date().toISOString(),
+    };
+  });
+  return { assessments };
+}
+
+const MOCK_MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
+const MOCK_DIRECT_DOWNLOAD_THRESHOLD_BYTES = 10 * 1024 * 1024;
+const MOCK_STORAGE_PREFIX = '/__mock_r2__/';
+
+interface MockUploadSession {
+  teamId: string;
+  number: number;
+  fileName: string;
+  extension: string;
+  size: number;
+  userId: string;
+  putDone: boolean;
+  file?: MockCheckpointFile;
+}
+
+// Not persisted: an upload session only matters within one page load.
+const mockUploadSessions = new Map<string, MockUploadSession>();
+
+/** Stands in for the presigned R2 URL: the browser PUTs here through storageClient. */
+export function registerStorageMockHandlers(mock: MockAdapter): void {
+  mock.onPut(new RegExp(`^${MOCK_STORAGE_PREFIX}[^/]+$`)).reply((config) => {
+    const uploadId = config.url?.slice(MOCK_STORAGE_PREFIX.length) || '';
+    const session = mockUploadSessions.get(uploadId);
+    if (!session) return [403, '<Error><Code>AccessDenied</Code></Error>'];
+    const bytes = config.data instanceof Blob ? config.data.size : session.size;
+    if (bytes !== session.size) return [403, '<Error><Code>SignatureDoesNotMatch</Code></Error>'];
+    session.putDone = true;
+    return [200];
+  });
+}
+
 export function registerWorkspaceMockHandlers(mock: MockAdapter): void {
   mock.onGet('/rankings').reply((config) => {
     const state = getMockState();
@@ -386,7 +454,7 @@ export function registerWorkspaceMockHandlers(mock: MockAdapter): void {
           status: score === undefined ? 'NOT_GRADED' : state.evaluationPublicationStatuses[evaluationId] || 'SUBMITTED',
         };
       });
-      const components = [...checkpoints, ...assessments];
+      const components = checkpoints;
       const complete = components.length > 0 && components.every(item => item.score !== null);
       const published = complete && components.every(item => item.status === 'PUBLISHED');
       const hasGradedComponent = components.some(item => item.score !== null);
@@ -420,6 +488,47 @@ export function registerWorkspaceMockHandlers(mock: MockAdapter): void {
       };
     });
     return ok({ activeSemester, selectedSemester, availableSemesters, items }, 'Team rankings retrieved.');
+  });
+
+  mock.onGet('/dashboard/submission-analytics').reply((config) => {
+    const state = getMockState();
+    const user = state.users.find(item => item.id === state.sessionUserId);
+    if (!user) return failure(401, 'UNAUTHORIZED', 'Authentication is required.');
+    if (!['ADMIN', 'LECTURER'].includes(user.role)) return failure(403, 'CLASS_ACCESS_DENIED', 'Staff access is required.');
+    const params = config.params || {};
+    if ((params.semester && !['SP', 'SU', 'FA'].includes(String(params.semester).trim().toUpperCase())) ||
+        (params.year !== undefined && (!Number.isInteger(Number(params.year)) || Number(params.year) < 2000 || Number(params.year) > 9999)) ||
+        (params.checkpointNumber !== undefined && (!Number.isInteger(Number(params.checkpointNumber)) || Number(params.checkpointNumber) < 1))) {
+      return failure(400, 'CLASS_VALIDATION_ERROR', 'Invalid submission analytics filters.');
+    }
+    const accessibleClasses = state.classes.filter(cls => cls.status !== 'Archived' &&
+      state.semesters.find(semester => semester.id === cls.semesterId)?.status !== 'Archived' &&
+      (user.role === 'ADMIN' || cls.primaryLecturerId === user.id));
+    if ((params.classId && !accessibleClasses.some(cls => cls.id === params.classId)) ||
+        (params.teamId && !state.teams.some(team => team.id === params.teamId && accessibleClasses.some(cls => cls.id === team.classId)))) {
+      return failure(403, 'CLASS_ACCESS_DENIED', 'You do not have access to this submission analytics scope.');
+    }
+    const classes = accessibleClasses.filter(cls => (!params.semester || cls.semesterCode.startsWith(String(params.semester).trim().toUpperCase())) &&
+      (!params.year || cls.year === Number(params.year)) && (!params.classId || cls.id === params.classId));
+    const now = new Date().toISOString();
+    const items: SubmissionAnalyticsItem[] = classes.flatMap(cls => state.teams.filter(team => team.classId === cls.id &&
+      team.status === 'Active' && (!params.teamId || team.id === params.teamId)).flatMap(team =>
+      checkpointDefinitionsForClass(cls).filter(checkpoint => !params.checkpointNumber || checkpoint.number === Number(params.checkpointNumber))
+        .map(checkpoint => {
+          const times = [...filesForCheckpoint(team.id, checkpoint.number).map(file => file.uploadedAt),
+            ...linksForCheckpoint(team.id, checkpoint.number).map(link => link.submittedAt)].sort((a, b) => Date.parse(a) - Date.parse(b));
+          const deadlineUtc = scheduleFor(cls.id, checkpoint.id)?.endDateUtc || null;
+          return {
+            teamId: team.id, teamName: team.teamName, classId: cls.id, classCode: cls.classCode,
+            courseCode: cls.subjectCode, semesterCode: cls.semesterCode, hasWorkspace: Boolean(team.projectName),
+            checkpointId: checkpoint.id, checkpointNumber: checkpoint.number, checkpointTitle: checkpoint.title,
+            courseWeight: checkpoint.courseWeight, deadlineUtc, submittedAtUtc: times[0] || null,
+            status: times.length ? 'Submitted' : deadlineUtc && Date.parse(now) > Date.parse(deadlineUtc) ? 'Missing' : 'NotSubmitted',
+          };
+        })));
+    const submittedCount = items.filter(item => item.status === 'Submitted').length;
+    return ok({ serverTimeUtc: now, expectedCount: items.length, submittedCount,
+      notSubmittedCount: items.length - submittedCount, missingCount: items.filter(item => item.status === 'Missing').length, items });
   });
 
   mock.onGet('/lecturer/checkpoints').reply((config) => {
@@ -969,13 +1078,10 @@ export function registerWorkspaceMockHandlers(mock: MockAdapter): void {
       : failure(403, 'WORKSPACE_ACCESS_DENIED', 'You do not have access to this team workspace.');
   });
 
-  mock.onPost(/^\/workspace\/checkpoints\/teams\/[^/]+\/checkpoints\/\d+\/upload$/).reply((config) => {
-    const match = config.url?.match(/^\/workspace\/checkpoints\/teams\/([^/]+)\/checkpoints\/(\d+)\/upload$/);
+  mock.onPost(/^\/workspace\/checkpoints\/teams\/[^/]+\/checkpoints\/\d+\/uploads$/).reply((config) => {
+    const match = config.url?.match(/^\/workspace\/checkpoints\/teams\/([^/]+)\/checkpoints\/(\d+)\/uploads$/);
     const teamId = match?.[1] || '';
     const number = Number(match?.[2]);
-    const contentType = String(config.headers?.['Content-Type'] ?? '').toLowerCase();
-    if (!contentType.startsWith('multipart/form-data'))
-      return failure(415, 'UNSUPPORTED_MEDIA_TYPE', 'Upload requests must use multipart/form-data.');
     const state = getMockState();
     const user = state.users.find((item) => item.id === state.sessionUserId);
     const cls = classByTeam(teamId);
@@ -986,27 +1092,78 @@ export function registerWorkspaceMockHandlers(mock: MockAdapter): void {
     const schedule = scheduleFor(cls.id, checkpoint.id);
     if (scheduleStatus(schedule) !== 'Open')
       return failure(400, 'WORKSPACE_CHECKPOINT_NOT_OPEN', 'This checkpoint is not open for uploads.');
-    const file = config.data instanceof FormData ? config.data.get('file') : null;
-    if (!(file instanceof File)) return failure(400, 'WORKSPACE_VALIDATION_ERROR', 'A file is required.');
-    const extension = file.name.split('.').at(-1)?.toLowerCase() || '';
-    if (!['pdf', 'docx', 'pptx'].includes(extension) || file.size <= 0 || file.size > 15 * 1024 * 1024)
-      return failure(400, 'WORKSPACE_VALIDATION_ERROR', 'Only PDF, DOCX, and PPTX files up to 15 MB are accepted.');
+    const body = parseBody(config) as { fileName?: string; contentType?: string; size?: number };
+    const fileName = String(body.fileName ?? '').trim();
+    const size = Number(body.size);
+    const extension = fileName.split('.').at(-1)?.toLowerCase() || '';
+    if (!fileName || !['pdf', 'docx', 'pptx'].includes(extension))
+      return failure(400, 'WORKSPACE_VALIDATION_ERROR', 'Only PDF, DOCX, and PPTX files are accepted.');
+    if (!Number.isFinite(size) || size <= 0)
+      return failure(400, 'WORKSPACE_VALIDATION_ERROR', 'The file is empty.');
+    if (size > MOCK_MAX_UPLOAD_BYTES)
+      return failure(400, 'WORKSPACE_VALIDATION_ERROR', 'Files must not exceed 100 MB.');
+    const uploadId = allocateId();
+    const now = Date.now();
+    mockUploadSessions.set(uploadId, { teamId, number, fileName, extension, size, userId: user.id, putDone: false });
+    return ok({
+      uploadId,
+      uploadUrl: `${MOCK_STORAGE_PREFIX}${uploadId}`,
+      method: 'PUT',
+      headers: { 'Content-Type': body.contentType || 'application/octet-stream' },
+      urlExpiresAt: new Date(now + 10 * 60_000).toISOString(),
+      sessionExpiresAt: new Date(now + 60 * 60_000).toISOString(),
+      maxFileSize: MOCK_MAX_UPLOAD_BYTES,
+    }, 'Upload session created.');
+  });
+
+  mock.onPost(/^\/workspace\/checkpoints\/teams\/[^/]+\/checkpoints\/\d+\/uploads\/[^/]+\/complete$/).reply((config) => {
+    const match = config.url?.match(/^\/workspace\/checkpoints\/teams\/([^/]+)\/checkpoints\/(\d+)\/uploads\/([^/]+)\/complete$/);
+    const teamId = match?.[1] || '';
+    const number = Number(match?.[2]);
+    const session = mockUploadSessions.get(match?.[3] || '');
+    const state = getMockState();
+    const user = state.users.find((item) => item.id === state.sessionUserId);
+    if (user?.role !== 'STUDENT' || !canAccessCheckpointTeam(teamId))
+      return failure(403, 'WORKSPACE_ACCESS_DENIED', 'Only active team students can upload documents.');
+    if (!session || session.userId !== user.id || session.teamId !== teamId || session.number !== number)
+      return failure(404, 'COMMON_NOT_FOUND', 'Upload session was not found.');
+    // Retrying complete returns the file created by the first call.
+    if (session.file) return ok(session.file, 'File uploaded.');
+    if (!session.putDone)
+      return failure(409, 'WORKSPACE_UPLOAD_OBJECT_MISSING', 'The file has not finished uploading. Please retry.');
     const key = `${teamId}:${number}`;
     const existingFiles = filesForCheckpoint(teamId, number);
     const existingLinks = linksForCheckpoint(teamId, number);
     const uploaded = {
       _id: allocateId(),
       versionNumber: Math.max(0, ...existingFiles.map((item) => item.versionNumber ?? 0), ...existingLinks.map((item) => item.versionNumber ?? 0)) + 1,
-      originalName: file.name,
-      fileType: extension,
-      fileSize: file.size,
+      originalName: session.fileName,
+      fileType: session.extension,
+      fileSize: session.size,
+      canDirectDownload: session.size > MOCK_DIRECT_DOWNLOAD_THRESHOLD_BYTES,
       uploadedAt: new Date().toISOString(),
       uploadedBy: { _id: user.id, name: user.name },
     };
     state.checkpointFiles[key] ??= existingFiles;
     state.checkpointFiles[key].push(uploaded);
+    session.file = uploaded;
     persistMockState();
     return ok(uploaded, 'File uploaded.');
+  });
+
+  mock.onGet(/^\/workspace\/checkpoints\/teams\/[^/]+\/checkpoints\/\d+\/files\/[^/]+\/download-url$/).reply((config) => {
+    const match = config.url?.match(/^\/workspace\/checkpoints\/teams\/([^/]+)\/checkpoints\/(\d+)\/files\/([^/]+)\/download-url$/);
+    const teamId = match?.[1] || '';
+    const number = Number(match?.[2]);
+    const fileId = match?.[3] || '';
+    if (!canAccessCheckpointTeam(teamId)) return failure(403, 'WORKSPACE_ACCESS_DENIED', 'You do not have access to this team workspace.');
+    const file = filesForCheckpoint(teamId, number).find((item) => item._id === fileId);
+    if (!file) return failure(404, 'COMMON_NOT_FOUND', 'Submitted file was not found.');
+    if (!file.canDirectDownload) return failure(400, 'WORKSPACE_VALIDATION_ERROR', 'Direct download is not available for this file.');
+    return ok({
+      url: `data:text/plain;charset=utf-8,${encodeURIComponent(`Mock submitted file: ${file.originalName}`)}`,
+      expiresAt: new Date(Date.now() + 5 * 60_000).toISOString(),
+    }, 'Download link created.');
   });
 
   mock.onPost(/^\/workspace\/checkpoints\/teams\/[^/]+\/checkpoints\/\d+\/links$/).reply((config) => {
@@ -1165,42 +1322,51 @@ export function registerWorkspaceMockHandlers(mock: MockAdapter): void {
       : failure(404, 'TEAM_NOT_FOUND', 'Team not found.');
   });
 
+  mock.onPost('/workspace/checkpoints/evaluation-grading').reply((config) => {
+    const state = getMockState();
+    const body = parseBody(config);
+    const requestedTeamIds = Array.isArray(body.teamIds) ? body.teamIds.map(String) : [];
+    if (requestedTeamIds.length > 200 || requestedTeamIds.some(teamId => !teamId)) {
+      return failure(400, 'WORKSPACE_VALIDATION_ERROR', 'Select up to 200 valid teams at once.');
+    }
+    const teamIds = [...new Set(requestedTeamIds)];
+    if (teamIds.some(teamId => !classByTeam(teamId) || !canAccessCheckpointTeam(teamId))) {
+      return failure(403, 'WORKSPACE_ACCESS_DENIED', 'One or more requested teams are unavailable or outside your access scope.');
+    }
+    const teams = teamIds.map(teamId => {
+      const detail = workspaceData(teamId);
+      const semesterGroupName = [...new Set(Object.values(state.rosters).flat()
+        .filter(student => student.teamId === teamId && student.semesterGroupName)
+        .map(student => student.semesterGroupName))].join(', ');
+      return {
+        teamId,
+        teamCode: detail?.team.teamCode || '',
+        projectName: detail?.project?.projectName || detail?.proposal?.projectName || null,
+        projectDescription: detail?.project?.description || detail?.proposal?.projectDescription || null,
+        semesterGroupName,
+        members: (detail?.members || []).map(member => ({
+          studentId: member.studentId,
+          userId: typeof member.userId === 'object' && member.userId ? member.userId._id : member.userId || null,
+          fullName: member.fullName,
+          rollNumber: member.rollNumber,
+          majorCode: member.majorCode,
+          roleInTeam: member.roleInTeam,
+        })),
+        checkpoints: checkpointDefinitionsForClass(classByTeam(teamId)!).map(checkpoint => {
+          const summary = evaluationSummary(teamId, checkpoint.number);
+          return { checkpoint: summary.checkpoint, evaluations: summary.evaluations };
+        }),
+        assessments: courseAssessmentData(teamId).assessments,
+      };
+    });
+    return ok({ teams }, 'Evaluation grading data retrieved.');
+  });
+
   mock.onGet(/^\/workspace\/checkpoints\/teams\/[^/]+\/course-assessments$/).reply((config) => {
     const teamId = routeId(config, /^\/workspace\/checkpoints\/teams\/([^/]+)\/course-assessments$/);
     const cls = classByTeam(teamId);
     if (!cls || !canAccessCheckpointTeam(teamId)) return failure(403, 'WORKSPACE_ACCESS_DENIED', 'You do not have access to this team.');
-    const state = getMockState();
-    const currentUser = state.users.find(user => user.id === state.sessionUserId);
-    const isInternal = currentUser?.role === 'ADMIN' || currentUser?.role === 'LECTURER';
-    const team = teamById(teamId)!;
-    const assessments = (state.curricula[cls.subjectCode]?.otherAssessments || []).map(item => {
-      const score = state.courseAssessmentScores[`${teamId}:${item._id}`];
-      const evaluationId = `${teamId}--${item._id}`;
-      const status = score === undefined ? 'NOT_GRADED' : state.evaluationPublicationStatuses[evaluationId] || 'SUBMITTED';
-      const visibleMembers = isInternal
-        ? team.members
-        : currentUser?.role === 'STUDENT' && status === 'PUBLISHED'
-          ? team.members.filter(member => member.studentId === currentUser.id)
-          : [];
-      return {
-        assessmentId: item._id,
-        name: item.name,
-        weight: item.weight,
-        evaluationId: score === undefined ? null : evaluationId,
-        evaluatorId: score === undefined ? null : cls.primaryLecturerId,
-        ...((isInternal || status === 'PUBLISHED') && score !== undefined ? { score } : {}),
-        ...(score !== undefined && visibleMembers.length > 0 ? {
-          memberScores: visibleMembers.map(member => {
-            const key = `${teamId}:${item._id}:${member.studentId}`;
-            const hasOverride = Object.prototype.hasOwnProperty.call(state.courseAssessmentMemberScores, key);
-            return { studentId: member.studentId, score: hasOverride ? state.courseAssessmentMemberScores[key] : score, isOverridden: hasOverride };
-          }),
-        } : {}),
-        status,
-        updatedAt: score === undefined ? null : new Date().toISOString(),
-      };
-    });
-    return ok({ assessments }, 'Course assessments retrieved.');
+    return ok(courseAssessmentData(teamId), 'Course assessments retrieved.');
   });
 
   mock.onPut(/^\/workspace\/checkpoints\/teams\/[^/]+\/course-assessments\/[^/]+$/).reply((config) => {

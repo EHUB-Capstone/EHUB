@@ -101,6 +101,135 @@ public sealed class TeamManagementHandler : ITeamManagementHandler
         return Result.Success<IReadOnlyCollection<TeamDto>>(teams.Select(TeamMappings.ToDto).ToArray());
     }
 
+    public async Task<Result<TeamDto>> CreateAsync(
+        Guid classId,
+        CreateClassManagerTeamRequest request,
+        Guid userId,
+        string role,
+        CancellationToken cancellationToken = default)
+    {
+        var teamName = request.TeamName.Trim();
+        try
+        {
+            return await _unitOfWork.ExecuteInSerializableTransactionAsync(async transactionCancellationToken =>
+            {
+                var targetClass = await _context.Classes
+                    .FirstOrDefaultAsync(item => item.Id == classId, transactionCancellationToken);
+                if (targetClass == null)
+                    return Failure(ErrorCodes.ClassNotFound, "The requested class was not found.");
+
+                var permission = ValidateManager(targetClass, userId, role);
+                if (permission != null) return Failure(permission.Value.Code, permission.Value.Message);
+
+                if (teamName.Length is < 3 or > 60)
+                    return Failure(ErrorCodes.ClassValidationError, "Team name must be between 3 and 60 characters.");
+
+                var mutationError = ClassStateRules.GetMutationError(targetClass.Status);
+                if (mutationError != null) return Failure(mutationError.Code, mutationError.Message);
+
+                var composition = await LoadAndValidateCompositionAsync(
+                    classId,
+                    request.MemberStudentIds,
+                    request.LeaderStudentId,
+                    null,
+                    transactionCancellationToken);
+                if (composition.IsFailure)
+                    return Failure(composition.Error.Code, composition.Error.Message);
+
+                var normalizedTeamName = teamName.ToUpperInvariant();
+                if (await _context.Teams.IgnoreQueryFilters().AsNoTracking().AnyAsync(item =>
+                        item.ClassId == classId && item.TeamName.ToUpper() == normalizedTeamName,
+                        transactionCancellationToken) ||
+                    await _context.TeamProposals.AsNoTracking().AnyAsync(item =>
+                        item.ClassId == classId && item.TeamName.ToUpper() == normalizedTeamName &&
+                        item.Status != TeamProposalStatus.Rejected && item.Status != TeamProposalStatus.Cancelled,
+                        transactionCancellationToken) ||
+                    await _context.TeamFormations.AsNoTracking().AnyAsync(item =>
+                        item.ClassId == classId && item.NormalizedTeamName == normalizedTeamName &&
+                        item.Status == TeamFormationStatus.Pending,
+                        transactionCancellationToken))
+                {
+                    return Failure(ErrorCodes.TeamNameDuplicated,
+                        "A team, open proposal, or pending formation already uses this name in the class.");
+                }
+
+                var now = DateTime.UtcNow;
+                var team = new Team
+                {
+                    ClassId = classId,
+                    Class = targetClass,
+                    TeamCode = await CreateNextTeamCodeAsync(targetClass, transactionCancellationToken),
+                    TeamName = teamName,
+                    Status = TeamStatus.Active,
+                    CreatedById = userId,
+                    CreatedBy = userId
+                };
+                foreach (var enrollment in composition.Value)
+                {
+                    team.TeamMembers.Add(new TeamMember
+                    {
+                        TeamId = team.Id,
+                        Team = team,
+                        ClassId = classId,
+                        StudentId = enrollment.StudentId,
+                        ClassStudent = enrollment,
+                        RoleInTeam = enrollment.StudentId == request.LeaderStudentId
+                            ? TeamMemberRole.Leader
+                            : TeamMemberRole.Member,
+                        CountsTowardActiveTeam = true,
+                        JoinedAt = now,
+                        CreatedById = userId
+                    });
+                }
+
+                var studentUserIds = composition.Value
+                    .Where(enrollment => enrollment.Student.UserId.HasValue)
+                    .Select(enrollment => enrollment.Student.UserId!.Value)
+                    .Distinct()
+                    .ToArray();
+                _context.Teams.Add(team);
+                _context.ClassAuditLogs.Add(new ClassAuditLog
+                {
+                    ClassId = classId,
+                    Action = "TEAM_CREATED_BY_CLASS_MANAGER",
+                    PerformedByUserId = userId,
+                    OccurredAtUtc = now,
+                    DetailsJson = JsonSerializer.Serialize(new
+                    {
+                        TeamId = team.Id,
+                        team.TeamName,
+                        request.LeaderStudentId,
+                        MemberStudentIds = composition.Value.Select(item => item.StudentId).ToArray()
+                    })
+                });
+                ClassOutbox.Enqueue(_context, "Team.Created.v1", classId, new
+                {
+                    TeamId = team.Id,
+                    team.TeamName,
+                    Source = "ClassManager",
+                    StudentUserIds = studentUserIds
+                }, now);
+                await _context.SaveChangesAsync(transactionCancellationToken);
+                return Result.Success(TeamMappings.ToDto(team));
+            }, cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return Failure(ErrorCodes.ClassConcurrencyConflict,
+                "The team changed concurrently. Refresh and try again.");
+        }
+        catch (SerializableTransactionConflictException)
+        {
+            return Failure(ErrorCodes.ClassConcurrencyConflict,
+                "Team creation conflicted with another request. Refresh and try again.");
+        }
+        catch (DbUpdateException)
+        {
+            return Failure(ErrorCodes.TeamMembershipConflict,
+                "The team could not be created because its name, code, or a selected membership is no longer available.");
+        }
+    }
+
     public async Task<Result<TeamDto>> GetAsync(Guid teamId, Guid userId, string role, CancellationToken cancellationToken = default)
     {
         var team = await TeamQuery().FirstOrDefaultAsync(item => item.Id == teamId, cancellationToken);
@@ -329,6 +458,13 @@ public sealed class TeamManagementHandler : ITeamManagementHandler
         if (await _context.TeamProposalMembers.AsNoTracking().AnyAsync(member =>
                 member.ClassId == classId && ids.Contains(member.StudentId) && member.CountsTowardOpenProposal, cancellationToken))
             return Result.Failure<List<ClassStudent>>(new Error(ErrorCodes.TeamProposalMembershipConflict, "A selected student belongs to an open team proposal."));
+        if (await _context.TeamFormationInvitations.AsNoTracking().AnyAsync(invitation =>
+                invitation.ClassId == classId && ids.Contains(invitation.StudentId) &&
+                invitation.ReservationReleasedAtUtc == null &&
+                invitation.Formation.Status == TeamFormationStatus.Pending,
+                cancellationToken))
+            return Result.Failure<List<ClassStudent>>(new Error(ErrorCodes.TeamFormationReservationConflict,
+                "A selected student belongs to a pending team formation."));
         var registeredMajors = await RegisteredStudentMajorResolver.LoadByEmailAsync(
             _context,
             enrollments.Select(item => item.Student.Email),
@@ -373,6 +509,24 @@ public sealed class TeamManagementHandler : ITeamManagementHandler
                await _context.SprintTasks.AnyAsync(item => item.TeamId == teamId, cancellationToken) ||
                await _context.WeeklyTasks.AnyAsync(item => item.TeamId == teamId, cancellationToken) ||
                await _context.Submissions.AnyAsync(item => item.TeamId == teamId, cancellationToken);
+    }
+
+    private async Task<string> CreateNextTeamCodeAsync(Class targetClass, CancellationToken cancellationToken)
+    {
+        const string suffixPrefix = "_TEAM_";
+        var classCode = targetClass.ClassCode.Trim();
+        var maximumClassCodeLength = 50 - suffixPrefix.Length - 10;
+        if (classCode.Length > maximumClassCodeLength) classCode = classCode[..maximumClassCodeLength];
+        var prefix = $"{classCode}{suffixPrefix}";
+        var codes = await _context.Teams.IgnoreQueryFilters().AsNoTracking()
+            .Where(item => item.ClassId == targetClass.Id && item.TeamCode.StartsWith(prefix))
+            .Select(item => item.TeamCode)
+            .ToArrayAsync(cancellationToken);
+        var highest = codes.Select(code => code[prefix.Length..])
+            .Select(suffix => int.TryParse(suffix, out var number) ? number : 0)
+            .DefaultIfEmpty()
+            .Max();
+        return $"{prefix}{highest + 1}";
     }
 
     private static IReadOnlyCollection<Guid> GetMemberUserIds(IEnumerable<TeamMember> members)

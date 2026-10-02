@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using EHub.Application.Common.Interfaces.Storage;
 using EHub.Infrastructure.Options;
+using EHub.Shared.Constants;
 using EHub.Shared.Errors;
 using EHub.Shared.Results;
 using Microsoft.Extensions.Logging;
@@ -10,7 +11,7 @@ namespace EHub.Infrastructure.Storage;
 
 public sealed class LibreOfficeDocumentPreviewConverter : IDocumentPreviewConverter, IDisposable
 {
-    private const int MaximumSourceBytes = 15 * 1024 * 1024;
+    private const int MaximumSourceBytes = (int)SubmissionFileLimits.MaxPreviewConvertSizeBytes;
     private readonly DocumentPreviewOptions options;
     private readonly ILogger<LibreOfficeDocumentPreviewConverter> logger;
     private readonly SemaphoreSlim conversionSlots;

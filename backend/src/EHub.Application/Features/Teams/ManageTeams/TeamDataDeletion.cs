@@ -11,7 +11,7 @@ internal static class TeamDataDeletion
     {
         var projects = db.Projects.IgnoreQueryFilters().Where(x => x.TeamId == teamId).Select(x => x.Id);
         var submissions = db.Submissions.IgnoreQueryFilters().Where(x => x.TeamId == teamId || projects.Contains(x.ProjectId)).Select(x => x.Id);
-        return await db.SubmissionFiles.IgnoreQueryFilters().AnyAsync(x => submissions.Contains(x.SubmissionId) && (x.FileUrl != "" || x.CloudinaryPublicId != ""), ct)
+        return await db.SubmissionFiles.IgnoreQueryFilters().AnyAsync(x => submissions.Contains(x.SubmissionId) && (x.FileUrl != "" || x.CloudinaryPublicId != "" || x.StorageKey != null), ct)
             || await db.PitchDecks.IgnoreQueryFilters().AnyAsync(x => projects.Contains(x.ProjectId) && (x.FileUrl != "" || x.CloudinaryPublicId != ""), ct)
             || await db.ChatMessages.IgnoreQueryFilters().AnyAsync(x =>
                 db.ChatGroups.IgnoreQueryFilters().Any(g => g.Id == x.ChatGroupId && g.TeamId == teamId)

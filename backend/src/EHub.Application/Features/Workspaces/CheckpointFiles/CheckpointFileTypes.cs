@@ -1,0 +1,45 @@
+using System.IO.Compression;
+
+namespace EHub.Application.Features.Workspaces.CheckpointFiles;
+
+internal static class CheckpointFileTypes
+{
+    public const int HeaderLength = 5;
+
+    private static readonly Dictionary<string, string> ContentTypesByExtension = new(StringComparer.OrdinalIgnoreCase)
+    {
+        [".pdf"] = "application/pdf",
+        [".docx"] = "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        [".pptx"] = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+    };
+
+    public static bool HasValidOfficeStructure(byte[] content, string extension)
+    {
+        try
+        {
+            using var stream = new MemoryStream(content, writable: false);
+            using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
+            return extension.Equals(".docx", StringComparison.OrdinalIgnoreCase)
+                ? zip.GetEntry("word/document.xml") is not null
+                : zip.GetEntry("ppt/presentation.xml") is not null;
+        }
+        catch (InvalidDataException) { return false; }
+    }
+
+    public static bool TryGetContentType(string extension, out string contentType) =>
+        ContentTypesByExtension.TryGetValue(extension, out contentType!);
+
+    /// <summary>
+    /// Cheap magic-byte check on the first bytes of a stored object. The full ZIP structure of
+    /// DOCX/PPTX is verified later, when the file is converted for preview.
+    /// </summary>
+    public static bool HasExpectedHeader(ReadOnlySpan<byte> header, string extension)
+    {
+        if (extension.Equals(".pdf", StringComparison.OrdinalIgnoreCase))
+        {
+            return header.Length >= 5 && header[..5].SequenceEqual("%PDF-"u8);
+        }
+
+        return header.Length >= 4 && header[0] == 0x50 && header[1] == 0x4B && header[2] == 0x03 && header[3] == 0x04;
+    }
+}

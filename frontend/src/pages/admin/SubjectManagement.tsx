@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
-  BookOpen, Calendar, CheckCircle2, ChevronLeft, ChevronRight, Edit3, Filter, GraduationCap, Plus,
+  BookOpen, Calendar, CheckCircle2, ChevronLeft, ChevronRight, Edit3, Factory, Filter, GraduationCap, Plus,
   LockKeyhole, RefreshCw, Search, ShieldAlert, Sparkles, Users,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -15,6 +15,7 @@ import EmptyState from '../../components/ui/EmptyState';
 import LoadingSkeleton from '../../components/ui/LoadingSkeleton';
 import Modal from '../../components/ui/Modal';
 import { parseApiError } from '../../utils/apiError';
+import StartupIndustryManagement from './StartupIndustryManagement';
 import type {
   SemesterCode,
   SemesterCompletionPreview,
@@ -84,7 +85,10 @@ function semesterDateRangeError(
 
 const SubjectManagement = () => {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<'subjects' | 'staff'>('subjects');
+  const [searchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState<'subjects' | 'staff' | 'industries'>(
+    searchParams.get('tab') === 'industries' ? 'industries' : 'subjects',
+  );
   const [subjects, setSubjects] = useState<SubjectDto[]>([]);
   const [subjectsLoading, setSubjectsLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -645,16 +649,22 @@ const SubjectManagement = () => {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 sm:text-3xl">
-            {activeTab === 'subjects' ? 'Subject & Semester' : 'Lecturers & Mentors'}
+            {activeTab === 'subjects' ? 'Subject & Semester' : activeTab === 'industries' ? 'Startup Industries' : 'Lecturers & Mentors'}
           </h1>
           <p className="mt-1 text-slate-500">
-            {activeTab === 'subjects' ? 'Manage academic subjects and the active semester.' : 'Review teaching assignments for each semester.'}
+            {activeTab === 'subjects'
+              ? 'Manage academic subjects and the active semester.'
+              : activeTab === 'industries'
+                ? 'Manage the standardized startup industries used across E-HUB projects.'
+                : 'Review teaching assignments for each semester.'}
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Button variant="outline" icon={RefreshCw} onClick={() => void refresh()}>Refresh</Button>
-          {activeTab === 'subjects' && <Button icon={Plus} onClick={openAdd}>Add Subject</Button>}
-        </div>
+        {activeTab !== 'industries' && (
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" icon={RefreshCw} onClick={() => void refresh()}>Refresh</Button>
+            {activeTab === 'subjects' && <Button icon={Plus} onClick={openAdd}>Add Subject</Button>}
+          </div>
+        )}
       </div>
 
       <div className="inline-flex w-full gap-1 overflow-x-auto rounded-xl bg-slate-100 p-1 sm:w-auto">
@@ -664,9 +674,14 @@ const SubjectManagement = () => {
         <button type="button" onClick={openStaffTab} className={`inline-flex shrink-0 items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition ${activeTab === 'staff' ? 'bg-white text-primary shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
           <Users className="h-4 w-4" /> Lecturers & Mentors by Semester
         </button>
+        <button type="button" onClick={() => setActiveTab('industries')} className={`inline-flex shrink-0 items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition ${activeTab === 'industries' ? 'bg-white text-primary shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+          <Factory className="h-4 w-4" /> Startup Industries
+        </button>
       </div>
 
-      {activeTab === 'subjects' ? (
+      {activeTab === 'industries' ? (
+        <StartupIndustryManagement embedded />
+      ) : activeTab === 'subjects' ? (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-4">
           <div className="space-y-4 lg:col-span-3">
             <div className="flex flex-col gap-3 sm:flex-row">

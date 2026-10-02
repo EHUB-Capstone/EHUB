@@ -61,6 +61,13 @@ public sealed class TeamDto
     public string RowVersion { get; init; } = string.Empty;
 }
 
+public sealed class CreateClassManagerTeamRequest
+{
+    public string TeamName { get; init; } = string.Empty;
+    public IReadOnlyCollection<Guid> MemberStudentIds { get; init; } = Array.Empty<Guid>();
+    public Guid LeaderStudentId { get; init; }
+}
+
 public sealed class UpdateTeamMembersRequest
 {
     public string? TeamName { get; init; }

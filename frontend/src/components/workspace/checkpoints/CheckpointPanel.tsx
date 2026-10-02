@@ -20,7 +20,10 @@ import CheckpointFilePreviewModal from './CheckpointFilePreviewModal';
 import FeedbackThread from './FeedbackThread';
 import EvaluationPanel from '../EvaluationPanel';
 import { subscribeProjectDirectionRealtime } from '../../../api/projectDirectionRealtime';
-import { isCheckpointFilePreviewable } from '../../../utils/checkpointUpload';
+import {
+  CHECKPOINT_UPLOAD_MAX_FILE_SIZE_MB,
+  isCheckpointFilePreviewable,
+} from '../../../utils/checkpointUpload';
 
 const ICONS = { Users, BarChart2, Layers, TrendingUp };
 
@@ -190,7 +193,8 @@ export default function CheckpointPanel({
         teamId,
         checkpoint.number,
         file._id,
-        file.originalName
+        file.originalName,
+        { canDirectDownload: file.canDirectDownload }
       );
     } catch (e) {
       toast.error(e?.message || 'Failed to download file.');
@@ -502,7 +506,7 @@ export default function CheckpointPanel({
                 <section className="rounded-2xl border border-slate-200/60 bg-white p-5 shadow-sm space-y-4">
                   <SectionTitle
                     icon={Upload}
-                    subtitle="PDF, DOCX, or PPTX · Max 15 MB per file"
+                    subtitle={`PDF, DOCX, or PPTX · Max ${CHECKPOINT_UPLOAD_MAX_FILE_SIZE_MB} MB per file`}
                   >
                     Upload documents
                   </SectionTitle>

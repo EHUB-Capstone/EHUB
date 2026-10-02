@@ -5,6 +5,10 @@ namespace EHub.Application.Features.Workspaces.CheckpointEvaluations;
 
 public interface ICheckpointEvaluationHandler
 {
+    Task<Result<EvaluationGradingBatchResponse>> GetGradingBatchAsync(
+        EvaluationGradingBatchRequest request, Guid userId, string role,
+        CancellationToken cancellationToken = default);
+
     Task<Result<WorkspaceCheckpointEvaluationSummaryResponse>> GetSummaryAsync(
         Guid teamId, int checkpointNumber, Guid userId, string role,
         CancellationToken cancellationToken = default);

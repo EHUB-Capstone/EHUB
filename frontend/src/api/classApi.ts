@@ -10,6 +10,7 @@ import type {
   AddStudentToClassPayload,
   CommitImportStudentsPayload,
 } from '../types/classes';
+import type { CreateClassManagerTeamRequest } from '../types/teamManagement';
 
 export const classApi = {
   // ─── Class CRUD ───────────────────────────────────────────────────────────
@@ -125,6 +126,9 @@ export const classApi = {
   // ─── Teams ───────────────────────────────────────────────────────────────
   getTeams:      (classId) => runClassFeatureRequest(classFeatureFlags.teamManagement, 'Class team management', () =>
     axiosClient.get(`/classes/${classId}/teams`)),
+  createTeam: (classId: string, payload: CreateClassManagerTeamRequest) =>
+    runClassFeatureRequest(classFeatureFlags.teamManagement, 'Class team management', () =>
+      axiosClient.post(`/classes/${classId}/teams`, payload)),
   getTeamProposals: (classId) => runClassFeatureRequest(classFeatureFlags.teamManagement, 'Class team management', () =>
     axiosClient.get(`/classes/${classId}/team-proposals`)),
   submitTeamProposal: (classId, payload) =>

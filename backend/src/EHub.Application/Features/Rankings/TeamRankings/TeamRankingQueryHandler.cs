@@ -254,14 +254,18 @@ public sealed class TeamRankingQueryHandler(IApplicationDbContext context) : ITe
                 Status = StatusName(evaluation?.Status),
             };
         }).ToArray();
-        var components = checkpointResponses.Select(item => new TeamRankingComponent(
+        var checkpointComponents = checkpointResponses.Select(item => new TeamRankingComponent(
                 item.Weight, item.Score, ParseStatus(item.Status)))
-            .Concat(assessmentResponses.Select(item => new TeamRankingComponent(
-                item.Weight, item.Score, ParseStatus(item.Status))))
             .ToArray();
-        var relevantEvaluations = components.Length == 0 || !team.ProjectId.HasValue
+        var checkpointRubricIds = checkpoints
+            .Select(checkpoint => rubricByCheckpoint.GetValueOrDefault(checkpoint.Id)?.Id)
+            .Where(rubricId => rubricId.HasValue)
+            .Select(rubricId => rubricId!.Value)
+            .ToHashSet();
+        var relevantEvaluations = checkpointComponents.Length == 0 || !team.ProjectId.HasValue
             ? Array.Empty<EvaluationRow>()
-            : latestEvaluations.Where(item => item.Key.ProjectId == team.ProjectId.Value)
+            : latestEvaluations.Where(item => item.Key.ProjectId == team.ProjectId.Value &&
+                                               checkpointRubricIds.Contains(item.Key.RubricId))
                 .Select(item => item.Value).ToArray();
 
         return new TeamRankingItemResponse
@@ -279,11 +283,11 @@ public sealed class TeamRankingQueryHandler(IApplicationDbContext context) : ITe
             Year = team.Year,
             Checkpoints = checkpointResponses,
             Assessments = assessmentResponses,
-            CourseTotal = TeamRankingRules.CalculateCourseTotal(components),
-            Status = TeamRankingRules.ResolveStatus(components),
-            CompletedComponentCount = components.Count(item => item.Score.HasValue),
-            PublishedComponentCount = components.Count(item => item.Score.HasValue && item.Status == EvaluationStatus.Published),
-            TotalComponentCount = components.Length,
+            CourseTotal = TeamRankingRules.CalculateCourseTotal(checkpointComponents),
+            Status = TeamRankingRules.ResolveStatus(checkpointComponents),
+            CompletedComponentCount = checkpointComponents.Count(item => item.Score.HasValue),
+            PublishedComponentCount = checkpointComponents.Count(item => item.Score.HasValue && item.Status == EvaluationStatus.Published),
+            TotalComponentCount = checkpointComponents.Length,
             LastUpdatedAt = relevantEvaluations.Length == 0 ? null : relevantEvaluations.Max(item => item.UpdatedAt),
         };
     }

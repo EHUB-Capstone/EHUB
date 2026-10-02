@@ -8,7 +8,7 @@ Nguồn mã phía máy chủ (Server-side API) của nền tảng Quản lý D�
 
 *   `src/EHub.Api`: REST API, Controllers, Middleware, configurations (Entry point).
 *   `src/EHub.Application`: Use cases, interfaces dịch vụ, validators.
-*   `src/EHub.Infrastructure`: EF Core, PostgreSQL mappings, JWT, Cloudinary.
+*   `src/EHub.Infrastructure`: EF Core, PostgreSQL mappings, JWT, Cloudinary (legacy files and avatars), Cloudflare R2 (submission documents).
 *   `src/EHub.Domain`: Entities, Enums, Rules nghiệp vụ lõi (không phụ thuộc layer ngoài).
 *   `src/EHub.Contracts`: Request/Response DTOs làm hợp đồng API.
 *   `src/EHub.Shared`: Result pattern, common errors, constants chung.

@@ -2,6 +2,7 @@ using System.Text.Json;
 using EHub.Application.Common.Interfaces.Persistence;
 using EHub.Application.Common.Interfaces.Services;
 using EHub.Contracts.Subjects;
+using EHub.Application.Features.Workspaces.CheckpointFiles;
 using EHub.Contracts.Workspaces;
 using EHub.Domain.Entities;
 using EHub.Domain.Enums;
@@ -274,6 +275,7 @@ public sealed class GetWorkspaceCheckpointOverviewQueryHandler(
                     OriginalName = file.OriginalName,
                     FileType = GetFileType(file.OriginalName),
                     FileSize = file.FileSize,
+                    CanDirectDownload = CheckpointDownloadPolicy.CanDirectDownload(file),
                     UploadedAt = file.UploadedAt,
                     UploadedBy = file.UploadedBy is null
                         ? null
