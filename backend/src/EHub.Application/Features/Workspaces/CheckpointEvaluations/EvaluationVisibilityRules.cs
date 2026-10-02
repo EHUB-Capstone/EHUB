@@ -9,11 +9,10 @@ internal static class EvaluationVisibilityRules
         IsRole(role, SystemRoles.Admin) || IsRole(role, SystemRoles.Lecturer);
 
     public static bool CanViewTeamScore(string role, EvaluationStatus status) =>
-        IsInternalViewer(role) || status == EvaluationStatus.Published;
+        IsInternalViewer(role);
 
     public static bool CanViewCriterionScores(string role, EvaluationStatus status) =>
-        IsInternalViewer(role) ||
-        (IsRole(role, SystemRoles.Student) && status == EvaluationStatus.Published);
+        IsInternalViewer(role);
 
     public static bool CanViewAllMemberScores(string role) => IsInternalViewer(role);
 

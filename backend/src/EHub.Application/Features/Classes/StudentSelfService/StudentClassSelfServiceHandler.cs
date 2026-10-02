@@ -131,16 +131,16 @@ public sealed class StudentClassSelfServiceHandler : IStudentClassSelfServiceHan
         var members = memberRows.Select(item => new StudentClassMemberDto
         {
             StudentId = item.StudentId,
-            UserId = item.UserId,
+            UserId = item.StudentId == studentId.Value ? item.UserId : null,
             RollNumber = item.RollNumber,
             FullName = item.FullName,
-            Email = item.Email,
+            Email = item.StudentId == studentId.Value ? item.Email : null,
             MajorCode = StudentEnrollmentRules.ResolveEffectiveMajorCode(
                 item.EnrollmentMajorCode,
                 item.ProfileMajorCode) ?? string.Empty,
-            ProfileMajorCode = item.ProfileMajorCode,
-            EnrollmentMajorCode = item.EnrollmentMajorCode,
-            MajorVerificationStatus = item.MajorVerificationStatus,
+            ProfileMajorCode = item.StudentId == studentId.Value ? item.ProfileMajorCode : null,
+            EnrollmentMajorCode = item.StudentId == studentId.Value ? item.EnrollmentMajorCode : string.Empty,
+            MajorVerificationStatus = item.StudentId == studentId.Value ? item.MajorVerificationStatus : string.Empty,
             CanEditMajor = item.StudentId == studentId.Value && canEditOwnMajor,
             IsMajorLocked = item.StudentId == studentId.Value && isOwnMajorLocked,
             EnrollmentStatus = item.EnrollmentStatus,
@@ -153,7 +153,7 @@ public sealed class StudentClassSelfServiceHandler : IStudentClassSelfServiceHan
         {
             Class = MapClass(targetClass, mentorsByClass.GetValueOrDefault(classId) ?? Array.Empty<MentorSummaryDto>(), enrollmentStatus.Value),
             Students = members,
-            Teams = teams.Select(TeamMappings.ToDto).ToArray()
+            Teams = teams.Select(team => TeamMappings.ToDto(team, false)).ToArray()
         });
     }
 
@@ -171,7 +171,7 @@ public sealed class StudentClassSelfServiceHandler : IStudentClassSelfServiceHan
             .ThenByDescending(item => item.Class.Semester.Year)
             .FirstOrDefaultAsync(cancellationToken);
         if (team == null) return Result.Success(new MyTeamResponse());
-        var dto = TeamMappings.ToDto(team);
+        var dto = TeamMappings.ToDto(team, false);
         var mentorsByClass = await LoadMentorsByClassAsync([team.ClassId], cancellationToken);
         return Result.Success(new MyTeamResponse
         {

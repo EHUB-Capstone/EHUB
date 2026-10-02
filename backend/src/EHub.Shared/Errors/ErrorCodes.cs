@@ -147,6 +147,12 @@ public static class ErrorCodes
     public const string ProductFeedbackAccessDenied = "PRODUCT_FEEDBACK_ACCESS_DENIED";
     public const string ProductFeedbackValidationError = "PRODUCT_FEEDBACK_VALIDATION_ERROR";
 
+    // Project data (cross-semester project list and achievements) error codes
+    public const string ProjectDataAccessDenied = "PROJECT_DATA_ACCESS_DENIED";
+    public const string ProjectDataNotFound = "PROJECT_DATA_NOT_FOUND";
+    public const string ProjectDataValidationError = "PROJECT_DATA_VALIDATION_ERROR";
+    public const string ProjectDataConcurrencyConflict = "PROJECT_DATA_CONCURRENCY_CONFLICT";
+
     // Team project workspace error codes
     public const string WorkspaceAccessDenied = "WORKSPACE_ACCESS_DENIED";
     public const string WorkspaceLeaderRequired = "WORKSPACE_LEADER_REQUIRED";

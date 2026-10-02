@@ -2401,7 +2401,7 @@ public sealed partial class TeamWorkflowIntegrationTests
         var studentSummary = await handler.GetSummaryAsync(seed.TeamId.Value, 1, seed.ProposerUserId, SystemRoles.Student);
         studentSummary.IsSuccess.Should().BeTrue();
         studentSummary.Value.Checkpoint.Rubrics.Select(item => item.Key).Should().Equal("clarity", "evidence");
-        studentSummary.Value.Checkpoint.Members.Should().HaveCount(seed.StudentIds.Count());
+        studentSummary.Value.Checkpoint.Members.Should().ContainSingle().Which.StudentId.Should().Be(seed.StudentIds[0]);
         studentSummary.Value.Evaluations.Should().ContainSingle();
         studentSummary.Value.Evaluations.Single().CheckpointTotal.Should().BeNull();
         studentSummary.Value.Evaluations.Single().MemberScores.Should().BeNull();
@@ -2427,17 +2427,19 @@ public sealed partial class TeamWorkflowIntegrationTests
         context.ChangeTracker.Clear();
         var publishedStudentSummary = await handler.GetSummaryAsync(
             seed.TeamId.Value, 1, seed.ProposerUserId, SystemRoles.Student);
-        publishedStudentSummary.Value.Evaluations.Single().CheckpointTotal.Should().Be(8.6m);
+        publishedStudentSummary.Value.Evaluations.Single().CheckpointTotal.Should().BeNull();
         publishedStudentSummary.Value.Evaluations.Single().MemberScores.Should().ContainSingle();
         publishedStudentSummary.Value.Evaluations.Single().MemberScores!.Single().StudentId.Should().Be(seed.StudentIds[0]);
         publishedStudentSummary.Value.Evaluations.Single().RubricScores
-            .Should().OnlyContain(item => item.Score.HasValue);
-        publishedStudentSummary.Value.Summary.AverageScore.Should().Be(8.6m);
+            .Should().OnlyContain(item => item.Score == null);
+        publishedStudentSummary.Value.Summary.AverageScore.Should().BeNull();
+        publishedStudentSummary.Value.History.Should().BeEmpty();
         var studentBatchAfterPublish = await handler.GetGradingBatchAsync(
             new EvaluationGradingBatchRequest { TeamIds = new[] { seed.TeamId.Value } },
             seed.ProposerUserId, SystemRoles.Student);
         studentBatchAfterPublish.IsSuccess.Should().BeTrue();
-        studentBatchAfterPublish.Value.Teams.Single().Checkpoints.Single().Evaluations.Single().CheckpointTotal.Should().Be(8.6m);
+        studentBatchAfterPublish.Value.Teams.Single().Checkpoints.Single().Evaluations.Single().CheckpointTotal.Should().BeNull();
+        studentBatchAfterPublish.Value.Teams.Single().Members.Should().ContainSingle().Which.StudentId.Should().Be(seed.StudentIds[0]);
         studentBatchAfterPublish.Value.Teams.Single().Checkpoints.Single().Evaluations.Single().MemberScores.Should().ContainSingle();
 
         var secondStudentUserId = await context.Students.AsNoTracking()
@@ -2451,7 +2453,9 @@ public sealed partial class TeamWorkflowIntegrationTests
 
         var publishedMentorSummary = await handler.GetSummaryAsync(
             seed.TeamId.Value, 1, seed.MentorUserId, SystemRoles.Mentor);
-        publishedMentorSummary.Value.Evaluations.Single().CheckpointTotal.Should().Be(8.6m);
+        publishedMentorSummary.Value.Evaluations.Single().CheckpointTotal.Should().BeNull();
+        publishedMentorSummary.Value.History.Should().BeEmpty();
+        publishedMentorSummary.Value.Checkpoint.Members.Should().BeEmpty();
         publishedMentorSummary.Value.Evaluations.Single().MemberScores.Should().BeNull();
         publishedMentorSummary.Value.Evaluations.Single().RubricScores
             .Should().OnlyContain(item => item.Score == null);
@@ -2469,6 +2473,7 @@ public sealed partial class TeamWorkflowIntegrationTests
             seed.TeamId.Value, 1, seed.ProposerUserId, SystemRoles.Student);
         hiddenStudentSummary.Value.Evaluations.Single().CheckpointTotal.Should().BeNull();
         hiddenStudentSummary.Value.Evaluations.Single().MemberScores.Should().BeNull();
+        hiddenStudentSummary.Value.History.Should().BeEmpty();
         hiddenStudentSummary.Value.Evaluations.Single().RubricScores
             .Should().OnlyContain(item => item.Score == null);
         var hiddenLecturerSummary = await handler.GetSummaryAsync(
@@ -2617,7 +2622,7 @@ public sealed partial class TeamWorkflowIntegrationTests
         republished.IsSuccess.Should().BeTrue();
         context.ChangeTracker.Clear();
         var republishedStudentSummary = await handler.GetSummaryAsync(seed.TeamId.Value, 1, seed.ProposerUserId, SystemRoles.Student);
-        republishedStudentSummary.Value.Evaluations.Single().CheckpointTotal.Should().Be(7.4m);
+        republishedStudentSummary.Value.Evaluations.Single().CheckpointTotal.Should().BeNull();
         republishedStudentSummary.Value.Evaluations.Single().MemberScores!.Single(item => item.StudentId == seed.StudentIds[0])
             .Should().Match<WorkspaceCheckpointEvaluationMemberScoreResponse>(item => item.Score == 6.5m && item.IsOverridden);
 
@@ -2710,14 +2715,14 @@ public sealed partial class TeamWorkflowIntegrationTests
         context.ChangeTracker.Clear();
         var studentAfterPublish = await assessmentHandler.GetAsync(
             seed.TeamId.Value, seed.ProposerUserId, SystemRoles.Student);
-        studentAfterPublish.Value.Assessments.Single().Score.Should().Be(8.5m);
+        studentAfterPublish.Value.Assessments.Single().Score.Should().BeNull();
         studentAfterPublish.Value.Assessments.Single().MemberScores!.Should().ContainSingle()
             .Which.Should().Match<WorkspaceCheckpointEvaluationMemberScoreResponse>(item =>
                 item.StudentId == seed.StudentIds[0] && item.Score == 6.5m && item.IsOverridden);
 
         var mentorAfterPublish = await assessmentHandler.GetAsync(
             seed.TeamId.Value, seed.MentorUserId, SystemRoles.Mentor);
-        mentorAfterPublish.Value.Assessments.Single().Score.Should().Be(8.5m);
+        mentorAfterPublish.Value.Assessments.Single().Score.Should().BeNull();
         mentorAfterPublish.Value.Assessments.Single().MemberScores.Should().BeNull();
 
         var revised = await assessmentHandler.SaveAsync(

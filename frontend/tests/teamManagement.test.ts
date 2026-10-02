@@ -3,6 +3,8 @@ import test from 'node:test';
 import type { ManagedTeam, TeamDraft, TeamStudent } from '../src/types/teamManagement.ts';
 import {
   canAssignMentorTypeToTeam,
+  evaluateTeamMajorComposition,
+  getTeamMajorWarning,
   getTeamProject,
   isMissingTeamMajor,
   isVerifiedEnrollmentMajor,
@@ -405,4 +407,57 @@ test('normalizes and rejects duplicated or invalid workspace tags', () => {
   assert.deepEqual(first.values, ['React']);
   assert.equal(appendWorkspaceTag(first.values, '  react  ').error, '“react” is already included.');
   assert.ok(appendWorkspaceTag(first.values, '<script>').error);
+});
+
+test('accepts a team with at least one GROUP_1 and one GROUP_2 major', () => {
+  const composition = evaluateTeamMajorComposition([
+    { fullName: 'Ada', majorCode: 'BBA_MKT' },
+    { fullName: 'Ben', majorCode: ' bit_se ' },
+    { fullName: 'Cam', majorCode: 'BIT_AI' },
+    { fullName: 'Dee', majorCode: 'BEN' },
+  ]);
+
+  assert.equal(composition.isValid, true);
+  assert.equal(composition.message, null);
+  assert.deepEqual(composition.missingGroups, []);
+});
+
+test('warns which group is missing and which members have no valid major', () => {
+  const onlyBusiness = evaluateTeamMajorComposition([
+    { fullName: 'Ada', majorCode: 'BBA_MKT' },
+    { fullName: 'Ben', majorCode: 'BBA_FIN' },
+    { fullName: 'Cam', majorCode: 'UNDECLARED' },
+    { fullName: 'Dee', majorCode: null },
+  ]);
+
+  assert.equal(onlyBusiness.isValid, false);
+  assert.deepEqual(onlyBusiness.missingGroups, ['GROUP_2']);
+  assert.deepEqual(onlyBusiness.membersWithoutValidMajor, ['Cam', 'Dee']);
+  assert.match(onlyBusiness.message || '', /no member from GROUP_2/);
+  assert.match(onlyBusiness.message || '', /Cam, Dee/);
+
+  const onlyTechnology = evaluateTeamMajorComposition([
+    { fullName: 'Ada', majorCode: 'BIT_SE' },
+    { fullName: 'Ben', majorCode: 'BIT_AI' },
+  ]);
+  assert.deepEqual(onlyTechnology.missingGroups, ['GROUP_1']);
+});
+
+test('shows a team major warning only for an invalid team and hides it once fixed', () => {
+  const invalid = normalizeManagedTeam({
+    id: 'team-1',
+    teamName: 'Imbalanced',
+    members: [],
+    majorComposition: evaluateTeamMajorComposition([{ fullName: 'Ada', majorCode: 'BBA_MKT' }]),
+  });
+  assert.ok(getTeamMajorWarning(invalid));
+  assert.match(getTeamMajorWarning(invalid)?.message || '', /GROUP_2/);
+
+  const fixed = { ...invalid, majorComposition: evaluateTeamMajorComposition([
+    { fullName: 'Ada', majorCode: 'BBA_MKT' },
+    { fullName: 'Ben', majorCode: 'BIT_SE' },
+  ]) };
+  assert.equal(getTeamMajorWarning(fixed), null);
+  assert.equal(getTeamMajorWarning({ _id: 'legacy', teamName: 'No evaluation' }), null);
+  assert.equal(getTeamMajorWarning({ ...invalid, isProposal: true }), null);
 });

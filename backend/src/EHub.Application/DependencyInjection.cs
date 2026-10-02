@@ -21,6 +21,9 @@ using EHub.Application.Features.Dashboard.GetAcademicOverview;
 using EHub.Application.Features.Dashboard.GetSubmissionAnalytics;
 using EHub.Application.Features.Notifications.GetNotifications;
 using EHub.Application.Features.Notifications.MarkNotificationRead;
+using EHub.Application.Features.ProjectData.GetProjectData;
+using EHub.Application.Features.ProjectData.GetProjectDataFilterOptions;
+using EHub.Application.Features.ProjectData.ManageAchievements;
 using EHub.Application.Features.Rankings.TeamRankings;
 using EHub.Application.Features.Subjects.Curriculum;
 using EHub.Application.Features.Subjects.ManageSemester;
@@ -70,6 +73,11 @@ public static class DependencyInjection
         services.AddScoped<IGetSubmissionAnalyticsQueryHandler, GetSubmissionAnalyticsQueryHandler>();
         services.AddScoped<ITrackingQueryHandler, TrackingQueryHandler>();
         services.AddScoped<ITeamRankingQueryHandler, TeamRankingQueryHandler>();
+        services.AddScoped<EHub.Application.Features.Chat.ChatReadAccessHandler>();
+        services.AddScoped<EHub.Application.Features.Workspaces.StudentPreviousScores.StudentPreviousScoresHandler>();
+        services.AddScoped<IGetProjectDataQueryHandler, GetProjectDataQueryHandler>();
+        services.AddScoped<IGetProjectDataFilterOptionsQueryHandler, GetProjectDataFilterOptionsQueryHandler>();
+        services.AddScoped<IUpdateProjectAchievementsCommandHandler, UpdateProjectAchievementsCommandHandler>();
         services.AddScoped<IGetNotificationsQueryHandler, GetNotificationsQueryHandler>();
         services.AddScoped<IMarkNotificationReadCommandHandler, MarkNotificationReadCommandHandler>();
 

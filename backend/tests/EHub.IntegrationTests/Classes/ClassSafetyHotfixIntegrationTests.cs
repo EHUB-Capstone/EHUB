@@ -1588,6 +1588,122 @@ public sealed class ClassSafetyHotfixIntegrationTests
     }
 
     [Fact]
+    public async Task OfficialMajorFile_WarnsAboutTeamMajorComposition_AndClearsItWhenTeamIsFixed()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateClassSeedAsync(context, "team-major-warning");
+        var lecturer = await context.Users.SingleAsync(user => user.Id == seed.LecturerId);
+        var lecturerToken = GenerateToken(scope.ServiceProvider, lecturer, SystemRoles.Lecturer);
+        var targetClass = await context.Classes.AsNoTracking().SingleAsync(item => item.Id == seed.ClassId);
+
+        var team = new Team
+        {
+            ClassId = seed.ClassId,
+            TeamCode = $"{targetClass.ClassCode}_TEAM_1",
+            TeamName = "Major Warning Team",
+            Status = TeamStatus.Active,
+            CreatedById = seed.AdminId,
+            CreatedBy = seed.AdminId
+        };
+        context.Teams.Add(team);
+        var majors = new[] { MajorCodes.BBA_MKT, MajorCodes.BBA_FIN, MajorCodes.BEN, MajorCodes.BIT_SE };
+        var rollNumbers = new List<string>();
+        for (var index = 0; index < majors.Length; index++)
+        {
+            var rollNumber = "SE" + Guid.NewGuid().ToString("N")[..8].ToUpperInvariant();
+            rollNumbers.Add(rollNumber);
+            var student = new Student
+            {
+                RollNumber = rollNumber,
+                NormalizedRollNumber = rollNumber,
+                FullName = $"Team Major Student {index}",
+                Email = $"team-major-{Guid.NewGuid():N}@example.com",
+                MajorCode = majors[index],
+                Status = StudentStatus.Active,
+                CreatedBy = seed.AdminId
+            };
+            var enrollment = new ClassStudent
+            {
+                ClassId = seed.ClassId,
+                StudentId = student.Id,
+                Student = student,
+                SemesterId = targetClass.SemesterId,
+                CourseId = targetClass.CourseId,
+                EnrollmentStatus = EnrollmentStatus.Active,
+                CountsTowardCourseSemesterLimit = true,
+                MajorCodeAtEnrollment = majors[index]
+            };
+            context.Students.Add(student);
+            context.ClassStudents.Add(enrollment);
+            context.TeamMembers.Add(new TeamMember
+            {
+                Team = team,
+                ClassId = seed.ClassId,
+                StudentId = student.Id,
+                ClassStudent = enrollment,
+                RoleInTeam = index == 0 ? TeamMemberRole.Leader : TeamMemberRole.Member
+            });
+        }
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        async Task<ApiResponse<VerifyClassMajorsResponse>> SendMajorFileAsync(string path, string rollNumber, string majorCode)
+        {
+            using var content = CreateMajorUpload(CreateOfficialMajorWorkbook(rollNumber, majorCode));
+            using var request = new HttpRequestMessage(HttpMethod.Post, $"/api/classes/{seed.ClassId}/major-verification/{path}")
+            {
+                Content = content
+            };
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", lecturerToken);
+            var response = await _client.SendAsync(request);
+            response.StatusCode.Should().Be(HttpStatusCode.OK);
+            return (await response.Content.ReadFromJsonAsync<ApiResponse<VerifyClassMajorsResponse>>())!;
+        }
+
+        async Task<EHub.Contracts.Teams.TeamDto> GetTeamAsync()
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, $"/api/teams/{team.Id}");
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", lecturerToken);
+            var response = await _client.SendAsync(request);
+            response.StatusCode.Should().Be(HttpStatusCode.OK);
+            return (await response.Content.ReadFromJsonAsync<ApiResponse<EHub.Contracts.Teams.TeamDto>>())!.Data!;
+        }
+
+        // The team starts valid: three GROUP_1 members and one GROUP_2 member.
+        (await GetTeamAsync()).MajorComposition.IsValid.Should().BeTrue();
+
+        // A preview never reports team warnings because it changes nothing.
+        var preview = await SendMajorFileAsync("preview", rollNumbers[3], MajorCodes.BBA_TM);
+        preview.Data!.TeamMajorWarnings.Should().BeEmpty();
+        (await GetTeamAsync()).MajorComposition.IsValid.Should().BeTrue();
+
+        // Official file moves the only GROUP_2 student to GROUP_1: the team now fails the rule.
+        var broken = await SendMajorFileAsync("synchronize", rollNumbers[3], MajorCodes.BBA_TM);
+        var warning = broken.Data!.TeamMajorWarnings.Should().ContainSingle().Subject;
+        warning.TeamId.Should().Be(team.Id);
+        warning.TeamName.Should().Be("Major Warning Team");
+        warning.MajorComposition.IsValid.Should().BeFalse();
+        warning.MajorComposition.MissingGroups.Should().Equal("GROUP_2");
+        warning.MajorComposition.Message.Should().Contain("GROUP_2");
+
+        // The warning is advisory only: team and members are untouched, and the team read reports it too.
+        var warnedTeam = await GetTeamAsync();
+        warnedTeam.Members.Should().HaveCount(4);
+        warnedTeam.MajorComposition.IsValid.Should().BeFalse();
+        warnedTeam.MajorComposition.MissingGroups.Should().Equal("GROUP_2");
+        context.ChangeTracker.Clear();
+        (await context.Teams.AsNoTracking().SingleAsync(item => item.Id == team.Id)).Status.Should().Be(TeamStatus.Active);
+        (await context.TeamMembers.AsNoTracking().CountAsync(item =>
+            item.TeamId == team.Id && item.CountsTowardActiveTeam)).Should().Be(4);
+
+        // Correcting the major clears the warning.
+        var fixedResult = await SendMajorFileAsync("synchronize", rollNumbers[3], MajorCodes.BIT_AI);
+        fixedResult.Data!.TeamMajorWarnings.Should().BeEmpty();
+        (await GetTeamAsync()).MajorComposition.IsValid.Should().BeTrue();
+    }
+
+    [Fact]
     public async Task SemesterGroupFile_PreviewsAndImportsByRollNumber_WithAccessAndValidationChecks()
     {
         using var scope = _factory.Services.CreateScope();

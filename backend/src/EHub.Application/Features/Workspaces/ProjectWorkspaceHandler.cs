@@ -88,7 +88,7 @@ public sealed class ProjectWorkspaceHandler : IProjectWorkspaceHandler
             .FirstOrDefaultAsync(item => item.Id == teamId, cancellationToken);
         if (team == null)
             return Failure<ProjectWorkspaceDetailDto>(ErrorCodes.WorkspaceAccessDenied, "You do not have access to this team workspace.");
-        return Result.Success(MapDetail(team));
+        return Result.Success(MapDetail(team, userId, role));
     }
 
     public async Task<Result<ProjectWorkspaceDto>> CreateAsync(
@@ -564,7 +564,7 @@ public sealed class ProjectWorkspaceHandler : IProjectWorkspaceHandler
         };
     }
 
-    private static ProjectWorkspaceDetailDto MapDetail(Team team)
+    private static ProjectWorkspaceDetailDto MapDetail(Team team, Guid userId, string role)
     {
         var activeMentors = team.MentorAssignments.Where(assignment =>
                 assignment.Status == MentorAssignmentStatus.Active && assignment.EndedAt == null)
@@ -606,9 +606,11 @@ public sealed class ProjectWorkspaceHandler : IProjectWorkspaceHandler
             Members = team.TeamMembers.Where(member => member.CountsTowardActiveTeam).Select(member => new WorkspaceMemberDto
             {
                 StudentId = member.StudentId,
-                UserId = member.ClassStudent.Student.UserId,
+                UserId = IsRole(role, SystemRoles.Admin) || IsRole(role, SystemRoles.Lecturer) ||
+                    member.ClassStudent.Student.UserId == userId ? member.ClassStudent.Student.UserId : null,
                 FullName = member.ClassStudent.Student.FullName,
-                Email = member.ClassStudent.Student.Email,
+                Email = IsRole(role, SystemRoles.Admin) || IsRole(role, SystemRoles.Lecturer) ||
+                    member.ClassStudent.Student.UserId == userId ? member.ClassStudent.Student.Email : null,
                 RollNumber = member.ClassStudent.Student.RollNumber ?? string.Empty,
                 MajorCode = member.ClassStudent.MajorCodeAtEnrollment,
                 RoleInTeam = member.RoleInTeam.ToString()

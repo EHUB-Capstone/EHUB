@@ -73,7 +73,8 @@ public sealed class GetClassDetailQueryHandler : IGetClassDetailQueryHandler
                 new Error(ErrorCodes.ClassNotFound, "The requested class was not found."));
         }
 
-        if (isLecturer && targetClass.PrimaryLecturerId != currentUserId)
+        if (isLecturer && targetClass.PrimaryLecturerId != currentUserId &&
+            !targetClass.ClassLecturers.Any(item => item.LecturerId == currentUserId))
         {
             return Result.Failure<ClassResponse>(
                 new Error(ErrorCodes.ClassAccessDenied, "You can only view details of classes assigned to you."));
@@ -159,7 +160,8 @@ public sealed class GetClassDetailQueryHandler : IGetClassDetailQueryHandler
             .AsNoTracking()
             .Include(c => c.Course)
             .Include(c => c.Semester)
-            .Include(c => c.PrimaryLecturer);
+            .Include(c => c.PrimaryLecturer)
+            .Include(c => c.ClassLecturers);
 
         return classId.HasValue
             ? query.FirstOrDefaultAsync(c => c.Id == classId.Value, cancellationToken)

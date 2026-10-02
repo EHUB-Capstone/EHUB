@@ -1,6 +1,8 @@
 import type { AxiosRequestConfig } from 'axios';
 import type { MockApiState, MockClass, MockRosterStudent, MockTeamMember } from './mockState.ts';
+import type { MockTeam } from './mockState.ts';
 import { createInitialMockState, nextMockId, nextRowVersion } from './mockState.ts';
+import { evaluateTeamMajorComposition } from '../utils/teamManagement.ts';
 
 export type MockReply = [number, unknown, Record<string, string>?];
 export type JsonBody = Record<string, unknown>;
@@ -155,6 +157,26 @@ export function memberFromStudent(student: MockRosterStudent, leaderId: string):
     roleInTeam: student.studentId === leaderId ? 'LEADER' : 'MEMBER',
     joinedAtUtc: new Date().toISOString(),
   };
+}
+
+/** Adds the server-style `majorComposition`, using the roster's current majors (they change on verification). */
+export function teamWithMajorComposition(team: MockTeam): MockTeam & { majorComposition: ReturnType<typeof evaluateTeamMajorComposition> } {
+  const roster = state.rosters[team.classId] || [];
+  return {
+    ...team,
+    majorComposition: evaluateTeamMajorComposition(team.members.map((member) => ({
+      fullName: member.fullName,
+      majorCode: roster.find((student) => student.studentId === member.studentId)?.majorCode ?? member.majorCode,
+    }))),
+  };
+}
+
+export function teamMajorWarnings(classId: string) {
+  return state.teams
+    .filter((team) => team.classId === classId && team.status === 'Active')
+    .map(teamWithMajorComposition)
+    .filter((team) => !team.majorComposition.isValid)
+    .map((team) => ({ teamId: team.id, teamCode: team.teamCode, teamName: team.teamName, majorComposition: team.majorComposition }));
 }
 
 export function allocateId(): string {

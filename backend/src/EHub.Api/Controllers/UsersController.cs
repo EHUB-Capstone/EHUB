@@ -152,6 +152,9 @@ public sealed class UsersController(IUserManagementHandler handler) : Controller
                     error.Message,
                     error.Code)),
 
+            EHub.Shared.Errors.ErrorCodes.CommonForbiddenError => StatusCode(StatusCodes.Status403Forbidden,
+                ApiResponse<object>.FailureResponse(error.Message, error.Code)),
+
             _ => BadRequest(
                 ApiResponse<object>.FailureResponse(
                     error.Message,

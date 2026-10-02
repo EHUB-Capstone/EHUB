@@ -44,9 +44,8 @@ import type { TeamRankingItem } from '../src/types/rankings.ts';
 
 const rankingItem = (
   teamId: string,
-  score: number | null,
+  rank: number | null,
   status: TeamRankingItem['status'],
-  checkpointScore = score,
 ): TeamRankingItem => ({
   teamId,
   teamName: `Team ${teamId}`,
@@ -59,44 +58,44 @@ const rankingItem = (
   courseCode: 'EXE201',
   semester: 'FA2026',
   year: 2026,
-  checkpoints: [{ checkpointId: 'checkpoint-1', number: 1, title: 'Checkpoint 1', weight: 100, score: checkpointScore, status: status === 'PUBLISHED' ? 'PUBLISHED' : status === 'READY_TO_PUBLISH' ? 'SUBMITTED' : 'NOT_GRADED' }],
+  checkpoints: [{ checkpointId: 'checkpoint-1', number: 1, title: 'Checkpoint 1', weight: 100, status: status === 'PUBLISHED' ? 'PUBLISHED' : status === 'READY_TO_PUBLISH' ? 'SUBMITTED' : 'NOT_GRADED' }],
   assessments: [],
-  courseTotal: score,
+  rank,
   status,
-  completedComponentCount: score === null ? 0 : 1,
+  completedComponentCount: rank === null ? 0 : 1,
   publishedComponentCount: status === 'PUBLISHED' ? 1 : 0,
   totalComponentCount: 1,
 });
 
-test('team rankings use current team totals regardless of publication and preserve ties', () => {
+test('team rankings preserve server ranks and ties without receiving scores', () => {
   const rows = rankTeamResults([
-    rankingItem('a', 8.5, 'PUBLISHED'),
-    rankingItem('b', 9, 'READY_TO_PUBLISH'),
-    rankingItem('c', 8.5, 'PUBLISHED'),
-    rankingItem('d', 7, 'PUBLISHED'),
-  ], 'course');
+    rankingItem('a', 2, 'PUBLISHED'),
+    rankingItem('b', 1, 'PUBLISHED'),
+    rankingItem('c', 2, 'PUBLISHED'),
+    rankingItem('d', 4, 'PUBLISHED'),
+  ]);
 
   assert.deepEqual(rows.map(row => [row.teamId, row.rank]), [['b', 1], ['a', 2], ['c', 2], ['d', 4]]);
 });
 
-test('checkpoint ranking uses checkpointTotal and ranking filters do not renumber teams', () => {
+test('ranking filters do not renumber server ranks', () => {
   const rows = rankTeamResults([
-    rankingItem('a', 6, 'PUBLISHED', 9),
-    rankingItem('b', 9, 'PUBLISHED', 8),
-  ], 'checkpoint:1');
+    rankingItem('a', 1, 'PUBLISHED'),
+    rankingItem('b', 2, 'PUBLISHED'),
+  ]);
   const filtered = filterTeamRankingRows(rows, { search: 'description b', teamId: '', status: '' });
 
-  assert.deepEqual(rows.map(row => [row.teamId, row.rank, row.rankingScore]), [['a', 1, 9], ['b', 2, 8]]);
+  assert.deepEqual(rows.map(row => [row.teamId, row.rank]), [['a', 1], ['b', 2]]);
   assert.deepEqual(filtered.map(row => [row.teamId, row.rank]), [['b', 2]]);
 });
 
-test('submitted checkpoint scores are rankable for lecturer and admin views', () => {
+test('unpublished teams remain unranked', () => {
   const rows = rankTeamResults([
-    rankingItem('a', 6, 'READY_TO_PUBLISH', 9),
-    rankingItem('b', 9, 'PUBLISHED', 8),
-  ], 'checkpoint:1');
+    rankingItem('a', null, 'INCOMPLETE'),
+    rankingItem('b', 1, 'PUBLISHED'),
+  ]);
 
-  assert.deepEqual(rows.map(row => [row.teamId, row.rank, row.rankingScore]), [['a', 1, 9], ['b', 2, 8]]);
+  assert.deepEqual(rows.map(row => [row.teamId, row.rank]), [['b', 1], ['a', null]]);
 });
 
 test('course score applies checkpoint and other-assessment weights and reports missing grades', () => {

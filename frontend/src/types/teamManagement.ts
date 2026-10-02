@@ -26,6 +26,21 @@ export interface TeamMember {
   joinedAt?: string;
 }
 
+/** Server-evaluated major structure of a team: needs at least one GROUP_1 and one GROUP_2 major. */
+export interface TeamMajorComposition {
+  isValid: boolean;
+  missingGroups: string[];
+  membersWithoutValidMajor: string[];
+  message: string | null;
+}
+
+export interface TeamMajorWarning {
+  teamId: string;
+  teamCode: string;
+  teamName: string;
+  majorComposition: TeamMajorComposition;
+}
+
 export interface ManagedTeam {
   _id: string;
   classId?: EntityReference;
@@ -43,6 +58,7 @@ export interface ManagedTeam {
   projectDescription?: string | null;
   projectStatus?: string | null;
   hasChatGroup?: boolean;
+  majorComposition?: TeamMajorComposition | null;
   chatGroupId?: EntityReference;
   mentorId?: EntityReference;
   lectureId?: EntityReference;

@@ -69,6 +69,7 @@ const validationFailure = (
 
 function userResponse(user: MockUser) {
   const state = getMockState();
+  const viewer = state.users.find(item => item.id === state.sessionUserId);
   const currentSemester = state.semesters.find((semester) => semester.status === 'Active');
   const currentClasses = currentSemester
     ? state.classes.filter((cls) => cls.semesterId === currentSemester.id)
@@ -78,6 +79,8 @@ function userResponse(user: MockUser) {
     .flatMap(([classId, roster]) => roster.map((student) => ({ classId, student })))
     .filter(({ classId, student }) => (
       currentClassIds.has(classId)
+      && (user.role !== 'STUDENT' || viewer?.role !== 'LECTURER' ||
+        state.classes.some(cls => cls.id === classId && cls.primaryLecturerId === viewer.id))
       &&
       (student.userId === user.id || student.studentId === user.id)
       && student.enrollmentStatus !== 'Dropped'
@@ -579,13 +582,21 @@ function registerUserHandlers(mock: MockAdapter): void {
   });
 
   mock.onGet('/users').reply((config) => {
+    const state = getMockState();
+    const viewer = state.users.find(item => item.id === state.sessionUserId);
+    if (!viewer) return failure(401, 'UNAUTHORIZED', 'Authentication is required.');
+    if (!['ADMIN', 'LECTURER'].includes(viewer.role)) return failure(403, 'COMMON_FORBIDDEN', 'Staff access is required.');
     const params = requestParams(config);
     const query = asString(params.search).trim().toLowerCase();
     const role = asString(params.role).toUpperCase();
     const status = asString(params.status).toUpperCase();
     const page = Math.max(1, asNumber(params.page, 1));
     const limit = Math.min(200, Math.max(1, asNumber(params.limit, 10)));
-    let users = getMockState().users.filter((user) =>
+    let users = state.users.filter((user) =>
+      (viewer.role === 'ADMIN' || user.id === viewer.id || user.role !== 'STUDENT' ||
+        state.classes.some(cls => cls.primaryLecturerId === viewer.id &&
+          state.rosters[cls.id]?.some(student => student.userId === user.id && student.enrollmentStatus !== 'Dropped')))
+      &&
       (!role || role === 'ALL' || user.role === role)
       && (!status || status === 'ALL' || user.status === status)
       && (!query || [user.name, user.email, user.studentId].some((value) => value?.toLowerCase().includes(query))));
@@ -614,7 +625,15 @@ function registerUserHandlers(mock: MockAdapter): void {
   });
 
   mock.onGet(/^\/users\/[^/]+$/).reply((config) => {
-    const user = getMockState().users.find((item) => item.id === routeId(config, /^\/users\/([^/]+)$/));
+    const state = getMockState();
+    const viewer = state.users.find(item => item.id === state.sessionUserId);
+    if (!viewer) return failure(401, 'UNAUTHORIZED', 'Authentication is required.');
+    if (!['ADMIN', 'LECTURER'].includes(viewer.role)) return failure(403, 'COMMON_FORBIDDEN', 'Staff access is required.');
+    const user = state.users.find((item) => item.id === routeId(config, /^\/users\/([^/]+)$/));
+    if (viewer.role !== 'ADMIN' && (!user || user.role === 'STUDENT' &&
+      !state.classes.some(cls => cls.primaryLecturerId === viewer.id &&
+        state.rosters[cls.id]?.some(student => student.userId === user.id && student.enrollmentStatus !== 'Dropped'))))
+      return failure(403, 'COMMON_FORBIDDEN', 'The user is unavailable or outside your class scope.');
     return user ? ok(userResponse(user), 'User retrieved successfully.') : failure(404, 'USER_NOT_FOUND', 'User not found.');
   });
 

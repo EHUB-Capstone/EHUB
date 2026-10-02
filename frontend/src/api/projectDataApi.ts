@@ -1,0 +1,24 @@
+import axiosClient from './axiosClient.ts';
+import type { ApiEnvelope } from '../types/workspaceTools';
+import type {
+  ProjectAchievementsResult,
+  ProjectDataFilterOptions,
+  ProjectDataPage,
+  ProjectDataQuery,
+  UpdateProjectAchievementsPayload,
+} from '../types/projectData';
+import { toProjectDataRequestParams } from '../utils/projectData.ts';
+
+export const projectDataApi = {
+  list: (query: ProjectDataQuery, signal?: AbortSignal): Promise<ApiEnvelope<ProjectDataPage>> =>
+    axiosClient.get('/project-data', { params: toProjectDataRequestParams(query), signal }),
+
+  getFilterOptions: (signal?: AbortSignal): Promise<ApiEnvelope<ProjectDataFilterOptions>> =>
+    axiosClient.get('/project-data/filter-options', { signal }),
+
+  updateAchievements: (
+    projectId: string,
+    payload: UpdateProjectAchievementsPayload,
+  ): Promise<ApiEnvelope<ProjectAchievementsResult>> =>
+    axiosClient.put(`/project-data/${projectId}/achievements`, payload),
+};
