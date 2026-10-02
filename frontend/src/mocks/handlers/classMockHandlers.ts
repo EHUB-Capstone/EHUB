@@ -21,6 +21,8 @@ import {
   refreshClassCounts,
   requestParams,
   routeId,
+  teamMajorWarnings,
+  teamWithMajorComposition,
   touchClass,
 } from '../mockHelpers.ts';
 
@@ -231,7 +233,9 @@ function registerClassQueries(mock: MockAdapter): void {
   mock.onGet('/classes/my-team').reply(() => {
     const state = getMockState();
     const studentId = state.users.find((user) => user.id === state.sessionUserId && user.role === 'STUDENT')?.id;
-    const team = state.teams.find((item) => item.members.some((member) => member.studentId === studentId)) || null;
+    const foundTeam = state.teams.find((item) => item.members.some((member) => member.studentId === studentId)) || null;
+    const team = foundTeam ? { ...teamWithMajorComposition(foundTeam),
+      members: foundTeam.members.map(({ email: _email, ...member }) => member) } : null;
     const cls = team ? findClass(team.classId) : undefined;
     const classSummary = cls ? studentClassSummary(cls, 'Active') : null;
     return ok({ team, class: classSummary, members: team?.members || [] }, 'Student team retrieved.');
@@ -245,6 +249,8 @@ function registerClassQueries(mock: MockAdapter): void {
     const state = getMockState();
     const sessionUserId = state.users.find((user) => user.id === state.sessionUserId && user.role === 'STUDENT')?.id;
     const currentEnrollment = (state.rosters[classId] || []).find((student) => student.userId === sessionUserId);
+    if (!currentEnrollment || currentEnrollment.enrollmentStatus === 'Dropped')
+      return failure(403, 'CLASS_ACCESS_DENIED', 'You are not enrolled in this class.');
     const rosterStatus = currentEnrollment?.enrollmentStatus === 'Completed' ? 'Completed' : 'Active';
     const classSummary = studentClassSummary(cls, rosterStatus);
     const ownMajorLocked = state.classes.some((item) =>
@@ -260,17 +266,17 @@ function registerClassQueries(mock: MockAdapter): void {
         && formation.invitations.some(invitation => invitation.studentId === student.studentId));
       const profileMajorCode = isOwnRow
         ? state.users.find(user => user.id === sessionUserId)?.major || null
-        : student.profileMajorCode;
+        : null;
       return {
         studentId: student.studentId,
-        userId: student.userId,
+        ...(isOwnRow ? { userId: student.userId } : {}),
         rollNumber: student.rollNumber,
         fullName: student.fullName,
-        email: student.email,
+        ...(isOwnRow ? { email: student.email } : {}),
         majorCode: student.majorCode,
         profileMajorCode,
-        enrollmentMajorCode: student.majorCode,
-        majorVerificationStatus: student.majorVerificationStatus,
+        enrollmentMajorCode: isOwnRow ? student.majorCode : '',
+        majorVerificationStatus: isOwnRow ? student.majorVerificationStatus : '',
         canEditMajor: isOwnRow && rosterStatus === 'Active' && ['Draft', 'Active'].includes(cls.status) && !ownMajorLocked,
         isMajorLocked: isOwnRow && ownMajorLocked,
         enrollmentStatus: student.enrollmentStatus,
@@ -278,12 +284,18 @@ function registerClassQueries(mock: MockAdapter): void {
         hasPendingTeamInvitation,
       };
     });
-    const teams = getMockState().teams.filter((team) => team.classId === classId);
+    const teams = getMockState().teams.filter((team) => team.classId === classId).map(teamWithMajorComposition)
+      .map(team => ({ ...team, members: team.members.map(({ email: _email, ...member }) => member) }));
     return ok({ class: classSummary, students, teams }, 'Student class detail retrieved.');
   });
 
   mock.onGet(/^\/classes\/[^/]+\/students$/).reply((config) => {
     const classId = routeId(config, /^\/classes\/([^/]+)\/students$/);
+    const state = getMockState();
+    const viewer = state.users.find(item => item.id === state.sessionUserId);
+    if (!viewer) return failure(401, 'UNAUTHORIZED', 'Authentication is required.');
+    if (!['ADMIN', 'LECTURER'].includes(viewer.role) || viewer.role === 'LECTURER' && findClass(classId)?.primaryLecturerId !== viewer.id)
+      return failure(403, 'CLASS_ACCESS_DENIED', 'You cannot view this class roster.');
     if (!findClass(classId)) return failure(404, 'CLASS_NOT_FOUND', 'Class not found.');
     const params = requestParams(config);
     const query = asString(params.search).trim().toLowerCase();
@@ -883,7 +895,7 @@ function registerRosterHandlers(mock: MockAdapter): void {
       return { rowNumber: index + 2, studentId: student.studentId, rollNumber: student.rollNumber, fullName: student.fullName, email: student.email, majorInFile: major, majorInDb: major, majorInProfile: major, status: 'Matched', message: null };
     });
     persistMockState();
-    return ok({ matched, mismatched: [], missing: [], notFound: [], synchronizedEnrollmentCount: rows.length, synchronizedProfileCount: rows.length }, 'Enrollment and profile majors synchronized from the verification file.');
+    return ok({ matched, mismatched: [], missing: [], notFound: [], synchronizedEnrollmentCount: rows.length, synchronizedProfileCount: rows.length, teamMajorWarnings: teamMajorWarnings(classId) }, 'Enrollment and profile majors synchronized from the verification file.');
   });
 
   mock.onPost(/^\/classes\/[^/]+\/import-students\/preview$/).reply((config) => {

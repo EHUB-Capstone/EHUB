@@ -16,7 +16,6 @@ export interface TeamRankingCheckpoint {
   number: number;
   title: string;
   weight: number;
-  score: number | null;
   status: TeamRankingEvaluationStatus;
 }
 
@@ -24,11 +23,11 @@ export interface TeamRankingAssessment {
   assessmentId: string;
   name: string;
   weight: number;
-  score: number | null;
   status: TeamRankingEvaluationStatus;
 }
 
 export interface TeamRankingItem {
+  rank: number | null;
   teamId: string;
   teamName: string;
   teamCode: string;
@@ -42,7 +41,6 @@ export interface TeamRankingItem {
   year: number;
   checkpoints: TeamRankingCheckpoint[];
   assessments: TeamRankingAssessment[];
-  courseTotal: number | null;
   status: TeamRankingStatus;
   completedComponentCount: number;
   publishedComponentCount: number;
@@ -60,8 +58,4 @@ export interface TeamRankingList {
 export type TeamRankingResponse = ApiEnvelope<TeamRankingList>;
 export type TeamRankingScoreScope = 'course' | `checkpoint:${number}`;
 
-export interface TeamRankingViewItem extends TeamRankingItem {
-  rank: number | null;
-  rankingScore: number | null;
-  rankingStatus: TeamRankingStatus;
-}
+export type TeamRankingViewItem = TeamRankingItem;

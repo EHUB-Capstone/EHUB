@@ -15,25 +15,6 @@ namespace EHub.Application.Features.Teams.ManageTeams;
 
 public sealed class TeamManagementHandler : ITeamManagementHandler
 {
-    private static readonly HashSet<string> GroupOneMajorCodes = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "BBA_HM",
-        "BBA_IB",
-        "BBA_MC",
-        "BBA_MKT",
-        "BEN",
-        "BBA_TM",
-        "BBA_FIN"
-    };
-
-    private static readonly HashSet<string> GroupTwoMajorCodes = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "BIT_AI",
-        "BIT_GD",
-        "BIT_IA",
-        "BIT_SE"
-    };
-
     private readonly IApplicationDbContext _context;
     private readonly IUnitOfWork _unitOfWork;
 
@@ -46,13 +27,15 @@ public sealed class TeamManagementHandler : ITeamManagementHandler
     public async Task<Result<IReadOnlyCollection<TeamDto>>> GetForClassAsync(
         Guid classId, Guid userId, string role, CancellationToken cancellationToken = default)
     {
-        var targetClass = await _context.Classes.AsNoTracking().FirstOrDefaultAsync(item => item.Id == classId, cancellationToken);
+        var targetClass = await _context.Classes.AsNoTracking().Include(item => item.ClassLecturers)
+            .FirstOrDefaultAsync(item => item.Id == classId, cancellationToken);
         if (targetClass == null) return FailureList(ErrorCodes.ClassNotFound, "The requested class was not found.");
 
         var query = TeamQuery().Where(team => team.ClassId == classId && team.Status == TeamStatus.Active);
         if (IsRole(role, SystemRoles.Lecturer))
         {
-            if (targetClass.PrimaryLecturerId != userId) return FailureList(ErrorCodes.ClassAccessDenied, "You can only view teams in classes assigned to you.");
+            if (targetClass.PrimaryLecturerId != userId && !targetClass.ClassLecturers.Any(item => item.LecturerId == userId))
+                return FailureList(ErrorCodes.ClassAccessDenied, "You can only view teams in classes assigned to you.");
         }
         else if (IsRole(role, SystemRoles.Student))
         {
@@ -75,7 +58,8 @@ public sealed class TeamManagementHandler : ITeamManagementHandler
         }
 
         var teams = await query.OrderBy(team => team.TeamCode).ToListAsync(cancellationToken);
-        return Result.Success<IReadOnlyCollection<TeamDto>>(teams.Select(TeamMappings.ToDto).ToArray());
+        return Result.Success<IReadOnlyCollection<TeamDto>>(teams.Select(team => TeamMappings.ToDto(team,
+            IsRole(role, SystemRoles.Admin) || IsRole(role, SystemRoles.Lecturer))).ToArray());
     }
 
     public async Task<Result<IReadOnlyCollection<TeamDto>>> GetAccessibleAsync(
@@ -84,7 +68,8 @@ public sealed class TeamManagementHandler : ITeamManagementHandler
         var query = TeamQuery().Where(team => team.Status == TeamStatus.Active &&
             (team.Class.Status == ClassStatus.Draft || team.Class.Status == ClassStatus.Active));
         if (IsRole(role, SystemRoles.Lecturer))
-            query = query.Where(team => team.Class.PrimaryLecturerId == userId);
+            query = query.Where(team => team.Class.PrimaryLecturerId == userId ||
+                team.Class.ClassLecturers.Any(item => item.LecturerId == userId));
         else if (IsRole(role, SystemRoles.Mentor))
             query = query.Where(team => team.MentorAssignments.Any(assignment =>
                 assignment.MentorProfile.UserId == userId && assignment.Status == MentorAssignmentStatus.Active && assignment.EndedAt == null));
@@ -98,7 +83,8 @@ public sealed class TeamManagementHandler : ITeamManagementHandler
             return FailureList(ErrorCodes.ClassAccessDenied, "You cannot view teams.");
 
         var teams = await query.OrderBy(team => team.Class.ClassCode).ThenBy(team => team.TeamCode).ToListAsync(cancellationToken);
-        return Result.Success<IReadOnlyCollection<TeamDto>>(teams.Select(TeamMappings.ToDto).ToArray());
+        return Result.Success<IReadOnlyCollection<TeamDto>>(teams.Select(team => TeamMappings.ToDto(team,
+            IsRole(role, SystemRoles.Admin) || IsRole(role, SystemRoles.Lecturer))).ToArray());
     }
 
     public async Task<Result<TeamDto>> CreateAsync(
@@ -236,7 +222,8 @@ public sealed class TeamManagementHandler : ITeamManagementHandler
         if (team == null) return Failure(ErrorCodes.TeamNotFound, "The requested team was not found.");
         if (!await CanViewTeamAsync(team, userId, role, cancellationToken))
             return Failure(ErrorCodes.ClassAccessDenied, "You cannot view this team.");
-        return Result.Success(TeamMappings.ToDto(team));
+        return Result.Success(TeamMappings.ToDto(team,
+            IsRole(role, SystemRoles.Admin) || IsRole(role, SystemRoles.Lecturer)));
     }
 
     public async Task<Result<TeamDto>> UpdateMembersAsync(
@@ -541,7 +528,7 @@ public sealed class TeamManagementHandler : ITeamManagementHandler
     private IQueryable<Team> TeamQuery(bool tracking = false)
     {
         var query = tracking ? _context.Teams.AsQueryable() : _context.Teams.AsNoTracking();
-        return query.Include(team => team.Class)
+        return query.Include(team => team.Class).ThenInclude(item => item.ClassLecturers)
             .Include(team => team.TeamMembers).ThenInclude(member => member.ClassStudent).ThenInclude(enrollment => enrollment.Student)
             .Include(team => team.MentorAssignments).ThenInclude(assignment => assignment.MentorProfile).ThenInclude(profile => profile.User)
             .Include(team => team.Project)
@@ -551,7 +538,8 @@ public sealed class TeamManagementHandler : ITeamManagementHandler
     private async Task<bool> CanViewTeamAsync(Team team, Guid userId, string role, CancellationToken cancellationToken)
     {
         if (IsRole(role, SystemRoles.Admin)) return true;
-        if (IsRole(role, SystemRoles.Lecturer)) return team.Class.PrimaryLecturerId == userId;
+        if (IsRole(role, SystemRoles.Lecturer)) return team.Class.PrimaryLecturerId == userId ||
+            team.Class.ClassLecturers.Any(item => item.LecturerId == userId);
         if (IsRole(role, SystemRoles.Mentor)) return team.MentorAssignments.Any(item => item.MentorProfile.UserId == userId && item.Status == MentorAssignmentStatus.Active && item.EndedAt == null);
         if (IsRole(role, SystemRoles.Student))
         {
@@ -590,11 +578,9 @@ public sealed class TeamManagementHandler : ITeamManagementHandler
         if (IsRole(role, SystemRoles.Lecturer) && targetClass.PrimaryLecturerId == userId) return null;
         return (ErrorCodes.ClassAccessDenied, "Only an administrator or the assigned lecturer can manage this team.");
     }
-    private static bool IsBusinessMajor(string? code) =>
-        !string.IsNullOrWhiteSpace(code) && GroupOneMajorCodes.Contains(code.Trim());
+    private static bool IsBusinessMajor(string? code) => TeamMajorCompositionRules.IsGroupOne(code);
 
-    private static bool IsTechnologyMajor(string? code) =>
-        !string.IsNullOrWhiteSpace(code) && GroupTwoMajorCodes.Contains(code.Trim());
+    private static bool IsTechnologyMajor(string? code) => TeamMajorCompositionRules.IsGroupTwo(code);
 
     private static bool IsRole(string role, string expected) => string.Equals(role, expected, StringComparison.OrdinalIgnoreCase);
     private static Result<TeamDto> Failure(string code, string message) => Result.Failure<TeamDto>(new Error(code, message));

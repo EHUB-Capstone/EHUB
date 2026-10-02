@@ -22,6 +22,11 @@ public class Project : AuditableEntity
 
     public ProjectStatus Status { get; set; } = ProjectStatus.Draft;
     public bool IsHighPotential { get; set; } = false;
+    public bool IsFunded { get; set; } = false;
+    public bool IsAwarded { get; set; } = false;
+
+    // PostgreSQL optimistic concurrency token mapped to the system xmin column.
+    public uint Version { get; set; }
 
     public Guid? CreatedById { get; set; }
     public virtual User? Creator { get; set; }

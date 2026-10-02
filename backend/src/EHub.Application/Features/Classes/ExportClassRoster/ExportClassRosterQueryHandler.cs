@@ -42,6 +42,7 @@ public sealed class ExportClassRosterQueryHandler : IExportClassRosterQueryHandl
             .AsNoTracking()
             .Include(c => c.Course)
             .Include(c => c.Semester)
+            .Include(c => c.ClassLecturers)
             .FirstOrDefaultAsync(c => c.Id == classId, cancellationToken);
 
 
@@ -53,7 +54,8 @@ public sealed class ExportClassRosterQueryHandler : IExportClassRosterQueryHandl
 
         if (isLecturer)
         {
-            if (targetClass.PrimaryLecturerId != currentUserId)
+            if (targetClass.PrimaryLecturerId != currentUserId &&
+                !targetClass.ClassLecturers.Any(item => item.LecturerId == currentUserId))
             {
                 return Result.Failure<(byte[], string, string)>(
                     new Error(ErrorCodes.ClassAccessDenied, "You can only export roster for classes assigned to you."));

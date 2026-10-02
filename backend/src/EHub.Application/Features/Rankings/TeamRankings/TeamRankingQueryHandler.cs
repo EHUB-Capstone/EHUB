@@ -33,6 +33,13 @@ public sealed class TeamRankingQueryHandler(IApplicationDbContext context) : ITe
                 team.Class.ClassLecturers.Any(assignment => assignment.LecturerId == currentUserId));
         }
 
+        if (request.ClassId.HasValue && !await context.Classes.AsNoTracking().AnyAsync(
+                item => item.Id == request.ClassId.Value &&
+                    (IsRole(currentUserRole, SystemRoles.Admin) || item.PrimaryLecturerId == currentUserId ||
+                     item.ClassLecturers.Any(assignment => assignment.LecturerId == currentUserId)), cancellationToken))
+            return Result.Failure<TeamRankingListResponse>(ErrorCodes.WorkspaceAccessDenied,
+                "The selected class is outside your ranking scope.");
+
         var availableSemesterRows = await teamQuery
             .Select(team => new
             {
@@ -48,7 +55,7 @@ public sealed class TeamRankingQueryHandler(IApplicationDbContext context) : ITe
             .Select(item => new SemesterRow(item.Id, item.Code, item.Term, item.Year, item.Status))
             .OrderByDescending(item => item.Status == SemesterStatus.Active)
             .ThenByDescending(item => item.Year)
-            .ThenBy(item => item.Term)
+            .ThenByDescending(item => item.Term)
             .ToArray();
 
         var activeSemester = availableSemesters.FirstOrDefault(item => item.Status == SemesterStatus.Active);
@@ -64,6 +71,7 @@ public sealed class TeamRankingQueryHandler(IApplicationDbContext context) : ITe
 
         var teamData = await teamQuery
             .Where(team => team.Class.SemesterId == selectedSemester.Id)
+            .Where(team => !request.ClassId.HasValue || team.ClassId == request.ClassId.Value)
             .OrderBy(team => team.Class.ClassCode)
             .ThenBy(team => team.TeamName)
             .Select(team => new
@@ -211,7 +219,23 @@ public sealed class TeamRankingQueryHandler(IApplicationDbContext context) : ITe
             checkpoints.Where(item => item.CourseId == team.CourseId).ToArray(),
             assessments.Where(item => item.CourseId == team.CourseId).ToArray(),
             rubricByCheckpoint,
-            latestEvaluations)).ToArray();
+            latestEvaluations, request.CheckpointNumber)).ToArray();
+
+        // Different subjects have different checkpoints and weights: rank within each subject.
+        foreach (var group in items.GroupBy(item => item.CourseCode))
+        {
+            decimal? previousScore = null;
+            var previousRank = 0;
+            var index = 0;
+            foreach (var item in group.Where(item => item.CourseTotal.HasValue)
+                         .OrderByDescending(item => item.CourseTotal).ThenBy(item => item.TeamCode))
+            {
+                index++;
+                item.Rank = item.CourseTotal == previousScore ? previousRank : index;
+                previousScore = item.CourseTotal;
+                previousRank = item.Rank.Value;
+            }
+        }
 
         return Result.Success(CreateResponse(activeSemester, selectedSemester, availableSemesters, items));
     }
@@ -221,7 +245,8 @@ public sealed class TeamRankingQueryHandler(IApplicationDbContext context) : ITe
         IReadOnlyCollection<CheckpointRow> checkpoints,
         IReadOnlyCollection<RubricRow> assessments,
         IReadOnlyDictionary<Guid, RubricRow> rubricByCheckpoint,
-        IReadOnlyDictionary<(Guid ProjectId, Guid RubricId), EvaluationRow> latestEvaluations)
+        IReadOnlyDictionary<(Guid ProjectId, Guid RubricId), EvaluationRow> latestEvaluations,
+        int? checkpointNumber)
     {
         EvaluationRow? FindEvaluation(Guid rubricId) => team.ProjectId.HasValue &&
             latestEvaluations.TryGetValue((team.ProjectId.Value, rubricId), out var evaluation)
@@ -238,7 +263,7 @@ public sealed class TeamRankingQueryHandler(IApplicationDbContext context) : ITe
                 Number = checkpoint.Number,
                 Title = checkpoint.Title,
                 Weight = checkpoint.Weight,
-                Score = evaluation?.Score,
+                Score = evaluation?.Status == EvaluationStatus.Published ? evaluation.Score : null,
                 Status = StatusName(evaluation?.Status),
             };
         }).ToArray();
@@ -250,7 +275,7 @@ public sealed class TeamRankingQueryHandler(IApplicationDbContext context) : ITe
                 AssessmentId = assessment.Id,
                 Name = assessment.Name,
                 Weight = assessment.Weight,
-                Score = evaluation?.Score,
+                Score = evaluation?.Status == EvaluationStatus.Published ? evaluation.Score : null,
                 Status = StatusName(evaluation?.Status),
             };
         }).ToArray();
@@ -268,6 +293,12 @@ public sealed class TeamRankingQueryHandler(IApplicationDbContext context) : ITe
                                                checkpointRubricIds.Contains(item.Key.RubricId))
                 .Select(item => item.Value).ToArray();
 
+        var rankingComponents = checkpointNumber.HasValue
+            ? checkpointResponses.Where(item => item.Number == checkpointNumber.Value)
+                .Select(item => new TeamRankingComponent(item.Weight, item.Score, ParseStatus(item.Status))).ToArray()
+            : checkpointComponents;
+        var complete = rankingComponents.Length > 0 && rankingComponents.All(item =>
+            item.Score.HasValue && item.Status == EvaluationStatus.Published);
         return new TeamRankingItemResponse
         {
             TeamId = team.Id,
@@ -283,8 +314,9 @@ public sealed class TeamRankingQueryHandler(IApplicationDbContext context) : ITe
             Year = team.Year,
             Checkpoints = checkpointResponses,
             Assessments = assessmentResponses,
-            CourseTotal = TeamRankingRules.CalculateCourseTotal(checkpointComponents),
-            Status = TeamRankingRules.ResolveStatus(checkpointComponents),
+            CourseTotal = !complete ? null : checkpointNumber.HasValue
+                ? rankingComponents.Single().Score : TeamRankingRules.CalculateCourseTotal(rankingComponents),
+            Status = complete ? "PUBLISHED" : "INCOMPLETE",
             CompletedComponentCount = checkpointComponents.Count(item => item.Score.HasValue),
             PublishedComponentCount = checkpointComponents.Count(item => item.Score.HasValue && item.Status == EvaluationStatus.Published),
             TotalComponentCount = checkpointComponents.Length,

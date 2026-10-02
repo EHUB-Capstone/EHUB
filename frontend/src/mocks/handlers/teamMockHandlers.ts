@@ -20,10 +20,29 @@ import {
   refreshClassCounts,
   requestParams,
   routeId,
+  teamWithMajorComposition,
 } from '../mockHelpers.ts';
 
 function teamById(teamId: string): MockTeam | undefined {
   return getMockState().teams.find((team) => team.id === teamId);
+}
+
+function canReadTeam(team: MockTeam): boolean {
+  const state = getMockState();
+  const user = state.users.find(item => item.id === state.sessionUserId);
+  if (!user) return false;
+  if (user.role === 'ADMIN') return true;
+  if (user.role === 'LECTURER') return findClass(team.classId)?.primaryLecturerId === user.id;
+  if (user.role === 'MENTOR') return team.currentMentorAssignments.some(item => item.status === 'Active' && item.mentor.userId === user.id);
+  return team.members.some(member => member.studentId === user.id);
+}
+
+function readableTeam(team: MockTeam) {
+  const state = getMockState();
+  const user = state.users.find(item => item.id === state.sessionUserId);
+  const result = teamWithMajorComposition(team);
+  return user && ['ADMIN', 'LECTURER'].includes(user.role) ? result
+    : { ...result, members: result.members.map(({ email: _email, ...member }) => member) };
 }
 
 function proposalMembers(classId: string, memberIds: string[], leaderId: string): MockProposalMember[] {
@@ -90,20 +109,32 @@ function activeMentorTeamCount(userId: string): number {
 function registerTeamQueries(mock: MockAdapter): void {
   mock.onGet('/teams').reply((config) => {
     const classId = asString(requestParams(config).classId);
-    const teams = getMockState().teams.filter((team) => !classId || team.classId === classId);
-    return ok(teams, 'Teams retrieved successfully.');
+    if (!getMockState().sessionUserId) return failure(401, 'UNAUTHORIZED', 'Authentication is required.');
+    const teams = getMockState().teams.filter((team) => (!classId || team.classId === classId) && canReadTeam(team));
+    return ok(teams.map(readableTeam), 'Teams retrieved successfully.');
   });
 
   mock.onGet(/^\/classes\/[^/]+\/teams$/).reply((config) => {
     const classId = routeId(config, /^\/classes\/([^/]+)\/teams$/);
-    return findClass(classId)
-      ? ok(getMockState().teams.filter((team) => team.classId === classId), 'Class teams retrieved successfully.')
-      : failure(404, 'CLASS_NOT_FOUND', 'Class not found.');
+    const state = getMockState();
+    const user = state.users.find(item => item.id === state.sessionUserId);
+    if (!user) return failure(401, 'UNAUTHORIZED', 'Authentication is required.');
+    const cls = findClass(classId);
+    if (!cls) return failure(404, 'CLASS_NOT_FOUND', 'Class not found.');
+    if (user.role === 'LECTURER' && cls.primaryLecturerId !== user.id || user.role === 'STUDENT' &&
+        !state.rosters[classId]?.some(item => item.userId === user.id && item.enrollmentStatus ===
+          (['Completed', 'Archived'].includes(cls.status) ? 'Completed' : 'Active')))
+      return failure(403, 'CLASS_ACCESS_DENIED', 'You cannot view this class.');
+    return ok(state.teams.filter(team => team.classId === classId &&
+      (user.role !== 'MENTOR' || canReadTeam(team))).map(readableTeam), 'Class teams retrieved successfully.');
   });
 
   mock.onGet(/^\/teams\/[^/]+$/).reply((config) => {
     const team = teamById(routeId(config, /^\/teams\/([^/]+)$/));
-    return team ? ok(team, 'Team retrieved successfully.') : failure(404, 'TEAM_NOT_FOUND', 'Team not found.');
+    if (!getMockState().sessionUserId) return failure(401, 'UNAUTHORIZED', 'Authentication is required.');
+    if (!team) return failure(404, 'TEAM_NOT_FOUND', 'Team not found.');
+    return canReadTeam(team) ? ok(readableTeam(team), 'Team retrieved successfully.')
+      : failure(403, 'CLASS_ACCESS_DENIED', 'You cannot view this team.');
   });
 
   mock.onGet(/^\/classes\/[^/]+\/mentors$/).reply((config) => {
@@ -238,7 +269,7 @@ function registerTeamMutations(mock: MockAdapter): void {
     updateRosterTeamLinks(classId, team);
     refreshClassCounts(classId);
     persistMockState();
-    return ok(team, 'Team created successfully.');
+    return ok(teamWithMajorComposition(team), 'Team created successfully.');
   });
 
   mock.onPut(/^\/teams\/[^/]+\/members$/).reply((config) => {
@@ -274,7 +305,7 @@ function registerTeamMutations(mock: MockAdapter): void {
     team.rowVersion = allocateRowVersion();
     updateRosterTeamLinks(team.classId, team, oldMemberIds);
     persistMockState();
-    return ok(team, 'Team members updated successfully.');
+    return ok(teamWithMajorComposition(team), 'Team members updated successfully.');
   });
 
   mock.onDelete(/^\/teams\/[^/]+$/).reply((config) => {
@@ -312,7 +343,7 @@ function registerTeamMutations(mock: MockAdapter): void {
     team.rowVersion = allocateRowVersion();
     updateRosterTeamLinks(team.classId, team);
     persistMockState();
-    return ok(team, 'Team leader updated successfully.');
+    return ok(teamWithMajorComposition(team), 'Team leader updated successfully.');
   });
 
   mock.onPost(/^\/teams\/[^/]+\/mentor-assignments$/).reply((config) => {

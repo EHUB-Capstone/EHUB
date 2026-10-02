@@ -167,6 +167,19 @@ public sealed class WorkspaceCheckpointsController(
             : ToErrorResponse(result.Error);
     }
 
+    [HttpGet("classes/{classId:guid}/students/{studentId:guid}/previous-scores")]
+    [Authorize(Policy = SystemPolicies.StaffOnly)]
+    public async Task<IActionResult> GetPreviousStudentScores(Guid classId, Guid studentId,
+        [FromServices] EHub.Application.Features.Workspaces.StudentPreviousScores.StudentPreviousScoresHandler handler,
+        CancellationToken cancellationToken)
+    {
+        var result = await handler.GetAsync(classId, studentId, UserId, Role, cancellationToken);
+        return result.IsSuccess
+            ? Ok(ApiResponse<StudentPreviousScoresResponse>.SuccessResponse(result.Value, "Previous scores retrieved."))
+            : StatusCode(StatusCodes.Status403Forbidden,
+                ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
+    }
+
     [HttpPost("evaluation-grading")]
     public async Task<IActionResult> GetEvaluationGradingBatch(
         [FromBody] EvaluationGradingBatchRequest request,

@@ -3,7 +3,9 @@ using System.Text.Json;
 using ExcelDataReader;
 using EHub.Application.Common.Interfaces.Persistence;
 using EHub.Application.Features.Classes.Common;
+using EHub.Application.Features.Teams.Common;
 using EHub.Contracts.Classes;
+using EHub.Contracts.Teams;
 using EHub.Domain.Entities;
 using EHub.Domain.Enums;
 using EHub.Shared.Constants;
@@ -347,8 +349,36 @@ public sealed class VerifyClassMajorsCommandHandler : IVerifyClassMajorsCommandH
             Missing = missing,
             NotFound = notFound,
             SynchronizedEnrollmentCount = synchronizedEnrollmentCount,
-            SynchronizedProfileCount = synchronizedProfileCount
+            SynchronizedProfileCount = synchronizedProfileCount,
+            TeamMajorWarnings = previewOnly
+                ? Array.Empty<TeamMajorWarningDto>()
+                : await GetTeamMajorWarningsAsync(classId, cancellationToken)
         });
+    }
+
+    // Read-only check of every active team against the persisted majors, so a warning is
+    // reported right after verification without changing any team or member data.
+    private async Task<IReadOnlyCollection<TeamMajorWarningDto>> GetTeamMajorWarningsAsync(
+        Guid classId,
+        CancellationToken cancellationToken)
+    {
+        var teams = await _context.Teams
+            .AsNoTracking()
+            .Include(team => team.TeamMembers).ThenInclude(member => member.ClassStudent).ThenInclude(enrollment => enrollment.Student)
+            .Where(team => team.ClassId == classId && team.Status == TeamStatus.Active)
+            .OrderBy(team => team.TeamCode)
+            .ToListAsync(cancellationToken);
+
+        return teams
+            .Select(team => new TeamMajorWarningDto
+            {
+                TeamId = team.Id,
+                TeamCode = team.TeamCode,
+                TeamName = team.TeamName,
+                MajorComposition = TeamMajorCompositionRules.Evaluate(team)
+            })
+            .Where(warning => !warning.MajorComposition.IsValid)
+            .ToArray();
     }
 
     private static Result<List<MajorSourceRow>> Parse(IFormFile file)

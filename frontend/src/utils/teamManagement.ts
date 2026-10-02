@@ -4,6 +4,7 @@ import type {
   MentorAssignment,
   TeamDraft,
   TeamDraftValidation,
+  TeamMajorComposition,
   TeamMember,
   TeamProject,
   TeamStudent,
@@ -162,6 +163,40 @@ export function validateTeamSelection(
     warnings,
     errors,
   };
+}
+
+/**
+ * Mirrors the backend TeamMajorCompositionRules. The backend is the source of truth
+ * (it sends `majorComposition` on every team); this is used by the mock API only.
+ */
+export function evaluateTeamMajorComposition(
+  members: Array<{ fullName: string; majorCode?: string | null }>,
+): TeamMajorComposition {
+  const groups = members.map((member) => getTeamGroupFromMajor(normalizeTeamMajorCode(member.majorCode)));
+  const missingGroups = (['GROUP_1', 'GROUP_2'] as const).filter((group) => !groups.includes(group));
+  if (missingGroups.length === 0) {
+    return { isValid: true, missingGroups: [], membersWithoutValidMajor: [], message: null };
+  }
+
+  const membersWithoutValidMajor = members
+    .filter((_, index) => !groups[index])
+    .map((member) => member.fullName);
+  const missingText = missingGroups
+    .map((group) => (group === 'GROUP_1' ? 'GROUP_1 (BBA/BEN)' : 'GROUP_2 (BIT)'))
+    .join(' and ');
+  let message = `This team does not meet the major requirement: it has no member from ${missingText}. `
+    + 'A team needs at least one GROUP_1 and one GROUP_2 major.';
+  if (membersWithoutValidMajor.length > 0) {
+    message += ` ${membersWithoutValidMajor.length} member(s) have no valid major: ${membersWithoutValidMajor.join(', ')}.`;
+  }
+  return { isValid: false, missingGroups: [...missingGroups], membersWithoutValidMajor, message };
+}
+
+/** The warning to show for a team, or null when the team is valid or has no server evaluation. */
+export function getTeamMajorWarning(team: ManagedTeam): TeamMajorComposition | null {
+  if (team.isProposal) return null;
+  const composition = team.majorComposition;
+  return composition && !composition.isValid ? composition : null;
 }
 
 export function normalizeManagedTeam(source: any): ManagedTeam {

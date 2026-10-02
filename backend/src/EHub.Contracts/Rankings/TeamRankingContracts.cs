@@ -1,9 +1,15 @@
+using System.Text.Json.Serialization;
+using System.ComponentModel.DataAnnotations;
+
 namespace EHub.Contracts.Rankings;
 
 public sealed class GetTeamRankingsRequest
 {
     public string? Semester { get; init; }
     public int? Year { get; init; }
+    public Guid? ClassId { get; init; }
+    [Range(1, int.MaxValue)]
+    public int? CheckpointNumber { get; init; }
 }
 
 public sealed class TeamRankingListResponse
@@ -27,6 +33,7 @@ public sealed class TeamRankingSemesterResponse
 
 public sealed class TeamRankingItemResponse
 {
+    public int? Rank { get; set; }
     public Guid TeamId { get; init; }
     public string TeamName { get; init; } = string.Empty;
     public string TeamCode { get; init; } = string.Empty;
@@ -42,6 +49,7 @@ public sealed class TeamRankingItemResponse
         Array.Empty<TeamRankingCheckpointResponse>();
     public IReadOnlyCollection<TeamRankingAssessmentResponse> Assessments { get; init; } =
         Array.Empty<TeamRankingAssessmentResponse>();
+    [JsonIgnore]
     public decimal? CourseTotal { get; init; }
     public string Status { get; init; } = "INCOMPLETE";
     public int CompletedComponentCount { get; init; }
@@ -56,6 +64,7 @@ public sealed class TeamRankingCheckpointResponse
     public int Number { get; init; }
     public string Title { get; init; } = string.Empty;
     public decimal Weight { get; init; }
+    [JsonIgnore]
     public decimal? Score { get; init; }
     public string Status { get; init; } = "NOT_GRADED";
 }
@@ -65,6 +74,7 @@ public sealed class TeamRankingAssessmentResponse
     public Guid AssessmentId { get; init; }
     public string Name { get; init; } = string.Empty;
     public decimal Weight { get; init; }
+    [JsonIgnore]
     public decimal? Score { get; init; }
     public string Status { get; init; } = "NOT_GRADED";
 }

@@ -51,6 +51,7 @@ public sealed class GetClassRosterQueryHandler : IGetClassRosterQueryHandler
 
         var targetClass = await _context.Classes
             .AsNoTracking()
+            .Include(c => c.ClassLecturers)
             .FirstOrDefaultAsync(c => c.Id == classId, cancellationToken);
 
         if (targetClass == null)
@@ -61,7 +62,8 @@ public sealed class GetClassRosterQueryHandler : IGetClassRosterQueryHandler
 
         if (isLecturer)
         {
-            if (targetClass.PrimaryLecturerId != currentUserId)
+            if (targetClass.PrimaryLecturerId != currentUserId &&
+                !targetClass.ClassLecturers.Any(item => item.LecturerId == currentUserId))
             {
                 return Result.Failure<ClassRosterListResponse>(
                     new Error(ErrorCodes.ClassAccessDenied, "You can only view roster for classes assigned to you."));

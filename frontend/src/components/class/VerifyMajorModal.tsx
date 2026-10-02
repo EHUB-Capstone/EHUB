@@ -8,6 +8,7 @@ import { classApi } from '../../api/classApi';
 import { PROGRAM_GROUPS, getMajorName } from '../../constants/majors';
 import { parseApiError } from '../../utils/apiError';
 import ConfirmDialog from '../ui/ConfirmDialog';
+import type { TeamMajorWarning } from '../../types/teamManagement';
 
 const downloadTemplate = async () => {
   const response = await classApi.getMajorVerificationTemplate();
@@ -97,7 +98,7 @@ export default function VerifyMajorModal({ classId, onClose, onUpdated }) {
   const [loading, setLoading] = useState(false);
   const [applying, setApplying] = useState(false);
   const [report, setReport]   = useState(null);
-  const [appliedSummary, setAppliedSummary] = useState<{ enrollments: number; profiles: number } | null>(null);
+  const [appliedSummary, setAppliedSummary] = useState<{ enrollments: number; profiles: number; teamWarnings: TeamMajorWarning[] } | null>(null);
   const [showApplyConfirm, setShowApplyConfirm] = useState(false);
   const [activeTab, setActiveTab] = useState('mismatched');
   const [search, setSearch]       = useState('');
@@ -152,13 +153,19 @@ export default function VerifyMajorModal({ classId, onClose, onUpdated }) {
         notFound?: unknown[];
         synchronizedEnrollmentCount?: number;
         synchronizedProfileCount?: number;
+        teamMajorWarnings?: TeamMajorWarning[];
       };
+      const teamWarnings = data.teamMajorWarnings || [];
       setAppliedSummary({
         enrollments: data.synchronizedEnrollmentCount || 0,
         profiles: data.synchronizedProfileCount || 0,
+        teamWarnings,
       });
       setShowApplyConfirm(false);
       toast.success(`Updated ${data.synchronizedEnrollmentCount || 0} class major(s) and ${data.synchronizedProfileCount || 0} profile major(s).`);
+      if (teamWarnings.length > 0) {
+        toast(`${teamWarnings.length} team(s) no longer meet the major requirement.`, { icon: '⚠️' });
+      }
       onUpdated?.();
     } catch (error) {
       toast.error(parseApiError(error, 'Unable to synchronize majors from the file.').message);
@@ -265,6 +272,24 @@ export default function VerifyMajorModal({ classId, onClose, onUpdated }) {
                   : `Preview only — no data has changed. The official file would change ${classChanges} class major(s) and ${profileChanges} profile major(s). Review before verifying and updating. Manual correction saves immediately and requires a new preview.`}
                 {' '}Other columns, including GroupName, are ignored.
               </div>
+              {appliedSummary && appliedSummary.teamWarnings.length > 0 && (
+                <div role="status" data-testid="verify-team-major-warnings" className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                  <p className="flex items-center gap-2 font-semibold">
+                    <AlertTriangle className="h-4 w-4 shrink-0 text-amber-500" aria-hidden="true" />
+                    {appliedSummary.teamWarnings.length} team(s) do not meet the major requirement
+                  </p>
+                  <p className="mt-1 text-xs text-amber-700">No team or member data was changed. Update the affected teams to clear the warning.</p>
+                  <ul className="mt-2 space-y-1.5 text-xs">
+                    {appliedSummary.teamWarnings.map(warning => (
+                      <li key={warning.teamId}>
+                        <span className="font-semibold">{warning.teamName}</span>
+                        {warning.teamCode ? <span className="font-mono text-amber-600"> ({warning.teamCode})</span> : null}
+                        {' — '}{warning.majorComposition.message}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
               {/* Summary cards */}
               <div className="grid grid-cols-4 gap-3">
                 {TABS.map(t => {

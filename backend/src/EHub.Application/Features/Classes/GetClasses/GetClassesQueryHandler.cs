@@ -74,7 +74,8 @@ public sealed class GetClassesQueryHandler : IGetClassesQueryHandler
         var query = _context.Classes.AsNoTracking();
         if (isLecturer)
         {
-            query = query.Where(@class => @class.PrimaryLecturerId == currentUserId);
+            query = query.Where(@class => @class.PrimaryLecturerId == currentUserId ||
+                @class.ClassLecturers.Any(item => item.LecturerId == currentUserId));
         }
 
         if (mustBeAssigned.HasValue)

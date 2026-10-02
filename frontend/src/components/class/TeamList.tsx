@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
+  AlertTriangle,
   ChevronDown,
   ChevronRight,
   Crown,
@@ -16,7 +17,7 @@ import {
 } from 'lucide-react';
 import Button from '../ui/Button';
 import type { ManagedTeam, TeamProject, TeamStudent } from '../../types/teamManagement';
-import { entityId, getTeamMembers, getTeamProject } from '../../utils/teamManagement';
+import { entityId, getTeamMajorWarning, getTeamMembers, getTeamProject } from '../../utils/teamManagement';
 
 interface TeamListProps {
   teams: ManagedTeam[];
@@ -174,9 +175,10 @@ function TeamCard({
   const needsRevision = proposalStatus === 'NEEDSREVISION' || proposalStatus === 'NEEDS_REVISION';
   const currentStudentIsMember = Boolean(currentStudentId && members.some(member => member._id === currentStudentId));
   const canOpenTeamWorkspace = canManageInfo || currentStudentIsMember;
+  const majorWarning = getTeamMajorWarning(team);
 
   return (
-    <article className={`overflow-hidden rounded-2xl border bg-white shadow-sm transition-shadow hover:shadow-card ${isPending ? 'border-amber-200' : 'border-slate-200/70'}`}>
+    <article className={`overflow-hidden rounded-2xl border bg-white shadow-sm transition-shadow hover:shadow-card ${isPending || majorWarning ? 'border-amber-200' : 'border-slate-200/70'}`}>
       <div className="p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="flex min-w-0 items-center gap-3">
@@ -206,6 +208,13 @@ function TeamCard({
             {!team.isProposal && canDelete && onDelete && <button type="button" onClick={() => onDelete(team)} className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-300 hover:bg-red-50 hover:text-red-500" aria-label={`Delete ${team.teamName}`} title="Delete team"><Trash2 className="h-4 w-4" /></button>}
           </div>
         </div>
+
+        {majorWarning && (
+          <div role="status" data-testid="team-major-warning" className="mt-4 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-800">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" aria-hidden="true" />
+            <p><strong className="font-semibold">Major requirement not met.</strong> {majorWarning.message}</p>
+          </div>
+        )}
 
         <div className="mt-4 grid grid-cols-2 gap-2">
           <div className="rounded-xl bg-slate-50 p-3">

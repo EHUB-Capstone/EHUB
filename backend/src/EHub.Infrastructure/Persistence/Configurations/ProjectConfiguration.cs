@@ -68,6 +68,18 @@ public class ProjectConfiguration : IEntityTypeConfiguration<Project>
             .HasColumnName("is_high_potential")
             .HasDefaultValue(false);
 
+        builder.Property(p => p.IsFunded)
+            .HasColumnName("is_funded")
+            .HasDefaultValue(false);
+
+        builder.Property(p => p.IsAwarded)
+            .HasColumnName("is_awarded")
+            .HasDefaultValue(false);
+
+        builder.Property(p => p.Version)
+            .IsRowVersion()
+            .HasColumnName("xmin");
+
         builder.Property(p => p.CreatedById)
             .HasColumnName("created_by_id");
 
