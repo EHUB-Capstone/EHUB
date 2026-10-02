@@ -282,7 +282,7 @@ export default function LecturerCheckpointManagement({
         <div className={`flex items-center justify-between gap-3 px-5 py-4 ${schedulesExpanded ? 'border-b border-slate-100' : ''}`}>
           <div>
             <h2 className="font-bold text-slate-900">Checkpoint schedules</h2>
-            <p className="mt-0.5 text-xs text-slate-500">Configure Admin-defined checkpoints for the classes you manage.</p>
+            <p className="mt-0.5 text-xs text-slate-500">Set checkpoint deadlines for your classes here.</p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
             {loading && <Loader2 className="h-4 w-4 animate-spin text-primary" />}

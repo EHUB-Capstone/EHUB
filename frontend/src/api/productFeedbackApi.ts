@@ -15,7 +15,7 @@ export const productFeedbackApi = {
       headers: { 'Content-Type': 'multipart/form-data' }
     });
   },
-  download: (feedbackId: string, attachmentId: string) => axiosClient.get(
+  download: (feedbackId: string, attachmentId: string): Promise<Blob> => axiosClient.get(
     `/product-feedback/${feedbackId}/attachments/${attachmentId}/download`,
     { responseType: 'blob' }
   )
