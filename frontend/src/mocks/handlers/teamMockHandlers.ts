@@ -157,6 +157,90 @@ function registerTeamQueries(mock: MockAdapter): void {
 }
 
 function registerTeamMutations(mock: MockAdapter): void {
+  mock.onPost(/^\/classes\/[^/]+\/teams$/).reply((config) => {
+    const classId = routeId(config, /^\/classes\/([^/]+)\/teams$/);
+    const guard = classMutationGuard(classId);
+    if (guard) return guard;
+
+    const state = getMockState();
+    const currentUser = state.users.find((user) => user.id === state.sessionUserId);
+    const canManageClass = currentUser?.role === 'ADMIN'
+      || (currentUser?.role === 'LECTURER' && findClass(classId)?.primaryLecturerId === currentUser.id);
+    if (!currentUser || !canManageClass) {
+      return failure(403, 'CLASS_ACCESS_DENIED', 'Only an administrator or the assigned lecturer can create a team for this class.');
+    }
+
+    const body = parseBody(config);
+    const rawMemberIds = asStringArray(body.memberStudentIds);
+    const memberIds = [...new Set(rawMemberIds)];
+    const leaderId = asString(body.leaderStudentId);
+    const teamName = asString(body.teamName).trim();
+    if (rawMemberIds.length !== memberIds.length || memberIds.length < 4 || memberIds.length > 6 || !memberIds.includes(leaderId)) {
+      return failure(400, 'CLASS_VALIDATION_ERROR', 'A team needs 4–6 unique students and a leader selected from its members.');
+    }
+    if (teamName.length < 3 || teamName.length > 60) {
+      return failure(400, 'CLASS_VALIDATION_ERROR', 'Team name must be between 3 and 60 characters.');
+    }
+
+    const roster = state.rosters[classId] || [];
+    const selectedStudents = memberIds.map((studentId) =>
+      roster.find((student) => student.studentId === studentId && student.enrollmentStatus === 'Active'));
+    if (selectedStudents.some((student) => !student)) {
+      return failure(400, 'CLASS_VALIDATION_ERROR', 'Every team member must have an active enrollment in this class.');
+    }
+    if (hasMemberConflict(classId, memberIds)) {
+      return failure(409, 'TEAM_MEMBERSHIP_CONFLICT', 'A selected student already belongs to another active team in this class.');
+    }
+    const openProposalStatuses = new Set(['Draft', 'Pending', 'NeedsRevision']);
+    if (state.proposals.some((proposal) => proposal.classId === classId
+      && openProposalStatuses.has(proposal.status)
+      && proposal.members.some((member) => memberIds.includes(member.studentId)))) {
+      return failure(409, 'TEAM_PROPOSAL_MEMBERSHIP_CONFLICT', 'A selected student belongs to an open team proposal.');
+    }
+    if (state.formations.some((formation) => formation.classId === classId
+      && formation.status === 'Pending'
+      && formation.invitations.some((invitation) => memberIds.includes(invitation.studentId)))) {
+      return failure(409, 'TEAM_FORMATION_RESERVATION_CONFLICT', 'A selected student belongs to a pending team formation.');
+    }
+
+    const groupOneMajors = new Set(['BBA_HM', 'BBA_FIN', 'BBA_IB', 'BBA_MC', 'BBA_MKT', 'BEN', 'BBA_TM']);
+    const groupTwoMajors = new Set(['BIT_AI', 'BIT_GD', 'BIT_IA', 'BIT_SE']);
+    const majors = selectedStudents.map((student) => student?.majorCode?.toUpperCase() || '');
+    if (!majors.some((major) => groupOneMajors.has(major)) || !majors.some((major) => groupTwoMajors.has(major))) {
+      return failure(400, 'TEAM_MAJOR_COMPOSITION_INVALID', 'A team must include at least one GROUP_1 major and one GROUP_2 major.');
+    }
+    if (hasDuplicateTeamName(classId, teamName)
+      || state.proposals.some((proposal) => proposal.classId === classId
+        && proposal.teamName.trim().toLowerCase() === teamName.toLowerCase()
+        && !['Rejected', 'Cancelled'].includes(proposal.status))
+      || state.formations.some((formation) => formation.classId === classId
+        && formation.status === 'Pending'
+        && formation.teamName.trim().toLowerCase() === teamName.toLowerCase())) {
+      return failure(409, 'TEAM_NAME_DUPLICATED', 'A team, open proposal, or pending formation already uses this name in the class.');
+    }
+
+    const team: MockTeam = {
+      id: allocateId(),
+      classId,
+      teamCode: `${findClass(classId)?.classCode || 'TEAM'}_TEAM_${state.teams.filter((item) => item.classId === classId).length + 1}`,
+      teamName,
+      description: null,
+      projectName: null,
+      projectDescription: null,
+      status: 'Active',
+      leaderId,
+      members: selectedStudents.map((student) => memberFromStudent(student!, leaderId)),
+      currentMentorAssignment: null,
+      currentMentorAssignments: [],
+      rowVersion: allocateRowVersion(),
+    };
+    state.teams.push(team);
+    updateRosterTeamLinks(classId, team);
+    refreshClassCounts(classId);
+    persistMockState();
+    return ok(team, 'Team created successfully.');
+  });
+
   mock.onPut(/^\/teams\/[^/]+\/members$/).reply((config) => {
     const teamId = routeId(config, /^\/teams\/([^/]+)\/members$/);
     const team = teamById(teamId);

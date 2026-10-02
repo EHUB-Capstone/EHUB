@@ -12,7 +12,7 @@ import { classApi } from '../../api/classApi';
 import { subjectApi } from '../../api/subjectApi';
 import { parseApiError } from '../../utils/apiError';
 import { unwrapApiData } from '../../utils/classMappers';
-import { parseClassPositions } from '../../utils/bulkClassAssignments';
+import { parseClassIndices } from '../../utils/bulkClassAssignments';
 import type {
   BulkClassPreviewResponse,
   ClassDto,
@@ -60,7 +60,7 @@ export default function BulkCreateModal({
   const [submitting, setSubmitting] = useState(false);
   const [lecturerSearch, setLecturerSearch] = useState('');
   const [assignmentMode, setAssignmentMode] = useState<AssignmentMode>('assign');
-  const [lecturerPositionInputs, setLecturerPositionInputs] = useState<Record<string, string>>({});
+  const [lecturerClassInputs, setLecturerClassInputs] = useState<Record<string, string>>({});
   const [form, setForm] = useState({
     subjectCode: '',
     semesterId: '',
@@ -134,7 +134,7 @@ export default function BulkCreateModal({
           email: member.email,
         }));
       setLecturers(options);
-      setLecturerPositionInputs({});
+      setLecturerClassInputs({});
       setServerPreview(null);
     }).catch(error => {
       if (active) {
@@ -169,17 +169,17 @@ export default function BulkCreateModal({
   const lecturerAssignments = useMemo(() => lecturers.map((lecturer, lecturerIndex) => ({
     lecturer,
     lecturerIndex,
-    ...parseClassPositions(lecturerPositionInputs[lecturer._id] || '', quantity),
-  })), [lecturerPositionInputs, lecturers, quantity]);
+    ...parseClassIndices(lecturerClassInputs[lecturer._id] || '', startIndex, quantity),
+  })), [lecturerClassInputs, lecturers, startIndex, quantity]);
 
-  const positionAssignments = useMemo(() => {
+  const classAssignments = useMemo(() => {
     const assignments = new Map<number, { lecturer: LecturerOption; lecturerIndex: number }>();
     const conflicts = new Set<number>();
     for (const assignment of lecturerAssignments) {
       if (assignment.error) continue;
-      for (const position of assignment.positions) {
-        if (assignments.has(position)) conflicts.add(position);
-        else assignments.set(position, assignment);
+      for (const classIndex of assignment.classIndices) {
+        if (assignments.has(classIndex)) conflicts.add(classIndex);
+        else assignments.set(classIndex, assignment);
       }
     }
     return { assignments, conflicts };
@@ -188,7 +188,7 @@ export default function BulkCreateModal({
   const updateForm = (field: keyof typeof form, value: string) => {
     setForm(current => ({ ...current, [field]: value }));
     if (field === 'semesterId') {
-      setLecturerPositionInputs({});
+      setLecturerClassInputs({});
     }
     setServerPreview(null);
   };
@@ -197,12 +197,12 @@ export default function BulkCreateModal({
     setAssignmentMode(mode);
     setServerPreview(null);
     if (mode === 'unassigned') {
-      setLecturerPositionInputs({});
+      setLecturerClassInputs({});
     }
   };
 
-  const updateLecturerPositions = (lecturerId: string, value: string) => {
-    setLecturerPositionInputs(current => ({ ...current, [lecturerId]: value }));
+  const updateLecturerClasses = (lecturerId: string, value: string) => {
+    setLecturerClassInputs(current => ({ ...current, [lecturerId]: value }));
     setServerPreview(null);
   };
 
@@ -221,22 +221,22 @@ export default function BulkCreateModal({
       if (lecturers.length === 0) return 'Add an active lecturer to this semester before assigning classes.';
       const assignmentError = lecturerAssignments.find(item => item.error);
       if (assignmentError?.error) return `${assignmentError.lecturer.name}: ${assignmentError.error}`;
-      if (positionAssignments.conflicts.size > 0) {
-        return `Class position(s) ${Array.from(positionAssignments.conflicts).sort((a, b) => a - b).join(', ')} are assigned more than once.`;
+      if (classAssignments.conflicts.size > 0) {
+        return `Class number(s) ${Array.from(classAssignments.conflicts).sort((a, b) => a - b).join(', ')} are assigned more than once.`;
       }
-      const missing = Array.from({ length: quantity }, (_, index) => index + 1)
-        .filter(position => !positionAssignments.assignments.has(position));
-      if (missing.length > 0) return `Assign every class. Missing position(s): ${missing.join(', ')}.`;
+      const missing = Array.from({ length: quantity }, (_, index) => startIndex + index)
+        .filter(classIndex => !classAssignments.assignments.has(classIndex));
+      if (missing.length > 0) return `Assign every class. Missing class number(s): ${missing.join(', ')}.`;
     }
     return null;
   };
 
   const buildRequest = (): CreateBulkClassesRequest => {
     const assignments = lecturerAssignments
-      .filter(item => !item.error && item.positions.length > 0)
+      .filter(item => !item.error && item.classIndices.length > 0)
       .map(item => ({
         lecturerId: item.lecturer._id,
-        classIndices: item.positions.map(position => startIndex + position - 1),
+        classIndices: item.classIndices,
       }));
     return {
       subjectCode: form.subjectCode,
@@ -274,7 +274,7 @@ export default function BulkCreateModal({
       }
 
       const createdClasses = unwrapApiData<ClassDto[]>(await classApi.commitBulkCreate(request));
-      const assignedLecturerCount = lecturerAssignments.filter(item => item.positions.length > 0).length;
+      const assignedLecturerCount = lecturerAssignments.filter(item => item.classIndices.length > 0).length;
       toast.success(
         assignmentMode === 'assign'
           ? `${createdClasses.length} class(es) created and assigned across ${assignedLecturerCount} lecturer(s).`
@@ -345,14 +345,14 @@ export default function BulkCreateModal({
                   <div className="mt-3 rounded-xl border border-slate-100 bg-slate-50 p-3">
                     <div className="mb-2 flex items-center justify-between gap-3">
                       <p className="text-xs font-semibold text-slate-500">Generated class codes</p>
-                      <p className="text-[11px] text-slate-400">The number before each code is its assignment position.</p>
+                      <p className="text-[11px] text-slate-400">Assign one or more of these classes to each lecturer below.</p>
                     </div>
                     <div className="max-h-44 overflow-y-auto pr-1">
                       <div className="flex flex-wrap gap-2">
                         {clientCodes.map((code, index) => {
-                          const position = index + 1;
-                          const conflict = positionAssignments.conflicts.has(position);
-                          const assignment = positionAssignments.assignments.get(position);
+                          const classIndex = startIndex + index;
+                          const conflict = classAssignments.conflicts.has(classIndex);
+                          const assignment = classAssignments.assignments.get(classIndex);
                           const color = assignment ? LECTURER_COLORS[assignment.lecturerIndex % LECTURER_COLORS.length] : null;
                           return (
                             <div
@@ -367,7 +367,7 @@ export default function BulkCreateModal({
                               title={conflict ? 'Assigned to multiple lecturers' : assignment?.lecturer.name || 'Unassigned'}
                             >
                               <div className="flex items-center gap-1.5">
-                                <span className="text-[10px] font-bold opacity-70">#{position}</span>
+                                <span className="text-[10px] font-bold opacity-70">#{classIndex}</span>
                                 <span className="font-mono text-xs font-semibold">{code}</span>
                               </div>
                               {assignmentMode === 'assign' && assignment && !conflict && (
@@ -405,7 +405,7 @@ export default function BulkCreateModal({
                 {assignmentMode === 'assign' && (
                   <div className="mt-3 rounded-xl border border-slate-200 p-3">
                     <div className="mb-3 rounded-lg bg-blue-50 px-3 py-2 text-xs text-blue-700">
-                      Enter generated positions for each lecturer. Use commas and ranges, for example <span className="font-semibold">2,4,8</span> or <span className="font-semibold">1-3,6</span>.
+                      To assign multiple classes to one lecturer, first increase <span className="font-semibold">Number of classes</span> above. Then enter the generated class numbers separated by commas (<span className="font-semibold">8, 10, 12</span>), as a range (<span className="font-semibold">8-12</span>), or combine both formats (<span className="font-semibold">8-10, 12</span>).
                     </div>
                     <div className="relative mb-2">
                       <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -417,7 +417,7 @@ export default function BulkCreateModal({
                       ) : filteredLecturers.map(lecturer => {
                         const lecturerIndex = lecturers.findIndex(item => item._id === lecturer._id);
                         const color = LECTURER_COLORS[lecturerIndex % LECTURER_COLORS.length];
-                        const parsed = parseClassPositions(lecturerPositionInputs[lecturer._id] || '', quantity);
+                        const parsed = parseClassIndices(lecturerClassInputs[lecturer._id] || '', startIndex, quantity);
                         return (
                           <div key={lecturer._id} className={`grid gap-2 rounded-xl border p-2.5 sm:grid-cols-[minmax(0,1fr)_220px] ${parsed.error ? 'border-red-200 bg-red-50/40' : 'border-slate-100 bg-slate-50/60'}`}>
                             <div className="flex min-w-0 items-center gap-2">
@@ -428,10 +428,11 @@ export default function BulkCreateModal({
                               <input
                                 type="text"
                                 inputMode="numeric"
-                                value={lecturerPositionInputs[lecturer._id] || ''}
-                                onChange={event => updateLecturerPositions(lecturer._id, event.target.value)}
-                                placeholder="e.g. 2,4,8 or 1-3"
-                                aria-label={`Class positions assigned to ${lecturer.name}`}
+                                value={lecturerClassInputs[lecturer._id] || ''}
+                                onChange={event => updateLecturerClasses(lecturer._id, event.target.value)}
+                                placeholder={quantity > 1 ? `e.g. ${startIndex}, ${startIndex + 1}` : `e.g. ${startIndex}`}
+                                aria-label={`Class numbers assigned to ${lecturer.name}`}
+                                aria-invalid={Boolean(parsed.error)}
                                 className={`w-full rounded-lg border bg-white px-3 py-2 text-xs outline-none focus:ring-2 ${parsed.error ? 'border-red-300 focus:border-red-400 focus:ring-red-100' : 'border-slate-200 focus:border-primary focus:ring-primary/20'}`}
                               />
                               {parsed.error && <p className="mt-1 text-[10px] text-red-600">{parsed.error}</p>}

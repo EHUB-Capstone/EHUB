@@ -1,7 +1,18 @@
 // @ts-nocheck
 // src/api/checkpointApi.js
 import axiosClient from './axiosClient.ts';
-import { CHECKPOINT_UPLOAD_TIMEOUT_MS } from '../utils/checkpointUpload.ts';
+import storageClient from './storageClient.ts';
+import { CHECKPOINT_UPLOAD_TIMEOUT_MS, checkpointPutTimeoutMs } from '../utils/checkpointUpload.ts';
+
+function triggerBrowserDownload(href, fileName) {
+  const link = document.createElement('a');
+  link.href = href;
+  link.download = fileName || 'checkpoint-file';
+  link.rel = 'noopener';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+}
 
 export const checkpointApi = {
   // Subject-configured checkpoints plus the team's submission history
@@ -13,19 +24,30 @@ export const checkpointApi = {
       params: checkpointNumber ? { checkpointNumber } : {},
     }),
 
-  // Upload a file (Student only)
-  uploadFile: (teamId, checkpointNumber, formData, options = {}) =>
+  // Direct upload (Student only): 1) ask the API for a presigned URL, 2) PUT the file straight to
+  // object storage, 3) tell the API it is done. The file never passes through the API.
+  initiateUpload: (teamId, checkpointNumber, { fileName, contentType, size }, options = {}) =>
     axiosClient.post(
-      `/workspace/checkpoints/teams/${teamId}/checkpoints/${checkpointNumber}/upload`,
-      formData,
-      {
-        timeout: CHECKPOINT_UPLOAD_TIMEOUT_MS,
-        ...options,
-        headers: {
-          'Content-Type': 'multipart/form-data',
-          ...(options.headers ?? {}),
-        },
-      },
+      `/workspace/checkpoints/teams/${teamId}/checkpoints/${checkpointNumber}/uploads`,
+      { fileName, contentType, size },
+      { timeout: CHECKPOINT_UPLOAD_TIMEOUT_MS, ...options },
+    ),
+
+  // Not an API call: storageClient sends no cookies or Authorization header to the storage host.
+  putToPresignedUrl: (session, file, options = {}) =>
+    storageClient.put(session.uploadUrl, file, {
+      headers: session.headers,
+      timeout: checkpointPutTimeoutMs(file.size),
+      maxBodyLength: Infinity,
+      ...options,
+    }),
+
+  // Safe to call again after a network failure: the API returns the file it already created.
+  completeUpload: (teamId, checkpointNumber, uploadId, options = {}) =>
+    axiosClient.post(
+      `/workspace/checkpoints/teams/${teamId}/checkpoints/${checkpointNumber}/uploads/${uploadId}/complete`,
+      null,
+      { timeout: CHECKPOINT_UPLOAD_TIMEOUT_MS, ...options },
     ),
 
   // Delete a submitted file
@@ -51,19 +73,21 @@ export const checkpointApi = {
       `/workspace/checkpoints/teams/${teamId}/checkpoints/${checkpointNumber}/links/${linkId}`,
     ),
 
-  // Use axiosClient so its in-memory access token and refresh interceptor apply.
-  downloadFile: async (teamId, checkpointNumber, fileId, fileName) => {
-    const blob = await axiosClient.get(
-      `/workspace/checkpoints/teams/${teamId}/checkpoints/${checkpointNumber}/files/${fileId}/download`,
-      { responseType: 'blob' },
-    );
+  // Small and legacy files stream through the API (axiosClient carries the in-memory access token).
+  // Large R2 files (canDirectDownload) get a short-lived presigned URL and download straight from storage.
+  downloadFile: async (teamId, checkpointNumber, fileId, fileName, { canDirectDownload = false } = {}) => {
+    const base = `/workspace/checkpoints/teams/${teamId}/checkpoints/${checkpointNumber}/files/${fileId}`;
+    if (canDirectDownload) {
+      const response = await axiosClient.get(`${base}/download-url`);
+      const url = response?.data?.url;
+      if (!url) throw new Error('The download link could not be created.');
+      triggerBrowserDownload(url, fileName);
+      return;
+    }
+
+    const blob = await axiosClient.get(`${base}/download`, { responseType: 'blob' });
     const objectUrl = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = objectUrl;
-    link.download = fileName || 'checkpoint-file';
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
+    triggerBrowserDownload(objectUrl, fileName);
     URL.revokeObjectURL(objectUrl);
   },
 

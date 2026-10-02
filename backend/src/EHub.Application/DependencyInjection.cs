@@ -18,6 +18,7 @@ using EHub.Application.Features.Auth.ResendRegistrationOtp;
 using EHub.Application.Features.Auth.VerifyRegistrationOtp;
 using EHub.Application.Features.Dashboard.GetAdminDashboard;
 using EHub.Application.Features.Dashboard.GetAcademicOverview;
+using EHub.Application.Features.Dashboard.GetSubmissionAnalytics;
 using EHub.Application.Features.Notifications.GetNotifications;
 using EHub.Application.Features.Notifications.MarkNotificationRead;
 using EHub.Application.Features.Rankings.TeamRankings;
@@ -66,6 +67,7 @@ public static class DependencyInjection
 
         services.AddScoped<IGetAdminDashboardQueryHandler, GetAdminDashboardQueryHandler>();
         services.AddScoped<IGetAcademicOverviewQueryHandler, GetAcademicOverviewQueryHandler>();
+        services.AddScoped<IGetSubmissionAnalyticsQueryHandler, GetSubmissionAnalyticsQueryHandler>();
         services.AddScoped<ITrackingQueryHandler, TrackingQueryHandler>();
         services.AddScoped<ITeamRankingQueryHandler, TeamRankingQueryHandler>();
         services.AddScoped<IGetNotificationsQueryHandler, GetNotificationsQueryHandler>();
@@ -120,6 +122,7 @@ public static class DependencyInjection
         services.AddScoped<IGetWorkspaceCheckpointOverviewQueryHandler, GetWorkspaceCheckpointOverviewQueryHandler>();
         services.AddScoped<ILecturerCheckpointManagementHandler, LecturerCheckpointManagementHandler>();
         services.AddScoped<EHub.Application.Features.Workspaces.CheckpointFiles.ICheckpointFileHandler, EHub.Application.Features.Workspaces.CheckpointFiles.CheckpointFileHandler>();
+        services.AddScoped<EHub.Application.Features.Workspaces.CheckpointFiles.ICheckpointFileUploadHandler, EHub.Application.Features.Workspaces.CheckpointFiles.CheckpointFileUploadHandler>();
         services.AddScoped<EHub.Application.Features.Workspaces.CheckpointLinks.ICheckpointLinkHandler, EHub.Application.Features.Workspaces.CheckpointLinks.CheckpointLinkHandler>();
         services.AddScoped<EHub.Application.Features.Workspaces.CheckpointRequirements.ICheckpointRequirementHandler, EHub.Application.Features.Workspaces.CheckpointRequirements.CheckpointRequirementHandler>();
         services.AddScoped<EHub.Application.Features.Workspaces.CheckpointFeedback.ICheckpointFeedbackHandler, EHub.Application.Features.Workspaces.CheckpointFeedback.CheckpointFeedbackHandler>();

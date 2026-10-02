@@ -11,6 +11,66 @@ import { generateCriterionKey, resolveCriterionKey } from '../src/utils/rubricKe
 resetMockState();
 enableApiMocks();
 
+test('submission analytics mock counts files and links, includes teams without workspaces, and uses the current deadline', async () => {
+  resetMockState();
+  await axiosClient.post('/auth/login', { email: 'giang.lecturer@ehub.local', password: 'Mock123!' });
+  const overview = await axiosClient.get('/lecturer/checkpoints', { params: { semester: 'FA', year: 2026 } });
+  const cls = overview.data.classes[0];
+  const definition = overview.data.checkpoints[0];
+  const state = getMockState();
+  const teams = state.teams.filter(team => team.classId === cls.id && team.status === 'Active');
+  assert.ok(teams.length >= 2);
+  for (const team of teams) {
+    state.checkpointFiles[`${team.id}:${definition.number}`] = [];
+    state.checkpointLinks[`${team.id}:${definition.number}`] = [];
+  }
+  const uploadedAt = new Date(Date.now() - 2 * 86400000).toISOString();
+  const file = { _id: 'analytics-file-1', originalName: 'submission.pdf', fileType: 'pdf', fileSize: 100,
+    uploadedAt, uploadedBy: { _id: state.sessionUserId || '', name: 'Mock submitter' } };
+  state.checkpointFiles[`${teams[0].id}:${definition.number}`] = [file, { ...file, _id: 'analytics-file-2' }];
+  state.checkpointSchedules[`${cls.id}:${definition.id}`] = {
+    id: 'analytics-schedule', classId: cls.id, checkpointId: definition.id, startDateUtc: uploadedAt,
+    endDateUtc: new Date(Date.now() - 86400000).toISOString(), reopenCount: 0,
+  };
+  const params = { semester: 'FA', year: 2026, classId: cls.id, checkpointNumber: definition.number };
+  const response = await axiosClient.get('/dashboard/submission-analytics', { params });
+  assert.equal(response.data.expectedCount, teams.length);
+  assert.equal(response.data.submittedCount, 1);
+  assert.equal(response.data.notSubmittedCount, teams.length - 1);
+  assert.equal(response.data.missingCount, teams.length - 1);
+  assert.ok(response.data.items.some((item: { hasWorkspace: boolean }) => !item.hasWorkspace));
+  const links = [{ _id: 'analytics-link', versionNumber: 1, name: 'Submission', url: 'https://example.test/submission',
+    submittedAt: uploadedAt, submittedBy: { _id: state.sessionUserId || '', name: 'Mock submitter' } }];
+  state.checkpointFiles[`${teams[0].id}:${definition.number}`] = [];
+  state.checkpointLinks[`${teams[0].id}:${definition.number}`] = links;
+  const linkOnly = await axiosClient.get('/dashboard/submission-analytics', { params: { ...params, teamId: teams[0].id } });
+  assert.equal(linkOnly.data.expectedCount, 1);
+  assert.equal(linkOnly.data.submittedCount, 1);
+  state.checkpointSchedules[`${cls.id}:${definition.id}`].endDateUtc = new Date(Date.now() + 86400000).toISOString();
+  const reopened = await axiosClient.get('/dashboard/submission-analytics', { params });
+  assert.equal(reopened.data.missingCount, 0);
+  assert.equal(reopened.data.notSubmittedCount, teams.length - 1);
+  const otherYear = await axiosClient.get('/dashboard/submission-analytics', { params: { ...params, year: 2025 } });
+  assert.equal(otherYear.data.expectedCount, 0);
+  resetMockState();
+});
+
+test('submission analytics mock enforces authentication, roles, validation, and lecturer resource access', async () => {
+  resetMockState();
+  const hasStatus = (status: number) => (error: unknown) => (error as { response?: { status?: number } }).response?.status === status;
+  await assert.rejects(axiosClient.get('/dashboard/submission-analytics', { _retry: true }), hasStatus(401));
+  await axiosClient.post('/auth/login', { email: 'se200001@fpt.edu.vn', password: 'Mock123!' });
+  await assert.rejects(axiosClient.get('/dashboard/submission-analytics'), hasStatus(403));
+  await axiosClient.post('/auth/login', { email: 'giang.lecturer@ehub.local', password: 'Mock123!' });
+  await assert.rejects(axiosClient.get('/dashboard/submission-analytics', { params: { checkpointNumber: 0 } }), hasStatus(400));
+  await assert.rejects(axiosClient.get('/dashboard/submission-analytics', { params: { classId: 'unknown-class' } }), hasStatus(403));
+  await assert.rejects(axiosClient.get('/dashboard/submission-analytics', { params: { teamId: 'unknown-team' } }), hasStatus(403));
+  await axiosClient.post('/auth/login', { email: 'admin@ehub.local', password: 'Mock123!' });
+  const admin = await axiosClient.get('/dashboard/submission-analytics');
+  assert.ok(admin.data.expectedCount > 0);
+  resetMockState();
+});
+
 test('criterion key follows label changes until the key is manually customized', () => {
   assert.equal(generateCriterionKey('Problem clarity'), 'problemClarity');
   assert.equal(generateCriterionKey('Độ phù hợp giải pháp'), 'doPhuHopGiaiPhap');
@@ -996,7 +1056,62 @@ test('mock student formation creates a team only after every invited member acce
   assert.equal(state.formations.find((formation) => formation.id === response.data.id)?.status, 'Completed');
 });
 
-test('mock class managers create the same pending project proposal on behalf of the team leader', async () => {
+test('mock class managers create active teams directly without formations or proposals', async () => {
+  for (const role of ['ADMIN', 'LECTURER'] as const) {
+    resetMockState();
+    const state = getMockState();
+    const targetClass = state.classes.find((item) => item.status === 'Draft');
+    assert.ok(targetClass);
+    const roster = state.rosters[targetClass.id];
+    const actor = state.users.find((user) => user.role === role);
+    assert.ok(actor);
+    if (role === 'LECTURER') targetClass.primaryLecturerId = actor.id;
+
+    await axiosClient.post('/auth/login', { email: actor.email, password: 'Mock123!' });
+    const memberIds = roster.map((student) => student.studentId);
+    const leaderId = memberIds[1];
+    const proposalCount = state.proposals.length;
+    const formationCount = state.formations.length;
+    const response = await axiosClient.post(`/classes/${targetClass.id}/teams`, {
+      teamName: `Direct Manager ${role}`,
+      memberStudentIds: memberIds,
+      leaderStudentId: leaderId,
+    });
+
+    assert.equal(response.data.status, 'Active');
+    assert.equal(response.data.leaderId, leaderId);
+    assert.equal(response.data.members.length, 4);
+    assert.equal(state.proposals.length, proposalCount);
+    assert.equal(state.formations.length, formationCount);
+    assert.ok(roster.every((student) => student.teamId === response.data.id));
+  }
+});
+
+test('mock direct class-manager team endpoint rejects student accounts', async () => {
+  resetMockState();
+  const state = getMockState();
+  const targetClass = state.classes.find((item) => item.status === 'Draft');
+  assert.ok(targetClass);
+  const roster = state.rosters[targetClass.id];
+  const student = state.users.find((user) => user.id === roster[0].userId);
+  assert.ok(student);
+  await axiosClient.post('/auth/login', { email: student.email, password: 'Mock123!' });
+
+  await assert.rejects(
+    axiosClient.post(`/classes/${targetClass.id}/teams`, {
+      teamName: 'Student Bypass Attempt',
+      memberStudentIds: roster.map((item) => item.studentId),
+      leaderStudentId: roster[0].studentId,
+    }),
+    (error: unknown) => {
+      const response = (error as { response?: { status?: number; data?: { code?: string } } }).response;
+      return response?.status === 403 && response.data?.code === 'CLASS_ACCESS_DENIED';
+    },
+  );
+  assert.equal(state.teams.some((team) => team.teamName === 'Student Bypass Attempt'), false);
+});
+
+test('mock legacy class-manager proposal endpoint still creates its pending project proposal', async () => {
   for (const role of ['ADMIN', 'LECTURER'] as const) {
     resetMockState();
     const state = getMockState();
@@ -1451,11 +1566,14 @@ test('lecturer checkpoint mock follows Admin definitions and shares class schedu
   assert.equal(second.startDateUtc, start);
 
   for (const [index, name] of ['first.pdf', 'revised.pdf'].entries()) {
-    const body = new FormData();
-    body.append('file', new File(['%PDF-test'], name, { type: 'application/pdf' }));
-    const uploaded = await checkpointApi.uploadFile(team.id, 2, body, {
-      onUploadProgress: () => undefined,
+    const file = new File(['%PDF-test'], name, { type: 'application/pdf' });
+    const created = await checkpointApi.initiateUpload(team.id, 2, {
+      fileName: file.name,
+      contentType: file.type,
+      size: file.size,
     });
+    await checkpointApi.putToPresignedUrl(created.data, file, { onUploadProgress: () => undefined });
+    const uploaded = await checkpointApi.completeUpload(team.id, 2, created.data.uploadId);
     assert.equal(uploaded.data.versionNumber, index + 1);
   }
   const submittedLink = await axiosClient.post(
@@ -1504,6 +1622,13 @@ test('lecturer checkpoint mock follows Admin definitions and shares class schedu
   assert.equal(evaluation.data.evaluations[0]?.memberScores, undefined);
   assert.equal(evaluation.data.evaluations[0]?.rubricScores[0]?.score, undefined);
   assert.ok(evaluation.data.evaluations[0]?.overallFeedback);
+  const gradingBatch = await axiosClient.post('/workspace/checkpoints/evaluation-grading', {
+    teamIds: [team.id, team.id],
+  });
+  assert.equal(gradingBatch.data.teams.length, 1);
+  assert.equal(gradingBatch.data.teams[0].teamId, team.id);
+  assert.equal(gradingBatch.data.teams[0].checkpoints[0].history, undefined);
+  assert.equal(gradingBatch.data.teams[0].checkpoints[0].evaluations[0]?.checkpointTotal, undefined);
 
   state.sessionUserId = cls.primaryLecturerId;
   await axiosClient.put(`/workspace/checkpoints/evaluations/${evaluation.data.evaluations[0]._id}/publish`, {});
@@ -1515,6 +1640,8 @@ test('lecturer checkpoint mock follows Admin definitions and shares class schedu
   assert.equal(publishedEvaluation.data.evaluations[0]?.checkpointTotal, 7.85);
   assert.equal(publishedEvaluation.data.evaluations[0]?.memberScores.length, 1);
   assert.equal(typeof publishedEvaluation.data.evaluations[0]?.rubricScores[0]?.score, 'number');
+  const publishedBatch = await axiosClient.post('/workspace/checkpoints/evaluation-grading', { teamIds: [team.id] });
+  assert.equal(publishedBatch.data.teams[0].checkpoints[0].evaluations[0]?.checkpointTotal, 7.85);
 
   state.sessionUserId = cls.primaryLecturerId;
   await axiosClient.put(`/workspace/checkpoints/evaluations/${evaluation.data.evaluations[0]._id}/unpublish`, {});
@@ -1663,6 +1790,11 @@ test('team rankings are staff-only and expose team totals without individual mem
   );
 
   await axiosClient.post('/auth/login', { email: 'giang.lecturer@ehub.local', password: 'Mock123!' });
+  const rankingState = getMockState();
+  const rankingClass = rankingState.classes.find(cls => cls.primaryLecturerId === rankingState.sessionUserId)!;
+  const rankingTeam = rankingState.teams.find(team => team.classId === rankingClass.id && team.status === 'Active')!;
+  const rankingAssessment = rankingState.curricula[rankingClass.subjectCode].otherAssessments[0];
+  rankingState.courseAssessmentScores[`${rankingTeam.id}:${rankingAssessment._id}`] = 10;
   const response = await axiosClient.get('/rankings');
   assert.equal(response.data.selectedSemester.semester, 'FA');
   assert.ok(response.data.items.length > 0);
@@ -1670,6 +1802,15 @@ test('team rankings are staff-only and expose team totals without individual mem
   assert.equal(typeof response.data.items[0].projectDescription, 'string');
   assert.equal(typeof response.data.items[0].semesterGroupName, 'string');
   assert.equal('memberScores' in response.data.items[0], false);
+  const rankedTeam = response.data.items.find((item: { teamId: string }) => item.teamId === rankingTeam.id);
+  const checkpointTotal = rankedTeam.checkpoints.reduce(
+    (sum: number, checkpoint: { score: number | null; weight: number }) =>
+      sum + Number(checkpoint.score) * checkpoint.weight / 100,
+    0,
+  );
+  assert.equal(rankedTeam.assessments[0].score, 10);
+  assert.equal(rankedTeam.courseTotal, Math.round(checkpointTotal * 100) / 100);
+  assert.equal(rankedTeam.totalComponentCount, rankedTeam.checkpoints.length);
   assert.equal(response.data.items.every((item: { classId: string }) =>
     getMockState().classes.find(cls => cls.id === item.classId)?.primaryLecturerId === getMockState().sessionUserId), true);
 });

@@ -38,3 +38,12 @@ window.__EHUB_MOCK_API__.reset()
 ```
 
 Set the flag to `false` (or remove it) to use the real API for every request.
+
+## Checkpoint file uploads
+
+Submission documents use a direct-upload flow in production (initiate, `PUT` to a presigned
+Cloudflare R2 URL, complete). In mock mode the presigned URL is `/__mock_r2__/<uploadId>` and
+is answered by a second mock adapter on `src/api/storageClient.ts`. The mock enforces the same
+100 MB limit, the PDF/DOCX/PPTX types and the student/open-checkpoint rules as the backend.
+Upload sessions live in memory only, so they are lost on reload. Files over 10 MB report
+`canDirectDownload: true` and are fetched through the `download-url` endpoint.

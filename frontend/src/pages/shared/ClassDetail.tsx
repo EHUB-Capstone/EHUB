@@ -272,7 +272,8 @@ export default function ClassDetail() {
   // Refresh only when the server confirms this class changed, or after reconnecting.
   useEffect(() => subscribeProjectDirectionRealtime((event) => {
     const currentClassId = String(cls?.id || cls?._id || '');
-    if (currentClassId && (event.eventType === 'ClassMajorUpdated' || event.eventType === 'TeamProposalReviewed')
+    if (currentClassId && (event.eventType === 'ClassMajorUpdated' || event.eventType === 'TeamProposalReviewed'
+      || event.eventType === 'TeamCreated')
       && String(event.classId) === currentClassId) {
       void fetchData();
     }
@@ -899,7 +900,7 @@ export default function ClassDetail() {
         </div>
       </div>
 
-      {/* ── Inline team proposal flow shared by students and class managers ── */}
+      {/* ── Direct team creation for administrators and the assigned lecturer ── */}
       {teamControlsVisible && selected.length > 0 && tab === 'students' && canManageClass && (
         <div className="sticky top-20 z-20 rounded-2xl bg-white/80 shadow-xl backdrop-blur-md">
           <StudentTeamGeneratePanel
@@ -908,6 +909,7 @@ export default function ClassDetail() {
             students={selectedTeamStudents}
             onTeamCreated={handleTeamCreated}
             requireCurrentStudentMembership={false}
+            creationMode="direct"
           />
         </div>
       )}

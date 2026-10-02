@@ -86,6 +86,12 @@ export interface TeamClassOption {
   name?: string;
 }
 
+export interface CreateClassManagerTeamRequest {
+  teamName: string;
+  memberStudentIds: string[];
+  leaderStudentId: string;
+}
+
 export interface TeamDraft {
   teamName: string;
   classId: string;

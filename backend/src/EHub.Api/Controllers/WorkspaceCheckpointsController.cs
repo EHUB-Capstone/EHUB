@@ -22,8 +22,6 @@ namespace EHub.Api.Controllers;
 public sealed class WorkspaceCheckpointsController(
     ICurrentUserService currentUser) : ControllerBase
 {
-    private const long MaximumUploadRequestSize = 16 * 1024 * 1024;
-
     [HttpGet("teams/{teamId:guid}")]
     public async Task<IActionResult> GetOverview(
         Guid teamId,
@@ -39,20 +37,29 @@ public sealed class WorkspaceCheckpointsController(
         return ToResponse(result);
     }
 
-    [HttpPost("teams/{teamId:guid}/checkpoints/{checkpointNumber:int}/upload")]
-    [Consumes("multipart/form-data")]
-    [RequestSizeLimit(MaximumUploadRequestSize)]
-    [RequestFormLimits(MultipartBodyLengthLimit = MaximumUploadRequestSize)]
-    public async Task<IActionResult> UploadFile(
+    [HttpPost("teams/{teamId:guid}/checkpoints/{checkpointNumber:int}/uploads")]
+    public async Task<IActionResult> InitiateUpload(
         Guid teamId,
         int checkpointNumber,
-        IFormFile file,
-        [FromServices] ICheckpointFileHandler handler,
+        [FromBody] InitiateCheckpointFileUploadRequest request,
+        [FromServices] ICheckpointFileUploadHandler handler,
         CancellationToken cancellationToken)
     {
-        if (file is null) return BadRequest(ApiResponse<object>.FailureResponse("A file is required.", ErrorCodes.WorkspaceValidationError));
-        await using var stream = file.OpenReadStream();
-        var result = await handler.UploadAsync(teamId, checkpointNumber, stream, file.FileName, file.ContentType, file.Length, UserId, Role, cancellationToken);
+        var result = await handler.InitiateAsync(teamId, checkpointNumber, request, UserId, Role, cancellationToken);
+        return result.IsSuccess
+            ? Ok(ApiResponse<CheckpointFileUploadSessionResponse>.SuccessResponse(result.Value, "Upload session created."))
+            : ToErrorResponse(result.Error);
+    }
+
+    [HttpPost("teams/{teamId:guid}/checkpoints/{checkpointNumber:int}/uploads/{uploadId:guid}/complete")]
+    public async Task<IActionResult> CompleteUpload(
+        Guid teamId,
+        int checkpointNumber,
+        Guid uploadId,
+        [FromServices] ICheckpointFileUploadHandler handler,
+        CancellationToken cancellationToken)
+    {
+        var result = await handler.CompleteAsync(teamId, checkpointNumber, uploadId, UserId, Role, cancellationToken);
         return ToFileResponse(result, "File uploaded.");
     }
 
@@ -62,6 +69,15 @@ public sealed class WorkspaceCheckpointsController(
         var result = await handler.DownloadAsync(teamId, checkpointNumber, fileId, UserId, Role, cancellationToken);
         if (result.IsSuccess) return File(result.Value.Content, result.Value.ContentType, result.Value.OriginalName);
         return ToErrorResponse(result.Error);
+    }
+
+    [HttpGet("teams/{teamId:guid}/checkpoints/{checkpointNumber:int}/files/{fileId:guid}/download-url")]
+    public async Task<IActionResult> GetDownloadUrl(Guid teamId, int checkpointNumber, Guid fileId, [FromServices] ICheckpointFileHandler handler, CancellationToken cancellationToken)
+    {
+        var result = await handler.GetDownloadUrlAsync(teamId, checkpointNumber, fileId, UserId, Role, cancellationToken);
+        return result.IsSuccess
+            ? Ok(ApiResponse<CheckpointFileDownloadUrlResponse>.SuccessResponse(result.Value, "Download link created."))
+            : ToErrorResponse(result.Error);
     }
 
     [HttpGet("teams/{teamId:guid}/checkpoints/{checkpointNumber:int}/files/{fileId:guid}/preview")]
@@ -148,6 +164,19 @@ public sealed class WorkspaceCheckpointsController(
         var result = await handler.GetSummaryAsync(teamId, checkpointNumber, UserId, Role, cancellationToken);
         return result.IsSuccess
             ? Ok(ApiResponse<WorkspaceCheckpointEvaluationSummaryResponse>.SuccessResponse(result.Value, "Checkpoint evaluation retrieved."))
+            : ToErrorResponse(result.Error);
+    }
+
+    [HttpPost("evaluation-grading")]
+    public async Task<IActionResult> GetEvaluationGradingBatch(
+        [FromBody] EvaluationGradingBatchRequest request,
+        [FromServices] ICheckpointEvaluationHandler handler,
+        CancellationToken cancellationToken)
+    {
+        var result = await handler.GetGradingBatchAsync(request, UserId, Role, cancellationToken);
+        return result.IsSuccess
+            ? Ok(ApiResponse<EvaluationGradingBatchResponse>.SuccessResponse(
+                result.Value, "Evaluation grading data retrieved."))
             : ToErrorResponse(result.Error);
     }
 
@@ -316,6 +345,12 @@ public sealed class WorkspaceCheckpointsController(
                 ? new NotFoundObjectResult(response)
                 : error.Code == ErrorCodes.WorkspaceFilePreviewUnsupported
                     ? new ObjectResult(response) { StatusCode = StatusCodes.Status415UnsupportedMediaType }
+                    : error.Code == ErrorCodes.WorkspaceUploadSessionExpired
+                        ? new ObjectResult(response) { StatusCode = StatusCodes.Status410Gone }
+                    : error.Code == ErrorCodes.WorkspaceUploadObjectMissing
+                        ? new ConflictObjectResult(response)
+                    : error.Code == ErrorCodes.WorkspaceUploadTooManyPending
+                        ? new ObjectResult(response) { StatusCode = StatusCodes.Status429TooManyRequests }
                     : error.Code == ErrorCodes.WorkspaceFilePreviewConversionFailed
                         ? new ObjectResult(response) { StatusCode = StatusCodes.Status422UnprocessableEntity }
                         : error.Code == ErrorCodes.WorkspaceFilePreviewUnavailable

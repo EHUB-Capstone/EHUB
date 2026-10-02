@@ -139,6 +139,11 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
                 await AddForStudentsAsync(message, data, "studentIds", "Your team is ready",
                     "All members accepted. Your team is now active.", cancellationToken);
                 break;
+            case "Team.Created.v1" when ReadString(data, "source") == "ClassManager":
+                await AddForUsersAsync(message, data, "studentUserIds", NotificationType.SystemAnnouncement,
+                    "Your team is ready",
+                    "Your class manager created your team. Open My Team to view it.", cancellationToken);
+                break;
             case "TeamProposal.Reviewed.v1":
                 var proposalDecision = ReadString(data, "decision");
                 var notificationType = proposalDecision == "Approved"
@@ -403,6 +408,19 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
 
     public async Task PublishAfterCommitAsync(OutboxMessage message, CancellationToken cancellationToken = default)
     {
+        if (message.Type == "Team.Created.v1")
+        {
+            using var teamDocument = JsonDocument.Parse(message.PayloadJson);
+            if (!teamDocument.RootElement.TryGetProperty("data", out var teamData) ||
+                ReadString(teamData, "source") != "ClassManager") return;
+            var teamId = ReadGuid(teamData, "teamId");
+            var teamRecipients = ReadGuids(teamData, "studentUserIds");
+            if (teamId.HasValue && teamRecipients.Length > 0)
+                await _classRealtimePublisher.PublishTeamCreatedAsync(
+                    teamRecipients, message.AggregateId, teamId.Value, cancellationToken);
+            return;
+        }
+
         if (message.Type is not ("TeamFormation.Invited.v1" or "TeamFormation.Accepted.v1" or
             "TeamFormation.Cancelled.v1" or "TeamFormation.Completed.v1")) return;
         using var document = JsonDocument.Parse(message.PayloadJson);

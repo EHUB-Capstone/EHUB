@@ -5352,6 +5352,19 @@ namespace EHub.Infrastructure.Persistence.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("preview_source_version_number");
 
+                    b.Property<string>("StorageKey")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)")
+                        .HasColumnName("storage_key");
+
+                    b.Property<string>("StorageProvider")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValue("Cloudinary")
+                        .HasColumnName("storage_provider");
+
                     b.Property<Guid>("SubmissionId")
                         .HasColumnType("uuid")
                         .HasColumnName("submission_id");
@@ -5518,6 +5531,89 @@ namespace EHub.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("submission_requirement_contents", (string)null);
+                });
+
+            modelBuilder.Entity("EHub.Domain.Entities.SubmissionUploadSession", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("CheckpointId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("checkpoint_id");
+
+                    b.Property<DateTime?>("CompletedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("completed_at_utc");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("content_type");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<long>("DeclaredSize")
+                        .HasColumnType("bigint")
+                        .HasColumnName("declared_size");
+
+                    b.Property<DateTime>("ExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at_utc");
+
+                    b.Property<string>("ObjectKey")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)")
+                        .HasColumnName("object_key");
+
+                    b.Property<string>("OriginalName")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("original_name");
+
+                    b.Property<uint>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.Property<Guid?>("SubmissionFileId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("submission_file_id");
+
+                    b.Property<Guid>("TeamId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("team_id");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ObjectKey")
+                        .IsUnique();
+
+                    b.HasIndex("TeamId");
+
+                    b.HasIndex("Status", "ExpiresAtUtc");
+
+                    b.HasIndex("UserId", "Status");
+
+                    b.ToTable("submission_upload_sessions", (string)null);
                 });
 
             modelBuilder.Entity("EHub.Domain.Entities.Team", b =>
@@ -7923,6 +8019,15 @@ namespace EHub.Infrastructure.Persistence.Migrations
                         .IsRequired();
 
                     b.Navigation("Submission");
+                });
+
+            modelBuilder.Entity("EHub.Domain.Entities.SubmissionUploadSession", b =>
+                {
+                    b.HasOne("EHub.Domain.Entities.Team", null)
+                        .WithMany()
+                        .HasForeignKey("TeamId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("EHub.Domain.Entities.Team", b =>

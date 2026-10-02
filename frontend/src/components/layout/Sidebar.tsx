@@ -61,7 +61,6 @@ const Sidebar = ({ mobileOpen, onMobileClose }: SidebarProps) => {
     ADMIN: [
       { path: '/admin', icon: 'dashboard', label: 'Overview' },
       { path: '/admin/subjects', icon: 'book_open', label: 'Subject Management' },
-      { path: '/admin/startup-industries', icon: 'factory', label: 'Startup Industry Management' },
       { path: '/admin/users', icon: 'group', label: 'Users' },
       { path: '/admin/account-approvals', icon: 'account_approval', label: 'Account Approvals' },
       { path: '/admin/classes', icon: 'school', label: 'Classes' },

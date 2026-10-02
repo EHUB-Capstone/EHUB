@@ -90,6 +90,26 @@ export interface CheckpointEvaluationSummary {
   };
 }
 
+export interface EvaluationGradingCheckpointSnapshot {
+  checkpoint: EvaluationCheckpoint;
+  evaluations: CheckpointEvaluation[];
+}
+
+export interface EvaluationGradingTeamSnapshot {
+  teamId: string;
+  teamCode: string;
+  projectName?: string | null;
+  projectDescription?: string | null;
+  semesterGroupName?: string | null;
+  members: EvaluationTeamMember[];
+  checkpoints: EvaluationGradingCheckpointSnapshot[];
+  assessments: CourseAssessmentEvaluation[];
+}
+
+export interface EvaluationGradingBatchResponse {
+  teams: EvaluationGradingTeamSnapshot[];
+}
+
 export interface EvaluationGradingRecord {
   key: string;
   team: EvaluationTeam;

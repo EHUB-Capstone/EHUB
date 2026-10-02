@@ -23,7 +23,6 @@ const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'));
 const ClassManagement = lazy(() => import('./pages/admin/ClassManagement'));
 const SubjectManagement = lazy(() => import('./pages/admin/SubjectManagement'));
 const SubjectDetail = lazy(() => import('./pages/admin/SubjectDetail'));
-const StartupIndustryManagement = lazy(() => import('./pages/admin/StartupIndustryManagement'));
 const UserManagement = lazy(() => import('./pages/admin/UserManagement'));
 const AccountApprovals = lazy(() => import('./pages/admin/AccountApprovals'));
 const LecturerDashboard = lazy(() => import('./pages/lecturer/LecturerDashboard'));
@@ -100,7 +99,7 @@ function App(): React.ReactElement {
                   <Route path="/admin/classes" element={<ProtectedRoute allowedRoles={['ADMIN']}><ClassManagement /></ProtectedRoute>} />
                   <Route path="/admin/subjects" element={<ProtectedRoute allowedRoles={['ADMIN']}><SubjectManagement /></ProtectedRoute>} />
                   <Route path="/admin/subjects/:subjectCode" element={<ProtectedRoute allowedRoles={['ADMIN']}><SubjectDetail /></ProtectedRoute>} />
-                  <Route path="/admin/startup-industries" element={<ProtectedRoute allowedRoles={['ADMIN']}><StartupIndustryManagement /></ProtectedRoute>} />
+                  <Route path="/admin/startup-industries" element={<ProtectedRoute allowedRoles={['ADMIN']}><Navigate to="/admin/subjects?tab=industries" replace /></ProtectedRoute>} />
                   <Route path="/admin/feedback" element={<ProtectedRoute allowedRoles={['ADMIN']}><FeedbackPage admin /></ProtectedRoute>} />
 
                   <Route path="/lecturer" element={<ProtectedRoute allowedRoles={[...classRouteAccess.lecturerArea]}>{releaseFeatureFlags.roleDashboards ? <LecturerDashboard /> : <Navigate to="/lecturer/classes" replace />}</ProtectedRoute>} />

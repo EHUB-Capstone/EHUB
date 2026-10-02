@@ -84,9 +84,8 @@ public sealed class WorkspaceCheckpointPreviewControllerTests
         public Task<Result<CheckpointFilePreview>> PreviewAsync(Guid teamId, int checkpointNumber, Guid fileId,
             Guid userId, string role, CancellationToken cancellationToken = default) => Task.FromResult(previewResult);
 
-        public Task<Result<WorkspaceCheckpointFileResponse>> UploadAsync(Guid teamId, int checkpointNumber,
-            Stream content, string originalName, string contentType, long length, Guid userId, string role,
-            CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<Result<CheckpointFileDownloadUrlResponse>> GetDownloadUrlAsync(Guid teamId, int checkpointNumber, Guid fileId,
+            Guid userId, string role, CancellationToken cancellationToken = default) => throw new NotSupportedException();
 
         public Task<Result<CheckpointFileDownload>> DownloadAsync(Guid teamId, int checkpointNumber, Guid fileId,
             Guid userId, string role, CancellationToken cancellationToken = default) => throw new NotSupportedException();

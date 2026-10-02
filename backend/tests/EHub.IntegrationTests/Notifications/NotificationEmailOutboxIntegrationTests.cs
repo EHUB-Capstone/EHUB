@@ -274,6 +274,7 @@ public sealed class NotificationEmailOutboxIntegrationTests(CustomWebApplication
         public Task PublishMajorUpdatedAsync(IReadOnlyCollection<Guid> recipientUserIds, Guid classId, Guid studentId, string majorCode, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task PublishProposalReviewedAsync(IReadOnlyCollection<Guid> recipientUserIds, Guid classId, Guid proposalId, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task PublishTeamFormationChangedAsync(IReadOnlyCollection<Guid> recipientUserIds, Guid classId, Guid formationId, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task PublishTeamCreatedAsync(IReadOnlyCollection<Guid> recipientUserIds, Guid classId, Guid teamId, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task PublishCheckpointRequirementsUpdatedAsync(IReadOnlyCollection<Guid> recipientUserIds, Guid teamId, int checkpointNumber, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task PublishCheckpointEvaluationUpdatedAsync(IReadOnlyCollection<Guid> recipientUserIds, Guid teamId, int checkpointNumber, CancellationToken cancellationToken = default) => Task.CompletedTask;
     }

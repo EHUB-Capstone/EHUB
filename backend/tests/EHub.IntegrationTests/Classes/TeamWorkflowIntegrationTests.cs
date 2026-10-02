@@ -47,7 +47,7 @@ using System.Net.Http.Headers;
 namespace EHub.IntegrationTests.Classes;
 
 [Collection("Sequential")]
-public sealed class TeamWorkflowIntegrationTests
+public sealed partial class TeamWorkflowIntegrationTests
 {
     private readonly CustomWebApplicationFactory _factory;
 
@@ -913,6 +913,117 @@ public sealed class TeamWorkflowIntegrationTests
     [Theory]
     [InlineData("ADMIN")]
     [InlineData("LECTURER")]
+    public async Task ClassManagerCreatesActiveTeamDirectly_WithoutFormationOrProposal(string role)
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateSeedAsync(context, createProposal: false, createTeam: false);
+        context.ChangeTracker.Clear();
+        var handler = scope.ServiceProvider.GetRequiredService<ITeamManagementHandler>();
+        var actorId = role == SystemRoles.Admin ? seed.AdminId : seed.LecturerId;
+        var leaderId = seed.StudentIds[1];
+
+        var result = await handler.CreateAsync(seed.ClassId, new CreateClassManagerTeamRequest
+        {
+            TeamName = $"Direct Manager Team {role}",
+            MemberStudentIds = seed.StudentIds,
+            LeaderStudentId = leaderId
+        }, actorId, role);
+
+        result.IsSuccess.Should().BeTrue(result.IsFailure ? result.Error.Message : string.Empty);
+        result.Value.Status.Should().Be("APPROVED");
+        result.Value.LeaderId.Should().Be(leaderId);
+        result.Value.Members.Should().HaveCount(4);
+        context.ChangeTracker.Clear();
+        var team = await context.Teams.AsNoTracking().Include(item => item.TeamMembers)
+            .SingleAsync(item => item.Id == result.Value.Id);
+        team.Status.Should().Be(TeamStatus.Active);
+        team.TeamMembers.Should().HaveCount(4);
+        team.TeamMembers.Single(item => item.RoleInTeam == TeamMemberRole.Leader).StudentId.Should().Be(leaderId);
+        (await context.TeamProposals.AsNoTracking().CountAsync(item => item.ClassId == seed.ClassId)).Should().Be(0);
+        (await context.TeamFormations.AsNoTracking().CountAsync(item => item.ClassId == seed.ClassId)).Should().Be(0);
+        var createdEventPayloads = await context.OutboxMessages.AsNoTracking()
+            .Where(item => item.AggregateId == seed.ClassId && item.Type == "Team.Created.v1")
+            .Select(item => item.PayloadJson)
+            .ToArrayAsync();
+        createdEventPayloads.Should().Contain(payload => payload.Contains("ClassManager", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task ClassManagerCannotUseStudentReservedByPendingFormation()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateSeedAsync(context, createProposal: false, createTeam: false);
+        context.ChangeTracker.Clear();
+        var formationHandler = scope.ServiceProvider.GetRequiredService<ITeamFormationHandler>();
+        var formation = await formationHandler.CreateAsync(seed.ClassId, new CreateTeamFormationRequest
+        {
+            TeamName = "Reserved Student Team",
+            MemberStudentIds = seed.StudentIds,
+            LeaderStudentId = seed.StudentIds[1]
+        }, seed.ProposerUserId, SystemRoles.Student);
+        formation.IsSuccess.Should().BeTrue();
+        context.ChangeTracker.Clear();
+
+        var handler = scope.ServiceProvider.GetRequiredService<ITeamManagementHandler>();
+        var result = await handler.CreateAsync(seed.ClassId, new CreateClassManagerTeamRequest
+        {
+            TeamName = "Manager Must Not Bypass Reservation",
+            MemberStudentIds = seed.StudentIds,
+            LeaderStudentId = seed.StudentIds[0]
+        }, seed.LecturerId, SystemRoles.Lecturer);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be(ErrorCodes.TeamFormationReservationConflict);
+        context.ChangeTracker.Clear();
+        (await context.Teams.AsNoTracking().CountAsync(item => item.ClassId == seed.ClassId)).Should().Be(0);
+    }
+
+    [Fact]
+    public async Task ClassManagerCreateTeamApi_RequiresAuthenticationAndManagerAccess()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateSeedAsync(context, createProposal: false, createTeam: false);
+        var student = await context.Users.SingleAsync(item => item.Id == seed.ProposerUserId);
+        var outsider = await CreateUserAsync(context, SystemRoles.Lecturer, "direct-team-outsider");
+        var tokenService = scope.ServiceProvider.GetRequiredService<IJwtTokenService>();
+        using var client = _factory.CreateClient();
+        var url = $"/api/classes/{seed.ClassId}/teams";
+        var payload = JsonSerializer.Serialize(new
+        {
+            teamName = "Protected Direct Team",
+            memberStudentIds = seed.StudentIds,
+            leaderStudentId = seed.StudentIds[0]
+        });
+
+        using var anonymous = await client.PostAsync(url,
+            new StringContent(payload, System.Text.Encoding.UTF8, "application/json"));
+        anonymous.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+
+        using var studentRequest = new HttpRequestMessage(HttpMethod.Post, url)
+        {
+            Content = new StringContent(payload, System.Text.Encoding.UTF8, "application/json")
+        };
+        studentRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer",
+            tokenService.GenerateAccessToken(student, [SystemRoles.Student]).Token);
+        using var studentResponse = await client.SendAsync(studentRequest);
+        studentResponse.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        using var outsiderRequest = new HttpRequestMessage(HttpMethod.Post, url)
+        {
+            Content = new StringContent(payload, System.Text.Encoding.UTF8, "application/json")
+        };
+        outsiderRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer",
+            tokenService.GenerateAccessToken(outsider, [SystemRoles.Lecturer]).Token);
+        using var outsiderResponse = await client.SendAsync(outsiderRequest);
+        outsiderResponse.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Theory]
+    [InlineData("ADMIN")]
+    [InlineData("LECTURER")]
     public async Task ClassManagerCreatesTeamOnBehalfOfLeader_WithPendingProjectProposal(string role)
     {
         using var scope = _factory.Services.CreateScope();
@@ -1450,11 +1561,10 @@ public sealed class TeamWorkflowIntegrationTests
         upcoming.Value.Status.Should().Be("Upcoming");
 
         var storage = new InMemoryCheckpointStorage();
-        var files = new CheckpointFileHandler(context, storage, clock, new SuccessfulPreviewConverter());
-        static MemoryStream Pdf() => new("%PDF-test"u8.ToArray());
+        var objects = new FakeObjectStorage();
+        var files = new CheckpointFileHandler(context, storage, objects, clock, new SuccessfulPreviewConverter());
 
-        var tooEarly = await files.UploadAsync(seed.TeamId.Value, 2, Pdf(), "future.pdf", "application/pdf", 9,
-            seed.ProposerUserId, SystemRoles.Student);
+        var tooEarly = await DirectUploadAsync(context, clock, objects, seed.TeamId.Value, 2, "future.pdf", seed.ProposerUserId);
         tooEarly.IsFailure.Should().BeTrue();
         tooEarly.Error.Code.Should().Be(ErrorCodes.WorkspaceCheckpointNotOpen);
 
@@ -1467,13 +1577,11 @@ public sealed class TeamWorkflowIntegrationTests
         draft.IsSuccess.Should().BeTrue();
         draft.Value.Status.Should().Be("Draft");
 
-        var firstUpload = await files.UploadAsync(seed.TeamId.Value, 1, Pdf(), "first.pdf", "application/pdf", 9,
-            seed.ProposerUserId, SystemRoles.Student);
+        var firstUpload = await DirectUploadAsync(context, clock, objects, seed.TeamId.Value, 1, "first.pdf", seed.ProposerUserId);
         firstUpload.IsSuccess.Should().BeTrue();
         firstUpload.Value.VersionNumber.Should().Be(1);
         clock.UtcNow = clock.UtcNow.AddMinutes(10);
-        var latestUpload = await files.UploadAsync(seed.TeamId.Value, 1, Pdf(), "later.pdf", "application/pdf", 9,
-            seed.ProposerUserId, SystemRoles.Student);
+        var latestUpload = await DirectUploadAsync(context, clock, objects, seed.TeamId.Value, 1, "later.pdf", seed.ProposerUserId);
         latestUpload.IsSuccess.Should().BeTrue();
         latestUpload.Value.VersionNumber.Should().Be(2);
         (await context.Submissions.AsNoTracking().Where(item => item.TeamId == seed.TeamId && item.CheckpointId == first.Id)
@@ -1496,8 +1604,7 @@ public sealed class TeamWorkflowIntegrationTests
         download.Value.OriginalName.Should().Be("first.pdf");
 
         clock.UtcNow = clock.UtcNow.AddHours(2);
-        var closedUpload = await files.UploadAsync(seed.TeamId.Value, 1, Pdf(), "blocked.pdf", "application/pdf", 9,
-            seed.ProposerUserId, SystemRoles.Student);
+        var closedUpload = await DirectUploadAsync(context, clock, objects, seed.TeamId.Value, 1, "blocked.pdf", seed.ProposerUserId);
         closedUpload.IsFailure.Should().BeTrue();
         closedUpload.Error.Code.Should().Be(ErrorCodes.WorkspaceCheckpointNotOpen);
 
@@ -1514,8 +1621,7 @@ public sealed class TeamWorkflowIntegrationTests
         (await context.ClassAuditLogs.CountAsync(item => item.ClassId == seed.ClassId && item.Action == "CheckpointReopened"))
             .Should().Be(1);
 
-        var reopenedUpload = await files.UploadAsync(seed.TeamId.Value, 1, Pdf(), "reopened.pdf", "application/pdf", 9,
-            seed.ProposerUserId, SystemRoles.Student);
+        var reopenedUpload = await DirectUploadAsync(context, clock, objects, seed.TeamId.Value, 1, "reopened.pdf", seed.ProposerUserId);
         reopenedUpload.IsSuccess.Should().BeTrue();
         reopenedUpload.Value.VersionNumber.Should().Be(3);
         (await context.SubmissionFiles.CountAsync(item => item.Submission.CheckpointId == first.Id)).Should().Be(3);
@@ -1693,7 +1799,7 @@ public sealed class TeamWorkflowIntegrationTests
         storage.Seed(unsupportedFile.FileUrl, "text"u8.ToArray(), "text/plain");
         storage.Seed(corruptFile.FileUrl, "corrupt"u8.ToArray(), "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
         var converter = new CountingPreviewConverter();
-        var handler = new CheckpointFileHandler(context, storage, new FixedCheckpointTimeProvider(DateTime.UtcNow), converter);
+        var handler = new CheckpointFileHandler(context, storage, new FakeObjectStorage(), new FixedCheckpointTimeProvider(DateTime.UtcNow), converter);
 
         var pdf = await handler.PreviewAsync(seed.TeamId.Value, 1, pdfFile.Id,
             seed.ProposerUserId, SystemRoles.Student);
@@ -1836,10 +1942,9 @@ public sealed class TeamWorkflowIntegrationTests
             .OrderBy(item => item.VersionNumber).Select(item => item.VersionNumber)
             .Should().Equal(1, 2);
 
-        var files = new CheckpointFileHandler(context, new InMemoryCheckpointStorage(), clock, new SuccessfulPreviewConverter());
-        using var pdf = new MemoryStream("%PDF-test"u8.ToArray());
-        var next = await files.UploadAsync(seed.TeamId.Value, 1, pdf, "new.pdf", "application/pdf", 9,
-            seed.ProposerUserId, SystemRoles.Student);
+        var objects = new FakeObjectStorage();
+        var files = new CheckpointFileHandler(context, new InMemoryCheckpointStorage(), objects, clock, new SuccessfulPreviewConverter());
+        var next = await DirectUploadAsync(context, clock, objects, seed.TeamId.Value, 1, "new.pdf", seed.ProposerUserId);
         next.IsSuccess.Should().BeTrue();
         next.Value.VersionNumber.Should().Be(3);
         (await context.Submissions.AsNoTracking().Where(item => item.CheckpointId == checkpoint.Id)
@@ -2245,6 +2350,25 @@ public sealed class TeamWorkflowIntegrationTests
         saved.Value.RubricScores.Select(item => item.CriterionKey).Should().Equal("clarity", "evidence");
         saved.Value.MemberScores!.Should().HaveCount(seed.StudentIds.Count());
         saved.Value.MemberScores.Should().OnlyContain(item => item.Score == 8.6m && !item.IsOverridden);
+        var lecturerBatch = await handler.GetGradingBatchAsync(
+            new EvaluationGradingBatchRequest { TeamIds = new[] { seed.TeamId.Value, seed.TeamId.Value } },
+            seed.LecturerId, SystemRoles.Lecturer);
+        lecturerBatch.IsSuccess.Should().BeTrue();
+        lecturerBatch.Value.Teams.Should().ContainSingle();
+        lecturerBatch.Value.Teams.Single().ProjectName.Should().Be("Evaluation project");
+        lecturerBatch.Value.Teams.Single().Members.Should().HaveCount(seed.StudentIds.Count());
+        lecturerBatch.Value.Teams.Single().Checkpoints.Should().ContainSingle();
+        lecturerBatch.Value.Teams.Single().Checkpoints.Single().Evaluations.Single().CheckpointTotal.Should().Be(8.6m);
+        var studentBatchBeforePublish = await handler.GetGradingBatchAsync(
+            new EvaluationGradingBatchRequest { TeamIds = new[] { seed.TeamId.Value } },
+            seed.ProposerUserId, SystemRoles.Student);
+        studentBatchBeforePublish.IsSuccess.Should().BeTrue();
+        studentBatchBeforePublish.Value.Teams.Single().Checkpoints.Single().Evaluations.Single().CheckpointTotal.Should().BeNull();
+        var inaccessibleBatch = await handler.GetGradingBatchAsync(
+            new EvaluationGradingBatchRequest { TeamIds = new[] { Guid.NewGuid() } },
+            seed.LecturerId, SystemRoles.Lecturer);
+        inaccessibleBatch.IsFailure.Should().BeTrue();
+        inaccessibleBatch.Error.Code.Should().Be(ErrorCodes.WorkspaceAccessDenied);
         var submittedEvaluation = await context.Evaluations.AsNoTracking().SingleAsync(item => item.Id == saved.Value.Id);
         submittedEvaluation.SubmissionId.Should().BeNull();
         submittedEvaluation.Status.Should().Be(EvaluationStatus.Submitted);
@@ -2309,6 +2433,12 @@ public sealed class TeamWorkflowIntegrationTests
         publishedStudentSummary.Value.Evaluations.Single().RubricScores
             .Should().OnlyContain(item => item.Score.HasValue);
         publishedStudentSummary.Value.Summary.AverageScore.Should().Be(8.6m);
+        var studentBatchAfterPublish = await handler.GetGradingBatchAsync(
+            new EvaluationGradingBatchRequest { TeamIds = new[] { seed.TeamId.Value } },
+            seed.ProposerUserId, SystemRoles.Student);
+        studentBatchAfterPublish.IsSuccess.Should().BeTrue();
+        studentBatchAfterPublish.Value.Teams.Single().Checkpoints.Single().Evaluations.Single().CheckpointTotal.Should().Be(8.6m);
+        studentBatchAfterPublish.Value.Teams.Single().Checkpoints.Single().Evaluations.Single().MemberScores.Should().ContainSingle();
 
         var secondStudentUserId = await context.Students.AsNoTracking()
             .Where(item => item.Id == seed.StudentIds[1])
@@ -2799,6 +2929,31 @@ public sealed class TeamWorkflowIntegrationTests
             tokenService.GenerateAccessToken(lecturer, [SystemRoles.Lecturer]).Token);
         using var bulkNotFound = await client.SendAsync(lecturerBulkRequest);
         bulkNotFound.StatusCode.Should().Be(HttpStatusCode.NotFound);
+
+        const string gradingBatchUrl = "/api/workspace/checkpoints/evaluation-grading";
+        using var anonymousGradingBatch = await client.PostAsync(gradingBatchUrl,
+            new StringContent("{\"teamIds\":[]}", System.Text.Encoding.UTF8, "application/json"));
+        anonymousGradingBatch.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+
+        using var studentGradingBatchRequest = new HttpRequestMessage(HttpMethod.Post, gradingBatchUrl)
+        {
+            Content = new StringContent("{\"teamIds\":[]}", System.Text.Encoding.UTF8, "application/json"),
+        };
+        studentGradingBatchRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer",
+            tokenService.GenerateAccessToken(student, [SystemRoles.Student]).Token);
+        using var emptyStudentBatch = await client.SendAsync(studentGradingBatchRequest);
+        emptyStudentBatch.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        using var inaccessibleGradingBatchRequest = new HttpRequestMessage(HttpMethod.Post, gradingBatchUrl)
+        {
+            Content = new StringContent(
+                $"{{\"teamIds\":[\"{Guid.NewGuid()}\"]}}",
+                System.Text.Encoding.UTF8, "application/json"),
+        };
+        inaccessibleGradingBatchRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer",
+            tokenService.GenerateAccessToken(lecturer, [SystemRoles.Lecturer]).Token);
+        using var inaccessibleGradingBatch = await client.SendAsync(inaccessibleGradingBatchRequest);
+        inaccessibleGradingBatch.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
 
     [Fact]
@@ -4072,6 +4227,7 @@ public sealed class TeamWorkflowIntegrationTests
             return Task.CompletedTask;
         }
 
+        public Task PublishTeamCreatedAsync(IReadOnlyCollection<Guid> recipientUserIds, Guid classId, Guid teamId, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task PublishMajorUpdatedAsync(IReadOnlyCollection<Guid> recipientUserIds, Guid classId, Guid studentId, string majorCode, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task PublishProposalReviewedAsync(IReadOnlyCollection<Guid> recipientUserIds, Guid classId, Guid proposalId, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task PublishCheckpointRequirementsUpdatedAsync(IReadOnlyCollection<Guid> recipientUserIds, Guid teamId, int checkpointNumber, CancellationToken cancellationToken = default) => Task.CompletedTask;

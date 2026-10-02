@@ -105,7 +105,7 @@ export default function StudentClassDetail() {
   useEffect(() => subscribeProjectDirectionRealtime((event) => {
     const currentClassId = String(data?.class?.id || data?.class?._id || '');
     if (currentClassId && (event.eventType === 'ClassMajorUpdated' || event.eventType === 'TeamProposalReviewed'
-      || event.eventType === 'TeamFormationChanged')
+      || event.eventType === 'TeamFormationChanged' || event.eventType === 'TeamCreated')
       && String(event.classId) === currentClassId) {
       void fetchClassDetail();
     }

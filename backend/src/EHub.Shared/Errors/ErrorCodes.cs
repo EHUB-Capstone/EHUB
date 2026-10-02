@@ -160,6 +160,9 @@ public static class ErrorCodes
     public const string WorkspaceFilePreviewUnsupported = "WORKSPACE_FILE_PREVIEW_UNSUPPORTED";
     public const string WorkspaceFilePreviewConversionFailed = "WORKSPACE_FILE_PREVIEW_CONVERSION_FAILED";
     public const string WorkspaceFilePreviewUnavailable = "WORKSPACE_FILE_PREVIEW_UNAVAILABLE";
+    public const string WorkspaceUploadSessionExpired = "WORKSPACE_UPLOAD_SESSION_EXPIRED";
+    public const string WorkspaceUploadObjectMissing = "WORKSPACE_UPLOAD_OBJECT_MISSING";
+    public const string WorkspaceUploadTooManyPending = "WORKSPACE_UPLOAD_TOO_MANY_PENDING";
     public const string WeeklyTaskNotFound = "WEEKLY_TASK_NOT_FOUND";
     public const string WeeklyTaskDuplicated = "WEEKLY_TASK_DUPLICATED";
     public const string ShortcutNotFound = "SHORTCUT_NOT_FOUND";

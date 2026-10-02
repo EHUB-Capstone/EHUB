@@ -49,6 +49,7 @@ GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 interface PreviewFile {
   _id: string;
   originalName: string;
+  canDirectDownload?: boolean;
 }
 
 interface CheckpointFilePreviewModalProps {
@@ -310,7 +311,9 @@ export default function CheckpointFilePreviewModal({
     if (!file) return;
     setDownloading(true);
     try {
-      await checkpointApi.downloadFile(teamId, checkpointNumber, file._id, file.originalName);
+      await checkpointApi.downloadFile(teamId, checkpointNumber, file._id, file.originalName, {
+        canDirectDownload: file.canDirectDownload,
+      });
     } catch {
       toast.error('Unable to download the original file.');
     } finally {

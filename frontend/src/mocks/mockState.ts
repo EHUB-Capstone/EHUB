@@ -138,6 +138,7 @@ export interface MockCheckpointFile {
   originalName: string;
   fileType: string;
   fileSize: number;
+  canDirectDownload?: boolean;
   uploadedAt: string;
   uploadedBy: { _id: string; name: string };
 }
