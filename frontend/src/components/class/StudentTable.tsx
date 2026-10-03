@@ -175,7 +175,13 @@ export default function StudentTable({
   const canSelect = (s) => !selectionDisabled && !s.teamId && !s.hasPendingTeamInvitation && s.enrollmentStatus === 'Active';
   const getSelectionBlockReason = (s) => {
     if (s.teamId) return 'This student is already assigned to another team.';
-    if (s.hasPendingTeamInvitation) return 'Pending another invitation — this student cannot be selected until the current invitation is resolved.';
+    if (s.hasPendingTeamInvitation) {
+      const teamName = s.pendingTeamName || 'another team';
+      if (s.isPendingTeamFormationMember) {
+        return `This student is already part of your pending invitation for ${teamName}.`;
+      }
+      return 'Pending another invitation — this student cannot be selected until the invitation is resolved.';
+    }
     if (s.enrollmentStatus !== 'Active') return 'Only active enrollments can be selected.';
     if (selectionDisabled) return 'Selection is disabled.';
     return '';
@@ -301,6 +307,8 @@ export default function StudentTable({
                 const mTooltip = majorTooltip(s.major);
                 const team = s.teamId ? teamMap.get(s.teamId.toString()) : null;
                 const selectionBlockReason = selectable ? '' : getSelectionBlockReason(s);
+                const pendingTeamName = s.pendingTeamName || 'Pending team';
+                const pendingInvitationAccepted = s.pendingTeamInvitationStatus === 'Accepted';
                 const isOwnRow = Boolean(editableStudentId) && s._id?.toString() === editableStudentId?.toString();
                 const canEditOwnMajor = isOwnRow && s.canEditMajor && onMajorChange;
 
@@ -311,7 +319,7 @@ export default function StudentTable({
                 const rowClass = `transition-colors ${selectable ? 'cursor-pointer hover:bg-slate-50' : s.hasPendingTeamInvitation ? 'cursor-not-allowed bg-amber-50/40' : ''} ${isSelected ? 'bg-primary-50' : ''} ${isFirstInTeam ? 'border-t-2 border-slate-200' : ''}`;
 
                 return (
-                  <tr key={s._id} onClick={() => selectable && toggleSelect(s._id)} className={rowClass} title={selectionBlockReason}>
+                  <tr key={s._id} onClick={() => (isSelected || selectable) && toggleSelect(s._id)} className={rowClass} title={selectionBlockReason}>
                     {!selectionDisabled && (
                       <td className="px-3 py-2.5">
                         <div className={`flex h-4.5 w-4.5 items-center justify-center rounded-full border-2 transition-all ${isSelected ? 'border-primary bg-primary' : 'border-slate-300'} ${!selectable ? 'opacity-30' : ''}`}>
@@ -425,10 +433,17 @@ export default function StudentTable({
                           )
                         ) : s.hasPendingTeamInvitation ? (
                           <span
-                            className="inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[11px] font-semibold text-amber-800"
-                            title="This student is currently reserved by another pending team invitation."
+                            className="inline-flex max-w-[190px] flex-col items-center rounded-lg bg-amber-100 px-2 py-1 text-[11px] font-semibold leading-tight text-amber-800"
+                            title={selectionBlockReason}
                           >
-                            Pending another invitation
+                            <span>
+                              {s.isPendingTeamFormationMember
+                                ? pendingInvitationAccepted ? 'Accepted invitation' : 'Awaiting response'
+                                : 'Pending another invitation'}
+                            </span>
+                            {s.isPendingTeamFormationMember && (
+                              <span className="mt-0.5 font-bold">{pendingTeamName}</span>
+                            )}
                           </span>
                         ) : (
                           <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[11px] font-semibold text-slate-500">Unassigned</span>

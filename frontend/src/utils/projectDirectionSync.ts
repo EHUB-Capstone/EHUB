@@ -22,6 +22,21 @@ export const isProjectDirectionConcurrencyConflict = (code?: string | null): boo
   code === 'CLASS_CONCURRENCY_CONFLICT' || code === 'PROJECT_DIRECTION_CONCURRENCY_CONFLICT'
 );
 
+export const resolveDirectionOverviewClassId = (
+  classIds: string[],
+  requestedClassId: string,
+  currentClassId: string,
+): string => {
+  if (requestedClassId && classIds.includes(requestedClassId)) return requestedClassId;
+  if (currentClassId && classIds.includes(currentClassId)) return currentClassId;
+  return '';
+};
+
+export const directionOverviewTargetClassIds = (
+  classIds: string[],
+  selectedClassId: string,
+): string[] => selectedClassId ? classIds.filter(classId => classId === selectedClassId) : classIds;
+
 export const hasUnsavedProjectDirectionChanges = (
   direction: ProjectDirectionSyncValue | null | undefined,
   title: string,
@@ -114,6 +129,9 @@ export const getProjectDirectionDecisionNotice = (
   incoming?: ProjectDirectionSyncValue | null,
 ): string => {
   if (current?.status !== 'Submitted') return '';
+  if (current.isProjectProfileChangeProposal && incoming?.reviews?.[0]?.toStatus === 'Rejected') {
+    return 'Lecturer rejected your Project Profile changes. The approved profile remains unchanged.';
+  }
   if (current.isProjectProfileChangeProposal && incoming?.status === 'Approved') {
     return 'Lecturer approved your Project Profile changes. The approved profile is now updated.';
   }

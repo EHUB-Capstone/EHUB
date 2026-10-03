@@ -1,6 +1,7 @@
 using EHub.Application.Common.Interfaces.Identity;
 using EHub.Application.Features.ProjectData.GetProjectData;
 using EHub.Application.Features.ProjectData.GetProjectDataFilterOptions;
+using EHub.Application.Features.ProjectData.GetProjectDataSummary;
 using EHub.Application.Features.ProjectData.ManageAchievements;
 using EHub.Contracts.Common;
 using EHub.Contracts.ProjectData;
@@ -26,6 +27,16 @@ public sealed class ProjectDataController(ICurrentUserService currentUser) : Con
         ToResponse(
             await handler.HandleAsync(request, UserId, Role, cancellationToken),
             "Project data retrieved.");
+
+    [HttpGet("summary")]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    public async Task<IActionResult> GetSummary(
+        [FromQuery] GetProjectDataRequest request,
+        [FromServices] IGetProjectDataSummaryQueryHandler handler,
+        CancellationToken cancellationToken) =>
+        ToResponse(
+            await handler.HandleAsync(request, UserId, Role, cancellationToken),
+            "Project data summary retrieved.");
 
     [HttpGet("filter-options")]
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]

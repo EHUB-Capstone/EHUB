@@ -44,8 +44,6 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
     {
         IReadOnlyCollection<Guid> realtimeNotificationRecipients = [];
         Guid? realtimeNotificationTeamId = null;
-        Guid? majorUpdatedStudentId = null;
-        string? updatedMajorCode = null;
         using var document = JsonDocument.Parse(message.PayloadJson);
         if (!document.RootElement.TryGetProperty("data", out var data))
         {
@@ -188,10 +186,6 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
                     "Your team membership or leader assignment was updated.",
                     cancellationToken);
                 break;
-            case "Class.MajorUpdated.v1":
-                majorUpdatedStudentId = ReadGuid(data, "studentId");
-                updatedMajorCode = ReadString(data, "majorCode");
-                break;
             case "Team.LeaderAssigned.v1":
                 await AddForUsersAsync(
                     message,
@@ -230,13 +224,23 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
                 realtimeNotificationTeamId = ReadGuid(data, "teamId");
                 foreach (var userId in realtimeNotificationRecipients)
                 {
+                    var directionNotificationType = directionDecision switch
+                    {
+                        "Approved" => NotificationType.ProjectDirectionApproved,
+                        "Rejected" => NotificationType.ProjectDirectionRejected,
+                        _ => NotificationType.ProjectDirectionNeedsRevision
+                    };
                     await AddAsync(message, userId,
-                        directionDecision == "Approved" ? NotificationType.ProjectDirectionApproved : NotificationType.ProjectDirectionNeedsRevision,
-                        isProfileChangeReview ? "Project Profile change reviewed" : "Project direction reviewed",
+                        directionNotificationType,
+                        isProfileChangeReview && directionDecision == "Rejected"
+                            ? "Project Profile change rejected"
+                            : isProfileChangeReview ? "Project Profile change reviewed" : "Project direction reviewed",
                         isProfileChangeReview
                             ? directionDecision == "Approved"
                                 ? "Your proposed Project Profile changes were approved and are now applied."
-                                : "Your proposed Project Profile changes need revision. The approved profile remains unchanged."
+                                : directionDecision == "Rejected"
+                                    ? "Your proposed Project Profile changes were rejected. The approved profile remains unchanged."
+                                    : "Your proposed Project Profile changes need revision. The approved profile remains unchanged."
                             : $"Your project direction was reviewed: {directionDecision}.", cancellationToken);
                 }
                 break;
@@ -259,18 +263,27 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
                 message.AggregateId,
                 realtimeNotificationTeamId.Value,
                 cancellationToken);
-        if (majorUpdatedStudentId.HasValue && !string.IsNullOrWhiteSpace(updatedMajorCode))
-            await PublishClassMajorUpdatedAsync(
-                message.AggregateId,
-                majorUpdatedStudentId.Value,
-                updatedMajorCode,
-                cancellationToken);
     }
 
     private async Task PublishClassMajorUpdatedAsync(
         Guid classId,
         Guid studentId,
         string majorCode,
+        CancellationToken cancellationToken)
+    {
+        var recipients = await GetClassRealtimeRecipientsAsync(classId, cancellationToken);
+        if (recipients.Length == 0) return;
+
+        await _classRealtimePublisher.PublishMajorUpdatedAsync(
+            recipients,
+            classId,
+            studentId,
+            majorCode,
+            cancellationToken);
+    }
+
+    private async Task<Guid[]> GetClassRealtimeRecipientsAsync(
+        Guid classId,
         CancellationToken cancellationToken)
     {
         var studentRecipients = await _context.ClassStudents.AsNoTracking()
@@ -289,18 +302,11 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
             .Where(item => item.Id == classId)
             .Select(item => item.PrimaryLecturerId)
             .SingleOrDefaultAsync(cancellationToken);
-        var recipients = studentRecipients
+        return studentRecipients
             .Concat(assignedLecturers)
             .Concat(primaryLecturerId.HasValue ? [primaryLecturerId.Value] : [])
             .Distinct()
             .ToArray();
-
-        await _classRealtimePublisher.PublishMajorUpdatedAsync(
-            recipients,
-            classId,
-            studentId,
-            majorCode,
-            cancellationToken);
     }
 
     private static bool RequiresChatSynchronization(string eventType) => eventType is
@@ -408,6 +414,33 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
 
     public async Task PublishAfterCommitAsync(OutboxMessage message, CancellationToken cancellationToken = default)
     {
+        if (message.Type == "Class.MajorUpdated.v1")
+        {
+            using var majorDocument = JsonDocument.Parse(message.PayloadJson);
+            if (!majorDocument.RootElement.TryGetProperty("data", out var majorData)) return;
+            var studentId = ReadGuid(majorData, "studentId");
+            var majorCode = ReadString(majorData, "majorCode");
+            if (studentId.HasValue && !string.IsNullOrWhiteSpace(majorCode))
+                await PublishClassMajorUpdatedAsync(
+                    message.AggregateId,
+                    studentId.Value,
+                    majorCode,
+                    cancellationToken);
+            return;
+        }
+
+        if (IsClassMajorsChangedEvent(message.Type))
+        {
+            var majorRecipients = await GetClassRealtimeRecipientsAsync(message.AggregateId, cancellationToken);
+            if (majorRecipients.Length > 0)
+                await _classRealtimePublisher.PublishMajorsChangedAsync(
+                    majorRecipients,
+                    message.AggregateId,
+                    message.Type,
+                    cancellationToken);
+            return;
+        }
+
         if (message.Type == "Team.Created.v1")
         {
             using var teamDocument = JsonDocument.Parse(message.PayloadJson);
@@ -427,15 +460,19 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
         if (!document.RootElement.TryGetProperty("data", out var data)) return;
         var formationId = ReadGuid(data, "formationId");
         if (!formationId.HasValue) return;
-        var recipients = await _context.TeamFormationInvitations.AsNoTracking()
-            .Where(invitation => invitation.FormationId == formationId.Value && invitation.ClassId == message.AggregateId &&
-                invitation.ClassStudent.Student.UserId.HasValue)
-            .Select(invitation => invitation.ClassStudent.Student.UserId!.Value)
-            .Distinct()
-            .ToArrayAsync(cancellationToken);
+        // A pending formation changes availability for every student in the class,
+        // not only for the invited members. Notify all class participants so their
+        // roster can immediately disable or release the affected students.
+        var recipients = await GetClassRealtimeRecipientsAsync(message.AggregateId, cancellationToken);
         if (recipients.Length > 0)
             await _classRealtimePublisher.PublishTeamFormationChangedAsync(recipients, message.AggregateId, formationId.Value, cancellationToken);
     }
+
+    private static bool IsClassMajorsChangedEvent(string eventType) => eventType is
+        "Class.EnrollmentMajorCorrected.v1" or
+        "Class.EnrollmentMajorsVerified.v1" or
+        "Class.EnrollmentMajorsSynchronizedFromFile.v1" or
+        "Class.StudentProfileMajorsSynchronized.v1";
 
     private async Task AddForStudentsAsync(
         OutboxMessage message,

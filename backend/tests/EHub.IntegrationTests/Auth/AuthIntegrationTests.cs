@@ -229,6 +229,15 @@ public class AuthIntegrationTests
                 FormationId = formation.Id,
                 Formation = formation,
                 ClassId = enrollmentIds.ActiveClassId,
+                StudentId = enrollmentIds.StudentId,
+                Status = TeamInvitationStatus.Accepted,
+                RespondedAtUtc = now
+            });
+            formation.Invitations.Add(new TeamFormationInvitation
+            {
+                FormationId = formation.Id,
+                Formation = formation,
+                ClassId = enrollmentIds.ActiveClassId,
                 StudentId = reservedStudent.Id,
                 ClassStudent = reservedEnrollment,
                 Status = TeamInvitationStatus.Pending
@@ -243,10 +252,51 @@ public class AuthIntegrationTests
         var classDetail = await _client.GetFromJsonAsync<ApiResponse<StudentClassDetailResponse>>(
             $"/api/classes/my-class-detail/{enrollmentIds.ActiveClassId}");
 
-        classDetail!.Data!.Students.Single(member => member.StudentId == enrollmentIds.StudentId)
-            .HasPendingTeamInvitation.Should().BeFalse();
-        classDetail.Data.Students.Single(member => member.StudentId == reservedStudentId)
-            .HasPendingTeamInvitation.Should().BeTrue();
+        var creator = classDetail!.Data!.Students.Single(member => member.StudentId == enrollmentIds.StudentId);
+        creator.HasPendingTeamInvitation.Should().BeTrue();
+        creator.IsPendingTeamFormationMember.Should().BeTrue();
+        creator.PendingTeamInvitationStatus.Should().Be("Accepted");
+
+        var reservedClassmate = classDetail.Data.Students.Single(member => member.StudentId == reservedStudentId);
+        reservedClassmate.HasPendingTeamInvitation.Should().BeTrue();
+        reservedClassmate.IsPendingTeamFormationMember.Should().BeTrue();
+        reservedClassmate.PendingTeamName.Should().StartWith("Reservation ");
+        reservedClassmate.PendingTeamInvitationStatus.Should().Be("Pending");
+
+        var outsiderEmail = $"google-reservation-outsider-{Guid.NewGuid()}@example.com";
+        var outsiderLogin = await _client.PostAsJsonAsync("/api/auth/google", new GoogleLoginRequest { IdToken = outsiderEmail });
+        var outsiderSession = (await outsiderLogin.Content.ReadFromJsonAsync<ApiResponse<AuthResponse>>())!.Data!;
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var outsider = await context.Students.SingleAsync(item => item.UserId == outsiderSession.User.Id);
+            var referenceEnrollment = await context.ClassStudents.AsNoTracking().SingleAsync(item =>
+                item.ClassId == enrollmentIds.ActiveClassId && item.StudentId == enrollmentIds.StudentId);
+            var now = DateTime.UtcNow;
+            context.ClassStudents.Add(new ClassStudent
+            {
+                ClassId = enrollmentIds.ActiveClassId,
+                StudentId = outsider.Id,
+                SemesterId = referenceEnrollment.SemesterId,
+                CourseId = referenceEnrollment.CourseId,
+                EnrollmentStatus = EnrollmentStatus.Active,
+                CountsTowardCourseSemesterLimit = true,
+                MajorCodeAtEnrollment = MajorCodes.BIT_SE,
+                CreatedAt = now,
+                UpdatedAt = now
+            });
+            await context.SaveChangesAsync();
+        }
+
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", outsiderSession.AccessToken);
+        var outsiderClassDetail = await _client.GetFromJsonAsync<ApiResponse<StudentClassDetailResponse>>(
+            $"/api/classes/my-class-detail/{enrollmentIds.ActiveClassId}");
+        var reservedFromOutside = outsiderClassDetail!.Data!.Students.Single(member => member.StudentId == reservedStudentId);
+        reservedFromOutside.HasPendingTeamInvitation.Should().BeTrue();
+        reservedFromOutside.IsPendingTeamFormationMember.Should().BeFalse();
+        reservedFromOutside.PendingTeamFormationId.Should().BeNull();
+        reservedFromOutside.PendingTeamName.Should().BeNull();
+        reservedFromOutside.PendingTeamInvitationStatus.Should().BeNull();
     }
 
     private async Task<(Guid StudentId, Guid ActiveClassId, Guid CompletedClassId)> SeedMajorUpdateEnrollmentsAsync(

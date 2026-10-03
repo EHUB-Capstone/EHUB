@@ -23,6 +23,7 @@ using EHub.Application.Features.Notifications.GetNotifications;
 using EHub.Application.Features.Notifications.MarkNotificationRead;
 using EHub.Application.Features.ProjectData.GetProjectData;
 using EHub.Application.Features.ProjectData.GetProjectDataFilterOptions;
+using EHub.Application.Features.ProjectData.GetProjectDataSummary;
 using EHub.Application.Features.ProjectData.ManageAchievements;
 using EHub.Application.Features.Rankings.TeamRankings;
 using EHub.Application.Features.Subjects.Curriculum;
@@ -77,6 +78,7 @@ public static class DependencyInjection
         services.AddScoped<EHub.Application.Features.Workspaces.StudentPreviousScores.StudentPreviousScoresHandler>();
         services.AddScoped<IGetProjectDataQueryHandler, GetProjectDataQueryHandler>();
         services.AddScoped<IGetProjectDataFilterOptionsQueryHandler, GetProjectDataFilterOptionsQueryHandler>();
+        services.AddScoped<IGetProjectDataSummaryQueryHandler, GetProjectDataSummaryQueryHandler>();
         services.AddScoped<IUpdateProjectAchievementsCommandHandler, UpdateProjectAchievementsCommandHandler>();
         services.AddScoped<IGetNotificationsQueryHandler, GetNotificationsQueryHandler>();
         services.AddScoped<IMarkNotificationReadCommandHandler, MarkNotificationReadCommandHandler>();
@@ -137,6 +139,7 @@ public static class DependencyInjection
 
         services.AddScoped<EHub.Application.Features.Workspaces.CheckpointEvaluations.ICheckpointEvaluationHandler, EHub.Application.Features.Workspaces.CheckpointEvaluations.CheckpointEvaluationHandler>();
         services.AddScoped<EHub.Application.Features.Workspaces.CourseAssessmentEvaluations.ICourseAssessmentEvaluationHandler, EHub.Application.Features.Workspaces.CourseAssessmentEvaluations.CourseAssessmentEvaluationHandler>();
+        services.AddScoped<EHub.Application.Features.Workspaces.EvaluationReportExport.IEvaluationReportExportHandler, EHub.Application.Features.Workspaces.EvaluationReportExport.EvaluationReportExportHandler>();
 
         services.AddScoped<EHub.Application.Features.ProductFeedback.IProductFeedbackHandler, EHub.Application.Features.ProductFeedback.ProductFeedbackHandler>();
 

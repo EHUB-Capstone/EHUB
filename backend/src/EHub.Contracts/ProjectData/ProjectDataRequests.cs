@@ -3,8 +3,11 @@ namespace EHub.Contracts.ProjectData;
 public sealed class GetProjectDataRequest
 {
     public string? Search { get; init; }
-    public Guid? SemesterId { get; init; }
     public string? SubjectCode { get; init; }
+
+    /// <summary>Semester term: SP, SU or FA. Combines with <see cref="Year"/>; either may be omitted.</summary>
+    public string? Semester { get; init; }
+    public int? Year { get; init; }
     public string? Group { get; init; }
     public string? StartupIndustry { get; init; }
     public Guid? LecturerId { get; init; }

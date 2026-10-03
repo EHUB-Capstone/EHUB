@@ -5,5 +5,6 @@ public enum ProjectDirectionStatus
     Draft,
     Submitted,
     NeedsRevision,
-    Approved
+    Approved,
+    Rejected
 }

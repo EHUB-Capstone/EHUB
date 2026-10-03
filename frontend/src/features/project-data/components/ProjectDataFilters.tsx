@@ -2,6 +2,7 @@ import { useId, useMemo, useState } from 'react';
 import { Search, SlidersHorizontal, X } from 'lucide-react';
 import Button from '../../../components/ui/Button';
 import { cn } from '../../../utils/cn';
+import { PROJECT_DATA_SEMESTER_TERMS } from '../../../types/projectData';
 import {
   FILTER_LABELS,
   PROJECT_DATA_SEARCH_MAX_LENGTH,
@@ -21,14 +22,32 @@ interface SelectFieldProps {
   options: SelectOption[];
   onChange: (value: string) => void;
   disabled?: boolean;
+  /** Renders the select on its own (accessible name from `label`) with `allLabel` as the empty choice. */
+  compact?: boolean;
+  allLabel?: string;
 }
 
-function SelectField({ label, value, options, onChange, disabled }: SelectFieldProps) {
+function SelectField({ label, value, options, onChange, disabled, compact = false, allLabel = 'All' }: SelectFieldProps) {
   const id = useId();
   // A value coming from a shared URL must stay visible even when it is not among the loaded options.
   const items = value && !options.some(option => option.value === value)
     ? [{ value, label: value }, ...options]
     : options;
+
+  if (compact) {
+    return (
+      <select
+        value={value}
+        disabled={disabled}
+        aria-label={label}
+        onChange={event => onChange(event.target.value)}
+        className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
+      >
+        <option value="">{allLabel}</option>
+        {items.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+      </select>
+    );
+  }
 
   return (
     <div className="min-w-0">
@@ -74,7 +93,7 @@ export default function ProjectDataFilters({
   const advancedId = useId();
   const [expanded, setExpanded] = useState(false);
   const activeKeys = activeFilterKeys(query);
-  const advancedActive = activeKeys.some(key => !['semesterId', 'subjectCode'].includes(key));
+  const advancedActive = activeKeys.some(key => !['subjectCode', 'semester', 'year'].includes(key));
   const showAdvanced = expanded || advancedActive;
   const disabled = optionsLoading || !options;
 
@@ -86,8 +105,9 @@ export default function ProjectDataFilters({
       mentorsByUser.set(mentor.userId, entry);
     }
     return {
-      semesters: (options?.semesters ?? []).map(item => ({ value: item.id, label: item.isActive ? `${item.code} (current)` : item.code })),
-      subjects: (options?.subjects ?? []).map(item => ({ value: item.code, label: item.name ? `${item.code} – ${item.name}` : item.code })),
+      subjects: (options?.subjects ?? []).map(item => ({ value: item.code, label: item.code })),
+      terms: PROJECT_DATA_SEMESTER_TERMS.map(code => ({ value: code, label: code })),
+      years: (options?.years ?? []).map(year => ({ value: String(year), label: String(year) })),
       groups: (options?.groups ?? []).map(value => ({ value, label: value })),
       industries: (options?.startupIndustries ?? []).map(value => ({ value, label: value })),
       lecturers: (options?.lecturers ?? []).map(item => ({ value: item.userId, label: item.fullName })),
@@ -98,8 +118,9 @@ export default function ProjectDataFilters({
 
   const valueLabel = (key: (typeof activeKeys)[number]): string => {
     const lookup: Record<string, SelectOption[]> = {
-      semesterId: choices.semesters,
       subjectCode: choices.subjects,
+      semester: choices.terms,
+      year: choices.years,
       group: choices.groups,
       startupIndustry: choices.industries,
       lecturerId: choices.lecturers,
@@ -112,33 +133,31 @@ export default function ProjectDataFilters({
 
   return (
     <section aria-label="Search and filters" className="mb-4 rounded-2xl border border-slate-200/60 bg-white p-4 shadow-sm">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
-        <div className="min-w-0 flex-1">
-          <label htmlFor={searchId} className="mb-1 block text-xs font-medium text-slate-500">Search</label>
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden="true" />
-            <input
-              id={searchId}
-              type="search"
-              value={searchInput}
-              maxLength={PROJECT_DATA_SEARCH_MAX_LENGTH}
-              onChange={event => onSearchInputChange(event.target.value)}
-              placeholder="Search project, description, subject, semester, lecturer, mentor or industry"
-              className="h-10 w-full rounded-xl border border-slate-200 bg-white pl-10 pr-3 text-sm text-slate-700 outline-none placeholder:text-slate-400 focus:border-primary focus:ring-2 focus:ring-primary/20"
-            />
-          </div>
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative min-w-[180px] flex-1">
+          <label htmlFor={searchId} className="sr-only">Search projects</label>
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden="true" />
+          <input
+            id={searchId}
+            type="search"
+            value={searchInput}
+            maxLength={PROJECT_DATA_SEARCH_MAX_LENGTH}
+            onChange={event => onSearchInputChange(event.target.value)}
+            placeholder="Search projects, classes, people…"
+            title="Searches project, description, class, subject, semester, lecturer, mentor and industry"
+            className="w-full rounded-xl border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm text-slate-700 outline-none placeholder:text-slate-400 focus:border-primary focus:ring-2 focus:ring-primary/20"
+          />
         </div>
-        <div className="grid grid-cols-2 gap-3 lg:w-[26rem]">
-          <SelectField label="Semester" value={query.semesterId} options={choices.semesters} disabled={disabled} onChange={value => onChange({ semesterId: value })} />
-          <SelectField label="Subject" value={query.subjectCode} options={choices.subjects} disabled={disabled} onChange={value => onChange({ subjectCode: value })} />
-        </div>
+        <SelectField compact label="Filter by subject" allLabel="All Subjects" value={query.subjectCode} options={choices.subjects} disabled={disabled} onChange={value => onChange({ subjectCode: value })} />
+        <SelectField compact label="Filter by semester" allLabel="All Semesters" value={query.semester} options={choices.terms} onChange={value => onChange({ semester: value as ProjectDataQuery['semester'] })} />
+        <SelectField compact label="Filter by year" allLabel="All Years" value={query.year} options={choices.years} disabled={disabled} onChange={value => onChange({ year: value })} />
         <Button
           variant="outline"
           icon={SlidersHorizontal}
           aria-expanded={showAdvanced}
           aria-controls={advancedId}
           onClick={() => setExpanded(current => !current)}
-          className="h-10 shrink-0"
+          className="shrink-0"
         >
           More filters
         </Button>

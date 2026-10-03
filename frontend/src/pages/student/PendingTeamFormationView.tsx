@@ -14,17 +14,18 @@ interface Props {
 export default function PendingTeamFormationView({ formation, onChanged }: Props) {
   const [working, setWorking] = useState(false);
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
+  const [declineConfirmOpen, setDeclineConfirmOpen] = useState(false);
   const ownInvitation = formation.invitations.find(member => member.studentId === formation.myStudentId);
   const isCreator = formation.creatorStudentId === formation.myStudentId;
   const acceptedCount = formation.invitations.filter(member => member.status === 'Accepted').length;
 
   const act = async (action: 'accept' | 'decline' | 'cancel') => {
     if (working) return;
-    if (action === 'decline' && !window.confirm('Declining will cancel this formation for everyone. Continue?')) return;
     setWorking(true);
     try {
       await teamFormationApi[action](formation.id);
       if (action === 'cancel') setCancelConfirmOpen(false);
+      if (action === 'decline') setDeclineConfirmOpen(false);
       toast.success(action === 'accept' ? 'Invitation accepted.' : 'Formation cancelled.');
       await onChanged();
     } catch (error) {
@@ -69,7 +70,7 @@ export default function PendingTeamFormationView({ formation, onChanged }: Props
                 className="rounded-xl bg-gradient-to-r from-primary to-secondary px-4 py-2.5 text-sm font-bold text-white hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50">
                 {working ? 'Updating…' : 'Accept invitation'}
               </button>
-              <button type="button" disabled={working} onClick={() => void act('decline')}
+              <button type="button" disabled={working} onClick={() => setDeclineConfirmOpen(true)}
                 className="rounded-xl border border-red-200 px-4 py-2.5 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50">
                 Decline
               </button>
@@ -119,6 +120,16 @@ export default function PendingTeamFormationView({ formation, onChanged }: Props
         </section>
       </div>
     </div>
+    <ConfirmDialog
+      isOpen={declineConfirmOpen}
+      onClose={() => { if (!working) setDeclineConfirmOpen(false); }}
+      onConfirm={() => act('decline')}
+      isSubmitting={working}
+      title="Decline team invitation?"
+      description="Declining this invitation will cancel the team formation for every selected member. This action cannot be undone."
+      confirmText="Decline invitation"
+      cancelText="Keep invitation"
+    />
     <ConfirmDialog
       isOpen={cancelConfirmOpen}
       onClose={() => { if (!working) setCancelConfirmOpen(false); }}

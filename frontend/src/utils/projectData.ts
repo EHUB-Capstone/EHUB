@@ -1,6 +1,7 @@
 import {
   PROJECT_ACHIEVEMENTS,
   PROJECT_DATA_PAGE_SIZES,
+  PROJECT_DATA_SEMESTER_TERMS,
   PROJECT_DATA_SORT_FIELDS,
 } from '../types/projectData.ts';
 import type {
@@ -9,6 +10,7 @@ import type {
   ProjectDataMentor,
   ProjectDataPageSize,
   ProjectDataQuery,
+  ProjectDataSemesterTerm,
   ProjectDataSortField,
 } from '../types/projectData.ts';
 
@@ -18,8 +20,9 @@ export const PROJECT_DATA_EMPTY_VALUE = '-';
 
 export const DEFAULT_PROJECT_DATA_QUERY: ProjectDataQuery = {
   search: '',
-  semesterId: '',
   subjectCode: '',
+  semester: '',
+  year: '',
   group: '',
   startupIndustry: '',
   lecturerId: '',
@@ -27,19 +30,20 @@ export const DEFAULT_PROJECT_DATA_QUERY: ProjectDataQuery = {
   achievement: '',
   pageIndex: 1,
   pageSize: 20,
-  sortBy: 'projectName',
+  sortBy: 'classCode',
   isDescending: false,
 };
 
-type FilterKey = 'semesterId' | 'subjectCode' | 'group' | 'startupIndustry' | 'lecturerId' | 'mentorId' | 'achievement';
+type FilterKey = 'subjectCode' | 'semester' | 'year' | 'group' | 'startupIndustry' | 'lecturerId' | 'mentorId' | 'achievement';
 
 const FILTER_KEYS: readonly FilterKey[] = [
-  'semesterId', 'subjectCode', 'group', 'startupIndustry', 'lecturerId', 'mentorId', 'achievement',
+  'subjectCode', 'semester', 'year', 'group', 'startupIndustry', 'lecturerId', 'mentorId', 'achievement',
 ];
 
 export const FILTER_LABELS: Record<FilterKey, string> = {
-  semesterId: 'Semester',
   subjectCode: 'Subject',
+  semester: 'Semester',
+  year: 'Year',
   group: 'Group',
   startupIndustry: 'Startup industry',
   lecturerId: 'Lecturer',
@@ -61,11 +65,14 @@ export function parseProjectDataQuery(params: URLSearchParams): ProjectDataQuery
   const pageSize = toPositiveInteger(params.get('pageSize'));
   const sortBy = params.get('sortBy') ?? '';
   const achievement = params.get('achievement') ?? '';
+  const semester = (params.get('semester') ?? '').trim().toUpperCase();
+  const year = (params.get('year') ?? '').trim();
 
   return {
     search: text('search', PROJECT_DATA_SEARCH_MAX_LENGTH),
-    semesterId: text('semesterId', 64),
     subjectCode: text('subjectCode', 50),
+    semester: isOneOf(PROJECT_DATA_SEMESTER_TERMS, semester as ProjectDataSemesterTerm) ? (semester as ProjectDataSemesterTerm) : '',
+    year: /^\d{4}$/.test(year) ? year : '',
     group: text('group'),
     startupIndustry: text('startupIndustry'),
     lecturerId: text('lecturerId', 64),
@@ -111,6 +118,16 @@ export function toProjectDataRequestParams(query: ProjectDataQuery): Record<stri
   return params;
 }
 
+/** The request params that decide which rows match: search and filters, without paging or sorting. */
+export function toProjectDataSummaryParams(query: ProjectDataQuery): Record<string, string> {
+  const params: Record<string, string> = {};
+  if (query.search) params.search = query.search;
+  for (const key of FILTER_KEYS) {
+    if (query[key]) params[key] = query[key];
+  }
+  return params;
+}
+
 /** Any change other than paging itself returns the user to the first page. */
 export function applyProjectDataChange(
   current: ProjectDataQuery,
@@ -149,6 +166,11 @@ export function nextProjectDataSort(
 
 export function projectDataQueryKey(userId: string | undefined, query: ProjectDataQuery) {
   return ['project-data', userId ?? 'anonymous', 'list', query] as const;
+}
+
+/** Paging and sorting are left out so turning a page never refetches the summary. */
+export function projectDataSummaryKey(userId: string | undefined, query: ProjectDataQuery) {
+  return ['project-data', userId ?? 'anonymous', 'summary', toProjectDataSummaryParams(query)] as const;
 }
 
 export function projectDataOptionsKey(userId: string | undefined) {

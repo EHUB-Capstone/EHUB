@@ -3,6 +3,7 @@ import type {
   EvaluationGradingFilters,
   EvaluationGradingRecord,
   EvaluationGradingStatus,
+  EvaluationReportTeamScope,
 } from '../types/evaluationGrading';
 import type { WorkspaceOption } from '../types/workspaceTools';
 import { parseWorkspaceSemester } from './workspaceHub.ts';
@@ -83,6 +84,22 @@ export function filterEvaluationRecords(
       (!filters.status || record.status === filters.status)
     );
   });
+}
+
+export function buildEvaluationReportExportScope(
+  records: EvaluationGradingRecord[],
+): EvaluationReportTeamScope[] {
+  const checkpointsByTeam = new Map<string, Set<number>>();
+  records.forEach(record => {
+    const checkpointNumbers = checkpointsByTeam.get(record.team.teamId) ?? new Set<number>();
+    checkpointNumbers.add(record.checkpoint.number);
+    checkpointsByTeam.set(record.team.teamId, checkpointNumbers);
+  });
+
+  return [...checkpointsByTeam.entries()].map(([teamId, checkpointNumbers]) => ({
+    teamId,
+    checkpointNumbers: [...checkpointNumbers].sort((left, right) => left - right),
+  }));
 }
 
 export function selectLatestOfficialEvaluation(

@@ -33,10 +33,12 @@ public class UnitOfWork : IUnitOfWork
         {
             await action(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
+            _context.SignalCommittedOutbox();
         }
         catch
         {
             await transaction.RollbackAsync(cancellationToken);
+            _context.DiscardUncommittedOutboxSignal();
             throw;
         }
     }
@@ -50,11 +52,13 @@ public class UnitOfWork : IUnitOfWork
         {
             var result = await action(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
+            _context.SignalCommittedOutbox();
             return result;
         }
         catch
         {
             await transaction.RollbackAsync(cancellationToken);
+            _context.DiscardUncommittedOutboxSignal();
             throw;
         }
     }
@@ -70,11 +74,13 @@ public class UnitOfWork : IUnitOfWork
         {
             var result = await action(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
+            _context.SignalCommittedOutbox();
             return result;
         }
         catch (Exception exception) when (ContainsTransactionConflict(exception))
         {
             await transaction.RollbackAsync(cancellationToken);
+            _context.DiscardUncommittedOutboxSignal();
             throw new SerializableTransactionConflictException(
                 "The serializable transaction conflicted with another concurrent transaction.",
                 exception);
@@ -82,6 +88,7 @@ public class UnitOfWork : IUnitOfWork
         catch
         {
             await transaction.RollbackAsync(cancellationToken);
+            _context.DiscardUncommittedOutboxSignal();
             throw;
         }
     }

@@ -762,8 +762,14 @@ function registerDirectionHandlers(mock: MockAdapter): void {
     if (direction.status !== 'Submitted') return failure(409, 'PROJECT_DIRECTION_STATE_INVALID', 'Only submitted directions can be reviewed.');
     const fromStatus = direction.status;
     const toStatus = asString(body.decision, 'NeedsRevision');
+    if (!['Approved', 'NeedsRevision', 'Rejected'].includes(toStatus)) {
+      return failure(400, 'VALIDATION_ERROR', 'Decision must be Approved, NeedsRevision, or Rejected.');
+    }
+    if (toStatus === 'Rejected' && !direction.isProjectProfileChangeProposal) {
+      return failure(409, 'PROJECT_DIRECTION_STATE_INVALID', 'Only a Project Profile change request can be rejected.');
+    }
+    const team = teamById(teamId);
     if (direction.isProjectProfileChangeProposal && toStatus === 'Approved') {
-      const team = teamById(teamId);
       if (team) {
         const changedFields = [
           team.projectName !== direction.title && 'projectName',
@@ -784,12 +790,26 @@ function registerDirectionHandlers(mock: MockAdapter): void {
         }, ...(team.projectActivities || [])];
       }
     }
-    direction.status = toStatus;
+    if (direction.isProjectProfileChangeProposal && toStatus === 'Rejected' && team) {
+      direction.title = team.projectName || '';
+      direction.summary = team.projectDescription || '';
+      const occurredAtUtc = new Date().toISOString();
+      team.projectActivities = [{
+        id: allocateId(),
+        action: 'PROJECT_PROFILE_CHANGE_REJECTED',
+        summary: 'Rejected proposed changes to the Project Profile. The approved profile remains unchanged.',
+        actorUserId: getMockState().users.find((user) => user.role === 'LECTURER')?.id || null,
+        actorName: 'Lecturer',
+        changedFields: [],
+        occurredAtUtc,
+      }, ...(team.projectActivities || [])];
+    }
+    direction.status = toStatus === 'Rejected' ? 'Approved' : toStatus;
     direction.reviewedAtUtc = new Date().toISOString();
     direction.rowVersion = allocateRowVersion();
     const review: MockDirectionReview = { id: allocateId(), fromStatus, toStatus, comment: asString(body.comment), reviewedByUserId: getMockState().users.find((user) => user.role === 'LECTURER')?.id || allocateId(), occurredAtUtc: new Date().toISOString() };
     direction.reviews.unshift(review);
-    if (toStatus === 'Approved') {
+    if (toStatus === 'Approved' || toStatus === 'Rejected') {
       direction.isProjectProfileChangeProposal = false;
       direction.currentTitle = null;
       direction.currentSummary = null;

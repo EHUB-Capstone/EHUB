@@ -110,6 +110,15 @@ export interface EvaluationGradingBatchResponse {
   teams: EvaluationGradingTeamSnapshot[];
 }
 
+export interface EvaluationReportTeamScope {
+  teamId: string;
+  checkpointNumbers: number[];
+}
+
+export interface EvaluationReportExportRequest {
+  teams: EvaluationReportTeamScope[];
+}
+
 export interface EvaluationGradingRecord {
   key: string;
   team: EvaluationTeam;

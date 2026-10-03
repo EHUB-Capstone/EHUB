@@ -6,6 +6,7 @@ using EHub.Application.Features.Workspaces.CheckpointFeedback;
 using EHub.Application.Features.Workspaces.CheckpointEvaluations;
 using EHub.Application.Features.Workspaces.CheckpointRequirements;
 using EHub.Application.Features.Workspaces.CourseAssessmentEvaluations;
+using EHub.Application.Features.Workspaces.EvaluationReportExport;
 using EHub.Contracts.Common;
 using EHub.Contracts.Workspaces;
 using EHub.Shared.Constants;
@@ -190,6 +191,19 @@ public sealed class WorkspaceCheckpointsController(
         return result.IsSuccess
             ? Ok(ApiResponse<EvaluationGradingBatchResponse>.SuccessResponse(
                 result.Value, "Evaluation grading data retrieved."))
+            : ToErrorResponse(result.Error);
+    }
+
+    [HttpPost("evaluation-grading/export")]
+    [Authorize(Policy = SystemPolicies.StaffOnly)]
+    public async Task<IActionResult> ExportEvaluationReport(
+        [FromBody] EvaluationReportExportRequest request,
+        [FromServices] IEvaluationReportExportHandler handler,
+        CancellationToken cancellationToken)
+    {
+        var result = await handler.HandleAsync(request, UserId, Role, cancellationToken);
+        return result.IsSuccess
+            ? File(result.Value.FileBytes, result.Value.ContentType, result.Value.FileName)
             : ToErrorResponse(result.Error);
     }
 

@@ -103,7 +103,7 @@ export default function ProjectDataDetailModal({
         <div className="space-y-6">
           <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field label="Semester">{displayText(item.semesterCode)}</Field>
-            <Field label="Subject Code">{displayText(item.subjectCode)}</Field>
+            <Field label="Class Code">{displayText(item.classCode)}</Field>
             <Field label="Group"><Chips values={item.groups} /></Field>
             <Field label="Lecturer">{displayText(item.lecturer?.fullName)}</Field>
             <Field label="Mentor"><MentorLabel mentor={item.mentor} /></Field>

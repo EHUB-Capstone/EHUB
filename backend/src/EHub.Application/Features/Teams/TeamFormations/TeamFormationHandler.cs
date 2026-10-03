@@ -303,10 +303,27 @@ public sealed class TeamFormationHandler : ITeamFormationHandler
         if (await _context.TeamProposalMembers.AsNoTracking().AnyAsync(item =>
             item.ClassId == classId && ids.Contains(item.StudentId) && item.CountsTowardOpenProposal, ct))
             return MemberFailure(ErrorCodes.TeamProposalMembershipConflict, "A selected student belongs to an open legacy proposal.");
-        if (await _context.TeamFormationInvitations.AsNoTracking().AnyAsync(item =>
-            item.ClassId == classId && ids.Contains(item.StudentId) && item.ReservationReleasedAtUtc == null &&
-            (!currentFormationId.HasValue || item.FormationId != currentFormationId.Value), ct))
-            return MemberFailure(ErrorCodes.TeamFormationReservationConflict, "A selected student is reserved by another formation.");
+        var reservationConflict = await _context.TeamFormationInvitations.AsNoTracking()
+            .Where(item =>
+                item.ClassId == classId && ids.Contains(item.StudentId) && item.ReservationReleasedAtUtc == null &&
+                item.Formation.Status == TeamFormationStatus.Pending &&
+                (!currentFormationId.HasValue || item.FormationId != currentFormationId.Value))
+            .OrderBy(item => item.ClassStudent.Student.RollNumber)
+            .Select(item => new
+            {
+                item.ClassStudent.Student.FullName,
+                item.ClassStudent.Student.RollNumber
+            })
+            .FirstOrDefaultAsync(ct);
+        if (reservationConflict is not null)
+        {
+            var studentLabel = string.IsNullOrWhiteSpace(reservationConflict.RollNumber)
+                ? reservationConflict.FullName
+                : $"{reservationConflict.FullName} ({reservationConflict.RollNumber})";
+            return MemberFailure(
+                ErrorCodes.TeamFormationReservationConflict,
+                $"{studentLabel} has another pending team invitation.");
+        }
 
         var registeredMajors = await RegisteredStudentMajorResolver.LoadByEmailAsync(
             _context, enrollments.Select(item => item.Student.Email), ct);

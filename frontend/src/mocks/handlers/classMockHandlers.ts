@@ -260,10 +260,14 @@ function registerClassQueries(mock: MockAdapter): void {
         student.enrollmentStatus === 'Active' && student.userId === sessionUserId));
     const students = (state.rosters[classId] || []).filter((student) => student.enrollmentStatus === rosterStatus).map((student) => {
       const isOwnRow = student.userId === sessionUserId;
-      const hasPendingTeamInvitation = rosterStatus === 'Active' && state.formations.some(formation =>
+      const pendingFormation = rosterStatus === 'Active' ? state.formations.find(formation =>
         formation.classId === classId
         && formation.status === 'Pending'
-        && formation.invitations.some(invitation => invitation.studentId === student.studentId));
+        && formation.invitations.some(invitation => invitation.studentId === student.studentId)) : undefined;
+      const pendingInvitation = pendingFormation?.invitations.find(invitation =>
+        invitation.studentId === student.studentId);
+      const viewerBelongsToPendingFormation = Boolean(pendingFormation?.invitations.some(invitation =>
+        invitation.studentId === currentEnrollment.studentId));
       const profileMajorCode = isOwnRow
         ? state.users.find(user => user.id === sessionUserId)?.major || null
         : null;
@@ -281,7 +285,11 @@ function registerClassQueries(mock: MockAdapter): void {
         isMajorLocked: isOwnRow && ownMajorLocked,
         enrollmentStatus: student.enrollmentStatus,
         teamId: student.teamId,
-        hasPendingTeamInvitation,
+        hasPendingTeamInvitation: Boolean(pendingFormation),
+        pendingTeamFormationId: viewerBelongsToPendingFormation ? pendingFormation?.id || null : null,
+        pendingTeamName: viewerBelongsToPendingFormation ? pendingFormation?.teamName || null : null,
+        pendingTeamInvitationStatus: viewerBelongsToPendingFormation ? pendingInvitation?.status || null : null,
+        isPendingTeamFormationMember: viewerBelongsToPendingFormation,
       };
     });
     const teams = getMockState().teams.filter((team) => team.classId === classId).map(teamWithMajorComposition)

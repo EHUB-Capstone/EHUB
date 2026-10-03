@@ -1,10 +1,13 @@
 export const PROJECT_ACHIEVEMENTS = ['Potential', 'Funded', 'Awarded'] as const;
 export type ProjectAchievement = (typeof PROJECT_ACHIEVEMENTS)[number];
 
+export const PROJECT_DATA_SEMESTER_TERMS = ['SP', 'SU', 'FA'] as const;
+export type ProjectDataSemesterTerm = (typeof PROJECT_DATA_SEMESTER_TERMS)[number];
+
 export const PROJECT_DATA_PAGE_SIZES = [10, 20, 50, 100] as const;
 export type ProjectDataPageSize = (typeof PROJECT_DATA_PAGE_SIZES)[number];
 
-export const PROJECT_DATA_SORT_FIELDS = ['projectName', 'semester', 'subject'] as const;
+export const PROJECT_DATA_SORT_FIELDS = ['classCode', 'semester', 'group', 'projectName'] as const;
 export type ProjectDataSortField = (typeof PROJECT_DATA_SORT_FIELDS)[number];
 
 export type ProjectDataMentorSlot = 'Enterprise' | 'Academic';
@@ -32,6 +35,7 @@ export interface ProjectDataItem {
   semesterCode: string;
   subjectId: string;
   subjectCode: string;
+  classCode: string;
   groups: string[];
   projectName: string;
   description: string | null;
@@ -53,8 +57,9 @@ export interface ProjectDataPage {
 
 export interface ProjectDataQuery {
   search: string;
-  semesterId: string;
   subjectCode: string;
+  semester: ProjectDataSemesterTerm | '';
+  year: string;
   group: string;
   startupIndustry: string;
   lecturerId: string;
@@ -66,11 +71,11 @@ export interface ProjectDataQuery {
   isDescending: boolean;
 }
 
-export interface ProjectDataSemesterOption {
-  id: string;
-  code: string;
-  year: number;
-  isActive: boolean;
+export interface ProjectDataSummary {
+  totalGroups: number;
+  potentialGroups: number;
+  fundedGroups: number;
+  awardedGroups: number;
 }
 
 export interface ProjectDataSubjectOption {
@@ -83,8 +88,8 @@ export interface ProjectDataMentorOption extends ProjectDataPerson {
 }
 
 export interface ProjectDataFilterOptions {
-  semesters: ProjectDataSemesterOption[];
   subjects: ProjectDataSubjectOption[];
+  years: number[];
   groups: string[];
   startupIndustries: string[];
   lecturers: ProjectDataPerson[];

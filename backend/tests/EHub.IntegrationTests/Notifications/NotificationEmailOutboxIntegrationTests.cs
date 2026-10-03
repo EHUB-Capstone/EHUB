@@ -147,6 +147,47 @@ public sealed class NotificationEmailOutboxIntegrationTests(CustomWebApplication
         message.LastError.Should().Be(nameof(EmailDeliveryFailureKind.QuotaExceeded));
     }
 
+    [Fact]
+    public async Task OutboxWakeSignal_ReleasesTheWorkerWithoutWaitingForFallbackPolling()
+    {
+        var signal = new OutboxWakeSignal();
+        signal.Signal();
+
+        await signal.WaitAsync(TimeSpan.FromSeconds(10)).WaitAsync(TimeSpan.FromSeconds(1));
+    }
+
+    [Fact]
+    public async Task AppDbContext_WakesOutboxOnlyAfterTheContainingCommit()
+    {
+        using var scope = factory.Services.CreateScope();
+        var connectionString = scope.ServiceProvider.GetRequiredService<AppDbContext>().Database.GetConnectionString();
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseNpgsql(connectionString).Options;
+        var wakeSignal = new RecordingOutboxWakeSignal();
+        await using var context = new AppDbContext(options, wakeSignal);
+
+        var directMessage = CreateMessage("Test.DirectWake.v1", new { });
+        directMessage.Status = OutboxMessageStatus.Pending;
+        directMessage.AvailableAtUtc = DateTime.UtcNow.AddHours(1);
+        context.OutboxMessages.Add(directMessage);
+        await context.SaveChangesAsync();
+        wakeSignal.SignalCount.Should().Be(1);
+
+        var transactionalMessage = CreateMessage("Test.TransactionalWake.v1", new { });
+        transactionalMessage.Status = OutboxMessageStatus.Pending;
+        transactionalMessage.AvailableAtUtc = DateTime.UtcNow.AddHours(1);
+        var unitOfWork = new UnitOfWork(context);
+        await unitOfWork.ExecuteInTransactionAsync(async cancellationToken =>
+        {
+            context.OutboxMessages.Add(transactionalMessage);
+            await context.SaveChangesAsync(cancellationToken);
+            wakeSignal.SignalCount.Should().Be(1, "an uncommitted outbox row must not wake the worker");
+        });
+        wakeSignal.SignalCount.Should().Be(2);
+
+        context.OutboxMessages.RemoveRange(directMessage, transactionalMessage);
+        await context.SaveChangesAsync();
+    }
+
     private ServiceProvider CreateServices(RecordingEmailService sender, bool failAfterProjection = false)
     {
         using var scope = factory.Services.CreateScope();
@@ -267,11 +308,22 @@ public sealed class NotificationEmailOutboxIntegrationTests(CustomWebApplication
             Task.FromResult(new ChatMembershipSyncResponse { ClassId = classId });
     }
 
+    private sealed class RecordingOutboxWakeSignal : IOutboxWakeSignal
+    {
+        public int SignalCount { get; private set; }
+
+        public void Signal() => SignalCount++;
+
+        public Task WaitAsync(TimeSpan fallbackDelay, CancellationToken cancellationToken = default) =>
+            Task.CompletedTask;
+    }
+
     private sealed class NoOpRealtimePublisher : IProjectDirectionRealtimePublisher, IClassRealtimePublisher
     {
         public Task PublishAsync(IReadOnlyCollection<Guid> recipientUserIds, string eventType, Guid classId, Guid teamId, ProjectDirectionDto direction, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task PublishNotificationReadyAsync(IReadOnlyCollection<Guid> recipientUserIds, Guid classId, Guid teamId, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task PublishMajorUpdatedAsync(IReadOnlyCollection<Guid> recipientUserIds, Guid classId, Guid studentId, string majorCode, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task PublishMajorsChangedAsync(IReadOnlyCollection<Guid> recipientUserIds, Guid classId, string changeType, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task PublishProposalReviewedAsync(IReadOnlyCollection<Guid> recipientUserIds, Guid classId, Guid proposalId, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task PublishTeamFormationChangedAsync(IReadOnlyCollection<Guid> recipientUserIds, Guid classId, Guid formationId, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task PublishTeamCreatedAsync(IReadOnlyCollection<Guid> recipientUserIds, Guid classId, Guid teamId, CancellationToken cancellationToken = default) => Task.CompletedTask;

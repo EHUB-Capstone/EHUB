@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import toast from 'react-hot-toast';
 import { Users, AlertTriangle, CheckCircle2, Crown, Loader2, AlertCircle, Send, X } from 'lucide-react';
 import { teamApi } from '../../api/teamApi';
@@ -451,7 +452,7 @@ export default function StudentTeamGeneratePanel({
       </div>
       </div>
 
-      {showConfirmation && !proposal && (
+      {showConfirmation && !proposal && createPortal(
         <div
           className="fixed inset-0 z-[90] flex items-end justify-center p-0 sm:items-center sm:p-6"
           role="dialog"
@@ -566,7 +567,8 @@ export default function StudentTeamGeneratePanel({
               </button>
             </footer>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </>
   );

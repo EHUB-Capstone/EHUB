@@ -27,29 +27,11 @@ public sealed class GetProjectDataFilterOptionsQueryHandler(IApplicationDbContex
         // Options come from the same scope as the list, independent of the current page or filters.
         var scoped = ProjectDataQuery.Scoped(context.Projects.AsNoTracking(), currentUserId, isAdmin);
 
-        var semesterRows = await scoped
-            .Select(project => new
-            {
-                project.Team.Class.SemesterId,
-                project.Team.Class.Semester.Code,
-                project.Team.Class.Semester.Year,
-                project.Team.Class.Semester.Term,
-                project.Team.Class.Semester.Status,
-            })
+        var years = await scoped
+            .Select(project => project.Team.Class.Semester.Year)
             .Distinct()
+            .OrderByDescending(year => year)
             .ToListAsync(cancellationToken);
-        var semesters = semesterRows
-            .OrderByDescending(item => item.Year)
-            .ThenByDescending(item => item.Term)
-            .ThenBy(item => item.Code, StringComparer.OrdinalIgnoreCase)
-            .Select(item => new ProjectDataSemesterOptionResponse
-            {
-                Id = item.SemesterId,
-                Code = item.Code,
-                Year = item.Year,
-                IsActive = item.Status == SemesterStatus.Active,
-            })
-            .ToArray();
 
         var subjects = await scoped
             .Select(project => new ProjectDataSubjectOptionResponse
@@ -104,9 +86,9 @@ public sealed class GetProjectDataFilterOptionsQueryHandler(IApplicationDbContex
 
         return Result.Success(new ProjectDataFilterOptionsResponse
         {
-            Semesters = semesters,
             Subjects = subjects,
-            Groups = ProjectDataQuery.DistinctSorted(groupNames),
+            Years = years,
+            Groups = ProjectDataQuery.DistinctSortedNaturally(groupNames),
             StartupIndustries = ProjectDataQuery.DistinctSorted(industryNames),
             Lecturers = lecturers,
             Mentors = mentors,

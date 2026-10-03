@@ -7,6 +7,7 @@ import LoadingSkeleton from '../../components/ui/LoadingSkeleton';
 import PageHeader from '../../components/ui/PageHeader';
 import ProjectDataDetailModal from '../../features/project-data/components/ProjectDataDetailModal';
 import type { ProjectDataSaveError } from '../../features/project-data/components/ProjectDataDetailModal';
+import ProjectDataSummaryCards from '../../features/project-data/components/ProjectDataSummaryCards';
 import ProjectDataFilters from '../../features/project-data/components/ProjectDataFilters';
 import ProjectDataTable from '../../features/project-data/components/ProjectDataTable';
 import { useProjectData } from '../../features/project-data/hooks/useProjectData';
@@ -20,7 +21,7 @@ const WRITE_ROLES = ['ADMIN', 'LECTURER'];
 
 export default function ProjectData() {
   const { user } = useAuth();
-  const { query, updateQuery, clearFilters, searchInput, setSearchInput, list, options, updateAchievements } = useProjectData();
+  const { query, updateQuery, clearFilters, searchInput, setSearchInput, list, summary, options, updateAchievements } = useProjectData();
   const [selected, setSelected] = useState<ProjectDataItem | null>(null);
   const [saveError, setSaveError] = useState<ProjectDataSaveError | null>(null);
   const [isReloading, setIsReloading] = useState(false);
@@ -151,7 +152,14 @@ export default function ProjectData() {
       <PageHeader
         title="Project Data"
         subtitle="Projects across semesters with their groups, industries, staff and achievements."
-        badge={page ? { text: `${page.totalItems} projects` } : undefined}
+      />
+
+      <ProjectDataSummaryCards
+        summary={summary.data}
+        isLoading={summary.isPending && !summary.data}
+        isError={summary.isError}
+        isRefreshing={summary.isFetching && !summary.isPending}
+        onRetry={() => { void summary.refetch(); }}
       />
 
       <ProjectDataFilters

@@ -1054,6 +1054,13 @@ test('mock student formation creates a team only after every invited member acce
   const classDetail = await axiosClient.get(`/classes/my-class-detail/${targetClass.slug}`);
   assert.ok(classDetail.data.students.every((student: { hasPendingTeamInvitation: boolean }) =>
     student.hasPendingTeamInvitation));
+  assert.ok(classDetail.data.students.every((student: {
+    isPendingTeamFormationMember: boolean;
+    pendingTeamName: string;
+  }) => student.isPendingTeamFormationMember && student.pendingTeamName === 'Student Venture Team'));
+  assert.equal(classDetail.data.students[0].pendingTeamInvitationStatus, 'Accepted');
+  assert.ok(classDetail.data.students.slice(1).every((student: { pendingTeamInvitationStatus: string }) =>
+    student.pendingTeamInvitationStatus === 'Pending'));
 
   await assert.rejects(
     axiosClient.post(`/classes/${targetClass.id}/team-formations`, {
@@ -1256,9 +1263,32 @@ test('mock team leader creates one project workspace linked to its academic cont
   assert.equal(pendingProfileChange.data.isProjectProfileChangeProposal, true);
   assert.equal(pendingProfileChange.data.currentTitle, 'Energy Insight Workspace');
   assert.equal(pendingProfileChange.data.title, 'Energy Insight Platform');
+  const rejectedProfileChange = await axiosClient.post(`/teams/${team.id}/project-direction/review`, {
+    decision: 'Rejected',
+    comment: 'Keep the currently approved Project Profile.',
+    rowVersion: pendingProfileChange.data.rowVersion,
+  });
+  assert.equal(rejectedProfileChange.data.status, 'Approved');
+  assert.equal(rejectedProfileChange.data.isProjectProfileChangeProposal, false);
+  assert.equal(rejectedProfileChange.data.title, 'Energy Insight Workspace');
+  assert.equal(rejectedProfileChange.data.summary, 'A project that helps small offices understand their energy usage.');
+  assert.equal(rejectedProfileChange.data.reviews[0].toStatus, 'Rejected');
+  assert.equal(team.projectName, 'Energy Insight Workspace');
+  assert.equal(team.projectDescription, 'A project that helps small offices understand their energy usage.');
+
+  await axiosClient.put(`/workspace/teams/${team.id}/profile`, {
+    projectName: 'Energy Insight Platform',
+    description: 'The latest project profile helps small offices reduce their energy usage.',
+    problem: 'Small offices cannot clearly identify the equipment driving energy waste.',
+    solution: 'The platform turns usage data into practical recommendations for each office.',
+    targetUsers: 'Small office owners and facility managers',
+    zaloGroupUrl: 'https://zalo.me/g/greenbyte-team',
+    keywords: ['energy', 'efficiency'],
+  });
+  const resubmittedProfileChange = await axiosClient.get(`/teams/${team.id}/project-direction`);
   const profileChangeApproval = await axiosClient.post(`/teams/${team.id}/project-direction/review`, {
     decision: 'Approved',
-    rowVersion: pendingProfileChange.data.rowVersion,
+    rowVersion: resubmittedProfileChange.data.rowVersion,
   });
   assert.equal(profileChangeApproval.data.status, 'Approved');
   const latest = await axiosClient.get(`/workspace/teams/${team.id}`);

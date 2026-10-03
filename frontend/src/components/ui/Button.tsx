@@ -5,7 +5,7 @@ import { Loader2 } from 'lucide-react';
 
 const variants = {
   primary: 'bg-primary text-white hover:bg-primary-dark shadow-sm hover:shadow-glow-primary',
-  secondary: 'bg-slate-900 text-white hover:bg-slate-800 shadow-sm',
+  secondary: 'bg-slate-900 text-white hover:bg-slate-800 shadow-sm dark:bg-slate-700 dark:hover:bg-slate-600',
   outline: 'border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-400',
   ghost: 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
   danger: 'bg-danger text-white hover:bg-danger-dark shadow-sm',

@@ -22,6 +22,8 @@ import {
   removedAchievements,
   sameAchievements,
   summarizeList,
+  projectDataSummaryKey,
+  toProjectDataSummaryParams,
   toProjectDataRequestParams,
   toProjectDataSearchParams,
   toggleAchievement,
@@ -39,8 +41,9 @@ test('query state round-trips through URL search params', () => {
   const query = {
     ...DEFAULT_PROJECT_DATA_QUERY,
     search: 'health',
-    semesterId: 'semester-1',
     subjectCode: 'EXE201',
+    semester: 'FA' as const,
+    year: '2026',
     group: 'FA26-G1',
     startupIndustry: 'Health Tech',
     lecturerId: 'lecturer-1',
@@ -48,7 +51,7 @@ test('query state round-trips through URL search params', () => {
     achievement: 'Funded' as const,
     pageIndex: 3,
     pageSize: 50 as const,
-    sortBy: 'semester' as const,
+    sortBy: 'group' as const,
     isDescending: true,
   };
   assert.deepEqual(parseProjectDataQuery(toProjectDataSearchParams(query)), query);
@@ -58,7 +61,9 @@ test('invalid URL values fall back to safe defaults instead of reaching the API'
   const parsed = parse('page=0&pageSize=7&sortBy=password&achievement=Famous&desc=yes&search=%20%20');
   assert.equal(parsed.pageIndex, 1);
   assert.equal(parsed.pageSize, 20);
-  assert.equal(parsed.sortBy, 'projectName');
+  assert.equal(parsed.sortBy, 'classCode');
+  assert.equal(parse('sortBy=subject').sortBy, 'classCode');
+  assert.equal(parse('sortBy=projectName').sortBy, 'projectName');
   assert.equal(parsed.achievement, '');
   assert.equal(parsed.isDescending, false);
   assert.equal(parsed.search, '');
@@ -66,44 +71,66 @@ test('invalid URL values fall back to safe defaults instead of reaching the API'
   assert.equal(parse('page=abc').pageIndex, 1);
   assert.equal(parse(`search=${'x'.repeat(250)}`).search.length, 100);
   assert.equal(parse('pageSize=100').pageSize, 100);
+  assert.equal(parse('semester=fa&year=2026').semester, 'FA');
+  assert.equal(parse('semester=Fall&year=26').semester, '');
+  assert.equal(parse('semester=FA&year=26').year, '');
+  assert.equal(parse('year=20266').year, '');
 });
 
 test('request params omit empty filters ("All") and always carry paging and sorting', () => {
   assert.deepEqual(toProjectDataRequestParams(DEFAULT_PROJECT_DATA_QUERY), {
-    pageIndex: 1, pageSize: 20, sortBy: 'projectName', isDescending: false,
+    pageIndex: 1, pageSize: 20, sortBy: 'classCode', isDescending: false,
   });
-  const params = toProjectDataRequestParams({ ...DEFAULT_PROJECT_DATA_QUERY, subjectCode: 'EXE201', achievement: 'Potential', search: 'ai' });
+  const params = toProjectDataRequestParams({ ...DEFAULT_PROJECT_DATA_QUERY, subjectCode: 'EXE201', semester: 'SU', year: '2026', achievement: 'Potential', search: 'ai' });
   assert.equal(params.subjectCode, 'EXE201');
+  assert.equal(params.semester, 'SU');
+  assert.equal(params.year, '2026');
   assert.equal(params.achievement, 'Potential');
   assert.equal(params.search, 'ai');
   assert.equal('group' in params, false);
   assert.equal('mentorId' in params, false);
+  assert.equal('semester' in toProjectDataRequestParams(DEFAULT_PROJECT_DATA_QUERY), false);
+  assert.equal('year' in toProjectDataRequestParams(DEFAULT_PROJECT_DATA_QUERY), false);
 });
 
 test('changing search, filters, page size or sort returns to page one while paging keeps the page', () => {
   const onPageThree = { ...DEFAULT_PROJECT_DATA_QUERY, pageIndex: 3 };
   assert.equal(applyProjectDataChange(onPageThree, { search: 'x' }).pageIndex, 1);
   assert.equal(applyProjectDataChange(onPageThree, { subjectCode: 'EXE201' }).pageIndex, 1);
+  assert.equal(applyProjectDataChange(onPageThree, { semester: 'FA' }).pageIndex, 1);
+  assert.equal(applyProjectDataChange(onPageThree, { year: '2026' }).pageIndex, 1);
   assert.equal(applyProjectDataChange(onPageThree, { pageSize: 50 }).pageIndex, 1);
-  assert.equal(applyProjectDataChange(onPageThree, { sortBy: 'subject', isDescending: false }).pageIndex, 1);
+  assert.equal(applyProjectDataChange(onPageThree, { sortBy: 'classCode', isDescending: false }).pageIndex, 1);
   assert.equal(applyProjectDataChange(onPageThree, { pageIndex: 4 }).pageIndex, 4);
   assert.equal(applyProjectDataChange(onPageThree, { achievement: '' }).pageIndex, 1);
 });
 
 test('clearing filters keeps sorting and page size but drops search, filters and page', () => {
   const dirty = {
-    ...DEFAULT_PROJECT_DATA_QUERY, search: 'x', group: 'G1', achievement: 'Awarded' as const,
-    pageIndex: 4, pageSize: 50 as const, sortBy: 'subject' as const, isDescending: true,
+    ...DEFAULT_PROJECT_DATA_QUERY, search: 'x', semester: 'SP' as const, year: '2026', group: 'G1', achievement: 'Awarded' as const,
+    pageIndex: 4, pageSize: 50 as const, sortBy: 'group' as const, isDescending: true,
   };
-  assert.deepEqual(activeFilterKeys(dirty), ['group', 'achievement']);
+  assert.deepEqual(activeFilterKeys(dirty), ['semester', 'year', 'group', 'achievement']);
   assert.deepEqual(clearProjectDataFilters(dirty), {
-    ...DEFAULT_PROJECT_DATA_QUERY, pageSize: 50, sortBy: 'subject', isDescending: true,
+    ...DEFAULT_PROJECT_DATA_QUERY, pageSize: 50, sortBy: 'group', isDescending: true,
   });
 });
 
 test('clicking a sort header toggles direction on the same field and starts ascending on a new one', () => {
-  assert.deepEqual(nextProjectDataSort(DEFAULT_PROJECT_DATA_QUERY, 'projectName'), { sortBy: 'projectName', isDescending: true });
+  assert.deepEqual(nextProjectDataSort(DEFAULT_PROJECT_DATA_QUERY, 'classCode'), { sortBy: 'classCode', isDescending: true });
+  assert.deepEqual(nextProjectDataSort(DEFAULT_PROJECT_DATA_QUERY, 'group'), { sortBy: 'group', isDescending: false });
   assert.deepEqual(nextProjectDataSort({ ...DEFAULT_PROJECT_DATA_QUERY, isDescending: true }, 'semester'), { sortBy: 'semester', isDescending: false });
+});
+
+test('summary params carry only search and filters, so paging and sorting never change the counters', () => {
+  assert.deepEqual(toProjectDataSummaryParams(DEFAULT_PROJECT_DATA_QUERY), {});
+  const filtered = { ...DEFAULT_PROJECT_DATA_QUERY, search: 'ai', semester: 'SU' as const, year: '2026', achievement: 'Funded' as const };
+  assert.deepEqual(toProjectDataSummaryParams(filtered), { search: 'ai', semester: 'SU', year: '2026', achievement: 'Funded' });
+  const paged = { ...filtered, pageIndex: 5, pageSize: 100 as const, sortBy: 'group' as const, isDescending: true };
+  assert.deepEqual(projectDataSummaryKey('user-a', paged), projectDataSummaryKey('user-a', filtered));
+  assert.notDeepEqual(projectDataSummaryKey('user-a', filtered), projectDataSummaryKey('user-a', { ...filtered, year: '2025' }));
+  assert.notDeepEqual(projectDataSummaryKey('user-a', filtered), projectDataSummaryKey('user-b', filtered));
+  assert.deepEqual(projectDataSummaryKey('user-a', filtered).slice(0, 2), projectDataScopeKey('user-a'));
 });
 
 test('query keys are scoped to the signed-in user so another account never reuses cached rows', () => {
@@ -145,7 +172,7 @@ test('page summary describes the visible range and handles empty results', () =>
 
 const item: ProjectDataItem = {
   projectId: 'project-1', teamId: 'team-1', classId: 'class-1', semesterId: 'semester-1', semesterCode: 'FA2026',
-  subjectId: 'subject-1', subjectCode: 'EXE201', groups: [], projectName: 'Health app', description: null,
+  subjectId: 'subject-1', subjectCode: 'EXE201', classCode: 'EXE201_8', groups: [], projectName: 'Health app', description: null,
   startupIndustries: [], lecturer: null, mentor: null, academicMentor: null, achievements: [], rowVersion: '7',
 };
 
@@ -170,6 +197,24 @@ test('the API client sends server-side query params, honours abort signals and m
     const controller = new AbortController();
     controller.abort();
     await assert.rejects(projectDataApi.list(DEFAULT_PROJECT_DATA_QUERY, controller.signal));
+  } finally {
+    mock.restore();
+  }
+});
+
+test('the summary request sends search and filters only and maps the counters', async () => {
+  const mock = new MockAdapter(axiosClient);
+  try {
+    let seenParams: Record<string, unknown> = {};
+    mock.onGet('/project-data/summary').reply(config => {
+      seenParams = config.params;
+      return [200, { success: true, message: 'ok', data: { totalGroups: 8, potentialGroups: 3, fundedGroups: 2, awardedGroups: 1 } }];
+    });
+    const response = await projectDataApi.getSummary({
+      ...DEFAULT_PROJECT_DATA_QUERY, subjectCode: 'EXE101', pageIndex: 4, pageSize: 50, sortBy: 'group', isDescending: true,
+    });
+    assert.deepEqual(response.data, { totalGroups: 8, potentialGroups: 3, fundedGroups: 2, awardedGroups: 1 });
+    assert.deepEqual(seenParams, { subjectCode: 'EXE101' });
   } finally {
     mock.restore();
   }
