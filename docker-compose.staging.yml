@@ -1,0 +1,161 @@
+name: ehub-staging
+
+x-logging: &default-logging
+  driver: local
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+x-backend-environment: &backend-environment
+  ASPNETCORE_ENVIRONMENT: Staging
+  ASPNETCORE_URLS: http://+:8080
+  AllowedHosts: staging.e-hub.com.vn
+  ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=${POSTGRES_DB:?POSTGRES_DB is required};Username=${POSTGRES_USER:?POSTGRES_USER is required};Password=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required};Maximum Pool Size=50
+  Jwt__Issuer: ${JWT_ISSUER:-EHub.Api.Staging}
+  Jwt__Audience: ${JWT_AUDIENCE:-EHub.Web.Staging}
+  Jwt__Secret: ${JWT_SECRET:?JWT_SECRET is required}
+  Jwt__AccessTokenExpirationMinutes: ${JWT_ACCESS_TOKEN_EXPIRATION_MINUTES:-30}
+  Jwt__RefreshTokenExpirationDays: ${JWT_REFRESH_TOKEN_EXPIRATION_DAYS:-7}
+  Google__ClientId: ${GOOGLE_CLIENT_ID:?GOOGLE_CLIENT_ID is required}
+  Cors__AllowedOrigins__0: https://staging.e-hub.com.vn
+  Frontend__BaseUrl: https://staging.e-hub.com.vn
+  ReverseProxy__Enabled: "true"
+  PasswordReset__TokenExpirationMinutes: ${PASSWORD_RESET_TOKEN_EXPIRATION_MINUTES:-15}
+  RegistrationOtp__HashKey: ${REGISTRATION_OTP_HASH_KEY:?REGISTRATION_OTP_HASH_KEY is required}
+  RegistrationOtp__ExpirationMinutes: ${REGISTRATION_OTP_EXPIRATION_MINUTES:-5}
+  RegistrationOtp__MaximumAttempts: ${REGISTRATION_OTP_MAXIMUM_ATTEMPTS:-5}
+  RegistrationOtp__ResendCooldownSeconds: ${REGISTRATION_OTP_RESEND_COOLDOWN_SECONDS:-60}
+  RegistrationOtp__MaximumResends: ${REGISTRATION_OTP_MAXIMUM_RESENDS:-5}
+  RegistrationOtp__CleanupRetentionHours: ${REGISTRATION_OTP_CLEANUP_RETENTION_HOURS:-24}
+  Email__Provider: Smtp
+  Email__FromName: ${EMAIL_FROM_NAME:-EHUB Staging}
+  Email__FromEmail: ${EMAIL_FROM_EMAIL:?EMAIL_FROM_EMAIL is required}
+  Email__SmtpHost: ${EMAIL_SMTP_HOST:?EMAIL_SMTP_HOST is required}
+  Email__SmtpPort: ${EMAIL_SMTP_PORT:-587}
+  Email__Username: ${EMAIL_USERNAME:?EMAIL_USERNAME is required}
+  Email__Password: ${EMAIL_PASSWORD:?EMAIL_PASSWORD is required}
+  Email__SecureSocketOption: ${EMAIL_SECURE_SOCKET_OPTION:-StartTls}
+  # Fallback is opt-in; blank credentials are allowed only while it is disabled.
+  Email__EnableBrevoFallback: ${EMAIL_ENABLE_BREVO_FALLBACK:-false}
+  Email__Brevo__SmtpHost: ${BREVO_SMTP_HOST:-smtp-relay.brevo.com}
+  Email__Brevo__SmtpPort: ${BREVO_SMTP_PORT:-587}
+  Email__Brevo__SecureSocketOption: ${BREVO_SECURE_SOCKET_OPTION:-StartTls}
+  Email__Brevo__FromName: ${BREVO_FROM_NAME:-EHUB Staging}
+  Email__Brevo__FromEmail: ${BREVO_FROM_EMAIL:-}
+  Email__Brevo__Username: ${BREVO_SMTP_USERNAME:-}
+  Email__Brevo__Password: ${BREVO_SMTP_PASSWORD:-}
+  Cloudinary__CloudName: ${CLOUDINARY_CLOUD_NAME:?CLOUDINARY_CLOUD_NAME is required}
+  Cloudinary__ApiKey: ${CLOUDINARY_API_KEY:?CLOUDINARY_API_KEY is required}
+  Cloudinary__ApiSecret: ${CLOUDINARY_API_SECRET:?CLOUDINARY_API_SECRET is required}
+  R2__AccountId: ${R2_ACCOUNT_ID:?R2_ACCOUNT_ID is required}
+  R2__AccessKeyId: ${R2_ACCESS_KEY_ID:?R2_ACCESS_KEY_ID is required}
+  R2__SecretAccessKey: ${R2_SECRET_ACCESS_KEY:?R2_SECRET_ACCESS_KEY is required}
+  R2__BucketName: ${R2_BUCKET_NAME:?R2_BUCKET_NAME is required}
+  AdminSeed__Email: ${ADMIN_SEED_EMAIL:-}
+  AdminSeed__Password: ${ADMIN_SEED_PASSWORD:-}
+  AdminSeed__FullName: ${ADMIN_SEED_FULL_NAME:-EHUB Staging Administrator}
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is required}
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+    volumes:
+      - ehub_staging_postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\"" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks:
+      - ehub-staging-private
+    logging: *default-logging
+    security_opt:
+      - no-new-privileges:true
+
+  backend:
+    # Fixed staging names prevent a copied production env from retagging its images.
+    image: ehub-staging-backend:${IMAGE_TAG:?IMAGE_TAG is required}
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment: *backend-environment
+    depends_on:
+      postgres:
+        condition: service_healthy
+    expose:
+      - "8080"
+    healthcheck:
+      test: [ "CMD-SHELL", "curl --fail --silent --show-error --header 'Host: staging.e-hub.com.vn' --header 'X-Forwarded-Proto: https' http://localhost:8080/health/ready || exit 1" ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    networks:
+      - ehub-staging-private
+    logging: *default-logging
+    security_opt:
+      - no-new-privileges:true
+    init: true
+
+  frontend:
+    image: ehub-staging-frontend:${IMAGE_TAG:?IMAGE_TAG is required}
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:?GOOGLE_CLIENT_ID is required}
+        VITE_ENABLE_API_MOCKS: "false"
+        VITE_ENABLE_REALTIME: "false"
+        VITE_FEATURE_AI: ${VITE_FEATURE_AI:-true}
+        VITE_FEATURE_CHAT: ${VITE_FEATURE_CHAT:-true}
+        VITE_FEATURE_DATA_BANK: ${VITE_FEATURE_DATA_BANK:-true}
+        VITE_FEATURE_EVALUATIONS: ${VITE_FEATURE_EVALUATIONS:-true}
+        VITE_FEATURE_MENTORING: ${VITE_FEATURE_MENTORING:-true}
+        VITE_FEATURE_RANKINGS: ${VITE_FEATURE_RANKINGS:-true}
+        VITE_FEATURE_ROLE_DASHBOARDS: ${VITE_FEATURE_ROLE_DASHBOARDS:-true}
+        VITE_FEATURE_STARTUP_IDEAS: ${VITE_FEATURE_STARTUP_IDEAS:-true}
+        VITE_FEATURE_WORKSHOPS: ${VITE_FEATURE_WORKSHOPS:-true}
+        VITE_FEATURE_CLASS_RENAME: ${VITE_FEATURE_CLASS_RENAME:-false}
+        VITE_FEATURE_CLASS_LIFECYCLE: ${VITE_FEATURE_CLASS_LIFECYCLE:-true}
+        VITE_FEATURE_CLASS_MAJOR_VERIFICATION: ${VITE_FEATURE_CLASS_MAJOR_VERIFICATION:-true}
+        VITE_FEATURE_CLASS_MENTOR_ASSIGNMENT: ${VITE_FEATURE_CLASS_MENTOR_ASSIGNMENT:-true}
+        VITE_FEATURE_CLASS_TEAM_MANAGEMENT: ${VITE_FEATURE_CLASS_TEAM_MANAGEMENT:-true}
+        VITE_FEATURE_CLASS_CHAT_BACKFILL: ${VITE_FEATURE_CLASS_CHAT_BACKFILL:-false}
+        VITE_FEATURE_CLASS_PROJECT_DIRECTION: ${VITE_FEATURE_CLASS_PROJECT_DIRECTION:-true}
+        VITE_FEATURE_CLASS_STUDENT_SELF_SERVICE: ${VITE_FEATURE_CLASS_STUDENT_SELF_SERVICE:-true}
+        VITE_FEATURE_CLASS_LECTURER_STUDENT_IMPORT: ${VITE_FEATURE_CLASS_LECTURER_STUDENT_IMPORT:-true}
+        VITE_SHOW_UNAVAILABLE_CLASS_FEATURES: "false"
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    # Only host Nginx reaches this port. It must stay separate from production :3000.
+    ports:
+      - "127.0.0.1:3001:80"
+    healthcheck:
+      test: [ "CMD-SHELL", "wget -qO- http://127.0.0.1/healthz >/dev/null || exit 1" ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - ehub-staging-private
+    logging: *default-logging
+    security_opt:
+      - no-new-privileges:true
+    init: true
+
+volumes:
+  ehub_staging_postgres_data:
+    name: ehub-staging-postgres-data
+
+networks:
+  ehub-staging-private:
+    name: ehub-staging-private
+    driver: bridge
