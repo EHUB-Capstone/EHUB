@@ -23,6 +23,9 @@ public sealed class ProjectDataApplicationTests
     [InlineData(0, 20, null, null, null, false)]
     [InlineData(1, 7, null, null, null, false)]
     [InlineData(1, 101, null, null, null, false)]
+    [InlineData(1, 20, null, "classCode", null, true)]
+    [InlineData(1, 20, null, "group", null, true)]
+    [InlineData(1, 20, null, "subject", null, false)]
     [InlineData(1, 20, null, "password", null, false)]
     [InlineData(1, 20, null, null, "Famous", false)]
     public void ListValidator_AcceptsOnlyAllowedPagingSortAndAchievementValues(
@@ -46,7 +49,11 @@ public sealed class ProjectDataApplicationTests
         var validator = new GetProjectDataRequestValidator();
         validator.Validate(new GetProjectDataRequest { Search = new string('x', 101) }).IsValid.Should().BeFalse();
         validator.Validate(new GetProjectDataRequest { Search = new string('x', 100) }).IsValid.Should().BeTrue();
-        validator.Validate(new GetProjectDataRequest { SemesterId = Guid.Empty }).IsValid.Should().BeFalse();
+        validator.Validate(new GetProjectDataRequest { Semester = "FA", Year = 2026 }).IsValid.Should().BeTrue();
+        validator.Validate(new GetProjectDataRequest { Semester = " su " }).IsValid.Should().BeTrue();
+        validator.Validate(new GetProjectDataRequest { Semester = "XX" }).IsValid.Should().BeFalse();
+        validator.Validate(new GetProjectDataRequest { Year = 1999 }).IsValid.Should().BeFalse();
+        validator.Validate(new GetProjectDataRequest { Year = 10000 }).IsValid.Should().BeFalse();
         validator.Validate(new GetProjectDataRequest { LecturerId = Guid.Empty }).IsValid.Should().BeFalse();
         validator.Validate(new GetProjectDataRequest { MentorId = Guid.Empty }).IsValid.Should().BeFalse();
     }
@@ -123,6 +130,45 @@ public sealed class ProjectDataApplicationTests
         ProjectAchievementMapping.Canonicalize(" funded ").Should().Be("Funded");
         ProjectAchievementMapping.Canonicalize("other").Should().BeNull();
         ProjectAchievementMapping.Canonicalize(null).Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData("SP", EHub.Domain.Enums.SemesterTerm.Spring)]
+    [InlineData("su", EHub.Domain.Enums.SemesterTerm.Summer)]
+    [InlineData(" FA ", EHub.Domain.Enums.SemesterTerm.Fall)]
+    public void ParseTerm_MapsShortCodesToTerms(string code, EHub.Domain.Enums.SemesterTerm expected)
+    {
+        ProjectDataQuery.ParseTerm(code).Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("XX")]
+    [InlineData("Fall")]
+    public void ParseTerm_ReturnsNullForUnknownCodes(string? code)
+    {
+        ProjectDataQuery.ParseTerm(code).Should().BeNull();
+    }
+
+    [Fact]
+    public void DistinctSortedNaturally_OrdersNumericSuffixesByValue()
+    {
+        ProjectDataQuery.DistinctSortedNaturally(["EXE201g_7G10", "EXE201g_7G2", " exe201g_7g2 ", "EXE201g_7G1", "", "EXE201g_10G1", "EXE201g_7G11"])
+            .Should().Equal("EXE201g_7G1", "EXE201g_7G2", "EXE201g_7G10", "EXE201g_7G11", "EXE201g_10G1");
+        ProjectDataQuery.DistinctSortedNaturally([]).Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData("G2", "G10", -1)]
+    [InlineData("G10", "G2", 1)]
+    [InlineData("g2", "G2", 0)]
+    [InlineData("G02", "G2", 0)]
+    [InlineData("EXE101_2", "EXE101_10", -1)]
+    [InlineData("A", "A1", -1)]
+    public void NaturalComparer_ComparesDigitRunsNumericallyAndIgnoresCase(string left, string right, int expectedSign)
+    {
+        Math.Sign(NaturalStringComparer.Instance.Compare(left, right)).Should().Be(expectedSign);
     }
 
     [Fact]

@@ -53,6 +53,7 @@ public sealed class GetProjectDataQueryHandler(IApplicationDbContext context) : 
                 project.Team.Class.Semester.Code,
                 project.Team.Class.CourseId,
                 project.Team.Class.Course.Code,
+                project.Team.Class.ClassCode,
                 project.Name,
                 project.Description,
                 project.Team.Class.PrimaryLecturerId,
@@ -101,7 +102,7 @@ public sealed class GetProjectDataQueryHandler(IApplicationDbContext context) : 
             .ToListAsync(cancellationToken);
         var groupsByTeam = groupRows
             .GroupBy(item => item.TeamId)
-            .ToDictionary(group => group.Key, group => ProjectDataQuery.DistinctSorted(group.Select(item => item.Group)));
+            .ToDictionary(group => group.Key, group => ProjectDataQuery.DistinctSortedNaturally(group.Select(item => item.Group)));
 
         var mentors = await ProjectDataMentorResolver.LoadAsync(
             context.MentorAssignments.AsNoTracking().Where(assignment => teamIds.Contains(assignment.TeamId)),
@@ -116,6 +117,7 @@ public sealed class GetProjectDataQueryHandler(IApplicationDbContext context) : 
             SemesterCode = row.SemesterCode,
             SubjectId = row.SubjectId,
             SubjectCode = row.SubjectCode,
+            ClassCode = row.ClassCode,
             Groups = groupsByTeam.GetValueOrDefault(row.TeamId) ?? [],
             ProjectName = row.ProjectName,
             Description = row.Description,
@@ -154,6 +156,7 @@ public sealed class GetProjectDataQueryHandler(IApplicationDbContext context) : 
         string SemesterCode,
         Guid SubjectId,
         string SubjectCode,
+        string ClassCode,
         string ProjectName,
         string? Description,
         Guid? LecturerId,

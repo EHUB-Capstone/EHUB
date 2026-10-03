@@ -1054,6 +1054,13 @@ test('mock student formation creates a team only after every invited member acce
   const classDetail = await axiosClient.get(`/classes/my-class-detail/${targetClass.slug}`);
   assert.ok(classDetail.data.students.every((student: { hasPendingTeamInvitation: boolean }) =>
     student.hasPendingTeamInvitation));
+  assert.ok(classDetail.data.students.every((student: {
+    isPendingTeamFormationMember: boolean;
+    pendingTeamName: string;
+  }) => student.isPendingTeamFormationMember && student.pendingTeamName === 'Student Venture Team'));
+  assert.equal(classDetail.data.students[0].pendingTeamInvitationStatus, 'Accepted');
+  assert.ok(classDetail.data.students.slice(1).every((student: { pendingTeamInvitationStatus: string }) =>
+    student.pendingTeamInvitationStatus === 'Pending'));
 
   await assert.rejects(
     axiosClient.post(`/classes/${targetClass.id}/team-formations`, {

@@ -99,7 +99,7 @@ public sealed partial class TeamWorkflowIntegrationTests
     }
 
     [Fact]
-    public async Task FormationRealtimeHint_IsSentOnlyToLinkedFormationMembers()
+    public async Task FormationRealtimeHint_IsSentToAllLinkedClassParticipants()
     {
         using var scope = _factory.Services.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -131,13 +131,94 @@ public sealed partial class TeamWorkflowIntegrationTests
 
         await dispatcher.PublishAfterCommitAsync(invitationEvent);
 
-        var linkedUserIds = await context.Students.AsNoTracking()
-            .Where(item => seed.StudentIds.Contains(item.Id) && item.UserId.HasValue)
-            .Select(item => item.UserId!.Value).ToArrayAsync();
+        var studentRecipients = await context.ClassStudents.AsNoTracking()
+            .Where(item => item.ClassId == seed.ClassId && item.Student.UserId.HasValue)
+            .Select(item => item.Student.UserId!.Value).ToArrayAsync();
+        var assignedLecturers = await context.ClassLecturers.AsNoTracking()
+            .Where(item => item.ClassId == seed.ClassId)
+            .Select(item => item.LecturerId).ToArrayAsync();
+        var expectedRecipients = studentRecipients
+            .Concat(assignedLecturers)
+            .Append(seed.LecturerId)
+            .Distinct()
+            .ToArray();
         publisher.FormationEvents.Should().ContainSingle();
         publisher.FormationEvents[0].ClassId.Should().Be(seed.ClassId);
         publisher.FormationEvents[0].FormationId.Should().Be(created.Value.Id);
-        publisher.FormationEvents[0].Recipients.Should().BeEquivalentTo(linkedUserIds);
+        publisher.FormationEvents[0].Recipients.Should().BeEquivalentTo(expectedRecipients);
+    }
+
+    [Fact]
+    public async Task MajorRealtimeHints_AreSentAfterCommit_ToLinkedClassParticipants()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateSeedAsync(context, createProposal: false, createTeam: false);
+        context.ChangeTracker.Clear();
+
+        var publisher = new RecordingClassRealtimePublisher();
+        var dispatcher = new NotificationOutboxEventDispatcher(
+            context,
+            scope.ServiceProvider.GetRequiredService<IClassChatMembershipSynchronizer>(),
+            scope.ServiceProvider.GetRequiredService<IProjectDirectionRealtimePublisher>(),
+            publisher,
+            scope.ServiceProvider.GetRequiredService<IEmailService>(),
+            NullLogger<NotificationOutboxEventDispatcher>.Instance);
+        var studentId = seed.StudentIds[0];
+        var singleUpdate = new OutboxMessage
+        {
+            Type = "Class.MajorUpdated.v1",
+            AggregateType = "Class",
+            AggregateId = seed.ClassId,
+            PayloadJson = JsonSerializer.Serialize(new { data = new { studentId, majorCode = "BIT" } })
+        };
+
+        await dispatcher.DispatchAsync(singleUpdate);
+        publisher.MajorEvents.Should().BeEmpty("realtime clients must not refetch before the transaction commits");
+        await dispatcher.PublishAfterCommitAsync(singleUpdate);
+
+        var studentRecipients = await context.ClassStudents.AsNoTracking()
+            .Where(item => item.ClassId == seed.ClassId && item.Student.UserId.HasValue)
+            .Select(item => item.Student.UserId!.Value)
+            .ToArrayAsync();
+        var assignedLecturers = await context.ClassLecturers.AsNoTracking()
+            .Where(item => item.ClassId == seed.ClassId)
+            .Select(item => item.LecturerId)
+            .ToArrayAsync();
+        var expectedRecipients = studentRecipients
+            .Concat(assignedLecturers)
+            .Append(seed.LecturerId)
+            .Distinct()
+            .ToArray();
+        publisher.MajorEvents.Should().ContainSingle();
+        publisher.MajorEvents[0].Recipients.Should().BeEquivalentTo(expectedRecipients);
+        publisher.MajorEvents[0].ClassId.Should().Be(seed.ClassId);
+        publisher.MajorEvents[0].StudentId.Should().Be(studentId);
+        publisher.MajorEvents[0].MajorCode.Should().Be("BIT");
+
+        var batchEventTypes = new[]
+        {
+            "Class.EnrollmentMajorCorrected.v1",
+            "Class.EnrollmentMajorsVerified.v1",
+            "Class.EnrollmentMajorsSynchronizedFromFile.v1",
+            "Class.StudentProfileMajorsSynchronized.v1"
+        };
+        foreach (var eventType in batchEventTypes)
+        {
+            await dispatcher.PublishAfterCommitAsync(new OutboxMessage
+            {
+                Type = eventType,
+                AggregateType = "Class",
+                AggregateId = seed.ClassId,
+                PayloadJson = JsonSerializer.Serialize(new { data = new { } })
+            });
+        }
+
+        publisher.MajorsChangedEvents.Should().HaveCount(batchEventTypes.Length);
+        publisher.MajorsChangedEvents.Should().OnlyContain(item =>
+            item.ClassId == seed.ClassId &&
+            item.Recipients.ToHashSet().SetEquals(expectedRecipients) &&
+            batchEventTypes.Contains(item.ChangeType));
     }
 
     [Fact]
@@ -4225,6 +4306,8 @@ public sealed partial class TeamWorkflowIntegrationTests
     private sealed class RecordingClassRealtimePublisher : IClassRealtimePublisher
     {
         public List<(Guid[] Recipients, Guid ClassId, Guid FormationId)> FormationEvents { get; } = [];
+        public List<(Guid[] Recipients, Guid ClassId, Guid StudentId, string MajorCode)> MajorEvents { get; } = [];
+        public List<(Guid[] Recipients, Guid ClassId, string ChangeType)> MajorsChangedEvents { get; } = [];
 
         public Task PublishTeamFormationChangedAsync(IReadOnlyCollection<Guid> recipientUserIds, Guid classId, Guid formationId, CancellationToken cancellationToken = default)
         {
@@ -4233,7 +4316,17 @@ public sealed partial class TeamWorkflowIntegrationTests
         }
 
         public Task PublishTeamCreatedAsync(IReadOnlyCollection<Guid> recipientUserIds, Guid classId, Guid teamId, CancellationToken cancellationToken = default) => Task.CompletedTask;
-        public Task PublishMajorUpdatedAsync(IReadOnlyCollection<Guid> recipientUserIds, Guid classId, Guid studentId, string majorCode, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task PublishMajorUpdatedAsync(IReadOnlyCollection<Guid> recipientUserIds, Guid classId, Guid studentId, string majorCode, CancellationToken cancellationToken = default)
+        {
+            MajorEvents.Add((recipientUserIds.ToArray(), classId, studentId, majorCode));
+            return Task.CompletedTask;
+        }
+
+        public Task PublishMajorsChangedAsync(IReadOnlyCollection<Guid> recipientUserIds, Guid classId, string changeType, CancellationToken cancellationToken = default)
+        {
+            MajorsChangedEvents.Add((recipientUserIds.ToArray(), classId, changeType));
+            return Task.CompletedTask;
+        }
         public Task PublishProposalReviewedAsync(IReadOnlyCollection<Guid> recipientUserIds, Guid classId, Guid proposalId, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task PublishCheckpointRequirementsUpdatedAsync(IReadOnlyCollection<Guid> recipientUserIds, Guid teamId, int checkpointNumber, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task PublishCheckpointEvaluationUpdatedAsync(IReadOnlyCollection<Guid> recipientUserIds, Guid teamId, int checkpointNumber, CancellationToken cancellationToken = default) => Task.CompletedTask;

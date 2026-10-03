@@ -18,27 +18,34 @@ internal sealed class OutboxProcessorBackgroundService : BackgroundService
 
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<OutboxProcessorBackgroundService> _logger;
+    private readonly IOutboxWakeSignal _wakeSignal;
 
     public OutboxProcessorBackgroundService(
         IServiceScopeFactory scopeFactory,
-        ILogger<OutboxProcessorBackgroundService> logger)
+        ILogger<OutboxProcessorBackgroundService> logger,
+        IOutboxWakeSignal? wakeSignal = null)
     {
         _scopeFactory = scopeFactory;
         _logger = logger;
+        _wakeSignal = wakeSignal ?? new OutboxWakeSignal();
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        using var timer = new PeriodicTimer(PollInterval);
-        do
+        while (!stoppingToken.IsCancellationRequested)
         {
             try
             {
-                var messageIds = await ClaimBatchAsync(stoppingToken);
-                foreach (var messageId in messageIds)
+                IReadOnlyCollection<Guid> messageIds;
+                do
                 {
-                    await ProcessAsync(messageId, stoppingToken);
+                    messageIds = await ClaimBatchAsync(stoppingToken);
+                    foreach (var messageId in messageIds)
+                    {
+                        await ProcessAsync(messageId, stoppingToken);
+                    }
                 }
+                while (messageIds.Count > 0);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
@@ -48,8 +55,16 @@ internal sealed class OutboxProcessorBackgroundService : BackgroundService
             {
                 _logger.LogError(exception, "Outbox polling cycle failed");
             }
+
+            try
+            {
+                await _wakeSignal.WaitAsync(PollInterval, stoppingToken);
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                break;
+            }
         }
-        while (await timer.WaitForNextTickAsync(stoppingToken));
     }
 
     private async Task<IReadOnlyCollection<Guid>> ClaimBatchAsync(CancellationToken cancellationToken)

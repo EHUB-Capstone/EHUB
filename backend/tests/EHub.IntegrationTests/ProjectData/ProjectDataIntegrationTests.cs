@@ -75,7 +75,8 @@ public sealed partial class ProjectDataIntegrationTests(CustomWebApplicationFact
             var active = page.Items.Single(item => item.ProjectId == world.ProjectA);
             active.SemesterCode.Should().NotBeNullOrEmpty();
             active.SubjectCode.Should().Be(world.CourseCode);
-            active.Groups.Should().Equal("FA26-G1", "FA26-G2");
+            active.ClassCode.Should().Be(world.ClassCodeA);
+            active.Groups.Should().Equal($"{world.GroupPrefix}2", $"{world.GroupPrefix}10");
             active.StartupIndustries.Should().Equal("EdTech", "Health Tech");
             active.Lecturer!.UserId.Should().Be(world.Lecturer.Id);
             active.Mentor!.UserId.Should().Be(world.EnterpriseMentor.Id);
@@ -127,7 +128,7 @@ public sealed partial class ProjectDataIntegrationTests(CustomWebApplicationFact
             options.Subjects.Should().NotContain(item => item.Code == world.OtherCourseCode);
             options.Lecturers.Should().ContainSingle(item => item.UserId == world.Lecturer.Id);
             options.Lecturers.Should().NotContain(item => item.UserId == world.Outsider.Id);
-            options.Groups.Should().Equal("FA26-G1", "FA26-G2");
+            options.Groups.Should().Equal($"{world.GroupPrefix}2", $"{world.GroupPrefix}10");
             options.Mentors.Select(item => item.UserId).Should().BeEquivalentTo(
                 [world.EnterpriseMentor.Id, world.AcademicMentor.Id]);
         }
@@ -146,10 +147,18 @@ public sealed partial class ProjectDataIntegrationTests(CustomWebApplicationFact
             using var client = factory.CreateClient();
             var baseQuery = $"search={world.Token}";
 
-            (await Ids(client, world, $"{baseQuery}&group=fa26-g2")).Should().Equal(world.ProjectA);
+            (await Ids(client, world, $"{baseQuery}&group={world.GroupPrefix.ToLowerInvariant()}10")).Should().Equal(world.ProjectA);
             (await Ids(client, world, $"{baseQuery}&startupIndustry=health tech")).Should().Equal(world.ProjectA);
             (await Ids(client, world, $"{baseQuery}&subjectCode={world.OtherCourseCode.ToLowerInvariant()}"))
                 .Should().Equal(world.ProjectOutsider);
+            // Semester term and year are independent filters that combine with AND.
+            var otherTerm = world.SemesterTerm == "FA" ? "SP" : "FA";
+            (await Ids(client, world, $"{baseQuery}&semester={world.SemesterTerm.ToLowerInvariant()}")).Should().HaveCount(4);
+            (await Ids(client, world, $"{baseQuery}&semester={otherTerm}")).Should().BeEmpty();
+            (await Ids(client, world, $"{baseQuery}&year={world.SemesterYear}")).Should().HaveCount(4);
+            (await Ids(client, world, $"{baseQuery}&year={world.SemesterYear + 1}")).Should().BeEmpty();
+            (await Ids(client, world, $"{baseQuery}&semester={world.SemesterTerm}&year={world.SemesterYear}")).Should().HaveCount(4);
+            (await Ids(client, world, $"{baseQuery}&semester={otherTerm}&year={world.SemesterYear}")).Should().BeEmpty();
             (await Ids(client, world, $"{baseQuery}&achievement=Funded")).Should().Equal(world.ProjectA);
             (await Ids(client, world, $"{baseQuery}&achievement=Awarded")).Should().BeEmpty();
             (await Ids(client, world, $"{baseQuery}&lecturerId={world.CoLecturer.Id}")).Should().Equal(world.ProjectA);
@@ -166,6 +175,7 @@ public sealed partial class ProjectDataIntegrationTests(CustomWebApplicationFact
 
             // Search covers description, industry tag, lecturer and displayed mentor names.
             (await Ids(client, world, $"search=quiet-{world.Token}")).Should().Equal(world.ProjectA);
+            (await Ids(client, world, $"search={world.ClassCodeB}")).Should().Equal(world.ProjectB);
             (await Ids(client, world, $"search=edtech&subjectCode={world.CourseCode}")).Should().Equal(world.ProjectA);
             (await Ids(client, world, $"search={world.Token.ToUpperInvariant()}")).Should().HaveCount(4);
             (await Ids(client, world, $"search=outsider lecturer {world.Token}")).Should().Equal(world.ProjectOutsider);
@@ -189,7 +199,8 @@ public sealed partial class ProjectDataIntegrationTests(CustomWebApplicationFact
         try
         {
             using var client = factory.CreateClient();
-            var query = $"search={world.Token}&pageSize=10";
+            var baseQuery = $"search={world.Token}&pageSize=10";
+            var query = $"{baseQuery}&sortBy=projectName";
 
             var first = await GetPage(client, world.Admin, SystemRoles.Admin, $"{query}&pageIndex=1");
             var second = await GetPage(client, world.Admin, SystemRoles.Admin, $"{query}&pageIndex=2");
@@ -208,12 +219,12 @@ public sealed partial class ProjectDataIntegrationTests(CustomWebApplicationFact
             names.Should().BeInAscendingOrder(StringComparer.Ordinal);
 
             var descending = await GetPage(client, world.Admin, SystemRoles.Admin,
-                $"{query}&sortBy=projectName&isDescending=true");
+                $"{baseQuery}&sortBy=projectName&isDescending=true");
             descending.Items.First().ProjectName.Should().Be(names.Max(StringComparer.Ordinal));
 
-            foreach (var sortBy in new[] { "semester", "subject" })
+            foreach (var sortBy in new[] { "semester", "classCode", "group" })
             {
-                var sorted = await GetPage(client, world.Admin, SystemRoles.Admin, $"{query}&sortBy={sortBy}");
+                var sorted = await GetPage(client, world.Admin, SystemRoles.Admin, $"{baseQuery}&sortBy={sortBy}");
                 sorted.Items.Should().HaveCount(10);
             }
         }
@@ -224,14 +235,59 @@ public sealed partial class ProjectDataIntegrationTests(CustomWebApplicationFact
     }
 
     [Fact]
+    public async Task Ordering_DefaultsToClassCodeThenNumericGroupWithUngroupedTeamsLast()
+    {
+        var world = await SeedAsync(groupedTeams: [11, 1, 3]);
+        try
+        {
+            using var client = factory.CreateClient();
+            var g = world.GroupedProjects;
+            var search = $"search={world.Token}";
+
+            // Class A (index 1) precedes B (2), C (3) and the other course; inside A the groups run G1, G2, G3, G11.
+            (await Order(client, world, search)).Should().Equal(
+                g[1], world.ProjectA, g[3], g[11], world.ProjectB, world.ProjectC, world.ProjectOutsider);
+            (await Order(client, world, $"{search}&sortBy=classCode")).Should().Equal(
+                g[1], world.ProjectA, g[3], g[11], world.ProjectB, world.ProjectC, world.ProjectOutsider);
+
+            // Descending reverses only the class keys; groups inside a class stay ascending.
+            (await Order(client, world, $"{search}&isDescending=true")).Should().Equal(
+                world.ProjectOutsider, world.ProjectC, world.ProjectB, g[1], world.ProjectA, g[3], g[11]);
+
+            // Sorting by group is numeric (G11 after G3); teams without a group always come last, by class code.
+            (await Order(client, world, $"{search}&sortBy=group")).Should().Equal(
+                g[1], world.ProjectA, g[3], g[11], world.ProjectB, world.ProjectC, world.ProjectOutsider);
+            (await Order(client, world, $"{search}&sortBy=group&isDescending=true")).Should().Equal(
+                g[11], g[3], world.ProjectA, g[1], world.ProjectB, world.ProjectC, world.ProjectOutsider);
+
+            // The class code is shown as returned and the group list itself is in natural order.
+            var page = await GetPage(client, world.Admin, SystemRoles.Admin, search);
+            page.Items.Take(5).Select(item => item.ClassCode).Should().Equal(
+                world.ClassCodeA, world.ClassCodeA, world.ClassCodeA, world.ClassCodeA, world.ClassCodeB);
+            page.Items.Single(item => item.ProjectId == world.ProjectA).Groups
+                .Should().Equal($"{world.GroupPrefix}2", $"{world.GroupPrefix}10");
+        }
+        finally
+        {
+            await CleanupAsync(world);
+        }
+    }
+
+    private async Task<IReadOnlyList<Guid>> Order(HttpClient client, World world, string query)
+    {
+        var page = await GetPage(client, world.Admin, SystemRoles.Admin, query);
+        return page.Items.Select(item => item.ProjectId).ToList();
+    }
+
+    [Fact]
     public async Task InvalidParameters_ReturnBadRequest()
     {
         using var client = factory.CreateClient();
         var admin = new User { FullName = "PD admin", Email = "pd-admin-invalid@example.test" };
         foreach (var query in new[]
                  {
-                     "pageIndex=0", "pageSize=7", "pageSize=1000", "sortBy=password", "achievement=Famous",
-                     $"search={new string('x', 101)}", "semesterId=00000000-0000-0000-0000-000000000000",
+                     "pageIndex=0", "pageSize=7", "pageSize=1000", "sortBy=password", "sortBy=subject", "achievement=Famous", "semester=XX", "year=1999", "year=abc",
+                     $"search={new string('x', 101)}",
                  })
         {
             var response = await Send(client, admin, SystemRoles.Admin, HttpMethod.Get, $"/api/project-data?{query}");
@@ -249,13 +305,13 @@ public sealed partial class ProjectDataIntegrationTests(CustomWebApplicationFact
             var options = await GetOptions(client, world.Admin, SystemRoles.Admin);
 
             options.Subjects.Select(item => item.Code).Should().Contain([world.CourseCode, world.OtherCourseCode]);
-            options.Groups.Should().Contain(["FA26-G1", "FA26-G2"]);
+            options.Groups.Should().Contain([$"{world.GroupPrefix}2", $"{world.GroupPrefix}10"]);
             options.StartupIndustries.Should().Contain(["EdTech", "Health Tech"]);
             options.Lecturers.Select(item => item.UserId).Should().Contain([world.Lecturer.Id, world.Outsider.Id]);
             options.Mentors.Should().Contain(item => item.UserId == world.HistoricalMentor.Id && item.Slot == "Enterprise");
             options.Mentors.Should().NotContain(item => item.UserId == world.EarlyEndedMentor.Id);
             options.Achievements.Should().Equal("Potential", "Funded", "Awarded");
-            options.Semesters.Should().NotBeEmpty();
+            options.Years.Should().Contain(world.SemesterYear).And.BeInDescendingOrder();
         }
         finally
         {
@@ -303,6 +359,12 @@ public sealed partial class ProjectDataIntegrationTests(CustomWebApplicationFact
         public string Token { get; init; } = string.Empty;
         public string CourseCode { get; init; } = string.Empty;
         public string OtherCourseCode { get; init; } = string.Empty;
+        public string SemesterTerm { get; init; } = string.Empty;
+        public int SemesterYear { get; init; }
+        public string ClassCodeA { get; init; } = string.Empty;
+        public string ClassCodeB { get; init; } = string.Empty;
+        public string GroupPrefix { get; init; } = string.Empty;
+        public Dictionary<int, Guid> GroupedProjects { get; init; } = [];
         public User Admin { get; init; } = null!;
         public User Lecturer { get; init; } = null!;
         public User CoLecturer { get; init; } = null!;
@@ -318,15 +380,16 @@ public sealed partial class ProjectDataIntegrationTests(CustomWebApplicationFact
         public Guid[] ClassIds { get; init; } = [];
     }
 
-    internal async Task<World> SeedAsync(int extraProjects = 0)
+    internal async Task<World> SeedAsync(int extraProjects = 0, int[]? groupedTeams = null)
     {
         using var scope = factory.Services.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var token = Guid.NewGuid().ToString("N")[..8];
-        var semesterId = await context.Semesters
+        var activeSemester = await context.Semesters
             .Where(semester => semester.Status == SemesterStatus.Active)
-            .Select(semester => semester.Id)
+            .Select(semester => new { semester.Id, semester.Term, semester.Year })
             .FirstAsync();
+        var semesterId = activeSemester.Id;
 
         User NewUser(string label) => new()
         {
@@ -435,6 +498,15 @@ public sealed partial class ProjectDataIntegrationTests(CustomWebApplicationFact
             context.Projects.Add(NewProject(NewTeam(classA), $"Extra {token} {index:00}"));
         }
 
+        var groupedTeamEntities = new List<(Team Team, int Number, Guid ProjectId)>();
+        foreach (var number in groupedTeams ?? [])
+        {
+            var groupedTeam = NewTeam(classA);
+            var groupedProject = NewProject(groupedTeam, $"Group {token} {number:00}");
+            context.Projects.Add(groupedProject);
+            groupedTeamEntities.Add((groupedTeam, number, groupedProject.Id));
+        }
+
         var assigner = admin;
         MentorAssignment Assignment(Team team, MentorProfile profile, MentorType slot,
             MentorAssignmentStatus status, DateTime assignedAt, DateTime? endedAt) => new()
@@ -488,11 +560,14 @@ public sealed partial class ProjectDataIntegrationTests(CustomWebApplicationFact
             });
         }
         // Duplicate group spelled differently, an empty group and a second group.
-        AddMember(teamA, classA, "FA26-G1");
-        AddMember(teamA, classA, " fa26-g1 ");
+        var groupPrefix = $"{course.Code}g_1G";
+        AddMember(teamA, classA, $"{groupPrefix}2");
+        AddMember(teamA, classA, $" {groupPrefix.ToLowerInvariant()}2 ");
         AddMember(teamA, classA, null);
-        AddMember(teamA, classA, "FA26-G2");
+        AddMember(teamA, classA, $"{groupPrefix}10");
         AddMember(teamB, classB, "  ");
+        foreach (var (groupedTeam, number, _) in groupedTeamEntities)
+            AddMember(groupedTeam, classA, $"{groupPrefix}{number}");
 
         await context.SaveChangesAsync();
 
@@ -501,6 +576,12 @@ public sealed partial class ProjectDataIntegrationTests(CustomWebApplicationFact
             Token = token,
             CourseCode = course.Code,
             OtherCourseCode = otherCourse.Code,
+            SemesterTerm = activeSemester.Term switch { SemesterTerm.Spring => "SP", SemesterTerm.Summer => "SU", _ => "FA" },
+            SemesterYear = activeSemester.Year,
+            ClassCodeA = classA.ClassCode,
+            ClassCodeB = classB.ClassCode,
+            GroupPrefix = groupPrefix,
+            GroupedProjects = groupedTeamEntities.ToDictionary(item => item.Number, item => item.ProjectId),
             Admin = admin,
             Lecturer = lecturer,
             CoLecturer = coLecturer,

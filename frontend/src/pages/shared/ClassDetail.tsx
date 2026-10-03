@@ -272,7 +272,8 @@ export default function ClassDetail() {
   // Refresh only when the server confirms this class changed, or after reconnecting.
   useEffect(() => subscribeProjectDirectionRealtime((event) => {
     const currentClassId = String(cls?.id || cls?._id || '');
-    if (currentClassId && (event.eventType === 'ClassMajorUpdated' || event.eventType === 'TeamProposalReviewed'
+    if (currentClassId && (event.eventType === 'ClassMajorUpdated' || event.eventType === 'ClassMajorsChanged'
+      || event.eventType === 'TeamProposalReviewed'
       || event.eventType === 'TeamCreated')
       && String(event.classId) === currentClassId) {
       void fetchData();

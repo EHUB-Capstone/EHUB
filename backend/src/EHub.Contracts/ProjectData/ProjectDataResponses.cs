@@ -29,6 +29,7 @@ public sealed class ProjectDataItemResponse
     public string SemesterCode { get; init; } = string.Empty;
     public Guid SubjectId { get; init; }
     public string SubjectCode { get; init; } = string.Empty;
+    public string ClassCode { get; init; } = string.Empty;
     public IReadOnlyCollection<string> Groups { get; init; } = Array.Empty<string>();
     public string ProjectName { get; init; } = string.Empty;
     public string? Description { get; init; }
@@ -38,14 +39,6 @@ public sealed class ProjectDataItemResponse
     public ProjectDataMentorResponse? AcademicMentor { get; init; }
     public IReadOnlyCollection<string> Achievements { get; init; } = Array.Empty<string>();
     public string RowVersion { get; init; } = string.Empty;
-}
-
-public sealed class ProjectDataSemesterOptionResponse
-{
-    public Guid Id { get; init; }
-    public string Code { get; init; } = string.Empty;
-    public int Year { get; init; }
-    public bool IsActive { get; init; }
 }
 
 public sealed class ProjectDataSubjectOptionResponse
@@ -63,8 +56,8 @@ public sealed class ProjectDataMentorOptionResponse
 
 public sealed class ProjectDataFilterOptionsResponse
 {
-    public IReadOnlyCollection<ProjectDataSemesterOptionResponse> Semesters { get; init; } = Array.Empty<ProjectDataSemesterOptionResponse>();
     public IReadOnlyCollection<ProjectDataSubjectOptionResponse> Subjects { get; init; } = Array.Empty<ProjectDataSubjectOptionResponse>();
+    public IReadOnlyCollection<int> Years { get; init; } = Array.Empty<int>();
     public IReadOnlyCollection<string> Groups { get; init; } = Array.Empty<string>();
     public IReadOnlyCollection<string> StartupIndustries { get; init; } = Array.Empty<string>();
     public IReadOnlyCollection<ProjectDataPersonResponse> Lecturers { get; init; } = Array.Empty<ProjectDataPersonResponse>();

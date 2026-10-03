@@ -111,6 +111,11 @@ export interface StudentClassMember {
   enrollmentStatus: string;
   teamId: string | null;
   hasPendingTeamInvitation: boolean;
+  pendingTeamFormationId: string | null;
+  pendingTeamName: string | null;
+  pendingTeamCreatorName: string | null;
+  pendingTeamInvitationStatus: 'Pending' | 'Accepted' | null;
+  isPendingTeamFormationMember: boolean;
 }
 
 export interface ClassRosterListResponse {

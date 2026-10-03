@@ -77,6 +77,13 @@ export default function StudentClassDetail() {
         enrollmentStatus: student.enrollmentStatus || classInfo.enrollmentStatus || 'Active',
         classId: currentClassId,
       }));
+      setSelected(current => current.filter(studentId => {
+        const student = normalizedStudents.find(item => item._id === studentId);
+        return student
+          && !student.teamId
+          && !student.hasPendingTeamInvitation
+          && student.enrollmentStatus === 'Active';
+      }));
       const normalizedTeams = (detail?.teams || []).map(normalizeManagedTeam);
       setData({ ...detail, students: normalizedStudents, teams: normalizedTeams });
       const proposalData = unwrapApiData(proposalResponse);
@@ -104,7 +111,8 @@ export default function StudentClassDetail() {
 
   useEffect(() => subscribeProjectDirectionRealtime((event) => {
     const currentClassId = String(data?.class?.id || data?.class?._id || '');
-    if (currentClassId && (event.eventType === 'ClassMajorUpdated' || event.eventType === 'TeamProposalReviewed'
+    if (currentClassId && (event.eventType === 'ClassMajorUpdated' || event.eventType === 'ClassMajorsChanged'
+      || event.eventType === 'TeamProposalReviewed'
       || event.eventType === 'TeamFormationChanged' || event.eventType === 'TeamCreated')
       && String(event.classId) === currentClassId) {
       void fetchClassDetail();

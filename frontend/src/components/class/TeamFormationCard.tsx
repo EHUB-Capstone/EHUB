@@ -15,17 +15,18 @@ interface Props {
 export default function TeamFormationCard({ formation, onChanged, acceptDisabledReason }: Props) {
   const [working, setWorking] = useState(false);
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
+  const [declineConfirmOpen, setDeclineConfirmOpen] = useState(false);
   const ownInvitation = formation.invitations.find(item => item.studentId === formation.myStudentId);
   const isCreator = formation.creatorStudentId === formation.myStudentId;
   const pending = formation.status === 'Pending';
 
   const act = async (action: 'accept' | 'decline' | 'cancel') => {
     if (working) return;
-    if (action === 'decline' && !window.confirm('Declining will cancel this formation for everyone. Continue?')) return;
     setWorking(true);
     try {
       await teamFormationApi[action](formation.id);
       if (action === 'cancel') setCancelConfirmOpen(false);
+      if (action === 'decline') setDeclineConfirmOpen(false);
       toast.success(action === 'accept' ? 'Invitation accepted.' : 'Formation cancelled.');
       await onChanged();
     } catch (error) {
@@ -77,7 +78,7 @@ export default function TeamFormationCard({ formation, onChanged, acceptDisabled
             {ownInvitation?.status === 'Pending' && <>
               <button type="button" disabled={working || Boolean(acceptDisabledReason)} onClick={() => void act('accept')}
                 className="rounded-lg bg-green-600 px-3 py-2 text-sm font-semibold text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50">Accept</button>
-              <button type="button" disabled={working} onClick={() => void act('decline')}
+              <button type="button" disabled={working} onClick={() => setDeclineConfirmOpen(true)}
                 className="rounded-lg border border-red-200 px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50">Decline</button>
             </>}
             {isCreator && <button type="button" disabled={working} onClick={() => setCancelConfirmOpen(true)}
@@ -86,6 +87,16 @@ export default function TeamFormationCard({ formation, onChanged, acceptDisabled
         </div>
       )}
     </section>
+    <ConfirmDialog
+      isOpen={declineConfirmOpen}
+      onClose={() => { if (!working) setDeclineConfirmOpen(false); }}
+      onConfirm={() => act('decline')}
+      isSubmitting={working}
+      title="Decline team invitation?"
+      description="Declining this invitation will cancel the team formation for every selected member. This action cannot be undone."
+      confirmText="Decline invitation"
+      cancelText="Keep invitation"
+    />
     <ConfirmDialog
       isOpen={cancelConfirmOpen}
       onClose={() => { if (!working) setCancelConfirmOpen(false); }}

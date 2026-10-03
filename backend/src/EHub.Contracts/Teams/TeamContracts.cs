@@ -297,6 +297,11 @@ public sealed class StudentClassMemberDto
     public string EnrollmentStatus { get; init; } = string.Empty;
     public Guid? TeamId { get; init; }
     public bool HasPendingTeamInvitation { get; init; }
+    public Guid? PendingTeamFormationId { get; init; }
+    public string? PendingTeamName { get; init; }
+    public string? PendingTeamCreatorName { get; init; }
+    public string? PendingTeamInvitationStatus { get; init; }
+    public bool IsPendingTeamFormationMember { get; init; }
 }
 
 public sealed class MyTeamResponse

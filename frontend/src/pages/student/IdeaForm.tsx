@@ -63,7 +63,7 @@ const IdeaForm = () => {
           setForm({ startupName: startupName || '', problem: problem || '', targetCustomer: targetCustomer || '', solution: solution || '', businessModel: businessModel || '', technology: technology || '', marketAnalysis: marketAnalysis || '', competitors: competitors || '', stage: stage || 'Idea' });
         }
       } catch {
-        toast.error('Failed to load data');
+        // Keep the empty state below without showing a toast on page entry.
       } finally {
         setLoading(false);
       }

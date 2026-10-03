@@ -107,8 +107,8 @@ export default function ProjectDataTable({
             <thead>
               <tr className="border-b border-slate-100 bg-slate-50/60">
                 <SortHeader label="Semester" field="semester" query={query} onSort={onSort} />
-                <SortHeader label="Subject Code" field="subject" query={query} onSort={onSort} />
-                <th scope="col" className={headerClass}>Group</th>
+                <SortHeader label="Class Code" field="classCode" query={query} onSort={onSort} />
+                <SortHeader label="Group" field="group" query={query} onSort={onSort} />
                 <SortHeader label="Project Name" field="projectName" query={query} onSort={onSort} />
                 <th scope="col" className={headerClass}>Description</th>
                 <th scope="col" className={headerClass}>Startup Industry</th>
@@ -122,7 +122,7 @@ export default function ProjectDataTable({
               {page.items.map(item => (
                 <tr key={item.projectId} className="hover:bg-slate-50/60">
                   <td className={cn(cellClass, 'whitespace-nowrap')}>{displayText(item.semesterCode)}</td>
-                  <td className={cn(cellClass, 'whitespace-nowrap')}>{displayText(item.subjectCode)}</td>
+                  <td className={cn(cellClass, 'whitespace-nowrap')}>{displayText(item.classCode)}</td>
                   <td className={cellClass}><ChipList values={item.groups} /></td>
                   <td className={cn(cellClass, 'min-w-[10rem]')}>
                     <button type="button" onClick={() => onOpen(item)} className="text-left font-semibold text-primary hover:underline focus-visible:underline">
@@ -151,7 +151,7 @@ export default function ProjectDataTable({
                 {item.projectName}
               </button>
               <p className="text-xs text-slate-500">
-                {displayText(item.semesterCode)} · {displayText(item.subjectCode)} · {displayText(item.lecturer?.fullName)}
+                {displayText(item.semesterCode)} · {displayText(item.classCode)} · {displayText(item.lecturer?.fullName)}
               </p>
               <ProjectAchievementBadges achievements={item.achievements} />
             </li>

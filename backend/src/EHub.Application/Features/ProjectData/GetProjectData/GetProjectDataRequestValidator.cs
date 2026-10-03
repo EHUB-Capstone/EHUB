@@ -16,7 +16,11 @@ public sealed class GetProjectDataRequestValidator : AbstractValidator<GetProjec
         RuleFor(request => request.SubjectCode).MaximumLength(50);
         RuleFor(request => request.Group).MaximumLength(100);
         RuleFor(request => request.StartupIndustry).MaximumLength(100);
-        RuleFor(request => request.SemesterId).NotEqual(Guid.Empty).When(request => request.SemesterId.HasValue);
+        RuleFor(request => request.Semester)
+            .Must(value => ProjectDataQuery.ParseTerm(value) is not null)
+            .When(request => !string.IsNullOrWhiteSpace(request.Semester))
+            .WithMessage("Semester must be SP, SU or FA.");
+        RuleFor(request => request.Year).InclusiveBetween(2000, 9999).When(request => request.Year.HasValue);
         RuleFor(request => request.LecturerId).NotEqual(Guid.Empty).When(request => request.LecturerId.HasValue);
         RuleFor(request => request.MentorId).NotEqual(Guid.Empty).When(request => request.MentorId.HasValue);
         RuleFor(request => request.Achievement)
