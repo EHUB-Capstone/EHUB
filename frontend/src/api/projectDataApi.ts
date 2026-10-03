@@ -5,13 +5,17 @@ import type {
   ProjectDataFilterOptions,
   ProjectDataPage,
   ProjectDataQuery,
+  ProjectDataSummary,
   UpdateProjectAchievementsPayload,
 } from '../types/projectData';
-import { toProjectDataRequestParams } from '../utils/projectData.ts';
+import { toProjectDataRequestParams, toProjectDataSummaryParams } from '../utils/projectData.ts';
 
 export const projectDataApi = {
   list: (query: ProjectDataQuery, signal?: AbortSignal): Promise<ApiEnvelope<ProjectDataPage>> =>
     axiosClient.get('/project-data', { params: toProjectDataRequestParams(query), signal }),
+
+  getSummary: (query: ProjectDataQuery, signal?: AbortSignal): Promise<ApiEnvelope<ProjectDataSummary>> =>
+    axiosClient.get('/project-data/summary', { params: toProjectDataSummaryParams(query), signal }),
 
   getFilterOptions: (signal?: AbortSignal): Promise<ApiEnvelope<ProjectDataFilterOptions>> =>
     axiosClient.get('/project-data/filter-options', { signal }),

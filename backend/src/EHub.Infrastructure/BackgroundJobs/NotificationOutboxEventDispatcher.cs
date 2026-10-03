@@ -224,13 +224,23 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
                 realtimeNotificationTeamId = ReadGuid(data, "teamId");
                 foreach (var userId in realtimeNotificationRecipients)
                 {
+                    var directionNotificationType = directionDecision switch
+                    {
+                        "Approved" => NotificationType.ProjectDirectionApproved,
+                        "Rejected" => NotificationType.ProjectDirectionRejected,
+                        _ => NotificationType.ProjectDirectionNeedsRevision
+                    };
                     await AddAsync(message, userId,
-                        directionDecision == "Approved" ? NotificationType.ProjectDirectionApproved : NotificationType.ProjectDirectionNeedsRevision,
-                        isProfileChangeReview ? "Project Profile change reviewed" : "Project direction reviewed",
+                        directionNotificationType,
+                        isProfileChangeReview && directionDecision == "Rejected"
+                            ? "Project Profile change rejected"
+                            : isProfileChangeReview ? "Project Profile change reviewed" : "Project direction reviewed",
                         isProfileChangeReview
                             ? directionDecision == "Approved"
                                 ? "Your proposed Project Profile changes were approved and are now applied."
-                                : "Your proposed Project Profile changes need revision. The approved profile remains unchanged."
+                                : directionDecision == "Rejected"
+                                    ? "Your proposed Project Profile changes were rejected. The approved profile remains unchanged."
+                                    : "Your proposed Project Profile changes need revision. The approved profile remains unchanged."
                             : $"Your project direction was reviewed: {directionDecision}.", cancellationToken);
                 }
                 break;

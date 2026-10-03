@@ -24,6 +24,7 @@ public sealed partial class ProjectDataIntegrationTests(CustomWebApplicationFact
         using var client = factory.CreateClient();
         (await client.GetAsync("/api/project-data")).StatusCode.Should().Be(HttpStatusCode.Unauthorized);
         (await client.GetAsync("/api/project-data/filter-options")).StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+        (await client.GetAsync("/api/project-data/summary")).StatusCode.Should().Be(HttpStatusCode.Unauthorized);
 
         var user = new User { FullName = "No staff", Email = "pd-nostaff@example.test" };
         foreach (var role in new[] { SystemRoles.Student, SystemRoles.Mentor })
@@ -31,6 +32,8 @@ public sealed partial class ProjectDataIntegrationTests(CustomWebApplicationFact
             (await Send(client, user, role, HttpMethod.Get, "/api/project-data")).StatusCode
                 .Should().Be(HttpStatusCode.Forbidden);
             (await Send(client, user, role, HttpMethod.Get, "/api/project-data/filter-options")).StatusCode
+                .Should().Be(HttpStatusCode.Forbidden);
+            (await Send(client, user, role, HttpMethod.Get, "/api/project-data/summary")).StatusCode
                 .Should().Be(HttpStatusCode.Forbidden);
             (await Send(client, user, role, HttpMethod.Put, $"/api/project-data/{Guid.NewGuid()}/achievements",
                 new UpdateProjectAchievementsRequest { RowVersion = "1" })).StatusCode
@@ -277,6 +280,57 @@ public sealed partial class ProjectDataIntegrationTests(CustomWebApplicationFact
     {
         var page = await GetPage(client, world.Admin, SystemRoles.Admin, query);
         return page.Items.Select(item => item.ProjectId).ToList();
+    }
+
+    [Fact]
+    public async Task Summary_CountsGroupsAndAchievementsWithinScopeAndFilters()
+    {
+        var world = await SeedAsync();
+        try
+        {
+            using var client = factory.CreateClient();
+            var search = $"search={world.Token}";
+
+            // Admin sees A (Potential + Funded), B, C and the other lecturer's E; nothing is Awarded yet.
+            (await GetSummary(client, world.Admin, SystemRoles.Admin, search))
+                .Should().BeEquivalentTo(new ProjectDataSummaryResponse
+                { TotalGroups = 4, PotentialGroups = 1, FundedGroups = 1, AwardedGroups = 0 });
+
+            // A lecturer only counts the classes they teach.
+            (await GetSummary(client, world.Lecturer, SystemRoles.Lecturer, search))
+                .Should().BeEquivalentTo(new ProjectDataSummaryResponse
+                { TotalGroups = 3, PotentialGroups = 1, FundedGroups = 1, AwardedGroups = 0 });
+            (await GetSummary(client, world.Outsider, SystemRoles.Lecturer, search))
+                .Should().BeEquivalentTo(new ProjectDataSummaryResponse { TotalGroups = 1 });
+
+            // Filters narrow the cards exactly like the table; paging and sorting are ignored.
+            (await GetSummary(client, world.Admin, SystemRoles.Admin, $"{search}&subjectCode={world.OtherCourseCode}"))
+                .Should().BeEquivalentTo(new ProjectDataSummaryResponse { TotalGroups = 1 });
+            (await GetSummary(client, world.Admin, SystemRoles.Admin, $"{search}&achievement=Potential&pageIndex=7&pageSize=10&sortBy=group"))
+                .Should().BeEquivalentTo(new ProjectDataSummaryResponse { TotalGroups = 1, PotentialGroups = 1, FundedGroups = 1 });
+            (await GetSummary(client, world.Admin, SystemRoles.Admin, $"{search}&semester={(world.SemesterTerm == "FA" ? "SP" : "FA")}"))
+                .Should().BeEquivalentTo(new ProjectDataSummaryResponse());
+
+            // Labels are independent: a project can be counted in several cards, and the totals follow edits.
+            var current = await CurrentAchievements(client, world, world.ProjectB);
+            await PutAchievements(client, world.Lecturer, SystemRoles.Lecturer, world.ProjectB,
+                ["Potential", "Funded", "Awarded"], current.RowVersion);
+            (await GetSummary(client, world.Admin, SystemRoles.Admin, search))
+                .Should().BeEquivalentTo(new ProjectDataSummaryResponse
+                { TotalGroups = 4, PotentialGroups = 2, FundedGroups = 2, AwardedGroups = 1 });
+        }
+        finally
+        {
+            await CleanupAsync(world);
+        }
+    }
+
+    private async Task<ProjectDataSummaryResponse> GetSummary(HttpClient client, User user, string role, string query)
+    {
+        var response = await Send(client, user, role, HttpMethod.Get, $"/api/project-data/summary?{query}");
+        response.StatusCode.Should().Be(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+        var body = await response.Content.ReadFromJsonAsync<ApiResponse<ProjectDataSummaryResponse>>();
+        return body!.Data!;
     }
 
     [Fact]

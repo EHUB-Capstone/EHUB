@@ -118,7 +118,6 @@ public sealed class StudentClassSelfServiceHandler : IStudentClassSelfServiceHan
                     invitation.StudentId,
                     invitation.FormationId,
                     invitation.Formation.TeamName,
-                    CreatorName = invitation.Formation.CreatorStudent.FullName,
                     InvitationStatus = invitation.Status.ToString()
                 })
                 .ToListAsync(cancellationToken);
@@ -142,6 +141,8 @@ public sealed class StudentClassSelfServiceHandler : IStudentClassSelfServiceHan
         var members = memberRows.Select(item =>
         {
             reservationsByStudentId.TryGetValue(item.StudentId, out var reservation);
+            var isMyPendingFormation = reservation is not null &&
+                myPendingFormationIds.Contains(reservation.FormationId);
             return new StudentClassMemberDto
             {
                 StudentId = item.StudentId,
@@ -160,12 +161,10 @@ public sealed class StudentClassSelfServiceHandler : IStudentClassSelfServiceHan
                 EnrollmentStatus = item.EnrollmentStatus,
                 TeamId = item.TeamId,
                 HasPendingTeamInvitation = reservation is not null,
-                PendingTeamFormationId = reservation?.FormationId,
-                PendingTeamName = reservation?.TeamName,
-                PendingTeamCreatorName = reservation?.CreatorName,
-                PendingTeamInvitationStatus = reservation?.InvitationStatus,
-                IsPendingTeamFormationMember = reservation is not null &&
-                    myPendingFormationIds.Contains(reservation.FormationId)
+                PendingTeamFormationId = isMyPendingFormation ? reservation?.FormationId : null,
+                PendingTeamName = isMyPendingFormation ? reservation?.TeamName : null,
+                PendingTeamInvitationStatus = isMyPendingFormation ? reservation?.InvitationStatus : null,
+                IsPendingTeamFormationMember = isMyPendingFormation
             };
         }).ToArray();
         var teams = await TeamQuery().Where(item => item.ClassId == classId && item.Status == TeamStatus.Active).OrderBy(item => item.TeamCode).ToListAsync(cancellationToken);

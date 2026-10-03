@@ -113,7 +113,6 @@ export interface StudentClassMember {
   hasPendingTeamInvitation: boolean;
   pendingTeamFormationId: string | null;
   pendingTeamName: string | null;
-  pendingTeamCreatorName: string | null;
   pendingTeamInvitationStatus: 'Pending' | 'Accepted' | null;
   isPendingTeamFormationMember: boolean;
 }

@@ -3404,11 +3404,68 @@ public sealed partial class TeamWorkflowIntegrationTests
         updated.Value.Description.Should().Be(initial.Description);
 
         context.ChangeTracker.Clear();
+        var firstPendingProfileChange = await directionHandler.GetAsync(seed.TeamId.Value, seed.ProposerUserId, SystemRoles.Student);
+        firstPendingProfileChange.Value.Status.Should().Be(nameof(ProjectDirectionStatus.Submitted));
+        firstPendingProfileChange.Value.IsProjectProfileChangeProposal.Should().BeTrue();
+        firstPendingProfileChange.Value.CurrentTitle.Should().Be(initial.ProjectName);
+        firstPendingProfileChange.Value.Title.Should().Be("Campus Circular Hub");
+        var rejectedProfileChange = await directionHandler.ReviewAsync(
+            seed.TeamId.Value,
+            new ReviewProjectDirectionRequest
+            {
+                Decision = "Rejected",
+                Comment = "Keep the approved Project Profile unchanged.",
+                RowVersion = firstPendingProfileChange.Value.RowVersion
+            },
+            seed.LecturerId,
+            SystemRoles.Lecturer);
+        rejectedProfileChange.IsSuccess.Should().BeTrue(rejectedProfileChange.IsFailure ? rejectedProfileChange.Error.Message : string.Empty);
+        rejectedProfileChange.Value.Status.Should().Be(nameof(ProjectDirectionStatus.Approved));
+        rejectedProfileChange.Value.IsProjectProfileChangeProposal.Should().BeFalse();
+        rejectedProfileChange.Value.Title.Should().Be(initial.ProjectName);
+        rejectedProfileChange.Value.Summary.Should().Be(initial.Description);
+        rejectedProfileChange.Value.Reviews.First().ToStatus.Should().Be(nameof(ProjectDirectionStatus.Rejected));
+
+        context.ChangeTracker.Clear();
+        var unchangedProject = await context.Projects.AsNoTracking().SingleAsync(project => project.TeamId == seed.TeamId);
+        unchangedProject.Name.Should().Be(initial.ProjectName);
+        unchangedProject.Description.Should().Be(initial.Description);
+        var reviewOutboxes = await context.OutboxMessages.AsNoTracking()
+            .Where(message => message.AggregateId == seed.ClassId && message.Type == "ProjectDirection.Reviewed.v1")
+            .ToListAsync();
+        var rejectionOutbox = reviewOutboxes.Single(message => message.PayloadJson.Contains("Rejected"));
+        await scope.ServiceProvider.GetRequiredService<IOutboxEventDispatcher>().DispatchAsync(rejectionOutbox);
+        context.ChangeTracker.Clear();
+        var rejectionNotifications = await context.Notifications.AsNoTracking()
+            .Where(notification => notification.SourceEventId == rejectionOutbox.EventId)
+            .ToListAsync();
+        rejectionNotifications.Should().NotBeEmpty();
+        rejectionNotifications.Should().OnlyContain(notification =>
+            notification.Type == NotificationType.ProjectDirectionRejected
+            && notification.Title == "Project Profile change rejected"
+            && notification.Body.Contains("approved profile remains unchanged"));
+
+        var reproposed = await handler.UpdateAsync(
+            seed.TeamId.Value,
+            new UpdateProjectWorkspaceRequest
+            {
+                ProjectName = "Campus Circular Hub",
+                Description = "The latest student marketplace profile for safe campus equipment reuse.",
+                Problem = updated.Value.Problem,
+                Solution = updated.Value.Solution,
+                TargetUsers = updated.Value.TargetUsers,
+                ZaloGroupUrl = updated.Value.ZaloGroupUrl,
+                Keywords = updated.Value.Keywords
+            },
+            seed.ProposerUserId,
+            SystemRoles.Student);
+        reproposed.IsSuccess.Should().BeTrue(reproposed.IsFailure ? reproposed.Error.Message : string.Empty);
+        reproposed.Value.ProjectName.Should().Be(initial.ProjectName);
+
+        context.ChangeTracker.Clear();
         var pendingProfileChange = await directionHandler.GetAsync(seed.TeamId.Value, seed.ProposerUserId, SystemRoles.Student);
         pendingProfileChange.Value.Status.Should().Be(nameof(ProjectDirectionStatus.Submitted));
         pendingProfileChange.Value.IsProjectProfileChangeProposal.Should().BeTrue();
-        pendingProfileChange.Value.CurrentTitle.Should().Be(initial.ProjectName);
-        pendingProfileChange.Value.Title.Should().Be("Campus Circular Hub");
         var requestedRevision = await directionHandler.ReviewAsync(
             seed.TeamId.Value,
             new ReviewProjectDirectionRequest

@@ -41,6 +41,15 @@ public sealed class ProjectDataItemResponse
     public string RowVersion { get; init; } = string.Empty;
 }
 
+public sealed class ProjectDataSummaryResponse
+{
+    /// <summary>Groups (one project per team) matching the current scope, search and filters.</summary>
+    public int TotalGroups { get; init; }
+    public int PotentialGroups { get; init; }
+    public int FundedGroups { get; init; }
+    public int AwardedGroups { get; init; }
+}
+
 public sealed class ProjectDataSubjectOptionResponse
 {
     public string Code { get; init; } = string.Empty;

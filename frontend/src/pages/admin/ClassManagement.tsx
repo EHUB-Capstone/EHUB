@@ -455,6 +455,8 @@ export default function ClassManagement() {
             onClick={() => {
               const next = new URLSearchParams(searchParams);
               next.set('tab', 'overview');
+              next.delete('classId');
+              next.delete('teamId');
               setSearchParams(next);
             }}
             className={`inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-semibold transition ${viewMode === 'overview' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
@@ -608,7 +610,8 @@ export default function ClassManagement() {
           focusTeamId={overviewTeamId}
           onSelectedClassChange={(classId) => {
             const next = new URLSearchParams(searchParams);
-            next.set('classId', classId);
+            if (classId) next.set('classId', classId);
+            else next.delete('classId');
             next.delete('teamId');
             setSearchParams(next, { replace: true });
           }}

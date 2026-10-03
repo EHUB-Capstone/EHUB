@@ -1375,6 +1375,37 @@ export function registerWorkspaceMockHandlers(mock: MockAdapter): void {
       : failure(404, 'TEAM_NOT_FOUND', 'Team not found.');
   });
 
+  mock.onPost('/workspace/checkpoints/evaluation-grading/export').reply((config) => {
+    const state = getMockState();
+    const currentUser = state.users.find(user => user.id === state.sessionUserId);
+    if (!currentUser) return failure(401, 'UNAUTHORIZED', 'Authentication is required.');
+    if (currentUser.role !== 'ADMIN' && currentUser.role !== 'LECTURER') {
+      return failure(403, 'WORKSPACE_ACCESS_DENIED', 'Staff access is required.');
+    }
+
+    const body = parseBody(config);
+    const scopes = Array.isArray(body.teams) ? body.teams as Array<{
+      teamId?: unknown;
+      checkpointNumbers?: unknown;
+    }> : [];
+    if (scopes.length === 0 || scopes.length > 500 || scopes.some(scope =>
+      !scope.teamId || !Array.isArray(scope.checkpointNumbers) ||
+      scope.checkpointNumbers.length === 0 ||
+      scope.checkpointNumbers.some(number => !Number.isInteger(Number(number)) || Number(number) <= 0))) {
+      return failure(400, 'WORKSPACE_VALIDATION_ERROR', 'Select a valid evaluation report scope.');
+    }
+    if (scopes.some(scope => !classByTeam(String(scope.teamId)) || !canAccessCheckpointTeam(String(scope.teamId)))) {
+      return failure(403, 'WORKSPACE_ACCESS_DENIED', 'One or more requested teams are outside your access scope.');
+    }
+
+    return [200, new Blob(['Mock evaluation report'], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    }), {
+      'content-type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'content-disposition': 'attachment; filename="evaluation_report.xlsx"',
+    }];
+  });
+
   mock.onPost('/workspace/checkpoints/evaluation-grading').reply((config) => {
     const state = getMockState();
     const body = parseBody(config);

@@ -2,7 +2,7 @@ import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } f
 import { Navigate, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
-  AlertTriangle, Award, BookOpenCheck, CheckCircle2, ChevronDown, ChevronUp, ClipboardCheck, Clock, Edit3, Filter,
+  AlertTriangle, Award, BookOpenCheck, CheckCircle2, ChevronDown, ChevronUp, ClipboardCheck, Clock, Download, Edit3, Filter,
   EyeOff, Loader2, MessageSquareText, RefreshCw, Search, Send, Trophy, Users, X,
 } from 'lucide-react';
 import { evaluationApi } from '../../api/evaluationApi';
@@ -25,7 +25,7 @@ import type {
 import type { ApiEnvelope, WorkspaceOption } from '../../types/workspaceTools';
 import { parseApiError } from '../../utils/apiError';
 import {
-  calculateWeightedCourseScore, canAccessEvaluationRankings, evaluationStatusLabel, filterEvaluationRecords, filterTeamsBySemester,
+  buildEvaluationReportExportScope, calculateWeightedCourseScore, canAccessEvaluationRankings, evaluationStatusLabel, filterEvaluationRecords, filterTeamsBySemester,
   resolveActiveEvaluationSemester, resolveEvaluationMemberScore,
   selectLatestOfficialEvaluation,
 } from '../../utils/evaluationGrading';
@@ -361,6 +361,7 @@ export default function EvaluationGrading() {
   const [editingAssessment, setEditingAssessment] = useState<{ team: EvaluationTeam; assessment: CourseAssessmentEvaluation } | null>(null);
   const [publishingEvaluationId, setPublishingEvaluationId] = useState<string | null>(null);
   const [bulkPublicationSubmitting, setBulkPublicationSubmitting] = useState(false);
+  const [exportingReport, setExportingReport] = useState(false);
   const [publicationConfirmation, setPublicationConfirmation] = useState<PublicationConfirmation | null>(null);
   const recordsRequestId = useRef(0);
   const [submissionAnalytics, setSubmissionAnalytics] = useState<SubmissionAnalyticsResponse | null>(null);
@@ -583,6 +584,10 @@ export default function EvaluationGrading() {
   const filteredRecords = useMemo(() => filterEvaluationRecords(resultRecords, deferredFilters)
     .filter(record => !canViewSubmissions || matchesSubmissionStatus(submissionsByKey.get(submissionKey(record.team.teamId, record.checkpoint.number)), submissionStatus)),
     [deferredFilters, resultRecords, canViewSubmissions, submissionsByKey, submissionStatus]);
+  const evaluationReportScope = useMemo(
+    () => buildEvaluationReportExportScope(filteredRecords),
+    [filteredRecords],
+  );
   const classGroups = useMemo(() => groupEvaluationRecords(filteredRecords, assessmentsByTeam), [assessmentsByTeam, filteredRecords]);
   const bulkPublicationTargets = useMemo(() => {
     const publishIds = new Set<string>();
@@ -628,6 +633,34 @@ export default function EvaluationGrading() {
   const averageScore = completedCourseScores.length === 0 ? 0 : completedCourseScores.reduce((total, item) => total + item.score, 0) / completedCourseScores.length;
   const feedbackCount = evaluatedRecords.reduce((total, record) => total + (record.evaluation?.overallFeedback ? 1 : 0) + (record.evaluation?.rubricScores.filter(score => score.comment).length || 0), 0);
   const retry = () => setReloadKey(value => value + 1);
+  const exportEvaluationReport = async () => {
+    if (evaluationReportScope.length === 0) return;
+    setExportingReport(true);
+    try {
+      const response = await evaluationApi.exportEvaluationReport({ teams: evaluationReportScope });
+      const blob = new Blob([response.data || response], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      });
+      const visibleClassCodes = [...new Set(filteredRecords.map(record => record.team.classCode).filter(Boolean))];
+      const scopeName = visibleClassCodes.length === 1
+        ? visibleClassCodes[0]
+        : semester !== 'all' && semester !== 'none' && year !== 'all' && year !== 'none'
+          ? `${semester}${year}`
+          : 'evaluation';
+      const safeScopeName = scopeName.replace(/[^a-z0-9_-]+/gi, '_');
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${safeScopeName}_evaluation_report.xlsx`;
+      link.click();
+      window.URL.revokeObjectURL(url);
+      toast.success('Evaluation report exported successfully');
+    } catch (error: unknown) {
+      toast.error(parseApiError(error, 'Unable to export evaluation report.').message);
+    } finally {
+      setExportingReport(false);
+    }
+  };
   const confirmPublicationChange = async () => {
     if (!publicationConfirmation || publicationConfirmation.evaluationIds.length === 0) return;
     const { action, evaluationIds, scope } = publicationConfirmation;
@@ -740,6 +773,7 @@ export default function EvaluationGrading() {
           <select value={status} onChange={event => updateFilter('status', event.target.value)} aria-label="Filter by status" className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 sm:w-[150px]"><option value="">All statuses</option>{(['SUBMITTED', 'PUBLISHED', 'NOT_GRADED'] as EvaluationGradingStatus[]).map(value => <option key={value} value={value}>{evaluationStatusLabel(value)}</option>)}</select>
           {canViewSubmissions && <select value={submissionStatus} onChange={event => updateFilter('submissionStatus', event.target.value)} aria-label="Filter by submission status" className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm sm:w-[180px]"><option value="">All submissions</option><option value="Submitted">Submitted</option><option value="NotSubmitted">Not submitted</option><option value="Missing">Missing</option></select>}
           <button type="submit" className="inline-flex items-center gap-2 rounded-xl bg-secondary px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-secondary-700"><Filter className="h-4 w-4" /> Search</button>
+          {isInternalViewer && <button type="button" onClick={exportEvaluationReport} disabled={evaluationReportScope.length === 0 || loadingRecords || loadingSubmissions || isFilterPending || exportingReport} className="inline-flex items-center gap-2 rounded-xl border border-primary/30 bg-primary/5 px-4 py-2 text-sm font-semibold text-primary transition-colors hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-50">{exportingReport ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />} Export Evaluation Report</button>}
           <button type="button" onClick={resetFilters} className="px-2 text-sm font-medium text-slate-400 hover:text-slate-700">Reset</button>
         </form>
       </section>

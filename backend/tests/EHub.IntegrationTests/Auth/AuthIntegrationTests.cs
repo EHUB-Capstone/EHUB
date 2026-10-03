@@ -261,7 +261,6 @@ public class AuthIntegrationTests
         reservedClassmate.HasPendingTeamInvitation.Should().BeTrue();
         reservedClassmate.IsPendingTeamFormationMember.Should().BeTrue();
         reservedClassmate.PendingTeamName.Should().StartWith("Reservation ");
-        reservedClassmate.PendingTeamCreatorName.Should().Be(session.User.FullName);
         reservedClassmate.PendingTeamInvitationStatus.Should().Be("Pending");
 
         var outsiderEmail = $"google-reservation-outsider-{Guid.NewGuid()}@example.com";
@@ -295,8 +294,9 @@ public class AuthIntegrationTests
         var reservedFromOutside = outsiderClassDetail!.Data!.Students.Single(member => member.StudentId == reservedStudentId);
         reservedFromOutside.HasPendingTeamInvitation.Should().BeTrue();
         reservedFromOutside.IsPendingTeamFormationMember.Should().BeFalse();
-        reservedFromOutside.PendingTeamName.Should().Be(reservedClassmate.PendingTeamName);
-        reservedFromOutside.PendingTeamCreatorName.Should().Be(session.User.FullName);
+        reservedFromOutside.PendingTeamFormationId.Should().BeNull();
+        reservedFromOutside.PendingTeamName.Should().BeNull();
+        reservedFromOutside.PendingTeamInvitationStatus.Should().BeNull();
     }
 
     private async Task<(Guid StudentId, Guid ActiveClassId, Guid CompletedClassId)> SeedMajorUpdateEnrollmentsAsync(

@@ -71,6 +71,13 @@ export interface ProjectDataQuery {
   isDescending: boolean;
 }
 
+export interface ProjectDataSummary {
+  totalGroups: number;
+  potentialGroups: number;
+  fundedGroups: number;
+  awardedGroups: number;
+}
+
 export interface ProjectDataSubjectOption {
   code: string;
   name: string;

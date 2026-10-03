@@ -201,8 +201,9 @@ public sealed class ProjectDirectionHandler : IProjectDirectionHandler
         var comment = request.Comment?.Trim() ?? string.Empty;
         if (comment.Length is > 0 and < 3 or > 1_000)
             return Failure(ErrorCodes.ClassValidationError, "Review comment must be between 3 and 1000 characters when provided.");
-        if (!Enum.TryParse<ProjectDirectionStatus>(request.Decision, true, out var decision) || decision is not (ProjectDirectionStatus.Approved or ProjectDirectionStatus.NeedsRevision))
-            return Failure(ErrorCodes.ClassValidationError, "Decision must be Approved or NeedsRevision.");
+        if (!Enum.TryParse<ProjectDirectionStatus>(request.Decision, true, out var decision)
+            || decision is not (ProjectDirectionStatus.Approved or ProjectDirectionStatus.NeedsRevision or ProjectDirectionStatus.Rejected))
+            return Failure(ErrorCodes.ClassValidationError, "Decision must be Approved, NeedsRevision, or Rejected.");
         var team = await TeamAccessQuery().FirstOrDefaultAsync(item => item.Id == teamId, cancellationToken);
         if (team == null) return Failure(ErrorCodes.TeamNotFound, "The requested team was not found.");
         if (team.Class.PrimaryLecturerId != userId) return Failure(ErrorCodes.ClassAccessDenied, "A lecturer cannot review project directions outside assigned classes.");
@@ -224,7 +225,14 @@ public sealed class ProjectDirectionHandler : IProjectDirectionHandler
             && project != null
             && (!string.Equals(currentTitle, direction.Title, StringComparison.Ordinal)
                 || !string.Equals(currentSummary, direction.Summary, StringComparison.Ordinal));
-        direction.Status = decision;
+        if (decision == ProjectDirectionStatus.Rejected && !isProjectProfileChangeProposal)
+            return Failure(ErrorCodes.ProjectDirectionStateInvalid, "Only a Project Profile change request can be rejected.");
+
+        var proposedTitle = direction.Title;
+        var proposedSummary = direction.Summary;
+        direction.Status = decision == ProjectDirectionStatus.Rejected
+            ? ProjectDirectionStatus.Approved
+            : decision;
         direction.ReviewedAtUtc = now;
         direction.ReviewedByUserId = userId;
         direction.UpdatedBy = userId;
@@ -258,6 +266,21 @@ public sealed class ProjectDirectionHandler : IProjectDirectionHandler
                 OccurredAtUtc = now
             });
         }
+        else if (decision == ProjectDirectionStatus.Rejected && project != null)
+        {
+            direction.Title = currentTitle;
+            direction.Summary = currentSummary;
+            _context.ProjectActivityLogs.Add(new ProjectActivityLog
+            {
+                ProjectId = project.Id,
+                Project = project,
+                ActorUserId = userId,
+                Action = "PROJECT_PROFILE_CHANGE_REJECTED",
+                Summary = "Rejected proposed changes to the Project Profile. The approved profile remains unchanged.",
+                ChangedFieldsJson = "[]",
+                OccurredAtUtc = now
+            });
+        }
         var studentUserIds = team.TeamMembers.Where(member => member.CountsTowardActiveTeam && member.ClassStudent.Student.UserId.HasValue)
             .Select(member => member.ClassStudent.Student.UserId!.Value).Distinct().ToArray();
         ClassOutbox.Enqueue(_context, "ProjectDirection.Reviewed.v1", team.ClassId, new
@@ -268,9 +291,9 @@ public sealed class ProjectDirectionHandler : IProjectDirectionHandler
             StudentUserIds = studentUserIds,
             IsProjectProfileChangeProposal = isProjectProfileChangeProposal,
             CurrentTitle = currentTitle,
-            ProposedTitle = direction.Title,
+            ProposedTitle = proposedTitle,
             CurrentSummary = currentSummary,
-            ProposedSummary = direction.Summary
+            ProposedSummary = proposedSummary
         }, now);
         try { await _context.SaveChangesAsync(cancellationToken); }
         catch (DbUpdateConcurrencyException) { return Failure(ErrorCodes.ClassConcurrencyConflict, "The project direction was reviewed concurrently. Refresh the page."); }

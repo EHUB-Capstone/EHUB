@@ -22,6 +22,8 @@ import {
   removedAchievements,
   sameAchievements,
   summarizeList,
+  projectDataSummaryKey,
+  toProjectDataSummaryParams,
   toProjectDataRequestParams,
   toProjectDataSearchParams,
   toggleAchievement,
@@ -120,6 +122,17 @@ test('clicking a sort header toggles direction on the same field and starts asce
   assert.deepEqual(nextProjectDataSort({ ...DEFAULT_PROJECT_DATA_QUERY, isDescending: true }, 'semester'), { sortBy: 'semester', isDescending: false });
 });
 
+test('summary params carry only search and filters, so paging and sorting never change the counters', () => {
+  assert.deepEqual(toProjectDataSummaryParams(DEFAULT_PROJECT_DATA_QUERY), {});
+  const filtered = { ...DEFAULT_PROJECT_DATA_QUERY, search: 'ai', semester: 'SU' as const, year: '2026', achievement: 'Funded' as const };
+  assert.deepEqual(toProjectDataSummaryParams(filtered), { search: 'ai', semester: 'SU', year: '2026', achievement: 'Funded' });
+  const paged = { ...filtered, pageIndex: 5, pageSize: 100 as const, sortBy: 'group' as const, isDescending: true };
+  assert.deepEqual(projectDataSummaryKey('user-a', paged), projectDataSummaryKey('user-a', filtered));
+  assert.notDeepEqual(projectDataSummaryKey('user-a', filtered), projectDataSummaryKey('user-a', { ...filtered, year: '2025' }));
+  assert.notDeepEqual(projectDataSummaryKey('user-a', filtered), projectDataSummaryKey('user-b', filtered));
+  assert.deepEqual(projectDataSummaryKey('user-a', filtered).slice(0, 2), projectDataScopeKey('user-a'));
+});
+
 test('query keys are scoped to the signed-in user so another account never reuses cached rows', () => {
   const a = projectDataQueryKey('user-a', DEFAULT_PROJECT_DATA_QUERY);
   const b = projectDataQueryKey('user-b', DEFAULT_PROJECT_DATA_QUERY);
@@ -184,6 +197,24 @@ test('the API client sends server-side query params, honours abort signals and m
     const controller = new AbortController();
     controller.abort();
     await assert.rejects(projectDataApi.list(DEFAULT_PROJECT_DATA_QUERY, controller.signal));
+  } finally {
+    mock.restore();
+  }
+});
+
+test('the summary request sends search and filters only and maps the counters', async () => {
+  const mock = new MockAdapter(axiosClient);
+  try {
+    let seenParams: Record<string, unknown> = {};
+    mock.onGet('/project-data/summary').reply(config => {
+      seenParams = config.params;
+      return [200, { success: true, message: 'ok', data: { totalGroups: 8, potentialGroups: 3, fundedGroups: 2, awardedGroups: 1 } }];
+    });
+    const response = await projectDataApi.getSummary({
+      ...DEFAULT_PROJECT_DATA_QUERY, subjectCode: 'EXE101', pageIndex: 4, pageSize: 50, sortBy: 'group', isDescending: true,
+    });
+    assert.deepEqual(response.data, { totalGroups: 8, potentialGroups: 3, fundedGroups: 2, awardedGroups: 1 });
+    assert.deepEqual(seenParams, { subjectCode: 'EXE101' });
   } finally {
     mock.restore();
   }

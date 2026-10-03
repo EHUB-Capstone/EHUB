@@ -21,6 +21,7 @@ import {
 } from '../src/utils/notificationNavigation.ts';
 import {
   canSubmitProjectDirection,
+  directionOverviewTargetClassIds,
   getApprovedProjectProfileDisplay,
   getProjectDirectionDecisionNotice,
   getProjectDirectionSubmitGuidance,
@@ -28,6 +29,7 @@ import {
   hasProjectDirectionChanged,
   isProjectDirectionConcurrencyConflict,
   isProjectProfileAvailable,
+  resolveDirectionOverviewClassId,
   updateProjectDirectionOverviewTeams,
 } from '../src/utils/projectDirectionSync.ts';
 import {
@@ -335,6 +337,10 @@ test('project direction live synchronization detects and announces lecturer deci
     status: 'NeedsRevision',
     reviews: [{ id: 'review-2', toStatus: 'NeedsRevision' }],
   };
+  const rejectedProfileChange = {
+    ...approved,
+    reviews: [{ id: 'review-3', toStatus: 'Rejected' }],
+  };
 
   assert.equal(hasProjectDirectionChanged(submitted, { ...submitted }), false);
   assert.equal(hasProjectDirectionChanged(submitted, approved), true);
@@ -353,6 +359,10 @@ test('project direction live synchronization detects and announces lecturer deci
   assert.equal(
     getProjectDirectionDecisionNotice(pendingProfileChange, needsRevision),
     'Lecturer requested revisions to your Project Profile changes. The approved profile remains unchanged.',
+  );
+  assert.equal(
+    getProjectDirectionDecisionNotice(pendingProfileChange, rejectedProfileChange),
+    'Lecturer rejected your Project Profile changes. The approved profile remains unchanged.',
   );
 });
 
@@ -473,4 +483,14 @@ test('lecturer review updates only the reviewed team without reloading the overv
   assert.equal(profileChangeResult[1].projectDirectionIsProfileChangeProposal, true);
   assert.equal(profileChangeResult[1].projectDirectionCurrentTitle, 'Approved project name');
   assert.equal(profileChangeResult[1].projectDirectionTitle, 'Proposed project name');
+});
+
+test('project direction overview defaults to all assigned classes and preserves valid deep-links', () => {
+  const classIds = ['class-1', 'class-2'];
+
+  assert.equal(resolveDirectionOverviewClassId(classIds, '', ''), '');
+  assert.deepEqual(directionOverviewTargetClassIds(classIds, ''), classIds);
+  assert.equal(resolveDirectionOverviewClassId(classIds, 'class-2', ''), 'class-2');
+  assert.deepEqual(directionOverviewTargetClassIds(classIds, 'class-2'), ['class-2']);
+  assert.equal(resolveDirectionOverviewClassId(classIds, 'missing-class', ''), '');
 });

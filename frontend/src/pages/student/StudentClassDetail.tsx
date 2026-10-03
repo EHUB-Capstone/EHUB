@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowRight, ChevronLeft, GraduationCap, Users, Mail, Loader2, LayoutGrid, Lock, Rocket, UserPlus } from 'lucide-react';
+import { ArrowRight, ChevronLeft, GraduationCap, Users, Mail, Loader2, LayoutGrid, Lock, UserPlus } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { classApi } from '../../api/classApi';
 import { teamFormationApi } from '../../api/teamFormationApi';
@@ -269,7 +269,6 @@ export default function StudentClassDetail() {
 
   const workspaceTeamId = entityId(currentStudent?.teamId) || reservedProposalTeamId;
   const majorNextAction: StudentMajorNextAction | undefined = (() => {
-    if (!majorVerified) return undefined;
     if (workspaceTeamId) {
       return {
         label: 'Open Startup Workspace',
@@ -277,6 +276,7 @@ export default function StudentClassDetail() {
         onClick: () => navigate(`/student/workspace/${workspaceTeamId}`),
       };
     }
+    if (!majorVerified) return undefined;
     if (isReadOnly) return undefined;
     if (formationError) {
       return {
@@ -513,15 +513,6 @@ export default function StudentClassDetail() {
                   : 'You cannot join another proposal while this one is open. View it in the Class Teams tab.'}
             </p>
           </div>
-          {isPendingProjectProposal && !majorVerified && (
-            <button
-              type="button"
-              onClick={() => navigate(`/student/workspace/${reservedProposalTeamId}`)}
-              className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-amber-700 px-3.5 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-amber-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/30"
-            >
-              <Rocket className="h-4 w-4" /> Open Startup Workspace <ArrowRight className="h-3.5 w-3.5" />
-            </button>
-          )}
         </div>
       )}
 

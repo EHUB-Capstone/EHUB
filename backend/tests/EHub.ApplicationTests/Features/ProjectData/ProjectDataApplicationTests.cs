@@ -3,6 +3,7 @@ using EHub.Application.Common.Interfaces.Services;
 using EHub.Application.Features.ProjectData.Common;
 using EHub.Application.Features.ProjectData.GetProjectData;
 using EHub.Application.Features.ProjectData.GetProjectDataFilterOptions;
+using EHub.Application.Features.ProjectData.GetProjectDataSummary;
 using EHub.Application.Features.ProjectData.ManageAchievements;
 using EHub.Contracts.ProjectData;
 using EHub.Shared.Constants;
@@ -86,10 +87,12 @@ public sealed class ProjectDataApplicationTests
             .HandleAsync(new GetProjectDataRequest(), userId, role);
         var options = await new GetProjectDataFilterOptionsQueryHandler(_context)
             .HandleAsync(userId, role);
+        var summary = await new GetProjectDataSummaryQueryHandler(_context)
+            .HandleAsync(new GetProjectDataRequest(), userId, role);
         var update = await new UpdateProjectAchievementsCommandHandler(_context, Substitute.For<IDateTimeProvider>())
             .HandleAsync(Guid.NewGuid(), new UpdateProjectAchievementsRequest { RowVersion = "1" }, userId, role);
 
-        foreach (var error in new[] { list.Error, options.Error, update.Error })
+        foreach (var error in new[] { list.Error, options.Error, summary.Error, update.Error })
             error.Code.Should().Be(ErrorCodes.ProjectDataAccessDenied);
         _ = _context.DidNotReceiveWithAnyArgs().Projects;
     }

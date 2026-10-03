@@ -312,9 +312,7 @@ public sealed class TeamFormationHandler : ITeamFormationHandler
             .Select(item => new
             {
                 item.ClassStudent.Student.FullName,
-                item.ClassStudent.Student.RollNumber,
-                item.Formation.TeamName,
-                CreatorName = item.Formation.CreatorStudent.FullName
+                item.ClassStudent.Student.RollNumber
             })
             .FirstOrDefaultAsync(ct);
         if (reservationConflict is not null)
@@ -324,7 +322,7 @@ public sealed class TeamFormationHandler : ITeamFormationHandler
                 : $"{reservationConflict.FullName} ({reservationConflict.RollNumber})";
             return MemberFailure(
                 ErrorCodes.TeamFormationReservationConflict,
-                $"{studentLabel} is already invited to {reservationConflict.TeamName} by {reservationConflict.CreatorName}.");
+                $"{studentLabel} has another pending team invitation.");
         }
 
         var registeredMajors = await RegisteredStudentMajorResolver.LoadByEmailAsync(

@@ -180,8 +180,7 @@ export default function StudentTable({
       if (s.isPendingTeamFormationMember) {
         return `This student is already part of your pending invitation for ${teamName}.`;
       }
-      const creator = s.pendingTeamCreatorName ? ` by ${s.pendingTeamCreatorName}` : '';
-      return `Pending another invitation — ${teamName}${creator} currently holds this student.`;
+      return 'Pending another invitation — this student cannot be selected until the invitation is resolved.';
     }
     if (s.enrollmentStatus !== 'Active') return 'Only active enrollments can be selected.';
     if (selectionDisabled) return 'Selection is disabled.';
@@ -442,9 +441,8 @@ export default function StudentTable({
                                 ? pendingInvitationAccepted ? 'Accepted invitation' : 'Awaiting response'
                                 : 'Pending another invitation'}
                             </span>
-                            <span className="mt-0.5 font-bold">{pendingTeamName}</span>
-                            {!s.isPendingTeamFormationMember && s.pendingTeamCreatorName && (
-                              <span className="mt-0.5 font-medium">Invited by {s.pendingTeamCreatorName}</span>
+                            {s.isPendingTeamFormationMember && (
+                              <span className="mt-0.5 font-bold">{pendingTeamName}</span>
                             )}
                           </span>
                         ) : (

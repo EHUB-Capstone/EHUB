@@ -16,6 +16,7 @@ import {
   projectDataOptionsKey,
   projectDataQueryKey,
   projectDataScopeKey,
+  projectDataSummaryKey,
   toProjectDataSearchParams,
 } from '../../../utils/projectData';
 
@@ -60,6 +61,13 @@ export function useProjectData() {
     placeholderData: keepPreviousData,
     staleTime: 0,
   });
+  const summary = useQuery({
+    queryKey: projectDataSummaryKey(userId, query),
+    queryFn: async ({ signal }) => (await projectDataApi.getSummary(query, signal)).data,
+    enabled,
+    placeholderData: keepPreviousData,
+    staleTime: 0,
+  });
   const options = useQuery({
     queryKey: projectDataOptionsKey(userId),
     queryFn: async ({ signal }) => (await projectDataApi.getFilterOptions(signal)).data,
@@ -84,6 +92,7 @@ export function useProjectData() {
     searchInput,
     setSearchInput: setSearchDraft,
     list,
+    summary,
     options,
     updateAchievements,
   };

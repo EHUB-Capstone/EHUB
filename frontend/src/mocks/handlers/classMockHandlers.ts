@@ -268,9 +268,6 @@ function registerClassQueries(mock: MockAdapter): void {
         invitation.studentId === student.studentId);
       const viewerBelongsToPendingFormation = Boolean(pendingFormation?.invitations.some(invitation =>
         invitation.studentId === currentEnrollment.studentId));
-      const pendingCreator = pendingFormation
-        ? (state.rosters[classId] || []).find(item => item.studentId === pendingFormation.creatorStudentId)
-        : undefined;
       const profileMajorCode = isOwnRow
         ? state.users.find(user => user.id === sessionUserId)?.major || null
         : null;
@@ -289,10 +286,9 @@ function registerClassQueries(mock: MockAdapter): void {
         enrollmentStatus: student.enrollmentStatus,
         teamId: student.teamId,
         hasPendingTeamInvitation: Boolean(pendingFormation),
-        pendingTeamFormationId: pendingFormation?.id || null,
-        pendingTeamName: pendingFormation?.teamName || null,
-        pendingTeamCreatorName: pendingCreator?.fullName || null,
-        pendingTeamInvitationStatus: pendingInvitation?.status || null,
+        pendingTeamFormationId: viewerBelongsToPendingFormation ? pendingFormation?.id || null : null,
+        pendingTeamName: viewerBelongsToPendingFormation ? pendingFormation?.teamName || null : null,
+        pendingTeamInvitationStatus: viewerBelongsToPendingFormation ? pendingInvitation?.status || null : null,
         isPendingTeamFormationMember: viewerBelongsToPendingFormation,
       };
     });

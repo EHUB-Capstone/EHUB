@@ -118,6 +118,16 @@ export function toProjectDataRequestParams(query: ProjectDataQuery): Record<stri
   return params;
 }
 
+/** The request params that decide which rows match: search and filters, without paging or sorting. */
+export function toProjectDataSummaryParams(query: ProjectDataQuery): Record<string, string> {
+  const params: Record<string, string> = {};
+  if (query.search) params.search = query.search;
+  for (const key of FILTER_KEYS) {
+    if (query[key]) params[key] = query[key];
+  }
+  return params;
+}
+
 /** Any change other than paging itself returns the user to the first page. */
 export function applyProjectDataChange(
   current: ProjectDataQuery,
@@ -156,6 +166,11 @@ export function nextProjectDataSort(
 
 export function projectDataQueryKey(userId: string | undefined, query: ProjectDataQuery) {
   return ['project-data', userId ?? 'anonymous', 'list', query] as const;
+}
+
+/** Paging and sorting are left out so turning a page never refetches the summary. */
+export function projectDataSummaryKey(userId: string | undefined, query: ProjectDataQuery) {
+  return ['project-data', userId ?? 'anonymous', 'summary', toProjectDataSummaryParams(query)] as const;
 }
 
 export function projectDataOptionsKey(userId: string | undefined) {
