@@ -21,6 +21,7 @@ using EHub.Application.Features.Dashboard.GetAcademicOverview;
 using EHub.Application.Features.Dashboard.GetSubmissionAnalytics;
 using EHub.Application.Features.Notifications.GetNotifications;
 using EHub.Application.Features.Notifications.MarkNotificationRead;
+using EHub.Application.Features.ProjectData.GetProjectAchievementHistory;
 using EHub.Application.Features.ProjectData.GetProjectData;
 using EHub.Application.Features.ProjectData.GetProjectDataFilterOptions;
 using EHub.Application.Features.ProjectData.GetProjectDataSummary;
@@ -79,6 +80,7 @@ public static class DependencyInjection
         services.AddScoped<IGetProjectDataQueryHandler, GetProjectDataQueryHandler>();
         services.AddScoped<IGetProjectDataFilterOptionsQueryHandler, GetProjectDataFilterOptionsQueryHandler>();
         services.AddScoped<IGetProjectDataSummaryQueryHandler, GetProjectDataSummaryQueryHandler>();
+        services.AddScoped<IGetProjectAchievementHistoryQueryHandler, GetProjectAchievementHistoryQueryHandler>();
         services.AddScoped<IUpdateProjectAchievementsCommandHandler, UpdateProjectAchievementsCommandHandler>();
         services.AddScoped<IGetNotificationsQueryHandler, GetNotificationsQueryHandler>();
         services.AddScoped<IMarkNotificationReadCommandHandler, MarkNotificationReadCommandHandler>();

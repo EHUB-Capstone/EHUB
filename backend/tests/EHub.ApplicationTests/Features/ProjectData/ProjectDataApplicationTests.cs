@@ -1,6 +1,7 @@
 using EHub.Application.Common.Interfaces.Persistence;
 using EHub.Application.Common.Interfaces.Services;
 using EHub.Application.Features.ProjectData.Common;
+using EHub.Application.Features.ProjectData.GetProjectAchievementHistory;
 using EHub.Application.Features.ProjectData.GetProjectData;
 using EHub.Application.Features.ProjectData.GetProjectDataFilterOptions;
 using EHub.Application.Features.ProjectData.GetProjectDataSummary;
@@ -76,6 +77,54 @@ public sealed class ProjectDataApplicationTests
     }
 
     [Theory]
+    [InlineData(null, new[] { "Potential" }, true)]
+    [InlineData("  Strong pilot  ", new[] { "Potential", "Funded" }, true)]
+    [InlineData("", new string[0], true)]
+    [InlineData("   ", new string[0], true)]
+    [InlineData("A note without labels", new string[0], false)]
+    public void UpdateValidator_AllowsANoteOnlyTogetherWithAtLeastOneLabel(string? note, string[] achievements, bool expected)
+    {
+        var request = new UpdateProjectAchievementsRequest { RowVersion = "1", Achievements = achievements, Note = note };
+
+        new UpdateProjectAchievementsRequestValidator().Validate(request).IsValid.Should().Be(expected);
+    }
+
+    [Fact]
+    public void UpdateValidator_LimitsTheNoteLength()
+    {
+        var validator = new UpdateProjectAchievementsRequestValidator();
+        UpdateProjectAchievementsRequest WithNote(string note) =>
+            new() { RowVersion = "1", Achievements = ["Potential"], Note = note };
+
+        validator.Validate(WithNote(new string('n', 500))).IsValid.Should().BeTrue();
+        validator.Validate(WithNote(new string('n', 501))).IsValid.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task UpdateHandler_RejectsAnOrphanNoteBeforeTouchingData()
+    {
+        var handler = new UpdateProjectAchievementsCommandHandler(_context, Substitute.For<IDateTimeProvider>());
+
+        var result = await handler.HandleAsync(
+            Guid.NewGuid(),
+            new UpdateProjectAchievementsRequest { RowVersion = "1", Achievements = [], Note = "Why?" },
+            Guid.NewGuid(),
+            SystemRoles.Admin);
+
+        result.Error.Code.Should().Be(ErrorCodes.ProjectDataValidationError);
+    }
+
+    [Theory]
+    [InlineData(null, null)]
+    [InlineData("", null)]
+    [InlineData("   ", null)]
+    [InlineData("  keep me  ", "keep me")]
+    public void NormalizeNote_TrimsAndTreatsBlankAsNoNote(string? input, string? expected)
+    {
+        ProjectAchievementMapping.NormalizeNote(input).Should().Be(expected);
+    }
+
+    [Theory]
     [InlineData(SystemRoles.Student)]
     [InlineData(SystemRoles.Mentor)]
     [InlineData("")]
@@ -91,8 +140,10 @@ public sealed class ProjectDataApplicationTests
             .HandleAsync(new GetProjectDataRequest(), userId, role);
         var update = await new UpdateProjectAchievementsCommandHandler(_context, Substitute.For<IDateTimeProvider>())
             .HandleAsync(Guid.NewGuid(), new UpdateProjectAchievementsRequest { RowVersion = "1" }, userId, role);
+        var history = await new GetProjectAchievementHistoryQueryHandler(_context)
+            .HandleAsync(Guid.NewGuid(), userId, role);
 
-        foreach (var error in new[] { list.Error, options.Error, summary.Error, update.Error })
+        foreach (var error in new[] { list.Error, options.Error, summary.Error, update.Error, history.Error })
             error.Code.Should().Be(ErrorCodes.ProjectDataAccessDenied);
         _ = _context.DidNotReceiveWithAnyArgs().Projects;
     }
@@ -152,6 +203,79 @@ public sealed class ProjectDataApplicationTests
     public void ParseTerm_ReturnsNullForUnknownCodes(string? code)
     {
         ProjectDataQuery.ParseTerm(code).Should().BeNull();
+    }
+
+    [Fact]
+    public void HistoryTokens_RoundTripAddedRemovedKeptAndNote()
+    {
+        var tokens = ProjectAchievementHistoryParser.BuildTokens(
+            ["Potential", "Funded"], ["Potential", "Awarded"], noteChanged: true, note: "Won the showcase");
+
+        tokens.Should().Equal("+Awarded", "-Funded", "=Potential", "note=Won the showcase");
+        var parsed = ProjectAchievementHistoryParser.Parse("PROJECT_ACHIEVEMENTS_CHANGED", "ignored", System.Text.Json.JsonSerializer.Serialize(tokens));
+        parsed.Added.Should().Equal("Awarded");
+        parsed.Removed.Should().Equal("Funded");
+        parsed.Kept.Should().Equal("Potential");
+        parsed.NoteChanged.Should().BeTrue();
+        parsed.Note.Should().Be("Won the showcase");
+    }
+
+    [Fact]
+    public void HistoryTokens_DistinguishClearingTheNoteFromLeavingItAlone()
+    {
+        var cleared = ProjectAchievementHistoryParser.Parse("PROJECT_ACHIEVEMENTS_CHANGED", "",
+            System.Text.Json.JsonSerializer.Serialize(ProjectAchievementHistoryParser.BuildTokens(["Potential"], [], true, null)));
+        cleared.Removed.Should().Equal("Potential");
+        cleared.NoteChanged.Should().BeTrue();
+        cleared.Note.Should().BeNull();
+
+        var untouched = ProjectAchievementHistoryParser.Parse("PROJECT_ACHIEVEMENTS_CHANGED", "",
+            System.Text.Json.JsonSerializer.Serialize(ProjectAchievementHistoryParser.BuildTokens(["Potential"], ["Potential", "Funded"], false, "kept")));
+        untouched.Added.Should().Equal("Funded");
+        untouched.Kept.Should().Equal("Potential");
+        untouched.NoteChanged.Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData("Achievements changed from none to Potential. Note: \"Strong pilot\"", "[\"Potential\",\"note\"]", new[] { "Potential" }, new string[0], new string[0], true, "Strong pilot")]
+    [InlineData("Achievements changed from Potential to Potential, Funded.", "[\"Funded\"]", new[] { "Funded" }, new string[0], new[] { "Potential" }, false, null)]
+    [InlineData("Achievements changed from Potential, Funded to none.", "[\"Potential\",\"Funded\"]", new string[0], new[] { "Potential", "Funded" }, new string[0], false, null)]
+    [InlineData("Achievement note updated. Note: \"New reason\"", "[\"note\"]", new string[0], new string[0], new string[0], true, "New reason")]
+    public void LegacyEntries_AreRecoveredFromTheirSummarySentence(
+        string summary, string json, string[] added, string[] removed, string[] kept, bool noteChanged, string? note)
+    {
+        var parsed = ProjectAchievementHistoryParser.Parse("PROJECT_ACHIEVEMENTS_CHANGED", summary, json);
+
+        parsed.Added.Should().Equal(added);
+        parsed.Removed.Should().Equal(removed);
+        parsed.Kept.Should().Equal(kept);
+        parsed.NoteChanged.Should().Be(noteChanged);
+        parsed.Note.Should().Be(note);
+    }
+
+    [Fact]
+    public void LegacyCarriedOverEntries_ShowTheirLabelsAsAdded()
+    {
+        var parsed = ProjectAchievementHistoryParser.Parse(
+            "ACHIEVEMENTS_CARRIED_OVER", "Carried over achievements (Potential, Funded) from the previous semester.", "[\"Potential\",\"Funded\"]");
+
+        parsed.Added.Should().Equal("Potential", "Funded");
+        parsed.Removed.Should().BeEmpty();
+        parsed.NoteChanged.Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData("", "")]
+    [InlineData("Profile edit", "not json")]
+    [InlineData("Something unexpected", "[\"x\"]")]
+    public void UnreadableEntries_ComeBackEmptyForTheClientToShowTheSummary(string summary, string json)
+    {
+        var parsed = ProjectAchievementHistoryParser.Parse("PROJECT_ACHIEVEMENTS_CHANGED", summary, json);
+
+        parsed.Added.Should().BeEmpty();
+        parsed.Removed.Should().BeEmpty();
+        parsed.Kept.Should().BeEmpty();
+        parsed.NoteChanged.Should().BeFalse();
     }
 
     [Fact]

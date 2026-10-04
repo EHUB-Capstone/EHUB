@@ -397,6 +397,8 @@ public sealed class VerifyClassMajorsResponse
     public IReadOnlyCollection<MajorVerificationRowDto> NotFound { get; init; } = Array.Empty<MajorVerificationRowDto>();
     public int SynchronizedEnrollmentCount { get; init; }
     public int SynchronizedProfileCount { get; init; }
+    public bool IsMajorLocked { get; init; }
+    public bool MajorsAutoLocked { get; init; }
     public IReadOnlyCollection<EHub.Contracts.Teams.TeamMajorWarningDto> TeamMajorWarnings { get; init; } =
         Array.Empty<EHub.Contracts.Teams.TeamMajorWarningDto>();
 }

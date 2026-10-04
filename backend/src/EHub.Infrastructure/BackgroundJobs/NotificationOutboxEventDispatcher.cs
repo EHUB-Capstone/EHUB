@@ -79,6 +79,14 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
                     $"You have been added to class {importedClassDetails.ClassCode}.", cancellationToken);
                 await QueueStudentImportEmailsAsync(message, data, importedClassDetails, cancellationToken);
                 break;
+            case "Class.EnrollmentMajorsAutoLocked.v1":
+                var lockedClassCode = await GetClassCodeAsync(message.AggregateId, cancellationToken);
+                await AddForUsersAsync(
+                    message, data, "studentUserIds", NotificationType.SystemAnnouncement,
+                    "Major verification completed",
+                    $"Majors for class {lockedClassCode} have been verified and major updates are now locked. Contact your lecturer if your major needs to be corrected.",
+                    cancellationToken);
+                break;
             case CheckpointDeadlineEvents.ScheduleChanged:
                 await AddCheckpointDeadlineNotificationsAsync(message, data, false, cancellationToken);
                 break;
@@ -779,7 +787,8 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
         {
             "AccountApproval.Requested.v1" => "/admin/account-approvals",
             "TeamProposal.Submitted.v1" => $"/classes/{message.AggregateId}",
-            "TeamProposal.Reviewed.v1" or "ProjectDirection.Reviewed.v1" => $"/student/classes/{message.AggregateId}",
+            "TeamProposal.Reviewed.v1" or "ProjectDirection.Reviewed.v1" or
+                "Class.EnrollmentMajorsAutoLocked.v1" => $"/student/classes/{message.AggregateId}",
             "TeamFormation.Invited.v1" or "TeamFormation.Accepted.v1" or
                 "TeamFormation.Cancelled.v1" or "TeamFormation.Completed.v1" => "/student/team",
             "Team.MentorAssignmentChanged.v1" => "/mentor/dashboard",

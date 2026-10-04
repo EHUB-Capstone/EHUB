@@ -44,6 +44,10 @@ export interface ProjectDataItem {
   mentor: ProjectDataMentor | null;
   academicMentor: ProjectDataMentor | null;
   achievements: ProjectAchievement[];
+  /** Why the project carries its labels; only present while at least one label is set. */
+  achievementNote: string | null;
+  achievementsUpdatedAtUtc: string | null;
+  achievementsUpdatedBy: ProjectDataPerson | null;
   rowVersion: string;
 }
 
@@ -99,11 +103,38 @@ export interface ProjectDataFilterOptions {
 
 export interface UpdateProjectAchievementsPayload {
   achievements: ProjectAchievement[];
+  note: string | null;
   rowVersion: string;
+}
+
+export interface ProjectAchievementHistoryItem {
+  id: string;
+  /** PROJECT_ACHIEVEMENTS_CHANGED or ACHIEVEMENTS_CARRIED_OVER. */
+  action: string;
+  summary: string;
+  actorName: string | null;
+  occurredAtUtc: string;
+  /** What the change did. All empty with `noteChanged` false means unreadable: show `summary` instead. */
+  added: ProjectAchievement[];
+  removed: ProjectAchievement[];
+  kept: ProjectAchievement[];
+  /** True when this entry set or cleared the note. */
+  noteChanged: boolean;
+  /** The note set by this entry; null when it was cleared. */
+  note: string | null;
+}
+
+export interface ProjectAchievementHistory {
+  /** Every recorded change; `items` holds only the latest ones, newest first. */
+  totalCount: number;
+  items: ProjectAchievementHistoryItem[];
 }
 
 export interface ProjectAchievementsResult {
   projectId: string;
   achievements: ProjectAchievement[];
   rowVersion: string;
+  note: string | null;
+  updatedAtUtc: string | null;
+  updatedBy: ProjectDataPerson | null;
 }

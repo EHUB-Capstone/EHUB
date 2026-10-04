@@ -441,6 +441,9 @@ public sealed class TeamContinuationService : ITeamContinuationService
                 IsHighPotential = sourceProject.IsHighPotential,
                 IsFunded = sourceProject.IsFunded,
                 IsAwarded = sourceProject.IsAwarded,
+                AchievementNote = sourceProject.AchievementNote,
+                AchievementsUpdatedAt = sourceProject.AchievementsUpdatedAt,
+                AchievementsUpdatedBy = sourceProject.AchievementsUpdatedBy,
                 SubmittedAt = sourceProject.SubmittedAt,
                 CreatedById = actorUserId,
                 CreatedBy = actorUserId,
@@ -471,6 +474,22 @@ public sealed class TeamContinuationService : ITeamContinuationService
                 Summary = $"Continued the project from team '{source.TeamName}' of class {source.Class.ClassCode}.",
                 OccurredAtUtc = now
             });
+            var carriedOver = Features.ProjectData.Common.ProjectAchievementMapping.ToNames(sourceProject);
+            if (carriedOver.Count > 0)
+            {
+                project.ActivityLogs.Add(new ProjectActivityLog
+                {
+                    ProjectId = project.Id,
+                    Project = project,
+                    ActorUserId = actorUserId,
+                    Action = Features.ProjectData.Common.ProjectAchievementMapping.CarriedOverAction,
+                    Summary = $"Carried over achievements ({string.Join(", ", carriedOver)}) from the previous semester.",
+                    ChangedFieldsJson = System.Text.Json.JsonSerializer.Serialize(
+                        Features.ProjectData.Common.ProjectAchievementHistoryParser.BuildCarriedOverTokens(
+                            carriedOver, sourceProject.AchievementNote)),
+                    OccurredAtUtc = now
+                });
+            }
             team.Project = project;
         }
 

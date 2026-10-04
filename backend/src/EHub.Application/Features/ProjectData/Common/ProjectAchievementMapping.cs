@@ -5,6 +5,19 @@ namespace EHub.Application.Features.ProjectData.Common;
 
 internal static class ProjectAchievementMapping
 {
+    internal const int NoteMaxLength = 500;
+
+    // Activity-log actions that make up a project's achievement history.
+    internal const string ChangedAction = "PROJECT_ACHIEVEMENTS_CHANGED";
+    internal const string CarriedOverAction = "ACHIEVEMENTS_CARRIED_OVER";
+
+    /// <summary>Trims the note and treats blank as no note.</summary>
+    internal static string? NormalizeNote(string? note)
+    {
+        var trimmed = note?.Trim();
+        return string.IsNullOrEmpty(trimmed) ? null : trimmed;
+    }
+
     internal static IReadOnlyCollection<string> ToNames(bool isHighPotential, bool isFunded, bool isAwarded)
     {
         var names = new List<string>(3);

@@ -44,4 +44,72 @@ public class CommitImportStudentsCommandHandlerTests
 
         result.Error.Code.Should().Be(ErrorCodes.ClassValidationError);
     }
+
+    [Fact]
+    public void ResolveImportedLeaderStudentCode_WhenMetadataBelongsToOneRollNumber_ReturnsThatStudent()
+    {
+        var rows = new[]
+        {
+            Row("SE001", zaloGroupUrl: "https://zalo.me/g/example"),
+            Row("SE002"),
+            Row("SE003"),
+            Row("SE004")
+        };
+
+        var result = CommitImportStudentsCommandHandler.ResolveImportedLeaderStudentCode(rows);
+
+        result.Should().Be("SE001");
+    }
+
+    [Fact]
+    public void ResolveImportedLeaderStudentCode_WhenOnlyDescriptionIsProvided_ReturnsItsStudent()
+    {
+        var rows = new[]
+        {
+            Row("SE001"),
+            Row("SE002", description: "A sufficiently detailed project description."),
+            Row("SE003"),
+            Row("SE004")
+        };
+
+        var result = CommitImportStudentsCommandHandler.ResolveImportedLeaderStudentCode(rows);
+
+        result.Should().Be("SE002");
+    }
+
+    [Fact]
+    public void ResolveImportedLeaderStudentCode_WhenZaloAndDescriptionBelongToDifferentStudents_ReturnsNull()
+    {
+        var rows = new[]
+        {
+            Row("SE001", zaloGroupUrl: "https://zalo.me/g/example"),
+            Row("SE002", description: "A sufficiently detailed project description."),
+            Row("SE003"),
+            Row("SE004")
+        };
+
+        var result = CommitImportStudentsCommandHandler.ResolveImportedLeaderStudentCode(rows);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public void ResolveImportedLeaderStudentCode_WhenTeamHasNoZaloOrDescription_ReturnsNull()
+    {
+        var rows = new[] { Row("SE001"), Row("SE002"), Row("SE003"), Row("SE004") };
+
+        var result = CommitImportStudentsCommandHandler.ResolveImportedLeaderStudentCode(rows);
+
+        result.Should().BeNull();
+    }
+
+    private static ImportStudentRowPreviewDto Row(
+        string studentCode,
+        string? zaloGroupUrl = null,
+        string? description = null) => new()
+    {
+        StudentCode = studentCode,
+        ZaloGroupUrl = zaloGroupUrl,
+        ProjectDescription = description
+    };
 }

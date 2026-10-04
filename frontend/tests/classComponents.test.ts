@@ -22,6 +22,7 @@ import {
 import {
   canSubmitProjectDirection,
   directionOverviewTargetClassIds,
+  getProjectDirectionDraftSeed,
   getApprovedProjectProfileDisplay,
   getProjectDirectionDecisionNotice,
   getProjectDirectionSubmitGuidance,
@@ -365,6 +366,26 @@ test('project direction live synchronization detects and announces lecturer deci
     getProjectDirectionDecisionNotice(pendingProfileChange, rejectedProfileChange),
     'Lecturer rejected your Project Profile changes. The approved profile remains unchanged.',
   );
+});
+
+test('imported project metadata seeds a missing Project Direction draft', () => {
+  assert.deepEqual(getProjectDirectionDraftSeed(null, {
+    projectName: 'SnapPose',
+    description: 'An imported project description.',
+  }), {
+    title: 'SnapPose',
+    summary: 'An imported project description.',
+  });
+  assert.deepEqual(getProjectDirectionDraftSeed({
+    title: 'Saved direction',
+    summary: 'Saved direction summary.',
+  }, {
+    projectName: 'Imported project',
+    description: 'Imported description.',
+  }), {
+    title: 'Saved direction',
+    summary: 'Saved direction summary.',
+  });
 });
 
 test('lecturer overview applies a newer Project Profile change request to an approved team', () => {

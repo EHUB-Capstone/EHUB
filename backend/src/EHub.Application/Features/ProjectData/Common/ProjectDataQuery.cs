@@ -229,6 +229,7 @@ internal static class ProjectDataQuery
             project.Description != null && project.Description.ToLower().Contains(term) ||
             project.Team.Class.Course.Code.ToLower().Contains(term) ||
             project.Team.Class.ClassCode.ToLower().Contains(term) ||
+            project.AchievementNote != null && project.AchievementNote.ToLower().Contains(term) ||
             project.Team.Class.Semester.Code.ToLower().Contains(term) ||
             project.Team.Class.PrimaryLecturer != null &&
             project.Team.Class.PrimaryLecturer.FullName.ToLower().Contains(term) ||

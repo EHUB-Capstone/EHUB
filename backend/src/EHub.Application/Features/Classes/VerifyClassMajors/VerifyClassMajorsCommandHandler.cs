@@ -20,6 +20,7 @@ public sealed class VerifyClassMajorsCommandHandler : IVerifyClassMajorsCommandH
 {
     private const long MaximumFileSize = 10 * 1024 * 1024;
     private const int MaximumRows = 5_000;
+    private const string MajorsAutoLockedEventType = "Class.EnrollmentMajorsAutoLocked.v1";
     private readonly IApplicationDbContext _context;
 
     static VerifyClassMajorsCommandHandler()
@@ -186,6 +187,7 @@ public sealed class VerifyClassMajorsCommandHandler : IVerifyClassMajorsCommandH
         var verifiedAt = DateTime.UtcNow;
         var synchronizedEnrollmentCount = 0;
         var synchronizedProfileCount = 0;
+        var verifiedStudentUserIds = new HashSet<Guid>();
 
         foreach (var enrollment in enrollments)
         {
@@ -272,6 +274,12 @@ public sealed class VerifyClassMajorsCommandHandler : IVerifyClassMajorsCommandH
                 enrollment.UpdatedAt = verifiedAt;
             }
 
+            if (status == EnrollmentMajorVerificationStatus.Matched &&
+                (linkedProfile ?? enrollment.Student).UserId is { } studentUserId)
+            {
+                verifiedStudentUserIds.Add(studentUserId);
+            }
+
             AddToBucket(new MajorVerificationRowDto
             {
                 RowNumber = source?.RowNumber,
@@ -301,6 +309,39 @@ public sealed class VerifyClassMajorsCommandHandler : IVerifyClassMajorsCommandH
                     ? "Student code is missing in this verification row."
                     : "The student code was not found in the active class roster."
             });
+        }
+
+        // Once every active student is verified the class is locked in the same transaction,
+        // so the roster cannot be re-verified or edited until a lecturer explicitly unlocks it.
+        var majorsAutoLocked = false;
+        if (!previewOnly &&
+            !targetClass.IsEnrollmentMajorLocked &&
+            enrollments.Count > 0 &&
+            matched.Count == enrollments.Count)
+        {
+            var classToLock = await _context.Classes
+                .FirstAsync(@class => @class.Id == classId, cancellationToken);
+            classToLock.IsEnrollmentMajorLocked = true;
+            majorsAutoLocked = true;
+
+            _context.ClassAuditLogs.Add(new ClassAuditLog
+            {
+                ClassId = classId,
+                Action = "ENROLLMENT_MAJOR_LOCKED",
+                PerformedByUserId = currentUserId,
+                OccurredAtUtc = verifiedAt,
+                DetailsJson = JsonSerializer.Serialize(new
+                {
+                    IsLocked = true,
+                    Automatic = true,
+                    VerifiedCount = matched.Count
+                })
+            });
+            ClassOutbox.Enqueue(_context, MajorsAutoLockedEventType, classId, new
+            {
+                VerifiedCount = matched.Count,
+                StudentUserIds = verifiedStudentUserIds.ToArray()
+            }, verifiedAt);
         }
 
         if (!previewOnly)
@@ -350,6 +391,8 @@ public sealed class VerifyClassMajorsCommandHandler : IVerifyClassMajorsCommandH
             NotFound = notFound,
             SynchronizedEnrollmentCount = synchronizedEnrollmentCount,
             SynchronizedProfileCount = synchronizedProfileCount,
+            IsMajorLocked = targetClass.IsEnrollmentMajorLocked || majorsAutoLocked,
+            MajorsAutoLocked = majorsAutoLocked,
             TeamMajorWarnings = previewOnly
                 ? Array.Empty<TeamMajorWarningDto>()
                 : await GetTeamMajorWarningsAsync(classId, cancellationToken)

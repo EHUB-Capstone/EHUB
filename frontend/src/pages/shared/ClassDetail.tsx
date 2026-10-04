@@ -25,7 +25,6 @@ import EditScheduleModal from '../../components/class/EditScheduleModal';
 import AssignLectureModal from '../../components/class/AssignLectureModal';
 import AssignMentorsModal from '../../components/class/AssignMentorsModal';
 import VerifyMajorModal from '../../components/class/VerifyMajorModal';
-import ImportSemesterGroupsModal from '../../components/class/ImportSemesterGroupsModal';
 import AddStudentModal from '../../components/class/AddStudentModal';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import { getTeamMemberIds, mergeTeamsWithLinkedProposals, normalizeManagedTeam, normalizeTeamProposal, resolveEffectiveTeamMajor } from '../../utils/teamManagement';
@@ -98,7 +97,6 @@ export default function ClassDetail() {
   const [showAssignLecturer, setShowAssignLecturer] = useState(false);
   const [showAssignMentors, setShowAssignMentors] = useState(false);
   const [showVerify, setShowVerify] = useState(false);
-  const [showSemesterGroupImport, setShowSemesterGroupImport] = useState(false);
   const [reviewTeam, setReviewTeam] = useState(null);
   const [teamToDelete, setTeamToDelete] = useState(null);
   const [directionTeam, setDirectionTeam] = useState(null);
@@ -684,6 +682,12 @@ export default function ClassDetail() {
               </ClassActionButton>
             )} */}
 
+            {!isReadOnly && (isAdmin || classFeatureFlags.lecturerStudentImport) && (
+              <ClassActionButton icon={Upload} tone="primary" onClick={() => setShowImport(true)}>
+                Import Students
+              </ClassActionButton>
+            )}
+
             <ClassActionButton icon={Download} loading={exporting} onClick={handleExportExcel} disabled={exporting}>
               Export Class Data
             </ClassActionButton>
@@ -711,12 +715,6 @@ export default function ClassDetail() {
               </>
             )}
 
-            {!isReadOnly && (isAdmin || classFeatureFlags.lecturerStudentImport) && (
-              <ClassActionButton icon={Upload} tone="primary" onClick={() => setShowImport(true)}>
-                Import Students
-              </ClassActionButton>
-            )}
-
             {!isReadOnly && isFeatureVisible(classFeatureFlags.majorVerification) && (
               <ClassActionButton
                 id="btn-verify-majors"
@@ -725,19 +723,6 @@ export default function ClassDetail() {
                 onClick={() => runFeatureAction(classFeatureFlags.majorVerification, 'Major verification', () => setShowVerify(true))}
               >
                 Verify / sync majors
-              </ClassActionButton>
-            )}
-
-            {!isReadOnly && (
-              <ClassActionButton
-                icon={Upload}
-                tone="secondary"
-                onClick={() => {
-                  setShowActionsMenu(false);
-                  setShowSemesterGroupImport(true);
-                }}
-              >
-                Import semester groups
               </ClassActionButton>
             )}
 
@@ -753,6 +738,16 @@ export default function ClassDetail() {
               </ClassActionButton>
             )}
 
+            {isFeatureVisible(classFeatureFlags.lifecycle) && (
+              <ClassActionButton
+                icon={isArchived ? RotateCcw : Archive}
+                tone={isArchived ? 'success' : 'danger'}
+                onClick={() => runFeatureAction(classFeatureFlags.lifecycle, 'Class lifecycle management', () => setShowDeleteClass(true))}
+              >
+                {lifecyclePresentation.label}
+              </ClassActionButton>
+            )}
+
             {((cls.status === 'Active') || (isCompleted && isAdmin)) && (
               <ClassActionButton
                 icon={isCompleted ? Play : CircleCheck}
@@ -762,16 +757,6 @@ export default function ClassDetail() {
                 disabled={completionLoading}
               >
                 {isCompleted ? 'Reopen Class' : 'Complete Class'}
-              </ClassActionButton>
-            )}
-
-            {isFeatureVisible(classFeatureFlags.lifecycle) && (
-              <ClassActionButton
-                icon={isArchived ? RotateCcw : Archive}
-                tone={isArchived ? 'success' : 'danger'}
-                onClick={() => runFeatureAction(classFeatureFlags.lifecycle, 'Class lifecycle management', () => setShowDeleteClass(true))}
-              >
-                {lifecyclePresentation.label}
               </ClassActionButton>
             )}
           </div>
@@ -795,6 +780,19 @@ export default function ClassDetail() {
                 {cls.completionReason ? ` — ${cls.completionReason}` : ''}
               </p>
             )}
+          </div>
+        </div>
+      )}
+
+      {canManageClass && !isReadOnly && cls.isMajorLocked && (
+        <div role="status" data-testid="major-lock-banner" className="flex items-start gap-2.5 rounded-xl border border-blue-200 bg-blue-50 px-3.5 py-3 text-sm text-blue-800">
+          <Lock className="mt-0.5 h-4 w-4 shrink-0" />
+          <div>
+            <p className="font-semibold">Major updates are locked</p>
+            <p className="mt-0.5 text-xs text-blue-700">
+              Students can no longer change their major in this class, and the verification file cannot be synchronized.
+              The lock is applied automatically once every student is verified. Use Actions &rarr; Unlock major updates to make corrections.
+            </p>
           </div>
         </div>
       )}
@@ -1103,14 +1101,6 @@ export default function ClassDetail() {
           classId={loadedClassId}
           onClose={() => setShowVerify(false)}
           onUpdated={() => void fetchData()}
-        />
-      )}
-
-      {!isReadOnly && showSemesterGroupImport && canManageClass && (
-        <ImportSemesterGroupsModal
-          classId={loadedClassId}
-          onClose={() => setShowSemesterGroupImport(false)}
-          onImported={() => void fetchData()}
         />
       )}
 

@@ -1,19 +1,25 @@
 import { useEffect, useId, useState, type ReactNode } from 'react';
-import { RefreshCw } from 'lucide-react';
+import { ArrowRight, RefreshCw, Rocket } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import Button from '../../../components/ui/Button';
 import ConfirmDialog from '../../../components/ui/ConfirmDialog';
 import Modal from '../../../components/ui/Modal';
 import { PROJECT_ACHIEVEMENTS } from '../../../types/projectData';
 import type { ProjectAchievement, ProjectDataItem } from '../../../types/projectData';
 import {
+  PROJECT_ACHIEVEMENT_NOTE_MAX_LENGTH,
   PROJECT_DATA_EMPTY_VALUE,
   displayText,
+  normalizeNote,
+  projectWorkspacePath,
   removedAchievements,
   sameAchievements,
+  sameNote,
   toggleAchievement,
 } from '../../../utils/projectData';
 import { ACHIEVEMENT_STYLES } from '../achievementStyles';
 import ProjectAchievementBadges from './ProjectAchievementBadges';
+import ProjectAchievementHistory from './ProjectAchievementHistory';
 import { MentorLabel } from './ProjectDataTable';
 
 export interface ProjectDataSaveError {
@@ -28,7 +34,7 @@ interface ProjectDataDetailModalProps {
   isReloading: boolean;
   error: ProjectDataSaveError | null;
   onClose: () => void;
-  onSave: (achievements: ProjectAchievement[]) => void;
+  onSave: (achievements: ProjectAchievement[], note: string | null) => void;
   onReload: () => void;
 }
 
@@ -61,11 +67,17 @@ export default function ProjectDataDetailModal({
   onReload,
 }: ProjectDataDetailModalProps) {
   const legendId = useId();
+  const navigate = useNavigate();
   // Edits belong to one version of one project; a new row version starts again from the saved labels.
   const itemKey = item ? `${item.projectId}:${item.rowVersion}` : '';
-  const [draftState, setDraftState] = useState<{ key: string; value: ProjectAchievement[] } | null>(null);
+  const [draftState, setDraftState] = useState<{ key: string; labels: ProjectAchievement[]; note: string } | null>(null);
   const [confirmKey, setConfirmKey] = useState<string | null>(null);
-  const draft = draftState?.key === itemKey ? draftState.value : item?.achievements ?? [];
+  const savedNote = item?.achievementNote ?? '';
+  const draft = draftState?.key === itemKey ? draftState.labels : item?.achievements ?? [];
+  const draftNote = draftState?.key === itemKey ? draftState.note : savedNote;
+  // A note explains labels, so without any label it is empty (and cleared on save).
+  const effectiveNote = draft.length > 0 ? draftNote : '';
+  const setDraft = (labels: ProjectAchievement[], note: string) => setDraftState({ key: itemKey, labels, note });
   const confirmingRemoval = confirmKey === itemKey && itemKey !== '';
   const setConfirmingRemoval = (open: boolean) => setConfirmKey(open ? itemKey : null);
 
@@ -80,12 +92,13 @@ export default function ProjectDataDetailModal({
 
   if (!item) return null;
 
-  const dirty = !sameAchievements(draft, item.achievements);
+  const dirty = !sameAchievements(draft, item.achievements) || !sameNote(effectiveNote, savedNote);
   const removed = removedAchievements(item.achievements, draft);
+  const save = () => onSave(draft, normalizeNote(effectiveNote));
   const submit = () => {
     if (!dirty || isSaving) return;
     if (removed.length > 0) setConfirmingRemoval(true);
-    else onSave(draft);
+    else save();
   };
 
   return (
@@ -127,7 +140,7 @@ export default function ProjectDataDetailModal({
                       <input
                         type="checkbox"
                         checked={draft.includes(name)}
-                        onChange={() => setDraftState({ key: itemKey, value: toggleAchievement(draft, name) })}
+                        onChange={() => setDraft(toggleAchievement(draft, name), draftNote)}
                         className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary/30"
                       />
                       <Icon className="h-4 w-4 text-slate-500" aria-hidden="true" />
@@ -136,9 +149,29 @@ export default function ProjectDataDetailModal({
                   );
                 })}
                 <p className="text-xs text-slate-400">An unchecked label only means the project has not been tagged with it.</p>
+                <label className="block pt-1">
+                  <span className="text-xs font-medium text-slate-500">Note (optional)</span>
+                  <textarea
+                    value={effectiveNote}
+                    disabled={draft.length === 0}
+                    maxLength={PROJECT_ACHIEVEMENT_NOTE_MAX_LENGTH}
+                    rows={3}
+                    onChange={event => setDraft(draft, event.target.value)}
+                    placeholder={draft.length > 0 ? 'Why does this project carry these labels?' : 'Select an achievement to add a note'}
+                    className="mt-1 w-full resize-none rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700 outline-none placeholder:text-slate-400 focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:bg-slate-50"
+                  />
+                  <span className="block text-right text-xs text-slate-400">{effectiveNote.length}/{PROJECT_ACHIEVEMENT_NOTE_MAX_LENGTH}</span>
+                </label>
               </fieldset>
             ) : (
-              <div className="mt-2"><ProjectAchievementBadges achievements={item.achievements} /></div>
+              <div className="mt-2 space-y-2">
+                <ProjectAchievementBadges achievements={item.achievements} />
+                {item.achievementNote && <p className="whitespace-pre-wrap break-words rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-600">{item.achievementNote}</p>}
+              </div>
+            )}
+
+            {item.achievementsUpdatedAtUtc && (
+              <ProjectAchievementHistory key={item.projectId} projectId={item.projectId} rowVersion={item.rowVersion} />
             )}
 
             {error && (
@@ -152,15 +185,27 @@ export default function ProjectDataDetailModal({
               </div>
             )}
           </section>
+
+          <div className="border-t border-slate-100 pt-4">
+            <Button
+              variant="primary"
+              icon={Rocket}
+              iconRight={ArrowRight}
+              disabled={isSaving}
+              onClick={() => navigate(projectWorkspacePath(item.teamId))}
+            >
+              Open Startup Workspace
+            </Button>
+          </div>
         </div>
       </Modal>
 
       <ConfirmDialog
         isOpen={confirmingRemoval}
         onClose={() => setConfirmingRemoval(false)}
-        onConfirm={() => { setConfirmingRemoval(false); onSave(draft); }}
+        onConfirm={() => { setConfirmingRemoval(false); save(); }}
         title="Remove achievement labels?"
-        description={`This removes ${removed.join(', ')} from “${item.projectName}”. The change is recorded in the project activity log.`}
+        description={`This removes ${removed.join(', ')} from “${item.projectName}”${draft.length === 0 && item.achievementNote ? ' together with its note' : ''}. The change is recorded in the project activity log.`}
         confirmText="Remove and save"
         isSubmitting={isSaving}
       />
