@@ -16,6 +16,7 @@ import {
 import Button from '../ui/Button';
 import { classApi } from '../../api/classApi';
 import { parseApiError } from '../../utils/apiError';
+import TeamContinuationPanel from './TeamContinuationPanel';
 import { validateImportFileSelection } from '../../utils/classComponentPolicy';
 import type {
   ImportStudentCommitError,
@@ -370,6 +371,7 @@ export default function ImportStudentsModal({
               )}
 
               {isTeamAssignment && <TeamPreviewList teams={previewData.teams || []} />}
+              <TeamContinuationPanel summary={previewData.continuation} applied={false} />
               <StudentRowsTable rows={previewData.rows || []} teamAssignment={isTeamAssignment} />
             </div>
           )}
@@ -398,6 +400,8 @@ export default function ImportStudentsModal({
                 <SummaryCard label={commitResult.importMode === 'TeamAssignment' ? 'Memberships' : 'Majors synced'} value={commitResult.importMode === 'TeamAssignment' ? commitResult.createdMembershipCount : commitResult.synchronizedMajorCount ?? 0} tone="success" />
                 <SummaryCard label="Skipped" value={commitResult.skippedCount} tone="danger" />
               </div>
+
+              <TeamContinuationPanel summary={commitResult.continuation} applied />
 
               {commitResult.errors?.length > 0 && (
                 <div className="overflow-hidden rounded-xl border border-amber-200 bg-amber-50">

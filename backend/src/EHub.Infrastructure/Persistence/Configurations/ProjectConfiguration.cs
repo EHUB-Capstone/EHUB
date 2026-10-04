@@ -21,6 +21,16 @@ public class ProjectConfiguration : IEntityTypeConfiguration<Project>
         builder.HasIndex(p => p.TeamId)
             .IsUnique();
 
+        builder.Property(p => p.ProjectLineageId)
+            .HasColumnName("project_lineage_id")
+            .IsRequired();
+
+        builder.Property(p => p.PreviousProjectId)
+            .HasColumnName("previous_project_id");
+
+        builder.HasIndex(p => p.ProjectLineageId);
+        builder.HasIndex(p => p.PreviousProjectId);
+
         builder.Property(p => p.Name)
             .HasColumnName("name")
             .HasMaxLength(200)
@@ -103,6 +113,11 @@ public class ProjectConfiguration : IEntityTypeConfiguration<Project>
             .WithOne(t => t.Project)
             .HasForeignKey<Project>(p => p.TeamId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne(p => p.PreviousProject)
+            .WithMany()
+            .HasForeignKey(p => p.PreviousProjectId)
+            .OnDelete(DeleteBehavior.SetNull);
 
         builder.HasOne(p => p.Creator)
             .WithMany()

@@ -397,7 +397,7 @@ public sealed class ProjectDirectionHandler : IProjectDirectionHandler
         }
     }
 
-    private static ProjectDirectionDto ToDto(ProjectDirection direction)
+    internal static ProjectDirectionDto ToDto(ProjectDirection direction)
     {
         var project = direction.Team?.Project;
         var currentTitle = project?.Name ?? string.Empty;

@@ -44,6 +44,8 @@ public class AppDbContext : DbContext, IApplicationDbContext
     public DbSet<ClassStudent> ClassStudents => Set<ClassStudent>();
     public DbSet<Team> Teams => Set<Team>();
     public DbSet<TeamMember> TeamMembers => Set<TeamMember>();
+    public DbSet<TeamContinuation> TeamContinuations => Set<TeamContinuation>();
+    public DbSet<TeamContinuationMember> TeamContinuationMembers => Set<TeamContinuationMember>();
     public DbSet<TeamProposal> TeamProposals => Set<TeamProposal>();
     public DbSet<TeamProposalMember> TeamProposalMembers => Set<TeamProposalMember>();
     public DbSet<TeamProposalHistory> TeamProposalHistory => Set<TeamProposalHistory>();

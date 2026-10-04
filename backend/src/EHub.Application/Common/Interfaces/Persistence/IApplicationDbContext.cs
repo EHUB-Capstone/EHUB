@@ -29,6 +29,8 @@ public interface IApplicationDbContext
     DbSet<ClassStudent> ClassStudents { get; }
     DbSet<Team> Teams { get; }
     DbSet<TeamMember> TeamMembers { get; }
+    DbSet<TeamContinuation> TeamContinuations { get; }
+    DbSet<TeamContinuationMember> TeamContinuationMembers { get; }
     DbSet<TeamProposal> TeamProposals { get; }
     DbSet<TeamProposalMember> TeamProposalMembers { get; }
     DbSet<TeamProposalHistory> TeamProposalHistory { get; }

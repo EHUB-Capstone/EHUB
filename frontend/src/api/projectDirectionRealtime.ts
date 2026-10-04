@@ -9,6 +9,9 @@ interface ProjectDirectionChangedRealtimeEvent {
     teamId: string;
     title: string;
     summary: string;
+    isProjectProfileChangeProposal?: boolean;
+    currentTitle?: string | null;
+    currentSummary?: string | null;
     status: string;
     submittedAtUtc?: string | null;
     reviewedAtUtc?: string | null;

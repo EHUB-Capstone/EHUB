@@ -167,3 +167,19 @@ export const updateProjectDirectionOverviewTeams = <T extends ProjectDirectionOv
     projectDirectionRowVersion: direction.rowVersion || '',
   };
 });
+
+export const shouldApplyProjectDirectionSubmission = (
+  currentStatus: string | null | undefined,
+  currentRowVersion: string | null | undefined,
+  incoming: ProjectDirectionSyncValue,
+): boolean => {
+  if (currentStatus === 'PENDING') return false;
+  if (currentStatus !== 'APPROVED') return true;
+  if (!incoming.isProjectProfileChangeProposal) return false;
+
+  const currentVersion = Number(currentRowVersion);
+  const incomingVersion = Number(incoming.rowVersion);
+  return !Number.isFinite(currentVersion)
+    || !Number.isFinite(incomingVersion)
+    || incomingVersion > currentVersion;
+};

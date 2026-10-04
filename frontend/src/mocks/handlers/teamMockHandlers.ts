@@ -137,6 +137,52 @@ function registerTeamQueries(mock: MockAdapter): void {
       : failure(403, 'CLASS_ACCESS_DENIED', 'You cannot view this team.');
   });
 
+  // Mock data has a single semester per team, so the history is one current term.
+  mock.onGet(/^\/teams\/[^/]+\/lineage$/).reply((config) => {
+    const team = teamById(routeId(config, /^\/teams\/([^/]+)\/lineage$/));
+    if (!getMockState().sessionUserId) return failure(401, 'UNAUTHORIZED', 'Authentication is required.');
+    if (!team) return failure(404, 'TEAM_NOT_FOUND', 'Team not found.');
+    if (!canReadTeam(team)) return failure(403, 'CLASS_ACCESS_DENIED', 'You cannot view this team history.');
+    const cls = findClass(team.classId);
+    return ok({
+      teamLineageId: team.id,
+      terms: [{
+        teamId: team.id,
+        classId: team.classId,
+        classCode: cls?.classCode ?? '',
+        semesterId: cls?.semesterId ?? '',
+        semesterCode: cls?.semesterCode ?? '',
+        teamName: team.teamName,
+        projectName: team.projectName ?? null,
+        projectStatus: null,
+        isCurrent: true,
+        canViewSubmissions: true,
+        canViewScores: true,
+        members: team.members.map(member => ({
+          studentId: member.studentId,
+          fullName: member.fullName,
+          rollNumber: member.rollNumber ?? null,
+          isLeader: member.roleInTeam === 'LEADER',
+        })),
+      }],
+    }, 'Team history retrieved.');
+  });
+
+  mock.onGet(/^\/teams\/[^/]+\/lineage\/[^/]+\/submissions$/).reply(() => {
+    if (!getMockState().sessionUserId) return failure(401, 'UNAUTHORIZED', 'Authentication is required.');
+    return ok([], 'Team term submissions retrieved.');
+  });
+
+  mock.onGet('/admin/team-continuity').reply(() => {
+    const state = getMockState();
+    const user = state.users.find(item => item.id === state.sessionUserId);
+    if (!user) return failure(401, 'UNAUTHORIZED', 'Authentication is required.');
+    if (user.role !== 'ADMIN') return failure(403, 'CLASS_ACCESS_DENIED', 'Only an administrator can view the continuity report.');
+    return ok({
+      semesterId: '', semesterCode: '', continuedTeamCount: 0, continuedProjectCount: 0, dissolvedCount: 0, classes: [],
+    }, 'Team continuity report retrieved.');
+  });
+
   mock.onGet(/^\/classes\/[^/]+\/mentors$/).reply((config) => {
     const classId = routeId(config, /^\/classes\/([^/]+)\/mentors$/);
     if (!findClass(classId)) return failure(404, 'CLASS_NOT_FOUND', 'Class not found.');

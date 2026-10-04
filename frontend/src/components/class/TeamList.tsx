@@ -189,6 +189,12 @@ function TeamCard({
                 <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${statusStyles[status] || statusStyles.ACTIVE}`}>{readableStatus(status)}</span>
               </div>
               <p className="mt-0.5 font-mono text-xs text-slate-400">{team.teamCode || 'No team code'}</p>
+              {team.isContinued && (
+                <p className="mt-1 text-xs font-medium text-indigo-600">
+                  Continued from {team.continuedFromSemesterCode || 'the previous semester'}
+                  {team.continuedFromClassCode ? ` · ${team.continuedFromClassCode}` : ''}
+                </p>
+              )}
               {team.linkedProposal && (
                 <p className="mt-1 text-xs font-medium text-slate-500">
                   Project proposal:{' '}

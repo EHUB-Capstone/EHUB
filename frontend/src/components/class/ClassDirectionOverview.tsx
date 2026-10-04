@@ -10,6 +10,7 @@ import { getDisplayTeamName } from '../../utils/teamDisplay';
 import {
   directionOverviewTargetClassIds,
   resolveDirectionOverviewClassId,
+  shouldApplyProjectDirectionSubmission,
   updateProjectDirectionOverviewTeams,
 } from '../../utils/projectDirectionSync';
 import type { ProjectDirectionSyncValue } from '../../utils/projectDirectionSync';
@@ -192,7 +193,11 @@ export default function ClassDirectionOverview({ semester, year, initialClassId 
           pendingRealtimeDirectionsRef.current.set(event.teamId, event.direction);
           return;
         }
-        if (previousTeam.projectDirectionStatus === 'PENDING' || previousTeam.projectDirectionStatus === 'APPROVED') return;
+        if (!shouldApplyProjectDirectionSubmission(
+          previousTeam.projectDirectionStatus,
+          previousTeam.projectDirectionRowVersion,
+          event.direction,
+        )) return;
         const nextOverview = {
           ...overviewRef.current,
           teams: updateProjectDirectionOverviewTeams(overviewRef.current?.teams || [], event.teamId, event.direction),

@@ -40,6 +40,10 @@ internal static class TeamMappings
             CurrentMentorAssignments = activeAssignments,
             CurrentMentorAssignment = activeAssignments.FirstOrDefault(),
             MajorComposition = TeamMajorCompositionRules.Evaluate(team),
+            TeamLineageId = team.TeamLineageId,
+            IsContinued = team.PreviousTeamId.HasValue,
+            ContinuedFromSemesterCode = team.PreviousTeam?.Class?.Semester?.Code,
+            ContinuedFromClassCode = team.PreviousTeam?.Class?.ClassCode,
             RowVersion = team.Version.ToString()
         };
     }
