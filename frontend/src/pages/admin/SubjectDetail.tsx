@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, BookOpen, Edit3, Globe2, Plus, Save, Trash2 } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, BookOpen, Edit3, FileSpreadsheet, Globe2, Plus, Save, Trash2, Upload } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Button from '../../components/ui/Button';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
@@ -12,6 +12,14 @@ import Badge from '../../components/ui/Badge';
 import { subjectApi } from '../../api/subjectApi';
 import { parseApiError } from '../../utils/apiError';
 import { resolveCriterionKey } from '../../utils/rubricKey';
+import {
+  mergeRubricImport,
+  readRubricImportFile,
+  RUBRIC_IMPORT_ACCEPT,
+  RubricImportValidationError,
+  type RubricImportPreview,
+} from '../../utils/rubricImport';
+import type { SubjectCheckpointDraft, SubjectOtherAssessmentDraft } from '../../types/subjects';
 
 const weeks = Array.from({ length: 10 }, (_, index) => index + 1);
 const emptyForm = { title: '', description: '', weekNumber: 1, priority: 'MEDIUM', estimatedHours: '', tags: '' };
@@ -171,21 +179,65 @@ function CheckpointRubricEditor({ subjectCode, checkpoints, onSaved }: any) {
   return <section className="grid gap-5 lg:grid-cols-[240px_minmax(0,1fr)]"><aside className="flex gap-2 overflow-x-auto lg:block lg:space-y-2">{draft.map(item => <button key={item.number} onClick={() => setSelected(item.number)} className={`min-w-52 rounded-xl p-3 text-left lg:w-full ${selected === item.number ? 'bg-primary text-white' : 'border border-slate-200 bg-white text-slate-600'}`}><span className="text-[10px] font-semibold">CHECKPOINT {item.number}</span><span className="mt-1 block text-sm font-semibold">{item.title}</span></button>)}</aside><div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><div className="mb-4 flex flex-wrap items-center justify-between gap-2"><h2 className="text-lg font-bold text-slate-900">Checkpoint {selected}</h2><Badge variant={total === 100 ? 'Active' : 'Improving'}>Total weight: {total}%</Badge></div><div className="space-y-4"><label className="block text-sm font-medium">Checkpoint title<input aria-label="Checkpoint title" value={checkpoint.title} onChange={e => update({ ...checkpoint, title: e.target.value })} className="mt-1 w-full rounded-xl border p-2.5" /></label><label className="block text-sm font-medium">Requirements<textarea aria-label="Requirements" value={checkpoint.requirements.join('\n')} onChange={e => update({ ...checkpoint, requirements: e.target.value.split('\n').map(value => value.trim()).filter(Boolean) })} className="mt-1 min-h-20 w-full rounded-xl border p-2.5" /></label><label className="block text-sm font-medium">Short description<textarea aria-label="Short description" value={checkpoint.shortDescription ?? ''} onChange={e => update({ ...checkpoint, shortDescription: e.target.value })} className="mt-1 min-h-20 w-full rounded-xl border p-2.5" /></label><div className="space-y-3">{checkpoint.rubrics.map((criterion: any, index: number) => <div key={index} className="rounded-xl border border-slate-200 p-4"><div className="mb-3 flex justify-between"><Badge>Criterion {index + 1}</Badge><button aria-label="Delete criterion" disabled={checkpoint.rubrics.length === 1} onClick={() => update({ ...checkpoint, rubrics: checkpoint.rubrics.filter((_: any, position: number) => position !== index) })} className="text-danger disabled:opacity-40"><Trash2 className="h-4 w-4" /></button></div><div className="grid gap-3 sm:grid-cols-2"><input aria-label="Criterion key" value={criterion.key} onChange={e => { const rubrics = [...checkpoint.rubrics]; rubrics[index] = { ...criterion, key: e.target.value }; update({ ...checkpoint, rubrics }); }} placeholder="Key" className="rounded-xl border p-2.5 font-mono" /><input aria-label="Criterion label" value={criterion.label} onChange={e => { const rubrics = [...checkpoint.rubrics]; rubrics[index] = { ...criterion, label: e.target.value, key: resolveCriterionKey(criterion.key, criterion.label, e.target.value) }; update({ ...checkpoint, rubrics }); }} placeholder="Label" className="rounded-xl border p-2.5" /><input aria-label="Criterion weight" type="number" step="0.5" min="0" value={criterion.weight} onChange={e => { const rubrics = [...checkpoint.rubrics]; rubrics[index] = { ...criterion, weight: e.target.value }; update({ ...checkpoint, rubrics }); }} placeholder="Weight (%)" className="rounded-xl border p-2.5" /><textarea aria-label="Criterion description" value={criterion.description ?? ''} onChange={e => { const rubrics = [...checkpoint.rubrics]; rubrics[index] = { ...criterion, description: e.target.value }; update({ ...checkpoint, rubrics }); }} placeholder="Description" className="rounded-xl border p-2.5" /></div></div>)}</div><Button variant="outline" icon={Plus} onClick={() => update({ ...checkpoint, rubrics: [...checkpoint.rubrics, { key: '', label: '', description: '', weight: 0, levels: [] }] })}>Add criterion</Button><div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4"><span className="text-sm text-slate-500">Changes here apply to every class and team in {subjectCode}.</span><Button icon={Save} isLoading={saving} onClick={save}>{dirty ? 'Save & synchronize subject' : 'Save & synchronize subject'}</Button></div></div></div></section>;
 }
 
-function FlexibleCheckpointRubricEditor({ subjectCode, checkpoints, otherAssessments, onSaved }: any) {
-  const [items, setItems] = useState<any[]>([]); const [otherItems, setOtherItems] = useState<any[]>([]); const [selected, setSelected] = useState<number | null>(null); const [dirty, setDirty] = useState(false); const [saving, setSaving] = useState(false); const [deleteRequest, setDeleteRequest] = useState<any>(null);
-  useEffect(() => { const next = [...checkpoints].sort((a: any, b: any) => a.number - b.number); setItems(next); setOtherItems([...otherAssessments]); setSelected(next[0]?.number ?? null); setDirty(false); }, [checkpoints, otherAssessments]);
+interface FlexibleCheckpointRubricEditorProps {
+  subjectCode: string;
+  checkpoints: SubjectCheckpointDraft[];
+  otherAssessments: SubjectOtherAssessmentDraft[];
+  onSaved: () => void | Promise<void>;
+}
+
+type RubricDeleteRequest =
+  | { type: 'checkpoint' }
+  | { type: 'criterion' | 'other'; index: number; label?: string };
+
+function FlexibleCheckpointRubricEditor({ subjectCode, checkpoints, otherAssessments, onSaved }: FlexibleCheckpointRubricEditorProps) {
+  const [items, setItems] = useState<SubjectCheckpointDraft[]>([]); const [otherItems, setOtherItems] = useState<SubjectOtherAssessmentDraft[]>([]); const [selected, setSelected] = useState<number | null>(null); const [dirty, setDirty] = useState(false); const [saving, setSaving] = useState(false); const [deleteRequest, setDeleteRequest] = useState<RubricDeleteRequest | null>(null);
+  const [importModalOpen, setImportModalOpen] = useState(false); const [importPreview, setImportPreview] = useState<RubricImportPreview | null>(null); const [importErrors, setImportErrors] = useState<string[]>([]); const [readingImport, setReadingImport] = useState(false); const importInputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => { const next = [...checkpoints].sort((a, b) => a.number - b.number); setItems(next); setOtherItems([...otherAssessments]); setSelected(next[0]?.number ?? null); setDirty(false); }, [checkpoints, otherAssessments]);
   const current = items.find(item => item.number === selected);
-  const update = (next: any) => { setItems(values => values.map(item => item.number === next.number ? next : item)); setDirty(true); };
+  const update = (next: SubjectCheckpointDraft) => { setItems(values => values.map(item => item.number === next.number ? next : item)); setDirty(true); };
   const add = () => { const number = Array.from({ length: 10 }, (_, index) => index + 1).find(value => !items.some(item => item.number === value)); if (!number) return void toast.error('A subject can have up to 10 checkpoints'); const next = { number, title: `Checkpoint ${number}`, shortDescription: '', courseWeight: 0, requirements: [], rubrics: [{ key: '', label: '', description: '', weight: 100, levels: [] }] }; setItems(values => [...values, next].sort((a, b) => a.number - b.number)); setSelected(number); setDirty(true); };
   const addOtherAssessment = () => { setOtherItems(values => [...values, { name: '', weight: 0 }]); setDirty(true); };
-  const remove = () => { if (!deleteRequest) return; if (deleteRequest.type === 'checkpoint') { if (items.length === 1) return void toast.error('A subject needs at least one checkpoint'); const next = items.filter(item => item.number !== current.number); setItems(next); setSelected(next[0].number); } else if (deleteRequest.type === 'other') { setOtherItems(values => values.filter((_, index) => index !== deleteRequest.index)); } else { update({ ...current, rubrics: current.rubrics.filter((_: any, index: number) => index !== deleteRequest.index) }); } setDeleteRequest(null); setDirty(true); };
+  const remove = () => { if (!deleteRequest || !current) return; if (deleteRequest.type === 'checkpoint') { if (items.length === 1) return void toast.error('A subject needs at least one checkpoint'); const next = items.filter(item => item.number !== current.number); setItems(next); setSelected(next[0].number); } else if (deleteRequest.type === 'other') { setOtherItems(values => values.filter((_, index) => index !== deleteRequest.index)); } else { update({ ...current, rubrics: current.rubrics.filter((_, index) => index !== deleteRequest.index) }); } setDeleteRequest(null); setDirty(true); };
+  const chooseImportFile = () => { if (importInputRef.current) importInputRef.current.value = ''; importInputRef.current?.click(); };
+  const handleImportFile = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]; if (!file) return;
+    setReadingImport(true); setImportPreview(null); setImportErrors([]); setImportModalOpen(true);
+    try { setImportPreview(await readRubricImportFile(file, subjectCode)); }
+    catch (error) { setImportErrors(error instanceof RubricImportValidationError ? error.issues : ['The rubric workbook could not be read.']); }
+    finally { setReadingImport(false); }
+  };
+  const applyImport = () => {
+    if (!importPreview) return;
+    const merged = mergeRubricImport(items, importPreview.checkpoints);
+    setItems(merged.checkpoints); setSelected(importPreview.checkpoints[0]?.number ?? selected); setDirty(true); setImportModalOpen(false);
+    toast.success(`${importPreview.checkpoints.length} checkpoint rubric${importPreview.checkpoints.length === 1 ? '' : 's'} added to the draft.`);
+    if (merged.createdCheckpointNumbers.length > 0) toast(`Set course weights for new checkpoints ${merged.createdCheckpointNumbers.join(', ')} before saving.`);
+  };
   const courseWeightTotal = items.reduce((sum, item) => sum + Number(item.courseWeight || 0), 0) + otherItems.reduce((sum, item) => sum + Number(item.weight || 0), 0);
   const courseWeightsValid = items.every(item => Number(item.courseWeight) > 0 && Number(item.courseWeight) <= 100) && otherItems.every(item => Number(item.weight) > 0 && Number(item.weight) <= 100);
   const canSave = courseWeightTotal === 100 && courseWeightsValid;
   const save = async () => { if (!courseWeightsValid) return void toast.error('Set every checkpoint and other assessment weight to a value greater than 0%.'); if (courseWeightTotal !== 100) return void toast.error(`Course weights must total exactly 100.0% (currently ${courseWeightTotal.toFixed(1)}%).`); setSaving(true); try { await subjectApi.synchronizeCheckpoints(subjectCode, { checkpoints: items.map(item => ({ ...item, courseWeight: Number(item.courseWeight) })), otherAssessments: otherItems.map(item => ({ ...item, weight: Number(item.weight) })) }); toast.success('Rubric and course weights synchronized for every class in this subject.'); setDirty(false); await onSaved(); } catch (error) { toast.error(parseApiError(error, 'Failed to synchronize rubric').message); } finally { setSaving(false); } };
-  if (!current) return <div className="rounded-2xl border border-slate-200 bg-white p-6"><EmptyState title="No checkpoints configured" description="Add the first checkpoint for this subject." action={{ label: 'Add checkpoint', onClick: add }} /></div>;
-  const total = current.rubrics.reduce((sum: number, item: any) => sum + Number(item.weight || 0), 0);
+  const importPanel = <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+    <div><h2 className="font-bold text-slate-900">Import evaluation rubric</h2><p className="mt-1 text-sm text-slate-500">Use the worksheet matching {subjectCode}. Existing checkpoint details and course weights are preserved.</p></div>
+    <input ref={importInputRef} type="file" accept={RUBRIC_IMPORT_ACCEPT} onChange={handleImportFile} className="hidden" aria-label="Choose rubric Excel file" />
+    <Button variant="outline" icon={Upload} onClick={chooseImportFile}>Import Rubric</Button>
+  </div>;
+  const importReviewModal = <Modal isOpen={importModalOpen} onClose={() => setImportModalOpen(false)} title="Review rubric import" submitText="Apply to draft" submitDisabled={!importPreview || importErrors.length > 0 || readingImport} isSubmitting={readingImport} onSubmit={applyImport} size="lg">
+    {readingImport && <div className="flex min-h-40 items-center justify-center text-sm text-slate-500">Reading and validating workbook...</div>}
+    {!readingImport && importErrors.length > 0 && <div className="rounded-xl border border-danger/20 bg-danger-50 p-4"><div className="flex items-center gap-2 font-bold text-danger"><AlertTriangle className="h-4 w-4" />The workbook cannot be imported</div><ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-danger-dark">{importErrors.map((error, index) => <li key={`${index}-${error}`}>{error}</li>)}</ul></div>}
+    {!readingImport && importPreview && <div className="space-y-4">
+      <div className="flex items-start gap-3 rounded-xl border border-primary/20 bg-primary-50 p-4"><FileSpreadsheet className="mt-0.5 h-5 w-5 shrink-0 text-primary" /><div className="min-w-0"><p className="truncate font-bold text-slate-900">{importPreview.fileName}</p><p className="mt-1 text-sm text-slate-600">Worksheet <span className="font-semibold">{importPreview.sheetName}</span> · {importPreview.checkpoints.length} checkpoints · {importPreview.checkpoints.reduce((sum, item) => sum + item.criteria.length, 0)} criteria</p></div></div>
+      {importPreview.warnings.map(warning => <p key={warning} className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">{warning}</p>)}
+      {importPreview.checkpoints.some(imported => !items.some(item => item.number === imported.number)) && <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">New checkpoints will be created with a 0% course weight. Set their course weights before saving.</p>}
+      <div className="space-y-2">{importPreview.checkpoints.map(checkpoint => <div key={checkpoint.number} className="rounded-xl border border-slate-200 p-3"><div className="flex items-center justify-between gap-3"><span className="font-bold text-slate-800">Checkpoint {checkpoint.number}</span><span className="text-xs font-semibold text-emerald-700">{checkpoint.criteria.reduce((sum, criterion) => sum + Number(criterion.weight), 0).toFixed(1)}%</span></div><p className="mt-1 text-sm text-slate-500">{checkpoint.criteria.map(criterion => criterion.label).join(', ')}</p></div>)}</div>
+      <p className="text-xs leading-5 text-slate-500">Applying the import only updates this page's draft. Review the result, then use “Save & synchronize subject” to persist it.</p>
+    </div>}
+  </Modal>;
+  if (!current) return <>{importPanel}<div className="rounded-2xl border border-slate-200 bg-white p-6"><EmptyState title="No checkpoints configured" description="Import an Excel rubric or add the first checkpoint manually." action={{ label: 'Add checkpoint', onClick: add }} /></div>{importReviewModal}</>;
+  const total = current.rubrics.reduce((sum, item) => sum + Number(item.weight || 0), 0);
   return <>
+    {importPanel}
     <section className="grid gap-5 lg:grid-cols-[240px_minmax(0,1fr)]">
       <aside className="min-w-0">
         <div className="flex gap-2 overflow-x-auto lg:block lg:space-y-2">
@@ -205,7 +257,7 @@ function FlexibleCheckpointRubricEditor({ subjectCode, checkpoints, otherAssessm
           <input aria-label="Checkpoint title" value={current.title} onChange={e => update({ ...current, title: e.target.value })} className="w-full rounded-xl border p-2.5" placeholder="Checkpoint title" />
           <textarea aria-label="Requirements" value={current.requirements.join('\n')} onChange={e => update({ ...current, requirements: e.target.value.split('\n').map(value => value.trim()).filter(Boolean) })} className="min-h-20 w-full rounded-xl border p-2.5" placeholder="Requirements, one per line" />
           <textarea aria-label="Short description" value={current.shortDescription ?? ''} onChange={e => update({ ...current, shortDescription: e.target.value })} className="min-h-20 w-full rounded-xl border p-2.5" placeholder="Short description" />
-          {current.rubrics.map((criterion: any, index: number) => <div key={index} className="rounded-xl border p-3">
+          {current.rubrics.map((criterion, index) => <div key={index} className="rounded-xl border p-3">
             <div className="mb-2 flex justify-between"><Badge>Criterion {index + 1}</Badge><button aria-label="Delete criterion" disabled={current.rubrics.length === 1} onClick={() => setDeleteRequest({ type: 'criterion', index, label: criterion.label })} className="text-danger disabled:opacity-40"><Trash2 className="h-4 w-4" /></button></div>
             <div className="grid gap-2 sm:grid-cols-2">
               <input aria-label="Criterion label" value={criterion.label} onChange={e => { const key = resolveCriterionKey(criterion.key, criterion.label, e.target.value); const rubrics = [...current.rubrics]; rubrics[index] = { ...criterion, label: e.target.value, key }; update({ ...current, rubrics }); }} className="rounded-lg border p-2" placeholder="Label" />
@@ -213,12 +265,14 @@ function FlexibleCheckpointRubricEditor({ subjectCode, checkpoints, otherAssessm
               <input aria-label="Criterion weight" type="number" step="0.5" value={criterion.weight} onChange={e => { const rubrics = [...current.rubrics]; rubrics[index] = { ...criterion, weight: e.target.value }; update({ ...current, rubrics }); }} className="rounded-lg border p-2" placeholder="Weight (%)" />
               <textarea aria-label="Criterion description" value={criterion.description ?? ''} onChange={e => { const rubrics = [...current.rubrics]; rubrics[index] = { ...criterion, description: e.target.value }; update({ ...current, rubrics }); }} className="rounded-lg border p-2" placeholder="Description" />
             </div>
+            {criterion.levels.length > 0 && <details className="mt-3 rounded-lg bg-slate-50 p-3"><summary className="cursor-pointer text-xs font-bold text-slate-600">{criterion.levels.length} imported performance levels</summary><div className="mt-2 grid gap-2 sm:grid-cols-2">{criterion.levels.map(level => <div key={level.key} className="rounded-lg border border-slate-200 bg-white p-2"><div className="flex items-center justify-between gap-2 text-xs font-bold text-slate-700"><span>{level.label}</span><span className="text-slate-400">{level.range}</span></div><p className="mt-1 text-xs leading-5 text-slate-500">{level.description || 'No description provided.'}</p></div>)}</div></details>}
           </div>)}
           <Button variant="outline" icon={Plus} onClick={() => update({ ...current, rubrics: [...current.rubrics, { key: '', label: '', description: '', weight: '', levels: [] }] })}>Add criterion</Button>
           <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4"><span className={`text-sm ${canSave ? 'text-emerald-700' : 'text-amber-700'}`}>Course total: {courseWeightTotal.toFixed(1)}%</span><Button icon={Save} isLoading={saving} disabled={!canSave || !dirty} onClick={save}>Save & synchronize subject</Button></div>
         </div>
       </div>
     </section>
+    {importReviewModal}
     <ConfirmDialog isOpen={Boolean(deleteRequest)} onClose={() => setDeleteRequest(null)} onConfirm={remove} title={deleteRequest?.type === 'checkpoint' ? 'Delete checkpoint' : `Delete ${deleteRequest?.label || (deleteRequest?.type === 'other' ? 'other assessment' : 'criterion')}`} description={deleteRequest?.type === 'checkpoint' ? `Checkpoint ${current.number} and its rubric configuration will be removed when you synchronize this subject.` : deleteRequest?.type === 'other' ? `The assessment ${deleteRequest?.label || ''} will be removed from the course result when you synchronize this subject.` : `The criterion ${deleteRequest?.label || ''} will be removed when you synchronize this subject.`} confirmText="Delete" />
   </>;
 }

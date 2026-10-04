@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using ClosedXML.Excel;
 using EHub.Contracts.Auth;
 using EHub.Contracts.Common;
 using EHub.Contracts.StartupIndustries;
@@ -175,11 +176,172 @@ public sealed class StartupIndustryManagementIntegrationTests
         (await _client.SendAsync(longDescriptionRequest)).StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
+    [Fact]
+    public async Task ImportIndustries_Should_Return_401_Without_AccessToken_And_403_For_Student()
+    {
+        var workbook = CreateIndustryWorkbook(
+            ("Access controlled industry", "This row must not be imported."));
+
+        using var unauthorizedContent = CreateWorkbookContent(workbook);
+        (await _client.PostAsync("/api/startup-industries/import", unauthorizedContent)).StatusCode
+            .Should().Be(HttpStatusCode.Unauthorized);
+        using var unauthorizedPreviewContent = CreateWorkbookContent(workbook);
+        (await _client.PostAsync("/api/startup-industries/import/preview", unauthorizedPreviewContent)).StatusCode
+            .Should().Be(HttpStatusCode.Unauthorized);
+
+        using var studentRequest = CreateAuthorizedRequest(
+            HttpMethod.Post,
+            "/api/startup-industries/import",
+            await GetStudentTokenAsync());
+        studentRequest.Content = CreateWorkbookContent(workbook);
+
+        (await _client.SendAsync(studentRequest)).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        using var studentPreviewRequest = CreateAuthorizedRequest(
+            HttpMethod.Post,
+            "/api/startup-industries/import/preview",
+            await GetStudentTokenAsync());
+        studentPreviewRequest.Content = CreateWorkbookContent(workbook);
+        (await _client.SendAsync(studentPreviewRequest)).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task Admin_Should_Preview_Industry_Rows_Without_Persisting_Them()
+    {
+        var token = await GetAdminTokenAsync();
+        var unique = Guid.NewGuid().ToString("N");
+        var validName = $"Preview only {unique}";
+        var duplicateName = $"Preview duplicate {unique}";
+        var workbook = CreateIndustryWorkbook(
+            (validName, "A valid preview row."),
+            (duplicateName, "First duplicate row."),
+            (duplicateName.ToUpperInvariant(), "Second duplicate row."));
+        using var request = CreateAuthorizedRequest(
+            HttpMethod.Post,
+            "/api/startup-industries/import/preview",
+            token);
+        request.Content = CreateWorkbookContent(workbook);
+
+        var response = await _client.SendAsync(request);
+        var body = await response.Content.ReadFromJsonAsync<ApiResponse<StartupIndustryImportPreviewResponse>>();
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+        body!.Data!.TotalRows.Should().Be(3);
+        body.Data.ValidRowsCount.Should().Be(1);
+        body.Data.ErrorRowsCount.Should().Be(2);
+        body.Data.Rows.Where(row => !row.IsValid).Should().OnlyContain(row => row.ErrorMessage != null);
+
+        var searchRequest = CreateAuthorizedRequest(
+            HttpMethod.Get,
+            $"/api/startup-industries?search={Uri.EscapeDataString(validName)}",
+            token);
+        var searchResponse = await _client.SendAsync(searchRequest);
+        var searchBody = await searchResponse.Content.ReadFromJsonAsync<ApiResponse<StartupIndustryListResponse>>();
+        searchBody!.Data!.Industries.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Admin_Should_Import_Industries_As_Active()
+    {
+        var token = await GetAdminTokenAsync();
+        var unique = Guid.NewGuid().ToString("N");
+        var firstName = $"Imported HealthTech {unique}";
+        var secondName = $"Imported EdTech {unique}";
+        var workbook = CreateIndustryWorkbook(
+            (firstName, "Digital health solutions."),
+            (secondName, "Education technology solutions."));
+        using var request = CreateAuthorizedRequest(HttpMethod.Post, "/api/startup-industries/import", token);
+        request.Content = CreateWorkbookContent(workbook, "Industry.xlsx");
+
+        var response = await _client.SendAsync(request);
+        var body = await response.Content.ReadFromJsonAsync<ApiResponse<StartupIndustryImportResponse>>();
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+        body!.Data!.ImportedCount.Should().Be(2);
+        body.Data.Industries.Should().OnlyContain(industry => industry.Status == "active");
+        body.Data.Industries.Select(industry => industry.Name).Should().BeEquivalentTo(firstName, secondName);
+    }
+
+    [Fact]
+    public async Task ImportIndustries_Should_Reject_Existing_Name_Without_Partial_Insert()
+    {
+        var token = await GetAdminTokenAsync();
+        var unique = Guid.NewGuid().ToString("N");
+        var existingName = $"Existing industry {unique}";
+        var createRequest = CreateAuthorizedRequest(HttpMethod.Post, "/api/startup-industries", token);
+        createRequest.Content = JsonContent.Create(new CreateStartupIndustryRequest
+        {
+            Name = existingName,
+            Status = "active"
+        });
+        (await _client.SendAsync(createRequest)).StatusCode.Should().Be(HttpStatusCode.Created);
+
+        var newName = $"Must not be inserted {unique}";
+        using var importRequest = CreateAuthorizedRequest(HttpMethod.Post, "/api/startup-industries/import", token);
+        importRequest.Content = CreateWorkbookContent(CreateIndustryWorkbook(
+            (newName, "Valid new row."),
+            (existingName.ToUpperInvariant(), "Duplicate existing row.")));
+
+        using var previewRequest = CreateAuthorizedRequest(
+            HttpMethod.Post,
+            "/api/startup-industries/import/preview",
+            token);
+        previewRequest.Content = CreateWorkbookContent(CreateIndustryWorkbook(
+            (newName, "Valid new row."),
+            (existingName.ToUpperInvariant(), "Duplicate existing row.")));
+        var previewResponse = await _client.SendAsync(previewRequest);
+        var previewBody = await previewResponse.Content.ReadFromJsonAsync<ApiResponse<StartupIndustryImportPreviewResponse>>();
+        previewResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        previewBody!.Data!.ValidRowsCount.Should().Be(1);
+        previewBody.Data.ErrorRowsCount.Should().Be(1);
+
+        var importResponse = await _client.SendAsync(importRequest);
+
+        importResponse.StatusCode.Should().Be(HttpStatusCode.Conflict);
+
+        var searchRequest = CreateAuthorizedRequest(
+            HttpMethod.Get,
+            $"/api/startup-industries?search={Uri.EscapeDataString(newName)}",
+            token);
+        var searchResponse = await _client.SendAsync(searchRequest);
+        var searchBody = await searchResponse.Content.ReadFromJsonAsync<ApiResponse<StartupIndustryListResponse>>();
+        searchBody!.Data!.Industries.Should().BeEmpty();
+    }
+
     private static HttpRequestMessage CreateAuthorizedRequest(HttpMethod method, string uri, string token)
     {
         var request = new HttpRequestMessage(method, uri);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         return request;
+    }
+
+    private static byte[] CreateIndustryWorkbook(params (string Name, string Description)[] rows)
+    {
+        using var workbook = new XLWorkbook();
+        var worksheet = workbook.AddWorksheet("Sheet1");
+        worksheet.Cell(1, 1).Value = "Industry";
+        worksheet.Cell(1, 2).Value = "Description";
+        for (var index = 0; index < rows.Length; index++)
+        {
+            worksheet.Cell(index + 2, 1).Value = rows[index].Name;
+            worksheet.Cell(index + 2, 2).Value = rows[index].Description;
+        }
+
+        using var stream = new MemoryStream();
+        workbook.SaveAs(stream);
+        return stream.ToArray();
+    }
+
+    private static MultipartFormDataContent CreateWorkbookContent(
+        byte[] workbook,
+        string fileName = "industries.xlsx")
+    {
+        var content = new MultipartFormDataContent();
+        var file = new ByteArrayContent(workbook);
+        file.Headers.ContentType = new MediaTypeHeaderValue(
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        content.Add(file, "file", fileName);
+        return content;
     }
 
     private async Task<string> GetAdminTokenAsync()

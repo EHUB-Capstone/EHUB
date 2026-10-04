@@ -97,6 +97,37 @@ export interface UpdateSemesterDatesPayload {
   reason: string;
 }
 
+export interface SubjectRubricLevel {
+  key: string;
+  label: string;
+  range: string;
+  description: string;
+}
+
+export interface SubjectRubricCriterion {
+  key: string;
+  label: string;
+  description: string | null;
+  weight: number | string;
+  levels: SubjectRubricLevel[];
+}
+
+export interface SubjectCheckpointDraft {
+  number: number;
+  title: string;
+  shortDescription: string | null;
+  courseWeight: number | string;
+  requirements: string[];
+  rubrics: SubjectRubricCriterion[];
+}
+
+export interface SubjectOtherAssessmentDraft {
+  _id?: string;
+  id?: string;
+  name: string;
+  weight: number | string;
+}
+
 export interface TeachingAssignmentDto {
   _id: string;
   classCode: string;

@@ -8,9 +8,11 @@ import {
   Plus,
   Power,
   Search,
+  Upload,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { startupIndustryApi } from '../../api/startupIndustryApi';
+import ImportStartupIndustriesModal from '../../components/admin/ImportStartupIndustriesModal';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
@@ -94,6 +96,7 @@ export default function StartupIndustryManagement({ embedded = false }: StartupI
   const [statusTarget, setStatusTarget] = useState<StartupIndustryDto | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isChangingStatus, setIsChangingStatus] = useState(false);
+  const [isImportOpen, setIsImportOpen] = useState(false);
   const hasLoadedRef = useRef(false);
 
   useEffect(() => {
@@ -222,6 +225,10 @@ export default function StartupIndustryManagement({ embedded = false }: StartupI
     }
   };
 
+  const openImportModal = () => {
+    setIsImportOpen(true);
+  };
+
   const confirmStatusChange = async () => {
     if (!statusTarget) return;
 
@@ -244,14 +251,18 @@ export default function StartupIndustryManagement({ embedded = false }: StartupI
   return (
     <div className="space-y-6">
       {embedded ? (
-        <div className="flex justify-end">
+        <div className="flex flex-wrap justify-end gap-2">
+          <Button variant="outline" icon={Upload} onClick={openImportModal}>Import Industry</Button>
           <Button icon={Plus} onClick={openCreateForm}>Add Industry</Button>
         </div>
       ) : (
         <PageHeader
           title="Startup Industry Management"
           subtitle="Manage the standardized startup industries used across E-HUB projects."
-          action={{ label: 'Add Industry', icon: Plus, variant: 'primary', onClick: openCreateForm }}
+          actions={[
+            { label: 'Import Industry', icon: Upload, variant: 'outline', onClick: openImportModal },
+            { label: 'Add Industry', icon: Plus, variant: 'primary', onClick: openCreateForm },
+          ]}
         />
       )}
 
@@ -471,6 +482,13 @@ export default function StartupIndustryManagement({ embedded = false }: StartupI
           </label>
         </div>
       </Modal>
+
+      {isImportOpen && (
+        <ImportStartupIndustriesModal
+          onClose={() => setIsImportOpen(false)}
+          onImported={() => setRefreshVersion((version) => version + 1)}
+        />
+      )}
 
       <ConfirmDialog
         isOpen={Boolean(statusTarget)}
