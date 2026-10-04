@@ -71,6 +71,10 @@ public static class ErrorCodes
     public const string MentorAllocationSessionAlreadyProcessing = "MENTOR_ALLOCATION_SESSION_ALREADY_PROCESSING";
     public const string MentorAllocationConflict = "MENTOR_ALLOCATION_CONFLICT";
 
+    // Startup industry import error codes
+    public const string StartupIndustryImportFileInvalid = "STARTUP_INDUSTRY_IMPORT_FILE_INVALID";
+    public const string StartupIndustryImportConflict = "STARTUP_INDUSTRY_IMPORT_CONFLICT";
+
     // Class management error codes
     public const string ClassAccessDenied = "CLASS_ACCESS_DENIED";
     public const string ClassNotFound = "CLASS_NOT_FOUND";

@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import * as XLSX from 'xlsx';
 import { adminApprovalApi } from '../src/api/adminApprovalApi.ts';
 import axiosClient from '../src/api/axiosClient.ts';
 import { checkpointApi } from '../src/api/checkpointApi.ts';
+import { startupIndustryApi } from '../src/api/startupIndustryApi.ts';
 import { enableApiMocks } from '../src/mocks/mockApi.ts';
 import { getMockState, resetMockState } from '../src/mocks/mockHelpers.ts';
 import { getApprovalStats, registrationToApprovalRequest } from '../src/utils/accountApproval.ts';
@@ -789,6 +791,34 @@ test('mock API persists startup industry CRUD and status mutations', async () =>
   });
   assert.equal(filtered.data.industries.length, 1);
   assert.equal(filtered.data.industries[0].status, 'inactive');
+});
+
+test('mock API imports startup industries from Excel as active', async () => {
+  resetMockState();
+  const worksheet = XLSX.utils.aoa_to_sheet([
+    ['Industry', 'Description'],
+    ['Clean Energy Import', 'Renewable energy solutions.'],
+    ['Community Import', 'Community-focused products and services.'],
+  ]);
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'Sheet1');
+  const bytes = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+  const file = new File([bytes], 'Industry.xlsx', {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  });
+
+  const preview = await startupIndustryApi.previewImport(file);
+
+  assert.equal(preview.data.totalRows, 2);
+  assert.equal(preview.data.validRowsCount, 2);
+  assert.equal(preview.data.errorRowsCount, 0);
+  assert.ok(!getMockState().startupIndustries.some((industry) => industry.name === 'Clean Energy Import'));
+
+  const imported = await startupIndustryApi.import(file);
+
+  assert.equal(imported.data.importedCount, 2);
+  assert.ok(imported.data.industries.every((industry: { status: string }) => industry.status === 'active'));
+  assert.ok(getMockState().startupIndustries.some((industry) => industry.name === 'Clean Energy Import'));
 });
 
 test('mock API enforces archived class read-only behavior', async () => {

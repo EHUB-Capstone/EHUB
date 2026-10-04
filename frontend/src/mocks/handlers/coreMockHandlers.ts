@@ -1,4 +1,5 @@
 import type MockAdapter from 'axios-mock-adapter';
+import * as XLSX from 'xlsx';
 import { ALL_TEAM_MAJOR_CODES } from '../../constants/majors.ts';
 import type { AxiosRequestConfig } from 'axios';
 import type { ChangePasswordPayload, LoginPayload, RegisterPayload } from '../../types/auth.ts';
@@ -1134,6 +1135,116 @@ function registerSubjectHandlers(mock: MockAdapter): void {
   });
 }
 
+interface MockIndustryImportRow {
+  rowNumber: number;
+  name: string;
+  description: string;
+  isValid: boolean;
+  status: 'Ready' | 'Error';
+  errorMessage: string | null;
+  errorCode: 'STARTUP_INDUSTRY_IMPORT_FILE_INVALID' | 'STARTUP_INDUSTRY_IMPORT_CONFLICT' | null;
+}
+
+async function inspectIndustryImport(config: AxiosRequestConfig): Promise<{ error?: MockReply; rows?: MockIndustryImportRow[] }> {
+  const formData = config.data instanceof FormData ? config.data : null;
+  const file = formData?.get('file');
+  if (!(file instanceof Blob) || file.size === 0 || file.size > 5 * 1024 * 1024) {
+    return { error: failure(400, 'STARTUP_INDUSTRY_IMPORT_FILE_INVALID', 'Select a non-empty Excel file not exceeding 5 MB.') };
+  }
+
+  const fileName = 'name' in file && typeof file.name === 'string' ? file.name : '';
+  if (!/\.(xlsx|xls)$/i.test(fileName)) {
+    return { error: failure(400, 'STARTUP_INDUSTRY_IMPORT_FILE_INVALID', 'Only Excel files (.xlsx or .xls) are allowed.') };
+  }
+
+  try {
+    const workbook = XLSX.read(await file.arrayBuffer(), { type: 'array' });
+    const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+    const sourceRows = worksheet
+      ? XLSX.utils.sheet_to_json<unknown[]>(worksheet, { header: 1, defval: '' })
+      : [];
+    const normalizeHeader = (value: unknown) => String(value ?? '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+    const headerIndex = sourceRows.slice(0, 10).findIndex((row) => {
+      const headers = row.map(normalizeHeader);
+      return headers.some((header) => header === 'industry' || header === 'industryname')
+        && headers.includes('description');
+    });
+    if (headerIndex < 0) {
+      return { error: failure(400, 'STARTUP_INDUSTRY_IMPORT_FILE_INVALID', "The header must contain 'Industry name' (or 'Industry') and 'Description' columns.") };
+    }
+
+    const headers = sourceRows[headerIndex].map(normalizeHeader);
+    const nameIndex = headers.findIndex((header) => header === 'industry' || header === 'industryname');
+    const descriptionIndex = headers.indexOf('description');
+    const rows: MockIndustryImportRow[] = sourceRows.slice(headerIndex + 1)
+      .map((row, offset) => ({
+        rowNumber: headerIndex + offset + 2,
+        name: String(row[nameIndex] ?? '').trim(),
+        description: String(row[descriptionIndex] ?? '').trim(),
+        isValid: true,
+        status: 'Ready' as const,
+        errorMessage: null,
+        errorCode: null,
+      }))
+      .filter((row) => row.name || row.description);
+
+    if (rows.length === 0 || rows.length > 500) {
+      return { error: failure(400, 'STARTUP_INDUSTRY_IMPORT_FILE_INVALID', rows.length === 0
+        ? 'The Excel worksheet contains no industry rows.'
+        : 'The industry import may contain at most 500 data rows.') };
+    }
+
+    for (const row of rows) {
+      row.errorMessage = !row.name
+        ? 'Industry name is required.'
+        : row.name.length > 100
+          ? 'Industry name may contain at most 100 characters.'
+          : row.description.length > 240
+            ? 'Description may contain at most 240 characters.'
+            : null;
+      if (row.errorMessage) {
+        row.isValid = false;
+        row.status = 'Error';
+        row.errorCode = 'STARTUP_INDUSTRY_IMPORT_FILE_INVALID';
+      }
+    }
+
+    const nameCounts = rows
+      .filter((row) => row.isValid)
+      .reduce<Map<string, number>>((counts, row) => {
+        const normalized = row.name.toUpperCase();
+        counts.set(normalized, (counts.get(normalized) ?? 0) + 1);
+        return counts;
+      }, new Map());
+    for (const row of rows) {
+      if (row.isValid && (nameCounts.get(row.name.toUpperCase()) ?? 0) > 1) {
+        row.isValid = false;
+        row.status = 'Error';
+        row.errorMessage = `Industry '${row.name}' appears more than once in the file.`;
+        row.errorCode = 'STARTUP_INDUSTRY_IMPORT_FILE_INVALID';
+      }
+    }
+
+    const existingByName = new Map(getMockState().startupIndustries.map((industry) => [
+      industry.name.trim().toUpperCase(),
+      industry.name,
+    ]));
+    for (const row of rows) {
+      const existingName = row.isValid ? existingByName.get(row.name.toUpperCase()) : null;
+      if (existingName) {
+        row.isValid = false;
+        row.status = 'Error';
+        row.errorMessage = `Industry '${existingName}' already exists.`;
+        row.errorCode = 'STARTUP_INDUSTRY_IMPORT_CONFLICT';
+      }
+    }
+
+    return { rows };
+  } catch {
+    return { error: failure(400, 'STARTUP_INDUSTRY_IMPORT_FILE_INVALID', 'The Excel file could not be read. Verify that it is a valid .xlsx or .xls workbook.') };
+  }
+}
+
 function registerStartupIndustryHandlers(mock: MockAdapter): void {
   mock.onGet('/startup-industries/options').reply(() => {
     const industries = getMockState().startupIndustries
@@ -1157,6 +1268,52 @@ function registerStartupIndustryHandlers(mock: MockAdapter): void {
         return sort === 'name-desc' ? -comparison : comparison;
       });
     return ok({ industries }, 'Startup industries retrieved successfully.');
+  });
+
+  mock.onPost('/startup-industries/import/preview').reply(async (config) => {
+    const inspection = await inspectIndustryImport(config);
+    if (inspection.error) return inspection.error;
+    const rows = inspection.rows!;
+    return ok({
+      totalRows: rows.length,
+      validRowsCount: rows.filter((row) => row.isValid).length,
+      errorRowsCount: rows.filter((row) => !row.isValid).length,
+      rows: rows.map((row) => ({
+        rowNumber: row.rowNumber,
+        name: row.name,
+        description: row.description || null,
+        isValid: row.isValid,
+        status: row.status,
+        errorMessage: row.errorMessage,
+      })),
+    }, 'Startup industry import preview generated successfully.');
+  });
+
+  mock.onPost('/startup-industries/import').reply(async (config) => {
+    const inspection = await inspectIndustryImport(config);
+    if (inspection.error) return inspection.error;
+    const rows = inspection.rows!;
+    const invalidRows = rows.filter((row) => !row.isValid);
+    if (invalidRows.length > 0) {
+      const hasFileError = invalidRows.some((row) => row.errorCode === 'STARTUP_INDUSTRY_IMPORT_FILE_INVALID');
+      return failure(
+        hasFileError ? 400 : 409,
+        hasFileError ? 'STARTUP_INDUSTRY_IMPORT_FILE_INVALID' : 'STARTUP_INDUSTRY_IMPORT_CONFLICT',
+        invalidRows.length === 1
+          ? `Row ${invalidRows[0].rowNumber}: ${invalidRows[0].errorMessage}`
+          : `The workbook contains ${invalidRows.length} invalid rows. Preview the file and resolve every error before importing.`,
+      );
+    }
+
+    const industries = rows.map((candidate) => ({
+        id: allocateId(),
+        name: candidate.name,
+        description: candidate.description || null,
+        status: 'active' as const,
+    }));
+    getMockState().startupIndustries.push(...industries);
+    persistMockState();
+    return ok({ importedCount: industries.length, industries }, `${industries.length} startup industries imported successfully.`);
   });
 
   mock.onPost('/startup-industries').reply((config) => {

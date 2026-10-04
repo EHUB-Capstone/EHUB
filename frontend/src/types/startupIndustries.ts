@@ -13,3 +13,24 @@ export interface SaveStartupIndustryPayload {
   description: string | null;
   status: StartupIndustryStatus;
 }
+
+export interface StartupIndustryImportResult {
+  importedCount: number;
+  industries: StartupIndustryDto[];
+}
+
+export interface StartupIndustryImportRowPreview {
+  rowNumber: number;
+  name: string;
+  description: string | null;
+  isValid: boolean;
+  status: 'Ready' | 'Error';
+  errorMessage: string | null;
+}
+
+export interface StartupIndustryImportPreviewResult {
+  totalRows: number;
+  validRowsCount: number;
+  errorRowsCount: number;
+  rows: StartupIndustryImportRowPreview[];
+}
