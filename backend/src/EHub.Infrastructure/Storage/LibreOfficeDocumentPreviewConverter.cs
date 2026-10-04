@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using EHub.Application.Common.Interfaces.Storage;
 using EHub.Infrastructure.Options;
@@ -15,6 +16,9 @@ public sealed class LibreOfficeDocumentPreviewConverter : IDocumentPreviewConver
     private readonly DocumentPreviewOptions options;
     private readonly ILogger<LibreOfficeDocumentPreviewConverter> logger;
     private readonly SemaphoreSlim conversionSlots;
+    // One LibreOffice profile per concurrent slot, reused between conversions: creating a profile
+    // costs about a second on every run, and a profile must never be used by two soffice processes at once.
+    private readonly ConcurrentQueue<int> freeProfileSlots;
 
     public LibreOfficeDocumentPreviewConverter(
         IOptions<DocumentPreviewOptions> options,
@@ -25,6 +29,7 @@ public sealed class LibreOfficeDocumentPreviewConverter : IDocumentPreviewConver
         conversionSlots = new SemaphoreSlim(
             this.options.MaximumConcurrentConversions,
             this.options.MaximumConcurrentConversions);
+        freeProfileSlots = new ConcurrentQueue<int>(Enumerable.Range(0, this.options.MaximumConcurrentConversions));
     }
 
     public async Task<Result<DocumentPreviewConversionResult>> ConvertToPdfAsync(
@@ -48,12 +53,15 @@ public sealed class LibreOfficeDocumentPreviewConverter : IDocumentPreviewConver
         }
 
         await conversionSlots.WaitAsync(cancellationToken);
+        // The semaphore guarantees a free slot; fall back to a throwaway slot id rather than ever sharing a profile.
+        var profileSlot = freeProfileSlots.TryDequeue(out var slot) ? slot : -1;
         try
         {
-            return await ConvertCoreAsync(sourceContent, extension, cancellationToken);
+            return await ConvertCoreAsync(sourceContent, extension, profileSlot, cancellationToken);
         }
         finally
         {
+            if (profileSlot >= 0) freeProfileSlots.Enqueue(profileSlot);
             conversionSlots.Release();
         }
     }
@@ -61,13 +69,16 @@ public sealed class LibreOfficeDocumentPreviewConverter : IDocumentPreviewConver
     private async Task<Result<DocumentPreviewConversionResult>> ConvertCoreAsync(
         byte[] sourceContent,
         string extension,
+        int profileSlot,
         CancellationToken cancellationToken)
     {
         var tempRoot = Path.GetFullPath(Path.Combine(Path.GetTempPath(), "ehub-document-previews"));
         Directory.CreateDirectory(tempRoot);
         var workDirectory = Path.Combine(tempRoot, Guid.NewGuid().ToString("N"));
         var outputDirectory = Path.Combine(workDirectory, "output");
-        var profileDirectory = Path.Combine(workDirectory, "profile");
+        var profileDirectory = profileSlot >= 0
+            ? Path.Combine(tempRoot, "profiles", $"slot-{profileSlot}")
+            : Path.Combine(workDirectory, "profile");
         var sourceBaseName = "source";
         var sourcePath = Path.Combine(workDirectory, $"{sourceBaseName}{extension}");
         var outputPath = Path.Combine(outputDirectory, $"{sourceBaseName}.pdf");
@@ -131,6 +142,7 @@ public sealed class LibreOfficeDocumentPreviewConverter : IDocumentPreviewConver
                 }
 
                 logger.LogWarning("LibreOffice preview conversion timed out for {Extension}.", extension);
+                DiscardProfile(tempRoot, profileDirectory, profileSlot);
                 return Unavailable("Document preview conversion timed out. You can still download the original file.");
             }
 
@@ -141,6 +153,8 @@ public sealed class LibreOfficeDocumentPreviewConverter : IDocumentPreviewConver
                 logger.LogWarning(
                     "LibreOffice preview conversion failed for {Extension}. ExitCode: {ExitCode}; OutputLength: {OutputLength}; ErrorLength: {ErrorLength}.",
                     extension, process.ExitCode, outputLog.Length, errorLog.Length);
+                // A failed run may have left a damaged profile behind; the next conversion starts from a clean one.
+                DiscardProfile(tempRoot, profileDirectory, profileSlot);
                 return ConversionFailed();
             }
 
@@ -148,6 +162,7 @@ public sealed class LibreOfficeDocumentPreviewConverter : IDocumentPreviewConver
             if (pdf.Length < 5 || !pdf.AsSpan(0, 5).SequenceEqual("%PDF-"u8))
             {
                 logger.LogWarning("LibreOffice produced an invalid PDF preview for {Extension}.", extension);
+                DiscardProfile(tempRoot, profileDirectory, profileSlot);
                 return ConversionFailed();
             }
 
@@ -196,6 +211,12 @@ public sealed class LibreOfficeDocumentPreviewConverter : IDocumentPreviewConver
         var programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
         var standardWindowsPath = Path.Combine(programFiles, "LibreOffice", "program", "soffice.exe");
         return File.Exists(standardWindowsPath) ? standardWindowsPath : options.LibreOfficeExecutablePath;
+    }
+
+    private static void DiscardProfile(string tempRoot, string profileDirectory, int profileSlot)
+    {
+        // Per-conversion profiles (slot -1) are deleted together with their work directory anyway.
+        if (profileSlot >= 0) SafeDeleteWorkDirectory(tempRoot, profileDirectory);
     }
 
     private static void SafeDeleteWorkDirectory(string tempRoot, string workDirectory)

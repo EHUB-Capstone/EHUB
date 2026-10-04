@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import { classApi } from '../../api/classApi';
 import { teamFormationApi } from '../../api/teamFormationApi';
 import TeamList from '../../components/class/TeamList';
+import OwnTeamMajorWarning from '../../components/class/OwnTeamMajorWarning';
 import StudentTable from '../../components/class/StudentTable';
 import StudentTeamGeneratePanel from '../../components/class/StudentTeamGeneratePanel';
 import TeamFormationCard from '../../components/class/TeamFormationCard';
@@ -13,7 +14,7 @@ import type { TeamFormation } from '../../types/teamFormation';
 import TeamSuggestionTooltip from '../../components/class/TeamSuggestionTooltip';
 import { useAuth } from '../../hooks/useAuth';
 import { unwrapApiData } from '../../utils/classMappers';
-import { entityId, normalizeManagedTeam, normalizeTeamProposal, getTeamMemberIds, isMissingTeamMajor, isVerifiedEnrollmentMajor, mergeTeamsWithLinkedProposals } from '../../utils/teamManagement';
+import { entityId, getTeamMajorWarning, normalizeManagedTeam, normalizeTeamProposal, getTeamMemberIds, isMissingTeamMajor, isVerifiedEnrollmentMajor, mergeTeamsWithLinkedProposals } from '../../utils/teamManagement';
 import ProjectDirectionModal from '../../components/class/ProjectDirectionModal';
 import { teamApi } from '../../api/teamApi';
 import { parseApiError } from '../../utils/apiError';
@@ -151,6 +152,10 @@ export default function StudentClassDetail() {
       || (user?.email && s.email?.toLowerCase() === user.email.toLowerCase());
   });
   const hasTeam = Boolean(currentStudent?.teamId);
+  const ownTeam = currentStudent?.teamId
+    ? teams.find(team => String(team._id) === String(currentStudent.teamId))
+    : undefined;
+  const ownTeamMajorWarning = ownTeam ? getTeamMajorWarning(ownTeam) : null;
   const majorActionRequired = Boolean(currentStudent && isMissingTeamMajor(currentStudent.major));
   const majorVerified = isVerifiedEnrollmentMajor(currentStudent?.majorVerificationStatus);
   const hasPendingFormation = formations.some(formation => formation.status === 'Pending');
@@ -447,6 +452,8 @@ export default function StudentClassDetail() {
           onSave={majorCode => handleOwnMajorChange(currentStudent, majorCode)}
         />
       )}
+
+      {ownTeamMajorWarning && <OwnTeamMajorWarning warning={ownTeamMajorWarning} testId="class-own-team-major-warning" />}
 
       {isReadOnly && (
         <div className="flex items-start gap-2.5 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">

@@ -1,10 +1,11 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef, useDeferredValue } from 'react';
 import toast from 'react-hot-toast';
-import { Search, Users, AlertTriangle, UserMinus, RotateCcw, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
+import { Search, Users, AlertTriangle, UserMinus, RotateCcw, ChevronLeft, ChevronRight, RefreshCw, Loader2 } from 'lucide-react';
 import EmptyState from '../ui/EmptyState';
 import { getMajorName, TEAM_MAJOR_GROUPS } from '../../constants/majors';
 import { isMissingTeamMajor } from '../../utils/teamManagement';
 import { shortenSemesterCode } from '../../utils/semester';
+import { matchesSearchQuery } from '../../utils/searchText';
 
 /**
  * Get display label for a major code.
@@ -39,6 +40,34 @@ const majorColor = (major) => {
   return colors[Math.abs(hash) % colors.length];
 };
 
+function ServerRosterSearchInput({ initialValue, onSearch }) {
+  const onSearchRef = useRef(onSearch);
+  const debounceRef = useRef<number | undefined>(undefined);
+
+  useEffect(() => {
+    onSearchRef.current = onSearch;
+  }, [onSearch]);
+
+  useEffect(() => () => window.clearTimeout(debounceRef.current), []);
+
+  const handleChange = (value: string) => {
+    window.clearTimeout(debounceRef.current);
+    debounceRef.current = window.setTimeout(() => onSearchRef.current(value), 300);
+  };
+
+  return (
+    <input
+      type="search"
+      aria-label="Search students"
+      autoComplete="off"
+      placeholder="Search name, roll, email…"
+      defaultValue={initialValue || ''}
+      onChange={(event) => handleChange(event.target.value)}
+      className="min-h-8 w-full rounded-lg border border-slate-200 bg-white py-1.5 pl-8 pr-3 text-xs outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15 sm:text-sm"
+    />
+  );
+}
+
 export default function StudentTable({
   students: rawStudents,
   teams: rawTeams,
@@ -55,6 +84,7 @@ export default function StudentTable({
   maxSelection = 6,
   serverQuery = undefined,
   onServerQueryChange = undefined,
+  refreshing = false,
   editableStudentId = undefined,
   onMajorChange = undefined,
   updatingMajor = false,
@@ -65,7 +95,9 @@ export default function StudentTable({
     _cls?.semesterCode || `${_cls?.semester || ''}${_cls?.year || ''}`,
   );
   const groupColumnLabel = semesterCode ? `Group ${semesterCode}` : 'Group';
-  const [search, setSearch] = useState(serverQuery?.search || '');
+  const [search, setSearch] = useState('');
+  // Keeps typing responsive: the input updates immediately, the table re-filters at low priority.
+  const deferredSearch = useDeferredValue(search);
 
   const teamMap = useMemo(() => {
     const map = new Map();
@@ -74,12 +106,6 @@ export default function StudentTable({
   }, [teams]);
   const [localFilterMajor, setLocalFilterMajor] = useState('');
   const filterMajor = serverQuery?.majorCode ?? localFilterMajor;
-
-  useEffect(() => {
-    if (!serverQuery || !onServerQueryChange || search === serverQuery.search) return undefined;
-    const timeout = window.setTimeout(() => onServerQueryChange({ search }), 300);
-    return () => window.clearTimeout(timeout);
-  }, [onServerQueryChange, search, serverQuery]);
 
   const majors = useMemo(() => {
     const codes = students
@@ -96,8 +122,7 @@ export default function StudentTable({
   const filtered = useMemo(() => {
     let result = students.filter(s => {
       if (serverQuery) return true;
-      const matchSearch = !search || [s.fullName, s.rollNumber, s.email]
-        .some(v => v?.toLowerCase().includes(search.toLowerCase()));
+      const matchSearch = matchesSearchQuery(deferredSearch, [s.fullName, s.rollNumber, s.email]);
       const matchMajor = !filterMajor || (s.major && s.major.toUpperCase() === filterMajor);
       return matchSearch && matchMajor;
     });
@@ -128,7 +153,7 @@ export default function StudentTable({
     });
 
     return result;
-  }, [students, teams, search, filterMajor, teamMap, serverQuery]);
+  }, [students, teams, deferredSearch, filterMajor, teamMap, serverQuery]);
 
   const hideProjectName = useMemo(() => {
     if (teams.length === 0) return false;
@@ -193,13 +218,25 @@ export default function StudentTable({
       <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 p-3">
         <div className="relative flex-1 min-w-[180px]">
           <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
-          <input
-            type="text"
-            placeholder="Search name, roll, email…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="min-h-8 w-full rounded-lg border border-slate-200 bg-white py-1.5 pl-8 pr-3 text-xs outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15 sm:text-sm"
-          />
+          {refreshing && (
+            <Loader2 aria-hidden="true" className="absolute right-8 top-1/2 h-3.5 w-3.5 -translate-y-1/2 animate-spin text-slate-400" />
+          )}
+          {serverQuery && onServerQueryChange ? (
+            <ServerRosterSearchInput
+              initialValue={serverQuery.search}
+              onSearch={(nextSearch) => onServerQueryChange({ search: nextSearch })}
+            />
+          ) : (
+            <input
+              type="search"
+              aria-label="Search students"
+              autoComplete="off"
+              placeholder="Search name, roll, email…"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              className="min-h-8 w-full rounded-lg border border-slate-200 bg-white py-1.5 pl-8 pr-3 text-xs outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15 sm:text-sm"
+            />
+          )}
         </div>
         <select
           value={filterMajor}
@@ -266,11 +303,14 @@ export default function StudentTable({
       </div>
 
       {filtered.length === 0 ? (
-        <div className="p-7">
+        <div className="p-7" aria-busy={refreshing || undefined}>
           <EmptyState icon={Users} title="No students found" description="Try adjusting your search or filters" />
         </div>
       ) : (
-        <div className="overflow-x-auto">
+        <div
+          aria-busy={refreshing || undefined}
+          className={`overflow-x-auto transition-opacity duration-150 ${refreshing ? 'opacity-60' : 'opacity-100'}`}
+        >
           <table className="w-full text-sm">
             <thead className="bg-slate-50 border-b border-slate-100">
               <tr>
@@ -376,9 +416,11 @@ export default function StudentTable({
                           <span className={`rounded-full px-1.5 py-0.5 text-[11px] font-semibold ${majorColor(s.major)}`} title={mTooltip}>
                             {mLabel}
                           </span>
-                          <span className="text-[10px] font-medium text-slate-400">
-                            {s.majorVerificationStatus === 'Matched' ? 'Verified' : (s.majorVerificationStatus || 'Unverified')}
-                          </span>
+                          {s.majorVerificationStatus && (
+                            <span className="text-[10px] font-medium text-slate-400">
+                              {s.majorVerificationStatus === 'Matched' ? 'Verified' : s.majorVerificationStatus}
+                            </span>
+                          )}
                           {s.hasMajorMismatch && (
                             <span
                               className="flex items-center gap-1 rounded bg-orange-50 px-1.5 py-0.5 text-[10px] font-semibold text-orange-700"

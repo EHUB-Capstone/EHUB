@@ -54,7 +54,9 @@ export default function FileUploadZone({
   const mountedRef = useRef(true);
   const completedSinceRefreshRef = useRef(0);
   const onUploadedRef = useRef(onUploaded);
-  onUploadedRef.current = onUploaded;
+  useEffect(() => {
+    onUploadedRef.current = onUploaded;
+  }, [onUploaded]);
 
   const commit = useCallback((next: CheckpointUploadItem[]) => {
     itemsRef.current = next;

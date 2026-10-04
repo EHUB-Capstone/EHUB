@@ -10,6 +10,7 @@ import WorkshopForm from '../../components/workspace/WorkshopForm';
 import WorkshopCheckInModal from '../../components/workspace/WorkshopCheckInModal';
 import WorkshopAttendanceManager from '../../components/workspace/WorkshopAttendanceManager';
 import LoadingSkeleton from '../../components/ui/LoadingSkeleton';
+import { matchesSearchQuery } from '../../utils/searchText';
 
 const Workshops = () => {
   const { user } = useAuth();
@@ -97,8 +98,7 @@ const Workshops = () => {
   // Filter and Search Logic
   const now = new Date();
   const filteredWorkshops = workshops.filter(ws => {
-    const matchesSearch = ws.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      ws.description?.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSearch = matchesSearchQuery(searchQuery, [ws.title, ws.description]);
     if (!matchesSearch) return false;
 
     if (filterSem && getSemesterFromDate(ws.startDate) !== filterSem) return false;

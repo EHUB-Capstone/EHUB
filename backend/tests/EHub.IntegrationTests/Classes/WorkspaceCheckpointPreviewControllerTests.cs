@@ -8,6 +8,7 @@ using EHub.Shared.Results;
 using FluentAssertions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace EHub.IntegrationTests.Classes;
 
@@ -51,6 +52,29 @@ public sealed class WorkspaceCheckpointPreviewControllerTests
             .Which.StatusCode.Should().Be(StatusCodes.Status415UnsupportedMediaType);
     }
 
+    [Fact]
+    public async Task PreviewFile_ReportsServerTimingAndKeepsNosniffAndNoStore()
+    {
+        var controller = CreateController();
+
+        await controller.PreviewFile(teamId, 1, fileId,
+            new PreviewResultHandler(Result.Success(new CheckpointFilePreview(
+                "%PDF-preview"u8.ToArray(), "preview.pdf", FromCache: false, new PreviewTimings(12, 340, 9100)))),
+            CancellationToken.None);
+
+        var headers = controller.Response.Headers;
+        headers["Server-Timing"].ToString().Should().Be("auth;dur=12, storage;dur=340, convert;dur=9100, cache;desc=\"miss\"");
+        headers.XContentTypeOptions.ToString().Should().Be("nosniff");
+        headers.CacheControl.ToString().Should().Be("private, no-store");
+
+        var cached = CreateController();
+        await cached.PreviewFile(teamId, 1, fileId,
+            new PreviewResultHandler(Result.Success(new CheckpointFilePreview(
+                "%PDF-preview"u8.ToArray(), "preview.pdf", FromCache: true, new PreviewTimings(5, 20, 0)))),
+            CancellationToken.None);
+        cached.Response.Headers["Server-Timing"].ToString().Should().Contain("convert;dur=0").And.Contain("cache;desc=\"hit\"");
+    }
+
     [Theory]
     [InlineData(ErrorCodes.WorkspaceFilePreviewConversionFailed, StatusCodes.Status422UnprocessableEntity)]
     [InlineData(ErrorCodes.WorkspaceFilePreviewUnavailable, StatusCodes.Status503ServiceUnavailable)]
@@ -66,7 +90,7 @@ public sealed class WorkspaceCheckpointPreviewControllerTests
             .Which.StatusCode.Should().Be(expectedStatusCode);
     }
 
-    private WorkspaceCheckpointsController CreateController() => new(new PreviewCurrentUser(userId))
+    private WorkspaceCheckpointsController CreateController() => new(new PreviewCurrentUser(userId), NullLogger<WorkspaceCheckpointsController>.Instance)
     {
         ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() }
     };
@@ -83,6 +107,9 @@ public sealed class WorkspaceCheckpointPreviewControllerTests
     {
         public Task<Result<CheckpointFilePreview>> PreviewAsync(Guid teamId, int checkpointNumber, Guid fileId,
             Guid userId, string role, CancellationToken cancellationToken = default) => Task.FromResult(previewResult);
+
+        public Task<Result<CheckpointFilePreviewSourceResponse>> GetPreviewSourceAsync(Guid teamId, int checkpointNumber, Guid fileId,
+            bool retry, Guid userId, string role, CancellationToken cancellationToken = default) => throw new NotSupportedException();
 
         public Task<Result<CheckpointFileDownloadUrlResponse>> GetDownloadUrlAsync(Guid teamId, int checkpointNumber, Guid fileId,
             Guid userId, string role, CancellationToken cancellationToken = default) => throw new NotSupportedException();

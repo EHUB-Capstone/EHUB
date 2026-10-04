@@ -155,7 +155,8 @@ public sealed class StudentClassSelfServiceHandler : IStudentClassSelfServiceHan
                     item.ProfileMajorCode) ?? string.Empty,
                 ProfileMajorCode = item.StudentId == studentId.Value ? item.ProfileMajorCode : null,
                 EnrollmentMajorCode = item.StudentId == studentId.Value ? item.EnrollmentMajorCode : string.Empty,
-                MajorVerificationStatus = item.StudentId == studentId.Value ? item.MajorVerificationStatus : string.Empty,
+                // Only a Verified/Unverified label, shared with classmates; majors and profile data stay private.
+                MajorVerificationStatus = item.MajorVerificationStatus,
                 CanEditMajor = item.StudentId == studentId.Value && canEditOwnMajor,
                 IsMajorLocked = item.StudentId == studentId.Value && isOwnMajorLocked,
                 EnrollmentStatus = item.EnrollmentStatus,

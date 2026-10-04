@@ -149,6 +149,20 @@ public sealed class R2SubmissionObjectStorage : ISubmissionObjectStorage, IDispo
         return _client.GetPreSignedURL(request);
     }
 
+    public string CreatePresignedInlinePdfUrl(string objectKey, TimeSpan lifetime)
+    {
+        var request = new GetPreSignedUrlRequest
+        {
+            BucketName = _bucketName,
+            Key = objectKey,
+            Verb = HttpVerb.GET,
+            Expires = DateTime.UtcNow.Add(lifetime)
+        };
+        request.ResponseHeaderOverrides.ContentType = "application/pdf";
+        request.ResponseHeaderOverrides.ContentDisposition = "inline";
+        return _client.GetPreSignedURL(request);
+    }
+
     internal static string BuildContentDisposition(string fileName)
     {
         var cleaned = new string(Path.GetFileName(fileName).Where(c => !char.IsControl(c)).ToArray());

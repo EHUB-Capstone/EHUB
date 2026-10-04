@@ -218,6 +218,12 @@ public sealed class CheckpointFileUploadHandler(
                     StorageKey = session.ObjectKey,
                     MimeType = session.ContentType,
                     FileSize = info.Value.Size,
+                    // Convert DOCX/PPTX in the background right away so Preview does not have to wait for LibreOffice.
+                    // Saved in the same SaveChanges as the file itself, so a file is never left without its queue entry.
+                    PreviewStatus = CheckpointFileTypes.NeedsBackgroundPreview(extension, info.Value.Size)
+                        ? SubmissionPreviewStatus.Pending
+                        : SubmissionPreviewStatus.None,
+                    PreviewNextAttemptAtUtc = CheckpointFileTypes.NeedsBackgroundPreview(extension, info.Value.Size) ? now : null,
                     FileType = extension == ".pptx" ? SubmissionFileType.PitchDeck : SubmissionFileType.Report,
                     UploadedById = userId,
                     UploadedAt = now,

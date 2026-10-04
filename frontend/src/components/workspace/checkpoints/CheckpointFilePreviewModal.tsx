@@ -24,13 +24,11 @@ import {
   ZoomOut,
 } from 'lucide-react';
 import {
-  GlobalWorkerOptions,
   getDocument,
   type PDFDocumentLoadingTask,
   type PDFDocumentProxy,
   type RenderTask,
 } from 'pdfjs-dist';
-import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import toast from 'react-hot-toast';
 import { checkpointApi } from '../../../api/checkpointApi';
 import {
@@ -43,8 +41,19 @@ import {
   type PdfPreviewFitMode,
 } from '../../../utils/checkpointFilePreview';
 import Button from '../../ui/Button';
+import { markPreviewOpen, measurePreviewFirstPage } from '../../../utils/previewTiming';
+import { getSharedPdfWorker } from '../../../utils/pdfPreviewRuntime';
+import { previewDocumentCache } from '../../../utils/previewDocumentCache';
+import {
+  PreviewPreparationTimeoutError,
+  PreviewUnavailableError,
+  resolvePreviewSource,
+} from '../../../utils/previewSource';
 
-GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
+// Small Range requests let the first page appear long before the whole PDF has been downloaded.
+const PDF_RANGE_CHUNK_SIZE = 256 * 1024;
+
+type PreviewPhase = 'requesting' | 'preparing' | 'downloading';
 
 interface PreviewFile {
   _id: string;
@@ -66,6 +75,8 @@ interface PdfPageCanvasProps {
   fallbackSize: { width: number; height: number };
   viewerRef: RefObject<HTMLDivElement | null>;
   registerPage: (pageNumber: number, element: HTMLElement | null) => void;
+  /** Called once when this page has been painted (used to time click -> first page). */
+  onFirstRender?: () => void;
 }
 
 const viewerControlClass = 'inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-lg px-2.5 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:pointer-events-none disabled:opacity-40';
@@ -77,7 +88,12 @@ function PdfPageCanvas({
   fallbackSize,
   viewerRef,
   registerPage,
+  onFirstRender,
 }: PdfPageCanvasProps) {
+  const onFirstRenderRef = useRef(onFirstRender);
+  useEffect(() => {
+    onFirstRenderRef.current = onFirstRender;
+  }, [onFirstRender]);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const pageContainerRef = useRef<HTMLElement>(null);
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
@@ -143,7 +159,11 @@ function PdfPageCanvas({
             : [outputScale, 0, 0, outputScale, 0, 0],
         });
         await renderTask.promise;
-        if (!cancelled) setStatus('ready');
+        if (!cancelled) {
+          setStatus('ready');
+          onFirstRenderRef.current?.();
+          onFirstRenderRef.current = undefined;
+        }
       } catch {
         if (!cancelled) setStatus('error');
       }
@@ -200,6 +220,10 @@ export default function CheckpointFilePreviewModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [retryKey, setRetryKey] = useState(0);
+  const [phase, setPhase] = useState<PreviewPhase>('requesting');
+  const [loadPercent, setLoadPercent] = useState<number | null>(null);
+  const [preparingSeconds, setPreparingSeconds] = useState(0);
+  const sourceKindRef = useRef<'cache' | 'network' | 'proxy'>('proxy');
   const [downloading, setDownloading] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [fitMode, setFitMode] = useState<PdfPreviewFitMode>('width');
@@ -211,10 +235,17 @@ export default function CheckpointFilePreviewModal({
   const pageElementsRef = useRef(new Map<number, HTMLElement>());
   const scrollFrameRef = useRef<number | null>(null);
 
+  const fileId = file?._id;
+  const handleFirstPageRendered = useCallback(() => {
+    if (fileId) measurePreviewFirstPage(fileId, sourceKindRef.current);
+  }, [fileId]);
+
   useEffect(() => {
     if (!file) return undefined;
+    markPreviewOpen(file._id);
     const controller = new AbortController();
     let loadingTask: PDFDocumentLoadingTask | undefined;
+    let openedDocument: PDFDocumentProxy | undefined;
 
     setLoading(true);
     setError('');
@@ -224,27 +255,109 @@ export default function CheckpointFilePreviewModal({
     setFitMode('width');
     pageElementsRef.current.clear();
 
+    const isOfficeFile = /\.(docx|pptx)$/i.test(file.originalName);
+
+    // Server-side preview endpoint: used for files that still live on Cloudinary and as a fallback.
+    const openFromServer = async () => {
+      sourceKindRef.current = 'proxy';
+      setPhase(isOfficeFile ? 'preparing' : 'downloading');
+      setLoadPercent(null);
+      const blob = await checkpointApi.previewFile(teamId, checkpointNumber, file._id, {
+        signal: controller.signal,
+        onDownloadProgress: ({ loaded, total }: { loaded: number; total?: number }) => {
+          if (total) setLoadPercent(Math.min(100, Math.round((loaded / total) * 100)));
+        },
+      });
+      if (controller.signal.aborted) throw new DOMException('Aborted', 'AbortError');
+
+      const previewBytes = new Uint8Array(await blob.arrayBuffer());
+      if (controller.signal.aborted) throw new DOMException('Aborted', 'AbortError');
+      loadingTask = getDocument({ data: previewBytes, worker: getSharedPdfWorker() });
+      return loadingTask.promise;
+    };
+
+    // Reads the PDF straight from storage with Range requests, so page 1 shows before the download ends.
+    const openFromStorage = (url: string) => {
+      sourceKindRef.current = 'network';
+      setPhase('downloading');
+      setLoadPercent(0);
+      loadingTask = getDocument({ url, rangeChunkSize: PDF_RANGE_CHUNK_SIZE, worker: getSharedPdfWorker() });
+      loadingTask.onProgress = ({ loaded, total }: { loaded: number; total?: number }) => {
+        if (total) setLoadPercent(Math.min(100, Math.round((loaded / total) * 100)));
+      };
+      return loadingTask.promise;
+    };
+
     const loadPreview = async () => {
       try {
-        const blob = await checkpointApi.previewFile(teamId, checkpointNumber, file._id, {
-          signal: controller.signal,
-        });
+        setPhase('requesting');
+        setLoadPercent(null);
+        setPreparingSeconds(0);
+
+        // Reopening a file whose PDF was fully downloaded a moment ago needs no request at all.
+        const cachedDocument = previewDocumentCache.get(file._id);
+        if (cachedDocument) {
+          sourceKindRef.current = 'cache';
+          const cachedFirstPage = await cachedDocument.getPage(1);
+          if (controller.signal.aborted) return;
+          const cachedViewport = cachedFirstPage.getViewport({ scale: 1 });
+          setFirstPageSize({ width: cachedViewport.width, height: cachedViewport.height });
+          setPdfDocument(cachedDocument);
+          return;
+        }
+
+        const source = await resolvePreviewSource(
+          async (retry) => (await checkpointApi.getPreviewSource(teamId, checkpointNumber, file._id, {
+            retry,
+            signal: controller.signal,
+          })).data,
+          {
+            signal: controller.signal,
+            retry: retryKey > 0,
+            onPreparing: (elapsedMs) => {
+              setPhase('preparing');
+              setPreparingSeconds(Math.floor(elapsedMs / 1000));
+            },
+          },
+        );
         if (controller.signal.aborted) return;
 
-        const previewBytes = new Uint8Array(await blob.arrayBuffer());
-        if (controller.signal.aborted) return;
+        let loadedDocument: PDFDocumentProxy;
+        if (source.status === 'Ready' && source.url) {
+          try {
+            loadedDocument = await openFromStorage(source.url);
+          } catch (storageError: unknown) {
+            if (controller.signal.aborted) return;
+            // Storage not reachable from the browser (for example the bucket CORS rule is missing):
+            // fall back to the server-side preview instead of showing an error.
+            if (import.meta.env?.DEV) console.warn('[E-HUB] Direct preview failed, using the server preview.', storageError);
+            void loadingTask?.destroy();
+            loadedDocument = await openFromServer();
+          }
+        } else {
+          loadedDocument = await openFromServer();
+        }
 
-        loadingTask = getDocument({ data: previewBytes });
-        const loadedDocument = await loadingTask.promise;
         const firstPage = await loadedDocument.getPage(1);
         if (controller.signal.aborted) return;
 
         const viewport = firstPage.getViewport({ scale: 1 });
         setFirstPageSize({ width: viewport.width, height: viewport.height });
         setPdfDocument(loadedDocument);
+        openedDocument = loadedDocument;
+        // Keep the document for quick reopening once it has been downloaded completely.
+        void loadedDocument.getDownloadInfo()
+          .then(() => {
+            if (!controller.signal.aborted) previewDocumentCache.set(file._id, loadedDocument);
+          })
+          .catch(() => undefined);
       } catch (requestError: unknown) {
         if (controller.signal.aborted) return;
-        setError(await getCheckpointPreviewErrorMessage(requestError));
+        setError(
+          requestError instanceof PreviewUnavailableError || requestError instanceof PreviewPreparationTimeoutError
+            ? requestError.message
+            : await getCheckpointPreviewErrorMessage(requestError),
+        );
       } finally {
         if (!controller.signal.aborted) setLoading(false);
       }
@@ -253,7 +366,10 @@ export default function CheckpointFilePreviewModal({
     void loadPreview();
     return () => {
       controller.abort();
-      void loadingTask?.destroy();
+      // A document that went into the cache is owned by the cache and destroyed on eviction.
+      if (loadingTask && !(openedDocument && previewDocumentCache.holds(file._id, openedDocument))) {
+        void loadingTask.destroy();
+      }
     };
   }, [checkpointNumber, file, retryKey, teamId]);
 
@@ -578,8 +694,32 @@ export default function CheckpointFilePreviewModal({
               <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white shadow-card ring-1 ring-slate-200">
                 <Loader2 className="h-7 w-7 animate-spin text-primary" />
               </div>
-              <p className="mt-4 text-sm font-bold text-slate-800">Loading preview...</p>
-              <p className="mt-1 text-xs text-slate-500">Preparing the document viewer</p>
+              <p className="mt-4 text-sm font-bold text-slate-800">
+                {phase === 'preparing'
+                  ? 'Preparing preview...'
+                  : phase === 'downloading'
+                    ? `Loading document${loadPercent === null ? '...' : `... ${loadPercent}%`}`
+                    : 'Opening preview...'}
+              </p>
+              <p className="mt-1 max-w-xs px-4 text-xs text-slate-500">
+                {phase === 'preparing'
+                  ? `Converting this document to PDF the first time it is opened. This can take up to 30 seconds${preparingSeconds >= 3 ? ` (${preparingSeconds}s)` : ''}.`
+                  : phase === 'downloading'
+                    ? 'The first page appears as soon as enough of the file has arrived.'
+                    : 'Checking access to the document'}
+              </p>
+              {phase === 'downloading' && loadPercent !== null && (
+                <div
+                  className="mt-3 h-1.5 w-48 overflow-hidden rounded-full bg-slate-200"
+                  role="progressbar"
+                  aria-label="Document download progress"
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={loadPercent}
+                >
+                  <div className="h-full rounded-full bg-primary transition-[width] duration-200" style={{ width: `${loadPercent}%` }} />
+                </div>
+              )}
             </div>
           )}
 
@@ -623,6 +763,7 @@ export default function CheckpointFilePreviewModal({
                       fallbackSize={firstPageSize}
                       viewerRef={documentAreaRef}
                       registerPage={registerPage}
+                      onFirstRender={pageNumber === 1 ? handleFirstPageRendered : undefined}
                     />
                   );
                 })}

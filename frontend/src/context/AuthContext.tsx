@@ -9,6 +9,7 @@ import type {
   VerifyRegistrationOtpPayload,
   WorkspaceUser,
 } from '../types/auth';
+import { clearPreviewDocumentCache } from '../utils/previewDocumentCache';
 
 // ─── Context shape ───────────────────────────────────────────────────────────
 
@@ -128,6 +129,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } finally {
       setAccessToken(null);
       setUser(null);
+      // Documents opened in previews must not stay in memory for the next user of this tab.
+      clearPreviewDocumentCache();
     }
   }, []);
 

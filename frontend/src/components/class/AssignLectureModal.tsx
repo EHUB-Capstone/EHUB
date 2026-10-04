@@ -5,6 +5,7 @@ import { classApi } from '../../api/classApi';
 import { subjectApi } from '../../api/subjectApi';
 import { parseApiError } from '../../utils/apiError';
 import { unwrapApiData } from '../../utils/classMappers';
+import { matchesSearchQuery } from '../../utils/searchText';
 
 export default function AssignLectureModal({ classId, semester, year, currentLecture, rowVersion, allowUnassign = false, onClose, onAssigned }) {
   const [lecturers, setLecturers] = useState([]);
@@ -65,10 +66,7 @@ export default function AssignLectureModal({ classId, semester, year, currentLec
     }
   };
 
-  const filtered = lecturers.filter(l =>
-    l.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    l.email?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filtered = lecturers.filter(l => matchesSearchQuery(searchTerm, [l.name, l.email]));
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">

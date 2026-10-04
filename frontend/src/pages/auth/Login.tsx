@@ -181,7 +181,6 @@ const Login: React.FC = () => {
 
     try {
       const user = await loginWithGoogle(credentialResponse.credential);
-      toast.success('Signed in with Google!');
       redirectByRole(user.roles as string[]);
     } catch (err: unknown) {
       const { code, message } = parseApiError(err, 'Google sign-in failed.');

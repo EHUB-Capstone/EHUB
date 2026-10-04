@@ -19,6 +19,7 @@ import type {
   CreateBulkClassesRequest,
 } from '../../types/classes';
 import type { ClassCreationSemesterOption } from '../../types/subjects';
+import { matchesSearchQuery } from '../../utils/searchText';
 
 type AssignmentMode = 'assign' | 'unassigned';
 
@@ -150,10 +151,7 @@ export default function BulkCreateModal({
     };
   }, [selectedSemester?.semester, selectedSemester?.year]);
   const filteredLecturers = useMemo(() => {
-    const search = lecturerSearch.trim().toLowerCase();
-    if (!search) return lecturers;
-    return lecturers.filter(lecturer =>
-      lecturer.name.toLowerCase().includes(search) || lecturer.email?.toLowerCase().includes(search));
+    return lecturers.filter(lecturer => matchesSearchQuery(lecturerSearch, [lecturer.name, lecturer.email]));
   }, [lecturerSearch, lecturers]);
 
   const startIndex = Number(form.startClassIndex);

@@ -1,4 +1,5 @@
 import type { TeamRankingItem, TeamRankingViewItem } from '../types/rankings';
+import { matchesSearchQuery } from './searchText.ts';
 
 // Ranks are supplied by the authorized backend; clients never need raw scores.
 export function rankTeamResults(items: TeamRankingItem[]): TeamRankingViewItem[] {
@@ -10,10 +11,9 @@ export function rankTeamResults(items: TeamRankingItem[]): TeamRankingViewItem[]
 export function filterTeamRankingRows(
   rows: TeamRankingViewItem[], filters: { search: string; teamId: string; status: string },
 ): TeamRankingViewItem[] {
-  const search = filters.search.trim().toLowerCase();
   return rows.filter(item =>
-    (!search || [item.projectName, item.projectDescription, item.semesterGroupName, item.teamName,
-      item.teamCode, item.classCode, item.courseCode].some(value => value.toLowerCase().includes(search)))
+    matchesSearchQuery(filters.search, [item.projectName, item.projectDescription, item.semesterGroupName, item.teamName,
+      item.teamCode, item.classCode, item.courseCode])
     && (!filters.teamId || item.teamId === filters.teamId)
     && (!filters.status || item.status === filters.status));
 }

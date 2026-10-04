@@ -7,6 +7,7 @@ import type {
   AccountApprovalStatus,
   RawAccountRegistration,
 } from '../types/accountApproval';
+import { matchesSearchQuery } from './searchText.ts';
 
 export function normalizeApprovalRole(value?: string | null): AccountApprovalRole | null {
   const normalized = String(value || '').trim().toUpperCase();
@@ -79,18 +80,16 @@ export function filterApprovalRequests(
   requests: AccountApprovalRequest[],
   filters: AccountApprovalFilters,
 ): AccountApprovalRequest[] {
-  const query = filters.search.trim().toLowerCase();
-
   return requests
     .filter((request) => filters.status === 'ALL' || request.status === filters.status)
     .filter((request) => filters.role === 'ALL' || request.role === filters.role)
-    .filter((request) => !query || [
+    .filter((request) => matchesSearchQuery(filters.search, [
       request.fullName,
       request.email,
       request.department,
       request.institution,
       request.expertise,
-    ].some((value) => value?.toLowerCase().includes(query)))
+    ]))
     .sort((left, right) => {
       if (left.status === 'PENDING' && right.status !== 'PENDING') return -1;
       if (right.status === 'PENDING' && left.status !== 'PENDING') return 1;

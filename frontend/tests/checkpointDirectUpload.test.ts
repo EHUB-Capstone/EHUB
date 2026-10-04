@@ -191,3 +191,31 @@ test('large files are flagged for direct download and small ones are not', async
     (error) => statusOf(error)?.status === 400,
   );
 });
+
+test('preview-source mock: PDFs use the server preview at once, DOCX reports Preparing before it is ready', async () => {
+  const { team, number } = await openCheckpointAsStudent();
+
+  async function upload(name: string) {
+    const created = await checkpointApi.initiateUpload(team.id, number, { fileName: name, contentType: '', size: 9 });
+    await checkpointApi.putToPresignedUrl(created.data, pdf(name, 9), {});
+    return (await checkpointApi.completeUpload(team.id, number, created.data.uploadId)).data;
+  }
+
+  const report = await upload('report.pdf');
+  const plan = await upload('plan.docx');
+
+  const pdfSource = await checkpointApi.getPreviewSource(team.id, number, report._id);
+  assert.equal(pdfSource.data.status, 'Proxy');
+
+  const first = await axiosClient.get(`/workspace/checkpoints/teams/${team.id}/checkpoints/${number}/files/${plan._id}/preview-source`);
+  assert.equal(first.data.status, 'Preparing');
+  const second = await checkpointApi.getPreviewSource(team.id, number, plan._id);
+  assert.equal(second.data.status, 'Preparing');
+  const third = await checkpointApi.getPreviewSource(team.id, number, plan._id);
+  assert.equal(third.data.status, 'Proxy');
+
+  await assert.rejects(
+    () => checkpointApi.getPreviewSource(team.id, number, 'missing-file'),
+    (error) => statusOf(error)?.status === 404,
+  );
+});
