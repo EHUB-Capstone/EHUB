@@ -22,6 +22,11 @@ public class Team : AuditableEntity
     public DateTime? ArchivedAt { get; set; }
     public uint Version { get; set; }
 
+    // Identity shared by every semester-specific instance of the same team.
+    public Guid TeamLineageId { get; set; } = Guid.NewGuid();
+    public Guid? PreviousTeamId { get; set; }
+    public virtual Team? PreviousTeam { get; set; }
+
     // Navigation properties
     public virtual ICollection<TeamMember> TeamMembers { get; set; } = new List<TeamMember>();
     public virtual Project? Project { get; set; }

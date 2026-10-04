@@ -3306,9 +3306,11 @@ public sealed partial class TeamWorkflowIntegrationTests
         var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var seed = await CreateSeedAsync(context, createProposal: false, createTeam: true);
         context.ChangeTracker.Clear();
+        var realtimePublisher = new RecordingProjectDirectionRealtimePublisher();
         var handler = new ProjectWorkspaceHandler(
             context,
-            scope.ServiceProvider.GetRequiredService<EHub.Application.Common.Interfaces.Persistence.IUnitOfWork>());
+            scope.ServiceProvider.GetRequiredService<EHub.Application.Common.Interfaces.Persistence.IUnitOfWork>(),
+            realtimePublisher);
         var initial = new CreateProjectWorkspaceRequest
         {
             ProjectName = "Campus Circular",
@@ -3402,6 +3404,16 @@ public sealed partial class TeamWorkflowIntegrationTests
         updated.Value.ZaloGroupUrl.Should().Be("https://zalo.me/g/campus-circular");
         updated.Value.ProjectName.Should().Be(initial.ProjectName);
         updated.Value.Description.Should().Be(initial.Description);
+        realtimePublisher.Events.Should().ContainSingle();
+        var profileChangeEvent = realtimePublisher.Events.Single();
+        profileChangeEvent.Recipients.Should().Equal(seed.LecturerId);
+        profileChangeEvent.EventType.Should().Be("ProjectDirectionSubmitted");
+        profileChangeEvent.ClassId.Should().Be(seed.ClassId);
+        profileChangeEvent.TeamId.Should().Be(seed.TeamId.Value);
+        profileChangeEvent.Direction.Status.Should().Be(nameof(ProjectDirectionStatus.Submitted));
+        profileChangeEvent.Direction.IsProjectProfileChangeProposal.Should().BeTrue();
+        profileChangeEvent.Direction.CurrentTitle.Should().Be(initial.ProjectName);
+        profileChangeEvent.Direction.Title.Should().Be("Campus Circular Hub");
 
         context.ChangeTracker.Clear();
         var firstPendingProfileChange = await directionHandler.GetAsync(seed.TeamId.Value, seed.ProposerUserId, SystemRoles.Student);
@@ -4387,5 +4399,28 @@ public sealed partial class TeamWorkflowIntegrationTests
         public Task PublishProposalReviewedAsync(IReadOnlyCollection<Guid> recipientUserIds, Guid classId, Guid proposalId, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task PublishCheckpointRequirementsUpdatedAsync(IReadOnlyCollection<Guid> recipientUserIds, Guid teamId, int checkpointNumber, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task PublishCheckpointEvaluationUpdatedAsync(IReadOnlyCollection<Guid> recipientUserIds, Guid teamId, int checkpointNumber, CancellationToken cancellationToken = default) => Task.CompletedTask;
+    }
+
+    private sealed class RecordingProjectDirectionRealtimePublisher : IProjectDirectionRealtimePublisher
+    {
+        public List<(Guid[] Recipients, string EventType, Guid ClassId, Guid TeamId, ProjectDirectionDto Direction)> Events { get; } = [];
+
+        public Task PublishAsync(
+            IReadOnlyCollection<Guid> recipientUserIds,
+            string eventType,
+            Guid classId,
+            Guid teamId,
+            ProjectDirectionDto direction,
+            CancellationToken cancellationToken = default)
+        {
+            Events.Add((recipientUserIds.ToArray(), eventType, classId, teamId, direction));
+            return Task.CompletedTask;
+        }
+
+        public Task PublishNotificationReadyAsync(
+            IReadOnlyCollection<Guid> recipientUserIds,
+            Guid classId,
+            Guid teamId,
+            CancellationToken cancellationToken = default) => Task.CompletedTask;
     }
 }

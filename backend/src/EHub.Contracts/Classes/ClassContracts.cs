@@ -464,6 +464,7 @@ public sealed class ImportStudentsPreviewResponse
     public int MajorMismatchCount { get; init; }
     public int TeamCount { get; init; }
     public IReadOnlyCollection<ImportTeamPreviewDto> Teams { get; init; } = Array.Empty<ImportTeamPreviewDto>();
+    public EHub.Contracts.Teams.TeamContinuationSummaryDto? Continuation { get; init; }
     public IReadOnlyCollection<ImportStudentRowPreviewDto> Rows { get; init; } = Array.Empty<ImportStudentRowPreviewDto>();
 }
 
@@ -496,6 +497,7 @@ public sealed class ImportStudentsCommitResponse
     public int SkippedCount { get; init; }
     public int ErrorCount { get; init; }
     public int SynchronizedMajorCount { get; init; }
+    public EHub.Contracts.Teams.TeamContinuationSummaryDto? Continuation { get; init; }
     public IReadOnlyCollection<ImportStudentCommitErrorDto> Errors { get; init; } = Array.Empty<ImportStudentCommitErrorDto>();
 }
 

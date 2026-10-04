@@ -395,6 +395,16 @@ public sealed class TeamManagementHandler : ITeamManagementHandler
                     return Result.Failure(new Error(ErrorCodes.TeamDeletionBlocked,
                         "This team has externally stored files. Permanent file deletion must be configured before dissolving it. No data has been deleted."));
 
+                // Remember that a continued team was dissolved on purpose so later imports
+                // do not recreate it from the previous semester.
+                var dissolvedAtUtc = DateTime.UtcNow;
+                await _context.TeamContinuations
+                    .Where(item => item.CreatedTeamId == teamId && item.Status == TeamContinuationStatus.Active)
+                    .ExecuteUpdateAsync(setters => setters
+                        .SetProperty(item => item.Status, TeamContinuationStatus.Dissolved)
+                        .SetProperty(item => item.DissolvedAtUtc, dissolvedAtUtc)
+                        .SetProperty(item => item.DissolvedByUserId, userId), transactionCancellationToken);
+
                 await TeamDataDeletion.DeleteAsync(_context, teamId, transactionCancellationToken);
                 return Result.Success();
             }, cancellationToken);
@@ -532,6 +542,7 @@ public sealed class TeamManagementHandler : ITeamManagementHandler
             .Include(team => team.TeamMembers).ThenInclude(member => member.ClassStudent).ThenInclude(enrollment => enrollment.Student)
             .Include(team => team.MentorAssignments).ThenInclude(assignment => assignment.MentorProfile).ThenInclude(profile => profile.User)
             .Include(team => team.Project)
+            .Include(team => team.PreviousTeam!).ThenInclude(previous => previous.Class).ThenInclude(@class => @class.Semester)
             .Include(team => team.ChatGroups);
     }
 

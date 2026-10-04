@@ -78,6 +78,10 @@ public sealed class TeamDto
     public IReadOnlyCollection<MentorAssignmentDto> CurrentMentorAssignments { get; init; } = Array.Empty<MentorAssignmentDto>();
     public MentorAssignmentDto? CurrentMentorAssignment { get; init; }
     public TeamMajorCompositionDto MajorComposition { get; init; } = new() { IsValid = true };
+    public Guid TeamLineageId { get; init; }
+    public bool IsContinued { get; init; }
+    public string? ContinuedFromSemesterCode { get; init; }
+    public string? ContinuedFromClassCode { get; init; }
     public string RowVersion { get; init; } = string.Empty;
 }
 

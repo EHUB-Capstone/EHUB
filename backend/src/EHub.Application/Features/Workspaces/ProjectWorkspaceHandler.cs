@@ -2,7 +2,10 @@ using System.Text.RegularExpressions;
 using System.Text.Json;
 using EHub.Application.Common.Exceptions;
 using EHub.Application.Common.Interfaces.Persistence;
+using EHub.Application.Common.Interfaces.Services;
 using EHub.Application.Features.Classes.Common;
+using EHub.Application.Features.Teams.ProjectDirections;
+using EHub.Contracts.Teams;
 using EHub.Contracts.Workspaces;
 using EHub.Domain.Entities;
 using EHub.Domain.Enums;
@@ -23,11 +26,16 @@ public sealed class ProjectWorkspaceHandler : IProjectWorkspaceHandler
 
     private readonly IApplicationDbContext _context;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IProjectDirectionRealtimePublisher? _realtimePublisher;
 
-    public ProjectWorkspaceHandler(IApplicationDbContext context, IUnitOfWork unitOfWork)
+    public ProjectWorkspaceHandler(
+        IApplicationDbContext context,
+        IUnitOfWork unitOfWork,
+        IProjectDirectionRealtimePublisher? realtimePublisher = null)
     {
         _context = context;
         _unitOfWork = unitOfWork;
+        _realtimePublisher = realtimePublisher;
     }
 
     public async Task<Result<IReadOnlyCollection<WorkspaceOptionDto>>> GetAccessibleAsync(
@@ -257,7 +265,10 @@ public sealed class ProjectWorkspaceHandler : IProjectWorkspaceHandler
 
         try
         {
-            return await _unitOfWork.ExecuteInSerializableTransactionAsync(async transactionCancellationToken =>
+            var realtimeClassId = Guid.Empty;
+            Guid? realtimeLecturerId = null;
+            ProjectDirectionDto? realtimeDirection = null;
+            var result = await _unitOfWork.ExecuteInSerializableTransactionAsync(async transactionCancellationToken =>
             {
                 var team = await TeamQuery(tracking: true)
                     .FirstOrDefaultAsync(item => item.Id == teamId, transactionCancellationToken);
@@ -372,8 +383,30 @@ public sealed class ProjectWorkspaceHandler : IProjectWorkspaceHandler
                 }
 
                 await _context.SaveChangesAsync(transactionCancellationToken);
+                if (proposedFields.Count > 0)
+                {
+                    await _context.ProjectDirectionReviews
+                        .Where(review => review.ProjectDirectionId == team.ProjectDirection.Id)
+                        .LoadAsync(transactionCancellationToken);
+                    realtimeClassId = team.ClassId;
+                    realtimeLecturerId = team.Class.PrimaryLecturerId;
+                    realtimeDirection = ProjectDirectionHandler.ToDto(team.ProjectDirection);
+                }
                 return Result.Success(MapProject(project, team));
             }, cancellationToken);
+
+            if (result.IsSuccess && realtimeLecturerId.HasValue && realtimeDirection != null && _realtimePublisher != null)
+            {
+                await _realtimePublisher.PublishAsync(
+                    [realtimeLecturerId.Value],
+                    "ProjectDirectionSubmitted",
+                    realtimeClassId,
+                    teamId,
+                    realtimeDirection,
+                    cancellationToken);
+            }
+
+            return result;
         }
         catch (DbUpdateException)
         {

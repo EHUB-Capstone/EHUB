@@ -59,6 +59,10 @@ export interface ManagedTeam {
   projectStatus?: string | null;
   hasChatGroup?: boolean;
   majorComposition?: TeamMajorComposition | null;
+  teamLineageId?: string | null;
+  isContinued?: boolean;
+  continuedFromSemesterCode?: string | null;
+  continuedFromClassCode?: string | null;
   chatGroupId?: EntityReference;
   mentorId?: EntityReference;
   lectureId?: EntityReference;

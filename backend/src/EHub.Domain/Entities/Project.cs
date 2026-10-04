@@ -33,6 +33,11 @@ public class Project : AuditableEntity
 
     public DateTime? SubmittedAt { get; set; }
 
+    // Identity shared by every semester-specific instance of the same project.
+    public Guid ProjectLineageId { get; set; } = Guid.NewGuid();
+    public Guid? PreviousProjectId { get; set; }
+    public virtual Project? PreviousProject { get; set; }
+
     // Navigation properties
     public virtual ICollection<ProjectTag> ProjectTags { get; set; } = new List<ProjectTag>();
     public virtual ICollection<ProjectActivityLog> ActivityLogs { get; set; } = new List<ProjectActivityLog>();

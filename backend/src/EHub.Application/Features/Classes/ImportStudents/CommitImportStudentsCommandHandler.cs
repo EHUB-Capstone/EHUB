@@ -2,6 +2,7 @@ using System.Text.Json;
 using EHub.Application.Common.Exceptions;
 using EHub.Application.Common.Interfaces.Persistence;
 using EHub.Application.Features.Classes.Common;
+using EHub.Application.Features.Teams.Continuations;
 using EHub.Contracts.Classes;
 using EHub.Domain.Entities;
 using EHub.Domain.Enums;
@@ -18,13 +19,16 @@ public sealed class CommitImportStudentsCommandHandler : ICommitImportStudentsCo
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private readonly IApplicationDbContext _context;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly ITeamContinuationService _teamContinuation;
 
     public CommitImportStudentsCommandHandler(
         IApplicationDbContext context,
-        IUnitOfWork unitOfWork)
+        IUnitOfWork unitOfWork,
+        ITeamContinuationService? teamContinuation = null)
     {
         _context = context;
         _unitOfWork = unitOfWork;
+        _teamContinuation = teamContinuation ?? new TeamContinuationService(context);
     }
 
     public async Task<Result<ImportStudentsCommitResponse>> HandleAsync(
@@ -411,6 +415,10 @@ public sealed class CommitImportStudentsCommandHandler : ICommitImportStudentsCo
 
         await _context.SaveChangesAsync(cancellationToken);
 
+        // Enrollments are saved inside the caller's transaction; continue previous-semester teams
+        // that are now complete. A failure here rolls back the whole import.
+        var continuation = await _teamContinuation.ApplyAsync(targetClass, currentUserId, cancellationToken);
+
         return new ImportStudentsCommitResponse
         {
             ImportMode = "StudentRoster",
@@ -419,6 +427,7 @@ public sealed class CommitImportStudentsCommandHandler : ICommitImportStudentsCo
             SynchronizedMajorCount = synchronizedMajorCount,
             SkippedCount = errors.Count,
             ErrorCount = errors.Count,
+            Continuation = continuation,
             Errors = errors
         };
     }
@@ -822,6 +831,9 @@ public sealed class CommitImportStudentsCommandHandler : ICommitImportStudentsCo
 
         await _context.SaveChangesAsync(cancellationToken);
 
+        // Teams defined by the file win; continuation only considers students without a team.
+        var continuation = await _teamContinuation.ApplyAsync(targetClass, currentUserId, cancellationToken);
+
         return new ImportStudentsCommitResponse
         {
             ImportMode = "TeamAssignment",
@@ -832,6 +844,7 @@ public sealed class CommitImportStudentsCommandHandler : ICommitImportStudentsCo
             CreatedProjectCount = createdProjectCount,
             SkippedCount = errors.Count,
             ErrorCount = errors.Count,
+            Continuation = continuation,
             Errors = errors
         };
     }

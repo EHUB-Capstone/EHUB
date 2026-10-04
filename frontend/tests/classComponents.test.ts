@@ -30,6 +30,7 @@ import {
   isProjectDirectionConcurrencyConflict,
   isProjectProfileAvailable,
   resolveDirectionOverviewClassId,
+  shouldApplyProjectDirectionSubmission,
   updateProjectDirectionOverviewTeams,
 } from '../src/utils/projectDirectionSync.ts';
 import {
@@ -127,7 +128,7 @@ test('evaluation rankings are restricted to admin and lecturer roles', () => {
 });
 
 test('workspace keeps evaluation inside checkpoints and removes standalone evaluation and mentoring tabs', () => {
-  assert.deepEqual(WORKSPACE_TABS, ['overview', 'roadmap', 'shortcut']);
+  assert.deepEqual(WORKSPACE_TABS, ['overview', 'roadmap', 'shortcut', 'history']);
   assert.equal(resolveWorkspaceTab('?tab=roadmap'), 'roadmap');
   assert.equal(resolveWorkspaceTab('?tab=evaluation'), 'overview');
   assert.equal(resolveWorkspaceTab('?tab=mentoring'), 'overview');
@@ -364,6 +365,24 @@ test('project direction live synchronization detects and announces lecturer deci
     getProjectDirectionDecisionNotice(pendingProfileChange, rejectedProfileChange),
     'Lecturer rejected your Project Profile changes. The approved profile remains unchanged.',
   );
+});
+
+test('lecturer overview applies a newer Project Profile change request to an approved team', () => {
+  const profileChange = {
+    id: 'direction-1',
+    status: 'Submitted',
+    rowVersion: '12',
+    isProjectProfileChangeProposal: true,
+  };
+
+  assert.equal(shouldApplyProjectDirectionSubmission('APPROVED', '11', profileChange), true);
+  assert.equal(shouldApplyProjectDirectionSubmission('APPROVED', '12', profileChange), false);
+  assert.equal(shouldApplyProjectDirectionSubmission('APPROVED', '11', {
+    ...profileChange,
+    isProjectProfileChangeProposal: false,
+  }), false);
+  assert.equal(shouldApplyProjectDirectionSubmission('CHANGES_REQUESTED', '11', profileChange), true);
+  assert.equal(shouldApplyProjectDirectionSubmission('PENDING', '11', profileChange), false);
 });
 
 test('approved Project Profile displays the values from the latest realtime decision', () => {
