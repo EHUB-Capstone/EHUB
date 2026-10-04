@@ -1,4 +1,5 @@
 using EHub.Application.Common.Interfaces.Identity;
+using EHub.Application.Features.ProjectData.GetProjectAchievementHistory;
 using EHub.Application.Features.ProjectData.GetProjectData;
 using EHub.Application.Features.ProjectData.GetProjectDataFilterOptions;
 using EHub.Application.Features.ProjectData.GetProjectDataSummary;
@@ -46,6 +47,16 @@ public sealed class ProjectDataController(ICurrentUserService currentUser) : Con
         ToResponse(
             await handler.HandleAsync(UserId, Role, cancellationToken),
             "Project data filter options retrieved.");
+
+    [HttpGet("{projectId:guid}/achievements/history")]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    public async Task<IActionResult> GetAchievementHistory(
+        Guid projectId,
+        [FromServices] IGetProjectAchievementHistoryQueryHandler handler,
+        CancellationToken cancellationToken) =>
+        ToResponse(
+            await handler.HandleAsync(projectId, UserId, Role, cancellationToken),
+            "Project achievement history retrieved.");
 
     [HttpPut("{projectId:guid}/achievements")]
     public async Task<IActionResult> UpdateAchievements(

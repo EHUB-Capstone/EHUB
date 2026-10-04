@@ -6,6 +6,7 @@ import {
 } from '../types/projectData.ts';
 import type {
   ProjectAchievement,
+  ProjectAchievementHistoryItem,
   ProjectDataItem,
   ProjectDataMentor,
   ProjectDataPageSize,
@@ -15,6 +16,7 @@ import type {
 } from '../types/projectData.ts';
 
 export const PROJECT_DATA_SEARCH_MAX_LENGTH = 100;
+export const PROJECT_ACHIEVEMENT_NOTE_MAX_LENGTH = 500;
 export const PROJECT_DATA_SEARCH_DEBOUNCE_MS = 300;
 export const PROJECT_DATA_EMPTY_VALUE = '-';
 
@@ -173,6 +175,52 @@ export function projectDataSummaryKey(userId: string | undefined, query: Project
   return ['project-data', userId ?? 'anonymous', 'summary', toProjectDataSummaryParams(query)] as const;
 }
 
+/** Includes the row version so a saved change makes an open history list refetch. */
+export function projectDataHistoryKey(userId: string | undefined, projectId: string, rowVersion: string) {
+  return ['project-data', userId ?? 'anonymous', 'history', projectId, rowVersion] as const;
+}
+
+/** "4 Oct 2026, 14:22": month spelled out so day/month order is never ambiguous, no seconds. */
+export function formatHistoryDate(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return PROJECT_DATA_EMPTY_VALUE;
+  return date.toLocaleString('en-GB', {
+    day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false,
+  });
+}
+
+export interface HistoryEntryView {
+  isCarriedOver: boolean;
+  /** Labels were added or removed (kept labels alone are not a change). */
+  labelsChanged: boolean;
+  /** Short tag for entries that only touched the note, or removed it. */
+  noteTag: 'Note updated' | 'Note removed' | null;
+  /** False when the entry could not be read; the summary sentence is shown instead. */
+  hasStructure: boolean;
+}
+
+export function describeHistoryEntry(entry: ProjectAchievementHistoryItem): HistoryEntryView {
+  const labelsChanged = entry.added.length > 0 || entry.removed.length > 0;
+  const hasStructure = labelsChanged || entry.kept.length > 0 || entry.noteChanged;
+  const noteTag = !entry.noteChanged
+    ? null
+    : entry.note === null
+      ? 'Note removed'
+      : labelsChanged ? null : 'Note updated';
+  return { isCarriedOver: entry.action === 'ACHIEVEMENTS_CARRIED_OVER', labelsChanged, noteTag, hasStructure };
+}
+
+export function historyActionLabel(action: string): string {
+  return action === 'ACHIEVEMENTS_CARRIED_OVER' ? 'Carried over' : 'Changed';
+}
+
+/** Says so when the list shows only the latest entries of a longer history. */
+export function historyTruncationNotice(history: { totalCount: number; items: readonly unknown[] }): string | null {
+  return history.totalCount > history.items.length
+    ? `Showing the latest ${history.items.length} of ${history.totalCount} updates.`
+    : null;
+}
+
 export function projectDataOptionsKey(userId: string | undefined) {
   return ['project-data', userId ?? 'anonymous', 'options'] as const;
 }
@@ -204,6 +252,16 @@ export function removedAchievements(
   return orderAchievements(saved.filter(name => !draft.includes(name)));
 }
 
+/** Trims the note; a blank note means no note (the API stores null). */
+export function normalizeNote(value: string | null | undefined): string | null {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : null;
+}
+
+export function sameNote(a: string | null | undefined, b: string | null | undefined): boolean {
+  return normalizeNote(a) === normalizeNote(b);
+}
+
 export function displayList(values: readonly string[] | null | undefined): string {
   const items = (values ?? []).map(value => value.trim()).filter(Boolean);
   return items.length > 0 ? items.join(', ') : PROJECT_DATA_EMPTY_VALUE;
@@ -229,6 +287,11 @@ export function pageSummary(page: { pageIndex: number; pageSize: number; totalIt
   const first = (page.pageIndex - 1) * page.pageSize + 1;
   const last = Math.min(page.totalItems, page.pageIndex * page.pageSize);
   return first > page.totalItems ? `${page.totalItems} projects` : `${first}–${last} of ${page.totalItems} projects`;
+}
+
+/** The Startup Workspace of exactly this team (the route also used by the workspace hub). */
+export function projectWorkspacePath(teamId: string): string {
+  return `/workspace/teams/${encodeURIComponent(teamId)}`;
 }
 
 export function findItem(items: readonly ProjectDataItem[], projectId: string | null): ProjectDataItem | null {

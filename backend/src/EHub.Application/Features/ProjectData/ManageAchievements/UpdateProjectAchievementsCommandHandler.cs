@@ -14,7 +14,7 @@ public sealed class UpdateProjectAchievementsCommandHandler(
     IApplicationDbContext context,
     IDateTimeProvider dateTimeProvider) : IUpdateProjectAchievementsCommandHandler
 {
-    private const string ActivityAction = "PROJECT_ACHIEVEMENTS_CHANGED";
+    private const int SummaryMaxLength = 300;
 
     public async Task<Result<ProjectAchievementsResponse>> HandleAsync(
         Guid projectId,
@@ -40,6 +40,12 @@ public sealed class UpdateProjectAchievementsCommandHandler(
             requested.Add(canonical);
         }
 
+        var note = ProjectAchievementMapping.NormalizeNote(request.Note);
+        if (note is { Length: > ProjectAchievementMapping.NoteMaxLength })
+            return Failure(ErrorCodes.ProjectDataValidationError, $"The note must be at most {ProjectAchievementMapping.NoteMaxLength} characters.");
+        if (note is not null && requested.Count == 0)
+            return Failure(ErrorCodes.ProjectDataValidationError, "A note needs at least one achievement.");
+
         // The project must exist within the feature scope (administrator view) before role-specific access is judged.
         var project = await ProjectDataQuery.Scoped(context.Projects, currentUserId, isAdmin: true)
             .FirstOrDefaultAsync(item => item.Id == projectId, cancellationToken);
@@ -60,30 +66,34 @@ public sealed class UpdateProjectAchievementsCommandHandler(
         var nextFunded = requested.Contains(ProjectAchievementNames.Funded);
         var nextAwarded = requested.Contains(ProjectAchievementNames.Awarded);
 
-        // An unchanged label set is a no-op so retries after a lost response stay harmless.
-        if (project.IsHighPotential == nextPotential &&
-            project.IsFunded == nextFunded &&
-            project.IsAwarded == nextAwarded)
-        {
-            return Result.Success(ToResponse(project));
-        }
+        var labelsChanged = project.IsHighPotential != nextPotential ||
+                            project.IsFunded != nextFunded ||
+                            project.IsAwarded != nextAwarded;
+        var noteChanged = !string.Equals(project.AchievementNote, note, StringComparison.Ordinal);
+
+        // An unchanged label set and note is a no-op so retries after a lost response stay harmless.
+        if (!labelsChanged && !noteChanged)
+            return Result.Success(await ToResponseAsync(project, cancellationToken));
 
         var now = dateTimeProvider.UtcNow;
         project.IsHighPotential = nextPotential;
         project.IsFunded = nextFunded;
         project.IsAwarded = nextAwarded;
+        project.AchievementNote = note;
+        project.AchievementsUpdatedAt = now;
+        project.AchievementsUpdatedBy = currentUserId;
         project.UpdatedAt = now;
         project.UpdatedBy = currentUserId;
 
         var after = ProjectAchievementMapping.ToNames(project);
-        var changed = before.Except(after).Concat(after.Except(before)).ToArray();
+        var changedFields = ProjectAchievementHistoryParser.BuildTokens(before, after, noteChanged, note);
         context.ProjectActivityLogs.Add(new ProjectActivityLog
         {
             ProjectId = project.Id,
             ActorUserId = currentUserId,
-            Action = ActivityAction,
-            Summary = $"Achievements changed from {Describe(before)} to {Describe(after)}.",
-            ChangedFieldsJson = JsonSerializer.Serialize(changed),
+            Action = ProjectAchievementMapping.ChangedAction,
+            Summary = BuildSummary(labelsChanged, before, after, note),
+            ChangedFieldsJson = JsonSerializer.Serialize(changedFields),
             OccurredAtUtc = now,
         });
 
@@ -96,15 +106,51 @@ public sealed class UpdateProjectAchievementsCommandHandler(
             return Failure(ErrorCodes.ProjectDataConcurrencyConflict, "The project was changed by another user. Refresh and try again.");
         }
 
-        return Result.Success(ToResponse(project));
+        return Result.Success(await ToResponseAsync(project, cancellationToken));
     }
 
-    private static ProjectAchievementsResponse ToResponse(Project project) => new()
+    private async Task<ProjectAchievementsResponse> ToResponseAsync(Project project, CancellationToken cancellationToken)
     {
-        ProjectId = project.Id,
-        Achievements = ProjectAchievementMapping.ToNames(project),
-        RowVersion = project.Version.ToString(),
-    };
+        ProjectDataPersonResponse? updatedBy = null;
+        if (project.AchievementsUpdatedBy is { } updaterId)
+        {
+            var name = await context.Users.AsNoTracking()
+                .Where(user => user.Id == updaterId)
+                .Select(user => user.FullName)
+                .FirstOrDefaultAsync(cancellationToken);
+            if (name is not null)
+                updatedBy = new ProjectDataPersonResponse { UserId = updaterId, FullName = name };
+        }
+
+        return new ProjectAchievementsResponse
+        {
+            ProjectId = project.Id,
+            Achievements = ProjectAchievementMapping.ToNames(project),
+            RowVersion = project.Version.ToString(),
+            Note = project.AchievementNote,
+            UpdatedAtUtc = project.AchievementsUpdatedAt,
+            UpdatedBy = updatedBy,
+        };
+    }
+
+    /// <summary>One line for the activity log; the note is cut so the summary always fits its column.</summary>
+    private static string BuildSummary(
+        bool labelsChanged,
+        IReadOnlyCollection<string> before,
+        IReadOnlyCollection<string> after,
+        string? note)
+    {
+        var summary = labelsChanged
+            ? $"Achievements changed from {Describe(before)} to {Describe(after)}."
+            : "Achievement note updated.";
+        if (note is null) return summary;
+
+        const string prefix = " Note: \"";
+        var room = SummaryMaxLength - summary.Length - prefix.Length - 1;
+        if (room <= 0) return summary;
+        var shown = note.Length <= room ? note : note[..Math.Max(0, room - 1)] + "…";
+        return $"{summary}{prefix}{shown}\"";
+    }
 
     private static string Describe(IReadOnlyCollection<string> names) =>
         names.Count == 0 ? "none" : string.Join(", ", names);

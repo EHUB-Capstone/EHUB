@@ -86,6 +86,16 @@ public class ProjectConfiguration : IEntityTypeConfiguration<Project>
             .HasColumnName("is_awarded")
             .HasDefaultValue(false);
 
+        builder.Property(p => p.AchievementNote)
+            .HasColumnName("achievement_note")
+            .HasMaxLength(500);
+
+        builder.Property(p => p.AchievementsUpdatedAt)
+            .HasColumnName("achievements_updated_at");
+
+        builder.Property(p => p.AchievementsUpdatedBy)
+            .HasColumnName("achievements_updated_by");
+
         builder.Property(p => p.Version)
             .IsRowVersion()
             .HasColumnName("xmin");

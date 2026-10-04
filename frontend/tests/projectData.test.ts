@@ -23,6 +23,14 @@ import {
   sameAchievements,
   summarizeList,
   projectDataSummaryKey,
+  projectWorkspacePath,
+  projectDataHistoryKey,
+  historyActionLabel,
+  describeHistoryEntry,
+  formatHistoryDate,
+  historyTruncationNotice,
+  normalizeNote,
+  sameNote,
   toProjectDataSummaryParams,
   toProjectDataRequestParams,
   toProjectDataSearchParams,
@@ -164,6 +172,84 @@ test('missing values and collections render as a dash while real values are trim
   assert.deepEqual(summarizeList(null), { shown: [], hidden: 0 });
 });
 
+test('notes are trimmed, blank means no note and comparison ignores surrounding whitespace', () => {
+  assert.equal(normalizeNote('  Strong pilot  '), 'Strong pilot');
+  assert.equal(normalizeNote('   '), null);
+  assert.equal(normalizeNote(null), null);
+  assert.equal(sameNote(' same ', 'same'), true);
+  assert.equal(sameNote('', null), true);
+  assert.equal(sameNote('a', 'b'), false);
+  assert.equal(sameNote('a', null), false);
+});
+
+test('the history list says when it shows only the latest entries and labels carried-over ones', () => {
+  assert.equal(historyTruncationNotice({ totalCount: 3, items: [1, 2, 3] }), null);
+  assert.equal(historyTruncationNotice({ totalCount: 0, items: [] }), null);
+  assert.equal(historyTruncationNotice({ totalCount: 63, items: new Array(50).fill(0) }), 'Showing the latest 50 of 63 updates.');
+  assert.equal(historyActionLabel('ACHIEVEMENTS_CARRIED_OVER'), 'Carried over');
+  assert.equal(historyActionLabel('PROJECT_ACHIEVEMENTS_CHANGED'), 'Changed');
+});
+
+const historyEntry = (patch: Record<string, unknown> = {}) => ({
+  id: 'e1', action: 'PROJECT_ACHIEVEMENTS_CHANGED', summary: 'Achievements changed.', actorName: 'EHUB',
+  occurredAtUtc: '2026-10-04T07:22:00Z', added: [], removed: [], kept: [], noteChanged: false, note: null, ...patch,
+}) as Parameters<typeof describeHistoryEntry>[0];
+
+test('history entries are described by what changed, not by the summary sentence', () => {
+  const added = describeHistoryEntry(historyEntry({ added: ['Awarded'], kept: ['Potential'], noteChanged: true, note: 'Won' }));
+  assert.deepEqual(added, { isCarriedOver: false, labelsChanged: true, noteTag: null, hasStructure: true });
+
+  assert.equal(describeHistoryEntry(historyEntry({ removed: ['Potential'], noteChanged: true, note: null })).noteTag, 'Note removed');
+  assert.equal(describeHistoryEntry(historyEntry({ kept: ['Potential'], noteChanged: true, note: 'Revised' })).noteTag, 'Note updated');
+  assert.equal(describeHistoryEntry(historyEntry({ kept: ['Potential'], noteChanged: true, note: 'Revised' })).labelsChanged, false);
+
+  const carried = describeHistoryEntry(historyEntry({ action: 'ACHIEVEMENTS_CARRIED_OVER', added: ['Potential'] }));
+  assert.equal(carried.isCarriedOver, true);
+  assert.equal(carried.labelsChanged, true);
+
+  // Nothing readable: the summary sentence is shown instead.
+  assert.equal(describeHistoryEntry(historyEntry()).hasStructure, false);
+});
+
+test('history dates spell out the month, drop seconds and survive bad input', () => {
+  assert.match(formatHistoryDate('2026-10-04T07:22:32Z'), /^\d{1,2} [A-Z][a-z]{2} 2026, \d{2}:\d{2}$/);
+  assert.doesNotMatch(formatHistoryDate('2026-10-04T07:22:32Z'), /:\d{2}:\d{2}/);
+  assert.equal(formatHistoryDate('not a date'), '-');
+});
+
+test('history cache keys follow the user, the project and its row version', () => {
+  const key = projectDataHistoryKey('user-a', 'project-1', '7');
+  assert.deepEqual(key.slice(0, 2), projectDataScopeKey('user-a'));
+  assert.notDeepEqual(key, projectDataHistoryKey('user-a', 'project-1', '8'));
+  assert.notDeepEqual(key, projectDataHistoryKey('user-a', 'project-2', '7'));
+  assert.notDeepEqual(key, projectDataHistoryKey('user-b', 'project-1', '7'));
+});
+
+test('the history request targets the project and maps the entries', async () => {
+  const mock = new MockAdapter(axiosClient);
+  try {
+    mock.onGet('/project-data/project-1/achievements/history').reply(200, {
+      success: true, message: 'ok',
+      data: { totalCount: 2, items: [
+        { id: 'a', action: 'PROJECT_ACHIEVEMENTS_CHANGED', summary: 'Achievements changed from none to Potential.', actorName: 'EHUB', occurredAtUtc: '2026-10-04T01:00:00Z', added: ['Potential'], removed: [], kept: [], noteChanged: false, note: null },
+        { id: 'b', action: 'ACHIEVEMENTS_CARRIED_OVER', summary: 'Carried over achievements (Potential).', actorName: null, occurredAtUtc: '2026-09-01T01:00:00Z', added: ['Potential'], removed: [], kept: [], noteChanged: false, note: null },
+      ] },
+    });
+    const response = await projectDataApi.getAchievementHistory('project-1');
+    assert.equal(response.data.totalCount, 2);
+    assert.equal(response.data.items[0].actorName, 'EHUB');
+    assert.equal(response.data.items[1].actorName, null);
+    assert.deepEqual(response.data.items[0].added, ['Potential']);
+  } finally {
+    mock.restore();
+  }
+});
+
+test('the workspace link targets exactly the team of the selected project', () => {
+  assert.equal(projectWorkspacePath('0b8f6d3e-1111-4222-8333-444455556666'), '/workspace/teams/0b8f6d3e-1111-4222-8333-444455556666');
+  assert.equal(projectWorkspacePath('a/b?c'), '/workspace/teams/a%2Fb%3Fc');
+});
+
 test('page summary describes the visible range and handles empty results', () => {
   assert.equal(pageSummary({ pageIndex: 1, pageSize: 20, totalItems: 0 }), 'No projects');
   assert.equal(pageSummary({ pageIndex: 2, pageSize: 20, totalItems: 35 }), '21–35 of 35 projects');
@@ -173,7 +259,8 @@ test('page summary describes the visible range and handles empty results', () =>
 const item: ProjectDataItem = {
   projectId: 'project-1', teamId: 'team-1', classId: 'class-1', semesterId: 'semester-1', semesterCode: 'FA2026',
   subjectId: 'subject-1', subjectCode: 'EXE201', classCode: 'EXE201_8', groups: [], projectName: 'Health app', description: null,
-  startupIndustries: [], lecturer: null, mentor: null, academicMentor: null, achievements: [], rowVersion: '7',
+  startupIndustries: [], lecturer: null, mentor: null, academicMentor: null, achievements: [], achievementNote: null,
+  achievementsUpdatedAtUtc: null, achievementsUpdatedBy: null, rowVersion: '7',
 };
 
 test('the API client sends server-side query params, honours abort signals and maps the envelope', async () => {
@@ -226,15 +313,17 @@ test('updating achievements PUTs the full label set with the row version and sur
     let body: unknown;
     mock.onPut('/project-data/project-1/achievements').replyOnce(config => {
       body = JSON.parse(config.data);
-      return [200, { success: true, message: 'ok', data: { projectId: 'project-1', achievements: ['Potential', 'Funded'], rowVersion: '8' } }];
+      return [200, { success: true, message: 'ok', data: { projectId: 'project-1', achievements: ['Potential', 'Funded'], rowVersion: '8', note: 'Strong pilot', updatedAtUtc: '2026-10-04T00:00:00Z', updatedBy: { userId: 'u1', fullName: 'EHUB' } } }];
     });
-    const result = await projectDataApi.updateAchievements('project-1', { achievements: ['Potential', 'Funded'], rowVersion: '7' });
-    assert.deepEqual(body, { achievements: ['Potential', 'Funded'], rowVersion: '7' });
+    const result = await projectDataApi.updateAchievements('project-1', { achievements: ['Potential', 'Funded'], note: 'Strong pilot', rowVersion: '7' });
+    assert.deepEqual(body, { achievements: ['Potential', 'Funded'], note: 'Strong pilot', rowVersion: '7' });
     assert.equal(result.data.rowVersion, '8');
+    assert.equal(result.data.note, 'Strong pilot');
+    assert.equal(result.data.updatedBy?.fullName, 'EHUB');
 
     mock.onPut('/project-data/project-1/achievements').replyOnce(409, { success: false, message: 'changed', code: 'PROJECT_DATA_CONCURRENCY_CONFLICT' });
     await assert.rejects(
-      projectDataApi.updateAchievements('project-1', { achievements: [], rowVersion: '7' }),
+      projectDataApi.updateAchievements('project-1', { achievements: [], note: null, rowVersion: '7' }),
       (error: { response?: { status?: number; data?: { code?: string } } }) =>
         error.response?.status === 409 && error.response.data?.code === 'PROJECT_DATA_CONCURRENCY_CONFLICT',
     );

@@ -38,6 +38,9 @@ public sealed class ProjectDataItemResponse
     public ProjectDataMentorResponse? Mentor { get; init; }
     public ProjectDataMentorResponse? AcademicMentor { get; init; }
     public IReadOnlyCollection<string> Achievements { get; init; } = Array.Empty<string>();
+    public string? AchievementNote { get; init; }
+    public DateTime? AchievementsUpdatedAtUtc { get; init; }
+    public ProjectDataPersonResponse? AchievementsUpdatedBy { get; init; }
     public string RowVersion { get; init; } = string.Empty;
 }
 

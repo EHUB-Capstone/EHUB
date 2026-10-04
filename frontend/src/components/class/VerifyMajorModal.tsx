@@ -2,7 +2,7 @@ import { useState, useRef, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import {
   X, Upload, FileSpreadsheet, Loader2, CheckCircle2,
-  AlertTriangle, HelpCircle, Search, ChevronDown
+  AlertTriangle, HelpCircle, Search, ChevronDown, Lock
 } from 'lucide-react';
 import { classApi } from '../../api/classApi';
 import { PROGRAM_GROUPS, getMajorName } from '../../constants/majors';
@@ -98,7 +98,7 @@ export default function VerifyMajorModal({ classId, onClose, onUpdated }) {
   const [loading, setLoading] = useState(false);
   const [applying, setApplying] = useState(false);
   const [report, setReport]   = useState(null);
-  const [appliedSummary, setAppliedSummary] = useState<{ enrollments: number; profiles: number; teamWarnings: TeamMajorWarning[] } | null>(null);
+  const [appliedSummary, setAppliedSummary] = useState<{ enrollments: number; profiles: number; teamWarnings: TeamMajorWarning[]; autoLocked: boolean } | null>(null);
   const [showApplyConfirm, setShowApplyConfirm] = useState(false);
   const [activeTab, setActiveTab] = useState('mismatched');
   const [search, setSearch]       = useState('');
@@ -154,15 +154,21 @@ export default function VerifyMajorModal({ classId, onClose, onUpdated }) {
         synchronizedEnrollmentCount?: number;
         synchronizedProfileCount?: number;
         teamMajorWarnings?: TeamMajorWarning[];
+        majorsAutoLocked?: boolean;
       };
       const teamWarnings = data.teamMajorWarnings || [];
+      const autoLocked = Boolean(data.majorsAutoLocked);
       setAppliedSummary({
         enrollments: data.synchronizedEnrollmentCount || 0,
         profiles: data.synchronizedProfileCount || 0,
         teamWarnings,
+        autoLocked,
       });
       setShowApplyConfirm(false);
       toast.success(`Updated ${data.synchronizedEnrollmentCount || 0} class major(s) and ${data.synchronizedProfileCount || 0} profile major(s).`);
+      if (autoLocked) {
+        toast.success('All students are verified. Major updates have been locked automatically.', { duration: 6000 });
+      }
       if (teamWarnings.length > 0) {
         toast(`${teamWarnings.length} team(s) no longer meet the major requirement.`, { icon: '⚠️' });
       }
@@ -272,6 +278,18 @@ export default function VerifyMajorModal({ classId, onClose, onUpdated }) {
                   : `Preview only — no data has changed. The official file would change ${classChanges} class major(s) and ${profileChanges} profile major(s). Review before verifying and updating. Manual correction saves immediately and requires a new preview.`}
                 {' '}Other columns, including GroupName, are ignored.
               </div>
+              {appliedSummary?.autoLocked && (
+                <div role="status" data-testid="verify-major-auto-lock" className="flex items-start gap-2 rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">
+                  <Lock className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                  <div>
+                    <p className="font-semibold">Major updates locked automatically</p>
+                    <p className="mt-0.5 text-xs text-blue-700">
+                      Every student in this class is verified. Students were notified and can no longer change their major.
+                      Use Actions &rarr; Unlock major updates if a correction is needed.
+                    </p>
+                  </div>
+                </div>
+              )}
               {appliedSummary && appliedSummary.teamWarnings.length > 0 && (
                 <div role="status" data-testid="verify-team-major-warnings" className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
                   <p className="flex items-center gap-2 font-semibold">

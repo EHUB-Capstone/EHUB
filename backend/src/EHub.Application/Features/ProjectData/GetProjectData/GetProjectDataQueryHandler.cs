@@ -61,6 +61,9 @@ public sealed class GetProjectDataQueryHandler(IApplicationDbContext context) : 
                 project.IsHighPotential,
                 project.IsFunded,
                 project.IsAwarded,
+                project.AchievementNote,
+                project.AchievementsUpdatedAt,
+                project.AchievementsUpdatedBy,
                 project.Version))
             .ToListAsync(cancellationToken);
 
@@ -104,6 +107,14 @@ public sealed class GetProjectDataQueryHandler(IApplicationDbContext context) : 
             .GroupBy(item => item.TeamId)
             .ToDictionary(group => group.Key, group => ProjectDataQuery.DistinctSortedNaturally(group.Select(item => item.Group)));
 
+        var updaterIds = rows.Where(row => row.AchievementsUpdatedBy.HasValue)
+            .Select(row => row.AchievementsUpdatedBy!.Value).Distinct().ToArray();
+        var updaterNames = updaterIds.Length == 0
+            ? new Dictionary<Guid, string>()
+            : await context.Users.AsNoTracking()
+                .Where(user => updaterIds.Contains(user.Id))
+                .ToDictionaryAsync(user => user.Id, user => user.FullName, cancellationToken);
+
         var mentors = await ProjectDataMentorResolver.LoadAsync(
             context.MentorAssignments.AsNoTracking().Where(assignment => teamIds.Contains(assignment.TeamId)),
             cancellationToken);
@@ -128,6 +139,11 @@ public sealed class GetProjectDataQueryHandler(IApplicationDbContext context) : 
             Mentor = ToMentor(mentors.GetValueOrDefault((row.TeamId, MentorType.Enterprise))),
             AcademicMentor = ToMentor(mentors.GetValueOrDefault((row.TeamId, MentorType.Academic))),
             Achievements = ProjectAchievementMapping.ToNames(row.IsHighPotential, row.IsFunded, row.IsAwarded),
+            AchievementNote = row.AchievementNote,
+            AchievementsUpdatedAtUtc = row.AchievementsUpdatedAt,
+            AchievementsUpdatedBy = row.AchievementsUpdatedBy is { } updaterId && updaterNames.TryGetValue(updaterId, out var updaterName)
+                ? new ProjectDataPersonResponse { UserId = updaterId, FullName = updaterName }
+                : null,
             RowVersion = row.Version.ToString(),
         }).ToArray();
     }
@@ -164,5 +180,8 @@ public sealed class GetProjectDataQueryHandler(IApplicationDbContext context) : 
         bool IsHighPotential,
         bool IsFunded,
         bool IsAwarded,
+        string? AchievementNote,
+        DateTime? AchievementsUpdatedAt,
+        Guid? AchievementsUpdatedBy,
         uint Version);
 }

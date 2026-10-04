@@ -1233,8 +1233,13 @@ public sealed class ClassSafetyHotfixIntegrationTests
         var team = await context.Teams.AsNoTracking()
             .Include(item => item.TeamMembers)
             .Include(item => item.Project)
+            .Include(item => item.ProjectDirection)
             .SingleAsync(item => item.ClassId == seed.ClassId && item.TeamName == "NextWave Tech");
         team.TeamMembers.Should().HaveCount(4);
+        team.TeamMembers.Single(item => item.StudentId == students[0].Id)
+            .RoleInTeam.Should().Be(TeamMemberRole.Leader);
+        team.TeamMembers.Where(item => item.StudentId != students[0].Id)
+            .Should().OnlyContain(item => item.RoleInTeam == TeamMemberRole.Member);
         (await context.Students.AsNoTracking().SingleAsync(item => item.Id == students[0].Id))
             .FullName.Should().Be("Imported Team Member");
         (await context.ClassStudents.AsNoTracking().CountAsync(item =>
@@ -1243,6 +1248,10 @@ public sealed class ClassSafetyHotfixIntegrationTests
         team.Project!.Name.Should().Be("SnapPose");
         team.Project.ZaloGroupUrl.Should().Be("https://zalo.me/g/snap-pose");
         team.Project.Description.Should().Be("An AI-assisted photography application for guided poses and better framing.");
+        team.ProjectDirection.Should().NotBeNull();
+        team.ProjectDirection!.Title.Should().Be("SnapPose");
+        team.ProjectDirection.Summary.Should().Be("An AI-assisted photography application for guided poses and better framing.");
+        team.ProjectDirection.Status.Should().Be(ProjectDirectionStatus.Draft);
         (await context.ClassAuditLogs.AsNoTracking().AnyAsync(log =>
             log.ClassId == seed.ClassId && log.Action == "TEAM_ASSIGNMENT_IMPORT_COMMITTED")).Should().BeTrue();
         (await context.ClassImportSessions.AsNoTracking().SingleAsync(item => item.Id == preview.Value.SessionId))
@@ -1588,6 +1597,130 @@ public sealed class ClassSafetyHotfixIntegrationTests
     }
 
     [Fact]
+    public async Task OfficialMajorFile_LocksMajorsAutomaticallyOnceEveryStudentIsVerified_AndNotifiesStudents()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateClassSeedAsync(context, "major-auto-lock");
+        var lecturer = await context.Users.SingleAsync(user => user.Id == seed.LecturerId);
+        var lecturerToken = GenerateToken(scope.ServiceProvider, lecturer, SystemRoles.Lecturer);
+        var targetClass = await context.Classes.AsNoTracking().SingleAsync(item => item.Id == seed.ClassId);
+        var studentRole = await context.Roles.SingleAsync(role => role.Name == SystemRoles.Student);
+
+        var enrolled = new List<(Student Student, string RollNumber)>();
+        for (var index = 0; index < 2; index++)
+        {
+            var email = $"auto-lock-{Guid.NewGuid():N}@example.com";
+            var user = new User
+            {
+                FullName = $"Auto Lock Student {index}",
+                Email = email,
+                NormalizedEmail = email.ToLowerInvariant(),
+                PasswordHash = "integration-test-only",
+                Status = UserStatus.Active,
+                IsEmailVerified = true
+            };
+            user.UserRoles.Add(new UserRole { UserId = user.Id, User = user, RoleId = studentRole.Id, Role = studentRole });
+            var rollNumber = "SE" + Guid.NewGuid().ToString("N")[..8].ToUpperInvariant();
+            var student = new Student
+            {
+                UserId = user.Id,
+                User = user,
+                RollNumber = rollNumber,
+                NormalizedRollNumber = rollNumber,
+                FullName = user.FullName,
+                Email = email,
+                MajorCode = MajorCodes.BIT_AI,
+                Status = StudentStatus.Active,
+                CreatedBy = seed.AdminId
+            };
+            context.Students.Add(student);
+            context.ClassStudents.Add(new ClassStudent
+            {
+                ClassId = seed.ClassId,
+                StudentId = student.Id,
+                Student = student,
+                SemesterId = targetClass.SemesterId,
+                CourseId = targetClass.CourseId,
+                EnrollmentStatus = EnrollmentStatus.Active,
+                CountsTowardCourseSemesterLimit = true,
+                MajorCodeAtEnrollment = MajorCodes.Undeclared
+            });
+            enrolled.Add((student, rollNumber));
+        }
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        async Task<ApiResponse<VerifyClassMajorsResponse>> SendAsync(string path, params (string RollNumber, string Major)[] rows)
+        {
+            using var content = CreateMajorUpload(CreateOfficialMajorWorkbook(rows));
+            using var request = new HttpRequestMessage(HttpMethod.Post, $"/api/classes/{seed.ClassId}/major-verification/{path}")
+            {
+                Content = content
+            };
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", lecturerToken);
+            var response = await _client.SendAsync(request);
+            response.StatusCode.Should().Be(HttpStatusCode.OK);
+            return (await response.Content.ReadFromJsonAsync<ApiResponse<VerifyClassMajorsResponse>>())!;
+        }
+
+        async Task<bool> IsLockedAsync()
+        {
+            context.ChangeTracker.Clear();
+            return (await context.Classes.AsNoTracking().SingleAsync(item => item.Id == seed.ClassId)).IsEnrollmentMajorLocked;
+        }
+
+        var both = new[]
+        {
+            (enrolled[0].RollNumber, MajorCodes.BBA_FIN),
+            (enrolled[1].RollNumber, MajorCodes.BIT_SE)
+        };
+
+        // A preview never changes the class, even when every student would be verified.
+        var preview = await SendAsync("preview", both);
+        preview.Data!.MajorsAutoLocked.Should().BeFalse();
+        (await IsLockedAsync()).Should().BeFalse();
+
+        // One student is missing from the file, so the class is not fully verified yet.
+        var partial = await SendAsync("synchronize", both[0]);
+        partial.Data!.MajorsAutoLocked.Should().BeFalse();
+        partial.Data.IsMajorLocked.Should().BeFalse();
+        (await IsLockedAsync()).Should().BeFalse();
+
+        // Verifying the remaining student locks the class in the same request.
+        var complete = await SendAsync("synchronize", both);
+        complete.Data!.MajorsAutoLocked.Should().BeTrue();
+        complete.Data.IsMajorLocked.Should().BeTrue();
+        (await IsLockedAsync()).Should().BeTrue();
+        (await context.ClassAuditLogs.AsNoTracking().CountAsync(item =>
+            item.ClassId == seed.ClassId && item.Action == "ENROLLMENT_MAJOR_LOCKED")).Should().Be(1);
+
+        // Students receive one bell notification each, and replaying the event does not duplicate it.
+        var lockEvent = await context.OutboxMessages.AsNoTracking().SingleAsync(item =>
+            item.AggregateId == seed.ClassId && item.Type == "Class.EnrollmentMajorsAutoLocked.v1");
+        var dispatcher = scope.ServiceProvider.GetRequiredService<IOutboxEventDispatcher>();
+        await dispatcher.DispatchAsync(lockEvent);
+        await dispatcher.DispatchAsync(lockEvent);
+        var notifications = await context.Notifications.AsNoTracking()
+            .Where(item => item.SourceEventId == lockEvent.EventId)
+            .ToArrayAsync();
+        notifications.Select(item => item.RecipientUserId)
+            .Should().BeEquivalentTo(enrolled.Select(item => item.Student.UserId!.Value));
+        notifications.Should().OnlyContain(item =>
+            item.Title == "Major verification completed" && item.Link == $"/student/classes/{seed.ClassId}");
+
+        // The lock now blocks further synchronization until a lecturer unlocks the class.
+        using var lockedContent = CreateMajorUpload(CreateOfficialMajorWorkbook(both));
+        using var lockedRequest = new HttpRequestMessage(HttpMethod.Post,
+            $"/api/classes/{seed.ClassId}/major-verification/synchronize") { Content = lockedContent };
+        lockedRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", lecturerToken);
+        (await _client.SendAsync(lockedRequest)).StatusCode.Should().Be(HttpStatusCode.Conflict);
+        context.ChangeTracker.Clear();
+        (await context.OutboxMessages.AsNoTracking().CountAsync(item =>
+            item.AggregateId == seed.ClassId && item.Type == "Class.EnrollmentMajorsAutoLocked.v1")).Should().Be(1);
+    }
+
+    [Fact]
     public async Task OfficialMajorFile_WarnsAboutTeamMajorComposition_AndClearsItWhenTeamIsFixed()
     {
         using var scope = _factory.Services.CreateScope();
@@ -1867,6 +2000,17 @@ public sealed class ClassSafetyHotfixIntegrationTests
             otherToken,
             new UpdateClassStudentRequest { MajorCode = MajorCodes.BIT_AI, Reason = "Attempted correction outside assigned class" });
         (await _client.SendAsync(forbiddenMajorCorrection)).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        // Verifying the only student completes the class, which locks major updates automatically.
+        // A correction needs an explicit unlock first.
+        using var lockedMajorCorrection = CreateAuthorizedPutRequest(
+            $"/api/classes/{seed.ClassId}/students/{student.Id}/major",
+            assignedToken,
+            new UpdateClassStudentRequest { MajorCode = MajorCodes.BIT_AI, Reason = "Correction while locked" });
+        (await _client.SendAsync(lockedMajorCorrection)).StatusCode.Should().Be(HttpStatusCode.Conflict);
+        using var unlockRequest = new HttpRequestMessage(HttpMethod.Delete, $"/api/classes/{seed.ClassId}/major-lock");
+        unlockRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", assignedToken);
+        (await _client.SendAsync(unlockRequest)).StatusCode.Should().Be(HttpStatusCode.OK);
 
         using var allowedMajorCorrection = CreateAuthorizedPutRequest(
             $"/api/classes/{seed.ClassId}/students/{student.Id}/major",
@@ -2561,6 +2705,24 @@ public sealed class ClassSafetyHotfixIntegrationTests
         worksheet.Cell(2, 3).Value = email;
         worksheet.Cell(2, 4).Value = majorCode;
 
+        using var stream = new MemoryStream();
+        workbook.SaveAs(stream);
+        return stream.ToArray();
+    }
+
+    private static byte[] CreateOfficialMajorWorkbook(IEnumerable<(string RollNumber, string Major)> rows)
+    {
+        using var workbook = new XLWorkbook();
+        var worksheet = workbook.Worksheets.Add("Class Roster");
+        worksheet.Cell(1, 1).Value = "RollNumber";
+        worksheet.Cell(1, 2).Value = "Chuyên ngành";
+        var rowNumber = 2;
+        foreach (var (rollNumber, major) in rows)
+        {
+            worksheet.Cell(rowNumber, 1).Value = rollNumber;
+            worksheet.Cell(rowNumber, 2).Value = major;
+            rowNumber++;
+        }
         using var stream = new MemoryStream();
         workbook.SaveAs(stream);
         return stream.ToArray();

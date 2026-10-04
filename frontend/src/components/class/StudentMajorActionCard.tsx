@@ -210,6 +210,12 @@ export default function StudentMajorActionCard({
                 <span className="font-bold">{normalizedMajor}</span>{majorName ? ` — ${majorName}` : ''}
               </p>
               <p className="mt-0.5 text-xs text-slate-500">Matches the latest official class record.</p>
+              {isLocked && (
+                <p data-testid="major-locked-notice" className="mt-1 flex items-center gap-1 text-xs font-semibold text-slate-500">
+                  <Lock className="h-3 w-3" />
+                  Your major is verified and updates are locked. Contact {lecturerName || 'your lecturer'} if it needs to be corrected.
+                </p>
+              )}
             </div>
           </div>
 

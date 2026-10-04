@@ -886,8 +886,12 @@ function registerRosterHandlers(mock: MockAdapter): void {
     const mismatched = rows.filter((_, index) => index % 4 === 3).map((student, index) => ({ rowNumber: index + 2, studentId: student.studentId, rollNumber: student.rollNumber, fullName: student.fullName, email: student.email, majorInFile: student.majorCode === 'BIT_SE' ? 'BBA_IB' : 'BIT_SE', majorInDb: student.majorCode, majorInProfile: student.profileMajorCode, status: 'Mismatched', message: 'Major in file differs from enrollment major.' }));
     matched.forEach((row) => { const student = rows.find((item) => item.studentId === row.studentId); if (student) student.majorVerificationStatus = 'Matched'; });
     mismatched.forEach((row) => { const student = rows.find((item) => item.studentId === row.studentId); if (student) student.majorVerificationStatus = 'Mismatched'; });
+    const verifiedCls = findClass(classId);
+    const majorsAutoLocked = Boolean(verifiedCls) && !verifiedCls!.isEnrollmentMajorLocked
+      && rows.length > 0 && mismatched.length === 0;
+    if (majorsAutoLocked) { verifiedCls!.isEnrollmentMajorLocked = true; verifiedCls!.rowVersion = allocateRowVersion(); }
     persistMockState();
-    return ok({ matched, mismatched, missing: [], notFound: [], synchronizedEnrollmentCount: 0, synchronizedProfileCount: 0 }, 'Student majors verified successfully.');
+    return ok({ matched, mismatched, missing: [], notFound: [], synchronizedEnrollmentCount: 0, synchronizedProfileCount: 0, isMajorLocked: Boolean(verifiedCls?.isEnrollmentMajorLocked), majorsAutoLocked }, 'Student majors verified successfully.');
   });
 
   mock.onPost(/^\/classes\/[^/]+\/major-verification\/synchronize$/).reply((config) => {
@@ -902,8 +906,11 @@ function registerRosterHandlers(mock: MockAdapter): void {
       student.majorVerificationStatus = 'Matched';
       return { rowNumber: index + 2, studentId: student.studentId, rollNumber: student.rollNumber, fullName: student.fullName, email: student.email, majorInFile: major, majorInDb: major, majorInProfile: major, status: 'Matched', message: null };
     });
+    const syncedCls = findClass(classId);
+    const majorsAutoLocked = Boolean(syncedCls) && !syncedCls!.isEnrollmentMajorLocked && rows.length > 0;
+    if (majorsAutoLocked) { syncedCls!.isEnrollmentMajorLocked = true; syncedCls!.rowVersion = allocateRowVersion(); }
     persistMockState();
-    return ok({ matched, mismatched: [], missing: [], notFound: [], synchronizedEnrollmentCount: rows.length, synchronizedProfileCount: rows.length, teamMajorWarnings: teamMajorWarnings(classId) }, 'Enrollment and profile majors synchronized from the verification file.');
+    return ok({ matched, mismatched: [], missing: [], notFound: [], synchronizedEnrollmentCount: rows.length, synchronizedProfileCount: rows.length, isMajorLocked: Boolean(syncedCls?.isEnrollmentMajorLocked), majorsAutoLocked, teamMajorWarnings: teamMajorWarnings(classId) }, 'Enrollment and profile majors synchronized from the verification file.');
   });
 
   mock.onPost(/^\/classes\/[^/]+\/import-students\/preview$/).reply((config) => {

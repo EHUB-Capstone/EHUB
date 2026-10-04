@@ -18,6 +18,19 @@ export interface ProjectDirectionSyncValue {
   startupIndustries?: string[] | null;
 }
 
+interface ProjectDirectionSeedProject {
+  projectName?: string | null;
+  description?: string | null;
+}
+
+export const getProjectDirectionDraftSeed = (
+  direction?: ProjectDirectionSyncValue | null,
+  project?: ProjectDirectionSeedProject | null,
+): { title: string; summary: string } => ({
+  title: direction?.title || project?.projectName || '',
+  summary: direction?.summary || project?.description || '',
+});
+
 export const isProjectDirectionConcurrencyConflict = (code?: string | null): boolean => (
   code === 'CLASS_CONCURRENCY_CONFLICT' || code === 'PROJECT_DIRECTION_CONCURRENCY_CONFLICT'
 );

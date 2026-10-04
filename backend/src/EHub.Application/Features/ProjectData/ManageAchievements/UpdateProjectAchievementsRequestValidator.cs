@@ -15,6 +15,12 @@ public sealed class UpdateProjectAchievementsRequestValidator : AbstractValidato
         RuleForEach(request => request.Achievements)
             .Must(value => ProjectAchievementMapping.Canonicalize(value) is not null)
             .WithMessage("Achievement must be Potential, Funded or Awarded.");
+        RuleFor(request => request.Note)
+            .MaximumLength(ProjectAchievementMapping.NoteMaxLength);
+        RuleFor(request => request)
+            .Must(request => string.IsNullOrWhiteSpace(request.Note) || request.Achievements.Count > 0)
+            .WithName(nameof(UpdateProjectAchievementsRequest.Note))
+            .WithMessage("A note needs at least one achievement.");
         RuleFor(request => request.RowVersion)
             .NotEmpty()
             .Matches("^[0-9]+$")

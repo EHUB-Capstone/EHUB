@@ -89,6 +89,15 @@ public sealed class TeamContinuityIntegrationTests
         newTeam.Project.Name.Should().Be(world.OldProject.Name);
         newTeam.Project.Status.Should().Be(ProjectStatus.Approved);
         newTeam.Project.IsHighPotential.Should().BeTrue();
+        // The labels arrive with their note and original attribution, and the carry-over is traceable in the log.
+        newTeam.Project.AchievementNote.Should().Be(world.OldProject.AchievementNote);
+        newTeam.Project.AchievementsUpdatedBy.Should().Be(world.OldProject.AchievementsUpdatedBy);
+        newTeam.Project.AchievementsUpdatedAt.Should().BeCloseTo(world.OldProject.AchievementsUpdatedAt!.Value, TimeSpan.FromMilliseconds(1));
+        var carriedOver = await context.ProjectActivityLogs.AsNoTracking()
+            .SingleAsync(log => log.ProjectId == newTeam.Project.Id && log.Action == "ACHIEVEMENTS_CARRIED_OVER");
+        carriedOver.Summary.Should().Contain("Potential");
+        carriedOver.ChangedFieldsJson.Should().Contain("+Potential").And.Contain("note=Strong pilot results");
+        carriedOver.ActorUserId.Should().Be(world.AdminId);
         newTeam.Project.ProjectTags.Select(tag => tag.TagName).Should().BeEquivalentTo(["fintech"]);
         (await context.Submissions.AsNoTracking().CountAsync(item => item.ProjectId == newTeam.Project.Id))
             .Should().Be(0);
@@ -513,6 +522,9 @@ public sealed class TeamContinuityIntegrationTests
             Problem = "Students lose track of money",
             Status = ProjectStatus.Approved,
             IsHighPotential = true,
+            AchievementNote = "Strong pilot results",
+            AchievementsUpdatedAt = DateTime.UtcNow.AddDays(-100),
+            AchievementsUpdatedBy = admin.Id,
             CreatedById = admin.Id,
             SubmittedAt = DateTime.UtcNow.AddDays(-150)
         };

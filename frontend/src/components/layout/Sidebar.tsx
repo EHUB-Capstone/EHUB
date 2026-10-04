@@ -64,7 +64,7 @@ const Sidebar = ({ mobileOpen, onMobileClose }: SidebarProps) => {
       { path: '/admin/users', icon: 'group', label: 'Users' },
       { path: '/admin/account-approvals', icon: 'account_approval', label: 'Account Approvals' },
       { path: '/admin/classes', icon: 'school', label: 'Classes' },
-      { path: '/workspace', icon: 'view_kanban', label: 'Startup Workspace' },
+      // { path: '/workspace', icon: 'view_kanban', label: 'Startup Workspace' },
       { path: '/project-data', icon: 'database', label: 'Project Data' },
       { path: '/admin/feedback', icon: 'chat', label: 'Feedback Inbox' },
       // ...(releaseFeatureFlags.dataBank ? [{ path: '/lecturer/data-bank', icon: 'database', label: 'Data Bank' }] : []),

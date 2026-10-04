@@ -39,15 +39,22 @@ export default function ProjectData() {
     updateAchievements.reset();
   }, [updateAchievements]);
 
-  const saveAchievements = useCallback((achievements: ProjectAchievement[]) => {
+  const saveAchievements = useCallback((achievements: ProjectAchievement[], note: string | null) => {
     if (!selected || updateAchievements.isPending) return;
     setSaveError(null);
     updateAchievements.mutate(
-      { projectId: selected.projectId, payload: { achievements, rowVersion: selected.rowVersion } },
+      { projectId: selected.projectId, payload: { achievements, note, rowVersion: selected.rowVersion } },
       {
         onSuccess: result => {
           setSelected(current => current && current.projectId === result.projectId
-            ? { ...current, achievements: result.achievements, rowVersion: result.rowVersion }
+            ? {
+                ...current,
+                achievements: result.achievements,
+                achievementNote: result.note,
+                achievementsUpdatedAtUtc: result.updatedAtUtc,
+                achievementsUpdatedBy: result.updatedBy,
+                rowVersion: result.rowVersion,
+              }
             : current);
           toast.success('Achievements updated.');
         },
