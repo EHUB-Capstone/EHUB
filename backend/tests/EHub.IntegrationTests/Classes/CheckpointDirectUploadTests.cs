@@ -469,6 +469,9 @@ public sealed partial class TeamWorkflowIntegrationTests
         public string CreatePresignedDownloadUrl(string objectKey, string fileName, string contentType, TimeSpan lifetime) =>
             $"https://r2.test/get/{objectKey}?name={Uri.EscapeDataString(fileName)}&expires={(int)lifetime.TotalSeconds}";
 
+        public string CreatePresignedInlinePdfUrl(string objectKey, TimeSpan lifetime) =>
+            $"https://r2.test/inline/{objectKey}?inline=1&expires={(int)lifetime.TotalSeconds}";
+
         public bool Contains(string objectKey) => objects.ContainsKey(objectKey);
 
         private readonly HashSet<string> stuckDeletes = new(StringComparer.Ordinal);

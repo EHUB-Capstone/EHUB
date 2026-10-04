@@ -1,4 +1,4 @@
-import { useState, useEffect, useContext, useCallback } from 'react';
+import { useState, useEffect, useContext, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { motion } from 'framer-motion';
@@ -14,6 +14,7 @@ import { userApi } from '../../api/userApi';
 import LoadingSkeleton from '../../components/ui/LoadingSkeleton';
 import StudentTable from '../../components/class/StudentTable';
 import TeamList from '../../components/class/TeamList';
+import TeamMajorWarningBanner from '../../components/class/TeamMajorWarningBanner';
 import TeamManagementModal from '../../components/class/TeamManagementModal';
 import StudentAssignmentModal from '../../components/class/StudentAssignmentModal';
 import ImportStudentsModal from '../../components/class/ImportStudentsModal';
@@ -37,6 +38,48 @@ import { canManageClass as canManageClassPermission, hasClassRole } from '../../
 import type { ClassCompletionPreview } from '../../types/classes';
 import type { StudentAssignmentMode } from '../../types/studentAssignment';
 import { subscribeProjectDirectionRealtime } from '../../api/projectDirectionRealtime';
+
+const mapRosterStudents = (rawStudents, currentClassId, proposals = []) => {
+  const reservedTeamIds = new Map();
+  proposals.forEach((proposal) => {
+    const proposalStatus = String(proposal.status || '').toUpperCase();
+    if (!['DRAFT', 'PENDING', 'NEEDS_REVISION', 'NEEDSREVISION'].includes(proposalStatus)) return;
+    getTeamMemberIds(proposal).forEach((studentId) => reservedTeamIds.set(studentId, proposal._id));
+  });
+
+  return rawStudents.map((student, index) => {
+    const effectiveMajor = resolveEffectiveTeamMajor(student.majorCode, student.profileMajorCode, student.major);
+    const registeredMajor = typeof student.profileMajorCode === 'string'
+      ? student.profileMajorCode.trim().toUpperCase()
+      : '';
+    const hasMajorMismatch = Boolean(
+      effectiveMajor &&
+      registeredMajor &&
+      effectiveMajor !== 'UNDECLARED' &&
+      registeredMajor !== 'UNDECLARED' &&
+      effectiveMajor !== registeredMajor,
+    );
+    const studentId = student.studentId || student.id || student._id || `student-${index}`;
+    return {
+      _id: studentId,
+      studentCode: student.rollNumber || student.studentCode,
+      rollNumber: student.rollNumber || student.studentCode,
+      fullName: student.fullName,
+      email: student.email,
+      major: effectiveMajor,
+      majorCode: effectiveMajor,
+      profileMajorCode: registeredMajor || null,
+      hasMajorMismatch,
+      majorVerificationStatus: student.majorVerificationStatus || 'Unverified',
+      semesterGroupName: student.semesterGroupName || null,
+      enrollmentStatus: student.enrollmentStatus || 'Active',
+      classId: currentClassId,
+      teamId: student.teamId || reservedTeamIds.get(studentId) || null,
+      teamName: student.teamName || null,
+      isTeamLeader: student.isTeamLeader || false,
+    };
+  });
+};
 
 const classActionTone = {
   neutral: 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-800',
@@ -71,6 +114,7 @@ export default function ClassDetail() {
   const [teamProposals, setTeamProposals] = useState([]);
   const [loading,  setLoading]  = useState(true);
   const [rosterLoadError, setRosterLoadError] = useState('');
+  const [rosterRefreshing, setRosterRefreshing] = useState(false);
   const [rosterPage, setRosterPage] = useState(1);
   const [rosterPageSize] = useState(50);
   const [rosterSearch, setRosterSearch] = useState('');
@@ -119,15 +163,79 @@ export default function ClassDetail() {
   const [completionPreview, setCompletionPreview] = useState<ClassCompletionPreview | null>(null);
   const [completionLoading, setCompletionLoading] = useState(false);
   const [showActionsMenu, setShowActionsMenu] = useState(false);
+  const lastAutoLoadedClassIdentifierRef = useRef<string | undefined>(undefined);
+  const currentClassRef = useRef(null);
+  const teamProposalsRef = useRef([]);
+  const rosterRequestRef = useRef<{ controller: AbortController; sequence: number } | null>(null);
 
-  const fetchData = useCallback(async () => {
+  useEffect(() => {
+    currentClassRef.current = cls;
+  }, [cls]);
+
+  useEffect(() => {
+    teamProposalsRef.current = teamProposals;
+  }, [teamProposals]);
+
+  const handleRosterQueryChange = useCallback((next) => {
+    if (Object.prototype.hasOwnProperty.call(next, 'search')) setRosterSearch(next.search);
+    if (Object.prototype.hasOwnProperty.call(next, 'majorCode')) setRosterMajor(next.majorCode);
+    if (Object.prototype.hasOwnProperty.call(next, 'status')) setRosterStatus(next.status);
+    if (Object.prototype.hasOwnProperty.call(next, 'page')) setRosterPage(next.page);
+    if (!Object.prototype.hasOwnProperty.call(next, 'page')) setRosterPage(1);
+  }, []);
+
+  // `background` refreshes in place: swapping the page for a skeleton would unmount open modals.
+  const fetchData = useCallback(async (options?: { background?: boolean; rosterOnly?: boolean }) => {
     if (!id || id === 'undefined') {
       toast.error('Invalid class identifier');
       setLoading(false);
       return null;
     }
 
-    setLoading(true);
+    if (options?.rosterOnly) {
+      const currentClass = currentClassRef.current;
+      const currentClassId = String(currentClass?.id || currentClass?._id || '');
+      if (!currentClassId) return null;
+
+      rosterRequestRef.current?.controller.abort();
+      const controller = new AbortController();
+      const sequence = (rosterRequestRef.current?.sequence || 0) + 1;
+      rosterRequestRef.current = { controller, sequence };
+      setRosterLoadError('');
+      setRosterRefreshing(true);
+
+      try {
+        const response = await classApi.getStudents(currentClassId, {
+          page: rosterPage,
+          pageSize: rosterPageSize,
+          search: rosterSearch || undefined,
+          majorCode: rosterMajor || undefined,
+          status: rosterStatus || undefined,
+        }, controller.signal);
+        if (controller.signal.aborted || rosterRequestRef.current?.sequence !== sequence) return null;
+
+        const data = unwrapApiData(response);
+        const rawStudents = data.items || data.students || data.data || (Array.isArray(data) ? data : []);
+        setRosterMeta({
+          totalCount: data.totalCount ?? rawStudents.length,
+          page: data.page ?? rosterPage,
+          pageSize: data.pageSize ?? rosterPageSize,
+          totalPages: Math.max(1, data.totalPages ?? 1),
+        });
+        setStudents(mapRosterStudents(rawStudents, currentClassId, teamProposalsRef.current));
+      } catch (error) {
+        if (!controller.signal.aborted) {
+          setRosterLoadError(parseApiError(error, 'Failed to load the class roster.').message);
+        }
+      } finally {
+        // A superseded request must not clear the indicator of the one that replaced it.
+        if (rosterRequestRef.current?.sequence === sequence) setRosterRefreshing(false);
+      }
+      return null;
+    }
+
+    rosterRequestRef.current?.controller.abort();
+    if (options?.background !== true) setLoading(true);
     setRosterLoadError('');
 
     try {
@@ -188,38 +296,6 @@ export default function ClassDetail() {
         setRosterLoadError(parseApiError(studentRes.reason, 'Failed to load the class roster.').message);
       }
 
-      const mappedStudents = rawStudents.map((s, idx) => {
-        const effectiveMajor = resolveEffectiveTeamMajor(s.majorCode, s.profileMajorCode, s.major);
-        const registeredMajor = typeof s.profileMajorCode === 'string'
-          ? s.profileMajorCode.trim().toUpperCase()
-          : '';
-        const hasMajorMismatch = Boolean(
-          effectiveMajor &&
-          registeredMajor &&
-          effectiveMajor !== 'UNDECLARED' &&
-          registeredMajor !== 'UNDECLARED' &&
-          effectiveMajor !== registeredMajor,
-        );
-        return {
-          _id: s.studentId || s.id || s._id || `student-${idx}`,
-          studentCode: s.rollNumber || s.studentCode,
-          rollNumber: s.rollNumber || s.studentCode,
-          fullName: s.fullName,
-          email: s.email,
-          major: effectiveMajor,
-          majorCode: effectiveMajor,
-          profileMajorCode: registeredMajor || null,
-          hasMajorMismatch,
-          majorVerificationStatus: s.majorVerificationStatus || 'Unverified',
-          semesterGroupName: s.semesterGroupName || null,
-          enrollmentStatus: s.enrollmentStatus || 'Active',
-          classId: currentClassId,
-          teamId: s.teamId || null,
-          teamName: s.teamName || null,
-          isTeamLeader: s.isTeamLeader || false
-        };
-      });
-
       let rawTeams = [];
       let rawProposals = [];
       if (classFeatureFlags.teamManagement) {
@@ -239,17 +315,7 @@ export default function ClassDetail() {
 
       const normalizedTeams = rawTeams.map(normalizeManagedTeam);
       const normalizedProposals = rawProposals.map(normalizeTeamProposal);
-      const reservedTeamIds = new Map();
-      normalizedProposals.forEach((proposal) => {
-        const proposalStatus = String(proposal.status || '').toUpperCase();
-        if (!['DRAFT', 'PENDING', 'NEEDS_REVISION', 'NEEDSREVISION'].includes(proposalStatus)) return;
-        getTeamMemberIds(proposal).forEach((studentId) => reservedTeamIds.set(studentId, proposal._id));
-      });
-
-      setStudents(mappedStudents.map((student) => ({
-        ...student,
-        teamId: student.teamId || reservedTeamIds.get(student._id) || null,
-      })));
+      setStudents(mapRosterStudents(rawStudents, currentClassId, normalizedProposals));
       setTeams(normalizedTeams);
       setTeamProposals(normalizedProposals);
 
@@ -263,22 +329,33 @@ export default function ClassDetail() {
   }, [id, navigate, rosterMajor, rosterPage, rosterPageSize, rosterSearch, rosterStatus]);
 
   useEffect(() => {
+    const background = lastAutoLoadedClassIdentifierRef.current === id;
+    lastAutoLoadedClassIdentifierRef.current = id;
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    fetchData();
-  }, [fetchData]);
+    fetchData({ background, rosterOnly: background });
+  }, [fetchData, id]);
+
+  useEffect(() => () => rosterRequestRef.current?.controller.abort(), []);
 
   // Refresh only when the server confirms this class changed, or after reconnecting.
+  // fetchData changes whenever the roster query changes; subscribing through a ref keeps the
+  // subscription stable so typing in the search box never re-triggers the "connected" refresh.
+  const fetchDataRef = useRef(fetchData);
+  useEffect(() => {
+    fetchDataRef.current = fetchData;
+  }, [fetchData]);
+
+  const currentClassId = String(cls?.id || cls?._id || '');
   useEffect(() => subscribeProjectDirectionRealtime((event) => {
-    const currentClassId = String(cls?.id || cls?._id || '');
     if (currentClassId && (event.eventType === 'ClassMajorUpdated' || event.eventType === 'ClassMajorsChanged'
       || event.eventType === 'TeamProposalReviewed'
       || event.eventType === 'TeamCreated')
       && String(event.classId) === currentClassId) {
-      void fetchData();
+      void fetchDataRef.current({ background: true });
     }
   }, (reconnected) => {
-    if (reconnected) void fetchData();
-  }), [cls?.id, cls?._id, fetchData]);
+    if (reconnected) void fetchDataRef.current({ background: true });
+  }), [currentClassId]);
 
   useEffect(() => {
     setSelectedStudentSnapshots((current) => {
@@ -913,6 +990,10 @@ export default function ClassDetail() {
         </div>
       )}
 
+      {canManageClass && teamControlsVisible && (
+        <TeamMajorWarningBanner teams={safeTeams} onViewTeams={tab === 'teams' ? undefined : () => setTab('teams')} />
+      )}
+
       {/* ── Tabs ── */}
       <div className="flex w-fit gap-0.5 rounded-lg bg-slate-100 p-0.5">
         {(teamControlsVisible ? ['students', 'teams'] : ['students']).map(t => (
@@ -966,13 +1047,8 @@ export default function ClassDetail() {
               totalCount: rosterMeta.totalCount,
               totalPages: rosterMeta.totalPages,
             }}
-            onServerQueryChange={(next) => {
-              if (Object.prototype.hasOwnProperty.call(next, 'search')) setRosterSearch(next.search);
-              if (Object.prototype.hasOwnProperty.call(next, 'majorCode')) setRosterMajor(next.majorCode);
-              if (Object.prototype.hasOwnProperty.call(next, 'status')) setRosterStatus(next.status);
-              if (Object.prototype.hasOwnProperty.call(next, 'page')) setRosterPage(next.page);
-              if (!Object.prototype.hasOwnProperty.call(next, 'page')) setRosterPage(1);
-            }}
+            onServerQueryChange={handleRosterQueryChange}
+            refreshing={rosterRefreshing}
             toolbarAction={canSelectTeamMembers && teamControlsVisible && selected.length === 0 ? (
               <div className="flex items-center gap-2">
                 <button
@@ -1100,7 +1176,7 @@ export default function ClassDetail() {
         <VerifyMajorModal
           classId={loadedClassId}
           onClose={() => setShowVerify(false)}
-          onUpdated={() => void fetchData()}
+          onUpdated={() => void fetchData({ background: true })}
         />
       )}
 

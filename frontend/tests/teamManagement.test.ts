@@ -5,6 +5,7 @@ import {
   canAssignMentorTypeToTeam,
   evaluateTeamMajorComposition,
   getTeamMajorWarning,
+  getTeamsWithMajorWarning,
   getTeamProject,
   isMissingTeamMajor,
   isVerifiedEnrollmentMajor,
@@ -460,4 +461,26 @@ test('shows a team major warning only for an invalid team and hides it once fixe
   assert.equal(getTeamMajorWarning(fixed), null);
   assert.equal(getTeamMajorWarning({ _id: 'legacy', teamName: 'No evaluation' }), null);
   assert.equal(getTeamMajorWarning({ ...invalid, isProposal: true }), null);
+});
+
+test('class banner lists only teams that fail the major requirement and clears once fixed', () => {
+  const valid = evaluateTeamMajorComposition([
+    { fullName: 'Ada', majorCode: 'BBA_MKT' },
+    { fullName: 'Ben', majorCode: 'BIT_SE' },
+  ]);
+  const invalid = evaluateTeamMajorComposition([
+    { fullName: 'Cam', majorCode: 'BIT_SE' },
+    { fullName: 'Dee', majorCode: 'BIT_AI' },
+  ]);
+  const teams: ManagedTeam[] = [
+    { _id: 'ok', teamName: 'Balanced', majorComposition: valid },
+    { _id: 'bad', teamName: 'All BIT', majorComposition: invalid },
+    { _id: 'proposal', teamName: 'Proposal', majorComposition: invalid, isProposal: true },
+    { _id: 'legacy', teamName: 'No evaluation' },
+  ];
+
+  const flagged = getTeamsWithMajorWarning(teams);
+  assert.deepEqual(flagged.map(({ team }) => team._id), ['bad']);
+  assert.deepEqual(flagged[0].warning.missingGroups, ['GROUP_1']);
+  assert.deepEqual(getTeamsWithMajorWarning([{ ...teams[1], majorComposition: valid }]), []);
 });

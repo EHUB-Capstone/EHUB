@@ -5377,9 +5377,24 @@ namespace EHub.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(256)")
                         .HasColumnName("original_name");
 
+                    b.Property<int>("PreviewAttemptCount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("preview_attempt_count");
+
                     b.Property<DateTime?>("PreviewGeneratedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("preview_generated_at");
+
+                    b.Property<string>("PreviewLastError")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("preview_last_error");
+
+                    b.Property<DateTime?>("PreviewNextAttemptAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("preview_next_attempt_at_utc");
 
                     b.Property<string>("PreviewPdfPublicId")
                         .HasMaxLength(256)
@@ -5394,6 +5409,14 @@ namespace EHub.Infrastructure.Persistence.Migrations
                     b.Property<int?>("PreviewSourceVersionNumber")
                         .HasColumnType("integer")
                         .HasColumnName("preview_source_version_number");
+
+                    b.Property<string>("PreviewStatus")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValue("None")
+                        .HasColumnName("preview_status");
 
                     b.Property<string>("StorageKey")
                         .HasMaxLength(512)
@@ -5435,6 +5458,8 @@ namespace EHub.Infrastructure.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("UploadedById");
+
+                    b.HasIndex("PreviewStatus", "PreviewNextAttemptAtUtc");
 
                     b.HasIndex("SubmissionId", "VersionNumber")
                         .IsUnique();

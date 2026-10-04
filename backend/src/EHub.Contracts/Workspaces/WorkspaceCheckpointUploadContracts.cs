@@ -24,3 +24,18 @@ public sealed class CheckpointFileDownloadUrlResponse
     public string Url { get; init; } = string.Empty;
     public DateTime ExpiresAt { get; init; }
 }
+
+/// <summary>Answer of <c>preview-source</c>: where the browser can read the PDF preview, or why it cannot yet.</summary>
+public sealed class CheckpointFilePreviewSourceResponse
+{
+    /// <summary>
+    /// <c>Ready</c> (read the PDF from <see cref="Url"/>), <c>Preparing</c> (the PDF is being generated; ask again),
+    /// <c>Proxy</c> (use the <c>preview</c> endpoint, e.g. files still on Cloudinary), <c>Failed</c>,
+    /// <c>TooLarge</c> or <c>Unsupported</c> (see <see cref="Message"/>).
+    /// </summary>
+    public string Status { get; init; } = string.Empty;
+    public string? Url { get; init; }
+    public DateTime? ExpiresAt { get; init; }
+    public string? Message { get; init; }
+    public int? RetryAfterSeconds { get; init; }
+}

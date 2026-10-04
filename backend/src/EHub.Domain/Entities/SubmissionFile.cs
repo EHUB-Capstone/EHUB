@@ -25,6 +25,10 @@ public class SubmissionFile : AuditableEntity
     public string? PreviewPdfPublicId { get; set; }
     public int? PreviewSourceVersionNumber { get; set; }
     public DateTime? PreviewGeneratedAt { get; set; }
+    public SubmissionPreviewStatus PreviewStatus { get; set; } = SubmissionPreviewStatus.None;
+    public int PreviewAttemptCount { get; set; }
+    public DateTime? PreviewNextAttemptAtUtc { get; set; }
+    public string? PreviewLastError { get; set; }
 
     public Guid? UploadedById { get; set; }
     public virtual User? UploadedBy { get; set; }

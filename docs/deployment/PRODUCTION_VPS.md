@@ -74,23 +74,34 @@ to them and must not be raised for this feature.
    `R2_ACCOUNT_ID`; the bucket name is `R2_BUCKET_NAME`. Use a separate bucket
    and token for each environment.
 3. Add this CORS policy to the bucket (Settings, CORS Policy). Browsers upload
-   with `PUT`, so the production origin must be listed exactly, without a
-   trailing slash:
+   with `PUT`, and the document preview reads PDFs straight from the bucket with
+   `GET` and `Range` requests, so the production origin must be listed exactly,
+   without a trailing slash:
 
    ```json
    [
      {
        "AllowedOrigins": ["https://e-hub.com.vn"],
-       "AllowedMethods": ["PUT"],
-       "AllowedHeaders": ["Content-Type"],
-       "ExposeHeaders": ["ETag"],
+       "AllowedMethods": ["GET", "HEAD", "PUT"],
+       "AllowedHeaders": ["Content-Type", "Range"],
+       "ExposeHeaders": ["ETag", "Accept-Ranges", "Content-Range", "Content-Length"],
        "MaxAgeSeconds": 3600
      }
    ]
    ```
 
-4. Downloads of large files use short-lived presigned `GET` links opened as a
-   normal browser navigation, so no extra CORS rule is needed for them.
+   If the `GET`/`Range` rules are missing the preview still works, because the
+   browser falls back to the API's server-side preview, but large PDFs open
+   noticeably slower.
+4. Large file downloads use short-lived presigned `GET` links opened as a normal
+   browser navigation, so they need no extra CORS rule.
+
+Document preview: DOCX/PPTX are converted to PDF by a background job right after
+upload (one file at a time, up to 3 attempts), cached in the bucket next to the
+original, and the browser reads the cached PDF through a 15-minute presigned URL
+issued only after the API has checked access to the file. Opening a preview never
+waits for a conversion inside the HTTP request; until the PDF exists the UI shows
+"Preparing preview".
 
 The backend validates the size, type and file signature again when the upload
 is completed, deletes objects that fail validation, and a background job removes

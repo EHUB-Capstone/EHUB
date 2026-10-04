@@ -199,6 +199,16 @@ export function getTeamMajorWarning(team: ManagedTeam): TeamMajorComposition | n
   return composition && !composition.isValid ? composition : null;
 }
 
+/** Teams (not proposals) that currently fail the major requirement, with their warning. */
+export function getTeamsWithMajorWarning(
+  teams: ManagedTeam[],
+): Array<{ team: ManagedTeam; warning: TeamMajorComposition }> {
+  return teams.flatMap((team) => {
+    const warning = getTeamMajorWarning(team);
+    return warning ? [{ team, warning }] : [];
+  });
+}
+
 export function normalizeManagedTeam(source: any): ManagedTeam {
   const currentMentorAssignments = Array.isArray(source?.currentMentorAssignments)
     ? source.currentMentorAssignments

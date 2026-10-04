@@ -9,6 +9,7 @@ import { PROGRAM_GROUPS, getMajorName } from '../../constants/majors';
 import { parseApiError } from '../../utils/apiError';
 import ConfirmDialog from '../ui/ConfirmDialog';
 import type { TeamMajorWarning } from '../../types/teamManagement';
+import { matchesSearchQuery } from '../../utils/searchText';
 
 const downloadTemplate = async () => {
   const response = await classApi.getMajorVerificationTemplate();
@@ -200,11 +201,7 @@ export default function VerifyMajorModal({ classId, onClose, onUpdated }) {
   // ── Render rows for active tab ──
   const activeRows = report ? (report[activeTab] || []) : [];
   const filteredRows = search
-    ? activeRows.filter(r =>
-        [r.fullName, r.rollNumber, r.email].some(v =>
-          v?.toLowerCase().includes(search.toLowerCase())
-        )
-      )
+    ? activeRows.filter(r => matchesSearchQuery(search, [r.fullName, r.rollNumber, r.email]))
     : activeRows;
   const previewRows = report ? [...(report.matched || []), ...(report.mismatched || [])] : [];
   const classChanges = previewRows.filter(row => majorDiffers(row.majorInDb, row.majorInFile)).length;

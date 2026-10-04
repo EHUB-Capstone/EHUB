@@ -26,6 +26,9 @@ public interface ISubmissionObjectStorage
     /// <summary>Short-lived GET URL that makes the browser save the object as <paramref name="fileName"/>.</summary>
     string CreatePresignedDownloadUrl(string objectKey, string fileName, string contentType, TimeSpan lifetime);
 
+    /// <summary>Short-lived GET URL for showing a PDF inline in the browser (supports Range requests).</summary>
+    string CreatePresignedInlinePdfUrl(string objectKey, TimeSpan lifetime);
+
     /// <summary>Best effort; deleting a missing object is not an error.</summary>
     Task DeleteAsync(string objectKey, CancellationToken cancellationToken = default);
 }

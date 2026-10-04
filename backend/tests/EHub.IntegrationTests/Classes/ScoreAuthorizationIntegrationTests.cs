@@ -1,7 +1,10 @@
 using System.Net;
 using System.Net.Http.Headers;
+using System.Net.Http.Json;
 using System.Text.Json;
 using EHub.Application.Common.Interfaces.Identity;
+using EHub.Contracts.Common;
+using EHub.Contracts.Teams;
 using EHub.Domain.Entities;
 using EHub.Domain.Enums;
 using EHub.Infrastructure.Persistence;
@@ -261,6 +264,23 @@ public sealed partial class TeamWorkflowIntegrationTests
         classDetail.StatusCode.Should().Be(HttpStatusCode.OK);
         var classJson = await classDetail.Content.ReadAsStringAsync();
         foreach (var peer in peers) classJson.Should().NotContain(peer.Email!).And.NotContain(peer.UserId!.Value.ToString());
+
+        // The Verified/Unverified label is shared with classmates, but their majors and profiles stay private.
+        var peerIds = peers.Select(peer => peer.Id).ToArray();
+        var peerEnrollments = await context.ClassStudents
+            .Where(item => item.ClassId == seed.ClassId && peerIds.Contains(item.StudentId)).ToArrayAsync();
+        peerEnrollments.Should().NotBeEmpty();
+        foreach (var enrollment in peerEnrollments) enrollment.MajorVerificationStatus = EnrollmentMajorVerificationStatus.Matched;
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+        using var verifiedDetail = await SendAuditGetAsync(client, scope.ServiceProvider, context,
+            $"/api/classes/my-class-detail/{seed.ClassId}", seed.ProposerUserId, SystemRoles.Student);
+        var detail = await verifiedDetail.Content.ReadFromJsonAsync<ApiResponse<StudentClassDetailResponse>>();
+        var classmates = detail!.Data!.Students.Where(member => peerIds.Contains(member.StudentId)).ToArray();
+        classmates.Should().HaveCount(peerIds.Length);
+        classmates.Should().OnlyContain(member => member.MajorVerificationStatus == nameof(EnrollmentMajorVerificationStatus.Matched));
+        classmates.Should().OnlyContain(member => member.Email == null && member.UserId == null
+            && member.ProfileMajorCode == null && member.EnrollmentMajorCode == string.Empty);
     }
 
     private static async Task<Evaluation> SeedAuditEvaluationAsync(AppDbContext context, WorkflowSeed seed)

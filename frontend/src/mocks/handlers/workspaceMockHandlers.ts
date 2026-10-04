@@ -395,6 +395,7 @@ interface MockUploadSession {
 
 // Not persisted: an upload session only matters within one page load.
 const mockUploadSessions = new Map<string, MockUploadSession>();
+const mockPreviewPolls = new Map<string, number>();
 
 /** Stands in for the presigned R2 URL: the browser PUTs here through storageClient. */
 export function registerStorageMockHandlers(mock: MockAdapter): void {
@@ -1202,6 +1203,30 @@ export function registerWorkspaceMockHandlers(mock: MockAdapter): void {
     session.file = uploaded;
     persistMockState();
     return ok(uploaded, 'File uploaded.');
+  });
+
+  // Mirrors the API: the server never converts inside the request. DOCX/PPTX answer "Preparing" for the
+  // first two polls (so the "Preparing preview" UI can be seen), then fall back to the server-side preview.
+  mock.onGet(/^\/workspace\/checkpoints\/teams\/[^/]+\/checkpoints\/\d+\/files\/[^/]+\/preview-source$/).reply((config) => {
+    const match = config.url?.match(/^\/workspace\/checkpoints\/teams\/([^/]+)\/checkpoints\/(\d+)\/files\/([^/]+)\/preview-source$/);
+    const teamId = match?.[1] || '';
+    const number = Number(match?.[2]);
+    const fileId = match?.[3] || '';
+    if (!canAccessCheckpointTeam(teamId)) return failure(403, 'WORKSPACE_ACCESS_DENIED', 'You do not have access to this team workspace.');
+    const file = filesForCheckpoint(teamId, number).find((item) => item._id === fileId);
+    if (!file) return failure(404, 'COMMON_NOT_FOUND', 'Submitted file was not found.');
+    const extension = file.originalName.split('.').at(-1)?.toLowerCase() || '';
+    if (!['pdf', 'docx', 'pptx'].includes(extension))
+      return [200, { success: true, message: 'Preview source resolved.', code: null, errors: null,
+        data: { status: 'Unsupported', message: 'This file format cannot be previewed. You can still download the original file.' } }];
+    if (extension !== 'pdf') {
+      const polls = (mockPreviewPolls.get(fileId) ?? 0) + 1;
+      mockPreviewPolls.set(fileId, polls);
+      if (polls <= 2)
+        return [202, { success: true, message: 'Preview source resolved.', code: null, errors: null,
+          data: { status: 'Preparing', retryAfterSeconds: 1 } }];
+    }
+    return ok({ status: 'Proxy' }, 'Preview source resolved.');
   });
 
   mock.onGet(/^\/workspace\/checkpoints\/teams\/[^/]+\/checkpoints\/\d+\/files\/[^/]+\/download-url$/).reply((config) => {

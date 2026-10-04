@@ -1,4 +1,4 @@
-using System.Collections.Concurrent;
+using System.Diagnostics;
 using EHub.Application.Common.Interfaces.Persistence;
 using EHub.Application.Common.Interfaces.Services;
 using EHub.Application.Common.Interfaces.Storage;
@@ -16,7 +16,8 @@ namespace EHub.Application.Features.Workspaces.CheckpointFiles;
 /// <summary>
 /// Download, preview and delete for submitted files. Files uploaded to R2 are addressed by
 /// <see cref="SubmissionFile.StorageKey"/>; older files still live on Cloudinary and keep their existing flow.
-/// New uploads go through <see cref="CheckpointFileUploadHandler"/>.
+/// New uploads go through <see cref="CheckpointFileUploadHandler"/>; DOCX/PPTX conversion lives in
+/// <see cref="CheckpointPreviewGenerator"/>.
 /// </summary>
 public sealed class CheckpointFileHandler(
     IApplicationDbContext context,
@@ -25,7 +26,8 @@ public sealed class CheckpointFileHandler(
     IDateTimeProvider dateTimeProvider,
     IDocumentPreviewConverter previewConverter) : ICheckpointFileHandler
 {
-    private static readonly ConcurrentDictionary<Guid, PreviewLockEntry> PreviewLocks = new();
+    private readonly ICheckpointPreviewGenerator previewGenerator =
+        new CheckpointPreviewGenerator(context, storage, objectStorage, dateTimeProvider, previewConverter);
 
     public async Task<Result<CheckpointFileDownload>> DownloadAsync(Guid teamId, int checkpointNumber, Guid fileId, Guid userId, string role, CancellationToken cancellationToken = default)
     {
@@ -56,6 +58,73 @@ public sealed class CheckpointFileHandler(
         });
     }
 
+    /// <summary>
+    /// Tells the browser where to read the preview PDF without ever converting inside the request:
+    /// a presigned R2 URL when it exists, otherwise "Preparing" after making sure the background job will build it.
+    /// </summary>
+    public async Task<Result<CheckpointFilePreviewSourceResponse>> GetPreviewSourceAsync(
+        Guid teamId, int checkpointNumber, Guid fileId, bool retry, Guid userId, string role, CancellationToken cancellationToken = default)
+    {
+        var resolved = await ResolveFileAccessAsync(teamId, checkpointNumber, fileId, userId, role, tracking: true, cancellationToken);
+        if (resolved.IsFailure) return Result.Failure<CheckpointFilePreviewSourceResponse>(resolved.Error);
+        var file = resolved.Value.File;
+
+        // Files that still live on Cloudinary keep the existing server-side preview endpoint.
+        if (file.StorageProvider != SubmissionStorageProvider.R2 || string.IsNullOrWhiteSpace(file.StorageKey))
+        {
+            return Source("Proxy");
+        }
+
+        var extension = Path.GetExtension(file.OriginalName).ToLowerInvariant();
+        if (extension == ".pdf") return ReadySource(file.StorageKey);
+        if (extension is not ".docx" and not ".pptx")
+        {
+            return Source("Unsupported", "This file format cannot be previewed. You can still download the original file.");
+        }
+
+        if (file.FileSize > SubmissionFileLimits.MaxPreviewConvertSizeBytes)
+        {
+            return Source("TooLarge",
+                $"This file is larger than {SubmissionFileLimits.MaxPreviewConvertSizeBytes / (1024 * 1024)} MB and cannot be previewed. You can still download the original file.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(file.PreviewPdfPublicId) && file.PreviewSourceVersionNumber == file.VersionNumber)
+        {
+            return ReadySource(file.PreviewPdfPublicId);
+        }
+
+        var now = EnsureUtc(dateTimeProvider.UtcNow);
+        switch (file.PreviewStatus)
+        {
+            case SubmissionPreviewStatus.Pending:
+                return Source("Preparing", retryAfterSeconds: 1);
+            case SubmissionPreviewStatus.Failed when !retry:
+                return Source("Failed", "The preview could not be prepared. You can still download the original file.");
+            default:
+                // None, a Ready row whose cache is gone, or an explicit retry of a Failed file: queue it again.
+                file.PreviewStatus = SubmissionPreviewStatus.Pending;
+                file.PreviewAttemptCount = 0;
+                file.PreviewNextAttemptAtUtc = now;
+                file.PreviewLastError = null;
+                await context.SaveChangesAsync(cancellationToken);
+                return Source("Preparing", retryAfterSeconds: 1);
+        }
+    }
+
+    private Result<CheckpointFilePreviewSourceResponse> ReadySource(string objectKey)
+    {
+        var lifetime = SubmissionFileLimits.PresignedPreviewLifetime;
+        return Result.Success(new CheckpointFilePreviewSourceResponse
+        {
+            Status = "Ready",
+            Url = objectStorage.CreatePresignedInlinePdfUrl(objectKey, lifetime),
+            ExpiresAt = EnsureUtc(dateTimeProvider.UtcNow).Add(lifetime)
+        });
+    }
+
+    private static Result<CheckpointFilePreviewSourceResponse> Source(string status, string? message = null, int? retryAfterSeconds = null) =>
+        Result.Success(new CheckpointFilePreviewSourceResponse { Status = status, Message = message, RetryAfterSeconds = retryAfterSeconds });
+
     public async Task<Result<CheckpointFilePreview>> PreviewAsync(
         Guid teamId,
         int checkpointNumber,
@@ -64,16 +133,21 @@ public sealed class CheckpointFileHandler(
         string role,
         CancellationToken cancellationToken = default)
     {
+        var clock = Stopwatch.StartNew();
         var resolved = await ResolveFileAccessAsync(teamId, checkpointNumber, fileId, userId, role, tracking: false, cancellationToken);
+        var authMs = clock.ElapsedMilliseconds;
         if (resolved.IsFailure) return Result.Failure<CheckpointFilePreview>(resolved.Error);
 
         var extension = Path.GetExtension(resolved.Value.File.OriginalName).ToLowerInvariant();
         if (extension == ".pdf")
         {
+            clock.Restart();
             var pdf = await ReadOriginalAsync(resolved.Value.File, cancellationToken);
+            var storageMs = clock.ElapsedMilliseconds;
             if (pdf.IsFailure) return Result.Failure<CheckpointFilePreview>(pdf.Error);
             if (!HasPdfSignature(pdf.Value)) return ConversionFailed<CheckpointFilePreview>();
-            return Result.Success(new CheckpointFilePreview(pdf.Value, resolved.Value.File.OriginalName, FromCache: false));
+            return Result.Success(new CheckpointFilePreview(
+                pdf.Value, resolved.Value.File.OriginalName, FromCache: false, new PreviewTimings(authMs, storageMs, 0)));
         }
 
         if (extension is not ".docx" and not ".pptx")
@@ -90,121 +164,13 @@ public sealed class CheckpointFileHandler(
                 $"This file is larger than {SubmissionFileLimits.MaxPreviewConvertSizeBytes / (1024 * 1024)} MB and cannot be previewed. You can still download the original file.");
         }
 
-        using (await AcquirePreviewLockAsync(fileId, cancellationToken))
-        {
-            context.ClearChanges();
-            resolved = await ResolveFileAccessAsync(teamId, checkpointNumber, fileId, userId, role, tracking: true, cancellationToken);
-            if (resolved.IsFailure) return Result.Failure<CheckpointFilePreview>(resolved.Error);
-            var file = resolved.Value.File;
-            var isR2 = file.StorageProvider == SubmissionStorageProvider.R2;
-
-            var hasCache = isR2
-                ? !string.IsNullOrWhiteSpace(file.PreviewPdfPublicId)
-                : !string.IsNullOrWhiteSpace(file.PreviewPdfUrl);
-            if (hasCache && file.PreviewSourceVersionNumber == file.VersionNumber)
-            {
-                var cached = isR2
-                    ? await objectStorage.DownloadAsync(file.PreviewPdfPublicId!, cancellationToken)
-                    : await DownloadLegacyAsync(file.PreviewPdfUrl!, cancellationToken);
-                if (cached.IsSuccess && HasPdfSignature(cached.Value))
-                {
-                    return Result.Success(new CheckpointFilePreview(cached.Value, PreviewName(file), FromCache: true));
-                }
-            }
-
-            var original = await ReadOriginalAsync(file, cancellationToken);
-            if (original.IsFailure) return Result.Failure<CheckpointFilePreview>(original.Error);
-            // R2 uploads are only magic-byte checked on complete; verify the Office structure before handing it to LibreOffice.
-            if (isR2 && !CheckpointFileTypes.HasValidOfficeStructure(original.Value, extension))
-            {
-                return Result.Failure<CheckpointFilePreview>(
-                    ErrorCodes.WorkspaceFilePreviewConversionFailed,
-                    "The document could not be converted for preview. You can still download the original file.");
-            }
-
-            var converted = await previewConverter.ConvertToPdfAsync(original.Value, extension, cancellationToken);
-            if (converted.IsFailure) return Result.Failure<CheckpointFilePreview>(converted.Error);
-
-            var previousPreviewId = file.PreviewPdfPublicId;
-            string newPreviewId;
-            string? newPreviewUrl = null;
-            if (isR2)
-            {
-                newPreviewId = $"{file.StorageKey}.preview.pdf";
-                var stored = await objectStorage.UploadAsync(newPreviewId, converted.Value.Content, "application/pdf", cancellationToken);
-                if (stored.IsFailure) return PreviewCacheUnavailable();
-            }
-            else
-            {
-                await using var previewStream = new MemoryStream(converted.Value.Content, writable: false);
-                var uploaded = await storage.UploadAsync(
-                    previewStream,
-                    PreviewName(file),
-                    "application/pdf",
-                    teamId,
-                    checkpointNumber,
-                    cancellationToken);
-                if (uploaded.IsFailure) return PreviewCacheUnavailable();
-                newPreviewId = uploaded.Value.PublicId;
-                newPreviewUrl = uploaded.Value.SecureUrl;
-            }
-
-            file.PreviewPdfUrl = newPreviewUrl;
-            file.PreviewPdfPublicId = newPreviewId;
-            file.PreviewSourceVersionNumber = file.VersionNumber;
-            file.PreviewGeneratedAt = EnsureUtc(dateTimeProvider.UtcNow);
-            try
-            {
-                await context.SaveChangesAsync(cancellationToken);
-            }
-            catch
-            {
-                await DeleteStoredAsync(isR2, newPreviewId, cancellationToken);
-                throw;
-            }
-
-            if (!string.IsNullOrWhiteSpace(previousPreviewId) &&
-                !string.Equals(previousPreviewId, newPreviewId, StringComparison.Ordinal))
-            {
-                await DeleteStoredAsync(isR2, previousPreviewId, cancellationToken);
-            }
-
-            return Result.Success(new CheckpointFilePreview(converted.Value.Content, PreviewName(file), FromCache: false));
-        }
-    }
-
-    private static async Task<PreviewLockLease> AcquirePreviewLockAsync(Guid fileId, CancellationToken cancellationToken)
-    {
-        while (true)
-        {
-            var entry = PreviewLocks.GetOrAdd(fileId, static _ => new PreviewLockEntry());
-            Interlocked.Increment(ref entry.ReferenceCount);
-            if (PreviewLocks.TryGetValue(fileId, out var current) && ReferenceEquals(entry, current))
-            {
-                try
-                {
-                    await entry.Gate.WaitAsync(cancellationToken);
-                    return new PreviewLockLease(fileId, entry);
-                }
-                catch
-                {
-                    ReleasePreviewLockReference(fileId, entry, releaseGate: false);
-                    throw;
-                }
-            }
-
-            ReleasePreviewLockReference(fileId, entry, releaseGate: false);
-        }
-    }
-
-    private static void ReleasePreviewLockReference(Guid fileId, PreviewLockEntry entry, bool releaseGate)
-    {
-        if (releaseGate) entry.Gate.Release();
-        if (Interlocked.Decrement(ref entry.ReferenceCount) == 0 &&
-            PreviewLocks.TryRemove(new KeyValuePair<Guid, PreviewLockEntry>(fileId, entry)))
-        {
-            entry.Gate.Dispose();
-        }
+        var generated = await previewGenerator.EnsurePreviewAsync(fileId, teamId, checkpointNumber, needContent: true, cancellationToken);
+        if (generated.IsFailure) return Result.Failure<CheckpointFilePreview>(generated.Error);
+        return Result.Success(new CheckpointFilePreview(
+            generated.Value.Content!,
+            generated.Value.PreviewName,
+            generated.Value.FromCache,
+            generated.Value.Timings with { AuthMs = authMs }));
     }
 
     public async Task<Result> DeleteAsync(Guid teamId, int checkpointNumber, Guid fileId, Guid userId, string role, CancellationToken cancellationToken = default)
@@ -273,37 +239,14 @@ public sealed class CheckpointFileHandler(
     private Task<Result<Access>> ResolveAccessAsync(Guid teamId, int checkpointNumber, Guid userId, string role, CancellationToken cancellationToken) =>
         CheckpointWorkspaceAccess.ResolveAsync(context, teamId, checkpointNumber, userId, role, cancellationToken);
 
-    private static string PreviewName(SubmissionFile file) => $"{Path.GetFileNameWithoutExtension(file.OriginalName)}-preview-v{file.VersionNumber}.pdf";
     private static bool HasPdfSignature(byte[] content) => content.Length >= 5 && content.AsSpan(0, 5).SequenceEqual("%PDF-"u8);
     private static Result<T> ConversionFailed<T>() => Result.Failure<T>(
         ErrorCodes.WorkspaceFilePreviewConversionFailed,
         "The stored PDF is invalid and cannot be previewed. You can still download the original file.");
-    private static Result<CheckpointFilePreview> PreviewCacheUnavailable() => Result.Failure<CheckpointFilePreview>(
-        ErrorCodes.WorkspaceFilePreviewUnavailable,
-        "The PDF preview could not be cached. You can still download the original file.");
     private static bool IsStudent(string role) => CheckpointWorkspaceAccess.IsStudent(role);
     private static DateTime EnsureUtc(DateTime value) => CheckpointWorkspaceAccess.EnsureUtc(value);
     private static Result EnsureOpen(ClassCheckpointSchedule? schedule, DateTime now) => CheckpointWorkspaceAccess.EnsureOpen(schedule, now);
     private static Result<T> Invalid<T>(string message) => Result.Failure<T>(ErrorCodes.WorkspaceValidationError, message);
-
-    private sealed class PreviewLockEntry
-    {
-        public SemaphoreSlim Gate { get; } = new(1, 1);
-        public int ReferenceCount;
-    }
-
-    private sealed class PreviewLockLease(Guid fileId, PreviewLockEntry entry) : IDisposable
-    {
-        private int disposed;
-
-        public void Dispose()
-        {
-            if (Interlocked.Exchange(ref disposed, 1) == 0)
-            {
-                ReleasePreviewLockReference(fileId, entry, releaseGate: true);
-            }
-        }
-    }
 
     private sealed record FileAccess(Access Workspace, SubmissionFile File);
 }

@@ -91,6 +91,15 @@ export const checkpointApi = {
     URL.revokeObjectURL(objectUrl);
   },
 
+  // Where to read the preview PDF: a short-lived storage URL, "Preparing" while it is being generated, or "Proxy".
+  getPreviewSource: (teamId, checkpointNumber, fileId, options = {}) => {
+    const { retry = false, ...requestOptions } = options;
+    return axiosClient.get(
+      `/workspace/checkpoints/teams/${teamId}/checkpoints/${checkpointNumber}/files/${fileId}/preview-source`,
+      { params: retry ? { retry: true } : undefined, ...requestOptions },
+    );
+  },
+
   previewFile: (teamId, checkpointNumber, fileId, options = {}) =>
     axiosClient.get(
       `/workspace/checkpoints/teams/${teamId}/checkpoints/${checkpointNumber}/files/${fileId}/preview`,

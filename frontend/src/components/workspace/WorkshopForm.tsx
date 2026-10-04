@@ -9,6 +9,7 @@ import { userApi } from '../../api/userApi';
 import { chatApi } from '../../api/chatApi';
 import toast from 'react-hot-toast';
 import WorkshopPreviewModal from './WorkshopPreviewModal';
+import { matchesSearchQuery } from '../../utils/searchText';
 
 const WorkshopForm = ({ isOpen, onClose, workshop, onSave }) => {
   const [title, setTitle] = useState('');
@@ -476,12 +477,7 @@ const WorkshopForm = ({ isOpen, onClose, workshop, onSave }) => {
   };
 
   const filteredClasses = useMemo(() => {
-    if (!classSearch.trim()) return availableClasses;
-    const lowerSearch = classSearch.toLowerCase();
-    return availableClasses.filter(c =>
-      (c.classCode || '').toLowerCase().includes(lowerSearch) ||
-      (c.subjectCode || '').toLowerCase().includes(lowerSearch)
-    );
+    return availableClasses.filter(c => matchesSearchQuery(classSearch, [c.classCode, c.subjectCode]));
   }, [availableClasses, classSearch]);
 
   const workshopPayload = {

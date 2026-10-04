@@ -26,6 +26,7 @@ import type {
   TeachingStaffCandidateDto,
   TeachingStaffSummary,
 } from '../../types/subjects';
+import { matchesSearchQuery } from '../../utils/searchText';
 
 const emptySummary: TeachingStaffSummary = { lecturers: 0, mentors: 0, assigned: 0, unassigned: 0, classes: 0 };
 const currentYear = new Date().getFullYear();
@@ -91,6 +92,7 @@ const SubjectManagement = () => {
   );
   const [subjects, setSubjects] = useState<SubjectDto[]>([]);
   const [subjectsLoading, setSubjectsLoading] = useState(true);
+  const [subjectsRefreshing, setSubjectsRefreshing] = useState(false);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | SubjectStatus>('ALL');
@@ -145,24 +147,36 @@ const SubjectManagement = () => {
   } | null>(null);
   const [semesterTransitionReason, setSemesterTransitionReason] = useState('');
   const staffRequestId = useRef(0);
+  const subjectsRequestId = useRef(0);
+  const hasLoadedSubjects = useRef(false);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => setDebouncedSearch(search), 500);
     return () => window.clearTimeout(timeout);
   }, [search]);
 
+  // Only the first load swaps the table for a skeleton; later searches keep the current rows
+  // visible (dimmed) and ignore responses that a newer request has already superseded.
   const loadSubjects = async () => {
-    setSubjectsLoading(true);
+    const requestId = ++subjectsRequestId.current;
+    if (hasLoadedSubjects.current) setSubjectsRefreshing(true);
+    else setSubjectsLoading(true);
     try {
       const params: { search?: string; status?: SubjectStatus } = {};
       if (debouncedSearch.trim()) params.search = debouncedSearch.trim();
       if (statusFilter !== 'ALL') params.status = statusFilter;
       const payload = responseData(await subjectApi.getAll(params));
+      if (requestId !== subjectsRequestId.current) return;
       setSubjects(payload.subjects ?? []);
+      hasLoadedSubjects.current = true;
     } catch (error) {
+      if (requestId !== subjectsRequestId.current) return;
       toast.error(parseApiError(error, 'Failed to load subjects').message);
     } finally {
-      setSubjectsLoading(false);
+      if (requestId === subjectsRequestId.current) {
+        setSubjectsLoading(false);
+        setSubjectsRefreshing(false);
+      }
     }
   };
 
@@ -542,11 +556,9 @@ const SubjectManagement = () => {
   };
 
   const visibleStaff = useMemo(() => {
-    const query = staffSearch.trim().toLowerCase();
     return staff.filter((member) => {
       const matchesRole = staffRole === 'ALL' || member.role === staffRole;
-      const matchesSearch = !query || [member.name, member.email, ...member.assignments.flatMap((item) => [item.classCode, item.subjectCode])]
-        .some((value) => value?.toLowerCase().includes(query));
+      const matchesSearch = matchesSearchQuery(staffSearch, [member.name, member.email, ...member.assignments.flatMap((item) => [item.classCode, item.subjectCode])]);
       return matchesRole && matchesSearch;
     });
   }, [staff, staffRole, staffSearch]);
@@ -698,7 +710,7 @@ const SubjectManagement = () => {
             </div>
             <div className="overflow-hidden rounded-2xl border border-slate-200/70 bg-white shadow-sm">
               {subjectsLoading ? <LoadingSkeleton variant="table" lines={6} className="p-4" /> : subjects.length === 0 ? <EmptyState icon={BookOpen} title="No subjects found" description="Try adjusting your search or add a new subject." action={{ label: 'Add Subject', onClick: openAdd }} /> : (
-                <div className="overflow-x-auto"><table className="w-full min-w-[620px]"><thead><tr className="border-b border-slate-100 bg-slate-50"><th className="px-6 py-3 text-left text-xs font-semibold uppercase text-slate-400">Subject Code</th><th className="px-6 py-3 text-left text-xs font-semibold uppercase text-slate-400">Subject Name</th><th className="px-6 py-3 text-left text-xs font-semibold uppercase text-slate-400">Status</th><th className="px-6 py-3 text-right text-xs font-semibold uppercase text-slate-400">Actions</th></tr></thead>
+                <div aria-busy={subjectsRefreshing || undefined} className={`overflow-x-auto transition-opacity duration-150 ${subjectsRefreshing ? 'opacity-60' : 'opacity-100'}`}><table className="w-full min-w-[620px]"><thead><tr className="border-b border-slate-100 bg-slate-50"><th className="px-6 py-3 text-left text-xs font-semibold uppercase text-slate-400">Subject Code</th><th className="px-6 py-3 text-left text-xs font-semibold uppercase text-slate-400">Subject Name</th><th className="px-6 py-3 text-left text-xs font-semibold uppercase text-slate-400">Status</th><th className="px-6 py-3 text-right text-xs font-semibold uppercase text-slate-400">Actions</th></tr></thead>
                   <tbody>{subjects.map((subject) => <tr key={subject._id} className="group border-b border-slate-50 last:border-0 hover:bg-slate-50/80"><td className="px-6 py-3.5"><div className="flex items-center gap-3"><span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary-50 font-mono text-xs font-bold text-primary">{subject.subjectCode.slice(0, 3)}</span><Link to={`/admin/subjects/${subject.subjectCode}`} className="font-mono font-semibold text-slate-900 hover:text-primary hover:underline">{subject.subjectCode}</Link></div></td><td className="px-6 py-3.5 text-sm font-medium text-slate-700">{subject.subjectName}</td><td className="px-6 py-3.5"><Badge variant={subject.status === 'active' ? 'Active' : 'Overdue'}>{subject.status === 'active' ? 'Active' : 'Disabled'}</Badge></td><td className="px-6 py-3.5"><div className="flex justify-end gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100"><button type="button" title="Edit Subject" onClick={() => openEdit(subject)} className="rounded-lg p-2 text-slate-400 hover:bg-primary-50 hover:text-primary"><Edit3 className="h-4 w-4" /></button>{subject.status !== 'disabled' && <button type="button" title="Disable Subject" onClick={() => setDisableTarget(subject)} className="rounded-lg p-2 text-slate-400 hover:bg-danger-50 hover:text-danger"><LockKeyhole className="h-4 w-4" /></button>}</div></td></tr>)}</tbody></table></div>
               )}</div>
           </div>
