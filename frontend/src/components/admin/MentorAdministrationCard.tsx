@@ -57,7 +57,16 @@ export default function MentorAdministrationCard({ semesterId, semesterLabel, on
     setBusy('commit-import');
     try {
       const response = await mentorAdminApi.commitImport(importPreview.sessionId);
-      toast.success(`Imported ${response.data.createdCount} new and updated ${response.data.updatedCount} mentor accounts. New mentors can use Forgot Password to set their first password.`);
+      const parts = [
+        `${response.data.createdCount} new account${response.data.createdCount === 1 ? '' : 's'}`,
+        `${response.data.updatedCount} updated`,
+        `${response.data.draftSavedCount} saved for later completion`,
+        `${response.data.draftCompletedCount} completed`,
+      ];
+      const accountHint = response.data.createdCount > 0
+        ? ' New accounts can use Forgot Password to set their first password.'
+        : '';
+      toast.success(`Mentor import completed: ${parts.join(', ')}.${accountHint}`);
       setFile(null);
       setImportPreview(null);
       if (fileInput.current) fileInput.current.value = '';
@@ -153,14 +162,19 @@ export default function MentorAdministrationCard({ semesterId, semesterLabel, on
               </div>
               {importPreview && (
                 <div className="mt-4 space-y-3 border-t border-slate-200 pt-4">
-                  <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
+                  <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-3 lg:grid-cols-6">
                     <Metric label="New" value={importPreview.createCount} />
                     <Metric label="Update" value={importPreview.updateCount} />
                     <Metric label="Add to semester" value={importPreview.addToSemesterCount} />
+                    <Metric label="Needs information" value={importPreview.needsCompletionCount} warning={importPreview.needsCompletionCount > 0} />
+                    <Metric label="Complete draft" value={importPreview.completeDraftCount} />
                     <Metric label="Errors" value={importPreview.errorCount} danger={importPreview.errorCount > 0} />
                   </div>
                   <div className="max-h-52 overflow-auto rounded-lg border border-slate-200 bg-white">
-                    <table className="w-full min-w-[560px] text-left text-xs"><thead className="sticky top-0 bg-slate-50 text-slate-500"><tr><th className="px-3 py-2">Sheet / row</th><th className="px-3 py-2">Type</th><th className="px-3 py-2">Mentor</th><th className="px-3 py-2">Status</th></tr></thead><tbody>{importPreview.rows.map(row => <tr key={`${row.sheetName}-${row.rowNumber}`} className="border-t border-slate-100"><td className="px-3 py-2">{row.sheetName} · {row.rowNumber}</td><td className="px-3 py-2">{row.mentorType}</td><td className="px-3 py-2"><span className="block font-semibold">{row.fullName}</span><span className="text-slate-400">{row.email}</span></td><td className={`px-3 py-2 ${row.isValid ? 'text-green-700' : 'text-red-700'}`} title={row.message ?? undefined}>{row.status}</td></tr>)}</tbody></table>
+                    <table className="w-full min-w-[680px] text-left text-xs"><thead className="sticky top-0 bg-slate-50 text-slate-500"><tr><th className="px-3 py-2">Sheet / row</th><th className="px-3 py-2">Type</th><th className="px-3 py-2">Mentor</th><th className="px-3 py-2">Status</th></tr></thead><tbody>{importPreview.rows.map(row => {
+                      const incomplete = row.status === 'NeedsCompletion' || row.status === 'UpdateIncomplete';
+                      return <tr key={`${row.sheetName}-${row.rowNumber}`} className="border-t border-slate-100 align-top"><td className="px-3 py-2">{row.sheetName} · {row.rowNumber}</td><td className="px-3 py-2">{row.mentorType}</td><td className="px-3 py-2"><span className="block font-semibold">{row.fullName}</span><span className={row.email ? 'text-slate-400' : 'font-medium text-amber-600'}>{row.email || 'Email missing'}</span>{row.missingFields.length > 0 && <span className="mt-1 block max-w-sm text-[11px] text-slate-400">Missing: {row.missingFields.join(', ')}</span>}</td><td className={`px-3 py-2 ${!row.isValid ? 'text-red-700' : incomplete ? 'text-amber-700' : 'text-green-700'}`}><span className="block font-semibold">{incomplete ? 'Needs information' : row.status}</span>{row.message && <span className="mt-1 block max-w-xs text-[11px] leading-4 text-slate-500">{row.message}</span>}</td></tr>;
+                    })}</tbody></table>
                   </div>
                   <div className="flex justify-end">
                     <Button size="sm" disabled={!importPreview.canCommit} onClick={() => void commitImport()} isLoading={busy === 'commit-import'}>Commit import</Button>
@@ -238,6 +252,6 @@ function ActionToggle({
   );
 }
 
-function Metric({ label, value, danger = false }: { label: string; value: number; danger?: boolean }) {
-  return <div className={`rounded-lg px-3 py-2 ${danger ? 'bg-red-50 text-red-700' : 'bg-slate-50 text-slate-700'}`}><span className="block text-[10px] uppercase text-slate-400">{label}</span><strong className="text-base">{value}</strong></div>;
+function Metric({ label, value, danger = false, warning = false }: { label: string; value: number; danger?: boolean; warning?: boolean }) {
+  return <div className={`rounded-lg px-3 py-2 ${danger ? 'bg-red-50 text-red-700' : warning ? 'bg-amber-50 text-amber-700' : 'bg-slate-50 text-slate-700'}`}><span className="block text-[10px] uppercase text-slate-400">{label}</span><strong className="text-base">{value}</strong></div>;
 }

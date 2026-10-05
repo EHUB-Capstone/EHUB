@@ -38,6 +38,7 @@ public class AppDbContext : DbContext, IApplicationDbContext
     public DbSet<ClassImportSession> ClassImportSessions => Set<ClassImportSession>();
     public DbSet<LecturerImportSession> LecturerImportSessions => Set<LecturerImportSession>();
     public DbSet<MentorImportSession> MentorImportSessions => Set<MentorImportSession>();
+    public DbSet<MentorImportDraft> MentorImportDrafts => Set<MentorImportDraft>();
     public DbSet<MentorAllocationSession> MentorAllocationSessions => Set<MentorAllocationSession>();
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
     public DbSet<Student> Students => Set<Student>();

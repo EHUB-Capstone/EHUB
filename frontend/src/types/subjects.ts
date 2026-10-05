@@ -136,13 +136,15 @@ export interface TeachingAssignmentDto {
 
 export interface TeachingStaffDto {
   _id: string;
-  userId: string;
+  userId: string | null;
   name: string;
   email: string;
   avatar?: string | null;
   role: 'LECTURER' | 'MENTOR';
-  status: 'Active' | 'Inactive';
+  status: 'Active' | 'Inactive' | 'Incomplete';
   userStatus: string;
+  isIncomplete: boolean;
+  missingFields: string[];
   classCount: number;
   assignments: TeachingAssignmentDto[];
   rowVersion: string;

@@ -44,7 +44,73 @@ import {
   selectLatestOfficialEvaluation,
 } from '../src/utils/evaluationGrading.ts';
 import { filterTeamRankingRows, rankTeamResults } from '../src/utils/teamRankings.ts';
+import { filterTeachingStaff, paginateTeachingStaff } from '../src/utils/teachingStaffDirectory.ts';
 import type { TeamRankingItem } from '../src/types/rankings.ts';
+import type { TeachingStaffDto } from '../src/types/subjects.ts';
+
+const teachingStaffMember = (overrides: Partial<TeachingStaffDto>): TeachingStaffDto => ({
+  _id: 'staff-1',
+  userId: 'user-1',
+  name: 'Nguyen Van A',
+  email: 'mentor@example.com',
+  role: 'MENTOR',
+  status: 'Active',
+  userStatus: 'Active',
+  isIncomplete: false,
+  missingFields: [],
+  classCount: 0,
+  assignments: [],
+  rowVersion: '1',
+  ...overrides,
+});
+
+test('teaching staff directory filters mentors that need information', () => {
+  const complete = teachingStaffMember({ _id: 'complete' });
+  const incomplete = teachingStaffMember({
+    _id: 'incomplete',
+    userId: null,
+    name: 'Mentor Missing Email',
+    email: '',
+    status: 'Incomplete',
+    userStatus: 'NotCreated',
+    isIncomplete: true,
+    missingFields: ['Email', 'Công ty'],
+    rowVersion: '',
+  });
+  const lecturer = teachingStaffMember({ _id: 'lecturer', role: 'LECTURER' });
+
+  assert.deepEqual(
+    filterTeachingStaff([complete, incomplete, lecturer], {
+      search: '',
+      role: 'ALL',
+      status: 'NEEDS_INFORMATION',
+    }).map(item => item._id),
+    ['incomplete'],
+  );
+  assert.deepEqual(
+    filterTeachingStaff([complete, incomplete, lecturer], {
+      search: 'cong ty',
+      role: 'MENTOR',
+      status: 'ALL',
+    }).map(item => item._id),
+    ['incomplete'],
+  );
+});
+
+test('teaching staff pagination clamps pages and reports the visible range', () => {
+  const rows = Array.from({ length: 23 }, (_, index) => index + 1);
+
+  assert.deepEqual(paginateTeachingStaff(rows, 3, 10), {
+    items: [21, 22, 23],
+    page: 3,
+    pageSize: 10,
+    totalPages: 3,
+    rangeStart: 21,
+    rangeEnd: 23,
+    totalItems: 23,
+  });
+  assert.equal(paginateTeachingStaff(rows, 99, 10).page, 3);
+});
 
 const rankingItem = (
   teamId: string,

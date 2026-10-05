@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
-  BookOpen, Calendar, CheckCircle2, ChevronLeft, ChevronRight, Edit3, Factory, Filter, GraduationCap, Plus,
+  BookOpen, Calendar, CheckCircle2, ChevronLeft, ChevronRight, CircleAlert, Edit3, Factory, Filter, GraduationCap, Plus,
   LockKeyhole, RefreshCw, Search, ShieldAlert, Sparkles, Users,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -15,6 +15,11 @@ import EmptyState from '../../components/ui/EmptyState';
 import LoadingSkeleton from '../../components/ui/LoadingSkeleton';
 import Modal from '../../components/ui/Modal';
 import { parseApiError } from '../../utils/apiError';
+import {
+  filterTeachingStaff,
+  paginateTeachingStaff,
+  type StaffStatusFilter,
+} from '../../utils/teachingStaffDirectory';
 import StartupIndustryManagement from './StartupIndustryManagement';
 import type {
   SemesterCode,
@@ -26,10 +31,10 @@ import type {
   TeachingStaffCandidateDto,
   TeachingStaffSummary,
 } from '../../types/subjects';
-import { matchesSearchQuery } from '../../utils/searchText';
 
 const emptySummary: TeachingStaffSummary = { lecturers: 0, mentors: 0, assigned: 0, unassigned: 0, classes: 0 };
 const currentYear = new Date().getFullYear();
+const staffPageSizes = [10, 20, 50] as const;
 
 function responseData(response: any) {
   return response?.data ?? response ?? {};
@@ -120,6 +125,9 @@ const SubjectManagement = () => {
   const [staffLoading, setStaffLoading] = useState(false);
   const [staffSearch, setStaffSearch] = useState('');
   const [staffRole, setStaffRole] = useState<'ALL' | TeachingStaffDto['role']>('ALL');
+  const [staffStatus, setStaffStatus] = useState<StaffStatusFilter>('ALL');
+  const [staffPage, setStaffPage] = useState(1);
+  const [staffPageSize, setStaffPageSize] = useState<(typeof staffPageSizes)[number]>(10);
   const [staffModalOpen, setStaffModalOpen] = useState(false);
   const [editingStaff, setEditingStaff] = useState<TeachingStaffDto | null>(null);
   const [staffModalRole, setStaffModalRole] = useState<TeachingStaffDto['role']>('LECTURER');
@@ -154,6 +162,10 @@ const SubjectManagement = () => {
     const timeout = window.setTimeout(() => setDebouncedSearch(search), 500);
     return () => window.clearTimeout(timeout);
   }, [search]);
+
+  useEffect(() => {
+    setStaffPage(1);
+  }, [staffSearch, staffRole, staffStatus, staffPageSize, selectedSemester, selectedYear]);
 
   // Only the first load swaps the table for a skeleton; later searches keep the current rows
   // visible (dimmed) and ignore responses that a newer request has already superseded.
@@ -294,8 +306,9 @@ const SubjectManagement = () => {
   };
 
   const openEditStaff = (member: TeachingStaffDto) => {
+    if (member.isIncomplete) return;
     setEditingStaff(member);
-    setStaffEntryStatus(member.status);
+    setStaffEntryStatus(member.status === 'Inactive' ? 'Inactive' : 'Active');
     setStaffModalOpen(true);
   };
 
@@ -556,12 +569,16 @@ const SubjectManagement = () => {
   };
 
   const visibleStaff = useMemo(() => {
-    return staff.filter((member) => {
-      const matchesRole = staffRole === 'ALL' || member.role === staffRole;
-      const matchesSearch = matchesSearchQuery(staffSearch, [member.name, member.email, ...member.assignments.flatMap((item) => [item.classCode, item.subjectCode])]);
-      return matchesRole && matchesSearch;
-    });
-  }, [staff, staffRole, staffSearch]);
+    return filterTeachingStaff(staff, { search: staffSearch, role: staffRole, status: staffStatus });
+  }, [staff, staffRole, staffSearch, staffStatus]);
+
+  const staffPagination = paginateTeachingStaff(visibleStaff, staffPage, staffPageSize);
+  const staffTotalPages = staffPagination.totalPages;
+  const currentStaffPage = staffPagination.page;
+  const paginatedStaff = staffPagination.items;
+  const staffRangeStart = staffPagination.rangeStart;
+  const staffRangeEnd = staffPagination.rangeEnd;
+  const hasStaffFilters = Boolean(staffSearch.trim()) || staffRole !== 'ALL' || staffStatus !== 'ALL';
 
   const availableStaffCandidates = useMemo(() => {
     const existingKeys = new Set(staff.map(member => `${member.userId}:${member.role}`));
@@ -631,29 +648,11 @@ const SubjectManagement = () => {
   const staffStats = [
     { label: 'Lecturers', value: staffSummary.lecturers, icon: GraduationCap, style: 'text-primary bg-primary-50' },
     { label: 'Mentors', value: staffSummary.mentors, icon: Users, style: 'text-secondary bg-secondary-50' },
+    { label: 'Needs info', value: staff.filter(member => member.isIncomplete).length, icon: CircleAlert, style: 'text-amber-700 bg-amber-50' },
     { label: 'Assigned', value: staffSummary.assigned, icon: CheckCircle2, style: 'text-success bg-success-50' },
     { label: 'Unassigned', value: staffSummary.unassigned, icon: ShieldAlert, style: 'text-warning-dark bg-warning-50' },
     { label: 'Classes', value: staffSummary.classes, icon: BookOpen, style: 'text-cyan-700 bg-cyan-50' },
   ];
-
-  const staffSections = [
-    {
-      role: 'LECTURER' as const,
-      title: 'Lecturers',
-      description: 'Teaching staff available for class assignment in this semester.',
-      icon: GraduationCap,
-      iconStyle: 'bg-primary-50 text-primary',
-      members: visibleStaff.filter(member => member.role === 'LECTURER'),
-    },
-    {
-      role: 'MENTOR' as const,
-      title: 'Mentors',
-      description: 'Mentors available for class and team assignment in this semester.',
-      icon: Users,
-      iconStyle: 'bg-secondary-50 text-secondary',
-      members: visibleStaff.filter(member => member.role === 'MENTOR'),
-    },
-  ].filter(section => staffRole === 'ALL' || section.role === staffRole);
   const selectedSemesterRecord = semesters.find(item => item.semester === selectedSemester && Number(item.year) === selectedYear);
 
   return (
@@ -878,99 +877,101 @@ const SubjectManagement = () => {
           <MentorAdministrationCard
             semesterId={selectedSemesterRecord?.id}
             semesterLabel={`${selectedSemester} ${selectedYear}`}
-            onImportCommitted={() => loadStaff(selectedSemester, selectedYear)}
+            onImportCommitted={() => {
+              setStaffPage(1);
+              return loadStaff(selectedSemester, selectedYear);
+            }}
           />
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">{staffStats.map(({ label, value, icon: Icon, style }) => <div key={label} className="rounded-xl border border-slate-200/70 bg-white p-4 shadow-sm"><div className={`flex h-9 w-9 items-center justify-center rounded-lg ${style}`}><Icon className="h-4 w-4" /></div><p className="mt-3 text-2xl font-bold text-slate-900">{value}</p><p className="text-sm text-slate-500">{label}</p></div>)}</div>
-          <div className="flex flex-col gap-3 sm:flex-row"><div className="relative flex-1"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input value={staffSearch} onChange={(event) => setStaffSearch(event.target.value)} placeholder="Search name, email, class or subject code..." className="w-full rounded-xl border border-slate-200 bg-white py-2 pl-10 pr-4 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20" /></div><select value={staffRole} onChange={(event) => setStaffRole(event.target.value as typeof staffRole)} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none"><option value="ALL">All roles</option><option value="LECTURER">Lecturers only</option><option value="MENTOR">Mentors only</option></select></div>
-          {staffLoading ? (
-            <div className="overflow-hidden rounded-2xl border border-slate-200/70 bg-white shadow-sm">
-              <LoadingSkeleton variant="table" lines={6} className="p-4" />
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
+            {staffStats.map(({ label, value, icon: Icon, style }) => (
+              <div key={label} className="flex items-center gap-3 rounded-xl border border-slate-200/70 bg-white px-3 py-2.5 shadow-sm">
+                <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${style}`}><Icon className="h-4 w-4" /></span>
+                <div className="min-w-0"><p className="text-lg font-bold leading-5 text-slate-900">{value}</p><p className="truncate text-xs text-slate-500">{label}</p></div>
+              </div>
+            ))}
+          </div>
+
+          <div className="rounded-2xl border border-slate-200/70 bg-white p-3 shadow-sm">
+            <div className="flex flex-col gap-2 xl:flex-row xl:items-center">
+              <div className="relative min-w-0 flex-1">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <input value={staffSearch} onChange={(event) => setStaffSearch(event.target.value)} placeholder="Search name, email, class, subject or missing field..." className="w-full rounded-xl border border-slate-200 bg-white py-2 pl-10 pr-4 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20" />
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="hidden items-center gap-1 text-xs font-semibold text-slate-400 sm:flex"><Filter className="h-3.5 w-3.5" /> Filters</span>
+                <select aria-label="Filter teaching staff by role" value={staffRole} onChange={(event) => setStaffRole(event.target.value as typeof staffRole)} className="min-w-[135px] rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-primary">
+                  <option value="ALL">All roles</option><option value="LECTURER">Lecturers</option><option value="MENTOR">Mentors</option>
+                </select>
+                <select aria-label="Filter teaching staff by status" value={staffStatus} onChange={(event) => setStaffStatus(event.target.value as StaffStatusFilter)} className="min-w-[165px] rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-primary">
+                  <option value="ALL">All statuses</option><option value="ACTIVE">Active</option><option value="INACTIVE">Inactive</option><option value="NEEDS_INFORMATION">Needs information</option>
+                </select>
+                <select aria-label="Rows per page" value={staffPageSize} onChange={(event) => setStaffPageSize(Number(event.target.value) as (typeof staffPageSizes)[number])} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-primary">
+                  {staffPageSizes.map(size => <option key={size} value={size}>{size} / page</option>)}
+                </select>
+                {hasStaffFilters && <button type="button" onClick={() => { setStaffSearch(''); setStaffRole('ALL'); setStaffStatus('ALL'); }} className="px-2 py-2 text-sm font-semibold text-primary hover:text-primary-dark">Reset</button>}
+              </div>
             </div>
-          ) : (
-            <div className="space-y-5">
-              {staffSections.map(({ role, title, description, icon: Icon, iconStyle, members }) => (
-                <section key={role} className="overflow-hidden rounded-2xl border border-slate-200/70 bg-white shadow-sm">
-                  <header className="flex flex-col gap-3 border-b border-slate-100 bg-slate-50/70 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="flex items-center gap-3">
-                      <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${iconStyle}`}>
-                        <Icon className="h-5 w-5" />
-                      </span>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h2 className="font-bold text-slate-900">{title}</h2>
-                          <span className="rounded-full bg-white px-2.5 py-0.5 text-xs font-semibold text-slate-600 shadow-sm">
-                            {members.length}
-                          </span>
-                        </div>
-                        <p className="mt-0.5 text-sm text-slate-500">{description}</p>
+          </div>
+
+          <section className="overflow-hidden rounded-2xl border border-slate-200/70 bg-white shadow-sm">
+            <header className="flex flex-col gap-3 border-b border-slate-100 bg-slate-50/70 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <div className="flex items-center gap-2"><h2 className="font-bold text-slate-900">Teaching staff directory</h2><span className="rounded-full bg-white px-2 py-0.5 text-xs font-semibold text-slate-600 shadow-sm">{visibleStaff.length}</span></div>
+                <p className="mt-0.5 text-xs text-slate-500">Lecturers and mentors for {selectedSemester} {selectedYear}</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button size="sm" variant="outline" icon={Plus} onClick={() => void openAddStaff('LECTURER')}>Add lecturer</Button>
+                <Button size="sm" variant="outline" icon={Plus} onClick={() => void openAddStaff('MENTOR')}>Add mentor</Button>
+              </div>
+            </header>
+
+            {staffLoading ? (
+              <LoadingSkeleton variant="table" lines={6} className="p-4" />
+            ) : paginatedStaff.length === 0 ? (
+              <div className="px-5 py-10 text-center">
+                <p className="text-sm font-semibold text-slate-700">No teaching staff found</p>
+                <p className="mt-1 text-sm text-slate-500">{hasStaffFilters ? 'Try another search or reset the current filters.' : `Add lecturers or mentors to ${selectedSemester} ${selectedYear}.`}</p>
+                {hasStaffFilters && <button type="button" onClick={() => { setStaffSearch(''); setStaffRole('ALL'); setStaffStatus('ALL'); }} className="mt-3 text-sm font-semibold text-primary hover:underline">Clear filters</button>}
+              </div>
+            ) : (
+              <div className="divide-y divide-slate-100">
+                {paginatedStaff.map((member) => (
+                  <article key={member._id} className="grid gap-3 px-4 py-3 transition-colors hover:bg-slate-50/60 lg:grid-cols-[minmax(230px,1.25fr)_minmax(170px,auto)_minmax(230px,1fr)_36px] lg:items-center">
+                    <div className="flex min-w-0 items-center gap-3">
+                      {member.avatar ? <img src={member.avatar} alt="" className="h-9 w-9 rounded-full object-cover" /> : <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold ${member.isIncomplete ? 'bg-amber-50 text-amber-700' : 'bg-slate-100 text-slate-600'}`}>{initials(member.name)}</span>}
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-slate-900">{member.name}</p>
+                        <p className={`truncate text-xs ${member.isIncomplete ? 'font-medium text-amber-600' : 'text-slate-500'}`}>{member.email || 'Email not provided'}</p>
+                        {member.isIncomplete && member.missingFields.length > 0 && <p title={member.missingFields.join(', ')} className="mt-0.5 truncate text-[11px] text-slate-400">Missing: {member.missingFields.join(', ')}</p>}
+                        {!member.isIncomplete && member.userStatus !== 'Active' && <p className="mt-0.5 text-[11px] font-medium text-red-600">User account: {member.userStatus}</p>}
                       </div>
                     </div>
-                    <Button size="sm" variant="outline" icon={Plus} onClick={() => void openAddStaff(role)}>
-                      Add {role === 'LECTURER' ? 'Lecturer' : 'Mentor'}
-                    </Button>
-                  </header>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className={`rounded-full px-2 py-1 text-[11px] font-semibold ${member.role === 'LECTURER' ? 'bg-primary-50 text-primary' : 'bg-secondary-50 text-secondary'}`}>{member.role === 'LECTURER' ? 'Lecturer' : 'Mentor'}</span>
+                      {member.isIncomplete ? <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-700">Needs information</span> : <Badge variant={member.status === 'Active' ? 'Active' : 'Inactive'}>{member.status}</Badge>}
+                    </div>
+                    <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                      {member.isIncomplete ? <span className="text-xs font-medium text-amber-700">Complete profile before assignment</span> : member.assignments.length ? <>{member.assignments.slice(0, 2).map(assignment => <span key={assignment._id} className="rounded-full border border-primary-100 bg-primary-50 px-2 py-1 text-[11px] font-semibold text-primary">{assignment.classCode} · {assignment.subjectCode}</span>)}{member.assignments.length > 2 && <span className="text-xs font-semibold text-slate-500">+{member.assignments.length - 2} more</span>}</> : <span className="text-xs text-slate-500">Not assigned · {member.classCount} classes</span>}
+                    </div>
+                    <div className="flex justify-end">
+                      {!member.isIncomplete && <button type="button" onClick={() => openEditStaff(member)} className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-primary-50 hover:text-primary" aria-label={`Edit ${member.name} semester status`} title="Edit semester status"><Edit3 className="h-4 w-4" /></button>}
+                    </div>
+                  </article>
+                ))}
+              </div>
+            )}
 
-                  {members.length === 0 ? (
-                    <div className="px-5 py-8 text-center">
-                      <p className="text-sm font-semibold text-slate-700">No {title.toLowerCase()} found</p>
-                      <p className="mt-1 text-sm text-slate-500">
-                        {staffSearch.trim()
-                          ? 'Try another search term or clear the current filters.'
-                          : `Add ${title.toLowerCase()} to ${selectedSemester} ${selectedYear}.`}
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="divide-y divide-slate-100">
-                      {members.map((member) => (
-                        <article key={member._id} className="flex flex-col gap-4 p-5 lg:flex-row lg:items-center">
-                          <div className="flex min-w-0 flex-1 items-center gap-3">
-                            {member.avatar ? (
-                              <img src={member.avatar} alt="" className="h-10 w-10 rounded-full object-cover" />
-                            ) : (
-                              <span className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-600">
-                                {initials(member.name)}
-                              </span>
-                            )}
-                            <div className="min-w-0">
-                              <p className="truncate font-semibold text-slate-900">{member.name}</p>
-                              <p className="truncate text-sm text-slate-500">{member.email}</p>
-                              {member.userStatus !== 'Active' && (
-                                <p className="mt-0.5 text-xs font-medium text-red-600">User account: {member.userStatus}</p>
-                              )}
-                            </div>
-                          </div>
-                          <div className="flex flex-wrap items-center gap-2">
-                            <Badge variant={member.status === 'Active' ? 'Active' : 'Inactive'}>{member.status}</Badge>
-                            <span className="text-sm font-medium text-slate-600">{member.classCount} classes</span>
-                          </div>
-                          <div className="flex flex-1 flex-wrap gap-1.5 lg:justify-end">
-                            {member.assignments.length ? member.assignments.map((assignment) => (
-                              <span key={assignment._id} className="rounded-full border border-primary-100 bg-primary-50 px-2 py-1 text-xs font-semibold text-primary">
-                                {assignment.classCode} · {assignment.subjectCode}
-                              </span>
-                            )) : (
-                              <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-semibold text-slate-500">
-                                Not assigned in {selectedSemester} {selectedYear}
-                              </span>
-                            )}
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => openEditStaff(member)}
-                            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-primary-50 hover:text-primary"
-                            aria-label={`Edit ${member.name} semester status`}
-                            title="Edit semester status"
-                          >
-                            <Edit3 className="h-4 w-4" />
-                          </button>
-                        </article>
-                      ))}
-                    </div>
-                  )}
-                </section>
-              ))}
-            </div>
-          )}
+            {!staffLoading && visibleStaff.length > 0 && (
+              <footer className="flex flex-col gap-2 border-t border-slate-100 bg-slate-50/60 px-4 py-3 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between">
+                <span>Showing <strong className="text-slate-700">{staffRangeStart}–{staffRangeEnd}</strong> of <strong className="text-slate-700">{visibleStaff.length}</strong></span>
+                <div className="flex items-center gap-2">
+                  <button type="button" disabled={currentStaffPage <= 1} onClick={() => setStaffPage(page => Math.max(1, page - 1))} className="inline-flex h-8 items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 font-semibold text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"><ChevronLeft className="h-3.5 w-3.5" /> Previous</button>
+                  <span className="min-w-[76px] text-center font-medium text-slate-600">Page {currentStaffPage} / {staffTotalPages}</span>
+                  <button type="button" disabled={currentStaffPage >= staffTotalPages} onClick={() => setStaffPage(page => Math.min(staffTotalPages, page + 1))} className="inline-flex h-8 items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 font-semibold text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40">Next <ChevronRight className="h-3.5 w-3.5" /></button>
+                </div>
+              </footer>
+            )}
+          </section>
         </section>
       )}
 

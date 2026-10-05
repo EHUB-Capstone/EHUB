@@ -100,13 +100,15 @@ public sealed class TeachingStaffResponse
 {
     [JsonPropertyName("_id")]
     public Guid Id { get; init; }
-    public Guid UserId { get; init; }
+    public Guid? UserId { get; init; }
     public string Name { get; init; } = string.Empty;
     public string Email { get; init; } = string.Empty;
     public string? Avatar { get; init; }
     public string Role { get; init; } = string.Empty;
     public string Status { get; init; } = string.Empty;
     public string UserStatus { get; init; } = string.Empty;
+    public bool IsIncomplete { get; init; }
+    public IReadOnlyCollection<string> MissingFields { get; init; } = Array.Empty<string>();
     public int ClassCount { get; init; }
     public IReadOnlyCollection<TeachingAssignmentResponse> Assignments { get; init; } = Array.Empty<TeachingAssignmentResponse>();
     public string RowVersion { get; init; } = string.Empty;
