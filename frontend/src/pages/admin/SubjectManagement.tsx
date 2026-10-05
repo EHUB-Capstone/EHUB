@@ -2,12 +2,13 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   BookOpen, Calendar, CheckCircle2, ChevronLeft, ChevronRight, CircleAlert, Edit3, Factory, Filter, GraduationCap, Plus,
-  LockKeyhole, RefreshCw, Search, ShieldAlert, Sparkles, Users,
+  History, LockKeyhole, RefreshCw, Search, ShieldAlert, Sparkles, Users,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { subjectApi } from '../../api/subjectApi';
 import SemesterDateRangePicker from '../../components/admin/SemesterDateRangePicker';
 import MentorAdministrationCard from '../../components/admin/MentorAdministrationCard';
+import MentorCarryoverModal from '../../components/admin/MentorCarryoverModal';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
@@ -46,6 +47,11 @@ function initials(name: string) {
 
 function semesterLabel({ semester, year }: SemesterDto) {
   return `${semester} ${year}`;
+}
+
+function semesterChronology({ semester, year }: SemesterDto) {
+  const termOrder: Record<SemesterCode, number> = { SP: 0, SU: 1, FA: 2 };
+  return year * 3 + termOrder[semester];
 }
 
 function formatSemesterDate(value: string | null) {
@@ -136,6 +142,7 @@ const SubjectManagement = () => {
   const [staffEntryStatus, setStaffEntryStatus] = useState<'Active' | 'Inactive'>('Active');
   const [staffSaving, setStaffSaving] = useState(false);
   const [staffCandidatesLoading, setStaffCandidatesLoading] = useState(false);
+  const [mentorCarryoverOpen, setMentorCarryoverOpen] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingSubject, setEditingSubject] = useState<SubjectDto | null>(null);
   const [form, setForm] = useState({ subjectCode: '', subjectName: '', status: 'active' as SubjectStatus });
@@ -654,6 +661,13 @@ const SubjectManagement = () => {
     { label: 'Classes', value: staffSummary.classes, icon: BookOpen, style: 'bg-cyan text-white ring-black/10 dark:ring-cyan-300/40' },
   ];
   const selectedSemesterRecord = semesters.find(item => item.semester === selectedSemester && Number(item.year) === selectedYear);
+  const mentorCarryoverSources = useMemo(() => {
+    if (!selectedSemesterRecord) return [];
+    const targetOrder = semesterChronology(selectedSemesterRecord);
+    return semesters
+      .filter(item => item.id !== selectedSemesterRecord.id && semesterChronology(item) < targetOrder)
+      .sort((left, right) => semesterChronology(right) - semesterChronology(left));
+  }, [selectedSemesterRecord, semesters]);
 
   return (
     <div className="space-y-6">
@@ -932,6 +946,15 @@ const SubjectManagement = () => {
                 </div>
               </div>
               <div className="flex flex-wrap gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  icon={History}
+                  disabled={!selectedSemesterRecord || ['Closing', 'Completed', 'Archived'].includes(selectedSemesterRecord.status)}
+                  onClick={() => setMentorCarryoverOpen(true)}
+                >
+                  Reuse mentors
+                </Button>
                 <Button size="sm" variant="outline" icon={Plus} onClick={() => void openAddStaff('LECTURER')}>Add lecturer</Button>
                 <Button size="sm" variant="outline" icon={Plus} onClick={() => void openAddStaff('MENTOR')}>Add mentor</Button>
               </div>
@@ -1067,6 +1090,16 @@ const SubjectManagement = () => {
           </p>
         </div>
       </Modal>
+
+      {selectedSemesterRecord && (
+        <MentorCarryoverModal
+          isOpen={mentorCarryoverOpen}
+          onClose={() => setMentorCarryoverOpen(false)}
+          targetSemester={selectedSemesterRecord}
+          sourceSemesters={mentorCarryoverSources}
+          onCompleted={() => loadStaff(selectedSemester, selectedYear)}
+        />
+      )}
 
       <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title={editingSubject ? 'Edit Subject' : 'Add Subject'} submitText={savingSubject ? 'Saving...' : 'Save Subject'} isSubmitting={savingSubject} onSubmit={saveSubject}>
         <div className="space-y-4"><label className="block text-sm font-medium text-slate-700">Subject Code *<input disabled={Boolean(editingSubject)} value={form.subjectCode} onChange={(event) => setForm({ ...form, subjectCode: event.target.value })} placeholder="e.g. EXE301" className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 font-mono text-sm outline-none focus:border-primary disabled:bg-slate-50" /></label><label className="block text-sm font-medium text-slate-700">Subject Name *<input value={form.subjectName} onChange={(event) => setForm({ ...form, subjectName: event.target.value })} placeholder="e.g. Experiential Entrepreneurship 3" className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-primary" /></label><label className="block text-sm font-medium text-slate-700">Status<select value={form.status} onChange={(event) => setForm({ ...form, status: event.target.value as SubjectStatus })} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-primary"><option value="active">Active</option><option value="disabled">Disabled</option></select></label></div>

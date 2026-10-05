@@ -47,6 +47,10 @@ export const subjectApi = {
     axiosClient.post('/subjects/teaching-staff', data),
   updateTeachingStaff: (id: string, data: { status: 'Active' | 'Inactive'; rowVersion: string }) =>
     axiosClient.put(`/subjects/teaching-staff/${id}`, data),
+  previewMentorCarryover: (data: { sourceSemesterId: string; targetSemesterId: string }, signal?: AbortSignal) =>
+    axiosClient.post('/subjects/teaching-staff/mentor-carryover/preview', data, { signal }),
+  commitMentorCarryover: (data: { sourceSemesterId: string; targetSemesterId: string; mentorUserIds: string[] }) =>
+    axiosClient.post('/subjects/teaching-staff/mentor-carryover/commit', data),
   getCurriculum: (subjectCode: string) => axiosClient.get(`/subjects/${subjectCode}/curriculum`),
   synchronizeCheckpoints: (subjectCode: string, data: unknown) => axiosClient.put(`/subjects/${subjectCode}/checkpoints`, data),
   createRoadmapItem: (subjectCode: string, data: unknown) => axiosClient.post(`/subjects/${subjectCode}/roadmap`, data),

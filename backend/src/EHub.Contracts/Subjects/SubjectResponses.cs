@@ -144,6 +144,39 @@ public sealed class TeachingStaffCandidateListResponse
         Array.Empty<TeachingStaffCandidateResponse>();
 }
 
+public sealed class MentorCarryoverCandidateResponse
+{
+    public Guid UserId { get; init; }
+    public string Name { get; init; } = string.Empty;
+    public string Email { get; init; } = string.Empty;
+    public string? Avatar { get; init; }
+    public string MentorType { get; init; } = string.Empty;
+    public string Action { get; init; } = string.Empty;
+    public bool CanSelect { get; init; }
+    public string Message { get; init; } = string.Empty;
+}
+
+public sealed class MentorCarryoverPreviewResponse
+{
+    public Guid SourceSemesterId { get; init; }
+    public Guid TargetSemesterId { get; init; }
+    public int TotalCount { get; init; }
+    public int EligibleCount { get; init; }
+    public int AlreadyAddedCount { get; init; }
+    public int UnavailableCount { get; init; }
+    public int EnterpriseCount { get; init; }
+    public int AcademicCount { get; init; }
+    public IReadOnlyCollection<MentorCarryoverCandidateResponse> Mentors { get; init; } =
+        Array.Empty<MentorCarryoverCandidateResponse>();
+}
+
+public sealed class MentorCarryoverCommitResponse
+{
+    public int AddedCount { get; init; }
+    public int ReactivatedCount { get; init; }
+    public int AlreadyAddedCount { get; init; }
+}
+
 public sealed class RoadmapItemResponse
 {
     [JsonPropertyName("_id")]

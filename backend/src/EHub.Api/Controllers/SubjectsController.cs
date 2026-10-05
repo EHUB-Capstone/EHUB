@@ -298,6 +298,38 @@ public sealed class SubjectsController : ControllerBase
                 "Semester teaching staff entry updated successfully."));
     }
 
+    [HttpPost("teaching-staff/mentor-carryover/preview")]
+    [Authorize(Policy = SystemPolicies.AdminOnly)]
+    public async Task<IActionResult> PreviewMentorCarryover(
+        [FromBody] PreviewMentorCarryoverRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await _semesterTeachingStaffHandler.PreviewMentorCarryoverAsync(
+            request,
+            cancellationToken);
+        return result.IsFailure
+            ? ToSemesterErrorResponse(result.Error)
+            : Ok(ApiResponse<MentorCarryoverPreviewResponse>.SuccessResponse(
+                result.Value!,
+                "Mentors available for reuse retrieved successfully."));
+    }
+
+    [HttpPost("teaching-staff/mentor-carryover/commit")]
+    [Authorize(Policy = SystemPolicies.AdminOnly)]
+    public async Task<IActionResult> CommitMentorCarryover(
+        [FromBody] CommitMentorCarryoverRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await _semesterTeachingStaffHandler.CommitMentorCarryoverAsync(
+            request,
+            cancellationToken);
+        return result.IsFailure
+            ? ToSemesterErrorResponse(result.Error)
+            : Ok(ApiResponse<MentorCarryoverCommitResponse>.SuccessResponse(
+                result.Value!,
+                "Selected mentors added to the target semester successfully."));
+    }
+
     [HttpGet("{subjectCode}")]
     public async Task<IActionResult> GetCurriculum(string subjectCode, CancellationToken cancellationToken)
     {
