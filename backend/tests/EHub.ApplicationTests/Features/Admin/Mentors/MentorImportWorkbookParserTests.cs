@@ -62,6 +62,48 @@ public sealed class MentorImportWorkbookParserTests
     }
 
     [Fact]
+    public void Parse_NameOnlyWorkbook_ReadsRowsAsValidIncompleteMentors()
+    {
+        var file = CreateWorkbook((enterprise, academic) =>
+        {
+            enterprise.Cell(1, 1).Value = "STT";
+            enterprise.Cell(1, 2).Value = "Họ và tên";
+            enterprise.Cell(2, 1).Value = 1;
+            enterprise.Cell(2, 2).Value = "Mentor Doanh nghiệp Chưa Đủ";
+            academic.Cell(1, 1).Value = "STT";
+            academic.Cell(1, 2).Value = "Họ tên";
+            academic.Cell(2, 1).Value = 1;
+            academic.Cell(2, 2).Value = "Mentor Giảng viên Chưa Đủ";
+        });
+
+        var result = MentorImportWorkbookParser.Parse(file);
+
+        result.IsSuccess.Should().BeTrue(result.IsFailure ? result.Error.Message : string.Empty);
+        result.Value.Should().HaveCount(2);
+        result.Value.Should().OnlyContain(item => item.IsValid && item.Email == string.Empty);
+        result.Value.Should().ContainSingle(item => item.MentorType == MentorType.Enterprise && item.FullName == "Mentor Doanh nghiệp Chưa Đủ");
+        result.Value.Should().ContainSingle(item => item.MentorType == MentorType.Academic && item.FullName == "Mentor Giảng viên Chưa Đủ");
+    }
+
+    [Fact]
+    public void Parse_InvalidProvidedEmail_MarksRowInvalidInsteadOfSavingDraft()
+    {
+        var file = CreateWorkbook((enterprise, academic) =>
+        {
+            WriteEnterpriseHeader(enterprise);
+            WriteEnterpriseRow(enterprise, 2, "Enterprise", "", "not-an-email", "");
+            WriteAcademicHeader(academic);
+            WriteAcademicRow(academic, 2, "academic@example.com", "Academic");
+        });
+
+        var result = MentorImportWorkbookParser.Parse(file);
+
+        result.IsSuccess.Should().BeTrue(result.IsFailure ? result.Error.Message : string.Empty);
+        result.Value.Single(item => item.MentorType == MentorType.Enterprise).IsValid.Should().BeFalse();
+        result.Value.Single(item => item.MentorType == MentorType.Enterprise).Message.Should().Contain("valid email");
+    }
+
+    [Fact]
     public void Parse_MissingRequiredSheet_ReturnsFailure()
     {
         using var workbook = new XLWorkbook();

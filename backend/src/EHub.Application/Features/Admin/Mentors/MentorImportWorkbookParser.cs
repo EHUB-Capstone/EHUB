@@ -16,6 +16,28 @@ internal static class MentorImportWorkbookParser
     private const int MaximumRowsPerSheet = 500;
     private const int MaximumHeaderSearchRows = 20;
     private const int MaximumColumns = 20;
+    private static readonly IReadOnlyDictionary<string, string[]> EnterpriseColumns = new Dictionary<string, string[]>
+    {
+        ["stt"] = ["stt"],
+        ["fullname"] = ["hovaten", "hoten"],
+        ["dateofbirth"] = ["ngaythangnamsinh", "ngaysinh"],
+        ["phone"] = ["sdt", "sodienthoai", "dienthoai"],
+        ["contracttype"] = ["loaihd", "loaihopdong"],
+        ["educationlevel"] = ["trinhdohocvan", "hocvan"],
+        ["address"] = ["diachihiennay", "diachi"],
+        ["email"] = ["email"],
+        ["fptemail"] = ["fptemail", "emailfpt"],
+        ["jobtitle"] = ["vitrichucdanh", "chucdanh", "vitri"],
+        ["organization"] = ["congty", "tochuc", "donvi"]
+    };
+    private static readonly IReadOnlyDictionary<string, string[]> AcademicColumns = new Dictionary<string, string[]>
+    {
+        ["stt"] = ["stt"],
+        ["email"] = ["emailcongviec", "email"],
+        ["fullname"] = ["hoten", "hovaten"],
+        ["department"] = ["phongbantructiep", "phongban", "bomon"],
+        ["jobtitle"] = ["chucdanhvn", "chucdanh", "vitrichucdanh"]
+    };
 
     static MentorImportWorkbookParser() => Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
 
@@ -93,9 +115,8 @@ internal static class MentorImportWorkbookParser
 
     private static Result<List<MentorImportCandidate>> ParseEnterprise(IReadOnlyList<SpreadsheetRow> rows)
     {
-        var required = new[] { "stt", "hovaten", "ngaythangnamsinh", "sdt", "loaihd", "trinhdohocvan", "diachihiennay", "email", "fptemail", "vitrichucdanh", "congty" };
-        var header = FindHeader(rows, required);
-        if (header is null) return Failure($"Sheet '{EnterpriseSheetName}' does not contain the required enterprise mentor headers.");
+        var header = FindHeader(rows, EnterpriseColumns, ["fullname"]);
+        if (header is null) return Failure($"Sheet '{EnterpriseSheetName}' must contain a mentor name column such as 'Họ và tên'.");
 
         var dataRows = rows.Where(item => item.RowNumber > header.Value.Row.RowNumber && item.Cells.Any(value => !string.IsNullOrWhiteSpace(value))).ToArray();
         if (dataRows.Length > MaximumRowsPerSheet)
@@ -103,26 +124,30 @@ internal static class MentorImportWorkbookParser
         var result = new List<MentorImportCandidate>();
         foreach (var row in dataRows)
         {
-            var values = required.ToDictionary(key => key, key => GetCell(row.Cells, header.Value.Columns[key]));
+            var values = EnterpriseColumns.Keys.ToDictionary(key => key, key => GetOptionalCell(row.Cells, header.Value.Columns, key));
             if (values.Values.All(string.IsNullOrWhiteSpace)) continue;
-            var email = NormalizeEmail(values["email"]);
+            var rawEmail = values["email"];
+            var email = NormalizeEmail(rawEmail);
             var candidate = new MentorImportCandidate
             {
                 RowNumber = row.RowNumber,
                 SheetName = EnterpriseSheetName,
                 MentorType = MentorType.Enterprise,
-                FullName = values["hovaten"].Trim(),
-                Email = email ?? values["email"].Trim().ToLowerInvariant(),
+                SourceOrdinal = EmptyToNull(values["stt"]),
+                FullName = values["fullname"].Trim(),
+                NormalizedFullName = NormalizeName(values["fullname"]),
+                Email = email ?? rawEmail.Trim().ToLowerInvariant(),
                 FptEmail = EmptyToNull(NormalizeEmail(values["fptemail"]) ?? values["fptemail"].Trim()),
-                Phone = EmptyToNull(values["sdt"]),
-                DateOfBirth = ParseDate(values["ngaythangnamsinh"]),
-                ContractType = EmptyToNull(values["loaihd"]),
-                EducationLevel = EmptyToNull(values["trinhdohocvan"]),
-                CurrentAddress = EmptyToNull(values["diachihiennay"]),
-                JobTitle = EmptyToNull(values["vitrichucdanh"]),
-                Organization = EmptyToNull(values["congty"])
+                Phone = EmptyToNull(values["phone"]),
+                DateOfBirth = ParseDate(values["dateofbirth"]),
+                ContractType = EmptyToNull(values["contracttype"]),
+                EducationLevel = EmptyToNull(values["educationlevel"]),
+                CurrentAddress = EmptyToNull(values["address"]),
+                JobTitle = EmptyToNull(values["jobtitle"]),
+                Organization = EmptyToNull(values["organization"]),
+                PresentColumns = header.Value.Columns.Keys.ToHashSet(StringComparer.OrdinalIgnoreCase)
             };
-            ValidateCommon(candidate, email, values["ngaythangnamsinh"]);
+            ValidateCommon(candidate, email, rawEmail, values["dateofbirth"]);
             result.Add(candidate);
         }
         return result.Count == 0 ? Failure($"Sheet '{EnterpriseSheetName}' contains no mentor rows.") : Result.Success(result);
@@ -130,9 +155,8 @@ internal static class MentorImportWorkbookParser
 
     private static Result<List<MentorImportCandidate>> ParseAcademic(IReadOnlyList<SpreadsheetRow> rows)
     {
-        var required = new[] { "stt", "emailcongviec", "hoten", "phongbantructiep", "chucdanhvn" };
-        var header = FindHeader(rows, required);
-        if (header is null) return Failure($"Sheet '{AcademicSheetName}' does not contain the required academic mentor headers.");
+        var header = FindHeader(rows, AcademicColumns, ["fullname"]);
+        if (header is null) return Failure($"Sheet '{AcademicSheetName}' must contain a mentor name column such as 'Họ tên'.");
 
         var dataRows = rows.Where(item => item.RowNumber > header.Value.Row.RowNumber && item.Cells.Any(value => !string.IsNullOrWhiteSpace(value))).ToArray();
         if (dataRows.Length > MaximumRowsPerSheet)
@@ -140,30 +164,34 @@ internal static class MentorImportWorkbookParser
         var result = new List<MentorImportCandidate>();
         foreach (var row in dataRows)
         {
-            var values = required.ToDictionary(key => key, key => GetCell(row.Cells, header.Value.Columns[key]));
+            var values = AcademicColumns.Keys.ToDictionary(key => key, key => GetOptionalCell(row.Cells, header.Value.Columns, key));
             if (values.Values.All(string.IsNullOrWhiteSpace)) continue;
-            var email = NormalizeEmail(values["emailcongviec"]);
+            var rawEmail = values["email"];
+            var email = NormalizeEmail(rawEmail);
             var candidate = new MentorImportCandidate
             {
                 RowNumber = row.RowNumber,
                 SheetName = AcademicSheetName,
                 MentorType = MentorType.Academic,
-                FullName = values["hoten"].Trim(),
-                Email = email ?? values["emailcongviec"].Trim().ToLowerInvariant(),
-                Department = EmptyToNull(values["phongbantructiep"]),
-                JobTitle = EmptyToNull(values["chucdanhvn"])
+                SourceOrdinal = EmptyToNull(values["stt"]),
+                FullName = values["fullname"].Trim(),
+                NormalizedFullName = NormalizeName(values["fullname"]),
+                Email = email ?? rawEmail.Trim().ToLowerInvariant(),
+                Department = EmptyToNull(values["department"]),
+                JobTitle = EmptyToNull(values["jobtitle"]),
+                PresentColumns = header.Value.Columns.Keys.ToHashSet(StringComparer.OrdinalIgnoreCase)
             };
-            ValidateCommon(candidate, email, null);
+            ValidateCommon(candidate, email, rawEmail, null);
             result.Add(candidate);
         }
         return result.Count == 0 ? Failure($"Sheet '{AcademicSheetName}' contains no mentor rows.") : Result.Success(result);
     }
 
-    private static void ValidateCommon(MentorImportCandidate row, string? validEmail, string? rawDate)
+    private static void ValidateCommon(MentorImportCandidate row, string? validEmail, string? rawEmail, string? rawDate)
     {
         if (string.IsNullOrWhiteSpace(row.FullName)) row.MarkInvalid("Mentor name is required.");
         else if (row.FullName.Length > 100) row.MarkInvalid("Mentor name may contain at most 100 characters.");
-        else if (validEmail is null) row.MarkInvalid("A valid login email is required.");
+        else if (!string.IsNullOrWhiteSpace(rawEmail) && validEmail is null) row.MarkInvalid("Login email must be a valid email address when provided.");
         else if (!string.IsNullOrWhiteSpace(rawDate) && row.DateOfBirth is null) row.MarkInvalid("Date of birth must be a valid date.");
         else if (row.DateOfBirth is { } date && (date > DateOnly.FromDateTime(DateTime.UtcNow) || date.Year < 1900)) row.MarkInvalid("Date of birth is outside the allowed range.");
         else if (row.FptEmail is not null && NormalizeEmail(row.FptEmail) is null) row.MarkInvalid("Fpt Email must be a valid email address when provided.");
@@ -176,14 +204,21 @@ internal static class MentorImportWorkbookParser
         else if (row.JobTitle?.Length > 200) row.MarkInvalid("Job title may contain at most 200 characters.");
     }
 
-    private static (SpreadsheetRow Row, Dictionary<string, int> Columns)? FindHeader(IReadOnlyList<SpreadsheetRow> rows, IReadOnlyCollection<string> required)
+    private static (SpreadsheetRow Row, Dictionary<string, int> Columns)? FindHeader(
+        IReadOnlyList<SpreadsheetRow> rows,
+        IReadOnlyDictionary<string, string[]> recognized,
+        IReadOnlyCollection<string> required)
     {
         foreach (var row in rows.Take(MaximumHeaderSearchRows))
         {
-            var columns = row.Cells.Select((value, index) => (Key: NormalizeHeader(value), Index: index))
+            var sourceColumns = row.Cells.Select((value, index) => (Key: NormalizeHeader(value), Index: index))
                 .Where(item => !string.IsNullOrEmpty(item.Key))
                 .GroupBy(item => item.Key)
                 .ToDictionary(group => group.Key, group => group.First().Index);
+            var columns = recognized
+                .Select(item => (item.Key, Match: item.Value.FirstOrDefault(sourceColumns.ContainsKey)))
+                .Where(item => item.Match is not null)
+                .ToDictionary(item => item.Key, item => sourceColumns[item.Match!], StringComparer.OrdinalIgnoreCase);
             if (required.All(columns.ContainsKey)) return (row, columns);
         }
         return null;
@@ -236,6 +271,10 @@ internal static class MentorImportWorkbookParser
         _ => Convert.ToString(value, CultureInfo.InvariantCulture)?.Trim() ?? string.Empty
     };
     private static string GetCell(IReadOnlyList<string> cells, int index) => index < cells.Count ? cells[index].Trim() : string.Empty;
+    private static string GetOptionalCell(IReadOnlyList<string> cells, IReadOnlyDictionary<string, int> columns, string key) =>
+        columns.TryGetValue(key, out var index) ? GetCell(cells, index) : string.Empty;
+    private static string NormalizeName(string value) => string.Join(' ', value.Trim().Normalize(NormalizationForm.FormKC)
+        .Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)).ToLowerInvariant();
     private static string? EmptyToNull(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
     private static Result<List<MentorImportCandidate>> Failure(string message) => Result.Failure<List<MentorImportCandidate>>(new Error(ErrorCodes.MentorImportFileInvalid, message));
     private static Result<List<SpreadsheetRow>> RowFailure(string sheet, string message) => Result.Failure<List<SpreadsheetRow>>(new Error(ErrorCodes.MentorImportFileInvalid, $"Sheet '{sheet}' {message}"));
@@ -248,7 +287,9 @@ internal sealed class MentorImportCandidate
     public int RowNumber { get; set; }
     public string SheetName { get; set; } = string.Empty;
     public MentorType MentorType { get; set; }
+    public string? SourceOrdinal { get; set; }
     public string FullName { get; set; } = string.Empty;
+    public string NormalizedFullName { get; set; } = string.Empty;
     public string Email { get; set; } = string.Empty;
     public string? FptEmail { get; set; }
     public string? Phone { get; set; }
@@ -259,6 +300,13 @@ internal sealed class MentorImportCandidate
     public string? Organization { get; set; }
     public string? Department { get; set; }
     public string? JobTitle { get; set; }
+    public HashSet<string> PresentColumns { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    public Guid? DraftId { get; set; }
+    public bool WillCreateAccount { get; set; }
+    public bool WillUpdateAccount { get; set; }
+    public bool WillAddToSemester { get; set; }
+    public bool WillSaveDraft { get; set; }
+    public bool WillCompleteDraft { get; set; }
     public string Status { get; set; } = "Create";
     public bool IsValid { get; set; } = true;
     public string? Message { get; set; }
@@ -268,5 +316,17 @@ internal sealed class MentorImportCandidate
         IsValid = false;
         Status = "Conflict";
         Message = message;
+    }
+
+    public void ResetPlannedAction()
+    {
+        DraftId = null;
+        WillCreateAccount = false;
+        WillUpdateAccount = false;
+        WillAddToSemester = false;
+        WillSaveDraft = false;
+        WillCompleteDraft = false;
+        Status = "Create";
+        Message = null;
     }
 }

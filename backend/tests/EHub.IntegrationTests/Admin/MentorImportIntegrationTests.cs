@@ -6,6 +6,7 @@ using EHub.Application.Common.Interfaces.Identity;
 using EHub.Contracts.Auth;
 using EHub.Contracts.Common;
 using EHub.Contracts.Mentors;
+using EHub.Contracts.Subjects;
 using EHub.Domain.Entities;
 using EHub.Domain.Enums;
 using EHub.IntegrationTests.Common;
@@ -133,6 +134,133 @@ public sealed class MentorImportIntegrationTests(CustomWebApplicationFactory fac
     }
 
     [Fact]
+    public async Task AdminImport_NameOnlyRows_ShouldSaveDrafts_ThenCompleteThemFromFullWorkbook()
+    {
+        var token = await GetAdminTokenAsync();
+        var semesterId = await GetSemesterIdAsync();
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+        var enterpriseName = $"Incomplete Enterprise {suffix}";
+        var academicName = $"Incomplete Academic {suffix}";
+        var enterpriseEmail = $"incomplete-enterprise-{suffix}@example.com";
+        var academicEmail = $"incomplete-academic-{suffix}@example.edu.vn";
+
+        using var draftPreviewRequest = CreatePreviewRequest(semesterId, CreateNameOnlyMentorWorkbook(enterpriseName, academicName), token);
+        var draftPreviewResponse = await _client.SendAsync(draftPreviewRequest);
+        var draftPreview = await draftPreviewResponse.Content.ReadFromJsonAsync<ApiResponse<MentorImportPreviewResponse>>();
+
+        draftPreviewResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        draftPreview!.Data!.CanCommit.Should().BeTrue();
+        draftPreview.Data.NeedsCompletionCount.Should().Be(2);
+        draftPreview.Data.ErrorCount.Should().Be(0);
+
+        using var draftCommitRequest = new HttpRequestMessage(HttpMethod.Post, "/api/admin/mentors/imports/commit")
+        {
+            Content = JsonContent.Create(new CommitMentorImportRequest { SessionId = draftPreview.Data.SessionId })
+        };
+        draftCommitRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        var draftCommitResponse = await _client.SendAsync(draftCommitRequest);
+        var draftCommit = await draftCommitResponse.Content.ReadFromJsonAsync<ApiResponse<MentorImportCommitResponse>>();
+
+        draftCommitResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        draftCommit!.Data!.DraftSavedCount.Should().Be(2);
+        draftCommit.Data.CreatedCount.Should().Be(0);
+
+        string semesterCode;
+        int semesterYear;
+        using (var verifyDraftScope = factory.Services.CreateScope())
+        {
+            var context = verifyDraftScope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var semester = await context.Semesters.AsNoTracking().SingleAsync(item => item.Id == semesterId);
+            semesterCode = semester.Term switch
+            {
+                SemesterTerm.Spring => "SP",
+                SemesterTerm.Summer => "SU",
+                SemesterTerm.Fall => "FA",
+                _ => throw new InvalidOperationException("Unsupported semester term.")
+            };
+            semesterYear = semester.Year;
+            var drafts = await context.MentorImportDrafts.AsNoTracking()
+                .Where(item => item.SemesterId == semesterId && (item.FullName == enterpriseName || item.FullName == academicName))
+                .ToListAsync();
+            drafts.Should().HaveCount(2);
+            drafts.Should().OnlyContain(item => item.Status == MentorImportDraftStatus.NeedsCompletion);
+        }
+
+        using var draftListRequest = new HttpRequestMessage(
+            HttpMethod.Get,
+            $"/api/subjects/teaching-staff?semester={semesterCode}&year={semesterYear}");
+        draftListRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        var draftListResponse = await _client.SendAsync(draftListRequest);
+        var draftList = await draftListResponse.Content.ReadFromJsonAsync<ApiResponse<TeachingStaffListResponse>>();
+
+        draftListResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        draftList!.Data!.Staff.Should().Contain(item =>
+            item.Name == enterpriseName && item.IsIncomplete && item.UserId == null && item.Status == "Incomplete");
+        draftList.Data.Staff.Should().Contain(item =>
+            item.Name == academicName && item.IsIncomplete && item.UserId == null && item.Status == "Incomplete");
+
+        using var completePreviewRequest = CreatePreviewRequest(semesterId,
+            CreateMentorWorkbook(enterpriseEmail, academicEmail, enterpriseName, academicName), token);
+        var completePreviewResponse = await _client.SendAsync(completePreviewRequest);
+        var completePreview = await completePreviewResponse.Content.ReadFromJsonAsync<ApiResponse<MentorImportPreviewResponse>>();
+
+        completePreviewResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        completePreview!.Data!.CanCommit.Should().BeTrue();
+        completePreview.Data.CompleteDraftCount.Should().Be(2);
+
+        using var completeCommitRequest = new HttpRequestMessage(HttpMethod.Post, "/api/admin/mentors/imports/commit")
+        {
+            Content = JsonContent.Create(new CommitMentorImportRequest { SessionId = completePreview.Data.SessionId })
+        };
+        completeCommitRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        var completeCommitResponse = await _client.SendAsync(completeCommitRequest);
+        var completeCommit = await completeCommitResponse.Content.ReadFromJsonAsync<ApiResponse<MentorImportCommitResponse>>();
+
+        completeCommitResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        completeCommit!.Data!.CreatedCount.Should().Be(2);
+        completeCommit.Data.DraftCompletedCount.Should().Be(2);
+
+        using var completedListRequest = new HttpRequestMessage(
+            HttpMethod.Get,
+            $"/api/subjects/teaching-staff?semester={semesterCode}&year={semesterYear}");
+        completedListRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        var completedListResponse = await _client.SendAsync(completedListRequest);
+        var completedList = await completedListResponse.Content.ReadFromJsonAsync<ApiResponse<TeachingStaffListResponse>>();
+
+        completedListResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        completedList!.Data!.Staff.Should().Contain(item =>
+            item.Name == enterpriseName && !item.IsIncomplete && item.Email == enterpriseEmail);
+        completedList.Data.Staff.Should().Contain(item =>
+            item.Name == academicName && !item.IsIncomplete && item.Email == academicEmail);
+
+        using var minimalPreviewRequest = CreatePreviewRequest(semesterId,
+            CreateIdentityOnlyMentorWorkbook(enterpriseEmail, academicEmail, enterpriseName, academicName), token);
+        var minimalPreviewResponse = await _client.SendAsync(minimalPreviewRequest);
+        var minimalPreview = await minimalPreviewResponse.Content.ReadFromJsonAsync<ApiResponse<MentorImportPreviewResponse>>();
+        minimalPreviewResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        minimalPreview!.Data!.CanCommit.Should().BeTrue();
+        using var minimalCommitRequest = new HttpRequestMessage(HttpMethod.Post, "/api/admin/mentors/imports/commit")
+        {
+            Content = JsonContent.Create(new CommitMentorImportRequest { SessionId = minimalPreview.Data.SessionId })
+        };
+        minimalCommitRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        (await _client.SendAsync(minimalCommitRequest)).StatusCode.Should().Be(HttpStatusCode.OK);
+
+        using var verifyScope = factory.Services.CreateScope();
+        var verifyContext = verifyScope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var completedDrafts = await verifyContext.MentorImportDrafts.AsNoTracking()
+            .Where(item => item.SemesterId == semesterId && (item.FullName == enterpriseName || item.FullName == academicName))
+            .ToListAsync();
+        completedDrafts.Should().OnlyContain(item => item.Status == MentorImportDraftStatus.Converted && item.ConvertedMentorProfileId != null);
+        var profiles = await verifyContext.MentorProfiles.AsNoTracking().Include(item => item.User)
+            .Where(item => item.User.NormalizedEmail == enterpriseEmail || item.User.NormalizedEmail == academicEmail)
+            .ToListAsync();
+        profiles.Should().HaveCount(2);
+        profiles.Single(item => item.Type == MentorType.Enterprise).Organization.Should().Be("Integration Company");
+        profiles.Single(item => item.Type == MentorType.Academic).Department.Should().Be("Bộ môn CNTT");
+    }
+
+    [Fact]
     public async Task BalancedAllocation_ShouldFillBothSlotsAndKeepLoadsWithinOne()
     {
         var token = await GetAdminTokenAsync();
@@ -233,20 +361,74 @@ public sealed class MentorImportIntegrationTests(CustomWebApplicationFactory fac
         return request;
     }
 
-    private static byte[] CreateMentorWorkbook(string enterpriseEmail, string academicEmail)
+    private static byte[] CreateMentorWorkbook(
+        string enterpriseEmail,
+        string academicEmail,
+        string enterpriseName = "Enterprise Integration Mentor",
+        string academicName = "Academic Integration Mentor")
     {
         using var workbook = new XLWorkbook();
         var enterprise = workbook.Worksheets.Add("DS Mentor_FA26");
         string[] enterpriseHeaders = ["STT", "Họ và tên", "Ngày tháng năm sinh", "SDT", "Loại HĐ", "Trình độ học vấn", "Địa chỉ hiện nay", "Email", "Fpt Email", "Vị trí, Chức danh", "Công ty"];
         for (var index = 0; index < enterpriseHeaders.Length; index++) enterprise.Cell(1, index + 1).Value = enterpriseHeaders[index];
-        string[] enterpriseValues = ["1", "Enterprise Integration Mentor", "21/01/1993", "0900000000", "Thỉnh giảng", "Thạc sĩ", "Đà Nẵng", enterpriseEmail, "", "CEO", "Integration Company"];
+        string[] enterpriseValues = ["1", enterpriseName, "21/01/1993", "0900000000", "Thỉnh giảng", "Thạc sĩ", "Đà Nẵng", enterpriseEmail, "", "CEO", "Integration Company"];
         for (var index = 0; index < enterpriseValues.Length; index++) enterprise.Cell(2, index + 1).Value = enterpriseValues[index];
 
         var academic = workbook.Worksheets.Add("Mentor IT_FA26");
         string[] academicHeaders = ["STT", "Email công việc", "Họ tên", "Phòng ban trực tiếp", "Chức danh (VN)"];
         for (var index = 0; index < academicHeaders.Length; index++) academic.Cell(1, index + 1).Value = academicHeaders[index];
-        string[] academicValues = ["1", academicEmail, "Academic Integration Mentor", "Bộ môn CNTT", "Giảng viên"];
+        string[] academicValues = ["1", academicEmail, academicName, "Bộ môn CNTT", "Giảng viên"];
         for (var index = 0; index < academicValues.Length; index++) academic.Cell(2, index + 1).Value = academicValues[index];
+
+        using var stream = new MemoryStream();
+        workbook.SaveAs(stream);
+        return stream.ToArray();
+    }
+
+    private static byte[] CreateNameOnlyMentorWorkbook(string enterpriseName, string academicName)
+    {
+        using var workbook = new XLWorkbook();
+        var enterprise = workbook.Worksheets.Add("DS Mentor_FA26");
+        enterprise.Cell(1, 1).Value = "STT";
+        enterprise.Cell(1, 2).Value = "Họ và tên";
+        enterprise.Cell(2, 1).Value = 1;
+        enterprise.Cell(2, 2).Value = enterpriseName;
+
+        var academic = workbook.Worksheets.Add("Mentor IT_FA26");
+        academic.Cell(1, 1).Value = "STT";
+        academic.Cell(1, 2).Value = "Họ tên";
+        academic.Cell(2, 1).Value = 1;
+        academic.Cell(2, 2).Value = academicName;
+
+        using var stream = new MemoryStream();
+        workbook.SaveAs(stream);
+        return stream.ToArray();
+    }
+
+    private static byte[] CreateIdentityOnlyMentorWorkbook(
+        string enterpriseEmail,
+        string academicEmail,
+        string enterpriseName,
+        string academicName)
+    {
+        using var workbook = new XLWorkbook();
+        var enterprise = workbook.Worksheets.Add("DS Mentor_FA26");
+        string[] enterpriseHeaders = ["STT", "Họ và tên", "Email"];
+        string[] enterpriseValues = ["1", enterpriseName, enterpriseEmail];
+        for (var index = 0; index < enterpriseHeaders.Length; index++)
+        {
+            enterprise.Cell(1, index + 1).Value = enterpriseHeaders[index];
+            enterprise.Cell(2, index + 1).Value = enterpriseValues[index];
+        }
+
+        var academic = workbook.Worksheets.Add("Mentor IT_FA26");
+        string[] academicHeaders = ["STT", "Email công việc", "Họ tên"];
+        string[] academicValues = ["1", academicEmail, academicName];
+        for (var index = 0; index < academicHeaders.Length; index++)
+        {
+            academic.Cell(1, index + 1).Value = academicHeaders[index];
+            academic.Cell(2, index + 1).Value = academicValues[index];
+        }
 
         using var stream = new MemoryStream();
         workbook.SaveAs(stream);

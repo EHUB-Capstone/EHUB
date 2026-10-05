@@ -57,7 +57,16 @@ export default function MentorAdministrationCard({ semesterId, semesterLabel, on
     setBusy('commit-import');
     try {
       const response = await mentorAdminApi.commitImport(importPreview.sessionId);
-      toast.success(`Imported ${response.data.createdCount} new and updated ${response.data.updatedCount} mentor accounts. New mentors can use Forgot Password to set their first password.`);
+      const parts = [
+        `${response.data.createdCount} new account${response.data.createdCount === 1 ? '' : 's'}`,
+        `${response.data.updatedCount} updated`,
+        `${response.data.draftSavedCount} saved for later completion`,
+        `${response.data.draftCompletedCount} completed`,
+      ];
+      const accountHint = response.data.createdCount > 0
+        ? ' New accounts can use Forgot Password to set their first password.'
+        : '';
+      toast.success(`Mentor import completed: ${parts.join(', ')}.${accountHint}`);
       setFile(null);
       setImportPreview(null);
       if (fileInput.current) fileInput.current.value = '';
@@ -99,10 +108,10 @@ export default function MentorAdministrationCard({ semesterId, semesterLabel, on
   };
 
   return (
-    <section className="rounded-2xl border border-primary-100 bg-white p-4 shadow-sm">
+    <section className="rounded-2xl border border-primary-100 bg-white p-4 shadow-sm dark:border-primary/35 dark:bg-[#111827] dark:shadow-[0_10px_30px_rgba(0,0,0,0.18)]">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 items-center gap-3">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary-50 text-primary">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary text-white shadow-sm ring-1 ring-primary-200 dark:ring-primary/50">
             <FileSpreadsheet className="h-4.5 w-4.5" />
           </span>
           <div className="min-w-0">
@@ -153,14 +162,19 @@ export default function MentorAdministrationCard({ semesterId, semesterLabel, on
               </div>
               {importPreview && (
                 <div className="mt-4 space-y-3 border-t border-slate-200 pt-4">
-                  <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
+                  <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-3 lg:grid-cols-6">
                     <Metric label="New" value={importPreview.createCount} />
                     <Metric label="Update" value={importPreview.updateCount} />
                     <Metric label="Add to semester" value={importPreview.addToSemesterCount} />
+                    <Metric label="Needs information" value={importPreview.needsCompletionCount} warning={importPreview.needsCompletionCount > 0} />
+                    <Metric label="Complete draft" value={importPreview.completeDraftCount} />
                     <Metric label="Errors" value={importPreview.errorCount} danger={importPreview.errorCount > 0} />
                   </div>
                   <div className="max-h-52 overflow-auto rounded-lg border border-slate-200 bg-white">
-                    <table className="w-full min-w-[560px] text-left text-xs"><thead className="sticky top-0 bg-slate-50 text-slate-500"><tr><th className="px-3 py-2">Sheet / row</th><th className="px-3 py-2">Type</th><th className="px-3 py-2">Mentor</th><th className="px-3 py-2">Status</th></tr></thead><tbody>{importPreview.rows.map(row => <tr key={`${row.sheetName}-${row.rowNumber}`} className="border-t border-slate-100"><td className="px-3 py-2">{row.sheetName} · {row.rowNumber}</td><td className="px-3 py-2">{row.mentorType}</td><td className="px-3 py-2"><span className="block font-semibold">{row.fullName}</span><span className="text-slate-400">{row.email}</span></td><td className={`px-3 py-2 ${row.isValid ? 'text-green-700' : 'text-red-700'}`} title={row.message ?? undefined}>{row.status}</td></tr>)}</tbody></table>
+                    <table className="w-full min-w-[680px] text-left text-xs"><thead className="sticky top-0 bg-slate-50 text-slate-500"><tr><th className="px-3 py-2">Sheet / row</th><th className="px-3 py-2">Type</th><th className="px-3 py-2">Mentor</th><th className="px-3 py-2">Status</th></tr></thead><tbody>{importPreview.rows.map(row => {
+                      const incomplete = row.status === 'NeedsCompletion' || row.status === 'UpdateIncomplete';
+                      return <tr key={`${row.sheetName}-${row.rowNumber}`} className="border-t border-slate-100 align-top"><td className="px-3 py-2">{row.sheetName} · {row.rowNumber}</td><td className="px-3 py-2">{row.mentorType}</td><td className="px-3 py-2"><span className="block font-semibold">{row.fullName}</span><span className={row.email ? 'text-slate-400' : 'font-medium text-amber-600'}>{row.email || 'Email missing'}</span>{row.missingFields.length > 0 && <span className="mt-1 block max-w-sm text-[11px] text-slate-400">Missing: {row.missingFields.join(', ')}</span>}</td><td className={`px-3 py-2 ${!row.isValid ? 'text-red-700' : incomplete ? 'text-amber-700' : 'text-green-700'}`}><span className="block font-semibold">{incomplete ? 'Needs information' : row.status}</span>{row.message && <span className="mt-1 block max-w-xs text-[11px] leading-4 text-slate-500">{row.message}</span>}</td></tr>;
+                    })}</tbody></table>
                   </div>
                   <div className="flex justify-end">
                     <Button size="sm" disabled={!importPreview.canCommit} onClick={() => void commitImport()} isLoading={busy === 'commit-import'}>Commit import</Button>
@@ -224,9 +238,9 @@ function ActionToggle({
       aria-expanded={active}
       aria-controls={controls}
       onClick={onClick}
-      className={`group flex w-full items-center gap-3 rounded-xl border px-3.5 py-2.5 text-left transition-colors ${active ? 'border-primary-300 bg-primary-50/70' : 'border-slate-200 bg-slate-50/60 hover:border-primary-200 hover:bg-white'}`}
+      className={`group flex w-full items-center gap-3 rounded-xl border px-3.5 py-2.5 text-left transition-colors ${active ? 'border-primary-300 bg-primary-50/70 dark:border-primary/50 dark:bg-primary/15' : 'border-slate-200 bg-slate-50/60 hover:border-primary-200 hover:bg-white dark:border-white/12 dark:bg-white/[0.035] dark:hover:border-primary/40 dark:hover:bg-white/[0.06]'}`}
     >
-      <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${active ? 'bg-primary text-white' : 'bg-white text-slate-500 shadow-sm group-hover:text-primary'}`}>
+      <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg shadow-sm ring-1 ring-inset ${active ? 'bg-primary text-white ring-primary/50' : 'bg-white text-slate-600 ring-slate-200 group-hover:text-primary dark:bg-slate-700 dark:text-slate-100 dark:ring-white/15'}`}>
         <Icon className="h-4 w-4" />
       </span>
       <span className="min-w-0 flex-1">
@@ -238,6 +252,6 @@ function ActionToggle({
   );
 }
 
-function Metric({ label, value, danger = false }: { label: string; value: number; danger?: boolean }) {
-  return <div className={`rounded-lg px-3 py-2 ${danger ? 'bg-red-50 text-red-700' : 'bg-slate-50 text-slate-700'}`}><span className="block text-[10px] uppercase text-slate-400">{label}</span><strong className="text-base">{value}</strong></div>;
+function Metric({ label, value, danger = false, warning = false }: { label: string; value: number; danger?: boolean; warning?: boolean }) {
+  return <div className={`rounded-lg px-3 py-2 ${danger ? 'bg-red-50 text-red-700' : warning ? 'bg-amber-50 text-amber-700' : 'bg-slate-50 text-slate-700'}`}><span className="block text-[10px] uppercase text-slate-400">{label}</span><strong className="text-base">{value}</strong></div>;
 }

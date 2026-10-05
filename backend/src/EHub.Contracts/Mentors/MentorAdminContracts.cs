@@ -16,6 +16,7 @@ public sealed class MentorImportRowPreview
     public string? Organization { get; init; }
     public string? Department { get; init; }
     public string? JobTitle { get; init; }
+    public IReadOnlyCollection<string> MissingFields { get; init; } = Array.Empty<string>();
     public string Status { get; init; } = string.Empty;
     public bool IsValid { get; init; }
     public string? Message { get; init; }
@@ -29,6 +30,8 @@ public sealed class MentorImportPreviewResponse
     public int CreateCount { get; init; }
     public int UpdateCount { get; init; }
     public int AddToSemesterCount { get; init; }
+    public int NeedsCompletionCount { get; init; }
+    public int CompleteDraftCount { get; init; }
     public int ErrorCount { get; init; }
     public bool CanCommit { get; init; }
     public IReadOnlyCollection<MentorImportRowPreview> Rows { get; init; } = Array.Empty<MentorImportRowPreview>();
@@ -44,6 +47,8 @@ public sealed class MentorImportCommitResponse
     public int CreatedCount { get; init; }
     public int UpdatedCount { get; init; }
     public int SemesterAssignmentCount { get; init; }
+    public int DraftSavedCount { get; init; }
+    public int DraftCompletedCount { get; init; }
 }
 
 public sealed class PreviewMentorAllocationRequest

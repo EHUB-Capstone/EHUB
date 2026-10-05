@@ -23,6 +23,7 @@ public interface IApplicationDbContext
     DbSet<ClassImportSession> ClassImportSessions { get; }
     DbSet<LecturerImportSession> LecturerImportSessions { get; }
     DbSet<MentorImportSession> MentorImportSessions { get; }
+    DbSet<MentorImportDraft> MentorImportDrafts { get; }
     DbSet<MentorAllocationSession> MentorAllocationSessions { get; }
     DbSet<OutboxMessage> OutboxMessages { get; }
     DbSet<Student> Students { get; }
