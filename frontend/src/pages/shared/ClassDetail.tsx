@@ -15,6 +15,8 @@ import LoadingSkeleton from '../../components/ui/LoadingSkeleton';
 import StudentTable from '../../components/class/StudentTable';
 import TeamList from '../../components/class/TeamList';
 import TeamMajorWarningBanner from '../../components/class/TeamMajorWarningBanner';
+import GroupProjectWarningBanner from '../../components/class/GroupProjectWarningBanner';
+import type { GroupProjectConsistency, GroupProjectWarning } from '../../types/groupProjectConsistency';
 import TeamManagementModal from '../../components/class/TeamManagementModal';
 import StudentAssignmentModal from '../../components/class/StudentAssignmentModal';
 import ImportStudentsModal from '../../components/class/ImportStudentsModal';
@@ -25,6 +27,7 @@ import ProjectDirectionModal from '../../components/class/ProjectDirectionModal'
 import EditScheduleModal from '../../components/class/EditScheduleModal';
 import AssignLectureModal from '../../components/class/AssignLectureModal';
 import AssignMentorsModal from '../../components/class/AssignMentorsModal';
+import ImportSemesterGroupsModal from '../../components/class/ImportSemesterGroupsModal';
 import VerifyMajorModal from '../../components/class/VerifyMajorModal';
 import AddStudentModal from '../../components/class/AddStudentModal';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
@@ -112,6 +115,7 @@ export default function ClassDetail() {
   const [students, setStudents] = useState([]);
   const [teams,    setTeams]    = useState([]);
   const [teamProposals, setTeamProposals] = useState([]);
+  const [groupProjectWarnings, setGroupProjectWarnings] = useState<GroupProjectWarning[]>([]);
   const [loading,  setLoading]  = useState(true);
   const [rosterLoadError, setRosterLoadError] = useState('');
   const [rosterRefreshing, setRosterRefreshing] = useState(false);
@@ -141,6 +145,7 @@ export default function ClassDetail() {
   const [showAssignLecturer, setShowAssignLecturer] = useState(false);
   const [showAssignMentors, setShowAssignMentors] = useState(false);
   const [showVerify, setShowVerify] = useState(false);
+  const [showSemesterGroupImport, setShowSemesterGroupImport] = useState(false);
   const [reviewTeam, setReviewTeam] = useState(null);
   const [teamToDelete, setTeamToDelete] = useState(null);
   const [directionTeam, setDirectionTeam] = useState(null);
@@ -313,11 +318,21 @@ export default function ClassDetail() {
         }
       }
 
+      // Advisory check of the 1-1 Group/Project rule; the class stays usable if it cannot be loaded.
+      let nextGroupProjectWarnings: GroupProjectWarning[] = [];
+      try {
+        const consistency = unwrapApiData<GroupProjectConsistency>(await classApi.getGroupProjectConsistency(currentClassId));
+        nextGroupProjectWarnings = Array.isArray(consistency?.warnings) ? consistency.warnings : [];
+      } catch {
+        // Only staff who manage the class can run this check.
+      }
+
       const normalizedTeams = rawTeams.map(normalizeManagedTeam);
       const normalizedProposals = rawProposals.map(normalizeTeamProposal);
       setStudents(mapRosterStudents(rawStudents, currentClassId, normalizedProposals));
       setTeams(normalizedTeams);
       setTeamProposals(normalizedProposals);
+      setGroupProjectWarnings(nextGroupProjectWarnings);
 
       return classData;
     } catch (err) {
@@ -759,26 +774,96 @@ export default function ClassDetail() {
               </ClassActionButton>
             )} */}
 
-            {!isReadOnly && (isAdmin || classFeatureFlags.lecturerStudentImport) && (
-              <ClassActionButton icon={Upload} tone="primary" onClick={() => setShowImport(true)}>
-                Import Students
-              </ClassActionButton>
-            )}
+            {/* Roster */}
+            <div role="group" aria-label="Roster actions" className="flex flex-wrap items-center gap-1.5 empty:hidden">
+              {!isReadOnly && (isAdmin || classFeatureFlags.lecturerStudentImport) && (
+                <ClassActionButton icon={Upload} tone="primary" onClick={() => setShowImport(true)}>
+                  Import Students
+                </ClassActionButton>
+              )}
 
-            <ClassActionButton icon={Download} loading={exporting} onClick={handleExportExcel} disabled={exporting}>
-              Export Class Data
-            </ClassActionButton>
-
-            {!isReadOnly && (
-              <>
+              {!isReadOnly && (
                 <ClassActionButton icon={UserPlus} tone="primary" onClick={() => setShowAddStudent(true)}>
                   Add student
                 </ClassActionButton>
+              )}
 
-                {/* <ClassActionButton icon={UserRoundCheck} tone="secondary" onClick={() => openStudentAssignment('CLASS')}>
-                  Assign students
-                </ClassActionButton> */}
+              {/* <ClassActionButton icon={UserRoundCheck} tone="secondary" onClick={() => openStudentAssignment('CLASS')}>
+                Assign students
+              </ClassActionButton> */}
 
+              {!isReadOnly && (
+                <ClassActionButton
+                  icon={Upload}
+                  tone="secondary"
+                  onClick={() => {
+                    setShowActionsMenu(false);
+                    setShowSemesterGroupImport(true);
+                  }}
+                >
+                  Import semester groups
+                </ClassActionButton>
+              )}
+
+              <ClassActionButton icon={Download} loading={exporting} onClick={handleExportExcel} disabled={exporting}>
+                Export Class Data
+              </ClassActionButton>
+            </div>
+
+            {/* Majors */}
+            <div role="group" aria-label="Major actions" className="flex flex-wrap items-center gap-1.5 border-slate-200 empty:hidden sm:border-l sm:pl-2">
+              {!isReadOnly && isFeatureVisible(classFeatureFlags.majorVerification) && (
+                <ClassActionButton
+                  id="btn-verify-majors"
+                  icon={ShieldCheck}
+                  tone="indigo"
+                  onClick={() => runFeatureAction(classFeatureFlags.majorVerification, 'Major verification', () => setShowVerify(true))}
+                >
+                  Verify / sync majors
+                </ClassActionButton>
+              )}
+
+              {!isReadOnly && (
+                <ClassActionButton
+                  icon={cls.isMajorLocked ? Lock : Unlock}
+                  tone={cls.isMajorLocked ? 'danger' : 'success'}
+                  loading={togglingLock}
+                  onClick={() => runFeatureAction(classFeatureFlags.majorVerification, 'Major locking', handleToggleMajorLock)}
+                  disabled={togglingLock}
+                >
+                  {cls.isMajorLocked ? 'Unlock major updates' : 'Lock major updates'}
+                </ClassActionButton>
+              )}
+            </div>
+
+            {/* Class lifecycle */}
+            <div role="group" aria-label="Class lifecycle actions" className="flex flex-wrap items-center gap-1.5 border-slate-200 empty:hidden sm:border-l sm:pl-2">
+              {((cls.status === 'Active') || (isCompleted && isAdmin)) && (
+                <ClassActionButton
+                  icon={isCompleted ? Play : CircleCheck}
+                  tone={isCompleted ? 'primary' : 'success'}
+                  loading={completionLoading}
+                  onClick={openCompletionDialog}
+                  disabled={completionLoading}
+                >
+                  {isCompleted ? 'Reopen Class' : 'Complete Class'}
+                </ClassActionButton>
+              )}
+
+              {isFeatureVisible(classFeatureFlags.lifecycle) && (
+                <ClassActionButton
+                  icon={isArchived ? RotateCcw : Archive}
+                  tone={isArchived ? 'success' : 'danger'}
+                  onClick={() => runFeatureAction(classFeatureFlags.lifecycle, 'Class lifecycle management', () => setShowDeleteClass(true))}
+                >
+                  {lifecyclePresentation.label}
+                </ClassActionButton>
+              )}
+            </div>
+
+            {/* Destructive */}
+            <div role="group" aria-label="Destructive actions" className="flex flex-wrap items-center gap-1.5 border-slate-200 empty:hidden sm:border-l sm:pl-2">
+              {!isReadOnly && (
                 <ClassActionButton
                   icon={Trash2}
                   tone="danger"
@@ -789,53 +874,8 @@ export default function ClassDetail() {
                 >
                   Remove all students
                 </ClassActionButton>
-              </>
-            )}
-
-            {!isReadOnly && isFeatureVisible(classFeatureFlags.majorVerification) && (
-              <ClassActionButton
-                id="btn-verify-majors"
-                icon={ShieldCheck}
-                tone="indigo"
-                onClick={() => runFeatureAction(classFeatureFlags.majorVerification, 'Major verification', () => setShowVerify(true))}
-              >
-                Verify / sync majors
-              </ClassActionButton>
-            )}
-
-            {!isReadOnly && (
-              <ClassActionButton
-                icon={cls.isMajorLocked ? Lock : Unlock}
-                tone={cls.isMajorLocked ? 'danger' : 'success'}
-                loading={togglingLock}
-                onClick={() => runFeatureAction(classFeatureFlags.majorVerification, 'Major locking', handleToggleMajorLock)}
-                disabled={togglingLock}
-              >
-                {cls.isMajorLocked ? 'Unlock major updates' : 'Lock major updates'}
-              </ClassActionButton>
-            )}
-
-            {isFeatureVisible(classFeatureFlags.lifecycle) && (
-              <ClassActionButton
-                icon={isArchived ? RotateCcw : Archive}
-                tone={isArchived ? 'success' : 'danger'}
-                onClick={() => runFeatureAction(classFeatureFlags.lifecycle, 'Class lifecycle management', () => setShowDeleteClass(true))}
-              >
-                {lifecyclePresentation.label}
-              </ClassActionButton>
-            )}
-
-            {((cls.status === 'Active') || (isCompleted && isAdmin)) && (
-              <ClassActionButton
-                icon={isCompleted ? Play : CircleCheck}
-                tone={isCompleted ? 'primary' : 'success'}
-                loading={completionLoading}
-                onClick={openCompletionDialog}
-                disabled={completionLoading}
-              >
-                {isCompleted ? 'Reopen Class' : 'Complete Class'}
-              </ClassActionButton>
-            )}
+              )}
+            </div>
           </div>
         )}
       </section>
@@ -993,6 +1033,8 @@ export default function ClassDetail() {
       {canManageClass && teamControlsVisible && (
         <TeamMajorWarningBanner teams={safeTeams} onViewTeams={tab === 'teams' ? undefined : () => setTab('teams')} />
       )}
+
+      {canManageClass && <GroupProjectWarningBanner warnings={groupProjectWarnings} />}
 
       {/* ── Tabs ── */}
       <div className="flex w-fit gap-0.5 rounded-lg bg-slate-100 p-0.5">
@@ -1177,6 +1219,14 @@ export default function ClassDetail() {
           classId={loadedClassId}
           onClose={() => setShowVerify(false)}
           onUpdated={() => void fetchData({ background: true })}
+        />
+      )}
+
+      {!isReadOnly && showSemesterGroupImport && canManageClass && (
+        <ImportSemesterGroupsModal
+          classId={loadedClassId}
+          onClose={() => setShowSemesterGroupImport(false)}
+          onImported={() => void fetchData({ background: true })}
         />
       )}
 

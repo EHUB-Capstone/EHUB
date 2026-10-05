@@ -1837,6 +1837,122 @@ public sealed class ClassSafetyHotfixIntegrationTests
     }
 
     [Fact]
+    public async Task GroupProjectConsistency_WarnsWhenGroupAndProjectAreNotOneToOne_WithAccessChecks()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateClassSeedAsync(context, "group-project-consistency");
+        var lecturer = await context.Users.SingleAsync(user => user.Id == seed.LecturerId);
+        var otherLecturer = await CreateLecturerAsync(context, "other-group-project");
+        var lecturerToken = GenerateToken(scope.ServiceProvider, lecturer, SystemRoles.Lecturer);
+        var otherToken = GenerateToken(scope.ServiceProvider, otherLecturer, SystemRoles.Lecturer);
+        var targetClass = await context.Classes.AsNoTracking().SingleAsync(item => item.Id == seed.ClassId);
+
+        Team CreateTeam(string code, string projectName)
+        {
+            var team = new Team
+            {
+                ClassId = seed.ClassId,
+                TeamCode = $"{targetClass.ClassCode}_{code}",
+                TeamName = $"Team {code}",
+                Status = TeamStatus.Active,
+                CreatedById = seed.AdminId,
+                CreatedBy = seed.AdminId
+            };
+            context.Teams.Add(team);
+            context.Projects.Add(new Project { Team = team, Name = projectName, CreatedById = seed.AdminId });
+            return team;
+        }
+
+        var teamA = CreateTeam("GP_A", "Project A");
+        var teamB = CreateTeam("GP_B", "Project B");
+        var enrollments = new List<ClassStudent>();
+        var layout = new[]
+        {
+            (Team: teamA, Group: "G01"), (Team: teamA, Group: "G01"),
+            (Team: teamB, Group: "G01"), (Team: teamB, Group: "G02")
+        };
+        for (var index = 0; index < layout.Length; index++)
+        {
+            var rollNumber = "SE" + Guid.NewGuid().ToString("N")[..8].ToUpperInvariant();
+            var student = new Student
+            {
+                RollNumber = rollNumber,
+                NormalizedRollNumber = rollNumber,
+                FullName = $"Group Project Student {index}",
+                Email = $"group-project-{Guid.NewGuid():N}@example.com",
+                MajorCode = MajorCodes.BIT_SE,
+                Status = StudentStatus.Active,
+                CreatedBy = seed.AdminId
+            };
+            var enrollment = new ClassStudent
+            {
+                ClassId = seed.ClassId,
+                StudentId = student.Id,
+                Student = student,
+                SemesterId = targetClass.SemesterId,
+                CourseId = targetClass.CourseId,
+                EnrollmentStatus = EnrollmentStatus.Active,
+                CountsTowardCourseSemesterLimit = true,
+                MajorCodeAtEnrollment = MajorCodes.BIT_SE,
+                SemesterGroupName = layout[index].Group
+            };
+            enrollments.Add(enrollment);
+            context.Students.Add(student);
+            context.ClassStudents.Add(enrollment);
+            context.TeamMembers.Add(new TeamMember
+            {
+                Team = layout[index].Team,
+                ClassId = seed.ClassId,
+                StudentId = student.Id,
+                ClassStudent = enrollment
+            });
+        }
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        var url = $"/api/classes/{seed.ClassId}/group-project-consistency";
+        async Task<HttpResponseMessage> GetAsync(string? token)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, url);
+            if (token != null) request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            return await _client.SendAsync(request);
+        }
+
+        (await GetAsync(null)).StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+        (await GetAsync(otherToken)).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        var response = await GetAsync(lecturerToken);
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = (await response.Content.ReadFromJsonAsync<ApiResponse<GroupProjectConsistencyResponse>>())!.Data!;
+        body.IsConsistent.Should().BeFalse();
+        body.Warnings.Should().HaveCount(2);
+        body.Warnings.Should().ContainSingle(item =>
+            item.Type == GroupProjectWarningTypes.GroupHasMultipleProjects &&
+            item.Subject == "G01" &&
+            item.Message == "Group `G01` is assigned to multiple projects: `Project A`, `Project B`.");
+        body.Warnings.Should().ContainSingle(item =>
+            item.Type == GroupProjectWarningTypes.ProjectHasMultipleGroups &&
+            item.Subject == "Project B" &&
+            item.Message == "Project `Project B` is assigned to multiple groups: `G01`, `G02`.");
+
+        // Warning is advisory: nothing about the teams or enrollments changed.
+        (await context.TeamMembers.AsNoTracking().CountAsync(item => item.ClassId == seed.ClassId)).Should().Be(4);
+
+        // Moving the third student to G02 makes G01 <-> Project A and G02 <-> Project B.
+        var toFix = await context.ClassStudents.SingleAsync(item => item.ClassId == seed.ClassId && item.StudentId == enrollments[2].StudentId);
+        toFix.SemesterGroupName = "G02";
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        var fixedResponse = await GetAsync(lecturerToken);
+        fixedResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        var fixedBody = (await fixedResponse.Content.ReadFromJsonAsync<ApiResponse<GroupProjectConsistencyResponse>>())!.Data!;
+        fixedBody.IsConsistent.Should().BeTrue();
+        fixedBody.Warnings.Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task SemesterGroupFile_PreviewsAndImportsByRollNumber_WithAccessAndValidationChecks()
     {
         using var scope = _factory.Services.CreateScope();

@@ -3,6 +3,7 @@ import type { AxiosRequestConfig } from 'axios';
 import type { ClassDto, ClassStatus } from '../../types/classes.ts';
 import type { MockClass, MockRosterStudent } from '../mockState.ts';
 import { PROGRAM_GROUPS, TEAM_MAJOR_GROUPS } from '../../constants/majors.ts';
+import { evaluateGroupProjectConsistency } from '../../utils/groupProjectConsistency.ts';
 import {
   allocateId,
   allocateRowVersion,
@@ -777,6 +778,20 @@ function registerRosterHandlers(mock: MockAdapter): void {
 
   mock.onPost(/^\/classes\/[^/]+\/major-lock$/).reply((config) => setMajorLock(config, true));
   mock.onDelete(/^\/classes\/[^/]+\/major-lock$/).reply((config) => setMajorLock(config, false));
+
+  mock.onGet(/^\/classes\/[^/]+\/group-project-consistency$/).reply((config) => {
+    const classId = routeId(config, /^\/classes\/([^/]+)\/group-project-consistency$/);
+    if (!findClass(classId)) return failure(404, 'CLASS_NOT_FOUND', 'Class not found.');
+    const state = getMockState();
+    const activeTeams = state.teams.filter((team) => team.classId === classId && team.status === 'Active');
+    const students = (state.rosters[classId] || [])
+      .filter((student) => student.enrollmentStatus === 'Active')
+      .map((student) => ({
+        group: student.semesterGroupName,
+        project: activeTeams.find((team) => team.members.some((member) => member.studentId === student.studentId))?.projectName,
+      }));
+    return ok(evaluateGroupProjectConsistency(students), 'Group and project consistency checked successfully.');
+  });
 
   mock.onPost(/^\/classes\/[^/]+\/students\/synchronize-profile-majors$/).reply((config) => {
     const classId = routeId(config, /^\/classes\/([^/]+)\/students\/synchronize-profile-majors$/);

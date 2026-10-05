@@ -208,6 +208,27 @@ test('mock teams expose majorComposition and verification reports team major war
   assert.equal(team.members.length, listed.members.length);
 });
 
+test('mock group-project consistency endpoint reports groups that break the one-to-one rule', async () => {
+  resetMockState();
+  await axiosClient.post('/auth/login', { email: 'admin@ehub.local', password: 'Mock123!' });
+  const state = getMockState();
+  const team = state.teams.find((item) => item.status === 'Active' && item.members.length >= 2 && item.projectName);
+  assert.ok(team);
+  const roster = state.rosters[team.classId];
+  const members = team.members.map((member) => roster.find((student) => student.studentId === member.studentId));
+  assert.ok(members.every(Boolean));
+
+  members.forEach((student) => { student!.semesterGroupName = 'G01'; });
+  const consistent = await axiosClient.get(`/classes/${team.classId}/group-project-consistency`);
+  assert.equal(consistent.data.isConsistent, true);
+
+  members[1]!.semesterGroupName = 'G02';
+  const broken = await axiosClient.get(`/classes/${team.classId}/group-project-consistency`);
+  assert.equal(broken.data.isConsistent, false);
+  const warning = broken.data.warnings.find((item: { type: string }) => item.type === 'PROJECT_HAS_MULTIPLE_GROUPS');
+  assert.deepEqual(warning.related, ['G01', 'G02']);
+});
+
 test('managed users include class and group data from the active semester', async () => {
   resetMockState();
   await axiosClient.post('/auth/login', { email: 'admin@ehub.local', password: 'Mock123!' });
