@@ -108,10 +108,10 @@ export default function MentorAdministrationCard({ semesterId, semesterLabel, on
   };
 
   return (
-    <section className="rounded-2xl border border-primary-100 bg-white p-4 shadow-sm">
+    <section className="rounded-2xl border border-primary-100 bg-white p-4 shadow-sm dark:border-primary/35 dark:bg-[#111827] dark:shadow-[0_10px_30px_rgba(0,0,0,0.18)]">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 items-center gap-3">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary-50 text-primary">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary text-white shadow-sm ring-1 ring-primary-200 dark:ring-primary/50">
             <FileSpreadsheet className="h-4.5 w-4.5" />
           </span>
           <div className="min-w-0">
@@ -238,9 +238,9 @@ function ActionToggle({
       aria-expanded={active}
       aria-controls={controls}
       onClick={onClick}
-      className={`group flex w-full items-center gap-3 rounded-xl border px-3.5 py-2.5 text-left transition-colors ${active ? 'border-primary-300 bg-primary-50/70' : 'border-slate-200 bg-slate-50/60 hover:border-primary-200 hover:bg-white'}`}
+      className={`group flex w-full items-center gap-3 rounded-xl border px-3.5 py-2.5 text-left transition-colors ${active ? 'border-primary-300 bg-primary-50/70 dark:border-primary/50 dark:bg-primary/15' : 'border-slate-200 bg-slate-50/60 hover:border-primary-200 hover:bg-white dark:border-white/12 dark:bg-white/[0.035] dark:hover:border-primary/40 dark:hover:bg-white/[0.06]'}`}
     >
-      <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${active ? 'bg-primary text-white' : 'bg-white text-slate-500 shadow-sm group-hover:text-primary'}`}>
+      <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg shadow-sm ring-1 ring-inset ${active ? 'bg-primary text-white ring-primary/50' : 'bg-white text-slate-600 ring-slate-200 group-hover:text-primary dark:bg-slate-700 dark:text-slate-100 dark:ring-white/15'}`}>
         <Icon className="h-4 w-4" />
       </span>
       <span className="min-w-0 flex-1">
