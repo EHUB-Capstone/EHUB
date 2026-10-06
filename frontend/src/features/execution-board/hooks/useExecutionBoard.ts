@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { teamWorkspaceApi } from '../../../api/teamWorkspaceApi';
 import { weeklyTaskSavePayload } from '../../../utils/weeklyTaskPayload';
+import { getTaskApiErrorMessage } from '../../../utils/taskLimits';
 import { teamApi } from '../../../api/teamApi';
 import { classFeatureFlags } from '../../../config/classFeatureFlags';
 import {
@@ -28,7 +29,7 @@ const extractTeam = (response) => response?.data?.team || response?.team || resp
 const duplicateTaskMessage = 'Duplicate task: A task with this title already exists in this week.';
 const getTaskErrorMessage = (error, fallback) => {
   if (error?.status === 409 || error?.message === 'Duplicate task') return duplicateTaskMessage;
-  return error?.message || fallback;
+  return getTaskApiErrorMessage(error, fallback);
 };
 
 export function useTeamContext({ user, queryTeamId }) {

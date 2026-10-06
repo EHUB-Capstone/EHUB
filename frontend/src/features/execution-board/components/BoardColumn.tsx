@@ -10,6 +10,7 @@ function BoardColumn({
   tasks,
   permissions,
   onEditTask,
+  onOpenTask,
   onDeleteTask,
   onStatusChange,
   onSwipeStatusChange,
@@ -72,6 +73,7 @@ function BoardColumn({
                     canDelete={permissions.canDeleteTask(task)}
                     canUpdateStatus={permissions.canUpdateTaskStatus(task)}
                     onEdit={onEditTask}
+                    onOpen={onOpenTask}
                     onDelete={onDeleteTask}
                     onStatusChange={onStatusChange}
                     onSwipeStatusChange={onSwipeStatusChange}

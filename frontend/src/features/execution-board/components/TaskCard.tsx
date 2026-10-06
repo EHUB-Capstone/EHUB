@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { PRIORITY_CFG, STATUSES, STATUS_CFG, WORKFLOW_STATUSES } from '../constants';
 import { taskProgress } from '../../../utils/taskProgress';
+import TruncatedText from '../../../components/ui/TruncatedText';
 
 const SWIPE_THRESHOLD = 72;
 const SWIPE_LIMIT = 120;
@@ -31,6 +32,7 @@ function TaskCard({
   canDelete,
   canUpdateStatus,
   onEdit,
+  onOpen,
   onDelete,
   onStatusChange,
   onSwipeStatusChange,
@@ -118,6 +120,19 @@ function TaskCard({
     setIsSwiping(false);
   };
 
+  const openDetail = (event) => {
+    if (isOverlay || !onOpen) return;
+    if (event.target.closest('button, a, input, select, textarea, [role="menuitem"]')) return;
+    onOpen(task);
+  };
+
+  const handleTitleKeyDown = (event) => {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    event.preventDefault();
+    event.stopPropagation();
+    onOpen?.(task);
+  };
+
   const handlePointerDown = (event) => {
     if (!enableSwipe || !canUpdateStatus || isOverlay || event.button !== 0) return;
     if (event.target.closest('button, input, textarea, select, a, [role="menuitem"]')) return;
@@ -187,6 +202,7 @@ function TaskCard({
         onPointerMove={handlePointerMove}
         onPointerUp={finishSwipe}
         onPointerCancel={resetSwipe}
+        onClick={openDetail}
         onClickCapture={(event) => {
           if (!suppressClickRef.current) return;
           event.preventDefault();
@@ -195,7 +211,7 @@ function TaskCard({
         }}
         className={`group relative overflow-hidden rounded-lg border bg-slate-100 transition-[border-color,box-shadow,transform] duration-150 hover:border-slate-300 ${
           isOverlay ? 'scale-[1.02] shadow-2xl ring-2 ring-primary/20' : ''
-        } ${cardIsDragSurface ? 'touch-none cursor-grab select-none active:cursor-grabbing' : ''
+        } ${cardIsDragSurface ? 'touch-none cursor-grab select-none active:cursor-grabbing' : onOpen && !isOverlay ? 'cursor-pointer' : ''
         } ${isDragging ? 'border-dashed shadow-none' : 'shadow-sm'
         } ${isOverdue ? 'border-red-200' : 'border-slate-200'}`}
       >
@@ -267,9 +283,18 @@ function TaskCard({
           </div>
         </div>
 
-        <h4 className="mb-1 line-clamp-2 text-sm font-semibold leading-snug text-slate-900">{task.title}</h4>
+        <h4 className="mb-1 text-sm font-semibold leading-snug text-slate-900">
+          <TruncatedText
+            as="span"
+            text={task.title}
+            role="button"
+            tabIndex={isOverlay ? -1 : 0}
+            onKeyDown={handleTitleKeyDown}
+            className="rounded hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+          />
+        </h4>
         <p className="mb-2 text-xs text-slate-500">{task.taskType === 'COURSE_TEMPLATE' ? 'Course Roadmap' : task.taskType === 'CLASS_TASK' ? 'Class Requirement' : 'Team Task'}</p>
-        {task.description && <p className="mb-2 line-clamp-2 text-xs leading-relaxed text-slate-500">{task.description}</p>}
+        {task.description && <TruncatedText text={task.description} className="mb-2 text-xs leading-relaxed text-slate-500" />}
 
         {checklist.length > 0 && (
           <div className="mb-3">

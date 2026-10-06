@@ -4,6 +4,7 @@ import { Edit, Trash2 } from 'lucide-react';
 import { PRIORITY_CFG, STATUSES, STATUS_CFG } from '../constants';
 import { getTaskStatus } from '../boardUtils';
 import { taskProgress as getProgress } from '../../../utils/taskProgress';
+import TruncatedText from '../../../components/ui/TruncatedText';
 
 function Badge({ children, className = '' }) {
   return (
@@ -81,12 +82,12 @@ function TaskTableView({ tasks, permissions, onEditTask, onDeleteTask, onStatusC
                 <tr key={task._id} className="group transition-colors hover:bg-slate-50">
                   <td className="px-3 py-3 font-mono text-xs text-slate-400">{index + 1}</td>
                   <td className="px-3 py-3">
-                    <div className="line-clamp-2 font-semibold text-slate-900">{task.title || 'Untitled Task'}</div>
+                    <TruncatedText as="div" text={task.title || 'Untitled Task'} className="font-semibold text-slate-900" />
                     <div className="mt-1 text-xs text-slate-400">W{task.weekNumber || '—'}</div>
                     <div className="text-xs text-slate-500">{task.taskType === 'COURSE_TEMPLATE' ? 'Course Roadmap' : task.taskType === 'CLASS_TASK' ? 'Class Requirement' : 'Team Task'}</div>
                   </td>
                   <td className="px-3 py-3 text-slate-600">
-                    <div className="line-clamp-2">{task.description || '—'}</div>
+                    <TruncatedText as="div" text={task.description || '—'} />
                   </td>
                   <td className="px-3 py-3 text-slate-600">{getAssignee(task)}</td>
                   <td className="px-3 py-3 text-slate-600">{formatDate(task.startDate)}</td>
