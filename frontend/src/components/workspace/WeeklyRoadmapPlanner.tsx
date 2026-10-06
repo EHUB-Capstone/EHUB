@@ -8,8 +8,17 @@ import ConfirmDialog from '../ui/ConfirmDialog';
 import Button from '../ui/Button';
 import Modal from '../ui/Modal';
 import ErrorState from '../ui/ErrorState';
+import TruncatedText from '../ui/TruncatedText';
+import TaskDetailModal from './TaskDetailModal';
+import CharacterCounter from '../ui/CharacterCounter';
 import { useWeeklyRoadmap } from '../../hooks/useWeeklyRoadmap';
 import { parseApiError } from '../../utils/apiError';
+import {
+  TASK_DESCRIPTION_MAX_LENGTH,
+  TASK_TITLE_MAX_LENGTH,
+  getTaskApiErrorMessage,
+  getTaskTextError,
+} from '../../utils/taskLimits';
 import type { WeeklyTask, WeeklyTaskKind, WeeklyTaskStatus, SaveWeeklyTaskPayload } from '../../types/workspaceTools';
 
 interface RoadmapMember {
@@ -59,7 +68,7 @@ const getTaskSaveErrorMessage = (error) => {
   if (error?.status === 409 || error?.message === 'Duplicate task') {
     return DUPLICATE_TASK_MESSAGE;
   }
-  return error?.message || 'Failed to save task';
+  return getTaskApiErrorMessage(error, 'Failed to save task');
 };
 
 // ─── Tiny helpers ─────────────────────────────────────────────────────────────
@@ -96,7 +105,7 @@ const SectionEmpty = ({ label }) => (
 
 // ─── TaskCard ─────────────────────────────────────────────────────────────────
 
-function TaskCard({ task, canEdit, canDelete, canUpdateSts, onEdit, onDelete, onStatusChange, onMarkComplete }) {
+function TaskCard({ task, canEdit, canDelete, canUpdateSts, onEdit, onOpen, onDelete, onStatusChange, onMarkComplete }) {
   const [statusOpen, setStatusOpen] = useState(false);
 
   const checklist = task.checklist || [];
@@ -105,8 +114,22 @@ function TaskCard({ task, canEdit, canDelete, canUpdateSts, onEdit, onDelete, on
   const dueDateStr = task.dueDate ? new Date(task.dueDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) : null;
   const isOverdue = task.status === 'OVERDUE';
 
+  const handleCardClick = (event) => {
+    if (event.target.closest('button, a, input, select, textarea')) return;
+    onOpen?.(task, canEdit);
+  };
+
+  const handleTitleKeyDown = (event) => {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    event.preventDefault();
+    onOpen?.(task, canEdit);
+  };
+
   return (
-    <div className={`bg-white rounded-xl border shadow-sm hover:shadow-md transition-shadow duration-200 ${isOverdue ? 'border-red-200' : 'border-slate-200/80'}`}>
+    <div
+      onClick={handleCardClick}
+      className={`bg-white rounded-xl border shadow-sm hover:shadow-md transition-shadow duration-200 ${onOpen ? 'cursor-pointer' : ''} ${isOverdue ? 'border-red-200' : 'border-slate-200/80'}`}
+    >
       {/* Priority bar */}
       <div className={`h-0.5 rounded-t-xl ${
         task.priority === 'CRITICAL' ? 'bg-red-500' :
@@ -142,9 +165,18 @@ function TaskCard({ task, canEdit, canDelete, canUpdateSts, onEdit, onDelete, on
         </div>
 
         {/* Title */}
-        <h4 className="text-sm font-semibold text-slate-800 leading-snug mb-1">{task.title}</h4>
+        <h4 className="text-sm font-semibold text-slate-800 leading-snug mb-1">
+          <TruncatedText
+            as="span"
+            text={task.title}
+            role="button"
+            tabIndex={0}
+            onKeyDown={handleTitleKeyDown}
+            className="rounded hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
+          />
+        </h4>
         {task.description && (
-          <p className="text-xs text-slate-500 leading-relaxed line-clamp-2 mb-2">{task.description}</p>
+          <TruncatedText text={task.description} className="text-xs text-slate-500 leading-relaxed mb-2" />
         )}
 
         {/* Checklist progress */}
@@ -347,6 +379,9 @@ function WeeklyTaskModal({ isOpen, onClose, onSave, task, fixedTaskType, selecte
     if (loading) return;
     if (!form.title.trim()) { toast.error('Title is required'); return; }
 
+    const textError = getTaskTextError(form.title, form.description);
+    if (textError) { toast.error(textError); return; }
+
     const today = new Date().toISOString().split('T')[0];
 
     if (!isEdit && form.startDate && form.startDate < today) {
@@ -386,16 +421,29 @@ function WeeklyTaskModal({ isOpen, onClose, onSave, task, fixedTaskType, selecte
         <form onSubmit={handleSubmit} className="overflow-y-auto flex-1 px-6 py-4 space-y-4">
           {/* Title */}
           <div>
-            <label className={labelCls}>Title *</label>
-            <input className={inputCls} placeholder="Task title…" value={form.title}
-              onChange={e => set('title', e.target.value)} required />
+            <label className={`${labelCls} flex items-center justify-between`}>
+              <span>Title *</span>
+              <CharacterCounter value={form.title} max={TASK_TITLE_MAX_LENGTH} />
+            </label>
+            <input className={`${inputCls} ${form.title.length > TASK_TITLE_MAX_LENGTH ? '!border-red-400' : ''}`} placeholder="Task title…" value={form.title}
+              onChange={e => set('title', e.target.value)} aria-invalid={form.title.length > TASK_TITLE_MAX_LENGTH} required />
+            {form.title.length > TASK_TITLE_MAX_LENGTH && (
+              <p role="alert" className="mt-1 text-xs text-red-600">Title must be {TASK_TITLE_MAX_LENGTH} characters or fewer.</p>
+            )}
           </div>
 
           {/* Description */}
           <div>
-            <label className={labelCls}>Description</label>
-            <textarea className={`${inputCls} resize-none`} rows={3} placeholder="Optional description…"
-              value={form.description} onChange={e => set('description', e.target.value)} />
+            <label className={`${labelCls} flex items-center justify-between`}>
+              <span>Description</span>
+              <CharacterCounter value={form.description} max={TASK_DESCRIPTION_MAX_LENGTH} />
+            </label>
+            <textarea className={`${inputCls} resize-none ${form.description.length > TASK_DESCRIPTION_MAX_LENGTH ? '!border-red-400' : ''}`} rows={3} placeholder="Optional description…"
+              value={form.description} onChange={e => set('description', e.target.value)}
+              aria-invalid={form.description.length > TASK_DESCRIPTION_MAX_LENGTH} />
+            {form.description.length > TASK_DESCRIPTION_MAX_LENGTH && (
+              <p role="alert" className="mt-1 text-xs text-red-600">Description must be {TASK_DESCRIPTION_MAX_LENGTH} characters or fewer.</p>
+            )}
           </div>
 
           {/* Priority + Assignee row */}
@@ -569,6 +617,7 @@ export default function WeeklyRoadmapPlanner({
   const [editingTask,  setEditingTask]  = useState<WeeklyTask | null>(null);
   const [modalType,    setModalType]    = useState<WeeklyTaskKind>('TEAM_TASK');
   const [deleteTarget, setDeleteTarget] = useState<WeeklyTask | null>(null);
+  const [detail, setDetail] = useState<{ taskId: string; canEdit: boolean } | null>(null);
 
   // ── Handlers ───────────────────────────────────────────────
   const handleWeekChange = (w) => {
@@ -580,6 +629,11 @@ export default function WeeklyRoadmapPlanner({
   const openCreate = (type: WeeklyTaskKind) => { setEditingTask(null); setModalType(type); setModalOpen(true); };
   const openEdit   = (task: WeeklyTask)  => { setEditingTask(task); setModalType(task.taskType); setModalOpen(true); };
   const closeModal = ()      => { setModalOpen(false); setEditingTask(null); };
+  const openDetail = (task: WeeklyTask, canEdit: boolean) => setDetail({ taskId: task._id, canEdit });
+  const closeDetail = useCallback(() => setDetail(null), []);
+  const detailTask = detail
+    ? [...courseTasks, ...classTasks, ...teamTasks].find(task => task._id === detail.taskId) ?? null
+    : null;
 
   const getTasksByType = useCallback((taskType) => {
     if (taskType === 'TEAM_TASK') return teamTasks;
@@ -669,6 +723,7 @@ export default function WeeklyRoadmapPlanner({
       canDelete={canDeleteTask(task)}
       canUpdateSts={canUpdateStatus(task)}
       onEdit={openEdit}
+      onOpen={openDetail}
       onDelete={handleDelete}
       onStatusChange={handleStatusChange}
       onMarkComplete={handleMarkComplete}
@@ -815,6 +870,7 @@ export default function WeeklyRoadmapPlanner({
               canDelete={isAdmin}
               canUpdateSts={isAdmin}
               onEdit={openEdit}
+              onOpen={openDetail}
               onDelete={handleDelete}
               onStatusChange={handleStatusChange}
               onMarkComplete={handleMarkComplete}
@@ -838,6 +894,7 @@ export default function WeeklyRoadmapPlanner({
               canDelete={isAdmin || isLecturer}
               canUpdateSts={isAdmin || isLecturer}
               onEdit={openEdit}
+              onOpen={openDetail}
               onDelete={handleDelete}
               onStatusChange={handleStatusChange}
               onMarkComplete={handleMarkComplete}
@@ -861,6 +918,12 @@ export default function WeeklyRoadmapPlanner({
       </div>
 
       {/* ── Modal ──────────────────────────────────────────── */}
+      <TaskDetailModal
+        task={detailTask}
+        onClose={closeDetail}
+        onEdit={detailTask && detail?.canEdit ? (task) => { closeDetail(); openEdit(task); } : undefined}
+      />
+
       <WeeklyTaskModal
         isOpen={modalOpen}
         onClose={closeModal}

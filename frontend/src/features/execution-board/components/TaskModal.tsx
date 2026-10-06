@@ -3,6 +3,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Loader2, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { PRIORITY_CFG, WEEKS } from '../constants';
+import CharacterCounter from '../../../components/ui/CharacterCounter';
+import { TASK_DESCRIPTION_MAX_LENGTH, TASK_TITLE_MAX_LENGTH, getTaskTextError } from '../../../utils/taskLimits';
 
 const blankForm = {
   title: '',
@@ -63,6 +65,9 @@ export default function TaskModal({ isOpen, onClose, onSave, task, teamMembers, 
 
   if (!isOpen) return null;
 
+  const titleTooLong = form.title.length > TASK_TITLE_MAX_LENGTH;
+  const descriptionTooLong = form.description.length > TASK_DESCRIPTION_MAX_LENGTH;
+
   const setField = (key, value) => setForm((current) => ({ ...current, [key]: value }));
 
   const addCheckItem = () => {
@@ -88,6 +93,12 @@ export default function TaskModal({ isOpen, onClose, onSave, task, teamMembers, 
 
     if (!form.title.trim()) {
       toast.error('Title is required');
+      return;
+    }
+
+    const textError = getTaskTextError(form.title, form.description);
+    if (textError) {
+      toast.error(textError);
       return;
     }
 
@@ -141,13 +152,21 @@ export default function TaskModal({ isOpen, onClose, onSave, task, teamMembers, 
 
         <form onSubmit={handleSubmit} className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
           <div>
-            <label className={labelClass}>Title *</label>
-            <input ref={titleRef} className={inputClass} value={form.title} onChange={(event) => setField('title', event.target.value)} required />
+            <label className={`${labelClass} flex items-center justify-between`}>
+              <span>Title *</span>
+              <CharacterCounter value={form.title} max={TASK_TITLE_MAX_LENGTH} />
+            </label>
+            <input ref={titleRef} className={`${inputClass} ${titleTooLong ? '!border-red-400' : ''}`} value={form.title} onChange={(event) => setField('title', event.target.value)} aria-invalid={titleTooLong} required />
+            {titleTooLong && <p role="alert" className="mt-1 text-xs text-red-600">Title must be {TASK_TITLE_MAX_LENGTH} characters or fewer.</p>}
           </div>
 
           <div>
-            <label className={labelClass}>Description</label>
-            <textarea className={`${inputClass} resize-none`} rows={3} value={form.description} onChange={(event) => setField('description', event.target.value)} />
+            <label className={`${labelClass} flex items-center justify-between`}>
+              <span>Description</span>
+              <CharacterCounter value={form.description} max={TASK_DESCRIPTION_MAX_LENGTH} />
+            </label>
+            <textarea className={`${inputClass} resize-none ${descriptionTooLong ? '!border-red-400' : ''}`} rows={3} value={form.description} onChange={(event) => setField('description', event.target.value)} aria-invalid={descriptionTooLong} />
+            {descriptionTooLong && <p role="alert" className="mt-1 text-xs text-red-600">Description must be {TASK_DESCRIPTION_MAX_LENGTH} characters or fewer.</p>}
           </div>
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">

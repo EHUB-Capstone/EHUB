@@ -67,8 +67,9 @@ function App(): React.ReactElement {
             <Router>
               <Toaster
                 position="top-right"
+                containerStyle={{ top: 80 }}
                 toastOptions={{
-                  duration: 3500,
+                  duration: 2000,
                   style: {
                     background: 'var(--app-toast-bg)',
                     color: 'var(--app-toast-color)',
@@ -80,7 +81,7 @@ function App(): React.ReactElement {
                     boxShadow: '0 4px 16px -4px rgb(0 0 0 / 0.2)',
                   },
                   success: { iconTheme: { primary: '#51B848', secondary: '#fff' } },
-                  error: { iconTheme: { primary: '#ef4444', secondary: '#fff' } },
+                  error: { duration: 3500, iconTheme: { primary: '#ef4444', secondary: '#fff' } },
                 }}
               />
 

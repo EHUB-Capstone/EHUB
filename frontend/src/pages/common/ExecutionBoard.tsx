@@ -30,6 +30,7 @@ import MobileStatusTabs from '../../features/execution-board/components/MobileSt
 import TaskCard from '../../features/execution-board/components/TaskCard';
 import TaskTableView from '../../features/execution-board/components/TaskTableView';
 import TaskModal from '../../features/execution-board/components/TaskModal';
+import TaskDetailModal from '../../components/workspace/TaskDetailModal';
 import { EMPTY_GROUPED, STATUSES } from '../../features/execution-board/constants';
 import {
   getDropTarget,
@@ -73,6 +74,7 @@ export default function ExecutionBoard() {
   const [activeMobileStatus, setActiveMobileStatus] = useState('TODO');
   const [modalOpen, setModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
+  const [detailTaskId, setDetailTaskId] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [activeTask, setActiveTask] = useState(null);
   const [activeTaskWidth, setActiveTaskWidth] = useState(null);
@@ -115,6 +117,9 @@ export default function ExecutionBoard() {
     board.tasks.forEach((task) => map.set(task._id, task));
     return map;
   }, [board.tasks]);
+  const detailTask = detailTaskId ? taskById.get(detailTaskId) || null : null;
+  const openTaskDetail = useCallback((task) => setDetailTaskId(task._id), []);
+  const closeTaskDetail = useCallback(() => setDetailTaskId(null), []);
   const taskStatusById = useMemo(() => {
     const map = new Map();
     STATUSES.forEach((status) => {
@@ -432,6 +437,7 @@ export default function ExecutionBoard() {
               tasks={board.grouped?.[activeMobileStatus] || []}
               permissions={permissions}
               onEditTask={handleEdit}
+              onOpenTask={openTaskDetail}
               onDeleteTask={setDeleteTarget}
               onStatusChange={handleStatusChange}
               onSwipeStatusChange={handleSwipeStatusChange}
@@ -455,6 +461,7 @@ export default function ExecutionBoard() {
                 tasks={board.grouped?.[status] || []}
                 permissions={permissions}
                 onEditTask={handleEdit}
+                onOpenTask={openTaskDetail}
                 onDeleteTask={setDeleteTarget}
                 onStatusChange={handleStatusChange}
                 activeOverStatus={activeOverStatus}
@@ -501,6 +508,15 @@ export default function ExecutionBoard() {
           onStatusChange={handleStatusChange}
         />
       )}
+
+      <TaskDetailModal
+        task={detailTask}
+        onClose={closeTaskDetail}
+        onEdit={detailTask && permissions.canEditTask(detailTask) ? (task) => {
+          closeTaskDetail();
+          handleEdit(task);
+        } : undefined}
+      />
 
       <TaskModal
         isOpen={modalOpen}
