@@ -104,6 +104,7 @@ public static class DependencyInjection
         services.AddScoped<EHub.Application.Features.Classes.UpdateClassSchedule.IUpdateClassScheduleCommandHandler, EHub.Application.Features.Classes.UpdateClassSchedule.UpdateClassScheduleCommandHandler>();
         services.AddScoped<EHub.Application.Features.Classes.GetClassDetail.IGetClassDetailQueryHandler, EHub.Application.Features.Classes.GetClassDetail.GetClassDetailQueryHandler>();
         services.AddScoped<EHub.Application.Features.Classes.GetClassRoster.IGetClassRosterQueryHandler, EHub.Application.Features.Classes.GetClassRoster.GetClassRosterQueryHandler>();
+        services.AddScoped<EHub.Application.Features.Classes.GroupProjectConsistency.IGetGroupProjectConsistencyQueryHandler, EHub.Application.Features.Classes.GroupProjectConsistency.GetGroupProjectConsistencyQueryHandler>();
         services.AddScoped<EHub.Application.Features.Classes.AddStudentToClass.IAddStudentToClassCommandHandler, EHub.Application.Features.Classes.AddStudentToClass.AddStudentToClassCommandHandler>();
         services.AddScoped<EHub.Application.Features.Classes.AssignStudents.IAssignStudentsCommandHandler, EHub.Application.Features.Classes.AssignStudents.AssignStudentsCommandHandler>();
         services.AddScoped<EHub.Application.Features.Classes.UpdateClassStudent.IUpdateClassStudentCommandHandler, EHub.Application.Features.Classes.UpdateClassStudent.UpdateClassStudentCommandHandler>();

@@ -124,6 +124,9 @@ export const classApi = {
   reEnrollStudent: (classId, studentId) =>
     axiosClient.post(`/classes/${classId}/students/${studentId}/re-enroll`),
 
+  getGroupProjectConsistency: (classId: string) =>
+    axiosClient.get(`/classes/${classId}/group-project-consistency`),
+
   // ─── Teams ───────────────────────────────────────────────────────────────
   getTeams:      (classId) => runClassFeatureRequest(classFeatureFlags.teamManagement, 'Class team management', () =>
     axiosClient.get(`/classes/${classId}/teams`)),

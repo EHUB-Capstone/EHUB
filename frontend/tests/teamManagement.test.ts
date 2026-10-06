@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { ManagedTeam, TeamDraft, TeamStudent } from '../src/types/teamManagement.ts';
+import { evaluateGroupProjectConsistency } from '../src/utils/groupProjectConsistency.ts';
 import {
   canAssignMentorTypeToTeam,
   evaluateTeamMajorComposition,
@@ -483,4 +484,42 @@ test('class banner lists only teams that fail the major requirement and clears o
   assert.deepEqual(flagged.map(({ team }) => team._id), ['bad']);
   assert.deepEqual(flagged[0].warning.missingGroups, ['GROUP_1']);
   assert.deepEqual(getTeamsWithMajorWarning([{ ...teams[1], majorComposition: valid }]), []);
+});
+
+test('accepts one-to-one group and project data', () => {
+  const result = evaluateGroupProjectConsistency([
+    { group: 'G01', project: 'Project A' },
+    { group: 'G01', project: 'Project A' },
+    { group: 'G02', project: 'Project B' },
+    { group: 'G02', project: 'Project B' },
+  ]);
+
+  assert.equal(result.isConsistent, true);
+  assert.deepEqual(result.warnings, []);
+});
+
+test('warns when a group has several projects', () => {
+  const result = evaluateGroupProjectConsistency([
+    { group: 'G01', project: 'Project A' },
+    { group: 'G01', project: 'Project A' },
+    { group: 'G01', project: 'Project B' },
+  ]);
+
+  assert.equal(result.isConsistent, false);
+  assert.equal(result.warnings.length, 1);
+  assert.equal(result.warnings[0].type, 'GROUP_HAS_MULTIPLE_PROJECTS');
+  assert.equal(result.warnings[0].message, 'Group `G01` is assigned to multiple projects: `Project A`, `Project B`.');
+});
+
+test('warns when a project has several groups, sorted naturally and ignoring blanks and case', () => {
+  const result = evaluateGroupProjectConsistency([
+    { group: 'G10', project: 'Project A' },
+    { group: 'G2', project: 'project a' },
+    { group: 'G1', project: ' Project A ' },
+    { group: '', project: 'Project A' },
+    { group: 'G3', project: null },
+  ]);
+
+  assert.deepEqual(result.warnings.map((warning) => warning.type), ['PROJECT_HAS_MULTIPLE_GROUPS']);
+  assert.deepEqual(result.warnings[0].related, ['G1', 'G2', 'G10']);
 });
