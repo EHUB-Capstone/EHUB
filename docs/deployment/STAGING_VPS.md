@@ -1,4 +1,4 @@
-t # EHUB staging trên cùng VPS với production
+# EHUB staging trên cùng VPS với production
 
 Hướng dẫn này triển khai `https://staging.e-hub.com.vn` để nhóm kiểm thử trước
 khi phát hành lên `https://e-hub.com.vn`. Các lệnh phải chạy từng bước; nếu một
