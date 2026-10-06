@@ -141,6 +141,8 @@ export interface TeachingStaffDto {
   email: string;
   avatar?: string | null;
   role: 'LECTURER' | 'MENTOR';
+  /** Only set for mentors: Enterprise = industry mentor, Academic = lecturer mentor. */
+  mentorType?: 'Enterprise' | 'Academic' | null;
   status: 'Active' | 'Inactive' | 'Incomplete';
   userStatus: string;
   isIncomplete: boolean;

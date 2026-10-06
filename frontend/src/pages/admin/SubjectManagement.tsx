@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
-  BookOpen, Calendar, CheckCircle2, ChevronLeft, ChevronRight, CircleAlert, Edit3, Factory, Filter, GraduationCap, Plus,
-  History, LockKeyhole, RefreshCw, Search, ShieldAlert, Sparkles, Users,
+  BookOpen, Building2, Calendar, CheckCircle2, ChevronLeft, ChevronRight, CircleAlert, Edit3, Factory, Filter, GraduationCap, Plus,
+  History, LockKeyhole, RefreshCw, Search, ShieldAlert, Sparkles, UserCheck, Users,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { subjectApi } from '../../api/subjectApi';
@@ -18,10 +18,55 @@ import Modal from '../../components/ui/Modal';
 import { parseApiError } from '../../utils/apiError';
 import {
   filterTeachingStaff,
+  getStaffKind,
   paginateTeachingStaff,
+  type StaffKind,
+  type StaffRoleFilter,
   type StaffStatusFilter,
 } from '../../utils/teachingStaffDirectory';
 import StartupIndustryManagement from './StartupIndustryManagement';
+
+const STAFF_KIND_STYLES: Record<StaffKind, {
+  label: string;
+  hint: string;
+  Icon: typeof Users;
+  badge: string;
+  avatar: string;
+  accent: string;
+}> = {
+  LECTURER: {
+    label: 'Lecturer',
+    hint: 'Teaches and manages classes',
+    Icon: GraduationCap,
+    badge: 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-400/40 dark:bg-blue-500/15 dark:text-blue-300',
+    avatar: 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300',
+    accent: 'border-l-blue-500',
+  },
+  ENTERPRISE_MENTOR: {
+    label: 'Industry mentor',
+    hint: 'Mentor from a company',
+    Icon: Building2,
+    badge: 'border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-400/40 dark:bg-orange-500/15 dark:text-orange-300',
+    avatar: 'bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-300',
+    accent: 'border-l-orange-500',
+  },
+  ACADEMIC_MENTOR: {
+    label: 'Lecturer mentor',
+    hint: 'Mentor from the faculty',
+    Icon: UserCheck,
+    badge: 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-400/40 dark:bg-emerald-500/15 dark:text-emerald-300',
+    avatar: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300',
+    accent: 'border-l-emerald-500',
+  },
+  MENTOR: {
+    label: 'Mentor',
+    hint: 'Mentor',
+    Icon: Users,
+    badge: 'border-slate-200 bg-slate-50 text-slate-700 dark:border-white/20 dark:bg-white/10 dark:text-slate-200',
+    avatar: 'bg-slate-100 text-slate-600 dark:bg-white/10 dark:text-slate-200',
+    accent: 'border-l-slate-400',
+  },
+};
 import type {
   SemesterCode,
   SemesterCompletionPreview,
@@ -130,7 +175,7 @@ const SubjectManagement = () => {
   const [staffSummary, setStaffSummary] = useState<TeachingStaffSummary>(emptySummary);
   const [staffLoading, setStaffLoading] = useState(false);
   const [staffSearch, setStaffSearch] = useState('');
-  const [staffRole, setStaffRole] = useState<'ALL' | TeachingStaffDto['role']>('ALL');
+  const [staffRole, setStaffRole] = useState<StaffRoleFilter>('ALL');
   const [staffStatus, setStaffStatus] = useState<StaffStatusFilter>('ALL');
   const [staffPage, setStaffPage] = useState(1);
   const [staffPageSize, setStaffPageSize] = useState<(typeof staffPageSizes)[number]>(10);
@@ -923,7 +968,7 @@ const SubjectManagement = () => {
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <select aria-label="Filter teaching staff by role" value={staffRole} onChange={(event) => setStaffRole(event.target.value as typeof staffRole)} className="min-w-[135px] rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-primary">
-                  <option value="ALL">All roles</option><option value="LECTURER">Lecturers</option><option value="MENTOR">Mentors</option>
+                  <option value="ALL">All roles</option><option value="LECTURER">Lecturers</option><option value="MENTOR">All mentors</option><option value="ENTERPRISE_MENTOR">Industry mentors</option><option value="ACADEMIC_MENTOR">Lecturer mentors</option>
                 </select>
                 <select aria-label="Filter teaching staff by status" value={staffStatus} onChange={(event) => setStaffStatus(event.target.value as StaffStatusFilter)} className="min-w-[165px] rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-primary">
                   <option value="ALL">All statuses</option><option value="ACTIVE">Active</option><option value="INACTIVE">Inactive</option><option value="NEEDS_INFORMATION">Needs information</option>
@@ -960,6 +1005,19 @@ const SubjectManagement = () => {
               </div>
             </header>
 
+            <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 px-4 py-2 dark:border-white/10" aria-label="Staff type legend">
+              {(['LECTURER', 'ENTERPRISE_MENTOR', 'ACADEMIC_MENTOR'] as const).map((kind) => {
+                const style = STAFF_KIND_STYLES[kind];
+                const LegendIcon = style.Icon;
+                const count = visibleStaff.filter(member => getStaffKind(member) === kind).length;
+                return (
+                  <span key={kind} className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold ${style.badge}`}>
+                    <LegendIcon className="h-3 w-3" aria-hidden="true" />{style.label}<span className="opacity-70">· {count}</span>
+                  </span>
+                );
+              })}
+            </div>
+
             {staffLoading ? (
               <LoadingSkeleton variant="table" lines={6} className="p-4" />
             ) : paginatedStaff.length === 0 ? (
@@ -970,10 +1028,13 @@ const SubjectManagement = () => {
               </div>
             ) : (
               <div className="divide-y divide-slate-100">
-                {paginatedStaff.map((member) => (
-                  <article key={member._id} className="grid gap-3 border-l-2 border-l-transparent px-4 py-3 transition-colors hover:border-l-secondary hover:bg-slate-50/60 dark:hover:bg-white/[0.035] lg:grid-cols-[minmax(230px,1.25fr)_minmax(170px,auto)_minmax(230px,1fr)_36px] lg:items-center">
+                {paginatedStaff.map((member) => {
+                  const kindStyle = STAFF_KIND_STYLES[getStaffKind(member)];
+                  const KindIcon = kindStyle.Icon;
+                  return (
+                  <article key={member._id} className={`grid gap-3 border-l-4 px-4 py-3 transition-colors hover:bg-slate-50/60 dark:hover:bg-white/[0.035] lg:grid-cols-[minmax(230px,1.25fr)_minmax(190px,auto)_minmax(230px,1fr)_36px] lg:items-center ${kindStyle.accent}`}>
                     <div className="flex min-w-0 items-center gap-3">
-                      {member.avatar ? <img src={member.avatar} alt="" className="h-9 w-9 rounded-full object-cover" /> : <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold ${member.isIncomplete ? 'bg-amber-50 text-amber-700' : 'bg-slate-100 text-slate-600'}`}>{initials(member.name)}</span>}
+                      {member.avatar ? <img src={member.avatar} alt="" className="h-9 w-9 rounded-full object-cover" /> : <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold ${kindStyle.avatar}`}>{initials(member.name)}</span>}
                       <div className="min-w-0">
                         <p className="truncate text-sm font-semibold text-slate-900">{member.name}</p>
                         <p className={`truncate text-xs ${member.isIncomplete ? 'font-medium text-amber-600' : 'text-slate-500'}`}>{member.email || 'Email not provided'}</p>
@@ -982,7 +1043,7 @@ const SubjectManagement = () => {
                       </div>
                     </div>
                     <div className="flex flex-wrap items-center gap-1.5">
-                      <span className={`rounded-full px-2 py-1 text-[11px] font-semibold ${member.role === 'LECTURER' ? 'bg-primary-50 text-primary' : 'bg-secondary-50 text-secondary'}`}>{member.role === 'LECTURER' ? 'Lecturer' : 'Mentor'}</span>
+                      <span title={kindStyle.hint} className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[11px] font-semibold ${kindStyle.badge}`}><KindIcon className="h-3 w-3" aria-hidden="true" />{kindStyle.label}</span>
                       {member.isIncomplete ? <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-700">Needs information</span> : <Badge variant={member.status === 'Active' ? 'Active' : 'Inactive'}>{member.status}</Badge>}
                     </div>
                     <div className="flex min-w-0 flex-wrap items-center gap-1.5">
@@ -992,7 +1053,8 @@ const SubjectManagement = () => {
                       {!member.isIncomplete && <button type="button" onClick={() => openEditStaff(member)} className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-primary-50 hover:text-primary" aria-label={`Edit ${member.name} semester status`} title="Edit semester status"><Edit3 className="h-4 w-4" /></button>}
                     </div>
                   </article>
-                ))}
+                  );
+                })}
               </div>
             )}
 

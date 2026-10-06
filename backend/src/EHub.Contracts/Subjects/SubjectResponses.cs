@@ -105,6 +105,7 @@ public sealed class TeachingStaffResponse
     public string Email { get; init; } = string.Empty;
     public string? Avatar { get; init; }
     public string Role { get; init; } = string.Empty;
+    public string? MentorType { get; init; }
     public string Status { get; init; } = string.Empty;
     public string UserStatus { get; init; } = string.Empty;
     public bool IsIncomplete { get; init; }
