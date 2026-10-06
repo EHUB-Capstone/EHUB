@@ -248,6 +248,18 @@ public sealed class EvaluationGradingBatchRequest
     public IReadOnlyCollection<Guid> TeamIds { get; init; } = Array.Empty<Guid>();
 }
 
+public sealed class EvaluationReportExportRequest
+{
+    public IReadOnlyCollection<EvaluationReportTeamScopeRequest> Teams { get; init; } =
+        Array.Empty<EvaluationReportTeamScopeRequest>();
+}
+
+public sealed class EvaluationReportTeamScopeRequest
+{
+    public Guid TeamId { get; init; }
+    public IReadOnlyCollection<int> CheckpointNumbers { get; init; } = Array.Empty<int>();
+}
+
 public sealed class EvaluationGradingBatchResponse
 {
     public IReadOnlyCollection<EvaluationGradingTeamResponse> Teams { get; init; } =

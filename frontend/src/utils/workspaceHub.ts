@@ -1,4 +1,5 @@
 import type { ApiEnvelope, WorkspaceOption } from '../types/workspaceTools';
+import { matchesSearchQuery } from './searchText.ts';
 
 export interface WorkspaceClassGroup {
   classId: string;
@@ -41,12 +42,10 @@ export function parseWorkspaceSemester(code: string): { semester: string; year: 
 }
 
 export function filterWorkspaces(workspaces: WorkspaceOption[], filters: WorkspaceHubFilters): WorkspaceOption[] {
-  const search = filters.search?.trim().toLowerCase() || '';
   return workspaces.filter(workspace => {
     const semester = parseWorkspaceSemester(workspace.semester);
     return (
-      (!search || [workspace.teamName, workspace.classCode, workspace.courseCode, workspace.semester]
-        .some(value => value.toLowerCase().includes(search))) &&
+      matchesSearchQuery(filters.search || '', [workspace.teamName, workspace.classCode, workspace.courseCode, workspace.semester]) &&
       (!filters.subject || workspace.courseCode.toUpperCase() === filters.subject.toUpperCase()) &&
       (!filters.semester || filters.semester === 'all' || semester?.semester === filters.semester.toUpperCase()) &&
       (!filters.year || filters.year === 'all' || semester?.year === filters.year) &&

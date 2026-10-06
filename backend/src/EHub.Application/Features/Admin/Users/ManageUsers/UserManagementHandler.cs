@@ -20,8 +20,9 @@ public sealed class UserManagementHandler(IApplicationDbContext context, ICurren
     };
     public async Task<Result<ManagedUserListResponse>> GetUsersAsync(int page, int limit, string? search, string? role, string? status, CancellationToken token = default)
     {
+        if (!CanReadDirectory) return Fail<ManagedUserListResponse>(ErrorCodes.CommonForbiddenError, "Staff access is required.");
         if (page < 1 || limit is < 1 or > 100) return Fail<ManagedUserListResponse>("VALIDATION_ERROR", "Page and limit are invalid.");
-        var query = context.Users.AsNoTracking().Include(user => user.UserRoles).ThenInclude(item => item.Role).Include(user => user.Student).AsQueryable();
+        var query = ReadUsersQuery();
         if (!string.IsNullOrWhiteSpace(search)) { var term = search.Trim().ToLower(); query = query.Where(user => user.FullName.ToLower().Contains(term) || user.Email.ToLower().Contains(term) || (user.Student != null && user.Student.RollNumber != null && user.Student.RollNumber.ToLower().Contains(term))); }
         var roleName = string.Empty; if (!string.IsNullOrWhiteSpace(role) && !TryRole(role, out roleName)) return Fail<ManagedUserListResponse>("VALIDATION_ERROR", "Role is invalid."); if (!string.IsNullOrWhiteSpace(role)) query = query.Where(user => user.UserRoles.Any(item => item.Role.Name == roleName));
         var userStatus = UserStatus.Active; if (!string.IsNullOrWhiteSpace(status) && !TryStatus(status, out userStatus)) return Fail<ManagedUserListResponse>("VALIDATION_ERROR", "Status is invalid."); if (!string.IsNullOrWhiteSpace(status)) query = query.Where(user => user.Status == userStatus);
@@ -42,7 +43,34 @@ public sealed class UserManagementHandler(IApplicationDbContext context, ICurren
             Pagination = new PaginationResponse { Total = total, Page = page, Limit = limit, Pages = pages }
         });
     }
-    public async Task<Result<ManagedUserResponse>> GetUserAsync(Guid id, CancellationToken token = default) { var user = await GetUserEntityAsync(id, token); return user is null ? Fail<ManagedUserResponse>("NOT_FOUND", "User was not found.") : Result.Success(ToResponse(user)); }
+    public async Task<Result<ManagedUserResponse>> GetUserAsync(Guid id, CancellationToken token = default)
+    {
+        if (!CanReadDirectory) return Fail<ManagedUserResponse>(ErrorCodes.CommonForbiddenError, "Staff access is required.");
+        var user = await ReadUsersQuery().FirstOrDefaultAsync(item => item.Id == id, token);
+        if (user is null) return IsAdminReader
+            ? Fail<ManagedUserResponse>("NOT_FOUND", "User was not found.")
+            : Fail<ManagedUserResponse>(ErrorCodes.CommonForbiddenError, "The user is unavailable or outside your class scope.");
+        return Result.Success(ToResponse(user));
+    }
+
+    private bool IsAdminReader => currentUser.Roles.Contains(SystemRoles.Admin, StringComparer.OrdinalIgnoreCase);
+    private bool CanReadDirectory => IsAdminReader || currentUser.Roles.Contains(SystemRoles.Lecturer, StringComparer.OrdinalIgnoreCase);
+
+    private IQueryable<User> ReadUsersQuery()
+    {
+        var query = context.Users.AsNoTracking().Include(user => user.UserRoles).ThenInclude(item => item.Role)
+            .Include(user => user.Student).AsQueryable();
+        if (IsAdminReader) return query;
+        var lecturerId = currentUser.UserId;
+        // Staff directory entries stay available; student profiles require an
+        // active/completed enrollment in one of this lecturer's assigned classes.
+        return query.Where(user => user.Id == lecturerId ||
+            user.Student == null && !user.UserRoles.Any(item => item.Role.Name == SystemRoles.Student) ||
+            user.Student != null && user.Student.ClassStudents.Any(enrollment =>
+                enrollment.EnrollmentStatus != EnrollmentStatus.Dropped &&
+                (enrollment.Class.PrimaryLecturerId == lecturerId ||
+                 enrollment.Class.ClassLecturers.Any(assignment => assignment.LecturerId == lecturerId))));
+    }
     public async Task<Result<ManagedUserResponse>> CreateUserAsync(SaveManagedUserRequest request, CancellationToken token = default)
     {
         var validation = await ValidateAsync(request, null, true, token); if (validation is not null) return Fail<ManagedUserResponse>("VALIDATION_ERROR", validation);
@@ -150,6 +178,8 @@ public sealed class UserManagementHandler(IApplicationDbContext context, ICurren
             .Where(enrollment =>
                 enrollment.SemesterId == currentSemester.Id &&
                 enrollment.EnrollmentStatus != EnrollmentStatus.Dropped &&
+                (IsAdminReader || enrollment.Class.PrimaryLecturerId == currentUser.UserId ||
+                 enrollment.Class.ClassLecturers.Any(assignment => assignment.LecturerId == currentUser.UserId)) &&
                 enrollment.Student.UserId.HasValue &&
                 userIds.Contains(enrollment.Student.UserId.Value))
             .Select(enrollment => new
@@ -170,6 +200,8 @@ public sealed class UserManagementHandler(IApplicationDbContext context, ICurren
                 member.Team.Status == TeamStatus.Active &&
                 member.CountsTowardActiveTeam &&
                 member.ClassStudent.EnrollmentStatus != EnrollmentStatus.Dropped &&
+                (IsAdminReader || member.Team.Class.PrimaryLecturerId == currentUser.UserId ||
+                 member.Team.Class.ClassLecturers.Any(assignment => assignment.LecturerId == currentUser.UserId)) &&
                 member.ClassStudent.Student.UserId.HasValue &&
                 userIds.Contains(member.ClassStudent.Student.UserId.Value))
             .Select(member => new

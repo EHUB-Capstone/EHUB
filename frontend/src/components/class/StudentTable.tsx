@@ -1,10 +1,11 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef, useDeferredValue } from 'react';
 import toast from 'react-hot-toast';
-import { Search, Users, AlertTriangle, UserMinus, RotateCcw, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
+import { Search, Users, AlertTriangle, UserMinus, RotateCcw, ChevronLeft, ChevronRight, RefreshCw, Loader2 } from 'lucide-react';
 import EmptyState from '../ui/EmptyState';
 import { getMajorName, TEAM_MAJOR_GROUPS } from '../../constants/majors';
 import { isMissingTeamMajor } from '../../utils/teamManagement';
 import { shortenSemesterCode } from '../../utils/semester';
+import { matchesSearchQuery } from '../../utils/searchText';
 
 /**
  * Get display label for a major code.
@@ -39,6 +40,34 @@ const majorColor = (major) => {
   return colors[Math.abs(hash) % colors.length];
 };
 
+function ServerRosterSearchInput({ initialValue, onSearch }) {
+  const onSearchRef = useRef(onSearch);
+  const debounceRef = useRef<number | undefined>(undefined);
+
+  useEffect(() => {
+    onSearchRef.current = onSearch;
+  }, [onSearch]);
+
+  useEffect(() => () => window.clearTimeout(debounceRef.current), []);
+
+  const handleChange = (value: string) => {
+    window.clearTimeout(debounceRef.current);
+    debounceRef.current = window.setTimeout(() => onSearchRef.current(value), 300);
+  };
+
+  return (
+    <input
+      type="search"
+      aria-label="Search students"
+      autoComplete="off"
+      placeholder="Search name, roll, email…"
+      defaultValue={initialValue || ''}
+      onChange={(event) => handleChange(event.target.value)}
+      className="min-h-8 w-full rounded-lg border border-slate-200 bg-white py-1.5 pl-8 pr-3 text-xs outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15 sm:text-sm"
+    />
+  );
+}
+
 export default function StudentTable({
   students: rawStudents,
   teams: rawTeams,
@@ -55,6 +84,7 @@ export default function StudentTable({
   maxSelection = 6,
   serverQuery = undefined,
   onServerQueryChange = undefined,
+  refreshing = false,
   editableStudentId = undefined,
   onMajorChange = undefined,
   updatingMajor = false,
@@ -65,7 +95,9 @@ export default function StudentTable({
     _cls?.semesterCode || `${_cls?.semester || ''}${_cls?.year || ''}`,
   );
   const groupColumnLabel = semesterCode ? `Group ${semesterCode}` : 'Group';
-  const [search, setSearch] = useState(serverQuery?.search || '');
+  const [search, setSearch] = useState('');
+  // Keeps typing responsive: the input updates immediately, the table re-filters at low priority.
+  const deferredSearch = useDeferredValue(search);
 
   const teamMap = useMemo(() => {
     const map = new Map();
@@ -74,12 +106,6 @@ export default function StudentTable({
   }, [teams]);
   const [localFilterMajor, setLocalFilterMajor] = useState('');
   const filterMajor = serverQuery?.majorCode ?? localFilterMajor;
-
-  useEffect(() => {
-    if (!serverQuery || !onServerQueryChange || search === serverQuery.search) return undefined;
-    const timeout = window.setTimeout(() => onServerQueryChange({ search }), 300);
-    return () => window.clearTimeout(timeout);
-  }, [onServerQueryChange, search, serverQuery]);
 
   const majors = useMemo(() => {
     const codes = students
@@ -96,8 +122,7 @@ export default function StudentTable({
   const filtered = useMemo(() => {
     let result = students.filter(s => {
       if (serverQuery) return true;
-      const matchSearch = !search || [s.fullName, s.rollNumber, s.email]
-        .some(v => v?.toLowerCase().includes(search.toLowerCase()));
+      const matchSearch = matchesSearchQuery(deferredSearch, [s.fullName, s.rollNumber, s.email]);
       const matchMajor = !filterMajor || (s.major && s.major.toUpperCase() === filterMajor);
       return matchSearch && matchMajor;
     });
@@ -128,7 +153,7 @@ export default function StudentTable({
     });
 
     return result;
-  }, [students, teams, search, filterMajor, teamMap, serverQuery]);
+  }, [students, teams, deferredSearch, filterMajor, teamMap, serverQuery]);
 
   const hideProjectName = useMemo(() => {
     if (teams.length === 0) return false;
@@ -175,7 +200,13 @@ export default function StudentTable({
   const canSelect = (s) => !selectionDisabled && !s.teamId && !s.hasPendingTeamInvitation && s.enrollmentStatus === 'Active';
   const getSelectionBlockReason = (s) => {
     if (s.teamId) return 'This student is already assigned to another team.';
-    if (s.hasPendingTeamInvitation) return 'Pending another invitation — this student cannot be selected until the current invitation is resolved.';
+    if (s.hasPendingTeamInvitation) {
+      const teamName = s.pendingTeamName || 'another team';
+      if (s.isPendingTeamFormationMember) {
+        return `This student is already part of your pending invitation for ${teamName}.`;
+      }
+      return 'Pending another invitation — this student cannot be selected until the invitation is resolved.';
+    }
     if (s.enrollmentStatus !== 'Active') return 'Only active enrollments can be selected.';
     if (selectionDisabled) return 'Selection is disabled.';
     return '';
@@ -187,13 +218,25 @@ export default function StudentTable({
       <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 p-3">
         <div className="relative flex-1 min-w-[180px]">
           <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
-          <input
-            type="text"
-            placeholder="Search name, roll, email…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="min-h-8 w-full rounded-lg border border-slate-200 bg-white py-1.5 pl-8 pr-3 text-xs outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15 sm:text-sm"
-          />
+          {refreshing && (
+            <Loader2 aria-hidden="true" className="absolute right-8 top-1/2 h-3.5 w-3.5 -translate-y-1/2 animate-spin text-slate-400" />
+          )}
+          {serverQuery && onServerQueryChange ? (
+            <ServerRosterSearchInput
+              initialValue={serverQuery.search}
+              onSearch={(nextSearch) => onServerQueryChange({ search: nextSearch })}
+            />
+          ) : (
+            <input
+              type="search"
+              aria-label="Search students"
+              autoComplete="off"
+              placeholder="Search name, roll, email…"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              className="min-h-8 w-full rounded-lg border border-slate-200 bg-white py-1.5 pl-8 pr-3 text-xs outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15 sm:text-sm"
+            />
+          )}
         </div>
         <select
           value={filterMajor}
@@ -260,11 +303,14 @@ export default function StudentTable({
       </div>
 
       {filtered.length === 0 ? (
-        <div className="p-7">
+        <div className="p-7" aria-busy={refreshing || undefined}>
           <EmptyState icon={Users} title="No students found" description="Try adjusting your search or filters" />
         </div>
       ) : (
-        <div className="overflow-x-auto">
+        <div
+          aria-busy={refreshing || undefined}
+          className={`overflow-x-auto transition-opacity duration-150 ${refreshing ? 'opacity-60' : 'opacity-100'}`}
+        >
           <table className="w-full text-sm">
             <thead className="bg-slate-50 border-b border-slate-100">
               <tr>
@@ -301,6 +347,8 @@ export default function StudentTable({
                 const mTooltip = majorTooltip(s.major);
                 const team = s.teamId ? teamMap.get(s.teamId.toString()) : null;
                 const selectionBlockReason = selectable ? '' : getSelectionBlockReason(s);
+                const pendingTeamName = s.pendingTeamName || 'Pending team';
+                const pendingInvitationAccepted = s.pendingTeamInvitationStatus === 'Accepted';
                 const isOwnRow = Boolean(editableStudentId) && s._id?.toString() === editableStudentId?.toString();
                 const canEditOwnMajor = isOwnRow && s.canEditMajor && onMajorChange;
 
@@ -311,7 +359,7 @@ export default function StudentTable({
                 const rowClass = `transition-colors ${selectable ? 'cursor-pointer hover:bg-slate-50' : s.hasPendingTeamInvitation ? 'cursor-not-allowed bg-amber-50/40' : ''} ${isSelected ? 'bg-primary-50' : ''} ${isFirstInTeam ? 'border-t-2 border-slate-200' : ''}`;
 
                 return (
-                  <tr key={s._id} onClick={() => selectable && toggleSelect(s._id)} className={rowClass} title={selectionBlockReason}>
+                  <tr key={s._id} onClick={() => (isSelected || selectable) && toggleSelect(s._id)} className={rowClass} title={selectionBlockReason}>
                     {!selectionDisabled && (
                       <td className="px-3 py-2.5">
                         <div className={`flex h-4.5 w-4.5 items-center justify-center rounded-full border-2 transition-all ${isSelected ? 'border-primary bg-primary' : 'border-slate-300'} ${!selectable ? 'opacity-30' : ''}`}>
@@ -368,9 +416,11 @@ export default function StudentTable({
                           <span className={`rounded-full px-1.5 py-0.5 text-[11px] font-semibold ${majorColor(s.major)}`} title={mTooltip}>
                             {mLabel}
                           </span>
-                          <span className="text-[10px] font-medium text-slate-400">
-                            {s.majorVerificationStatus === 'Matched' ? 'Verified' : (s.majorVerificationStatus || 'Unverified')}
-                          </span>
+                          {s.majorVerificationStatus && (
+                            <span className="text-[10px] font-medium text-slate-400">
+                              {s.majorVerificationStatus === 'Matched' ? 'Verified' : s.majorVerificationStatus}
+                            </span>
+                          )}
                           {s.hasMajorMismatch && (
                             <span
                               className="flex items-center gap-1 rounded bg-orange-50 px-1.5 py-0.5 text-[10px] font-semibold text-orange-700"
@@ -425,10 +475,17 @@ export default function StudentTable({
                           )
                         ) : s.hasPendingTeamInvitation ? (
                           <span
-                            className="inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[11px] font-semibold text-amber-800"
-                            title="This student is currently reserved by another pending team invitation."
+                            className="inline-flex max-w-[190px] flex-col items-center rounded-lg bg-amber-100 px-2 py-1 text-[11px] font-semibold leading-tight text-amber-800"
+                            title={selectionBlockReason}
                           >
-                            Pending another invitation
+                            <span>
+                              {s.isPendingTeamFormationMember
+                                ? pendingInvitationAccepted ? 'Accepted invitation' : 'Awaiting response'
+                                : 'Pending another invitation'}
+                            </span>
+                            {s.isPendingTeamFormationMember && (
+                              <span className="mt-0.5 font-bold">{pendingTeamName}</span>
+                            )}
                           </span>
                         ) : (
                           <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[11px] font-semibold text-slate-500">Unassigned</span>

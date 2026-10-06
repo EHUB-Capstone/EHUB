@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import * as XLSX from 'xlsx';
 import { adminApprovalApi } from '../src/api/adminApprovalApi.ts';
 import axiosClient from '../src/api/axiosClient.ts';
 import { checkpointApi } from '../src/api/checkpointApi.ts';
+import { startupIndustryApi } from '../src/api/startupIndustryApi.ts';
 import { enableApiMocks } from '../src/mocks/mockApi.ts';
 import { getMockState, resetMockState } from '../src/mocks/mockHelpers.ts';
 import { getApprovalStats, registrationToApprovalRequest } from '../src/utils/accountApproval.ts';
@@ -106,6 +108,42 @@ test('student cannot open the mentor directory mock', async () => {
     (error: unknown) => (error as { response?: { status?: number } }).response?.status === 403);
 });
 
+test('mock mentor carryover previews eligibility and adds only selected mentors to the target semester', async () => {
+  resetMockState();
+  await axiosClient.post('/auth/login', { email: 'admin@ehub.local', password: 'Mock123!' });
+  const state = getMockState();
+  const source = state.semesters.find(semester => semester.semester === 'SP' && semester.year === 2026);
+  const target = state.semesters.find(semester => semester.semester === 'FA' && semester.year === 2026);
+  const existingMentor = state.users.find(user => user.email === 'khoa.mentor@ehub.local');
+  const reusableMentor = state.users.find(user => user.email === 'yen.mentor@ehub.local');
+  assert.ok(source && target && existingMentor && reusableMentor);
+  reusableMentor.status = 'APPROVED';
+  state.semesterStaffAssignments.push(
+    { id: 'carryover-source-existing', semesterId: source.id, userId: existingMentor.id, role: 'MENTOR', status: 'ACTIVE' },
+    { id: 'carryover-source-reusable', semesterId: source.id, userId: reusableMentor.id, role: 'MENTOR', status: 'ACTIVE' },
+  );
+
+  const preview = await axiosClient.post('/subjects/teaching-staff/mentor-carryover/preview', {
+    sourceSemesterId: source.id,
+    targetSemesterId: target.id,
+  });
+  assert.equal(preview.data.totalCount, 2);
+  assert.equal(preview.data.eligibleCount, 1);
+  assert.equal(preview.data.alreadyAddedCount, 1);
+  assert.equal(preview.data.mentors.find((mentor: { userId: string }) => mentor.userId === reusableMentor.id).action, 'Add');
+
+  const committed = await axiosClient.post('/subjects/teaching-staff/mentor-carryover/commit', {
+    sourceSemesterId: source.id,
+    targetSemesterId: target.id,
+    mentorUserIds: [reusableMentor.id],
+  });
+  assert.equal(committed.data.addedCount, 1);
+  assert.equal(committed.data.reactivatedCount, 0);
+  assert.ok(state.semesterStaffAssignments.some(assignment =>
+    assignment.semesterId === target.id && assignment.userId === reusableMentor.id && assignment.status === 'ACTIVE'));
+  resetMockState();
+});
+
 test('admin class export accepts selected classes from one semester and returns one Excel blob', async () => {
   resetMockState();
   await axiosClient.post('/auth/login', { email: 'admin@ehub.local', password: 'Mock123!' });
@@ -194,8 +232,57 @@ test('mock official major synchronization updates class enrollment and profile w
   await axiosClient.post('/auth/login', { email: studentUser.email, password: 'Mock123!' });
   const studentDetail = await axiosClient.get(`/classes/my-class-detail/${cls.slug}`);
   assert.ok(studentDetail.data.students.length > 0);
-  assert.ok(studentDetail.data.students.every((student: { majorVerificationStatus: string }) =>
-    student.majorVerificationStatus === 'Matched'));
+  assert.ok(studentDetail.data.students.every((student: { studentId: string; majorVerificationStatus: string }) =>
+    student.majorVerificationStatus === (student.studentId === linkedStudent.studentId ? 'Matched' : '')));
+});
+
+test('mock teams expose majorComposition and verification reports team major warnings', async () => {
+  resetMockState();
+  await axiosClient.post('/auth/login', { email: 'admin@ehub.local', password: 'Mock123!' });
+  const state = getMockState();
+  const team = state.teams.find((item) => item.status === 'Active' && item.members.length >= 2);
+  assert.ok(team);
+  const roster = state.rosters[team.classId];
+  const rosterByStudent = new Map(roster.map((student) => [student.studentId, student]));
+
+  // Make the team valid, then break it by moving every member to GROUP_1.
+  team.members.forEach((member, index) => {
+    const student = rosterByStudent.get(member.studentId);
+    if (student) student.majorCode = index === 0 ? 'BBA_MKT' : 'BIT_SE';
+  });
+  const valid = await axiosClient.get(`/teams/${team.id}`);
+  assert.equal(valid.data.majorComposition.isValid, true);
+
+  team.members.forEach((member) => {
+    const student = rosterByStudent.get(member.studentId);
+    if (student) student.majorCode = 'BBA_MKT';
+  });
+  const invalid = await axiosClient.get(`/classes/${team.classId}/teams`);
+  const listed = invalid.data.find((item: { id: string }) => item.id === team.id);
+  assert.equal(listed.majorComposition.isValid, false);
+  assert.deepEqual(listed.majorComposition.missingGroups, ['GROUP_2']);
+  assert.equal(team.members.length, listed.members.length);
+});
+
+test('mock group-project consistency endpoint reports groups that break the one-to-one rule', async () => {
+  resetMockState();
+  await axiosClient.post('/auth/login', { email: 'admin@ehub.local', password: 'Mock123!' });
+  const state = getMockState();
+  const team = state.teams.find((item) => item.status === 'Active' && item.members.length >= 2 && item.projectName);
+  assert.ok(team);
+  const roster = state.rosters[team.classId];
+  const members = team.members.map((member) => roster.find((student) => student.studentId === member.studentId));
+  assert.ok(members.every(Boolean));
+
+  members.forEach((student) => { student!.semesterGroupName = 'G01'; });
+  const consistent = await axiosClient.get(`/classes/${team.classId}/group-project-consistency`);
+  assert.equal(consistent.data.isConsistent, true);
+
+  members[1]!.semesterGroupName = 'G02';
+  const broken = await axiosClient.get(`/classes/${team.classId}/group-project-consistency`);
+  assert.equal(broken.data.isConsistent, false);
+  const warning = broken.data.warnings.find((item: { type: string }) => item.type === 'PROJECT_HAS_MULTIPLE_GROUPS');
+  assert.deepEqual(warning.related, ['G01', 'G02']);
 });
 
 test('managed users include class and group data from the active semester', async () => {
@@ -259,6 +346,7 @@ test('mock change password rejects an incorrect current password and updates val
 
 test('account approval API loads persisted Lecturer and Mentor statistics', async () => {
   resetMockState();
+  await axiosClient.post('/auth/login', { email: 'admin@ehub.local', password: 'Mock123!' });
   const response = await adminApprovalApi.getAll();
   const requests = response.data
     .map(registrationToApprovalRequest)
@@ -782,6 +870,34 @@ test('mock API persists startup industry CRUD and status mutations', async () =>
   assert.equal(filtered.data.industries[0].status, 'inactive');
 });
 
+test('mock API imports startup industries from Excel as active', async () => {
+  resetMockState();
+  const worksheet = XLSX.utils.aoa_to_sheet([
+    ['Industry', 'Description'],
+    ['Clean Energy Import', 'Renewable energy solutions.'],
+    ['Community Import', 'Community-focused products and services.'],
+  ]);
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'Sheet1');
+  const bytes = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+  const file = new File([bytes], 'Industry.xlsx', {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  });
+
+  const preview = await startupIndustryApi.previewImport(file);
+
+  assert.equal(preview.data.totalRows, 2);
+  assert.equal(preview.data.validRowsCount, 2);
+  assert.equal(preview.data.errorRowsCount, 0);
+  assert.ok(!getMockState().startupIndustries.some((industry) => industry.name === 'Clean Energy Import'));
+
+  const imported = await startupIndustryApi.import(file);
+
+  assert.equal(imported.data.importedCount, 2);
+  assert.ok(imported.data.industries.every((industry: { status: string }) => industry.status === 'active'));
+  assert.ok(getMockState().startupIndustries.some((industry) => industry.name === 'Clean Energy Import'));
+});
+
 test('mock API enforces archived class read-only behavior', async () => {
   const list = await axiosClient.get('/classes', { params: { pageSize: 20 } });
   const active = list.data.items.find((item: { status: string }) => item.status === 'Active');
@@ -1045,6 +1161,13 @@ test('mock student formation creates a team only after every invited member acce
   const classDetail = await axiosClient.get(`/classes/my-class-detail/${targetClass.slug}`);
   assert.ok(classDetail.data.students.every((student: { hasPendingTeamInvitation: boolean }) =>
     student.hasPendingTeamInvitation));
+  assert.ok(classDetail.data.students.every((student: {
+    isPendingTeamFormationMember: boolean;
+    pendingTeamName: string;
+  }) => student.isPendingTeamFormationMember && student.pendingTeamName === 'Student Venture Team'));
+  assert.equal(classDetail.data.students[0].pendingTeamInvitationStatus, 'Accepted');
+  assert.ok(classDetail.data.students.slice(1).every((student: { pendingTeamInvitationStatus: string }) =>
+    student.pendingTeamInvitationStatus === 'Pending'));
 
   await assert.rejects(
     axiosClient.post(`/classes/${targetClass.id}/team-formations`, {
@@ -1247,9 +1370,32 @@ test('mock team leader creates one project workspace linked to its academic cont
   assert.equal(pendingProfileChange.data.isProjectProfileChangeProposal, true);
   assert.equal(pendingProfileChange.data.currentTitle, 'Energy Insight Workspace');
   assert.equal(pendingProfileChange.data.title, 'Energy Insight Platform');
+  const rejectedProfileChange = await axiosClient.post(`/teams/${team.id}/project-direction/review`, {
+    decision: 'Rejected',
+    comment: 'Keep the currently approved Project Profile.',
+    rowVersion: pendingProfileChange.data.rowVersion,
+  });
+  assert.equal(rejectedProfileChange.data.status, 'Approved');
+  assert.equal(rejectedProfileChange.data.isProjectProfileChangeProposal, false);
+  assert.equal(rejectedProfileChange.data.title, 'Energy Insight Workspace');
+  assert.equal(rejectedProfileChange.data.summary, 'A project that helps small offices understand their energy usage.');
+  assert.equal(rejectedProfileChange.data.reviews[0].toStatus, 'Rejected');
+  assert.equal(team.projectName, 'Energy Insight Workspace');
+  assert.equal(team.projectDescription, 'A project that helps small offices understand their energy usage.');
+
+  await axiosClient.put(`/workspace/teams/${team.id}/profile`, {
+    projectName: 'Energy Insight Platform',
+    description: 'The latest project profile helps small offices reduce their energy usage.',
+    problem: 'Small offices cannot clearly identify the equipment driving energy waste.',
+    solution: 'The platform turns usage data into practical recommendations for each office.',
+    targetUsers: 'Small office owners and facility managers',
+    zaloGroupUrl: 'https://zalo.me/g/greenbyte-team',
+    keywords: ['energy', 'efficiency'],
+  });
+  const resubmittedProfileChange = await axiosClient.get(`/teams/${team.id}/project-direction`);
   const profileChangeApproval = await axiosClient.post(`/teams/${team.id}/project-direction/review`, {
     decision: 'Approved',
-    rowVersion: pendingProfileChange.data.rowVersion,
+    rowVersion: resubmittedProfileChange.data.rowVersion,
   });
   assert.equal(profileChangeApproval.data.status, 'Approved');
   const latest = await axiosClient.get(`/workspace/teams/${team.id}`);
@@ -1657,11 +1803,14 @@ test('lecturer checkpoint mock follows Admin definitions and shares class schedu
     `/workspace/checkpoints/teams/${team.id}/checkpoints/1/evaluation-summary`,
   );
   assert.equal(publishedEvaluation.data.evaluations[0]?.status, 'PUBLISHED');
-  assert.equal(publishedEvaluation.data.evaluations[0]?.checkpointTotal, 7.85);
+  assert.equal(publishedEvaluation.data.evaluations[0]?.checkpointTotal, undefined);
   assert.equal(publishedEvaluation.data.evaluations[0]?.memberScores.length, 1);
-  assert.equal(typeof publishedEvaluation.data.evaluations[0]?.rubricScores[0]?.score, 'number');
+  assert.equal(publishedEvaluation.data.evaluations[0]?.rubricScores[0]?.score, undefined);
+  assert.deepEqual(publishedEvaluation.data.history, []);
+  assert.equal(publishedEvaluation.data.summary.averageScore, undefined);
   const publishedBatch = await axiosClient.post('/workspace/checkpoints/evaluation-grading', { teamIds: [team.id] });
-  assert.equal(publishedBatch.data.teams[0].checkpoints[0].evaluations[0]?.checkpointTotal, 7.85);
+  assert.equal(publishedBatch.data.teams[0].checkpoints[0].evaluations[0]?.checkpointTotal, undefined);
+  assert.equal(publishedBatch.data.teams[0].members.length, 1);
 
   state.sessionUserId = cls.primaryLecturerId;
   await axiosClient.put(`/workspace/checkpoints/evaluations/${evaluation.data.evaluations[0]._id}/unpublish`, {});
@@ -1787,7 +1936,7 @@ test('course assessments expose configured weights and enforce lecturer grading 
   await axiosClient.put(`/workspace/checkpoints/evaluations/${refreshed.data.assessments[0].evaluationId}/publish`, {});
   state.sessionUserId = team.leaderId;
   const studentAfterPublish = await axiosClient.get(`/workspace/checkpoints/teams/${team.id}/course-assessments`);
-  assert.equal(studentAfterPublish.data.assessments[0].score, 9);
+  assert.equal(studentAfterPublish.data.assessments[0].score, undefined);
   assert.equal(studentAfterPublish.data.assessments[0].memberScores.length, 1);
   assert.equal(studentAfterPublish.data.assessments[0].memberScores[0].score, 7.5);
   assert.equal(studentAfterPublish.data.assessments[0].status, 'PUBLISHED');
@@ -1801,7 +1950,7 @@ test('course assessments expose configured weights and enforce lecturer grading 
   assert.equal(studentAfterHide.data.assessments[0].status, 'SUBMITTED');
 });
 
-test('team rankings are staff-only and expose team totals without individual member scores', async () => {
+test('team rankings are staff-only and return ranks without raw scores', async () => {
   resetMockState();
   await axiosClient.post('/auth/login', { email: 'se200001@fpt.edu.vn', password: 'Mock123!' });
   await assert.rejects(
@@ -1818,19 +1967,57 @@ test('team rankings are staff-only and expose team totals without individual mem
   const response = await axiosClient.get('/rankings');
   assert.equal(response.data.selectedSemester.semester, 'FA');
   assert.ok(response.data.items.length > 0);
-  assert.equal(response.data.items[0].checkpoints[0].score, 7.85);
+  assert.equal(response.data.items[0].checkpoints[0].score, undefined);
   assert.equal(typeof response.data.items[0].projectDescription, 'string');
   assert.equal(typeof response.data.items[0].semesterGroupName, 'string');
   assert.equal('memberScores' in response.data.items[0], false);
   const rankedTeam = response.data.items.find((item: { teamId: string }) => item.teamId === rankingTeam.id);
-  const checkpointTotal = rankedTeam.checkpoints.reduce(
-    (sum: number, checkpoint: { score: number | null; weight: number }) =>
-      sum + Number(checkpoint.score) * checkpoint.weight / 100,
-    0,
-  );
-  assert.equal(rankedTeam.assessments[0].score, 10);
-  assert.equal(rankedTeam.courseTotal, Math.round(checkpointTotal * 100) / 100);
+  assert.equal(rankedTeam.assessments[0].score, undefined);
+  assert.equal(rankedTeam.courseTotal, undefined);
+  assert.equal(rankedTeam.rank, null);
   assert.equal(rankedTeam.totalComponentCount, rankedTeam.checkpoints.length);
   assert.equal(response.data.items.every((item: { classId: string }) =>
     getMockState().classes.find(cls => cls.id === item.classId)?.primaryLecturerId === getMockState().sessionUserId), true);
+  const evaluationId = `00000000-0000-4000-8000-${String(140000 + Number(rankingTeam.id.slice(-3)) * 10 + 1).padStart(12, '0')}`;
+  rankingState.evaluationPublicationStatuses[evaluationId] = 'PUBLISHED';
+  const published = await axiosClient.get('/rankings', { params: { classId: rankingClass.id, checkpointNumber: 1 } });
+  assert.equal(published.data.items.find((item: { teamId: string }) => item.teamId === rankingTeam.id).rank, 1);
+  assert.equal(JSON.stringify(published).includes('"score":'), false);
+  rankingState.evaluationPublicationStatuses[evaluationId] = 'SUBMITTED';
+  const hidden = await axiosClient.get('/rankings', { params: { classId: rankingClass.id, checkpointNumber: 1 } });
+  assert.equal(hidden.data.items.find((item: { teamId: string }) => item.teamId === rankingTeam.id).rank, null);
+});
+
+test('student information mock hides peer PII and previous scores recheck the current class scope', async () => {
+  resetMockState();
+  await axiosClient.post('/auth/login', { email: 'se200001@fpt.edu.vn', password: 'Mock123!' });
+  const state = getMockState();
+  const team = state.teams.find(item => item.members.some(member => member.studentId === state.sessionUserId))!;
+  const detail = await axiosClient.get(`/classes/my-class-detail/${team.classId}`);
+  const own = detail.data.students.find((item: { userId?: string }) => item.userId === state.sessionUserId);
+  assert.ok(own);
+  for (const peer of detail.data.students.filter((item: { studentId: string }) => item.studentId !== own.studentId)) {
+    assert.equal(peer.email, undefined);
+    assert.equal(peer.userId, undefined);
+    assert.equal(peer.profileMajorCode, null);
+  }
+  const ownTeam = await axiosClient.get(`/teams/${team.id}`);
+  assert.ok(ownTeam.data.members.every((member: { email?: string }) => member.email === undefined));
+  const previousUrl = `/workspace/checkpoints/classes/${team.classId}/students/${own.studentId}/previous-scores`;
+  await assert.rejects(axiosClient.get(previousUrl),
+    (error: unknown) => (error as { response?: { status?: number } }).response?.status === 403);
+  const cls = state.classes.find(item => item.id === team.classId)!;
+  state.sessionUserId = cls.primaryLecturerId;
+  const previous = await axiosClient.get(previousUrl);
+  assert.ok(Array.isArray(previous.data.components));
+  assert.equal('teamId' in previous.data, false);
+  const directory = await axiosClient.get('/users', { params: { role: 'STUDENT', limit: 100 } });
+  assert.ok(directory.data.users.every((user: { _id: string }) => state.classes.some(item =>
+    item.primaryLecturerId === cls.primaryLecturerId && state.rosters[item.id]?.some(student =>
+      student.userId === user._id && student.enrollmentStatus !== 'Dropped'))));
+  const enrollment = state.rosters[cls.id].find(item => item.studentId === own.studentId)!;
+  enrollment.enrollmentStatus = 'Dropped';
+  await assert.rejects(axiosClient.get(previousUrl),
+    (error: unknown) => (error as { response?: { status?: number } }).response?.status === 403);
+  resetMockState();
 });

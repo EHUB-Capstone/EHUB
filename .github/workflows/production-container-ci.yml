@@ -7,11 +7,15 @@ on:
       - main
     paths:
       - .env.production.example
+      - .env.staging.example
       - docker-compose.production.yml
+      - docker-compose.staging.yml
       - backend/**
       - frontend/**
       - deploy/**
       - scripts/production/**
+      - scripts/staging/**
+      - .gitattributes
       - .github/workflows/production-container-ci.yml
   push:
     branches:
@@ -19,11 +23,15 @@ on:
       - main
     paths:
       - .env.production.example
+      - .env.staging.example
       - docker-compose.production.yml
+      - docker-compose.staging.yml
       - backend/**
       - frontend/**
       - deploy/**
       - scripts/production/**
+      - scripts/staging/**
+      - .gitattributes
       - .github/workflows/production-container-ci.yml
 
 permissions:
@@ -41,6 +49,9 @@ jobs:
       - name: Check production shell scripts
         run: bash -n scripts/production/*.sh
 
+      - name: Check staging shell scripts
+        run: bash -n scripts/staging/backup-postgres.sh
+
       - name: Prepare temporary TLS files for Nginx syntax check
         run: |
           mkdir -p "${RUNNER_TEMP}/letsencrypt/live/e-hub.com.vn"
@@ -48,6 +59,11 @@ jobs:
             -subj "/CN=e-hub.com.vn" \
             -keyout "${RUNNER_TEMP}/letsencrypt/live/e-hub.com.vn/privkey.pem" \
             -out "${RUNNER_TEMP}/letsencrypt/live/e-hub.com.vn/fullchain.pem"
+          mkdir -p "${RUNNER_TEMP}/letsencrypt/live/staging.e-hub.com.vn"
+          openssl req -x509 -newkey rsa:2048 -nodes -days 1 \
+            -subj "/CN=staging.e-hub.com.vn" \
+            -keyout "${RUNNER_TEMP}/letsencrypt/live/staging.e-hub.com.vn/privkey.pem" \
+            -out "${RUNNER_TEMP}/letsencrypt/live/staging.e-hub.com.vn/fullchain.pem"
 
       - name: Check bootstrap Nginx configuration
         run: |
@@ -63,6 +79,24 @@ jobs:
             --volume "${RUNNER_TEMP}/letsencrypt:/etc/letsencrypt:ro" \
             nginx:1.27-alpine nginx -t
 
+      - name: Check staging bootstrap alongside production TLS
+        run: |
+          docker run --rm \
+            --volume "${PWD}/deploy/nginx/e-hub.com.vn.conf:/etc/nginx/conf.d/production.conf:ro" \
+            --volume "${PWD}/deploy/nginx/staging.e-hub.com.vn.bootstrap.conf:/etc/nginx/conf.d/default.conf:ro" \
+            --volume "${PWD}/deploy/nginx/cloudflare-real-ip.conf:/etc/nginx/snippets/ehub-cloudflare-real-ip.conf:ro" \
+            --volume "${RUNNER_TEMP}/letsencrypt:/etc/letsencrypt:ro" \
+            nginx:1.27-alpine nginx -t
+
+      - name: Check staging TLS alongside production TLS
+        run: |
+          docker run --rm \
+            --volume "${PWD}/deploy/nginx/e-hub.com.vn.conf:/etc/nginx/conf.d/production.conf:ro" \
+            --volume "${PWD}/deploy/nginx/staging.e-hub.com.vn.conf:/etc/nginx/conf.d/default.conf:ro" \
+            --volume "${PWD}/deploy/nginx/cloudflare-real-ip.conf:/etc/nginx/snippets/ehub-cloudflare-real-ip.conf:ro" \
+            --volume "${RUNNER_TEMP}/letsencrypt:/etc/letsencrypt:ro" \
+            nginx:1.27-alpine nginx -t
+
   validate-compose:
     name: Validate production Compose
     runs-on: ubuntu-latest
@@ -73,6 +107,9 @@ jobs:
 
       - name: Validate production configuration
         run: docker compose --env-file .env.production.example -f docker-compose.production.yml config --quiet
+
+      - name: Validate staging configuration
+        run: docker compose --project-name ehub-staging --env-file .env.staging.example -f docker-compose.staging.yml config --quiet
 
   build-images:
     name: Build ${{ matrix.component }} image

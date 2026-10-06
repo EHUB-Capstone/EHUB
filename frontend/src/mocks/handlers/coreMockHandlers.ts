@@ -1,4 +1,5 @@
 import type MockAdapter from 'axios-mock-adapter';
+import * as XLSX from 'xlsx';
 import { ALL_TEAM_MAJOR_CODES } from '../../constants/majors.ts';
 import type { AxiosRequestConfig } from 'axios';
 import type { ChangePasswordPayload, LoginPayload, RegisterPayload } from '../../types/auth.ts';
@@ -52,6 +53,11 @@ function semesterOverlapMessage(semester: MockSemester): string {
   return `This date range overlaps with ${semester.semester} ${semester.year} (${formatSemesterDate(semester.startDate!)} – ${formatSemesterDate(semester.endDate!)}).`;
 }
 
+function semesterOrder(semester: MockSemester): number {
+  const termOrder = { SP: 0, SU: 1, FA: 2 } as const;
+  return semester.year * 3 + termOrder[semester.semester];
+}
+
 const backendRole = (role: MockUser['role']): string =>
   role.charAt(0) + role.slice(1).toLowerCase();
 
@@ -69,6 +75,7 @@ const validationFailure = (
 
 function userResponse(user: MockUser) {
   const state = getMockState();
+  const viewer = state.users.find(item => item.id === state.sessionUserId);
   const currentSemester = state.semesters.find((semester) => semester.status === 'Active');
   const currentClasses = currentSemester
     ? state.classes.filter((cls) => cls.semesterId === currentSemester.id)
@@ -78,6 +85,8 @@ function userResponse(user: MockUser) {
     .flatMap(([classId, roster]) => roster.map((student) => ({ classId, student })))
     .filter(({ classId, student }) => (
       currentClassIds.has(classId)
+      && (user.role !== 'STUDENT' || viewer?.role !== 'LECTURER' ||
+        state.classes.some(cls => cls.id === classId && cls.primaryLecturerId === viewer.id))
       &&
       (student.userId === user.id || student.studentId === user.id)
       && student.enrollmentStatus !== 'Dropped'
@@ -579,13 +588,21 @@ function registerUserHandlers(mock: MockAdapter): void {
   });
 
   mock.onGet('/users').reply((config) => {
+    const state = getMockState();
+    const viewer = state.users.find(item => item.id === state.sessionUserId);
+    if (!viewer) return failure(401, 'UNAUTHORIZED', 'Authentication is required.');
+    if (!['ADMIN', 'LECTURER'].includes(viewer.role)) return failure(403, 'COMMON_FORBIDDEN', 'Staff access is required.');
     const params = requestParams(config);
     const query = asString(params.search).trim().toLowerCase();
     const role = asString(params.role).toUpperCase();
     const status = asString(params.status).toUpperCase();
     const page = Math.max(1, asNumber(params.page, 1));
     const limit = Math.min(200, Math.max(1, asNumber(params.limit, 10)));
-    let users = getMockState().users.filter((user) =>
+    let users = state.users.filter((user) =>
+      (viewer.role === 'ADMIN' || user.id === viewer.id || user.role !== 'STUDENT' ||
+        state.classes.some(cls => cls.primaryLecturerId === viewer.id &&
+          state.rosters[cls.id]?.some(student => student.userId === user.id && student.enrollmentStatus !== 'Dropped')))
+      &&
       (!role || role === 'ALL' || user.role === role)
       && (!status || status === 'ALL' || user.status === status)
       && (!query || [user.name, user.email, user.studentId].some((value) => value?.toLowerCase().includes(query))));
@@ -614,7 +631,15 @@ function registerUserHandlers(mock: MockAdapter): void {
   });
 
   mock.onGet(/^\/users\/[^/]+$/).reply((config) => {
-    const user = getMockState().users.find((item) => item.id === routeId(config, /^\/users\/([^/]+)$/));
+    const state = getMockState();
+    const viewer = state.users.find(item => item.id === state.sessionUserId);
+    if (!viewer) return failure(401, 'UNAUTHORIZED', 'Authentication is required.');
+    if (!['ADMIN', 'LECTURER'].includes(viewer.role)) return failure(403, 'COMMON_FORBIDDEN', 'Staff access is required.');
+    const user = state.users.find((item) => item.id === routeId(config, /^\/users\/([^/]+)$/));
+    if (viewer.role !== 'ADMIN' && (!user || user.role === 'STUDENT' &&
+      !state.classes.some(cls => cls.primaryLecturerId === viewer.id &&
+        state.rosters[cls.id]?.some(student => student.userId === user.id && student.enrollmentStatus !== 'Dropped'))))
+      return failure(403, 'COMMON_FORBIDDEN', 'The user is unavailable or outside your class scope.');
     return user ? ok(userResponse(user), 'User retrieved successfully.') : failure(404, 'USER_NOT_FOUND', 'User not found.');
   });
 
@@ -1037,6 +1062,117 @@ function registerSubjectHandlers(mock: MockAdapter): void {
     return ok(semester, `Semester ${reopen ? 'reopened' : 'completed'} successfully.`);
   });
 
+  mock.onPost('/subjects/teaching-staff/mentor-carryover/preview').reply((config) => {
+    const state = getMockState();
+    const viewer = state.users.find(item => item.id === state.sessionUserId);
+    if (viewer?.role !== 'ADMIN') return failure(403, 'CLASS_ACCESS_DENIED', 'Only an administrator can reuse mentors across semesters.');
+    const body = parseBody(config);
+    const sourceSemesterId = asString(body.sourceSemesterId);
+    const targetSemesterId = asString(body.targetSemesterId);
+    if (!sourceSemesterId || !targetSemesterId || sourceSemesterId === targetSemesterId)
+      return failure(400, 'CLASS_VALIDATION_ERROR', 'Different source and target semesters are required.');
+    const source = state.semesters.find(item => item.id === sourceSemesterId);
+    const target = state.semesters.find(item => item.id === targetSemesterId);
+    if (!source || !target) return failure(404, 'SEMESTER_NOT_FOUND', 'The source or target semester was not found.');
+    if (semesterOrder(source) >= semesterOrder(target))
+      return failure(400, 'CLASS_VALIDATION_ERROR', 'The source semester must be earlier than the target semester.');
+    if (target.status === 'Closing' || target.status === 'Completed' || target.status === 'Archived')
+      return failure(409, 'SEMESTER_INVALID_STATE', `Teaching staff of a ${target.status.toLowerCase()} semester cannot be changed.`);
+
+    const targetAssignments = new Map(state.semesterStaffAssignments
+      .filter(item => item.semesterId === targetSemesterId && item.role === 'MENTOR')
+      .map(item => [item.userId, item]));
+    const mentors = state.semesterStaffAssignments
+      .filter(item => item.semesterId === sourceSemesterId && item.role === 'MENTOR')
+      .map(assignment => {
+        const user = state.users.find(item => item.id === assignment.userId);
+        const targetAssignment = targetAssignments.get(assignment.userId);
+        const accountActive = user?.status === 'APPROVED' && user.role === 'MENTOR';
+        const canSelect = assignment.status === 'ACTIVE' && accountActive && targetAssignment?.status !== 'ACTIVE';
+        const action = assignment.status !== 'ACTIVE' || !accountActive
+          ? 'Unavailable'
+          : targetAssignment?.status === 'ACTIVE'
+            ? 'AlreadyAdded'
+            : targetAssignment
+              ? 'Reactivate'
+              : 'Add';
+        return {
+          userId: assignment.userId,
+          name: user?.name ?? 'Unknown mentor',
+          email: user?.email ?? '',
+          avatar: user?.avatar ?? null,
+          mentorType: 'Enterprise',
+          action,
+          canSelect,
+          message: action === 'Unavailable'
+            ? 'Mentor account or source assignment is inactive.'
+            : action === 'AlreadyAdded'
+              ? 'Already available in the target semester.'
+              : action === 'Reactivate'
+                ? 'Will be reactivated in the target semester.'
+                : 'Ready to add to the target semester.',
+        };
+      })
+      .sort((left, right) => left.name.localeCompare(right.name));
+    return ok({
+      sourceSemesterId,
+      targetSemesterId,
+      totalCount: mentors.length,
+      eligibleCount: mentors.filter(item => item.canSelect).length,
+      alreadyAddedCount: mentors.filter(item => item.action === 'AlreadyAdded').length,
+      unavailableCount: mentors.filter(item => item.action === 'Unavailable').length,
+      enterpriseCount: mentors.length,
+      academicCount: 0,
+      mentors,
+    }, 'Mentors available for reuse retrieved successfully.');
+  });
+
+  mock.onPost('/subjects/teaching-staff/mentor-carryover/commit').reply((config) => {
+    const state = getMockState();
+    const viewer = state.users.find(item => item.id === state.sessionUserId);
+    if (viewer?.role !== 'ADMIN') return failure(403, 'CLASS_ACCESS_DENIED', 'Only an administrator can reuse mentors across semesters.');
+    const body = parseBody(config);
+    const sourceSemesterId = asString(body.sourceSemesterId);
+    const targetSemesterId = asString(body.targetSemesterId);
+    const mentorUserIds = asStringArray(body.mentorUserIds);
+    const uniqueIds = [...new Set(mentorUserIds)];
+    if (!sourceSemesterId || !targetSemesterId || sourceSemesterId === targetSemesterId || uniqueIds.length === 0 || uniqueIds.length !== mentorUserIds.length)
+      return failure(400, 'CLASS_VALIDATION_ERROR', 'Select distinct mentors and use different source and target semesters.');
+    const source = state.semesters.find(item => item.id === sourceSemesterId);
+    const target = state.semesters.find(item => item.id === targetSemesterId);
+    if (!source || !target)
+      return failure(404, 'SEMESTER_NOT_FOUND', 'The source or target semester was not found.');
+    if (semesterOrder(source) >= semesterOrder(target))
+      return failure(400, 'CLASS_VALIDATION_ERROR', 'The source semester must be earlier than the target semester.');
+    if (target.status === 'Closing' || target.status === 'Completed' || target.status === 'Archived')
+      return failure(409, 'SEMESTER_INVALID_STATE', `Teaching staff of a ${target.status.toLowerCase()} semester cannot be changed.`);
+
+    const sourceAssignments = state.semesterStaffAssignments.filter(item =>
+      item.semesterId === sourceSemesterId && item.role === 'MENTOR' && uniqueIds.includes(item.userId));
+    const allEligible = sourceAssignments.length === uniqueIds.length && sourceAssignments.every(assignment => {
+      const user = state.users.find(item => item.id === assignment.userId);
+      return assignment.status === 'ACTIVE' && user?.role === 'MENTOR' && user.status === 'APPROVED';
+    });
+    if (!allEligible) return failure(409, 'SEMESTER_STAFF_CONFLICT', 'One or more selected mentors are no longer eligible. Preview again.');
+
+    let addedCount = 0;
+    let reactivatedCount = 0;
+    let alreadyAddedCount = 0;
+    uniqueIds.forEach(userId => {
+      const existing = state.semesterStaffAssignments.find(item => item.semesterId === targetSemesterId && item.userId === userId && item.role === 'MENTOR');
+      if (existing?.status === 'ACTIVE') alreadyAddedCount++;
+      else if (existing) {
+        existing.status = 'ACTIVE';
+        reactivatedCount++;
+      } else {
+        state.semesterStaffAssignments.push({ id: allocateId(), semesterId: targetSemesterId, userId, role: 'MENTOR', status: 'ACTIVE' });
+        addedCount++;
+      }
+    });
+    persistMockState();
+    return ok({ addedCount, reactivatedCount, alreadyAddedCount }, 'Selected mentors added to the target semester successfully.');
+  });
+
   mock.onGet('/subjects/teaching-staff').reply(() => {
     const staff = getMockState().users.filter((user) => user.role === 'LECTURER' || user.role === 'MENTOR').map((user) => {
       const assignments = user.role === 'LECTURER'
@@ -1115,6 +1251,116 @@ function registerSubjectHandlers(mock: MockAdapter): void {
   });
 }
 
+interface MockIndustryImportRow {
+  rowNumber: number;
+  name: string;
+  description: string;
+  isValid: boolean;
+  status: 'Ready' | 'Error';
+  errorMessage: string | null;
+  errorCode: 'STARTUP_INDUSTRY_IMPORT_FILE_INVALID' | 'STARTUP_INDUSTRY_IMPORT_CONFLICT' | null;
+}
+
+async function inspectIndustryImport(config: AxiosRequestConfig): Promise<{ error?: MockReply; rows?: MockIndustryImportRow[] }> {
+  const formData = config.data instanceof FormData ? config.data : null;
+  const file = formData?.get('file');
+  if (!(file instanceof Blob) || file.size === 0 || file.size > 5 * 1024 * 1024) {
+    return { error: failure(400, 'STARTUP_INDUSTRY_IMPORT_FILE_INVALID', 'Select a non-empty Excel file not exceeding 5 MB.') };
+  }
+
+  const fileName = 'name' in file && typeof file.name === 'string' ? file.name : '';
+  if (!/\.(xlsx|xls)$/i.test(fileName)) {
+    return { error: failure(400, 'STARTUP_INDUSTRY_IMPORT_FILE_INVALID', 'Only Excel files (.xlsx or .xls) are allowed.') };
+  }
+
+  try {
+    const workbook = XLSX.read(await file.arrayBuffer(), { type: 'array' });
+    const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+    const sourceRows = worksheet
+      ? XLSX.utils.sheet_to_json<unknown[]>(worksheet, { header: 1, defval: '' })
+      : [];
+    const normalizeHeader = (value: unknown) => String(value ?? '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+    const headerIndex = sourceRows.slice(0, 10).findIndex((row) => {
+      const headers = row.map(normalizeHeader);
+      return headers.some((header) => header === 'industry' || header === 'industryname')
+        && headers.includes('description');
+    });
+    if (headerIndex < 0) {
+      return { error: failure(400, 'STARTUP_INDUSTRY_IMPORT_FILE_INVALID', "The header must contain 'Industry name' (or 'Industry') and 'Description' columns.") };
+    }
+
+    const headers = sourceRows[headerIndex].map(normalizeHeader);
+    const nameIndex = headers.findIndex((header) => header === 'industry' || header === 'industryname');
+    const descriptionIndex = headers.indexOf('description');
+    const rows: MockIndustryImportRow[] = sourceRows.slice(headerIndex + 1)
+      .map((row, offset) => ({
+        rowNumber: headerIndex + offset + 2,
+        name: String(row[nameIndex] ?? '').trim(),
+        description: String(row[descriptionIndex] ?? '').trim(),
+        isValid: true,
+        status: 'Ready' as const,
+        errorMessage: null,
+        errorCode: null,
+      }))
+      .filter((row) => row.name || row.description);
+
+    if (rows.length === 0 || rows.length > 500) {
+      return { error: failure(400, 'STARTUP_INDUSTRY_IMPORT_FILE_INVALID', rows.length === 0
+        ? 'The Excel worksheet contains no industry rows.'
+        : 'The industry import may contain at most 500 data rows.') };
+    }
+
+    for (const row of rows) {
+      row.errorMessage = !row.name
+        ? 'Industry name is required.'
+        : row.name.length > 100
+          ? 'Industry name may contain at most 100 characters.'
+          : row.description.length > 240
+            ? 'Description may contain at most 240 characters.'
+            : null;
+      if (row.errorMessage) {
+        row.isValid = false;
+        row.status = 'Error';
+        row.errorCode = 'STARTUP_INDUSTRY_IMPORT_FILE_INVALID';
+      }
+    }
+
+    const nameCounts = rows
+      .filter((row) => row.isValid)
+      .reduce<Map<string, number>>((counts, row) => {
+        const normalized = row.name.toUpperCase();
+        counts.set(normalized, (counts.get(normalized) ?? 0) + 1);
+        return counts;
+      }, new Map());
+    for (const row of rows) {
+      if (row.isValid && (nameCounts.get(row.name.toUpperCase()) ?? 0) > 1) {
+        row.isValid = false;
+        row.status = 'Error';
+        row.errorMessage = `Industry '${row.name}' appears more than once in the file.`;
+        row.errorCode = 'STARTUP_INDUSTRY_IMPORT_FILE_INVALID';
+      }
+    }
+
+    const existingByName = new Map(getMockState().startupIndustries.map((industry) => [
+      industry.name.trim().toUpperCase(),
+      industry.name,
+    ]));
+    for (const row of rows) {
+      const existingName = row.isValid ? existingByName.get(row.name.toUpperCase()) : null;
+      if (existingName) {
+        row.isValid = false;
+        row.status = 'Error';
+        row.errorMessage = `Industry '${existingName}' already exists.`;
+        row.errorCode = 'STARTUP_INDUSTRY_IMPORT_CONFLICT';
+      }
+    }
+
+    return { rows };
+  } catch {
+    return { error: failure(400, 'STARTUP_INDUSTRY_IMPORT_FILE_INVALID', 'The Excel file could not be read. Verify that it is a valid .xlsx or .xls workbook.') };
+  }
+}
+
 function registerStartupIndustryHandlers(mock: MockAdapter): void {
   mock.onGet('/startup-industries/options').reply(() => {
     const industries = getMockState().startupIndustries
@@ -1138,6 +1384,52 @@ function registerStartupIndustryHandlers(mock: MockAdapter): void {
         return sort === 'name-desc' ? -comparison : comparison;
       });
     return ok({ industries }, 'Startup industries retrieved successfully.');
+  });
+
+  mock.onPost('/startup-industries/import/preview').reply(async (config) => {
+    const inspection = await inspectIndustryImport(config);
+    if (inspection.error) return inspection.error;
+    const rows = inspection.rows!;
+    return ok({
+      totalRows: rows.length,
+      validRowsCount: rows.filter((row) => row.isValid).length,
+      errorRowsCount: rows.filter((row) => !row.isValid).length,
+      rows: rows.map((row) => ({
+        rowNumber: row.rowNumber,
+        name: row.name,
+        description: row.description || null,
+        isValid: row.isValid,
+        status: row.status,
+        errorMessage: row.errorMessage,
+      })),
+    }, 'Startup industry import preview generated successfully.');
+  });
+
+  mock.onPost('/startup-industries/import').reply(async (config) => {
+    const inspection = await inspectIndustryImport(config);
+    if (inspection.error) return inspection.error;
+    const rows = inspection.rows!;
+    const invalidRows = rows.filter((row) => !row.isValid);
+    if (invalidRows.length > 0) {
+      const hasFileError = invalidRows.some((row) => row.errorCode === 'STARTUP_INDUSTRY_IMPORT_FILE_INVALID');
+      return failure(
+        hasFileError ? 400 : 409,
+        hasFileError ? 'STARTUP_INDUSTRY_IMPORT_FILE_INVALID' : 'STARTUP_INDUSTRY_IMPORT_CONFLICT',
+        invalidRows.length === 1
+          ? `Row ${invalidRows[0].rowNumber}: ${invalidRows[0].errorMessage}`
+          : `The workbook contains ${invalidRows.length} invalid rows. Preview the file and resolve every error before importing.`,
+      );
+    }
+
+    const industries = rows.map((candidate) => ({
+        id: allocateId(),
+        name: candidate.name,
+        description: candidate.description || null,
+        status: 'active' as const,
+    }));
+    getMockState().startupIndustries.push(...industries);
+    persistMockState();
+    return ok({ importedCount: industries.length, industries }, `${industries.length} startup industries imported successfully.`);
   });
 
   mock.onPost('/startup-industries').reply((config) => {

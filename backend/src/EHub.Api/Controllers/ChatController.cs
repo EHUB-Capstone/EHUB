@@ -66,10 +66,11 @@ public sealed class ChatController : ControllerBase
             if (isLecturer)
             {
                 var myClassIds = _context.Classes.AsNoTracking()
-                    .Where(c => c.PrimaryLecturerId == currentUserId)
+                    .Where(c => c.PrimaryLecturerId == currentUserId ||
+                        c.ClassLecturers.Any(assignment => assignment.LecturerId == currentUserId))
                     .Select(c => c.Id);
 
-                groupsQuery = groupsQuery.Where(g => myGroupIdsQuery.Contains(g.Id) || myClassIds.Contains(g.ClassId));
+                groupsQuery = groupsQuery.Where(g => myClassIds.Contains(g.ClassId));
             }
             else
             {
@@ -98,8 +99,16 @@ public sealed class ChatController : ControllerBase
     }
 
     [HttpGet("groups/{chatGroupId:guid}/members")]
-    public async Task<IActionResult> GetChatGroupMembers(Guid chatGroupId, CancellationToken cancellationToken)
+    public async Task<IActionResult> GetChatGroupMembers(Guid chatGroupId,
+        [FromServices] EHub.Application.Features.Chat.ChatReadAccessHandler access,
+        CancellationToken cancellationToken)
     {
+        if (!await access.CanReadAsync(chatGroupId, _currentUserService.UserId ?? Guid.Empty,
+                _currentUserService.Roles, cancellationToken))
+            return StatusCode(403, ApiResponse<object>.FailureResponse("You cannot access this chat group.", ErrorCodes.ClassAccessDenied));
+        var canViewPrivateInformation = _currentUserService.Roles.Any(role =>
+            role.Equals(SystemRoles.Admin, StringComparison.OrdinalIgnoreCase) ||
+            role.Equals(SystemRoles.Lecturer, StringComparison.OrdinalIgnoreCase));
         var group = await _context.ChatGroups.AsNoTracking()
             .FirstOrDefaultAsync(g => g.Id == chatGroupId, cancellationToken);
 
@@ -117,11 +126,11 @@ public sealed class ChatController : ControllerBase
                 _id = m.Id,
                 id = m.Id,
                 chatGroupId = m.ChatGroupId,
-                userId = m.UserId ?? (m.Student != null ? m.Student.UserId : (Guid?)null),
+                userId = canViewPrivateInformation ? m.UserId ?? (m.Student != null ? m.Student.UserId : (Guid?)null) : null,
                 studentId = m.StudentId,
                 studentCode = m.Student != null ? m.Student.RollNumber : null,
                 displayName = m.Student != null ? m.Student.FullName : (m.User != null ? m.User.FullName : "Member"),
-                email = m.Student != null ? m.Student.Email : (m.User != null ? m.User.Email : string.Empty),
+                email = canViewPrivateInformation ? m.Student != null ? m.Student.Email : (m.User != null ? m.User.Email : string.Empty) : null,
                 role = m.Role.ToString().ToUpperInvariant(),
                 nickname = m.Nickname
             })
@@ -131,8 +140,13 @@ public sealed class ChatController : ControllerBase
     }
 
     [HttpGet("groups/{chatGroupId:guid}/messages")]
-    public async Task<IActionResult> GetChatGroupMessages(Guid chatGroupId, CancellationToken cancellationToken)
+    public async Task<IActionResult> GetChatGroupMessages(Guid chatGroupId,
+        [FromServices] EHub.Application.Features.Chat.ChatReadAccessHandler access,
+        CancellationToken cancellationToken)
     {
+        if (!await access.CanReadAsync(chatGroupId, _currentUserService.UserId ?? Guid.Empty,
+                _currentUserService.Roles, cancellationToken))
+            return StatusCode(403, ApiResponse<object>.FailureResponse("You cannot access this chat group.", ErrorCodes.ClassAccessDenied));
         var groupExists = await _context.ChatGroups.AsNoTracking()
             .AnyAsync(g => g.Id == chatGroupId, cancellationToken);
 

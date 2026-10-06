@@ -12,6 +12,7 @@ import {
   ThumbsUp, PartyPopper, Lightbulb, Heart, Sparkles
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { matchesSearchQuery } from '../../utils/searchText';
 // ─── Role helpers ────────────────────────────────────────────────────────────
 const roleConfig = {
   ADMIN:    { color: 'bg-red-50 text-red-700 border-red-200',     icon: <Shield       className="w-3 h-3 text-red-500 shrink-0" />,     label: 'Admin' },
@@ -525,9 +526,9 @@ export default function GroupChat() {
   const mentionSuggestions = mentionMatch
     ? channelMembers
         .filter(member => {
-          const query = mentionMatch[1].toLowerCase();
-          return getMemberDisplayName(member).toLowerCase().includes(query)
-            || member.email?.toLowerCase().includes(query);
+          // Mention tokens use "_" in place of spaces, so match them against the spaced display name.
+          const query = mentionMatch[1].replace(/_/g, ' ');
+          return matchesSearchQuery(query, [getMemberDisplayName(member), member.email]);
         })
         .slice(0, 5)
     : [];
@@ -658,10 +659,7 @@ export default function GroupChat() {
   };
 
   const filteredChannels = channels.filter(c =>
-    c.groupName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    c.team?.teamName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    c.class?.classCode?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+    matchesSearchQuery(searchQuery, [c.groupName, c.team?.teamName, c.class?.classCode]));
 
   if (loadingChannels) {
     return (

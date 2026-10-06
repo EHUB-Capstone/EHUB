@@ -21,6 +21,8 @@ import {
 } from '../src/utils/notificationNavigation.ts';
 import {
   canSubmitProjectDirection,
+  directionOverviewTargetClassIds,
+  getProjectDirectionDraftSeed,
   getApprovedProjectProfileDisplay,
   getProjectDirectionDecisionNotice,
   getProjectDirectionSubmitGuidance,
@@ -28,6 +30,8 @@ import {
   hasProjectDirectionChanged,
   isProjectDirectionConcurrencyConflict,
   isProjectProfileAvailable,
+  resolveDirectionOverviewClassId,
+  shouldApplyProjectDirectionSubmission,
   updateProjectDirectionOverviewTeams,
 } from '../src/utils/projectDirectionSync.ts';
 import {
@@ -40,13 +44,78 @@ import {
   selectLatestOfficialEvaluation,
 } from '../src/utils/evaluationGrading.ts';
 import { filterTeamRankingRows, rankTeamResults } from '../src/utils/teamRankings.ts';
+import { filterTeachingStaff, paginateTeachingStaff } from '../src/utils/teachingStaffDirectory.ts';
 import type { TeamRankingItem } from '../src/types/rankings.ts';
+import type { TeachingStaffDto } from '../src/types/subjects.ts';
+
+const teachingStaffMember = (overrides: Partial<TeachingStaffDto>): TeachingStaffDto => ({
+  _id: 'staff-1',
+  userId: 'user-1',
+  name: 'Nguyen Van A',
+  email: 'mentor@example.com',
+  role: 'MENTOR',
+  status: 'Active',
+  userStatus: 'Active',
+  isIncomplete: false,
+  missingFields: [],
+  classCount: 0,
+  assignments: [],
+  rowVersion: '1',
+  ...overrides,
+});
+
+test('teaching staff directory filters mentors that need information', () => {
+  const complete = teachingStaffMember({ _id: 'complete' });
+  const incomplete = teachingStaffMember({
+    _id: 'incomplete',
+    userId: null,
+    name: 'Mentor Missing Email',
+    email: '',
+    status: 'Incomplete',
+    userStatus: 'NotCreated',
+    isIncomplete: true,
+    missingFields: ['Email', 'Công ty'],
+    rowVersion: '',
+  });
+  const lecturer = teachingStaffMember({ _id: 'lecturer', role: 'LECTURER' });
+
+  assert.deepEqual(
+    filterTeachingStaff([complete, incomplete, lecturer], {
+      search: '',
+      role: 'ALL',
+      status: 'NEEDS_INFORMATION',
+    }).map(item => item._id),
+    ['incomplete'],
+  );
+  assert.deepEqual(
+    filterTeachingStaff([complete, incomplete, lecturer], {
+      search: 'cong ty',
+      role: 'MENTOR',
+      status: 'ALL',
+    }).map(item => item._id),
+    ['incomplete'],
+  );
+});
+
+test('teaching staff pagination clamps pages and reports the visible range', () => {
+  const rows = Array.from({ length: 23 }, (_, index) => index + 1);
+
+  assert.deepEqual(paginateTeachingStaff(rows, 3, 10), {
+    items: [21, 22, 23],
+    page: 3,
+    pageSize: 10,
+    totalPages: 3,
+    rangeStart: 21,
+    rangeEnd: 23,
+    totalItems: 23,
+  });
+  assert.equal(paginateTeachingStaff(rows, 99, 10).page, 3);
+});
 
 const rankingItem = (
   teamId: string,
-  score: number | null,
+  rank: number | null,
   status: TeamRankingItem['status'],
-  checkpointScore = score,
 ): TeamRankingItem => ({
   teamId,
   teamName: `Team ${teamId}`,
@@ -59,44 +128,44 @@ const rankingItem = (
   courseCode: 'EXE201',
   semester: 'FA2026',
   year: 2026,
-  checkpoints: [{ checkpointId: 'checkpoint-1', number: 1, title: 'Checkpoint 1', weight: 100, score: checkpointScore, status: status === 'PUBLISHED' ? 'PUBLISHED' : status === 'READY_TO_PUBLISH' ? 'SUBMITTED' : 'NOT_GRADED' }],
+  checkpoints: [{ checkpointId: 'checkpoint-1', number: 1, title: 'Checkpoint 1', weight: 100, status: status === 'PUBLISHED' ? 'PUBLISHED' : status === 'READY_TO_PUBLISH' ? 'SUBMITTED' : 'NOT_GRADED' }],
   assessments: [],
-  courseTotal: score,
+  rank,
   status,
-  completedComponentCount: score === null ? 0 : 1,
+  completedComponentCount: rank === null ? 0 : 1,
   publishedComponentCount: status === 'PUBLISHED' ? 1 : 0,
   totalComponentCount: 1,
 });
 
-test('team rankings use current team totals regardless of publication and preserve ties', () => {
+test('team rankings preserve server ranks and ties without receiving scores', () => {
   const rows = rankTeamResults([
-    rankingItem('a', 8.5, 'PUBLISHED'),
-    rankingItem('b', 9, 'READY_TO_PUBLISH'),
-    rankingItem('c', 8.5, 'PUBLISHED'),
-    rankingItem('d', 7, 'PUBLISHED'),
-  ], 'course');
+    rankingItem('a', 2, 'PUBLISHED'),
+    rankingItem('b', 1, 'PUBLISHED'),
+    rankingItem('c', 2, 'PUBLISHED'),
+    rankingItem('d', 4, 'PUBLISHED'),
+  ]);
 
   assert.deepEqual(rows.map(row => [row.teamId, row.rank]), [['b', 1], ['a', 2], ['c', 2], ['d', 4]]);
 });
 
-test('checkpoint ranking uses checkpointTotal and ranking filters do not renumber teams', () => {
+test('ranking filters do not renumber server ranks', () => {
   const rows = rankTeamResults([
-    rankingItem('a', 6, 'PUBLISHED', 9),
-    rankingItem('b', 9, 'PUBLISHED', 8),
-  ], 'checkpoint:1');
+    rankingItem('a', 1, 'PUBLISHED'),
+    rankingItem('b', 2, 'PUBLISHED'),
+  ]);
   const filtered = filterTeamRankingRows(rows, { search: 'description b', teamId: '', status: '' });
 
-  assert.deepEqual(rows.map(row => [row.teamId, row.rank, row.rankingScore]), [['a', 1, 9], ['b', 2, 8]]);
+  assert.deepEqual(rows.map(row => [row.teamId, row.rank]), [['a', 1], ['b', 2]]);
   assert.deepEqual(filtered.map(row => [row.teamId, row.rank]), [['b', 2]]);
 });
 
-test('submitted checkpoint scores are rankable for lecturer and admin views', () => {
+test('unpublished teams remain unranked', () => {
   const rows = rankTeamResults([
-    rankingItem('a', 6, 'READY_TO_PUBLISH', 9),
-    rankingItem('b', 9, 'PUBLISHED', 8),
-  ], 'checkpoint:1');
+    rankingItem('a', null, 'INCOMPLETE'),
+    rankingItem('b', 1, 'PUBLISHED'),
+  ]);
 
-  assert.deepEqual(rows.map(row => [row.teamId, row.rank, row.rankingScore]), [['a', 1, 9], ['b', 2, 8]]);
+  assert.deepEqual(rows.map(row => [row.teamId, row.rank]), [['b', 1], ['a', null]]);
 });
 
 test('course score applies checkpoint and other-assessment weights and reports missing grades', () => {
@@ -126,7 +195,7 @@ test('evaluation rankings are restricted to admin and lecturer roles', () => {
 });
 
 test('workspace keeps evaluation inside checkpoints and removes standalone evaluation and mentoring tabs', () => {
-  assert.deepEqual(WORKSPACE_TABS, ['overview', 'roadmap', 'shortcut']);
+  assert.deepEqual(WORKSPACE_TABS, ['overview', 'roadmap', 'shortcut', 'history']);
   assert.equal(resolveWorkspaceTab('?tab=roadmap'), 'roadmap');
   assert.equal(resolveWorkspaceTab('?tab=evaluation'), 'overview');
   assert.equal(resolveWorkspaceTab('?tab=mentoring'), 'overview');
@@ -336,6 +405,10 @@ test('project direction live synchronization detects and announces lecturer deci
     status: 'NeedsRevision',
     reviews: [{ id: 'review-2', toStatus: 'NeedsRevision' }],
   };
+  const rejectedProfileChange = {
+    ...approved,
+    reviews: [{ id: 'review-3', toStatus: 'Rejected' }],
+  };
 
   assert.equal(hasProjectDirectionChanged(submitted, { ...submitted }), false);
   assert.equal(hasProjectDirectionChanged(submitted, approved), true);
@@ -355,6 +428,48 @@ test('project direction live synchronization detects and announces lecturer deci
     getProjectDirectionDecisionNotice(pendingProfileChange, needsRevision),
     'Lecturer requested revisions to your Project Profile changes. The approved profile remains unchanged.',
   );
+  assert.equal(
+    getProjectDirectionDecisionNotice(pendingProfileChange, rejectedProfileChange),
+    'Lecturer rejected your Project Profile changes. The approved profile remains unchanged.',
+  );
+});
+
+test('imported project metadata seeds a missing Project Direction draft', () => {
+  assert.deepEqual(getProjectDirectionDraftSeed(null, {
+    projectName: 'SnapPose',
+    description: 'An imported project description.',
+  }), {
+    title: 'SnapPose',
+    summary: 'An imported project description.',
+  });
+  assert.deepEqual(getProjectDirectionDraftSeed({
+    title: 'Saved direction',
+    summary: 'Saved direction summary.',
+  }, {
+    projectName: 'Imported project',
+    description: 'Imported description.',
+  }), {
+    title: 'Saved direction',
+    summary: 'Saved direction summary.',
+  });
+});
+
+test('lecturer overview applies a newer Project Profile change request to an approved team', () => {
+  const profileChange = {
+    id: 'direction-1',
+    status: 'Submitted',
+    rowVersion: '12',
+    isProjectProfileChangeProposal: true,
+  };
+
+  assert.equal(shouldApplyProjectDirectionSubmission('APPROVED', '11', profileChange), true);
+  assert.equal(shouldApplyProjectDirectionSubmission('APPROVED', '12', profileChange), false);
+  assert.equal(shouldApplyProjectDirectionSubmission('APPROVED', '11', {
+    ...profileChange,
+    isProjectProfileChangeProposal: false,
+  }), false);
+  assert.equal(shouldApplyProjectDirectionSubmission('CHANGES_REQUESTED', '11', profileChange), true);
+  assert.equal(shouldApplyProjectDirectionSubmission('PENDING', '11', profileChange), false);
 });
 
 test('approved Project Profile displays the values from the latest realtime decision', () => {
@@ -474,4 +589,14 @@ test('lecturer review updates only the reviewed team without reloading the overv
   assert.equal(profileChangeResult[1].projectDirectionIsProfileChangeProposal, true);
   assert.equal(profileChangeResult[1].projectDirectionCurrentTitle, 'Approved project name');
   assert.equal(profileChangeResult[1].projectDirectionTitle, 'Proposed project name');
+});
+
+test('project direction overview defaults to all assigned classes and preserves valid deep-links', () => {
+  const classIds = ['class-1', 'class-2'];
+
+  assert.equal(resolveDirectionOverviewClassId(classIds, '', ''), '');
+  assert.deepEqual(directionOverviewTargetClassIds(classIds, ''), classIds);
+  assert.equal(resolveDirectionOverviewClassId(classIds, 'class-2', ''), 'class-2');
+  assert.deepEqual(directionOverviewTargetClassIds(classIds, 'class-2'), ['class-2']);
+  assert.equal(resolveDirectionOverviewClassId(classIds, 'missing-class', ''), '');
 });

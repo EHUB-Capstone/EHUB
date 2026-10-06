@@ -47,7 +47,17 @@ public class TeamConfiguration : IEntityTypeConfiguration<Team>
             .IsRowVersion()
             .HasColumnName("xmin");
 
+        builder.Property(t => t.TeamLineageId)
+            .HasColumnName("team_lineage_id")
+            .IsRequired();
+
+        builder.Property(t => t.PreviousTeamId)
+            .HasColumnName("previous_team_id");
+
         // Indexes & Constraints
+        builder.HasIndex(t => t.TeamLineageId);
+        builder.HasIndex(t => t.PreviousTeamId);
+
         builder.HasIndex(t => new { t.ClassId, t.TeamCode })
             .IsUnique();
 
@@ -71,6 +81,11 @@ public class TeamConfiguration : IEntityTypeConfiguration<Team>
             .WithMany(c => c.Teams)
             .HasForeignKey(t => t.ClassId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne(t => t.PreviousTeam)
+            .WithMany()
+            .HasForeignKey(t => t.PreviousTeamId)
+            .OnDelete(DeleteBehavior.SetNull);
 
         builder.HasOne(t => t.Creator)
             .WithMany()

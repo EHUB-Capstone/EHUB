@@ -91,15 +91,31 @@ export default function StudentMajorActionCard({
             </div>
           </div>
 
-          {canEdit && !editing && (
-            <button
-              id="select-major-action"
-              type="button"
-              onClick={openEditor}
-              className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-primary-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:ring-offset-2"
-            >
-              Select Your Major <ChevronDown className="h-4 w-4" />
-            </button>
+          {!editing && (canEdit || nextAction?.kind === 'workspace') && (
+            <div className="flex shrink-0 flex-wrap items-center gap-2">
+              {canEdit && (
+                <button
+                  id="select-major-action"
+                  type="button"
+                  onClick={openEditor}
+                  className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-xl border border-orange-200 bg-white px-4 py-2.5 text-sm font-bold text-orange-800 shadow-sm transition hover:bg-orange-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500/20"
+                >
+                  Select Your Major <ChevronDown className="h-4 w-4" />
+                </button>
+              )}
+              {nextAction?.kind === 'workspace' && (
+                <button
+                  id="major-next-action"
+                  type="button"
+                  onClick={nextAction.onClick}
+                  className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-primary-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:ring-offset-2"
+                >
+                  <Rocket className="h-4 w-4" />
+                  {nextAction.label}
+                  <ArrowRight className="h-4 w-4" />
+                </button>
+              )}
+            </div>
           )}
         </div>
 
@@ -194,6 +210,12 @@ export default function StudentMajorActionCard({
                 <span className="font-bold">{normalizedMajor}</span>{majorName ? ` — ${majorName}` : ''}
               </p>
               <p className="mt-0.5 text-xs text-slate-500">Matches the latest official class record.</p>
+              {isLocked && (
+                <p data-testid="major-locked-notice" className="mt-1 flex items-center gap-1 text-xs font-semibold text-slate-500">
+                  <Lock className="h-3 w-3" />
+                  Your major is verified and updates are locked. Contact {lecturerName || 'your lecturer'} if it needs to be corrected.
+                </p>
+              )}
             </div>
           </div>
 
@@ -250,14 +272,30 @@ export default function StudentMajorActionCard({
           </div>
         </div>
 
-        {canEdit && !editing && (
-          <button
-            type="button"
-            onClick={openEditor}
-            className="inline-flex min-h-9 shrink-0 items-center justify-center rounded-xl border border-amber-200 bg-white px-3.5 py-2 text-sm font-semibold text-amber-800 transition hover:bg-amber-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/20"
-          >
-            Change Major
-          </button>
+        {!editing && (canEdit || nextAction?.kind === 'workspace') && (
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            {canEdit && (
+              <button
+                type="button"
+                onClick={openEditor}
+                className="inline-flex min-h-9 shrink-0 items-center justify-center rounded-xl border border-amber-200 bg-white px-3.5 py-2 text-sm font-semibold text-amber-800 transition hover:bg-amber-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/20"
+              >
+                Change Major
+              </button>
+            )}
+            {nextAction?.kind === 'workspace' && (
+              <button
+                id="major-next-action"
+                type="button"
+                onClick={nextAction.onClick}
+                className="inline-flex min-h-9 shrink-0 items-center justify-center gap-2 rounded-xl bg-primary px-3.5 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-primary-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:ring-offset-2"
+              >
+                <Rocket className="h-4 w-4" />
+                {nextAction.label}
+                <ArrowRight className="h-4 w-4" />
+              </button>
+            )}
+          </div>
         )}
       </div>
 

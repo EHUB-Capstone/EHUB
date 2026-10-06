@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowRight, ChevronLeft, GraduationCap, Users, Mail, Loader2, LayoutGrid, Lock, Rocket, UserPlus } from 'lucide-react';
+import { ArrowRight, ChevronLeft, GraduationCap, Users, Mail, Loader2, LayoutGrid, Lock, UserPlus } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { classApi } from '../../api/classApi';
 import { teamFormationApi } from '../../api/teamFormationApi';
 import TeamList from '../../components/class/TeamList';
+import OwnTeamMajorWarning from '../../components/class/OwnTeamMajorWarning';
 import StudentTable from '../../components/class/StudentTable';
 import StudentTeamGeneratePanel from '../../components/class/StudentTeamGeneratePanel';
 import TeamFormationCard from '../../components/class/TeamFormationCard';
@@ -13,7 +14,7 @@ import type { TeamFormation } from '../../types/teamFormation';
 import TeamSuggestionTooltip from '../../components/class/TeamSuggestionTooltip';
 import { useAuth } from '../../hooks/useAuth';
 import { unwrapApiData } from '../../utils/classMappers';
-import { entityId, normalizeManagedTeam, normalizeTeamProposal, getTeamMemberIds, isMissingTeamMajor, isVerifiedEnrollmentMajor, mergeTeamsWithLinkedProposals } from '../../utils/teamManagement';
+import { entityId, getTeamMajorWarning, normalizeManagedTeam, normalizeTeamProposal, getTeamMemberIds, isMissingTeamMajor, isVerifiedEnrollmentMajor, mergeTeamsWithLinkedProposals } from '../../utils/teamManagement';
 import ProjectDirectionModal from '../../components/class/ProjectDirectionModal';
 import { teamApi } from '../../api/teamApi';
 import { parseApiError } from '../../utils/apiError';
@@ -77,6 +78,13 @@ export default function StudentClassDetail() {
         enrollmentStatus: student.enrollmentStatus || classInfo.enrollmentStatus || 'Active',
         classId: currentClassId,
       }));
+      setSelected(current => current.filter(studentId => {
+        const student = normalizedStudents.find(item => item._id === studentId);
+        return student
+          && !student.teamId
+          && !student.hasPendingTeamInvitation
+          && student.enrollmentStatus === 'Active';
+      }));
       const normalizedTeams = (detail?.teams || []).map(normalizeManagedTeam);
       setData({ ...detail, students: normalizedStudents, teams: normalizedTeams });
       const proposalData = unwrapApiData(proposalResponse);
@@ -104,7 +112,8 @@ export default function StudentClassDetail() {
 
   useEffect(() => subscribeProjectDirectionRealtime((event) => {
     const currentClassId = String(data?.class?.id || data?.class?._id || '');
-    if (currentClassId && (event.eventType === 'ClassMajorUpdated' || event.eventType === 'TeamProposalReviewed'
+    if (currentClassId && (event.eventType === 'ClassMajorUpdated' || event.eventType === 'ClassMajorsChanged'
+      || event.eventType === 'TeamProposalReviewed'
       || event.eventType === 'TeamFormationChanged' || event.eventType === 'TeamCreated')
       && String(event.classId) === currentClassId) {
       void fetchClassDetail();
@@ -143,6 +152,10 @@ export default function StudentClassDetail() {
       || (user?.email && s.email?.toLowerCase() === user.email.toLowerCase());
   });
   const hasTeam = Boolean(currentStudent?.teamId);
+  const ownTeam = currentStudent?.teamId
+    ? teams.find(team => String(team._id) === String(currentStudent.teamId))
+    : undefined;
+  const ownTeamMajorWarning = ownTeam ? getTeamMajorWarning(ownTeam) : null;
   const majorActionRequired = Boolean(currentStudent && isMissingTeamMajor(currentStudent.major));
   const majorVerified = isVerifiedEnrollmentMajor(currentStudent?.majorVerificationStatus);
   const hasPendingFormation = formations.some(formation => formation.status === 'Pending');
@@ -261,7 +274,6 @@ export default function StudentClassDetail() {
 
   const workspaceTeamId = entityId(currentStudent?.teamId) || reservedProposalTeamId;
   const majorNextAction: StudentMajorNextAction | undefined = (() => {
-    if (!majorVerified) return undefined;
     if (workspaceTeamId) {
       return {
         label: 'Open Startup Workspace',
@@ -269,6 +281,7 @@ export default function StudentClassDetail() {
         onClick: () => navigate(`/student/workspace/${workspaceTeamId}`),
       };
     }
+    if (!majorVerified) return undefined;
     if (isReadOnly) return undefined;
     if (formationError) {
       return {
@@ -440,6 +453,8 @@ export default function StudentClassDetail() {
         />
       )}
 
+      {ownTeamMajorWarning && <OwnTeamMajorWarning warning={ownTeamMajorWarning} testId="class-own-team-major-warning" />}
+
       {isReadOnly && (
         <div className="flex items-start gap-2.5 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
           <Lock className="mt-0.5 h-4 w-4 shrink-0" />
@@ -505,15 +520,6 @@ export default function StudentClassDetail() {
                   : 'You cannot join another proposal while this one is open. View it in the Class Teams tab.'}
             </p>
           </div>
-          {isPendingProjectProposal && !majorVerified && (
-            <button
-              type="button"
-              onClick={() => navigate(`/student/workspace/${reservedProposalTeamId}`)}
-              className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-amber-700 px-3.5 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-amber-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/30"
-            >
-              <Rocket className="h-4 w-4" /> Open Startup Workspace <ArrowRight className="h-3.5 w-3.5" />
-            </button>
-          )}
         </div>
       )}
 

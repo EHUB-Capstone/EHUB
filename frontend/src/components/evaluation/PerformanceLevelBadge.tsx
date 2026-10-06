@@ -152,9 +152,7 @@ export const MentorEvaluationCard = ({ evaluation, showIndividualScore = false }
   const rubricScores = evaluation?.rubricScores || [];
   const overallLevel = evaluation?.overallLevel || 'Unscored';
   const overallLabel = evaluation?.overallLabel || '';
-  const teamScore = evaluation?.checkpointTotal;
   const ownScore = showIndividualScore ? evaluation?.memberScores?.[0]?.score : null;
-  const hasPublishedTeamScore = teamScore !== null && teamScore !== undefined;
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-slate-50 overflow-hidden">
@@ -183,13 +181,7 @@ export const MentorEvaluationCard = ({ evaluation, showIndividualScore = false }
         </div>
       </div>
 
-      <div className={`grid gap-2 border-b border-slate-200 p-4 ${showIndividualScore ? 'sm:grid-cols-2' : ''}`}>
-        <div className="rounded-xl border border-orange-100 bg-orange-50 p-3">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-orange-500">Team score</p>
-          <p className={`mt-1 font-black ${hasPublishedTeamScore ? 'text-xl text-primary' : 'text-sm text-slate-400'}`}>
-            {hasPublishedTeamScore ? `${Number(teamScore).toFixed(2)} / 10` : 'Pending publication'}
-          </p>
-        </div>
+      {showIndividualScore && <div className="grid gap-2 border-b border-slate-200 p-4">
         {showIndividualScore && (
           <div className="rounded-xl border border-blue-100 bg-blue-50 p-3">
             <p className="text-[10px] font-bold uppercase tracking-wider text-blue-500">My score</p>
@@ -198,7 +190,7 @@ export const MentorEvaluationCard = ({ evaluation, showIndividualScore = false }
             </p>
           </div>
         )}
-      </div>
+      </div>}
 
       {/* Per-criterion level badges */}
       {rubricScores.length > 0 && (

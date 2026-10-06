@@ -107,15 +107,25 @@ public sealed class StudentClassSelfServiceHandler : IStudentClassSelfServiceHan
                 EnrollmentStatus = item.EnrollmentStatus.ToString(),
                 TeamId = item.TeamMembers.Where(member => member.CountsTowardActiveTeam).Select(member => (Guid?)member.TeamId).FirstOrDefault()
             }).ToListAsync(cancellationToken);
-        var reservedStudentIds = rosterStatus == EnrollmentStatus.Active
-            ? await _context.TeamFormationInvitations.AsNoTracking()
+        var activeReservations = await _context.TeamFormationInvitations.AsNoTracking()
                 .Where(invitation =>
+                    rosterStatus == EnrollmentStatus.Active &&
                     invitation.ClassId == classId &&
-                    invitation.ReservationReleasedAtUtc == null)
-                .Select(invitation => invitation.StudentId)
-                .Distinct()
-                .ToHashSetAsync(cancellationToken)
-            : new HashSet<Guid>();
+                    invitation.ReservationReleasedAtUtc == null &&
+                    invitation.Formation.Status == TeamFormationStatus.Pending)
+                .Select(invitation => new
+                {
+                    invitation.StudentId,
+                    invitation.FormationId,
+                    invitation.Formation.TeamName,
+                    InvitationStatus = invitation.Status.ToString()
+                })
+                .ToListAsync(cancellationToken);
+        var reservationsByStudentId = activeReservations.ToDictionary(item => item.StudentId);
+        var myPendingFormationIds = activeReservations
+            .Where(item => item.StudentId == studentId.Value)
+            .Select(item => item.FormationId)
+            .ToHashSet();
         var isOwnMajorLocked = await _context.ClassStudents.AsNoTracking()
             .AnyAsync(item =>
                 item.StudentId == studentId.Value &&
@@ -128,24 +138,35 @@ public sealed class StudentClassSelfServiceHandler : IStudentClassSelfServiceHan
         var canEditOwnMajor = rosterStatus == EnrollmentStatus.Active &&
             (targetClass.Status == ClassStatus.Draft || targetClass.Status == ClassStatus.Active) &&
             !isOwnMajorLocked;
-        var members = memberRows.Select(item => new StudentClassMemberDto
+        var members = memberRows.Select(item =>
         {
-            StudentId = item.StudentId,
-            UserId = item.UserId,
-            RollNumber = item.RollNumber,
-            FullName = item.FullName,
-            Email = item.Email,
-            MajorCode = StudentEnrollmentRules.ResolveEffectiveMajorCode(
-                item.EnrollmentMajorCode,
-                item.ProfileMajorCode) ?? string.Empty,
-            ProfileMajorCode = item.ProfileMajorCode,
-            EnrollmentMajorCode = item.EnrollmentMajorCode,
-            MajorVerificationStatus = item.MajorVerificationStatus,
-            CanEditMajor = item.StudentId == studentId.Value && canEditOwnMajor,
-            IsMajorLocked = item.StudentId == studentId.Value && isOwnMajorLocked,
-            EnrollmentStatus = item.EnrollmentStatus,
-            TeamId = item.TeamId,
-            HasPendingTeamInvitation = reservedStudentIds.Contains(item.StudentId)
+            reservationsByStudentId.TryGetValue(item.StudentId, out var reservation);
+            var isMyPendingFormation = reservation is not null &&
+                myPendingFormationIds.Contains(reservation.FormationId);
+            return new StudentClassMemberDto
+            {
+                StudentId = item.StudentId,
+                UserId = item.StudentId == studentId.Value ? item.UserId : null,
+                RollNumber = item.RollNumber,
+                FullName = item.FullName,
+                Email = item.StudentId == studentId.Value ? item.Email : null,
+                MajorCode = StudentEnrollmentRules.ResolveEffectiveMajorCode(
+                    item.EnrollmentMajorCode,
+                    item.ProfileMajorCode) ?? string.Empty,
+                ProfileMajorCode = item.StudentId == studentId.Value ? item.ProfileMajorCode : null,
+                EnrollmentMajorCode = item.StudentId == studentId.Value ? item.EnrollmentMajorCode : string.Empty,
+                // Only a Verified/Unverified label, shared with classmates; majors and profile data stay private.
+                MajorVerificationStatus = item.MajorVerificationStatus,
+                CanEditMajor = item.StudentId == studentId.Value && canEditOwnMajor,
+                IsMajorLocked = item.StudentId == studentId.Value && isOwnMajorLocked,
+                EnrollmentStatus = item.EnrollmentStatus,
+                TeamId = item.TeamId,
+                HasPendingTeamInvitation = reservation is not null,
+                PendingTeamFormationId = isMyPendingFormation ? reservation?.FormationId : null,
+                PendingTeamName = isMyPendingFormation ? reservation?.TeamName : null,
+                PendingTeamInvitationStatus = isMyPendingFormation ? reservation?.InvitationStatus : null,
+                IsPendingTeamFormationMember = isMyPendingFormation
+            };
         }).ToArray();
         var teams = await TeamQuery().Where(item => item.ClassId == classId && item.Status == TeamStatus.Active).OrderBy(item => item.TeamCode).ToListAsync(cancellationToken);
         var mentorsByClass = await LoadMentorsByClassAsync([classId], cancellationToken);
@@ -153,7 +174,7 @@ public sealed class StudentClassSelfServiceHandler : IStudentClassSelfServiceHan
         {
             Class = MapClass(targetClass, mentorsByClass.GetValueOrDefault(classId) ?? Array.Empty<MentorSummaryDto>(), enrollmentStatus.Value),
             Students = members,
-            Teams = teams.Select(TeamMappings.ToDto).ToArray()
+            Teams = teams.Select(team => TeamMappings.ToDto(team, false)).ToArray()
         });
     }
 
@@ -171,7 +192,7 @@ public sealed class StudentClassSelfServiceHandler : IStudentClassSelfServiceHan
             .ThenByDescending(item => item.Class.Semester.Year)
             .FirstOrDefaultAsync(cancellationToken);
         if (team == null) return Result.Success(new MyTeamResponse());
-        var dto = TeamMappings.ToDto(team);
+        var dto = TeamMappings.ToDto(team, false);
         var mentorsByClass = await LoadMentorsByClassAsync([team.ClassId], cancellationToken);
         return Result.Success(new MyTeamResponse
         {

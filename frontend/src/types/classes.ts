@@ -111,6 +111,10 @@ export interface StudentClassMember {
   enrollmentStatus: string;
   teamId: string | null;
   hasPendingTeamInvitation: boolean;
+  pendingTeamFormationId: string | null;
+  pendingTeamName: string | null;
+  pendingTeamInvitationStatus: 'Pending' | 'Accepted' | null;
+  isPendingTeamFormationMember: boolean;
 }
 
 export interface ClassRosterListResponse {
@@ -225,6 +229,33 @@ export interface ImportTeamPreview {
   isValid: boolean;
 }
 
+export type TeamContinuationOutcome =
+  | 'Created'
+  | 'MembersAdded'
+  | 'NoChange'
+  | 'NotEligible'
+  | 'Dissolved'
+  | 'ContinuedElsewhere';
+
+export interface TeamContinuationItem {
+  teamId: string | null;
+  sourceTeamId: string;
+  teamName: string;
+  sourceTeamName: string;
+  sourceClassCode: string;
+  outcome: TeamContinuationOutcome;
+  memberCount: number;
+  reasons: string[];
+}
+
+export interface TeamContinuationSummary {
+  sourceSemesterCode: string | null;
+  createdCount: number;
+  membersAddedCount: number;
+  notEligibleCount: number;
+  items: TeamContinuationItem[];
+}
+
 export interface ImportStudentsPreviewResponse {
   sessionId: string;
   importMode: ClassImportMode;
@@ -234,6 +265,7 @@ export interface ImportStudentsPreviewResponse {
   majorMismatchCount: number;
   teamCount: number;
   teams: ImportTeamPreview[];
+  continuation?: TeamContinuationSummary | null;
   rows: ImportStudentRowPreview[];
 }
 
@@ -259,6 +291,7 @@ export interface ImportStudentsCommitResponse {
   skippedCount: number;
   errorCount: number;
   synchronizedMajorCount: number;
+  continuation?: TeamContinuationSummary | null;
   errors: ImportStudentCommitError[];
 }
 

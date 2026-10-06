@@ -31,6 +31,7 @@ import {
   TEAM_MEMBER_LIMIT,
   validateTeamDraft,
 } from '../../utils/teamManagement';
+import { matchesSearchQuery } from '../../utils/searchText';
 
 interface TeamManagementModalProps {
   classInfo: TeamClassOption;
@@ -82,10 +83,8 @@ export default function TeamManagementModal({
     [draft.memberIds, students],
   );
   const visibleStudents = useMemo(() => {
-    const query = search.trim().toLowerCase();
     const selectedIds = new Set(draft.memberIds);
-    return students.filter((student) => !query || [student.fullName, student.rollNumber, student.email, student.major]
-      .some((value) => value?.toLowerCase().includes(query)))
+    return students.filter((student) => matchesSearchQuery(search, [student.fullName, student.rollNumber, student.email, student.major]))
       .sort((left, right) => Number(selectedIds.has(right._id)) - Number(selectedIds.has(left._id)));
   }, [search, students, draft.memberIds]);
   const formationSummary = useMemo(() => {

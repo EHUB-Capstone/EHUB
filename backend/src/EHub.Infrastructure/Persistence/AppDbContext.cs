@@ -3,15 +3,23 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using EHub.Application.Common.Interfaces.Persistence;
+using EHub.Application.Common.Interfaces.Services;
 using EHub.Domain.Common;
 using EHub.Domain.Entities;
+using EHub.Domain.Enums;
 
 namespace EHub.Infrastructure.Persistence;
 
 public class AppDbContext : DbContext, IApplicationDbContext
 {
-    public AppDbContext(DbContextOptions<AppDbContext> options) : base(options)
+    private readonly IOutboxWakeSignal? _outboxWakeSignal;
+    private bool _hasUnsignaledOutboxMessages;
+
+    public AppDbContext(
+        DbContextOptions<AppDbContext> options,
+        IOutboxWakeSignal? outboxWakeSignal = null) : base(options)
     {
+        _outboxWakeSignal = outboxWakeSignal;
     }
 
     public DbSet<User> Users => Set<User>();
@@ -30,12 +38,15 @@ public class AppDbContext : DbContext, IApplicationDbContext
     public DbSet<ClassImportSession> ClassImportSessions => Set<ClassImportSession>();
     public DbSet<LecturerImportSession> LecturerImportSessions => Set<LecturerImportSession>();
     public DbSet<MentorImportSession> MentorImportSessions => Set<MentorImportSession>();
+    public DbSet<MentorImportDraft> MentorImportDrafts => Set<MentorImportDraft>();
     public DbSet<MentorAllocationSession> MentorAllocationSessions => Set<MentorAllocationSession>();
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
     public DbSet<Student> Students => Set<Student>();
     public DbSet<ClassStudent> ClassStudents => Set<ClassStudent>();
     public DbSet<Team> Teams => Set<Team>();
     public DbSet<TeamMember> TeamMembers => Set<TeamMember>();
+    public DbSet<TeamContinuation> TeamContinuations => Set<TeamContinuation>();
+    public DbSet<TeamContinuationMember> TeamContinuationMembers => Set<TeamContinuationMember>();
     public DbSet<TeamProposal> TeamProposals => Set<TeamProposal>();
     public DbSet<TeamProposalMember> TeamProposalMembers => Set<TeamProposalMember>();
     public DbSet<TeamProposalHistory> TeamProposalHistory => Set<TeamProposalHistory>();
@@ -107,6 +118,10 @@ public class AppDbContext : DbContext, IApplicationDbContext
 
     public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
+        var hasNewOutboxMessages = ChangeTracker.Entries<OutboxMessage>()
+            .Any(entry => entry.State == EntityState.Added && entry.Entity.Status == OutboxMessageStatus.Pending);
+        var hasExplicitTransaction = Database.CurrentTransaction != null;
+
         foreach (var entry in ChangeTracker.Entries<AuditableEntity>())
         {
             switch (entry.State)
@@ -128,8 +143,31 @@ public class AppDbContext : DbContext, IApplicationDbContext
             }
         }
 
-        return await base.SaveChangesAsync(cancellationToken);
+        var savedChanges = await base.SaveChangesAsync(cancellationToken);
+        if (hasNewOutboxMessages && hasExplicitTransaction)
+        {
+            _hasUnsignaledOutboxMessages = true;
+        }
+        else if (hasNewOutboxMessages)
+        {
+            _outboxWakeSignal?.Signal();
+        }
+
+        return savedChanges;
     }
 
-    public void ClearChanges() => ChangeTracker.Clear();
+    internal void SignalCommittedOutbox()
+    {
+        if (!_hasUnsignaledOutboxMessages) return;
+        _hasUnsignaledOutboxMessages = false;
+        _outboxWakeSignal?.Signal();
+    }
+
+    internal void DiscardUncommittedOutboxSignal() => _hasUnsignaledOutboxMessages = false;
+
+    public void ClearChanges()
+    {
+        _hasUnsignaledOutboxMessages = false;
+        ChangeTracker.Clear();
+    }
 }

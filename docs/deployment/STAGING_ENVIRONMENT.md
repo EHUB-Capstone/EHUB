@@ -1,5 +1,8 @@
 # EHUB staging deployment configuration
 
+For staging on the same Ubuntu VPS as production, use [STAGING_VPS.md](STAGING_VPS.md).
+The configuration below documents the separate Vercel/Render/Neon topology.
+
 This document lists configuration keys only. Never commit real passwords,
 tokens, or database connection strings.
 

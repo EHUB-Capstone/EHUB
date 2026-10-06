@@ -100,13 +100,15 @@ public sealed class TeachingStaffResponse
 {
     [JsonPropertyName("_id")]
     public Guid Id { get; init; }
-    public Guid UserId { get; init; }
+    public Guid? UserId { get; init; }
     public string Name { get; init; } = string.Empty;
     public string Email { get; init; } = string.Empty;
     public string? Avatar { get; init; }
     public string Role { get; init; } = string.Empty;
     public string Status { get; init; } = string.Empty;
     public string UserStatus { get; init; } = string.Empty;
+    public bool IsIncomplete { get; init; }
+    public IReadOnlyCollection<string> MissingFields { get; init; } = Array.Empty<string>();
     public int ClassCount { get; init; }
     public IReadOnlyCollection<TeachingAssignmentResponse> Assignments { get; init; } = Array.Empty<TeachingAssignmentResponse>();
     public string RowVersion { get; init; } = string.Empty;
@@ -140,6 +142,39 @@ public sealed class TeachingStaffCandidateListResponse
 {
     public IReadOnlyCollection<TeachingStaffCandidateResponse> Candidates { get; init; } =
         Array.Empty<TeachingStaffCandidateResponse>();
+}
+
+public sealed class MentorCarryoverCandidateResponse
+{
+    public Guid UserId { get; init; }
+    public string Name { get; init; } = string.Empty;
+    public string Email { get; init; } = string.Empty;
+    public string? Avatar { get; init; }
+    public string MentorType { get; init; } = string.Empty;
+    public string Action { get; init; } = string.Empty;
+    public bool CanSelect { get; init; }
+    public string Message { get; init; } = string.Empty;
+}
+
+public sealed class MentorCarryoverPreviewResponse
+{
+    public Guid SourceSemesterId { get; init; }
+    public Guid TargetSemesterId { get; init; }
+    public int TotalCount { get; init; }
+    public int EligibleCount { get; init; }
+    public int AlreadyAddedCount { get; init; }
+    public int UnavailableCount { get; init; }
+    public int EnterpriseCount { get; init; }
+    public int AcademicCount { get; init; }
+    public IReadOnlyCollection<MentorCarryoverCandidateResponse> Mentors { get; init; } =
+        Array.Empty<MentorCarryoverCandidateResponse>();
+}
+
+public sealed class MentorCarryoverCommitResponse
+{
+    public int AddedCount { get; init; }
+    public int ReactivatedCount { get; init; }
+    public int AlreadyAddedCount { get; init; }
 }
 
 public sealed class RoadmapItemResponse

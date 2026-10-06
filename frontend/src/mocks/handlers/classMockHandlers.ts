@@ -3,6 +3,7 @@ import type { AxiosRequestConfig } from 'axios';
 import type { ClassDto, ClassStatus } from '../../types/classes.ts';
 import type { MockClass, MockRosterStudent } from '../mockState.ts';
 import { PROGRAM_GROUPS, TEAM_MAJOR_GROUPS } from '../../constants/majors.ts';
+import { evaluateGroupProjectConsistency } from '../../utils/groupProjectConsistency.ts';
 import {
   allocateId,
   allocateRowVersion,
@@ -21,6 +22,8 @@ import {
   refreshClassCounts,
   requestParams,
   routeId,
+  teamMajorWarnings,
+  teamWithMajorComposition,
   touchClass,
 } from '../mockHelpers.ts';
 
@@ -231,7 +234,9 @@ function registerClassQueries(mock: MockAdapter): void {
   mock.onGet('/classes/my-team').reply(() => {
     const state = getMockState();
     const studentId = state.users.find((user) => user.id === state.sessionUserId && user.role === 'STUDENT')?.id;
-    const team = state.teams.find((item) => item.members.some((member) => member.studentId === studentId)) || null;
+    const foundTeam = state.teams.find((item) => item.members.some((member) => member.studentId === studentId)) || null;
+    const team = foundTeam ? { ...teamWithMajorComposition(foundTeam),
+      members: foundTeam.members.map(({ email: _email, ...member }) => member) } : null;
     const cls = team ? findClass(team.classId) : undefined;
     const classSummary = cls ? studentClassSummary(cls, 'Active') : null;
     return ok({ team, class: classSummary, members: team?.members || [] }, 'Student team retrieved.');
@@ -245,6 +250,8 @@ function registerClassQueries(mock: MockAdapter): void {
     const state = getMockState();
     const sessionUserId = state.users.find((user) => user.id === state.sessionUserId && user.role === 'STUDENT')?.id;
     const currentEnrollment = (state.rosters[classId] || []).find((student) => student.userId === sessionUserId);
+    if (!currentEnrollment || currentEnrollment.enrollmentStatus === 'Dropped')
+      return failure(403, 'CLASS_ACCESS_DENIED', 'You are not enrolled in this class.');
     const rosterStatus = currentEnrollment?.enrollmentStatus === 'Completed' ? 'Completed' : 'Active';
     const classSummary = studentClassSummary(cls, rosterStatus);
     const ownMajorLocked = state.classes.some((item) =>
@@ -254,36 +261,50 @@ function registerClassQueries(mock: MockAdapter): void {
         student.enrollmentStatus === 'Active' && student.userId === sessionUserId));
     const students = (state.rosters[classId] || []).filter((student) => student.enrollmentStatus === rosterStatus).map((student) => {
       const isOwnRow = student.userId === sessionUserId;
-      const hasPendingTeamInvitation = rosterStatus === 'Active' && state.formations.some(formation =>
+      const pendingFormation = rosterStatus === 'Active' ? state.formations.find(formation =>
         formation.classId === classId
         && formation.status === 'Pending'
-        && formation.invitations.some(invitation => invitation.studentId === student.studentId));
+        && formation.invitations.some(invitation => invitation.studentId === student.studentId)) : undefined;
+      const pendingInvitation = pendingFormation?.invitations.find(invitation =>
+        invitation.studentId === student.studentId);
+      const viewerBelongsToPendingFormation = Boolean(pendingFormation?.invitations.some(invitation =>
+        invitation.studentId === currentEnrollment.studentId));
       const profileMajorCode = isOwnRow
         ? state.users.find(user => user.id === sessionUserId)?.major || null
-        : student.profileMajorCode;
+        : null;
       return {
         studentId: student.studentId,
-        userId: student.userId,
+        ...(isOwnRow ? { userId: student.userId } : {}),
         rollNumber: student.rollNumber,
         fullName: student.fullName,
-        email: student.email,
+        ...(isOwnRow ? { email: student.email } : {}),
         majorCode: student.majorCode,
         profileMajorCode,
-        enrollmentMajorCode: student.majorCode,
-        majorVerificationStatus: student.majorVerificationStatus,
+        enrollmentMajorCode: isOwnRow ? student.majorCode : '',
+        majorVerificationStatus: isOwnRow ? student.majorVerificationStatus : '',
         canEditMajor: isOwnRow && rosterStatus === 'Active' && ['Draft', 'Active'].includes(cls.status) && !ownMajorLocked,
         isMajorLocked: isOwnRow && ownMajorLocked,
         enrollmentStatus: student.enrollmentStatus,
         teamId: student.teamId,
-        hasPendingTeamInvitation,
+        hasPendingTeamInvitation: Boolean(pendingFormation),
+        pendingTeamFormationId: viewerBelongsToPendingFormation ? pendingFormation?.id || null : null,
+        pendingTeamName: viewerBelongsToPendingFormation ? pendingFormation?.teamName || null : null,
+        pendingTeamInvitationStatus: viewerBelongsToPendingFormation ? pendingInvitation?.status || null : null,
+        isPendingTeamFormationMember: viewerBelongsToPendingFormation,
       };
     });
-    const teams = getMockState().teams.filter((team) => team.classId === classId);
+    const teams = getMockState().teams.filter((team) => team.classId === classId).map(teamWithMajorComposition)
+      .map(team => ({ ...team, members: team.members.map(({ email: _email, ...member }) => member) }));
     return ok({ class: classSummary, students, teams }, 'Student class detail retrieved.');
   });
 
   mock.onGet(/^\/classes\/[^/]+\/students$/).reply((config) => {
     const classId = routeId(config, /^\/classes\/([^/]+)\/students$/);
+    const state = getMockState();
+    const viewer = state.users.find(item => item.id === state.sessionUserId);
+    if (!viewer) return failure(401, 'UNAUTHORIZED', 'Authentication is required.');
+    if (!['ADMIN', 'LECTURER'].includes(viewer.role) || viewer.role === 'LECTURER' && findClass(classId)?.primaryLecturerId !== viewer.id)
+      return failure(403, 'CLASS_ACCESS_DENIED', 'You cannot view this class roster.');
     if (!findClass(classId)) return failure(404, 'CLASS_NOT_FOUND', 'Class not found.');
     const params = requestParams(config);
     const query = asString(params.search).trim().toLowerCase();
@@ -758,6 +779,20 @@ function registerRosterHandlers(mock: MockAdapter): void {
   mock.onPost(/^\/classes\/[^/]+\/major-lock$/).reply((config) => setMajorLock(config, true));
   mock.onDelete(/^\/classes\/[^/]+\/major-lock$/).reply((config) => setMajorLock(config, false));
 
+  mock.onGet(/^\/classes\/[^/]+\/group-project-consistency$/).reply((config) => {
+    const classId = routeId(config, /^\/classes\/([^/]+)\/group-project-consistency$/);
+    if (!findClass(classId)) return failure(404, 'CLASS_NOT_FOUND', 'Class not found.');
+    const state = getMockState();
+    const activeTeams = state.teams.filter((team) => team.classId === classId && team.status === 'Active');
+    const students = (state.rosters[classId] || [])
+      .filter((student) => student.enrollmentStatus === 'Active')
+      .map((student) => ({
+        group: student.semesterGroupName,
+        project: activeTeams.find((team) => team.members.some((member) => member.studentId === student.studentId))?.projectName,
+      }));
+    return ok(evaluateGroupProjectConsistency(students), 'Group and project consistency checked successfully.');
+  });
+
   mock.onPost(/^\/classes\/[^/]+\/students\/synchronize-profile-majors$/).reply((config) => {
     const classId = routeId(config, /^\/classes\/([^/]+)\/students\/synchronize-profile-majors$/);
     const guard = classMutationGuard(classId);
@@ -866,8 +901,12 @@ function registerRosterHandlers(mock: MockAdapter): void {
     const mismatched = rows.filter((_, index) => index % 4 === 3).map((student, index) => ({ rowNumber: index + 2, studentId: student.studentId, rollNumber: student.rollNumber, fullName: student.fullName, email: student.email, majorInFile: student.majorCode === 'BIT_SE' ? 'BBA_IB' : 'BIT_SE', majorInDb: student.majorCode, majorInProfile: student.profileMajorCode, status: 'Mismatched', message: 'Major in file differs from enrollment major.' }));
     matched.forEach((row) => { const student = rows.find((item) => item.studentId === row.studentId); if (student) student.majorVerificationStatus = 'Matched'; });
     mismatched.forEach((row) => { const student = rows.find((item) => item.studentId === row.studentId); if (student) student.majorVerificationStatus = 'Mismatched'; });
+    const verifiedCls = findClass(classId);
+    const majorsAutoLocked = Boolean(verifiedCls) && !verifiedCls!.isEnrollmentMajorLocked
+      && rows.length > 0 && mismatched.length === 0;
+    if (majorsAutoLocked) { verifiedCls!.isEnrollmentMajorLocked = true; verifiedCls!.rowVersion = allocateRowVersion(); }
     persistMockState();
-    return ok({ matched, mismatched, missing: [], notFound: [], synchronizedEnrollmentCount: 0, synchronizedProfileCount: 0 }, 'Student majors verified successfully.');
+    return ok({ matched, mismatched, missing: [], notFound: [], synchronizedEnrollmentCount: 0, synchronizedProfileCount: 0, isMajorLocked: Boolean(verifiedCls?.isEnrollmentMajorLocked), majorsAutoLocked }, 'Student majors verified successfully.');
   });
 
   mock.onPost(/^\/classes\/[^/]+\/major-verification\/synchronize$/).reply((config) => {
@@ -882,8 +921,11 @@ function registerRosterHandlers(mock: MockAdapter): void {
       student.majorVerificationStatus = 'Matched';
       return { rowNumber: index + 2, studentId: student.studentId, rollNumber: student.rollNumber, fullName: student.fullName, email: student.email, majorInFile: major, majorInDb: major, majorInProfile: major, status: 'Matched', message: null };
     });
+    const syncedCls = findClass(classId);
+    const majorsAutoLocked = Boolean(syncedCls) && !syncedCls!.isEnrollmentMajorLocked && rows.length > 0;
+    if (majorsAutoLocked) { syncedCls!.isEnrollmentMajorLocked = true; syncedCls!.rowVersion = allocateRowVersion(); }
     persistMockState();
-    return ok({ matched, mismatched: [], missing: [], notFound: [], synchronizedEnrollmentCount: rows.length, synchronizedProfileCount: rows.length }, 'Enrollment and profile majors synchronized from the verification file.');
+    return ok({ matched, mismatched: [], missing: [], notFound: [], synchronizedEnrollmentCount: rows.length, synchronizedProfileCount: rows.length, isMajorLocked: Boolean(syncedCls?.isEnrollmentMajorLocked), majorsAutoLocked, teamMajorWarnings: teamMajorWarnings(classId) }, 'Enrollment and profile majors synchronized from the verification file.');
   });
 
   mock.onPost(/^\/classes\/[^/]+\/import-students\/preview$/).reply((config) => {

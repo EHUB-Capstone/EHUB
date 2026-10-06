@@ -7,6 +7,7 @@ export interface MentorImportRowPreview {
   fullName: string;
   email: string;
   fptEmail?: string | null;
+  missingFields: string[];
   status: string;
   isValid: boolean;
   message?: string | null;
@@ -19,6 +20,8 @@ export interface MentorImportPreview {
   createCount: number;
   updateCount: number;
   addToSemesterCount: number;
+  needsCompletionCount: number;
+  completeDraftCount: number;
   errorCount: number;
   canCommit: boolean;
   rows: MentorImportRowPreview[];
@@ -28,6 +31,8 @@ export interface MentorImportCommitResult {
   createdCount: number;
   updatedCount: number;
   semesterAssignmentCount: number;
+  draftSavedCount: number;
+  draftCompletedCount: number;
 }
 
 export interface MentorAllocationRowPreview {

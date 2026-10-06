@@ -14,6 +14,8 @@ namespace EHub.Application.Features.Subjects.ManageTeachingStaff;
 
 public sealed class SemesterTeachingStaffCommandHandler : ISemesterTeachingStaffCommandHandler
 {
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+
     private readonly IApplicationDbContext _context;
     private readonly ICurrentUserService _currentUser;
     private readonly IUnitOfWork _unitOfWork;
@@ -246,6 +248,253 @@ public sealed class SemesterTeachingStaffCommandHandler : ISemesterTeachingStaff
         }
     }
 
+    public async Task<Result<MentorCarryoverPreviewResponse>> PreviewMentorCarryoverAsync(
+        PreviewMentorCarryoverRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        if (!IsAdmin())
+        {
+            return Failure<MentorCarryoverPreviewResponse>(
+                ErrorCodes.ClassAccessDenied,
+                "Only an administrator can reuse mentors across semesters.");
+        }
+
+        if (request.SourceSemesterId == Guid.Empty ||
+            request.TargetSemesterId == Guid.Empty ||
+            request.SourceSemesterId == request.TargetSemesterId)
+        {
+            return Failure<MentorCarryoverPreviewResponse>(
+                ErrorCodes.ClassValidationError,
+                "Different source and target semesters are required.");
+        }
+
+        var semesters = await _context.Semesters
+            .AsNoTracking()
+            .Where(item => item.Id == request.SourceSemesterId || item.Id == request.TargetSemesterId)
+            .ToListAsync(cancellationToken);
+        var sourceSemester = semesters.SingleOrDefault(item => item.Id == request.SourceSemesterId);
+        var targetSemester = semesters.SingleOrDefault(item => item.Id == request.TargetSemesterId);
+        if (sourceSemester == null || targetSemester == null)
+        {
+            return Failure<MentorCarryoverPreviewResponse>(
+                ErrorCodes.SemesterNotFound,
+                "The source or target semester was not found.");
+        }
+        if (!IsEarlierSemester(sourceSemester, targetSemester))
+        {
+            return Failure<MentorCarryoverPreviewResponse>(
+                ErrorCodes.ClassValidationError,
+                "The source semester must be earlier than the target semester.");
+        }
+
+        var lifecycleError = GetSemesterMutationError(targetSemester);
+        if (lifecycleError != null)
+        {
+            return Failure<MentorCarryoverPreviewResponse>(lifecycleError.Code, lifecycleError.Message);
+        }
+
+        var sourceAssignments = await _context.SemesterStaffAssignments
+            .AsNoTracking()
+            .Include(item => item.User)
+            .ThenInclude(user => user.UserRoles)
+            .ThenInclude(userRole => userRole.Role)
+            .Include(item => item.User)
+            .ThenInclude(user => user.MentorProfile)
+            .Where(item =>
+                item.SemesterId == sourceSemester.Id &&
+                item.Role == SemesterStaffRole.Mentor)
+            .OrderBy(item => item.User.FullName)
+            .ToListAsync(cancellationToken);
+
+        var targetAssignments = await _context.SemesterStaffAssignments
+            .AsNoTracking()
+            .Where(item =>
+                item.SemesterId == targetSemester.Id &&
+                item.Role == SemesterStaffRole.Mentor)
+            .ToDictionaryAsync(item => item.UserId, cancellationToken);
+
+        var candidates = sourceAssignments.Select(sourceAssignment =>
+        {
+            targetAssignments.TryGetValue(sourceAssignment.UserId, out var targetAssignment);
+            return ToCarryoverCandidate(sourceAssignment, targetAssignment);
+        }).ToArray();
+
+        return Result.Success(new MentorCarryoverPreviewResponse
+        {
+            SourceSemesterId = sourceSemester.Id,
+            TargetSemesterId = targetSemester.Id,
+            TotalCount = candidates.Length,
+            EligibleCount = candidates.Count(item => item.CanSelect),
+            AlreadyAddedCount = candidates.Count(item => item.Action == "AlreadyAdded"),
+            UnavailableCount = candidates.Count(item => item.Action == "Unavailable"),
+            EnterpriseCount = candidates.Count(item => item.MentorType == MentorType.Enterprise.ToString()),
+            AcademicCount = candidates.Count(item => item.MentorType == MentorType.Academic.ToString()),
+            Mentors = candidates
+        });
+    }
+
+    public async Task<Result<MentorCarryoverCommitResponse>> CommitMentorCarryoverAsync(
+        CommitMentorCarryoverRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        if (!IsAdmin())
+        {
+            return Failure<MentorCarryoverCommitResponse>(
+                ErrorCodes.ClassAccessDenied,
+                "Only an administrator can reuse mentors across semesters.");
+        }
+
+        var selectedUserIds = request.MentorUserIds.Distinct().ToArray();
+        if (request.SourceSemesterId == Guid.Empty ||
+            request.TargetSemesterId == Guid.Empty ||
+            request.SourceSemesterId == request.TargetSemesterId ||
+            selectedUserIds.Length == 0 ||
+            selectedUserIds.Length > 500 ||
+            selectedUserIds.Any(item => item == Guid.Empty) ||
+            selectedUserIds.Length != request.MentorUserIds.Count)
+        {
+            return Failure<MentorCarryoverCommitResponse>(
+                ErrorCodes.ClassValidationError,
+                "Select between 1 and 500 distinct mentors and use different source and target semesters.");
+        }
+
+        try
+        {
+            return await _unitOfWork.ExecuteInSerializableTransactionAsync(
+                async transactionCancellationToken =>
+                {
+                    var semesters = await _context.Semesters
+                        .Where(item => item.Id == request.SourceSemesterId || item.Id == request.TargetSemesterId)
+                        .ToListAsync(transactionCancellationToken);
+                    var sourceSemester = semesters.SingleOrDefault(item => item.Id == request.SourceSemesterId);
+                    var targetSemester = semesters.SingleOrDefault(item => item.Id == request.TargetSemesterId);
+                    if (sourceSemester == null || targetSemester == null)
+                    {
+                        return Failure<MentorCarryoverCommitResponse>(
+                            ErrorCodes.SemesterNotFound,
+                            "The source or target semester was not found.");
+                    }
+                    if (!IsEarlierSemester(sourceSemester, targetSemester))
+                    {
+                        return Failure<MentorCarryoverCommitResponse>(
+                            ErrorCodes.ClassValidationError,
+                            "The source semester must be earlier than the target semester.");
+                    }
+
+                    var lifecycleError = GetSemesterMutationError(targetSemester);
+                    if (lifecycleError != null)
+                    {
+                        return Failure<MentorCarryoverCommitResponse>(lifecycleError.Code, lifecycleError.Message);
+                    }
+
+                    var sourceAssignments = await _context.SemesterStaffAssignments
+                        .Include(item => item.User)
+                        .ThenInclude(user => user.UserRoles)
+                        .ThenInclude(userRole => userRole.Role)
+                        .Include(item => item.User)
+                        .ThenInclude(user => user.MentorProfile)
+                        .Where(item =>
+                            item.SemesterId == sourceSemester.Id &&
+                            item.Role == SemesterStaffRole.Mentor &&
+                            selectedUserIds.Contains(item.UserId))
+                        .ToListAsync(transactionCancellationToken);
+
+                    if (sourceAssignments.Count != selectedUserIds.Length)
+                    {
+                        return Failure<MentorCarryoverCommitResponse>(
+                            ErrorCodes.SemesterStaffConflict,
+                            "One or more selected mentors no longer belong to the source semester. Preview again.");
+                    }
+
+                    var unavailable = sourceAssignments.FirstOrDefault(item => !IsEligibleSourceMentor(item));
+                    if (unavailable != null)
+                    {
+                        return Failure<MentorCarryoverCommitResponse>(
+                            ErrorCodes.SemesterStaffConflict,
+                            $"{unavailable.User.FullName} is no longer eligible for reuse. Preview again.");
+                    }
+
+                    var targetAssignments = await _context.SemesterStaffAssignments
+                        .Where(item =>
+                            item.SemesterId == targetSemester.Id &&
+                            item.Role == SemesterStaffRole.Mentor &&
+                            selectedUserIds.Contains(item.UserId))
+                        .ToDictionaryAsync(item => item.UserId, transactionCancellationToken);
+
+                    var added = 0;
+                    var reactivated = 0;
+                    var alreadyAdded = 0;
+                    foreach (var sourceAssignment in sourceAssignments)
+                    {
+                        if (targetAssignments.TryGetValue(sourceAssignment.UserId, out var targetAssignment))
+                        {
+                            if (targetAssignment.Status == SemesterStaffStatus.Active)
+                            {
+                                alreadyAdded++;
+                                continue;
+                            }
+
+                            targetAssignment.Status = SemesterStaffStatus.Active;
+                            targetAssignment.UpdatedBy = _currentUser.UserId;
+                            reactivated++;
+                            continue;
+                        }
+
+                        var assignment = new SemesterStaffAssignment
+                        {
+                            SemesterId = targetSemester.Id,
+                            Semester = targetSemester,
+                            UserId = sourceAssignment.UserId,
+                            User = sourceAssignment.User,
+                            Role = SemesterStaffRole.Mentor,
+                            Status = SemesterStaffStatus.Active,
+                            CreatedBy = _currentUser.UserId
+                        };
+                        await _context.SemesterStaffAssignments.AddAsync(assignment, transactionCancellationToken);
+                        added++;
+                    }
+
+                    if (added > 0 || reactivated > 0)
+                    {
+                        AddMentorCarryoverAuditAndOutbox(
+                            sourceSemester,
+                            targetSemester,
+                            selectedUserIds,
+                            added,
+                            reactivated,
+                            alreadyAdded);
+                        await _unitOfWork.SaveChangesAsync(transactionCancellationToken);
+                    }
+
+                    return Result.Success(new MentorCarryoverCommitResponse
+                    {
+                        AddedCount = added,
+                        ReactivatedCount = reactivated,
+                        AlreadyAddedCount = alreadyAdded
+                    });
+                },
+                cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return Failure<MentorCarryoverCommitResponse>(
+                ErrorCodes.SemesterConcurrencyConflict,
+                "The target semester mentor list changed concurrently. Preview and try again.");
+        }
+        catch (DbUpdateException)
+        {
+            return Failure<MentorCarryoverCommitResponse>(
+                ErrorCodes.SemesterStaffConflict,
+                "The target semester mentor list changed while mentors were being reused. Preview again.");
+        }
+        catch (SerializableTransactionConflictException)
+        {
+            return Failure<MentorCarryoverCommitResponse>(
+                ErrorCodes.SemesterConcurrencyConflict,
+                "The target semester mentor list changed concurrently. Preview and try again.");
+        }
+    }
+
     private async Task<string?> GetInUseMessageAsync(
         SemesterStaffAssignment assignment,
         CancellationToken cancellationToken)
@@ -308,6 +557,67 @@ public sealed class SemesterTeachingStaffCommandHandler : ISemesterTeachingStaff
             string.Equals(item.Role.Name, expectedRole, StringComparison.OrdinalIgnoreCase));
     }
 
+    private static bool IsEligibleSourceMentor(SemesterStaffAssignment assignment) =>
+        assignment.Status == SemesterStaffStatus.Active &&
+        assignment.User.Status == UserStatus.Active &&
+        assignment.User.MentorProfile is { Status: MentorProfileStatus.Active } &&
+        assignment.User.UserRoles.Any(item =>
+            string.Equals(item.Role.Name, SystemRoles.Mentor, StringComparison.OrdinalIgnoreCase));
+
+    private static MentorCarryoverCandidateResponse ToCarryoverCandidate(
+        SemesterStaffAssignment sourceAssignment,
+        SemesterStaffAssignment? targetAssignment)
+    {
+        var profile = sourceAssignment.User.MentorProfile;
+        var action = "Add";
+        var canSelect = true;
+        var message = "Ready to add to the target semester.";
+
+        if (sourceAssignment.Status != SemesterStaffStatus.Active)
+        {
+            action = "Unavailable";
+            canSelect = false;
+            message = "Inactive in the source semester.";
+        }
+        else if (sourceAssignment.User.Status != UserStatus.Active)
+        {
+            action = "Unavailable";
+            canSelect = false;
+            message = $"Account is {sourceAssignment.User.Status}.";
+        }
+        else if (profile is null || profile.Status != MentorProfileStatus.Active ||
+                 !sourceAssignment.User.UserRoles.Any(item =>
+                     string.Equals(item.Role.Name, SystemRoles.Mentor, StringComparison.OrdinalIgnoreCase)))
+        {
+            action = "Unavailable";
+            canSelect = false;
+            message = "Mentor profile or role is not active.";
+        }
+        else if (targetAssignment?.Status == SemesterStaffStatus.Active)
+        {
+            action = "AlreadyAdded";
+            canSelect = false;
+            message = "Already available in the target semester.";
+        }
+        else if (targetAssignment is not null)
+        {
+            action = "Reactivate";
+            message = "Will be reactivated in the target semester.";
+        }
+
+        return new MentorCarryoverCandidateResponse
+        {
+            UserId = sourceAssignment.UserId,
+            Name = sourceAssignment.User.FullName,
+            Email = sourceAssignment.User.Email,
+            Avatar = sourceAssignment.User.AvatarUrl,
+            MentorType = profile?.Type.ToString() ?? string.Empty,
+            Action = action,
+            CanSelect = canSelect,
+            Message = message
+        };
+    }
+
     private void AddAuditAndOutbox(
         Semester semester,
         SemesterStaffAssignment assignment,
@@ -353,6 +663,55 @@ public sealed class SemesterTeachingStaffCommandHandler : ISemesterTeachingStaff
         });
     }
 
+    private void AddMentorCarryoverAuditAndOutbox(
+        Semester sourceSemester,
+        Semester targetSemester,
+        IReadOnlyCollection<Guid> mentorUserIds,
+        int addedCount,
+        int reactivatedCount,
+        int alreadyAddedCount)
+    {
+        var eventId = Guid.NewGuid();
+        var occurredAtUtc = DateTime.UtcNow;
+        var performedByUserId = _currentUser.UserId ?? Guid.Empty;
+        var details = new
+        {
+            SourceSemesterId = sourceSemester.Id,
+            TargetSemesterId = targetSemester.Id,
+            MentorUserIds = mentorUserIds,
+            AddedCount = addedCount,
+            ReactivatedCount = reactivatedCount,
+            AlreadyAddedCount = alreadyAddedCount
+        };
+
+        _context.SemesterAuditLogs.Add(new SemesterAuditLog
+        {
+            SemesterId = targetSemester.Id,
+            Action = "SEMESTER_MENTORS_CARRIED_OVER",
+            PerformedByUserId = performedByUserId,
+            OccurredAtUtc = occurredAtUtc,
+            DetailsJson = JsonSerializer.Serialize(details)
+        });
+        _context.OutboxMessages.Add(new OutboxMessage
+        {
+            EventId = eventId,
+            Type = "Semester.MentorsCarriedOver.v1",
+            AggregateType = "Semester",
+            AggregateId = targetSemester.Id,
+            OccurredAtUtc = occurredAtUtc,
+            AvailableAtUtc = occurredAtUtc,
+            PayloadJson = JsonSerializer.Serialize(new
+            {
+                EventId = eventId,
+                EventType = "Semester.MentorsCarriedOver.v1",
+                AggregateType = "Semester",
+                AggregateId = targetSemester.Id,
+                OccurredAtUtc = occurredAtUtc,
+                Data = details
+            }, JsonOptions)
+        });
+    }
+
     private static Error? GetSemesterMutationError(Semester semester) => semester.Status switch
     {
         SemesterStatus.Closing => new Error(
@@ -366,6 +725,21 @@ public sealed class SemesterTeachingStaffCommandHandler : ISemesterTeachingStaff
             "Teaching staff of an archived semester cannot be changed."),
         _ => null
     };
+
+    private static bool IsEarlierSemester(Semester source, Semester target) =>
+        SemesterOrder(source) < SemesterOrder(target);
+
+    private static int SemesterOrder(Semester semester)
+    {
+        var termOrder = semester.Term switch
+        {
+            SemesterTerm.Spring => 0,
+            SemesterTerm.Summer => 1,
+            SemesterTerm.Fall => 2,
+            _ => throw new ArgumentOutOfRangeException(nameof(semester.Term))
+        };
+        return semester.Year * 3 + termOrder;
+    }
 
     private static bool TryParseTerm(string? value, out SemesterTerm term)
     {
@@ -429,6 +803,9 @@ public sealed class SemesterTeachingStaffCommandHandler : ISemesterTeachingStaff
 
     private static Result<TeachingStaffResponse> Failure(string code, string message) =>
         Result.Failure<TeachingStaffResponse>(new Error(code, message));
+
+    private static Result<T> Failure<T>(string code, string message) =>
+        Result.Failure<T>(new Error(code, message));
 
     private bool IsAdmin() => _currentUser.Roles.Any(role =>
         string.Equals(role, SystemRoles.Admin, StringComparison.OrdinalIgnoreCase));

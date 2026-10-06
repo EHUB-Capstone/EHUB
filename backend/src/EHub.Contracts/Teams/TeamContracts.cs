@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace EHub.Contracts.Teams;
 
 public sealed class TeamMemberDto
@@ -5,6 +7,7 @@ public sealed class TeamMemberDto
     public Guid StudentId { get; init; }
     public string RollNumber { get; init; } = string.Empty;
     public string FullName { get; init; } = string.Empty;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Email { get; init; }
     public string MajorCode { get; init; } = string.Empty;
     public string RoleInTeam { get; init; } = string.Empty;
@@ -43,6 +46,22 @@ public sealed class MentorCandidateDto
     public int ActiveTeamCount { get; init; }
 }
 
+public sealed class TeamMajorCompositionDto
+{
+    public bool IsValid { get; init; }
+    public IReadOnlyCollection<string> MissingGroups { get; init; } = Array.Empty<string>();
+    public IReadOnlyCollection<string> MembersWithoutValidMajor { get; init; } = Array.Empty<string>();
+    public string? Message { get; init; }
+}
+
+public sealed class TeamMajorWarningDto
+{
+    public Guid TeamId { get; init; }
+    public string TeamCode { get; init; } = string.Empty;
+    public string TeamName { get; init; } = string.Empty;
+    public TeamMajorCompositionDto MajorComposition { get; init; } = new();
+}
+
 public sealed class TeamDto
 {
     public Guid Id { get; init; }
@@ -58,6 +77,11 @@ public sealed class TeamDto
     public IReadOnlyCollection<TeamMemberDto> Members { get; init; } = Array.Empty<TeamMemberDto>();
     public IReadOnlyCollection<MentorAssignmentDto> CurrentMentorAssignments { get; init; } = Array.Empty<MentorAssignmentDto>();
     public MentorAssignmentDto? CurrentMentorAssignment { get; init; }
+    public TeamMajorCompositionDto MajorComposition { get; init; } = new() { IsValid = true };
+    public Guid TeamLineageId { get; init; }
+    public bool IsContinued { get; init; }
+    public string? ContinuedFromSemesterCode { get; init; }
+    public string? ContinuedFromClassCode { get; init; }
     public string RowVersion { get; init; } = string.Empty;
 }
 
@@ -262,9 +286,11 @@ public sealed class StudentClassDetailResponse
 public sealed class StudentClassMemberDto
 {
     public Guid StudentId { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public Guid? UserId { get; init; }
     public string RollNumber { get; init; } = string.Empty;
     public string FullName { get; init; } = string.Empty;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Email { get; init; }
     public string MajorCode { get; init; } = string.Empty;
     public string? ProfileMajorCode { get; init; }
@@ -275,6 +301,10 @@ public sealed class StudentClassMemberDto
     public string EnrollmentStatus { get; init; } = string.Empty;
     public Guid? TeamId { get; init; }
     public bool HasPendingTeamInvitation { get; init; }
+    public Guid? PendingTeamFormationId { get; init; }
+    public string? PendingTeamName { get; init; }
+    public string? PendingTeamInvitationStatus { get; init; }
+    public bool IsPendingTeamFormationMember { get; init; }
 }
 
 public sealed class MyTeamResponse

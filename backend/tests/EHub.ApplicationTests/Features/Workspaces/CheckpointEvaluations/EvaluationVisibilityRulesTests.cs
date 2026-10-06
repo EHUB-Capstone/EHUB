@@ -12,9 +12,9 @@ public sealed class EvaluationVisibilityRulesTests
     [InlineData(SystemRoles.Lecturer, EvaluationStatus.Submitted, true)]
     [InlineData(SystemRoles.Student, EvaluationStatus.Submitted, false)]
     [InlineData(SystemRoles.Mentor, EvaluationStatus.Submitted, false)]
-    [InlineData(SystemRoles.Student, EvaluationStatus.Published, true)]
-    [InlineData(SystemRoles.Mentor, EvaluationStatus.Published, true)]
-    public void TeamScore_RequiresPublicationForExternalViewers(
+    [InlineData(SystemRoles.Student, EvaluationStatus.Published, false)]
+    [InlineData(SystemRoles.Mentor, EvaluationStatus.Published, false)]
+    public void TeamScore_IsInternalOnly(
         string role, EvaluationStatus status, bool expected)
     {
         EvaluationVisibilityRules.CanViewTeamScore(role, status).Should().Be(expected);
@@ -34,10 +34,10 @@ public sealed class EvaluationVisibilityRulesTests
     [InlineData(SystemRoles.Admin, EvaluationStatus.Submitted, true)]
     [InlineData(SystemRoles.Lecturer, EvaluationStatus.Submitted, true)]
     [InlineData(SystemRoles.Student, EvaluationStatus.Submitted, false)]
-    [InlineData(SystemRoles.Student, EvaluationStatus.Published, true)]
+    [InlineData(SystemRoles.Student, EvaluationStatus.Published, false)]
     [InlineData(SystemRoles.Mentor, EvaluationStatus.Submitted, false)]
     [InlineData(SystemRoles.Mentor, EvaluationStatus.Published, false)]
-    public void CriterionScores_AreAvailableToStudentOnlyAfterPublication(
+    public void CriterionScores_AreInternalOnly(
         string role, EvaluationStatus status, bool expected)
     {
         EvaluationVisibilityRules.CanViewCriterionScores(role, status).Should().Be(expected);

@@ -6,6 +6,7 @@ using EHub.Application.Features.Workspaces.CheckpointFeedback;
 using EHub.Application.Features.Workspaces.CheckpointEvaluations;
 using EHub.Application.Features.Workspaces.CheckpointRequirements;
 using EHub.Application.Features.Workspaces.CourseAssessmentEvaluations;
+using EHub.Application.Features.Workspaces.EvaluationReportExport;
 using EHub.Contracts.Common;
 using EHub.Contracts.Workspaces;
 using EHub.Shared.Constants;
@@ -20,7 +21,8 @@ namespace EHub.Api.Controllers;
 [Route("api/workspace/checkpoints")]
 [Authorize]
 public sealed class WorkspaceCheckpointsController(
-    ICurrentUserService currentUser) : ControllerBase
+    ICurrentUserService currentUser,
+    ILogger<WorkspaceCheckpointsController> logger) : ControllerBase
 {
     [HttpGet("teams/{teamId:guid}")]
     public async Task<IActionResult> GetOverview(
@@ -80,6 +82,27 @@ public sealed class WorkspaceCheckpointsController(
             : ToErrorResponse(result.Error);
     }
 
+    [HttpGet("teams/{teamId:guid}/checkpoints/{checkpointNumber:int}/files/{fileId:guid}/preview-source")]
+    public async Task<IActionResult> GetPreviewSource(
+        Guid teamId,
+        int checkpointNumber,
+        Guid fileId,
+        [FromServices] ICheckpointFileHandler handler,
+        CancellationToken cancellationToken,
+        [FromQuery] bool retry = false)
+    {
+        var result = await handler.GetPreviewSourceAsync(teamId, checkpointNumber, fileId, retry, UserId, Role, cancellationToken);
+        if (result.IsFailure) return ToErrorResponse(result.Error);
+
+        // The URL grants read access to one file for 15 minutes; it must never be cached or shared.
+        Response.Headers.CacheControl = "private, no-store";
+        Response.Headers.XContentTypeOptions = "nosniff";
+        var body = ApiResponse<CheckpointFilePreviewSourceResponse>.SuccessResponse(result.Value, "Preview source resolved.");
+        return result.Value.Status == "Preparing"
+            ? StatusCode(StatusCodes.Status202Accepted, body)
+            : Ok(body);
+    }
+
     [HttpGet("teams/{teamId:guid}/checkpoints/{checkpointNumber:int}/files/{fileId:guid}/preview")]
     public async Task<IActionResult> PreviewFile(
         Guid teamId,
@@ -93,6 +116,17 @@ public sealed class WorkspaceCheckpointsController(
 
         Response.Headers.CacheControl = "private, no-store";
         Response.Headers.XContentTypeOptions = "nosniff";
+        if (result.Value.Timings is { } timings)
+        {
+            // Visible in DevTools > Network > Timing; contains no file names or URLs.
+            Response.Headers.Append("Server-Timing",
+                $"auth;dur={timings.AuthMs}, storage;dur={timings.StorageMs}, convert;dur={timings.ConvertMs}, " +
+                $"cache;desc=\"{(result.Value.FromCache ? "hit" : "miss")}\"");
+            logger.LogInformation(
+                "Preview served for file {FileId}: cache {Cache}, auth {AuthMs} ms, storage {StorageMs} ms, convert {ConvertMs} ms, {Bytes} bytes.",
+                fileId, result.Value.FromCache ? "hit" : "miss", timings.AuthMs, timings.StorageMs, timings.ConvertMs, result.Value.Content.Length);
+        }
+
         return File(result.Value.Content, "application/pdf", enableRangeProcessing: true);
     }
 
@@ -167,6 +201,19 @@ public sealed class WorkspaceCheckpointsController(
             : ToErrorResponse(result.Error);
     }
 
+    [HttpGet("classes/{classId:guid}/students/{studentId:guid}/previous-scores")]
+    [Authorize(Policy = SystemPolicies.StaffOnly)]
+    public async Task<IActionResult> GetPreviousStudentScores(Guid classId, Guid studentId,
+        [FromServices] EHub.Application.Features.Workspaces.StudentPreviousScores.StudentPreviousScoresHandler handler,
+        CancellationToken cancellationToken)
+    {
+        var result = await handler.GetAsync(classId, studentId, UserId, Role, cancellationToken);
+        return result.IsSuccess
+            ? Ok(ApiResponse<StudentPreviousScoresResponse>.SuccessResponse(result.Value, "Previous scores retrieved."))
+            : StatusCode(StatusCodes.Status403Forbidden,
+                ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
+    }
+
     [HttpPost("evaluation-grading")]
     public async Task<IActionResult> GetEvaluationGradingBatch(
         [FromBody] EvaluationGradingBatchRequest request,
@@ -177,6 +224,19 @@ public sealed class WorkspaceCheckpointsController(
         return result.IsSuccess
             ? Ok(ApiResponse<EvaluationGradingBatchResponse>.SuccessResponse(
                 result.Value, "Evaluation grading data retrieved."))
+            : ToErrorResponse(result.Error);
+    }
+
+    [HttpPost("evaluation-grading/export")]
+    [Authorize(Policy = SystemPolicies.StaffOnly)]
+    public async Task<IActionResult> ExportEvaluationReport(
+        [FromBody] EvaluationReportExportRequest request,
+        [FromServices] IEvaluationReportExportHandler handler,
+        CancellationToken cancellationToken)
+    {
+        var result = await handler.HandleAsync(request, UserId, Role, cancellationToken);
+        return result.IsSuccess
+            ? File(result.Value.FileBytes, result.Value.ContentType, result.Value.FileName)
             : ToErrorResponse(result.Error);
     }
 

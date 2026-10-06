@@ -141,7 +141,7 @@ public sealed class CheckpointEvaluationHandler(
                         .ToArray();
                     return new EvaluationGradingCheckpointResponse
                     {
-                        Checkpoint = ToCheckpointResponse(item.Checkpoint, item.Rubric!, team),
+                        Checkpoint = ToCheckpointResponse(item.Checkpoint, item.Rubric!, team, userId, role),
                         Evaluations = current
                     };
                 })
@@ -176,7 +176,9 @@ public sealed class CheckpointEvaluationHandler(
                 ProjectDescription = team.Project?.Description ?? proposal?.Description,
                 SemesterGroupName = string.Join(", ", semesterGroups),
                 Members = team.TeamMembers
-                    .Where(member => member.CountsTowardActiveTeam)
+                    .Where(member => member.CountsTowardActiveTeam &&
+                        (EvaluationVisibilityRules.IsInternalViewer(role) ||
+                         (IsRole(role, SystemRoles.Student) && member.ClassStudent.Student.UserId == userId)))
                     .OrderBy(member => member.ClassStudent.Student.FullName)
                     .ThenBy(member => member.StudentId)
                     .Select(member => new EvaluationGradingTeamMemberResponse
@@ -238,11 +240,13 @@ public sealed class CheckpointEvaluationHandler(
 
         return Result.Success(new WorkspaceCheckpointEvaluationSummaryResponse
         {
-            Checkpoint = ToCheckpointResponse(item.Checkpoint, item.Rubric, item.Team),
+            Checkpoint = ToCheckpointResponse(item.Checkpoint, item.Rubric, item.Team, userId, role),
             Evaluations = visibleEvaluations
                 .Select(evaluation => ToEvaluationResponse(evaluation, item.Team, userId, role))
                 .ToArray(),
-            History = ToHistoryResponses(history, item.Team, userId, role),
+            History = EvaluationVisibilityRules.IsInternalViewer(role)
+                ? ToHistoryResponses(history, item.Team, userId, role)
+                : Array.Empty<WorkspaceCheckpointEvaluationHistoryResponse>(),
             Summary = new WorkspaceCheckpointEvaluationAggregateResponse
             {
                 EvaluationCount = visibleEvaluations.Count,
@@ -788,7 +792,7 @@ public sealed class CheckpointEvaluationHandler(
     }
 
     private static WorkspaceCheckpointEvaluationConfigResponse ToCheckpointResponse(
-        Checkpoint checkpoint, Rubric rubric, Team? team) => new()
+        Checkpoint checkpoint, Rubric rubric, Team? team, Guid userId, string role) => new()
     {
         Number = checkpoint.CheckpointNumber,
         Title = checkpoint.Name,
@@ -805,7 +809,9 @@ public sealed class CheckpointEvaluationHandler(
         }).ToArray(),
         Members = team is null
             ? Array.Empty<WorkspaceCheckpointEvaluationMemberResponse>()
-            : ActiveMembers(team).Select(item => new WorkspaceCheckpointEvaluationMemberResponse
+            : ActiveMembers(team).Where(item => EvaluationVisibilityRules.IsInternalViewer(role) ||
+                (IsRole(role, SystemRoles.Student) && item.ClassStudent.Student.UserId == userId))
+                .Select(item => new WorkspaceCheckpointEvaluationMemberResponse
             {
                 StudentId = item.StudentId,
                 FullName = item.ClassStudent.Student.FullName,

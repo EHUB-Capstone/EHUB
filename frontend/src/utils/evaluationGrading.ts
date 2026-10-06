@@ -3,9 +3,11 @@ import type {
   EvaluationGradingFilters,
   EvaluationGradingRecord,
   EvaluationGradingStatus,
+  EvaluationReportTeamScope,
 } from '../types/evaluationGrading';
 import type { WorkspaceOption } from '../types/workspaceTools';
 import { parseWorkspaceSemester } from './workspaceHub.ts';
+import { matchesSearchQuery } from './searchText.ts';
 
 export const evaluationRankingRoles = ['ADMIN', 'LECTURER'] as const;
 
@@ -56,7 +58,7 @@ export function filterEvaluationRecords(
   records: EvaluationGradingRecord[],
   filters: EvaluationGradingFilters,
 ): EvaluationGradingRecord[] {
-  const search = filters.search?.trim().toLowerCase() || '';
+  const search = filters.search || '';
 
   return records.filter(record => {
     const searchableValues = [
@@ -76,13 +78,29 @@ export function filterEvaluationRecords(
     ];
 
     return (
-      (!search || searchableValues.some(value => String(value || '').toLowerCase().includes(search))) &&
+      matchesSearchQuery(search, searchableValues) &&
       (!filters.classId || record.team.classId === filters.classId) &&
       (!filters.teamId || record.team.teamId === filters.teamId) &&
       (!filters.checkpoint || String(record.checkpoint.number) === filters.checkpoint) &&
       (!filters.status || record.status === filters.status)
     );
   });
+}
+
+export function buildEvaluationReportExportScope(
+  records: EvaluationGradingRecord[],
+): EvaluationReportTeamScope[] {
+  const checkpointsByTeam = new Map<string, Set<number>>();
+  records.forEach(record => {
+    const checkpointNumbers = checkpointsByTeam.get(record.team.teamId) ?? new Set<number>();
+    checkpointNumbers.add(record.checkpoint.number);
+    checkpointsByTeam.set(record.team.teamId, checkpointNumbers);
+  });
+
+  return [...checkpointsByTeam.entries()].map(([teamId, checkpointNumbers]) => ({
+    teamId,
+    checkpointNumbers: [...checkpointNumbers].sort((left, right) => left - right),
+  }));
 }
 
 export function selectLatestOfficialEvaluation(

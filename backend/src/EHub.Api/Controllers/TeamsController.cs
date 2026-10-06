@@ -1,4 +1,5 @@
 using EHub.Application.Common.Interfaces.Identity;
+using EHub.Application.Features.Teams.Lineage;
 using EHub.Application.Features.Teams.ManageTeams;
 using EHub.Application.Features.Teams.MentorAssignments;
 using EHub.Application.Features.Teams.ProjectDirections;
@@ -123,6 +124,19 @@ public sealed class TeamsController : ControllerBase
     [HttpPost("teams/{teamId:guid}/project-direction/review")]
     public async Task<IActionResult> ReviewDirection(Guid teamId, [FromBody] ReviewProjectDirectionRequest request, [FromServices] IProjectDirectionHandler handler, CancellationToken cancellationToken) =>
         ToResponse(await handler.ReviewAsync(teamId, request, UserId, Role, cancellationToken), "Project direction reviewed.");
+
+    [HttpGet("teams/{teamId:guid}/lineage")]
+    public async Task<IActionResult> GetTeamLineage(Guid teamId, [FromServices] ITeamLineageHandler handler, CancellationToken cancellationToken) =>
+        ToResponse(await handler.GetLineageAsync(teamId, UserId, Role, cancellationToken), "Team history retrieved.");
+
+    [HttpGet("teams/{teamId:guid}/lineage/{termTeamId:guid}/submissions")]
+    public async Task<IActionResult> GetTeamLineageSubmissions(Guid teamId, Guid termTeamId, [FromServices] ITeamLineageHandler handler, CancellationToken cancellationToken) =>
+        ToResponse(await handler.GetTermSubmissionsAsync(teamId, termTeamId, UserId, Role, cancellationToken), "Team term submissions retrieved.");
+
+    [HttpGet("admin/team-continuity")]
+    [Authorize(Policy = SystemPolicies.AdminOnly)]
+    public async Task<IActionResult> GetTeamContinuityReport([FromQuery] Guid semesterId, [FromServices] ITeamLineageHandler handler, CancellationToken cancellationToken) =>
+        ToResponse(await handler.GetReportAsync(semesterId, Role, cancellationToken), "Team continuity report retrieved.");
 
     private Guid UserId => _currentUser.UserId ?? Guid.Empty;
     private string Role

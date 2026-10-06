@@ -53,7 +53,8 @@ export const classApi = {
     axiosClient.post(`/classes/${id}/repair-chat-memberships`)),
 
   // ─── Students ────────────────────────────────────────────────────────────
-  getStudents: (classId: string, params: GetClassRosterParams) => axiosClient.get(`/classes/${classId}/students`, { params }),
+  getStudents: (classId: string, params: GetClassRosterParams, signal?: AbortSignal) =>
+    axiosClient.get(`/classes/${classId}/students`, { params, signal }),
   previewImportStudents: (classId: string, formData: FormData) =>
     axiosClient.post(`/classes/${classId}/import-students/preview`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
@@ -122,6 +123,9 @@ export const classApi = {
     axiosClient.post(`/classes/${classId}/students/drop-all`),
   reEnrollStudent: (classId, studentId) =>
     axiosClient.post(`/classes/${classId}/students/${studentId}/re-enroll`),
+
+  getGroupProjectConsistency: (classId: string) =>
+    axiosClient.get(`/classes/${classId}/group-project-consistency`),
 
   // ─── Teams ───────────────────────────────────────────────────────────────
   getTeams:      (classId) => runClassFeatureRequest(classFeatureFlags.teamManagement, 'Class team management', () =>

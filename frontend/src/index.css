@@ -140,6 +140,18 @@ body {
   color: #602c0d;
 }
 
+/* Tailwind v4 no longer sets a default border color, so a bare `border` or
+   `border-b` falls back to currentColor (the text color). Restore a neutral
+   default. It lives in @layer base so any `border-<color>` utility still wins. */
+@layer base {
+  *, ::after, ::before, ::backdrop, ::file-selector-button {
+    border-color: var(--color-slate-200);
+  }
+  .dark *, .dark ::after, .dark ::before, .dark ::backdrop {
+    border-color: rgba(255, 255, 255, 0.11);
+  }
+}
+
 /* ─── Gradient backgrounds ─── */
 .bg-gradient-primary {
   background: linear-gradient(135deg, #EA6A12 0%, #D97706 100%);
@@ -259,6 +271,19 @@ body {
   .border-slate-300, .border-slate-300\/60, .border-gray-100,
   .border-gray-200, .border-gray-300
 ) { border-color: rgba(255, 255, 255, 0.11); }
+/* Neutral default for form controls. It sits before the semantic border rules
+   below so error/warning/success borders on inputs still win. */
+.dark :where(input, select, textarea) { border-color: rgba(255, 255, 255, 0.12); }
+/* Arbitrary variants such as `[&>span:nth-child(odd)]:sm:border-slate-200` compile to
+   a class name the lists above cannot match, so match the class attribute instead. */
+.dark :where(
+  [class*="]:border-slate-100"], [class*="]:border-slate-200"], [class*="]:border-slate-300"],
+  [class*="]:sm:border-slate-100"], [class*="]:sm:border-slate-200"], [class*="]:sm:border-slate-300"]
+),
+.dark :where(
+  [class*="]:border-slate-100"], [class*="]:border-slate-200"], [class*="]:border-slate-300"],
+  [class*="]:sm:border-slate-100"], [class*="]:sm:border-slate-200"], [class*="]:sm:border-slate-300"]
+) > :where(*) { border-color: rgba(255, 255, 255, 0.11); }
 
 .dark :where(
   .border-blue-50, .border-blue-100, .border-blue-100\/50, .border-blue-200,
@@ -286,7 +311,6 @@ body {
 
 .dark :where(input, select, textarea) {
   background-color: rgba(15, 23, 42, 0.72);
-  border-color: rgba(255, 255, 255, 0.12);
   color: #f8fafc;
 }
 
@@ -300,6 +324,171 @@ body {
 .dark :where(.hover\:text-slate-800, .hover\:text-gray-800):hover { color: #f1f5f9; }
 .dark :where(.focus\:bg-white):focus { background-color: #111827; }
 .dark :where(.disabled\:bg-slate-50, .disabled\:bg-gray-50):disabled { background-color: #1e293b; }
+
+/* ─── Dark coverage extension ───
+   These rules are unlayered, so they beat Tailwind utilities (@layer utilities).
+   Every light tint the app uses therefore needs an explicit dark counterpart here,
+   including opacity suffixes (`bg-amber-50/60` is not matched by `.bg-amber-50`).
+   `npm test` (tests/darkThemeCoverage.test.ts) fails when a light tint is missing. */
+
+/* Tinted surfaces */
+.dark :where(
+  .bg-amber-50\/20, .bg-amber-50\/30, .bg-amber-50\/40, .bg-amber-50\/60, .bg-amber-50\/80,
+  .bg-amber-200\/30, .bg-orange-50\/20, .bg-orange-50\/80, .bg-orange-100\/70, .bg-orange-200\/30
+) { background-color: rgba(245, 158, 11, 0.11); }
+.dark :where(.bg-rose-50, .bg-red-50\/40, .bg-red-50\/50, .bg-red-50\/60, .bg-danger-50\/60) { background-color: rgba(239, 68, 68, 0.11); }
+.dark :where(.bg-green-50\/60, .bg-emerald-50\/20) { background-color: rgba(34, 197, 94, 0.11); }
+.dark :where(
+  .bg-blue-50\/10, .bg-blue-50\/30, .bg-blue-50\/50, .bg-blue-50\/80,
+  .bg-indigo-50\/20, .bg-indigo-50\/30, .bg-indigo-50\/40, .bg-indigo-50\/70, .bg-indigo-50\/80,
+  .bg-secondary-50\/50, .bg-secondary-50\/70, .bg-secondary-100\/30
+) { background-color: rgba(121, 168, 217, 0.11); }
+.dark :where(.bg-secondary-100) { background-color: rgba(121, 168, 217, 0.16); }
+.dark :where(.bg-teal-50, .bg-teal-100) { background-color: rgba(20, 184, 166, 0.13); }
+.dark :where(.bg-violet-50\/50) { background-color: rgba(168, 85, 247, 0.12); }
+.dark :where(
+  .bg-primary-50\/20, .bg-primary-50\/30, .bg-primary-50\/40, .bg-primary-50\/50,
+  .bg-primary-50\/60, .bg-primary-50\/70, .bg-primary-50\/80, .bg-primary-100\/10
+) { background-color: rgba(234, 106, 18, 0.09); }
+.dark :where(.bg-primary-100\/30, .bg-primary-100\/40) { background-color: rgba(234, 106, 18, 0.13); }
+.dark :where(.bg-slate-50\/95) { background-color: rgba(22, 32, 51, 0.95); }
+.dark :where(.bg-slate-200\/60, .bg-slate-200\/80) { background-color: rgba(51, 65, 85, 0.64); }
+
+/* Floating panels (modals, dropdowns, dialogs) sit one step above cards. */
+.dark .bg-white:where(.shadow-float, .shadow-elevated) { background-color: #162033; }
+
+/* Slate overlays are invisible against a dark page; use a deeper scrim. */
+.dark :where(.inset-0):where(
+  .bg-slate-900\/30, .bg-slate-900\/40, .bg-slate-900\/45, .bg-slate-900\/50, .bg-slate-900\/60,
+  .bg-slate-950\/30, .bg-slate-950\/35, .bg-slate-950\/50, .bg-slate-950\/60
+) { background-color: rgba(2, 6, 23, 0.72); }
+
+/* Borders, rings and dividers */
+.dark :where(
+  .border-amber-200\/80, .border-orange-100\/70, .border-orange-100\/80, .border-orange-200\/70,
+  .border-warning-light
+) { border-color: rgba(251, 191, 36, 0.3); }
+.dark :where(.border-rose-100, .border-rose-200, .border-danger-light) { border-color: rgba(248, 113, 113, 0.28); }
+.dark :where(.border-success-light) { border-color: rgba(74, 222, 128, 0.28); }
+.dark :where(.border-primary-100, .border-primary-200, .border-primary-200\/60) { border-color: rgba(234, 106, 18, 0.28); }
+.dark :where(.border-primary-300) { border-color: rgba(234, 106, 18, 0.4); }
+.dark :where(.border-secondary-100, .border-secondary-200) { border-color: rgba(121, 168, 217, 0.28); }
+.dark :where(.border-teal-100) { border-color: rgba(45, 212, 191, 0.28); }
+.dark :where(.border-violet-100, .border-violet-200) { border-color: rgba(192, 132, 252, 0.28); }
+/* White rings/borders around avatars and badges are cut-outs against the card. */
+.dark :where(.border-white) { border-color: #111827; }
+.dark :where(.ring-white) { --tw-ring-color: #111827; }
+.dark :where(.ring-slate-200, .ring-slate-200\/70, .ring-slate-200\/80, .ring-slate-900\/10) { --tw-ring-color: rgba(255, 255, 255, 0.12); }
+.dark :where(.ring-amber-100, .ring-orange-200, .ring-primary-100, .ring-primary-200) { --tw-ring-color: rgba(234, 106, 18, 0.3); }
+.dark :where(.divide-slate-50) > :not(:last-child) { border-color: rgba(255, 255, 255, 0.08); }
+.dark :where(.divide-amber-100, .divide-orange-100) > :not(:last-child) { border-color: rgba(251, 191, 36, 0.2); }
+
+/* Semantic borders must win over the neutral rules above when an element carries
+   both (for example an invalid input: `border-slate-200 border-danger`). Keep these
+   after every neutral border rule. */
+.dark :where(.border-danger, .border-red-400, .border-red-500) { border-color: var(--color-danger); }
+.dark :where(.border-primary, .border-primary-500) { border-color: var(--color-primary); }
+.dark :where(.border-amber-400, .border-amber-500, .border-orange-400, .border-orange-500) { border-color: #f59e0b; }
+.dark :where(.border-green-400, .border-green-500, .border-emerald-600) { border-color: var(--color-success); }
+.dark :where(.border-blue-400) { border-color: #60a5fa; }
+.dark :where(.focus\:border-primary):focus { border-color: var(--color-primary); }
+.dark :where(.focus\:border-danger):focus { border-color: var(--color-danger); }
+
+/* Text that is too dark on a dark surface */
+.dark :where(.text-primary-700, .text-primary-800, .text-primary-dark) { color: #fb923c; }
+.dark :where(.text-secondary, .text-secondary\/80) { color: #79a8d9; }
+.dark :where(.text-rose-600, .text-rose-700) { color: #fda4af; }
+.dark :where(.text-teal-700) { color: #5eead4; }
+.dark :where(.text-indigo-900) { color: #93c5fd; }
+.dark :where(.text-orange-900) { color: #fbbf24; }
+.dark :where(.text-success-dark) { color: #86efac; }
+.dark :where(.text-warning-dark) { color: #fbbf24; }
+.dark :where(.text-danger-dark) { color: #fca5a5; }
+.dark :where(.hover\:text-primary-700, .hover\:text-primary-dark):hover { color: #fdba74; }
+.dark :where(.hover\:text-success-dark):hover { color: #bbf7d0; }
+.dark :where(.hover\:text-secondary-dark):hover { color: #bfdbfe; }
+
+/* Hover, active and disabled states */
+.dark :where(.hover\:bg-slate-200, .hover\:bg-gray-200):hover { background-color: #3b475c; }
+.dark :where(.hover\:bg-slate-300, .hover\:bg-gray-300):hover { background-color: #475569; }
+.dark :where(.active\:bg-slate-300):active { background-color: #475569; }
+.dark :where(
+  .hover\:bg-slate-50\/10, .hover\:bg-slate-50\/40, .hover\:bg-slate-50\/50,
+  .hover\:bg-slate-50\/60, .hover\:bg-slate-50\/70, .hover\:bg-slate-50\/80
+):hover { background-color: rgba(30, 41, 59, 0.56); }
+.dark :where(.hover\:bg-slate-100\/60):hover { background-color: rgba(51, 65, 85, 0.64); }
+.dark :where(.hover\:bg-white\/60, .hover\:bg-white\/70):hover { background-color: rgba(30, 41, 59, 0.74); }
+.dark :where(
+  .hover\:bg-primary-50, .hover\:bg-primary-50\/20, .hover\:bg-primary-50\/30, .hover\:bg-primary-50\/40,
+  .hover\:bg-orange-50, .hover\:bg-orange-50\/20, .hover\:bg-orange-50\/30, .hover\:bg-orange-50\/70
+):hover { background-color: rgba(234, 106, 18, 0.14); }
+.dark :where(.hover\:bg-primary-100, .hover\:bg-orange-100):hover { background-color: rgba(234, 106, 18, 0.2); }
+.dark :where(.hover\:bg-red-50, .hover\:bg-danger-50):hover { background-color: rgba(239, 68, 68, 0.14); }
+.dark :where(.hover\:bg-red-100, .hover\:bg-rose-100):hover { background-color: rgba(239, 68, 68, 0.2); }
+.dark :where(.hover\:bg-amber-50):hover { background-color: rgba(245, 158, 11, 0.14); }
+.dark :where(.hover\:bg-amber-100, .hover\:bg-amber-200):hover { background-color: rgba(245, 158, 11, 0.2); }
+.dark :where(.hover\:bg-green-50, .hover\:bg-emerald-50, .hover\:bg-success-50):hover { background-color: rgba(34, 197, 94, 0.14); }
+.dark :where(.hover\:bg-green-100, .hover\:bg-emerald-100):hover { background-color: rgba(34, 197, 94, 0.2); }
+.dark :where(.hover\:bg-blue-50, .hover\:bg-indigo-50, .hover\:bg-secondary-50):hover { background-color: rgba(121, 168, 217, 0.14); }
+.dark :where(.hover\:bg-blue-100, .hover\:bg-indigo-100, .hover\:bg-secondary-100):hover { background-color: rgba(121, 168, 217, 0.2); }
+.dark .group:hover :where(.group-hover\:bg-slate-50) { background-color: #1e293b; }
+.dark .group:hover :where(.group-hover\:bg-orange-50, .group-hover\:bg-primary-100\/20) { background-color: rgba(234, 106, 18, 0.14); }
+.dark :where(
+  .hover\:border-slate-100, .hover\:border-slate-200, .hover\:border-slate-300, .hover\:border-slate-400,
+  .hover\:border-gray-300
+):hover { border-color: rgba(255, 255, 255, 0.22); }
+.dark :where(
+  .hover\:border-primary-200, .hover\:border-primary-300, .hover\:border-orange-200, .hover\:border-orange-300
+):hover { border-color: rgba(234, 106, 18, 0.4); }
+.dark :where(.hover\:border-red-200, .hover\:border-red-300):hover { border-color: rgba(248, 113, 113, 0.4); }
+.dark :where(.hover\:border-green-300, .hover\:border-emerald-300):hover { border-color: rgba(74, 222, 128, 0.4); }
+.dark :where(.hover\:border-indigo-300, .hover\:border-secondary-300):hover { border-color: rgba(96, 165, 250, 0.4); }
+.dark :where(.active\:bg-emerald-200):active { background-color: rgba(34, 197, 94, 0.26); }
+.dark :where(.active\:bg-rose-200):active { background-color: rgba(239, 68, 68, 0.26); }
+.dark :where(.disabled\:bg-slate-100, .disabled\:bg-gray-100):disabled { background-color: #1e293b; }
+.dark :where(.disabled\:bg-slate-300):disabled { background-color: #334155; }
+.dark :where(.disabled\:border-slate-200):disabled { border-color: rgba(255, 255, 255, 0.11); }
+.dark :where(.disabled\:hover\:border-slate-200):disabled:hover { border-color: rgba(255, 255, 255, 0.11); }
+.dark :where(.disabled\:text-slate-600):disabled { color: #94a3b8; }
+.dark :where(.focus\:ring-blue-200):focus { --tw-ring-color: rgba(96, 165, 250, 0.4); }
+.dark :where(.focus\:ring-emerald-200):focus { --tw-ring-color: rgba(74, 222, 128, 0.4); }
+.dark :where(.focus\:ring-red-100):focus { --tw-ring-color: rgba(248, 113, 113, 0.35); }
+
+/* Hover/group-hover text: the base text rules above do not cover state variants. */
+.dark :where(.hover\:text-slate-600, .hover\:text-slate-700, .hover\:text-gray-600):hover { color: #e2e8f0; }
+.dark :where(
+  .hover\:text-red-600, .hover\:text-red-700, .hover\:text-red-800, .hover\:text-red-900, .hover\:text-rose-700
+):hover { color: #fecaca; }
+.dark :where(.hover\:text-blue-800, .hover\:text-blue-900):hover { color: #bfdbfe; }
+.dark :where(.hover\:text-emerald-700, .hover\:text-green-700, .hover\:text-green-800):hover { color: #bbf7d0; }
+.dark :where(.hover\:text-orange-600):hover { color: #fdba74; }
+.dark .group:hover :where(.group-hover\:text-slate-600) { color: #e2e8f0; }
+.dark .group:hover :where(.group-hover\:text-emerald-600) { color: #86efac; }
+.dark .group:hover :where(.group-hover\:text-orange-600) { color: #fdba74; }
+
+/* Gradient stops. Only the color variable is replaced, so the gradient direction
+   and any `from-x/80` opacity suffix keep working. */
+.dark :where(.from-white) { --tw-gradient-from: #111827; }
+.dark :where(.via-white) { --tw-gradient-via: #111827; }
+.dark :where(.to-white) { --tw-gradient-to: #111827; }
+.dark :where(.from-slate-100) { --tw-gradient-from: #1e293b; }
+.dark :where(.to-slate-200) { --tw-gradient-to: #334155; }
+.dark :where(.to-slate-50\/50) { --tw-gradient-to: rgba(22, 32, 51, 0.5); }
+.dark :where(.from-orange-50, .from-orange-50\/80, .from-amber-50) { --tw-gradient-from: rgba(245, 158, 11, 0.1); }
+.dark :where(.via-amber-50\/40, .via-amber-50\/70) { --tw-gradient-via: rgba(245, 158, 11, 0.08); }
+.dark :where(.to-amber-50\/70, .to-orange-50) { --tw-gradient-to: rgba(245, 158, 11, 0.1); }
+.dark :where(.to-red-50) { --tw-gradient-to: rgba(239, 68, 68, 0.1); }
+.dark :where(.from-blue-50, .from-indigo-50) { --tw-gradient-from: rgba(121, 168, 217, 0.1); }
+.dark :where(.to-blue-50\/60, .to-indigo-50, .to-secondary-50) { --tw-gradient-to: rgba(121, 168, 217, 0.1); }
+.dark :where(.to-blue-100) { --tw-gradient-to: rgba(121, 168, 217, 0.16); }
+.dark :where(.to-indigo-100\/30) { --tw-gradient-to: rgba(121, 168, 217, 0.1); }
+.dark :where(.from-purple-50) { --tw-gradient-from: rgba(168, 85, 247, 0.1); }
+.dark :where(.to-purple-100) { --tw-gradient-to: rgba(168, 85, 247, 0.16); }
+.dark :where(.from-primary-50, .from-primary-50\/60) { --tw-gradient-from: rgba(234, 106, 18, 0.09); }
+.dark :where(.to-primary-50\/30) { --tw-gradient-to: rgba(234, 106, 18, 0.07); }
+.dark :where(.from-primary-100) { --tw-gradient-from: rgba(234, 106, 18, 0.16); }
+.dark :where(.to-primary-100\/30) { --tw-gradient-to: rgba(234, 106, 18, 0.12); }
+.dark :where(.to-primary-200) { --tw-gradient-to: rgba(234, 106, 18, 0.24); }
 
 .dark :where(.shadow-sm, .shadow-card, .shadow-elevated, .shadow-float) {
   --tw-shadow-color: rgba(0, 0, 0, 0.32);

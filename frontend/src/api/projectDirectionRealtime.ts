@@ -9,6 +9,9 @@ interface ProjectDirectionChangedRealtimeEvent {
     teamId: string;
     title: string;
     summary: string;
+    isProjectProfileChangeProposal?: boolean;
+    currentTitle?: string | null;
+    currentSummary?: string | null;
     status: string;
     submittedAtUtc?: string | null;
     reviewedAtUtc?: string | null;
@@ -52,6 +55,12 @@ interface ClassMajorUpdatedRealtimeEvent {
   majorCode: string;
 }
 
+interface ClassMajorsChangedRealtimeEvent {
+  eventType: 'ClassMajorsChanged';
+  classId: string;
+  changeType: string;
+}
+
 interface TeamProposalReviewedRealtimeEvent {
   eventType: 'TeamProposalReviewed';
   classId: string;
@@ -88,6 +97,7 @@ export type ProjectDirectionRealtimeEvent =
   | CheckpointFeedbackPostedRealtimeEvent
   | CheckpointFeedbackDeletedRealtimeEvent
   | ClassMajorUpdatedRealtimeEvent
+  | ClassMajorsChangedRealtimeEvent
   | TeamProposalReviewedRealtimeEvent
   | TeamFormationChangedRealtimeEvent
   | TeamCreatedRealtimeEvent
@@ -161,7 +171,8 @@ const connect = () => {
     try {
       const event = JSON.parse(String(message.data)) as ProjectDirectionRealtimeEvent;
       if (!event?.eventType) return;
-      if (event.eventType === 'ClassMajorUpdated' || event.eventType === 'TeamProposalReviewed'
+      if (event.eventType === 'ClassMajorUpdated' || event.eventType === 'ClassMajorsChanged'
+        || event.eventType === 'TeamProposalReviewed'
         || event.eventType === 'TeamFormationChanged' || event.eventType === 'TeamCreated') {
         if (!event.classId) return;
         if (event.eventType === 'TeamFormationChanged' && !event.formationId) return;
@@ -173,6 +184,7 @@ const connect = () => {
         && event.eventType !== 'CheckpointRequirementsUpdated'
         && event.eventType !== 'CheckpointEvaluationUpdated'
         && event.eventType !== 'ClassMajorUpdated'
+        && event.eventType !== 'ClassMajorsChanged'
         && event.eventType !== 'TeamProposalReviewed'
         && event.eventType !== 'TeamFormationChanged'
         && event.eventType !== 'TeamCreated'

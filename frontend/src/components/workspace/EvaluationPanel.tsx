@@ -104,6 +104,7 @@ export default function EvaluationPanel({
 
   const isStudent = user?.role === 'STUDENT' || user?.role === 'USER';
   const isMentor = user?.role === 'MENTOR';
+  const canViewHistory = user?.role === 'LECTURER' || user?.role === 'ADMIN';
   const canEdit = !isReadOnly && user?.role === 'LECTURER';
   const activeEvaluation = useMemo(
     () => evaluations.find((ev) => ev.lecturerId?._id === user?._id) || null,
@@ -325,7 +326,7 @@ export default function EvaluationPanel({
           </section>
         )}
 
-        <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        {canViewHistory && <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="mb-3 flex items-center gap-2">
             <History className="h-4 w-4 text-primary" />
             <h3 className="font-bold text-slate-900">Evaluation history</h3>
@@ -335,7 +336,7 @@ export default function EvaluationPanel({
           ) : (
             <EvaluationHistoryEntries history={history} />
           )}
-        </section>
+        </section>}
       </div>
     );
   }
@@ -351,7 +352,7 @@ export default function EvaluationPanel({
             <h2 className="mt-2 text-2xl font-black text-slate-900">{checkpointTitle}</h2>
             <p className="mt-1 text-sm text-slate-500">
               {isStudent
-                ? 'View the official evaluation, comments, and history for each checkpoint.'
+                ? 'View your published personal score and feedback for each checkpoint.'
                 : canEdit
                   ? 'Score the startup team, save drafts, and submit the official evaluation.'
                   : isMentor
@@ -530,7 +531,7 @@ export default function EvaluationPanel({
             )}
           </div>
 
-          <div className="rounded-2xl bg-white border border-slate-200/70 shadow-sm p-5 sm:p-6">
+          {canViewHistory && <div className="rounded-2xl bg-white border border-slate-200/70 shadow-sm p-5 sm:p-6">
             <div className="flex items-center gap-2 mb-4">
               <History className="w-4 h-4 text-primary" />
               <h3 className="font-bold text-slate-900">Evaluation history</h3>
@@ -540,7 +541,7 @@ export default function EvaluationPanel({
             ) : (
               <div className="max-h-[620px] overflow-y-auto pr-1"><EvaluationHistoryEntries history={history} /></div>
             )}
-          </div>
+          </div>}
 
           <div className="rounded-2xl bg-white border border-slate-200/70 shadow-sm p-5 sm:p-6">
             <div className="flex items-center gap-2 mb-4">
@@ -550,7 +551,7 @@ export default function EvaluationPanel({
             <div className="space-y-3 text-sm text-slate-600">
               <p>Lecturers can create drafts, score rubric criteria, and submit the official evaluation.</p>
               <p>Mentors can review and comment, but cannot finalize the score.</p>
-              <p>Students can view published evaluations and feedback history.</p>
+              <p>Students can view their published personal scores and written feedback.</p>
             </div>
           </div>
         </div>

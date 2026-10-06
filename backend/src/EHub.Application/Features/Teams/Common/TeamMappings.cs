@@ -7,7 +7,9 @@ namespace EHub.Application.Features.Teams.Common;
 
 internal static class TeamMappings
 {
-    public static TeamDto ToDto(Team team)
+    public static TeamDto ToDto(Team team) => ToDto(team, true);
+
+    public static TeamDto ToDto(Team team, bool includePrivateInformation)
     {
         var activeAssignments = team.MentorAssignments
             .Where(assignment => assignment.Status == MentorAssignmentStatus.Active && assignment.EndedAt == null)
@@ -19,7 +21,7 @@ internal static class TeamMappings
             .Where(member => member.CountsTowardActiveTeam)
             .OrderBy(member => member.RoleInTeam == TeamMemberRole.Leader ? 0 : 1)
             .ThenBy(member => member.ClassStudent.Student.RollNumber)
-            .Select(ToMemberDto)
+            .Select(member => ToMemberDto(member, includePrivateInformation))
             .ToArray();
 
         return new TeamDto
@@ -37,16 +39,23 @@ internal static class TeamMappings
             Members = members,
             CurrentMentorAssignments = activeAssignments,
             CurrentMentorAssignment = activeAssignments.FirstOrDefault(),
+            MajorComposition = TeamMajorCompositionRules.Evaluate(team),
+            TeamLineageId = team.TeamLineageId,
+            IsContinued = team.PreviousTeamId.HasValue,
+            ContinuedFromSemesterCode = team.PreviousTeam?.Class?.Semester?.Code,
+            ContinuedFromClassCode = team.PreviousTeam?.Class?.ClassCode,
             RowVersion = team.Version.ToString()
         };
     }
 
-    public static TeamMemberDto ToMemberDto(TeamMember member) => new()
+    public static TeamMemberDto ToMemberDto(TeamMember member) => ToMemberDto(member, true);
+
+    public static TeamMemberDto ToMemberDto(TeamMember member, bool includePrivateInformation) => new()
     {
         StudentId = member.StudentId,
         RollNumber = member.ClassStudent.Student.RollNumber ?? string.Empty,
         FullName = member.ClassStudent.Student.FullName,
-        Email = member.ClassStudent.Student.Email,
+        Email = includePrivateInformation ? member.ClassStudent.Student.Email : null,
         MajorCode = StudentEnrollmentRules.ResolveEffectiveMajorCode(
             member.ClassStudent.MajorCodeAtEnrollment,
             member.ClassStudent.Student.MajorCode) ?? string.Empty,

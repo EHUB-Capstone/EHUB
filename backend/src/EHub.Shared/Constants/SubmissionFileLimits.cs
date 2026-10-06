@@ -12,6 +12,15 @@ public static class SubmissionFileLimits
 
     public const int MaxPendingUploadSessionsPerUserTeam = 5;
 
+    /// <summary>Background preview generation: attempts before a file is marked Failed.</summary>
+    public const int MaxPreviewGenerationAttempts = 3;
+
+    /// <summary>Wait before retry number 1, 2, ... (the last entry is reused if there are more attempts).</summary>
+    public static readonly TimeSpan[] PreviewGenerationRetryDelays = [TimeSpan.FromSeconds(30), TimeSpan.FromMinutes(2)];
+
+    /// <summary>A claimed file is not picked up again for this long (covers a crash mid-conversion).</summary>
+    public static readonly TimeSpan PreviewGenerationLease = TimeSpan.FromMinutes(5);
+
     /// <summary>An abandoned session is cleaned up this long after it expired.</summary>
     public static readonly TimeSpan UploadCleanupGrace = TimeSpan.FromMinutes(10);
 
@@ -22,6 +31,9 @@ public static class SubmissionFileLimits
     public const long DirectDownloadThresholdBytes = 10L * 1024 * 1024;
 
     public static readonly TimeSpan PresignedDownloadLifetime = TimeSpan.FromMinutes(5);
+
+    /// <summary>Presigned GET used by PDF.js to read a preview PDF straight from R2 (several Range requests).</summary>
+    public static readonly TimeSpan PresignedPreviewLifetime = TimeSpan.FromMinutes(15);
 
     /// <summary>DOCX/PPTX larger than this are not converted to a PDF preview (RAM and LibreOffice timeout).</summary>
     public const long MaxPreviewConvertSizeBytes = 30L * 1024 * 1024;

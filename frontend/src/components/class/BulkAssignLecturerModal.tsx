@@ -8,6 +8,7 @@ import { normalizeLecturerOptions } from '../../utils/lecturerDirectory';
 import { subjectApi } from '../../api/subjectApi';
 import { unwrapApiData } from '../../utils/classMappers';
 import { parseApiError } from '../../utils/apiError';
+import { matchesSearchQuery } from '../../utils/searchText';
 
 interface LecturerOption {
   _id: string;
@@ -88,10 +89,7 @@ const BulkAssignLecturerModal = ({
     };
   }, [classes, isOpen]);
   const options = useMemo(
-    () => normalizeLecturerOptions(lecturers).filter((lecturer) => {
-      const query = search.trim().toLowerCase();
-      return !query || lecturer.name?.toLowerCase().includes(query) || lecturer.email?.toLowerCase().includes(query);
-    }),
+    () => normalizeLecturerOptions(lecturers).filter((lecturer) => matchesSearchQuery(search, [lecturer.name, lecturer.email])),
     [lecturers, search],
   );
 

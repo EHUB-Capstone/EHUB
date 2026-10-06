@@ -1,4 +1,4 @@
-import { useState, useEffect, useContext, useCallback } from 'react';
+import { useState, useEffect, useContext, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { motion } from 'framer-motion';
@@ -14,6 +14,9 @@ import { userApi } from '../../api/userApi';
 import LoadingSkeleton from '../../components/ui/LoadingSkeleton';
 import StudentTable from '../../components/class/StudentTable';
 import TeamList from '../../components/class/TeamList';
+import TeamMajorWarningBanner from '../../components/class/TeamMajorWarningBanner';
+import GroupProjectWarningBanner from '../../components/class/GroupProjectWarningBanner';
+import type { GroupProjectConsistency, GroupProjectWarning } from '../../types/groupProjectConsistency';
 import TeamManagementModal from '../../components/class/TeamManagementModal';
 import StudentAssignmentModal from '../../components/class/StudentAssignmentModal';
 import ImportStudentsModal from '../../components/class/ImportStudentsModal';
@@ -24,8 +27,8 @@ import ProjectDirectionModal from '../../components/class/ProjectDirectionModal'
 import EditScheduleModal from '../../components/class/EditScheduleModal';
 import AssignLectureModal from '../../components/class/AssignLectureModal';
 import AssignMentorsModal from '../../components/class/AssignMentorsModal';
-import VerifyMajorModal from '../../components/class/VerifyMajorModal';
 import ImportSemesterGroupsModal from '../../components/class/ImportSemesterGroupsModal';
+import VerifyMajorModal from '../../components/class/VerifyMajorModal';
 import AddStudentModal from '../../components/class/AddStudentModal';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import { getTeamMemberIds, mergeTeamsWithLinkedProposals, normalizeManagedTeam, normalizeTeamProposal, resolveEffectiveTeamMajor } from '../../utils/teamManagement';
@@ -38,6 +41,48 @@ import { canManageClass as canManageClassPermission, hasClassRole } from '../../
 import type { ClassCompletionPreview } from '../../types/classes';
 import type { StudentAssignmentMode } from '../../types/studentAssignment';
 import { subscribeProjectDirectionRealtime } from '../../api/projectDirectionRealtime';
+
+const mapRosterStudents = (rawStudents, currentClassId, proposals = []) => {
+  const reservedTeamIds = new Map();
+  proposals.forEach((proposal) => {
+    const proposalStatus = String(proposal.status || '').toUpperCase();
+    if (!['DRAFT', 'PENDING', 'NEEDS_REVISION', 'NEEDSREVISION'].includes(proposalStatus)) return;
+    getTeamMemberIds(proposal).forEach((studentId) => reservedTeamIds.set(studentId, proposal._id));
+  });
+
+  return rawStudents.map((student, index) => {
+    const effectiveMajor = resolveEffectiveTeamMajor(student.majorCode, student.profileMajorCode, student.major);
+    const registeredMajor = typeof student.profileMajorCode === 'string'
+      ? student.profileMajorCode.trim().toUpperCase()
+      : '';
+    const hasMajorMismatch = Boolean(
+      effectiveMajor &&
+      registeredMajor &&
+      effectiveMajor !== 'UNDECLARED' &&
+      registeredMajor !== 'UNDECLARED' &&
+      effectiveMajor !== registeredMajor,
+    );
+    const studentId = student.studentId || student.id || student._id || `student-${index}`;
+    return {
+      _id: studentId,
+      studentCode: student.rollNumber || student.studentCode,
+      rollNumber: student.rollNumber || student.studentCode,
+      fullName: student.fullName,
+      email: student.email,
+      major: effectiveMajor,
+      majorCode: effectiveMajor,
+      profileMajorCode: registeredMajor || null,
+      hasMajorMismatch,
+      majorVerificationStatus: student.majorVerificationStatus || 'Unverified',
+      semesterGroupName: student.semesterGroupName || null,
+      enrollmentStatus: student.enrollmentStatus || 'Active',
+      classId: currentClassId,
+      teamId: student.teamId || reservedTeamIds.get(studentId) || null,
+      teamName: student.teamName || null,
+      isTeamLeader: student.isTeamLeader || false,
+    };
+  });
+};
 
 const classActionTone = {
   neutral: 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-800',
@@ -70,8 +115,10 @@ export default function ClassDetail() {
   const [students, setStudents] = useState([]);
   const [teams,    setTeams]    = useState([]);
   const [teamProposals, setTeamProposals] = useState([]);
+  const [groupProjectWarnings, setGroupProjectWarnings] = useState<GroupProjectWarning[]>([]);
   const [loading,  setLoading]  = useState(true);
   const [rosterLoadError, setRosterLoadError] = useState('');
+  const [rosterRefreshing, setRosterRefreshing] = useState(false);
   const [rosterPage, setRosterPage] = useState(1);
   const [rosterPageSize] = useState(50);
   const [rosterSearch, setRosterSearch] = useState('');
@@ -121,15 +168,79 @@ export default function ClassDetail() {
   const [completionPreview, setCompletionPreview] = useState<ClassCompletionPreview | null>(null);
   const [completionLoading, setCompletionLoading] = useState(false);
   const [showActionsMenu, setShowActionsMenu] = useState(false);
+  const lastAutoLoadedClassIdentifierRef = useRef<string | undefined>(undefined);
+  const currentClassRef = useRef(null);
+  const teamProposalsRef = useRef([]);
+  const rosterRequestRef = useRef<{ controller: AbortController; sequence: number } | null>(null);
 
-  const fetchData = useCallback(async () => {
+  useEffect(() => {
+    currentClassRef.current = cls;
+  }, [cls]);
+
+  useEffect(() => {
+    teamProposalsRef.current = teamProposals;
+  }, [teamProposals]);
+
+  const handleRosterQueryChange = useCallback((next) => {
+    if (Object.prototype.hasOwnProperty.call(next, 'search')) setRosterSearch(next.search);
+    if (Object.prototype.hasOwnProperty.call(next, 'majorCode')) setRosterMajor(next.majorCode);
+    if (Object.prototype.hasOwnProperty.call(next, 'status')) setRosterStatus(next.status);
+    if (Object.prototype.hasOwnProperty.call(next, 'page')) setRosterPage(next.page);
+    if (!Object.prototype.hasOwnProperty.call(next, 'page')) setRosterPage(1);
+  }, []);
+
+  // `background` refreshes in place: swapping the page for a skeleton would unmount open modals.
+  const fetchData = useCallback(async (options?: { background?: boolean; rosterOnly?: boolean }) => {
     if (!id || id === 'undefined') {
       toast.error('Invalid class identifier');
       setLoading(false);
       return null;
     }
 
-    setLoading(true);
+    if (options?.rosterOnly) {
+      const currentClass = currentClassRef.current;
+      const currentClassId = String(currentClass?.id || currentClass?._id || '');
+      if (!currentClassId) return null;
+
+      rosterRequestRef.current?.controller.abort();
+      const controller = new AbortController();
+      const sequence = (rosterRequestRef.current?.sequence || 0) + 1;
+      rosterRequestRef.current = { controller, sequence };
+      setRosterLoadError('');
+      setRosterRefreshing(true);
+
+      try {
+        const response = await classApi.getStudents(currentClassId, {
+          page: rosterPage,
+          pageSize: rosterPageSize,
+          search: rosterSearch || undefined,
+          majorCode: rosterMajor || undefined,
+          status: rosterStatus || undefined,
+        }, controller.signal);
+        if (controller.signal.aborted || rosterRequestRef.current?.sequence !== sequence) return null;
+
+        const data = unwrapApiData(response);
+        const rawStudents = data.items || data.students || data.data || (Array.isArray(data) ? data : []);
+        setRosterMeta({
+          totalCount: data.totalCount ?? rawStudents.length,
+          page: data.page ?? rosterPage,
+          pageSize: data.pageSize ?? rosterPageSize,
+          totalPages: Math.max(1, data.totalPages ?? 1),
+        });
+        setStudents(mapRosterStudents(rawStudents, currentClassId, teamProposalsRef.current));
+      } catch (error) {
+        if (!controller.signal.aborted) {
+          setRosterLoadError(parseApiError(error, 'Failed to load the class roster.').message);
+        }
+      } finally {
+        // A superseded request must not clear the indicator of the one that replaced it.
+        if (rosterRequestRef.current?.sequence === sequence) setRosterRefreshing(false);
+      }
+      return null;
+    }
+
+    rosterRequestRef.current?.controller.abort();
+    if (options?.background !== true) setLoading(true);
     setRosterLoadError('');
 
     try {
@@ -190,38 +301,6 @@ export default function ClassDetail() {
         setRosterLoadError(parseApiError(studentRes.reason, 'Failed to load the class roster.').message);
       }
 
-      const mappedStudents = rawStudents.map((s, idx) => {
-        const effectiveMajor = resolveEffectiveTeamMajor(s.majorCode, s.profileMajorCode, s.major);
-        const registeredMajor = typeof s.profileMajorCode === 'string'
-          ? s.profileMajorCode.trim().toUpperCase()
-          : '';
-        const hasMajorMismatch = Boolean(
-          effectiveMajor &&
-          registeredMajor &&
-          effectiveMajor !== 'UNDECLARED' &&
-          registeredMajor !== 'UNDECLARED' &&
-          effectiveMajor !== registeredMajor,
-        );
-        return {
-          _id: s.studentId || s.id || s._id || `student-${idx}`,
-          studentCode: s.rollNumber || s.studentCode,
-          rollNumber: s.rollNumber || s.studentCode,
-          fullName: s.fullName,
-          email: s.email,
-          major: effectiveMajor,
-          majorCode: effectiveMajor,
-          profileMajorCode: registeredMajor || null,
-          hasMajorMismatch,
-          majorVerificationStatus: s.majorVerificationStatus || 'Unverified',
-          semesterGroupName: s.semesterGroupName || null,
-          enrollmentStatus: s.enrollmentStatus || 'Active',
-          classId: currentClassId,
-          teamId: s.teamId || null,
-          teamName: s.teamName || null,
-          isTeamLeader: s.isTeamLeader || false
-        };
-      });
-
       let rawTeams = [];
       let rawProposals = [];
       if (classFeatureFlags.teamManagement) {
@@ -239,21 +318,21 @@ export default function ClassDetail() {
         }
       }
 
+      // Advisory check of the 1-1 Group/Project rule; the class stays usable if it cannot be loaded.
+      let nextGroupProjectWarnings: GroupProjectWarning[] = [];
+      try {
+        const consistency = unwrapApiData<GroupProjectConsistency>(await classApi.getGroupProjectConsistency(currentClassId));
+        nextGroupProjectWarnings = Array.isArray(consistency?.warnings) ? consistency.warnings : [];
+      } catch {
+        // Only staff who manage the class can run this check.
+      }
+
       const normalizedTeams = rawTeams.map(normalizeManagedTeam);
       const normalizedProposals = rawProposals.map(normalizeTeamProposal);
-      const reservedTeamIds = new Map();
-      normalizedProposals.forEach((proposal) => {
-        const proposalStatus = String(proposal.status || '').toUpperCase();
-        if (!['DRAFT', 'PENDING', 'NEEDS_REVISION', 'NEEDSREVISION'].includes(proposalStatus)) return;
-        getTeamMemberIds(proposal).forEach((studentId) => reservedTeamIds.set(studentId, proposal._id));
-      });
-
-      setStudents(mappedStudents.map((student) => ({
-        ...student,
-        teamId: student.teamId || reservedTeamIds.get(student._id) || null,
-      })));
+      setStudents(mapRosterStudents(rawStudents, currentClassId, normalizedProposals));
       setTeams(normalizedTeams);
       setTeamProposals(normalizedProposals);
+      setGroupProjectWarnings(nextGroupProjectWarnings);
 
       return classData;
     } catch (err) {
@@ -265,21 +344,33 @@ export default function ClassDetail() {
   }, [id, navigate, rosterMajor, rosterPage, rosterPageSize, rosterSearch, rosterStatus]);
 
   useEffect(() => {
+    const background = lastAutoLoadedClassIdentifierRef.current === id;
+    lastAutoLoadedClassIdentifierRef.current = id;
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    fetchData();
-  }, [fetchData]);
+    fetchData({ background, rosterOnly: background });
+  }, [fetchData, id]);
+
+  useEffect(() => () => rosterRequestRef.current?.controller.abort(), []);
 
   // Refresh only when the server confirms this class changed, or after reconnecting.
+  // fetchData changes whenever the roster query changes; subscribing through a ref keeps the
+  // subscription stable so typing in the search box never re-triggers the "connected" refresh.
+  const fetchDataRef = useRef(fetchData);
+  useEffect(() => {
+    fetchDataRef.current = fetchData;
+  }, [fetchData]);
+
+  const currentClassId = String(cls?.id || cls?._id || '');
   useEffect(() => subscribeProjectDirectionRealtime((event) => {
-    const currentClassId = String(cls?.id || cls?._id || '');
-    if (currentClassId && (event.eventType === 'ClassMajorUpdated' || event.eventType === 'TeamProposalReviewed'
+    if (currentClassId && (event.eventType === 'ClassMajorUpdated' || event.eventType === 'ClassMajorsChanged'
+      || event.eventType === 'TeamProposalReviewed'
       || event.eventType === 'TeamCreated')
       && String(event.classId) === currentClassId) {
-      void fetchData();
+      void fetchDataRef.current({ background: true });
     }
   }, (reconnected) => {
-    if (reconnected) void fetchData();
-  }), [cls?.id, cls?._id, fetchData]);
+    if (reconnected) void fetchDataRef.current({ background: true });
+  }), [currentClassId]);
 
   useEffect(() => {
     setSelectedStudentSnapshots((current) => {
@@ -683,20 +774,96 @@ export default function ClassDetail() {
               </ClassActionButton>
             )} */}
 
-            <ClassActionButton icon={Download} loading={exporting} onClick={handleExportExcel} disabled={exporting}>
-              Export Class Data
-            </ClassActionButton>
+            {/* Roster */}
+            <div role="group" aria-label="Roster actions" className="flex flex-wrap items-center gap-1.5 empty:hidden">
+              {!isReadOnly && (isAdmin || classFeatureFlags.lecturerStudentImport) && (
+                <ClassActionButton icon={Upload} tone="primary" onClick={() => setShowImport(true)}>
+                  Import Students
+                </ClassActionButton>
+              )}
 
-            {!isReadOnly && (
-              <>
+              {!isReadOnly && (
                 <ClassActionButton icon={UserPlus} tone="primary" onClick={() => setShowAddStudent(true)}>
                   Add student
                 </ClassActionButton>
+              )}
 
-                {/* <ClassActionButton icon={UserRoundCheck} tone="secondary" onClick={() => openStudentAssignment('CLASS')}>
-                  Assign students
-                </ClassActionButton> */}
+              {/* <ClassActionButton icon={UserRoundCheck} tone="secondary" onClick={() => openStudentAssignment('CLASS')}>
+                Assign students
+              </ClassActionButton> */}
 
+              {!isReadOnly && (
+                <ClassActionButton
+                  icon={Upload}
+                  tone="secondary"
+                  onClick={() => {
+                    setShowActionsMenu(false);
+                    setShowSemesterGroupImport(true);
+                  }}
+                >
+                  Import semester groups
+                </ClassActionButton>
+              )}
+
+              <ClassActionButton icon={Download} loading={exporting} onClick={handleExportExcel} disabled={exporting}>
+                Export Class Data
+              </ClassActionButton>
+            </div>
+
+            {/* Majors */}
+            <div role="group" aria-label="Major actions" className="flex flex-wrap items-center gap-1.5 border-slate-200 empty:hidden sm:border-l sm:pl-2">
+              {!isReadOnly && isFeatureVisible(classFeatureFlags.majorVerification) && (
+                <ClassActionButton
+                  id="btn-verify-majors"
+                  icon={ShieldCheck}
+                  tone="indigo"
+                  onClick={() => runFeatureAction(classFeatureFlags.majorVerification, 'Major verification', () => setShowVerify(true))}
+                >
+                  Verify / sync majors
+                </ClassActionButton>
+              )}
+
+              {!isReadOnly && (
+                <ClassActionButton
+                  icon={cls.isMajorLocked ? Lock : Unlock}
+                  tone={cls.isMajorLocked ? 'danger' : 'success'}
+                  loading={togglingLock}
+                  onClick={() => runFeatureAction(classFeatureFlags.majorVerification, 'Major locking', handleToggleMajorLock)}
+                  disabled={togglingLock}
+                >
+                  {cls.isMajorLocked ? 'Unlock major updates' : 'Lock major updates'}
+                </ClassActionButton>
+              )}
+            </div>
+
+            {/* Class lifecycle */}
+            <div role="group" aria-label="Class lifecycle actions" className="flex flex-wrap items-center gap-1.5 border-slate-200 empty:hidden sm:border-l sm:pl-2">
+              {((cls.status === 'Active') || (isCompleted && isAdmin)) && (
+                <ClassActionButton
+                  icon={isCompleted ? Play : CircleCheck}
+                  tone={isCompleted ? 'primary' : 'success'}
+                  loading={completionLoading}
+                  onClick={openCompletionDialog}
+                  disabled={completionLoading}
+                >
+                  {isCompleted ? 'Reopen Class' : 'Complete Class'}
+                </ClassActionButton>
+              )}
+
+              {isFeatureVisible(classFeatureFlags.lifecycle) && (
+                <ClassActionButton
+                  icon={isArchived ? RotateCcw : Archive}
+                  tone={isArchived ? 'success' : 'danger'}
+                  onClick={() => runFeatureAction(classFeatureFlags.lifecycle, 'Class lifecycle management', () => setShowDeleteClass(true))}
+                >
+                  {lifecyclePresentation.label}
+                </ClassActionButton>
+              )}
+            </div>
+
+            {/* Destructive */}
+            <div role="group" aria-label="Destructive actions" className="flex flex-wrap items-center gap-1.5 border-slate-200 empty:hidden sm:border-l sm:pl-2">
+              {!isReadOnly && (
                 <ClassActionButton
                   icon={Trash2}
                   tone="danger"
@@ -707,72 +874,8 @@ export default function ClassDetail() {
                 >
                   Remove all students
                 </ClassActionButton>
-              </>
-            )}
-
-            {!isReadOnly && (isAdmin || classFeatureFlags.lecturerStudentImport) && (
-              <ClassActionButton icon={Upload} tone="primary" onClick={() => setShowImport(true)}>
-                Import Students
-              </ClassActionButton>
-            )}
-
-            {!isReadOnly && isFeatureVisible(classFeatureFlags.majorVerification) && (
-              <ClassActionButton
-                id="btn-verify-majors"
-                icon={ShieldCheck}
-                tone="indigo"
-                onClick={() => runFeatureAction(classFeatureFlags.majorVerification, 'Major verification', () => setShowVerify(true))}
-              >
-                Verify / sync majors
-              </ClassActionButton>
-            )}
-
-            {!isReadOnly && (
-              <ClassActionButton
-                icon={Upload}
-                tone="secondary"
-                onClick={() => {
-                  setShowActionsMenu(false);
-                  setShowSemesterGroupImport(true);
-                }}
-              >
-                Import semester groups
-              </ClassActionButton>
-            )}
-
-            {!isReadOnly && (
-              <ClassActionButton
-                icon={cls.isMajorLocked ? Lock : Unlock}
-                tone={cls.isMajorLocked ? 'danger' : 'success'}
-                loading={togglingLock}
-                onClick={() => runFeatureAction(classFeatureFlags.majorVerification, 'Major locking', handleToggleMajorLock)}
-                disabled={togglingLock}
-              >
-                {cls.isMajorLocked ? 'Unlock major updates' : 'Lock major updates'}
-              </ClassActionButton>
-            )}
-
-            {((cls.status === 'Active') || (isCompleted && isAdmin)) && (
-              <ClassActionButton
-                icon={isCompleted ? Play : CircleCheck}
-                tone={isCompleted ? 'primary' : 'success'}
-                loading={completionLoading}
-                onClick={openCompletionDialog}
-                disabled={completionLoading}
-              >
-                {isCompleted ? 'Reopen Class' : 'Complete Class'}
-              </ClassActionButton>
-            )}
-
-            {isFeatureVisible(classFeatureFlags.lifecycle) && (
-              <ClassActionButton
-                icon={isArchived ? RotateCcw : Archive}
-                tone={isArchived ? 'success' : 'danger'}
-                onClick={() => runFeatureAction(classFeatureFlags.lifecycle, 'Class lifecycle management', () => setShowDeleteClass(true))}
-              >
-                {lifecyclePresentation.label}
-              </ClassActionButton>
-            )}
+              )}
+            </div>
           </div>
         )}
       </section>
@@ -794,6 +897,19 @@ export default function ClassDetail() {
                 {cls.completionReason ? ` — ${cls.completionReason}` : ''}
               </p>
             )}
+          </div>
+        </div>
+      )}
+
+      {canManageClass && !isReadOnly && cls.isMajorLocked && (
+        <div role="status" data-testid="major-lock-banner" className="flex items-start gap-2.5 rounded-xl border border-blue-200 bg-blue-50 px-3.5 py-3 text-sm text-blue-800">
+          <Lock className="mt-0.5 h-4 w-4 shrink-0" />
+          <div>
+            <p className="font-semibold">Major updates are locked</p>
+            <p className="mt-0.5 text-xs text-blue-700">
+              Students can no longer change their major in this class, and the verification file cannot be synchronized.
+              The lock is applied automatically once every student is verified. Use Actions &rarr; Unlock major updates to make corrections.
+            </p>
           </div>
         </div>
       )}
@@ -914,6 +1030,12 @@ export default function ClassDetail() {
         </div>
       )}
 
+      {canManageClass && teamControlsVisible && (
+        <TeamMajorWarningBanner teams={safeTeams} onViewTeams={tab === 'teams' ? undefined : () => setTab('teams')} />
+      )}
+
+      {canManageClass && <GroupProjectWarningBanner warnings={groupProjectWarnings} />}
+
       {/* ── Tabs ── */}
       <div className="flex w-fit gap-0.5 rounded-lg bg-slate-100 p-0.5">
         {(teamControlsVisible ? ['students', 'teams'] : ['students']).map(t => (
@@ -967,13 +1089,8 @@ export default function ClassDetail() {
               totalCount: rosterMeta.totalCount,
               totalPages: rosterMeta.totalPages,
             }}
-            onServerQueryChange={(next) => {
-              if (Object.prototype.hasOwnProperty.call(next, 'search')) setRosterSearch(next.search);
-              if (Object.prototype.hasOwnProperty.call(next, 'majorCode')) setRosterMajor(next.majorCode);
-              if (Object.prototype.hasOwnProperty.call(next, 'status')) setRosterStatus(next.status);
-              if (Object.prototype.hasOwnProperty.call(next, 'page')) setRosterPage(next.page);
-              if (!Object.prototype.hasOwnProperty.call(next, 'page')) setRosterPage(1);
-            }}
+            onServerQueryChange={handleRosterQueryChange}
+            refreshing={rosterRefreshing}
             toolbarAction={canSelectTeamMembers && teamControlsVisible && selected.length === 0 ? (
               <div className="flex items-center gap-2">
                 <button
@@ -1101,7 +1218,7 @@ export default function ClassDetail() {
         <VerifyMajorModal
           classId={loadedClassId}
           onClose={() => setShowVerify(false)}
-          onUpdated={() => void fetchData()}
+          onUpdated={() => void fetchData({ background: true })}
         />
       )}
 
@@ -1109,7 +1226,7 @@ export default function ClassDetail() {
         <ImportSemesterGroupsModal
           classId={loadedClassId}
           onClose={() => setShowSemesterGroupImport(false)}
-          onImported={() => void fetchData()}
+          onImported={() => void fetchData({ background: true })}
         />
       )}
 

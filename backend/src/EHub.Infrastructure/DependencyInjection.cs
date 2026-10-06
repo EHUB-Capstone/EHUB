@@ -46,7 +46,9 @@ public static class DependencyInjection
         services.AddHostedService<MentorAdminSessionCleanupService>();
         services.AddHostedService<PendingRegistrationCleanupService>();
         services.AddHostedService<PendingSubmissionUploadCleanupService>();
+        services.AddHostedService<SubmissionPreviewGenerationService>();
         services.AddScoped<IOutboxEventDispatcher, NotificationOutboxEventDispatcher>();
+        services.AddSingleton<IOutboxWakeSignal, OutboxWakeSignal>();
         services.AddScoped<IClassChatMembershipSynchronizer, ClassChatMembershipSynchronizer>();
         services.AddSingleton<ProjectDirectionRealtimeService>();
         services.AddSingleton<IProjectDirectionRealtimePublisher>(provider =>

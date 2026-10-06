@@ -1,5 +1,6 @@
 using EHub.Application.Common.Interfaces.Persistence;
 using EHub.Contracts.Subjects;
+using EHub.Domain.Entities;
 using EHub.Domain.Enums;
 using EHub.Shared.Constants;
 using EHub.Shared.Errors;
@@ -38,6 +39,14 @@ public sealed class TeachingStaffQueryHandler(IApplicationDbContext context) : I
             .Where(item => item.SemesterId == targetSemester.Id)
             .OrderBy(item => item.User.FullName)
             .ThenBy(item => item.Role)
+            .ToListAsync(cancellationToken);
+
+        var incompleteMentors = await context.MentorImportDrafts
+            .AsNoTracking()
+            .Where(item =>
+                item.SemesterId == targetSemester.Id &&
+                item.Status == MentorImportDraftStatus.NeedsCompletion)
+            .OrderBy(item => item.FullName)
             .ToListAsync(cancellationToken);
 
         var lecturerAssignments = await context.ClassLecturers
@@ -79,7 +88,7 @@ public sealed class TeachingStaffQueryHandler(IApplicationDbContext context) : I
                 item.Role
             });
 
-        var response = staff.Select(item =>
+        var activeStaffResponse = staff.Select(item =>
         {
             var memberAssignments = assignmentsByRole[new
                 {
@@ -104,11 +113,34 @@ public sealed class TeachingStaffQueryHandler(IApplicationDbContext context) : I
                 Role = ToRoleCode(item.Role),
                 Status = item.Status.ToString(),
                 UserStatus = item.User.Status.ToString(),
+                IsIncomplete = false,
                 ClassCount = memberAssignments.Length,
                 Assignments = memberAssignments,
                 RowVersion = item.Version.ToString()
             };
-        }).ToArray();
+        });
+
+        var incompleteMentorResponse = incompleteMentors.Select(item => new TeachingStaffResponse
+        {
+            Id = item.Id,
+            UserId = null,
+            Name = item.FullName,
+            Email = item.Email ?? string.Empty,
+            Role = "MENTOR",
+            Status = "Incomplete",
+            UserStatus = "NotCreated",
+            IsIncomplete = true,
+            MissingFields = GetMissingFields(item),
+            ClassCount = 0,
+            Assignments = Array.Empty<TeachingAssignmentResponse>(),
+            RowVersion = string.Empty
+        });
+
+        var response = activeStaffResponse
+            .Concat(incompleteMentorResponse)
+            .OrderBy(item => item.Name)
+            .ThenBy(item => item.Role)
+            .ToArray();
 
         var distinctClasses = lecturerAssignments
             .Concat(mentorAssignments)
@@ -191,6 +223,33 @@ public sealed class TeachingStaffQueryHandler(IApplicationDbContext context) : I
         SemesterStaffRole.Mentor => "MENTOR",
         _ => throw new ArgumentOutOfRangeException(nameof(role))
     };
+
+    private static IReadOnlyCollection<string> GetMissingFields(MentorImportDraft mentor)
+    {
+        var fields = new List<string>();
+        if (string.IsNullOrWhiteSpace(mentor.Email))
+        {
+            fields.Add(mentor.Type == MentorType.Academic ? "Email công việc" : "Email");
+        }
+
+        if (mentor.Type == MentorType.Enterprise)
+        {
+            if (mentor.DateOfBirth is null) fields.Add("Ngày tháng năm sinh");
+            if (string.IsNullOrWhiteSpace(mentor.Phone)) fields.Add("SDT");
+            if (string.IsNullOrWhiteSpace(mentor.ContractType)) fields.Add("Loại HĐ");
+            if (string.IsNullOrWhiteSpace(mentor.EducationLevel)) fields.Add("Trình độ học vấn");
+            if (string.IsNullOrWhiteSpace(mentor.CurrentAddress)) fields.Add("Địa chỉ hiện nay");
+            if (string.IsNullOrWhiteSpace(mentor.JobTitle)) fields.Add("Vị trí, Chức danh");
+            if (string.IsNullOrWhiteSpace(mentor.Organization)) fields.Add("Công ty");
+        }
+        else
+        {
+            if (string.IsNullOrWhiteSpace(mentor.Department)) fields.Add("Phòng ban trực tiếp");
+            if (string.IsNullOrWhiteSpace(mentor.JobTitle)) fields.Add("Chức danh (VN)");
+        }
+
+        return fields;
+    }
 
     private sealed record StaffClassAssignment(
         Guid UserId,

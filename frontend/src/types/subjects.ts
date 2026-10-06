@@ -97,6 +97,37 @@ export interface UpdateSemesterDatesPayload {
   reason: string;
 }
 
+export interface SubjectRubricLevel {
+  key: string;
+  label: string;
+  range: string;
+  description: string;
+}
+
+export interface SubjectRubricCriterion {
+  key: string;
+  label: string;
+  description: string | null;
+  weight: number | string;
+  levels: SubjectRubricLevel[];
+}
+
+export interface SubjectCheckpointDraft {
+  number: number;
+  title: string;
+  shortDescription: string | null;
+  courseWeight: number | string;
+  requirements: string[];
+  rubrics: SubjectRubricCriterion[];
+}
+
+export interface SubjectOtherAssessmentDraft {
+  _id?: string;
+  id?: string;
+  name: string;
+  weight: number | string;
+}
+
 export interface TeachingAssignmentDto {
   _id: string;
   classCode: string;
@@ -105,13 +136,15 @@ export interface TeachingAssignmentDto {
 
 export interface TeachingStaffDto {
   _id: string;
-  userId: string;
+  userId: string | null;
   name: string;
   email: string;
   avatar?: string | null;
   role: 'LECTURER' | 'MENTOR';
-  status: 'Active' | 'Inactive';
+  status: 'Active' | 'Inactive' | 'Incomplete';
   userStatus: string;
+  isIncomplete: boolean;
+  missingFields: string[];
   classCount: number;
   assignments: TeachingAssignmentDto[];
   rowVersion: string;
@@ -123,6 +156,37 @@ export interface TeachingStaffCandidateDto {
   email: string;
   avatar?: string | null;
   role: 'LECTURER' | 'MENTOR';
+}
+
+export type MentorCarryoverAction = 'Add' | 'Reactivate' | 'AlreadyAdded' | 'Unavailable';
+
+export interface MentorCarryoverCandidate {
+  userId: string;
+  name: string;
+  email: string;
+  avatar?: string | null;
+  mentorType: 'Enterprise' | 'Academic' | '';
+  action: MentorCarryoverAction;
+  canSelect: boolean;
+  message: string;
+}
+
+export interface MentorCarryoverPreview {
+  sourceSemesterId: string;
+  targetSemesterId: string;
+  totalCount: number;
+  eligibleCount: number;
+  alreadyAddedCount: number;
+  unavailableCount: number;
+  enterpriseCount: number;
+  academicCount: number;
+  mentors: MentorCarryoverCandidate[];
+}
+
+export interface MentorCarryoverCommitResult {
+  addedCount: number;
+  reactivatedCount: number;
+  alreadyAddedCount: number;
 }
 
 export interface TeachingStaffSummary {

@@ -18,9 +18,37 @@ export interface ProjectDirectionSyncValue {
   startupIndustries?: string[] | null;
 }
 
+interface ProjectDirectionSeedProject {
+  projectName?: string | null;
+  description?: string | null;
+}
+
+export const getProjectDirectionDraftSeed = (
+  direction?: ProjectDirectionSyncValue | null,
+  project?: ProjectDirectionSeedProject | null,
+): { title: string; summary: string } => ({
+  title: direction?.title || project?.projectName || '',
+  summary: direction?.summary || project?.description || '',
+});
+
 export const isProjectDirectionConcurrencyConflict = (code?: string | null): boolean => (
   code === 'CLASS_CONCURRENCY_CONFLICT' || code === 'PROJECT_DIRECTION_CONCURRENCY_CONFLICT'
 );
+
+export const resolveDirectionOverviewClassId = (
+  classIds: string[],
+  requestedClassId: string,
+  currentClassId: string,
+): string => {
+  if (requestedClassId && classIds.includes(requestedClassId)) return requestedClassId;
+  if (currentClassId && classIds.includes(currentClassId)) return currentClassId;
+  return '';
+};
+
+export const directionOverviewTargetClassIds = (
+  classIds: string[],
+  selectedClassId: string,
+): string[] => selectedClassId ? classIds.filter(classId => classId === selectedClassId) : classIds;
 
 export const hasUnsavedProjectDirectionChanges = (
   direction: ProjectDirectionSyncValue | null | undefined,
@@ -114,6 +142,9 @@ export const getProjectDirectionDecisionNotice = (
   incoming?: ProjectDirectionSyncValue | null,
 ): string => {
   if (current?.status !== 'Submitted') return '';
+  if (current.isProjectProfileChangeProposal && incoming?.reviews?.[0]?.toStatus === 'Rejected') {
+    return 'Lecturer rejected your Project Profile changes. The approved profile remains unchanged.';
+  }
   if (current.isProjectProfileChangeProposal && incoming?.status === 'Approved') {
     return 'Lecturer approved your Project Profile changes. The approved profile is now updated.';
   }
@@ -149,3 +180,19 @@ export const updateProjectDirectionOverviewTeams = <T extends ProjectDirectionOv
     projectDirectionRowVersion: direction.rowVersion || '',
   };
 });
+
+export const shouldApplyProjectDirectionSubmission = (
+  currentStatus: string | null | undefined,
+  currentRowVersion: string | null | undefined,
+  incoming: ProjectDirectionSyncValue,
+): boolean => {
+  if (currentStatus === 'PENDING') return false;
+  if (currentStatus !== 'APPROVED') return true;
+  if (!incoming.isProjectProfileChangeProposal) return false;
+
+  const currentVersion = Number(currentRowVersion);
+  const incomingVersion = Number(incoming.rowVersion);
+  return !Number.isFinite(currentVersion)
+    || !Number.isFinite(incomingVersion)
+    || incomingVersion > currentVersion;
+};

@@ -12,6 +12,7 @@ import { mentorSupportApi } from '../../api/mentorSupportApi';
 import type { MentorRecommendation } from '../../types/mentoring';
 import { Link } from 'react-router-dom';
 import ConfirmDialog from '../ui/ConfirmDialog';
+import { matchesSearchQuery } from '../../utils/searchText';
 
 interface AssignMentorsModalProps {
   classId: string;
@@ -162,20 +163,14 @@ export default function AssignMentorsModal({ classId, currentMentors: _currentMe
     }
   };
 
-  const filteredMentors = mentors.filter(m =>
-    m.name?.toLowerCase().includes(mentorSearchTerm.toLowerCase()) ||
-    m.email?.toLowerCase().includes(mentorSearchTerm.toLowerCase())
-  );
+  const filteredMentors = mentors.filter(m => matchesSearchQuery(mentorSearchTerm, [m.name, m.email]));
 
   const selectedMentor = mentors.find(mentor => mentor._id === selectedMentorId);
   const eligibleTeams = selectedMentor
     ? teams.filter(team => canAssignMentorTypeToTeam(team, selectedMentor.mentorType))
     : [];
   const filteredTeams = eligibleTeams.filter(team =>
-    team.teamName?.toLowerCase().includes(teamSearchTerm.toLowerCase()) ||
-    team.teamCode?.toLowerCase().includes(teamSearchTerm.toLowerCase()) ||
-    team.groupName?.toLowerCase().includes(teamSearchTerm.toLowerCase())
-  );
+    matchesSearchQuery(teamSearchTerm, [team.teamName, team.teamCode, team.groupName]));
   const currentAssignments = teams.flatMap(team => (team.currentMentorAssignments || []).map(assignment => ({ team, assignment })));
 
   return (

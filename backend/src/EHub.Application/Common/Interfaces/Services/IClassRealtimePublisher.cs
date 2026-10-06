@@ -4,6 +4,7 @@ namespace EHub.Application.Common.Interfaces.Services;
 public interface IClassRealtimePublisher
 {
     Task PublishMajorUpdatedAsync(IReadOnlyCollection<Guid> recipientUserIds, Guid classId, Guid studentId, string majorCode, CancellationToken cancellationToken = default);
+    Task PublishMajorsChangedAsync(IReadOnlyCollection<Guid> recipientUserIds, Guid classId, string changeType, CancellationToken cancellationToken = default);
     Task PublishProposalReviewedAsync(IReadOnlyCollection<Guid> recipientUserIds, Guid classId, Guid proposalId, CancellationToken cancellationToken = default);
     Task PublishTeamFormationChangedAsync(IReadOnlyCollection<Guid> recipientUserIds, Guid classId, Guid formationId, CancellationToken cancellationToken = default);
     Task PublishTeamCreatedAsync(IReadOnlyCollection<Guid> recipientUserIds, Guid classId, Guid teamId, CancellationToken cancellationToken = default);

@@ -3,6 +3,7 @@ using System.Xml;
 using System.Xml.Linq;
 using ExcelDataReader;
 using EHub.Application.Common.Interfaces.Persistence;
+using EHub.Application.Features.Teams.Continuations;
 using EHub.Application.Features.Classes.Common;
 using EHub.Contracts.Classes;
 using EHub.Domain.Entities;
@@ -24,15 +25,19 @@ public sealed class PreviewImportStudentsCommandHandler : IPreviewImportStudents
     private static readonly TimeSpan SessionLifetime = TimeSpan.FromMinutes(30);
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private readonly IApplicationDbContext _context;
+    private readonly ITeamContinuationService _teamContinuation;
 
     static PreviewImportStudentsCommandHandler()
     {
         System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
     }
 
-    public PreviewImportStudentsCommandHandler(IApplicationDbContext context)
+    public PreviewImportStudentsCommandHandler(
+        IApplicationDbContext context,
+        ITeamContinuationService? teamContinuation = null)
     {
         _context = context;
+        _teamContinuation = teamContinuation ?? new TeamContinuationService(context);
     }
 
     public async Task<Result<ImportStudentsPreviewResponse>> HandleAsync(
@@ -115,6 +120,16 @@ public sealed class PreviewImportStudentsCommandHandler : IPreviewImportStudents
             : [];
         var sessionId = Guid.Empty;
 
+        // Students that already have a profile and are not placed in a file-defined team can be
+        // continued from a previous-semester team once they are enrolled.
+        var continuation = await _teamContinuation.PreviewAsync(
+            targetClass,
+            validRows
+                .Where(row => string.IsNullOrWhiteSpace(row.GroupName))
+                .Select(row => new PendingContinuationStudent(row.StudentCode, row.Email, row.MajorCode))
+                .ToArray(),
+            cancellationToken);
+
         if (validRows.Length > 0)
         {
             sessionId = Guid.NewGuid();
@@ -142,6 +157,7 @@ public sealed class PreviewImportStudentsCommandHandler : IPreviewImportStudents
             MajorMismatchCount = validRows.Count(row => row.NeedsMajorSync),
             TeamCount = teams.Count(team => team.IsValid),
             Teams = teams,
+            Continuation = continuation.Items.Count == 0 ? null : continuation,
             Rows = rows
         });
     }

@@ -23,12 +23,15 @@ public interface IApplicationDbContext
     DbSet<ClassImportSession> ClassImportSessions { get; }
     DbSet<LecturerImportSession> LecturerImportSessions { get; }
     DbSet<MentorImportSession> MentorImportSessions { get; }
+    DbSet<MentorImportDraft> MentorImportDrafts { get; }
     DbSet<MentorAllocationSession> MentorAllocationSessions { get; }
     DbSet<OutboxMessage> OutboxMessages { get; }
     DbSet<Student> Students { get; }
     DbSet<ClassStudent> ClassStudents { get; }
     DbSet<Team> Teams { get; }
     DbSet<TeamMember> TeamMembers { get; }
+    DbSet<TeamContinuation> TeamContinuations { get; }
+    DbSet<TeamContinuationMember> TeamContinuationMembers { get; }
     DbSet<TeamProposal> TeamProposals { get; }
     DbSet<TeamProposalMember> TeamProposalMembers { get; }
     DbSet<TeamProposalHistory> TeamProposalHistory { get; }

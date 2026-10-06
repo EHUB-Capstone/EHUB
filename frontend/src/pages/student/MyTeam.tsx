@@ -6,9 +6,10 @@ import { classApi } from '../../api/classApi';
 import { teamFormationApi } from '../../api/teamFormationApi';
 import type { TeamFormation } from '../../types/teamFormation';
 import EmptyState from '../../components/ui/EmptyState';
+import OwnTeamMajorWarning from '../../components/class/OwnTeamMajorWarning';
 import { getDisplayTeamName } from '../../utils/teamDisplay';
 import { unwrapApiData } from '../../utils/classMappers';
-import { entityId, getTeamMembers, normalizeManagedTeam } from '../../utils/teamManagement';
+import { entityId, getTeamMajorWarning, getTeamMembers, normalizeManagedTeam } from '../../utils/teamManagement';
 import PendingTeamFormationView from './PendingTeamFormationView';
 import { subscribeProjectDirectionRealtime } from '../../api/projectDirectionRealtime';
 
@@ -98,6 +99,7 @@ export default function MyTeam() {
       : [];
   const displayTeamName = getDisplayTeamName(team) || 'Unnamed Team';
   const leaderId = entityId(team?.leaderId);
+  const majorWarning = team ? getTeamMajorWarning(team) : null;
   const pendingFormations = formations.filter(formation => formation.status === 'Pending');
   const selectedFormation = pendingFormations.find(formation => formation.id === selectedFormationId)
     ?? (!team ? pendingFormations[0] : null);
@@ -187,6 +189,8 @@ export default function MyTeam() {
           <span>Semester: {cls?.semester || '—'}</span>
         </div>
       </div>
+
+      {majorWarning && <OwnTeamMajorWarning warning={majorWarning} testId="my-team-major-warning" />}
 
       {/* Main Grid Layout */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

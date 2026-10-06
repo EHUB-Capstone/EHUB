@@ -32,6 +32,7 @@ import CheckpointDateTimeField from './CheckpointDateTimeField';
 import Modal from '../ui/Modal';
 import CheckpointFilePreviewModal from '../workspace/checkpoints/CheckpointFilePreviewModal';
 import { isCheckpointFilePreviewable } from '../../utils/checkpointUpload';
+import { warmUpPdfPreview } from '../../utils/pdfPreviewRuntime';
 import EvaluationPanel from '../workspace/EvaluationPanel';
 
 interface Props {
@@ -394,6 +395,8 @@ export default function LecturerCheckpointManagement({
                                     type="button"
                                     title="Preview file"
                                     aria-label={`Preview ${file.originalName}`}
+                                    onMouseEnter={warmUpPdfPreview}
+                                    onFocus={warmUpPdfPreview}
                                     onClick={() => setPreviewTarget({
                                       teamId: item.teamId,
                                       checkpointNumber: item.checkpointNumber,

@@ -85,6 +85,28 @@ public class SubmissionFileConfiguration : IEntityTypeConfiguration<SubmissionFi
         builder.Property(sf => sf.PreviewGeneratedAt)
             .HasColumnName("preview_generated_at");
 
+        builder.Property(sf => sf.PreviewStatus)
+            .HasColumnName("preview_status")
+            .HasConversion<string>()
+            .HasMaxLength(20)
+            .HasDefaultValue(SubmissionPreviewStatus.None)
+            .IsRequired();
+
+        builder.Property(sf => sf.PreviewAttemptCount)
+            .HasColumnName("preview_attempt_count")
+            .HasDefaultValue(0)
+            .IsRequired();
+
+        builder.Property(sf => sf.PreviewNextAttemptAtUtc)
+            .HasColumnName("preview_next_attempt_at_utc");
+
+        builder.Property(sf => sf.PreviewLastError)
+            .HasColumnName("preview_last_error")
+            .HasMaxLength(500);
+
+        // The background job polls for Pending rows that are due.
+        builder.HasIndex(sf => new { sf.PreviewStatus, sf.PreviewNextAttemptAtUtc });
+
         builder.Property(sf => sf.UploadedById)
             .HasColumnName("uploaded_by_id");
 

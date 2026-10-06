@@ -2,6 +2,7 @@ using System.Text.Json;
 using EHub.Application.Common.Exceptions;
 using EHub.Application.Common.Interfaces.Persistence;
 using EHub.Application.Features.Classes.Common;
+using EHub.Application.Features.Teams.Continuations;
 using EHub.Contracts.Classes;
 using EHub.Domain.Entities;
 using EHub.Domain.Enums;
@@ -18,13 +19,16 @@ public sealed class CommitImportStudentsCommandHandler : ICommitImportStudentsCo
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private readonly IApplicationDbContext _context;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly ITeamContinuationService _teamContinuation;
 
     public CommitImportStudentsCommandHandler(
         IApplicationDbContext context,
-        IUnitOfWork unitOfWork)
+        IUnitOfWork unitOfWork,
+        ITeamContinuationService? teamContinuation = null)
     {
         _context = context;
         _unitOfWork = unitOfWork;
+        _teamContinuation = teamContinuation ?? new TeamContinuationService(context);
     }
 
     public async Task<Result<ImportStudentsCommitResponse>> HandleAsync(
@@ -411,6 +415,10 @@ public sealed class CommitImportStudentsCommandHandler : ICommitImportStudentsCo
 
         await _context.SaveChangesAsync(cancellationToken);
 
+        // Enrollments are saved inside the caller's transaction; continue previous-semester teams
+        // that are now complete. A failure here rolls back the whole import.
+        var continuation = await _teamContinuation.ApplyAsync(targetClass, currentUserId, cancellationToken);
+
         return new ImportStudentsCommitResponse
         {
             ImportMode = "StudentRoster",
@@ -419,6 +427,7 @@ public sealed class CommitImportStudentsCommandHandler : ICommitImportStudentsCo
             SynchronizedMajorCount = synchronizedMajorCount,
             SkippedCount = errors.Count,
             ErrorCount = errors.Count,
+            Continuation = continuation,
             Errors = errors
         };
     }
@@ -605,6 +614,7 @@ public sealed class CommitImportStudentsCommandHandler : ICommitImportStudentsCo
             var projectName = FirstNonEmpty(groupRows.Select(row => row.ProjectName))!;
             var zaloGroupUrl = FirstNonEmpty(groupRows.Select(row => row.ZaloGroupUrl));
             var projectDescription = FirstNonEmpty(groupRows.Select(row => row.ProjectDescription));
+            var importedLeaderStudentCode = ResolveImportedLeaderStudentCode(groupRows);
             var team = new Team
             {
                 ClassId = targetClass.Id,
@@ -711,7 +721,12 @@ public sealed class CommitImportStudentsCommandHandler : ICommitImportStudentsCo
                     ClassId = targetClass.Id,
                     StudentId = enrollment.StudentId,
                     ClassStudent = enrollment,
-                    RoleInTeam = TeamMemberRole.Member,
+                    RoleInTeam = string.Equals(
+                        row.StudentCode,
+                        importedLeaderStudentCode,
+                        StringComparison.OrdinalIgnoreCase)
+                        ? TeamMemberRole.Leader
+                        : TeamMemberRole.Member,
                     CountsTowardActiveTeam = true,
                     JoinedAt = now,
                     CreatedById = currentUserId
@@ -730,6 +745,16 @@ public sealed class CommitImportStudentsCommandHandler : ICommitImportStudentsCo
                 CreatedBy = currentUserId,
                 CreatedAt = now
             };
+            var direction = new ProjectDirection
+            {
+                TeamId = team.Id,
+                Team = team,
+                Title = projectName,
+                Summary = projectDescription ?? string.Empty,
+                Status = ProjectDirectionStatus.Draft,
+                CreatedBy = currentUserId,
+                CreatedAt = now
+            };
             project.ActivityLogs.Add(new ProjectActivityLog
             {
                 ProjectId = project.Id,
@@ -743,6 +768,7 @@ public sealed class CommitImportStudentsCommandHandler : ICommitImportStudentsCo
                 OccurredAtUtc = now
             });
             team.Project = project;
+            team.ProjectDirection = direction;
             _context.Teams.Add(team);
 
             var memberUserIds = team.TeamMembers
@@ -751,6 +777,9 @@ public sealed class CommitImportStudentsCommandHandler : ICommitImportStudentsCo
                 .Select(userId => userId!.Value)
                 .Distinct()
                 .ToArray();
+            var leaderUserId = team.TeamMembers
+                .FirstOrDefault(member => member.RoleInTeam == TeamMemberRole.Leader)?
+                .ClassStudent.Student.UserId;
             ClassOutbox.Enqueue(_context, "Team.Created.v1", targetClass.Id, new
             {
                 TeamId = team.Id,
@@ -764,7 +793,7 @@ public sealed class CommitImportStudentsCommandHandler : ICommitImportStudentsCo
                 ClassId = targetClass.Id,
                 SubjectId = targetClass.CourseId,
                 SemesterId = targetClass.SemesterId,
-                LeaderUserId = (Guid?)null
+                LeaderUserId = leaderUserId
             }, now);
 
             existingTeamNames.Add(team.TeamName);
@@ -822,6 +851,9 @@ public sealed class CommitImportStudentsCommandHandler : ICommitImportStudentsCo
 
         await _context.SaveChangesAsync(cancellationToken);
 
+        // Teams defined by the file win; continuation only considers students without a team.
+        var continuation = await _teamContinuation.ApplyAsync(targetClass, currentUserId, cancellationToken);
+
         return new ImportStudentsCommitResponse
         {
             ImportMode = "TeamAssignment",
@@ -832,6 +864,7 @@ public sealed class CommitImportStudentsCommandHandler : ICommitImportStudentsCo
             CreatedProjectCount = createdProjectCount,
             SkippedCount = errors.Count,
             ErrorCount = errors.Count,
+            Continuation = continuation,
             Errors = errors
         };
     }
@@ -861,6 +894,21 @@ public sealed class CommitImportStudentsCommandHandler : ICommitImportStudentsCo
             return (ErrorCodes.ClassValidationError, $"Team '{groupName}' must have at most one project description between 20 and 2000 characters.");
 
         return null;
+    }
+
+    internal static string? ResolveImportedLeaderStudentCode(
+        IEnumerable<ImportStudentRowPreviewDto> rows)
+    {
+        var candidates = rows
+            .Where(row =>
+                !string.IsNullOrWhiteSpace(row.ZaloGroupUrl) ||
+                !string.IsNullOrWhiteSpace(row.ProjectDescription))
+            .Select(row => row.StudentCode)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Take(2)
+            .ToArray();
+
+        return candidates.Length == 1 ? candidates[0] : null;
     }
 
     private static string CreateTeamCodePrefix(string classCode)

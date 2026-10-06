@@ -19,6 +19,7 @@ using EHub.Application.Features.Classes.ExportAdminClassData;
 using EHub.Application.Features.Classes.GetClassDetail;
 using EHub.Application.Features.Classes.GetClasses;
 using EHub.Application.Features.Classes.GetClassRoster;
+using EHub.Application.Features.Classes.GroupProjectConsistency;
 using EHub.Application.Features.Classes.GetImportTemplate;
 using EHub.Application.Features.Classes.GetMajorVerificationTemplate;
 using EHub.Application.Features.Classes.ImportStudents;
@@ -367,6 +368,28 @@ public sealed class ClassesController : ControllerBase
         return Ok(ApiResponse<ClassRosterListResponse>.SuccessResponse(
             result.Value,
             "Class roster retrieved successfully."));
+    }
+
+    [HttpGet("{id:guid}/group-project-consistency")]
+    public async Task<IActionResult> GetGroupProjectConsistency(
+        Guid id,
+        [FromServices] IGetGroupProjectConsistencyQueryHandler queryHandler,
+        CancellationToken cancellationToken)
+    {
+        var result = await queryHandler.HandleAsync(
+            id,
+            _currentUserService.UserId ?? Guid.Empty,
+            GetCurrentUserRole(),
+            cancellationToken);
+
+        if (result.IsFailure)
+        {
+            return ToClassErrorResponse(result.Error);
+        }
+
+        return Ok(ApiResponse<GroupProjectConsistencyResponse>.SuccessResponse(
+            result.Value,
+            "Group and project consistency checked successfully."));
     }
 
     [HttpPost("{id:guid}/students")]

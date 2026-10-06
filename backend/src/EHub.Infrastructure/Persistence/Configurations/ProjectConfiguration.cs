@@ -21,6 +21,16 @@ public class ProjectConfiguration : IEntityTypeConfiguration<Project>
         builder.HasIndex(p => p.TeamId)
             .IsUnique();
 
+        builder.Property(p => p.ProjectLineageId)
+            .HasColumnName("project_lineage_id")
+            .IsRequired();
+
+        builder.Property(p => p.PreviousProjectId)
+            .HasColumnName("previous_project_id");
+
+        builder.HasIndex(p => p.ProjectLineageId);
+        builder.HasIndex(p => p.PreviousProjectId);
+
         builder.Property(p => p.Name)
             .HasColumnName("name")
             .HasMaxLength(200)
@@ -68,6 +78,28 @@ public class ProjectConfiguration : IEntityTypeConfiguration<Project>
             .HasColumnName("is_high_potential")
             .HasDefaultValue(false);
 
+        builder.Property(p => p.IsFunded)
+            .HasColumnName("is_funded")
+            .HasDefaultValue(false);
+
+        builder.Property(p => p.IsAwarded)
+            .HasColumnName("is_awarded")
+            .HasDefaultValue(false);
+
+        builder.Property(p => p.AchievementNote)
+            .HasColumnName("achievement_note")
+            .HasMaxLength(500);
+
+        builder.Property(p => p.AchievementsUpdatedAt)
+            .HasColumnName("achievements_updated_at");
+
+        builder.Property(p => p.AchievementsUpdatedBy)
+            .HasColumnName("achievements_updated_by");
+
+        builder.Property(p => p.Version)
+            .IsRowVersion()
+            .HasColumnName("xmin");
+
         builder.Property(p => p.CreatedById)
             .HasColumnName("created_by_id");
 
@@ -91,6 +123,11 @@ public class ProjectConfiguration : IEntityTypeConfiguration<Project>
             .WithOne(t => t.Project)
             .HasForeignKey<Project>(p => p.TeamId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne(p => p.PreviousProject)
+            .WithMany()
+            .HasForeignKey(p => p.PreviousProjectId)
+            .OnDelete(DeleteBehavior.SetNull);
 
         builder.HasOne(p => p.Creator)
             .WithMany()

@@ -31,6 +31,7 @@ import {
   getTeamMemberIds,
   TEAM_MEMBER_LIMIT,
 } from '../../utils/teamManagement';
+import { matchesSearchQuery } from '../../utils/searchText';
 
 interface StudentAssignmentModalProps {
   classInfo: TeamClassOption;
@@ -98,10 +99,8 @@ export default function StudentAssignmentModal({
   const availableTeamSlots = Math.max(0, TEAM_MEMBER_LIMIT - targetMemberCount);
 
   const visibleStudents = useMemo(() => {
-    const query = search.trim().toLowerCase();
     return students
-      .filter((student) => !query || [student.fullName, student.rollNumber, student.email, student.major]
-        .some((value) => value?.toLowerCase().includes(query)))
+      .filter((student) => matchesSearchQuery(search, [student.fullName, student.rollNumber, student.email, student.major]))
       .sort((left, right) => {
         const leftSelected = draft.studentIds.includes(left._id) ? 1 : 0;
         const rightSelected = draft.studentIds.includes(right._id) ? 1 : 0;

@@ -135,6 +135,8 @@ function canAccessCheckpointTeam(teamId: string) {
 
 function workspaceData(teamId: string) {
   const state = getMockState();
+  const viewer = state.users.find(item => item.id === state.sessionUserId);
+  const isStaff = viewer && ['ADMIN', 'LECTURER'].includes(viewer.role);
   const team = teamById(teamId)!;
   const cls = classByTeam(teamId)!;
   const lecturer = state.users.find((user) => user.id === cls.primaryLecturerId) || null;
@@ -149,9 +151,10 @@ function workspaceData(teamId: string) {
     return {
       _id: member.studentId,
       studentId: member.studentId,
-      userId: user ? { _id: user.id, name: user.name, email: user.email } : { _id: member.studentId },
+      userId: isStaff || member.studentId === viewer?.id
+        ? user ? { _id: user.id, name: user.name, email: user.email } : { _id: member.studentId } : null,
       fullName: member.fullName,
-      email: member.email,
+      email: isStaff || member.studentId === viewer?.id ? member.email : null,
       rollNumber: member.rollNumber,
       majorCode: member.majorCode,
       roleInTeam: member.roleInTeam === 'LEADER' ? 'Leader' : 'Member',
@@ -274,7 +277,7 @@ function evaluationSummary(teamId: string, checkpointNumber: number) {
   const currentUser = state.users.find(user => user.id === state.sessionUserId);
   const isInternal = currentUser?.role === 'ADMIN' || currentUser?.role === 'LECTURER';
   const scoresPublished = status === 'PUBLISHED';
-  const canViewTeamScore = isInternal || scoresPublished;
+  const canViewTeamScore = isInternal;
   const currentStudentId = Object.values(state.rosters).flat()
     .find(student => student.userId === currentUser?.id)?.studentId;
   const evaluation = {
@@ -289,7 +292,7 @@ function evaluationSummary(teamId: string, checkpointNumber: number) {
     rubricScores: rubrics.map((criterion, index) => ({
       criterionKey: criterion.key,
       criterionName: criterion.label,
-      ...(isInternal || (currentUser?.role === 'STUDENT' && scoresPublished)
+      ...(isInternal
         ? { score: index === 1 ? 7.5 : 8.5 }
         : {}),
       comment: index === 1 ? 'Include more direct customer quotes and quantified findings.' : 'Clear and focused.',
@@ -301,23 +304,25 @@ function evaluationSummary(teamId: string, checkpointNumber: number) {
         isOverridden: index === 0,
       })),
     } : currentUser?.role === 'STUDENT' && scoresPublished ? {
-      memberScores: members.filter(member => member.studentId === currentStudentId).map((member, index) => ({
+      memberScores: members.map((member, index) => ({
         studentId: member.studentId,
         score: index === 0 ? 7.5 : 7.85,
         isOverridden: index === 0,
-      })),
+      })).filter(member => member.studentId === currentStudentId),
     } : {}),
   };
 
   return {
-    checkpoint,
+    checkpoint: { ...checkpoint, members: members.filter(member => isInternal ||
+      (currentUser?.role === 'STUDENT' && member.studentId === currentStudentId))
+      .map(member => ({ studentId: member.studentId, fullName: member.fullName, rollNumber: member.rollNumber })) },
     evaluations: hasEvaluation ? [evaluation] : [],
     summary: {
       evaluationCount: hasEvaluation ? 1 : 0,
       submittedCount: hasEvaluation ? 1 : 0,
       ...(hasEvaluation && canViewTeamScore ? { averageScore: 7.85 } : {}),
     },
-    history: hasEvaluation ? [{
+    history: hasEvaluation && isInternal ? [{
       _id: uuid(1501),
       action: 'SUBMITTED',
       version: 1,
@@ -358,7 +363,7 @@ function courseAssessmentData(teamId: string) {
       weight: item.weight,
       evaluationId: score === undefined ? null : evaluationId,
       evaluatorId: score === undefined ? null : cls.primaryLecturerId,
-      ...((isInternal || status === 'PUBLISHED') && score !== undefined ? { score } : {}),
+      ...(isInternal && score !== undefined ? { score } : {}),
       ...(score !== undefined && visibleMembers.length > 0 ? {
         memberScores: visibleMembers.map(member => {
           const key = `${teamId}:${item._id}:${member.studentId}`;
@@ -390,6 +395,7 @@ interface MockUploadSession {
 
 // Not persisted: an upload session only matters within one page load.
 const mockUploadSessions = new Map<string, MockUploadSession>();
+const mockPreviewPolls = new Map<string, number>();
 
 /** Stands in for the presigned R2 URL: the browser PUTs here through storageClient. */
 export function registerStorageMockHandlers(mock: MockAdapter): void {
@@ -405,14 +411,53 @@ export function registerStorageMockHandlers(mock: MockAdapter): void {
 }
 
 export function registerWorkspaceMockHandlers(mock: MockAdapter): void {
+  mock.onGet(/^\/workspace\/checkpoints\/classes\/[^/]+\/students\/[^/]+\/previous-scores$/).reply((config) => {
+    const [, classId, studentId] = config.url!.match(/^\/workspace\/checkpoints\/classes\/([^/]+)\/students\/([^/]+)\/previous-scores$/)!;
+    const state = getMockState();
+    const user = state.users.find(item => item.id === state.sessionUserId);
+    if (!user) return failure(401, 'UNAUTHORIZED', 'Authentication is required.');
+    const cls = state.classes.find(item => item.id === classId);
+    const enrollment = state.rosters[classId]?.find(item => item.studentId === studentId && item.enrollmentStatus === 'Active');
+    if (!['ADMIN', 'LECTURER'].includes(user.role) || !cls || cls.status !== 'Active' || !enrollment ||
+        !state.semesters.some(item => item.id === cls.semesterId && item.status === 'Active') ||
+        (user.role !== 'ADMIN' && cls.primaryLecturerId !== user.id))
+      return failure(403, 'WORKSPACE_ACCESS_DENIED', 'You do not have access to this student\'s previous scores.');
+    const termOrder: Record<string, number> = { SP: 0, SU: 1, FA: 2 };
+    const previous = state.semesters.filter(item => ['Completed', 'Archived'].includes(item.status) &&
+      (item.year < cls.year || item.year === cls.year && termOrder[item.semester] < termOrder[cls.semesterCode.slice(0, 2)]))
+      .sort((left, right) => right.year - left.year || termOrder[right.semester] - termOrder[left.semester])[0];
+    const oldClass = previous && state.classes.find(item => item.semesterId === previous.id && item.courseId === cls.courseId &&
+      state.rosters[item.id]?.some(student => student.studentId === studentId && student.enrollmentStatus === 'Completed'));
+    const oldTeam = oldClass && state.teams.find(team => team.classId === oldClass.id && team.members.some(member => member.studentId === studentId));
+    const assessments = oldTeam ? (state.curricula[cls.subjectCode]?.otherAssessments || []).flatMap(assessment => {
+      const evaluationId = `${oldTeam.id}--${assessment._id}`;
+      const teamScore = state.courseAssessmentScores[`${oldTeam.id}:${assessment._id}`];
+      if (teamScore === undefined || state.evaluationPublicationStatuses[evaluationId] !== 'PUBLISHED') return [];
+      return [{ assessmentId: assessment._id, checkpointNumber: null, name: assessment.name, weight: assessment.weight,
+        score: state.courseAssessmentMemberScores[`${oldTeam.id}:${assessment._id}:${studentId}`] ?? teamScore }];
+    }) : [];
+    const checkpoints = oldTeam ? checkpointDefinitionsForClass(oldClass!).flatMap(checkpoint => {
+      const evaluationId = uuid(140000 + Number(oldTeam.id.slice(-3)) * 10 + checkpoint.number);
+      if (checkpoint.number !== 1 || state.evaluationPublicationStatuses[evaluationId] !== 'PUBLISHED') return [];
+      return [{ assessmentId: checkpoint.id, checkpointNumber: checkpoint.number, name: checkpoint.title,
+        weight: checkpoint.courseWeight, score: oldTeam.members[0]?.studentId === studentId ? 7.5 : 7.85 }];
+    }) : [];
+    return ok({ studentId, semesterCode: previous ? `${previous.semester}${previous.year}` : null, components: [...checkpoints, ...assessments] });
+  });
   mock.onGet('/rankings').reply((config) => {
     const state = getMockState();
     const currentUser = state.users.find(user => user.id === state.sessionUserId);
-    if (!currentUser || !['ADMIN', 'LECTURER'].includes(currentUser.role)) {
+    if (!currentUser) return failure(401, 'UNAUTHORIZED', 'Authentication is required.');
+    if (config.params?.checkpointNumber !== undefined && (!Number.isInteger(Number(config.params.checkpointNumber)) || Number(config.params.checkpointNumber) < 1))
+      return failure(400, 'VALIDATION_ERROR', 'Checkpoint number must be positive.');
+    if (!['ADMIN', 'LECTURER'].includes(currentUser.role)) {
       return failure(403, 'WORKSPACE_ACCESS_DENIED', 'Only administrators and lecturers can view team rankings.');
     }
 
     const scopedClasses = state.classes.filter(cls => currentUser.role === 'ADMIN' || cls.primaryLecturerId === currentUser.id);
+    const requestedClass = String(config.params?.classId || '');
+    if (requestedClass && !scopedClasses.some(cls => cls.id === requestedClass))
+      return failure(403, 'WORKSPACE_ACCESS_DENIED', 'The selected class is outside your ranking scope.');
     const availableSemesterIds = new Set(scopedClasses.map(cls => cls.semesterId));
     const availableSemesters = state.semesters
       .filter(item => availableSemesterIds.has(item.id))
@@ -425,7 +470,7 @@ export function registerWorkspaceMockHandlers(mock: MockAdapter): void {
       (!requestedSemester || item.semester === requestedSemester || item.code === requestedSemester) &&
       (!requestedYear || item.year === requestedYear)) || activeSemester || availableSemesters[0] || null;
     const selectedClasses = selectedSemester
-      ? scopedClasses.filter(cls => cls.semesterId === selectedSemester.id)
+      ? scopedClasses.filter(cls => cls.semesterId === selectedSemester.id && (!requestedClass || cls.id === requestedClass))
       : [];
     const selectedClassIds = new Set(selectedClasses.map(cls => cls.id));
     const items = state.teams.filter(team => team.status === 'Active' && selectedClassIds.has(team.classId)).map(team => {
@@ -454,12 +499,13 @@ export function registerWorkspaceMockHandlers(mock: MockAdapter): void {
           status: score === undefined ? 'NOT_GRADED' : state.evaluationPublicationStatuses[evaluationId] || 'SUBMITTED',
         };
       });
-      const components = checkpoints;
+      const components = config.params?.checkpointNumber
+        ? checkpoints.filter(item => item.number === Number(config.params.checkpointNumber)) : checkpoints;
       const complete = components.length > 0 && components.every(item => item.score !== null);
       const published = complete && components.every(item => item.status === 'PUBLISHED');
-      const hasGradedComponent = components.some(item => item.score !== null);
-      const courseTotal = hasGradedComponent
-        ? Math.round(components.reduce((sum, item) => sum + Number(item.score) * item.weight / 100, 0) * 100) / 100
+      const courseTotal = published
+        ? config.params?.checkpointNumber ? components[0].score
+          : Math.round(components.reduce((sum, item) => sum + Number(item.score) * item.weight / 100, 0) * 100) / 100
         : null;
       return {
         teamId: team.id,
@@ -480,14 +526,22 @@ export function registerWorkspaceMockHandlers(mock: MockAdapter): void {
         checkpoints,
         assessments,
         courseTotal,
-        status: !complete ? 'INCOMPLETE' : published ? 'PUBLISHED' : 'READY_TO_PUBLISH',
+        status: published ? 'PUBLISHED' : 'INCOMPLETE',
         completedComponentCount: components.filter(item => item.score !== null).length,
         publishedComponentCount: components.filter(item => item.score !== null && item.status === 'PUBLISHED').length,
         totalComponentCount: components.length,
         lastUpdatedAt: components.some(item => item.score !== null) ? new Date().toISOString() : null,
       };
     });
-    return ok({ activeSemester, selectedSemester, availableSemesters, items }, 'Team rankings retrieved.');
+    const rankedItems = items.map(item => {
+      const scope = items.filter(other => other.courseCode === item.courseCode && other.courseTotal !== null);
+      const rank = item.courseTotal === null ? null : 1 + scope.filter(other => Number(other.courseTotal) > Number(item.courseTotal)).length;
+      const { courseTotal: _total, ...safeItem } = item;
+      return { ...safeItem, rank,
+        checkpoints: item.checkpoints.map(({ score: _score, ...checkpoint }) => checkpoint),
+        assessments: item.assessments.map(({ score: _score, ...assessment }) => assessment) };
+    });
+    return ok({ activeSemester, selectedSemester, availableSemesters, items: rankedItems }, 'Team rankings retrieved.');
   });
 
   mock.onGet('/dashboard/submission-analytics').reply((config) => {
@@ -1151,6 +1205,30 @@ export function registerWorkspaceMockHandlers(mock: MockAdapter): void {
     return ok(uploaded, 'File uploaded.');
   });
 
+  // Mirrors the API: the server never converts inside the request. DOCX/PPTX answer "Preparing" for the
+  // first two polls (so the "Preparing preview" UI can be seen), then fall back to the server-side preview.
+  mock.onGet(/^\/workspace\/checkpoints\/teams\/[^/]+\/checkpoints\/\d+\/files\/[^/]+\/preview-source$/).reply((config) => {
+    const match = config.url?.match(/^\/workspace\/checkpoints\/teams\/([^/]+)\/checkpoints\/(\d+)\/files\/([^/]+)\/preview-source$/);
+    const teamId = match?.[1] || '';
+    const number = Number(match?.[2]);
+    const fileId = match?.[3] || '';
+    if (!canAccessCheckpointTeam(teamId)) return failure(403, 'WORKSPACE_ACCESS_DENIED', 'You do not have access to this team workspace.');
+    const file = filesForCheckpoint(teamId, number).find((item) => item._id === fileId);
+    if (!file) return failure(404, 'COMMON_NOT_FOUND', 'Submitted file was not found.');
+    const extension = file.originalName.split('.').at(-1)?.toLowerCase() || '';
+    if (!['pdf', 'docx', 'pptx'].includes(extension))
+      return [200, { success: true, message: 'Preview source resolved.', code: null, errors: null,
+        data: { status: 'Unsupported', message: 'This file format cannot be previewed. You can still download the original file.' } }];
+    if (extension !== 'pdf') {
+      const polls = (mockPreviewPolls.get(fileId) ?? 0) + 1;
+      mockPreviewPolls.set(fileId, polls);
+      if (polls <= 2)
+        return [202, { success: true, message: 'Preview source resolved.', code: null, errors: null,
+          data: { status: 'Preparing', retryAfterSeconds: 1 } }];
+    }
+    return ok({ status: 'Proxy' }, 'Preview source resolved.');
+  });
+
   mock.onGet(/^\/workspace\/checkpoints\/teams\/[^/]+\/checkpoints\/\d+\/files\/[^/]+\/download-url$/).reply((config) => {
     const match = config.url?.match(/^\/workspace\/checkpoints\/teams\/([^/]+)\/checkpoints\/(\d+)\/files\/([^/]+)\/download-url$/);
     const teamId = match?.[1] || '';
@@ -1322,6 +1400,37 @@ export function registerWorkspaceMockHandlers(mock: MockAdapter): void {
       : failure(404, 'TEAM_NOT_FOUND', 'Team not found.');
   });
 
+  mock.onPost('/workspace/checkpoints/evaluation-grading/export').reply((config) => {
+    const state = getMockState();
+    const currentUser = state.users.find(user => user.id === state.sessionUserId);
+    if (!currentUser) return failure(401, 'UNAUTHORIZED', 'Authentication is required.');
+    if (currentUser.role !== 'ADMIN' && currentUser.role !== 'LECTURER') {
+      return failure(403, 'WORKSPACE_ACCESS_DENIED', 'Staff access is required.');
+    }
+
+    const body = parseBody(config);
+    const scopes = Array.isArray(body.teams) ? body.teams as Array<{
+      teamId?: unknown;
+      checkpointNumbers?: unknown;
+    }> : [];
+    if (scopes.length === 0 || scopes.length > 500 || scopes.some(scope =>
+      !scope.teamId || !Array.isArray(scope.checkpointNumbers) ||
+      scope.checkpointNumbers.length === 0 ||
+      scope.checkpointNumbers.some(number => !Number.isInteger(Number(number)) || Number(number) <= 0))) {
+      return failure(400, 'WORKSPACE_VALIDATION_ERROR', 'Select a valid evaluation report scope.');
+    }
+    if (scopes.some(scope => !classByTeam(String(scope.teamId)) || !canAccessCheckpointTeam(String(scope.teamId)))) {
+      return failure(403, 'WORKSPACE_ACCESS_DENIED', 'One or more requested teams are outside your access scope.');
+    }
+
+    return [200, new Blob(['Mock evaluation report'], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    }), {
+      'content-type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'content-disposition': 'attachment; filename="evaluation_report.xlsx"',
+    }];
+  });
+
   mock.onPost('/workspace/checkpoints/evaluation-grading').reply((config) => {
     const state = getMockState();
     const body = parseBody(config);
@@ -1333,6 +1442,8 @@ export function registerWorkspaceMockHandlers(mock: MockAdapter): void {
     if (teamIds.some(teamId => !classByTeam(teamId) || !canAccessCheckpointTeam(teamId))) {
       return failure(403, 'WORKSPACE_ACCESS_DENIED', 'One or more requested teams are unavailable or outside your access scope.');
     }
+    const currentUser = state.users.find(user => user.id === state.sessionUserId);
+    const isInternal = currentUser?.role === 'ADMIN' || currentUser?.role === 'LECTURER';
     const teams = teamIds.map(teamId => {
       const detail = workspaceData(teamId);
       const semesterGroupName = [...new Set(Object.values(state.rosters).flat()
@@ -1344,7 +1455,9 @@ export function registerWorkspaceMockHandlers(mock: MockAdapter): void {
         projectName: detail?.project?.projectName || detail?.proposal?.projectName || null,
         projectDescription: detail?.project?.description || detail?.proposal?.projectDescription || null,
         semesterGroupName,
-        members: (detail?.members || []).map(member => ({
+        members: (detail?.members || []).filter(member => isInternal ||
+          (currentUser?.role === 'STUDENT' && (typeof member.userId === 'object' && member.userId ? member.userId._id : member.userId) === currentUser.id))
+          .map(member => ({
           studentId: member.studentId,
           userId: typeof member.userId === 'object' && member.userId ? member.userId._id : member.userId || null,
           fullName: member.fullName,

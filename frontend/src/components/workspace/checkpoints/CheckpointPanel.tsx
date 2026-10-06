@@ -15,6 +15,7 @@ import { useAuth } from '../../../hooks/useAuth';
 import Button from '../../ui/Button';
 import ConfirmDialog from '../../ui/ConfirmDialog';
 import FileUploadZone from './FileUploadZone';
+import { warmUpPdfPreview } from '../../../utils/pdfPreviewRuntime';
 import CheckpointLinkForm from './CheckpointLinkForm';
 import CheckpointFilePreviewModal from './CheckpointFilePreviewModal';
 import FeedbackThread from './FeedbackThread';
@@ -639,6 +640,8 @@ export default function CheckpointPanel({
                               <button
                                 type="button"
                                 onClick={() => setPreviewFile(file)}
+                                onMouseEnter={warmUpPdfPreview}
+                                onFocus={warmUpPdfPreview}
                                 className="flex-1 inline-flex items-center justify-center gap-2 py-2 rounded-lg border border-primary-200 bg-white text-primary text-xs font-bold hover:bg-primary-50 transition-all"
                               >
                                 <Eye className="w-3.5 h-3.5" />

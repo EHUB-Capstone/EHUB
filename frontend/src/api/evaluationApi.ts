@@ -1,6 +1,7 @@
 // @ts-nocheck
 // frontend/src/api/evaluationApi.js
 import axiosClient from './axiosClient';
+import type { EvaluationReportExportRequest } from '../types/evaluationGrading';
 
 export const evaluationApi = {
   // Legacy Module 1 Methods
@@ -34,6 +35,9 @@ export const evaluationApi = {
   },
   getGradingBatch: async (teamIds: string[]) => {
     return axiosClient.post('/workspace/checkpoints/evaluation-grading', { teamIds });
+  },
+  exportEvaluationReport: async (data: EvaluationReportExportRequest) => {
+    return axiosClient.post('/workspace/checkpoints/evaluation-grading/export', data, { responseType: 'blob' });
   },
   getCheckpointHistory: async (teamId, checkpointNumber) => {
     return axiosClient.get(`/evaluations/team/${teamId}/checkpoints/${checkpointNumber}/history`);
@@ -74,6 +78,7 @@ export const {
   getCheckpointEvaluations,
   getCheckpointSummary,
   getGradingBatch,
+  exportEvaluationReport,
   getCheckpointHistory,
   getCourseAssessments,
   saveCourseAssessment,

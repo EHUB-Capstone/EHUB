@@ -2,7 +2,7 @@ import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } f
 import { Navigate, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
-  AlertTriangle, Award, BookOpenCheck, CheckCircle2, ChevronDown, ChevronUp, ClipboardCheck, Clock, Edit3, Filter,
+  AlertTriangle, Award, BookOpenCheck, CheckCircle2, ChevronDown, ChevronUp, ClipboardCheck, Clock, Download, Edit3, Filter,
   EyeOff, Loader2, MessageSquareText, RefreshCw, Search, Send, Trophy, Users, X,
 } from 'lucide-react';
 import { evaluationApi } from '../../api/evaluationApi';
@@ -11,6 +11,7 @@ import { submissionAnalyticsApi } from '../../api/submissionAnalyticsApi';
 import type { SubmissionAnalyticsResponse } from '../../types/submissionAnalytics';
 import { includeTeamsWithoutWorkspace, matchesSubmissionStatus, submissionKey } from '../../utils/submissionAnalytics';
 import EvaluationPanel from '../../components/workspace/EvaluationPanel';
+import StudentPreviousScoresDialog from '../../components/evaluation/StudentPreviousScoresDialog';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import EmptyState from '../../components/ui/EmptyState';
 import ErrorState from '../../components/ui/ErrorState';
@@ -24,7 +25,7 @@ import type {
 import type { ApiEnvelope, WorkspaceOption } from '../../types/workspaceTools';
 import { parseApiError } from '../../utils/apiError';
 import {
-  calculateWeightedCourseScore, canAccessEvaluationRankings, evaluationStatusLabel, filterEvaluationRecords, filterTeamsBySemester,
+  buildEvaluationReportExportScope, calculateWeightedCourseScore, canAccessEvaluationRankings, evaluationStatusLabel, filterEvaluationRecords, filterTeamsBySemester,
   resolveActiveEvaluationSemester, resolveEvaluationMemberScore,
   selectLatestOfficialEvaluation,
 } from '../../utils/evaluationGrading';
@@ -33,8 +34,8 @@ import { parseWorkspaceSemester } from '../../utils/workspaceHub';
 const roleDescription: Record<string, string> = {
   ADMIN: 'Review evaluation results across all accessible classes and teams.',
   LECTURER: 'Review and manage grading for teams in the classes you teach.',
-  MENTOR: 'Review published team scores and written feedback for the teams you mentor.',
-  STUDENT: 'Review published team and personal scores, plus written feedback for your team.',
+  MENTOR: 'Review written feedback for the teams you mentor.',
+  STUDENT: 'Review your published personal scores and written feedback.',
 };
 
 const statusStyle: Record<EvaluationGradingStatus, string> = {
@@ -180,7 +181,7 @@ function FeedbackDialog({
   if (!evaluation) return null;
   const rubricComments = evaluation.rubricScores.filter(score => score.comment?.trim());
   const criterionScores = evaluation.rubricScores.filter(score => score.score !== null && score.score !== undefined);
-  const canShowCriterionScores = isStudent && record.status === 'PUBLISHED' && criterionScores.length > 0;
+  const canShowCriterionScores = !isStudent && record.status === 'PUBLISHED' && criterionScores.length > 0;
   const criterionConfig = new Map((record.checkpoint.rubrics || []).map(criterion => [criterion.key, criterion]));
 
   return (
@@ -196,7 +197,7 @@ function FeedbackDialog({
 
         <div className="overflow-y-auto p-5 sm:p-6">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <div className="rounded-xl border border-orange-100 bg-orange-50 p-3"><p className="text-[10px] font-bold uppercase tracking-wider text-orange-500">Team score</p>{evaluation.checkpointTotal === null || evaluation.checkpointTotal === undefined ? <p className="mt-1 text-sm font-bold text-slate-400">Pending publication</p> : <p className="mt-1 text-2xl font-black text-primary">{Number(evaluation.checkpointTotal).toFixed(2)}<span className="text-xs text-slate-400"> / 10</span></p>}</div>
+            {(isStudent || evaluation.checkpointTotal !== undefined) && <div className="rounded-xl border border-orange-100 bg-orange-50 p-3"><p className="text-[10px] font-bold uppercase tracking-wider text-orange-500">{isStudent ? 'My score' : 'Team score'}</p>{(isStudent ? evaluation.memberScores?.[0]?.score : evaluation.checkpointTotal) === null || (isStudent ? evaluation.memberScores?.[0]?.score : evaluation.checkpointTotal) === undefined ? <p className="mt-1 text-sm font-bold text-slate-400">Pending publication</p> : <p className="mt-1 text-2xl font-black text-primary">{Number((isStudent ? evaluation.memberScores?.[0]?.score : evaluation.checkpointTotal)).toFixed(2)}<span className="text-xs text-slate-400"> / 10</span></p>}</div>}
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-3"><p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Status</p><span className={`mt-2 inline-flex rounded-full border px-2.5 py-1 text-xs font-bold ${statusStyle[record.status]}`}>{evaluationStatusLabel(record.status)}</span></div>
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-3"><p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Evaluated by</p><p className="mt-1 truncate text-sm font-bold text-slate-800">{evaluation.lecturerId?.name || 'Lecturer'}</p></div>
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-3"><p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Updated</p><p className="mt-1 text-xs font-semibold leading-5 text-slate-700">{formatUpdatedAt(evaluation.updatedAt)}</p></div>
@@ -355,10 +356,12 @@ export default function EvaluationGrading() {
   const [partialFailureCount, setPartialFailureCount] = useState(0);
   const [reloadKey, setReloadKey] = useState(0);
   const [feedbackRecord, setFeedbackRecord] = useState<EvaluationGradingRecord | null>(null);
+  const [previousScoresStudent, setPreviousScoresStudent] = useState<{ classId: string; studentId: string; fullName: string } | null>(null);
   const [editingRecord, setEditingRecord] = useState<EvaluationGradingRecord | null>(null);
   const [editingAssessment, setEditingAssessment] = useState<{ team: EvaluationTeam; assessment: CourseAssessmentEvaluation } | null>(null);
   const [publishingEvaluationId, setPublishingEvaluationId] = useState<string | null>(null);
   const [bulkPublicationSubmitting, setBulkPublicationSubmitting] = useState(false);
+  const [exportingReport, setExportingReport] = useState(false);
   const [publicationConfirmation, setPublicationConfirmation] = useState<PublicationConfirmation | null>(null);
   const recordsRequestId = useRef(0);
   const [submissionAnalytics, setSubmissionAnalytics] = useState<SubmissionAnalyticsResponse | null>(null);
@@ -375,6 +378,7 @@ export default function EvaluationGrading() {
 
   const role = String(user?.role || 'STUDENT').toUpperCase();
   const canEdit = role === 'LECTURER';
+  const isInternalViewer = role === 'LECTURER' || role === 'ADMIN';
   const canViewSubmissions = role === 'LECTURER' || role === 'ADMIN';
   const canViewCourseTotal = role !== 'MENTOR';
   const currentUserId = user?.id || '';
@@ -580,6 +584,10 @@ export default function EvaluationGrading() {
   const filteredRecords = useMemo(() => filterEvaluationRecords(resultRecords, deferredFilters)
     .filter(record => !canViewSubmissions || matchesSubmissionStatus(submissionsByKey.get(submissionKey(record.team.teamId, record.checkpoint.number)), submissionStatus)),
     [deferredFilters, resultRecords, canViewSubmissions, submissionsByKey, submissionStatus]);
+  const evaluationReportScope = useMemo(
+    () => buildEvaluationReportExportScope(filteredRecords),
+    [filteredRecords],
+  );
   const classGroups = useMemo(() => groupEvaluationRecords(filteredRecords, assessmentsByTeam), [assessmentsByTeam, filteredRecords]);
   const bulkPublicationTargets = useMemo(() => {
     const publishIds = new Set<string>();
@@ -625,6 +633,34 @@ export default function EvaluationGrading() {
   const averageScore = completedCourseScores.length === 0 ? 0 : completedCourseScores.reduce((total, item) => total + item.score, 0) / completedCourseScores.length;
   const feedbackCount = evaluatedRecords.reduce((total, record) => total + (record.evaluation?.overallFeedback ? 1 : 0) + (record.evaluation?.rubricScores.filter(score => score.comment).length || 0), 0);
   const retry = () => setReloadKey(value => value + 1);
+  const exportEvaluationReport = async () => {
+    if (evaluationReportScope.length === 0) return;
+    setExportingReport(true);
+    try {
+      const response = await evaluationApi.exportEvaluationReport({ teams: evaluationReportScope });
+      const blob = new Blob([response.data || response], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      });
+      const visibleClassCodes = [...new Set(filteredRecords.map(record => record.team.classCode).filter(Boolean))];
+      const scopeName = visibleClassCodes.length === 1
+        ? visibleClassCodes[0]
+        : semester !== 'all' && semester !== 'none' && year !== 'all' && year !== 'none'
+          ? `${semester}${year}`
+          : 'evaluation';
+      const safeScopeName = scopeName.replace(/[^a-z0-9_-]+/gi, '_');
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${safeScopeName}_evaluation_report.xlsx`;
+      link.click();
+      window.URL.revokeObjectURL(url);
+      toast.success('Evaluation report exported successfully');
+    } catch (error: unknown) {
+      toast.error(parseApiError(error, 'Unable to export evaluation report.').message);
+    } finally {
+      setExportingReport(false);
+    }
+  };
   const confirmPublicationChange = async () => {
     if (!publicationConfirmation || publicationConfirmation.evaluationIds.length === 0) return;
     const { action, evaluationIds, scope } = publicationConfirmation;
@@ -737,6 +773,7 @@ export default function EvaluationGrading() {
           <select value={status} onChange={event => updateFilter('status', event.target.value)} aria-label="Filter by status" className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 sm:w-[150px]"><option value="">All statuses</option>{(['SUBMITTED', 'PUBLISHED', 'NOT_GRADED'] as EvaluationGradingStatus[]).map(value => <option key={value} value={value}>{evaluationStatusLabel(value)}</option>)}</select>
           {canViewSubmissions && <select value={submissionStatus} onChange={event => updateFilter('submissionStatus', event.target.value)} aria-label="Filter by submission status" className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm sm:w-[180px]"><option value="">All submissions</option><option value="Submitted">Submitted</option><option value="NotSubmitted">Not submitted</option><option value="Missing">Missing</option></select>}
           <button type="submit" className="inline-flex items-center gap-2 rounded-xl bg-secondary px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-secondary-700"><Filter className="h-4 w-4" /> Search</button>
+          {isInternalViewer && <button type="button" onClick={exportEvaluationReport} disabled={evaluationReportScope.length === 0 || loadingRecords || loadingSubmissions || isFilterPending || exportingReport} className="inline-flex items-center gap-2 rounded-xl border border-primary/30 bg-primary/5 px-4 py-2 text-sm font-semibold text-primary transition-colors hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-50">{exportingReport ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />} Export Evaluation Report</button>}
           <button type="button" onClick={resetFilters} className="px-2 text-sm font-medium text-slate-400 hover:text-slate-700">Reset</button>
         </form>
       </section>
@@ -816,9 +853,9 @@ export default function EvaluationGrading() {
                               <p className="mt-1.5 whitespace-normal break-words text-xs font-medium leading-5 text-slate-500">{teamGroup.team.projectDescription || 'No project description'}</p>
                             </th>
                             {teamGroup.assessments.map(assessment => {
-                              const hasScore = assessment.score !== null && assessment.score !== undefined;
+                              const hasScore = isInternalViewer && assessment.score !== null && assessment.score !== undefined;
                               const isSubmitted = assessment.status === 'SUBMITTED';
-                              return <td key={assessment.assessmentId} className="border-b border-r border-t border-slate-200 bg-blue-50/30 px-3 py-3 text-center align-middle"><div className="flex min-h-24 flex-col items-center justify-center">{hasScore ? <><span className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Team score</span><p className="mt-0.5 text-xl font-black text-blue-700">{Number(assessment.score).toFixed(2)}</p></> : <><span className="text-xl font-black text-slate-300">—</span><span className="mt-1 text-[10px] font-bold uppercase tracking-wide text-slate-400">{isSubmitted ? 'Score pending publication' : 'Not graded'}</span></>}<span className={`mt-1 rounded-full border px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide ${statusStyle[assessment.status]}`}>{isSubmitted && canEdit && assessment.evaluatorId === currentUserId ? 'Ready to publish' : evaluationStatusLabel(assessment.status)}</span>{canEdit && teamGroup.team.accessMode !== 'READ_ONLY' && assessment.evaluatorId === currentUserId && assessment.evaluationId && isSubmitted && <button type="button" disabled={bulkPublicationSubmitting || publishingEvaluationId === assessment.evaluationId} onClick={() => setPublicationConfirmation({ evaluationIds: [assessment.evaluationId!], teamCount: 1, scope: 'single', action: 'publish' })} className="mt-1.5 inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 hover:underline disabled:opacity-50">{publishingEvaluationId === assessment.evaluationId ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />} Publish</button>}{canEdit && teamGroup.team.accessMode !== 'READ_ONLY' && assessment.evaluatorId === currentUserId && assessment.evaluationId && assessment.status === 'PUBLISHED' && <button type="button" disabled={bulkPublicationSubmitting || publishingEvaluationId === assessment.evaluationId} onClick={() => setPublicationConfirmation({ evaluationIds: [assessment.evaluationId!], teamCount: 1, scope: 'single', action: 'unpublish' })} className="mt-1.5 inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 hover:underline disabled:opacity-50">{publishingEvaluationId === assessment.evaluationId ? <Loader2 className="h-3 w-3 animate-spin" /> : <EyeOff className="h-3 w-3" />} Hide scores</button>}{canEdit && teamGroup.team.accessMode !== 'READ_ONLY' && <button type="button" onClick={() => setEditingAssessment({ team: teamGroup.team, assessment })} className="mt-1 inline-flex items-center gap-1 text-[10px] font-bold text-blue-700 hover:underline"><Edit3 className="h-3 w-3" /> {assessment.evaluationId ? 'Edit grading' : 'Start grading'}</button>}</div></td>;
+                              return <td key={assessment.assessmentId} className="border-b border-r border-t border-slate-200 bg-blue-50/30 px-3 py-3 text-center align-middle"><div className="flex min-h-24 flex-col items-center justify-center">{hasScore ? <><span className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Team score</span><p className="mt-0.5 text-xl font-black text-blue-700">{Number(assessment.score).toFixed(2)}</p></> : <><span className="text-xl font-black text-slate-300">—</span><span className="mt-1 text-[10px] font-bold uppercase tracking-wide text-slate-400">{!isInternalViewer ? role === 'STUDENT' ? 'See my score below' : 'Feedback only' : isSubmitted ? 'Score pending publication' : 'Not graded'}</span></>}<span className={`mt-1 rounded-full border px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide ${statusStyle[assessment.status]}`}>{isSubmitted && canEdit && assessment.evaluatorId === currentUserId ? 'Ready to publish' : evaluationStatusLabel(assessment.status)}</span>{canEdit && teamGroup.team.accessMode !== 'READ_ONLY' && assessment.evaluatorId === currentUserId && assessment.evaluationId && isSubmitted && <button type="button" disabled={bulkPublicationSubmitting || publishingEvaluationId === assessment.evaluationId} onClick={() => setPublicationConfirmation({ evaluationIds: [assessment.evaluationId!], teamCount: 1, scope: 'single', action: 'publish' })} className="mt-1.5 inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 hover:underline disabled:opacity-50">{publishingEvaluationId === assessment.evaluationId ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />} Publish</button>}{canEdit && teamGroup.team.accessMode !== 'READ_ONLY' && assessment.evaluatorId === currentUserId && assessment.evaluationId && assessment.status === 'PUBLISHED' && <button type="button" disabled={bulkPublicationSubmitting || publishingEvaluationId === assessment.evaluationId} onClick={() => setPublicationConfirmation({ evaluationIds: [assessment.evaluationId!], teamCount: 1, scope: 'single', action: 'unpublish' })} className="mt-1.5 inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 hover:underline disabled:opacity-50">{publishingEvaluationId === assessment.evaluationId ? <Loader2 className="h-3 w-3 animate-spin" /> : <EyeOff className="h-3 w-3" />} Hide scores</button>}{canEdit && teamGroup.team.accessMode !== 'READ_ONLY' && <button type="button" onClick={() => setEditingAssessment({ team: teamGroup.team, assessment })} className="mt-1 inline-flex items-center gap-1 text-[10px] font-bold text-blue-700 hover:underline"><Edit3 className="h-3 w-3" /> {assessment.evaluationId ? 'Edit grading' : 'Start grading'}</button>}</div></td>;
                             })}
                             {classGroup.checkpoints.map(item => {
                               const record = teamGroup.recordsByCheckpoint.get(item.number);
@@ -832,7 +869,7 @@ export default function EvaluationGrading() {
                                   </div>}
                                   {record?.evaluation ? (
                                     <div className="flex min-h-24 flex-col items-center justify-center">
-                                      {record.evaluation.checkpointTotal === null || record.evaluation.checkpointTotal === undefined ? <><span className="text-xl font-black text-slate-300">—</span><span className="mt-1 text-[10px] font-bold uppercase tracking-wide text-slate-400">Score pending publication</span></> : <><span className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Team score</span><p className="mt-0.5 text-xl font-black text-primary">{Number(record.evaluation.checkpointTotal).toFixed(2)}</p></>}
+                                      {!isInternalViewer || record.evaluation.checkpointTotal === null || record.evaluation.checkpointTotal === undefined ? <><span className="text-xl font-black text-slate-300">—</span><span className="mt-1 text-[10px] font-bold uppercase tracking-wide text-slate-400">{!isInternalViewer ? role === 'STUDENT' ? 'See my score below' : 'Feedback only' : 'Score pending publication'}</span></> : <><span className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Team score</span><p className="mt-0.5 text-xl font-black text-primary">{Number(record.evaluation.checkpointTotal).toFixed(2)}</p></>}
                                       <span className={`mt-1 rounded-full border px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide ${statusStyle[record.status]}`}>{record.status === 'SUBMITTED' && canEdit && record.evaluation.lecturerId?._id === currentUserId ? 'Ready to publish' : evaluationStatusLabel(record.status)}</span>
                                       <button type="button" onClick={() => setFeedbackRecord(record)} className="mt-1.5 text-[11px] font-bold text-secondary hover:underline">View feedback</button>
                                       {canEdit && teamGroup.team.accessMode !== 'READ_ONLY' && record.evaluation.lecturerId?._id === currentUserId && record.status === 'SUBMITTED' && <button type="button" disabled={bulkPublicationSubmitting || publishingEvaluationId === record.evaluation._id} onClick={() => setPublicationConfirmation({ evaluationIds: [record.evaluation!._id], teamCount: 1, scope: 'single', action: 'publish' })} className="mt-1 inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 hover:underline disabled:opacity-50">{publishingEvaluationId === record.evaluation._id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />} Publish</button>}
@@ -860,6 +897,7 @@ export default function EvaluationGrading() {
                                   <span className="min-w-0">
                                     <span className="block max-w-[185px] truncate text-sm font-semibold text-slate-800" title={member.fullName}>{member.fullName}</span>
                                     {member.rollNumber && <span className="block text-[10px] font-medium text-slate-400">{member.rollNumber}</span>}
+                                    {role === 'LECTURER' && teamGroup.team.isCurrent && <button type="button" onClick={() => setPreviousScoresStudent({ classId: teamGroup.team.classId, studentId: member.studentId, fullName: member.fullName })} className="mt-1 block text-[11px] font-semibold text-primary hover:underline">Previous semester scores</button>}
                                   </span>
                                 </div>
                               </th>
@@ -891,6 +929,7 @@ export default function EvaluationGrading() {
       )}
 
       {feedbackRecord && <FeedbackDialog record={feedbackRecord} onClose={() => setFeedbackRecord(null)} isStudent={role === 'STUDENT'} />}
+      {previousScoresStudent && <StudentPreviousScoresDialog {...previousScoresStudent} onClose={() => setPreviousScoresStudent(null)} />}
       {editingAssessment && canEdit && <CourseAssessmentDialog team={editingAssessment.team} assessment={editingAssessment.assessment} onClose={() => setEditingAssessment(null)} onSaved={() => { setEditingAssessment(null); retry(); }} />}
       <ConfirmDialog
         isOpen={Boolean(publicationConfirmation)}
