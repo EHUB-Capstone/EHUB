@@ -1,7 +1,9 @@
 import axiosClient from './axiosClient';
 import type {
   MentorAllocationCommitResult,
+  MentorAllocationEdit,
   MentorAllocationPreview,
+  MentorAllocationStrategy,
   MentorImportCommitResult,
   MentorImportPreview,
 } from '../types/mentorAdmin';
@@ -28,10 +30,17 @@ export const mentorAdminApi = {
   commitImport: (sessionId: string): Promise<ApiEnvelope<MentorImportCommitResult>> =>
     axiosClient.post('/admin/mentors/imports/commit', { sessionId }),
 
-  previewAllocation: (semesterId: string, seed?: number): Promise<ApiEnvelope<MentorAllocationPreview>> =>
+  previewAllocation: (
+    semesterId: string,
+    seed?: number,
+    strategy: MentorAllocationStrategy = 'Balanced',
+    edits: MentorAllocationEdit[] = [],
+  ): Promise<ApiEnvelope<MentorAllocationPreview>> =>
     axiosClient.post('/admin/mentors/allocations/preview', {
       semesterId,
       classIds: [],
+      strategy,
+      edits,
       ...(seed === undefined ? {} : { seed }),
     }),
 

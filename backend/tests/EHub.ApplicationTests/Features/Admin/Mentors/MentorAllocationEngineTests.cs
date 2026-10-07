@@ -127,6 +127,63 @@ public sealed class MentorAllocationEngineTests
         Signature(first).Should().Equal(Signature(second));
     }
 
+    [Fact]
+    public void Allocate_RandomStrategy_StillRespectsTheHardRules()
+    {
+        var teams = Teams(20);
+        var enterprise = Mentors(MentorType.Enterprise, 4);
+        var academic = Mentors(MentorType.Academic, 3);
+        var existing = new[] { new AllocationExistingAssignment(teams[0].Id, enterprise[0].Id, MentorType.Enterprise) };
+
+        var outcome = MentorAllocationEngine.Allocate(teams, enterprise.Concat(academic).ToArray(), existing, seed: 11, AllocationStrategy.Random);
+
+        outcome.Proposals.Should().HaveCount(39);
+        outcome.Proposals.Should().NotContain(item => item.Team.Id == teams[0].Id && item.Mentor.Type == MentorType.Enterprise);
+        outcome.Proposals.Select(item => (item.Team.Id, item.Mentor.Type)).Should().OnlyHaveUniqueItems();
+        outcome.Proposals.Where(item => item.Mentor.Type == MentorType.Enterprise).Should().OnlyContain(item => enterprise.Contains(item.Mentor));
+        outcome.Proposals.Where(item => item.Mentor.Type == MentorType.Academic).Should().OnlyContain(item => academic.Contains(item.Mentor));
+    }
+
+    [Fact]
+    public void Allocate_RandomStrategy_IsDeterministicForTheSameSeed()
+    {
+        var teams = Teams(30);
+        var mentors = Mentors(MentorType.Enterprise, 6).Concat(Mentors(MentorType.Academic, 4)).ToArray();
+
+        var first = MentorAllocationEngine.Allocate(teams, mentors, [], seed: 5, AllocationStrategy.Random);
+        var second = MentorAllocationEngine.Allocate(teams, mentors, [], seed: 5, AllocationStrategy.Random);
+
+        Signature(first).Should().Equal(Signature(second));
+    }
+
+    [Fact]
+    public void Allocate_RandomStrategy_IgnoresTheCurrentLoad()
+    {
+        var teams = Teams(10);
+        var mentors = Mentors(MentorType.Enterprise, 3);
+        var busy = mentors[0];
+        var existing = teams.Take(5).Select(team => new AllocationExistingAssignment(team.Id, busy.Id, MentorType.Enterprise)).ToArray();
+
+        var pickedTheBusyMentor = Enumerable.Range(1, 40)
+            .Select(seed => MentorAllocationEngine.Allocate(teams, mentors, existing, seed, AllocationStrategy.Random))
+            .Any(outcome => outcome.Proposals.Any(item => item.Mentor.Id == busy.Id));
+        var balancedNeverDoes = Enumerable.Range(1, 40)
+            .Select(seed => MentorAllocationEngine.Allocate(teams, mentors, existing, seed, AllocationStrategy.Balanced))
+            .All(outcome => outcome.Proposals.All(item => item.Mentor.Id != busy.Id));
+
+        pickedTheBusyMentor.Should().BeTrue("Random does not look at the load");
+        balancedNeverDoes.Should().BeTrue("the busy mentor already carries more teams than the others will reach");
+    }
+
+    [Fact]
+    public void Allocate_RandomStrategy_WarnsWhenNoMentorOfATypeExists()
+    {
+        var outcome = MentorAllocationEngine.Allocate(Teams(2), Mentors(MentorType.Academic, 1), [], seed: 2, AllocationStrategy.Random);
+
+        outcome.Warnings.Should().ContainSingle().Which.Should().Contain("Enterprise");
+        outcome.Proposals.Should().HaveCount(2).And.OnlyContain(item => item.Mentor.Type == MentorType.Academic);
+    }
+
     // Characterization: the engine must keep producing exactly what the original inline algorithm in
     // MentorAdminHandler.PreviewAllocationAsync produced for the same seed. Remove LegacyAllocate once the
     // selection strategies are replaced in a later phase.
