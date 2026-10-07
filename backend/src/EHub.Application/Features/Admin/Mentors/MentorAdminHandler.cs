@@ -377,6 +377,17 @@ public sealed class MentorAdminHandler(
             MentorLoadBefore = loadBefore.GetValueOrDefault(proposal.Mentor.Id)
         }));
         var skipped = retention.Skipped.Select(ToSkippedPreview).ToList();
+        var teamsInScope = teams.ToDictionary(item => item.Id);
+        var existingAssignments = active
+            .Where(item => teamsInScope.ContainsKey(item.TeamId))
+            .OrderBy(item => teamsInScope[item.TeamId].Code, StringComparer.Ordinal).ThenBy(item => item.Slot)
+            .Select(item => new MentorAllocationExistingPreview
+            {
+                AssignmentId = item.Id, TeamId = item.TeamId, TeamCode = teamsInScope[item.TeamId].Code, TeamName = teamsInScope[item.TeamId].Name,
+                ClassId = teamsInScope[item.TeamId].ClassId, ClassCode = ClassCodeOf(teamsInScope[item.TeamId].ClassId), SubjectCode = item.SubjectCode,
+                MentorType = item.Slot.ToString(), MentorProfileId = item.MentorProfileId, MentorName = item.MentorName,
+                Replaced = replacedIds.Contains(item.Id)
+            }).ToList();
         var conflicts = manual.Conflicts.Select(item => ToConflictPreview(item, active.FirstOrDefault(slot => item.Team != null && slot.TeamId == item.Team.Id && slot.Slot == item.Slot)?.Id)).ToList();
 
         // Slots that still have no mentor once everything proposed is applied (for example no mentor of that type is active).
@@ -434,7 +445,7 @@ public sealed class MentorAdminHandler(
             UnfilledEnterpriseCount = unfilled.Count(item => item.MentorType == nameof(MentorType.Enterprise)),
             UnfilledAcademicCount = unfilled.Count(item => item.MentorType == nameof(MentorType.Academic)),
             CanCommit = canCommit, Warnings = warnings, Assignments = result, Skipped = skipped,
-            Unfilled = unfilled, MentorLoads = mentorLoads, Conflicts = conflicts
+            Unfilled = unfilled, MentorLoads = mentorLoads, Conflicts = conflicts, ExistingAssignments = existingAssignments
         });
     }
 

@@ -1,10 +1,19 @@
 import { useRef, useState } from 'react';
-import { ChevronDown, Download, FileSpreadsheet, RefreshCw, Shuffle, Upload, Users } from 'lucide-react';
+import { ChevronDown, Download, FileSpreadsheet, Shuffle, Upload, Users } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { mentorAdminApi } from '../../api/mentorAdminApi';
-import type { MentorAllocationPreview, MentorImportPreview } from '../../types/mentorAdmin';
+import type {
+  MentorAllocationEdit,
+  MentorAllocationPreview,
+  MentorAllocationStrategy,
+  MentorImportPreview,
+  MentorType,
+} from '../../types/mentorAdmin';
 import { parseApiError } from '../../utils/apiError';
+import { keepAppliedEdits, removeEdit, upsertEdit } from '../../utils/mentorAllocationPreview';
 import Button from '../ui/Button';
+import ConfirmDialog from '../ui/ConfirmDialog';
+import MentorAllocationPreviewModal from './MentorAllocationPreviewModal';
 
 interface MentorAdministrationCardProps {
   semesterId?: string;
@@ -18,7 +27,12 @@ export default function MentorAdministrationCard({ semesterId, semesterLabel, on
   const [file, setFile] = useState<File | null>(null);
   const [importPreview, setImportPreview] = useState<MentorImportPreview | null>(null);
   const [allocationPreview, setAllocationPreview] = useState<MentorAllocationPreview | null>(null);
-  const [busy, setBusy] = useState<'template' | 'preview-import' | 'commit-import' | 'preview-allocation' | 'commit-allocation' | null>(null);
+  const [strategy, setStrategy] = useState<MentorAllocationStrategy>('Balanced');
+  const [edits, setEdits] = useState<MentorAllocationEdit[]>([]);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewStale, setPreviewStale] = useState(false);
+  const [confirmReplacement, setConfirmReplacement] = useState(false);
+  const [busy, setBusy] = useState<'template' | 'export' | 'preview-import' | 'commit-import' | 'preview-allocation' | 'refresh-allocation' | 'commit-allocation' | null>(null);
 
   const downloadTemplate = async () => {
     setBusy('template');
@@ -78,30 +92,110 @@ export default function MentorAdministrationCard({ semesterId, semesterLabel, on
     }
   };
 
-  const previewAllocation = async () => {
+  const exportAssignments = async () => {
     if (!semesterId) return;
-    setBusy('preview-allocation');
-    setAllocationPreview(null);
+    setBusy('export');
     try {
-      const response = await mentorAdminApi.previewAllocation(semesterId);
-      setAllocationPreview(response.data);
-      if (response.data.warnings.length) response.data.warnings.forEach(message => toast.error(message));
+      const blob = await mentorAdminApi.exportAssignments(semesterId);
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = `${semesterLabel.replace(/\s+/g, '_')}_mentor_assignments.xlsx`;
+      anchor.click();
+      URL.revokeObjectURL(url);
     } catch (error) {
-      toast.error(parseApiError(error, 'Failed to preview balanced allocation').message);
+      toast.error(parseApiError(error, 'Failed to export mentor assignments').message);
     } finally {
       setBusy(null);
     }
   };
 
+  // Generates a preview. Re-using the seed and strategy keeps the proposal stable while the admin edits it by hand.
+  const loadPreview = async (nextEdits: MentorAllocationEdit[], seed?: number) => {
+    if (!semesterId) return null;
+    const response = await mentorAdminApi.previewAllocation(semesterId, seed, strategy, nextEdits);
+    return response.data;
+  };
+
+  const previewAllocation = async () => {
+    if (!semesterId) return;
+    setBusy('preview-allocation');
+    try {
+      const preview = await loadPreview([]);
+      if (!preview) return;
+      setAllocationPreview(preview);
+      setEdits([]);
+      setPreviewStale(false);
+      setPreviewOpen(true);
+    } catch (error) {
+      toast.error(parseApiError(error, 'Failed to preview mentor assignment').message);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const applyEdit = async (edit: MentorAllocationEdit) => {
+    if (!allocationPreview) return;
+    const requested = upsertEdit(edits, edit);
+    setBusy('refresh-allocation');
+    try {
+      const preview = await loadPreview(requested, allocationPreview.seed);
+      if (!preview) return;
+      setAllocationPreview(preview);
+      setEdits(keepAppliedEdits(requested, preview));
+      setPreviewStale(false);
+      const notApplied = (preview.conflicts ?? []).find(conflict => conflict.teamId === edit.teamId && conflict.mentorType === edit.mentorType);
+      if (notApplied) toast.error(notApplied.message);
+    } catch (error) {
+      toast.error(parseApiError(error, 'Failed to apply the edit').message);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const undoEdit = async (teamId: string, mentorType: MentorType) => {
+    if (!allocationPreview) return;
+    const remaining = removeEdit(edits, teamId, mentorType);
+    setBusy('refresh-allocation');
+    try {
+      const preview = await loadPreview(remaining, allocationPreview.seed);
+      if (!preview) return;
+      setAllocationPreview(preview);
+      setEdits(keepAppliedEdits(remaining, preview));
+    } catch (error) {
+      toast.error(parseApiError(error, 'Failed to undo the edit').message);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const closePreview = () => {
+    setPreviewOpen(false);
+    setAllocationPreview(null);
+    setEdits([]);
+    setPreviewStale(false);
+  };
+
+  const requestCommit = () => {
+    if (!allocationPreview?.canCommit || previewStale) return;
+    if ((allocationPreview.replacementCount ?? 0) > 0) setConfirmReplacement(true);
+    else void commitAllocation();
+  };
+
   const commitAllocation = async () => {
     if (!allocationPreview?.canCommit) return;
+    setConfirmReplacement(false);
     setBusy('commit-allocation');
     try {
       const response = await mentorAdminApi.commitAllocation(allocationPreview.sessionId);
-      toast.success(`Assigned ${response.data.createdCount} missing mentor slots.`);
-      setAllocationPreview(null);
+      const ended = response.data.endedCount ?? 0;
+      toast.success(`Assigned ${response.data.createdCount} mentor slot${response.data.createdCount === 1 ? '' : 's'}${ended ? ` and ended ${ended} replaced assignment${ended === 1 ? '' : 's'}` : ''}.`);
+      closePreview();
+      await onImportCommitted();
     } catch (error) {
-      toast.error(parseApiError(error, 'Failed to commit balanced allocation').message);
+      toast.error(parseApiError(error, 'Failed to save the mentor assignment').message);
+      // A conflict means data changed after the preview, so it must be regenerated before it can be saved.
+      if ((error as { response?: { status?: number } }).response?.status === 409) setPreviewStale(true);
     } finally {
       setBusy(null);
     }
@@ -116,13 +210,16 @@ export default function MentorAdministrationCard({ semesterId, semesterLabel, on
           </span>
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="font-bold text-slate-900">Mentor import & balanced assignment</h2>
+              <h2 className="font-bold text-slate-900">Mentor import & assignment</h2>
               <span className="rounded-full bg-primary-50 px-2 py-0.5 text-[11px] font-semibold text-primary">{semesterLabel}</span>
             </div>
-            <p className="mt-0.5 text-xs text-slate-500">Import mentor rosters or fill missing team mentor slots.</p>
+            <p className="mt-0.5 text-xs text-slate-500">Import mentor rosters, assign mentors to teams and export the result.</p>
           </div>
         </div>
-        <Button size="sm" variant="outline" icon={Download} onClick={() => void downloadTemplate()} isLoading={busy === 'template'}>Download template</Button>
+        <div className="flex flex-wrap gap-2">
+          {semesterId && <Button size="sm" variant="outline" icon={FileSpreadsheet} onClick={() => void exportAssignments()} isLoading={busy === 'export'}>Export assignments</Button>}
+          <Button size="sm" variant="outline" icon={Download} onClick={() => void downloadTemplate()} isLoading={busy === 'template'}>Download template</Button>
+        </div>
       </div>
 
       {!semesterId ? (
@@ -141,8 +238,8 @@ export default function MentorAdministrationCard({ semesterId, semesterLabel, on
             <ActionToggle
               active={activePanel === 'allocation'}
               icon={Users}
-              title="Balanced assignment"
-              description="Fill only the mentor slots still missing"
+              title="Assign mentors"
+              description="Keep mentors of continuing teams, then fill what is missing"
               controls="mentor-allocation-panel"
               onClick={() => setActivePanel(current => current === 'allocation' ? null : 'allocation')}
             />
@@ -186,31 +283,61 @@ export default function MentorAdministrationCard({ semesterId, semesterLabel, on
 
           {activePanel === 'allocation' && (
             <div id="mentor-allocation-panel" className="mt-3 rounded-xl border border-slate-200 bg-slate-50/50 p-4">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                 <div>
-                  <h3 className="text-sm font-semibold text-slate-800">Fill missing mentor slots</h3>
-                  <p className="mt-1 max-w-3xl text-xs leading-5 text-slate-500">Existing assignments are preserved. Only missing Enterprise or Academic slots in active classes are filled with balanced loads.</p>
+                  <h3 className="text-sm font-semibold text-slate-800">Assign mentors to teams</h3>
+                  <p className="mt-1 max-w-3xl text-xs leading-5 text-slate-500">
+                    Mentors of teams that continue from the previous semester stay with them when they are active. Only missing industry or lecturer slots are filled, existing mentors are never replaced automatically, and nothing is saved before you confirm the preview.
+                  </p>
                 </div>
-                <Button size="sm" className="shrink-0" variant="outline" icon={allocationPreview ? RefreshCw : Shuffle} onClick={() => void previewAllocation()} isLoading={busy === 'preview-allocation'}>{allocationPreview ? 'Generate another preview' : 'Preview assignment'}</Button>
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                  <div role="group" aria-label="Assignment method" className="inline-flex rounded-xl border border-slate-200 bg-white p-0.5">
+                    {(['Balanced', 'Random'] as const).map(option => (
+                      <button
+                        key={option}
+                        type="button"
+                        aria-pressed={strategy === option}
+                        disabled={busy !== null}
+                        onClick={() => setStrategy(option)}
+                        className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${strategy === option ? 'bg-primary text-white' : 'text-slate-600 hover:text-slate-900'}`}
+                      >
+                        {option}{option === 'Balanced' ? ' (recommended)' : ''}
+                      </button>
+                    ))}
+                  </div>
+                  <Button size="sm" className="shrink-0" icon={Shuffle} onClick={() => void previewAllocation()} isLoading={busy === 'preview-allocation'}>Preview assignment</Button>
+                </div>
               </div>
-              {allocationPreview && (
-                <div className="mt-4 space-y-3 border-t border-slate-200 pt-4">
-                  <div className="grid grid-cols-3 gap-2 text-xs">
-                    <Metric label="Teams" value={allocationPreview.teamCount} />
-                    <Metric label="Enterprise" value={allocationPreview.missingEnterpriseCount} />
-                    <Metric label="Academic" value={allocationPreview.missingAcademicCount} />
-                  </div>
-                  <p className="text-xs text-slate-400">Reproducible random seed: {allocationPreview.seed}</p>
-                  <div className="max-h-52 overflow-auto rounded-lg border border-slate-200 bg-white">
-                    <table className="w-full min-w-[520px] text-left text-xs"><thead className="sticky top-0 bg-slate-50 text-slate-500"><tr><th className="px-3 py-2">Team</th><th className="px-3 py-2">Slot</th><th className="px-3 py-2">Mentor</th><th className="px-3 py-2">Load</th></tr></thead><tbody>{allocationPreview.assignments.map(row => <tr key={`${row.teamId}-${row.mentorType}`} className="border-t border-slate-100"><td className="px-3 py-2"><span className="block font-semibold">{row.teamCode}</span><span className="text-slate-400">{row.classCode}</span></td><td className="px-3 py-2">{row.mentorType}</td><td className="px-3 py-2">{row.mentorName}</td><td className="px-3 py-2">{row.resultingSemesterLoad}</td></tr>)}</tbody></table>
-                  </div>
-                  <div className="flex justify-end">
-                    <Button size="sm" disabled={!allocationPreview.canCommit} onClick={() => void commitAllocation()} isLoading={busy === 'commit-allocation'}>Commit balanced assignment</Button>
-                  </div>
-                </div>
-              )}
+              <p className="mt-2 text-xs text-slate-500">
+                {strategy === 'Balanced'
+                  ? 'Balanced gives each missing slot to the mentor with the fewest teams in this semester.'
+                  : 'Random picks any eligible mentor for each missing slot, regardless of how many teams they already have.'}
+              </p>
             </div>
           )}
+
+          <MentorAllocationPreviewModal
+            isOpen={previewOpen}
+            preview={allocationPreview}
+            edits={edits}
+            isRefreshing={busy === 'refresh-allocation'}
+            isCommitting={busy === 'commit-allocation'}
+            isStale={previewStale}
+            onClose={closePreview}
+            onApplyEdit={edit => void applyEdit(edit)}
+            onRemoveEdit={(teamId, mentorType) => void undoEdit(teamId, mentorType)}
+            onRegenerate={() => void previewAllocation()}
+            onConfirm={requestCommit}
+          />
+          <ConfirmDialog
+            isOpen={confirmReplacement}
+            onClose={() => setConfirmReplacement(false)}
+            onConfirm={() => void commitAllocation()}
+            title="Replace current mentors?"
+            description={`${allocationPreview?.replacementCount ?? 0} current mentor assignment(s) will end and the chosen mentors take over. The history of the ended assignments is kept.`}
+            confirmText="Replace and save"
+            isSubmitting={busy === 'commit-allocation'}
+          />
         </>
       )}
     </section>

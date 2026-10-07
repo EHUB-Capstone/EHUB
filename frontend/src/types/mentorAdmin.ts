@@ -66,6 +66,21 @@ export interface MentorAllocationEdit {
   reason?: string;
 }
 
+/** A mentor already assigned to a team slot. `replaced` is true when the preview ends this assignment. */
+export interface MentorAllocationExisting {
+  assignmentId: string;
+  teamId: string;
+  teamCode: string;
+  teamName: string;
+  classId: string;
+  classCode: string;
+  subjectCode: string;
+  mentorType: MentorType;
+  mentorProfileId: string;
+  mentorName: string;
+  replaced: boolean;
+}
+
 export interface MentorAllocationConflict {
   teamId: string | null;
   teamCode: string;
@@ -153,6 +168,7 @@ export interface MentorAllocationPreview {
   unfilled?: MentorAllocationUnfilled[];
   mentorLoads?: MentorAllocationMentorLoad[];
   conflicts?: MentorAllocationConflict[];
+  existingAssignments?: MentorAllocationExisting[];
 }
 
 export interface MentorAllocationCommitResult {

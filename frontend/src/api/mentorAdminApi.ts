@@ -44,6 +44,10 @@ export const mentorAdminApi = {
       ...(seed === undefined ? {} : { seed }),
     }),
 
+  /** Downloads the semester assignment workbook: sheets EXE101, EXE201 and a mentor summary. */
+  exportAssignments: (semesterId: string): Promise<Blob> =>
+    axiosClient.get('/admin/mentors/assignments/export', { params: { semesterId }, responseType: 'blob' }),
+
   commitAllocation: (sessionId: string): Promise<ApiEnvelope<MentorAllocationCommitResult>> =>
     axiosClient.post('/admin/mentors/allocations/commit', { sessionId }),
 };

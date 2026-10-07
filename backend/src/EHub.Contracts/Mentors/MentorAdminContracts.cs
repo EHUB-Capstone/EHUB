@@ -181,6 +181,22 @@ public sealed class MentorAllocationConflictPreview
     public string Message { get; init; } = string.Empty;
 }
 
+// A mentor already assigned to a team slot. Replaced is true when the preview ends this assignment in favour of a new mentor.
+public sealed class MentorAllocationExistingPreview
+{
+    public Guid AssignmentId { get; init; }
+    public Guid TeamId { get; init; }
+    public string TeamCode { get; init; } = string.Empty;
+    public string TeamName { get; init; } = string.Empty;
+    public Guid ClassId { get; init; }
+    public string ClassCode { get; init; } = string.Empty;
+    public string SubjectCode { get; init; } = string.Empty;
+    public string MentorType { get; init; } = string.Empty;
+    public Guid MentorProfileId { get; init; }
+    public string MentorName { get; init; } = string.Empty;
+    public bool Replaced { get; init; }
+}
+
 public sealed class MentorAllocationPreviewResponse
 {
     public Guid SessionId { get; init; }
@@ -200,6 +216,7 @@ public sealed class MentorAllocationPreviewResponse
     public IReadOnlyCollection<MentorAllocationUnfilledPreview> Unfilled { get; init; } = Array.Empty<MentorAllocationUnfilledPreview>();
     public IReadOnlyCollection<MentorAllocationMentorLoad> MentorLoads { get; init; } = Array.Empty<MentorAllocationMentorLoad>();
     public IReadOnlyCollection<MentorAllocationConflictPreview> Conflicts { get; init; } = Array.Empty<MentorAllocationConflictPreview>();
+    public IReadOnlyCollection<MentorAllocationExistingPreview> ExistingAssignments { get; init; } = Array.Empty<MentorAllocationExistingPreview>();
     public int ReplacementCount { get; init; }
 }
 
