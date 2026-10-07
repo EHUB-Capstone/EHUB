@@ -1,4 +1,5 @@
 using EHub.Application.Features.Admin.Mentors;
+using EHub.Application.Features.Admin.Mentors.ExportAssignments;
 using EHub.Contracts.Common;
 using EHub.Contracts.Mentors;
 using EHub.Shared.Constants;
@@ -12,7 +13,7 @@ namespace EHub.Api.Controllers;
 [ApiController]
 [Route("api/admin/mentors")]
 [Authorize(Policy = SystemPolicies.AdminOnly)]
-public sealed class MentorAdminController(IMentorAdminHandler handler) : ControllerBase
+public sealed class MentorAdminController(IMentorAdminHandler handler, IMentorAssignmentExportHandler exportHandler) : ControllerBase
 {
     [HttpGet("import-template")]
     public async Task<IActionResult> DownloadTemplate(CancellationToken cancellationToken)
@@ -39,6 +40,15 @@ public sealed class MentorAdminController(IMentorAdminHandler handler) : Control
     [HttpPost("allocations/commit")]
     public async Task<IActionResult> CommitAllocation([FromBody] CommitMentorAllocationRequest request, CancellationToken cancellationToken) =>
         ToResponse(await handler.CommitAllocationAsync(request, cancellationToken), "Balanced mentor allocation committed successfully.");
+
+    [HttpGet("assignments/export")]
+    public async Task<IActionResult> ExportAssignments([FromQuery] Guid semesterId, CancellationToken cancellationToken)
+    {
+        var result = await exportHandler.ExportAsync(semesterId, cancellationToken);
+        return result.IsSuccess
+            ? File(result.Value.FileBytes, result.Value.ContentType, result.Value.FileName)
+            : ToError(result.Error);
+    }
 
     private IActionResult ToResponse<T>(Result<T> result, string message) =>
         result.IsSuccess ? Ok(ApiResponse<T>.SuccessResponse(result.Value, message)) : ToError(result.Error);

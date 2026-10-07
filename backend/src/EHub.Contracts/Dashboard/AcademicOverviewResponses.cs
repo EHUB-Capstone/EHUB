@@ -32,6 +32,8 @@ public sealed class AcademicOverviewScopeResponse
     public Guid SemesterId { get; init; }
     public string SemesterCode { get; init; } = string.Empty;
     public string SemesterName { get; init; } = string.Empty;
+    // False when no semester is active and the overview shows the most relevant other semester instead.
+    public bool IsActiveSemester { get; init; }
     public Guid? CourseId { get; init; }
     public string? SubjectCode { get; init; }
     public string? SubjectName { get; init; }

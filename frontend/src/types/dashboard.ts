@@ -2,6 +2,8 @@ export interface AcademicOverviewScope {
   semesterId: string;
   semesterCode: string;
   semesterName: string;
+  /** False when no semester is active and the overview shows the most relevant other semester. */
+  isActiveSemester?: boolean;
   courseId: string | null;
   subjectCode: string | null;
   subjectName: string | null;

@@ -39,6 +39,9 @@ import {
   academicOverviewMetricEntries,
   percentage,
   resolveAcademicOverviewState,
+  ACADEMIC_OVERVIEW_ERROR_FALLBACK,
+  resolveOverviewErrorMessage,
+  semesterScopeNotice,
 } from '../../utils/academicDashboard';
 
 interface MetricPresentation {
@@ -131,6 +134,7 @@ const LecturerDashboard = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [updating, setUpdating] = useState(false);
   const [error, setError] = useState(false);
+  const [errorMessage, setErrorMessage] = useState(ACADEMIC_OVERVIEW_ERROR_FALLBACK);
   const hasOverviewRef = useRef(false);
 
   const loadOverview = useCallback(async (
@@ -148,8 +152,11 @@ const LecturerDashboard = () => {
       if (!response.success || !response.data) throw new Error(response.message);
       hasOverviewRef.current = true;
       setOverview(response.data);
-    } catch {
-      if (!signal?.aborted) setError(true);
+    } catch (loadError) {
+      if (!signal?.aborted) {
+        setErrorMessage(resolveOverviewErrorMessage(loadError));
+        setError(true);
+      }
     } finally {
       if (!signal?.aborted) {
         setLoading(false);
@@ -202,7 +209,7 @@ const LecturerDashboard = () => {
     return (
       <ErrorState
         title="Academic overview unavailable"
-        message="We couldn't load your dashboard. Please try again."
+        message={errorMessage}
         onRetry={() => void loadOverview(filters)}
       />
     );
@@ -236,6 +243,7 @@ const LecturerDashboard = () => {
       <div className="space-y-6">
         <DashboardHero
           semesterLabel={semesterLabel}
+          notice={semesterScopeNotice(overview.scope)}
           refreshing={refreshing}
           onRefresh={() => void loadOverview(filters, undefined, true)}
         />
@@ -271,6 +279,7 @@ const LecturerDashboard = () => {
     <div className="space-y-6 pb-6">
       <DashboardHero
         semesterLabel={semesterLabel}
+        notice={semesterScopeNotice(overview.scope)}
         refreshing={refreshing}
         onRefresh={() => void loadOverview(filters, undefined, true)}
       />
@@ -570,10 +579,12 @@ function DashboardFilters({
 
 function DashboardHero({
   semesterLabel,
+  notice,
   refreshing,
   onRefresh,
 }: {
   semesterLabel: string;
+  notice?: string | null;
   refreshing: boolean;
   onRefresh: () => void;
 }) {
@@ -594,6 +605,7 @@ function DashboardHero({
               </span>
             </div>
             <p className="mt-1 max-w-2xl text-sm leading-relaxed text-slate-500">Track academic delivery, checkpoint progress, and promising projects across your assigned classes.</p>
+            {notice && <p role="status" className="mt-2 inline-block rounded-lg bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-800">{notice}</p>}
           </div>
         </div>
         <Button

@@ -34,22 +34,37 @@ internal static class ClassRosterExportWorkbookBuilder
     {
         using var workbook = new XLWorkbook();
         var worksheet = workbook.Worksheets.Add(WorksheetName);
-        var semesterCode = sections.FirstOrDefault()?.Class.Semester?.Code;
+        WriteSheet(worksheet, sections, registeredMajorByEmail);
+
+        using var stream = new MemoryStream();
+        workbook.SaveAs(stream);
+        return stream.ToArray();
+    }
+
+    /// <summary>
+    /// Writes the roster layout (one row per student, project and mentor columns on the first row of each team)
+    /// into an existing worksheet. When <paramref name="unassignedMentorLabel"/> is set, a team that has no mentor
+    /// in a slot shows that text instead of an empty cell.
+    /// </summary>
+    internal static void WriteSheet(
+        IXLWorksheet worksheet,
+        IReadOnlyCollection<ClassRosterExportSection> sections,
+        IReadOnlyDictionary<string, string>? registeredMajorByEmail = null,
+        string? semesterCode = null,
+        string? unassignedMentorLabel = null)
+    {
+        semesterCode ??= sections.FirstOrDefault()?.Class.Semester?.Code;
 
         WriteHeader(worksheet, SemesterGroupColumn.GetHeader(semesterCode));
 
         var rowIndex = 2;
         foreach (var section in sections)
         {
-            rowIndex = WriteRoster(worksheet, rowIndex, section, registeredMajorByEmail);
+            rowIndex = WriteRoster(worksheet, rowIndex, section, registeredMajorByEmail, unassignedMentorLabel);
         }
 
         ApplyColumnSizing(worksheet, rowIndex - 1);
         ApplyBorders(worksheet, rowIndex - 1);
-
-        using var stream = new MemoryStream();
-        workbook.SaveAs(stream);
-        return stream.ToArray();
     }
 
     private static void WriteHeader(IXLWorksheet worksheet, string groupHeader)
@@ -75,7 +90,8 @@ internal static class ClassRosterExportWorkbookBuilder
         IXLWorksheet worksheet,
         int startRowIndex,
         ClassRosterExportSection section,
-        IReadOnlyDictionary<string, string>? registeredMajorByEmail)
+        IReadOnlyDictionary<string, string>? registeredMajorByEmail,
+        string? unassignedMentorLabel = null)
     {
         var rosterRows = section.Roster
             .Select(enrollment =>
@@ -163,11 +179,12 @@ internal static class ClassRosterExportWorkbookBuilder
                 worksheet.Cell(rowIndex, 7).Value = project?.Name ?? string.Empty;
                 worksheet.Cell(rowIndex, 8).Value = project?.Description ?? string.Empty;
 
-                if (row.Team != null &&
-                    section.MentorsByTeam?.TryGetValue(row.Team.Id, out var mentors) == true)
+                if (row.Team != null)
                 {
-                    worksheet.Cell(rowIndex, 10).Value = mentors.Enterprise;
-                    worksheet.Cell(rowIndex, 11).Value = mentors.Academic;
+                    ClassRosterMentorNames? mentors = null;
+                    section.MentorsByTeam?.TryGetValue(row.Team.Id, out mentors);
+                    worksheet.Cell(rowIndex, 10).Value = FirstNonEmpty(mentors?.Enterprise, unassignedMentorLabel);
+                    worksheet.Cell(rowIndex, 11).Value = FirstNonEmpty(mentors?.Academic, unassignedMentorLabel);
                 }
 
                 var zaloUrl = project?.ZaloGroupUrl;
@@ -196,6 +213,9 @@ internal static class ClassRosterExportWorkbookBuilder
 
         return rowIndex;
     }
+
+    private static string FirstNonEmpty(string? value, string? fallback) =>
+        string.IsNullOrWhiteSpace(value) ? fallback ?? string.Empty : value;
 
     private static void ApplyBorders(IXLWorksheet worksheet, int lastRowIndex)
     {

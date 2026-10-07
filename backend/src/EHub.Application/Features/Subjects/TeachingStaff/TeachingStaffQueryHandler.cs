@@ -88,6 +88,13 @@ public sealed class TeachingStaffQueryHandler(IApplicationDbContext context) : I
                 item.Role
             });
 
+        var staffUserIds = staff.Select(item => item.UserId).Distinct().ToArray();
+        var mentorTypes = await context.MentorProfiles
+            .AsNoTracking()
+            .Where(profile => staffUserIds.Contains(profile.UserId))
+            .Select(profile => new { profile.UserId, profile.Type })
+            .ToDictionaryAsync(profile => profile.UserId, profile => profile.Type, cancellationToken);
+
         var activeStaffResponse = staff.Select(item =>
         {
             var memberAssignments = assignmentsByRole[new
@@ -111,6 +118,9 @@ public sealed class TeachingStaffQueryHandler(IApplicationDbContext context) : I
                 Email = item.User.Email,
                 Avatar = item.User.AvatarUrl,
                 Role = ToRoleCode(item.Role),
+                MentorType = item.Role == SemesterStaffRole.Mentor && mentorTypes.TryGetValue(item.UserId, out var mentorType)
+                    ? mentorType.ToString()
+                    : null,
                 Status = item.Status.ToString(),
                 UserStatus = item.User.Status.ToString(),
                 IsIncomplete = false,
@@ -127,6 +137,7 @@ public sealed class TeachingStaffQueryHandler(IApplicationDbContext context) : I
             Name = item.FullName,
             Email = item.Email ?? string.Empty,
             Role = "MENTOR",
+            MentorType = item.Type.ToString(),
             Status = "Incomplete",
             UserStatus = "NotCreated",
             IsIncomplete = true,
