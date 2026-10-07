@@ -300,34 +300,42 @@ public sealed class MentorAdminHandler(
             .Select(item => new { item.TeamId, item.MentorProfileId, item.Slot }).ToListAsync(cancellationToken);
 
         var seed = request.Seed ?? RandomNumberGenerator.GetInt32(int.MaxValue);
-        var random = new Random(seed);
+        var existing = active.Select(item => new AllocationExistingAssignment(item.TeamId, item.MentorProfileId, item.Slot)).ToArray();
+
+        // Mentors of the previous semester's teams stay with their continuing team first; the remaining
+        // empty slots are then filled by the allocation engine, which counts the retained mentors in their load.
+        var retention = MentorRetentionPlanner.Plan(await MentorRetentionDataLoader.LoadAsync(
+            context, request.SemesterId, teams.Select(item => item.Id).ToArray(), existing, cancellationToken));
+        var outcome = MentorAllocationEngine.Allocate(
+            teams, mentors,
+            existing.Concat(retention.Retained.Select(item => new AllocationExistingAssignment(item.Team.Id, item.Mentor.Id, item.Slot))).ToArray(),
+            seed);
+        var warnings = outcome.Warnings;
+
+        var retainedLoads = new Dictionary<Guid, int>();
         var result = new List<MentorAllocationRowPreview>();
-        var warnings = new List<string>();
-        foreach (var type in new[] { MentorType.Enterprise, MentorType.Academic })
+        foreach (var retained in retention.Retained)
         {
-            var pool = mentors.Where(item => item.Type == type).ToArray();
-            var missing = teams.Where(team => active.All(item => item.TeamId != team.Id || item.Slot != type)).OrderBy(_ => random.Next()).ToArray();
-            if (missing.Length > 0 && pool.Length == 0)
+            var load = retainedLoads.GetValueOrDefault(retained.Mentor.Id, existing.Count(item => item.MentorProfileId == retained.Mentor.Id)) + 1;
+            retainedLoads[retained.Mentor.Id] = load;
+            result.Add(new MentorAllocationRowPreview
             {
-                warnings.Add($"No active {type} mentors are available for {missing.Length} missing team slots.");
-                continue;
-            }
-            var loads = pool.ToDictionary(item => item.Id, item => active.Count(assignment => assignment.MentorProfileId == item.Id));
-            foreach (var team in missing)
-            {
-                var minimum = loads.Values.Min();
-                var eligible = pool.Where(item => loads[item.Id] == minimum).OrderBy(_ => random.Next()).ToArray();
-                var mentor = eligible[0];
-                loads[mentor.Id]++;
-                var classCode = classes.First(item => item.Id == team.ClassId).ClassCode;
-                result.Add(new MentorAllocationRowPreview
-                {
-                    TeamId = team.Id, TeamCode = team.Code, TeamName = team.Name, ClassId = team.ClassId, ClassCode = classCode,
-                    MentorType = type.ToString(), MentorProfileId = mentor.Id, MentorName = mentor.Name, MentorEmail = mentor.Email,
-                    ResultingSemesterLoad = loads[mentor.Id]
-                });
-            }
+                TeamId = retained.Team.Id, TeamCode = retained.Team.Code, TeamName = retained.Team.Name,
+                ClassId = teams.First(item => item.Id == retained.Team.Id).ClassId, ClassCode = retained.Team.ClassCode,
+                MentorType = retained.Slot.ToString(), MentorProfileId = retained.Mentor.Id,
+                MentorName = retained.Mentor.Name, MentorEmail = retained.Mentor.Email,
+                ResultingSemesterLoad = load, Source = MentorAllocationSources.Retained
+            });
         }
+        result.AddRange(outcome.Proposals.Select(proposal => new MentorAllocationRowPreview
+        {
+            TeamId = proposal.Team.Id, TeamCode = proposal.Team.Code, TeamName = proposal.Team.Name, ClassId = proposal.Team.ClassId,
+            ClassCode = classes.First(item => item.Id == proposal.Team.ClassId).ClassCode,
+            MentorType = proposal.Mentor.Type.ToString(), MentorProfileId = proposal.Mentor.Id,
+            MentorName = proposal.Mentor.Name, MentorEmail = proposal.Mentor.Email,
+            ResultingSemesterLoad = proposal.ResultingLoad, Source = MentorAllocationSources.Allocated
+        }));
+        var skipped = retention.Skipped.Select(ToSkippedPreview).ToList();
 
         var canCommit = warnings.Count == 0 && result.Count > 0;
         var sessionId = Guid.Empty;
@@ -348,9 +356,27 @@ public sealed class MentorAdminHandler(
             SessionId = sessionId, SemesterId = request.SemesterId, Seed = seed, TeamCount = teams.Count,
             MissingEnterpriseCount = result.Count(item => item.MentorType == MentorType.Enterprise.ToString()),
             MissingAcademicCount = result.Count(item => item.MentorType == MentorType.Academic.ToString()),
-            CanCommit = canCommit, Warnings = warnings, Assignments = result
+            RetainedCount = retention.Retained.Count,
+            CanCommit = canCommit, Warnings = warnings, Assignments = result, Skipped = skipped
         });
     }
+
+    private static MentorAllocationSkippedPreview ToSkippedPreview(RetentionSkip skip) => new()
+    {
+        TeamId = skip.Team?.Id, TeamCode = skip.Team?.Code ?? string.Empty, TeamName = skip.Team?.Name ?? string.Empty,
+        ClassCode = skip.Team?.ClassCode ?? string.Empty, SourceTeamCode = skip.SourceTeamCode,
+        MentorType = skip.Slot.ToString(), MentorProfileId = skip.MentorProfileId,
+        MentorName = skip.MentorName, MentorEmail = skip.MentorEmail,
+        Reason = skip.Reason.ToString(),
+        Message = skip.Reason switch
+        {
+            MentorRetentionSkipReason.MentorNotActiveInSemester => "The previous mentor is not active in this semester. Assign a new mentor.",
+            MentorRetentionSkipReason.MentorUnavailable => "The previous mentor's profile or account is no longer available.",
+            MentorRetentionSkipReason.SlotAlreadyFilled => "This slot already has a different mentor, so the existing mentor is kept.",
+            MentorRetentionSkipReason.NoContinuedTeam => "The previous team has no continued team in this semester, so its mentor is not carried over.",
+            _ => string.Empty
+        }
+    };
 
     public async Task<Result<MentorAllocationCommitResponse>> CommitAllocationAsync(CommitMentorAllocationRequest request, CancellationToken cancellationToken = default)
     {
@@ -405,7 +431,10 @@ public sealed class MentorAdminHandler(
                     {
                         TeamId = row.TeamId, MentorProfileId = row.MentorProfileId, AssignedById = adminId,
                         AssignedAt = now, Status = MentorAssignmentStatus.Active, Slot = type,
-                        Note = "Balanced semester allocation", CreatedBy = adminId
+                        Note = row.Source == MentorAllocationSources.Retained
+                            ? "Retained from the previous semester's team"
+                            : "Balanced semester allocation",
+                        CreatedBy = adminId
                     });
                 }
                 foreach (var group in rows.GroupBy(item => item.ClassId))
@@ -413,7 +442,11 @@ public sealed class MentorAdminHandler(
                     context.ClassAuditLogs.Add(new ClassAuditLog
                     {
                         ClassId = group.Key, Action = "MENTORS_BALANCED_ASSIGNED", PerformedByUserId = adminId,
-                        OccurredAtUtc = now, DetailsJson = JsonSerializer.Serialize(new { session.Id, session.Seed, AssignmentCount = group.Count() })
+                        OccurredAtUtc = now, DetailsJson = JsonSerializer.Serialize(new
+                        {
+                            session.Id, session.Seed, AssignmentCount = group.Count(),
+                            RetainedCount = group.Count(item => item.Source == MentorAllocationSources.Retained)
+                        })
                     });
                     ClassOutbox.Enqueue(context, "Team.MentorAssignmentChanged.v1", group.Key,
                         new { AllocationSessionId = session.Id, AssignmentCount = group.Count(), Action = "BalancedAssigned" }, now);
@@ -682,7 +715,5 @@ public sealed class MentorAdminHandler(
     private bool TryGetAdminId(out Guid id)
     { id = currentUser.UserId ?? Guid.Empty; return currentUser.IsAuthenticated && id != Guid.Empty && currentUser.Roles.Any(role => role.Equals(SystemRoles.Admin, StringComparison.OrdinalIgnoreCase)); }
     private static Result<T> Failure<T>(string code, string message) => Result.Failure<T>(new Error(code, message));
-    private sealed record AllocationTeam(Guid Id, Guid ClassId, string Code, string Name);
-    private sealed record AllocationMentor(Guid Id, string Name, string Email, MentorType Type);
     private sealed class MentorAdminConflictException(string message) : Exception(message);
 }

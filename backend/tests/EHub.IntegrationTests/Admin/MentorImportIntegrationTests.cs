@@ -336,6 +336,128 @@ public sealed class MentorImportIntegrationTests(CustomWebApplicationFactory fac
             assignments.Where(item => item.TeamId == teamId).Select(item => item.Slot).Should().BeEquivalentTo([MentorType.Enterprise, MentorType.Academic]);
     }
 
+    [Fact]
+    public async Task Allocation_ShouldRetainMentorsForContinuingTeamsAndReportTheOnesThatCannotContinue()
+    {
+        var token = await GetAdminTokenAsync();
+        var completedAt = DateTime.UtcNow.AddDays(-5);
+        Guid targetSemesterId, targetClassId, continuingTeamId, newTeamId;
+        Guid retainedEnterpriseId, retainedAcademicId, droppedEnterpriseId;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var adminId = await context.Users.Where(item => item.NormalizedEmail == "admin@ehub.test").Select(item => item.Id).SingleAsync();
+            var mentorRole = await context.Roles.SingleAsync(item => item.Name == SystemRoles.Mentor);
+            var suffix = Guid.NewGuid().ToString("N")[..8];
+            var exe101 = await context.Courses.SingleOrDefaultAsync(item => item.Code == "EXE101")
+                         ?? new Course { Code = "EXE101", Name = "EXE101", Status = CourseStatus.Active };
+            var exe201 = await context.Courses.SingleOrDefaultAsync(item => item.Code == "EXE201")
+                         ?? new Course { Code = "EXE201", Name = "EXE201", Status = CourseStatus.Active };
+            if (context.Entry(exe101).State == EntityState.Detached) context.Courses.Add(exe101);
+            if (context.Entry(exe201).State == EntityState.Detached) context.Courses.Add(exe201);
+
+            var previousSemester = new Semester { Code = $"RP{suffix}", Name = $"Retention prev {suffix}", Term = SemesterTerm.Fall, Year = 2070, Status = SemesterStatus.Planned };
+            var targetSemester = new Semester { Code = $"RT{suffix}", Name = $"Retention target {suffix}", Term = SemesterTerm.Spring, Year = 2071, Status = SemesterStatus.Planned };
+            context.Semesters.AddRange(previousSemester, targetSemester);
+
+            const string schedule = "[{\"dayOfWeek\":1,\"startTime\":\"08:00\",\"endTime\":\"10:00\"}]";
+            var previousClass = new Class { SemesterId = previousSemester.Id, Semester = previousSemester, CourseId = exe101.Id, Course = exe101, ClassCode = $"P101{suffix}", Slug = $"p101-{suffix}", ClassIndex = 1, Status = ClassStatus.Completed, CompletedAtUtc = completedAt, CompletionReason = "Integration test", PrimaryLecturerId = adminId, ScheduleJson = schedule, CreatedById = adminId };
+            var targetClass = new Class { SemesterId = targetSemester.Id, Semester = targetSemester, CourseId = exe201.Id, Course = exe201, ClassCode = $"T201{suffix}", Slug = $"t201-{suffix}", ClassIndex = 1, Status = ClassStatus.Active, PrimaryLecturerId = adminId, ScheduleJson = schedule, CreatedById = adminId };
+            context.Classes.AddRange(previousClass, targetClass);
+
+            Team NewTeam(Class owner, string code, Team? previous = null) => new()
+            {
+                ClassId = owner.Id, Class = owner, TeamCode = code, TeamName = code, Status = TeamStatus.Active, CreatedById = adminId,
+                PreviousTeamId = previous?.Id, TeamLineageId = previous?.TeamLineageId ?? Guid.NewGuid()
+            };
+            var continuingSource = NewTeam(previousClass, $"P101{suffix}_G1");
+            var droppedSource = NewTeam(previousClass, $"P101{suffix}_G2");
+            var continuing = NewTeam(targetClass, $"T201{suffix}_G1", continuingSource);
+            var fresh = NewTeam(targetClass, $"T201{suffix}_G2");
+            context.Teams.AddRange(continuingSource, droppedSource, continuing, fresh);
+
+            MentorProfile NewMentor(MentorType type, string label, bool activeInTarget)
+            {
+                var email = $"retention-{label}-{suffix}@example.com";
+                var user = new User { FullName = $"Retention {label}", Email = email, NormalizedEmail = email, PasswordHash = "not-used", Status = UserStatus.Active };
+                var profile = new MentorProfile { UserId = user.Id, User = user, Type = type, Status = MentorProfileStatus.Active, CreatedBy = adminId };
+                context.Users.Add(user);
+                context.UserRoles.Add(new UserRole { UserId = user.Id, User = user, RoleId = mentorRole.Id, Role = mentorRole, AssignedAt = DateTime.UtcNow, AssignedBy = adminId });
+                context.MentorProfiles.Add(profile);
+                if (activeInTarget)
+                    context.SemesterStaffAssignments.Add(new SemesterStaffAssignment { SemesterId = targetSemester.Id, Semester = targetSemester, UserId = user.Id, User = user, Role = SemesterStaffRole.Mentor, Status = SemesterStaffStatus.Active, CreatedBy = adminId });
+                return profile;
+            }
+            var retainedEnterprise = NewMentor(MentorType.Enterprise, "ent-kept", true);
+            var retainedAcademic = NewMentor(MentorType.Academic, "acad-kept", true);
+            var droppedEnterprise = NewMentor(MentorType.Enterprise, "ent-dropped", true);
+            NewMentor(MentorType.Enterprise, "ent-spare", true);
+            NewMentor(MentorType.Academic, "acad-spare", true);
+
+            MentorAssignment EndedAtCompletion(Team team, MentorProfile mentor) => new()
+            {
+                TeamId = team.Id, Team = team, MentorProfileId = mentor.Id, MentorProfile = mentor, AssignedById = adminId,
+                AssignedAt = completedAt.AddDays(-60), EndedAt = completedAt, Slot = mentor.Type, Status = MentorAssignmentStatus.Ended, CreatedBy = adminId
+            };
+            context.MentorAssignments.AddRange(
+                EndedAtCompletion(continuingSource, retainedEnterprise),
+                EndedAtCompletion(continuingSource, retainedAcademic),
+                EndedAtCompletion(droppedSource, droppedEnterprise));
+            await context.SaveChangesAsync();
+
+            targetSemesterId = targetSemester.Id;
+            targetClassId = targetClass.Id;
+            continuingTeamId = continuing.Id;
+            newTeamId = fresh.Id;
+            retainedEnterpriseId = retainedEnterprise.Id;
+            retainedAcademicId = retainedAcademic.Id;
+            droppedEnterpriseId = droppedEnterprise.Id;
+        }
+
+        using var previewRequest = new HttpRequestMessage(HttpMethod.Post, "/api/admin/mentors/allocations/preview")
+        {
+            Content = JsonContent.Create(new PreviewMentorAllocationRequest { SemesterId = targetSemesterId, ClassIds = [targetClassId], Seed = 7 })
+        };
+        previewRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        var previewResponse = await _client.SendAsync(previewRequest);
+        var preview = await previewResponse.Content.ReadFromJsonAsync<ApiResponse<MentorAllocationPreviewResponse>>();
+
+        previewResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        preview!.Data!.CanCommit.Should().BeTrue();
+        preview.Data.RetainedCount.Should().Be(2);
+        preview.Data.Assignments.Should().HaveCount(4);
+
+        var continuingRows = preview.Data.Assignments.Where(item => item.TeamId == continuingTeamId).ToArray();
+        continuingRows.Should().OnlyContain(item => item.Source == MentorAllocationSources.Retained);
+        continuingRows.Single(item => item.MentorType == nameof(MentorType.Enterprise)).MentorProfileId.Should().Be(retainedEnterpriseId);
+        continuingRows.Single(item => item.MentorType == nameof(MentorType.Academic)).MentorProfileId.Should().Be(retainedAcademicId);
+
+        var freshRows = preview.Data.Assignments.Where(item => item.TeamId == newTeamId).ToArray();
+        freshRows.Should().HaveCount(2).And.OnlyContain(item => item.Source == MentorAllocationSources.Allocated);
+        freshRows.Should().NotContain(item => item.MentorProfileId == retainedEnterpriseId, "the retained mentor already carries a team and the spare mentor has none");
+
+        var skipped = preview.Data.Skipped.Should().ContainSingle().Subject;
+        skipped.Reason.Should().Be("NoContinuedTeam");
+        skipped.MentorProfileId.Should().Be(droppedEnterpriseId);
+
+        using var commitRequest = new HttpRequestMessage(HttpMethod.Post, "/api/admin/mentors/allocations/commit")
+        {
+            Content = JsonContent.Create(new CommitMentorAllocationRequest { SessionId = preview.Data.SessionId })
+        };
+        commitRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        (await _client.SendAsync(commitRequest)).StatusCode.Should().Be(HttpStatusCode.OK);
+
+        using var verifyScope = factory.Services.CreateScope();
+        var verifyContext = verifyScope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var active = await verifyContext.MentorAssignments.AsNoTracking()
+            .Where(item => (item.TeamId == continuingTeamId || item.TeamId == newTeamId) && item.Status == MentorAssignmentStatus.Active && item.EndedAt == null)
+            .ToListAsync();
+        active.Should().HaveCount(4);
+        active.Where(item => item.TeamId == continuingTeamId).Select(item => item.MentorProfileId)
+            .Should().BeEquivalentTo([retainedEnterpriseId, retainedAcademicId]);
+        active.Where(item => item.TeamId == continuingTeamId).Should().OnlyContain(item => item.Note != null && item.Note.StartsWith("Retained"));
+    }
+
     private async Task<Guid> GetSemesterIdAsync()
     {
         using var scope = factory.Services.CreateScope();

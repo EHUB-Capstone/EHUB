@@ -46,6 +46,28 @@ export interface MentorAllocationRowPreview {
   mentorName: string;
   mentorEmail: string;
   resultingSemesterLoad: number;
+  /** "Retained" keeps the previous semester's mentor for a continuing team; "Allocated" is newly chosen. */
+  source?: 'Retained' | 'Allocated';
+}
+
+export type MentorAllocationSkipReason =
+  | 'MentorNotActiveInSemester'
+  | 'MentorUnavailable'
+  | 'SlotAlreadyFilled'
+  | 'NoContinuedTeam';
+
+export interface MentorAllocationSkipped {
+  teamId: string | null;
+  teamCode: string;
+  teamName: string;
+  classCode: string;
+  sourceTeamCode: string;
+  mentorType: MentorType;
+  mentorProfileId: string;
+  mentorName: string;
+  mentorEmail: string;
+  reason: MentorAllocationSkipReason;
+  message: string;
 }
 
 export interface MentorAllocationPreview {
@@ -55,9 +77,11 @@ export interface MentorAllocationPreview {
   teamCount: number;
   missingEnterpriseCount: number;
   missingAcademicCount: number;
+  retainedCount?: number;
   canCommit: boolean;
   warnings: string[];
   assignments: MentorAllocationRowPreview[];
+  skipped?: MentorAllocationSkipped[];
 }
 
 export interface MentorAllocationCommitResult {

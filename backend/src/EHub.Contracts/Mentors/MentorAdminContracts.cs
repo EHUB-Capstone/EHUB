@@ -75,6 +75,30 @@ public sealed class MentorAllocationRowPreview
     public string MentorName { get; init; } = string.Empty;
     public string MentorEmail { get; init; } = string.Empty;
     public int ResultingSemesterLoad { get; init; }
+    // "Retained" keeps the mentor of the previous semester's team; "Allocated" is a newly chosen mentor.
+    public string Source { get; init; } = MentorAllocationSources.Allocated;
+}
+
+public static class MentorAllocationSources
+{
+    public const string Allocated = "Allocated";
+    public const string Retained = "Retained";
+}
+
+// A previous mentor that could not be carried over to a continuing team, with the reason.
+public sealed class MentorAllocationSkippedPreview
+{
+    public Guid? TeamId { get; init; }
+    public string TeamCode { get; init; } = string.Empty;
+    public string TeamName { get; init; } = string.Empty;
+    public string ClassCode { get; init; } = string.Empty;
+    public string SourceTeamCode { get; init; } = string.Empty;
+    public string MentorType { get; init; } = string.Empty;
+    public Guid MentorProfileId { get; init; }
+    public string MentorName { get; init; } = string.Empty;
+    public string MentorEmail { get; init; } = string.Empty;
+    public string Reason { get; init; } = string.Empty;
+    public string Message { get; init; } = string.Empty;
 }
 
 public sealed class MentorAllocationPreviewResponse
@@ -85,9 +109,11 @@ public sealed class MentorAllocationPreviewResponse
     public int TeamCount { get; init; }
     public int MissingEnterpriseCount { get; init; }
     public int MissingAcademicCount { get; init; }
+    public int RetainedCount { get; init; }
     public bool CanCommit { get; init; }
     public IReadOnlyCollection<string> Warnings { get; init; } = Array.Empty<string>();
     public IReadOnlyCollection<MentorAllocationRowPreview> Assignments { get; init; } = Array.Empty<MentorAllocationRowPreview>();
+    public IReadOnlyCollection<MentorAllocationSkippedPreview> Skipped { get; init; } = Array.Empty<MentorAllocationSkippedPreview>();
 }
 
 public sealed class MentorAllocationCommitResponse
