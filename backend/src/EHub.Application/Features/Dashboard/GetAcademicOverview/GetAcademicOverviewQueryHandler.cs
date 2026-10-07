@@ -20,31 +20,18 @@ public sealed class GetAcademicOverviewQueryHandler(
         GetAcademicOverviewRequest request,
         CancellationToken cancellationToken = default)
     {
-        var selectedSemester = await context.Semesters
+        var semesterCandidates = await context.Semesters
             .AsNoTracking()
-            .Where(semester =>
-                semester.Status != SemesterStatus.Archived &&
-                (request.SemesterId.HasValue
-                    ? semester.Id == request.SemesterId.Value
-                    : semester.Status == SemesterStatus.Active))
-            .Select(semester => new
-            {
+            .Where(semester => semester.Status != SemesterStatus.Archived)
+            .Select(semester => new SemesterCandidate(
                 semester.Id,
                 semester.Code,
                 semester.Name,
                 semester.Year,
-                semester.Status
-            })
-            .FirstOrDefaultAsync(cancellationToken);
-
-        if (selectedSemester is null)
-        {
-            return Result.Failure<AcademicOverviewResponse>(new Error(
-                ErrorCodes.SemesterNotFound,
-                request.SemesterId.HasValue
-                    ? "The selected semester does not exist or is archived."
-                    : "No active semester is configured for the academic overview."));
-        }
+                semester.Term,
+                semester.Status,
+                semester.StartDate))
+            .ToArrayAsync(cancellationToken);
 
         var now = EnsureUtc(dateTimeProvider.UtcNow);
         var classData = await context.Classes
@@ -85,6 +72,19 @@ public sealed class GetAcademicOverviewQueryHandler(
                 item.SemesterYear,
                 item.SemesterStatus))
             .ToArray();
+
+        var selectedSemester = AcademicOverviewSemesterSelector.Choose(
+            request.SemesterId,
+            semesterCandidates,
+            assignedClasses.Select(item => item.SemesterId).ToHashSet());
+        if (selectedSemester is null)
+        {
+            return Result.Failure<AcademicOverviewResponse>(new Error(
+                ErrorCodes.SemesterNotFound,
+                request.SemesterId.HasValue
+                    ? "The selected semester does not exist or is archived."
+                    : "No semester is configured for the academic overview."));
+        }
 
         if (request.ClassId.HasValue && assignedClasses.All(item => item.Id != request.ClassId.Value))
         {
@@ -183,6 +183,7 @@ public sealed class GetAcademicOverviewQueryHandler(
             SemesterId = selectedSemester.Id,
             SemesterCode = selectedSemester.Code,
             SemesterName = selectedSemester.Name,
+            IsActiveSemester = selectedSemester.Status == SemesterStatus.Active,
             CourseId = selectedSubject?.Id,
             SubjectCode = selectedSubject?.Code,
             SubjectName = selectedSubject?.Name,

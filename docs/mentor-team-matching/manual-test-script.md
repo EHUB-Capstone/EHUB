@@ -120,7 +120,7 @@ Mẹo: điền cột "Loại HĐ" của mentor doanh nghiệp là "Thỉnh giả
 
 1. Tạo **một lớp EXE101** với **4 nhóm**: **Nhóm Sao**, **Nhóm Trăng**, **Nhóm Mây**, **Nhóm Gió**. Mỗi nhóm có ít nhất 4 sinh viên (đủ điều kiện kế thừa), có tên dự án và link Zalo.
 2. Tạo **một lớp EXE201** với **2 nhóm**: **Nhóm Núi**, **Nhóm Sông**.
-3. Gán mentor: vào trang chi tiết lớp (`/classes/...`), ở khối Mentors bấm **Manage**, chọn theo bảng:
+3. Gán mentor: vào trang chi tiết lớp (`/classes/...`), ở khối Mentors bấm **Manage**, tab **Assign new**. Chọn **một mentor**, tick **nhiều nhóm** cùng lúc rồi bấm **Assign to N teams**. Hộp thoại vẫn mở để bạn gán tiếp mentor khác. Gán theo bảng:
 
 | Nhóm (kỳ cũ) | Mentor doanh nghiệp | Mentor giảng viên |
 |---|---|---|
@@ -615,12 +615,20 @@ Các kiểm tra này không thuộc riêng yêu cầu nào nhưng cần đạt �
 - [ ] Giảng viên bị chuyển đi hoặc từ chối, không thấy thẻ **Mentor import & assignment**.
 - [ ] Chưa đăng nhập thì bị đưa về trang đăng nhập.
 
-### Kiểm tra 10.2. Giảng viên vẫn quản lý mentor từng nhóm ở lớp của mình
+### Kiểm tra 10.2. Giảng viên quản lý mentor ở lớp của mình (hộp thoại Manage)
 
-**Làm gì:** đăng nhập bằng giảng viên là giảng viên chính của lớp EXE201 kỳ mới, mở lớp, bấm **Manage** ở khối Mentors.
+**Làm gì:** đăng nhập bằng giảng viên là giảng viên chính của lớp EXE201 kỳ mới, mở lớp, bấm **Manage** ở khối Mentors, tab **Assign new**.
+1. Chọn một mentor doanh nghiệp. Cột bên phải liệt kê các nhóm còn thiếu mentor doanh nghiệp.
+2. Bấm ô **Select all** để chọn hết, rồi bỏ tick một nhóm. Gõ vào ô tìm kiếm nhóm để thu hẹp danh sách rồi bấm **Select all shown**.
+3. Bấm **Assign to N teams**.
 
 **Phải thấy gì**
-- [ ] Vẫn gán được và kết thúc được phân công cho từng nhóm như trước (kết thúc phân công yêu cầu nhập lý do).
+- [ ] Có thể tick **nhiều nhóm** cho cùng một mentor; nút ghi đúng số nhóm ("Assign to 3 teams").
+- [ ] Mỗi nhóm trong danh sách hiện mentor còn lại của nhóm (ví dụ "Lecturer mentor: Hoa" hoặc "No lecturer mentor yet").
+- [ ] Sau khi gán, hộp thoại **vẫn mở**, hiện thông báo xanh "Assigned to N teams.". Các nhóm vừa gán biến khỏi danh sách; số "N teams this semester" của mentor tăng.
+- [ ] Khối Mentors ở trang lớp phía sau cũng được cập nhật mà không bị tải lại toàn trang.
+- [ ] Nếu một nhóm không gán được (ví dụ vừa có người khác gán trước), thông báo vàng nêu rõ nhóm nào và vì sao; các nhóm còn lại vẫn được gán, nhóm lỗi vẫn được tick để thử lại.
+- [ ] Tab **Current assignments** có nút **End** (bắt buộc nhập lý do). Sau khi kết thúc, hộp thoại vẫn mở và danh sách cập nhật.
 - [ ] Phân công làm ở đây được tính vào số nhóm của mentor khi Admin xem trước lần sau.
 
 ### Kiểm tra 10.3. Giao diện sáng, tối và màn hình nhỏ

@@ -1569,13 +1569,23 @@ function registerDashboardHandlers(mock: MockAdapter): void {
     const requestedSemesterId = asString(params.semesterId);
     const requestedCourseId = asString(params.courseId);
     const requestedClassId = asString(params.classId);
+    // Without an explicit choice: the active semester, else the latest semester the lecturer teaches in, else the latest one.
+    const termOrder: Record<string, number> = { SP: 1, SU: 2, FA: 3 };
+    const latestSemester = <T extends { year: number; semester: string }>(items: T[]) =>
+      [...items].sort((left, right) => right.year - left.year || (termOrder[right.semester] ?? 0) - (termOrder[left.semester] ?? 0))[0];
+    const openSemesters = state.semesters.filter((semester) => semester.status !== 'Archived');
+    const taughtSemesterIds = new Set(state.classes
+      .filter((cls) => cls.primaryLecturerId === state.sessionUserId)
+      .map((cls) => cls.semesterId));
     const selectedSemester = requestedSemesterId
-      ? state.semesters.find((semester) => semester.id === requestedSemesterId && semester.status !== 'Archived')
-      : state.semesters.find((semester) => semester.status === 'Active');
+      ? openSemesters.find((semester) => semester.id === requestedSemesterId)
+      : openSemesters.find((semester) => semester.status === 'Active')
+        ?? latestSemester(openSemesters.filter((semester) => taughtSemesterIds.has(semester.id)))
+        ?? latestSemester(openSemesters);
     if (!selectedSemester) {
       return failure(400, 'SEMESTER_NOT_FOUND', requestedSemesterId
         ? 'The selected semester does not exist or is archived.'
-        : 'No active semester is configured for the academic overview.');
+        : 'No semester is configured for the academic overview.');
     }
 
     const semesterCode = `${selectedSemester.semester}${selectedSemester.year}`;
@@ -1702,6 +1712,7 @@ function registerDashboardHandlers(mock: MockAdapter): void {
         semesterId: selectedSemester.id,
         semesterCode,
         semesterName: `${selectedSemester.semester} ${selectedSemester.year}`,
+        isActiveSemester: selectedSemester.status === 'Active',
         courseId: requestedCourseId || null,
         subjectCode: requestedCourseId ? semesterClasses.find((cls) => cls.courseId === requestedCourseId)?.subjectCode ?? null : null,
         subjectName: requestedCourseId ? semesterClasses.find((cls) => cls.courseId === requestedCourseId)?.subjectName ?? null : null,

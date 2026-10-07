@@ -1165,8 +1165,8 @@ export default function ClassDetail() {
           currentMentors={activeMentors}
           onClose={() => setShowAssignMentors(false)}
           onAssigned={async () => {
-            setShowAssignMentors(false);
-            await fetchData();
+            // Refresh in the background so the dialog stays open and the admin can keep assigning teams.
+            await fetchData({ background: true });
           }}
         />
       )}
