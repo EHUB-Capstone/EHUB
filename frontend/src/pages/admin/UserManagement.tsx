@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Search, Filter, Plus, Edit, Trash2, Users, ArrowLeft, ArrowRight, Check, X, Mail, GraduationCap, Upload, Loader2 } from 'lucide-react';
+import { Search, Filter, Plus, Edit, Trash2, Users, ArrowLeft, ArrowRight, Check, X, Mail, GraduationCap, Upload, Loader2, ChevronDown } from 'lucide-react';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
 import Modal from '../../components/ui/Modal';
@@ -11,6 +11,11 @@ import { userApi } from '../../api/userApi';
 import { parseApiError } from '../../utils/apiError';
 import { PROGRAM_GROUPS } from '../../constants/majors';
 import ImportLecturersModal from '../../components/admin/ImportLecturersModal';
+import ImportMentorsModal from '../../components/admin/ImportMentorsModal';
+import IncompleteMentorsPanel from '../../components/admin/IncompleteMentorsPanel';
+import MentorKindTag from '../../components/admin/MentorKindTag';
+import { mentorAdminApi } from '../../api/mentorAdminApi';
+import { MENTOR_KIND_OPTIONS, mentorTypeError, toManagedUserPayload } from '../../utils/managedUserForm';
 
 const roleBadge = { ADMIN: 'Approved', LECTURER: 'Submitted', MENTOR: 'Review', STUDENT: 'Reviewed' };
 const roleLabel = { ADMIN: 'Admin', LECTURER: 'Lecturer', MENTOR: 'Mentor', STUDENT: 'Student' };
@@ -30,6 +35,7 @@ export default function UserManagement() {
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
+  const [mentorTypeFilter, setMentorTypeFilter] = useState('ALL');
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
@@ -37,6 +43,10 @@ export default function UserManagement() {
   // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [isMentorImportOpen, setIsMentorImportOpen] = useState(false);
+  const [view, setView] = useState<'accounts' | 'incomplete'>('accounts');
+  const [incompleteCount, setIncompleteCount] = useState(0);
+  const [incompleteRefresh, setIncompleteRefresh] = useState(0);
   const [deleteTarget, setDeleteTarget] = useState<any | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -48,12 +58,27 @@ export default function UserManagement() {
     email: '',
     password: '',
     role: 'STUDENT',
+    mentorType: '',
     status: 'APPROVED',
     phone: '',
     studentId: '',
     programGroup: 'BIT',
     major: 'BIT_SE',
   });
+
+  // The badge is a convenience: if loading it fails the page still works without it.
+  const loadIncompleteCount = useCallback(async () => {
+    try {
+      const response = await mentorAdminApi.getIncompleteMasterMentors({ page: 1, limit: 1 });
+      setIncompleteCount(response.data.pagination.total);
+    } catch {
+      setIncompleteCount(0);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadIncompleteCount();
+  }, [loadIncompleteCount]);
 
   // Debounce search
   useEffect(() => {
@@ -78,10 +103,12 @@ export default function UserManagement() {
         search?: string;
         role?: string;
         status?: string;
+        mentorType?: string;
       } = { page, limit: 10 };
       if (debouncedSearch) params.search = debouncedSearch;
       if (roleFilter !== 'ALL') params.role = roleFilter;
       if (statusFilter !== 'ALL') params.status = statusFilter;
+      if (roleFilter === 'MENTOR' && mentorTypeFilter !== 'ALL') params.mentorType = mentorTypeFilter;
 
       const res = await userApi.getAll(params);
       if (requestId !== latestRequestId.current) return;
@@ -107,7 +134,7 @@ export default function UserManagement() {
         setIsRefreshing(false);
       }
     }
-  }, [page, debouncedSearch, roleFilter, statusFilter]);
+  }, [page, debouncedSearch, roleFilter, statusFilter, mentorTypeFilter]);
 
   useEffect(() => {
     void fetchUsers();
@@ -145,6 +172,7 @@ export default function UserManagement() {
       email: '',
       password: '',
       role: 'STUDENT',
+      mentorType: '',
       status: 'APPROVED',
       phone: '',
       studentId: '',
@@ -165,6 +193,7 @@ export default function UserManagement() {
       email: user.email || '',
       password: '',
       role: user.role || 'STUDENT',
+      mentorType: user.mentorType || '',
       status: user.status || 'APPROVED',
       phone: user.phone || '',
       studentId: user.studentId || '',
@@ -206,6 +235,11 @@ export default function UserManagement() {
       toast.error('Temporary password must contain at least 6 characters');
       return;
     }
+    const mentorError = mentorTypeError(formData.role, formData.mentorType);
+    if (mentorError) {
+      toast.error(mentorError);
+      return;
+    }
     if (formData.role === 'STUDENT') {
       if (!formData.studentId.trim()) {
         toast.error('Student ID is required for student accounts');
@@ -220,10 +254,10 @@ export default function UserManagement() {
     setIsSubmitting(true);
     try {
       if (editingUser) {
-        await userApi.update(editingUser.id || editingUser._id, formData);
+        await userApi.update(editingUser.id || editingUser._id, toManagedUserPayload(formData));
         toast.success('User updated successfully!');
       } else {
-        await userApi.create(formData);
+        await userApi.create(toManagedUserPayload(formData));
         toast.success('User account created successfully!');
       }
       setIsModalOpen(false);
@@ -242,14 +276,40 @@ export default function UserManagement() {
     <div className="space-y-6">
       {/* ── Header ── */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
-        <div>
+        <div className="min-w-0">
           <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">User Management</h1>
-          <p className="text-slate-500 mt-1">{totalItems} user accounts registered on the platform</p>
+          <p className="text-slate-500 mt-1">
+            {view === 'accounts'
+              ? `${totalItems} user accounts registered on the platform`
+              : `${incompleteCount} mentor${incompleteCount === 1 ? '' : 's'} imported without a login account`}
+          </p>
         </div>
-        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
-          <Button variant="outline" icon={Upload} onClick={() => setIsImportModalOpen(true)}>Import Lecturers</Button>
-          <Button variant="primary" icon={Plus} onClick={openAddModal}>Create User</Button>
+        <div className="flex w-full shrink-0 items-center gap-2 sm:w-auto">
+          <ImportMenu
+            onImportLecturers={() => setIsImportModalOpen(true)}
+            onImportMentors={() => setIsMentorImportOpen(true)}
+          />
+          <Button variant="primary" icon={Plus} className="whitespace-nowrap" onClick={openAddModal}>Create User</Button>
         </div>
+      </div>
+
+      {/* ── View tabs ── */}
+      <div role="tablist" aria-label="User list view" className="inline-flex rounded-xl border border-slate-200 bg-white p-0.5">
+        {([['accounts', 'Accounts'], ['incomplete', 'Needs information']] as const).map(([key, label]) => (
+          <button
+            key={key}
+            type="button"
+            role="tab"
+            aria-selected={view === key}
+            onClick={() => { if (view !== key) { setView(key); setMentorTypeFilter('ALL'); setPage(1); } }}
+            className={`inline-flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-sm font-semibold transition-colors ${view === key ? 'bg-primary text-white' : 'text-slate-600 hover:text-slate-900'}`}
+          >
+            {label}
+            {key === 'incomplete' && incompleteCount > 0 && (
+              <span className={`rounded-full px-1.5 text-[11px] font-bold ${view === key ? 'bg-white/25 text-white' : 'bg-amber-100 text-amber-800'}`}>{incompleteCount}</span>
+            )}
+          </button>
+        ))}
       </div>
 
       {/* ── Search & Filters ── */}
@@ -258,17 +318,18 @@ export default function UserManagement() {
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <input
             className="w-full bg-white border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-            placeholder="Search users by name, email, student ID..."
+            placeholder={view === 'accounts' ? 'Search users by name, email, student ID...' : 'Search mentors by name or email...'}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
+        {view === 'accounts' && (
         <div className="relative w-full sm:w-48 shrink-0">
           <Filter className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <select
             className="w-full bg-white border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary appearance-none cursor-pointer"
             value={roleFilter}
-            onChange={(e) => { setRoleFilter(e.target.value); setPage(1); }}
+            onChange={(e) => { setRoleFilter(e.target.value); setMentorTypeFilter('ALL'); setPage(1); }}
           >
             <option value="ALL">All Roles</option>
             <option value="STUDENT">Students</option>
@@ -277,6 +338,23 @@ export default function UserManagement() {
             <option value="ADMIN">Admins</option>
           </select>
         </div>
+        )}
+        {(view === 'incomplete' || roleFilter === 'MENTOR') && (
+          <div className="relative w-full sm:w-52 shrink-0">
+            <Filter className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <select
+              aria-label="Mentor type"
+              className="w-full bg-white border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary appearance-none cursor-pointer"
+              value={mentorTypeFilter}
+              onChange={(e) => { setMentorTypeFilter(e.target.value); setPage(1); }}
+            >
+              <option value="ALL">All mentors</option>
+              <option value="Enterprise">Enterprise mentors</option>
+              <option value="Academic">Lecturer mentors</option>
+            </select>
+          </div>
+        )}
+        {view === 'accounts' && (
         <div className="relative w-full sm:w-44 shrink-0">
           <Filter className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <select
@@ -290,9 +368,20 @@ export default function UserManagement() {
             <option value="REJECTED">Rejected</option>
           </select>
         </div>
+        )}
       </div>
 
+      {view === 'incomplete' && (
+        <IncompleteMentorsPanel
+          key={`${debouncedSearch}|${mentorTypeFilter}|${incompleteRefresh}`}
+          search={debouncedSearch}
+          mentorType={mentorTypeFilter}
+          onUnfilteredTotal={setIncompleteCount}
+        />
+      )}
+
       {/* ── Table ── */}
+      {view === 'accounts' && (
       <div className="bg-white border border-slate-200/60 rounded-2xl shadow-sm overflow-hidden">
         {loading ? (
           <div className="p-6"><LoadingSkeleton lines={6} /></div>
@@ -349,9 +438,14 @@ export default function UserManagement() {
                       </div>
                     </td>
                     <td className="py-3.5 px-6">
-                      <Badge variant={roleBadge[user.role] || 'Default'} size="sm">
-                        {roleLabel[user.role] || user.role}
-                      </Badge>
+                      <div className="flex flex-col items-start gap-1">
+                        <Badge variant={roleBadge[user.role] || 'Default'} size="sm" className="whitespace-nowrap">
+                          {roleLabel[user.role] || user.role}
+                        </Badge>
+                        {user.role === 'MENTOR' && (user.mentorType === 'Enterprise' || user.mentorType === 'Academic') && (
+                          <MentorKindTag type={user.mentorType} />
+                        )}
+                      </div>
                     </td>
                     <td className="py-3.5 px-6">
                       <Badge variant={statusBadge[user.status || 'APPROVED'] || 'Default'} size="sm">
@@ -451,6 +545,7 @@ export default function UserManagement() {
           </div>
         )}
       </div>
+      )}
 
       {/* ── Add / Edit User Modal ── */}
       <Modal
@@ -530,6 +625,27 @@ export default function UserManagement() {
             </div>
           </div>
 
+          {formData.role === 'MENTOR' && (
+            <div>
+              <label htmlFor="user-mentor-type" className="block font-medium text-slate-700 mb-1">Mentor Type *</label>
+              <select
+                id="user-mentor-type"
+                className="w-full border border-slate-200 rounded-xl px-3 py-2.5 outline-none bg-white focus:ring-2 focus:ring-primary/20 focus:border-primary cursor-pointer disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500"
+                value={formData.mentorType}
+                disabled={Boolean(editingUser?.role === 'MENTOR' && editingUser?.mentorType)}
+                onChange={(e) => setFormData({ ...formData, mentorType: e.target.value })}
+              >
+                <option value="">Select mentor type…</option>
+                {MENTOR_KIND_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+              </select>
+              <p className="mt-1 text-xs text-slate-500">
+                {editingUser?.role === 'MENTOR' && editingUser?.mentorType
+                  ? 'The type of an existing mentor cannot be changed here.'
+                  : 'Enterprise mentors fill the company slot of a team; lecturer mentors fill the faculty slot.'}
+              </p>
+            </div>
+          )}
+
           <div>
             <label className="block font-medium text-slate-700 mb-1">Phone Number (optional)</label>
             <input
@@ -606,6 +722,13 @@ export default function UserManagement() {
         />
       )}
 
+      {isMentorImportOpen && (
+        <ImportMentorsModal
+          onClose={() => setIsMentorImportOpen(false)}
+          onImported={() => { void fetchUsers(); void loadIncompleteCount(); setIncompleteRefresh(value => value + 1); }}
+        />
+      )}
+
       {/* ── Confirm Delete Dialog ── */}
       <ConfirmDialog
         isOpen={!!deleteTarget}
@@ -615,6 +738,61 @@ export default function UserManagement() {
         description={`Are you sure you want to delete ${deleteTarget?.name}? This action cannot be undone.`}
         isSubmitting={isDeleting}
       />
+    </div>
+  );
+}
+
+/** One "Import" button that opens a small menu, so the header stays compact as import types grow. */
+function ImportMenu({ onImportLecturers, onImportMentors }: { onImportLecturers: () => void; onImportMentors: () => void }) {
+  const [open, setOpen] = useState(false);
+  const container = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const closeOnOutside = (event: MouseEvent) => {
+      if (!container.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('mousedown', closeOnOutside);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('mousedown', closeOnOutside);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [open]);
+
+  const choose = (action: () => void) => {
+    setOpen(false);
+    action();
+  };
+
+  return (
+    <div ref={container} className="relative">
+      <Button
+        variant="outline"
+        icon={Upload}
+        iconRight={ChevronDown}
+        className="whitespace-nowrap"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpen(current => !current)}
+      >
+        Import
+      </Button>
+      {open && (
+        <div role="menu" className="absolute left-0 z-20 mt-1.5 w-56 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-lg sm:left-auto sm:right-0">
+          <button type="button" role="menuitem" onClick={() => choose(onImportLecturers)} className="flex w-full flex-col px-4 py-2.5 text-left hover:bg-slate-50">
+            <span className="text-sm font-semibold text-slate-800">Import Lecturers</span>
+            <span className="text-xs text-slate-500">Create lecturer accounts from Excel</span>
+          </button>
+          <button type="button" role="menuitem" onClick={() => choose(onImportMentors)} className="flex w-full flex-col px-4 py-2.5 text-left hover:bg-slate-50">
+            <span className="text-sm font-semibold text-slate-800">Import Mentors</span>
+            <span className="text-xs text-slate-500">Enterprise and lecturer mentors</span>
+          </button>
+        </div>
+      )}
     </div>
   );
 }

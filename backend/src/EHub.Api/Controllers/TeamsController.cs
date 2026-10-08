@@ -73,6 +73,18 @@ public sealed class TeamsController : ControllerBase
     public async Task<IActionResult> AssignMentor(Guid teamId, [FromBody] AssignMentorRequest request, [FromServices] IMentorAssignmentHandler handler, CancellationToken cancellationToken) =>
         ToResponse(await handler.AssignAsync(teamId, request, UserId, Role, cancellationToken), "Mentor assigned.");
 
+    [HttpGet("mentors/me/assignment-history")]
+    public async Task<IActionResult> GetMyMentorHistory([FromServices] IMentorAssignmentHandler handler, CancellationToken cancellationToken) =>
+        ToResponse(await handler.GetMyHistoryAsync(UserId, Role, cancellationToken), "Mentoring history retrieved.");
+
+    [HttpPost("teams/{teamId:guid}/mentor-assignments/replace")]
+    public async Task<IActionResult> ReplaceMentor(Guid teamId, [FromBody] ReplaceMentorRequest request, [FromServices] IMentorAssignmentHandler handler, CancellationToken cancellationToken) =>
+        ToResponse(await handler.ReplaceAsync(teamId, request, UserId, Role, cancellationToken), "Mentor replaced.");
+
+    [HttpPost("classes/{classId:guid}/mentor-assignments/batch")]
+    public async Task<IActionResult> AssignMentorBatch(Guid classId, [FromBody] AssignMentorBatchRequest request, [FromServices] IMentorAssignmentHandler handler, CancellationToken cancellationToken) =>
+        ToResponse(await handler.AssignBatchAsync(classId, request, UserId, Role, cancellationToken), "Mentor assigned to the selected teams.");
+
     [HttpPost("teams/{teamId:guid}/mentor-assignments/end")]
     public async Task<IActionResult> EndMentor(Guid teamId, [FromBody] EndMentorAssignmentRequest request, [FromServices] IMentorAssignmentHandler handler, CancellationToken cancellationToken) =>
         ToResponse(await handler.EndAsync(teamId, request, UserId, Role, cancellationToken), "Mentor assignment ended.");

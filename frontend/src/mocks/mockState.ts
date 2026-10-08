@@ -8,6 +8,8 @@ export interface MockUser {
   email: string;
   avatar: string | null;
   role: 'ADMIN' | 'LECTURER' | 'MENTOR' | 'STUDENT';
+  /** Only for mentors: Enterprise = enterprise mentor, Academic = lecturer mentor. */
+  mentorType?: 'Enterprise' | 'Academic';
   status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'BLOCKED' | 'INACTIVE';
   studentId: string | null;
   programGroup: string | null;
@@ -353,11 +355,11 @@ const users: MockUser[] = [
   { id: id(1), _id: id(1), name: 'Nguyễn Minh Admin', email: 'admin@ehub.local', avatar: null, role: 'ADMIN', status: 'APPROVED', studentId: null, programGroup: null, major: null, phone: '0901000001', createdAt: isoAgo(180), lastSeen: isoAgo(0, 1) },
   { id: id(2), _id: id(2), name: 'Trần Thu Giang', email: 'giang.lecturer@ehub.local', avatar: null, role: 'LECTURER', status: 'APPROVED', studentId: null, programGroup: null, major: null, phone: '0901000002', createdAt: isoAgo(150), lastSeen: isoAgo(0, 3) },
   { id: id(3), _id: id(3), name: 'Lê Hoàng Nam', email: 'nam.lecturer@ehub.local', avatar: null, role: 'LECTURER', status: 'APPROVED', studentId: null, programGroup: null, major: null, phone: '0901000003', createdAt: isoAgo(130), lastSeen: isoAgo(1) },
-  { id: id(4), _id: id(4), name: 'Phạm Anh Khoa', email: 'khoa.mentor@ehub.local', avatar: null, role: 'MENTOR', status: 'APPROVED', studentId: null, programGroup: null, major: null, phone: '0901000004', createdAt: isoAgo(120), lastSeen: isoAgo(0, 9) },
-  { id: id(5), _id: id(5), name: 'Võ Hải Yến', email: 'yen.mentor@ehub.local', avatar: null, role: 'MENTOR', status: 'PENDING', studentId: null, programGroup: null, major: null, phone: '0901000005', createdAt: isoAgo(2), lastSeen: null },
-  { id: id(6), _id: id(6), name: 'Blocked Mentor', email: 'blocked.mentor@ehub.local', avatar: null, role: 'MENTOR', status: 'BLOCKED', studentId: null, programGroup: null, major: null, phone: null, createdAt: isoAgo(40), lastSeen: isoAgo(20) },
+  { id: id(4), _id: id(4), name: 'Phạm Anh Khoa', email: 'khoa.mentor@ehub.local', avatar: null, role: 'MENTOR', mentorType: 'Enterprise', status: 'APPROVED', studentId: null, programGroup: null, major: null, phone: '0901000004', createdAt: isoAgo(120), lastSeen: isoAgo(0, 9) },
+  { id: id(5), _id: id(5), name: 'Võ Hải Yến', email: 'yen.mentor@ehub.local', avatar: null, role: 'MENTOR', mentorType: 'Academic', status: 'PENDING', studentId: null, programGroup: null, major: null, phone: '0901000005', createdAt: isoAgo(2), lastSeen: null },
+  { id: id(6), _id: id(6), name: 'Blocked Mentor', email: 'blocked.mentor@ehub.local', avatar: null, role: 'MENTOR', mentorType: 'Enterprise', status: 'BLOCKED', studentId: null, programGroup: null, major: null, phone: null, createdAt: isoAgo(40), lastSeen: isoAgo(20) },
   { id: id(7), _id: id(7), name: 'Inactive Lecturer', email: 'inactive.lecturer@ehub.local', avatar: null, role: 'LECTURER', status: 'INACTIVE', studentId: null, programGroup: null, major: null, phone: null, createdAt: isoAgo(80), lastSeen: isoAgo(30) },
-  { id: id(8), _id: id(8), name: 'Rejected Mentor', email: 'rejected.mentor@ehub.local', avatar: null, role: 'MENTOR', status: 'REJECTED', studentId: null, programGroup: null, major: null, phone: null, createdAt: isoAgo(10), lastSeen: null },
+  { id: id(8), _id: id(8), name: 'Rejected Mentor', email: 'rejected.mentor@ehub.local', avatar: null, role: 'MENTOR', mentorType: 'Academic', status: 'REJECTED', studentId: null, programGroup: null, major: null, phone: null, createdAt: isoAgo(10), lastSeen: null },
   ...[
     ['Nguyễn Gia Huy', 'SE200001', 'BIT', 'BIT_SE'],
     ['Trần Minh Anh', 'IB200002', 'BBA', 'BBA_IB'],

@@ -88,42 +88,6 @@ test('mock authentication opens an admin session for protected UI testing', asyn
   assert.equal(me.data.email, 'admin@ehub.local');
 });
 
-test('mock mentor carryover previews eligibility and adds only selected mentors to the target semester', async () => {
-  resetMockState();
-  await axiosClient.post('/auth/login', { email: 'admin@ehub.local', password: 'Mock123!' });
-  const state = getMockState();
-  const source = state.semesters.find(semester => semester.semester === 'SP' && semester.year === 2026);
-  const target = state.semesters.find(semester => semester.semester === 'FA' && semester.year === 2026);
-  const existingMentor = state.users.find(user => user.email === 'khoa.mentor@ehub.local');
-  const reusableMentor = state.users.find(user => user.email === 'yen.mentor@ehub.local');
-  assert.ok(source && target && existingMentor && reusableMentor);
-  reusableMentor.status = 'APPROVED';
-  state.semesterStaffAssignments.push(
-    { id: 'carryover-source-existing', semesterId: source.id, userId: existingMentor.id, role: 'MENTOR', status: 'ACTIVE' },
-    { id: 'carryover-source-reusable', semesterId: source.id, userId: reusableMentor.id, role: 'MENTOR', status: 'ACTIVE' },
-  );
-
-  const preview = await axiosClient.post('/subjects/teaching-staff/mentor-carryover/preview', {
-    sourceSemesterId: source.id,
-    targetSemesterId: target.id,
-  });
-  assert.equal(preview.data.totalCount, 2);
-  assert.equal(preview.data.eligibleCount, 1);
-  assert.equal(preview.data.alreadyAddedCount, 1);
-  assert.equal(preview.data.mentors.find((mentor: { userId: string }) => mentor.userId === reusableMentor.id).action, 'Add');
-
-  const committed = await axiosClient.post('/subjects/teaching-staff/mentor-carryover/commit', {
-    sourceSemesterId: source.id,
-    targetSemesterId: target.id,
-    mentorUserIds: [reusableMentor.id],
-  });
-  assert.equal(committed.data.addedCount, 1);
-  assert.equal(committed.data.reactivatedCount, 0);
-  assert.ok(state.semesterStaffAssignments.some(assignment =>
-    assignment.semesterId === target.id && assignment.userId === reusableMentor.id && assignment.status === 'ACTIVE'));
-  resetMockState();
-});
-
 test('admin class export accepts selected classes from one semester and returns one Excel blob', async () => {
   resetMockState();
   await axiosClient.post('/auth/login', { email: 'admin@ehub.local', password: 'Mock123!' });

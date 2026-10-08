@@ -1,5 +1,6 @@
 import axiosClient from './axiosClient';
 import type {
+  AddTeachingStaffBatchPayload,
   PlanSemesterPayload,
   SemesterCode,
   SemesterLifecyclePayload,
@@ -45,12 +46,11 @@ export const subjectApi = {
   getTeachingStaffCandidates: () => axiosClient.get('/subjects/teaching-staff/candidates'),
   addTeachingStaff: (data: { semester: SemesterCode; year: number; userId: string; role: 'LECTURER' | 'MENTOR' }) =>
     axiosClient.post('/subjects/teaching-staff', data),
+  /** Adds several existing lecturers or mentors to a semester in one request. */
+  addTeachingStaffBatch: (data: AddTeachingStaffBatchPayload) =>
+    axiosClient.post('/subjects/teaching-staff/batch', data),
   updateTeachingStaff: (id: string, data: { status: 'Active' | 'Inactive'; rowVersion: string }) =>
     axiosClient.put(`/subjects/teaching-staff/${id}`, data),
-  previewMentorCarryover: (data: { sourceSemesterId: string; targetSemesterId: string }, signal?: AbortSignal) =>
-    axiosClient.post('/subjects/teaching-staff/mentor-carryover/preview', data, { signal }),
-  commitMentorCarryover: (data: { sourceSemesterId: string; targetSemesterId: string; mentorUserIds: string[] }) =>
-    axiosClient.post('/subjects/teaching-staff/mentor-carryover/commit', data),
   getCurriculum: (subjectCode: string) => axiosClient.get(`/subjects/${subjectCode}/curriculum`),
   synchronizeCheckpoints: (subjectCode: string, data: unknown) => axiosClient.put(`/subjects/${subjectCode}/checkpoints`, data),
   createRoadmapItem: (subjectCode: string, data: unknown) => axiosClient.post(`/subjects/${subjectCode}/roadmap`, data),

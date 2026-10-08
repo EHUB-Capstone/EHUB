@@ -429,6 +429,67 @@ function registerTeamMutations(mock: MockAdapter): void {
     return ok(assignment, 'Mentor assigned successfully.');
   });
 
+  mock.onPost(/^\/teams\/[^/]+\/mentor-assignments\/replace$/).reply((config) => {
+    const team = teamById(routeId(config, /^\/teams\/([^/]+)\/mentor-assignments\/replace$/));
+    if (!team) return failure(404, 'TEAM_NOT_FOUND', 'Team not found.');
+    const guard = classMutationGuard(team.classId);
+    if (guard) return guard;
+    const body = parseBody(config);
+    const reason = asString(body.reason).trim();
+    if (reason.length < 3) return failure(400, 'CLASS_VALIDATION_ERROR', 'A reason between 3 and 1000 characters is required.');
+    const current = team.currentMentorAssignments.find(item => item.assignmentId === asString(body.assignmentId) && item.status === 'Active');
+    if (!current) return failure(409, 'MENTOR_ASSIGNMENT_CONFLICT', 'The current mentor assignment is no longer active. Refresh and try again.');
+    const mentorUser = getMockState().users.find((user) => user.id === asString(body.mentorProfileId) && user.role === 'MENTOR' && user.status === 'APPROVED');
+    if (!mentorUser || !isActiveSemesterMentor(team.classId, mentorUser.id)) {
+      return failure(400, 'MENTOR_NOT_AVAILABLE', "The selected mentor is not active in this semester's teaching staff list.");
+    }
+    if (mentorUser.id === current.mentor.userId) return failure(400, 'CLASS_VALIDATION_ERROR', 'The selected mentor is already assigned to this slot.');
+    const mentor: MockMentor = { mentorProfileId: mentorUser.id, userId: mentorUser.id, fullName: mentorUser.name, email: mentorUser.email, organization: 'E-HUB Partner Network', mentorType: current.slot };
+    current.status = 'Ended';
+    current.endedAtUtc = new Date().toISOString();
+    const assignment = { assignmentId: allocateId(), teamId: team.id, teamName: team.teamName, classId: team.classId, mentor, status: 'Active' as const, assignedAtUtc: new Date().toISOString(), endedAtUtc: null, note: asString(body.note) || null, slot: current.slot };
+    team.currentMentorAssignments = [...team.currentMentorAssignments.filter(item => item.status === 'Active'), assignment];
+    team.currentMentorAssignment = team.currentMentorAssignments[0] || null;
+    refreshClassCounts(team.classId);
+    persistMockState();
+    return ok(assignment, 'Mentor replaced.');
+  });
+
+  mock.onPost(/^\/classes\/[^/]+\/mentor-assignments\/batch$/).reply((config) => {
+    const classId = routeId(config, /^\/classes\/([^/]+)\/mentor-assignments\/batch$/);
+    if (!findClass(classId)) return failure(404, 'CLASS_NOT_FOUND', 'Class not found.');
+    const guard = classMutationGuard(classId);
+    if (guard) return guard;
+    const body = parseBody(config);
+    const mentorUser = getMockState().users.find((user) => user.id === asString(body.mentorProfileId) && user.role === 'MENTOR' && user.status === 'APPROVED');
+    if (!mentorUser || !isActiveSemesterMentor(classId, mentorUser.id)) {
+      return failure(400, 'MENTOR_NOT_AVAILABLE', "The selected mentor is not active in this semester's teaching staff list.");
+    }
+    const ids = Array.isArray(body.teamIds) ? body.teamIds.map(String) : [];
+    const teams = ids.map((id) => teamById(id));
+    if (ids.length === 0 || teams.some((team) => !team || team.classId !== classId)) {
+      return failure(404, 'TEAM_NOT_FOUND', 'Every selected team must belong to this class.');
+    }
+    const mentor: MockMentor = { mentorProfileId: mentorUser.id, userId: mentorUser.id, fullName: mentorUser.name, email: mentorUser.email, organization: 'E-HUB Partner Network', mentorType: 'Enterprise' };
+    const targets = teams.filter((team): team is NonNullable<typeof team> => Boolean(team));
+    const blocked = targets.filter((team) => team.currentMentorAssignments.some((item) => item.slot === mentor.mentorType && item.status === 'Active' && item.mentor.userId !== mentorUser.id));
+    if (blocked.length > 0) {
+      return failure(409, 'MENTOR_ASSIGNMENT_CONFLICT', `Nothing was saved. ${blocked.map((team) => team.teamName).join('; ')} already has a ${mentor.mentorType} mentor. Refresh and try again.`);
+    }
+    let assigned = 0;
+    let already = 0;
+    for (const team of targets) {
+      if (team.currentMentorAssignments.some((item) => item.mentor.userId === mentorUser.id && item.status === 'Active')) { already += 1; continue; }
+      const assignment = { assignmentId: allocateId(), teamId: team.id, teamName: team.teamName, classId: team.classId, mentor, status: 'Active' as const, assignedAtUtc: new Date().toISOString(), endedAtUtc: null, note: null, slot: mentor.mentorType };
+      team.currentMentorAssignments.push(assignment);
+      team.currentMentorAssignment = assignment;
+      assigned += 1;
+    }
+    refreshClassCounts(classId);
+    persistMockState();
+    return ok({ assignedCount: assigned, alreadyAssignedCount: already }, 'Mentor assigned to the selected teams.');
+  });
+
   mock.onPost(/^\/teams\/[^/]+\/mentor-assignments\/end$/).reply((config) => {
     const team = teamById(routeId(config, /^\/teams\/([^/]+)\/mentor-assignments\/end$/));
     if (!team) return failure(404, 'TEAM_NOT_FOUND', 'Team not found.');

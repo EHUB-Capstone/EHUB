@@ -5,8 +5,9 @@ namespace EHub.Domain.Entities;
 
 public sealed class MentorImportDraft : AuditableEntity
 {
-    public Guid SemesterId { get; set; }
-    public Semester Semester { get; set; } = null!;
+    // Null for an incomplete mentor kept in the master list, which belongs to no semester.
+    public Guid? SemesterId { get; set; }
+    public Semester? Semester { get; set; }
 
     public MentorType Type { get; set; }
     public string FullName { get; set; } = string.Empty;

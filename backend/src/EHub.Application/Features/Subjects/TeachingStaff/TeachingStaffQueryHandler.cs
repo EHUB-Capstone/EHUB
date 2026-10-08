@@ -1,3 +1,4 @@
+using EHub.Application.Features.Admin.Mentors;
 using EHub.Application.Common.Interfaces.Persistence;
 using EHub.Contracts.Subjects;
 using EHub.Domain.Entities;
@@ -141,7 +142,7 @@ public sealed class TeachingStaffQueryHandler(IApplicationDbContext context) : I
             Status = "Incomplete",
             UserStatus = "NotCreated",
             IsIncomplete = true,
-            MissingFields = GetMissingFields(item),
+            MissingFields = MentorDraftFields.GetMissing(item),
             ClassCount = 0,
             Assignments = Array.Empty<TeachingAssignmentResponse>(),
             RowVersion = string.Empty
@@ -180,6 +181,7 @@ public sealed class TeachingStaffQueryHandler(IApplicationDbContext context) : I
             .AsNoTracking()
             .Include(user => user.UserRoles)
             .ThenInclude(userRole => userRole.Role)
+            .Include(user => user.MentorProfile)
             .Where(user =>
                 user.Status == UserStatus.Active &&
                 user.UserRoles.Any(userRole =>
@@ -204,7 +206,13 @@ public sealed class TeachingStaffQueryHandler(IApplicationDbContext context) : I
                         SystemRoles.Lecturer,
                         StringComparison.OrdinalIgnoreCase)
                         ? "LECTURER"
-                        : "MENTOR"
+                        : "MENTOR",
+                    MentorType = string.Equals(userRole.Role.Name, SystemRoles.Mentor, StringComparison.OrdinalIgnoreCase)
+                        ? user.MentorProfile?.Type.ToString()
+                        : null,
+                    ContractType = string.Equals(userRole.Role.Name, SystemRoles.Mentor, StringComparison.OrdinalIgnoreCase)
+                        ? user.MentorProfile?.ContractType
+                        : null
                 }))
             .ToArray();
 
@@ -234,33 +242,6 @@ public sealed class TeachingStaffQueryHandler(IApplicationDbContext context) : I
         SemesterStaffRole.Mentor => "MENTOR",
         _ => throw new ArgumentOutOfRangeException(nameof(role))
     };
-
-    private static IReadOnlyCollection<string> GetMissingFields(MentorImportDraft mentor)
-    {
-        var fields = new List<string>();
-        if (string.IsNullOrWhiteSpace(mentor.Email))
-        {
-            fields.Add(mentor.Type == MentorType.Academic ? "Email công việc" : "Email");
-        }
-
-        if (mentor.Type == MentorType.Enterprise)
-        {
-            if (mentor.DateOfBirth is null) fields.Add("Ngày tháng năm sinh");
-            if (string.IsNullOrWhiteSpace(mentor.Phone)) fields.Add("SDT");
-            if (string.IsNullOrWhiteSpace(mentor.ContractType)) fields.Add("Loại HĐ");
-            if (string.IsNullOrWhiteSpace(mentor.EducationLevel)) fields.Add("Trình độ học vấn");
-            if (string.IsNullOrWhiteSpace(mentor.CurrentAddress)) fields.Add("Địa chỉ hiện nay");
-            if (string.IsNullOrWhiteSpace(mentor.JobTitle)) fields.Add("Vị trí, Chức danh");
-            if (string.IsNullOrWhiteSpace(mentor.Organization)) fields.Add("Công ty");
-        }
-        else
-        {
-            if (string.IsNullOrWhiteSpace(mentor.Department)) fields.Add("Phòng ban trực tiếp");
-            if (string.IsNullOrWhiteSpace(mentor.JobTitle)) fields.Add("Chức danh (VN)");
-        }
-
-        return fields;
-    }
 
     private sealed record StaffClassAssignment(
         Guid UserId,
