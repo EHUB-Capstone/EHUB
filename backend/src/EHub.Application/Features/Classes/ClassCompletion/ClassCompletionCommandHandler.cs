@@ -252,8 +252,8 @@ public sealed class ClassCompletionCommandHandler : IClassCompletionCommandHandl
 
         var schedules = ClassScheduleRules.Deserialize(targetClass.ScheduleJson);
         var scheduleError = ClassScheduleRules.Validate(schedules);
-        if (scheduleError != null || schedules.Count == 0)
-            return Failure(ErrorCodes.ClassCompletionBlocked, scheduleError ?? "A reopened class must have at least one schedule slot.");
+        if (scheduleError != null)
+            return Failure(ErrorCodes.ClassCompletionBlocked, scheduleError);
 
         var otherClasses = await _context.Classes.AsNoTracking()
             .Where(item => item.Id != targetClass.Id && item.SemesterId == targetClass.SemesterId &&

@@ -38,8 +38,8 @@ public static class ClassScheduleRules
 
     public static bool HasSchedule(string? scheduleJson) => Deserialize(scheduleJson).Count > 0;
 
-    public static ClassStatus DetermineOperationalStatus(Guid? primaryLecturerId, string? scheduleJson) =>
-        primaryLecturerId.HasValue && HasSchedule(scheduleJson)
+    public static ClassStatus DetermineOperationalStatus(Guid? primaryLecturerId) =>
+        primaryLecturerId.HasValue
             ? ClassStatus.Active
             : ClassStatus.Draft;
 

@@ -4,6 +4,7 @@ import type { ClassDto, ClassStatus } from '../../types/classes.ts';
 import type { MockClass, MockRosterStudent } from '../mockState.ts';
 import { PROGRAM_GROUPS, TEAM_MAJOR_GROUPS } from '../../constants/majors.ts';
 import { evaluateGroupProjectConsistency } from '../../utils/groupProjectConsistency.ts';
+import { activeFormationFor, activeRecord, sweepExpiredInvitations } from '../formationHelpers.ts';
 import {
   allocateId,
   allocateRowVersion,
@@ -162,8 +163,8 @@ function createClassFromBulk(body: Record<string, unknown>, classIndex: number):
     room: asString(body.room) || null,
     schedules: [],
     isEnrollmentMajorLocked: false,
-    status: 'Draft',
-    previousStatus: 'Draft',
+    status: primaryLecturer ? 'Active' : 'Draft',
+    previousStatus: primaryLecturer ? 'Active' : 'Draft',
     studentCount: 0,
     teamCount: 0,
     mentors: [],
@@ -254,6 +255,7 @@ function registerClassQueries(mock: MockAdapter): void {
       return failure(403, 'CLASS_ACCESS_DENIED', 'You are not enrolled in this class.');
     const rosterStatus = currentEnrollment?.enrollmentStatus === 'Completed' ? 'Completed' : 'Active';
     const classSummary = studentClassSummary(cls, rosterStatus);
+    sweepExpiredInvitations();
     const ownMajorLocked = state.classes.some((item) =>
       ['Draft', 'Active', 'Inactive'].includes(item.status)
       && item.isEnrollmentMajorLocked
@@ -261,14 +263,11 @@ function registerClassQueries(mock: MockAdapter): void {
         student.enrollmentStatus === 'Active' && student.userId === sessionUserId));
     const students = (state.rosters[classId] || []).filter((student) => student.enrollmentStatus === rosterStatus).map((student) => {
       const isOwnRow = student.userId === sessionUserId;
-      const pendingFormation = rosterStatus === 'Active' ? state.formations.find(formation =>
-        formation.classId === classId
-        && formation.status === 'Pending'
-        && formation.invitations.some(invitation => invitation.studentId === student.studentId)) : undefined;
-      const pendingInvitation = pendingFormation?.invitations.find(invitation =>
-        invitation.studentId === student.studentId);
-      const viewerBelongsToPendingFormation = Boolean(pendingFormation?.invitations.some(invitation =>
-        invitation.studentId === currentEnrollment.studentId));
+      // Only a pending or accepted invitation holds a student; declined, expired and left records are history.
+      const pendingFormation = rosterStatus === 'Active' ? activeFormationFor(classId, student.studentId) : undefined;
+      const pendingInvitation = pendingFormation ? activeRecord(pendingFormation, student.studentId) : undefined;
+      const viewerBelongsToPendingFormation = Boolean(pendingFormation
+        && activeRecord(pendingFormation, currentEnrollment.studentId));
       const profileMajorCode = isOwnRow
         ? state.users.find(user => user.id === sessionUserId)?.major || null
         : null;
@@ -568,7 +567,7 @@ function changeLifecycle(config: AxiosRequestConfig, target: 'Archived' | 'Resto
     addAudit(classId, 'CLASS_ARCHIVED', { reason });
   } else {
     if (cls.status !== 'Archived') return ok({ classId, status: cls.status, archivedAtUtc: null, rowVersion: cls.rowVersion }, 'Class is already restored.');
-    cls.status = cls.primaryLecturerId && cls.schedules.length ? cls.previousStatus : 'Draft';
+    cls.status = cls.primaryLecturerId ? cls.previousStatus : 'Draft';
     cls.rowVersion = allocateRowVersion();
     addAudit(classId, 'CLASS_RESTORED', { reason });
   }

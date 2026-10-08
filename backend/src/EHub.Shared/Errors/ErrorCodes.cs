@@ -140,6 +140,11 @@ public static class ErrorCodes
     public const string TeamFormationNotFound = "TEAM_FORMATION_NOT_FOUND";
     public const string TeamFormationStateInvalid = "TEAM_FORMATION_STATE_INVALID";
     public const string TeamFormationReservationConflict = "TEAM_FORMATION_RESERVATION_CONFLICT";
+    public const string TeamFormationCapacityConflict = "TEAM_FORMATION_CAPACITY_CONFLICT";
+    public const string TeamFormationNotReady = "TEAM_FORMATION_NOT_READY";
+    public const string TeamFormationPendingConfirmationRequired = "TEAM_FORMATION_PENDING_CONFIRMATION_REQUIRED";
+    public const string TeamInvitationExpired = "TEAM_INVITATION_EXPIRED";
+    public const string TeamInvitationConflict = "TEAM_INVITATION_CONFLICT";
     public const string TeamApprovalConflict = "TEAM_APPROVAL_CONFLICT";
     public const string MentorNotAvailable = "MENTOR_NOT_AVAILABLE";
     public const string MentorCapacityReached = "MENTOR_CAPACITY_REACHED";

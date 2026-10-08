@@ -7,6 +7,7 @@ import { teamFormationApi } from '../../api/teamFormationApi';
 import { classApi } from '../../api/classApi';
 import { unwrapApiData } from '../../utils/classMappers';
 import { isMissingTeamMajor, validateTeamSelection } from '../../utils/teamManagement';
+import { MAX_FORMATION_MEMBERS, remainingInviteSlots } from '../../utils/teamFormation';
 import TeamSuggestionTooltip from './TeamSuggestionTooltip';
 
 const getTeamSizeSuggestion = (count) => {
@@ -65,6 +66,7 @@ export default function StudentTeamGeneratePanel({
   requireCurrentStudentMembership = true,
   proposal = null,
   creationMode = 'formation',
+  inviteToFormation = null,
 }) {
   const [submitting, setSubmitting] = useState(false);
   const students = useMemo(() => (Array.isArray(rawStudents) ? rawStudents : []), [rawStudents]);
@@ -151,6 +153,7 @@ export default function StudentTeamGeneratePanel({
       isFullyValid,
       missingMajorCount,
       isFormValid,
+      isGroupNameValid,
       hasCurrentUser,
       hasLeader,
     };
@@ -159,11 +162,21 @@ export default function StudentTeamGeneratePanel({
   const {
     selectedStudents, studentCount, uniqueMajors,
     hasGroup1, hasGroup2, isFullyValid,
-    missingMajorCount, isFormValid, hasCurrentUser, hasLeader
+    missingMajorCount, isFormValid, isGroupNameValid, hasCurrentUser, hasLeader
   } = validation;
-  const canSubmit = isFormValid && isFullyValid;
-  const selectedLeader = selectedStudents.find(student => student._id === selectedLeaderId);
   const createsTeamDirectly = creationMode === 'direct' && !proposal;
+  // Student formations only invite: the 4–6 members and BBA/BIT rules are enforced when the creator finalizes.
+  const isFormationFlow = !createsTeamDirectly && !proposal;
+  const inviteMode = isFormationFlow && Boolean(inviteToFormation);
+  const maxSelection = inviteMode ? remainingInviteSlots(inviteToFormation) : MAX_FORMATION_MEMBERS;
+  const formationMembersValid = inviteMode
+    ? studentCount >= 1 && studentCount <= maxSelection
+    : studentCount >= 2 && studentCount <= MAX_FORMATION_MEMBERS;
+  const formationReady = inviteMode
+    ? formationMembersValid
+    : formationMembersValid && isGroupNameValid && hasCurrentUser && hasLeader;
+  const canSubmit = isFormationFlow ? formationReady : isFormValid && isFullyValid;
+  const selectedLeader = selectedStudents.find(student => student._id === selectedLeaderId);
 
   const requestSubmission = () => {
     if (submitting || !canSubmit) {
@@ -171,7 +184,7 @@ export default function StudentTeamGeneratePanel({
       return;
     }
 
-    if (proposal) {
+    if (proposal || inviteMode) {
       void handleSubmit();
       return;
     }
@@ -205,9 +218,11 @@ export default function StudentTeamGeneratePanel({
             leaderStudentId: selectedLeaderId,
             teamName: groupName.trim(),
           });
+        } else if (inviteMode) {
+          await teamFormationApi.invite(inviteToFormation.id, selected);
         } else {
           await teamFormationApi.create(classId, {
-            memberStudentIds: selected,
+            inviteeStudentIds: selected.filter(studentId => studentId !== currentStudentId),
             leaderStudentId: selectedLeaderId,
             teamName: groupName.trim(),
           });
@@ -219,7 +234,7 @@ export default function StudentTeamGeneratePanel({
           ? 'Project proposal resubmitted. Your team is unchanged.'
           : createsTeamDirectly
             ? 'Team created successfully. Students can view it immediately.'
-            : 'Invitations sent. Your team will be created after everyone accepts.',
+            : 'Invitations sent. Each student has 24 hours to respond.',
       );
       
       // Reset form
@@ -258,7 +273,7 @@ export default function StudentTeamGeneratePanel({
 
       <div className="grid grid-cols-1">
         {/* Form Info */}
-        {hasLeader && (
+        {!inviteMode && hasLeader && (
           <div className="order-2 grid gap-3 border-t border-slate-200 bg-slate-50/30 p-3 md:grid-cols-[0.8fr_0.8fr_1.4fr]">
             <div>
               <label className="mb-1.5 block text-xs font-semibold text-slate-600">
@@ -357,25 +372,37 @@ export default function StudentTeamGeneratePanel({
             </h4>
             
             <div className="grid overflow-hidden rounded-lg border border-slate-200 text-xs sm:grid-cols-2 [&>span]:min-h-11 [&>span]:px-3 [&>span]:py-2 [&>span:nth-child(-n+2)]:border-b [&>span:nth-child(odd)]:sm:border-r [&>span:nth-child(odd)]:sm:border-slate-200">
-              <span className={`flex items-center gap-1.5 font-medium ${(studentCount >= 4 && studentCount <= 6) ? 'text-green-600' : studentCount > 0 ? 'text-red-500' : 'text-slate-400'}`}>
-                <span className={`w-4 h-4 rounded-full flex items-center justify-center text-white text-[10px] ${(studentCount >= 4 && studentCount <= 6) ? 'bg-green-500' : studentCount > 0 ? 'bg-red-400' : 'bg-slate-300'}`}>
-                  {(studentCount >= 4 && studentCount <= 6) ? '✓' : '✗'}
+              {isFormationFlow ? (
+                <span className={`flex items-center gap-1.5 font-medium ${formationMembersValid ? 'text-green-600' : studentCount > 0 ? 'text-red-500' : 'text-slate-400'}`}>
+                  <span className={`w-4 h-4 rounded-full flex items-center justify-center text-white text-[10px] ${formationMembersValid ? 'bg-green-500' : studentCount > 0 ? 'bg-red-400' : 'bg-slate-300'}`}>
+                    {formationMembersValid ? '✓' : '✗'}
+                  </span>
+                  {inviteMode
+                    ? `Invitees (${studentCount}/${maxSelection} slots)`
+                    : `Invite 1–5 classmates (${Math.max(0, studentCount - 1)}/5)`}
                 </span>
-                4–6 members ({studentCount}/6)
+              ) : (
+                <span className={`flex items-center gap-1.5 font-medium ${(studentCount >= 4 && studentCount <= 6) ? 'text-green-600' : studentCount > 0 ? 'text-red-500' : 'text-slate-400'}`}>
+                  <span className={`w-4 h-4 rounded-full flex items-center justify-center text-white text-[10px] ${(studentCount >= 4 && studentCount <= 6) ? 'bg-green-500' : studentCount > 0 ? 'bg-red-400' : 'bg-slate-300'}`}>
+                    {(studentCount >= 4 && studentCount <= 6) ? '✓' : '✗'}
+                  </span>
+                  4–6 members ({studentCount}/6)
+                </span>
+              )}
+
+              {/* Group rules are checked when the creator finalizes, so they only guide formations. */}
+              <span className={`flex items-center gap-1.5 font-medium ${hasGroup1 ? 'text-green-600' : isFormationFlow ? 'text-amber-600' : studentCount > 0 ? 'text-red-500' : 'text-slate-400'}`}>
+                <span className={`w-4 h-4 rounded-full flex items-center justify-center text-white text-[10px] shrink-0 ${hasGroup1 ? 'bg-green-500' : isFormationFlow ? 'bg-amber-400' : studentCount > 0 ? 'bg-red-400' : 'bg-slate-300'}`}>
+                  {hasGroup1 ? '✓' : isFormationFlow ? '!' : '✗'}
+                </span>
+                <span>{isFormationFlow ? 'Group 1 (BBA) needed to finalize' : 'Group 1 (BBA) required'}</span>
               </span>
 
-              <span className={`flex items-center gap-1.5 font-medium ${hasGroup1 ? 'text-green-600' : studentCount > 0 ? 'text-red-500' : 'text-slate-400'}`}>
-                <span className={`w-4 h-4 rounded-full flex items-center justify-center text-white text-[10px] shrink-0 ${hasGroup1 ? 'bg-green-500' : studentCount > 0 ? 'bg-red-400' : 'bg-slate-300'}`}>
-                  {hasGroup1 ? '✓' : '✗'}
+              <span className={`flex items-center gap-1.5 font-medium ${hasGroup2 ? 'text-green-600' : isFormationFlow ? 'text-amber-600' : studentCount > 0 ? 'text-red-500' : 'text-slate-400'}`}>
+                <span className={`w-4 h-4 rounded-full flex items-center justify-center text-white text-[10px] shrink-0 ${hasGroup2 ? 'bg-green-500' : isFormationFlow ? 'bg-amber-400' : studentCount > 0 ? 'bg-red-400' : 'bg-slate-300'}`}>
+                  {hasGroup2 ? '✓' : isFormationFlow ? '!' : '✗'}
                 </span>
-                <span>Group 1 (BBA) required</span>
-              </span>
-
-              <span className={`flex items-center gap-1.5 font-medium ${hasGroup2 ? 'text-green-600' : studentCount > 0 ? 'text-red-500' : 'text-slate-400'}`}>
-                <span className={`w-4 h-4 rounded-full flex items-center justify-center text-white text-[10px] shrink-0 ${hasGroup2 ? 'bg-green-500' : studentCount > 0 ? 'bg-red-400' : 'bg-slate-300'}`}>
-                  {hasGroup2 ? '✓' : '✗'}
-                </span>
-                <span>Group 2 (BIT) required</span>
+                <span>{isFormationFlow ? 'Group 2 (BIT) needed to finalize' : 'Group 2 (BIT) required'}</span>
               </span>
               
               <span className={`hidden items-center gap-1.5 font-medium ${hasCurrentUser ? 'text-green-600' : 'text-red-500'}`}>
@@ -385,12 +412,14 @@ export default function StudentTeamGeneratePanel({
                 <span>You must be a team member</span>
               </span>
 
-              <span className={`flex items-center gap-1.5 font-medium ${hasLeader ? 'text-green-600' : 'text-red-500'}`}>
-                <span className={`w-4 h-4 rounded-full flex items-center justify-center text-white text-[10px] shrink-0 ${hasLeader ? 'bg-green-500' : 'bg-red-400'}`}>
-                  {hasLeader ? '✓' : '×'}
+              {!inviteMode && (
+                <span className={`flex items-center gap-1.5 font-medium ${hasLeader ? 'text-green-600' : 'text-red-500'}`}>
+                  <span className={`w-4 h-4 rounded-full flex items-center justify-center text-white text-[10px] shrink-0 ${hasLeader ? 'bg-green-500' : 'bg-red-400'}`}>
+                    {hasLeader ? '✓' : '×'}
+                  </span>
+                  <span>{isFormationFlow ? 'Proposed Team Leader required' : 'Team Leader required'}</span>
                 </span>
-                <span>Team Leader required</span>
-              </span>
+              )}
             </div>
 
             {uniqueMajors.length > 0 && (
@@ -408,7 +437,18 @@ export default function StudentTeamGeneratePanel({
               </div>
             )}
             
-            {studentCount > 0 && !isFullyValid && (
+            {isFormationFlow && studentCount > 0 && (
+              <div className="mt-1.5 flex items-start gap-2 text-[10px] text-slate-600">
+                <AlertCircle className="w-4 h-4 text-slate-400 shrink-0" />
+                <p className="text-xs font-medium">
+                  {inviteMode
+                    ? 'Each new student has 24 hours to respond. You finalize the team yourself once 4–6 members have accepted.'
+                    : 'Each student has 24 hours to respond. To finalize you need 4–6 accepted members, including both major groups.'}
+                </p>
+              </div>
+            )}
+
+            {!isFormationFlow && studentCount > 0 && !isFullyValid && (
               <div className="mt-1.5 flex items-start gap-2 text-[10px] text-orange-700">
                 <AlertTriangle className="w-4 h-4 text-orange-500 shrink-0" />
                 <p className="text-xs text-orange-700 font-medium">
@@ -419,17 +459,22 @@ export default function StudentTeamGeneratePanel({
           </div>
 
           <div className="border-t border-slate-200 bg-slate-50/60 p-3 lg:border-l lg:border-t-0">
-            <label className="mb-1.5 flex items-center gap-1 text-[11px] font-bold text-slate-600">
-              <Crown className="h-3.5 w-3.5 text-amber-500" /> Team Leader <span className="text-red-500">*</span>
-            </label>
-            <select
-              value={selected.includes(selectedLeaderId) ? selectedLeaderId : ''}
-              onChange={(event) => setSelectedLeaderId(event.target.value)}
-              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
-            >
-              <option value="">Select leader</option>
-              {selectedStudents.map(student => <option key={student._id} value={student._id}>{student.fullName} ({student.rollNumber || 'No student code'})</option>)}
-            </select>
+            {!inviteMode && (
+              <>
+                <label htmlFor="proposed-team-leader" className="mb-1.5 flex items-center gap-1 text-[11px] font-bold text-slate-600">
+                  <Crown className="h-3.5 w-3.5 text-amber-500" /> {isFormationFlow ? 'Proposed Team Leader' : 'Team Leader'} <span className="text-red-500">*</span>
+                </label>
+                <select
+                  id="proposed-team-leader"
+                  value={selected.includes(selectedLeaderId) ? selectedLeaderId : ''}
+                  onChange={(event) => setSelectedLeaderId(event.target.value)}
+                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+                >
+                  <option value="">Select leader</option>
+                  {selectedStudents.map(student => <option key={student._id} value={student._id}>{student.fullName} ({student.rollNumber || 'No student code'})</option>)}
+                </select>
+              </>
+            )}
             <button
               type="button"
               onClick={requestSubmission}
@@ -441,9 +486,9 @@ export default function StudentTeamGeneratePanel({
                 }`}
             >
               {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 
-                (isFullyValid ? <CheckCircle2 className="w-4 h-4" /> : <Send className="w-4 h-4" />)
+                (canSubmit ? <CheckCircle2 className="w-4 h-4" /> : <Send className="w-4 h-4" />)
               }
-              {isFullyValid
+              {canSubmit
                 ? (proposal ? 'Resubmit project proposal' : createsTeamDirectly ? 'Create team' : 'Send invitations')
                 : 'Requirements not met'}
             </button>
@@ -475,7 +520,7 @@ export default function StudentTeamGeneratePanel({
                 <p className="mt-1 text-sm text-slate-500">
                   {createsTeamDirectly
                     ? 'Review the members before creating the active team.'
-                    : 'Review the members before sending invitations. The team will not be created yet.'}
+                    : 'Review the invitations before sending them. The team is not created until you finalize it.'}
                 </p>
               </div>
               <button
@@ -536,10 +581,10 @@ export default function StudentTeamGeneratePanel({
                 <p>
                   {createsTeamDirectly
                     ? 'The team and all memberships will be created immediately. Student confirmation is not required.'
-                    : 'Each selected member must accept before the team is created.'}
+                    : 'Each invited student has 24 hours to accept. Only students who accept can join; you finalize the team once 4–6 members, including both major groups, have accepted.'}
                   {selectedLeader && <>
                     {' '}<strong>{selectedLeader.fullName} ({selectedLeader.rollNumber || 'No student code'})</strong>
-                    {createsTeamDirectly ? ' will be assigned as Team Leader.' : ' will be the Team Leader after formation is complete.'}
+                    {createsTeamDirectly ? ' will be assigned as Team Leader.' : ' is invited as Team Leader and will keep the role if they accept.'}
                   </>}
                 </p>
               </div>

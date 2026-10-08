@@ -171,8 +171,8 @@ public sealed class CreateClassCommandHandler : ICreateClassCommandHandler
             CourseId = request.CourseId,
             PrimaryLecturerId = targetLecturerId,
             Room = normalizedRoom,
-            // Activation is automatic only after lecturer and schedule are present.
-            Status = ClassStatus.Draft,
+            // Activation is automatic as soon as a primary lecturer is assigned.
+            Status = ClassScheduleRules.DetermineOperationalStatus(targetLecturerId),
             CreatedById = currentUserId
         };
 
