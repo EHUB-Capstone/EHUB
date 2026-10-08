@@ -2,14 +2,13 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   BookOpen, Building2, Calendar, CheckCircle2, ChevronLeft, ChevronRight, CircleAlert, Edit3, Factory, Filter, GraduationCap, Plus,
-  History, LockKeyhole, RefreshCw, Search, ShieldAlert, Sparkles, UserCheck, Users,
+  LockKeyhole, RefreshCw, Search, ShieldAlert, Sparkles, UserCheck, Users,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { subjectApi } from '../../api/subjectApi';
 import SemesterDateRangePicker from '../../components/admin/SemesterDateRangePicker';
 import MentorAdministrationCard from '../../components/admin/MentorAdministrationCard';
 import AddSemesterStaffModal from '../../components/admin/AddSemesterStaffModal';
-import MentorCarryoverModal from '../../components/admin/MentorCarryoverModal';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
@@ -92,11 +91,6 @@ function initials(name: string) {
 
 function semesterLabel({ semester, year }: SemesterDto) {
   return `${semester} ${year}`;
-}
-
-function semesterChronology({ semester, year }: SemesterDto) {
-  const termOrder: Record<SemesterCode, number> = { SP: 0, SU: 1, FA: 2 };
-  return year * 3 + termOrder[semester];
 }
 
 function formatSemesterDate(value: string | null) {
@@ -184,7 +178,6 @@ const SubjectManagement = () => {
   const [addStaffRole, setAddStaffRole] = useState<TeachingStaffDto['role'] | null>(null);
   const [staffEntryStatus, setStaffEntryStatus] = useState<'Active' | 'Inactive'>('Active');
   const [staffSaving, setStaffSaving] = useState(false);
-  const [mentorCarryoverOpen, setMentorCarryoverOpen] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingSubject, setEditingSubject] = useState<SubjectDto | null>(null);
   const [form, setForm] = useState({ subjectCode: '', subjectName: '', status: 'active' as SubjectStatus });
@@ -673,13 +666,6 @@ const SubjectManagement = () => {
     { label: 'Classes', value: staffSummary.classes, icon: BookOpen, style: 'bg-cyan text-white ring-black/10 dark:ring-cyan-300/40' },
   ];
   const selectedSemesterRecord = semesters.find(item => item.semester === selectedSemester && Number(item.year) === selectedYear);
-  const mentorCarryoverSources = useMemo(() => {
-    if (!selectedSemesterRecord) return [];
-    const targetOrder = semesterChronology(selectedSemesterRecord);
-    return semesters
-      .filter(item => item.id !== selectedSemesterRecord.id && semesterChronology(item) < targetOrder)
-      .sort((left, right) => semesterChronology(right) - semesterChronology(left));
-  }, [selectedSemesterRecord, semesters]);
 
   return (
     <div className="space-y-6">
@@ -958,15 +944,6 @@ const SubjectManagement = () => {
                 </div>
               </div>
               <div className="flex flex-wrap gap-2">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  icon={History}
-                  disabled={!selectedSemesterRecord || ['Closing', 'Completed', 'Archived'].includes(selectedSemesterRecord.status)}
-                  onClick={() => setMentorCarryoverOpen(true)}
-                >
-                  Reuse mentors
-                </Button>
                 <Button size="sm" variant="outline" icon={Plus} onClick={() => void openAddStaff('LECTURER')}>Add lecturer</Button>
                 <Button size="sm" variant="outline" icon={Plus} onClick={() => void openAddStaff('MENTOR')}>Add mentor</Button>
               </div>
@@ -1088,16 +1065,6 @@ const SubjectManagement = () => {
           existingUserIds={existingStaffUserIds}
           onClose={() => setAddStaffRole(null)}
           onChanged={() => loadStaff()}
-        />
-      )}
-
-      {selectedSemesterRecord && (
-        <MentorCarryoverModal
-          isOpen={mentorCarryoverOpen}
-          onClose={() => setMentorCarryoverOpen(false)}
-          targetSemester={selectedSemesterRecord}
-          sourceSemesters={mentorCarryoverSources}
-          onCompleted={() => loadStaff(selectedSemester, selectedYear)}
         />
       )}
 

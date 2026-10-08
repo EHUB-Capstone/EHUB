@@ -20,6 +20,7 @@ public sealed class UsersController(IUserManagementHandler handler) : Controller
         [FromQuery] string? search = null,
         [FromQuery] string? role = null,
         [FromQuery] string? status = null,
+        [FromQuery] string? mentorType = null,
         CancellationToken cancellationToken = default)
     {
         var result = await handler.GetUsersAsync(
@@ -28,6 +29,7 @@ public sealed class UsersController(IUserManagementHandler handler) : Controller
             search,
             role,
             status,
+            mentorType,
             cancellationToken);
 
         return ToActionResult(result, "Users retrieved successfully.");

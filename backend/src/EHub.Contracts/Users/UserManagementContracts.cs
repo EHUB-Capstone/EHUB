@@ -21,6 +21,8 @@ public sealed class ManagedUserResponse
     public string Email { get; init; } = string.Empty;
     public string? Avatar { get; init; }
     public string Role { get; init; } = "STUDENT";
+    // Only for mentors: "Enterprise" (industry mentor) or "Academic" (lecturer mentor).
+    public string? MentorType { get; init; }
     public string Status { get; init; } = "APPROVED";
     public string? StudentId { get; init; }
     public string? ProgramGroup { get; init; }

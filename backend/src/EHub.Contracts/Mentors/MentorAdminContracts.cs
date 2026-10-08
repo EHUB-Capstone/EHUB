@@ -25,7 +25,8 @@ public sealed class MentorImportRowPreview
 public sealed class MentorImportPreviewResponse
 {
     public Guid SessionId { get; init; }
-    public Guid SemesterId { get; init; }
+    // Null when the workbook is imported into the master mentor list instead of a semester.
+    public Guid? SemesterId { get; init; }
     public int TotalRows { get; init; }
     public int CreateCount { get; init; }
     public int UpdateCount { get; init; }
@@ -49,6 +50,17 @@ public sealed class MentorImportCommitResponse
     public int SemesterAssignmentCount { get; init; }
     public int DraftSavedCount { get; init; }
     public int DraftCompletedCount { get; init; }
+}
+
+// A mentor kept in the master list without a login account yet (for example the workbook had no email).
+public sealed class IncompleteMentorResponse
+{
+    public Guid Id { get; init; }
+    public string FullName { get; init; } = string.Empty;
+    public string MentorType { get; init; } = string.Empty;
+    public string? Email { get; init; }
+    public IReadOnlyCollection<string> MissingFields { get; init; } = Array.Empty<string>();
+    public DateTime UpdatedAtUtc { get; init; }
 }
 
 public static class MentorAllocationStrategies

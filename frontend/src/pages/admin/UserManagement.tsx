@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Search, Filter, Plus, Edit, Trash2, Users, ArrowLeft, ArrowRight, Check, X, Mail, GraduationCap, Upload, Loader2 } from 'lucide-react';
+import { Search, Filter, Plus, Edit, Trash2, Users, ArrowLeft, ArrowRight, Check, X, Mail, GraduationCap, Upload, Loader2, ChevronDown, AlertTriangle } from 'lucide-react';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
 import Modal from '../../components/ui/Modal';
@@ -11,9 +11,16 @@ import { userApi } from '../../api/userApi';
 import { parseApiError } from '../../utils/apiError';
 import { PROGRAM_GROUPS } from '../../constants/majors';
 import ImportLecturersModal from '../../components/admin/ImportLecturersModal';
+import ImportMentorsModal from '../../components/admin/ImportMentorsModal';
+import IncompleteMentorsModal from '../../components/admin/IncompleteMentorsModal';
+import { mentorAdminApi } from '../../api/mentorAdminApi';
 
 const roleBadge = { ADMIN: 'Approved', LECTURER: 'Submitted', MENTOR: 'Review', STUDENT: 'Reviewed' };
 const roleLabel = { ADMIN: 'Admin', LECTURER: 'Lecturer', MENTOR: 'Mentor', STUDENT: 'Student' };
+
+// Mentors are either industry mentors (Enterprise) or lecturer mentors (Academic).
+const mentorKindLabel = { Enterprise: 'Industry mentor', Academic: 'Lecturer mentor' } as const;
+const mentorKindBadge = { Enterprise: 'Reviewed', Academic: 'Improving' } as const;
 
 const statusBadge = { PENDING: 'Review', APPROVED: 'Approved', REJECTED: 'Overdue' };
 const statusLabel = { PENDING: 'Pending Approval', APPROVED: 'Approved', REJECTED: 'Rejected' };
@@ -30,6 +37,7 @@ export default function UserManagement() {
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
+  const [mentorTypeFilter, setMentorTypeFilter] = useState('ALL');
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
@@ -37,6 +45,9 @@ export default function UserManagement() {
   // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [isMentorImportOpen, setIsMentorImportOpen] = useState(false);
+  const [isIncompleteOpen, setIsIncompleteOpen] = useState(false);
+  const [incompleteCount, setIncompleteCount] = useState(0);
   const [deleteTarget, setDeleteTarget] = useState<any | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -54,6 +65,20 @@ export default function UserManagement() {
     programGroup: 'BIT',
     major: 'BIT_SE',
   });
+
+  // The badge is a convenience: if loading it fails the page still works without it.
+  const loadIncompleteCount = useCallback(async () => {
+    try {
+      const response = await mentorAdminApi.getIncompleteMasterMentors();
+      setIncompleteCount(response.data.length);
+    } catch {
+      setIncompleteCount(0);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadIncompleteCount();
+  }, [loadIncompleteCount]);
 
   // Debounce search
   useEffect(() => {
@@ -78,10 +103,12 @@ export default function UserManagement() {
         search?: string;
         role?: string;
         status?: string;
+        mentorType?: string;
       } = { page, limit: 10 };
       if (debouncedSearch) params.search = debouncedSearch;
       if (roleFilter !== 'ALL') params.role = roleFilter;
       if (statusFilter !== 'ALL') params.status = statusFilter;
+      if (roleFilter === 'MENTOR' && mentorTypeFilter !== 'ALL') params.mentorType = mentorTypeFilter;
 
       const res = await userApi.getAll(params);
       if (requestId !== latestRequestId.current) return;
@@ -107,7 +134,7 @@ export default function UserManagement() {
         setIsRefreshing(false);
       }
     }
-  }, [page, debouncedSearch, roleFilter, statusFilter]);
+  }, [page, debouncedSearch, roleFilter, statusFilter, mentorTypeFilter]);
 
   useEffect(() => {
     void fetchUsers();
@@ -242,13 +269,26 @@ export default function UserManagement() {
     <div className="space-y-6">
       {/* ── Header ── */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
-        <div>
+        <div className="min-w-0">
           <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">User Management</h1>
           <p className="text-slate-500 mt-1">{totalItems} user accounts registered on the platform</p>
+          {incompleteCount > 0 && (
+            <button
+              type="button"
+              onClick={() => setIsIncompleteOpen(true)}
+              className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800 transition-colors hover:bg-amber-100"
+            >
+              <AlertTriangle className="h-3.5 w-3.5" />
+              {incompleteCount} incomplete mentor{incompleteCount === 1 ? '' : 's'} · View
+            </button>
+          )}
         </div>
-        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
-          <Button variant="outline" icon={Upload} onClick={() => setIsImportModalOpen(true)}>Import Lecturers</Button>
-          <Button variant="primary" icon={Plus} onClick={openAddModal}>Create User</Button>
+        <div className="flex w-full shrink-0 items-center gap-2 sm:w-auto">
+          <ImportMenu
+            onImportLecturers={() => setIsImportModalOpen(true)}
+            onImportMentors={() => setIsMentorImportOpen(true)}
+          />
+          <Button variant="primary" icon={Plus} className="whitespace-nowrap" onClick={openAddModal}>Create User</Button>
         </div>
       </div>
 
@@ -268,7 +308,7 @@ export default function UserManagement() {
           <select
             className="w-full bg-white border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary appearance-none cursor-pointer"
             value={roleFilter}
-            onChange={(e) => { setRoleFilter(e.target.value); setPage(1); }}
+            onChange={(e) => { setRoleFilter(e.target.value); setMentorTypeFilter('ALL'); setPage(1); }}
           >
             <option value="ALL">All Roles</option>
             <option value="STUDENT">Students</option>
@@ -277,6 +317,21 @@ export default function UserManagement() {
             <option value="ADMIN">Admins</option>
           </select>
         </div>
+        {roleFilter === 'MENTOR' && (
+          <div className="relative w-full sm:w-52 shrink-0">
+            <Filter className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <select
+              aria-label="Mentor type"
+              className="w-full bg-white border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary appearance-none cursor-pointer"
+              value={mentorTypeFilter}
+              onChange={(e) => { setMentorTypeFilter(e.target.value); setPage(1); }}
+            >
+              <option value="ALL">All mentors</option>
+              <option value="Enterprise">Industry mentors</option>
+              <option value="Academic">Lecturer mentors</option>
+            </select>
+          </div>
+        )}
         <div className="relative w-full sm:w-44 shrink-0">
           <Filter className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <select
@@ -349,9 +404,16 @@ export default function UserManagement() {
                       </div>
                     </td>
                     <td className="py-3.5 px-6">
-                      <Badge variant={roleBadge[user.role] || 'Default'} size="sm">
-                        {roleLabel[user.role] || user.role}
-                      </Badge>
+                      <div className="flex flex-col items-start gap-1">
+                        <Badge variant={roleBadge[user.role] || 'Default'} size="sm" className="whitespace-nowrap">
+                          {roleLabel[user.role] || user.role}
+                        </Badge>
+                        {user.role === 'MENTOR' && mentorKindLabel[user.mentorType as keyof typeof mentorKindLabel] && (
+                          <Badge variant={mentorKindBadge[user.mentorType as keyof typeof mentorKindBadge]} size="xs" dot className="whitespace-nowrap">
+                            {mentorKindLabel[user.mentorType as keyof typeof mentorKindLabel]}
+                          </Badge>
+                        )}
+                      </div>
                     </td>
                     <td className="py-3.5 px-6">
                       <Badge variant={statusBadge[user.status || 'APPROVED'] || 'Default'} size="sm">
@@ -606,6 +668,15 @@ export default function UserManagement() {
         />
       )}
 
+      {isMentorImportOpen && (
+        <ImportMentorsModal
+          onClose={() => setIsMentorImportOpen(false)}
+          onImported={() => { void fetchUsers(); void loadIncompleteCount(); }}
+        />
+      )}
+
+      {isIncompleteOpen && <IncompleteMentorsModal onClose={() => { setIsIncompleteOpen(false); void loadIncompleteCount(); }} />}
+
       {/* ── Confirm Delete Dialog ── */}
       <ConfirmDialog
         isOpen={!!deleteTarget}
@@ -615,6 +686,61 @@ export default function UserManagement() {
         description={`Are you sure you want to delete ${deleteTarget?.name}? This action cannot be undone.`}
         isSubmitting={isDeleting}
       />
+    </div>
+  );
+}
+
+/** One "Import" button that opens a small menu, so the header stays compact as import types grow. */
+function ImportMenu({ onImportLecturers, onImportMentors }: { onImportLecturers: () => void; onImportMentors: () => void }) {
+  const [open, setOpen] = useState(false);
+  const container = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const closeOnOutside = (event: MouseEvent) => {
+      if (!container.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('mousedown', closeOnOutside);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('mousedown', closeOnOutside);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [open]);
+
+  const choose = (action: () => void) => {
+    setOpen(false);
+    action();
+  };
+
+  return (
+    <div ref={container} className="relative">
+      <Button
+        variant="outline"
+        icon={Upload}
+        iconRight={ChevronDown}
+        className="whitespace-nowrap"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpen(current => !current)}
+      >
+        Import
+      </Button>
+      {open && (
+        <div role="menu" className="absolute left-0 z-20 mt-1.5 w-56 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-lg sm:left-auto sm:right-0">
+          <button type="button" role="menuitem" onClick={() => choose(onImportLecturers)} className="flex w-full flex-col px-4 py-2.5 text-left hover:bg-slate-50">
+            <span className="text-sm font-semibold text-slate-800">Import Lecturers</span>
+            <span className="text-xs text-slate-500">Create lecturer accounts from Excel</span>
+          </button>
+          <button type="button" role="menuitem" onClick={() => choose(onImportMentors)} className="flex w-full flex-col px-4 py-2.5 text-left hover:bg-slate-50">
+            <span className="text-sm font-semibold text-slate-800">Import Mentors</span>
+            <span className="text-xs text-slate-500">Industry and lecturer mentors</span>
+          </button>
+        </div>
+      )}
     </div>
   );
 }

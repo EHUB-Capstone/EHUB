@@ -35,10 +35,30 @@ public sealed class MentorAdminHandler(
         return Task.FromResult(Result.Success((MentorImportTemplateBuilder.Build(), contentType, "Danh_sach_Mentor_FA26_mau.xlsx")));
     }
 
-    public async Task<Result<MentorImportPreviewResponse>> PreviewImportAsync(Guid semesterId, IFormFile file, CancellationToken cancellationToken = default)
+    public async Task<Result<IReadOnlyCollection<IncompleteMentorResponse>>> GetIncompleteMasterMentorsAsync(CancellationToken cancellationToken = default)
+    {
+        if (!TryGetAdminId(out _)) return Failure<IReadOnlyCollection<IncompleteMentorResponse>>(ErrorCodes.CommonUnauthorizedError, "An authenticated administrator is required.");
+        var drafts = await context.MentorImportDrafts.AsNoTracking()
+            .Where(item => item.SemesterId == null && item.Status == MentorImportDraftStatus.NeedsCompletion)
+            .OrderBy(item => item.FullName).ToListAsync(cancellationToken);
+        IReadOnlyCollection<IncompleteMentorResponse> response = drafts.Select(item => new IncompleteMentorResponse
+        {
+            Id = item.Id,
+            FullName = item.FullName,
+            MentorType = item.Type.ToString(),
+            Email = item.Email,
+            MissingFields = MentorDraftFields.GetMissing(item),
+            UpdatedAtUtc = item.UpdatedAt ?? item.CreatedAt
+        }).ToArray();
+        return Result.Success(response);
+    }
+
+    // A null semesterId previews an import into the master mentor list (accounts and profiles only, no semester).
+    public async Task<Result<MentorImportPreviewResponse>> PreviewImportAsync(Guid? semesterId, IFormFile file, CancellationToken cancellationToken = default)
     {
         if (!TryGetAdminId(out var adminId)) return Failure<MentorImportPreviewResponse>(ErrorCodes.CommonUnauthorizedError, "An authenticated administrator is required.");
-        if (semesterId == Guid.Empty || !await context.Semesters.AsNoTracking().AnyAsync(item => item.Id == semesterId, cancellationToken))
+        if (semesterId is { } requestedSemesterId &&
+            (requestedSemesterId == Guid.Empty || !await context.Semesters.AsNoTracking().AnyAsync(item => item.Id == requestedSemesterId, cancellationToken)))
             return Failure<MentorImportPreviewResponse>(ErrorCodes.SemesterNotFound, "The selected semester was not found.");
         if (file is null || file.Length == 0 || file.Length > MaximumFileSize)
             return Failure<MentorImportPreviewResponse>(ErrorCodes.MentorImportFileInvalid, "Select a non-empty .xlsx file not exceeding 5 MB.");
@@ -120,9 +140,11 @@ public sealed class MentorAdminHandler(
                     .ToListAsync(token);
                 var pendingByEmail = pendingRegistrations
                     .ToDictionary(item => item.NormalizedEmail, StringComparer.OrdinalIgnoreCase);
-                var semesterStaff = await context.SemesterStaffAssignments
-                    .Where(item => item.SemesterId == session.SemesterId && item.Role == SemesterStaffRole.Mentor &&
-                                   users.Select(user => user.Id).Contains(item.UserId)).ToListAsync(token);
+                var semesterStaff = session.SemesterId is { } staffSemesterId
+                    ? await context.SemesterStaffAssignments
+                        .Where(item => item.SemesterId == staffSemesterId && item.Role == SemesterStaffRole.Mentor &&
+                                       users.Select(user => user.Id).Contains(item.UserId)).ToListAsync(token)
+                    : [];
                 var created = 0;
                 var updated = 0;
                 var assigned = 0;
@@ -137,7 +159,7 @@ public sealed class MentorAdminHandler(
                         if (row.DraftId is { } existingDraftId)
                         {
                             draft = await context.MentorImportDrafts.FirstOrDefaultAsync(item => item.Id == existingDraftId &&
-                                item.SemesterId == session.SemesterId && item.Status == MentorImportDraftStatus.NeedsCompletion, token)
+                                (item.SemesterId == session.SemesterId || item.SemesterId == null) && item.Status == MentorImportDraftStatus.NeedsCompletion, token)
                                 ?? throw new MentorAdminConflictException("An incomplete mentor changed after preview.");
                         }
                         else
@@ -161,7 +183,7 @@ public sealed class MentorAdminHandler(
                     if (row.DraftId is { } draftId)
                     {
                         completingDraft = await context.MentorImportDrafts.FirstOrDefaultAsync(item => item.Id == draftId &&
-                            item.SemesterId == session.SemesterId && item.Status == MentorImportDraftStatus.NeedsCompletion, token)
+                            (item.SemesterId == session.SemesterId || item.SemesterId == null) && item.Status == MentorImportDraftStatus.NeedsCompletion, token)
                             ?? throw new MentorAdminConflictException("An incomplete mentor changed after preview.");
                         ApplyDraft(completingDraft, row, adminId);
                         ApplyDraftFallback(row, completingDraft);
@@ -208,27 +230,30 @@ public sealed class MentorAdminHandler(
                         draftsCompleted++;
                     }
 
-                    var staff = semesterStaff.FirstOrDefault(item => item.UserId == user.Id);
-                    if (staff is null)
+                    if (session.SemesterId is { } targetSemesterId)
                     {
-                        staff = new SemesterStaffAssignment
+                        var staff = semesterStaff.FirstOrDefault(item => item.UserId == user.Id);
+                        if (staff is null)
                         {
-                            SemesterId = session.SemesterId,
-                            UserId = user.Id,
-                            User = user,
-                            Role = SemesterStaffRole.Mentor,
-                            Status = SemesterStaffStatus.Active,
-                            CreatedBy = adminId
-                        };
-                        context.SemesterStaffAssignments.Add(staff);
-                        semesterStaff.Add(staff);
-                        assigned++;
-                    }
-                    else if (staff.Status != SemesterStaffStatus.Active)
-                    {
-                        staff.Status = SemesterStaffStatus.Active;
-                        staff.UpdatedBy = adminId;
-                        assigned++;
+                            staff = new SemesterStaffAssignment
+                            {
+                                SemesterId = targetSemesterId,
+                                UserId = user.Id,
+                                User = user,
+                                Role = SemesterStaffRole.Mentor,
+                                Status = SemesterStaffStatus.Active,
+                                CreatedBy = adminId
+                            };
+                            context.SemesterStaffAssignments.Add(staff);
+                            semesterStaff.Add(staff);
+                            assigned++;
+                        }
+                        else if (staff.Status != SemesterStaffStatus.Active)
+                        {
+                            staff.Status = SemesterStaffStatus.Active;
+                            staff.UpdatedBy = adminId;
+                            assigned++;
+                        }
                     }
 
                     CancelPendingRegistration(row.Email, user.Id, pendingByEmail, now, adminId);
@@ -630,23 +655,32 @@ public sealed class MentorAdminHandler(
         }
     }
 
-    private async Task ValidateImportRowsAsync(Guid semesterId, IReadOnlyCollection<MentorImportCandidate> rows, CancellationToken cancellationToken)
+    private async Task ValidateImportRowsAsync(Guid? semesterId, IReadOnlyCollection<MentorImportCandidate> rows, CancellationToken cancellationToken)
     {
+        var isMasterList = semesterId is null;
         foreach (var row in rows.Where(item => item.IsValid)) row.ResetPlannedAction();
         var emails = rows.Where(item => item.IsValid && !string.IsNullOrWhiteSpace(item.Email)).Select(item => item.Email).Distinct().ToArray();
         var users = await context.Users.IgnoreQueryFilters().AsNoTracking().Include(item => item.UserRoles).ThenInclude(item => item.Role)
             .Include(item => item.MentorProfile).Where(item => emails.Contains(item.NormalizedEmail)).ToListAsync(cancellationToken);
-        var staffIds = await context.SemesterStaffAssignments.AsNoTracking()
-            .Where(item => item.SemesterId == semesterId && item.Role == SemesterStaffRole.Mentor && item.Status == SemesterStaffStatus.Active)
-            .Select(item => item.UserId).ToListAsync(cancellationToken);
+        var staffIds = isMasterList
+            ? []
+            : await context.SemesterStaffAssignments.AsNoTracking()
+                .Where(item => item.SemesterId == semesterId && item.Role == SemesterStaffRole.Mentor && item.Status == SemesterStaffStatus.Active)
+                .Select(item => item.UserId).ToListAsync(cancellationToken);
         var byEmail = users.ToDictionary(item => item.NormalizedEmail, StringComparer.OrdinalIgnoreCase);
         var normalizedNames = rows.Where(item => item.IsValid).Select(item => item.NormalizedFullName).Distinct().ToArray();
+        // A master-list import only sees master drafts. A semester import prefers that semester's own draft and
+        // falls back to a master draft of the same name, so an incomplete master mentor can be completed from either place.
         var drafts = await context.MentorImportDrafts.AsNoTracking()
-            .Where(item => item.SemesterId == semesterId && item.Status == MentorImportDraftStatus.NeedsCompletion &&
+            .Where(item => (item.SemesterId == semesterId || item.SemesterId == null) && item.Status == MentorImportDraftStatus.NeedsCompletion &&
                 normalizedNames.Contains(item.NormalizedFullName))
             .ToListAsync(cancellationToken);
         var draftsByKey = drafts.GroupBy(item => DraftMatchKey(item.Type, item.NormalizedFullName))
-            .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
+            .ToDictionary(group => group.Key, group =>
+            {
+                var own = group.Where(item => item.SemesterId == semesterId).ToArray();
+                return own.Length > 0 ? own : group.ToArray();
+            }, StringComparer.Ordinal);
         var incomingCounts = rows.Where(item => item.IsValid)
             .GroupBy(item => DraftMatchKey(item.MentorType, item.NormalizedFullName))
             .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal);
@@ -657,7 +691,7 @@ public sealed class MentorAdminHandler(
             var matchingDrafts = draftsByKey.GetValueOrDefault(key) ?? [];
             if (matchingDrafts.Length > 1)
             {
-                row.MarkInvalid("More than one incomplete Mentor has this name and type in the selected semester. Resolve the duplicate before importing.");
+                row.MarkInvalid("More than one incomplete Mentor has this name and type. Resolve the duplicate before importing.");
                 continue;
             }
             if (matchingDrafts.Length == 1 && incomingCounts[key] > 1)
@@ -679,14 +713,17 @@ public sealed class MentorAdminHandler(
                 row.Message = row.DraftId is null
                     ? "The available data will be saved. Add a login email in a later import to activate this Mentor."
                     : "The existing incomplete Mentor will be updated with the available data.";
+                if (isMasterList) row.Message += " This Mentor is kept in the master list and is not in any semester yet.";
                 continue;
             }
 
             if (!byEmail.TryGetValue(row.Email, out var user))
             {
                 row.WillCreateAccount = true;
-                row.WillAddToSemester = true;
-                SetAccountAction(row, "Create", "A new Mentor account will be created and added to this semester.");
+                row.WillAddToSemester = !isMasterList;
+                SetAccountAction(row, "Create", isMasterList
+                    ? "A new Mentor account will be created."
+                    : "A new Mentor account will be created and added to this semester.");
                 continue;
             }
             var isMentor = user.UserRoles.Any(item => item.Role.Name == SystemRoles.Mentor);
@@ -696,10 +733,12 @@ public sealed class MentorAdminHandler(
             else if (row.MentorType == MentorType.Academic && isLecturer) row.MarkInvalid("Academic mentors must use a Mentor-only account, not a Lecturer account.");
             else if (user.MentorProfile.Type != row.MentorType) row.MarkInvalid($"The existing Mentor is {user.MentorProfile.Type}, but this row is {row.MentorType}.");
             else if (user.Status is UserStatus.Blocked or UserStatus.Rejected or UserStatus.Inactive) row.MarkInvalid($"The existing Mentor account is {user.Status} and cannot be imported.");
-            else if (staffIds.Contains(user.Id))
+            else if (isMasterList || staffIds.Contains(user.Id))
             {
                 row.WillUpdateAccount = true;
-                SetAccountAction(row, "Update", "The existing Mentor profile will be updated for this semester.");
+                SetAccountAction(row, "Update", isMasterList
+                    ? "The existing Mentor profile will be updated."
+                    : "The existing Mentor profile will be updated for this semester.");
             }
             else
             {

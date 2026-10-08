@@ -29,6 +29,17 @@ public sealed class MentorAdminController(IMentorAdminHandler handler, IMentorAs
     public async Task<IActionResult> PreviewImport([FromForm] Guid semesterId, [FromForm] IFormFile file, CancellationToken cancellationToken) =>
         ToResponse(await handler.PreviewImportAsync(semesterId, file, cancellationToken), "Mentor import preview generated successfully.");
 
+    // Imports mentors into the master list: accounts and profiles only, no semester. Confirm with imports/commit.
+    [HttpPost("master-imports/preview")]
+    [Consumes("multipart/form-data")]
+    public async Task<IActionResult> PreviewMasterImport([FromForm] IFormFile file, CancellationToken cancellationToken) =>
+        ToResponse(await handler.PreviewImportAsync(null, file, cancellationToken), "Mentor master list import preview generated successfully.");
+
+    // Mentors kept in the master list without a login account yet.
+    [HttpGet("incomplete")]
+    public async Task<IActionResult> GetIncompleteMasterMentors(CancellationToken cancellationToken) =>
+        ToResponse(await handler.GetIncompleteMasterMentorsAsync(cancellationToken), "Incomplete mentors retrieved successfully.");
+
     [HttpPost("imports/commit")]
     public async Task<IActionResult> CommitImport([FromBody] CommitMentorImportRequest request, CancellationToken cancellationToken) =>
         ToResponse(await handler.CommitImportAsync(request, cancellationToken), "Mentors imported successfully.");

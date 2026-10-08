@@ -214,13 +214,50 @@ public sealed class UserManagementIntegrationTests : IAsyncLifetime
         await _context.SaveChangesAsync();
         _context.ChangeTracker.Clear();
 
-        var result = await handler.GetUsersAsync(1, 10, email, "STUDENT", "APPROVED");
+        var result = await handler.GetUsersAsync(1, 10, email, "STUDENT", "APPROVED", null);
 
         result.IsSuccess.Should().BeTrue();
         var user = result.Value.Users.Should().ContainSingle().Subject;
         user.Semester.Should().Be(semester.Code);
         user.Class.Should().Be(currentClass.ClassCode);
         user.GroupName.Should().Be(team.TeamName);
+        user.MentorType.Should().BeNull("only mentors have a mentor type");
+    }
+
+    [Fact]
+    public async Task GetUsersAsync_ReturnsMentorType_AndFiltersByIt()
+    {
+        var handler = new UserManagementHandler(_context, new TestCurrentUser(_adminId), new BCryptPasswordHasher());
+        var unique = Guid.NewGuid().ToString("N")[..8];
+        async Task<Guid> CreateMentorAsync(string name, MentorType type)
+        {
+            var created = await handler.CreateUserAsync(new SaveManagedUserRequest
+            {
+                Name = name, Email = $"{name.ToLowerInvariant().Replace(' ', '-')}-{unique}@example.com",
+                Password = "Temporary123", Role = "MENTOR", Status = "APPROVED"
+            });
+            created.IsSuccess.Should().BeTrue();
+            _context.ChangeTracker.Clear();
+            var profile = await _context.MentorProfiles.SingleAsync(item => item.UserId == created.Value.Id);
+            profile.Type = type;
+            await _context.SaveChangesAsync();
+            _context.ChangeTracker.Clear();
+            return created.Value.Id;
+        }
+        var industry = await CreateMentorAsync("Filter Industry", MentorType.Enterprise);
+        var lecturer = await CreateMentorAsync("Filter Lecturer", MentorType.Academic);
+
+        var all = await handler.GetUsersAsync(1, 100, unique, "MENTOR", null, null);
+        var industryOnly = await handler.GetUsersAsync(1, 100, unique, "MENTOR", null, "Enterprise");
+        var lecturerOnly = await handler.GetUsersAsync(1, 100, unique, "MENTOR", null, "academic");
+        var invalid = await handler.GetUsersAsync(1, 100, unique, "MENTOR", null, "Unknown");
+
+        all.Value.Users.Should().HaveCount(2);
+        all.Value.Users.Single(item => item.Id == industry).MentorType.Should().Be("Enterprise");
+        all.Value.Users.Single(item => item.Id == lecturer).MentorType.Should().Be("Academic");
+        industryOnly.Value.Users.Should().ContainSingle().Which.Id.Should().Be(industry);
+        lecturerOnly.Value.Users.Should().ContainSingle().Which.Id.Should().Be(lecturer);
+        invalid.IsFailure.Should().BeTrue();
     }
 
     private sealed class TestCurrentUser(Guid userId) : ICurrentUserService

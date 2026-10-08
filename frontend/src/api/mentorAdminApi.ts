@@ -1,5 +1,6 @@
 import axiosClient from './axiosClient';
 import type {
+  IncompleteMentor,
   MentorAllocationCommitResult,
   MentorAllocationEdit,
   MentorAllocationPreview,
@@ -26,6 +27,19 @@ export const mentorAdminApi = {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
   },
+
+  /** Previews an import into the master mentor list: accounts and profiles only, no semester. Confirm with commitImport. */
+  previewMasterImport: (file: File): Promise<ApiEnvelope<MentorImportPreview>> => {
+    const form = new FormData();
+    form.append('file', file);
+    return axiosClient.post('/admin/mentors/master-imports/preview', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+
+  /** Mentors kept in the master list without a login account yet. */
+  getIncompleteMasterMentors: (): Promise<ApiEnvelope<IncompleteMentor[]>> =>
+    axiosClient.get('/admin/mentors/incomplete'),
 
   commitImport: (sessionId: string): Promise<ApiEnvelope<MentorImportCommitResult>> =>
     axiosClient.post('/admin/mentors/imports/commit', { sessionId }),

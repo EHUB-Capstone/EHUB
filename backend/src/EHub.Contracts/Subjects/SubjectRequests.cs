@@ -82,19 +82,6 @@ public sealed class UpdateSemesterTeachingStaffRequest
     public string RowVersion { get; init; } = string.Empty;
 }
 
-public sealed class PreviewMentorCarryoverRequest
-{
-    public Guid SourceSemesterId { get; init; }
-    public Guid TargetSemesterId { get; init; }
-}
-
-public sealed class CommitMentorCarryoverRequest
-{
-    public Guid SourceSemesterId { get; init; }
-    public Guid TargetSemesterId { get; init; }
-    public IReadOnlyCollection<Guid> MentorUserIds { get; init; } = Array.Empty<Guid>();
-}
-
 public sealed class SaveRoadmapItemRequest
 {
     public string Title { get; init; } = string.Empty;

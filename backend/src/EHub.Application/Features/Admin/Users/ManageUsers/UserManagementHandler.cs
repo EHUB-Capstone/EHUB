@@ -18,7 +18,7 @@ public sealed class UserManagementHandler(IApplicationDbContext context, ICurren
         ["BEN"] = [MajorCodes.BEN],
         ["BIT"] = [MajorCodes.BIT_AI, MajorCodes.BIT_GD, MajorCodes.BIT_IA, MajorCodes.BIT_SE]
     };
-    public async Task<Result<ManagedUserListResponse>> GetUsersAsync(int page, int limit, string? search, string? role, string? status, CancellationToken token = default)
+    public async Task<Result<ManagedUserListResponse>> GetUsersAsync(int page, int limit, string? search, string? role, string? status, string? mentorType, CancellationToken token = default)
     {
         if (!CanReadDirectory) return Fail<ManagedUserListResponse>(ErrorCodes.CommonForbiddenError, "Staff access is required.");
         if (page < 1 || limit is < 1 or > 100) return Fail<ManagedUserListResponse>("VALIDATION_ERROR", "Page and limit are invalid.");
@@ -26,6 +26,12 @@ public sealed class UserManagementHandler(IApplicationDbContext context, ICurren
         if (!string.IsNullOrWhiteSpace(search)) { var term = search.Trim().ToLower(); query = query.Where(user => user.FullName.ToLower().Contains(term) || user.Email.ToLower().Contains(term) || (user.Student != null && user.Student.RollNumber != null && user.Student.RollNumber.ToLower().Contains(term))); }
         var roleName = string.Empty; if (!string.IsNullOrWhiteSpace(role) && !TryRole(role, out roleName)) return Fail<ManagedUserListResponse>("VALIDATION_ERROR", "Role is invalid."); if (!string.IsNullOrWhiteSpace(role)) query = query.Where(user => user.UserRoles.Any(item => item.Role.Name == roleName));
         var userStatus = UserStatus.Active; if (!string.IsNullOrWhiteSpace(status) && !TryStatus(status, out userStatus)) return Fail<ManagedUserListResponse>("VALIDATION_ERROR", "Status is invalid."); if (!string.IsNullOrWhiteSpace(status)) query = query.Where(user => user.Status == userStatus);
+        if (!string.IsNullOrWhiteSpace(mentorType))
+        {
+            if (!Enum.TryParse<MentorType>(mentorType.Trim(), ignoreCase: true, out var type) || !Enum.IsDefined(type))
+                return Fail<ManagedUserListResponse>("VALIDATION_ERROR", "Mentor type is invalid.");
+            query = query.Where(user => user.MentorProfile != null && user.MentorProfile.Type == type);
+        }
         var total = await query.CountAsync(token);
         var pages = Math.Max(1, (int)Math.Ceiling(total / (double)limit));
         var users = await query
@@ -59,7 +65,7 @@ public sealed class UserManagementHandler(IApplicationDbContext context, ICurren
     private IQueryable<User> ReadUsersQuery()
     {
         var query = context.Users.AsNoTracking().Include(user => user.UserRoles).ThenInclude(item => item.Role)
-            .Include(user => user.Student).AsQueryable();
+            .Include(user => user.Student).Include(user => user.MentorProfile).AsQueryable();
         if (IsAdminReader) return query;
         var lecturerId = currentUser.UserId;
         // Staff directory entries stay available; student profiles require an
@@ -281,6 +287,7 @@ public sealed class UserManagementHandler(IApplicationDbContext context, ICurren
             Email = user.Email,
             Avatar = user.AvatarUrl,
             Role = user.UserRoles.FirstOrDefault()?.Role.Name.ToUpperInvariant() ?? "STUDENT",
+            MentorType = user.MentorProfile?.Type.ToString(),
             Status = ToStatus(user.Status),
             StudentId = user.Student?.RollNumber ?? request?.StudentId,
             ProgramGroup = request?.ProgramGroup,

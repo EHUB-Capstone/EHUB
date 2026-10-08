@@ -15,7 +15,8 @@ export interface MentorImportRowPreview {
 
 export interface MentorImportPreview {
   sessionId: string;
-  semesterId: string;
+  /** Null when the workbook is imported into the master mentor list instead of a semester. */
+  semesterId: string | null;
   totalRows: number;
   createCount: number;
   updateCount: number;
@@ -25,6 +26,16 @@ export interface MentorImportPreview {
   errorCount: number;
   canCommit: boolean;
   rows: MentorImportRowPreview[];
+}
+
+/** A mentor kept in the master list without a login account yet. */
+export interface IncompleteMentor {
+  id: string;
+  fullName: string;
+  mentorType: MentorType;
+  email?: string | null;
+  missingFields: string[];
+  updatedAtUtc: string;
 }
 
 export interface MentorImportCommitResult {

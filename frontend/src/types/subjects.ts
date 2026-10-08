@@ -187,37 +187,6 @@ export interface AddTeachingStaffBatchResponse {
   rejectedCount: number;
 }
 
-export type MentorCarryoverAction = 'Add' | 'Reactivate' | 'AlreadyAdded' | 'Unavailable';
-
-export interface MentorCarryoverCandidate {
-  userId: string;
-  name: string;
-  email: string;
-  avatar?: string | null;
-  mentorType: 'Enterprise' | 'Academic' | '';
-  action: MentorCarryoverAction;
-  canSelect: boolean;
-  message: string;
-}
-
-export interface MentorCarryoverPreview {
-  sourceSemesterId: string;
-  targetSemesterId: string;
-  totalCount: number;
-  eligibleCount: number;
-  alreadyAddedCount: number;
-  unavailableCount: number;
-  enterpriseCount: number;
-  academicCount: number;
-  mentors: MentorCarryoverCandidate[];
-}
-
-export interface MentorCarryoverCommitResult {
-  addedCount: number;
-  reactivatedCount: number;
-  alreadyAddedCount: number;
-}
-
 export interface TeachingStaffSummary {
   lecturers: number;
   mentors: number;

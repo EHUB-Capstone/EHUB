@@ -53,11 +53,6 @@ function semesterOverlapMessage(semester: MockSemester): string {
   return `This date range overlaps with ${semester.semester} ${semester.year} (${formatSemesterDate(semester.startDate!)} – ${formatSemesterDate(semester.endDate!)}).`;
 }
 
-function semesterOrder(semester: MockSemester): number {
-  const termOrder = { SP: 0, SU: 1, FA: 2 } as const;
-  return semester.year * 3 + termOrder[semester.semester];
-}
-
 const backendRole = (role: MockUser['role']): string =>
   role.charAt(0) + role.slice(1).toLowerCase();
 
@@ -596,6 +591,7 @@ function registerUserHandlers(mock: MockAdapter): void {
     const query = asString(params.search).trim().toLowerCase();
     const role = asString(params.role).toUpperCase();
     const status = asString(params.status).toUpperCase();
+    const mentorType = asString(params.mentorType);
     const page = Math.max(1, asNumber(params.page, 1));
     const limit = Math.min(200, Math.max(1, asNumber(params.limit, 10)));
     let users = state.users.filter((user) =>
@@ -605,6 +601,7 @@ function registerUserHandlers(mock: MockAdapter): void {
       &&
       (!role || role === 'ALL' || user.role === role)
       && (!status || status === 'ALL' || user.status === status)
+      && (!mentorType || mentorType === 'ALL' || user.mentorType === mentorType)
       && (!query || [user.name, user.email, user.studentId].some((value) => value?.toLowerCase().includes(query))));
     const total = users.length;
     users = users.slice((page - 1) * limit, page * limit);
@@ -1060,117 +1057,6 @@ function registerSubjectHandlers(mock: MockAdapter): void {
     semester.rowVersion = allocateRowVersion();
     persistMockState();
     return ok(semester, `Semester ${reopen ? 'reopened' : 'completed'} successfully.`);
-  });
-
-  mock.onPost('/subjects/teaching-staff/mentor-carryover/preview').reply((config) => {
-    const state = getMockState();
-    const viewer = state.users.find(item => item.id === state.sessionUserId);
-    if (viewer?.role !== 'ADMIN') return failure(403, 'CLASS_ACCESS_DENIED', 'Only an administrator can reuse mentors across semesters.');
-    const body = parseBody(config);
-    const sourceSemesterId = asString(body.sourceSemesterId);
-    const targetSemesterId = asString(body.targetSemesterId);
-    if (!sourceSemesterId || !targetSemesterId || sourceSemesterId === targetSemesterId)
-      return failure(400, 'CLASS_VALIDATION_ERROR', 'Different source and target semesters are required.');
-    const source = state.semesters.find(item => item.id === sourceSemesterId);
-    const target = state.semesters.find(item => item.id === targetSemesterId);
-    if (!source || !target) return failure(404, 'SEMESTER_NOT_FOUND', 'The source or target semester was not found.');
-    if (semesterOrder(source) >= semesterOrder(target))
-      return failure(400, 'CLASS_VALIDATION_ERROR', 'The source semester must be earlier than the target semester.');
-    if (target.status === 'Closing' || target.status === 'Completed' || target.status === 'Archived')
-      return failure(409, 'SEMESTER_INVALID_STATE', `Teaching staff of a ${target.status.toLowerCase()} semester cannot be changed.`);
-
-    const targetAssignments = new Map(state.semesterStaffAssignments
-      .filter(item => item.semesterId === targetSemesterId && item.role === 'MENTOR')
-      .map(item => [item.userId, item]));
-    const mentors = state.semesterStaffAssignments
-      .filter(item => item.semesterId === sourceSemesterId && item.role === 'MENTOR')
-      .map(assignment => {
-        const user = state.users.find(item => item.id === assignment.userId);
-        const targetAssignment = targetAssignments.get(assignment.userId);
-        const accountActive = user?.status === 'APPROVED' && user.role === 'MENTOR';
-        const canSelect = assignment.status === 'ACTIVE' && accountActive && targetAssignment?.status !== 'ACTIVE';
-        const action = assignment.status !== 'ACTIVE' || !accountActive
-          ? 'Unavailable'
-          : targetAssignment?.status === 'ACTIVE'
-            ? 'AlreadyAdded'
-            : targetAssignment
-              ? 'Reactivate'
-              : 'Add';
-        return {
-          userId: assignment.userId,
-          name: user?.name ?? 'Unknown mentor',
-          email: user?.email ?? '',
-          avatar: user?.avatar ?? null,
-          mentorType: 'Enterprise',
-          action,
-          canSelect,
-          message: action === 'Unavailable'
-            ? 'Mentor account or source assignment is inactive.'
-            : action === 'AlreadyAdded'
-              ? 'Already available in the target semester.'
-              : action === 'Reactivate'
-                ? 'Will be reactivated in the target semester.'
-                : 'Ready to add to the target semester.',
-        };
-      })
-      .sort((left, right) => left.name.localeCompare(right.name));
-    return ok({
-      sourceSemesterId,
-      targetSemesterId,
-      totalCount: mentors.length,
-      eligibleCount: mentors.filter(item => item.canSelect).length,
-      alreadyAddedCount: mentors.filter(item => item.action === 'AlreadyAdded').length,
-      unavailableCount: mentors.filter(item => item.action === 'Unavailable').length,
-      enterpriseCount: mentors.length,
-      academicCount: 0,
-      mentors,
-    }, 'Mentors available for reuse retrieved successfully.');
-  });
-
-  mock.onPost('/subjects/teaching-staff/mentor-carryover/commit').reply((config) => {
-    const state = getMockState();
-    const viewer = state.users.find(item => item.id === state.sessionUserId);
-    if (viewer?.role !== 'ADMIN') return failure(403, 'CLASS_ACCESS_DENIED', 'Only an administrator can reuse mentors across semesters.');
-    const body = parseBody(config);
-    const sourceSemesterId = asString(body.sourceSemesterId);
-    const targetSemesterId = asString(body.targetSemesterId);
-    const mentorUserIds = asStringArray(body.mentorUserIds);
-    const uniqueIds = [...new Set(mentorUserIds)];
-    if (!sourceSemesterId || !targetSemesterId || sourceSemesterId === targetSemesterId || uniqueIds.length === 0 || uniqueIds.length !== mentorUserIds.length)
-      return failure(400, 'CLASS_VALIDATION_ERROR', 'Select distinct mentors and use different source and target semesters.');
-    const source = state.semesters.find(item => item.id === sourceSemesterId);
-    const target = state.semesters.find(item => item.id === targetSemesterId);
-    if (!source || !target)
-      return failure(404, 'SEMESTER_NOT_FOUND', 'The source or target semester was not found.');
-    if (semesterOrder(source) >= semesterOrder(target))
-      return failure(400, 'CLASS_VALIDATION_ERROR', 'The source semester must be earlier than the target semester.');
-    if (target.status === 'Closing' || target.status === 'Completed' || target.status === 'Archived')
-      return failure(409, 'SEMESTER_INVALID_STATE', `Teaching staff of a ${target.status.toLowerCase()} semester cannot be changed.`);
-
-    const sourceAssignments = state.semesterStaffAssignments.filter(item =>
-      item.semesterId === sourceSemesterId && item.role === 'MENTOR' && uniqueIds.includes(item.userId));
-    const allEligible = sourceAssignments.length === uniqueIds.length && sourceAssignments.every(assignment => {
-      const user = state.users.find(item => item.id === assignment.userId);
-      return assignment.status === 'ACTIVE' && user?.role === 'MENTOR' && user.status === 'APPROVED';
-    });
-    if (!allEligible) return failure(409, 'SEMESTER_STAFF_CONFLICT', 'One or more selected mentors are no longer eligible. Preview again.');
-
-    let addedCount = 0;
-    let reactivatedCount = 0;
-    let alreadyAddedCount = 0;
-    uniqueIds.forEach(userId => {
-      const existing = state.semesterStaffAssignments.find(item => item.semesterId === targetSemesterId && item.userId === userId && item.role === 'MENTOR');
-      if (existing?.status === 'ACTIVE') alreadyAddedCount++;
-      else if (existing) {
-        existing.status = 'ACTIVE';
-        reactivatedCount++;
-      } else {
-        state.semesterStaffAssignments.push({ id: allocateId(), semesterId: targetSemesterId, userId, role: 'MENTOR', status: 'ACTIVE' });
-        addedCount++;
-      }
-    });
-    persistMockState();
-    return ok({ addedCount, reactivatedCount, alreadyAddedCount }, 'Selected mentors added to the target semester successfully.');
   });
 
   // The mock staff list is derived from every lecturer and mentor user, so these only keep the contract in sync;

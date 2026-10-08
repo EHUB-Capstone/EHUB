@@ -17,12 +17,4 @@ public interface ISemesterTeachingStaffCommandHandler
         Guid assignmentId,
         UpdateSemesterTeachingStaffRequest request,
         CancellationToken cancellationToken = default);
-
-    Task<Result<MentorCarryoverPreviewResponse>> PreviewMentorCarryoverAsync(
-        PreviewMentorCarryoverRequest request,
-        CancellationToken cancellationToken = default);
-
-    Task<Result<MentorCarryoverCommitResponse>> CommitMentorCarryoverAsync(
-        CommitMentorCarryoverRequest request,
-        CancellationToken cancellationToken = default);
 }

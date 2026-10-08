@@ -10,7 +10,7 @@ Ký hiệu thư mục test: `AppTests` = `backend/tests/EHub.ApplicationTests/Fe
 
 | AC | Hiện thực | Test |
 |---|---|---|
-| 01.1 Chọn mentor active theo kỳ | Danh sách mentor tổng + `SemesterStaffAssignments` (có sẵn, không đổi) | `MentorImportIntegrationTests.AdminImport_ShouldCreateBothMentorTypes_AndAddThemToSelectedSemester`, `MentorCarryoverIntegrationTests` |
+| 01.1 Chọn mentor active theo kỳ | Danh sách mentor tổng + `SemesterStaffAssignments` (có sẵn, không đổi) | `MentorImportIntegrationTests.AdminImport_ShouldCreateBothMentorTypes_AndAddThemToSelectedSemester` |
 | 01.2 Nhóm EXE201 kết thúc được lưu trữ, không kế thừa | Hoàn thành lớp kết thúc phân công (có sẵn); `MentorRetentionPlanner` không bao giờ kế thừa nhóm EXE201 | `MentorAssignmentExportIntegrationTests.CompletingAnExe101Class_...`, `MentorRetentionPlannerTests.Plan_NeverCarriesAnExe201TeamForward` |
 | 01.3 Mentor không active thì không được dùng | Truy vấn ứng viên chỉ lấy mentor active trong kỳ; `MentorManualEditPlanner` từ chối | `MentorImportIntegrationTests.RandomAllocation_...` (mentor ngoài kỳ không bao giờ được chọn), `MentorManualEditPlannerTests.Plan_RejectsAMentorWhoIsNotActiveThisSemester` |
 

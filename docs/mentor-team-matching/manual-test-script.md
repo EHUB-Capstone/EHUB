@@ -226,6 +226,31 @@ Bảng này được thiết kế để mỗi quy tắc đều có dữ liệu c
 - [ ] Người nào bị bỏ qua (ví dụ vừa có người khác thêm trước, hoặc đã nằm trong kỳ ở trạng thái Inactive) được nêu tên kèm lý do; những người còn lại vẫn được thêm.
 - [ ] Add lecturer hoạt động tương tự, và danh sách chỉ có giảng viên.
 
+### Kiểm tra 1.4. Nhập danh sách mentor gốc ở User Management
+
+**Làm gì**
+1. Vào **User Management**, bấm **Import Mentors** (cạnh nút Import Lecturers).
+2. Bấm **Download template**, điền vài dòng ở hai sheet (mentor doanh nghiệp và mentor giảng viên), lưu lại, rồi kéo thả file vào hộp thoại.
+3. Xem bước **Review data**, bấm **Import N mentor(s)**.
+4. Chuẩn bị thêm một file có dòng chỉ ghi tên, không có email, và tải lên.
+5. Tải lại đúng file đã nhập ở bước 3, có sửa tên một mentor.
+
+**Phải thấy gì**
+- [ ] Bước 2: xuất hiện bảng xem trước, có các ô Total / Create / Update / Errors. Chưa có tài khoản nào được tạo.
+- [ ] Bước 3: thông báo hoàn tất, danh sách User Management tải lại và có các tài khoản Mentor mới. Hộp thoại nhắc tài khoản mới dùng Forgot Password để đặt mật khẩu lần đầu.
+- [ ] Các mentor mới **chưa** nằm trong kỳ nào: mở Add mentors của một kỳ thì họ ở mục có thể chọn, không ở mục "Already in …".
+- [ ] Bước 4: dòng chỉ có tên vẫn được chấp nhận. Ô email ghi "No email yet" (màu vàng, không phải lỗi), cột Result ghi "Incomplete", ô **Incomplete** đếm đúng số dòng, nút Import vẫn bấm được.
+- [ ] Sau khi nhập bước 4: không tạo tài khoản nào cho các dòng đó. Ở User Management xuất hiện nút **Incomplete Mentors (N)**; bấm vào thấy tên, loại mentor (Industry/Lecturer) và các trường còn thiếu.
+- [ ] Nhập lại một file có đúng tên đó kèm email: dòng hiện "Complete record", sau khi nhập thì tài khoản được tạo, mentor biến khỏi danh sách Incomplete Mentors.
+- [ ] Bước 5: các dòng cũ hiện là Update (không tạo trùng tài khoản), sau khi nhập thì tên mới được cập nhật.
+- [ ] File không phải .xlsx hoặc lớn hơn 5 MB bị từ chối ngay với thông báo rõ ràng. Chỉ thiếu **tên** mới là lỗi.
+
+- [ ] Đầu trang User Management chỉ còn nút **Import** (bấm ra menu Import Lecturers / Import Mentors) và **Create User**, không bị xuống dòng chữ. Nếu có mentor chưa đầy đủ, một nhãn vàng "N incomplete mentors · View" nằm dưới tiêu đề.
+- [ ] Ở cột Role, mentor có thêm nhãn **Industry mentor** hoặc **Lecturer mentor**.
+- [ ] Chọn lọc Role = Mentors thì xuất hiện ô lọc thứ hai: **All mentors / Industry mentors / Lecturer mentors**, danh sách lọc đúng; đổi sang role khác thì ô này ẩn và được đặt lại.
+
+**Lưu ý:** mentor chưa đầy đủ ở master list chưa có tài khoản nên chưa thể thêm vào kỳ hay phân công nhóm. Import file của một kỳ (Subject Management) có email cho đúng tên đó cũng hoàn tất bản ghi và thêm vào kỳ.
+
 **Kết luận REQ-01:** ☐ Đạt  ☐ Đạt có điều kiện  ☐ Chưa đạt   Ghi chú: ……………………
 
 ---
@@ -671,7 +696,7 @@ Các kiểm tra này không thuộc riêng yêu cầu nào nhưng cần đạt �
 
 **Phải thấy gì**
 - [ ] **Import mentor list** (xem trước rồi lưu) hoạt động như trước.
-- [ ] **Reuse mentors**, **Add mentor**, **Add lecturer** hoạt động như trước.
+- [ ] **Add mentor** và **Add lecturer** hoạt động như trước (nút Reuse mentors đã được gỡ).
 - [ ] Mentor nhập thiếu thông tin vẫn hiện "Needs information" và không được đưa vào chia.
 - [ ] Xuất danh sách của **một lớp** (ở trang chi tiết lớp) vẫn ra **một sheet** như trước, ô mentor còn thiếu để trống (không có chữ "Chưa phân công").
 

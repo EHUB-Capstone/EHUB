@@ -11,7 +11,7 @@ public sealed class MentorImportDraftConfiguration : IEntityTypeConfiguration<Me
         builder.ToTable("mentor_import_drafts");
         builder.HasKey(item => item.Id);
         builder.Property(item => item.Id).HasColumnName("id");
-        builder.Property(item => item.SemesterId).HasColumnName("semester_id").IsRequired();
+        builder.Property(item => item.SemesterId).HasColumnName("semester_id");
         builder.Property(item => item.Type).HasColumnName("mentor_type").HasConversion<string>().HasMaxLength(30).IsRequired();
         builder.Property(item => item.FullName).HasColumnName("full_name").HasMaxLength(100).IsRequired();
         builder.Property(item => item.NormalizedFullName).HasColumnName("normalized_full_name").HasMaxLength(100).IsRequired();
