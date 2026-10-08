@@ -225,6 +225,23 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
                 if (lecturerUserId.HasValue) realtimeNotificationRecipients = [lecturerUserId.Value];
                 realtimeNotificationTeamId = ReadGuid(data, "teamId");
                 break;
+            case "CheckpointSubmission.Submitted.v1":
+                var submissionVersion = data.TryGetProperty("submissionVersion", out var versionValue) && versionValue.TryGetInt32(out var parsedVersion)
+                    ? parsedVersion
+                    : 1;
+                var checkpointNumber = data.TryGetProperty("checkpointNumber", out var checkpointValue) && checkpointValue.TryGetInt32(out var parsedCheckpoint)
+                    ? parsedCheckpoint
+                    : 0;
+                var isResubmission = submissionVersion > 1;
+                var checkpointLabel = checkpointNumber > 0 ? $"Checkpoint {checkpointNumber}" : "a checkpoint";
+                await AddForOptionalUserAsync(
+                    message, data, "lecturerUserId", NotificationType.SubmissionSubmitted,
+                    isResubmission ? $"{checkpointLabel} resubmitted" : $"New {checkpointLabel} submission",
+                    isResubmission
+                        ? $"A team submitted version {submissionVersion} of {checkpointLabel} for your review."
+                        : $"A team submitted materials for {checkpointLabel} for your review.",
+                    cancellationToken);
+                break;
             case "ProjectDirection.Reviewed.v1":
                 var directionDecision = ReadString(data, "decision");
                 var isProfileChangeReview = ReadBoolean(data, "isProjectProfileChangeProposal");
@@ -751,6 +768,12 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
 
     private async Task<string?> BuildLinkAsync(OutboxMessage message, CancellationToken cancellationToken)
     {
+        if (message.Type == "CheckpointSubmission.Submitted.v1")
+        {
+            var teamId = ReadPayloadGuid(message.PayloadJson, "teamId");
+            return teamId.HasValue ? $"/workspace/teams/{teamId.Value}" : null;
+        }
+
         if (message.Type == "ProjectDirection.Submitted.v1")
         {
             var classPeriod = await _context.Classes
