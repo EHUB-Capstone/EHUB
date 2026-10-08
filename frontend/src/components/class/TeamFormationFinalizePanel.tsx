@@ -95,7 +95,7 @@ export default function TeamFormationFinalizePanel({ formation, onChanged }: Pro
         type="button"
         disabled={!canSubmit}
         onClick={() => setConfirmOpen(true)}
-        className="rounded-xl bg-gradient-to-r from-primary to-secondary px-4 py-2.5 text-sm font-bold text-white hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50"
+        className="rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-white hover:bg-primary-dark disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-primary"
       >
         Finalize Team
       </button>
