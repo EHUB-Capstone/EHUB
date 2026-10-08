@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Search, Filter, Plus, Edit, Trash2, Users, ArrowLeft, ArrowRight, Check, X, Mail, GraduationCap, Upload, Loader2, ChevronDown } from 'lucide-react';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
@@ -14,6 +15,8 @@ import ImportLecturersModal from '../../components/admin/ImportLecturersModal';
 import ImportMentorsModal from '../../components/admin/ImportMentorsModal';
 import IncompleteMentorsPanel from '../../components/admin/IncompleteMentorsPanel';
 import MentorKindTag from '../../components/admin/MentorKindTag';
+import TagInput from '../../components/admin/TagInput';
+import { addExpertiseTag, MENTOR_PROFILE_LIMITS } from '../../utils/mentorProfileForm';
 import { mentorAdminApi } from '../../api/mentorAdminApi';
 import { MENTOR_KIND_OPTIONS, mentorTypeError, toManagedUserPayload } from '../../utils/managedUserForm';
 
@@ -59,6 +62,9 @@ export default function UserManagement() {
     password: '',
     role: 'STUDENT',
     mentorType: '',
+    expertise: [] as string[],
+    bio: '',
+    availabilityNote: '',
     status: 'APPROVED',
     phone: '',
     studentId: '',
@@ -173,6 +179,9 @@ export default function UserManagement() {
       password: '',
       role: 'STUDENT',
       mentorType: '',
+      expertise: [],
+      bio: '',
+      availabilityNote: '',
       status: 'APPROVED',
       phone: '',
       studentId: '',
@@ -194,6 +203,9 @@ export default function UserManagement() {
       password: '',
       role: user.role || 'STUDENT',
       mentorType: user.mentorType || '',
+      expertise: [],
+      bio: '',
+      availabilityNote: '',
       status: user.status || 'APPROVED',
       phone: user.phone || '',
       studentId: user.studentId || '',
@@ -430,7 +442,9 @@ export default function UserManagement() {
                           </div>
                         )}
                         <div className="min-w-0">
-                          <div className="font-semibold text-slate-900 truncate">{user.name}</div>
+                          {user.role === 'MENTOR' && user.mentorProfileId
+                            ? <Link to={`/admin/mentors/${user.mentorProfileId}`} className="block truncate font-semibold text-slate-900 hover:text-primary hover:underline" title="Open mentor profile">{user.name}</Link>
+                            : <div className="font-semibold text-slate-900 truncate">{user.name}</div>}
                           <div className="text-xs text-slate-400 truncate flex items-center gap-1">
                             <Mail className="w-3 h-3 inline" /> {user.email}
                           </div>
@@ -644,6 +658,48 @@ export default function UserManagement() {
                   : 'Enterprise mentors fill the company slot of a team; lecturer mentors fill the faculty slot.'}
               </p>
             </div>
+          )}
+
+          {formData.role === 'MENTOR' && !editingUser && (
+            <div className="space-y-3 rounded-xl border border-slate-200/60 bg-slate-50/70 p-3.5">
+              <p className="text-xs text-slate-500">Optional. You can complete the rest on the mentor profile page after the account is created.</p>
+              <TagInput
+                label="Expertise"
+                value={formData.expertise}
+                onChange={(expertise) => setFormData({ ...formData, expertise })}
+                addTag={addExpertiseTag}
+                placeholder="e.g. Marketing, Fundraising"
+              />
+              <div>
+                <label htmlFor="user-mentor-bio" className="block font-medium text-slate-700 mb-1">Background</label>
+                <textarea
+                  id="user-mentor-bio"
+                  rows={3}
+                  maxLength={MENTOR_PROFILE_LIMITS.bio}
+                  className="w-full border border-slate-200 rounded-xl px-3.5 py-2.5 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                  value={formData.bio}
+                  onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
+                />
+              </div>
+              <div>
+                <label htmlFor="user-mentor-availability" className="block font-medium text-slate-700 mb-1">Availability note</label>
+                <input
+                  id="user-mentor-availability"
+                  type="text"
+                  maxLength={MENTOR_PROFILE_LIMITS.availabilityNote}
+                  placeholder="e.g. Weekday afternoons, online only"
+                  className="w-full border border-slate-200 rounded-xl px-3.5 py-2.5 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                  value={formData.availabilityNote}
+                  onChange={(e) => setFormData({ ...formData, availabilityNote: e.target.value })}
+                />
+              </div>
+            </div>
+          )}
+
+          {formData.role === 'MENTOR' && editingUser?.mentorProfileId && (
+            <Link to={`/admin/mentors/${editingUser.mentorProfileId}`} className="inline-flex text-xs font-semibold text-primary hover:underline">
+              Open the full mentor profile (expertise, background, availability)
+            </Link>
           )}
 
           <div>

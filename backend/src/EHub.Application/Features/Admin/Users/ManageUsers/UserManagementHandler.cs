@@ -1,5 +1,6 @@
 using EHub.Application.Common.Interfaces.Identity;
 using EHub.Application.Common.Interfaces.Persistence;
+using EHub.Application.Features.Admin.MentorProfiles;
 using EHub.Contracts.Users;
 using EHub.Domain.Entities;
 using EHub.Domain.Enums;
@@ -81,6 +82,7 @@ public sealed class UserManagementHandler(IApplicationDbContext context, ICurren
     {
         var validation = await ValidateAsync(request, null, true, token); if (validation is not null) return Fail<ManagedUserResponse>("VALIDATION_ERROR", validation);
         var mentorTypeError = await ValidateMentorTypeAsync(request, null, token); if (mentorTypeError is not null) return Fail<ManagedUserResponse>("VALIDATION_ERROR", mentorTypeError);
+        var mentorFieldsError = ValidateMentorProfileFields(request); if (mentorFieldsError is not null) return Fail<ManagedUserResponse>("VALIDATION_ERROR", mentorFieldsError);
         var role = await context.Roles.FirstAsync(item => item.Name == NormalizeRole(request.Role), token); var email = request.Email.Trim().ToLowerInvariant(); var user = new User { FullName = request.Name.Trim(), Email = email, NormalizedEmail = email, PasswordHash = passwordHasher.Hash(request.Password!), Phone = Clean(request.Phone), Status = ToStatus(request.Status), IsEmailVerified = true, CreatedBy = currentUser.UserId };
         var requestedRole = NormalizeRole(request.Role);
         await context.Users.AddAsync(user, token);
@@ -93,7 +95,7 @@ public sealed class UserManagementHandler(IApplicationDbContext context, ICurren
             AssignedBy = currentUser.UserId
         }, token);
         if (requestedRole == SystemRoles.Student) await context.Students.AddAsync(NewStudent(user, request), token);
-        if (requestedRole == SystemRoles.Mentor) await context.MentorProfiles.AddAsync(NewMentorProfile(user, ParseMentorType(request.MentorType)!.Value), token);
+        if (requestedRole == SystemRoles.Mentor) await context.MentorProfiles.AddAsync(NewMentorProfile(user, ParseMentorType(request.MentorType)!.Value, request), token);
         await context.SaveChangesAsync(token);
         return Result.Success(ToResponse(user, request));
     }
@@ -145,7 +147,7 @@ public sealed class UserManagementHandler(IApplicationDbContext context, ICurren
         }
 
         if (requestedRole == SystemRoles.Student) { var student = user.Student ?? await context.Students.IgnoreQueryFilters().FirstOrDefaultAsync(item => item.UserId == user.Id, token); if (student is null) await context.Students.AddAsync(NewStudent(user, request), token); else UpdateStudent(student, request, user); } else if (user.Student is not null) { user.Student.IsDeleted = true; user.Student.DeletedAt = DateTime.UtcNow; }
-        if (requestedRole == SystemRoles.Mentor && !await context.MentorProfiles.AnyAsync(item => item.UserId == user.Id, token)) await context.MentorProfiles.AddAsync(NewMentorProfile(user, ParseMentorType(request.MentorType)!.Value), token);
+        if (requestedRole == SystemRoles.Mentor && !await context.MentorProfiles.AnyAsync(item => item.UserId == user.Id, token)) await context.MentorProfiles.AddAsync(NewMentorProfile(user, ParseMentorType(request.MentorType)!.Value, request), token);
         await context.SaveChangesAsync(token); return Result.Success(ToResponse(user, request));
     }
     public async Task<Result> DeleteUserAsync(Guid id, CancellationToken token = default)
@@ -276,6 +278,15 @@ public sealed class UserManagementHandler(IApplicationDbContext context, ICurren
     }
 
     private async Task<string?> ValidateAsync(SaveManagedUserRequest request, User? existing, bool creating, CancellationToken token) { if (string.IsNullOrWhiteSpace(request.Name) || string.IsNullOrWhiteSpace(request.Email) || !System.Net.Mail.MailAddress.TryCreate(request.Email.Trim(), out _)) return "Name and a valid email are required."; if (creating && (string.IsNullOrWhiteSpace(request.Password) || request.Password.Length < 6)) return "Temporary password must contain at least 6 characters."; if (!TryRole(request.Role, out _) || !TryStatus(request.Status, out _)) return "Role or status is invalid."; var email = request.Email.Trim().ToLowerInvariant(); if (await context.Users.AnyAsync(item => item.NormalizedEmail == email && (existing == null || item.Id != existing.Id), token)) return "Email already exists."; if (NormalizeRole(request.Role) == SystemRoles.Student) { if (string.IsNullOrWhiteSpace(request.StudentId) || string.IsNullOrWhiteSpace(request.ProgramGroup) || string.IsNullOrWhiteSpace(request.Major)) return "Student ID, program group, and major are required for students."; if (!ValidMajors.TryGetValue(request.ProgramGroup.Trim(), out var majors) || !majors.Contains(request.Major.Trim().ToUpperInvariant())) return "Major is invalid for the selected program group."; var existingStudentId = existing?.Student?.Id ?? Guid.Empty; if (await context.Students.AnyAsync(item => item.NormalizedRollNumber == request.StudentId.Trim().ToUpperInvariant() && item.Id != existingStudentId, token)) return "Student ID already exists."; } return null; }
+    // Expertise, background and availability are optional when a mentor is created; when given they follow the same rules as the profile form.
+    private static string? ValidateMentorProfileFields(SaveManagedUserRequest request)
+    {
+        if (NormalizeRole(request.Role) != SystemRoles.Mentor) return null;
+        return MentorProfileRules.NormalizeExpertise(request.Expertise).Error
+            ?? MentorProfileRules.ValidateBio(request.Bio)
+            ?? MentorProfileRules.ValidateAvailabilityNote(request.AvailabilityNote);
+    }
+
     private static MentorType? ParseMentorType(string? value) =>
         Enum.TryParse<MentorType>(value?.Trim(), ignoreCase: true, out var type) && Enum.IsDefined(type) ? type : null;
 
@@ -293,7 +304,7 @@ public sealed class UserManagementHandler(IApplicationDbContext context, ICurren
     private Task<User?> GetUserEntityAsync(Guid id, CancellationToken token) => context.Users.Include(user => user.UserRoles).ThenInclude(item => item.Role).Include(user => user.Student).FirstOrDefaultAsync(user => user.Id == id, token);
     private Task<int> AdminCount(CancellationToken token) => context.UserRoles.CountAsync(item => item.Role.Name == SystemRoles.Admin, token);
     private static bool TryRole(string value, out string role) { role = NormalizeRole(value); return SystemRoles.All.Contains(role); } private static string NormalizeRole(string value) => value.Trim().ToLowerInvariant() switch { "admin" => SystemRoles.Admin, "lecturer" => SystemRoles.Lecturer, "mentor" => SystemRoles.Mentor, "student" => SystemRoles.Student, _ => string.Empty }; private static bool TryStatus(string value, out UserStatus status) { status = ToStatus(value); return value.Equals("PENDING", StringComparison.OrdinalIgnoreCase) || value.Equals("APPROVED", StringComparison.OrdinalIgnoreCase) || value.Equals("REJECTED", StringComparison.OrdinalIgnoreCase); } private static UserStatus ToStatus(string value) => value.Trim().ToUpperInvariant() switch { "PENDING" => UserStatus.PendingApproval, "REJECTED" => UserStatus.Rejected, _ => UserStatus.Active }; private static string ToStatus(UserStatus value) => value == UserStatus.PendingApproval ? "PENDING" : value == UserStatus.Rejected ? "REJECTED" : "APPROVED"; private static string? Clean(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
-    private static Student NewStudent(User user, SaveManagedUserRequest request) => new() { UserId = user.Id, FullName = user.FullName, Email = user.Email, RollNumber = request.StudentId!.Trim(), NormalizedRollNumber = request.StudentId.Trim().ToUpperInvariant(), MajorCode = request.Major!.Trim().ToUpperInvariant(), AvatarUrl = user.AvatarUrl, ProgramGroup = ProgramGroup.Standard }; private static MentorProfile NewMentorProfile(User user, MentorType type) => new() { UserId = user.Id, User = user, Type = type, Status = MentorProfileStatus.Active }; private static void UpdateStudent(Student student, SaveManagedUserRequest request, User user) { student.IsDeleted = false; student.FullName = user.FullName; student.Email = user.Email; student.RollNumber = request.StudentId!.Trim(); student.NormalizedRollNumber = request.StudentId.Trim().ToUpperInvariant(); student.MajorCode = request.Major!.Trim().ToUpperInvariant(); }
+    private static Student NewStudent(User user, SaveManagedUserRequest request) => new() { UserId = user.Id, FullName = user.FullName, Email = user.Email, RollNumber = request.StudentId!.Trim(), NormalizedRollNumber = request.StudentId.Trim().ToUpperInvariant(), MajorCode = request.Major!.Trim().ToUpperInvariant(), AvatarUrl = user.AvatarUrl, ProgramGroup = ProgramGroup.Standard }; private static MentorProfile NewMentorProfile(User user, MentorType type, SaveManagedUserRequest request) => new() { UserId = user.Id, User = user, Type = type, Status = MentorProfileStatus.Active, Expertise = MentorProfileRules.NormalizeExpertise(request.Expertise).Values, Bio = MentorProfileRules.Clean(request.Bio), AvailabilityNote = MentorProfileRules.Clean(request.AvailabilityNote) }; private static void UpdateStudent(Student student, SaveManagedUserRequest request, User user) { student.IsDeleted = false; student.FullName = user.FullName; student.Email = user.Email; student.RollNumber = request.StudentId!.Trim(); student.NormalizedRollNumber = request.StudentId.Trim().ToUpperInvariant(); student.MajorCode = request.Major!.Trim().ToUpperInvariant(); }
     private static ManagedUserResponse ToResponse(
         User user,
         SaveManagedUserRequest? request = null,
@@ -305,6 +316,7 @@ public sealed class UserManagementHandler(IApplicationDbContext context, ICurren
             Avatar = user.AvatarUrl,
             Role = user.UserRoles.FirstOrDefault()?.Role.Name.ToUpperInvariant() ?? "STUDENT",
             MentorType = user.MentorProfile?.Type.ToString(),
+            MentorProfileId = user.MentorProfile?.Id,
             Status = ToStatus(user.Status),
             StudentId = user.Student?.RollNumber ?? request?.StudentId,
             ProgramGroup = request?.ProgramGroup,

@@ -23,6 +23,7 @@ const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'));
 const ClassManagement = lazy(() => import('./pages/admin/ClassManagement'));
 const SubjectManagement = lazy(() => import('./pages/admin/SubjectManagement'));
 const SubjectDetail = lazy(() => import('./pages/admin/SubjectDetail'));
+const MentorProfileDetail = lazy(() => import('./pages/admin/MentorProfileDetail'));
 const UserManagement = lazy(() => import('./pages/admin/UserManagement'));
 const AccountApprovals = lazy(() => import('./pages/admin/AccountApprovals'));
 const LecturerDashboard = lazy(() => import('./pages/lecturer/LecturerDashboard'));
@@ -96,6 +97,7 @@ function App(): React.ReactElement {
                 <Route element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
                   <Route path="/admin" element={<ProtectedRoute allowedRoles={['ADMIN']}><AdminDashboard /></ProtectedRoute>} />
                   <Route path="/admin/users" element={<ProtectedRoute allowedRoles={['ADMIN']}><UserManagement /></ProtectedRoute>} />
+                  <Route path="/admin/mentors/:profileId" element={<ProtectedRoute allowedRoles={['ADMIN']}><MentorProfileDetail /></ProtectedRoute>} />
                   <Route path="/admin/account-approvals" element={<ProtectedRoute allowedRoles={['ADMIN']}><AccountApprovals /></ProtectedRoute>} />
                   <Route path="/admin/classes" element={<ProtectedRoute allowedRoles={['ADMIN']}><ClassManagement /></ProtectedRoute>} />
                   <Route path="/admin/subjects" element={<ProtectedRoute allowedRoles={['ADMIN']}><SubjectManagement /></ProtectedRoute>} />

@@ -738,6 +738,24 @@ Các kiểm tra này không thuộc riêng yêu cầu nào nhưng cần đạt �
 - [ ] Cuối trang có mục **Previous teams** cho mentor từng làm ở lớp đã hoàn thành: tên nhóm, lớp, loại mentor (Enterprise/Lecturer) và dòng "Finished with the class on …". Các thẻ này **không bấm vào được** (không mở workspace).
 - [ ] Mentor đã bị thay giữa kỳ thấy dòng "Assignment ended early" và vẫn **không** mở được workspace của nhóm đó. Mentor chưa từng làm ở lớp nào thì không có mục Previous teams.
 
+### Kiểm tra 10.8. Hồ sơ mentor (EHUB-250)
+
+**Làm gì**
+1. Vào **Users**, bấm **Create User**, chọn Role = **Mentor**, chọn Mentor Type. Nhập thử Expertise (gõ chữ rồi Enter hoặc dấu phẩy), Background, Availability note rồi lưu.
+2. Ở danh sách Users, bấm vào **tên mentor** vừa tạo (chữ có gạch chân khi rê chuột).
+3. Ở trang hồ sơ bấm **Edit profile**. Thử: thêm vài expertise (cả một thẻ trùng, một thẻ chỉ 1 ký tự), nhập Background dài hơn 2000 ký tự, nhập LinkedIn không phải http/https, FPT email sai, ngày sinh năm 1800.
+4. Sửa lại cho đúng, đổi **Status** sang Unavailable, bấm **Save profile**.
+5. Mở cùng hồ sơ ở hai tab trình duyệt, sửa và lưu ở tab 1, rồi sửa và lưu ở tab 2.
+
+**Phải thấy gì**
+- [ ] Bước 1: tạo được mentor; thiếu Mentor Type thì báo lỗi; Expertise trùng hoặc Background quá dài thì báo lỗi và không tạo tài khoản.
+- [ ] Bước 2: mở được trang hồ sơ, thấy tên, email, tag loại mentor, trạng thái, số team đang phụ trách, expertise, background và ghi chú availability vừa nhập. Ô chưa có dữ liệu ghi "Not provided".
+- [ ] Bước 3: mỗi lỗi hiện thông báo ngay dưới ô; thẻ expertise trùng bị từ chối kèm lý do; các thẻ có nút xóa nhỏ. Nút **Save profile** chỉ sáng khi có thay đổi.
+- [ ] Bước 4: lưu thành công, trang hiển thị đúng dữ liệu mới. Nếu mentor còn team đang phụ trách thì có dòng cảnh báo vàng "chỉ ngừng nhận phân công mới". Mentor Unavailable không còn chọn được khi gán team.
+- [ ] Bước 5: tab 2 bị chặn với thông báo "changed by someone else" và nút **Reload the latest profile**; dữ liệu đã nhập ở tab 2 không bị mất cho tới khi bấm nút đó.
+- [ ] Loại mentor (Enterprise hoặc Lecturer) không đổi được ở hồ sơ. Tên, email, số điện thoại sửa ở Users (Edit).
+- [ ] Giảng viên hoặc mentor gõ thẳng địa chỉ `/admin/mentors/...` thì không vào được.
+
 **Kết luận phần kiểm tra chung:** ☐ Đạt  ☐ Đạt có điều kiện  ☐ Chưa đạt   Ghi chú: ……………………
 
 ---

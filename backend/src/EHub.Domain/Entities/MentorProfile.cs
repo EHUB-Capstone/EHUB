@@ -11,7 +11,10 @@ public class MentorProfile : AuditableEntity
     public virtual User User { get; set; } = null!;
 
     public string[] Expertise { get; set; } = Array.Empty<string>();
+    // Background of the mentor: experience, achievements, areas they can coach.
     public string? Bio { get; set; }
+    // Free-text availability, for example "Weekday afternoons, online only". Status says whether the mentor can be assigned at all.
+    public string? AvailabilityNote { get; set; }
     public string? Organization { get; set; }
     public string? LinkedInUrl { get; set; }
 
@@ -25,6 +28,9 @@ public class MentorProfile : AuditableEntity
     public string? JobTitle { get; set; }
 
     public MentorProfileStatus Status { get; set; } = MentorProfileStatus.Active;
+
+    // PostgreSQL xmin: lets two admins editing the same profile be detected instead of overwriting each other.
+    public uint Version { get; set; }
 
     // Navigation properties
     public virtual ICollection<MentorAssignment> Assignments { get; set; } = new List<MentorAssignment>();

@@ -70,6 +70,7 @@ public static class DependencyInjection
         services.AddScoped<IUserManagementHandler, UserManagementHandler>();
         services.AddScoped<EHub.Application.Features.Admin.Users.ImportLecturers.ILecturerImportHandler, EHub.Application.Features.Admin.Users.ImportLecturers.LecturerImportHandler>();
         services.AddScoped<EHub.Application.Features.Admin.Mentors.IMentorAdminHandler, EHub.Application.Features.Admin.Mentors.MentorAdminHandler>();
+        services.AddScoped<EHub.Application.Features.Admin.MentorProfiles.IMentorProfileHandler, EHub.Application.Features.Admin.MentorProfiles.MentorProfileHandler>();
 
         services.AddScoped<IGetAdminDashboardQueryHandler, GetAdminDashboardQueryHandler>();
         services.AddScoped<IGetAcademicOverviewQueryHandler, GetAcademicOverviewQueryHandler>();

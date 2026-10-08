@@ -8,6 +8,9 @@ public sealed class SaveManagedUserRequest
     public string Role { get; init; } = string.Empty;
     // Required when Role is MENTOR: "Enterprise" or "Academic". It decides which team slot the mentor can fill.
     public string? MentorType { get; init; }
+    // Optional, used only when a mentor is created: the first expertise tags and availability note (Bio is the background).
+    public IReadOnlyCollection<string>? Expertise { get; init; }
+    public string? AvailabilityNote { get; init; }
     public string Status { get; init; } = "APPROVED";
     public string? Phone { get; init; }
     public string? Bio { get; init; }
@@ -25,6 +28,8 @@ public sealed class ManagedUserResponse
     public string Role { get; init; } = "STUDENT";
     // Only for mentors: "Enterprise" (enterprise mentor) or "Academic" (lecturer mentor).
     public string? MentorType { get; init; }
+    // Only for mentors: the id of the profile page (/admin/mentors/{id}).
+    public Guid? MentorProfileId { get; init; }
     public string Status { get; init; } = "APPROVED";
     public string? StudentId { get; init; }
     public string? ProgramGroup { get; init; }

@@ -25,6 +25,14 @@ public class MentorProfileConfiguration : IEntityTypeConfiguration<MentorProfile
             .HasColumnName("bio")
             .HasMaxLength(2000);
 
+        builder.Property(mp => mp.AvailabilityNote)
+            .HasColumnName("availability_note")
+            .HasMaxLength(500);
+
+        builder.Property(mp => mp.Version)
+            .IsRowVersion()
+            .HasColumnName("xmin");
+
         builder.Property(mp => mp.Organization)
             .HasColumnName("organization")
             .HasMaxLength(200);
