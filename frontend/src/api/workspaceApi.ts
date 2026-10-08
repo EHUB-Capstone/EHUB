@@ -1,3 +1,4 @@
+import type { MentorHistoryItem } from '../types/teamManagement';
 // @ts-nocheck
 // frontend/src/api/workspaceApi.js
 import axiosClient from './axiosClient';
@@ -8,6 +9,7 @@ import type { ProjectWorkspaceDraft } from '../utils/projectWorkspace';
 export const workspaceApi = {
   getMyWorkspace: () => axiosClient.get('/workspace/my-team'),
   getAccessibleTeams: (): Promise<ApiEnvelope<WorkspaceOption[]>> => axiosClient.get('/workspace/accessible-teams'),
+  getMyMentorHistory: (): Promise<ApiEnvelope<MentorHistoryItem[]>> => axiosClient.get('/mentors/me/assignment-history'),
   getActiveSemester: (): Promise<ApiEnvelope<CurrentSemesterResponse>> => axiosClient.get('/workspace/active-semester'),
   getTeamWorkspace: (teamId) => axiosClient.get(`/workspace/teams/${teamId}`),
   createWorkspace: (teamId: string, payload: ProjectWorkspaceDraft) => axiosClient.post(`/workspace/teams/${teamId}`, payload),

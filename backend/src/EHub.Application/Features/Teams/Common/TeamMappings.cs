@@ -11,8 +11,13 @@ internal static class TeamMappings
 
     public static TeamDto ToDto(Team team, bool includePrivateInformation)
     {
+        // Completing a class ends its assignments at the completion time. Those still describe who mentored the team,
+        // so they are shown for a completed class; a mentor replaced earlier in the term is not.
+        var completedAt = team.Class?.CompletedAtUtc;
         var activeAssignments = team.MentorAssignments
-            .Where(assignment => assignment.Status == MentorAssignmentStatus.Active && assignment.EndedAt == null)
+            .Where(assignment => (assignment.Status == MentorAssignmentStatus.Active && assignment.EndedAt == null) ||
+                (completedAt != null && assignment.Status == MentorAssignmentStatus.Ended &&
+                 assignment.EndedAt != null && assignment.EndedAt >= completedAt))
             .OrderBy(assignment => assignment.Slot)
             .ThenByDescending(assignment => assignment.AssignedAt)
             .Select(ToMentorAssignmentDto)

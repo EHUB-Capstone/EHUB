@@ -261,6 +261,53 @@ public sealed class MentorAssignmentHandler : IMentorAssignmentHandler
         return Result.Success();
     }
 
+    // Past teams of the signed-in mentor. It lists only their own ended assignments and never opens the team itself,
+    // so a mentor who was replaced or whose class finished does not regain access to the workspace.
+    public async Task<Result<IReadOnlyCollection<MentorHistoryItemDto>>> GetMyHistoryAsync(
+        Guid userId, string role, CancellationToken cancellationToken = default)
+    {
+        if (!IsRole(role, SystemRoles.Mentor))
+            return Result.Failure<IReadOnlyCollection<MentorHistoryItemDto>>(new Error(ErrorCodes.ClassAccessDenied, "Only a mentor has a mentoring history."));
+
+        var rows = await _context.MentorAssignments.AsNoTracking()
+            .Where(item => item.MentorProfile.UserId == userId && item.Status == MentorAssignmentStatus.Ended && item.EndedAt != null)
+            .OrderByDescending(item => item.EndedAt)
+            .Select(item => new
+            {
+                item.Id,
+                item.TeamId,
+                TeamName = item.Team.TeamName,
+                ProjectName = item.Team.Project != null ? item.Team.Project.Name : null,
+                ClassId = item.Team.ClassId,
+                ClassCode = item.Team.Class.ClassCode,
+                SubjectCode = item.Team.Class.Course.Code,
+                SemesterCode = item.Team.Class.Semester.Code,
+                item.Slot,
+                item.AssignedAt,
+                EndedAt = item.EndedAt!.Value,
+                ClassCompletedAt = item.Team.Class.CompletedAtUtc
+            })
+            .Take(500)
+            .ToListAsync(cancellationToken);
+
+        IReadOnlyCollection<MentorHistoryItemDto> history = rows.Select(row => new MentorHistoryItemDto
+        {
+            AssignmentId = row.Id,
+            TeamId = row.TeamId,
+            TeamName = row.TeamName,
+            ProjectName = row.ProjectName,
+            ClassId = row.ClassId,
+            ClassCode = row.ClassCode,
+            SubjectCode = row.SubjectCode,
+            SemesterCode = row.SemesterCode,
+            Slot = row.Slot.ToString(),
+            AssignedAtUtc = row.AssignedAt,
+            EndedAtUtc = row.EndedAt,
+            EndedBecause = row.ClassCompletedAt != null && row.EndedAt >= row.ClassCompletedAt ? "ClassCompleted" : "EndedEarly"
+        }).ToArray();
+        return Result.Success(history);
+    }
+
     public async Task<Result<MentorAssignmentDto>> ReplaceAsync(
         Guid teamId, ReplaceMentorRequest request, Guid userId, string role, CancellationToken cancellationToken = default)
     {

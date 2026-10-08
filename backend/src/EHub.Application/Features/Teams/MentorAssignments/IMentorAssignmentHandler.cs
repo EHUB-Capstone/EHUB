@@ -9,6 +9,7 @@ public interface IMentorAssignmentHandler
     Task<Result<IReadOnlyCollection<MentorAssignmentDto>>> GetForClassAsync(Guid classId, Guid userId, string role, CancellationToken cancellationToken = default);
     Task<Result<IReadOnlyCollection<MentorAssignmentDto>>> GetForTeamAsync(Guid teamId, Guid userId, string role, CancellationToken cancellationToken = default);
     Task<Result<MentorAssignmentDto>> AssignAsync(Guid teamId, AssignMentorRequest request, Guid userId, string role, CancellationToken cancellationToken = default);
+    Task<Result<IReadOnlyCollection<MentorHistoryItemDto>>> GetMyHistoryAsync(Guid userId, string role, CancellationToken cancellationToken = default);
     Task<Result<MentorAssignmentDto>> ReplaceAsync(Guid teamId, ReplaceMentorRequest request, Guid userId, string role, CancellationToken cancellationToken = default);
     Task<Result<AssignMentorBatchResponse>> AssignBatchAsync(Guid classId, AssignMentorBatchRequest request, Guid userId, string role, CancellationToken cancellationToken = default);
     Task<Result> EndAsync(Guid teamId, EndMentorAssignmentRequest request, Guid userId, string role, CancellationToken cancellationToken = default);
