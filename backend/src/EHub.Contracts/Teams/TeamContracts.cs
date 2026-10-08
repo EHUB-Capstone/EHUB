@@ -115,6 +115,24 @@ public sealed class AssignMentorRequest
     public string? Note { get; init; }
 }
 
+// One past (ended) assignment of the signed-in mentor, for the read-only history list.
+public sealed class MentorHistoryItemDto
+{
+    public Guid AssignmentId { get; init; }
+    public Guid TeamId { get; init; }
+    public string TeamName { get; init; } = string.Empty;
+    public string? ProjectName { get; init; }
+    public Guid ClassId { get; init; }
+    public string ClassCode { get; init; } = string.Empty;
+    public string SubjectCode { get; init; } = string.Empty;
+    public string SemesterCode { get; init; } = string.Empty;
+    public string Slot { get; init; } = string.Empty;
+    public DateTime AssignedAtUtc { get; init; }
+    public DateTime EndedAtUtc { get; init; }
+    // "ClassCompleted" when the assignment ended together with its class, otherwise "EndedEarly" (replaced or ended by an admin).
+    public string EndedBecause { get; init; } = string.Empty;
+}
+
 // Ends the current assignment of a slot and gives it to another mentor of the same type, all in one save.
 public sealed class ReplaceMentorRequest
 {

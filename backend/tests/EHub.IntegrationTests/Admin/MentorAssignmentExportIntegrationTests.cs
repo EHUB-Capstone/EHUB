@@ -7,6 +7,7 @@ using EHub.Contracts.Auth;
 using EHub.Contracts.Classes;
 using EHub.Contracts.Common;
 using EHub.Contracts.Mentors;
+using EHub.Contracts.Teams;
 using EHub.Domain.Entities;
 using EHub.Domain.Enums;
 using EHub.Infrastructure.Persistence;
@@ -163,6 +164,58 @@ public sealed class MentorAssignmentExportIntegrationTests(CustomWebApplicationF
         rows.Should().HaveCount(2).And.OnlyContain(item => item.Source == MentorAllocationSources.Retained);
         rows.Select(item => item.MentorProfileId).Should().BeEquivalentTo([seed.EnterpriseMentorId, seed.AcademicMentorId]);
         body.Data.MentorLoads.Single(item => item.MentorProfileId == seed.EnterpriseMentorId).TotalBefore.Should().Be(0, "the ended EXE101 assignment no longer counts as a current team");
+    }
+
+    [Fact]
+    public async Task CompletedClass_ShouldStillShowItsMentors_AndGiveThemAReadOnlyHistoryWithoutOpeningTheTeam()
+    {
+        var token = await GetAdminTokenAsync();
+        var seed = await SeedLifecycleAsync(2077, 2078);
+        using (var complete = new HttpRequestMessage(HttpMethod.Post, $"/api/classes/{seed.PreviousClassId}/complete")
+        {
+            Content = JsonContent.Create(new ChangeClassLifecycleRequest { RowVersion = seed.PreviousClassVersion.ToString(), Reason = "End of EXE101" })
+        })
+        {
+            complete.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            (await _client.SendAsync(complete)).StatusCode.Should().Be(HttpStatusCode.OK);
+        }
+
+        // 1. The teams of the completed class still list the mentors they finished with.
+        using var teamsRequest = new HttpRequestMessage(HttpMethod.Get, $"/api/classes/{seed.PreviousClassId}/teams");
+        teamsRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        var teams = await (await _client.SendAsync(teamsRequest)).Content.ReadFromJsonAsync<ApiResponse<List<TeamDto>>>();
+        var finished = teams!.Data!.Single(item => item.Id == seed.PreviousTeamId);
+        finished.CurrentMentorAssignments.Select(item => item.Mentor.MentorProfileId)
+            .Should().BeEquivalentTo([seed.EnterpriseMentorId, seed.AcademicMentorId]);
+
+        // 2. The mentor gets a history entry for it, marked as ended with the class.
+        string enterpriseToken, strangerToken;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var jwt = scope.ServiceProvider.GetRequiredService<IJwtTokenService>();
+            var enterpriseUser = await context.MentorProfiles.AsNoTracking().Where(item => item.Id == seed.EnterpriseMentorId).Select(item => item.User).SingleAsync();
+            enterpriseToken = jwt.GenerateAccessToken(enterpriseUser, [SystemRoles.Mentor]).Token;
+            var admin = await context.Users.AsNoTracking().SingleAsync(item => item.NormalizedEmail == "admin@ehub.test");
+            strangerToken = jwt.GenerateAccessToken(admin, [SystemRoles.Admin]).Token;
+        }
+        async Task<HttpResponseMessage> History(string? bearer)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, "/api/mentors/me/assignment-history");
+            if (bearer is not null) request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", bearer);
+            return await _client.SendAsync(request);
+        }
+        var ownHistory = await History(enterpriseToken);
+        var items = (await ownHistory.Content.ReadFromJsonAsync<ApiResponse<List<MentorHistoryItemDto>>>())!.Data!;
+        ownHistory.StatusCode.Should().Be(HttpStatusCode.OK);
+        items.Should().ContainSingle(item => item.TeamId == seed.PreviousTeamId && item.EndedBecause == "ClassCompleted" && item.Slot == "Enterprise");
+
+        // 3. A mentor sees only their own assignments, and history does not reopen the team for them.
+        (await History(null)).StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+        (await History(strangerToken)).StatusCode.Should().NotBe(HttpStatusCode.OK, "only mentors have a mentoring history");
+        using var openTeam = new HttpRequestMessage(HttpMethod.Get, $"/api/teams/{seed.PreviousTeamId}");
+        openTeam.Headers.Authorization = new AuthenticationHeaderValue("Bearer", enterpriseToken);
+        (await _client.SendAsync(openTeam)).StatusCode.Should().NotBe(HttpStatusCode.OK, "an ended mentor no longer has access to the team itself");
     }
 
     private static string[] Counts(IXLWorksheet summary, string mentorName)

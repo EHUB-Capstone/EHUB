@@ -723,6 +723,21 @@ Các kiểm tra này không thuộc riêng yêu cầu nào nhưng cần đạt �
 - [ ] Nếu kỳ chưa có mentor active, hộp thoại ghi rõ phải thêm mentor vào kỳ trước (Subject Management, Add mentors).
 - [ ] Esc đóng hộp thoại (không đóng khi đang lưu); Tab không ra ngoài hộp thoại; đóng xong con trỏ quay về nút Manage.
 
+### Kiểm tra 10.7. Lớp đã hoàn thành, lớp mới và tài khoản mentor
+
+**Làm gì**
+1. Mở chi tiết một lớp **đã Completed** (ví dụ EXE101 kỳ cũ).
+2. Mở chi tiết một lớp đang hoạt động, ở tab Students, thu nhỏ rồi mở rộng cửa sổ trình duyệt.
+3. Đăng nhập bằng tài khoản mentor vừa được gán cho team ở kỳ mới, và một mentor từng có team ở lớp đã hoàn thành.
+
+**Phải thấy gì**
+- [ ] Bước 1: thẻ **Mentors** liệt kê đúng các mentor đã làm với lớp (cùng con số với trang danh sách lớp), không còn ghi "No mentors assigned". Tab Teams của lớp cũng hiện mentor của từng nhóm.
+- [ ] Bước 2: bảng sinh viên có cột **Project Name** (nếu tên dự án khác tên nhóm) và **Description** khi bảng đủ rộng; không phụ thuộc vào việc cửa sổ trình duyệt có rộng 1536px hay không.
+- [ ] Bước 3: mentor đăng nhập vào thẳng **Startup Workspace** (không còn trang "No data found").
+- [ ] Khi chưa có kỳ nào Active, trang Workspace mở ở kỳ gần nhất có team và hiện dòng thông báo màu xanh; team mới được gán hiện ra, không còn "0 of 1 teams".
+- [ ] Cuối trang có mục **Previous teams** cho mentor từng làm ở lớp đã hoàn thành: tên nhóm, lớp, loại mentor (Enterprise/Lecturer) và dòng "Finished with the class on …". Các thẻ này **không bấm vào được** (không mở workspace).
+- [ ] Mentor đã bị thay giữa kỳ thấy dòng "Assignment ended early" và vẫn **không** mở được workspace của nhóm đó. Mentor chưa từng làm ở lớp nào thì không có mục Previous teams.
+
 **Kết luận phần kiểm tra chung:** ☐ Đạt  ☐ Đạt có điều kiện  ☐ Chưa đạt   Ghi chú: ……………………
 
 ---

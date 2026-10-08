@@ -688,6 +688,10 @@ export default function ClassDetail() {
     };
 
     teamMentors.forEach(addMentor);
+    // A class that ended has no active assignments any more; the class itself still reports who mentored it.
+    if (unique.length === 0 && Array.isArray(cls?.mentors)) {
+      cls.mentors.forEach(mentor => addMentor({ _id: mentor.mentorProfileId, name: mentor.fullName, email: mentor.email }));
+    }
     return unique;
   };
 
