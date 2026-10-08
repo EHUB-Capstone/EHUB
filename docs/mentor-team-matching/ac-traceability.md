@@ -10,7 +10,7 @@ Ký hiệu thư mục test: `AppTests` = `backend/tests/EHub.ApplicationTests/Fe
 
 | AC | Hiện thực | Test |
 |---|---|---|
-| 01.1 Chọn mentor active theo kỳ | Danh sách mentor tổng + `SemesterStaffAssignments` (có sẵn, không đổi) | `MentorImportIntegrationTests.AdminImport_ShouldCreateBothMentorTypes_AndAddThemToSelectedSemester` |
+| 01.1 Chọn mentor active theo kỳ | Danh sách mentor tổng + `SemesterStaffAssignments` (có sẵn, không đổi) | `MentorImportIntegrationTests.MasterImport_ShouldCreateMentors_WithoutAddingThemToAnySemester`, `SemesterTeachingStaffBatchIntegrationTests` |
 | 01.2 Nhóm EXE201 kết thúc được lưu trữ, không kế thừa | Hoàn thành lớp kết thúc phân công (có sẵn); `MentorRetentionPlanner` không bao giờ kế thừa nhóm EXE201 | `MentorAssignmentExportIntegrationTests.CompletingAnExe101Class_...`, `MentorRetentionPlannerTests.Plan_NeverCarriesAnExe201TeamForward` |
 | 01.3 Mentor không active thì không được dùng | Truy vấn ứng viên chỉ lấy mentor active trong kỳ; `MentorManualEditPlanner` từ chối | `MentorImportIntegrationTests.RandomAllocation_...` (mentor ngoài kỳ không bao giờ được chọn), `MentorManualEditPlannerTests.Plan_RejectsAMentorWhoIsNotActiveThisSemester` |
 
@@ -69,7 +69,7 @@ Ký hiệu thư mục test: `AppTests` = `backend/tests/EHub.ApplicationTests/Fe
 | 08.5 Hủy thì không lưu | Chỉ đóng modal; phiên tự hết hạn | Kiểm tra thủ công |
 | 08.6 Dữ liệu đổi sau xem trước thì từ chối | Kiểm tra từng vị trí và tải mentor lúc xác nhận | `ReplacingAMentor_ShouldBeRejectedWhenTheCurrentMentorChangedAfterThePreview`, `Commit_ShouldBeRejectedWhenAMentorLoadChangedAfterThePreview` |
 | 08.7 Khóa bấm xác nhận hai lần | Khóa phía server; nút có trạng thái đang lưu | `Commit_ShouldCreateEachAssignmentOnceWhenConfirmedTwiceAtTheSameTime` |
-| 08.8 Chỉ Admin (401, 403) | `[Authorize(Policy = AdminOnly)]` ở controller | `AllocationEndpoints_ShouldBeDeniedWithoutAnAdministrator`, `Preview_ShouldReturn401/403_*` |
+| 08.8 Chỉ Admin (401, 403) | `[Authorize(Policy = AdminOnly)]` ở controller | `AllocationEndpoints_ShouldBeDeniedWithoutAnAdministrator`, `MasterImportPreview_ShouldReturn401_*`, `MasterImportPreview_ShouldReturn403_*` |
 
 ### AC-09: Xuất Excel
 
@@ -84,15 +84,15 @@ Ký hiệu thư mục test: `AppTests` = `backend/tests/EHub.ApplicationTests/Fe
 
 ## 2. Kiểm tra thủ công trên giao diện
 
-Các mục này chưa có kiểm thử tự động cho giao diện. Cần xem trên `/admin/subjects`, mục "Mentor import & assignment":
+Các mục này chưa có kiểm thử tự động cho giao diện. Cần xem trên `/admin/subjects`, thẻ "Mentor assignment":
 
 1. Balanced được chọn sẵn; đổi sang Random thì dòng giải thích đổi theo (AC-06.1).
 2. Cửa sổ xem trước hiển thị ba tab, bảng cuộn ngang được trên màn hình hẹp, và hoạt động ở chế độ tối.
-3. Mentor kỳ trước không giữ được hiển thị mờ kèm lý do ở tab "Needs attention" (AC-02.4).
+3. Mentor kỳ trước không giữ được hiển thị mờ kèm lý do "Not active this semester · needs a new mentor" ở tab "Needs attention" (AC-02.4).
 4. Chỉnh một ô mentor: vị trí trống chọn được mentor hoặc để trống; vị trí đã có mentor yêu cầu lý do từ 3 ký tự và hiện "Replaces …" (AC-04.2, 04.3).
 5. Có mentor bị thay thì xác nhận hiện hộp thoại "Replace current mentors?" trước khi lưu.
 6. Đóng cửa sổ (Cancel) thì không có gì được lưu (AC-08.5).
-7. Nút "Export assignments" tải đúng file `.xlsx` ba sheet.
+7. Nút "Export" ở thẻ Mentor assignment tải đúng file `.xlsx` ba sheet.
 
 ## 3. Mặc định đã chọn, cần cô xác nhận
 

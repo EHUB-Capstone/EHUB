@@ -46,7 +46,7 @@ interface PendingEndAssignment {
 }
 
 const mentorTypeLabel: Record<MentorOption['mentorType'], string> = {
-  Enterprise: 'Industry mentor',
+  Enterprise: 'Enterprise mentor',
   Academic: 'Lecturer mentor',
 };
 

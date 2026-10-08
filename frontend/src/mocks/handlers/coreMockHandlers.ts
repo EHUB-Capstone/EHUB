@@ -714,10 +714,14 @@ function registerUserHandlers(mock: MockAdapter): void {
       studentId: role === 'STUDENT' ? asString(body.studentId) || null : null,
       programGroup: role === 'STUDENT' ? asString(body.programGroup) || null : null,
       major: role === 'STUDENT' ? asString(body.major) || null : null,
+      ...(role === 'MENTOR' ? { mentorType: asString(body.mentorType) === 'Academic' ? 'Academic' as const : 'Enterprise' as const } : {}),
       phone: asString(body.phone) || null,
       createdAt: new Date().toISOString(),
       lastSeen: null,
     };
+    if (role === 'MENTOR' && !['Enterprise', 'Academic'].includes(asString(body.mentorType))) {
+      return failure(400, 'VALIDATION_ERROR', 'Mentor type must be Enterprise or Academic.');
+    }
     getMockState().users.unshift(user);
     persistMockState();
     return created(userResponse(user), 'User created successfully.');

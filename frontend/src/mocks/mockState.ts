@@ -8,7 +8,7 @@ export interface MockUser {
   email: string;
   avatar: string | null;
   role: 'ADMIN' | 'LECTURER' | 'MENTOR' | 'STUDENT';
-  /** Only for mentors: Enterprise = industry mentor, Academic = lecturer mentor. */
+  /** Only for mentors: Enterprise = enterprise mentor, Academic = lecturer mentor. */
   mentorType?: 'Enterprise' | 'Academic';
   status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'BLOCKED' | 'INACTIVE';
   studentId: string | null;

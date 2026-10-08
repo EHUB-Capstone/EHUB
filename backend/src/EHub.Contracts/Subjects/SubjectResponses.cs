@@ -122,7 +122,7 @@ public sealed class TeachingStaffCandidateResponse
     public string Email { get; init; } = string.Empty;
     public string? Avatar { get; init; }
     public string Role { get; init; } = string.Empty;
-    // Only set for mentors: "Enterprise" (industry mentor) or "Academic" (lecturer mentor).
+    // Only set for mentors: "Enterprise" (enterprise mentor) or "Academic" (lecturer mentor).
     public string? MentorType { get; init; }
     public string? ContractType { get; init; }
 }

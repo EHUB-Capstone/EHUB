@@ -806,6 +806,7 @@ public sealed partial class TeamWorkflowIntegrationTests
             Email = $"team-flow-mentor-{unique}@ehub.local",
             Password = "QaMentor!123",
             Role = "MENTOR",
+            MentorType = "Enterprise",
             Status = "APPROVED"
         });
 

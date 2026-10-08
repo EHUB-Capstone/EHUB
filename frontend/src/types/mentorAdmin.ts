@@ -15,12 +15,9 @@ export interface MentorImportRowPreview {
 
 export interface MentorImportPreview {
   sessionId: string;
-  /** Null when the workbook is imported into the master mentor list instead of a semester. */
-  semesterId: string | null;
   totalRows: number;
   createCount: number;
   updateCount: number;
-  addToSemesterCount: number;
   needsCompletionCount: number;
   completeDraftCount: number;
   errorCount: number;
@@ -38,10 +35,14 @@ export interface IncompleteMentor {
   updatedAtUtc: string;
 }
 
+export interface IncompleteMentorList {
+  mentors: IncompleteMentor[];
+  pagination: { total: number; page: number; limit: number; pages: number };
+}
+
 export interface MentorImportCommitResult {
   createdCount: number;
   updatedCount: number;
-  semesterAssignmentCount: number;
   draftSavedCount: number;
   draftCompletedCount: number;
 }

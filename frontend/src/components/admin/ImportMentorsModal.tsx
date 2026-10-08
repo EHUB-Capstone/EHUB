@@ -168,7 +168,7 @@ export default function ImportMentorsModal({ onClose, onImported }: ImportMentor
               <div className="flex items-start gap-2.5 rounded-xl border border-blue-200 bg-blue-50 p-3.5 text-xs leading-5 text-slate-700">
                 <Info className="mt-0.5 h-4 w-4 shrink-0 text-blue-600" />
                 <div className="space-y-1">
-                  <p><strong>Use the mentor workbook template.</strong> Required sheets: DS Mentor_FA26 (industry mentors) and Mentor IT_FA26 (lecturer mentors).</p>
+                  <p><strong>Use the mentor workbook template.</strong> Required sheets: DS Mentor_FA26 (enterprise mentors) and Mentor IT_FA26 (lecturer mentors).</p>
                   <p>Only the mentor name is required. Mentors without an email are saved as <strong>incomplete</strong>; import a file with their email later to create the account. Existing mentors with the same email are updated.</p>
                   <p>Nobody is added to a semester here — use Add mentors in Subject Management.</p>
                   <p>Limits: Excel .xlsx · maximum 5 MB.</p>
@@ -223,7 +223,7 @@ export default function ImportMentorsModal({ onClose, onImported }: ImportMentor
               <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-green-100 text-green-600"><CheckCircle2 className="h-6 w-6" /></div>
               <h3 className="mt-3 text-lg font-bold text-slate-900">Mentor import completed</h3>
               <p className="mt-1 text-sm text-slate-600">Created {result.createdCount}, updated {result.updatedCount}, saved as incomplete {result.draftSavedCount}, completed {result.draftCompletedCount}.</p>
-              {result.draftSavedCount > 0 && <p className="mt-2 text-xs text-slate-500">Incomplete mentors are listed under Incomplete Mentors in User Management. Import a file with their email to create their accounts.</p>}
+              {result.draftSavedCount > 0 && <p className="mt-2 text-xs text-slate-500">Incomplete mentors are listed in the Needs information tab of User Management. Import a file with their email to create their accounts.</p>}
               {result.createdCount > 0 && <p className="mt-2 text-xs text-slate-500">New accounts can use Forgot Password to set their first password. Add them to a semester from Subject Management.</p>}
             </div>
           )}
@@ -256,7 +256,7 @@ function MentorRowsTable({ rows }: { rows: MentorImportPreview['rows'] }) {
         <tbody className="divide-y divide-slate-100 bg-white">{rows.map((row) => (
           <tr key={`${row.sheetName}-${row.rowNumber}`} className={!row.isValid ? 'bg-red-50/50' : 'hover:bg-slate-50'}>
             <td className="px-3 py-3 text-slate-600">{row.sheetName} · {row.rowNumber}</td>
-            <td className="px-3 py-3 text-slate-600">{row.mentorType === 'Enterprise' ? 'Industry' : 'Lecturer'}</td>
+            <td className="px-3 py-3 text-slate-600">{row.mentorType === 'Enterprise' ? 'Enterprise' : 'Lecturer'}</td>
             <td className="px-3 py-3"><span className="block font-semibold text-slate-700">{row.fullName || '—'}</span><span className={emailCellText(row.email).provided ? 'text-slate-400' : 'font-medium text-amber-600'}>{emailCellText(row.email).text}</span>{row.missingFields.length > 0 && <span className="mt-1 block max-w-sm text-[11px] text-slate-400">Missing: {row.missingFields.join(', ')}</span>}</td>
             <td className={`px-3 py-3 ${row.isValid ? 'text-green-700' : 'text-red-700'}`}><span className="block font-semibold">{!row.isValid ? 'Invalid' : row.status === 'NeedsCompletion' || row.status === 'UpdateIncomplete' ? 'Incomplete' : row.status === 'CompleteIncomplete' ? 'Complete record' : row.status}</span>{row.message && <span className="mt-1 block max-w-xs text-[11px] leading-4 text-slate-500">{row.message}</span>}</td>
           </tr>

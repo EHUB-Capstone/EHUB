@@ -5,10 +5,11 @@ import {
   countMasterImportChanges,
   describeMasterImportResult,
   emailCellText,
+  summarizeMissingFields,
   validateMentorWorkbook,
 } from '../src/utils/mentorMasterImport.ts';
 
-const emptyResult = { createdCount: 0, updatedCount: 0, semesterAssignmentCount: 0, draftSavedCount: 0, draftCompletedCount: 0 };
+const emptyResult = { createdCount: 0, updatedCount: 0, draftSavedCount: 0, draftCompletedCount: 0 };
 
 test('validateMentorWorkbook accepts only non-empty .xlsx files within the size limit', () => {
   assert.equal(validateMentorWorkbook({ name: 'mentors.XLSX', size: 10 }), null);
@@ -37,4 +38,9 @@ test('emailCellText shows a neutral hint when the file has no email', () => {
   assert.deepEqual(emailCellText(' a@b.vn '), { text: 'a@b.vn', provided: true });
   assert.deepEqual(emailCellText(''), { text: 'No email yet', provided: false });
   assert.deepEqual(emailCellText(null), { text: 'No email yet', provided: false });
+});
+
+test('summarizeMissingFields keeps the first few names and counts the rest', () => {
+  assert.deepEqual(summarizeMissingFields(['Email', 'SDT', 'Công ty', 'Loại HĐ', 'Địa chỉ']), { count: 5, preview: ['Email', 'SDT', 'Công ty'], hiddenCount: 2 });
+  assert.deepEqual(summarizeMissingFields([]), { count: 0, preview: [], hiddenCount: 0 });
 });

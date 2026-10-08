@@ -39,228 +39,6 @@ public sealed class MentorImportIntegrationTests(CustomWebApplicationFactory fac
     }
 
     [Fact]
-    public async Task Preview_ShouldReturn401_WhenNoTokenIsProvided()
-    {
-        var semesterId = await GetSemesterIdAsync();
-        using var request = CreatePreviewRequest(semesterId, CreateMentorWorkbook("unauthorized-enterprise@example.com", "unauthorized-academic@example.com"));
-
-        var response = await _client.SendAsync(request);
-
-        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
-    }
-
-    [Fact]
-    public async Task Preview_ShouldReturn403_WhenLecturerTokenIsProvided()
-    {
-        using var scope = factory.Services.CreateScope();
-        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var lecturerRole = await context.Roles.SingleAsync(role => role.Name == SystemRoles.Lecturer);
-        var lecturer = new User
-        {
-            FullName = "Forbidden Lecturer",
-            Email = $"forbidden-{Guid.NewGuid():N}@example.com",
-            NormalizedEmail = $"forbidden-{Guid.NewGuid():N}@example.com",
-            PasswordHash = "not-used",
-            Status = UserStatus.Active
-        };
-        lecturer.NormalizedEmail = lecturer.Email;
-        context.Users.Add(lecturer);
-        context.UserRoles.Add(new UserRole { UserId = lecturer.Id, User = lecturer, RoleId = lecturerRole.Id, Role = lecturerRole, AssignedAt = DateTime.UtcNow });
-        await context.SaveChangesAsync();
-        var token = scope.ServiceProvider.GetRequiredService<IJwtTokenService>().GenerateAccessToken(lecturer, [SystemRoles.Lecturer]).Token;
-        var semesterId = await GetSemesterIdAsync();
-        using var request = CreatePreviewRequest(semesterId, CreateMentorWorkbook("forbidden-enterprise@example.com", "forbidden-academic@example.com"), token);
-
-        var response = await _client.SendAsync(request);
-
-        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
-    }
-
-    [Fact]
-    public async Task AdminImport_ShouldCreateBothMentorTypes_AndAddThemToSelectedSemester()
-    {
-        var token = await GetAdminTokenAsync();
-        var semesterId = await GetSemesterIdAsync();
-        var enterpriseEmail = $"enterprise-{Guid.NewGuid():N}@example.com";
-        var academicEmail = $"academic-{Guid.NewGuid():N}@example.edu.vn";
-        using (var setupScope = factory.Services.CreateScope())
-        {
-            var setupContext = setupScope.ServiceProvider.GetRequiredService<AppDbContext>();
-            setupContext.PendingRegistrations.Add(new PendingRegistration
-            {
-                FullName = "Pending Enterprise Mentor",
-                Email = enterpriseEmail,
-                NormalizedEmail = enterpriseEmail,
-                PasswordHash = "not-used",
-                RoleName = SystemRoles.Mentor,
-                OtpHash = "not-used",
-                OtpExpiresAtUtc = DateTime.UtcNow.AddMinutes(5),
-                Status = PendingRegistrationStatus.Pending
-            });
-            await setupContext.SaveChangesAsync();
-        }
-        using var previewRequest = CreatePreviewRequest(semesterId, CreateMentorWorkbook(enterpriseEmail, academicEmail), token);
-
-        var previewResponse = await _client.SendAsync(previewRequest);
-        var preview = await previewResponse.Content.ReadFromJsonAsync<ApiResponse<MentorImportPreviewResponse>>();
-
-        previewResponse.StatusCode.Should().Be(HttpStatusCode.OK);
-        preview!.Data!.CanCommit.Should().BeTrue();
-        preview.Data.CreateCount.Should().Be(2);
-
-        using var commitRequest = new HttpRequestMessage(HttpMethod.Post, "/api/admin/mentors/imports/commit")
-        {
-            Content = JsonContent.Create(new CommitMentorImportRequest { SessionId = preview.Data.SessionId })
-        };
-        commitRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-        var commitResponse = await _client.SendAsync(commitRequest);
-        var commit = await commitResponse.Content.ReadFromJsonAsync<ApiResponse<MentorImportCommitResponse>>();
-
-        commitResponse.StatusCode.Should().Be(HttpStatusCode.OK);
-        commit!.Data!.CreatedCount.Should().Be(2);
-        commit.Data.SemesterAssignmentCount.Should().Be(2);
-
-        using var scope = factory.Services.CreateScope();
-        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var profiles = await context.MentorProfiles.AsNoTracking().Include(item => item.User)
-            .Where(item => item.User.NormalizedEmail == enterpriseEmail || item.User.NormalizedEmail == academicEmail).ToListAsync();
-        profiles.Should().ContainSingle(item => item.Type == MentorType.Enterprise && item.User.NormalizedEmail == enterpriseEmail && item.User.IsEmailVerified && item.FptEmail == null && item.DateOfBirth == new DateOnly(1993, 1, 21));
-        profiles.Should().ContainSingle(item => item.Type == MentorType.Academic && item.User.NormalizedEmail == academicEmail && item.Department == "Bộ môn CNTT");
-        var userIds = profiles.Select(item => item.UserId).ToArray();
-        (await context.SemesterStaffAssignments.AsNoTracking().CountAsync(item => item.SemesterId == semesterId && userIds.Contains(item.UserId) && item.Role == SemesterStaffRole.Mentor && item.Status == SemesterStaffStatus.Active)).Should().Be(2);
-        var pendingRegistration = await context.PendingRegistrations.AsNoTracking().SingleAsync(item => item.NormalizedEmail == enterpriseEmail);
-        pendingRegistration.Status.Should().Be(PendingRegistrationStatus.Cancelled);
-        pendingRegistration.CompletedUserId.Should().Be(profiles.Single(item => item.User.NormalizedEmail == enterpriseEmail).UserId);
-    }
-
-    [Fact]
-    public async Task AdminImport_NameOnlyRows_ShouldSaveDrafts_ThenCompleteThemFromFullWorkbook()
-    {
-        var token = await GetAdminTokenAsync();
-        var semesterId = await GetSemesterIdAsync();
-        var suffix = Guid.NewGuid().ToString("N")[..8];
-        var enterpriseName = $"Incomplete Enterprise {suffix}";
-        var academicName = $"Incomplete Academic {suffix}";
-        var enterpriseEmail = $"incomplete-enterprise-{suffix}@example.com";
-        var academicEmail = $"incomplete-academic-{suffix}@example.edu.vn";
-
-        using var draftPreviewRequest = CreatePreviewRequest(semesterId, CreateNameOnlyMentorWorkbook(enterpriseName, academicName), token);
-        var draftPreviewResponse = await _client.SendAsync(draftPreviewRequest);
-        var draftPreview = await draftPreviewResponse.Content.ReadFromJsonAsync<ApiResponse<MentorImportPreviewResponse>>();
-
-        draftPreviewResponse.StatusCode.Should().Be(HttpStatusCode.OK);
-        draftPreview!.Data!.CanCommit.Should().BeTrue();
-        draftPreview.Data.NeedsCompletionCount.Should().Be(2);
-        draftPreview.Data.ErrorCount.Should().Be(0);
-
-        using var draftCommitRequest = new HttpRequestMessage(HttpMethod.Post, "/api/admin/mentors/imports/commit")
-        {
-            Content = JsonContent.Create(new CommitMentorImportRequest { SessionId = draftPreview.Data.SessionId })
-        };
-        draftCommitRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-        var draftCommitResponse = await _client.SendAsync(draftCommitRequest);
-        var draftCommit = await draftCommitResponse.Content.ReadFromJsonAsync<ApiResponse<MentorImportCommitResponse>>();
-
-        draftCommitResponse.StatusCode.Should().Be(HttpStatusCode.OK);
-        draftCommit!.Data!.DraftSavedCount.Should().Be(2);
-        draftCommit.Data.CreatedCount.Should().Be(0);
-
-        string semesterCode;
-        int semesterYear;
-        using (var verifyDraftScope = factory.Services.CreateScope())
-        {
-            var context = verifyDraftScope.ServiceProvider.GetRequiredService<AppDbContext>();
-            var semester = await context.Semesters.AsNoTracking().SingleAsync(item => item.Id == semesterId);
-            semesterCode = semester.Term switch
-            {
-                SemesterTerm.Spring => "SP",
-                SemesterTerm.Summer => "SU",
-                SemesterTerm.Fall => "FA",
-                _ => throw new InvalidOperationException("Unsupported semester term.")
-            };
-            semesterYear = semester.Year;
-            var drafts = await context.MentorImportDrafts.AsNoTracking()
-                .Where(item => item.SemesterId == semesterId && (item.FullName == enterpriseName || item.FullName == academicName))
-                .ToListAsync();
-            drafts.Should().HaveCount(2);
-            drafts.Should().OnlyContain(item => item.Status == MentorImportDraftStatus.NeedsCompletion);
-        }
-
-        using var draftListRequest = new HttpRequestMessage(
-            HttpMethod.Get,
-            $"/api/subjects/teaching-staff?semester={semesterCode}&year={semesterYear}");
-        draftListRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-        var draftListResponse = await _client.SendAsync(draftListRequest);
-        var draftList = await draftListResponse.Content.ReadFromJsonAsync<ApiResponse<TeachingStaffListResponse>>();
-
-        draftListResponse.StatusCode.Should().Be(HttpStatusCode.OK);
-        draftList!.Data!.Staff.Should().Contain(item =>
-            item.Name == enterpriseName && item.IsIncomplete && item.UserId == null && item.Status == "Incomplete");
-        draftList.Data.Staff.Should().Contain(item =>
-            item.Name == academicName && item.IsIncomplete && item.UserId == null && item.Status == "Incomplete");
-
-        using var completePreviewRequest = CreatePreviewRequest(semesterId,
-            CreateMentorWorkbook(enterpriseEmail, academicEmail, enterpriseName, academicName), token);
-        var completePreviewResponse = await _client.SendAsync(completePreviewRequest);
-        var completePreview = await completePreviewResponse.Content.ReadFromJsonAsync<ApiResponse<MentorImportPreviewResponse>>();
-
-        completePreviewResponse.StatusCode.Should().Be(HttpStatusCode.OK);
-        completePreview!.Data!.CanCommit.Should().BeTrue();
-        completePreview.Data.CompleteDraftCount.Should().Be(2);
-
-        using var completeCommitRequest = new HttpRequestMessage(HttpMethod.Post, "/api/admin/mentors/imports/commit")
-        {
-            Content = JsonContent.Create(new CommitMentorImportRequest { SessionId = completePreview.Data.SessionId })
-        };
-        completeCommitRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-        var completeCommitResponse = await _client.SendAsync(completeCommitRequest);
-        var completeCommit = await completeCommitResponse.Content.ReadFromJsonAsync<ApiResponse<MentorImportCommitResponse>>();
-
-        completeCommitResponse.StatusCode.Should().Be(HttpStatusCode.OK);
-        completeCommit!.Data!.CreatedCount.Should().Be(2);
-        completeCommit.Data.DraftCompletedCount.Should().Be(2);
-
-        using var completedListRequest = new HttpRequestMessage(
-            HttpMethod.Get,
-            $"/api/subjects/teaching-staff?semester={semesterCode}&year={semesterYear}");
-        completedListRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-        var completedListResponse = await _client.SendAsync(completedListRequest);
-        var completedList = await completedListResponse.Content.ReadFromJsonAsync<ApiResponse<TeachingStaffListResponse>>();
-
-        completedListResponse.StatusCode.Should().Be(HttpStatusCode.OK);
-        completedList!.Data!.Staff.Should().Contain(item =>
-            item.Name == enterpriseName && !item.IsIncomplete && item.Email == enterpriseEmail);
-        completedList.Data.Staff.Should().Contain(item =>
-            item.Name == academicName && !item.IsIncomplete && item.Email == academicEmail);
-
-        using var minimalPreviewRequest = CreatePreviewRequest(semesterId,
-            CreateIdentityOnlyMentorWorkbook(enterpriseEmail, academicEmail, enterpriseName, academicName), token);
-        var minimalPreviewResponse = await _client.SendAsync(minimalPreviewRequest);
-        var minimalPreview = await minimalPreviewResponse.Content.ReadFromJsonAsync<ApiResponse<MentorImportPreviewResponse>>();
-        minimalPreviewResponse.StatusCode.Should().Be(HttpStatusCode.OK);
-        minimalPreview!.Data!.CanCommit.Should().BeTrue();
-        using var minimalCommitRequest = new HttpRequestMessage(HttpMethod.Post, "/api/admin/mentors/imports/commit")
-        {
-            Content = JsonContent.Create(new CommitMentorImportRequest { SessionId = minimalPreview.Data.SessionId })
-        };
-        minimalCommitRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-        (await _client.SendAsync(minimalCommitRequest)).StatusCode.Should().Be(HttpStatusCode.OK);
-
-        using var verifyScope = factory.Services.CreateScope();
-        var verifyContext = verifyScope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var completedDrafts = await verifyContext.MentorImportDrafts.AsNoTracking()
-            .Where(item => item.SemesterId == semesterId && (item.FullName == enterpriseName || item.FullName == academicName))
-            .ToListAsync();
-        completedDrafts.Should().OnlyContain(item => item.Status == MentorImportDraftStatus.Converted && item.ConvertedMentorProfileId != null);
-        var profiles = await verifyContext.MentorProfiles.AsNoTracking().Include(item => item.User)
-            .Where(item => item.User.NormalizedEmail == enterpriseEmail || item.User.NormalizedEmail == academicEmail)
-            .ToListAsync();
-        profiles.Should().HaveCount(2);
-        profiles.Single(item => item.Type == MentorType.Enterprise).Organization.Should().Be("Integration Company");
-        profiles.Single(item => item.Type == MentorType.Academic).Department.Should().Be("Bộ môn CNTT");
-    }
-
-    [Fact]
     public async Task BalancedAllocation_ShouldFillBothSlotsAndKeepLoadsWithinOne()
     {
         var token = await GetAdminTokenAsync();
@@ -909,17 +687,14 @@ public sealed class MentorImportIntegrationTests(CustomWebApplicationFactory fac
         var preview = await previewResponse.Content.ReadFromJsonAsync<ApiResponse<MentorImportPreviewResponse>>();
 
         previewResponse.StatusCode.Should().Be(HttpStatusCode.OK);
-        preview!.Data!.SemesterId.Should().BeNull();
         preview.Data.CanCommit.Should().BeTrue();
         preview.Data.CreateCount.Should().Be(2);
-        preview.Data.AddToSemesterCount.Should().Be(0);
 
         var commitResponse = await CommitImportAsync(token, preview.Data.SessionId);
         var commit = await commitResponse.Content.ReadFromJsonAsync<ApiResponse<MentorImportCommitResponse>>();
 
         commitResponse.StatusCode.Should().Be(HttpStatusCode.OK);
         commit!.Data!.CreatedCount.Should().Be(2);
-        commit.Data.SemesterAssignmentCount.Should().Be(0);
         using var scope = factory.Services.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var profiles = await context.MentorProfiles.AsNoTracking().Include(item => item.User)
@@ -948,7 +723,6 @@ public sealed class MentorImportIntegrationTests(CustomWebApplicationFactory fac
         second.Data.UpdateCount.Should().Be(2);
         var commit = await (await CommitImportAsync(token, second.Data.SessionId)).Content.ReadFromJsonAsync<ApiResponse<MentorImportCommitResponse>>();
         commit!.Data!.UpdatedCount.Should().Be(2);
-        commit.Data.SemesterAssignmentCount.Should().Be(0);
     }
 
     [Fact]
@@ -964,7 +738,6 @@ public sealed class MentorImportIntegrationTests(CustomWebApplicationFactory fac
         var preview = await response.Content.ReadFromJsonAsync<ApiResponse<MentorImportPreviewResponse>>();
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
-        preview!.Data!.SemesterId.Should().BeNull();
         preview.Data.CanCommit.Should().BeTrue("missing email and other fields must not block the import");
         preview.Data.ErrorCount.Should().Be(0);
         preview.Data.NeedsCompletionCount.Should().Be(2);
@@ -973,9 +746,8 @@ public sealed class MentorImportIntegrationTests(CustomWebApplicationFactory fac
         var commit = await (await CommitImportAsync(token, preview.Data.SessionId)).Content.ReadFromJsonAsync<ApiResponse<MentorImportCommitResponse>>();
         commit!.Data!.DraftSavedCount.Should().Be(2);
         commit.Data.CreatedCount.Should().Be(0);
-        commit.Data.SemesterAssignmentCount.Should().Be(0);
 
-        var list = await GetIncompleteMastersAsync(token);
+        var list = await GetIncompleteMastersAsync(token, suffix);
         list.Should().Contain(item => item.FullName == enterpriseName && item.MentorType == "Enterprise" && item.MissingFields.Contains("Email"));
         list.Should().Contain(item => item.FullName == academicName && item.MentorType == "Academic");
         using var scope = factory.Services.CreateScope();
@@ -1005,33 +777,136 @@ public sealed class MentorImportIntegrationTests(CustomWebApplicationFactory fac
         var commit = await (await CommitImportAsync(token, fullPreview.Data.SessionId)).Content.ReadFromJsonAsync<ApiResponse<MentorImportCommitResponse>>();
         commit!.Data!.CreatedCount.Should().Be(2);
         commit.Data.DraftCompletedCount.Should().Be(2);
-        commit.Data.SemesterAssignmentCount.Should().Be(0);
-        (await GetIncompleteMastersAsync(token)).Should().NotContain(item => item.FullName == enterpriseName || item.FullName == academicName);
+        (await GetIncompleteMastersAsync(token, suffix)).Should().NotContain(item => item.FullName == enterpriseName || item.FullName == academicName);
     }
 
     [Fact]
-    public async Task SemesterImport_ShouldCompleteAnIncompleteMasterMentor_AndAddThemToTheSemester()
+    public async Task MasterImport_ShouldNotEraseExistingProfileFields_WhenALaterFileOmitsThem()
     {
         var token = await GetAdminTokenAsync();
-        var semesterId = await GetSemesterIdAsync();
         var suffix = Guid.NewGuid().ToString("N")[..8];
-        var enterpriseName = $"Fallback Enterprise {suffix}";
-        var academicName = $"Fallback Academic {suffix}";
-        var enterpriseEmail = $"fallback-e-{suffix}@example.com";
-        var academicEmail = $"fallback-a-{suffix}@example.edu.vn";
-        using var draftRequest = CreateMasterPreviewRequest(CreateNameOnlyMentorWorkbook(enterpriseName, academicName), token);
-        var draftPreview = await (await _client.SendAsync(draftRequest)).Content.ReadFromJsonAsync<ApiResponse<MentorImportPreviewResponse>>();
-        (await CommitImportAsync(token, draftPreview!.Data!.SessionId)).StatusCode.Should().Be(HttpStatusCode.OK);
+        var enterpriseEmail = $"keep-fields-e-{suffix}@example.com";
+        var academicEmail = $"keep-fields-a-{suffix}@example.edu.vn";
+        var enterpriseName = $"Keep Fields Enterprise {suffix}";
+        var academicName = $"Keep Fields Academic {suffix}";
+        using var fullRequest = CreateMasterPreviewRequest(CreateMentorWorkbook(enterpriseEmail, academicEmail, enterpriseName, academicName), token);
+        var full = await (await _client.SendAsync(fullRequest)).Content.ReadFromJsonAsync<ApiResponse<MentorImportPreviewResponse>>();
+        (await CommitImportAsync(token, full!.Data!.SessionId)).StatusCode.Should().Be(HttpStatusCode.OK);
 
-        using var semesterRequest = CreatePreviewRequest(semesterId, CreateMentorWorkbook(enterpriseEmail, academicEmail, enterpriseName, academicName), token);
-        var preview = await (await _client.SendAsync(semesterRequest)).Content.ReadFromJsonAsync<ApiResponse<MentorImportPreviewResponse>>();
+        using var minimalRequest = CreateMasterPreviewRequest(CreateIdentityOnlyMentorWorkbook(enterpriseEmail, academicEmail, enterpriseName, academicName), token);
+        var minimal = await (await _client.SendAsync(minimalRequest)).Content.ReadFromJsonAsync<ApiResponse<MentorImportPreviewResponse>>();
+        minimal!.Data!.CanCommit.Should().BeTrue();
+        (await CommitImportAsync(token, minimal.Data.SessionId)).StatusCode.Should().Be(HttpStatusCode.OK);
+
+        using var scope = factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var profiles = await context.MentorProfiles.AsNoTracking().Include(item => item.User)
+            .Where(item => item.User.NormalizedEmail == enterpriseEmail || item.User.NormalizedEmail == academicEmail).ToListAsync();
+        profiles.Should().HaveCount(2);
+        profiles.Single(item => item.Type == MentorType.Enterprise).Organization.Should().Be("Integration Company");
+        profiles.Single(item => item.Type == MentorType.Academic).Department.Should().Be("Bộ môn CNTT");
+    }
+
+    [Fact]
+    public async Task MasterImport_ShouldCompleteAnIncompleteMentorSavedEarlierForASemester()
+    {
+        var token = await GetAdminTokenAsync();
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+        var enterpriseName = $"Legacy Draft Enterprise {suffix}";
+        var academicName = $"Legacy Draft Academic {suffix}";
+        Guid draftId;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var semesterId = await context.Semesters.AsNoTracking().Select(item => item.Id).FirstAsync();
+            var draft = new MentorImportDraft
+            {
+                SemesterId = semesterId, Type = MentorType.Enterprise, FullName = enterpriseName,
+                NormalizedFullName = enterpriseName.ToLowerInvariant(), Status = MentorImportDraftStatus.NeedsCompletion
+            };
+            context.MentorImportDrafts.Add(draft);
+            await context.SaveChangesAsync();
+            draftId = draft.Id;
+        }
+        var email = $"legacy-draft-e-{suffix}@example.com";
+        using var request = CreateMasterPreviewRequest(CreateMentorWorkbook(email, $"legacy-draft-a-{suffix}@example.edu.vn", enterpriseName, academicName), token);
+        var preview = await (await _client.SendAsync(request)).Content.ReadFromJsonAsync<ApiResponse<MentorImportPreviewResponse>>();
 
         preview!.Data!.CanCommit.Should().BeTrue();
-        preview.Data.CompleteDraftCount.Should().Be(2);
-        var commit = await (await CommitImportAsync(token, preview.Data.SessionId)).Content.ReadFromJsonAsync<ApiResponse<MentorImportCommitResponse>>();
-        commit!.Data!.DraftCompletedCount.Should().Be(2);
-        commit.Data.SemesterAssignmentCount.Should().Be(2);
-        (await GetIncompleteMastersAsync(token)).Should().NotContain(item => item.FullName == enterpriseName || item.FullName == academicName);
+        preview.Data.CompleteDraftCount.Should().Be(1, "only the enterprise mentor has an earlier incomplete record");
+        (await CommitImportAsync(token, preview.Data.SessionId)).StatusCode.Should().Be(HttpStatusCode.OK);
+        using var verify = factory.Services.CreateScope();
+        var saved = await verify.ServiceProvider.GetRequiredService<AppDbContext>().MentorImportDrafts.AsNoTracking().SingleAsync(item => item.Id == draftId);
+        saved.Status.Should().Be(MentorImportDraftStatus.Converted);
+        saved.ConvertedMentorProfileId.Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task IncompleteMasterMentors_ShouldPageSearchAndFilterByType()
+    {
+        var token = await GetAdminTokenAsync();
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+        using var request = CreateMasterPreviewRequest(CreateNameOnlyMentorWorkbook($"Paged Industry {suffix}", $"Paged Lecturer {suffix}"), token);
+        var preview = await (await _client.SendAsync(request)).Content.ReadFromJsonAsync<ApiResponse<MentorImportPreviewResponse>>();
+        (await CommitImportAsync(token, preview!.Data!.SessionId)).StatusCode.Should().Be(HttpStatusCode.OK);
+
+        async Task<IncompleteMentorListResponse> Get(string query)
+        {
+            using var get = new HttpRequestMessage(HttpMethod.Get, $"/api/admin/mentors/incomplete?{query}");
+            get.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            var response = await _client.SendAsync(get);
+            response.StatusCode.Should().Be(HttpStatusCode.OK);
+            return (await response.Content.ReadFromJsonAsync<ApiResponse<IncompleteMentorListResponse>>())!.Data!;
+        }
+
+        var all = await Get($"search={suffix}&limit=1");
+        all.Pagination.Total.Should().Be(2);
+        all.Pagination.Pages.Should().Be(2);
+        all.Mentors.Should().HaveCount(1);
+        (await Get($"search={suffix}&mentorType=Enterprise")).Mentors.Should().ContainSingle().Which.MentorType.Should().Be("Enterprise");
+        (await Get($"search={suffix}&mentorType=academic")).Mentors.Should().ContainSingle().Which.MentorType.Should().Be("Academic");
+        using var invalid = new HttpRequestMessage(HttpMethod.Get, "/api/admin/mentors/incomplete?mentorType=Unknown");
+        invalid.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        (await _client.SendAsync(invalid)).StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task IncompleteMasterMentors_ShouldCountEachPersonOnce_AndCompleteEveryRecordOfThem()
+    {
+        var token = await GetAdminTokenAsync();
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+        var enterpriseName = $"Twice Saved Enterprise {suffix}";
+        var academicName = $"Twice Saved Academic {suffix}";
+        // One record saved by the retired per-semester import...
+        using (var scope = factory.Services.CreateScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var semesterId = await context.Semesters.AsNoTracking().Select(item => item.Id).FirstAsync();
+            context.MentorImportDrafts.Add(new MentorImportDraft
+            {
+                SemesterId = semesterId, Type = MentorType.Enterprise, FullName = enterpriseName,
+                NormalizedFullName = enterpriseName.ToLowerInvariant(), Status = MentorImportDraftStatus.NeedsCompletion
+            });
+            await context.SaveChangesAsync();
+        }
+        // ...and a second record for the same person saved by a master-list import.
+        using var draftRequest = CreateMasterPreviewRequest(CreateNameOnlyMentorWorkbook(enterpriseName, academicName), token);
+        var draftPreview = await (await _client.SendAsync(draftRequest)).Content.ReadFromJsonAsync<ApiResponse<MentorImportPreviewResponse>>();
+        draftPreview!.Data!.CanCommit.Should().BeTrue("a person with an earlier record must not block the import");
+        (await CommitImportAsync(token, draftPreview.Data.SessionId)).StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var list = await GetIncompleteMastersAsync(token, suffix);
+        list.Should().HaveCount(2, "each person is listed once even when two records exist");
+
+        using var fullRequest = CreateMasterPreviewRequest(CreateMentorWorkbook($"twice-e-{suffix}@example.com", $"twice-a-{suffix}@example.edu.vn", enterpriseName, academicName), token);
+        var full = await (await _client.SendAsync(fullRequest)).Content.ReadFromJsonAsync<ApiResponse<MentorImportPreviewResponse>>();
+        full!.Data!.CanCommit.Should().BeTrue();
+        (await CommitImportAsync(token, full.Data.SessionId)).StatusCode.Should().Be(HttpStatusCode.OK);
+
+        (await GetIncompleteMastersAsync(token, suffix)).Should().BeEmpty("every record of a completed person is closed");
+        using var verify = factory.Services.CreateScope();
+        (await verify.ServiceProvider.GetRequiredService<AppDbContext>().MentorImportDrafts.AsNoTracking()
+            .AnyAsync(item => item.FullName == enterpriseName && item.Status == MentorImportDraftStatus.NeedsCompletion)).Should().BeFalse();
     }
 
     [Fact]
@@ -1056,24 +931,13 @@ public sealed class MentorImportIntegrationTests(CustomWebApplicationFactory fac
         (await _client.SendAsync(request)).StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
 
-    private async Task<IReadOnlyCollection<IncompleteMentorResponse>> GetIncompleteMastersAsync(string token)
+    private async Task<IReadOnlyCollection<IncompleteMentorResponse>> GetIncompleteMastersAsync(string token, string search)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/admin/mentors/incomplete");
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"/api/admin/mentors/incomplete?limit=100&search={Uri.EscapeDataString(search)}");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         var response = await _client.SendAsync(request);
         response.StatusCode.Should().Be(HttpStatusCode.OK);
-        return (await response.Content.ReadFromJsonAsync<ApiResponse<IReadOnlyCollection<IncompleteMentorResponse>>>())!.Data!;
-    }
-
-    [Fact]
-    public async Task SemesterImportPreview_ShouldStillRequireAKnownSemester()
-    {
-        var token = await GetAdminTokenAsync();
-        using var request = CreatePreviewRequest(Guid.Empty, CreateMentorWorkbook("no-semester-e@example.com", "no-semester-a@example.com"), token);
-
-        var response = await _client.SendAsync(request);
-
-        response.StatusCode.Should().NotBe(HttpStatusCode.OK, "an empty semester id must not silently become a master-list import");
+        return (await response.Content.ReadFromJsonAsync<ApiResponse<IncompleteMentorListResponse>>())!.Data!.Mentors;
     }
 
     private Task<HttpResponseMessage> CommitImportAsync(string token, Guid sessionId)
@@ -1097,29 +961,11 @@ public sealed class MentorImportIntegrationTests(CustomWebApplicationFactory fac
         return request;
     }
 
-    private async Task<Guid> GetSemesterIdAsync()
-    {
-        using var scope = factory.Services.CreateScope();
-        return await scope.ServiceProvider.GetRequiredService<AppDbContext>().Semesters.AsNoTracking().Select(item => item.Id).FirstAsync();
-    }
-
     private async Task<string> GetAdminTokenAsync()
     {
         var response = await _client.PostAsJsonAsync("/api/auth/login", new EmailPasswordLoginRequest { Email = "admin@ehub.test", Password = "Admin@123456" });
         var body = await response.Content.ReadFromJsonAsync<ApiResponse<AuthResponse>>();
         return body!.Data!.AccessToken;
-    }
-
-    private static HttpRequestMessage CreatePreviewRequest(Guid semesterId, byte[] workbook, string? token = null)
-    {
-        var content = new MultipartFormDataContent();
-        content.Add(new StringContent(semesterId.ToString()), "semesterId");
-        var file = new ByteArrayContent(workbook);
-        file.Headers.ContentType = new MediaTypeHeaderValue("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-        content.Add(file, "file", "mentors.xlsx");
-        var request = new HttpRequestMessage(HttpMethod.Post, "/api/admin/mentors/imports/preview") { Content = content };
-        if (token is not null) request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-        return request;
     }
 
     private static byte[] CreateMentorWorkbook(

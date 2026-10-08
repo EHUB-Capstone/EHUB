@@ -93,6 +93,7 @@ public sealed class UserManagementIntegrationTests : IAsyncLifetime
                 Name = createResult.Value.Name,
                 Email = createResult.Value.Email,
                 Role = "MENTOR",
+                MentorType = "Academic",
                 Status = createResult.Value.Status
             });
 
@@ -234,13 +235,10 @@ public sealed class UserManagementIntegrationTests : IAsyncLifetime
             var created = await handler.CreateUserAsync(new SaveManagedUserRequest
             {
                 Name = name, Email = $"{name.ToLowerInvariant().Replace(' ', '-')}-{unique}@example.com",
-                Password = "Temporary123", Role = "MENTOR", Status = "APPROVED"
+                Password = "Temporary123", Role = "MENTOR", MentorType = type.ToString(), Status = "APPROVED"
             });
             created.IsSuccess.Should().BeTrue();
             _context.ChangeTracker.Clear();
-            var profile = await _context.MentorProfiles.SingleAsync(item => item.UserId == created.Value.Id);
-            profile.Type = type;
-            await _context.SaveChangesAsync();
             _context.ChangeTracker.Clear();
             return created.Value.Id;
         }
@@ -258,6 +256,60 @@ public sealed class UserManagementIntegrationTests : IAsyncLifetime
         industryOnly.Value.Users.Should().ContainSingle().Which.Id.Should().Be(industry);
         lecturerOnly.Value.Users.Should().ContainSingle().Which.Id.Should().Be(lecturer);
         invalid.IsFailure.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task CreateUserAsync_RequiresAValidMentorType_ForMentorsOnly()
+    {
+        var handler = new UserManagementHandler(_context, new TestCurrentUser(_adminId), new BCryptPasswordHasher());
+        var unique = Guid.NewGuid().ToString("N")[..8];
+        SaveManagedUserRequest Request(string role, string? mentorType) => new()
+        {
+            Name = $"Typed {role}", Email = $"typed-{role.ToLowerInvariant()}-{mentorType ?? "none"}-{unique}@example.com",
+            Password = "Temporary123", Role = role, MentorType = mentorType, Status = "APPROVED"
+        };
+
+        (await handler.CreateUserAsync(Request("MENTOR", null))).IsFailure.Should().BeTrue("a mentor must say which kind they are");
+        (await handler.CreateUserAsync(Request("MENTOR", "Unknown"))).IsFailure.Should().BeTrue();
+        var enterprise = await handler.CreateUserAsync(Request("MENTOR", "enterprise"));
+        var academic = await handler.CreateUserAsync(Request("MENTOR", "Academic"));
+        var lecturer = await handler.CreateUserAsync(Request("LECTURER", null));
+
+        enterprise.IsSuccess.Should().BeTrue();
+        enterprise.Value.MentorType.Should().Be("Enterprise");
+        academic.Value.MentorType.Should().Be("Academic");
+        lecturer.IsSuccess.Should().BeTrue("other roles do not need a mentor type");
+        lecturer.Value.MentorType.Should().BeNull();
+        _context.ChangeTracker.Clear();
+        (await _context.MentorProfiles.AsNoTracking().SingleAsync(item => item.UserId == academic.Value.Id)).Type.Should().Be(MentorType.Academic);
+        (await _context.MentorProfiles.AsNoTracking().SingleAsync(item => item.UserId == enterprise.Value.Id)).Type.Should().Be(MentorType.Enterprise);
+    }
+
+    [Fact]
+    public async Task UpdateUserAsync_RequiresATypeWhenSwitchingToMentor_AndNeverChangesAnExistingMentorType()
+    {
+        var handler = new UserManagementHandler(_context, new TestCurrentUser(_adminId), new BCryptPasswordHasher());
+        var unique = Guid.NewGuid().ToString("N")[..8];
+        var lecturer = await handler.CreateUserAsync(new SaveManagedUserRequest
+        {
+            Name = "Becomes Mentor", Email = $"becomes-mentor-{unique}@example.com", Password = "Temporary123", Role = "LECTURER", Status = "APPROVED"
+        });
+        _context.ChangeTracker.Clear();
+        SaveManagedUserRequest AsMentor(string? type) => new()
+        {
+            Name = lecturer.Value.Name, Email = lecturer.Value.Email, Role = "MENTOR", MentorType = type, Status = "APPROVED"
+        };
+
+        (await handler.UpdateUserAsync(lecturer.Value.Id, AsMentor(null))).IsFailure.Should().BeTrue("switching to mentor needs a type");
+        _context.ChangeTracker.Clear();
+        (await handler.UpdateUserAsync(lecturer.Value.Id, AsMentor("Academic"))).IsSuccess.Should().BeTrue();
+        _context.ChangeTracker.Clear();
+
+        (await handler.UpdateUserAsync(lecturer.Value.Id, AsMentor("Enterprise"))).IsFailure.Should().BeTrue("the type of an existing mentor is not changed here");
+        _context.ChangeTracker.Clear();
+        (await handler.UpdateUserAsync(lecturer.Value.Id, AsMentor(null))).IsSuccess.Should().BeTrue("editing other fields keeps the current type");
+        _context.ChangeTracker.Clear();
+        (await _context.MentorProfiles.AsNoTracking().SingleAsync(item => item.UserId == lecturer.Value.Id)).Type.Should().Be(MentorType.Academic);
     }
 
     private sealed class TestCurrentUser(Guid userId) : ICurrentUserService

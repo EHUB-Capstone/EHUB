@@ -24,6 +24,7 @@ import type {
 import Button from '../ui/Button';
 import LoadingSkeleton from '../ui/LoadingSkeleton';
 import Modal from '../ui/Modal';
+import MentorKindTag from './MentorKindTag';
 
 interface AddSemesterStaffModalProps {
   isOpen: boolean;
@@ -39,14 +40,9 @@ interface AddSemesterStaffModalProps {
 
 const kindFilters: { value: MentorKindFilter; label: string }[] = [
   { value: 'ALL', label: 'All mentors' },
-  { value: 'Enterprise', label: 'Industry mentors' },
+  { value: 'Enterprise', label: 'Enterprise mentors' },
   { value: 'Academic', label: 'Lecturer mentors' },
 ];
-
-const kindBadge = {
-  Enterprise: { label: 'Industry mentor', className: 'border-orange-200 bg-orange-50 text-orange-700' },
-  Academic: { label: 'Lecturer mentor', className: 'border-emerald-200 bg-emerald-50 text-emerald-700' },
-} as const;
 
 export default function AddSemesterStaffModal({
   isOpen,
@@ -289,7 +285,6 @@ export default function AddSemesterStaffModal({
 }
 
 function CandidateInfo({ candidate }: { candidate: TeachingStaffCandidateDto }) {
-  const badge = candidate.mentorType ? kindBadge[candidate.mentorType] : null;
   return (
     <div className="flex min-w-0 items-center gap-2.5">
       <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-600">
@@ -299,10 +294,10 @@ function CandidateInfo({ candidate }: { candidate: TeachingStaffCandidateDto }) 
         <p className="truncate text-xs font-semibold text-slate-800">{candidate.name}</p>
         <p className="truncate text-[10px] text-slate-400">{candidate.email}</p>
       </div>
-      {badge && (
-        <span className={`hidden shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold sm:inline ${badge.className}`}>
-          {badge.label}{candidate.contractType ? ` · ${candidate.contractType}` : ''}
-        </span>
+      {candidate.mentorType && (
+        <MentorKindTag type={candidate.mentorType} className="hidden shrink-0 sm:inline-flex">
+          {candidate.contractType ? ` · ${candidate.contractType}` : ''}
+        </MentorKindTag>
       )}
     </div>
   );

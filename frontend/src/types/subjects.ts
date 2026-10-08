@@ -141,7 +141,7 @@ export interface TeachingStaffDto {
   email: string;
   avatar?: string | null;
   role: 'LECTURER' | 'MENTOR';
-  /** Only set for mentors: Enterprise = industry mentor, Academic = lecturer mentor. */
+  /** Only set for mentors: Enterprise = enterprise mentor, Academic = lecturer mentor. */
   mentorType?: 'Enterprise' | 'Academic' | null;
   status: 'Active' | 'Inactive' | 'Incomplete';
   userStatus: string;
@@ -160,7 +160,7 @@ export interface TeachingStaffCandidateDto {
   email: string;
   avatar?: string | null;
   role: 'LECTURER' | 'MENTOR';
-  /** Only for mentors: Enterprise = industry mentor, Academic = lecturer mentor. */
+  /** Only for mentors: Enterprise = enterprise mentor, Academic = lecturer mentor. */
   mentorType?: MentorKind | null;
   contractType?: string | null;
 }

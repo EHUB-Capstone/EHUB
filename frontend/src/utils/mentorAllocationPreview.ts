@@ -186,7 +186,7 @@ export function keepAppliedEdits(edits: MentorAllocationEdit[], preview: MentorA
 }
 
 export const skipReasonLabel: Record<MentorAllocationSkipReason, string> = {
-  MentorNotActiveInSemester: 'Not active this semester',
+  MentorNotActiveInSemester: 'Not active this semester · needs a new mentor',
   MentorUnavailable: 'Unavailable',
   SlotAlreadyFilled: 'Slot already filled',
   NoContinuedTeam: 'Team does not continue',

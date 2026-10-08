@@ -21,7 +21,7 @@ Khi sang kỳ mới, Admin cần gán mentor cho các nhóm. Tính năng giúp:
 
 | Từ | Nghĩa |
 |---|---|
-| Mentor doanh nghiệp | Mentor đến từ công ty. Trên màn hình gọi là **Industry mentor**. |
+| Mentor doanh nghiệp | Mentor đến từ công ty. Trên màn hình gọi là **Enterprise mentor**. |
 | Mentor giảng viên | Mentor là giảng viên của trường. Trên màn hình gọi là **Lecturer mentor**. |
 | Vị trí mentor | Mỗi nhóm có đúng **hai vị trí**: một cho mentor doanh nghiệp, một cho mentor giảng viên. |
 | Nhóm tiếp tục | Nhóm EXE201 của kỳ mới đi tiếp nguyên nhóm từ một nhóm EXE101 của kỳ cũ. |
@@ -99,7 +99,7 @@ Lưu ý:
 
 ### 2.3 Tạo mentor
 
-Vào `/admin/subjects`, mở tab **Lecturers & Mentors by Semester**, chọn kỳ, rồi dùng **Import mentor list** (bấm **Download template** để lấy file mẫu) hoặc **Add mentor**. Tạo các mentor sau:
+Vào `/admin/subjects`, mở tab **Lecturers & Mentors by Semester**, chọn kỳ, rồi dùng **Add mentors** để thêm mentor đã có trong hệ thống (mentor mới thì nhập trước ở User Management > Import > Import Mentors, bấm **Download template** để lấy file mẫu). Tạo các mentor sau:
 
 | Tên mentor | Loại | Kỳ cũ | Kỳ mới |
 |---|---|---|---|
@@ -194,8 +194,8 @@ Bảng này được thiết kế để mỗi quy tắc đều có dữ liệu c
 **Phải thấy gì**
 - [ ] Kỳ mới: Cường và Lan **không** ở trạng thái đang tham gia.
 - [ ] Kỳ cũ: Cường và Lan vẫn tham gia, các phân công cũ vẫn như cũ.
-- [ ] Mỗi mentor có nhãn loại đúng: **Industry mentor** (màu cam) cho mentor doanh nghiệp, **Lecturer mentor** (màu xanh lá) cho mentor giảng viên.
-- [ ] Bộ lọc Role có "All mentors", "Industry mentors", "Lecturer mentors" và lọc đúng.
+- [ ] Mỗi mentor có nhãn loại đúng: **Enterprise mentor** (màu cam) cho mentor doanh nghiệp, **Lecturer mentor** (màu xanh lá) cho mentor giảng viên.
+- [ ] Bộ lọc Role có "All mentors", "Enterprise mentors", "Lecturer mentors" và lọc đúng.
 
 ### Kiểm tra 1.2. Mentor không tham gia kỳ này thì không được dùng
 
@@ -212,19 +212,19 @@ Bảng này được thiết kế để mỗi quy tắc đều có dữ liệu c
 ### Kiểm tra 1.3. Thêm nhiều mentor vào kỳ cùng lúc
 
 **Làm gì**
-1. Ở Teaching staff directory của kỳ mới, bấm **Add mentor**.
-2. Trong hộp thoại **Add mentors to <kỳ>**: gõ vài chữ vào ô tìm kiếm, bấm các nút lọc **Industry mentors** và **Lecturer mentors**.
+1. Ở Teaching staff directory của kỳ mới, bấm **Add mentors**.
+2. Trong hộp thoại **Add mentors to <kỳ>**: gõ vài chữ vào ô tìm kiếm, bấm các nút lọc **Enterprise mentors** và **Lecturer mentors**.
 3. Tick vài mentor, hoặc bấm **Select all**, rồi bấm **Add N mentors**.
-4. Làm tương tự với **Add lecturer**.
+4. Làm tương tự với **Add lecturers**.
 
 **Phải thấy gì**
-- [ ] Danh sách hiển thị đủ tài khoản mentor đang hoạt động, mỗi người kèm nhãn **Industry mentor** hoặc **Lecturer mentor** (và loại hợp đồng nếu có).
+- [ ] Danh sách hiển thị đủ tài khoản mentor đang hoạt động, mỗi người kèm nhãn **Enterprise mentor** hoặc **Lecturer mentor** (và loại hợp đồng nếu có).
 - [ ] Ô tìm kiếm lọc theo tên, email và loại hợp đồng, không phân biệt dấu. Nút lọc chỉ giữ đúng loại mentor.
 - [ ] Mentor đã ở trong kỳ nằm ở mục **Already in <kỳ>**, mờ và không tick được. Dòng đếm cho biết "N available · M already in …".
 - [ ] **Select all** chọn tất cả người đang hiện (khi đang lọc thì ghi "Select all shown"). Nút cuối ghi đúng số người, ví dụ "Add 5 mentors".
 - [ ] Sau khi bấm, thông báo "Added 5 mentors." xuất hiện, các mentor vừa thêm chuyển xuống mục "Already in …", và danh sách phía sau (Teaching staff directory) cập nhật ngay.
 - [ ] Người nào bị bỏ qua (ví dụ vừa có người khác thêm trước, hoặc đã nằm trong kỳ ở trạng thái Inactive) được nêu tên kèm lý do; những người còn lại vẫn được thêm.
-- [ ] Add lecturer hoạt động tương tự, và danh sách chỉ có giảng viên.
+- [ ] Add lecturers hoạt động tương tự, và danh sách chỉ có giảng viên.
 
 ### Kiểm tra 1.4. Nhập danh sách mentor gốc ở User Management
 
@@ -240,14 +240,17 @@ Bảng này được thiết kế để mỗi quy tắc đều có dữ liệu c
 - [ ] Bước 3: thông báo hoàn tất, danh sách User Management tải lại và có các tài khoản Mentor mới. Hộp thoại nhắc tài khoản mới dùng Forgot Password để đặt mật khẩu lần đầu.
 - [ ] Các mentor mới **chưa** nằm trong kỳ nào: mở Add mentors của một kỳ thì họ ở mục có thể chọn, không ở mục "Already in …".
 - [ ] Bước 4: dòng chỉ có tên vẫn được chấp nhận. Ô email ghi "No email yet" (màu vàng, không phải lỗi), cột Result ghi "Incomplete", ô **Incomplete** đếm đúng số dòng, nút Import vẫn bấm được.
-- [ ] Sau khi nhập bước 4: không tạo tài khoản nào cho các dòng đó. Ở User Management xuất hiện nút **Incomplete Mentors (N)**; bấm vào thấy tên, loại mentor (Industry/Lecturer) và các trường còn thiếu.
-- [ ] Nhập lại một file có đúng tên đó kèm email: dòng hiện "Complete record", sau khi nhập thì tài khoản được tạo, mentor biến khỏi danh sách Incomplete Mentors.
+- [ ] Sau khi nhập bước 4: không tạo tài khoản nào cho các dòng đó. Ở User Management, tab **Needs information (N)** hiện danh sách các mentor này: tên, tag Industry/Lecturer mentor, nhãn vàng **Needs information** và "N fields missing" (rê chuột để xem đủ các trường thiếu). Tab có tìm kiếm, lọc loại mentor và phân trang; chỉ để xem, không có nút sửa hay xóa.
+- [ ] Nhập lại một file có đúng tên đó kèm email: dòng hiện "Complete record", sau khi nhập thì tài khoản được tạo, mentor biến khỏi tab Needs information và xuất hiện ở tab Accounts.
 - [ ] Bước 5: các dòng cũ hiện là Update (không tạo trùng tài khoản), sau khi nhập thì tên mới được cập nhật.
 - [ ] File không phải .xlsx hoặc lớn hơn 5 MB bị từ chối ngay với thông báo rõ ràng. Chỉ thiếu **tên** mới là lỗi.
 
-- [ ] Đầu trang User Management chỉ còn nút **Import** (bấm ra menu Import Lecturers / Import Mentors) và **Create User**, không bị xuống dòng chữ. Nếu có mentor chưa đầy đủ, một nhãn vàng "N incomplete mentors · View" nằm dưới tiêu đề.
-- [ ] Ở cột Role, mentor có thêm nhãn **Industry mentor** hoặc **Lecturer mentor**.
-- [ ] Chọn lọc Role = Mentors thì xuất hiện ô lọc thứ hai: **All mentors / Industry mentors / Lecturer mentors**, danh sách lọc đúng; đổi sang role khác thì ô này ẩn và được đặt lại.
+- [ ] Đầu trang User Management chỉ còn nút **Import** (bấm ra menu Import Lecturers / Import Mentors) và **Create User**, không bị xuống dòng chữ. Bên dưới có hai tab **Accounts** và **Needs information**.
+- [ ] Ở cột Role, mentor có thêm nhãn **Enterprise mentor** hoặc **Lecturer mentor**.
+- [ ] Chọn lọc Role = Mentors thì xuất hiện ô lọc thứ hai: **All mentors / Enterprise mentors / Lecturer mentors**, danh sách lọc đúng; đổi sang role khác thì ô này ẩn và được đặt lại.
+
+- [ ] Thêm thủ công: ở **Create User**, chọn System Role = Mentor thì xuất hiện ô **Mentor Type \*** (Enterprise mentor / Lecturer mentor). Không chọn thì không lưu được và báo lỗi. Sau khi tạo, người đó có đúng tag loại mentor trong danh sách.
+- [ ] Sửa một mentor đã có: ô Mentor Type bị khóa kèm dòng giải thích. Đổi một Lecturer thành Mentor thì phải chọn loại.
 
 **Lưu ý:** mentor chưa đầy đủ ở master list chưa có tài khoản nên chưa thể thêm vào kỳ hay phân công nhóm. Import file của một kỳ (Subject Management) có email cho đúng tên đó cũng hoàn tất bản ghi và thêm vào kỳ.
 
@@ -497,7 +500,7 @@ Vào trang chi tiết lớp, khối Mentors, nút **Manage**, gán tay:
 ### Kiểm tra 7.1. Bản xem trước đủ thông tin
 
 **Phải thấy gì**
-- [ ] Đầu cửa sổ có các ô số liệu: **Teams, Kept, New, Manual, Replaced, Missing industry, Missing lecturer**.
+- [ ] Đầu cửa sổ có các ô số liệu: **Teams, Kept, New, Manual, Replaced, Missing enterprise, Missing lecturer**.
 - [ ] Tab **By team** có ô tìm kiếm và bộ lọc ("All teams", "Changed by this preview", "Missing a mentor") hoạt động.
 - [ ] Tab **By mentor** có cột cho từng môn (EXE101, EXE201), cột **Total** dạng "số trước → số sau", loại hợp đồng của mentor doanh nghiệp.
 - [ ] Tab **Needs attention** có các mục Conflicts, Previous mentors not carried over, Slots still without a mentor (khi có dữ liệu tương ứng).
@@ -599,7 +602,7 @@ Vào trang chi tiết lớp, khối Mentors, nút **Manage**, gán tay:
 
 ### Kiểm tra 9.1. File của kỳ mới
 
-**Làm gì:** ở thẻ **Mentor import & assignment**, bấm **Export assignments**.
+**Làm gì:** ở thẻ **Mentor assignment**, bấm **Export**.
 
 **Phải thấy gì**
 - [ ] Tải về file tên dạng `<mã kỳ>_mentor_assignments.xlsx`.
@@ -626,7 +629,7 @@ Vào trang chi tiết lớp, khối Mentors, nút **Manage**, gán tay:
 
 ### Kiểm tra 9.4. File của kỳ cũ
 
-**Làm gì:** đổi sang **kỳ cũ**, bấm **Export assignments**.
+**Làm gì:** đổi sang **kỳ cũ**, bấm **Export** ở thẻ Mentor assignment.
 
 **Phải thấy gì**
 - [ ] Các nhóm EXE101 (Sao, Trăng, Mây, Gió) và EXE201 (Núi, Sông) hiển thị đúng mentor đã gán.
@@ -634,7 +637,7 @@ Vào trang chi tiết lớp, khối Mentors, nút **Manage**, gán tay:
 
 ### Kiểm tra 9.5. Kỳ chưa có lớp
 
-**Làm gì:** chọn một kỳ chưa có lớp EXE101 và EXE201, bấm **Export assignments**.
+**Làm gì:** chọn một kỳ chưa có lớp EXE101 và EXE201, bấm **Export** ở thẻ Mentor assignment.
 
 **Phải thấy gì**
 - [ ] File vẫn tải được, có 3 sheet. Hai sheet đầu chỉ có dòng tiêu đề, không báo lỗi.
@@ -695,9 +698,9 @@ Các kiểm tra này không thuộc riêng yêu cầu nào nhưng cần đạt �
 ### Kiểm tra 10.5. Các chức năng cũ vẫn hoạt động
 
 **Phải thấy gì**
-- [ ] **Import mentor list** (xem trước rồi lưu) hoạt động như trước.
-- [ ] **Add mentor** và **Add lecturer** hoạt động như trước (nút Reuse mentors đã được gỡ).
-- [ ] Mentor nhập thiếu thông tin vẫn hiện "Needs information" và không được đưa vào chia.
+- [ ] Trang Lecturers & Mentors không còn panel Import mentor list; panel **Assign mentors** luôn hiện sẵn và hoạt động như trước.
+- [ ] **Add mentors** và **Add lecturers** hoạt động như trước (nút Reuse mentors đã được gỡ).
+- [ ] Mentor nhập thiếu thông tin (chưa có tài khoản) không được đưa vào chia.
 - [ ] Xuất danh sách của **một lớp** (ở trang chi tiết lớp) vẫn ra **một sheet** như trước, ô mentor còn thiếu để trống (không có chữ "Chưa phân công").
 
 **Kết luận phần kiểm tra chung:** ☐ Đạt  ☐ Đạt có điều kiện  ☐ Chưa đạt   Ghi chú: ……………………

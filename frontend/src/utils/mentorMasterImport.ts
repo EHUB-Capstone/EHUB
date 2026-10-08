@@ -33,3 +33,8 @@ export function emailCellText(email: string | null | undefined): { text: string;
   const value = email?.trim();
   return value ? { text: value, provided: true } : { text: 'No email yet', provided: false };
 }
+
+/** Short summary of the missing columns for a table cell: the first few names and how many are hidden. */
+export function summarizeMissingFields(fields: readonly string[], previewSize = 3): { count: number; preview: string[]; hiddenCount: number } {
+  return { count: fields.length, preview: fields.slice(0, previewSize), hiddenCount: Math.max(0, fields.length - previewSize) };
+}

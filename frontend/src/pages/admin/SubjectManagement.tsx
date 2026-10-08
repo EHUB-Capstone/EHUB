@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
-  BookOpen, Building2, Calendar, CheckCircle2, ChevronLeft, ChevronRight, CircleAlert, Edit3, Factory, Filter, GraduationCap, Plus,
-  LockKeyhole, RefreshCw, Search, ShieldAlert, Sparkles, UserCheck, Users,
+  BookOpen, Calendar, CheckCircle2, ChevronLeft, ChevronRight, CircleAlert, Edit3, Factory, Filter, GraduationCap, Plus,
+  LockKeyhole, RefreshCw, Search, ShieldAlert, Sparkles, Users,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { subjectApi } from '../../api/subjectApi';
@@ -24,6 +24,7 @@ import {
   type StaffRoleFilter,
   type StaffStatusFilter,
 } from '../../utils/teachingStaffDirectory';
+import { MENTOR_KIND_STYLES } from '../../utils/mentorKindStyles';
 import StartupIndustryManagement from './StartupIndustryManagement';
 
 const STAFF_KIND_STYLES: Record<StaffKind, {
@@ -42,22 +43,8 @@ const STAFF_KIND_STYLES: Record<StaffKind, {
     avatar: 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300',
     accent: 'border-l-blue-500',
   },
-  ENTERPRISE_MENTOR: {
-    label: 'Industry mentor',
-    hint: 'Mentor from a company',
-    Icon: Building2,
-    badge: 'border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-400/40 dark:bg-orange-500/15 dark:text-orange-300',
-    avatar: 'bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-300',
-    accent: 'border-l-orange-500',
-  },
-  ACADEMIC_MENTOR: {
-    label: 'Lecturer mentor',
-    hint: 'Mentor from the faculty',
-    Icon: UserCheck,
-    badge: 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-400/40 dark:bg-emerald-500/15 dark:text-emerald-300',
-    avatar: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300',
-    accent: 'border-l-emerald-500',
-  },
+  ENTERPRISE_MENTOR: MENTOR_KIND_STYLES.Enterprise,
+  ACADEMIC_MENTOR: MENTOR_KIND_STYLES.Academic,
   MENTOR: {
     label: 'Mentor',
     hint: 'Mentor',
@@ -884,8 +871,35 @@ const SubjectManagement = () => {
           </aside>
         </div>
       ) : (
-        <section className="space-y-5">
-          <div className="flex flex-col gap-3 rounded-2xl border border-slate-200/70 bg-white p-4 shadow-sm md:flex-row md:items-end md:justify-between"><div className="flex flex-col gap-3 sm:flex-row"><label className="text-xs font-semibold uppercase text-slate-400">Semester<select value={selectedSemester} onChange={(event) => setSelectedSemester(event.target.value as SemesterCode)} className="mt-1.5 block rounded-xl border border-slate-200 px-3 py-2 text-sm font-normal text-slate-700 outline-none"><option value="SP">SP (Spring)</option><option value="SU">SU (Summer)</option><option value="FA">FA (Fall)</option></select></label><label className="text-xs font-semibold uppercase text-slate-400">Year<select value={selectedYear} onChange={(event) => setSelectedYear(Number(event.target.value))} className="mt-1.5 block rounded-xl border border-slate-200 px-3 py-2 text-sm font-normal text-slate-700 outline-none">{availableYears.map((year) => <option key={year} value={year}>{year}</option>)}</select></label></div><Button variant="outline" icon={Users} onClick={() => navigate('/admin/classes')}>Manage Assignments</Button></div>
+        <section className="space-y-4">
+          {/* Semester context and the numbers for it, kept together at the top */}
+          <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm dark:border-white/15 dark:bg-[#111827] dark:shadow-[0_10px_30px_rgba(0,0,0,0.18)]">
+            <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-end sm:justify-between">
+              <div className="flex flex-wrap items-end gap-3">
+                <label className="text-xs font-semibold uppercase text-slate-400">Semester
+                  <select value={selectedSemester} onChange={(event) => setSelectedSemester(event.target.value as SemesterCode)} className="mt-1.5 block rounded-xl border border-slate-200 px-3 py-2 text-sm font-normal text-slate-700 outline-none focus:border-primary">
+                    <option value="SP">SP (Spring)</option><option value="SU">SU (Summer)</option><option value="FA">FA (Fall)</option>
+                  </select>
+                </label>
+                <label className="text-xs font-semibold uppercase text-slate-400">Year
+                  <select value={selectedYear} onChange={(event) => setSelectedYear(Number(event.target.value))} className="mt-1.5 block rounded-xl border border-slate-200 px-3 py-2 text-sm font-normal text-slate-700 outline-none focus:border-primary">
+                    {availableYears.map((year) => <option key={year} value={year}>{year}</option>)}
+                  </select>
+                </label>
+                <p className="pb-2 text-xs text-slate-500">Staff overview for <strong className="font-semibold text-slate-700">{selectedSemester} {selectedYear}</strong></p>
+              </div>
+              <Button variant="outline" icon={Users} className="whitespace-nowrap" onClick={() => navigate('/admin/classes')}>Manage Assignments</Button>
+            </div>
+            <div className="grid grid-cols-2 gap-px border-t border-slate-200/80 bg-slate-200/80 sm:grid-cols-3 xl:grid-cols-6 dark:border-white/10 dark:bg-white/10">
+              {staffStats.map(({ label, value, icon: Icon, style }) => (
+                <div key={label} className="flex items-center gap-3 bg-white px-4 py-3 dark:bg-[#111827]">
+                  <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg shadow-sm ring-1 ring-inset ${style}`}><Icon className="h-4 w-4" /></span>
+                  <div className="min-w-0"><p className="text-lg font-bold leading-5 text-slate-900">{value}</p><p className="truncate text-xs text-slate-500">{label}</p></div>
+                </div>
+              ))}
+            </div>
+          </div>
+
           <MentorAdministrationCard
             semesterId={selectedSemesterRecord?.id}
             semesterLabel={`${selectedSemester} ${selectedYear}`}
@@ -894,45 +908,6 @@ const SubjectManagement = () => {
               return loadStaff(selectedSemester, selectedYear);
             }}
           />
-          <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm dark:border-white/15 dark:bg-[#111827] dark:shadow-[0_10px_30px_rgba(0,0,0,0.18)]">
-            <header className="flex items-center gap-3 border-b border-slate-200/80 bg-slate-50/80 px-4 py-3 dark:border-white/10 dark:bg-white/[0.045]">
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-secondary text-white shadow-sm ring-1 ring-black/10 dark:ring-blue-300/40"><Users className="h-4.5 w-4.5" /></span>
-              <div><h2 className="text-sm font-bold text-slate-900">Staff overview</h2><p className="text-xs text-slate-500">Availability and assignment status for {selectedSemester} {selectedYear}</p></div>
-            </header>
-            <div className="grid grid-cols-2 gap-2 p-3 sm:grid-cols-3 xl:grid-cols-6">
-              {staffStats.map(({ label, value, icon: Icon, style }) => (
-                <div key={label} className="flex items-center gap-3 rounded-xl border border-slate-200/80 bg-slate-50/70 px-3 py-2.5 dark:border-white/10 dark:bg-white/[0.035]">
-                  <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg shadow-sm ring-1 ring-inset ${style}`}><Icon className="h-4 w-4" /></span>
-                  <div className="min-w-0"><p className="text-lg font-bold leading-5 text-slate-900">{value}</p><p className="truncate text-xs text-slate-500">{label}</p></div>
-                </div>
-              ))}
-            </div>
-          </section>
-
-          <section className="rounded-2xl border border-slate-200/80 bg-white p-3 shadow-sm dark:border-white/15 dark:bg-[#111827] dark:shadow-[0_10px_30px_rgba(0,0,0,0.18)]">
-            <header className="mb-3 flex items-center gap-3 border-b border-slate-100 pb-3 dark:border-white/10">
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary text-white shadow-sm ring-1 ring-primary-200 dark:ring-primary/50"><Filter className="h-4 w-4" /></span>
-              <div><h2 className="text-sm font-bold text-slate-900">Search and filters</h2><p className="text-xs text-slate-500">Find staff by identity, role, profile status or assignment.</p></div>
-            </header>
-            <div className="flex flex-col gap-2 xl:flex-row xl:items-center">
-              <div className="relative min-w-0 flex-1">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500 dark:text-slate-300" />
-                <input value={staffSearch} onChange={(event) => setStaffSearch(event.target.value)} placeholder="Search name, email, class, subject or missing field..." className="w-full rounded-xl border border-slate-200 bg-white py-2 pl-10 pr-4 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 dark:border-white/15 dark:bg-[#0f172a]" />
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <select aria-label="Filter teaching staff by role" value={staffRole} onChange={(event) => setStaffRole(event.target.value as typeof staffRole)} className="min-w-[135px] rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-primary">
-                  <option value="ALL">All roles</option><option value="LECTURER">Lecturers</option><option value="MENTOR">All mentors</option><option value="ENTERPRISE_MENTOR">Industry mentors</option><option value="ACADEMIC_MENTOR">Lecturer mentors</option>
-                </select>
-                <select aria-label="Filter teaching staff by status" value={staffStatus} onChange={(event) => setStaffStatus(event.target.value as StaffStatusFilter)} className="min-w-[165px] rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-primary">
-                  <option value="ALL">All statuses</option><option value="ACTIVE">Active</option><option value="INACTIVE">Inactive</option><option value="NEEDS_INFORMATION">Needs information</option>
-                </select>
-                <select aria-label="Rows per page" value={staffPageSize} onChange={(event) => setStaffPageSize(Number(event.target.value) as (typeof staffPageSizes)[number])} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-primary">
-                  {staffPageSizes.map(size => <option key={size} value={size}>{size} / page</option>)}
-                </select>
-                {hasStaffFilters && <button type="button" onClick={() => { setStaffSearch(''); setStaffRole('ALL'); setStaffStatus('ALL'); }} className="px-2 py-2 text-sm font-semibold text-primary hover:text-primary-dark">Reset</button>}
-              </div>
-            </div>
-          </section>
 
           <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm dark:border-white/15 dark:bg-[#111827] dark:shadow-[0_10px_30px_rgba(0,0,0,0.18)]">
             <header className="flex flex-col gap-3 border-b border-slate-200/80 bg-slate-50/80 px-4 py-3 dark:border-white/10 dark:bg-white/[0.045] sm:flex-row sm:items-center sm:justify-between">
@@ -944,22 +919,45 @@ const SubjectManagement = () => {
                 </div>
               </div>
               <div className="flex flex-wrap gap-2">
-                <Button size="sm" variant="outline" icon={Plus} onClick={() => void openAddStaff('LECTURER')}>Add lecturer</Button>
-                <Button size="sm" variant="outline" icon={Plus} onClick={() => void openAddStaff('MENTOR')}>Add mentor</Button>
+                <Button size="sm" variant="outline" icon={Plus} onClick={() => void openAddStaff('LECTURER')}>Add lecturers</Button>
+                <Button size="sm" variant="outline" icon={Plus} onClick={() => void openAddStaff('MENTOR')}>Add mentors</Button>
               </div>
             </header>
 
-            <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 px-4 py-2 dark:border-white/10" aria-label="Staff type legend">
-              {(['LECTURER', 'ENTERPRISE_MENTOR', 'ACADEMIC_MENTOR'] as const).map((kind) => {
-                const style = STAFF_KIND_STYLES[kind];
-                const LegendIcon = style.Icon;
-                const count = visibleStaff.filter(member => getStaffKind(member) === kind).length;
-                return (
-                  <span key={kind} className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold ${style.badge}`}>
-                    <LegendIcon className="h-3 w-3" aria-hidden="true" />{style.label}<span className="opacity-70">· {count}</span>
-                  </span>
-                );
-              })}
+            <div className="space-y-3 border-b border-slate-100 px-4 py-3 dark:border-white/10">
+              <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
+                <div className="relative min-w-0 flex-1">
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500 dark:text-slate-300" />
+                  <input value={staffSearch} onChange={(event) => setStaffSearch(event.target.value)} placeholder="Search name, email, class, subject or missing field..." aria-label="Search teaching staff" className="w-full rounded-xl border border-slate-200 bg-white py-2 pl-10 pr-4 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 dark:border-white/15 dark:bg-[#0f172a]" />
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <select aria-label="Filter teaching staff by status" value={staffStatus} onChange={(event) => setStaffStatus(event.target.value as StaffStatusFilter)} className="min-w-[150px] rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-primary">
+                    <option value="ALL">All statuses</option><option value="ACTIVE">Active</option><option value="INACTIVE">Inactive</option><option value="NEEDS_INFORMATION">Needs information</option>
+                  </select>
+                  <select aria-label="Rows per page" value={staffPageSize} onChange={(event) => setStaffPageSize(Number(event.target.value) as (typeof staffPageSizes)[number])} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-primary">
+                    {staffPageSizes.map(size => <option key={size} value={size}>{size} / page</option>)}
+                  </select>
+                  {hasStaffFilters && <button type="button" onClick={() => { setStaffSearch(''); setStaffRole('ALL'); setStaffStatus('ALL'); }} className="px-2 py-2 text-sm font-semibold text-primary hover:text-primary-dark">Reset</button>}
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Filter teaching staff by type">
+                {([['ALL', 'All', staff.length], ...(['LECTURER', 'ENTERPRISE_MENTOR', 'ACADEMIC_MENTOR'] as const).map(kind => [kind, STAFF_KIND_STYLES[kind].label, staff.filter(member => getStaffKind(member) === kind).length] as const)] as const).map(([kind, label, count]) => {
+                  const active = staffRole === kind;
+                  const style = kind === 'ALL' ? null : STAFF_KIND_STYLES[kind];
+                  const KindIcon = style?.Icon;
+                  return (
+                    <button
+                      key={kind}
+                      type="button"
+                      aria-pressed={active}
+                      onClick={() => setStaffRole(active && kind !== 'ALL' ? 'ALL' : kind)}
+                      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition ${style ? style.badge : 'border-slate-200 bg-slate-50 text-slate-700'} ${active ? 'ring-2 ring-primary/40' : 'opacity-80 hover:opacity-100'}`}
+                    >
+                      {KindIcon && <KindIcon className="h-3 w-3" aria-hidden="true" />}{label}<span className="opacity-70">· {count}</span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             {staffLoading ? (
