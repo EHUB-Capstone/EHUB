@@ -221,7 +221,7 @@ export default function MyTeam() {
             <div className="pt-2">
               <button
                 onClick={() => navigate('/student/workspace')}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-primary to-secondary text-white hover:opacity-95 hover:scale-[1.01] active:scale-95 transition-all text-sm font-bold rounded-xl cursor-pointer shadow-sm"
+                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-primary text-white hover:bg-primary-dark hover:scale-[1.01] active:scale-95 transition-all text-sm font-bold rounded-xl cursor-pointer shadow-sm"
               >
                 <Sparkles className="w-4 h-4 animate-pulse" />
                 Open Startup Workspace
