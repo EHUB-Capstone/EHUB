@@ -15,11 +15,9 @@ export interface MentorImportRowPreview {
 
 export interface MentorImportPreview {
   sessionId: string;
-  semesterId: string;
   totalRows: number;
   createCount: number;
   updateCount: number;
-  addToSemesterCount: number;
   needsCompletionCount: number;
   completeDraftCount: number;
   errorCount: number;
@@ -27,10 +25,24 @@ export interface MentorImportPreview {
   rows: MentorImportRowPreview[];
 }
 
+/** A mentor kept in the master list without a login account yet. */
+export interface IncompleteMentor {
+  id: string;
+  fullName: string;
+  mentorType: MentorType;
+  email?: string | null;
+  missingFields: string[];
+  updatedAtUtc: string;
+}
+
+export interface IncompleteMentorList {
+  mentors: IncompleteMentor[];
+  pagination: { total: number; page: number; limit: number; pages: number };
+}
+
 export interface MentorImportCommitResult {
   createdCount: number;
   updatedCount: number;
-  semesterAssignmentCount: number;
   draftSavedCount: number;
   draftCompletedCount: number;
 }

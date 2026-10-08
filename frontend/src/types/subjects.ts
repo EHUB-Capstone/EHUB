@@ -141,7 +141,7 @@ export interface TeachingStaffDto {
   email: string;
   avatar?: string | null;
   role: 'LECTURER' | 'MENTOR';
-  /** Only set for mentors: Enterprise = industry mentor, Academic = lecturer mentor. */
+  /** Only set for mentors: Enterprise = enterprise mentor, Academic = lecturer mentor. */
   mentorType?: 'Enterprise' | 'Academic' | null;
   status: 'Active' | 'Inactive' | 'Incomplete';
   userStatus: string;
@@ -152,43 +152,39 @@ export interface TeachingStaffDto {
   rowVersion: string;
 }
 
+export type MentorKind = 'Enterprise' | 'Academic';
+
 export interface TeachingStaffCandidateDto {
   userId: string;
   name: string;
   email: string;
   avatar?: string | null;
   role: 'LECTURER' | 'MENTOR';
+  /** Only for mentors: Enterprise = enterprise mentor, Academic = lecturer mentor. */
+  mentorType?: MentorKind | null;
+  contractType?: string | null;
 }
 
-export type MentorCarryoverAction = 'Add' | 'Reactivate' | 'AlreadyAdded' | 'Unavailable';
+export type TeachingStaffBatchOutcome = 'Added' | 'AlreadyInList' | 'Rejected';
 
-export interface MentorCarryoverCandidate {
+export interface TeachingStaffBatchItem {
   userId: string;
-  name: string;
-  email: string;
-  avatar?: string | null;
-  mentorType: 'Enterprise' | 'Academic' | '';
-  action: MentorCarryoverAction;
-  canSelect: boolean;
-  message: string;
+  outcome: TeachingStaffBatchOutcome;
+  message?: string | null;
 }
 
-export interface MentorCarryoverPreview {
-  sourceSemesterId: string;
-  targetSemesterId: string;
-  totalCount: number;
-  eligibleCount: number;
-  alreadyAddedCount: number;
-  unavailableCount: number;
-  enterpriseCount: number;
-  academicCount: number;
-  mentors: MentorCarryoverCandidate[];
+export interface AddTeachingStaffBatchPayload {
+  semester: SemesterCode;
+  year: number;
+  role: 'LECTURER' | 'MENTOR';
+  userIds: string[];
 }
 
-export interface MentorCarryoverCommitResult {
+export interface AddTeachingStaffBatchResponse {
+  results: TeachingStaffBatchItem[];
   addedCount: number;
-  reactivatedCount: number;
-  alreadyAddedCount: number;
+  alreadyInListCount: number;
+  rejectedCount: number;
 }
 
 export interface TeachingStaffSummary {

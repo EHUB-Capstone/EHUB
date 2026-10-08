@@ -44,7 +44,7 @@ interface MentorAllocationPreviewModalProps {
   onConfirm: () => void;
 }
 
-const slotLabel: Record<MentorType, string> = { Enterprise: 'Industry mentor', Academic: 'Lecturer mentor' };
+const slotLabel: Record<MentorType, string> = { Enterprise: 'Enterprise mentor', Academic: 'Lecturer mentor' };
 
 const stateStyle: Record<SlotState, { label: string; className: string }> = {
   existing: { label: 'Current', className: 'bg-slate-100 text-slate-600' },
@@ -147,7 +147,7 @@ export default function MentorAllocationPreviewModal({
           <Metric label="New" value={summary.allocated} />
           <Metric label="Manual" value={summary.manual} />
           <Metric label="Replaced" value={summary.replacements} warning={summary.replacements > 0} />
-          <Metric label="Missing industry" value={summary.unfilledEnterprise} danger={summary.unfilledEnterprise > 0} />
+          <Metric label="Missing enterprise" value={summary.unfilledEnterprise} danger={summary.unfilledEnterprise > 0} />
           <Metric label="Missing lecturer" value={summary.unfilledAcademic} danger={summary.unfilledAcademic > 0} />
         </div>
 

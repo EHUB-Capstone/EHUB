@@ -1204,7 +1204,6 @@ export default function ClassDetail() {
       {!isReadOnly && classFeatureFlags.mentorAssignment && showAssignMentors && canManageClass && (
         <AssignMentorsModal
           classId={loadedClassId}
-          currentMentors={activeMentors}
           onClose={() => setShowAssignMentors(false)}
           onAssigned={async () => {
             // Refresh in the background so the dialog stays open and the admin can keep assigning teams.

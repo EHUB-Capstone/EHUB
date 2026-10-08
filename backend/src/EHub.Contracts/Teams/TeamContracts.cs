@@ -24,6 +24,7 @@ public sealed class MentorSummaryDto
     public string MentorType { get; init; } = string.Empty;
     public string? Department { get; init; }
     public string? JobTitle { get; init; }
+    public string? ContractType { get; init; }
 }
 
 public sealed class MentorAssignmentDto
@@ -112,6 +113,28 @@ public sealed class AssignMentorRequest
 {
     public Guid MentorProfileId { get; init; }
     public string? Note { get; init; }
+}
+
+// Ends the current assignment of a slot and gives it to another mentor of the same type, all in one save.
+public sealed class ReplaceMentorRequest
+{
+    public Guid AssignmentId { get; init; }
+    public Guid MentorProfileId { get; init; }
+    public string Reason { get; init; } = string.Empty;
+    public string? Note { get; init; }
+}
+
+// Assigns one mentor to several teams of a class. Either every team is assigned or none is.
+public sealed class AssignMentorBatchRequest
+{
+    public Guid MentorProfileId { get; init; }
+    public IReadOnlyCollection<Guid> TeamIds { get; init; } = Array.Empty<Guid>();
+}
+
+public sealed class AssignMentorBatchResponse
+{
+    public int AssignedCount { get; init; }
+    public int AlreadyAssignedCount { get; init; }
 }
 
 public sealed class EndMentorAssignmentRequest

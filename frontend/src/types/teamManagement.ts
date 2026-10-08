@@ -87,6 +87,7 @@ export interface MentorAssignment {
     mentorType: 'Enterprise' | 'Academic';
     department?: string | null;
     jobTitle?: string | null;
+    contractType?: string | null;
   };
   slot: 'Enterprise' | 'Academic';
   status: string;

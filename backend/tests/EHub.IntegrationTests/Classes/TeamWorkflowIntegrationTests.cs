@@ -806,6 +806,7 @@ public sealed partial class TeamWorkflowIntegrationTests
             Email = $"team-flow-mentor-{unique}@ehub.local",
             Password = "QaMentor!123",
             Role = "MENTOR",
+            MentorType = "Enterprise",
             Status = "APPROVED"
         });
 
@@ -4140,6 +4141,111 @@ public sealed partial class TeamWorkflowIntegrationTests
         var deleted = await handler.DeleteWeeklyTaskAsync(created.Value.Id, seed.ProposerUserId, SystemRoles.Student);
         deleted.IsFailure.Should().BeTrue();
         deleted.Error.Code.Should().Be(ErrorCodes.WorkspaceAccessDenied);
+    }
+
+    [Fact]
+    public async Task ReplacingAMentor_EndsTheOldAssignmentAndCreatesTheNewOneInOneSave()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateSeedAsync(context, createProposal: false, createTeam: true);
+        var replacement = await CreateListedMentorAsync(context, seed, MentorType.Enterprise, "replace-ok", listedInSemester: true);
+        var current = await context.MentorAssignments.AsNoTracking().SingleAsync(item => item.TeamId == seed.TeamId && item.EndedAt == null);
+        context.ChangeTracker.Clear();
+        var handler = new MentorAssignmentHandler(context, scope.ServiceProvider.GetRequiredService<EHub.Application.Common.Interfaces.Persistence.IUnitOfWork>());
+
+        var result = await handler.ReplaceAsync(seed.TeamId!.Value,
+            new ReplaceMentorRequest { AssignmentId = current.Id, MentorProfileId = replacement, Reason = "Better domain fit" },
+            seed.LecturerId, SystemRoles.Lecturer);
+
+        result.IsSuccess.Should().BeTrue(result.IsFailure ? result.Error.Message : string.Empty);
+        context.ChangeTracker.Clear();
+        var all = await context.MentorAssignments.AsNoTracking().Where(item => item.TeamId == seed.TeamId).ToListAsync();
+        all.Should().HaveCount(2, "the old assignment is kept as history");
+        var ended = all.Single(item => item.Id == current.Id);
+        ended.Status.Should().Be(MentorAssignmentStatus.Ended);
+        ended.EndedAt.Should().NotBeNull();
+        ended.Note.Should().Contain("Better domain fit");
+        all.Single(item => item.EndedAt == null).MentorProfileId.Should().Be(replacement);
+    }
+
+    [Fact]
+    public async Task ReplacingAMentor_ChangesNothingWhenTheReplacementCannotBeUsed()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateSeedAsync(context, createProposal: false, createTeam: true);
+        var notListed = await CreateListedMentorAsync(context, seed, MentorType.Enterprise, "replace-unlisted", listedInSemester: false);
+        var wrongType = await CreateListedMentorAsync(context, seed, MentorType.Academic, "replace-academic", listedInSemester: true);
+        var current = await context.MentorAssignments.AsNoTracking().SingleAsync(item => item.TeamId == seed.TeamId && item.EndedAt == null);
+        context.ChangeTracker.Clear();
+        var handler = new MentorAssignmentHandler(context, scope.ServiceProvider.GetRequiredService<EHub.Application.Common.Interfaces.Persistence.IUnitOfWork>());
+        Task<EHub.Shared.Results.Result<EHub.Contracts.Teams.MentorAssignmentDto>> Replace(Guid mentor, string reason, Guid userId, string role) =>
+            handler.ReplaceAsync(seed.TeamId!.Value, new ReplaceMentorRequest { AssignmentId = current.Id, MentorProfileId = mentor, Reason = reason }, userId, role);
+
+        (await Replace(notListed, "valid reason", seed.AdminId, SystemRoles.Admin)).Error.Code.Should().Be(ErrorCodes.MentorNotAvailable);
+        (await Replace(wrongType, "valid reason", seed.AdminId, SystemRoles.Admin)).Error.Code.Should().Be(ErrorCodes.ClassValidationError);
+        (await Replace(wrongType, "no", seed.AdminId, SystemRoles.Admin)).Error.Code.Should().Be(ErrorCodes.ClassValidationError);
+        (await Replace(current.MentorProfileId, "valid reason", seed.AdminId, SystemRoles.Admin)).Error.Code.Should().Be(ErrorCodes.ClassValidationError);
+        var stranger = await CreateUserAsync(context, SystemRoles.Lecturer, "not-the-owner");
+        (await Replace(notListed, "valid reason", stranger.Id, SystemRoles.Lecturer)).Error.Code.Should().Be(ErrorCodes.ClassAccessDenied);
+
+        context.ChangeTracker.Clear();
+        var all = await context.MentorAssignments.AsNoTracking().Where(item => item.TeamId == seed.TeamId).ToListAsync();
+        all.Should().ContainSingle("a failed replacement must keep the current mentor and add nobody");
+        all.Single().Status.Should().Be(MentorAssignmentStatus.Active);
+        all.Single().EndedAt.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task AssigningOneMentorToSeveralTeams_IsAllOrNothing_AndStaysInsideTheClass()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateSeedAsync(context, createProposal: false, createTeam: true);
+        var academic = await CreateListedMentorAsync(context, seed, MentorType.Academic, "batch-academic", listedInSemester: true);
+        var enterprise = await CreateListedMentorAsync(context, seed, MentorType.Enterprise, "batch-enterprise", listedInSemester: true);
+        context.ChangeTracker.Clear();
+        var handler = new MentorAssignmentHandler(context, scope.ServiceProvider.GetRequiredService<EHub.Application.Common.Interfaces.Persistence.IUnitOfWork>());
+        var both = new[] { seed.TeamId!.Value, seed.OtherTeamId!.Value };
+
+        var first = await handler.AssignBatchAsync(seed.ClassId, new AssignMentorBatchRequest { MentorProfileId = academic, TeamIds = both }, seed.LecturerId, SystemRoles.Lecturer);
+        var again = await handler.AssignBatchAsync(seed.ClassId, new AssignMentorBatchRequest { MentorProfileId = academic, TeamIds = both }, seed.AdminId, SystemRoles.Admin);
+        // The first team already has an enterprise mentor, so the other team must not be assigned either.
+        var conflict = await handler.AssignBatchAsync(seed.ClassId, new AssignMentorBatchRequest { MentorProfileId = enterprise, TeamIds = both }, seed.AdminId, SystemRoles.Admin);
+        var foreign = await handler.AssignBatchAsync(seed.ClassId, new AssignMentorBatchRequest { MentorProfileId = academic, TeamIds = [Guid.NewGuid()] }, seed.AdminId, SystemRoles.Admin);
+        var stranger = await CreateUserAsync(context, SystemRoles.Lecturer, "batch-stranger");
+        var denied = await handler.AssignBatchAsync(seed.ClassId, new AssignMentorBatchRequest { MentorProfileId = academic, TeamIds = both }, stranger.Id, SystemRoles.Lecturer);
+
+        first.IsSuccess.Should().BeTrue(first.IsFailure ? first.Error.Message : string.Empty);
+        first.Value.AssignedCount.Should().Be(2);
+        again.Value.AssignedCount.Should().Be(0);
+        again.Value.AlreadyAssignedCount.Should().Be(2, "assigning the same mentor again must not create duplicates");
+        conflict.Error.Code.Should().Be(ErrorCodes.MentorAssignmentConflict);
+        foreign.Error.Code.Should().Be(ErrorCodes.TeamNotFound);
+        denied.Error.Code.Should().Be(ErrorCodes.ClassAccessDenied);
+        context.ChangeTracker.Clear();
+        var active = await context.MentorAssignments.AsNoTracking().Where(item => both.Contains(item.TeamId) && item.EndedAt == null).ToListAsync();
+        active.Where(item => item.Slot == MentorType.Academic).Should().HaveCount(2);
+        active.Where(item => item.Slot == MentorType.Enterprise).Should().ContainSingle("the conflicting batch saved nothing");
+    }
+
+    private static async Task<Guid> CreateListedMentorAsync(AppDbContext context, WorkflowSeed seed, MentorType type, string suffix, bool listedInSemester)
+    {
+        var user = await CreateUserAsync(context, SystemRoles.Mentor, suffix);
+        var profile = new MentorProfile { UserId = user.Id, User = user, Type = type, Status = MentorProfileStatus.Active, CreatedBy = seed.AdminId };
+        context.MentorProfiles.Add(profile);
+        if (listedInSemester)
+        {
+            var semesterId = await context.Classes.Where(item => item.Id == seed.ClassId).Select(item => item.SemesterId).SingleAsync();
+            context.SemesterStaffAssignments.Add(new SemesterStaffAssignment
+            {
+                SemesterId = semesterId, UserId = user.Id, User = user, Role = SemesterStaffRole.Mentor,
+                Status = SemesterStaffStatus.Active, CreatedBy = seed.AdminId
+            });
+        }
+        await context.SaveChangesAsync();
+        return profile.Id;
     }
 
     private static async Task<WorkflowSeed> CreateSeedAsync(AppDbContext context, bool createProposal, bool createTeam)

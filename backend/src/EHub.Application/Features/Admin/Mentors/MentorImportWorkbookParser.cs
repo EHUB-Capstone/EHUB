@@ -304,7 +304,6 @@ internal sealed class MentorImportCandidate
     public Guid? DraftId { get; set; }
     public bool WillCreateAccount { get; set; }
     public bool WillUpdateAccount { get; set; }
-    public bool WillAddToSemester { get; set; }
     public bool WillSaveDraft { get; set; }
     public bool WillCompleteDraft { get; set; }
     public string Status { get; set; } = "Create";
@@ -323,7 +322,6 @@ internal sealed class MentorImportCandidate
         DraftId = null;
         WillCreateAccount = false;
         WillUpdateAccount = false;
-        WillAddToSemester = false;
         WillSaveDraft = false;
         WillCompleteDraft = false;
         Status = "Create";

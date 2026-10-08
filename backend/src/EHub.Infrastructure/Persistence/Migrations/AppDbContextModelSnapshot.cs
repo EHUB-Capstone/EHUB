@@ -2185,7 +2185,7 @@ namespace EHub.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(30)")
                         .HasColumnName("phone");
 
-                    b.Property<Guid>("SemesterId")
+                    b.Property<Guid?>("SemesterId")
                         .HasColumnType("uuid")
                         .HasColumnName("semester_id");
 
@@ -2257,7 +2257,7 @@ namespace EHub.Infrastructure.Persistence.Migrations
                         .HasColumnType("jsonb")
                         .HasColumnName("rows_json");
 
-                    b.Property<Guid>("SemesterId")
+                    b.Property<Guid?>("SemesterId")
                         .HasColumnType("uuid")
                         .HasColumnName("semester_id");
 
@@ -7581,8 +7581,7 @@ namespace EHub.Infrastructure.Persistence.Migrations
                     b.HasOne("EHub.Domain.Entities.Semester", "Semester")
                         .WithMany()
                         .HasForeignKey("SemesterId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Cascade);
 
                     b.Navigation("ConvertedMentorProfile");
 
@@ -7600,8 +7599,7 @@ namespace EHub.Infrastructure.Persistence.Migrations
                     b.HasOne("EHub.Domain.Entities.Semester", "Semester")
                         .WithMany()
                         .HasForeignKey("SemesterId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Cascade);
 
                     b.Navigation("AdminUser");
 

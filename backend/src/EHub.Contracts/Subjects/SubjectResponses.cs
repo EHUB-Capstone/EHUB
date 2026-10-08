@@ -122,6 +122,32 @@ public sealed class TeachingStaffCandidateResponse
     public string Email { get; init; } = string.Empty;
     public string? Avatar { get; init; }
     public string Role { get; init; } = string.Empty;
+    // Only set for mentors: "Enterprise" (enterprise mentor) or "Academic" (lecturer mentor).
+    public string? MentorType { get; init; }
+    public string? ContractType { get; init; }
+}
+
+public static class SemesterStaffBatchOutcomes
+{
+    public const string Added = "Added";
+    public const string AlreadyInList = "AlreadyInList";
+    public const string Rejected = "Rejected";
+}
+
+public sealed class SemesterStaffBatchItemResponse
+{
+    public Guid UserId { get; init; }
+    public string Outcome { get; init; } = string.Empty;
+    public string? Message { get; init; }
+    public TeachingStaffResponse? Staff { get; init; }
+}
+
+public sealed class AddSemesterTeachingStaffBatchResponse
+{
+    public IReadOnlyCollection<SemesterStaffBatchItemResponse> Results { get; init; } = Array.Empty<SemesterStaffBatchItemResponse>();
+    public int AddedCount { get; init; }
+    public int AlreadyInListCount { get; init; }
+    public int RejectedCount { get; init; }
 }
 
 public sealed class TeachingStaffSummaryResponse
@@ -143,39 +169,6 @@ public sealed class TeachingStaffCandidateListResponse
 {
     public IReadOnlyCollection<TeachingStaffCandidateResponse> Candidates { get; init; } =
         Array.Empty<TeachingStaffCandidateResponse>();
-}
-
-public sealed class MentorCarryoverCandidateResponse
-{
-    public Guid UserId { get; init; }
-    public string Name { get; init; } = string.Empty;
-    public string Email { get; init; } = string.Empty;
-    public string? Avatar { get; init; }
-    public string MentorType { get; init; } = string.Empty;
-    public string Action { get; init; } = string.Empty;
-    public bool CanSelect { get; init; }
-    public string Message { get; init; } = string.Empty;
-}
-
-public sealed class MentorCarryoverPreviewResponse
-{
-    public Guid SourceSemesterId { get; init; }
-    public Guid TargetSemesterId { get; init; }
-    public int TotalCount { get; init; }
-    public int EligibleCount { get; init; }
-    public int AlreadyAddedCount { get; init; }
-    public int UnavailableCount { get; init; }
-    public int EnterpriseCount { get; init; }
-    public int AcademicCount { get; init; }
-    public IReadOnlyCollection<MentorCarryoverCandidateResponse> Mentors { get; init; } =
-        Array.Empty<MentorCarryoverCandidateResponse>();
-}
-
-public sealed class MentorCarryoverCommitResponse
-{
-    public int AddedCount { get; init; }
-    public int ReactivatedCount { get; init; }
-    public int AlreadyAddedCount { get; init; }
 }
 
 public sealed class RoadmapItemResponse
