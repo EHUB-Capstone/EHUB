@@ -78,7 +78,8 @@ internal static class TeamMappings
             Organization = assignment.MentorProfile.Organization,
             MentorType = assignment.MentorProfile.Type.ToString(),
             Department = assignment.MentorProfile.Department,
-            JobTitle = assignment.MentorProfile.JobTitle
+            JobTitle = assignment.MentorProfile.JobTitle,
+            ContractType = assignment.MentorProfile.ContractType
         },
         Status = assignment.Status.ToString(),
         AssignedAtUtc = assignment.AssignedAt,

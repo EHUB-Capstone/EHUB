@@ -703,6 +703,26 @@ Các kiểm tra này không thuộc riêng yêu cầu nào nhưng cần đạt �
 - [ ] Mentor nhập thiếu thông tin (chưa có tài khoản) không được đưa vào chia.
 - [ ] Xuất danh sách của **một lớp** (ở trang chi tiết lớp) vẫn ra **một sheet** như trước, ô mentor còn thiếu để trống (không có chữ "Chưa phân công").
 
+### Kiểm tra 10.6. Manage team mentors (nút Manage ở trang chi tiết lớp)
+
+**Làm gì**
+1. Mở một lớp có vài nhóm, bấm **Manage** ở thẻ Mentors.
+2. Ở tab **By team**: xem bảng (mỗi nhóm một hàng, hai cột Enterprise mentor và Lecturer mentor). Bấm **Missing a mentor** để chỉ còn các nhóm còn thiếu.
+3. Ở một ô trống bấm **Assign**, chọn một mentor, bấm **Assign mentor**.
+4. Ở một ô đã có mentor bấm **Replace**, chọn mentor khác, để trống lý do rồi nhập lý do, bấm **Replace mentor**.
+5. Bấm **End** ở một mentor, nhập lý do và xác nhận.
+6. Sang tab **One mentor, many teams**: bấm chip **Enterprise mentor** hoặc **Lecturer mentor**, chọn một mentor, tick vài nhóm hoặc **Select all**, bấm **Assign to N teams**.
+7. Nhấn **Esc**, và thử bấm Tab nhiều lần khi hộp thoại đang mở.
+
+**Phải thấy gì**
+- [ ] Nhóm thiếu mentor được đánh nhãn vàng ("No mentors yet" hoặc "Missing 1 mentor"); tab ghi số nhóm còn thiếu.
+- [ ] Tag Enterprise mentor và Lecturer mentor cùng màu và icon với User Management.
+- [ ] Hộp chọn mentor ở bước 3 và 4 chỉ liệt kê mentor đúng loại của ô đó, ít nhóm nhất đứng trước, mỗi người kèm loại hợp đồng nếu có.
+- [ ] Bước 4: nút **Replace mentor** bị khóa cho tới khi nhập lý do từ 3 ký tự. Sau khi lưu, người cũ biến khỏi ô, người mới vào ô cùng lúc, và không có thời điểm nào nhóm mất mentor. Nếu bị lỗi thì mentor cũ vẫn còn nguyên.
+- [ ] Bước 6: lưu một lần cho tất cả nhóm đã chọn hoặc không nhóm nào (nếu có nhóm đã đổi trạng thái, thông báo nêu rõ nhóm nào và không có gì được lưu; các nhóm vẫn được tick).
+- [ ] Nếu kỳ chưa có mentor active, hộp thoại ghi rõ phải thêm mentor vào kỳ trước (Subject Management, Add mentors).
+- [ ] Esc đóng hộp thoại (không đóng khi đang lưu); Tab không ra ngoài hộp thoại; đóng xong con trỏ quay về nút Manage.
+
 **Kết luận phần kiểm tra chung:** ☐ Đạt  ☐ Đạt có điều kiện  ☐ Chưa đạt   Ghi chú: ……………………
 
 ---
