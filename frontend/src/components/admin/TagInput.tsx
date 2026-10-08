@@ -9,11 +9,13 @@ interface TagInputProps {
   addTag: (current: readonly string[], raw: string) => { tags: string[]; error: string | null };
   placeholder?: string;
   hint?: string;
+  /** Tags already used elsewhere; offered while typing so the same word is spelled the same way. */
+  suggestions?: readonly string[];
   disabled?: boolean;
 }
 
 /** A field that turns typed words into removable chips. Enter or comma adds, Backspace on an empty box removes the last chip. */
-export default function TagInput({ label, value, onChange, addTag, placeholder, hint, disabled = false }: TagInputProps) {
+export default function TagInput({ label, value, onChange, addTag, placeholder, hint, suggestions = [], disabled = false }: TagInputProps) {
   const id = useId();
   const [draft, setDraft] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -61,9 +63,15 @@ export default function TagInput({ label, value, onChange, addTag, placeholder, 
           placeholder={value.length === 0 ? placeholder : undefined}
           aria-invalid={error ? true : undefined}
           aria-describedby={`${id}-help`}
+          list={suggestions.length > 0 ? `${id}-suggestions` : undefined}
           className="min-w-[120px] flex-1 border-0 bg-transparent px-1 py-1 text-sm outline-none"
         />
       </div>
+      {suggestions.length > 0 && (
+        <datalist id={`${id}-suggestions`}>
+          {suggestions.filter(item => !value.some(tag => tag.toLowerCase() === item.toLowerCase())).slice(0, 50).map(item => <option key={item} value={item} />)}
+        </datalist>
+      )}
       <p id={`${id}-help`} role={error ? 'alert' : undefined} className={`mt-1 text-[11px] ${error ? 'text-red-600' : 'text-slate-400'}`}>
         {error ?? hint ?? 'Press Enter or comma to add.'}
       </p>

@@ -25,6 +25,9 @@ import Button from '../ui/Button';
 import LoadingSkeleton from '../ui/LoadingSkeleton';
 import Modal from '../ui/Modal';
 import MentorKindTag from './MentorKindTag';
+import MentorTagChips from './MentorTagChips';
+import MentorTagFilter from './MentorTagFilter';
+import { collectTagOptions, keepKnownTags } from '../../utils/mentorTags';
 
 interface AddSemesterStaffModalProps {
   isOpen: boolean;
@@ -58,6 +61,7 @@ export default function AddSemesterStaffModal({
   const [loadFailed, setLoadFailed] = useState(false);
   const [search, setSearch] = useState('');
   const [mentorType, setMentorType] = useState<MentorKindFilter>('ALL');
+  const [tagFilter, setTagFilter] = useState<string[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [summary, setSummary] = useState<StaffBatchSummary | null>(null);
@@ -97,9 +101,11 @@ export default function AddSemesterStaffModal({
     void loadCandidates();
   }, [isOpen, role, loadCandidates]);
 
+  const tagOptions = useMemo(() => collectTagOptions(candidates.filter(candidate => candidate.role === 'MENTOR')), [candidates]);
+  const activeTagFilter = useMemo(() => keepKnownTags(tagFilter, tagOptions), [tagFilter, tagOptions]);
   const groups = useMemo(
-    () => groupCandidates(candidates, role, existingUserIds, { search, mentorType }),
-    [candidates, role, existingUserIds, search, mentorType],
+    () => groupCandidates(candidates, role, existingUserIds, { search, mentorType, tags: activeTagFilter }),
+    [candidates, role, existingUserIds, search, mentorType, activeTagFilter],
   );
   const availableIds = useMemo(() => groups.available.map(item => item.userId), [groups.available]);
   // A tick never survives for an account that is no longer available (for example after a refresh).
@@ -133,7 +139,7 @@ export default function AddSemesterStaffModal({
   const submitLabel = chosen.length === 0
     ? `Add to ${semesterLabel}`
     : `Add ${chosen.length} ${roleNoun}${chosen.length === 1 ? '' : 's'}`;
-  const hasFilters = Boolean(search.trim()) || (role === 'MENTOR' && mentorType !== 'ALL');
+  const hasFilters = Boolean(search.trim()) || (role === 'MENTOR' && (mentorType !== 'ALL' || activeTagFilter.length > 0));
 
   return (
     <Modal
@@ -177,7 +183,7 @@ export default function AddSemesterStaffModal({
               type="search"
               value={search}
               onChange={event => setSearch(event.target.value)}
-              placeholder={`Search ${roleNoun}s by name, email${role === 'MENTOR' ? ' or contract' : ''}...`}
+              placeholder={`Search ${roleNoun}s by name, email${role === 'MENTOR' ? ', contract or tag' : ''}...`}
               aria-label={`Search ${roleNoun}s`}
               className="w-full rounded-xl border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
             />
@@ -198,6 +204,10 @@ export default function AddSemesterStaffModal({
             </div>
           )}
         </div>
+
+        {role === 'MENTOR' && (
+          <MentorTagFilter options={tagOptions} selected={activeTagFilter} onChange={setTagFilter} disabled={submitting} />
+        )}
 
         {loading ? (
           <LoadingSkeleton variant="text" lines={5} />
@@ -293,6 +303,7 @@ function CandidateInfo({ candidate }: { candidate: TeachingStaffCandidateDto }) 
       <div className="min-w-0">
         <p className="truncate text-xs font-semibold text-slate-800">{candidate.name}</p>
         <p className="truncate text-[10px] text-slate-400">{candidate.email}</p>
+        <MentorTagChips tags={candidate.tags} />
       </div>
       {candidate.mentorType && (
         <MentorKindTag type={candidate.mentorType} className="hidden shrink-0 sm:inline-flex">

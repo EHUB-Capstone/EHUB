@@ -1,3 +1,4 @@
+import type { MentorTagSet } from './mentorProfile';
 export type EntityReference = string | { _id?: string; id?: string; name?: string } | null | undefined;
 
 export interface TeamStudent {
@@ -88,6 +89,8 @@ export interface MentorAssignment {
     department?: string | null;
     jobTitle?: string | null;
     contractType?: string | null;
+    /** Only in the mentor pickers. */
+    tags?: Partial<MentorTagSet> | null;
   };
   slot: 'Enterprise' | 'Academic';
   status: string;

@@ -1,3 +1,4 @@
+import type { MentorTagSet } from './mentorProfile';
 export type SemesterCode = 'SP' | 'SU' | 'FA';
 export type SemesterStatus = 'Planned' | 'Active' | 'Closing' | 'Completed' | 'Archived';
 export type SubjectStatus = 'active' | 'disabled';
@@ -163,6 +164,8 @@ export interface TeachingStaffCandidateDto {
   /** Only for mentors: Enterprise = enterprise mentor, Academic = lecturer mentor. */
   mentorType?: MentorKind | null;
   contractType?: string | null;
+  /** Only for mentors: what lecturers filter on when they pick a mentor. */
+  tags?: Partial<MentorTagSet> | null;
 }
 
 export type TeachingStaffBatchOutcome = 'Added' | 'AlreadyInList' | 'Rejected';

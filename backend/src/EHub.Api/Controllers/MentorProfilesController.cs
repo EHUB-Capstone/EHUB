@@ -14,6 +14,10 @@ namespace EHub.Api.Controllers;
 [Authorize(Policy = SystemPolicies.AdminOnly)]
 public sealed class MentorProfilesController(IMentorProfileHandler handler) : ControllerBase
 {
+    [HttpGet("tag-suggestions")]
+    public async Task<IActionResult> GetTagSuggestions(CancellationToken cancellationToken) =>
+        ToResponse(await handler.GetTagSuggestionsAsync(cancellationToken), "Mentor tag suggestions retrieved successfully.");
+
     [HttpGet("{mentorProfileId:guid}")]
     public async Task<IActionResult> Get(Guid mentorProfileId, CancellationToken cancellationToken) =>
         ToResponse(await handler.GetAsync(mentorProfileId, cancellationToken), "Mentor profile retrieved successfully.");

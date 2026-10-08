@@ -756,6 +756,27 @@ Các kiểm tra này không thuộc riêng yêu cầu nào nhưng cần đạt �
 - [ ] Loại mentor (Enterprise hoặc Lecturer) không đổi được ở hồ sơ. Tên, email, số điện thoại sửa ở Users (Edit).
 - [ ] Giảng viên hoặc mentor gõ thẳng địa chỉ `/admin/mentors/...` thì không vào được.
 
+### Kiểm tra 10.9. Expertise, domain, technology và tag của mentor (EHUB-251)
+
+**Làm gì**
+1. Đăng nhập Admin, mở hồ sơ một mentor (Users, bấm tên mentor), bấm **Edit profile**.
+2. Ở mục About có bốn ô thẻ: **Expertise**, **Startup domain**, **Technology skills**, **Mentor tags**. Thêm vài thẻ vào từng ô (gõ rồi Enter hoặc dấu phẩy). Thử: thẻ trùng (khác hoa thường), thẻ 1 ký tự, thẻ dài hơn 50 ký tự, thêm quá 20 thẻ vào một ô.
+3. Lưu, rồi làm tương tự với một mentor khác, dùng lại một vài thẻ trùng nghĩa (ví dụ "React", "react"). Khi gõ ở mentor thứ hai, trình duyệt gợi ý các thẻ đã dùng.
+4. Vào **Subject Management**, tab **Lecturers & Mentors by Semester**, bấm **Add mentors**. Trên danh sách có nút **Filter by tag**.
+5. Mở **Filter by tag**, tick một hoặc nhiều thẻ; thử gõ tên thẻ vào ô tìm kiếm.
+6. Vào một lớp, bấm **Manage** ở thẻ Mentors. Ở tab **One mentor, many teams** và ở hộp thoại **Assign / Replace** của từng nhóm cũng có **Filter by tag**.
+7. Đăng nhập giảng viên và mở lại hộp thoại chọn mentor của lớp mình dạy.
+
+**Phải thấy gì**
+- [ ] Bước 2: mỗi thẻ vừa thêm hiện thành chip có nút xóa; thẻ trùng, thẻ quá ngắn hoặc quá dài, quá 20 thẻ bị từ chối ngay dưới ô kèm lý do nêu tên loại (ví dụ "technology skill"). Lưu thì dữ liệu được giữ đúng thứ tự.
+- [ ] Trang xem hồ sơ tách bốn nhóm thẻ riêng; nhóm chưa có thì ghi "Not provided".
+- [ ] Bước 3: các cách viết chỉ khác hoa thường được gộp thành một gợi ý (giữ cách viết phổ biến nhất).
+- [ ] Bước 4, 5: nút **Filter by tag** liệt kê thẻ theo bốn nhóm kèm số mentor đang có thẻ đó; chọn thẻ thì danh sách chỉ còn mentor có **ít nhất một** thẻ đã chọn (chọn thêm thẻ thì danh sách rộng hơn). Có chip thẻ đã chọn kèm nút bỏ và nút **Clear**.
+- [ ] Mỗi mentor trong danh sách hiện tối đa 3 thẻ nhỏ và "+N" nếu còn nhiều hơn.
+- [ ] Ô tìm kiếm tìm được cả theo thẻ (tên, email, loại hợp đồng, thẻ).
+- [ ] Bước 6: bộ lọc hoạt động giống nhau ở cả ba nơi (Add mentors, One mentor many teams, Assign/Replace).
+- [ ] Bước 7: giảng viên **xem được thẻ và lọc** ở các hộp thoại chọn mentor nhưng **không vào được** trang hồ sơ mentor và không sửa được thẻ.
+
 **Kết luận phần kiểm tra chung:** ☐ Đạt  ☐ Đạt có điều kiện  ☐ Chưa đạt   Ghi chú: ……………………
 
 ---

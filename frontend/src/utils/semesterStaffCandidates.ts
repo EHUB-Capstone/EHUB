@@ -4,12 +4,15 @@ import type {
   TeachingStaffCandidateDto,
 } from '../types/subjects';
 import { matchesSearchQuery } from './searchText.ts';
+import { matchesAnyTag, tagSearchText } from './mentorTags.ts';
 
 export type MentorKindFilter = 'ALL' | MentorKind;
 
 export interface CandidateFilters {
   search: string;
   mentorType: MentorKindFilter;
+  /** Selected tag keys; a mentor needs any one of them. Empty means no tag filter. */
+  tags?: readonly string[];
 }
 
 export interface CandidateGroups {
@@ -32,7 +35,8 @@ export function groupCandidates(
   const matching = candidates
     .filter(candidate => candidate.role === role)
     .filter(candidate => role !== 'MENTOR' || filters.mentorType === 'ALL' || candidate.mentorType === filters.mentorType)
-    .filter(candidate => matchesSearchQuery(filters.search, [candidate.name, candidate.email, candidate.contractType]))
+    .filter(candidate => role !== 'MENTOR' || matchesAnyTag(candidate.tags, filters.tags ?? []))
+    .filter(candidate => matchesSearchQuery(filters.search, [candidate.name, candidate.email, candidate.contractType, ...tagSearchText(candidate.tags)]))
     .sort(byName);
 
   return {

@@ -27,6 +27,33 @@ public sealed class MentorProfileHandler(
         return Result.Success(await ToResponseAsync(profile, cancellationToken));
     }
 
+    public async Task<Result<MentorTagSuggestionsResponse>> GetTagSuggestionsAsync(CancellationToken cancellationToken = default)
+    {
+        var denied = RequireAdmin();
+        if (denied is not null) return Result.Failure<MentorTagSuggestionsResponse>(denied);
+
+        var rows = await context.MentorProfiles.AsNoTracking()
+            .Select(item => new { item.Expertise, item.StartupDomains, item.TechnologySkills, item.MentorTags })
+            .ToListAsync(cancellationToken);
+        return Result.Success(new MentorTagSuggestionsResponse
+        {
+            Expertise = MostUsed(rows.SelectMany(item => item.Expertise ?? [])),
+            StartupDomains = MostUsed(rows.SelectMany(item => item.StartupDomains ?? [])),
+            TechnologySkills = MostUsed(rows.SelectMany(item => item.TechnologySkills ?? [])),
+            MentorTags = MostUsed(rows.SelectMany(item => item.MentorTags ?? []))
+        });
+    }
+
+    // Groups spellings that differ only by case, keeps the most common spelling and orders by how many mentors use it.
+    private static string[] MostUsed(IEnumerable<string> tags) => tags
+        .Where(tag => !string.IsNullOrWhiteSpace(tag))
+        .GroupBy(tag => tag, StringComparer.OrdinalIgnoreCase)
+        .OrderByDescending(group => group.Count())
+        .ThenBy(group => group.Key, StringComparer.CurrentCultureIgnoreCase)
+        .Select(group => group.GroupBy(tag => tag).OrderByDescending(spelling => spelling.Count()).First().Key)
+        .Take(200)
+        .ToArray();
+
     public async Task<Result<MentorProfileResponse>> UpdateAsync(Guid mentorProfileId, UpdateMentorProfileRequest request, CancellationToken cancellationToken = default)
     {
         var denied = RequireAdmin();
@@ -44,6 +71,9 @@ public sealed class MentorProfileHandler(
 
         profile.Status = Enum.Parse<MentorProfileStatus>(request.Status, ignoreCase: true);
         profile.Expertise = MentorProfileRules.NormalizeExpertise(request.Expertise).Values;
+        profile.StartupDomains = MentorProfileRules.NormalizeTags("Startup domain", request.StartupDomains).Values;
+        profile.TechnologySkills = MentorProfileRules.NormalizeTags("Technology skill", request.TechnologySkills).Values;
+        profile.MentorTags = MentorProfileRules.NormalizeTags("Mentor tag", request.MentorTags).Values;
         profile.Bio = MentorProfileRules.Clean(request.Bio);
         profile.AvailabilityNote = MentorProfileRules.Clean(request.AvailabilityNote);
         profile.Organization = MentorProfileRules.Clean(request.Organization);
@@ -85,6 +115,9 @@ public sealed class MentorProfileHandler(
             MentorType = profile.Type.ToString(),
             Status = profile.Status.ToString(),
             Expertise = profile.Expertise ?? [],
+            StartupDomains = profile.StartupDomains ?? [],
+            TechnologySkills = profile.TechnologySkills ?? [],
+            MentorTags = profile.MentorTags ?? [],
             Bio = profile.Bio,
             AvailabilityNote = profile.AvailabilityNote,
             Organization = profile.Organization,

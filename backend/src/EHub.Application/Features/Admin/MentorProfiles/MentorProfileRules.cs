@@ -12,7 +12,10 @@ internal static partial class MentorProfileRules
     public const int MaximumAvailabilityNoteLength = 500;
 
     // Trims, collapses inner spaces, drops empty entries and rejects duplicates (ignoring case) and out-of-range tags.
-    public static (string[] Values, string? Error) NormalizeExpertise(IEnumerable<string>? raw)
+    public static (string[] Values, string? Error) NormalizeExpertise(IEnumerable<string>? raw) => NormalizeTags("Expertise", raw);
+
+    // The same rule for expertise, startup domains, technology skills and mentor tags; `label` names the kind in messages.
+    public static (string[] Values, string? Error) NormalizeTags(string label, IEnumerable<string>? raw)
     {
         var values = new List<string>();
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -21,12 +24,12 @@ internal static partial class MentorProfileRules
             var value = Spaces().Replace(item?.Trim() ?? string.Empty, " ");
             if (value.Length == 0) continue;
             if (value.Length < MinimumExpertiseLength || value.Length > MaximumExpertiseLength)
-                return ([], $"Each expertise must be {MinimumExpertiseLength} to {MaximumExpertiseLength} characters: '{Shorten(value)}'.");
-            if (!seen.Add(value)) return ([], $"Expertise '{value}' is listed more than once.");
+                return ([], $"Each {label.ToLowerInvariant()} must be {MinimumExpertiseLength} to {MaximumExpertiseLength} characters: '{Shorten(value)}'.");
+            if (!seen.Add(value)) return ([], $"{label} '{value}' is listed more than once.");
             values.Add(value);
         }
         return values.Count > MaximumExpertiseItems
-            ? ([], $"A mentor can have at most {MaximumExpertiseItems} expertise tags.")
+            ? ([], $"A mentor can have at most {MaximumExpertiseItems} {label.ToLowerInvariant()} tags.")
             : (values.ToArray(), null);
     }
 

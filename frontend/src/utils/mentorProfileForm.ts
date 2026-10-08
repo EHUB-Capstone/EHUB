@@ -26,6 +26,9 @@ export const MENTOR_PROFILE_STATUSES: ReadonlyArray<{ value: MentorProfileStatus
 export interface MentorProfileFormValues {
   status: MentorProfileStatus;
   expertise: string[];
+  startupDomains: string[];
+  technologySkills: string[];
+  mentorTags: string[];
   bio: string;
   availabilityNote: string;
   organization: string;
@@ -48,16 +51,25 @@ export function normalizeExpertiseTag(raw: string): string {
 
 /** Adds a tag when it is valid; otherwise returns the reason and leaves the list unchanged. */
 export function addExpertiseTag(current: readonly string[], raw: string): { tags: string[]; error: string | null } {
+  return addTag('expertise', 'tags', current, raw);
+}
+
+/** The same rule for every kind of tag; `noun` names the kind in messages. */
+export function addTagOfKind(noun: string) {
+  return (current: readonly string[], raw: string) => addTag(noun, 'tags', current, raw);
+}
+
+function addTag(noun: string, plural: string, current: readonly string[], raw: string): { tags: string[]; error: string | null } {
   const value = normalizeExpertiseTag(raw);
   if (value === '') return { tags: [...current], error: null };
   if (value.length < MENTOR_PROFILE_LIMITS.expertiseMin || value.length > MENTOR_PROFILE_LIMITS.expertiseMax) {
-    return { tags: [...current], error: `Each expertise must be ${MENTOR_PROFILE_LIMITS.expertiseMin} to ${MENTOR_PROFILE_LIMITS.expertiseMax} characters.` };
+    return { tags: [...current], error: `Each ${noun} must be ${MENTOR_PROFILE_LIMITS.expertiseMin} to ${MENTOR_PROFILE_LIMITS.expertiseMax} characters.` };
   }
   if (current.some(tag => tag.toLowerCase() === value.toLowerCase())) {
     return { tags: [...current], error: `"${value}" is already listed.` };
   }
   if (current.length >= MENTOR_PROFILE_LIMITS.expertiseItems) {
-    return { tags: [...current], error: `A mentor can have at most ${MENTOR_PROFILE_LIMITS.expertiseItems} expertise tags.` };
+    return { tags: [...current], error: `A mentor can have at most ${MENTOR_PROFILE_LIMITS.expertiseItems} ${noun} ${plural}.` };
   }
   return { tags: [...current, value], error: null };
 }
@@ -66,6 +78,9 @@ export function profileToFormValues(profile: MentorProfile): MentorProfileFormVa
   return {
     status: profile.status,
     expertise: [...profile.expertise],
+    startupDomains: [...profile.startupDomains],
+    technologySkills: [...profile.technologySkills],
+    mentorTags: [...profile.mentorTags],
     bio: profile.bio ?? '',
     availabilityNote: profile.availabilityNote ?? '',
     organization: profile.organization ?? '',
@@ -122,6 +137,9 @@ export function toUpdatePayload(values: MentorProfileFormValues, rowVersion: str
     rowVersion,
     status: values.status,
     expertise: values.expertise,
+    startupDomains: values.startupDomains,
+    technologySkills: values.technologySkills,
+    mentorTags: values.mentorTags,
     bio: text(values.bio),
     availabilityNote: text(values.availabilityNote),
     organization: text(values.organization),

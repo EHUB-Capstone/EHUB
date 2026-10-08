@@ -25,6 +25,8 @@ public sealed class MentorSummaryDto
     public string? Department { get; init; }
     public string? JobTitle { get; init; }
     public string? ContractType { get; init; }
+    // Only filled in the mentor pickers, where lecturers search mentors by tag.
+    public EHub.Contracts.Mentors.MentorTagsDto? Tags { get; init; }
 }
 
 public sealed class MentorAssignmentDto

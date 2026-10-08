@@ -212,6 +212,15 @@ public sealed class TeachingStaffQueryHandler(IApplicationDbContext context) : I
                         : null,
                     ContractType = string.Equals(userRole.Role.Name, SystemRoles.Mentor, StringComparison.OrdinalIgnoreCase)
                         ? user.MentorProfile?.ContractType
+                        : null,
+                    Tags = string.Equals(userRole.Role.Name, SystemRoles.Mentor, StringComparison.OrdinalIgnoreCase) && user.MentorProfile is not null
+                        ? new EHub.Contracts.Mentors.MentorTagsDto
+                        {
+                            Expertise = user.MentorProfile.Expertise ?? [],
+                            StartupDomains = user.MentorProfile.StartupDomains ?? [],
+                            TechnologySkills = user.MentorProfile.TechnologySkills ?? [],
+                            MentorTags = user.MentorProfile.MentorTags ?? []
+                        }
                         : null
                 }))
             .ToArray();

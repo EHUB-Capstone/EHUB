@@ -38,6 +38,18 @@ public sealed class MentorProfileRulesTests
         MentorProfileRules.NormalizeExpertise(Enumerable.Range(1, 21).Select(index => $"Skill {index}")).Error.Should().Contain("at most 20");
     }
 
+    [Theory]
+    [InlineData("Startup domain")]
+    [InlineData("Technology skill")]
+    [InlineData("Mentor tag")]
+    public void NormalizeTags_AppliesTheSameRulesToEveryKindAndNamesTheKindInTheMessage(string label)
+    {
+        MentorProfileRules.NormalizeTags(label, ["React", " react "]).Error.Should().StartWith(label).And.Contain("more than once");
+        MentorProfileRules.NormalizeTags(label, ["A"]).Error.Should().Contain(label.ToLowerInvariant());
+        MentorProfileRules.NormalizeTags(label, Enumerable.Range(1, 21).Select(index => $"Item {index}")).Error.Should().Contain(label.ToLowerInvariant());
+        MentorProfileRules.NormalizeTags(label, ["  .NET ", "Machine   learning"]).Values.Should().Equal(".NET", "Machine learning");
+    }
+
     [Fact]
     public void BioAndAvailabilityNote_AreLimitedAfterTrimming()
     {

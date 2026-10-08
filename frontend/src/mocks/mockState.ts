@@ -14,6 +14,9 @@ export interface MockUser {
   mentorProfile?: {
     status: 'Active' | 'Inactive' | 'Unavailable';
     expertise: string[];
+    startupDomains: string[];
+    technologySkills: string[];
+    mentorTags: string[];
     bio: string | null;
     availabilityNote: string | null;
     organization: string | null;

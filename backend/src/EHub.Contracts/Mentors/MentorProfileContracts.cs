@@ -14,6 +14,9 @@ public sealed class MentorProfileResponse
     // "Active", "Inactive" or "Unavailable". Only Active mentors can be assigned to teams.
     public string Status { get; init; } = string.Empty;
     public IReadOnlyCollection<string> Expertise { get; init; } = Array.Empty<string>();
+    public IReadOnlyCollection<string> StartupDomains { get; init; } = Array.Empty<string>();
+    public IReadOnlyCollection<string> TechnologySkills { get; init; } = Array.Empty<string>();
+    public IReadOnlyCollection<string> MentorTags { get; init; } = Array.Empty<string>();
     public string? Bio { get; init; }
     public string? AvailabilityNote { get; init; }
     public string? Organization { get; init; }
@@ -36,6 +39,9 @@ public sealed class UpdateMentorProfileRequest
     public string RowVersion { get; init; } = string.Empty;
     public string Status { get; init; } = string.Empty;
     public IReadOnlyCollection<string> Expertise { get; init; } = Array.Empty<string>();
+    public IReadOnlyCollection<string> StartupDomains { get; init; } = Array.Empty<string>();
+    public IReadOnlyCollection<string> TechnologySkills { get; init; } = Array.Empty<string>();
+    public IReadOnlyCollection<string> MentorTags { get; init; } = Array.Empty<string>();
     public string? Bio { get; init; }
     public string? AvailabilityNote { get; init; }
     public string? Organization { get; init; }
@@ -47,4 +53,22 @@ public sealed class UpdateMentorProfileRequest
     public string? LinkedInUrl { get; init; }
     public string? FptEmail { get; init; }
     public DateOnly? DateOfBirth { get; init; }
+}
+
+// The searchable labels of a mentor, shown to anyone who picks a mentor (admin and lecturers).
+public sealed class MentorTagsDto
+{
+    public IReadOnlyCollection<string> Expertise { get; init; } = Array.Empty<string>();
+    public IReadOnlyCollection<string> StartupDomains { get; init; } = Array.Empty<string>();
+    public IReadOnlyCollection<string> TechnologySkills { get; init; } = Array.Empty<string>();
+    public IReadOnlyCollection<string> MentorTags { get; init; } = Array.Empty<string>();
+}
+
+// Every tag already in use, most used first, so the editor can suggest one spelling instead of many.
+public sealed class MentorTagSuggestionsResponse
+{
+    public IReadOnlyCollection<string> Expertise { get; init; } = Array.Empty<string>();
+    public IReadOnlyCollection<string> StartupDomains { get; init; } = Array.Empty<string>();
+    public IReadOnlyCollection<string> TechnologySkills { get; init; } = Array.Empty<string>();
+    public IReadOnlyCollection<string> MentorTags { get; init; } = Array.Empty<string>();
 }

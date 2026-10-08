@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   addExpertiseTag,
+  addTagOfKind,
   hasProfileChanges,
   profileToFormValues,
   toUpdatePayload,
@@ -11,7 +12,7 @@ import type { MentorProfile } from '../src/types/mentorProfile.ts';
 
 const profile: MentorProfile = {
   id: 'p1', userId: 'u1', fullName: 'An', email: 'an@x.vn', mentorType: 'Academic', status: 'Active',
-  expertise: ['AI'], bio: 'Bio', availabilityNote: null, organization: 'Acme', department: null, jobTitle: null,
+  expertise: ['AI'], startupDomains: ['FinTech'], technologySkills: ['React'], mentorTags: ['Alumni'], bio: 'Bio', availabilityNote: null, organization: 'Acme', department: null, jobTitle: null,
   contractType: null, educationLevel: null, currentAddress: null, linkedInUrl: null, fptEmail: null, dateOfBirth: '1990-01-31',
   activeTeamCount: 2, rowVersion: '7',
 };
@@ -51,6 +52,9 @@ test('toUpdatePayload turns blank text into null and carries the row version', (
   assert.equal(payload.organization, 'Acme');
   assert.equal(payload.dateOfBirth, '1990-01-31');
   assert.deepEqual(payload.expertise, ['AI']);
+  assert.deepEqual(payload.startupDomains, ['FinTech']);
+  assert.deepEqual(payload.technologySkills, ['React']);
+  assert.deepEqual(payload.mentorTags, ['Alumni']);
 });
 
 test('hasProfileChanges ignores untouched fields and detects a real edit', () => {
@@ -59,4 +63,14 @@ test('hasProfileChanges ignores untouched fields and detects a real edit', () =>
   assert.equal(hasProfileChanges(profile, { ...values, bio: 'Bio ' }), false, 'trailing spaces are not a change');
   assert.equal(hasProfileChanges(profile, { ...values, status: 'Unavailable' }), true);
   assert.equal(hasProfileChanges(profile, { ...values, expertise: ['AI', 'UX'] }), true);
+  assert.equal(hasProfileChanges(profile, { ...values, technologySkills: ['React', '.NET'] }), true);
+  assert.equal(hasProfileChanges(profile, { ...values, mentorTags: [] }), true);
+});
+
+test('addTagOfKind applies the same rules to every kind of tag and names the kind in its message', () => {
+  const addSkill = addTagOfKind('technology skill');
+  assert.deepEqual(addSkill(['React'], ' .NET '), { tags: ['React', '.NET'], error: null });
+  assert.match(addSkill(['React'], 'REACT').error!, /already listed/);
+  assert.match(addSkill([], 'X').error!, /technology skill must be 2 to 50/);
+  assert.match(addSkill(Array.from({ length: 20 }, (_, index) => `Tech ${index}`), 'One more').error!, /at most 20 technology skill tags/);
 });

@@ -23,6 +23,9 @@ import { matchesSearchQuery } from '../../utils/searchText';
 import type { ManagedTeam, MentorAssignment, MentorCandidate } from '../../types/teamManagement';
 import type { ApiEnvelope } from '../../types/classes';
 import MentorKindTag from '../admin/MentorKindTag';
+import MentorTagChips from '../admin/MentorTagChips';
+import MentorTagFilter from '../admin/MentorTagFilter';
+import { collectTagOptions, keepKnownTags } from '../../utils/mentorTags';
 import ConfirmDialog from '../ui/ConfirmDialog';
 import MentorSlotDialog from './MentorSlotDialog';
 import MentorTeamsBoard from './MentorTeamsBoard';
@@ -73,6 +76,7 @@ export default function AssignMentorsModal({ classId, onClose, onAssigned }: Ass
   const [selectedTeamIds, setSelectedTeamIds] = useState<string[]>([]);
   const [mentorSearch, setMentorSearch] = useState('');
   const [kindFilter, setKindFilter] = useState<MentorKindFilter>('ALL');
+  const [tagFilter, setTagFilter] = useState<string[]>([]);
   const [bulkTeamSearch, setBulkTeamSearch] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [bulkResult, setBulkResult] = useState<{ tone: 'success' | 'error'; message: string } | null>(null);
@@ -102,6 +106,7 @@ export default function AssignMentorsModal({ classId, onClose, onAssigned }: Ass
         organization: candidate.mentor.organization,
         mentorType: candidate.mentor.mentorType,
         contractType: candidate.mentor.contractType,
+        tags: candidate.mentor.tags,
         activeTeamCount: candidate.activeTeamCount,
       })));
       setTeams((Array.isArray(teamData) ? teamData : []).map(normalizeManagedTeam));
@@ -149,7 +154,12 @@ export default function AssignMentorsModal({ classId, onClose, onAssigned }: Ass
   };
 
   // ── Bulk view ───────────────────────────────────────────────────────────────
-  const filteredMentors = useMemo(() => filterMentorOptions(mentors, mentorSearch, kindFilter), [mentors, mentorSearch, kindFilter]);
+  const tagOptions = useMemo(() => collectTagOptions(mentors), [mentors]);
+  const activeTagFilter = useMemo(() => keepKnownTags(tagFilter, tagOptions), [tagFilter, tagOptions]);
+  const filteredMentors = useMemo(
+    () => filterMentorOptions(mentors, mentorSearch, kindFilter, activeTagFilter),
+    [mentors, mentorSearch, kindFilter, activeTagFilter],
+  );
   const selectedMentor = mentors.find(mentor => mentor._id === selectedMentorId);
   const eligibleTeams = useMemo(
     () => (selectedMentor ? eligibleTeamsForKind(teams, selectedMentor.mentorType) : []),
@@ -320,12 +330,13 @@ export default function AssignMentorsModal({ classId, onClose, onAssigned }: Ass
                         </button>
                       ))}
                     </div>
+                    <div className="mb-2"><MentorTagFilter options={tagOptions} selected={activeTagFilter} onChange={setTagFilter} disabled={submitting} /></div>
                     <div className="relative mb-2">
                       <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                       <input
                         type="search"
                         aria-label="Search mentors"
-                        placeholder="Search by name, email or contract..."
+                        placeholder="Search by name, email, contract or tag..."
                         value={mentorSearch}
                         onChange={event => setMentorSearch(event.target.value)}
                         className="w-full rounded-xl border border-slate-200 py-2 pl-9 pr-3 text-xs outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
@@ -357,6 +368,7 @@ export default function AssignMentorsModal({ classId, onClose, onAssigned }: Ass
                               <div className="min-w-0">
                                 <p className="truncate text-xs font-semibold text-slate-800">{mentor.name}</p>
                                 <p className="truncate text-[10px] text-slate-400">{style.label}{mentor.contractType ? ` · ${mentor.contractType}` : ''} · {mentor.activeTeamCount} team{mentor.activeTeamCount === 1 ? '' : 's'} this semester</p>
+                                <MentorTagChips tags={mentor.tags} />
                               </div>
                             </div>
                             <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border ${isChecked ? 'border-primary bg-primary' : 'border-slate-200 bg-white'}`}>

@@ -17,6 +17,21 @@ public sealed class UpdateMentorProfileRequestValidator : AbstractValidator<Upda
             var (_, error) = MentorProfileRules.NormalizeExpertise(value);
             if (error is not null) context.AddFailure(nameof(UpdateMentorProfileRequest.Expertise), error);
         });
+        RuleFor(x => x.StartupDomains).Custom((value, context) =>
+        {
+            var (_, error) = MentorProfileRules.NormalizeTags("Startup domain", value);
+            if (error is not null) context.AddFailure(nameof(UpdateMentorProfileRequest.StartupDomains), error);
+        });
+        RuleFor(x => x.TechnologySkills).Custom((value, context) =>
+        {
+            var (_, error) = MentorProfileRules.NormalizeTags("Technology skill", value);
+            if (error is not null) context.AddFailure(nameof(UpdateMentorProfileRequest.TechnologySkills), error);
+        });
+        RuleFor(x => x.MentorTags).Custom((value, context) =>
+        {
+            var (_, error) = MentorProfileRules.NormalizeTags("Mentor tag", value);
+            if (error is not null) context.AddFailure(nameof(UpdateMentorProfileRequest.MentorTags), error);
+        });
         RuleFor(x => x.Bio).Must(value => MentorProfileRules.ValidateBio(value) is null)
             .WithMessage($"Background may contain at most {MentorProfileRules.MaximumBioLength} characters.");
         RuleFor(x => x.AvailabilityNote).Must(value => MentorProfileRules.ValidateAvailabilityNote(value) is null)

@@ -5,6 +5,7 @@ using EHub.Application.Common.Interfaces.Identity;
 using EHub.Contracts.Auth;
 using EHub.Contracts.Common;
 using EHub.Contracts.Mentors;
+using EHub.Contracts.Subjects;
 using EHub.Contracts.Users;
 using EHub.Domain.Entities;
 using EHub.Domain.Enums;
@@ -158,17 +159,108 @@ public sealed class MentorProfileIntegrationTests(CustomWebApplicationFactory fa
         (await ReadProfileAsync(token, profileId)).Bio.Should().NotBe("Hacked");
     }
 
+    [Fact]
+    public async Task UpdatingAProfile_ShouldSaveEveryKindOfTag_AndRejectBadOrDuplicatedOnes()
+    {
+        var token = await GetAdminTokenAsync();
+        var profileId = await CreateMentorAndGetProfileIdAsync(token);
+        var before = await ReadProfileAsync(token, profileId);
+
+        var saved = await UpdateProfileAsync(token, profileId, Update(before, request => request with
+        {
+            Expertise = ["Marketing"],
+            StartupDomains = [" FinTech ", "EdTech"],
+            TechnologySkills = ["React", ".NET", "Machine   learning"],
+            MentorTags = ["Alumni"]
+        }));
+        saved.StatusCode.Should().Be(HttpStatusCode.OK);
+        var after = (await saved.Content.ReadFromJsonAsync<ApiResponse<MentorProfileResponse>>())!.Data!;
+        after.StartupDomains.Should().Equal("FinTech", "EdTech");
+        after.TechnologySkills.Should().Equal("React", ".NET", "Machine learning");
+        after.MentorTags.Should().Equal("Alumni");
+
+        var cases = new Dictionary<string, Func<EditableProfile, EditableProfile>>
+        {
+            ["duplicate domain"] = request => request with { StartupDomains = ["FinTech", "fintech"] },
+            ["duplicate technology"] = request => request with { TechnologySkills = ["React", "REACT"] },
+            ["duplicate tag"] = request => request with { MentorTags = ["Alumni", "alumni"] },
+            ["short domain"] = request => request with { StartupDomains = ["X"] },
+            ["long technology"] = request => request with { TechnologySkills = [new string('t', 51)] },
+            ["too many tags"] = request => request with { MentorTags = Enumerable.Range(1, 21).Select(index => $"Tag {index}").ToArray() }
+        };
+        foreach (var (name, change) in cases)
+        {
+            var response = await UpdateProfileAsync(token, profileId, Update(after, change));
+            response.StatusCode.Should().Be(HttpStatusCode.BadRequest, name);
+        }
+        var stored = await ReadProfileAsync(token, profileId);
+        stored.StartupDomains.Should().Equal("FinTech", "EdTech");
+        stored.TechnologySkills.Should().Equal("React", ".NET", "Machine learning");
+    }
+
+    [Fact]
+    public async Task TagSuggestions_ShouldListEachKindMostUsedFirstWithOneSpelling_ForAdminsOnly()
+    {
+        var token = await GetAdminTokenAsync();
+        var tag = $"Zeta{Guid.NewGuid():N}"[..14];
+        foreach (var spelling in new[] { tag, tag, tag.ToUpperInvariant() })
+        {
+            var profileId = await CreateMentorAndGetProfileIdAsync(token);
+            var profile = await ReadProfileAsync(token, profileId);
+            (await UpdateProfileAsync(token, profileId, Update(profile, request => request with { TechnologySkills = [spelling] }))).StatusCode.Should().Be(HttpStatusCode.OK);
+        }
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/admin/mentor-profiles/tag-suggestions");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        var response = await _client.SendAsync(request);
+        var suggestions = (await response.Content.ReadFromJsonAsync<ApiResponse<MentorTagSuggestionsResponse>>())!.Data!;
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        suggestions.TechnologySkills.Where(item => item.Equals(tag, StringComparison.OrdinalIgnoreCase)).Should().ContainSingle("spellings that differ by case are listed once").Which.Should().Be(tag, "the most used spelling wins");
+
+        (await _client.GetAsync("/api/admin/mentor-profiles/tag-suggestions")).StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+        using var forbidden = new HttpRequestMessage(HttpMethod.Get, "/api/admin/mentor-profiles/tag-suggestions");
+        forbidden.Headers.Authorization = new AuthenticationHeaderValue("Bearer", await CreateLecturerTokenAsync());
+        (await _client.SendAsync(forbidden)).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task TheMentorPicker_ShouldCarryTheTagsOfEachMentor()
+    {
+        var token = await GetAdminTokenAsync();
+        var profileId = await CreateMentorAndGetProfileIdAsync(token);
+        var profile = await ReadProfileAsync(token, profileId);
+        (await UpdateProfileAsync(token, profileId, Update(profile, request => request with
+        {
+            Expertise = ["Pricing"], StartupDomains = ["HealthTech"], TechnologySkills = ["Python"], MentorTags = ["Industry"]
+        }))).StatusCode.Should().Be(HttpStatusCode.OK);
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/subjects/teaching-staff/candidates");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        var response = await _client.SendAsync(request);
+        var candidates = (await response.Content.ReadFromJsonAsync<ApiResponse<TeachingStaffCandidateListResponse>>())!.Data!.Candidates;
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var mentor = candidates.Single(item => item.UserId == profile.UserId && item.Role == "MENTOR");
+        mentor.Tags.Should().NotBeNull();
+        mentor.Tags!.Expertise.Should().Equal("Pricing");
+        mentor.Tags.StartupDomains.Should().Equal("HealthTech");
+        mentor.Tags.TechnologySkills.Should().Equal("Python");
+        mentor.Tags.MentorTags.Should().Equal("Industry");
+    }
+
     // ---- helpers ----
 
     private static UpdateMentorProfileRequest Update(MentorProfileResponse profile, Func<EditableProfile, EditableProfile> change)
     {
         var edited = change(new EditableProfile(
-            profile.RowVersion, profile.Status, profile.Expertise, profile.Bio, profile.AvailabilityNote, profile.Organization,
+            profile.RowVersion, profile.Status, profile.Expertise, profile.StartupDomains, profile.TechnologySkills, profile.MentorTags, profile.Bio, profile.AvailabilityNote, profile.Organization,
             profile.Department, profile.JobTitle, profile.ContractType, profile.EducationLevel, profile.CurrentAddress,
             profile.LinkedInUrl, profile.FptEmail, profile.DateOfBirth));
         return new UpdateMentorProfileRequest
         {
-            RowVersion = edited.RowVersion, Status = edited.Status, Expertise = edited.Expertise, Bio = edited.Bio,
+            RowVersion = edited.RowVersion, Status = edited.Status, Expertise = edited.Expertise, StartupDomains = edited.StartupDomains,
+            TechnologySkills = edited.TechnologySkills, MentorTags = edited.MentorTags, Bio = edited.Bio,
             AvailabilityNote = edited.AvailabilityNote, Organization = edited.Organization, Department = edited.Department,
             JobTitle = edited.JobTitle, ContractType = edited.ContractType, EducationLevel = edited.EducationLevel,
             CurrentAddress = edited.CurrentAddress, LinkedInUrl = edited.LinkedInUrl, FptEmail = edited.FptEmail, DateOfBirth = edited.DateOfBirth
@@ -176,7 +268,8 @@ public sealed class MentorProfileIntegrationTests(CustomWebApplicationFactory fa
     }
 
     private sealed record EditableProfile(
-        string RowVersion, string Status, IReadOnlyCollection<string> Expertise, string? Bio, string? AvailabilityNote, string? Organization,
+        string RowVersion, string Status, IReadOnlyCollection<string> Expertise, IReadOnlyCollection<string> StartupDomains,
+        IReadOnlyCollection<string> TechnologySkills, IReadOnlyCollection<string> MentorTags, string? Bio, string? AvailabilityNote, string? Organization,
         string? Department, string? JobTitle, string? ContractType, string? EducationLevel, string? CurrentAddress,
         string? LinkedInUrl, string? FptEmail, DateOnly? DateOfBirth);
 

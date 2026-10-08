@@ -125,6 +125,7 @@ public sealed class TeachingStaffCandidateResponse
     // Only set for mentors: "Enterprise" (enterprise mentor) or "Academic" (lecturer mentor).
     public string? MentorType { get; init; }
     public string? ContractType { get; init; }
+    public EHub.Contracts.Mentors.MentorTagsDto? Tags { get; init; }
 }
 
 public static class SemesterStaffBatchOutcomes

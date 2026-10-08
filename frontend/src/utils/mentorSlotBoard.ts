@@ -1,5 +1,7 @@
 import type { ManagedTeam, MentorAssignment } from '../types/teamManagement';
+import type { MentorTagSet } from '../types/mentorProfile';
 import { canAssignMentorTypeToTeam } from './teamManagement.ts';
+import { matchesAnyTag, tagSearchText } from './mentorTags.ts';
 import { matchesSearchQuery } from './searchText.ts';
 
 export type MentorSlot = MentorAssignment['slot'];
@@ -11,6 +13,7 @@ export interface MentorOption {
   organization?: string | null;
   mentorType: MentorSlot;
   contractType?: string | null;
+  tags?: Partial<MentorTagSet> | null;
   activeTeamCount: number;
 }
 
@@ -52,10 +55,16 @@ export function filterTeamSlotRows(rows: readonly TeamSlotRow[], filter: SlotFil
 export type MentorKindFilter = 'ALL' | MentorSlot;
 
 /** Mentors matching the search text and kind chip. */
-export function filterMentorOptions(options: readonly MentorOption[], search: string, kind: MentorKindFilter): MentorOption[] {
+export function filterMentorOptions(
+  options: readonly MentorOption[],
+  search: string,
+  kind: MentorKindFilter,
+  tagKeys: readonly string[] = [],
+): MentorOption[] {
   return options.filter(option =>
     (kind === 'ALL' || option.mentorType === kind)
-    && matchesSearchQuery(search, [option.name, option.email, option.contractType ?? '']));
+    && matchesAnyTag(option.tags, tagKeys)
+    && matchesSearchQuery(search, [option.name, option.email, option.contractType ?? '', ...tagSearchText(option.tags)]));
 }
 
 /** Mentors that can take a given slot: the right kind, and never the mentor who already holds it. */

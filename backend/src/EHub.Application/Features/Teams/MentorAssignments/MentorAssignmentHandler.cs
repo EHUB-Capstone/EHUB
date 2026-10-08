@@ -58,7 +58,14 @@ public sealed class MentorAssignmentHandler : IMentorAssignmentHandler
                     MentorType = profile.Type.ToString(),
                     Department = profile.Department,
                     JobTitle = profile.JobTitle,
-                    ContractType = profile.ContractType
+                    ContractType = profile.ContractType,
+                    Tags = new EHub.Contracts.Mentors.MentorTagsDto
+                    {
+                        Expertise = profile.Expertise,
+                        StartupDomains = profile.StartupDomains,
+                        TechnologySkills = profile.TechnologySkills,
+                        MentorTags = profile.MentorTags
+                    }
                 },
                 ActiveTeamCount = profile.Assignments.Count(assignment => assignment.Status == MentorAssignmentStatus.Active && assignment.EndedAt == null && assignment.Team.Class.SemesterId == targetClass.SemesterId)
             })

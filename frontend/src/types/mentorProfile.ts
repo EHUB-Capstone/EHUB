@@ -1,3 +1,14 @@
+/** The searchable labels of a mentor. */
+export interface MentorTagSet {
+  expertise: string[];
+  startupDomains: string[];
+  technologySkills: string[];
+  mentorTags: string[];
+}
+
+/** Tags already used by other mentors, most used first. */
+export type MentorTagSuggestions = MentorTagSet;
+
 export type MentorProfileStatus = 'Active' | 'Inactive' | 'Unavailable';
 
 export interface MentorProfile {
@@ -11,6 +22,9 @@ export interface MentorProfile {
   mentorType: 'Enterprise' | 'Academic';
   status: MentorProfileStatus;
   expertise: string[];
+  startupDomains: string[];
+  technologySkills: string[];
+  mentorTags: string[];
   bio?: string | null;
   availabilityNote?: string | null;
   organization?: string | null;
@@ -31,6 +45,9 @@ export interface UpdateMentorProfilePayload {
   rowVersion: string;
   status: MentorProfileStatus;
   expertise: string[];
+  startupDomains: string[];
+  technologySkills: string[];
+  mentorTags: string[];
   bio: string | null;
   availabilityNote: string | null;
   organization: string | null;

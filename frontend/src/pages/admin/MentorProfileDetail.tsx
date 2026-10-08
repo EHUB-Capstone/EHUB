@@ -8,12 +8,13 @@ import TagInput from '../../components/admin/TagInput';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
 import LoadingSkeleton from '../../components/ui/LoadingSkeleton';
-import type { MentorProfile, MentorProfileStatus } from '../../types/mentorProfile';
+import type { MentorProfile, MentorProfileStatus, MentorTagSuggestions } from '../../types/mentorProfile';
 import { parseApiError } from '../../utils/apiError';
 import {
   MENTOR_PROFILE_LIMITS,
   MENTOR_PROFILE_STATUSES,
   addExpertiseTag,
+  addTagOfKind,
   hasProfileChanges,
   profileToFormValues,
   toUpdatePayload,
@@ -36,6 +37,7 @@ export default function MentorProfileDetail() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
   const [conflict, setConflict] = useState(false);
+  const [suggestions, setSuggestions] = useState<MentorTagSuggestions | null>(null);
 
   const load = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
@@ -64,6 +66,8 @@ export default function MentorProfileDetail() {
     setSaveError('');
     setConflict(false);
     setEditing(true);
+    // Suggestions only help the admin spell a tag like the others; the form works without them.
+    mentorProfileApi.getTagSuggestions().then(response => setSuggestions(response.data)).catch(() => setSuggestions(null));
   };
 
   const cancelEditing = () => {
@@ -174,9 +178,42 @@ export default function MentorProfileDetail() {
               value={form.expertise}
               onChange={tags => set('expertise', tags)}
               addTag={addExpertiseTag}
+              suggestions={suggestions?.expertise}
               disabled={saving}
-              placeholder="e.g. Marketing, Fundraising, Machine learning"
-              hint={`Press Enter or comma to add. Up to ${MENTOR_PROFILE_LIMITS.expertiseItems} tags.`}
+              placeholder="e.g. Marketing, Fundraising, Pitching"
+              hint={`What this mentor can coach. Press Enter or comma to add. Up to ${MENTOR_PROFILE_LIMITS.expertiseItems} tags.`}
+            />
+            <div className="grid gap-4 md:grid-cols-2">
+              <TagInput
+                label="Startup domain"
+                value={form.startupDomains}
+                onChange={tags => set('startupDomains', tags)}
+                addTag={addTagOfKind('startup domain')}
+                suggestions={suggestions?.startupDomains}
+                disabled={saving}
+                placeholder="e.g. FinTech, EdTech, HealthTech"
+                hint="Fields of startups the mentor knows well."
+              />
+              <TagInput
+                label="Technology skills"
+                value={form.technologySkills}
+                onChange={tags => set('technologySkills', tags)}
+                addTag={addTagOfKind('technology skill')}
+                suggestions={suggestions?.technologySkills}
+                disabled={saving}
+                placeholder="e.g. React, .NET, Machine learning"
+                hint="Technologies the mentor works with."
+              />
+            </div>
+            <TagInput
+              label="Mentor tags"
+              value={form.mentorTags}
+              onChange={tags => set('mentorTags', tags)}
+              addTag={addTagOfKind('mentor tag')}
+              suggestions={suggestions?.mentorTags}
+              disabled={saving}
+              placeholder="e.g. Alumni, Investor"
+              hint="Free labels to group or find mentors."
             />
             <Field label="Background" error={errors.bio} counter={`${form.bio.length}/${MENTOR_PROFILE_LIMITS.bio}`}>
               <textarea rows={5} value={form.bio} disabled={saving} onChange={event => set('bio', event.target.value)} className={inputClass} placeholder="Experience, achievements and the areas this mentor can help with." />
@@ -224,11 +261,10 @@ export default function MentorProfileDetail() {
       {!editing && (
         <div className="space-y-4">
           <Section title="About">
-            <ReadRow label="Expertise">
-              {profile.expertise.length > 0
-                ? <div className="flex flex-wrap gap-1.5">{profile.expertise.map(tag => <span key={tag} className="rounded-full border border-primary-100 bg-primary-50 px-2.5 py-0.5 text-xs font-semibold text-primary">{tag}</span>)}</div>
-                : <Empty />}
-            </ReadRow>
+            <TagRow label="Expertise" tags={profile.expertise} />
+            <TagRow label="Startup domain" tags={profile.startupDomains} />
+            <TagRow label="Technology skills" tags={profile.technologySkills} />
+            <TagRow label="Mentor tags" tags={profile.mentorTags} />
             <ReadRow label="Background">{profile.bio ? <p className="whitespace-pre-wrap text-sm leading-6 text-slate-700">{profile.bio}</p> : <Empty />}</ReadRow>
           </Section>
           <Section title="Availability">
@@ -286,6 +322,16 @@ function ReadRow({ label, children }: { label: string; children: ReactNode }) {
       <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">{label}</p>
       {children}
     </div>
+  );
+}
+
+function TagRow({ label, tags }: { label: string; tags: string[] }) {
+  return (
+    <ReadRow label={label}>
+      {tags.length > 0
+        ? <div className="flex flex-wrap gap-1.5">{tags.map(tag => <span key={tag} className="rounded-full border border-primary-100 bg-primary-50 px-2.5 py-0.5 text-xs font-semibold text-primary">{tag}</span>)}</div>
+        : <Empty />}
+    </ReadRow>
   );
 }
 
