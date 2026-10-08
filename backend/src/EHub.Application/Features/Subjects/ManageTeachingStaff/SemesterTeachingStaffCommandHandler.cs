@@ -136,6 +136,145 @@ public sealed class SemesterTeachingStaffCommandHandler : ISemesterTeachingStaff
         }
     }
 
+    public const int MaximumBatchSize = 200;
+
+    public async Task<Result<AddSemesterTeachingStaffBatchResponse>> AddBatchAsync(
+        AddSemesterTeachingStaffBatchRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        if (!IsAdmin())
+        {
+            return Failure<AddSemesterTeachingStaffBatchResponse>(
+                ErrorCodes.ClassAccessDenied, "Only an administrator can manage semester teaching staff.");
+        }
+
+        if (!TryParseTerm(request.Semester, out var term) || request.Year is < 2000 or > 2100)
+        {
+            return Failure<AddSemesterTeachingStaffBatchResponse>(ErrorCodes.ClassValidationError, "Semester and year are invalid.");
+        }
+
+        if (!TryParseRole(request.Role, out var role))
+        {
+            return Failure<AddSemesterTeachingStaffBatchResponse>(ErrorCodes.ClassValidationError, "A valid role is required.");
+        }
+
+        var userIds = (request.UserIds ?? Array.Empty<Guid>()).Where(id => id != Guid.Empty).Distinct().ToArray();
+        if (userIds.Length == 0)
+        {
+            return Failure<AddSemesterTeachingStaffBatchResponse>(ErrorCodes.ClassValidationError, "Select at least one staff member.");
+        }
+
+        if (userIds.Length > MaximumBatchSize)
+        {
+            return Failure<AddSemesterTeachingStaffBatchResponse>(
+                ErrorCodes.ClassValidationError, $"At most {MaximumBatchSize} staff members can be added at once.");
+        }
+
+        try
+        {
+            return await _unitOfWork.ExecuteInSerializableTransactionAsync(
+                async transactionCancellationToken =>
+                {
+                    var semester = await _context.Semesters
+                        .FirstOrDefaultAsync(
+                            item => item.Term == term && item.Year == request.Year,
+                            transactionCancellationToken);
+                    if (semester == null)
+                    {
+                        return Failure<AddSemesterTeachingStaffBatchResponse>(
+                            ErrorCodes.SemesterNotFound, "Plan the semester before configuring its teaching staff.");
+                    }
+
+                    var lifecycleError = GetSemesterMutationError(semester);
+                    if (lifecycleError != null)
+                    {
+                        return Failure<AddSemesterTeachingStaffBatchResponse>(lifecycleError.Code, lifecycleError.Message);
+                    }
+
+                    var users = await _context.Users
+                        .Include(item => item.UserRoles)
+                        .ThenInclude(item => item.Role)
+                        .Where(item => userIds.Contains(item.Id))
+                        .ToDictionaryAsync(item => item.Id, transactionCancellationToken);
+                    var existing = await _context.SemesterStaffAssignments
+                        .Where(item => item.SemesterId == semester.Id && item.Role == role && userIds.Contains(item.UserId))
+                        .ToDictionaryAsync(item => item.UserId, transactionCancellationToken);
+
+                    var results = new List<SemesterStaffBatchItemResponse>(userIds.Length);
+                    foreach (var userId in userIds)
+                    {
+                        // A missing user and an ineligible one look the same to the caller.
+                        if (!users.TryGetValue(userId, out var user) || !IsEligibleUser(user, role))
+                        {
+                            results.Add(new SemesterStaffBatchItemResponse
+                            {
+                                UserId = userId,
+                                Outcome = SemesterStaffBatchOutcomes.Rejected,
+                                Message = $"The selected user is inactive or does not have {ToRoleCode(role)} role."
+                            });
+                            continue;
+                        }
+
+                        if (existing.TryGetValue(userId, out var current))
+                        {
+                            results.Add(new SemesterStaffBatchItemResponse
+                            {
+                                UserId = userId,
+                                Outcome = SemesterStaffBatchOutcomes.AlreadyInList,
+                                Message = current.Status == SemesterStaffStatus.Active
+                                    ? "This staff member is already in the semester teaching list."
+                                    : "This staff member is in the list as inactive. Edit the entry to reactivate it.",
+                                Staff = ToResponse(current, user)
+                            });
+                            continue;
+                        }
+
+                        var assignment = new SemesterStaffAssignment
+                        {
+                            SemesterId = semester.Id,
+                            Semester = semester,
+                            UserId = user.Id,
+                            User = user,
+                            Role = role,
+                            Status = SemesterStaffStatus.Active,
+                            CreatedBy = _currentUser.UserId
+                        };
+                        await _context.SemesterStaffAssignments.AddAsync(assignment, transactionCancellationToken);
+                        AddAuditAndOutbox(semester, assignment, "SEMESTER_STAFF_ADDED", "Semester.StaffAdded.v1");
+                        results.Add(new SemesterStaffBatchItemResponse
+                        {
+                            UserId = userId,
+                            Outcome = SemesterStaffBatchOutcomes.Added,
+                            Staff = ToResponse(assignment)
+                        });
+                    }
+
+                    await _unitOfWork.SaveChangesAsync(transactionCancellationToken);
+
+                    return Result.Success(new AddSemesterTeachingStaffBatchResponse
+                    {
+                        Results = results,
+                        AddedCount = results.Count(item => item.Outcome == SemesterStaffBatchOutcomes.Added),
+                        AlreadyInListCount = results.Count(item => item.Outcome == SemesterStaffBatchOutcomes.AlreadyInList),
+                        RejectedCount = results.Count(item => item.Outcome == SemesterStaffBatchOutcomes.Rejected)
+                    });
+                },
+                cancellationToken);
+        }
+        catch (DbUpdateException)
+        {
+            return Failure<AddSemesterTeachingStaffBatchResponse>(
+                ErrorCodes.SemesterStaffConflict,
+                "The semester teaching list changed concurrently. Reload and try again.");
+        }
+        catch (SerializableTransactionConflictException)
+        {
+            return Failure<AddSemesterTeachingStaffBatchResponse>(
+                ErrorCodes.SemesterStaffConflict,
+                "The semester teaching list changed concurrently. Reload and try again.");
+        }
+    }
+
     public async Task<Result<TeachingStaffResponse>> UpdateAsync(
         Guid assignmentId,
         UpdateSemesterTeachingStaffRequest request,
@@ -786,6 +925,19 @@ public sealed class SemesterTeachingStaffCommandHandler : ISemesterTeachingStaff
         SemesterStaffRole.Lecturer => "LECTURER",
         SemesterStaffRole.Mentor => "MENTOR",
         _ => throw new ArgumentOutOfRangeException(nameof(role))
+    };
+
+    private static TeachingStaffResponse ToResponse(SemesterStaffAssignment assignment, User user) => new()
+    {
+        Id = assignment.Id,
+        UserId = assignment.UserId,
+        Name = user.FullName,
+        Email = user.Email,
+        Avatar = user.AvatarUrl,
+        Role = ToRoleCode(assignment.Role),
+        Status = assignment.Status.ToString(),
+        UserStatus = user.Status.ToString(),
+        RowVersion = assignment.Version.ToString()
     };
 
     private static TeachingStaffResponse ToResponse(SemesterStaffAssignment assignment) => new()

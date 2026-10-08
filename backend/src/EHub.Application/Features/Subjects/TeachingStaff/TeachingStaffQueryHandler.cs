@@ -180,6 +180,7 @@ public sealed class TeachingStaffQueryHandler(IApplicationDbContext context) : I
             .AsNoTracking()
             .Include(user => user.UserRoles)
             .ThenInclude(userRole => userRole.Role)
+            .Include(user => user.MentorProfile)
             .Where(user =>
                 user.Status == UserStatus.Active &&
                 user.UserRoles.Any(userRole =>
@@ -204,7 +205,13 @@ public sealed class TeachingStaffQueryHandler(IApplicationDbContext context) : I
                         SystemRoles.Lecturer,
                         StringComparison.OrdinalIgnoreCase)
                         ? "LECTURER"
-                        : "MENTOR"
+                        : "MENTOR",
+                    MentorType = string.Equals(userRole.Role.Name, SystemRoles.Mentor, StringComparison.OrdinalIgnoreCase)
+                        ? user.MentorProfile?.Type.ToString()
+                        : null,
+                    ContractType = string.Equals(userRole.Role.Name, SystemRoles.Mentor, StringComparison.OrdinalIgnoreCase)
+                        ? user.MentorProfile?.ContractType
+                        : null
                 }))
             .ToArray();
 

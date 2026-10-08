@@ -8,6 +8,7 @@ import toast from 'react-hot-toast';
 import { subjectApi } from '../../api/subjectApi';
 import SemesterDateRangePicker from '../../components/admin/SemesterDateRangePicker';
 import MentorAdministrationCard from '../../components/admin/MentorAdministrationCard';
+import AddSemesterStaffModal from '../../components/admin/AddSemesterStaffModal';
 import MentorCarryoverModal from '../../components/admin/MentorCarryoverModal';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
@@ -74,7 +75,6 @@ import type {
   SubjectDto,
   SubjectStatus,
   TeachingStaffDto,
-  TeachingStaffCandidateDto,
   TeachingStaffSummary,
 } from '../../types/subjects';
 
@@ -181,12 +181,9 @@ const SubjectManagement = () => {
   const [staffPageSize, setStaffPageSize] = useState<(typeof staffPageSizes)[number]>(10);
   const [staffModalOpen, setStaffModalOpen] = useState(false);
   const [editingStaff, setEditingStaff] = useState<TeachingStaffDto | null>(null);
-  const [staffModalRole, setStaffModalRole] = useState<TeachingStaffDto['role']>('LECTURER');
-  const [staffCandidates, setStaffCandidates] = useState<TeachingStaffCandidateDto[]>([]);
-  const [staffCandidateKey, setStaffCandidateKey] = useState('');
+  const [addStaffRole, setAddStaffRole] = useState<TeachingStaffDto['role'] | null>(null);
   const [staffEntryStatus, setStaffEntryStatus] = useState<'Active' | 'Inactive'>('Active');
   const [staffSaving, setStaffSaving] = useState(false);
-  const [staffCandidatesLoading, setStaffCandidatesLoading] = useState(false);
   const [mentorCarryoverOpen, setMentorCarryoverOpen] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingSubject, setEditingSubject] = useState<SubjectDto | null>(null);
@@ -328,7 +325,7 @@ const SubjectManagement = () => {
     setActiveTab('staff');
   };
 
-  const openAddStaff = async (role: TeachingStaffDto['role']) => {
+  const openAddStaff = (role: TeachingStaffDto['role']) => {
     const targetSemester = semesters.find(item =>
       item.semester === selectedSemester && item.year === selectedYear);
     if (!targetSemester) {
@@ -340,21 +337,7 @@ const SubjectManagement = () => {
       return;
     }
 
-    setEditingStaff(null);
-    setStaffModalRole(role);
-    setStaffCandidateKey('');
-    setStaffEntryStatus('Active');
-    setStaffModalOpen(true);
-    setStaffCandidatesLoading(true);
-    try {
-      const payload = responseData(await subjectApi.getTeachingStaffCandidates());
-      setStaffCandidates(payload.candidates ?? []);
-    } catch (error) {
-      toast.error(parseApiError(error, 'Failed to load eligible lecturers and mentors').message);
-      setStaffCandidates([]);
-    } finally {
-      setStaffCandidatesLoading(false);
-    }
+    setAddStaffRole(role);
   };
 
   const openEditStaff = (member: TeachingStaffDto) => {
@@ -365,29 +348,14 @@ const SubjectManagement = () => {
   };
 
   const saveTeachingStaff = async () => {
+    if (!editingStaff) return;
     setStaffSaving(true);
     try {
-      if (editingStaff) {
-        await subjectApi.updateTeachingStaff(editingStaff._id, {
-          status: staffEntryStatus,
-          rowVersion: editingStaff.rowVersion,
-        });
-        toast.success(`${editingStaff.name} updated for ${selectedSemester} ${selectedYear}.`);
-      } else {
-        const candidate = staffCandidates.find(item => `${item.userId}:${item.role}` === staffCandidateKey);
-        if (!candidate) {
-          toast.error('Select an eligible lecturer or mentor.');
-          return;
-        }
-        await subjectApi.addTeachingStaff({
-          semester: selectedSemester,
-          year: selectedYear,
-          userId: candidate.userId,
-          role: candidate.role,
-        });
-        toast.success(`${candidate.name} added to ${selectedSemester} ${selectedYear}.`);
-      }
-
+      await subjectApi.updateTeachingStaff(editingStaff._id, {
+        status: staffEntryStatus,
+        rowVersion: editingStaff.rowVersion,
+      });
+      toast.success(`${editingStaff.name} updated for ${selectedSemester} ${selectedYear}.`);
       setStaffModalOpen(false);
       await loadStaff();
     } catch (error) {
@@ -632,11 +600,10 @@ const SubjectManagement = () => {
   const staffRangeEnd = staffPagination.rangeEnd;
   const hasStaffFilters = Boolean(staffSearch.trim()) || staffRole !== 'ALL' || staffStatus !== 'ALL';
 
-  const availableStaffCandidates = useMemo(() => {
-    const existingKeys = new Set(staff.map(member => `${member.userId}:${member.role}`));
-    return staffCandidates.filter(candidate =>
-      candidate.role === staffModalRole && !existingKeys.has(`${candidate.userId}:${candidate.role}`));
-  }, [staff, staffCandidates, staffModalRole]);
+  const existingStaffUserIds = useMemo(() => new Set(
+    staff
+      .filter(member => member.role === addStaffRole && member.userId)
+      .map(member => member.userId as string)), [staff, addStaffRole]);
 
   const semesterScheduleYears = useMemo(() => Array.from(new Set(
     semesters.map(item => Number(item.year)),
@@ -1075,83 +1042,54 @@ const SubjectManagement = () => {
       <Modal
         isOpen={staffModalOpen}
         onClose={() => setStaffModalOpen(false)}
-        title={editingStaff ? `Edit ${editingStaff.name}` : `Add Existing ${staffModalRole === 'LECTURER' ? 'Lecturer' : 'Mentor'} to ${selectedSemester} ${selectedYear}`}
-        submitText={staffSaving ? 'Saving...' : editingStaff ? 'Update Status' : 'Add to Semester'}
+        title={editingStaff ? `Edit ${editingStaff.name}` : 'Edit semester status'}
+        submitText={staffSaving ? 'Saving...' : 'Update Status'}
         isSubmitting={staffSaving}
         onSubmit={saveTeachingStaff}
       >
-        <div className="space-y-4">
-          {!editingStaff && (
-            <p className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs leading-5 text-blue-700">
-              This does not create a new account. Select an existing active {staffModalRole === 'LECTURER' ? 'Lecturer' : 'Mentor'} to make them available for assignments in this semester.
+        {editingStaff && (
+          <div className="space-y-4">
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <p className="font-semibold text-slate-900">{editingStaff.name}</p>
+              <p className="text-sm text-slate-500">{editingStaff.email}</p>
+              <p className="mt-1 text-xs font-semibold text-primary">
+                {editingStaff.role === 'LECTURER' ? 'Lecturer' : 'Mentor'} · {selectedSemester} {selectedYear}
+              </p>
+            </div>
+            <label className="block text-sm font-medium text-slate-700">
+              Semester status
+              <select
+                value={staffEntryStatus}
+                onChange={(event) => setStaffEntryStatus(event.target.value as 'Active' | 'Inactive')}
+                className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-primary"
+              >
+                <option value="Active">Active — available for new assignments</option>
+                <option value="Inactive">Inactive — hidden from assignment lists</option>
+              </select>
+            </label>
+            {editingStaff.classCount > 0 && staffEntryStatus === 'Inactive' && (
+              <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-700">
+                This member still has {editingStaff.classCount} class assignment(s). Reassign or end them before deactivation.
+              </p>
+            )}
+            <p className="rounded-xl bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-600">
+              Only active staff in this semester list are available for new class or team assignments.
             </p>
-          )}
-          {editingStaff ? (
-            <>
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                <p className="font-semibold text-slate-900">{editingStaff.name}</p>
-                <p className="text-sm text-slate-500">{editingStaff.email}</p>
-                <p className="mt-1 text-xs font-semibold text-primary">
-                  {editingStaff.role === 'LECTURER' ? 'Lecturer' : 'Mentor'} · {selectedSemester} {selectedYear}
-                </p>
-              </div>
-              <label className="block text-sm font-medium text-slate-700">
-                Semester status
-                <select
-                  value={staffEntryStatus}
-                  onChange={(event) => setStaffEntryStatus(event.target.value as 'Active' | 'Inactive')}
-                  className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-primary"
-                >
-                  <option value="Active">Active — available for new assignments</option>
-                  <option value="Inactive">Inactive — hidden from assignment lists</option>
-                </select>
-              </label>
-              {editingStaff.classCount > 0 && staffEntryStatus === 'Inactive' && (
-                <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-700">
-                  This member still has {editingStaff.classCount} class assignment(s). Reassign or end them before deactivation.
-                </p>
-              )}
-            </>
-          ) : staffCandidatesLoading ? (
-            <LoadingSkeleton variant="text" lines={4} />
-          ) : (
-            <>
-              <label className="block text-sm font-medium text-slate-700">
-                Existing active {staffModalRole === 'LECTURER' ? 'lecturer' : 'mentor'} *
-                <select
-                  value={staffCandidateKey}
-                  onChange={(event) => setStaffCandidateKey(event.target.value)}
-                  className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-primary"
-                >
-                  <option value="">Select a staff member</option>
-                  {availableStaffCandidates.map(candidate => (
-                    <option key={`${candidate.userId}:${candidate.role}`} value={`${candidate.userId}:${candidate.role}`}>
-                      {candidate.name} — {candidate.role === 'LECTURER' ? 'Lecturer' : 'Mentor'} ({candidate.email})
-                    </option>
-                  ))}
-                </select>
-              </label>
-              {availableStaffCandidates.length === 0 && (
-                <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
-                  No additional active {staffModalRole === 'LECTURER' ? 'Lecturer' : 'Mentor'} accounts are available for this semester.
-                </p>
-              )}
-            </>
-          )}
-          {!editingStaff && (
-            <p className="text-xs leading-5 text-slate-500">
-              Need to create a new staff account?{' '}
-              <Link to="/admin/users" className="font-semibold text-primary hover:underline">
-                Go to User Management
-              </Link>{' '}
-              first, then return here to add the account to this semester.
-            </p>
-          )}
-          <p className="rounded-xl bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-600">
-            Only active staff in this semester list are available for new class or team assignments.
-          </p>
-        </div>
+          </div>
+        )}
       </Modal>
+
+      {addStaffRole && (
+        <AddSemesterStaffModal
+          isOpen
+          role={addStaffRole}
+          semester={selectedSemester}
+          year={selectedYear}
+          existingUserIds={existingStaffUserIds}
+          onClose={() => setAddStaffRole(null)}
+          onChanged={() => loadStaff()}
+        />
+      )}
 
       {selectedSemesterRecord && (
         <MentorCarryoverModal

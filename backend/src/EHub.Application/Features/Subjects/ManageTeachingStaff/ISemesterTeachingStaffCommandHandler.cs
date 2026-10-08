@@ -9,6 +9,10 @@ public interface ISemesterTeachingStaffCommandHandler
         AddSemesterTeachingStaffRequest request,
         CancellationToken cancellationToken = default);
 
+    Task<Result<AddSemesterTeachingStaffBatchResponse>> AddBatchAsync(
+        AddSemesterTeachingStaffBatchRequest request,
+        CancellationToken cancellationToken = default);
+
     Task<Result<TeachingStaffResponse>> UpdateAsync(
         Guid assignmentId,
         UpdateSemesterTeachingStaffRequest request,

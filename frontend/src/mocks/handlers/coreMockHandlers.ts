@@ -1173,6 +1173,32 @@ function registerSubjectHandlers(mock: MockAdapter): void {
     return ok({ addedCount, reactivatedCount, alreadyAddedCount }, 'Selected mentors added to the target semester successfully.');
   });
 
+  // The mock staff list is derived from every lecturer and mentor user, so these only keep the contract in sync;
+  // they do not model per-semester membership.
+  mock.onGet('/subjects/teaching-staff/candidates').reply(() => {
+    const candidates = getMockState().users
+      .filter((user) => (user.role === 'LECTURER' || user.role === 'MENTOR') && user.status === 'APPROVED')
+      .map((user) => ({ userId: user.id, name: user.name, email: user.email, avatar: user.avatar, role: user.role, mentorType: null, contractType: null }));
+    return ok({ candidates }, 'Teaching staff candidates retrieved successfully.');
+  });
+
+  mock.onPost('/subjects/teaching-staff/batch').reply((config) => {
+    const body = parseBody(config);
+    const role = asString(body.role).toUpperCase();
+    const userIds = Array.isArray(body.userIds) ? [...new Set(body.userIds.map(String))] : [];
+    if (!['LECTURER', 'MENTOR'].includes(role) || userIds.length === 0) {
+      return failure(400, 'VALIDATION_ERROR', 'A valid role and at least one staff member are required.');
+    }
+    const results = userIds.map((userId) => {
+      const user = getMockState().users.find((item) => item.id === userId);
+      return user && user.status === 'APPROVED' && user.role === role
+        ? { userId, outcome: 'Added', message: null }
+        : { userId, outcome: 'Rejected', message: `The selected user is inactive or does not have ${role} role.` };
+    });
+    const addedCount = results.filter((item) => item.outcome === 'Added').length;
+    return ok({ results, addedCount, alreadyInListCount: 0, rejectedCount: results.length - addedCount }, 'Teaching staff batch processed successfully.');
+  });
+
   mock.onGet('/subjects/teaching-staff').reply(() => {
     const staff = getMockState().users.filter((user) => user.role === 'LECTURER' || user.role === 'MENTOR').map((user) => {
       const assignments = user.role === 'LECTURER'

@@ -209,6 +209,23 @@ Bảng này được thiết kế để mỗi quy tắc đều có dữ liệu c
 - [ ] Cường và Lan **không có** trong danh sách chọn của nút Change.
 - [ ] Vị trí mentor doanh nghiệp chỉ liệt kê mentor doanh nghiệp; vị trí mentor giảng viên chỉ liệt kê mentor giảng viên.
 
+### Kiểm tra 1.3. Thêm nhiều mentor vào kỳ cùng lúc
+
+**Làm gì**
+1. Ở Teaching staff directory của kỳ mới, bấm **Add mentor**.
+2. Trong hộp thoại **Add mentors to <kỳ>**: gõ vài chữ vào ô tìm kiếm, bấm các nút lọc **Industry mentors** và **Lecturer mentors**.
+3. Tick vài mentor, hoặc bấm **Select all**, rồi bấm **Add N mentors**.
+4. Làm tương tự với **Add lecturer**.
+
+**Phải thấy gì**
+- [ ] Danh sách hiển thị đủ tài khoản mentor đang hoạt động, mỗi người kèm nhãn **Industry mentor** hoặc **Lecturer mentor** (và loại hợp đồng nếu có).
+- [ ] Ô tìm kiếm lọc theo tên, email và loại hợp đồng, không phân biệt dấu. Nút lọc chỉ giữ đúng loại mentor.
+- [ ] Mentor đã ở trong kỳ nằm ở mục **Already in <kỳ>**, mờ và không tick được. Dòng đếm cho biết "N available · M already in …".
+- [ ] **Select all** chọn tất cả người đang hiện (khi đang lọc thì ghi "Select all shown"). Nút cuối ghi đúng số người, ví dụ "Add 5 mentors".
+- [ ] Sau khi bấm, thông báo "Added 5 mentors." xuất hiện, các mentor vừa thêm chuyển xuống mục "Already in …", và danh sách phía sau (Teaching staff directory) cập nhật ngay.
+- [ ] Người nào bị bỏ qua (ví dụ vừa có người khác thêm trước, hoặc đã nằm trong kỳ ở trạng thái Inactive) được nêu tên kèm lý do; những người còn lại vẫn được thêm.
+- [ ] Add lecturer hoạt động tương tự, và danh sách chỉ có giảng viên.
+
 **Kết luận REQ-01:** ☐ Đạt  ☐ Đạt có điều kiện  ☐ Chưa đạt   Ghi chú: ……………………
 
 ---

@@ -152,12 +152,39 @@ export interface TeachingStaffDto {
   rowVersion: string;
 }
 
+export type MentorKind = 'Enterprise' | 'Academic';
+
 export interface TeachingStaffCandidateDto {
   userId: string;
   name: string;
   email: string;
   avatar?: string | null;
   role: 'LECTURER' | 'MENTOR';
+  /** Only for mentors: Enterprise = industry mentor, Academic = lecturer mentor. */
+  mentorType?: MentorKind | null;
+  contractType?: string | null;
+}
+
+export type TeachingStaffBatchOutcome = 'Added' | 'AlreadyInList' | 'Rejected';
+
+export interface TeachingStaffBatchItem {
+  userId: string;
+  outcome: TeachingStaffBatchOutcome;
+  message?: string | null;
+}
+
+export interface AddTeachingStaffBatchPayload {
+  semester: SemesterCode;
+  year: number;
+  role: 'LECTURER' | 'MENTOR';
+  userIds: string[];
+}
+
+export interface AddTeachingStaffBatchResponse {
+  results: TeachingStaffBatchItem[];
+  addedCount: number;
+  alreadyInListCount: number;
+  rejectedCount: number;
 }
 
 export type MentorCarryoverAction = 'Add' | 'Reactivate' | 'AlreadyAdded' | 'Unavailable';

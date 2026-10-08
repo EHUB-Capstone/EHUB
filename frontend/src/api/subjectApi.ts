@@ -1,5 +1,6 @@
 import axiosClient from './axiosClient';
 import type {
+  AddTeachingStaffBatchPayload,
   PlanSemesterPayload,
   SemesterCode,
   SemesterLifecyclePayload,
@@ -45,6 +46,9 @@ export const subjectApi = {
   getTeachingStaffCandidates: () => axiosClient.get('/subjects/teaching-staff/candidates'),
   addTeachingStaff: (data: { semester: SemesterCode; year: number; userId: string; role: 'LECTURER' | 'MENTOR' }) =>
     axiosClient.post('/subjects/teaching-staff', data),
+  /** Adds several existing lecturers or mentors to a semester in one request. */
+  addTeachingStaffBatch: (data: AddTeachingStaffBatchPayload) =>
+    axiosClient.post('/subjects/teaching-staff/batch', data),
   updateTeachingStaff: (id: string, data: { status: 'Active' | 'Inactive'; rowVersion: string }) =>
     axiosClient.put(`/subjects/teaching-staff/${id}`, data),
   previewMentorCarryover: (data: { sourceSemesterId: string; targetSemesterId: string }, signal?: AbortSignal) =>

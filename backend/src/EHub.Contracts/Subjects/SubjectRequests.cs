@@ -67,6 +67,15 @@ public sealed class AddSemesterTeachingStaffRequest
     public string Role { get; init; } = string.Empty;
 }
 
+// Adds several existing lecturers or mentors of one role to a semester in a single request.
+public sealed class AddSemesterTeachingStaffBatchRequest
+{
+    public string Semester { get; init; } = string.Empty;
+    public int Year { get; init; }
+    public string Role { get; init; } = string.Empty;
+    public IReadOnlyCollection<Guid> UserIds { get; init; } = Array.Empty<Guid>();
+}
+
 public sealed class UpdateSemesterTeachingStaffRequest
 {
     public string Status { get; init; } = string.Empty;

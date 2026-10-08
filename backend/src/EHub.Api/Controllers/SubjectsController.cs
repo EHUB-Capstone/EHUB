@@ -280,6 +280,20 @@ public sealed class SubjectsController : ControllerBase
                     "Teaching staff member added to the semester successfully."));
     }
 
+    [HttpPost("teaching-staff/batch")]
+    [Authorize(Policy = SystemPolicies.AdminOnly)]
+    public async Task<IActionResult> AddTeachingStaffBatch(
+        [FromBody] AddSemesterTeachingStaffBatchRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await _semesterTeachingStaffHandler.AddBatchAsync(request, cancellationToken);
+        return result.IsFailure
+            ? ToSemesterErrorResponse(result.Error)
+            : Ok(ApiResponse<AddSemesterTeachingStaffBatchResponse>.SuccessResponse(
+                result.Value!,
+                "Teaching staff batch processed successfully."));
+    }
+
     [HttpPut("teaching-staff/{assignmentId:guid}")]
     [Authorize(Policy = SystemPolicies.AdminOnly)]
     public async Task<IActionResult> UpdateTeachingStaff(

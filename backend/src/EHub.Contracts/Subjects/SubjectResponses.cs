@@ -122,6 +122,32 @@ public sealed class TeachingStaffCandidateResponse
     public string Email { get; init; } = string.Empty;
     public string? Avatar { get; init; }
     public string Role { get; init; } = string.Empty;
+    // Only set for mentors: "Enterprise" (industry mentor) or "Academic" (lecturer mentor).
+    public string? MentorType { get; init; }
+    public string? ContractType { get; init; }
+}
+
+public static class SemesterStaffBatchOutcomes
+{
+    public const string Added = "Added";
+    public const string AlreadyInList = "AlreadyInList";
+    public const string Rejected = "Rejected";
+}
+
+public sealed class SemesterStaffBatchItemResponse
+{
+    public Guid UserId { get; init; }
+    public string Outcome { get; init; } = string.Empty;
+    public string? Message { get; init; }
+    public TeachingStaffResponse? Staff { get; init; }
+}
+
+public sealed class AddSemesterTeachingStaffBatchResponse
+{
+    public IReadOnlyCollection<SemesterStaffBatchItemResponse> Results { get; init; } = Array.Empty<SemesterStaffBatchItemResponse>();
+    public int AddedCount { get; init; }
+    public int AlreadyInListCount { get; init; }
+    public int RejectedCount { get; init; }
 }
 
 public sealed class TeachingStaffSummaryResponse
