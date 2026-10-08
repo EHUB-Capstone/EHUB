@@ -1,5 +1,6 @@
 using EHub.Application.Common.Interfaces.Persistence;
 using EHub.Application.Common.Interfaces.Services;
+using EHub.Application.Features.Classes.Common;
 using EHub.Contracts.Workspaces;
 using EHub.Domain.Entities;
 using EHub.Domain.Enums;
@@ -122,6 +123,15 @@ public sealed class CheckpointLinkHandler(
                     CreatedBy = userId
                 };
                 context.SubmissionLinks.Add(link);
+                ClassOutbox.Enqueue(context, "CheckpointSubmission.Submitted.v1", access.Value.ClassId, new
+                {
+                    TeamId = teamId,
+                    CheckpointId = access.Value.Checkpoint.Id,
+                    CheckpointNumber = checkpointNumber,
+                    SubmissionId = submission.Id,
+                    SubmissionVersion = submission.VersionNumber,
+                    LecturerUserId = access.Value.LecturerUserId
+                }, now);
                 await context.SaveChangesAsync(cancellationToken);
                 return Result.Success(Map(link, access.Value.UserName));
             }
@@ -213,7 +223,7 @@ public sealed class CheckpointLinkHandler(
             return Result.Failure<Access>(ErrorCodes.WorkspaceNotFound, "The checkpoint workspace was not found.");
         var schedule = await context.ClassCheckpointSchedules.AsNoTracking()
             .FirstOrDefaultAsync(item => item.ClassId == team.ClassId && item.CheckpointId == checkpoint.Id, cancellationToken);
-        return Result.Success(new Access(checkpoint, project, schedule, member.ClassStudent.Student.FullName));
+        return Result.Success(new Access(checkpoint, project, schedule, team.ClassId, team.Class.PrimaryLecturerId, member.ClassStudent.Student.FullName));
     }
 
     private static Result EnsureOpen(ClassCheckpointSchedule? schedule, DateTime now)
@@ -252,5 +262,11 @@ public sealed class CheckpointLinkHandler(
     private static Result<T> Denied<T>(string message = "You do not have access to this team workspace.") => Result.Failure<T>(ErrorCodes.WorkspaceAccessDenied, message);
     private static Result<T> Invalid<T>(string message) => Result.Failure<T>(ErrorCodes.WorkspaceValidationError, message);
     private static Result<T> NotFound<T>() => Result.Failure<T>(ErrorCodes.CommonNotFoundError, "Submitted link was not found.");
-    private sealed record Access(Checkpoint Checkpoint, Project Project, ClassCheckpointSchedule? Schedule, string UserName);
+    private sealed record Access(
+        Checkpoint Checkpoint,
+        Project Project,
+        ClassCheckpointSchedule? Schedule,
+        Guid ClassId,
+        Guid? LecturerUserId,
+        string UserName);
 }

@@ -178,6 +178,42 @@ public sealed partial class TeamWorkflowIntegrationTests
     }
 
     [Fact]
+    public async Task DirectUploadComplete_NotifiesAssignedLecturerForNewAndResubmittedVersions()
+    {
+        using var fixture = await CreateUploadFixtureAsync();
+
+        var first = await fixture.UploadStoredFileAsync("first.pdf", "%PDF-first"u8.ToArray());
+        var second = await fixture.UploadStoredFileAsync("second.pdf", "%PDF-second"u8.ToArray());
+
+        first.VersionNumber.Should().Be(1);
+        second.VersionNumber.Should().Be(2);
+        var events = await fixture.Context.OutboxMessages.AsNoTracking()
+            .Where(item => item.Type == "CheckpointSubmission.Submitted.v1")
+            .OrderBy(item => item.OccurredAtUtc)
+            .ToArrayAsync();
+        events.Should().HaveCount(2);
+
+        var dispatcher = fixture.Scope.ServiceProvider.GetRequiredService<IOutboxEventDispatcher>();
+        foreach (var @event in events)
+            await dispatcher.DispatchAsync(@event);
+        await fixture.Context.SaveChangesAsync();
+        fixture.Context.ChangeTracker.Clear();
+
+        var notifications = await fixture.Context.Notifications.AsNoTracking()
+            .Where(item => events.Select(@event => @event.EventId).Contains(item.SourceEventId))
+            .OrderBy(item => item.CreatedAt)
+            .ToArrayAsync();
+        notifications.Should().HaveCount(2);
+        notifications.Should().OnlyContain(item =>
+            item.RecipientUserId == fixture.Seed.LecturerId &&
+            item.Type == NotificationType.SubmissionSubmitted &&
+            item.Link == $"/workspace/teams/{fixture.Seed.TeamId}");
+        notifications.Select(item => item.Title).Should().BeEquivalentTo(
+            "New Checkpoint 1 submission", "Checkpoint 1 resubmitted");
+        notifications.Should().Contain(item => item.Body.Contains("version 2"));
+    }
+
+    [Fact]
     public async Task DirectUploadComplete_ConcurrentRetriesCreateExactlyOneFile()
     {
         using var fixture = await CreateUploadFixtureAsync();
