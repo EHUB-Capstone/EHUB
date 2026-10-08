@@ -14,6 +14,7 @@ import type { TeamFormation } from '../../types/teamFormation';
 import TeamSuggestionTooltip from '../../components/class/TeamSuggestionTooltip';
 import { useAuth } from '../../hooks/useAuth';
 import { unwrapApiData } from '../../utils/classMappers';
+import { isOpenFormationForMe, remainingInviteSlots } from '../../utils/teamFormation';
 import { entityId, getTeamMajorWarning, normalizeManagedTeam, normalizeTeamProposal, getTeamMemberIds, isMissingTeamMajor, isVerifiedEnrollmentMajor, mergeTeamsWithLinkedProposals } from '../../utils/teamManagement';
 import ProjectDirectionModal from '../../components/class/ProjectDirectionModal';
 import { teamApi } from '../../api/teamApi';
@@ -158,7 +159,12 @@ export default function StudentClassDetail() {
   const ownTeamMajorWarning = ownTeam ? getTeamMajorWarning(ownTeam) : null;
   const majorActionRequired = Boolean(currentStudent && isMissingTeamMajor(currentStudent.major));
   const majorVerified = isVerifiedEnrollmentMajor(currentStudent?.majorVerificationStatus);
-  const hasPendingFormation = formations.some(formation => formation.status === 'Pending');
+  const openFormations = formations.filter(isOpenFormationForMe);
+  const hasPendingFormation = openFormations.length > 0;
+  // The creator keeps inviting classmates into their own pending formation while slots remain.
+  const ownOpenFormation = openFormations.find(formation => formation.creatorStudentId === currentStudent?._id) ?? null;
+  const inviteSlotsLeft = ownOpenFormation ? remainingInviteSlots(ownOpenFormation) : 0;
+  const canInviteMore = inviteSlotsLeft > 0;
   const reservedProposal = proposals.find((proposal) => {
     const status = String(proposal.status || '').toUpperCase();
     return ['DRAFT', 'PENDING', 'NEEDS_REVISION', 'NEEDSREVISION'].includes(status)
@@ -175,7 +181,7 @@ export default function StudentClassDetail() {
   const selectionDisabled = isReadOnly
     || majorActionRequired
     || (hasTeam && !canEditReservedProposal)
-    || hasPendingFormation
+    || (hasPendingFormation && !canInviteMore)
     || Boolean(reservedProposal && !canEditReservedProposal);
 
   const handleTeamCreated = async () => {
@@ -498,7 +504,7 @@ export default function StudentClassDetail() {
       {formationError && <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
         Could not load team invitations. <button type="button" onClick={() => void fetchClassDetail()} className="font-semibold underline">Retry</button>
       </div>}
-      {formations.filter(formation => formation.status === 'Pending').map((formation, index) => (
+      {openFormations.map((formation, index) => (
         <div key={formation.id} id={index === 0 ? 'pending-team-formation' : undefined}>
           <TeamFormationCard
             formation={formation}
@@ -507,6 +513,13 @@ export default function StudentClassDetail() {
           />
         </div>
       ))}
+
+      {!isReadOnly && canInviteMore && (
+        <div className="rounded-xl border border-primary-100 bg-primary-50/60 px-4 py-3 text-sm text-slate-700" role="status">
+          You can invite up to <strong>{inviteSlotsLeft}</strong> more classmate{inviteSlotsLeft === 1 ? '' : 's'}. Select them in the
+          Classmates tab below. Students who declined, left or did not answer in time can also be invited again.
+        </div>
+      )}
 
       {!isReadOnly && reservedProposal && !canEditReservedProposal && (
         <div className="flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 sm:flex-row sm:items-center sm:justify-between">
@@ -532,6 +545,7 @@ export default function StudentClassDetail() {
             onTeamCreated={handleTeamCreated}
             currentStudentId={currentStudent?._id}
             proposal={proposalToRevise}
+            inviteToFormation={canInviteMore ? ownOpenFormation : null}
           />
         </div>
       )}
@@ -569,9 +583,9 @@ export default function StudentClassDetail() {
           selected={selected}
           onSelectionChange={setSelected}
           onRefresh={fetchClassDetail}
-          maxSelection={6}
+          maxSelection={canInviteMore ? inviteSlotsLeft : 6}
           selectionDisabled={selectionDisabled}
-          toolbarAction={!selectionDisabled && selected.length === 0 ? (
+          toolbarAction={!selectionDisabled && selected.length === 0 && !canInviteMore ? (
             <div className="flex items-center gap-2">
               <button
                 type="button"

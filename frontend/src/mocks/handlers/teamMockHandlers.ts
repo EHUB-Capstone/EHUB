@@ -1,7 +1,16 @@
 import type MockAdapter from 'axios-mock-adapter';
 import type { AxiosRequestConfig } from 'axios';
 import type { MockDirectionReview, MockMentor, MockProposal, MockProposalMember, MockTeam } from '../mockState.ts';
-import type { TeamFormation } from '../../types/teamFormation.ts';
+import type { TeamFormation, TeamFormationInvitation } from '../../types/teamFormation.ts';
+import { INVITATION_LIFETIME_MS, MAX_FORMATION_MEMBERS } from '../../utils/teamFormation.ts';
+import {
+  activeFormationFor,
+  activeRecord,
+  activeRecords,
+  latestRecord,
+  presentFormation,
+  sweepExpiredInvitations,
+} from '../formationHelpers.ts';
 import { TEAM_MAJOR_GROUPS } from '../../constants/majors.ts';
 import {
   allocateId,
@@ -274,9 +283,8 @@ function registerTeamMutations(mock: MockAdapter): void {
       && proposal.members.some((member) => memberIds.includes(member.studentId)))) {
       return failure(409, 'TEAM_PROPOSAL_MEMBERSHIP_CONFLICT', 'A selected student belongs to an open team proposal.');
     }
-    if (state.formations.some((formation) => formation.classId === classId
-      && formation.status === 'Pending'
-      && formation.invitations.some((invitation) => memberIds.includes(invitation.studentId)))) {
+    sweepExpiredInvitations();
+    if (memberIds.some((studentId) => activeFormationFor(classId, studentId))) {
       return failure(409, 'TEAM_FORMATION_RESERVATION_CONFLICT', 'A selected student belongs to a pending team formation.');
     }
 
@@ -629,30 +637,57 @@ function registerFormationHandlers(mock: MockAdapter): void {
     return user?.role === 'STUDENT' ? user.id : null;
   };
   const ownFormation = (formationId: string) => getMockState().formations.find(item => item.id === formationId);
+  const lifetimeIso = () => new Date(Date.now() + INVITATION_LIFETIME_MS).toISOString();
+  const newRecord = (student: { studentId: string; fullName: string; rollNumber: string }, creatorId: string,
+    leaderId: string): TeamFormationInvitation => {
+    const now = new Date().toISOString();
+    const isCreator = student.studentId === creatorId;
+    return {
+      id: allocateId(), studentId: student.studentId, fullName: student.fullName, rollNumber: student.rollNumber,
+      status: isCreator ? 'Accepted' : 'Pending', isCreator, isProposedLeader: student.studentId === leaderId,
+      isCurrent: true, createdAtUtc: now, expiresAtUtc: isCreator ? null : lifetimeIso(),
+      respondedAtUtc: isCreator ? now : null,
+    };
+  };
+  /** Individual eligibility shared by create and invite; composition is only checked at finalize. */
+  const eligibilityError = (classId: string, ids: string[], excludedFormationId = '') => {
+    const state = getMockState();
+    const roster = state.rosters[classId] || [];
+    const selected = ids.map(id => roster.find(student => student.studentId === id && student.enrollmentStatus === 'Active'));
+    if (selected.some(student => !student)) return failure(400, 'CLASS_VALIDATION_ERROR', 'All members must be actively enrolled in this class.');
+    if (selected.some(student => student?.teamId)) return failure(409, 'TEAM_MEMBERSHIP_CONFLICT', 'A selected student already belongs to a team in this class.');
+    if (ids.some(id => activeFormationFor(classId, id, excludedFormationId)))
+      return failure(409, 'TEAM_FORMATION_RESERVATION_CONFLICT', 'A selected student has another pending team invitation.');
+    return null;
+  };
 
   mock.onGet('/team-formations/mine').reply((config) => {
     const studentId = currentStudent();
     if (!studentId) return failure(403, 'CLASS_ACCESS_DENIED', 'Student account required.');
+    sweepExpiredInvitations();
     const classId = asString(config.params?.classId);
     return ok(getMockState().formations.filter(item =>
       (!classId || item.classId === classId) && item.invitations.some(invitation => invitation.studentId === studentId))
-      .map(item => ({ ...item, myStudentId: studentId })));
+      .map(item => presentFormation(item, studentId)));
   });
   mock.onGet('/team-formations/invitations/pending').reply(() => {
     const studentId = currentStudent();
     if (!studentId) return failure(403, 'CLASS_ACCESS_DENIED', 'Student account required.');
+    sweepExpiredInvitations();
     return ok(getMockState().formations.filter(item => item.status === 'Pending' &&
-      item.invitations.some(invitation => invitation.studentId === studentId && invitation.status === 'Pending'))
-      .map(item => ({ ...item, myStudentId: studentId })));
+      latestRecord(item, studentId)?.status === 'Pending')
+      .map(item => presentFormation(item, studentId)));
   });
   mock.onGet(/^\/team-formations\/[^/]+$/).reply((config) => {
     const studentId = currentStudent();
+    sweepExpiredInvitations();
     const formation = ownFormation(routeId(config, /^\/team-formations\/([^/]+)$/));
     if (!formation) return failure(404, 'TEAM_FORMATION_NOT_FOUND', 'Formation not found.');
     if (!studentId || !formation.invitations.some(item => item.studentId === studentId))
       return failure(403, 'CLASS_ACCESS_DENIED', 'This formation is not yours.');
-    return ok({ ...formation, myStudentId: studentId });
+    return ok(presentFormation(formation, studentId));
   });
+
   mock.onPost(/^\/classes\/[^/]+\/team-formations$/).reply((config) => {
     const classId = routeId(config, /^\/classes\/([^/]+)\/team-formations$/);
     const guard = classMutationGuard(classId);
@@ -660,77 +695,147 @@ function registerFormationHandlers(mock: MockAdapter): void {
     const state = getMockState();
     const creatorId = currentStudent();
     if (!creatorId) return failure(403, 'CLASS_ACCESS_DENIED', 'Student account required.');
+    sweepExpiredInvitations();
     const body = parseBody(config);
     const teamName = asString(body.teamName).trim();
-    const ids = asStringArray(body.memberStudentIds);
+    const inviteeIds = asStringArray(body.inviteeStudentIds);
     const leaderId = asString(body.leaderStudentId);
-    if (ids.length < 4 || ids.length > 6 || new Set(ids).size !== ids.length ||
-      !ids.includes(creatorId) || !ids.includes(leaderId) || teamName.length < 3 || teamName.length > 60)
-      return failure(400, 'VALIDATION_ERROR', 'Formation requires 4–6 unique members, creator, leader, and a valid team name.');
-    const roster = state.rosters[classId] || [];
-    const selected = ids.map(id => roster.find(student => student.studentId === id && student.enrollmentStatus === 'Active'));
-    if (selected.some(student => !student)) return failure(400, 'VALIDATION_ERROR', 'Every member must be enrolled.');
-    const groupOne = new Set(['BBA_HM', 'BBA_FIN', 'BBA_IB', 'BBA_MC', 'BBA_MKT', 'BEN', 'BBA_TM']);
-    const groupTwo = new Set(['BIT_AI', 'BIT_GD', 'BIT_IA', 'BIT_SE']);
-    if (!selected.some(student => groupOne.has(student?.majorCode || '')) ||
-      !selected.some(student => groupTwo.has(student?.majorCode || '')))
-      return failure(400, 'TEAM_MAJOR_COMPOSITION_INVALID', 'Both major groups are required.');
-    if (selected.some(student => student?.teamId) || state.formations.some(item => item.classId === classId &&
-      item.status === 'Pending' && item.invitations.some(invitation => ids.includes(invitation.studentId))))
-      return failure(409, 'TEAM_FORMATION_RESERVATION_CONFLICT', 'A member is already in a team or pending formation.');
+    if (teamName.length < 3 || teamName.length > 60)
+      return failure(400, 'CLASS_VALIDATION_ERROR', 'Team name must be between 3 and 60 characters.');
+    if (inviteeIds.length < 1 || inviteeIds.length > MAX_FORMATION_MEMBERS - 1 || new Set(inviteeIds).size !== inviteeIds.length)
+      return failure(400, 'CLASS_VALIDATION_ERROR', 'Invite 1 to 5 unique students.');
+    if (inviteeIds.includes(creatorId))
+      return failure(400, 'CLASS_VALIDATION_ERROR', 'The creator is added automatically and must not be invited.');
+    if (leaderId !== creatorId && !inviteeIds.includes(leaderId))
+      return failure(400, 'CLASS_VALIDATION_ERROR', 'The proposed leader must be the creator or an invited student.');
+    const ids = [creatorId, ...inviteeIds];
+    const invalid = eligibilityError(classId, ids);
+    if (invalid) return invalid;
     if (hasDuplicateTeamName(classId, teamName) || state.formations.some(item => item.classId === classId &&
       item.status === 'Pending' && item.teamName.toLowerCase() === teamName.toLowerCase()))
       return failure(409, 'TEAM_NAME_DUPLICATED', 'Team name is already in use.');
-    const now = new Date().toISOString();
+    const roster = state.rosters[classId] || [];
     const formation: TeamFormation = {
       id: allocateId(), classId, classCode: findClass(classId)?.classCode || '', teamName,
       creatorStudentId: creatorId, myStudentId: creatorId, proposedLeaderStudentId: leaderId,
-      status: 'Pending', completedTeamId: null, createdAtUtc: now,
-      invitations: selected.map(student => ({
-        studentId: student!.studentId, fullName: student!.fullName, rollNumber: student!.rollNumber,
-        status: student!.studentId === creatorId ? 'Accepted' : 'Pending',
-        isCreator: student!.studentId === creatorId, isProposedLeader: student!.studentId === leaderId,
-      })),
+      status: 'Pending', completedTeamId: null, createdAtUtc: new Date().toISOString(),
+      serverTimeUtc: new Date().toISOString(), acceptedCount: 0, pendingCount: 0, activeCount: 0,
+      canFinalize: false, finalizeBlockers: [], requiresLeaderSelection: false,
+      invitations: ids.map(id => newRecord(roster.find(student => student.studentId === id)!, creatorId, leaderId)),
     };
     state.formations.unshift(formation);
     persistMockState();
-    return created(formation, 'Invitations sent.');
+    return created(presentFormation(formation, creatorId), 'Invitations sent.');
   });
-  mock.onPost(/^\/team-formations\/[^/]+\/(accept|decline|cancel)$/).reply((config) => {
-    const formation = ownFormation(routeId(config, /^\/team-formations\/([^/]+)\/(accept|decline|cancel)$/));
-    const action = routeId(config, /^\/team-formations\/([^/]+)\/(accept|decline|cancel)$/, 2);
+
+  mock.onPost(/^\/team-formations\/[^/]+\/invitations$/).reply((config) => {
+    const studentId = currentStudent();
+    sweepExpiredInvitations();
+    const formation = ownFormation(routeId(config, /^\/team-formations\/([^/]+)\/invitations$/));
+    if (!formation) return failure(404, 'TEAM_FORMATION_NOT_FOUND', 'Formation not found.');
+    if (!studentId || formation.creatorStudentId !== studentId)
+      return failure(403, 'CLASS_ACCESS_DENIED', 'Only the creator can invite members.');
+    if (formation.status !== 'Pending') return failure(409, 'TEAM_FORMATION_STATE_INVALID', 'Only a pending formation can invite members.');
+    const ids = asStringArray(parseBody(config).studentIds);
+    if (ids.length === 0 || new Set(ids).size !== ids.length)
+      return failure(400, 'CLASS_VALIDATION_ERROR', 'Select at least one unique student to invite.');
+    for (const id of ids) {
+      const active = activeRecord(formation, id);
+      if (active) return failure(409, 'TEAM_INVITATION_CONFLICT', active.status === 'Accepted'
+        ? 'This student already accepted and cannot be re-invited.' : 'This student already has a pending invitation.');
+    }
+    if (activeRecords(formation).length + ids.length > MAX_FORMATION_MEMBERS)
+      return failure(409, 'TEAM_FORMATION_CAPACITY_CONFLICT', 'A team can have at most 6 members including pending invitations.');
+    const invalid = eligibilityError(formation.classId, ids, formation.id);
+    if (invalid) return invalid;
+    const roster = getMockState().rosters[formation.classId] || [];
+    // Each invite is a new record so earlier declined/expired records stay as history.
+    formation.invitations.push(...ids.map(id =>
+      newRecord(roster.find(student => student.studentId === id)!, formation.creatorStudentId, formation.proposedLeaderStudentId)));
+    persistMockState();
+    return ok(presentFormation(formation, studentId), 'Invitations sent.');
+  });
+
+  mock.onPost(/^\/team-formations\/[^/]+\/(accept|decline|leave|cancel)$/).reply((config) => {
+    const pattern = /^\/team-formations\/([^/]+)\/(accept|decline|leave|cancel)$/;
+    sweepExpiredInvitations();
+    const formation = ownFormation(routeId(config, pattern));
+    const action = routeId(config, pattern, 2);
     const studentId = currentStudent();
     if (!formation) return failure(404, 'TEAM_FORMATION_NOT_FOUND', 'Formation not found.');
     if (!studentId) return failure(403, 'CLASS_ACCESS_DENIED', 'Student account required.');
-    const invitation = formation.invitations.find(item => item.studentId === studentId);
-    if (!invitation || (action === 'cancel' && formation.creatorStudentId !== studentId))
+    const record = latestRecord(formation, studentId);
+    if (!record || (action === 'cancel' && formation.creatorStudentId !== studentId))
       return failure(403, 'CLASS_ACCESS_DENIED', 'You cannot act on this formation.');
-    if (formation.status !== 'Pending' || (action !== 'cancel' && invitation.status !== 'Pending'))
-      return failure(409, 'TEAM_FORMATION_STATE_INVALID', 'Formation is no longer pending.');
-    if (action === 'accept') invitation.status = 'Accepted';
-    if (action === 'decline') invitation.status = 'Declined';
-    if (action !== 'accept') formation.status = 'Cancelled';
-    if (formation.invitations.every(item => item.status === 'Accepted')) {
-      const state = getMockState();
-      const leaderId = formation.proposedLeaderStudentId;
-      const roster = state.rosters[formation.classId] || [];
-      const selected = formation.invitations.map(item => roster.find(student => student.studentId === item.studentId));
-      if (selected.some(item => !item || item.teamId)) return failure(409, 'TEAM_MEMBERSHIP_CONFLICT', 'A member joined another team.');
-      const team: MockTeam = {
-        id: allocateId(), classId: formation.classId,
-        teamCode: `${findClass(formation.classId)?.classCode || 'TEAM'}_TEAM_${state.teams.filter(item => item.classId === formation.classId).length + 1}`,
-        teamName: formation.teamName, description: null, projectName: null, projectDescription: null,
-        status: 'Active', leaderId, members: selected.map(item => memberFromStudent(item!, leaderId)),
-        currentMentorAssignment: null, currentMentorAssignments: [], rowVersion: allocateRowVersion(),
-      };
-      state.teams.push(team);
-      updateRosterTeamLinks(formation.classId, team);
-      formation.status = 'Completed';
-      formation.completedTeamId = team.id;
-      refreshClassCounts(formation.classId);
+    if (action === 'leave' && formation.creatorStudentId === studentId)
+      return failure(403, 'CLASS_ACCESS_DENIED', 'The creator cannot leave; cancel the formation instead.');
+    if (formation.status !== 'Pending') return failure(409, 'TEAM_FORMATION_STATE_INVALID', 'Formation is no longer pending.');
+    if (action === 'cancel') {
+      formation.status = 'Cancelled';
+    } else if (action === 'leave') {
+      if (record.status !== 'Accepted') return failure(409, 'TEAM_FORMATION_STATE_INVALID', 'Only an accepted member can leave.');
+      record.status = 'Left';
+      record.respondedAtUtc = new Date().toISOString();
+    } else {
+      if (record.status === 'Expired') return failure(400, 'TEAM_INVITATION_EXPIRED', 'This invitation has expired.');
+      if (record.status !== 'Pending') return failure(409, 'TEAM_FORMATION_STATE_INVALID', 'This invitation is no longer pending.');
+      if (action === 'accept') {
+        const conflict = eligibilityError(formation.classId, [studentId], formation.id);
+        if (conflict) return conflict;
+      }
+      record.status = action === 'accept' ? 'Accepted' : 'Declined';
+      record.respondedAtUtc = new Date().toISOString();
     }
     persistMockState();
-    return ok({ ...formation, myStudentId: studentId });
+    return ok(presentFormation(formation, studentId));
+  });
+
+  mock.onPost(/^\/team-formations\/[^/]+\/finalize$/).reply((config) => {
+    sweepExpiredInvitations();
+    const formation = ownFormation(routeId(config, /^\/team-formations\/([^/]+)\/finalize$/));
+    const studentId = currentStudent();
+    if (!formation) return failure(404, 'TEAM_FORMATION_NOT_FOUND', 'Formation not found.');
+    if (!studentId || formation.creatorStudentId !== studentId)
+      return failure(403, 'CLASS_ACCESS_DENIED', 'Only the creator can finalize this formation.');
+    if (formation.status !== 'Pending') return failure(409, 'TEAM_FORMATION_STATE_INVALID', 'Only a pending formation can be finalized.');
+    const body = parseBody(config);
+    const active = activeRecords(formation);
+    const pending = active.filter(item => item.status === 'Pending');
+    if (pending.length > 0 && body.confirmPendingInvitations !== true)
+      return failure(400, 'TEAM_FORMATION_PENDING_CONFIRMATION_REQUIRED', 'Some invitations are still waiting for a response. Confirm to close them and finalize the team.');
+    const presented = presentFormation(formation, studentId);
+    if (!presented.canFinalize)
+      return failure(400, 'TEAM_FORMATION_NOT_READY', presented.finalizeBlockers.join(' '));
+    const acceptedIds = active.filter(item => item.status === 'Accepted').map(item => item.studentId);
+    const requestedLeader = asString(body.leaderStudentId);
+    let leaderId = formation.proposedLeaderStudentId;
+    if (acceptedIds.includes(leaderId)) {
+      if (requestedLeader && requestedLeader !== leaderId)
+        return failure(400, 'CLASS_VALIDATION_ERROR', 'The proposed leader accepted the invitation and cannot be replaced.');
+    } else if (!requestedLeader || !acceptedIds.includes(requestedLeader)) {
+      return failure(400, 'CLASS_VALIDATION_ERROR', 'Choose a team leader from the accepted members.');
+    } else {
+      leaderId = requestedLeader;
+    }
+    const state = getMockState();
+    const roster = state.rosters[formation.classId] || [];
+    const selected = acceptedIds.map(id => roster.find(student => student.studentId === id));
+    if (selected.some(item => !item || item.teamId)) return failure(409, 'TEAM_MEMBERSHIP_CONFLICT', 'A member joined another team.');
+    const team: MockTeam = {
+      id: allocateId(), classId: formation.classId,
+      teamCode: `${findClass(formation.classId)?.classCode || 'TEAM'}_TEAM_${state.teams.filter(item => item.classId === formation.classId).length + 1}`,
+      teamName: formation.teamName, description: null, projectName: null, projectDescription: null,
+      status: 'Active', leaderId, members: selected.map(item => memberFromStudent(item!, leaderId)),
+      currentMentorAssignment: null, currentMentorAssignments: [], rowVersion: allocateRowVersion(),
+    };
+    state.teams.push(team);
+    updateRosterTeamLinks(formation.classId, team);
+    formation.proposedLeaderStudentId = leaderId;
+    formation.status = 'Completed';
+    formation.completedTeamId = team.id;
+    refreshClassCounts(formation.classId);
+    persistMockState();
+    return ok(presentFormation(formation, studentId), 'Team created.');
   });
 }
 

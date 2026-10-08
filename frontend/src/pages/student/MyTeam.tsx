@@ -9,6 +9,7 @@ import EmptyState from '../../components/ui/EmptyState';
 import OwnTeamMajorWarning from '../../components/class/OwnTeamMajorWarning';
 import { getDisplayTeamName } from '../../utils/teamDisplay';
 import { unwrapApiData } from '../../utils/classMappers';
+import { isOpenFormationForMe } from '../../utils/teamFormation';
 import { entityId, getTeamMajorWarning, getTeamMembers, normalizeManagedTeam } from '../../utils/teamManagement';
 import PendingTeamFormationView from './PendingTeamFormationView';
 import { subscribeProjectDirectionRealtime } from '../../api/projectDirectionRealtime';
@@ -100,7 +101,7 @@ export default function MyTeam() {
   const displayTeamName = getDisplayTeamName(team) || 'Unnamed Team';
   const leaderId = entityId(team?.leaderId);
   const majorWarning = team ? getTeamMajorWarning(team) : null;
-  const pendingFormations = formations.filter(formation => formation.status === 'Pending');
+  const pendingFormations = formations.filter(isOpenFormationForMe);
   const selectedFormation = pendingFormations.find(formation => formation.id === selectedFormationId)
     ?? (!team ? pendingFormations[0] : null);
   const showViewSwitcher = pendingFormations.length + (team ? 1 : 0) > 1;

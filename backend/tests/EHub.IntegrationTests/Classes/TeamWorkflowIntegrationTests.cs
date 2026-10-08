@@ -57,7 +57,7 @@ public sealed partial class TeamWorkflowIntegrationTests
     }
 
     [Fact]
-    public async Task Formation_CreatesTeamOnlyAfterEveryMemberAccepts_AndUsesProposedLeader()
+    public async Task Formation_CreatesTeamOnlyWhenCreatorFinalizes_AndKeepsAcceptedProposedLeader()
     {
         using var scope = _factory.Services.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -66,7 +66,7 @@ public sealed partial class TeamWorkflowIntegrationTests
         var handler = scope.ServiceProvider.GetRequiredService<ITeamFormationHandler>();
         var created = await handler.CreateAsync(seed.ClassId, new CreateTeamFormationRequest
         {
-            TeamName = "Consenting Team", MemberStudentIds = seed.StudentIds,
+            TeamName = "Consenting Team", InviteeStudentIds = seed.StudentIds.Skip(1).ToArray(),
             LeaderStudentId = seed.StudentIds[1]
         }, seed.ProposerUserId, SystemRoles.Student);
         created.IsSuccess.Should().BeTrue(created.IsFailure ? created.Error.Message : "");
@@ -82,8 +82,15 @@ public sealed partial class TeamWorkflowIntegrationTests
             userId.Should().NotBeNull();
             var response = await handler.AcceptAsync(created.Value.Id, userId!.Value, SystemRoles.Student);
             response.IsSuccess.Should().BeTrue(response.IsFailure ? response.Error.Message : "");
-            (await context.Teams.CountAsync(item => item.ClassId == seed.ClassId)).Should().Be(index == seed.StudentIds.Length - 1 ? 1 : 0);
+            // Accepting never creates the official team; only the creator's finalize does.
+            (await context.Teams.CountAsync(item => item.ClassId == seed.ClassId)).Should().Be(0);
+            (await context.TeamMembers.CountAsync(item => item.ClassId == seed.ClassId)).Should().Be(0);
         }
+
+        var finalized = await handler.FinalizeAsync(created.Value.Id, new FinalizeTeamFormationRequest(),
+            seed.ProposerUserId, SystemRoles.Student);
+        finalized.IsSuccess.Should().BeTrue(finalized.IsFailure ? finalized.Error.Message : "");
+        finalized.Value.Status.Should().Be("Completed");
 
         context.ChangeTracker.Clear();
         var team = await context.Teams.AsNoTracking().Include(item => item.TeamMembers)
@@ -108,7 +115,7 @@ public sealed partial class TeamWorkflowIntegrationTests
         var handler = scope.ServiceProvider.GetRequiredService<ITeamFormationHandler>();
         var created = await handler.CreateAsync(seed.ClassId, new CreateTeamFormationRequest
         {
-            TeamName = "Realtime Formation", MemberStudentIds = seed.StudentIds,
+            TeamName = "Realtime Formation", InviteeStudentIds = seed.StudentIds.Skip(1).ToArray(),
             LeaderStudentId = seed.StudentIds[1]
         }, seed.ProposerUserId, SystemRoles.Student);
         created.IsSuccess.Should().BeTrue();
@@ -231,7 +238,7 @@ public sealed partial class TeamWorkflowIntegrationTests
         var handler = scope.ServiceProvider.GetRequiredService<ITeamFormationHandler>();
         var request = new CreateTeamFormationRequest
         {
-            TeamName = "First Formation", MemberStudentIds = seed.StudentIds,
+            TeamName = "First Formation", InviteeStudentIds = seed.StudentIds.Skip(1).ToArray(),
             LeaderStudentId = seed.StudentIds[1]
         };
         var first = await handler.CreateAsync(seed.ClassId, request, seed.ProposerUserId, SystemRoles.Student);
@@ -248,14 +255,14 @@ public sealed partial class TeamWorkflowIntegrationTests
         (await context.TeamFormationInvitations.CountAsync(item => item.FormationId == first.Value.Id && item.ReservationReleasedAtUtc == null)).Should().Be(0);
         var newFormation = await handler.CreateAsync(seed.ClassId, new CreateTeamFormationRequest
         {
-            TeamName = "Second Formation", MemberStudentIds = seed.StudentIds,
+            TeamName = "Second Formation", InviteeStudentIds = seed.StudentIds.Skip(1).ToArray(),
             LeaderStudentId = seed.StudentIds[1]
         }, seed.ProposerUserId, SystemRoles.Student);
         newFormation.IsSuccess.Should().BeTrue(newFormation.IsFailure ? newFormation.Error.Message : "");
     }
 
     [Fact]
-    public async Task Formation_DeclineCancelsWithoutCreatingTeam_AndReleasesReservations()
+    public async Task Formation_DeclineKeepsFormationPending_AndReleasesOnlyTheDecliningStudent()
     {
         using var scope = _factory.Services.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -264,7 +271,7 @@ public sealed partial class TeamWorkflowIntegrationTests
         var handler = scope.ServiceProvider.GetRequiredService<ITeamFormationHandler>();
         var created = await handler.CreateAsync(seed.ClassId, new CreateTeamFormationRequest
         {
-            TeamName = "Declined Formation", MemberStudentIds = seed.StudentIds,
+            TeamName = "Declined Formation", InviteeStudentIds = seed.StudentIds.Skip(1).ToArray(),
             LeaderStudentId = seed.StudentIds[1]
         }, seed.ProposerUserId, SystemRoles.Student);
         created.IsSuccess.Should().BeTrue();
@@ -274,16 +281,14 @@ public sealed partial class TeamWorkflowIntegrationTests
         var declined = await handler.DeclineAsync(created.Value.Id, decliningUserId!.Value, SystemRoles.Student);
 
         declined.IsSuccess.Should().BeTrue();
-        declined.Value.Status.Should().Be("Cancelled");
+        declined.Value.Status.Should().Be("Pending");
         (await context.Teams.CountAsync(item => item.ClassId == seed.ClassId)).Should().Be(0);
+        var released = await context.TeamFormationInvitations.AsNoTracking().Where(item => item.FormationId == created.Value.Id &&
+            item.ReservationReleasedAtUtc != null).ToListAsync();
+        released.Should().ContainSingle().Which.StudentId.Should().Be(seed.StudentIds[2]);
+        released[0].Status.Should().Be(TeamInvitationStatus.Declined);
         (await context.TeamFormationInvitations.CountAsync(item => item.FormationId == created.Value.Id &&
-            item.ReservationReleasedAtUtc == null)).Should().Be(0);
-        var replacement = await handler.CreateAsync(seed.ClassId, new CreateTeamFormationRequest
-        {
-            TeamName = "Replacement Formation", MemberStudentIds = seed.StudentIds,
-            LeaderStudentId = seed.StudentIds[1]
-        }, seed.ProposerUserId, SystemRoles.Student);
-        replacement.IsSuccess.Should().BeTrue(replacement.IsFailure ? replacement.Error.Message : "");
+            item.ReservationReleasedAtUtc == null)).Should().Be(3);
     }
 
     [Fact]
@@ -301,7 +306,7 @@ public sealed partial class TeamWorkflowIntegrationTests
         var handler = scope.ServiceProvider.GetRequiredService<ITeamFormationHandler>();
         var created = await handler.CreateAsync(seed.ClassId, new CreateTeamFormationRequest
         {
-            TeamName = "Late Login Formation", MemberStudentIds = seed.StudentIds,
+            TeamName = "Late Login Formation", InviteeStudentIds = seed.StudentIds.Skip(1).ToArray(),
             LeaderStudentId = seed.StudentIds[1]
         }, seed.ProposerUserId, SystemRoles.Student);
         created.IsSuccess.Should().BeTrue(created.IsFailure ? created.Error.Message : "");
@@ -528,7 +533,7 @@ public sealed partial class TeamWorkflowIntegrationTests
         var handler = scope.ServiceProvider.GetRequiredService<ITeamFormationHandler>();
         var result = await handler.CreateAsync(seed.ClassId, new CreateTeamFormationRequest
         {
-            TeamName = "Undeclared Proposer Team", MemberStudentIds = seed.StudentIds,
+            TeamName = "Undeclared Proposer Team", InviteeStudentIds = seed.StudentIds.Skip(1).ToArray(),
             LeaderStudentId = seed.StudentIds[0]
         }, seed.ProposerUserId, SystemRoles.Student);
 
@@ -538,7 +543,7 @@ public sealed partial class TeamWorkflowIntegrationTests
     }
 
     [Fact]
-    public async Task StudentWithoutMajor_CannotCreateTeam_WhenNoBusinessMajorRemains()
+    public async Task StudentWithoutMajor_CannotFinalizeTeam_WhenNoBusinessMajorRemains()
     {
         using var scope = _factory.Services.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -553,12 +558,22 @@ public sealed partial class TeamWorkflowIntegrationTests
         var handler = scope.ServiceProvider.GetRequiredService<ITeamFormationHandler>();
         var result = await handler.CreateAsync(seed.ClassId, new CreateTeamFormationRequest
         {
-            TeamName = "No Business Major Team", MemberStudentIds = seed.StudentIds,
+            TeamName = "No Business Major Team", InviteeStudentIds = seed.StudentIds.Skip(1).ToArray(),
             LeaderStudentId = seed.StudentIds[0]
         }, seed.ProposerUserId, SystemRoles.Student);
 
-        result.IsFailure.Should().BeTrue();
-        result.Error.Code.Should().Be(ErrorCodes.TeamMajorCompositionInvalid);
+        // Composition is only enforced at finalize, on the accepted members.
+        result.IsSuccess.Should().BeTrue(result.IsFailure ? result.Error.Message : "");
+        for (var index = 1; index < seed.StudentIds.Length; index++)
+        {
+            var memberUserId = await context.Students.AsNoTracking().Where(item => item.Id == seed.StudentIds[index])
+                .Select(item => item.UserId).SingleAsync();
+            (await handler.AcceptAsync(result.Value.Id, memberUserId!.Value, SystemRoles.Student)).IsSuccess.Should().BeTrue();
+        }
+        var finalized = await handler.FinalizeAsync(result.Value.Id, new FinalizeTeamFormationRequest(),
+            seed.ProposerUserId, SystemRoles.Student);
+        finalized.IsFailure.Should().BeTrue();
+        finalized.Error.Code.Should().Be(ErrorCodes.TeamFormationNotReady);
     }
 
     [Fact]
@@ -1041,7 +1056,7 @@ public sealed partial class TeamWorkflowIntegrationTests
         var formation = await formationHandler.CreateAsync(seed.ClassId, new CreateTeamFormationRequest
         {
             TeamName = "Reserved Student Team",
-            MemberStudentIds = seed.StudentIds,
+            InviteeStudentIds = seed.StudentIds.Skip(1).ToArray(),
             LeaderStudentId = seed.StudentIds[1]
         }, seed.ProposerUserId, SystemRoles.Student);
         formation.IsSuccess.Should().BeTrue();
