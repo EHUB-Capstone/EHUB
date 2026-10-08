@@ -200,7 +200,8 @@ public sealed partial class TeamWorkflowIntegrationTests
         fixture.Context.ChangeTracker.Clear();
 
         var notifications = await fixture.Context.Notifications.AsNoTracking()
-            .Where(item => events.Select(@event => @event.EventId).Contains(item.SourceEventId))
+            .Where(item => item.SourceEventId.HasValue &&
+    events.Select(@event => @event.EventId).Contains(item.SourceEventId.Value))
             .OrderBy(item => item.CreatedAt)
             .ToArrayAsync();
         notifications.Should().HaveCount(2);
