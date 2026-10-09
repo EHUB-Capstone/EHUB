@@ -1,1 +1,151 @@
-// TODO: Implement classApi.ts
+// src/api/classApi.js — Module 2 Class Management API
+import axiosClient from './axiosClient';
+import { classFeatureFlags, runClassFeatureRequest } from '../config/classFeatureFlags';
+import type {
+  CreateBulkClassesRequest,
+  GetClassesParams,
+  GetClassRosterParams,
+  ExportClassRosterParams,
+  ExportAdminClassDataRequest,
+  AddStudentToClassPayload,
+  CommitImportStudentsPayload,
+} from '../types/classes';
+import type { CreateClassManagerTeamRequest } from '../types/teamManagement';
+
+export const classApi = {
+  // ─── Class CRUD ───────────────────────────────────────────────────────────
+  getAll:      (params: GetClassesParams = {}) => axiosClient.get('/classes', { params }),
+  getById:     (id: string) => axiosClient.get(`/classes/${id}`),
+  create:            (data: unknown) => axiosClient.post('/classes', data),
+  previewBulkCreate: (data: CreateBulkClassesRequest) => axiosClient.post('/classes/bulk/preview', data),
+  commitBulkCreate:  (data: CreateBulkClassesRequest) => axiosClient.post('/classes/bulk/commit', data),
+  update:      (id: string, data: unknown) => axiosClient.put(`/classes/${id}`, data),
+  rename:      (id, classCode) => runClassFeatureRequest(classFeatureFlags.rename, 'Class rename', () =>
+    axiosClient.put(`/classes/${id}/rename`, { classCode })),
+  archive: (id: string, data: { rowVersion: string; reason: string }) =>
+    runClassFeatureRequest(classFeatureFlags.lifecycle, 'Class lifecycle management', () =>
+      axiosClient.post(`/classes/${id}/archive`, data)),
+  restore: (id: string, data: { rowVersion: string; reason: string }) =>
+    runClassFeatureRequest(classFeatureFlags.lifecycle, 'Class lifecycle management', () =>
+      axiosClient.post(`/classes/${id}/restore`, data)),
+  getCompletionPreview: (id: string) => axiosClient.get(`/classes/${id}/completion-preview`),
+  complete: (id: string, data: { rowVersion: string; reason: string }) =>
+    axiosClient.post(`/classes/${id}/complete`, data),
+  reopen: (id: string, data: { rowVersion: string; reason: string }) =>
+    axiosClient.post(`/classes/${id}/reopen`, data),
+  getAudit: (id: string, params: { page?: number; pageSize?: number } = {}) =>
+    axiosClient.get(`/classes/${id}/audit`, { params }),
+  getCheckpointDeadlines: (classId: string) => axiosClient.get(`/classes/${classId}/checkpoints`),
+  saveCheckpointDeadline: (classId: string, checkpointNumber: number, data: { dueDate: string; status: string }) =>
+    axiosClient.put(`/classes/${classId}/checkpoints/${checkpointNumber}/deadline`, data),
+  getCheckpointDeadlineClasses: () => axiosClient.get('/classes/checkpoint-deadline-classes'),
+  saveCheckpointDeadlineForClasses: (checkpointNumber: number, data: { dueDate: string; status: string; applyToAllAccessibleClasses: boolean; classIds: string[] }) =>
+    axiosClient.put(`/classes/checkpoints/${checkpointNumber}/deadline/bulk`, data),
+
+  // ─── Lecturer Assignment & Schedule ──────────────────────────────────────────
+  getClassMentors: (id: string) => runClassFeatureRequest(classFeatureFlags.mentorAssignment, 'Class mentor assignment', () =>
+    axiosClient.get(`/classes/${id}/mentors`)),
+  getMentorCandidates: (id: string) => runClassFeatureRequest(classFeatureFlags.mentorAssignment, 'Class mentor assignment', () =>
+    axiosClient.get(`/classes/${id}/mentor-candidates`)),
+  assignMentorBatch: (id: string, mentorProfileId: string, teamIds: string[], temporary = false) => runClassFeatureRequest(classFeatureFlags.mentorAssignment, 'Class mentor assignment', () =>
+    axiosClient.post(`/classes/${id}/mentor-assignments/batch`, { mentorProfileId, teamIds, temporary })),
+  updateSchedule: (id: string, schedule: unknown) => axiosClient.put(`/classes/${id}/schedule`, schedule),
+  updateTeachingAssignment: (id: string, data: unknown) => axiosClient.put(`/classes/${id}/teaching-assignment`, data),
+  repairChatMemberships: (id: string) => runClassFeatureRequest(classFeatureFlags.chatBackfill, 'Class chat repair', () =>
+    axiosClient.post(`/classes/${id}/repair-chat-memberships`)),
+
+  // ─── Students ────────────────────────────────────────────────────────────
+  getStudents: (classId: string, params: GetClassRosterParams, signal?: AbortSignal) =>
+    axiosClient.get(`/classes/${classId}/students`, { params, signal }),
+  previewImportStudents: (classId: string, formData: FormData) =>
+    axiosClient.post(`/classes/${classId}/import-students/preview`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+  commitImportStudents: (classId: string, payload: CommitImportStudentsPayload) =>
+    axiosClient.post(`/classes/${classId}/import-students/commit`, payload),
+  previewSemesterGroups: (classId: string, formData: FormData) =>
+    axiosClient.post(`/classes/${classId}/semester-groups/preview`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+  importSemesterGroups: (classId: string, formData: FormData) =>
+    axiosClient.post(`/classes/${classId}/semester-groups/import`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+  importStudents: (classId, formData) =>
+    axiosClient.post(`/classes/${classId}/import-students/preview`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+  getImportTemplate: () =>
+    axiosClient.get('/classes/import-template', { responseType: 'blob' }),
+  exportClassExcel: (classId: string, params: ExportClassRosterParams) =>
+    axiosClient.get(`/classes/${classId}/export-excel`, { params, responseType: 'blob' }),
+  exportAdminClassData: (data: ExportAdminClassDataRequest) =>
+    axiosClient.post('/classes/bulk/export-excel', data, { responseType: 'blob' }),
+
+  // Verify student majors against lecturer's Excel file
+  previewMajors: (classId, formData) =>
+    runClassFeatureRequest(classFeatureFlags.majorVerification, 'Class major preview', () =>
+      axiosClient.post(`/classes/${classId}/major-verification/preview`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      })),
+  verifyMajors: (classId, formData) =>
+    runClassFeatureRequest(classFeatureFlags.majorVerification, 'Class major verification', () =>
+      axiosClient.post(`/classes/${classId}/major-verification`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      })),
+  synchronizeMajorsFromFile: (classId, formData) =>
+    runClassFeatureRequest(classFeatureFlags.majorVerification, 'Class major synchronization', () =>
+      axiosClient.post(`/classes/${classId}/major-verification/synchronize`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      })),
+  getMajorVerificationTemplate: () =>
+    axiosClient.get('/classes/major-verification-template', { responseType: 'blob' }),
+  // Manually update one enrollment's major snapshot
+  updateStudentMajor: (classId, studentId, majorCode, reason) =>
+    runClassFeatureRequest(classFeatureFlags.majorVerification, 'Class major verification', () =>
+      axiosClient.put(`/classes/${classId}/students/${studentId}/major`, { majorCode, reason })),
+  synchronizeProfileMajors: (classId: string) =>
+    axiosClient.post(`/classes/${classId}/students/synchronize-profile-majors`),
+  // Explicit, idempotent lock and unlock operations
+  lockMajors: (classId) =>
+    runClassFeatureRequest(classFeatureFlags.majorVerification, 'Class major verification', () =>
+      axiosClient.post(`/classes/${classId}/major-lock`)),
+  unlockMajors: (classId) =>
+    runClassFeatureRequest(classFeatureFlags.majorVerification, 'Class major verification', () =>
+      axiosClient.delete(`/classes/${classId}/major-lock`)),
+  addStudent: (classId: string, data: AddStudentToClassPayload) =>
+    axiosClient.post(`/classes/${classId}/students`, data),
+  assignStudents: (classId: string, data: { studentIds: string[] }) =>
+    axiosClient.post(`/classes/${classId}/students/assign`, data),
+  assignStudentsToTeam: (classId: string, teamId: string, data: { studentIds: string[] }) =>
+    axiosClient.post(`/classes/${classId}/teams/${teamId}/students/assign`, data),
+  dropStudent: (classId, studentId) =>
+    axiosClient.post(`/classes/${classId}/students/${studentId}/drop`),
+  dropAllStudents: (classId: string) =>
+    axiosClient.post(`/classes/${classId}/students/drop-all`),
+  reEnrollStudent: (classId, studentId) =>
+    axiosClient.post(`/classes/${classId}/students/${studentId}/re-enroll`),
+
+  getGroupProjectConsistency: (classId: string) =>
+    axiosClient.get(`/classes/${classId}/group-project-consistency`),
+
+  // ─── Teams ───────────────────────────────────────────────────────────────
+  getTeams:      (classId) => runClassFeatureRequest(classFeatureFlags.teamManagement, 'Class team management', () =>
+    axiosClient.get(`/classes/${classId}/teams`)),
+  createTeam: (classId: string, payload: CreateClassManagerTeamRequest) =>
+    runClassFeatureRequest(classFeatureFlags.teamManagement, 'Class team management', () =>
+      axiosClient.post(`/classes/${classId}/teams`, payload)),
+  getTeamProposals: (classId) => runClassFeatureRequest(classFeatureFlags.teamManagement, 'Class team management', () =>
+    axiosClient.get(`/classes/${classId}/team-proposals`)),
+  submitTeamProposal: (classId, payload) =>
+    runClassFeatureRequest(classFeatureFlags.teamManagement, 'Class team management', () =>
+      axiosClient.post(`/classes/${classId}/teams/student-proposal`, payload)),
+
+  // ─── Student/User side ───────────────────────────────────────────────────
+  getMyClasses: (scope: 'Current' | 'History' = 'Current') => runClassFeatureRequest(classFeatureFlags.studentSelfService, 'Student class self-service', () =>
+    axiosClient.get('/classes/my-classes', { params: { scope } })),
+  getMyTeam: () => runClassFeatureRequest(classFeatureFlags.studentSelfService, 'Student class self-service', () =>
+    axiosClient.get('/classes/my-team')),
+  getMyClassDetail: (classId) => runClassFeatureRequest(classFeatureFlags.studentSelfService, 'Student class self-service', () =>
+    axiosClient.get(`/classes/my-class-detail/${classId}`)),
+};

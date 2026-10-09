@@ -18,6 +18,11 @@ public class ClassConfiguration : IEntityTypeConfiguration<Class>
             .HasMaxLength(50)
             .IsRequired();
 
+        builder.Property(c => c.Slug)
+            .HasColumnName("slug")
+            .HasMaxLength(160)
+            .IsRequired();
+
         builder.Property(c => c.ClassIndex)
             .HasColumnName("class_index")
             .IsRequired();
@@ -30,6 +35,9 @@ public class ClassConfiguration : IEntityTypeConfiguration<Class>
             .HasColumnName("course_id")
             .IsRequired();
 
+        builder.Property(c => c.PrimaryLecturerId)
+            .HasColumnName("primary_lecturer_id");
+
         builder.Property(c => c.Room)
             .HasColumnName("room")
             .HasMaxLength(50);
@@ -38,8 +46,8 @@ public class ClassConfiguration : IEntityTypeConfiguration<Class>
             .HasColumnName("schedule_json")
             .HasColumnType("jsonb");
 
-        builder.Property(c => c.IsMajorLocked)
-            .HasColumnName("is_major_locked")
+        builder.Property(c => c.IsEnrollmentMajorLocked)
+            .HasColumnName("is_enrollment_major_locked")
             .HasDefaultValue(false);
 
         builder.Property(c => c.Status)
@@ -48,15 +56,52 @@ public class ClassConfiguration : IEntityTypeConfiguration<Class>
             .HasMaxLength(20)
             .IsRequired();
 
+        builder.Property(c => c.CompletedAtUtc)
+            .HasColumnName("completed_at_utc");
+
+        builder.Property(c => c.CompletedByUserId)
+            .HasColumnName("completed_by_user_id");
+
+        builder.Property(c => c.CompletionReason)
+            .HasColumnName("completion_reason")
+            .HasMaxLength(500);
+
+        builder.ToTable(tableBuilder => tableBuilder.HasCheckConstraint(
+            "CK_classes_active_requires_lecturer_and_schedule",
+            "status <> 'Active' OR (primary_lecturer_id IS NOT NULL AND schedule_json IS NOT NULL AND jsonb_typeof(schedule_json) = 'array' AND jsonb_array_length(schedule_json) > 0)"));
+        builder.ToTable(tableBuilder => tableBuilder.HasCheckConstraint(
+            "CK_classes_completion_metadata",
+            "status <> 'Completed' OR (completed_at_utc IS NOT NULL AND completion_reason IS NOT NULL)"));
+
+        builder.Property(c => c.ArchivedAtUtc)
+            .HasColumnName("archived_at_utc");
+
+        builder.Property(c => c.ArchivedByUserId)
+            .HasColumnName("archived_by_user_id");
+
+        builder.Property(c => c.StatusBeforeArchive)
+            .HasColumnName("status_before_archive")
+            .HasConversion<string>()
+            .HasMaxLength(20);
+
         builder.Property(c => c.CreatedById)
             .HasColumnName("created_by_id");
 
-        // Composite unique indexes
+        builder.Property(c => c.Version)
+            .IsRowVersion()
+            .HasColumnName("xmin");
+
+        // Composite unique indexes & performance indexes
         builder.HasIndex(c => new { c.ClassCode, c.SemesterId })
             .IsUnique();
 
         builder.HasIndex(c => new { c.SemesterId, c.CourseId, c.ClassIndex })
             .IsUnique();
+
+        builder.HasIndex(c => c.Slug)
+            .IsUnique();
+
+        builder.HasIndex(c => new { c.SemesterId, c.CourseId, c.PrimaryLecturerId, c.Status });
 
         // Audit & Soft Delete properties configuration
         builder.Property(c => c.CreatedAt).HasColumnName("created_at").IsRequired();
@@ -80,6 +125,21 @@ public class ClassConfiguration : IEntityTypeConfiguration<Class>
             .WithMany(co => co.Classes)
             .HasForeignKey(c => c.CourseId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne(c => c.PrimaryLecturer)
+            .WithMany()
+            .HasForeignKey(c => c.PrimaryLecturerId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        builder.HasOne(c => c.ArchivedByUser)
+            .WithMany()
+            .HasForeignKey(c => c.ArchivedByUserId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        builder.HasOne(c => c.CompletedByUser)
+            .WithMany()
+            .HasForeignKey(c => c.CompletedByUserId)
+            .OnDelete(DeleteBehavior.SetNull);
 
         builder.HasOne(c => c.Creator)
             .WithMany()

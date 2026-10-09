@@ -11,27 +11,55 @@ public interface IApplicationDbContext
     DbSet<Role> Roles { get; }
     DbSet<UserRole> UserRoles { get; }
     DbSet<RefreshToken> RefreshTokens { get; }
+    DbSet<PendingRegistration> PendingRegistrations { get; }
     DbSet<Semester> Semesters { get; }
+    DbSet<SemesterAuditLog> SemesterAuditLogs { get; }
+    DbSet<SemesterStaffAssignment> SemesterStaffAssignments { get; }
     DbSet<Course> Courses { get; }
+    DbSet<StartupIndustry> StartupIndustries { get; }
     DbSet<Class> Classes { get; }
     DbSet<ClassLecturer> ClassLecturers { get; }
+    DbSet<ClassAuditLog> ClassAuditLogs { get; }
+    DbSet<ClassImportSession> ClassImportSessions { get; }
+    DbSet<LecturerImportSession> LecturerImportSessions { get; }
+    DbSet<MentorImportSession> MentorImportSessions { get; }
+    DbSet<MentorImportDraft> MentorImportDrafts { get; }
+    DbSet<MentorAllocationSession> MentorAllocationSessions { get; }
+    DbSet<OutboxMessage> OutboxMessages { get; }
     DbSet<Student> Students { get; }
     DbSet<ClassStudent> ClassStudents { get; }
     DbSet<Team> Teams { get; }
     DbSet<TeamMember> TeamMembers { get; }
+    DbSet<TeamContinuation> TeamContinuations { get; }
+    DbSet<TeamContinuationMember> TeamContinuationMembers { get; }
+    DbSet<TeamProposal> TeamProposals { get; }
+    DbSet<TeamProposalMember> TeamProposalMembers { get; }
+    DbSet<TeamProposalHistory> TeamProposalHistory { get; }
+    DbSet<TeamFormation> TeamFormations { get; }
+    DbSet<TeamFormationInvitation> TeamFormationInvitations { get; }
+    DbSet<ProjectDirection> ProjectDirections { get; }
+    DbSet<ProjectDirectionReview> ProjectDirectionReviews { get; }
     DbSet<Project> Projects { get; }
     DbSet<ProjectTag> ProjectTags { get; }
+    DbSet<ProjectActivityLog> ProjectActivityLogs { get; }
     DbSet<Checkpoint> Checkpoints { get; }
+    DbSet<ClassCheckpointSchedule> ClassCheckpointSchedules { get; }
     DbSet<Submission> Submissions { get; }
     DbSet<SubmissionFile> SubmissionFiles { get; }
+    DbSet<SubmissionUploadSession> SubmissionUploadSessions { get; }
+    DbSet<SubmissionLink> SubmissionLinks { get; }
+    DbSet<SubmissionRequirementContent> SubmissionRequirementContents { get; }
     DbSet<SubmissionFeedback> SubmissionFeedbacks { get; }
     DbSet<Rubric> Rubrics { get; }
     DbSet<RubricCriterion> RubricCriteria { get; }
     DbSet<Evaluation> Evaluations { get; }
     DbSet<EvaluationDetail> EvaluationDetails { get; }
+    DbSet<EvaluationMemberScore> EvaluationMemberScores { get; }
     DbSet<EvaluationHistory> EvaluationHistories { get; }
     DbSet<MentorProfile> MentorProfiles { get; }
     DbSet<MentorAssignment> MentorAssignments { get; }
+    DbSet<TemporaryMentorAssignment> TemporaryMentorAssignments { get; }
+    DbSet<SemesterTemporaryMentor> SemesterTemporaryMentors { get; }
     DbSet<MentoringSession> MentoringSessions { get; }
     DbSet<MentoringActionItem> MentoringActionItems { get; }
     DbSet<MentoringAttendance> MentoringAttendances { get; }
@@ -57,7 +85,12 @@ public interface IApplicationDbContext
     DbSet<Milestone> Milestones { get; }
     DbSet<SprintTask> SprintTasks { get; }
     DbSet<WeeklyTask> WeeklyTasks { get; }
+    DbSet<WeeklyTaskTeamProgress> WeeklyTaskTeamProgress { get; }
     DbSet<ProjectAnalysis> ProjectAnalyses { get; }
+    DbSet<PasswordResetToken> PasswordResetTokens { get; }
+    DbSet<ProductFeedback> ProductFeedbacks { get; }
+    DbSet<ProductFeedbackAttachment> ProductFeedbackAttachments { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
+    void ClearChanges();
 }

@@ -4,8 +4,10 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "test:workspace": "node --experimental-strip-types --test tests/workspaceTools.test.ts",
     "dev": "vite",
-    "type-check": "tsc --noEmit",
+    "test": "node --experimental-strip-types --test tests/studentImport.test.ts tests/startupIndustryImport.test.ts tests/rubricImport.test.ts tests/addStudent.test.ts tests/teamManagement.test.ts tests/studentAssignment.test.ts tests/accountApproval.test.ts tests/classFeatureFlags.test.ts tests/releaseFeatureFlags.test.ts tests/classMappers.test.ts tests/classComponents.test.ts tests/classPermissions.test.ts tests/authValidation.test.ts tests/mockApi.test.ts tests/bulkClassAssignments.test.ts tests/bulkClassActions.test.ts tests/workspaceTools.test.ts tests/lecturerCheckpointSchedules.test.ts tests/checkpointDateTime.test.ts tests/checkpointFilePreview.test.ts tests/academicDashboard.test.ts tests/submissionAnalytics.test.ts tests/checkpointDirectUpload.test.ts tests/projectData.test.ts tests/darkThemeCoverage.test.ts tests/evaluationReportExport.test.ts tests/teamContinuity.test.ts tests/searchText.test.ts tests/nginxConfig.test.ts tests/previewTiming.test.ts tests/previewSource.test.ts tests/previewDocumentCache.test.ts tests/mentorAllocationPreview.test.ts tests/mentorBatchAssignment.test.ts tests/semesterStaffCandidates.test.ts tests/mentorMasterImport.test.ts tests/managedUserForm.test.ts tests/mentorSlotBoard.test.ts tests/mentorHistory.test.ts tests/mentorProfileForm.test.ts tests/mentorTags.test.ts tests/teamFormation.test.ts",
+    "type-check": "tsc -b",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview"
@@ -22,22 +24,29 @@
     "clsx": "^2.1.1",
     "framer-motion": "^12.42.2",
     "lucide-react": "^1.23.0",
+    "pdfjs-dist": "^6.3.289",
     "postcss": "^8.5.16",
     "postcss-loader": "^8.2.1",
     "react": "^19.2.7",
+    "react-day-picker": "^10.0.1",
     "react-dom": "^19.2.7",
     "react-hot-toast": "^2.6.0",
     "react-router-dom": "^7.18.1",
+    "read-excel-file": "^9.3.2",
     "recharts": "^3.9.2",
     "socket.io-client": "^4.8.3",
     "tailwind-merge": "^3.6.0",
-    "tailwindcss": "^4.3.2"
+    "tailwindcss": "^4.3.2",
+    "write-excel-file": "^4.1.1",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
-    "@types/node": "^24.13.2",
+    "@types/node": "^24.13.3",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
+    "@vercel/config": "^0.6.1",
     "@vitejs/plugin-react": "^6.0.3",
+    "axios-mock-adapter": "^2.1.0",
     "oxlint": "^1.71.0",
     "typescript": "~6.0.2",
     "vite": "^8.1.1"

@@ -1,0 +1,441 @@
+using System.Text.Json;
+using EHub.Application.Common.Interfaces.Persistence;
+using EHub.Application.Common.Interfaces.Services;
+using EHub.Application.Features.Classes.Common;
+using EHub.Contracts.Teams;
+using EHub.Domain.Entities;
+using EHub.Domain.Enums;
+using EHub.Shared.Constants;
+using EHub.Shared.Errors;
+using EHub.Shared.Results;
+using Microsoft.EntityFrameworkCore;
+
+namespace EHub.Application.Features.Teams.ProjectDirections;
+
+public sealed class ProjectDirectionHandler : IProjectDirectionHandler
+{
+    private readonly IApplicationDbContext _context;
+    private readonly IProjectDirectionRealtimePublisher? _realtimePublisher;
+
+    public ProjectDirectionHandler(
+        IApplicationDbContext context,
+        IProjectDirectionRealtimePublisher? realtimePublisher = null)
+    {
+        _context = context;
+        _realtimePublisher = realtimePublisher;
+    }
+
+    public async Task<Result<ProjectDirectionDto>> GetAsync(
+        Guid teamId, Guid userId, string role, CancellationToken cancellationToken = default)
+    {
+        var team = await TeamAccessQuery().FirstOrDefaultAsync(item => item.Id == teamId, cancellationToken);
+        if (team == null) return Failure(ErrorCodes.TeamNotFound, "The requested team was not found.");
+        if (!await CanViewAsync(team, userId, role, cancellationToken)) return Failure(ErrorCodes.ClassAccessDenied, "You cannot view this project direction.");
+        var direction = await DirectionQuery().FirstOrDefaultAsync(item => item.TeamId == teamId, cancellationToken);
+        if (direction == null) return Failure(ErrorCodes.ProjectDirectionNotFound, "The team has not created a project direction.");
+        return Result.Success(ToDto(direction));
+    }
+
+    public async Task<Result<ProjectDirectionDto>> SaveAsync(
+        Guid teamId, SaveProjectDirectionRequest request, Guid userId, string role, CancellationToken cancellationToken = default)
+    {
+        var validation = ValidateContent(request.Title, request.Summary);
+        if (validation != null) return Failure(validation.Value.Code, validation.Value.Message);
+        var team = await TeamAccessQuery().FirstOrDefaultAsync(item => item.Id == teamId, cancellationToken);
+        if (team == null) return Failure(ErrorCodes.TeamNotFound, "The requested team was not found.");
+        if (!await IsLeaderAsync(team, userId, role, cancellationToken)) return Failure(ErrorCodes.ClassAccessDenied, "Only the team leader can edit the project direction.");
+        if (team.Status != TeamStatus.Active) return Failure(ErrorCodes.TeamInactive, "Project direction cannot be changed for this team.");
+        var classError = ClassStateRules.GetMutationError(team.Class.Status);
+        if (classError != null) return Failure(classError.Code, classError.Message);
+
+        IReadOnlyCollection<StartupIndustry>? selectedIndustries = null;
+        if (request.StartupIndustryIds != null)
+        {
+            var industryIds = request.StartupIndustryIds.Distinct().ToArray();
+            if (industryIds.Length != request.StartupIndustryIds.Count || industryIds.Length is < 1 or > 3)
+                return Failure(ErrorCodes.ClassValidationError, "Select between 1 and 3 distinct startup industries.");
+            selectedIndustries = await _context.StartupIndustries.AsNoTracking()
+                .Where(industry => industryIds.Contains(industry.Id) && industry.Status == StartupIndustryStatus.Active)
+                .OrderBy(industry => industry.Name)
+                .ToArrayAsync(cancellationToken);
+            if (selectedIndustries.Count != industryIds.Length)
+                return Failure(ErrorCodes.ClassValidationError, "Every selected startup industry must exist and be active.");
+            if (team.Project == null)
+                return Failure(ErrorCodes.WorkspaceNotFound, "Create the project workspace before changing startup industries.");
+        }
+
+        var direction = await DirectionQuery(tracking: true).FirstOrDefaultAsync(item => item.TeamId == teamId, cancellationToken);
+        var revisedTitle = request.Title.Trim();
+        var revisedSummary = request.Summary.Trim();
+        if (direction == null)
+        {
+            if (!string.IsNullOrWhiteSpace(request.RowVersion)) return Failure(ErrorCodes.ClassConcurrencyConflict, "The project direction no longer matches this screen.");
+            direction = new ProjectDirection
+            {
+                TeamId = teamId,
+                Team = team,
+                Title = revisedTitle,
+                Summary = revisedSummary,
+                Status = ProjectDirectionStatus.Draft,
+                CreatedBy = userId
+            };
+            _context.ProjectDirections.Add(direction);
+        }
+        else
+        {
+            if (!uint.TryParse(request.RowVersion, out var version) || direction.Version != version)
+                return Failure(ErrorCodes.ClassConcurrencyConflict, "The project direction changed concurrently. Refresh and try again.");
+            if (direction.Status is not (ProjectDirectionStatus.Draft or ProjectDirectionStatus.NeedsRevision))
+                return Failure(ErrorCodes.ProjectDirectionStateInvalid, "Only Draft or NeedsRevision directions can be edited.");
+            var startupIndustriesChanged = selectedIndustries != null
+                && !HaveSameStartupIndustries(direction.Team.Project!, selectedIndustries);
+            var hasApprovedProfileBaseline = HasApprovedProfileBaseline(direction);
+            if (hasApprovedProfileBaseline && startupIndustriesChanged)
+                return Failure(ErrorCodes.ClassValidationError, "Startup Industry cannot be changed as part of a Project Profile name or description change request.");
+            if (direction.Status == ProjectDirectionStatus.NeedsRevision
+                && direction.Title == revisedTitle
+                && direction.Summary == revisedSummary
+                && !startupIndustriesChanged)
+                return Failure(ErrorCodes.ClassValidationError, "Change the project direction before saving the requested revision.");
+            direction.Title = revisedTitle;
+            direction.Summary = revisedSummary;
+            if (direction.Status == ProjectDirectionStatus.NeedsRevision)
+                direction.Status = ProjectDirectionStatus.Draft;
+            direction.UpdatedBy = userId;
+        }
+
+        var project = direction.Team.Project;
+        if (project != null && !HasApprovedProfileBaseline(direction))
+        {
+            var changedFields = new List<string>();
+            if (!string.Equals(project.Name, revisedTitle, StringComparison.Ordinal)) changedFields.Add("projectName");
+            if (!string.Equals(project.Description ?? string.Empty, revisedSummary, StringComparison.Ordinal)) changedFields.Add("description");
+            if (selectedIndustries != null && !HaveSameStartupIndustries(project, selectedIndustries))
+                changedFields.Add("startupIndustries");
+            if (changedFields.Count > 0)
+            {
+                var now = DateTime.UtcNow;
+                project.Name = revisedTitle;
+                project.Description = revisedSummary;
+                project.UpdatedBy = userId;
+                project.UpdatedAt = now;
+                if (selectedIndustries != null)
+                    ReplaceStartupIndustries(project, selectedIndustries, userId, now);
+                _context.ProjectActivityLogs.Add(new ProjectActivityLog
+                {
+                    ProjectId = project.Id,
+                    Project = project,
+                    ActorUserId = userId,
+                    Action = "PROJECT_DIRECTION_DETAILS_UPDATED",
+                    Summary = "Updated project details from the project direction.",
+                    ChangedFieldsJson = JsonSerializer.Serialize(changedFields),
+                    OccurredAtUtc = now
+                });
+            }
+        }
+
+        direction.UpdatedAt = DateTime.UtcNow;
+
+        ClassOutbox.Enqueue(_context, "ProjectDirection.Saved.v1", team.ClassId, new { TeamId = teamId, ProjectDirectionId = direction.Id });
+        try { await _context.SaveChangesAsync(cancellationToken); }
+        catch (DbUpdateConcurrencyException) { return Failure(ErrorCodes.ClassConcurrencyConflict, "The project direction changed concurrently. Refresh and try again."); }
+        catch (DbUpdateException) { return Failure(ErrorCodes.ClassConcurrencyConflict, "A project direction was created concurrently. Refresh and try again."); }
+        return Result.Success(ToDto(direction));
+    }
+
+    public async Task<Result<ProjectDirectionDto>> SubmitAsync(
+        Guid teamId, ProjectDirectionStateRequest request, Guid userId, string role, CancellationToken cancellationToken = default)
+    {
+        if (!uint.TryParse(request.RowVersion, out var version)) return Failure(ErrorCodes.ClassValidationError, "A valid rowVersion is required.");
+        var team = await TeamAccessQuery().FirstOrDefaultAsync(item => item.Id == teamId, cancellationToken);
+        if (team == null) return Failure(ErrorCodes.TeamNotFound, "The requested team was not found.");
+        if (!await IsLeaderAsync(team, userId, role, cancellationToken)) return Failure(ErrorCodes.ClassAccessDenied, "Only the team leader can submit the project direction.");
+        if (team.Status != TeamStatus.Active)
+            return Failure(ErrorCodes.TeamInactive, "Project direction cannot be submitted for an inactive team.");
+        var classError = ClassStateRules.GetMutationError(team.Class.Status);
+        if (classError != null) return Failure(classError.Code, classError.Message);
+        var direction = await DirectionQuery(tracking: true).FirstOrDefaultAsync(item => item.TeamId == teamId, cancellationToken);
+        if (direction == null) return Failure(ErrorCodes.ProjectDirectionNotFound, "Create the project direction before submitting it.");
+        if (direction.Version != version) return Failure(ErrorCodes.ClassConcurrencyConflict, "The project direction changed concurrently. Refresh and try again.");
+        if (direction.Status != ProjectDirectionStatus.Draft)
+            return Failure(ErrorCodes.ProjectDirectionStateInvalid, "Save requested revisions as a draft before submitting.");
+        var now = DateTime.UtcNow;
+        direction.Status = ProjectDirectionStatus.Submitted;
+        direction.SubmittedAtUtc = now;
+        direction.UpdatedBy = userId;
+        var project = direction.Team.Project;
+        var isProjectProfileChangeProposal = HasApprovedProfileBaseline(direction)
+            && project != null
+            && (!string.Equals(project.Name, direction.Title, StringComparison.Ordinal)
+                || !string.Equals(project.Description ?? string.Empty, direction.Summary, StringComparison.Ordinal));
+        ClassOutbox.Enqueue(_context, "ProjectDirection.Submitted.v1", team.ClassId, new
+        {
+            TeamId = teamId,
+            ProjectDirectionId = direction.Id,
+            LecturerUserId = team.Class.PrimaryLecturerId,
+            IsProjectProfileChangeProposal = isProjectProfileChangeProposal,
+            CurrentTitle = project?.Name,
+            ProposedTitle = direction.Title,
+            CurrentSummary = project?.Description,
+            ProposedSummary = direction.Summary
+        }, now);
+        try { await _context.SaveChangesAsync(cancellationToken); }
+        catch (DbUpdateConcurrencyException) { return Failure(ErrorCodes.ClassConcurrencyConflict, "The project direction changed concurrently. Refresh and try again."); }
+        var directionDto = ToDto(direction);
+        if (team.Class.PrimaryLecturerId.HasValue && _realtimePublisher != null)
+            await _realtimePublisher.PublishAsync(
+                [team.Class.PrimaryLecturerId.Value],
+                "ProjectDirectionSubmitted",
+                team.ClassId,
+                teamId,
+                directionDto,
+                cancellationToken);
+        return Result.Success(directionDto);
+    }
+
+    public async Task<Result<ProjectDirectionDto>> ReviewAsync(
+        Guid teamId, ReviewProjectDirectionRequest request, Guid userId, string role, CancellationToken cancellationToken = default)
+    {
+        if (!IsRole(role, SystemRoles.Lecturer)) return Failure(ErrorCodes.ClassAccessDenied, "Only the assigned lecturer can review a project direction.");
+        if (!uint.TryParse(request.RowVersion, out var version)) return Failure(ErrorCodes.ClassValidationError, "A valid rowVersion is required.");
+        var comment = request.Comment?.Trim() ?? string.Empty;
+        if (comment.Length is > 0 and < 3 or > 1_000)
+            return Failure(ErrorCodes.ClassValidationError, "Review comment must be between 3 and 1000 characters when provided.");
+        if (!Enum.TryParse<ProjectDirectionStatus>(request.Decision, true, out var decision)
+            || decision is not (ProjectDirectionStatus.Approved or ProjectDirectionStatus.NeedsRevision or ProjectDirectionStatus.Rejected))
+            return Failure(ErrorCodes.ClassValidationError, "Decision must be Approved, NeedsRevision, or Rejected.");
+        var team = await TeamAccessQuery().FirstOrDefaultAsync(item => item.Id == teamId, cancellationToken);
+        if (team == null) return Failure(ErrorCodes.TeamNotFound, "The requested team was not found.");
+        if (team.Class.PrimaryLecturerId != userId) return Failure(ErrorCodes.ClassAccessDenied, "A lecturer cannot review project directions outside assigned classes.");
+        if (team.Status != TeamStatus.Active)
+            return Failure(ErrorCodes.TeamInactive, "Project direction cannot be reviewed for an inactive team.");
+        var classError = ClassStateRules.GetMutationError(team.Class.Status);
+        if (classError != null) return Failure(classError.Code, classError.Message);
+        var direction = await DirectionQuery(tracking: true).FirstOrDefaultAsync(item => item.TeamId == teamId, cancellationToken);
+        if (direction == null) return Failure(ErrorCodes.ProjectDirectionNotFound, "The project direction was not found.");
+        if (direction.Version != version) return Failure(ErrorCodes.ClassConcurrencyConflict, "The project direction changed concurrently. Refresh and try again.");
+        if (direction.Status != ProjectDirectionStatus.Submitted) return Failure(ErrorCodes.ProjectDirectionStateInvalid, "Only a Submitted direction can be reviewed.");
+
+        var now = DateTime.UtcNow;
+        var previous = direction.Status;
+        var project = direction.Team.Project;
+        var currentTitle = project?.Name ?? string.Empty;
+        var currentSummary = project?.Description ?? string.Empty;
+        var isProjectProfileChangeProposal = HasApprovedProfileBaseline(direction)
+            && project != null
+            && (!string.Equals(currentTitle, direction.Title, StringComparison.Ordinal)
+                || !string.Equals(currentSummary, direction.Summary, StringComparison.Ordinal));
+        if (decision == ProjectDirectionStatus.Rejected && !isProjectProfileChangeProposal)
+            return Failure(ErrorCodes.ProjectDirectionStateInvalid, "Only a Project Profile change request can be rejected.");
+
+        var proposedTitle = direction.Title;
+        var proposedSummary = direction.Summary;
+        direction.Status = decision == ProjectDirectionStatus.Rejected
+            ? ProjectDirectionStatus.Approved
+            : decision;
+        direction.ReviewedAtUtc = now;
+        direction.ReviewedByUserId = userId;
+        direction.UpdatedBy = userId;
+        _context.ProjectDirectionReviews.Add(new ProjectDirectionReview
+        {
+            ProjectDirectionId = direction.Id,
+            ProjectDirection = direction,
+            FromStatus = previous,
+            ToStatus = decision,
+            Comment = comment,
+            ReviewedByUserId = userId,
+            OccurredAtUtc = now
+        });
+        if (decision == ProjectDirectionStatus.Approved && isProjectProfileChangeProposal && project != null)
+        {
+            var changedFields = new List<string>();
+            if (!string.Equals(project.Name, direction.Title, StringComparison.Ordinal)) changedFields.Add("projectName");
+            if (!string.Equals(project.Description ?? string.Empty, direction.Summary, StringComparison.Ordinal)) changedFields.Add("description");
+            project.Name = direction.Title;
+            project.Description = direction.Summary;
+            project.UpdatedBy = userId;
+            project.UpdatedAt = now;
+            _context.ProjectActivityLogs.Add(new ProjectActivityLog
+            {
+                ProjectId = project.Id,
+                Project = project,
+                ActorUserId = userId,
+                Action = "PROJECT_PROFILE_CHANGE_APPROVED",
+                Summary = $"Approved changes to {string.Join(" and ", changedFields.Select(ToDisplayField))}.",
+                ChangedFieldsJson = JsonSerializer.Serialize(changedFields),
+                OccurredAtUtc = now
+            });
+        }
+        else if (decision == ProjectDirectionStatus.Rejected && project != null)
+        {
+            direction.Title = currentTitle;
+            direction.Summary = currentSummary;
+            _context.ProjectActivityLogs.Add(new ProjectActivityLog
+            {
+                ProjectId = project.Id,
+                Project = project,
+                ActorUserId = userId,
+                Action = "PROJECT_PROFILE_CHANGE_REJECTED",
+                Summary = "Rejected proposed changes to the Project Profile. The approved profile remains unchanged.",
+                ChangedFieldsJson = "[]",
+                OccurredAtUtc = now
+            });
+        }
+        var studentUserIds = team.TeamMembers.Where(member => member.CountsTowardActiveTeam && member.ClassStudent.Student.UserId.HasValue)
+            .Select(member => member.ClassStudent.Student.UserId!.Value).Distinct().ToArray();
+        ClassOutbox.Enqueue(_context, "ProjectDirection.Reviewed.v1", team.ClassId, new
+        {
+            TeamId = teamId,
+            ProjectDirectionId = direction.Id,
+            Decision = decision.ToString(),
+            StudentUserIds = studentUserIds,
+            IsProjectProfileChangeProposal = isProjectProfileChangeProposal,
+            CurrentTitle = currentTitle,
+            ProposedTitle = proposedTitle,
+            CurrentSummary = currentSummary,
+            ProposedSummary = proposedSummary
+        }, now);
+        try { await _context.SaveChangesAsync(cancellationToken); }
+        catch (DbUpdateConcurrencyException) { return Failure(ErrorCodes.ClassConcurrencyConflict, "The project direction was reviewed concurrently. Refresh the page."); }
+        var directionDto = ToDto(direction);
+        if (_realtimePublisher != null)
+            await _realtimePublisher.PublishAsync(
+                studentUserIds,
+                "ProjectDirectionReviewed",
+                team.ClassId,
+                teamId,
+                directionDto,
+                cancellationToken);
+        return Result.Success(directionDto);
+    }
+
+    private IQueryable<Team> TeamAccessQuery() => _context.Teams
+        .Include(team => team.Class)
+        .Include(team => team.Project).ThenInclude(project => project!.ProjectTags)
+        .Include(team => team.TeamMembers).ThenInclude(member => member.ClassStudent).ThenInclude(enrollment => enrollment.Student)
+        .Include(team => team.MentorAssignments).ThenInclude(assignment => assignment.MentorProfile);
+
+    private IQueryable<ProjectDirection> DirectionQuery(bool tracking = false)
+    {
+        var query = tracking ? _context.ProjectDirections.AsQueryable() : _context.ProjectDirections.AsNoTracking();
+        return query
+            .Include(direction => direction.Reviews)
+            .Include(direction => direction.Team).ThenInclude(team => team.Project).ThenInclude(project => project!.ProjectTags);
+    }
+
+    private async Task<bool> CanViewAsync(Team team, Guid userId, string role, CancellationToken cancellationToken)
+    {
+        if (IsRole(role, SystemRoles.Admin)) return true;
+        if (IsRole(role, SystemRoles.Lecturer)) return team.Class.PrimaryLecturerId == userId;
+        if (IsRole(role, SystemRoles.Mentor)) return team.MentorAssignments.Any(item => item.MentorProfile.UserId == userId && item.Status == MentorAssignmentStatus.Active && item.EndedAt == null);
+        return await IsLeaderOrMemberAsync(team, userId, role, cancellationToken);
+    }
+
+    private async Task<bool> IsLeaderAsync(Team team, Guid userId, string role, CancellationToken cancellationToken)
+    {
+        if (!IsRole(role, SystemRoles.Student)) return false;
+        var studentId = await _context.Students.AsNoTracking().Where(item => item.UserId == userId).Select(item => (Guid?)item.Id).FirstOrDefaultAsync(cancellationToken);
+        return studentId.HasValue && team.TeamMembers.Any(item => item.StudentId == studentId && item.CountsTowardActiveTeam && item.RoleInTeam == TeamMemberRole.Leader);
+    }
+
+    private async Task<bool> IsLeaderOrMemberAsync(Team team, Guid userId, string role, CancellationToken cancellationToken)
+    {
+        if (!IsRole(role, SystemRoles.Student)) return false;
+        var studentId = await _context.Students.AsNoTracking().Where(item => item.UserId == userId).Select(item => (Guid?)item.Id).FirstOrDefaultAsync(cancellationToken);
+        return studentId.HasValue && team.TeamMembers.Any(item => item.StudentId == studentId && item.CountsTowardActiveTeam);
+    }
+
+    private static (string Code, string Message)? ValidateContent(string title, string summary)
+    {
+        if (string.IsNullOrWhiteSpace(title) || title.Trim().Length is < 3 or > 200) return (ErrorCodes.ClassValidationError, "Project name must be between 3 and 200 characters.");
+        if (string.IsNullOrWhiteSpace(summary) || summary.Trim().Length is < 20 or > 2_000) return (ErrorCodes.ClassValidationError, "Project description must be between 20 and 2000 characters.");
+        return null;
+    }
+
+    private static bool HaveSameStartupIndustries(Project project, IEnumerable<StartupIndustry> industries)
+    {
+        var current = project.ProjectTags
+            .Where(tag => tag.TagType == ProjectTagType.StartupField)
+            .Select(tag => tag.NormalizedTagName)
+            .ToHashSet(StringComparer.Ordinal);
+        var requested = industries.Select(industry => industry.NormalizedName).ToHashSet(StringComparer.Ordinal);
+        return current.SetEquals(requested);
+    }
+
+    private void ReplaceStartupIndustries(
+        Project project,
+        IEnumerable<StartupIndustry> industries,
+        Guid userId,
+        DateTime now)
+    {
+        var requested = industries.ToDictionary(industry => industry.NormalizedName, StringComparer.Ordinal);
+        var current = project.ProjectTags
+            .Where(tag => tag.TagType == ProjectTagType.StartupField)
+            .ToArray();
+
+        foreach (var tag in current.Where(tag => !requested.ContainsKey(tag.NormalizedTagName)))
+        {
+            _context.ProjectTags.Remove(tag);
+            project.ProjectTags.Remove(tag);
+        }
+
+        var currentNames = current
+            .Select(tag => tag.NormalizedTagName)
+            .ToHashSet(StringComparer.Ordinal);
+        foreach (var industry in requested.Values.Where(industry => !currentNames.Contains(industry.NormalizedName)))
+        {
+            _context.ProjectTags.Add(new ProjectTag
+            {
+                ProjectId = project.Id,
+                Project = project,
+                TagName = industry.Name,
+                NormalizedTagName = industry.NormalizedName,
+                TagType = ProjectTagType.StartupField,
+                CreatedById = userId,
+                CreatedAt = now
+            });
+        }
+    }
+
+    internal static ProjectDirectionDto ToDto(ProjectDirection direction)
+    {
+        var project = direction.Team?.Project;
+        var currentTitle = project?.Name ?? string.Empty;
+        var currentSummary = project?.Description ?? string.Empty;
+        var isProjectProfileChangeProposal = HasApprovedProfileBaseline(direction)
+            && project != null
+            && (!string.Equals(currentTitle, direction.Title, StringComparison.Ordinal)
+                || !string.Equals(currentSummary, direction.Summary, StringComparison.Ordinal));
+        return new ProjectDirectionDto
+        {
+            Id = direction.Id, TeamId = direction.TeamId, Title = direction.Title, Summary = direction.Summary,
+            IsProjectProfileChangeProposal = isProjectProfileChangeProposal,
+            CurrentTitle = isProjectProfileChangeProposal ? currentTitle : null,
+            CurrentSummary = isProjectProfileChangeProposal ? currentSummary : null,
+            StartupIndustries = project?.ProjectTags
+                .Where(tag => tag.TagType == ProjectTagType.StartupField)
+                .Select(tag => tag.TagName)
+                .ToArray() ?? Array.Empty<string>(),
+            Status = direction.Status.ToString(), SubmittedAtUtc = direction.SubmittedAtUtc, ReviewedAtUtc = direction.ReviewedAtUtc,
+            RowVersion = direction.Version.ToString(),
+            Reviews = direction.Reviews.OrderByDescending(review => review.OccurredAtUtc).Select(review => new ProjectDirectionReviewDto
+            {
+                Id = review.Id, FromStatus = review.FromStatus.ToString(), ToStatus = review.ToStatus.ToString(),
+                Comment = review.Comment, ReviewedByUserId = review.ReviewedByUserId, OccurredAtUtc = review.OccurredAtUtc
+            }).ToArray()
+        };
+    }
+
+    private static bool HasApprovedProfileBaseline(ProjectDirection direction) =>
+        direction.Reviews.Any(review => review.ToStatus == ProjectDirectionStatus.Approved);
+
+    private static string ToDisplayField(string field) => field switch
+    {
+        "projectName" => "Project name",
+        "description" => "Description",
+        _ => field
+    };
+
+    private static bool IsRole(string role, string expected) => string.Equals(role, expected, StringComparison.OrdinalIgnoreCase);
+    private static Result<ProjectDirectionDto> Failure(string code, string message) => Result.Failure<ProjectDirectionDto>(new Error(code, message));
+}

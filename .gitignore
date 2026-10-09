@@ -70,6 +70,7 @@ pnpm-debug.log*
 !.env.example
 !.env.development.example
 !.env.production.example
+!.env.staging.example
 
 # ASP.NET appsettings secrets
 appsettings.Production.json

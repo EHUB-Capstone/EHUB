@@ -1,0 +1,267 @@
+using System;
+using System.Threading.Tasks;
+using ClosedXML.Excel;
+using EHub.Application.Common.Interfaces.Persistence;
+using EHub.Application.Features.Classes.ImportStudents;
+using EHub.Contracts.Classes;
+using EHub.Domain.Entities;
+using EHub.Shared.Constants;
+using EHub.Shared.Errors;
+using FluentAssertions;
+using Microsoft.AspNetCore.Http;
+using NSubstitute;
+using Xunit;
+
+namespace EHub.ApplicationTests.Features.Classes.ImportStudents;
+
+public class PreviewImportStudentsCommandHandlerTests
+{
+    private readonly IApplicationDbContext _context;
+    private readonly PreviewImportStudentsCommandHandler _handler;
+
+    public PreviewImportStudentsCommandHandlerTests()
+    {
+        _context = Substitute.For<IApplicationDbContext>();
+        _handler = new PreviewImportStudentsCommandHandler(_context);
+    }
+
+    [Fact]
+    public async Task HandleAsync_WhenUserIsStudent_ReturnsAccessDeniedError()
+    {
+        // Act
+        var result = await _handler.HandleAsync(Guid.NewGuid(), null!, Guid.NewGuid(), SystemRoles.Student);
+
+        // Assert
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be(ErrorCodes.ClassAccessDenied);
+    }
+
+    [Fact]
+    public void MajorComparison_WhenImportedProfileHasNoAccount_WaitsForRegistration()
+    {
+        var row = ValidRow(MajorCodes.BBA_MKT);
+        var importedProfile = new Student
+        {
+            Email = row.Email,
+            FullName = row.FullName,
+            MajorCode = MajorCodes.BIT_SE,
+            UserId = null
+        };
+
+        var result = PreviewImportStudentsCommandHandler.WithMajorComparison(row, importedProfile);
+
+        result.MajorComparisonStatus.Should().Be("AwaitingRegistration");
+        result.RegisteredMajorCode.Should().BeNull();
+        result.NeedsMajorSync.Should().BeFalse();
+    }
+
+    [Fact]
+    public void MajorComparison_WhenRegisteredMajorDiffers_FlagsSynchronization()
+    {
+        var row = ValidRow(MajorCodes.BBA_MKT);
+        var registeredProfile = new Student
+        {
+            UserId = Guid.NewGuid(),
+            Email = row.Email,
+            FullName = row.FullName,
+            MajorCode = MajorCodes.BIT_SE
+        };
+
+        var result = PreviewImportStudentsCommandHandler.WithMajorComparison(row, registeredProfile);
+
+        result.MajorComparisonStatus.Should().Be("Mismatched");
+        result.RegisteredMajorCode.Should().Be(MajorCodes.BIT_SE);
+        result.NeedsMajorSync.Should().BeTrue();
+        result.MajorWarningMessage.Should().Contain(MajorCodes.BBA_MKT);
+    }
+
+    private static ImportStudentRowPreviewDto ValidRow(string majorCode) => new()
+    {
+        RowNumber = 2,
+        StudentCode = "DE180225",
+        FullName = "Nguyen Van A",
+        Email = "student@fpt.edu.vn",
+        MajorCode = majorCode,
+        IsValid = true,
+        Status = "Valid"
+    };
+
+    [Fact]
+    public async Task HandleAsync_WhenUserIsLecturerAndFileIsNull_ReachesFileValidation()
+    {
+        var result = await _handler.HandleAsync(Guid.NewGuid(), null!, Guid.NewGuid(), SystemRoles.Lecturer);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("Classes.FileEmpty");
+    }
+
+    [Fact]
+    public async Task HandleAsync_WhenFileIsNull_ReturnsFileEmptyError()
+    {
+        // Act
+        var result = await _handler.HandleAsync(Guid.NewGuid(), null!, Guid.NewGuid(), SystemRoles.Admin);
+
+        // Assert
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("Classes.FileEmpty");
+    }
+
+    [Fact]
+    public async Task HandleAsync_WhenFileHasInvalidExtension_ReturnsInvalidFileTypeError()
+    {
+        // Arrange
+        var file = Substitute.For<IFormFile>();
+        file.Length.Returns(1024);
+        file.FileName.Returns("test.pdf");
+
+        // Act
+        var result = await _handler.HandleAsync(Guid.NewGuid(), file, Guid.NewGuid(), SystemRoles.Admin);
+
+        // Assert
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("Classes.InvalidFileType");
+    }
+
+    [Fact]
+    public void ParseWorkbook_WhenFileIsLegacyXls_ReadsStudentRows()
+    {
+        const string legacyXlsBase64 = "0M8R4KGxGuEAAAAAAAAAAAAAAAAAAAAAPgADAP7/CQAGAAAAAAAAAAAAAAABAAAAAgAAAAAAAAAAEAAAAQAAAAEAAAD+////AAAAAAAAAAD////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////9/////v////7///8EAAAABQAAAP7////+/////v////7////+/////v////7////+/////v////7////+/////v////7////+/////v////7////+/////v////7////+/////v////7////+/////v////7////+/////v////7////+/////v////7////+/////v////7////+/////v////7////+/////v////7////+/////v////7////+/////v////7////+/////v////7////+/////v////7////+/////v////7////+/////v////7////+/////v////7////+/////v////7////+/////v////7////+/////v////7////+/////v////7////+/////v////7////+/////v////7////+/////v////7////+/////v////7////+/////v////7////+/////v////7////+/////v////7////+/////v////7////+/////v////7////+/////v////7////+/////v////7////+/////v////7////+/////v////7////+/////v////7////+/////v////7////+/////v////7////+/////v////7///8CAAAAAwAAAAQAAAAFAAAABgAAAAcAAAAIAAAACQAAAAoAAAALAAAADAAAAA0AAAAOAAAADwAAABAAAAARAAAAEgAAABMAAAAUAAAAFQAAAP7////+/////v////7////+/////v////7////+/////v////7////+/////v////7////+/////v////7////+/////v////7////+/////v////7////+/////v////7////+/////v////7////+/////v////7////+/////v////7////+/////v////7////+/////v////7////+/////v////7////+/////v////7////+/////v////7////+/////v////7////+/////v////7////+/////v////7////+/////v////7////+/////v////7////+/////v////7////+/////v////7////+/////v////7////+/////v////7////+/////v////7////+/////v////7////+/////v////7////+/////v////7////+/////v////7////+/////v////7////+/////v////7////+/////v////7////+/////v////7////+/////v////7////+////UgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQABQH//////////wEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADAAAAgAUAAAAAAAABAFMAaAAzADMAdABKADUAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEgACAf////8CAAAA/////wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAFcAbwByAGsA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";
+        var bytes = Convert.FromBase64String(legacyXlsBase64);
+        using var stream = new MemoryStream(bytes);
+        IFormFile file = new FormFile(stream, 0, stream.Length, "file", "students.xls");
+
+        var result = PreviewImportStudentsCommandHandler.ParseWorkbook(file);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.Should().ContainSingle();
+        result.Value[0].RowNumber.Should().Be(2);
+        result.Value[0].StudentCode.Should().Be("SE765432");
+        result.Value[0].FullName.Should().Be("Nguyen Van X");
+        result.Value[0].Email.Should().Be("xls.student@fpt.edu.vn");
+        result.Value[0].MajorCode.Should().Be("BIT_SE");
+        result.Value[0].IsValid.Should().BeTrue();
+    }
+
+    [Fact]
+    public void ParseWorkbook_WhenXlsExtensionContainsSpreadsheetMl_ReadsLegacyRosterWithoutMajor()
+    {
+        const string spreadsheetMl = """
+            <?xml version="1.0"?>
+            <?mso-application progid="Excel.Sheet"?>
+            <Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+                      xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <Worksheet ss:Name="Sheet1">
+                <Table>
+                  <Row>
+                    <Cell><Data ss:Type="String">Class</Data></Cell>
+                    <Cell><Data ss:Type="String">RollNumber</Data></Cell>
+                    <Cell><Data ss:Type="String">Email</Data></Cell>
+                    <Cell><Data ss:Type="String">MemberCode</Data></Cell>
+                    <Cell><Data ss:Type="String">FullName</Data></Cell>
+                  </Row>
+                  <Row>
+                    <Cell><Data ss:Type="String">EXE101_8</Data></Cell>
+                    <Cell><Data ss:Type="String">DE180225</Data></Cell>
+                    <Cell><Data ss:Type="String">LinhTNDE180225@fpt.edu.vn</Data></Cell>
+                    <Cell><Data ss:Type="String">LinhTNDE180225</Data></Cell>
+                    <Cell><Data ss:Type="String">Thái Ngọc Linh</Data></Cell>
+                  </Row>
+                </Table>
+              </Worksheet>
+            </Workbook>
+            """;
+        var bytes = System.Text.Encoding.UTF8.GetBytes(spreadsheetMl);
+        using var stream = new MemoryStream(bytes);
+        IFormFile file = new FormFile(stream, 0, stream.Length, "file", "Import tạo lớp.xls");
+
+        var result = PreviewImportStudentsCommandHandler.ParseWorkbook(file);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.Should().ContainSingle();
+        result.Value[0].RowNumber.Should().Be(2);
+        result.Value[0].StudentCode.Should().Be("DE180225");
+        result.Value[0].FullName.Should().Be("Thái Ngọc Linh");
+        result.Value[0].Email.Should().Be("linhtnde180225@fpt.edu.vn");
+        result.Value[0].MajorCode.Should().Be(MajorCodes.Undeclared);
+        result.Value[0].IsValid.Should().BeTrue();
+    }
+
+    [Fact]
+    public void ParseWorkbook_WhenTeamColumnsArePresent_ReadsTeamAndProjectMetadata()
+    {
+        const string spreadsheetMl = """
+            <?xml version="1.0"?>
+            <Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+                      xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <Worksheet ss:Name="Sheet1">
+                <Table>
+                  <Row>
+                    <Cell><Data ss:Type="String">RollNumber</Data></Cell>
+                    <Cell><Data ss:Type="String">Fullname</Data></Cell>
+                    <Cell><Data ss:Type="String">Email</Data></Cell>
+                    <Cell><Data ss:Type="String">Group</Data></Cell>
+                    <Cell><Data ss:Type="String">Project</Data></Cell>
+                    <Cell><Data ss:Type="String">Zalo</Data></Cell>
+                    <Cell><Data ss:Type="String">Description</Data></Cell>
+                  </Row>
+                  <Row>
+                    <Cell><Data ss:Type="String">DE180225</Data></Cell>
+                    <Cell><Data ss:Type="String">Nguyen Van A</Data></Cell>
+                    <Cell><Data ss:Type="String">student@fpt.edu.vn</Data></Cell>
+                    <Cell><Data ss:Type="String">NextWave Tech</Data></Cell>
+                    <Cell><Data ss:Type="String">SnapPose</Data></Cell>
+                    <Cell><Data ss:Type="String">https://zalo.me/g/example</Data></Cell>
+                    <Cell><Data ss:Type="String">A sufficiently detailed project description.</Data></Cell>
+                  </Row>
+                </Table>
+              </Worksheet>
+            </Workbook>
+            """;
+        var bytes = System.Text.Encoding.UTF8.GetBytes(spreadsheetMl);
+        using var stream = new MemoryStream(bytes);
+        IFormFile file = new FormFile(stream, 0, stream.Length, "file", "team-assignment.xls");
+
+        var result = PreviewImportStudentsCommandHandler.ParseWorkbook(file);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.Should().ContainSingle();
+        result.Value[0].GroupName.Should().Be("NextWave Tech");
+        result.Value[0].ProjectName.Should().Be("SnapPose");
+        result.Value[0].ZaloGroupUrl.Should().Be("https://zalo.me/g/example");
+        result.Value[0].ProjectDescription.Should().Be("A sufficiently detailed project description.");
+        result.Value[0].IsValid.Should().BeTrue();
+    }
+
+    [Fact]
+    public void ParseWorkbook_WhenFormattedRowsHaveNoCellData_IgnoresThem()
+    {
+        using var workbook = new XLWorkbook();
+        var worksheet = workbook.Worksheets.Add("Students");
+        worksheet.Cell(1, 1).Value = "RollNumber";
+        worksheet.Cell(1, 2).Value = "FullName";
+        worksheet.Cell(1, 3).Value = "Email";
+        for (var row = 2; row <= 13; row++)
+        {
+            worksheet.Cell(row, 1).Value = $"DE{180000 + row}";
+            worksheet.Cell(row, 2).Value = $"Student {row}";
+            worksheet.Cell(row, 3).Value = $"student{row}@fpt.edu.vn";
+        }
+
+        // Simulate a template whose formatting extends far below its actual data.
+        worksheet.Range("A14:I998").Style.Fill.BackgroundColor = XLColor.White;
+
+        using var stream = new MemoryStream();
+        workbook.SaveAs(stream);
+        stream.Position = 0;
+        IFormFile file = new FormFile(stream, 0, stream.Length, "file", "formatted-empty-rows.xlsx");
+
+        var result = PreviewImportStudentsCommandHandler.ParseWorkbook(file);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.Should().HaveCount(12);
+        result.Value.Select(row => row.RowNumber).Should().Equal(Enumerable.Range(2, 12));
+        result.Value.Should().OnlyContain(row =>
+            row.MajorCode == MajorCodes.Undeclared && row.IsValid);
+    }
+
+}

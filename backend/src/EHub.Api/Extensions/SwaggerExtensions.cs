@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.OpenApi;
@@ -20,25 +21,24 @@ public static class SwaggerExtensions
                 Description = "Backend API for Entrepreneurship Hub system."
             });
 
+            // Security scheme: API Key (header) approach
+            // This is more reliable across Swashbuckle/Swagger UI versions than Http Bearer
             var securityScheme = new OpenApiSecurityScheme
             {
                 Name = "Authorization",
-                Description = "Enter JWT Bearer token. Example: Bearer {your token}",
+                Description = "Enter the full Authorization header value: Bearer {your JWT token}",
                 In = ParameterLocation.Header,
-                Type = SecuritySchemeType.Http,
-                Scheme = "bearer",
-                BearerFormat = "JWT"
+                Type = SecuritySchemeType.ApiKey,
+                Scheme = "Bearer"
             };
 
             options.AddSecurityDefinition("Bearer", securityScheme);
 
-            var securitySchemeReference = new OpenApiSecuritySchemeReference("Bearer");
-
-            options.AddSecurityRequirement(_ => new OpenApiSecurityRequirement
+            options.AddSecurityRequirement(document => new OpenApiSecurityRequirement
             {
                 {
-                    securitySchemeReference,
-                    new System.Collections.Generic.List<string>()
+                    new OpenApiSecuritySchemeReference("Bearer", document),
+                    new List<string>()
                 }
             });
         });

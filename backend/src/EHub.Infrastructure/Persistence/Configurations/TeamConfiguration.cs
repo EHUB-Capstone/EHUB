@@ -27,17 +27,15 @@ public class TeamConfiguration : IEntityTypeConfiguration<Team>
             .HasMaxLength(100)
             .IsRequired();
 
+        builder.Property(t => t.Description)
+            .HasColumnName("description")
+            .HasMaxLength(1_000);
+
         builder.Property(t => t.Status)
             .HasColumnName("status")
             .HasConversion<string>()
             .HasMaxLength(20)
             .IsRequired();
-
-        builder.Property(t => t.LeaderId)
-            .HasColumnName("leader_id");
-
-        builder.Property(t => t.MentorId)
-            .HasColumnName("mentor_id");
 
         builder.Property(t => t.CreatedById)
             .HasColumnName("created_by_id");
@@ -45,7 +43,21 @@ public class TeamConfiguration : IEntityTypeConfiguration<Team>
         builder.Property(t => t.ArchivedAt)
             .HasColumnName("archived_at");
 
+        builder.Property(t => t.Version)
+            .IsRowVersion()
+            .HasColumnName("xmin");
+
+        builder.Property(t => t.TeamLineageId)
+            .HasColumnName("team_lineage_id")
+            .IsRequired();
+
+        builder.Property(t => t.PreviousTeamId)
+            .HasColumnName("previous_team_id");
+
         // Indexes & Constraints
+        builder.HasIndex(t => t.TeamLineageId);
+        builder.HasIndex(t => t.PreviousTeamId);
+
         builder.HasIndex(t => new { t.ClassId, t.TeamCode })
             .IsUnique();
 
@@ -70,19 +82,15 @@ public class TeamConfiguration : IEntityTypeConfiguration<Team>
             .HasForeignKey(t => t.ClassId)
             .OnDelete(DeleteBehavior.Restrict);
 
+        builder.HasOne(t => t.PreviousTeam)
+            .WithMany()
+            .HasForeignKey(t => t.PreviousTeamId)
+            .OnDelete(DeleteBehavior.SetNull);
+
         builder.HasOne(t => t.Creator)
             .WithMany()
             .HasForeignKey(t => t.CreatedById)
             .OnDelete(DeleteBehavior.Restrict);
 
-        builder.HasOne<User>()
-            .WithMany()
-            .HasForeignKey(t => t.MentorId)
-            .OnDelete(DeleteBehavior.Restrict);
-
-        builder.HasOne<Student>()
-            .WithMany()
-            .HasForeignKey(t => t.LeaderId)
-            .OnDelete(DeleteBehavior.Restrict);
     }
 }

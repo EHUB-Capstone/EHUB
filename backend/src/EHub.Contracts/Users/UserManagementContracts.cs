@@ -1,0 +1,50 @@
+namespace EHub.Contracts.Users;
+
+public sealed class SaveManagedUserRequest
+{
+    public string Name { get; init; } = string.Empty;
+    public string Email { get; init; } = string.Empty;
+    public string? Password { get; init; }
+    public string Role { get; init; } = string.Empty;
+    // Required when Role is MENTOR: "Enterprise" or "Academic". It decides which team slot the mentor can fill.
+    public string? MentorType { get; init; }
+    // Optional, used only when a mentor is created: the first expertise tags and availability note (Bio is the background).
+    public IReadOnlyCollection<string>? Expertise { get; init; }
+    public string? AvailabilityNote { get; init; }
+    public string Status { get; init; } = "APPROVED";
+    public string? Phone { get; init; }
+    public string? Bio { get; init; }
+    public string? StudentId { get; init; }
+    public string? ProgramGroup { get; init; }
+    public string? Major { get; init; }
+}
+
+public sealed class ManagedUserResponse
+{
+    public Guid Id { get; init; }
+    public string Name { get; init; } = string.Empty;
+    public string Email { get; init; } = string.Empty;
+    public string? Avatar { get; init; }
+    public string Role { get; init; } = "STUDENT";
+    // Only for mentors: "Enterprise" (enterprise mentor) or "Academic" (lecturer mentor).
+    public string? MentorType { get; init; }
+    // Only for mentors: the id of the profile page (/admin/mentors/{id}).
+    public Guid? MentorProfileId { get; init; }
+    public string Status { get; init; } = "APPROVED";
+    public string? StudentId { get; init; }
+    public string? ProgramGroup { get; init; }
+    public string? Major { get; init; }
+    public string? Phone { get; init; }
+    public string? Semester { get; init; }
+    public string? Class { get; init; }
+    public string? GroupName { get; init; }
+    public DateTime CreatedAt { get; init; }
+}
+
+public sealed class ManagedUserListResponse
+{
+    public IReadOnlyCollection<ManagedUserResponse> Users { get; init; } = Array.Empty<ManagedUserResponse>();
+    public PaginationResponse Pagination { get; init; } = new();
+}
+
+public sealed class PaginationResponse { public int Total { get; init; } public int Page { get; init; } public int Limit { get; init; } public int Pages { get; init; } }

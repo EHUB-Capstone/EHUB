@@ -1,0 +1,966 @@
+using System.Text.Json;
+using System.Xml;
+using System.Xml.Linq;
+using ExcelDataReader;
+using EHub.Application.Common.Interfaces.Persistence;
+using EHub.Application.Features.Teams.Continuations;
+using EHub.Application.Features.Classes.Common;
+using EHub.Contracts.Classes;
+using EHub.Domain.Entities;
+using EHub.Domain.Enums;
+using EHub.Shared.Constants;
+using EHub.Shared.Errors;
+using EHub.Shared.Results;
+using Microsoft.AspNetCore.Http;
+using Microsoft.EntityFrameworkCore;
+
+namespace EHub.Application.Features.Classes.ImportStudents;
+
+public sealed class PreviewImportStudentsCommandHandler : IPreviewImportStudentsCommandHandler
+{
+    private const long MaximumFileSize = 10 * 1024 * 1024;
+    private const int MaximumDataRows = 5_000;
+    private const int MaximumColumns = 256;
+    private const string SpreadsheetMlNamespace = "urn:schemas-microsoft-com:office:spreadsheet";
+    private static readonly TimeSpan SessionLifetime = TimeSpan.FromMinutes(30);
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private readonly IApplicationDbContext _context;
+    private readonly ITeamContinuationService _teamContinuation;
+
+    static PreviewImportStudentsCommandHandler()
+    {
+        System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
+    }
+
+    public PreviewImportStudentsCommandHandler(
+        IApplicationDbContext context,
+        ITeamContinuationService? teamContinuation = null)
+    {
+        _context = context;
+        _teamContinuation = teamContinuation ?? new TeamContinuationService(context);
+    }
+
+    public async Task<Result<ImportStudentsPreviewResponse>> HandleAsync(
+        Guid classId,
+        IFormFile file,
+        Guid currentUserId,
+        string currentUserRole,
+        CancellationToken cancellationToken = default)
+    {
+        var isAdmin = string.Equals(currentUserRole, SystemRoles.Admin, StringComparison.OrdinalIgnoreCase);
+        var isLecturer = string.Equals(currentUserRole, SystemRoles.Lecturer, StringComparison.OrdinalIgnoreCase);
+        if (!isAdmin && !isLecturer)
+        {
+            return Failure(ErrorCodes.ClassAccessDenied, "You do not have permission to import students.");
+        }
+
+        if (file == null || file.Length == 0)
+        {
+            return Failure("Classes.FileEmpty", "The uploaded Excel file is empty.");
+        }
+
+        if (file.Length > MaximumFileSize)
+        {
+            return Failure("Classes.FileTooLarge", "Excel file size exceeds the 10 MB limit.");
+        }
+
+        var fileValidation = ExcelWorkbookSecurity.Validate(file);
+        if (fileValidation.IsFailure)
+        {
+            return Result.Failure<ImportStudentsPreviewResponse>(fileValidation.Error);
+        }
+
+        var targetClass = await _context.Classes
+            .AsNoTracking()
+            .FirstOrDefaultAsync(@class => @class.Id == classId, cancellationToken);
+
+        if (targetClass == null)
+        {
+            return Failure(ErrorCodes.ClassNotFound, "The requested class was not found.");
+        }
+
+        var mutationError = ClassStateRules.GetMutationError(targetClass.Status);
+        if (mutationError != null)
+        {
+            return Failure(mutationError.Code, mutationError.Message);
+        }
+
+        if (isLecturer && targetClass.PrimaryLecturerId != currentUserId)
+        {
+            return Failure(ErrorCodes.ClassAccessDenied, "You can only import students to your assigned class.");
+        }
+
+        var parseResult = ParseWorkbook(file, targetClass.ClassCode);
+        if (parseResult.IsFailure)
+        {
+            return Result.Failure<ImportStudentsPreviewResponse>(parseResult.Error);
+        }
+
+        var rows = parseResult.Value;
+        var isTeamAssignment = rows.Any(row => !string.IsNullOrWhiteSpace(row.GroupName));
+        await ApplyDatabaseValidationAsync(rows, targetClass, isTeamAssignment, cancellationToken);
+
+        var validRows = rows.Where(row => row.IsValid).ToArray();
+        var teams = isTeamAssignment
+            ? rows.Where(row => !string.IsNullOrWhiteSpace(row.GroupName))
+                .GroupBy(row => row.GroupName!, StringComparer.OrdinalIgnoreCase)
+                .OrderBy(group => group.Key, StringComparer.OrdinalIgnoreCase)
+                .Select(group => new ImportTeamPreviewDto
+                {
+                    TeamName = group.Key,
+                    ProjectName = FirstNonEmpty(group.Select(row => row.ProjectName)) ?? string.Empty,
+                    ZaloGroupUrl = FirstNonEmpty(group.Select(row => row.ZaloGroupUrl)),
+                    Description = FirstNonEmpty(group.Select(row => row.ProjectDescription)),
+                    MemberCount = group.Count(),
+                    ValidMemberCount = group.Count(row => row.IsValid),
+                    ErrorMemberCount = group.Count(row => !row.IsValid),
+                    IsValid = group.All(row => row.IsValid)
+                })
+                .ToArray()
+            : [];
+        var sessionId = Guid.Empty;
+
+        // Students that already have a profile and are not placed in a file-defined team can be
+        // continued from a previous-semester team once they are enrolled.
+        var continuation = await _teamContinuation.PreviewAsync(
+            targetClass,
+            validRows
+                .Where(row => string.IsNullOrWhiteSpace(row.GroupName))
+                .Select(row => new PendingContinuationStudent(row.StudentCode, row.Email, row.MajorCode))
+                .ToArray(),
+            cancellationToken);
+
+        if (validRows.Length > 0)
+        {
+            sessionId = Guid.NewGuid();
+            _context.ClassImportSessions.Add(new ClassImportSession
+            {
+                Id = sessionId,
+                ClassId = classId,
+                UserId = currentUserId,
+                ValidRowsJson = JsonSerializer.Serialize(validRows, JsonOptions),
+                Status = ClassImportSessionStatus.Available,
+                CreatedAtUtc = DateTime.UtcNow,
+                ExpiresAtUtc = DateTime.UtcNow.Add(SessionLifetime)
+            });
+
+            await _context.SaveChangesAsync(cancellationToken);
+        }
+
+        return Result.Success(new ImportStudentsPreviewResponse
+        {
+            SessionId = sessionId,
+            ImportMode = isTeamAssignment ? "TeamAssignment" : "StudentRoster",
+            TotalRows = rows.Count,
+            ValidRowsCount = validRows.Length,
+            ErrorRowsCount = rows.Count - validRows.Length,
+            MajorMismatchCount = validRows.Count(row => row.NeedsMajorSync),
+            TeamCount = teams.Count(team => team.IsValid),
+            Teams = teams,
+            Continuation = continuation.Items.Count == 0 ? null : continuation,
+            Rows = rows
+        });
+    }
+
+    internal static Result<List<ImportStudentRowPreviewDto>> ParseWorkbook(IFormFile file, string? expectedClassCode = null)
+    {
+        try
+        {
+            using var source = file.OpenReadStream();
+            using var content = new MemoryStream();
+            source.CopyTo(content);
+            content.Position = 0;
+
+            if (LooksLikeXml(content))
+            {
+                return ParseSpreadsheetMl(content, expectedClassCode);
+            }
+
+            content.Position = 0;
+            using var reader = ExcelReaderFactory.CreateReader(content);
+            return ParseWorksheet(reader, expectedClassCode);
+        }
+        catch
+        {
+            return Result.Failure<List<ImportStudentRowPreviewDto>>(
+                new Error("Classes.InvalidExcelFormat", "Failed to parse the Excel file. Verify that it is a valid .xlsx or .xls workbook."));
+        }
+    }
+
+    private static bool LooksLikeXml(Stream stream)
+    {
+        var prefix = new byte[Math.Min(512, checked((int)stream.Length))];
+        var read = stream.Read(prefix, 0, prefix.Length);
+        stream.Position = 0;
+
+        if (read >= 2 && prefix[0] == 0xFF && prefix[1] == 0xFE)
+        {
+            return LooksLikeUtf16Xml(prefix, read, littleEndian: true);
+        }
+
+        if (read >= 2 && prefix[0] == 0xFE && prefix[1] == 0xFF)
+        {
+            return LooksLikeUtf16Xml(prefix, read, littleEndian: false);
+        }
+
+        var index = read >= 3 && prefix[0] == 0xEF && prefix[1] == 0xBB && prefix[2] == 0xBF ? 3 : 0;
+
+        while (index < read && char.IsWhiteSpace((char)prefix[index]))
+        {
+            index++;
+        }
+
+        return index < read && prefix[index] == (byte)'<';
+    }
+
+    private static bool LooksLikeUtf16Xml(byte[] prefix, int length, bool littleEndian)
+    {
+        for (var index = 2; index + 1 < length; index += 2)
+        {
+            var character = littleEndian
+                ? (char)(prefix[index] | (prefix[index + 1] << 8))
+                : (char)((prefix[index] << 8) | prefix[index + 1]);
+            if (char.IsWhiteSpace(character))
+            {
+                continue;
+            }
+
+            return character == '<';
+        }
+
+        return false;
+    }
+
+    private static Result<List<ImportStudentRowPreviewDto>> ParseSpreadsheetMl(Stream stream, string? expectedClassCode = null)
+    {
+        stream.Position = 0;
+        var settings = new XmlReaderSettings
+        {
+            DtdProcessing = DtdProcessing.Prohibit,
+            XmlResolver = null,
+            MaxCharactersInDocument = MaximumFileSize * 4,
+            IgnoreComments = true
+        };
+
+        using var xmlReader = XmlReader.Create(stream, settings);
+        var document = XDocument.Load(xmlReader, LoadOptions.None);
+        XNamespace spreadsheet = SpreadsheetMlNamespace;
+        if (document.Root?.Name != spreadsheet + "Workbook")
+        {
+            return Result.Failure<List<ImportStudentRowPreviewDto>>(
+                new Error("Classes.InvalidExcelFormat", "The XML file is not an Excel 2003 SpreadsheetML workbook."));
+        }
+
+        var rowElements = document.Root
+            .Elements(spreadsheet + "Worksheet")
+            .FirstOrDefault()?
+            .Element(spreadsheet + "Table")?
+            .Elements(spreadsheet + "Row")
+            .Take(MaximumDataRows + 2)
+            .ToArray() ?? [];
+
+        if (rowElements.Length == 0)
+        {
+            return Result.Failure<List<ImportStudentRowPreviewDto>>(
+                new Error("Classes.WorksheetEmpty", "The Excel worksheet contains no data."));
+        }
+
+        var rows = new List<SpreadsheetRow>(rowElements.Length);
+        var nextRowNumber = 1;
+        foreach (var rowElement in rowElements)
+        {
+            var explicitRowNumber = ParsePositiveIndex(rowElement.Attribute(spreadsheet + "Index")?.Value);
+            var rowNumber = explicitRowNumber ?? nextRowNumber;
+            nextRowNumber = rowNumber + 1;
+            var cells = ReadSpreadsheetMlCells(rowElement, spreadsheet);
+            if (rows.Count > 0 && IsEmptyRow(cells))
+            {
+                continue;
+            }
+
+            if (rows.Count > MaximumDataRows)
+            {
+                return Result.Failure<List<ImportStudentRowPreviewDto>>(
+                    new Error("Classes.TooManyRows", $"An import can contain at most {MaximumDataRows} data rows."));
+            }
+
+            rows.Add(new SpreadsheetRow(rowNumber, cells));
+        }
+
+        return ParseRows(rows, expectedClassCode);
+    }
+
+    private static IReadOnlyList<string> ReadSpreadsheetMlCells(XElement row, XNamespace spreadsheet)
+    {
+        var values = new List<string>();
+        var columnIndex = 0;
+
+        foreach (var cell in row.Elements(spreadsheet + "Cell"))
+        {
+            var explicitColumn = ParsePositiveIndex(cell.Attribute(spreadsheet + "Index")?.Value);
+            if (explicitColumn.HasValue)
+            {
+                columnIndex = explicitColumn.Value - 1;
+            }
+
+            if (columnIndex >= MaximumColumns)
+            {
+                break;
+            }
+
+            while (values.Count <= columnIndex)
+            {
+                values.Add(string.Empty);
+            }
+
+            values[columnIndex] = cell.Element(spreadsheet + "Data")?.Value.Trim() ?? string.Empty;
+            columnIndex++;
+        }
+
+        return values;
+    }
+
+    private static int? ParsePositiveIndex(string? value) =>
+        int.TryParse(value, out var parsed) && parsed > 0 ? parsed : null;
+
+    private static Result<List<ImportStudentRowPreviewDto>> ParseWorksheet(IExcelDataReader reader, string? expectedClassCode = null)
+    {
+        if (!reader.Read() || reader.FieldCount == 0)
+        {
+            return Result.Failure<List<ImportStudentRowPreviewDto>>(
+                new Error("Classes.WorksheetEmpty", "The Excel worksheet contains no data."));
+        }
+
+        if (reader.FieldCount > MaximumColumns)
+        {
+            return Result.Failure<List<ImportStudentRowPreviewDto>>(
+                new Error("Classes.TooManyColumns", $"An import can contain at most {MaximumColumns} columns."));
+        }
+
+        var rows = new List<SpreadsheetRow>
+        {
+            new(1, Enumerable.Range(0, reader.FieldCount)
+                .Select(column => GetCellText(reader.GetValue(column)))
+                .ToArray())
+        };
+        var rowNumber = 1;
+
+        while (reader.Read())
+        {
+            rowNumber++;
+            var cells = Enumerable.Range(0, reader.FieldCount)
+                .Select(column => GetCellText(reader.GetValue(column)))
+                .ToArray();
+            if (IsEmptyRow(cells))
+            {
+                continue;
+            }
+
+            if (rows.Count > MaximumDataRows)
+            {
+                return Result.Failure<List<ImportStudentRowPreviewDto>>(
+                    new Error("Classes.TooManyRows", $"An import can contain at most {MaximumDataRows} data rows."));
+            }
+
+            rows.Add(new SpreadsheetRow(rowNumber, cells));
+        }
+
+        return ParseRows(rows, expectedClassCode);
+    }
+
+    private static Result<List<ImportStudentRowPreviewDto>> ParseRows(
+        IReadOnlyList<SpreadsheetRow> sourceRows,
+        string? expectedClassCode = null)
+    {
+        if (sourceRows.Count == 0)
+        {
+            return Result.Failure<List<ImportStudentRowPreviewDto>>(
+                new Error("Classes.WorksheetEmpty", "The Excel worksheet contains no data."));
+        }
+
+        var columns = FindColumns(sourceRows[0].Cells);
+        if (columns.StudentCode < 0 || columns.FullName < 0 || columns.Email < 0)
+        {
+            return Result.Failure<List<ImportStudentRowPreviewDto>>(
+                new Error("Classes.MissingRequiredColumns", "Excel header must contain StudentCode (or RollNumber), FullName, and Email columns. MajorCode is optional for legacy files."));
+        }
+
+        var rows = new List<ImportStudentRowPreviewDto>();
+        var seenCodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var seenEmails = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var sourceRow in sourceRows.Skip(1))
+        {
+            var rawCode = GetCellText(sourceRow.Cells, columns.StudentCode);
+            var rawName = GetCellText(sourceRow.Cells, columns.FullName);
+            var rawEmail = GetCellText(sourceRow.Cells, columns.Email);
+            var rawMajor = columns.MajorCode >= 0
+                ? GetCellText(sourceRow.Cells, columns.MajorCode)
+                : string.Empty;
+            var rawClassCode = columns.ClassCode >= 0
+                ? GetCellText(sourceRow.Cells, columns.ClassCode)
+                : string.Empty;
+            var rawGroupName = columns.GroupName >= 0
+                ? GetCellText(sourceRow.Cells, columns.GroupName)
+                : null;
+            var rawProjectName = columns.ProjectName >= 0
+                ? GetCellText(sourceRow.Cells, columns.ProjectName)
+                : null;
+            var rawZaloGroupUrl = columns.ZaloGroupUrl >= 0
+                ? GetCellText(sourceRow.Cells, columns.ZaloGroupUrl)
+                : null;
+            var rawProjectDescription = columns.ProjectDescription >= 0
+                ? GetCellText(sourceRow.Cells, columns.ProjectDescription)
+                : null;
+
+            var hasSourceData = !string.IsNullOrWhiteSpace(rawCode) ||
+                !string.IsNullOrWhiteSpace(rawName) ||
+                !string.IsNullOrWhiteSpace(rawEmail) ||
+                !string.IsNullOrWhiteSpace(rawMajor) ||
+                !string.IsNullOrWhiteSpace(rawClassCode) ||
+                !string.IsNullOrWhiteSpace(rawGroupName) ||
+                !string.IsNullOrWhiteSpace(rawProjectName) ||
+                !string.IsNullOrWhiteSpace(rawZaloGroupUrl) ||
+                !string.IsNullOrWhiteSpace(rawProjectDescription);
+
+            if (!hasSourceData)
+            {
+                continue;
+            }
+
+            if (string.IsNullOrWhiteSpace(rawMajor))
+            {
+                rawMajor = MajorCodes.Undeclared;
+            }
+
+            var validationError = StudentEnrollmentRules.ValidateAndNormalize(
+                rawCode,
+                rawName,
+                rawEmail,
+                rawMajor,
+                out var input,
+                allowUndeclaredMajor: true);
+
+            if (validationError == null &&
+                !string.IsNullOrWhiteSpace(rawClassCode) &&
+                !string.IsNullOrWhiteSpace(expectedClassCode) &&
+                !string.Equals(rawClassCode.Trim(), expectedClassCode.Trim(), StringComparison.OrdinalIgnoreCase))
+            {
+                validationError = $"Class code '{rawClassCode}' in file does not match target class '{expectedClassCode}'.";
+            }
+
+            if (validationError == null && !seenCodes.Add(input.StudentCode))
+            {
+                validationError = $"Duplicate Student Code '{input.StudentCode}' found within this Excel file.";
+            }
+            else if (validationError == null && !seenEmails.Add(input.Email))
+            {
+                validationError = $"Duplicate Email '{input.Email}' found within this Excel file.";
+            }
+
+            if (validationError == null && columns.GroupName >= 0)
+            {
+                if (!string.IsNullOrWhiteSpace(rawGroupName) && rawGroupName.Length is < 3 or > 100)
+                {
+                    validationError = "Group name must be between 3 and 100 characters.";
+                }
+            }
+
+            rows.Add(new ImportStudentRowPreviewDto
+            {
+                RowNumber = sourceRow.RowNumber,
+                StudentCode = input.StudentCode,
+                FullName = input.FullName,
+                Email = input.Email,
+                GroupName = columns.GroupName >= 0 ? rawGroupName : null,
+                ProjectName = columns.ProjectName >= 0 ? rawProjectName : null,
+                ZaloGroupUrl = columns.ZaloGroupUrl >= 0 ? rawZaloGroupUrl : null,
+                ProjectDescription = columns.ProjectDescription >= 0 ? rawProjectDescription : null,
+                MajorCode = input.MajorCode,
+                IsValid = validationError == null,
+                Status = validationError == null ? "Valid" : "Error",
+                ErrorMessage = validationError
+            });
+        }
+
+        if (rows.Any(row => !string.IsNullOrWhiteSpace(row.GroupName)))
+        {
+            for (var index = 0; index < rows.Count; index++)
+            {
+                if (rows[index].IsValid && string.IsNullOrWhiteSpace(rows[index].GroupName))
+                {
+                    rows[index] = Invalid(rows[index], "Group is required for every student in a team assignment workbook.");
+                }
+            }
+        }
+
+        return Result.Success(rows);
+    }
+
+    private static bool IsEmptyRow(IEnumerable<string> cells) =>
+        cells.All(string.IsNullOrWhiteSpace);
+
+    private async Task ApplyDatabaseValidationAsync(
+        List<ImportStudentRowPreviewDto> rows,
+        Class targetClass,
+        bool isTeamAssignment,
+        CancellationToken cancellationToken)
+    {
+        var validRows = rows.Where(row => row.IsValid).ToArray();
+        if (validRows.Length == 0)
+        {
+            return;
+        }
+
+        var codes = validRows.Select(row => row.StudentCode).ToArray();
+        var emails = validRows.Select(row => row.Email).ToArray();
+        var profiles = await _context.Students
+            .AsNoTracking()
+            .Include(student => student.User)
+            .Where(student =>
+                (student.NormalizedRollNumber != null && codes.Contains(student.NormalizedRollNumber)) ||
+                (student.RollNumber != null && codes.Contains(student.RollNumber)) ||
+                (student.Email != null && emails.Contains(student.Email.ToLower())))
+            .ToListAsync(cancellationToken);
+
+        var profilesByCode = profiles
+            .Where(student => !string.IsNullOrWhiteSpace(student.NormalizedRollNumber ?? student.RollNumber))
+            .GroupBy(student => student.NormalizedRollNumber ?? student.RollNumber!, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.OrdinalIgnoreCase);
+        var profilesByEmail = profiles
+            .Where(student => !string.IsNullOrWhiteSpace(student.Email))
+            .GroupBy(student => student.Email!, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.OrdinalIgnoreCase);
+        var profileIds = profiles.Select(student => student.Id).ToArray();
+
+        var enrollments = profileIds.Length == 0
+            ? []
+            : await _context.ClassStudents
+                .AsNoTracking()
+                .Include(enrollment => enrollment.Class)
+                .Include(enrollment => enrollment.Student)
+                .Where(enrollment =>
+                    profileIds.Contains(enrollment.StudentId) &&
+                    (enrollment.ClassId == targetClass.Id ||
+                     (enrollment.CountsTowardCourseSemesterLimit &&
+                      enrollment.SemesterId == targetClass.SemesterId &&
+                      enrollment.CourseId == targetClass.CourseId)))
+                .ToListAsync(cancellationToken);
+
+        for (var index = 0; index < rows.Count; index++)
+        {
+            var row = rows[index];
+            if (!row.IsValid)
+            {
+                continue;
+            }
+
+            profilesByCode.TryGetValue(row.StudentCode, out var codeProfiles);
+            var profileByCode = codeProfiles?.Length == 1 ? codeProfiles[0] : null;
+            profilesByEmail.TryGetValue(row.Email, out var emailProfiles);
+            var profileByEmail = emailProfiles?.Length == 1 ? emailProfiles[0] : null;
+            string? error = null;
+
+            if (StudentImportIdentityRules.HasConflict(
+                    codeProfiles?.Length ?? 0,
+                    emailProfiles?.Length ?? 0,
+                    profileByCode,
+                    profileByEmail,
+                    row.StudentCode,
+                    row.Email))
+            {
+                error = "Student code and email do not identify one unique student profile.";
+            }
+            else
+            {
+                var profile = profileByCode ?? profileByEmail;
+                row = WithMajorComparison(row, profile);
+                rows[index] = row;
+                var currentEnrollment = profile == null
+                    ? null
+                    : enrollments.FirstOrDefault(enrollment =>
+                        enrollment.StudentId == profile.Id && enrollment.ClassId == targetClass.Id);
+                if (isTeamAssignment)
+                {
+                    if (profile != null)
+                    {
+                        row = WithStudentId(row, profile.Id);
+                        rows[index] = row;
+                    }
+
+                    var conflict = profile == null
+                        ? null
+                        : enrollments.FirstOrDefault(enrollment =>
+                            enrollment.StudentId == profile.Id &&
+                            enrollment.ClassId != targetClass.Id &&
+                            enrollment.CountsTowardCourseSemesterLimit);
+                    if (conflict != null)
+                    {
+                        error = $"Student '{row.StudentCode}' is already enrolled in class '{conflict.Class.ClassCode}' for the same course and semester.";
+                    }
+                    else if (currentEnrollment?.EnrollmentStatus == EnrollmentStatus.Completed)
+                    {
+                        error = $"Student '{row.StudentCode}' has already completed this class and cannot be assigned to a new team.";
+                    }
+                    else if (currentEnrollment?.EnrollmentStatus == EnrollmentStatus.Dropped)
+                    {
+                        rows[index] = WithStatus(row, "ReEnroll");
+                    }
+                }
+                else if (currentEnrollment?.EnrollmentStatus == EnrollmentStatus.Completed)
+                {
+                    error = $"Student '{row.StudentCode}' has already completed this class.";
+                }
+                else
+                {
+                    var conflict = profile == null
+                        ? null
+                        : enrollments.FirstOrDefault(enrollment =>
+                            enrollment.StudentId == profile.Id &&
+                            enrollment.ClassId != targetClass.Id &&
+                            enrollment.CountsTowardCourseSemesterLimit);
+                    if (conflict != null)
+                    {
+                        error = $"Student '{row.StudentCode}' is already enrolled in class '{conflict.Class.ClassCode}' for the same course and semester.";
+                    }
+                    else if (currentEnrollment?.EnrollmentStatus == EnrollmentStatus.Dropped)
+                    {
+                        rows[index] = WithStatus(row, "ReEnroll");
+                    }
+                    else if (currentEnrollment?.EnrollmentStatus == EnrollmentStatus.Active)
+                    {
+                        rows[index] = WithStatus(row, "UpdateProfile");
+                    }
+                }
+            }
+
+            if (error != null)
+            {
+                rows[index] = Invalid(row, error);
+            }
+        }
+
+        if (isTeamAssignment)
+        {
+            await ApplyTeamValidationAsync(rows, targetClass.Id, cancellationToken);
+        }
+    }
+
+    private async Task ApplyTeamValidationAsync(
+        List<ImportStudentRowPreviewDto> rows,
+        Guid classId,
+        CancellationToken cancellationToken)
+    {
+        var validStudentIds = rows
+            .Where(row => row.IsValid && row.StudentId.HasValue)
+            .Select(row => row.StudentId!.Value)
+            .ToArray();
+
+        if (validStudentIds.Length > 0)
+        {
+            var assignedStudentIds = await _context.TeamMembers
+                .AsNoTracking()
+                .Where(member =>
+                    member.ClassId == classId &&
+                    validStudentIds.Contains(member.StudentId) &&
+                    member.CountsTowardActiveTeam)
+                .Select(member => member.StudentId)
+                .ToListAsync(cancellationToken);
+            var proposedStudentIds = await _context.TeamProposalMembers
+                .AsNoTracking()
+                .Where(member =>
+                    member.ClassId == classId &&
+                    validStudentIds.Contains(member.StudentId) &&
+                    member.CountsTowardOpenProposal)
+                .Select(member => member.StudentId)
+                .ToListAsync(cancellationToken);
+            var assigned = assignedStudentIds.ToHashSet();
+            var proposed = proposedStudentIds.ToHashSet();
+
+            for (var index = 0; index < rows.Count; index++)
+            {
+                var row = rows[index];
+                if (!row.IsValid || !row.StudentId.HasValue)
+                {
+                    continue;
+                }
+
+                if (assigned.Contains(row.StudentId.Value))
+                {
+                    rows[index] = Invalid(row, $"Student '{row.StudentCode}' already belongs to an active team in this class.");
+                }
+                else if (proposed.Contains(row.StudentId.Value))
+                {
+                    rows[index] = Invalid(row, $"Student '{row.StudentCode}' belongs to an open team proposal.");
+                }
+            }
+        }
+
+        var existingTeamNames = (await _context.Teams
+                .IgnoreQueryFilters()
+                .AsNoTracking()
+                .Where(team => team.ClassId == classId)
+                .Select(team => team.TeamName)
+                .ToListAsync(cancellationToken))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var existingProposalNames = (await _context.TeamProposals
+                .AsNoTracking()
+                .Where(proposal =>
+                    proposal.ClassId == classId &&
+                    proposal.Status != TeamProposalStatus.Rejected &&
+                    proposal.Status != TeamProposalStatus.Cancelled)
+                .Select(proposal => proposal.TeamName)
+                .ToListAsync(cancellationToken))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var groups = rows
+            .Where(row => !string.IsNullOrWhiteSpace(row.GroupName))
+            .GroupBy(row => row.GroupName!, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        foreach (var group in groups)
+        {
+            var groupRows = group.ToArray();
+            string? groupError = null;
+            var projectNames = DistinctNonEmpty(groupRows.Select(row => row.ProjectName));
+            var zaloUrls = DistinctNonEmpty(groupRows.Select(row => row.ZaloGroupUrl));
+            var descriptions = DistinctNonEmpty(groupRows.Select(row => row.ProjectDescription));
+
+            if (groupRows.Any(row => !row.IsValid))
+            {
+                groupError = $"Team '{group.Key}' contains one or more invalid members.";
+            }
+            else if (groupRows.Length is < 4 or > 6)
+            {
+                groupError = $"Team '{group.Key}' must contain 4 to 6 students.";
+            }
+            else if (existingTeamNames.Contains(group.Key))
+            {
+                groupError = $"A team named '{group.Key}' already exists in this class.";
+            }
+            else if (existingProposalNames.Contains(group.Key))
+            {
+                groupError = $"An open team proposal named '{group.Key}' already exists in this class.";
+            }
+            else if (projectNames.Length == 0)
+            {
+                groupError = $"Team '{group.Key}' must declare a Project name.";
+            }
+            else if (projectNames.Length > 1)
+            {
+                groupError = $"Team '{group.Key}' contains conflicting Project names.";
+            }
+            else if (projectNames[0].Length is < 3 or > 200)
+            {
+                groupError = $"Project name for team '{group.Key}' must be between 3 and 200 characters.";
+            }
+            else if (zaloUrls.Length > 1)
+            {
+                groupError = $"Team '{group.Key}' contains conflicting Zalo links.";
+            }
+            else if (zaloUrls.Length == 1 && !IsValidZaloUrl(zaloUrls[0]))
+            {
+                groupError = $"Zalo link for team '{group.Key}' must be a valid HTTPS URL on zalo.me.";
+            }
+            else if (descriptions.Length > 1)
+            {
+                groupError = $"Team '{group.Key}' contains conflicting project descriptions.";
+            }
+            else if (descriptions.Length == 1 && descriptions[0].Length is < 20 or > 2_000)
+            {
+                groupError = $"Project description for team '{group.Key}' must be between 20 and 2000 characters when provided.";
+            }
+
+            if (groupError == null)
+            {
+                continue;
+            }
+
+            for (var index = 0; index < rows.Count; index++)
+            {
+                if (rows[index].IsValid &&
+                    string.Equals(rows[index].GroupName, group.Key, StringComparison.OrdinalIgnoreCase))
+                {
+                    rows[index] = Invalid(rows[index], groupError);
+                }
+            }
+        }
+    }
+
+    private static ImportStudentRowPreviewDto WithStudentId(ImportStudentRowPreviewDto row, Guid studentId) => new()
+    {
+        RowNumber = row.RowNumber,
+        StudentId = studentId,
+        StudentCode = row.StudentCode,
+        FullName = row.FullName,
+        Email = row.Email,
+        GroupName = row.GroupName,
+        ProjectName = row.ProjectName,
+        ZaloGroupUrl = row.ZaloGroupUrl,
+        ProjectDescription = row.ProjectDescription,
+        MajorCode = row.MajorCode,
+        RegisteredMajorCode = row.RegisteredMajorCode,
+        MajorComparisonStatus = row.MajorComparisonStatus,
+        MajorWarningMessage = row.MajorWarningMessage,
+        NeedsMajorSync = row.NeedsMajorSync,
+        IsValid = row.IsValid,
+        Status = row.Status,
+        ErrorMessage = row.ErrorMessage
+    };
+
+    private static string[] DistinctNonEmpty(IEnumerable<string?> values) => values
+        .Where(value => !string.IsNullOrWhiteSpace(value))
+        .Select(value => value!.Trim())
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .ToArray();
+
+    private static string? FirstNonEmpty(IEnumerable<string?> values) =>
+        values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))?.Trim();
+
+    private static bool IsValidZaloUrl(string value) =>
+        value.Length <= 500 &&
+        Uri.TryCreate(value, UriKind.Absolute, out var uri) &&
+        uri.Scheme == Uri.UriSchemeHttps &&
+        (uri.Host.Equals("zalo.me", StringComparison.OrdinalIgnoreCase) ||
+         uri.Host.EndsWith(".zalo.me", StringComparison.OrdinalIgnoreCase));
+
+    internal static ImportStudentRowPreviewDto WithMajorComparison(
+        ImportStudentRowPreviewDto row,
+        Student? profile)
+    {
+        var fileMajor = MajorCodes.IsValid(row.MajorCode)
+            ? row.MajorCode.Trim().ToUpperInvariant()
+            : null;
+        var hasRegisteredAccount = profile?.UserId.HasValue == true;
+        var registeredMajor = hasRegisteredAccount && MajorCodes.IsValid(profile?.MajorCode)
+            ? profile!.MajorCode!.Trim().ToUpperInvariant()
+            : null;
+        var status = "Matched";
+        string? warning = null;
+        var needsSync = false;
+
+        if (!hasRegisteredAccount)
+        {
+            status = fileMajor == null ? "AwaitingRegistrationWithoutMajor" : "AwaitingRegistration";
+        }
+        else if (fileMajor == null)
+        {
+            status = "UsesRegisteredMajor";
+        }
+        else if (registeredMajor == null)
+        {
+            status = "MissingRegisteredMajor";
+            warning = $"The registered profile has no valid major. Synchronize it to '{fileMajor}' from the import file.";
+            needsSync = true;
+        }
+        else if (!string.Equals(fileMajor, registeredMajor, StringComparison.OrdinalIgnoreCase))
+        {
+            status = "Mismatched";
+            warning = $"Registered as '{registeredMajor}', but the import file says '{fileMajor}'. Review and synchronize before applying.";
+            needsSync = true;
+        }
+
+        return new ImportStudentRowPreviewDto
+        {
+            RowNumber = row.RowNumber,
+            StudentId = row.StudentId,
+            StudentCode = row.StudentCode,
+            FullName = row.FullName,
+            Email = row.Email,
+            GroupName = row.GroupName,
+            ProjectName = row.ProjectName,
+            ZaloGroupUrl = row.ZaloGroupUrl,
+            ProjectDescription = row.ProjectDescription,
+            MajorCode = row.MajorCode,
+            RegisteredMajorCode = registeredMajor,
+            MajorComparisonStatus = status,
+            MajorWarningMessage = warning,
+            NeedsMajorSync = needsSync,
+            IsValid = row.IsValid,
+            Status = row.Status,
+            ErrorMessage = row.ErrorMessage
+        };
+    }
+
+    private static ImportStudentRowPreviewDto WithStatus(ImportStudentRowPreviewDto row, string status) => new()
+    {
+        RowNumber = row.RowNumber,
+        StudentId = row.StudentId,
+        StudentCode = row.StudentCode,
+        FullName = row.FullName,
+        Email = row.Email,
+        GroupName = row.GroupName,
+        ProjectName = row.ProjectName,
+        ZaloGroupUrl = row.ZaloGroupUrl,
+        ProjectDescription = row.ProjectDescription,
+        MajorCode = row.MajorCode,
+        RegisteredMajorCode = row.RegisteredMajorCode,
+        MajorComparisonStatus = row.MajorComparisonStatus,
+        MajorWarningMessage = row.MajorWarningMessage,
+        NeedsMajorSync = row.NeedsMajorSync,
+        IsValid = row.IsValid,
+        Status = status,
+        ErrorMessage = row.ErrorMessage
+    };
+
+    private static ImportStudentRowPreviewDto Invalid(ImportStudentRowPreviewDto row, string error) => new()
+    {
+        RowNumber = row.RowNumber,
+        StudentId = row.StudentId,
+        StudentCode = row.StudentCode,
+        FullName = row.FullName,
+        Email = row.Email,
+        GroupName = row.GroupName,
+        ProjectName = row.ProjectName,
+        ZaloGroupUrl = row.ZaloGroupUrl,
+        ProjectDescription = row.ProjectDescription,
+        MajorCode = row.MajorCode,
+        RegisteredMajorCode = row.RegisteredMajorCode,
+        MajorComparisonStatus = row.MajorComparisonStatus,
+        MajorWarningMessage = row.MajorWarningMessage,
+        NeedsMajorSync = row.NeedsMajorSync,
+        IsValid = false,
+        Status = "Error",
+        ErrorMessage = error
+    };
+
+    private static string GetCellText(object? value) =>
+        Convert.ToString(value, System.Globalization.CultureInfo.InvariantCulture)?.Trim() ?? string.Empty;
+
+    private static string GetCellText(IReadOnlyList<string> values, int columnIndex) =>
+        columnIndex >= 0 && columnIndex < values.Count ? values[columnIndex].Trim() : string.Empty;
+
+    private static (int StudentCode, int FullName, int Email, int MajorCode, int ClassCode, int GroupName, int ProjectName, int ZaloGroupUrl, int ProjectDescription) FindColumns(
+        IReadOnlyList<string> header)
+    {
+        var studentCode = -1;
+        var fullName = -1;
+        var email = -1;
+        var majorCode = -1;
+        var classCode = -1;
+        var groupName = -1;
+        var projectName = -1;
+        var zaloGroupUrl = -1;
+        var projectDescription = -1;
+
+        for (var column = 0; column < header.Count; column++)
+        {
+            var value = header[column].Replace(" ", string.Empty).ToLowerInvariant();
+            if (value is "studentcode" or "rollnumber" or "mssv" or "masv" or "masinhvien") studentCode = column;
+            else if (value is "fullname" or "name" or "hoten" or "hovaten") fullName = column;
+            else if (value == "email") email = column;
+            else if (value is "majorcode" or "major" or "chuyennganh" or "nganh") majorCode = column;
+            else if (value is "classcode" or "class" or "malop" or "lop" or "classname") classCode = column;
+            else if (value is "group" or "groupname" or "team" or "teamname" or "nhom" or "tennhom") groupName = column;
+            else if (value is "project" or "projectname" or "duan" or "tenduan") projectName = column;
+            else if (value is "zalo" or "zalourl" or "zalogroup" or "zalogroupurl") zaloGroupUrl = column;
+            else if (value is "description" or "projectdescription" or "mota") projectDescription = column;
+        }
+
+        return (studentCode, fullName, email, majorCode, classCode, groupName, projectName, zaloGroupUrl, projectDescription);
+    }
+
+    private sealed record SpreadsheetRow(int RowNumber, IReadOnlyList<string> Cells);
+
+    private static Result<ImportStudentsPreviewResponse> Failure(string code, string message) =>
+        Result.Failure<ImportStudentsPreviewResponse>(new Error(code, message));
+}

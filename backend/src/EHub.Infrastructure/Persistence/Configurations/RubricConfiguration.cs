@@ -36,6 +36,12 @@ public class RubricConfiguration : IEntityTypeConfiguration<Rubric>
             .HasColumnType("decimal(6,2)")
             .IsRequired();
 
+        builder.Property(r => r.CourseWeight)
+            .HasColumnName("course_weight")
+            .HasColumnType("decimal(6,2)")
+            .HasDefaultValue(0m)
+            .IsRequired();
+
         builder.Property(r => r.Status)
             .HasColumnName("status")
             .HasConversion<string>()

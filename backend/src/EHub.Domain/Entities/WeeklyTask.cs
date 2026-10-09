@@ -47,4 +47,6 @@ public class WeeklyTask : AuditableEntity
 
     public Guid? UpdatedById { get; set; }
     public virtual User? Updater { get; set; }
+
+    public virtual ICollection<WeeklyTaskTeamProgress> TeamProgress { get; set; } = new List<WeeklyTaskTeamProgress>();
 }

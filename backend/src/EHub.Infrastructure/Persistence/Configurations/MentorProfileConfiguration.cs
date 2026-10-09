@@ -21,9 +21,29 @@ public class MentorProfileConfiguration : IEntityTypeConfiguration<MentorProfile
             .HasColumnName("expertise")
             .HasColumnType("text[]");
 
+        builder.Property(mp => mp.StartupDomains)
+            .HasColumnName("startup_domains")
+            .HasColumnType("text[]");
+
+        builder.Property(mp => mp.TechnologySkills)
+            .HasColumnName("technology_skills")
+            .HasColumnType("text[]");
+
+        builder.Property(mp => mp.MentorTags)
+            .HasColumnName("mentor_tags")
+            .HasColumnType("text[]");
+
         builder.Property(mp => mp.Bio)
             .HasColumnName("bio")
             .HasMaxLength(2000);
+
+        builder.Property(mp => mp.AvailabilityNote)
+            .HasColumnName("availability_note")
+            .HasMaxLength(500);
+
+        builder.Property(mp => mp.Version)
+            .IsRowVersion()
+            .HasColumnName("xmin");
 
         builder.Property(mp => mp.Organization)
             .HasColumnName("organization")
@@ -33,14 +53,24 @@ public class MentorProfileConfiguration : IEntityTypeConfiguration<MentorProfile
             .HasColumnName("linkedin_url")
             .HasMaxLength(500);
 
+        builder.Property(mp => mp.Type)
+            .HasColumnName("mentor_type")
+            .HasConversion<string>()
+            .HasMaxLength(20)
+            .IsRequired();
+
+        builder.Property(mp => mp.DateOfBirth).HasColumnName("date_of_birth");
+        builder.Property(mp => mp.ContractType).HasColumnName("contract_type").HasMaxLength(100);
+        builder.Property(mp => mp.EducationLevel).HasColumnName("education_level").HasMaxLength(200);
+        builder.Property(mp => mp.CurrentAddress).HasColumnName("current_address").HasMaxLength(500);
+        builder.Property(mp => mp.FptEmail).HasColumnName("fpt_email").HasMaxLength(320);
+        builder.Property(mp => mp.Department).HasColumnName("department").HasMaxLength(200);
+        builder.Property(mp => mp.JobTitle).HasColumnName("job_title").HasMaxLength(200);
+
         builder.Property(mp => mp.Status)
             .HasColumnName("status")
             .HasConversion<string>()
             .HasMaxLength(30)
-            .IsRequired();
-
-        builder.Property(mp => mp.MaxTeams)
-            .HasColumnName("max_teams")
             .IsRequired();
 
         // Unique index: One User has one MentorProfile
@@ -48,10 +78,8 @@ public class MentorProfileConfiguration : IEntityTypeConfiguration<MentorProfile
             .IsUnique();
 
         builder.HasIndex(mp => mp.Status);
+        builder.HasIndex(mp => mp.Type);
         builder.HasIndex(mp => mp.Organization);
-
-        // Check constraint
-        builder.ToTable(t => t.HasCheckConstraint("CK_MentorProfile_MaxTeams", "max_teams >= 0"));
 
         // Audit & Soft Delete properties configuration
         builder.Property(mp => mp.CreatedAt).HasColumnName("created_at").IsRequired();

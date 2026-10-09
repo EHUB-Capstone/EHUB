@@ -1,5 +1,873 @@
-import React from 'react';
+// @ts-nocheck
+// Full-screen checkpoint detail view
+import { useEffect, useState, useCallback, useMemo } from 'react';
+import { createPortal } from 'react-dom';
+import { AnimatePresence, motion } from 'framer-motion';
+import {
+  X, CheckCircle2, Award, FileText, Download, Trash2, Loader2,
+  MessageSquare, ArrowLeft, Users, BarChart2, Layers, TrendingUp, Upload, Save,
+  ClipboardList, Eye, ClipboardCheck, PanelRightOpen, PanelRightClose,
+  CalendarClock, Link2, ExternalLink, Pencil,
+} from 'lucide-react';
+import toast from 'react-hot-toast';
+import { checkpointApi } from '../../../api/checkpointApi';
+import { useAuth } from '../../../hooks/useAuth';
+import Button from '../../ui/Button';
+import ConfirmDialog from '../../ui/ConfirmDialog';
+import FileUploadZone from './FileUploadZone';
+import { warmUpPdfPreview } from '../../../utils/pdfPreviewRuntime';
+import CheckpointLinkForm from './CheckpointLinkForm';
+import CheckpointFilePreviewModal from './CheckpointFilePreviewModal';
+import FeedbackThread from './FeedbackThread';
+import EvaluationPanel from '../EvaluationPanel';
+import { subscribeProjectDirectionRealtime } from '../../../api/projectDirectionRealtime';
+import {
+  CHECKPOINT_UPLOAD_MAX_FILE_SIZE_MB,
+  isCheckpointFilePreviewable,
+} from '../../../utils/checkpointUpload';
 
-export const CheckpointPanel: React.FC = () => {
-  return <div>CheckpointPanel</div>;
+const ICONS = { Users, BarChart2, Layers, TrendingUp };
+
+const formatBytes = (bytes) => {
+  if (!bytes) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${(bytes / k ** i).toFixed(1)} ${sizes[i]}`;
 };
+
+const FILE_TYPE_STYLES = {
+  pdf: { bg: 'bg-red-50', text: 'text-red-600', label: 'PDF' },
+  docx: { bg: 'bg-blue-50', text: 'text-blue-600', label: 'DOCX' },
+  pptx: { bg: 'bg-orange-50', text: 'text-orange-600', label: 'PPTX' },
+};
+
+const displayLinkHost = (url) => {
+  try { return new URL(url).hostname; } catch { return url; }
+};
+
+function SectionTitle({ icon: Icon, children, count, subtitle }) {
+  return (
+    <div className="space-y-0.5">
+      <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+        <span className="w-8 h-8 rounded-lg bg-primary-50 flex items-center justify-center border border-primary-100">
+          <Icon className="w-4 h-4 text-primary" />
+        </span>
+        {children}
+        {count != null && (
+          <span className="ml-auto text-xs font-bold text-primary bg-primary-50 px-2.5 py-0.5 rounded-full border border-primary-100">
+            {count}
+          </span>
+        )}
+      </h3>
+      {subtitle && <p className="text-xs text-slate-500 pl-10">{subtitle}</p>}
+    </div>
+  );
+}
+
+export default function CheckpointPanel({
+  checkpoint,
+  checkpointCount,
+  teamId,
+  workspaceClassName,
+  workspaceTeamName,
+  isEditable,
+  isReadOnly = false,
+  proposalId,
+  pitchDeckId,
+  onClose,
+  onRequirementsSaved,
+}) {
+  const { user } = useAuth();
+  const [files, setFiles] = useState([]);
+  const [links, setLinks] = useState([]);
+  const [feedbacks, setFeedbacks] = useState([]);
+  const [requirementContents, setRequirementContents] = useState({});
+  const [savingRequirements, setSavingRequirements] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [downloadingId, setDownloadingId] = useState(null);
+  const [previewFile, setPreviewFile] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+  const [editingLink, setEditingLink] = useState(null);
+  const [deleteLinkTarget, setDeleteLinkTarget] = useState(null);
+  const [deletingLink, setDeletingLink] = useState(false);
+  const isStudent = user?.role?.toUpperCase() === 'STUDENT';
+  const isLecturer = user?.role?.toUpperCase() === 'LECTURER';
+  const [showEvaluation, setShowEvaluation] = useState(false);
+  const canEditRequirements = isStudent && isEditable && checkpoint?.canUpload;
+  const Icon = ICONS[checkpoint?.icon] || FileText;
+
+  const buildContentsMap = useCallback((sub) => {
+    const map = {};
+    checkpoint.requirements.forEach((label, index) => {
+      const saved = sub?.requirementContents?.find(
+        (r) => Number(r.index) === index
+      );
+      map[index] = saved?.content || '';
+    });
+    return map;
+  }, [checkpoint.requirements]);
+
+  const fetchData = useCallback(async () => {
+    if (!teamId || !checkpoint) return;
+    setLoading(true);
+    try {
+      const res = await checkpointApi.getCheckpointData(String(teamId));
+      if (res.success) {
+        const sub = res.data.submissions.find(
+          (s) => Number(s.checkpointNumber) === Number(checkpoint.number)
+        );
+        setFiles(sub?.files || []);
+        setLinks(sub?.links || []);
+        setRequirementContents(buildContentsMap(sub));
+        setFeedbacks(
+          res.data.feedbacks.filter(
+            (f) => Number(f.checkpointNumber) === Number(checkpoint.number)
+          )
+        );
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  }, [teamId, checkpoint, buildContentsMap]);
+
+  const addFeedback = useCallback((feedback) => {
+    if (!feedback?._id) return;
+    setFeedbacks((current) => current.some((item) => item._id === feedback._id)
+      ? current
+      : [...current, feedback]);
+  }, []);
+
+  const removeFeedback = useCallback((feedbackId) => {
+    setFeedbacks((current) => current.filter((item) => item._id !== feedbackId));
+  }, []);
+
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { fetchData(); }, [fetchData]);
+
+  useEffect(() => subscribeProjectDirectionRealtime((event) => {
+    if (event.eventType === 'CheckpointFeedbackPosted'
+      && String(event.teamId) === String(teamId)
+      && Number(event.checkpointNumber) === Number(checkpoint.number)) {
+      addFeedback(event.feedback);
+    }
+    if (event.eventType === 'CheckpointFeedbackDeleted'
+      && String(event.teamId) === String(teamId)
+      && Number(event.checkpointNumber) === Number(checkpoint.number)) {
+      removeFeedback(event.feedbackId);
+    }
+    if (event.eventType === 'CheckpointRequirementsUpdated'
+      && String(event.teamId) === String(teamId)
+      && Number(event.checkpointNumber) === Number(checkpoint.number)) {
+      void fetchData();
+      onRequirementsSaved?.();
+    }
+  }, (reconnected) => {
+    if (reconnected) void fetchData();
+  }), [addFeedback, checkpoint.number, fetchData, onRequirementsSaved, removeFeedback, teamId]);
+
+  useEffect(() => {
+    document.body.style.overflow = 'hidden';
+    const onKey = (e) => e.key === 'Escape' && !previewFile && onClose();
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.body.style.overflow = '';
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [onClose, previewFile]);
+
+  const reqFilledCount = useMemo(
+    () =>
+      checkpoint.requirements.filter((_, i) =>
+        String(requirementContents[i] || '').trim()
+      ).length,
+    [checkpoint.requirements, requirementContents]
+  );
+
+  const handleDownload = async (file) => {
+    setDownloadingId(file._id);
+    try {
+      await checkpointApi.downloadFile(
+        teamId,
+        checkpoint.number,
+        file._id,
+        file.originalName,
+        { canDirectDownload: file.canDirectDownload }
+      );
+    } catch (e) {
+      toast.error(e?.message || 'Failed to download file.');
+    } finally {
+      setDownloadingId(null);
+    }
+  };
+
+  const handleDelete = async (fileId) => {
+    setDeleting(true);
+    try {
+      const res = await checkpointApi.deleteFile(teamId, checkpoint.number, fileId);
+      if (res.success) {
+        setFiles((current) => current.filter((file) => file._id !== fileId));
+        setDeleteTarget(null);
+        toast.success('File deleted.');
+        onRequirementsSaved?.();
+      }
+    } catch (e) {
+      toast.error(e?.response?.data?.error || 'Failed to delete file.');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const handleRequirementChange = (index, value) => {
+    setRequirementContents((prev) => ({ ...prev, [index]: value }));
+  };
+
+  const handleDeleteLink = async (linkId) => {
+    setDeletingLink(true);
+    try {
+      const res = await checkpointApi.deleteLink(teamId, checkpoint.number, linkId);
+      if (res.success) {
+        setLinks((current) => current.filter((link) => link._id !== linkId));
+        setDeleteLinkTarget(null);
+        if (editingLink?._id === linkId) setEditingLink(null);
+        toast.success('Submitted link deleted.');
+        onRequirementsSaved?.();
+      }
+    } catch (error) {
+      toast.error(error?.response?.data?.message || 'Unable to delete the submitted link.');
+    } finally {
+      setDeletingLink(false);
+    }
+  };
+
+  const handleSaveAllRequirements = async () => {
+    setSavingRequirements(true);
+    try {
+      const contents = checkpoint.requirements.map((_, index) => ({
+        index,
+        content: requirementContents[index] || '',
+      }));
+      const res = await checkpointApi.updateRequirements(
+        teamId,
+        checkpoint.number,
+        contents
+      );
+      if (res.success) {
+        setRequirementContents(buildContentsMap(res.data));
+        toast.success('Requirements saved successfully.');
+        onRequirementsSaved?.();
+      }
+    } catch (e) {
+      toast.error(e?.response?.data?.error || 'Failed to save requirements.');
+    } finally {
+      setSavingRequirements(false);
+    }
+  };
+
+  if (!checkpoint) return null;
+
+  const content = (
+    <div className="fixed inset-0 z-[100] flex flex-col">
+      <div
+        className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm animate-checkpoint-overlay"
+        onClick={onClose}
+        aria-hidden
+      />
+
+      <div className="relative flex flex-col h-full w-full bg-slate-50 animate-checkpoint-panel shadow-2xl">
+        {/* Header */}
+        <header className="shrink-0 relative overflow-hidden border-b border-orange-100/80 bg-gradient-to-r from-orange-50 via-amber-50/70 to-white text-slate-900">
+          <div className="absolute -left-16 -top-24 h-64 w-64 rounded-full bg-orange-200/30 blur-3xl pointer-events-none" />
+          <div className="absolute -top-20 right-0 w-72 h-72 rounded-full bg-amber-100/50 blur-3xl pointer-events-none" />
+
+          <div className="relative px-5 sm:px-8 lg:px-10 py-5 lg:py-6 max-w-7xl mx-auto w-full">
+            <div className="flex items-start gap-3 sm:gap-4">
+              <button
+                type="button"
+                onClick={onClose}
+                className="mt-0.5 flex items-center gap-2 px-3 py-2 rounded-xl bg-white/80 hover:bg-orange-50 border border-orange-200/80 text-slate-700 text-sm font-semibold shadow-sm transition-all shrink-0"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                <span className="hidden sm:inline">Back</span>
+              </button>
+
+              <div className="flex items-start gap-3 sm:gap-4 flex-1 min-w-0">
+                <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-br from-orange-500 to-primary-dark text-white border border-orange-400/50 shadow-md shadow-orange-200/60 flex items-center justify-center shrink-0">
+                  <Icon className="w-6 h-6 sm:w-7 sm:h-7" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[10px] sm:text-xs font-bold uppercase tracking-widest text-primary">
+                    Checkpoint {checkpoint.number} of {checkpointCount}
+                  </p>
+                  <h1 className="text-lg sm:text-2xl font-bold mt-0.5 leading-tight">
+                    {checkpoint.title}
+                  </h1>
+                  {(workspaceClassName || workspaceTeamName) && (
+                    <div className="mt-2 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs font-semibold text-slate-900">
+                      {workspaceClassName && (
+                        <span className="inline-flex min-w-0 items-center gap-1.5">
+                          <span>Class</span>
+                          <span className="max-w-48 truncate" title={workspaceClassName}>{workspaceClassName}</span>
+                        </span>
+                      )}
+                      {workspaceClassName && workspaceTeamName && (
+                        <span className="text-slate-900" aria-hidden="true">•</span>
+                      )}
+                      {workspaceTeamName && (
+                        <span className="inline-flex min-w-0 items-center gap-1.5">
+                          <span>Team</span>
+                          <span className="max-w-64 truncate" title={workspaceTeamName}>{workspaceTeamName}</span>
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  <p className="text-xs sm:text-sm text-slate-600 mt-1.5 leading-relaxed line-clamp-2 hidden sm:block">
+                    {checkpoint.shortDescription}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={onClose}
+                className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-white/80 hover:bg-orange-50 border border-orange-200/80 text-slate-600 hover:text-primary shadow-sm flex items-center justify-center transition-all shrink-0"
+                aria-label="Close"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="flex flex-wrap gap-2 mt-4">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/80 border border-orange-200/70 text-slate-700 text-xs font-semibold shadow-sm">
+                <FileText className="w-3.5 h-3.5" />
+                {loading ? '…' : `${files.length} file${files.length !== 1 ? 's' : ''}`}
+              </span>
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/80 border border-orange-200/70 text-slate-700 text-xs font-semibold shadow-sm">
+                <MessageSquare className="w-3.5 h-3.5" />
+                {loading ? '…' : `${feedbacks.length} feedback`}
+              </span>
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/80 border border-orange-200/70 text-slate-700 text-xs font-semibold shadow-sm">
+                <ClipboardList className="w-3.5 h-3.5" />
+                {loading
+                  ? '…'
+                  : `${reqFilledCount}/${checkpoint.requirements.length} requirements`}
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowEvaluation((current) => !current)}
+                aria-expanded={showEvaluation}
+                aria-controls="checkpoint-evaluation-panel"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-orange-200 bg-orange-100/70 px-3 py-1.5 text-xs font-bold text-primary transition hover:bg-orange-100"
+              >
+                {showEvaluation ? <PanelRightClose className="h-3.5 w-3.5" /> : <PanelRightOpen className="h-3.5 w-3.5" />}
+                {showEvaluation ? 'Hide evaluation' : isLecturer ? 'Open grading' : 'Show evaluation'}
+              </button>
+            </div>
+          </div>
+        </header>
+
+        {/* Body */}
+        <div className="relative flex-1 flex flex-col lg:flex-row min-h-0 overflow-hidden">
+          {/* Requirements sidebar */}
+          <aside className={`lg:w-[380px] xl:w-[420px] shrink-0 flex flex-col bg-white border-b lg:border-b-0 lg:border-r border-slate-200/80 min-h-0 ${showEvaluation ? 'lg:hidden' : ''}`}>
+            <div className="px-5 py-4 border-b border-orange-100/70 bg-orange-50/40">
+              <SectionTitle
+                icon={canEditRequirements ? ClipboardList : Eye}
+                subtitle={
+                  canEditRequirements
+                    ? 'Complete all fields, then save once at the bottom.'
+                    : isStudent && isEditable
+                      ? checkpoint.availabilityReason || 'This checkpoint is not open for submission.'
+                      : 'Submitted answers from the team (read-only).'
+                }
+              >
+                Requirements
+              </SectionTitle>
+            </div>
+
+            <div className="flex-1 overflow-y-auto scrollbar-thin px-5 py-4 space-y-3">
+              {checkpoint.requirements.map((req, i) => {
+                const filled = Boolean(String(requirementContents[i] || '').trim());
+                return (
+                  <div
+                    key={i}
+                    className={`rounded-xl border bg-white transition-colors ${filled
+                        ? 'border-primary-200 shadow-sm'
+                        : 'border-slate-200/80'
+                      }`}
+                  >
+                    <div
+                      className={`flex items-center gap-2 px-3 py-2 border-b text-xs font-bold uppercase tracking-wide ${filled
+                          ? 'bg-primary-50/80 border-primary-100 text-primary-800'
+                          : 'bg-slate-50 border-slate-100 text-slate-500'
+                        }`}
+                    >
+                      <span
+                        className={`w-5 h-5 rounded-md flex items-center justify-center text-[10px] ${filled
+                            ? 'bg-primary text-white'
+                            : 'bg-slate-200 text-slate-600'
+                          }`}
+                      >
+                        {i + 1}
+                      </span>
+                      <span className="truncate">{req}</span>
+                      {filled && !canEditRequirements && (
+                        <CheckCircle2 className="w-3.5 h-3.5 text-primary ml-auto shrink-0" />
+                      )}
+                    </div>
+
+                    <div className="p-3">
+                      {canEditRequirements ? (
+                        <textarea
+                          value={requirementContents[i] ?? ''}
+                          onChange={(e) => handleRequirementChange(i, e.target.value)}
+                          placeholder={`Describe your ${req.toLowerCase()}…`}
+                          rows={3}
+                          className="w-full text-sm text-slate-700 rounded-lg border border-slate-200 bg-slate-50/50 px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary focus:bg-white resize-y min-h-[80px] transition-colors"
+                        />
+                      ) : loading ? (
+                        <div className="h-16 flex items-center justify-center">
+                          <Loader2 className="w-5 h-5 text-primary animate-spin" />
+                        </div>
+                      ) : filled ? (
+                        <p className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">
+                          {requirementContents[i]}
+                        </p>
+                      ) : (
+                        <p className="text-sm text-slate-400 italic">No content submitted yet.</p>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+
+              {checkpoint.rubrics?.length > 0 && (
+                <section className="space-y-3">
+                  <SectionTitle icon={Award}>Evaluation rubric</SectionTitle>
+                  <ul className="space-y-2">
+                    {checkpoint.rubrics.map((r, i) => (
+                      <li
+                        key={i}
+                        className="p-3 rounded-xl bg-amber-50/80 border border-amber-100 text-sm text-slate-700"
+                      >
+                        <div className="flex items-start gap-3">
+                          <Award className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+                          <div className="min-w-0">
+                            <div className="font-semibold text-slate-900 flex items-center gap-2 flex-wrap">
+                              <span>{r.label}</span>
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white text-amber-700 border border-amber-200">{r.weight}%</span>
+                            </div>
+                            {r.description && <p className="text-xs text-slate-600 mt-1">{r.description}</p>}
+                            {Array.isArray(r.levels) && r.levels.length > 0 && (
+                              <div className="mt-2 flex flex-wrap gap-1.5 text-[10px] text-slate-500">
+                                {r.levels.map((level) => (
+                                  <span key={level.key} className="px-2 py-1 rounded-full bg-white border border-slate-200">
+                                    {level.label} {level.range}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )}
+            </div>
+
+            {canEditRequirements && (
+              <div className="shrink-0 px-5 py-4 border-t border-slate-200 bg-white">
+                <Button
+                  type="button"
+                  variant="gradient"
+                  size="lg"
+                  className="w-full"
+                  isLoading={savingRequirements}
+                  disabled={loading}
+                  icon={Save}
+                  onClick={handleSaveAllRequirements}
+                >
+                  Save all requirements
+                </Button>
+                <p className="text-[10px] text-slate-400 text-center mt-2">
+                  Saves all requirement fields for this checkpoint
+                </p>
+              </div>
+            )}
+          </aside>
+
+          {/* Main column */}
+          <main className="flex-1 overflow-y-auto scrollbar-thin bg-orange-50/20">
+            <div className="p-5 lg:p-8 max-w-4xl mx-auto w-full space-y-6">
+              {isEditable && isStudent && checkpoint.canUpload && (
+                <section className="rounded-2xl border border-slate-200/60 bg-white p-5 shadow-sm space-y-4">
+                  <SectionTitle
+                    icon={Upload}
+                    subtitle={`PDF, DOCX, or PPTX · Max ${CHECKPOINT_UPLOAD_MAX_FILE_SIZE_MB} MB per file`}
+                  >
+                    Upload documents
+                  </SectionTitle>
+                  <FileUploadZone
+                    teamId={teamId}
+                    checkpointNumber={checkpoint.number}
+                    onUploaded={fetchData}
+                    variant="large"
+                  />
+                </section>
+              )}
+
+              {isEditable && isStudent && checkpoint.canUpload && (
+                <section className="rounded-2xl border border-slate-200/60 bg-white p-5 shadow-sm space-y-4">
+                  <SectionTitle
+                    icon={Link2}
+                    subtitle="Name the resource and submit a public HTTPS link"
+                  >
+                    Submit a link
+                  </SectionTitle>
+                  {links.length < 10 ? (
+                    <CheckpointLinkForm
+                      teamId={String(teamId)}
+                      checkpointNumber={checkpoint.number}
+                      onSaved={fetchData}
+                    />
+                  ) : (
+                    <p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-800">
+                      This checkpoint already has the maximum of 10 active links. Delete one of your links before adding another.
+                    </p>
+                  )}
+                </section>
+              )}
+
+              {isEditable && isStudent && !checkpoint.canUpload && (
+                <section className={`rounded-2xl border p-5 shadow-sm ${checkpoint.scheduleStatus === 'Closed' ? 'border-red-200 bg-red-50' : 'border-blue-200 bg-blue-50'}`}>
+                  <div className="flex items-start gap-3">
+                    <CalendarClock className={`mt-0.5 h-5 w-5 shrink-0 ${checkpoint.scheduleStatus === 'Closed' ? 'text-red-600' : 'text-blue-600'}`} />
+                    <div>
+                      <p className="font-bold text-slate-900">
+                        {checkpoint.scheduleStatus === 'Upcoming' ? 'Checkpoint not open yet' : checkpoint.scheduleStatus === 'Closed' ? 'Checkpoint closed' : 'Checkpoint not scheduled'}
+                      </p>
+                      <p className="mt-1 text-sm text-slate-600">
+                        {checkpoint.scheduleStatus === 'Upcoming'
+                          ? `Opens ${new Date(checkpoint.startDateUtc).toLocaleString()}.`
+                          : checkpoint.scheduleStatus === 'Closed'
+                            ? `The submission deadline was ${new Date(checkpoint.endDateUtc).toLocaleString()}.`
+                            : 'Your lecturer has not configured an upload window for this checkpoint.'}
+                      </p>
+                    </div>
+                  </div>
+                </section>
+              )}
+
+              <section className="rounded-2xl border border-slate-200/60 bg-white p-5 shadow-sm space-y-4">
+                <SectionTitle
+                  icon={FileText}
+                  count={loading ? '…' : files.length}
+                  subtitle="Files attached to this checkpoint"
+                >
+                  Submitted files
+                </SectionTitle>
+
+                {loading ? (
+                  <div className="flex flex-col items-center justify-center py-14 rounded-xl border border-dashed border-slate-200 bg-slate-50/50">
+                    <Loader2 className="w-7 h-7 text-primary animate-spin" />
+                    <p className="text-sm text-slate-500 mt-3">Loading submissions…</p>
+                  </div>
+                ) : files.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-14 rounded-xl border border-dashed border-slate-200 bg-slate-50/50 text-center px-6">
+                    <div className="w-12 h-12 rounded-xl bg-primary-50 flex items-center justify-center mb-3 border border-primary-100">
+                      <FileText className="w-6 h-6 text-primary/70" />
+                    </div>
+                    <p className="text-sm font-semibold text-slate-700">No documents yet</p>
+                    <p className="text-xs text-slate-400 mt-1 max-w-sm">
+                      {isStudent && isEditable && checkpoint.canUpload
+                        ? 'Upload milestone files using the form above.'
+                        : isStudent && isEditable
+                          ? checkpoint.availabilityReason || 'This checkpoint is not open for submission.'
+                          : 'This team has not uploaded files for this checkpoint.'}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {files.map((file) => {
+                      const isOwner = file.uploadedBy?._id === user?._id;
+                      const canDelete = isStudent && checkpoint.canUpload && isOwner;
+                      const style = FILE_TYPE_STYLES[file.fileType] || {
+                        bg: 'bg-slate-50',
+                        text: 'text-slate-600',
+                        label: file.fileType?.toUpperCase() || 'FILE',
+                      };
+
+                      return (
+                        <div
+                          key={file._id}
+                          className="flex flex-col p-4 rounded-xl border border-slate-200/80 bg-slate-50/30 hover:border-primary-200 hover:bg-white transition-all"
+                        >
+                          <div className="flex flex-1 items-start gap-3">
+                            <div
+                              className={`w-11 h-11 rounded-lg ${style.bg} flex items-center justify-center shrink-0`}
+                            >
+                              <span className={`text-[10px] font-extrabold ${style.text}`}>
+                                {style.label}
+                              </span>
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p
+                                className="text-sm font-bold text-slate-800 line-clamp-2"
+                                title={file.originalName}
+                              >
+                                {file.originalName}
+                              </p>
+                              <p className="text-xs text-slate-500 mt-1">
+                                {formatBytes(file.fileSize)} · {file.uploadedBy?.name || 'Unknown'}
+                              </p>
+                              {file.versionNumber > 0 && (
+                                <span className="mt-1 inline-flex rounded-md bg-orange-100 px-2 py-0.5 text-[10px] font-bold text-orange-700">
+                                  Version {file.versionNumber}
+                                </span>
+                              )}
+                              <p className="text-[10px] text-slate-400 mt-0.5">
+                                {new Date(file.uploadedAt).toLocaleString()}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex gap-2 mt-3 pt-3 border-t border-slate-200/80">
+                            {isCheckpointFilePreviewable(file.originalName) && (
+                              <button
+                                type="button"
+                                onClick={() => setPreviewFile(file)}
+                                onMouseEnter={warmUpPdfPreview}
+                                onFocus={warmUpPdfPreview}
+                                className="flex-1 inline-flex items-center justify-center gap-2 py-2 rounded-lg border border-primary-200 bg-white text-primary text-xs font-bold hover:bg-primary-50 transition-all"
+                              >
+                                <Eye className="w-3.5 h-3.5" />
+                                Preview
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => handleDownload(file)}
+                              disabled={downloadingId === file._id}
+                              className="flex-1 inline-flex items-center justify-center gap-2 py-2 rounded-lg bg-primary text-white text-xs font-bold hover:bg-primary-dark transition-all disabled:opacity-50"
+                            >
+                              {downloadingId === file._id ? (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              ) : (
+                                <Download className="w-3.5 h-3.5" />
+                              )}
+                              Download
+                            </button>
+                            {canDelete && (
+                              <button
+                                type="button"
+                                onClick={() => setDeleteTarget(file)}
+                                className="px-3 py-2 rounded-lg border border-slate-200 text-slate-500 hover:text-red-600 hover:border-red-200 hover:bg-red-50 transition-all"
+                                title="Delete"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </section>
+
+              <section className="rounded-2xl border border-slate-200/60 bg-white p-5 shadow-sm space-y-4">
+                <SectionTitle
+                  icon={Link2}
+                  count={loading ? '…' : links.length}
+                  subtitle="External resources submitted for this checkpoint"
+                >
+                  Submitted links
+                </SectionTitle>
+
+                {loading ? (
+                  <div className="flex justify-center rounded-xl border border-dashed border-slate-200 py-10">
+                    <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                  </div>
+                ) : links.length === 0 ? (
+                  <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/50 px-6 py-10 text-center">
+                    <Link2 className="mx-auto h-7 w-7 text-slate-300" />
+                    <p className="mt-2 text-sm font-semibold text-slate-700">No submitted links yet</p>
+                    <p className="mt-1 text-xs text-slate-400">
+                      {isStudent && checkpoint.canUpload ? 'Submit a public HTTPS resource using the form above.' : 'Links submitted by the team will appear here.'}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {links.map((link) => {
+                      const isOwner = link.submittedBy?._id === user?._id;
+                      const canManage = isStudent && checkpoint.canUpload && isOwner;
+                      const isEditing = canManage && editingLink?._id === link._id;
+
+                      if (isEditing) {
+                        return (
+                          <article key={link._id} className="rounded-xl border border-primary-200 bg-primary-50/30 p-4 shadow-sm ring-1 ring-primary-100">
+                            <div className="mb-4 flex items-center gap-2 text-sm font-bold text-slate-800">
+                              <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-primary-100 bg-white">
+                                <Pencil className="h-4 w-4 text-primary" />
+                              </span>
+                              Edit submitted link
+                            </div>
+                            <CheckpointLinkForm
+                              teamId={String(teamId)}
+                              checkpointNumber={checkpoint.number}
+                              editingLink={link}
+                              onCancelEdit={() => setEditingLink(null)}
+                              onSaved={fetchData}
+                            />
+                          </article>
+                        );
+                      }
+
+                      return (
+                        <article key={link._id} className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-slate-50/30 p-4 sm:flex-row sm:items-center">
+                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-primary-100 bg-primary-50">
+                            <Link2 className="h-4 w-4 text-primary" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <a href={link.url} target="_blank" rel="noopener noreferrer" className="inline-flex max-w-full items-center gap-1.5 font-bold text-slate-800 hover:text-primary">
+                              <span className="truncate">{link.name}</span><ExternalLink className="h-3.5 w-3.5 shrink-0" />
+                            </a>
+                            <p className="truncate text-xs text-slate-500" title={link.url}>{displayLinkHost(link.url)}</p>
+                            <p className="mt-1 text-[10px] text-slate-400">
+                              Version {link.versionNumber} · {link.submittedBy?.name || 'Unknown'} · {new Date(link.submittedAt).toLocaleString()}
+                            </p>
+                          </div>
+                          {canManage && (
+                            <div className="flex shrink-0 gap-2">
+                              <button type="button" onClick={() => setEditingLink(link)} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600 hover:border-primary hover:text-primary">
+                                <Pencil className="h-3.5 w-3.5" /> Edit
+                              </button>
+                              <button type="button" onClick={() => setDeleteLinkTarget(link)} className="rounded-lg border border-slate-200 px-3 py-2 text-slate-500 hover:border-red-200 hover:bg-red-50 hover:text-red-600" aria-label={`Delete ${link.name}`}>
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </div>
+                          )}
+                        </article>
+                      );
+                    })}
+                  </div>
+                )}
+              </section>
+
+              <section className="rounded-2xl border border-slate-200/60 bg-white p-5 shadow-sm space-y-4 pb-2">
+                <SectionTitle
+                  icon={MessageSquare}
+                  count={feedbacks.length}
+                  subtitle="Comments from mentors and lecturers"
+                >
+                  Feedback
+                </SectionTitle>
+                <div className="rounded-xl border border-slate-100 bg-slate-50/30 p-4">
+                  {loading ? (
+                    <div className="flex justify-center py-8">
+                      <Loader2 className="w-6 h-6 text-primary animate-spin" />
+                    </div>
+                  ) : (
+                    <FeedbackThread
+                      feedbacks={feedbacks}
+                      teamId={teamId}
+                      checkpointNumber={checkpoint.number}
+                      onPosted={addFeedback}
+                      onDeleted={removeFeedback}
+                      fullHeight
+                    />
+                  )}
+                </div>
+              </section>
+            </div>
+          </main>
+
+          <AnimatePresence>
+          {showEvaluation && (
+            <motion.button
+              type="button"
+              className="absolute inset-0 z-10 bg-slate-950/30 backdrop-blur-[1px] lg:hidden"
+              aria-label="Close evaluation panel"
+              onClick={() => setShowEvaluation(false)}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+            />
+          )}
+
+          {showEvaluation && <motion.aside
+            id="checkpoint-evaluation-panel"
+            className="absolute inset-y-0 right-0 z-20 flex w-full max-w-[580px] flex-col border-l border-slate-200 bg-slate-100 shadow-2xl lg:static lg:z-auto lg:w-[420px] lg:max-w-none lg:shrink-0 lg:shadow-none xl:w-[500px] 2xl:w-[560px]"
+            initial={{ opacity: 0, x: 48 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 48 }}
+            transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+          >
+            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3">
+              <div className="flex min-w-0 items-center gap-2">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-primary-100 bg-primary-50 text-primary">
+                  <ClipboardCheck className="h-4 w-4" />
+                </span>
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-bold text-slate-900">Evaluation & grading</p>
+                  <p className="truncate text-xs text-slate-500">Checkpoint {checkpoint.number} · {checkpoint.title}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowEvaluation(false)}
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-800"
+                aria-label="Hide evaluation panel"
+              >
+                <PanelRightClose className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin">
+              <EvaluationPanel
+                teamId={teamId}
+                proposalId={proposalId}
+                pitchDeckId={pitchDeckId}
+                isReadOnly={isReadOnly}
+                checkpointNumber={checkpoint.number}
+                embedded
+              />
+            </div>
+          </motion.aside>}
+          </AnimatePresence>
+        </div>
+      </div>
+
+      <ConfirmDialog
+        isOpen={Boolean(deleteTarget)}
+        onClose={() => { if (!deleting) setDeleteTarget(null); }}
+        onConfirm={() => { if (deleteTarget) return handleDelete(deleteTarget._id); }}
+        title="Delete submitted file?"
+        description={`“${deleteTarget?.originalName || 'This file'}” will be permanently removed from this checkpoint.`}
+        confirmText="Delete file"
+        isSubmitting={deleting}
+      />
+      <ConfirmDialog
+        isOpen={Boolean(deleteLinkTarget)}
+        onClose={() => { if (!deletingLink) setDeleteLinkTarget(null); }}
+        onConfirm={() => { if (deleteLinkTarget) return handleDeleteLink(deleteLinkTarget._id); }}
+        title="Delete submitted link?"
+        description={`“${deleteLinkTarget?.name || 'This link'}” will be removed from this checkpoint.`}
+        confirmText="Delete link"
+        isSubmitting={deletingLink}
+      />
+      <CheckpointFilePreviewModal
+        teamId={String(teamId)}
+        checkpointNumber={checkpoint.number}
+        file={previewFile}
+        onClose={() => setPreviewFile(null)}
+      />
+    </div>
+  );
+
+  return createPortal(content, document.body);
+}

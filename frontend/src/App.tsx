@@ -1,122 +1,164 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
-import './App.css'
+import { lazy, Suspense } from 'react';
+import { BrowserRouter as Router, Navigate, Route, Routes } from 'react-router-dom';
+import { Toaster } from 'react-hot-toast';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { ThemeProvider } from './context/ThemeContext';
+import { AuthProvider } from './context/AuthContext';
+import { ProtectedRoute } from './routes/ProtectedRoute';
+import { queryClient } from './lib/queryClient';
+import DashboardLayout from './components/layout/DashboardLayout';
+import ErrorBoundary from './components/ui/ErrorBoundary';
 
-function App() {
-  const [count, setCount] = useState(0)
+import { classFeatureFlags } from './config/classFeatureFlags';
+import { classRouteAccess } from './config/classAccessPolicy';
+import { releaseFeatureFlags } from './config/releaseFeatureFlags';
+import { evaluationRankingRoles } from './utils/evaluationGrading';
 
+const Home = lazy(() => import('./pages/Home'));
+const Login = lazy(() => import('./pages/auth/Login'));
+const Register = lazy(() => import('./pages/auth/Register'));
+const ForgotPassword = lazy(() => import('./pages/auth/ForgotPassword'));
+const ResetPassword = lazy(() => import('./pages/auth/ResetPassword'));
+const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'));
+const ClassManagement = lazy(() => import('./pages/admin/ClassManagement'));
+const SubjectManagement = lazy(() => import('./pages/admin/SubjectManagement'));
+const SubjectDetail = lazy(() => import('./pages/admin/SubjectDetail'));
+const MentorProfileDetail = lazy(() => import('./pages/admin/MentorProfileDetail'));
+const UserManagement = lazy(() => import('./pages/admin/UserManagement'));
+const AccountApprovals = lazy(() => import('./pages/admin/AccountApprovals'));
+const LecturerDashboard = lazy(() => import('./pages/lecturer/LecturerDashboard'));
+const LecturerClasses = lazy(() => import('./pages/lecturer/LecturerClasses'));
+const StudentDashboard = lazy(() => import('./pages/student/StudentDashboard'));
+const IdeaForm = lazy(() => import('./pages/student/IdeaForm'));
+const MyClasses = lazy(() => import('./pages/student/MyClasses'));
+const MyTeam = lazy(() => import('./pages/student/MyTeam'));
+const StudentClassDetail = lazy(() => import('./pages/student/StudentClassDetail'));
+const AIAnalysis = lazy(() => import('./pages/common/AIAnalysis'));
+const ExecutionBoard = lazy(() => import('./pages/common/ExecutionBoard'));
+const GroupChat = lazy(() => import('./pages/common/GroupChat'));
+const IdeaDetail = lazy(() => import('./pages/common/IdeaDetail'));
+const MentoringSessions = lazy(() => import('./pages/common/MentoringSessions'));
+const StartupWorkspaceHub = lazy(() => import('./pages/workspace/StartupWorkspaceHub'));
+const TeamWorkspace = lazy(() => import('./pages/workspace/TeamWorkspace'));
+const ProposalEditor = lazy(() => import('./pages/workspace/ProposalEditor'));
+const ProjectProfileEditor = lazy(() => import('./pages/workspace/ProjectProfileEditor'));
+const Workshops = lazy(() => import('./pages/workshops/Workshops'));
+const DataBankPage = lazy(() => import('./features/data-bank/DataBankPage'));
+const ClassDetail = lazy(() => import('./pages/shared/ClassDetail'));
+const Forbidden = lazy(() => import('./pages/shared/Forbidden'));
+const NotFound = lazy(() => import('./pages/shared/NotFound'));
+const ProfileSettings = lazy(() => import('./pages/shared/ProfileSettings'));
+const FeedbackPage = lazy(() => import('./pages/shared/FeedbackPage'));
+const EvaluationGrading = lazy(() => import('./pages/shared/EvaluationGrading'));
+const ProjectData = lazy(() => import('./pages/shared/ProjectData'));
+
+const PageFallback = () => (
+  <div className="flex min-h-56 items-center justify-center" role="status" aria-label="Loading page">
+    <div className="h-8 w-8 animate-spin rounded-full border-2 border-slate-200 border-t-primary" />
+  </div>
+);
+
+function App(): React.ReactElement {
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
+    <ErrorBoundary>
+      <ThemeProvider>
+        <QueryClientProvider client={queryClient}>
+          <AuthProvider>
+            <Router>
+              <Toaster
+                position="top-right"
+                containerStyle={{ top: 80 }}
+                toastOptions={{
+                  duration: 2000,
+                  style: {
+                    background: 'var(--app-toast-bg)',
+                    color: 'var(--app-toast-color)',
+                    border: '1px solid var(--app-toast-border)',
+                    borderRadius: '12px',
+                    fontFamily: 'Inter, sans-serif',
+                    fontSize: '14px',
+                    padding: '12px 16px',
+                    boxShadow: '0 4px 16px -4px rgb(0 0 0 / 0.2)',
+                  },
+                  success: { iconTheme: { primary: '#51B848', secondary: '#fff' } },
+                  error: { duration: 3500, iconTheme: { primary: '#ef4444', secondary: '#fff' } },
+                }}
+              />
 
-      <div className="ticks"></div>
+              <Suspense fallback={<PageFallback />}>
+              <Routes>
+                <Route path="/" element={<Home />} />
+                <Route path="/login" element={<Login />} />
+                <Route path="/register" element={<Register />} />
+                <Route path="/forgot-password" element={<ForgotPassword />} />
+                <Route path="/reset-password" element={<ResetPassword />} />
+                <Route path="/reset-password/:token" element={<ResetPassword />} />
 
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
+                <Route element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
+                  <Route path="/admin" element={<ProtectedRoute allowedRoles={['ADMIN']}><AdminDashboard /></ProtectedRoute>} />
+                  <Route path="/admin/users" element={<ProtectedRoute allowedRoles={['ADMIN']}><UserManagement /></ProtectedRoute>} />
+                  <Route path="/admin/mentors/:profileId" element={<ProtectedRoute allowedRoles={['ADMIN']}><MentorProfileDetail /></ProtectedRoute>} />
+                  <Route path="/admin/account-approvals" element={<ProtectedRoute allowedRoles={['ADMIN']}><AccountApprovals /></ProtectedRoute>} />
+                  <Route path="/admin/classes" element={<ProtectedRoute allowedRoles={['ADMIN']}><ClassManagement /></ProtectedRoute>} />
+                  <Route path="/admin/subjects" element={<ProtectedRoute allowedRoles={['ADMIN']}><SubjectManagement /></ProtectedRoute>} />
+                  <Route path="/admin/subjects/:subjectCode" element={<ProtectedRoute allowedRoles={['ADMIN']}><SubjectDetail /></ProtectedRoute>} />
+                  <Route path="/admin/startup-industries" element={<ProtectedRoute allowedRoles={['ADMIN']}><Navigate to="/admin/subjects?tab=industries" replace /></ProtectedRoute>} />
+                  <Route path="/admin/feedback" element={<ProtectedRoute allowedRoles={['ADMIN']}><FeedbackPage admin /></ProtectedRoute>} />
 
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+                  <Route path="/lecturer" element={<ProtectedRoute allowedRoles={[...classRouteAccess.lecturerArea]}>{releaseFeatureFlags.roleDashboards ? <LecturerDashboard /> : <Navigate to="/lecturer/classes" replace />}</ProtectedRoute>} />
+                  <Route path="/lecturer/classes" element={<ProtectedRoute allowedRoles={[...classRouteAccess.lecturerArea]}><LecturerClasses /></ProtectedRoute>} />
+                  {releaseFeatureFlags.dataBank && <Route path="/lecturer/data-bank" element={<ProtectedRoute allowedRoles={['ADMIN', 'LECTURER']}><DataBankPage /></ProtectedRoute>} />}
+                  <Route path="/mentor" element={<ProtectedRoute allowedRoles={['MENTOR']}><Navigate to="/workspace" replace /></ProtectedRoute>} />
+
+                  <Route path="/classes/:slug" element={<ProtectedRoute allowedRoles={[...classRouteAccess.classDetail]}><ClassDetail /></ProtectedRoute>} />
+
+                  <Route path="/student" element={<ProtectedRoute allowedRoles={['STUDENT']}>{releaseFeatureFlags.roleDashboards ? <StudentDashboard /> : <Navigate to={classFeatureFlags.studentSelfService ? '/student/classes' : '/student/workspace'} replace />}</ProtectedRoute>} />
+                  {releaseFeatureFlags.startupIdeas && <Route path="/student/idea/new" element={<ProtectedRoute allowedRoles={['STUDENT']}><IdeaForm /></ProtectedRoute>} />}
+                  {releaseFeatureFlags.startupIdeas && <Route path="/student/idea/:id" element={<ProtectedRoute allowedRoles={['STUDENT']}><IdeaDetail /></ProtectedRoute>} />}
+                  {releaseFeatureFlags.evaluations && <Route path="/student/feedback" element={<ProtectedRoute allowedRoles={['STUDENT']}><IdeaDetail /></ProtectedRoute>} />}
+                  {releaseFeatureFlags.ai && <Route path="/student/ai-analysis" element={<ProtectedRoute allowedRoles={['STUDENT']}><AIAnalysis /></ProtectedRoute>} />}
+                  {releaseFeatureFlags.ai && <Route path="/student/ai-analysis/:startupIdeaId" element={<ProtectedRoute allowedRoles={['STUDENT']}><AIAnalysis /></ProtectedRoute>} />}
+                  {classFeatureFlags.studentSelfService && (
+                    <>
+                      <Route path="/student/classes" element={<ProtectedRoute allowedRoles={['STUDENT']}><MyClasses /></ProtectedRoute>} />
+                      <Route path="/student/classes/:slug" element={<ProtectedRoute allowedRoles={['STUDENT']}><StudentClassDetail /></ProtectedRoute>} />
+                      <Route path="/student/team" element={<ProtectedRoute allowedRoles={['STUDENT']}><MyTeam /></ProtectedRoute>} />
+                    </>
+                  )}
+
+                  <Route path="/workspace" element={<ProtectedRoute allowedRoles={['ADMIN', 'LECTURER', 'MENTOR']}><StartupWorkspaceHub /></ProtectedRoute>} />
+                  <Route path="/project-data" element={<ProtectedRoute allowedRoles={['ADMIN', 'LECTURER']}><ProjectData /></ProtectedRoute>} />
+                  <Route path="/student/workspace" element={<ProtectedRoute allowedRoles={['STUDENT']}><TeamWorkspace /></ProtectedRoute>} />
+                  <Route path="/student/workspace/proposal" element={<ProtectedRoute allowedRoles={['STUDENT']}><ProposalEditor /></ProtectedRoute>} />
+                  <Route path="/student/workspace/project-profile/:teamId" element={<ProtectedRoute allowedRoles={['STUDENT']}><ProjectProfileEditor /></ProtectedRoute>} />
+                  <Route path="/student/workspace/:teamId" element={<ProtectedRoute allowedRoles={['STUDENT']}><TeamWorkspace /></ProtectedRoute>} />
+                  <Route path="/workspace/teams/:teamId" element={<TeamWorkspace />} />
+                  <Route path="/workspace/teams/:teamId/proposal" element={<ProposalEditor />} />
+                  <Route path="/workspace/teams/:teamId/project-profile" element={<ProjectProfileEditor />} />
+
+                  {releaseFeatureFlags.rankings && <Route path="/rankings" element={<ProtectedRoute allowedRoles={[...evaluationRankingRoles]}><Navigate to="/evaluation-grading?tab=rankings" replace /></ProtectedRoute>} />}
+                  {releaseFeatureFlags.evaluations && <Route path="/evaluations" element={<IdeaDetail />} />}
+                  <Route path="/executionboard" element={<ExecutionBoard />} />
+                  {releaseFeatureFlags.mentoring && <Route path="/sessions" element={<MentoringSessions />} />}
+                  {releaseFeatureFlags.workshops && <Route path="/workshops" element={<Workshops />} />}
+                  {releaseFeatureFlags.chat && <Route path="/chat" element={<GroupChat />} />}
+                  <Route path="/settings" element={<ProfileSettings />} />
+                  <Route path="/feedback" element={<ProtectedRoute allowedRoles={['STUDENT','LECTURER','MENTOR']}><FeedbackPage /></ProtectedRoute>} />
+                  <Route path="/evaluation-grading" element={<ProtectedRoute allowedRoles={['ADMIN', 'LECTURER', 'MENTOR', 'STUDENT']}><EvaluationGrading /></ProtectedRoute>} />
+                  <Route path="/profile" element={<ProfileSettings />} />
+                </Route>
+
+                <Route path="/403" element={<Forbidden />} />
+                <Route path="/unauthorized" element={<Forbidden />} />
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+              </Suspense>
+            </Router>
+          </AuthProvider>
+        </QueryClientProvider>
+      </ThemeProvider>
+    </ErrorBoundary>
+  );
 }
 
-export default App
+export default App;

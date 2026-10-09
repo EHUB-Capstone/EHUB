@@ -32,6 +32,14 @@ public class CheckpointConfiguration : IEntityTypeConfiguration<Checkpoint>
             .HasColumnName("description")
             .HasMaxLength(1000);
 
+        builder.Property(c => c.RequirementsJson).HasColumnName("requirements_json").HasDefaultValue("[]");
+
+        builder.Property(c => c.CourseWeight)
+            .HasColumnName("course_weight")
+            .HasColumnType("decimal(6,2)")
+            .HasDefaultValue(0m)
+            .IsRequired();
+
         builder.Property(c => c.OpenDate)
             .HasColumnName("open_date");
 

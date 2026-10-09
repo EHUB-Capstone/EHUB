@@ -1,5 +1,212 @@
-import React from 'react';
+import { NavLink, useNavigate } from 'react-router-dom';
+import type { LucideIcon } from 'lucide-react';
+import { useAuth } from '../../hooks/useAuth';
+import { cn } from '../../utils/cn';
+import logo from '../../assets/logo.png';
+import {
+  LayoutDashboard, Users, GraduationCap, CalendarDays,
+  Kanban, Brain, Video, Rocket, LogOut, Plus, X, MessageSquare, Database, BookOpen, ShieldCheck, Factory,
+  ClipboardCheck,
+} from 'lucide-react';
+import { classFeatureFlags } from '../../config/classFeatureFlags';
+import { releaseFeatureFlags } from '../../config/releaseFeatureFlags';
 
-export const Sidebar: React.FC = () => {
-  return <div>Sidebar</div>;
+const iconMap: Record<string, LucideIcon> = {
+  dashboard: LayoutDashboard,
+  group: Users,
+  school: GraduationCap,
+  calendar_month: CalendarDays,
+  view_kanban: Kanban,
+  analytics: Brain,
+  event: CalendarDays,
+  rocket_launch: Rocket,
+  task_alt: Kanban,
+  video_chat: Video,
+  chat: MessageSquare,
+  database: Database,
+  book_open: BookOpen,
+  factory: Factory,
+  account_approval: ShieldCheck,
+  grading: ClipboardCheck,
 };
+
+interface SidebarProps {
+  mobileOpen: boolean;
+  onMobileClose: () => void;
+}
+
+interface NavItem {
+  path: string;
+  icon: string;
+  label: string;
+}
+
+type NavigationRole = 'ADMIN' | 'LECTURER' | 'MENTOR' | 'STUDENT';
+
+const Sidebar = ({ mobileOpen, onMobileClose }: SidebarProps) => {
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
+
+  const rawRole = user?.role?.toUpperCase();
+  const role: NavigationRole = rawRole === 'USER' || !rawRole
+    ? 'STUDENT'
+    : (rawRole as NavigationRole);
+
+  const navItems: Record<NavigationRole, NavItem[]> = {
+    ADMIN: [
+      { path: '/admin', icon: 'dashboard', label: 'Overview' },
+      { path: '/admin/subjects', icon: 'book_open', label: 'Subject Management' },
+      { path: '/admin/users', icon: 'group', label: 'Users' },
+      { path: '/admin/account-approvals', icon: 'account_approval', label: 'Account Approvals' },
+      { path: '/admin/classes', icon: 'school', label: 'Classes' },
+      // { path: '/workspace', icon: 'view_kanban', label: 'Startup Workspace' },
+      { path: '/project-data', icon: 'database', label: 'Project Data' },
+      { path: '/admin/feedback', icon: 'chat', label: 'Feedback Inbox' },
+      // ...(releaseFeatureFlags.dataBank ? [{ path: '/lecturer/data-bank', icon: 'database', label: 'Data Bank' }] : []),
+      // ...(releaseFeatureFlags.workshops ? [{ path: '/workshops', icon: 'calendar_month', label: 'Workshops' }] : []),
+      // ...(releaseFeatureFlags.chat ? [{ path: '/chat', icon: 'chat', label: 'Group Chat' }] : []),
+      // ...(releaseFeatureFlags.mentoring ? [{ path: '/sessions', icon: 'calendar_month', label: 'Schedules' }] : []),
+      { path: '/evaluation-grading', icon: 'grading', label: 'Evaluation & Grading' },
+    ],
+    LECTURER: [
+      ...(releaseFeatureFlags.roleDashboards ? [{ path: '/lecturer', icon: 'dashboard', label: 'Dashboard' }] : []),
+      { path: '/lecturer/classes', icon: 'school', label: 'My Classes' },
+      { path: '/workspace', icon: 'view_kanban', label: 'Startup Workspace' },
+      { path: '/project-data', icon: 'database', label: 'Project Data' },
+      { path: '/feedback', icon: 'chat', label: 'Send feedback' },
+      // ...(releaseFeatureFlags.workshops ? [{ path: '/workshops', icon: 'calendar_month', label: 'Workshops' }] : []),
+      // ...(releaseFeatureFlags.chat ? [{ path: '/chat', icon: 'chat', label: 'Group Chat' }] : []),
+      // ...(releaseFeatureFlags.dataBank ? [{ path: '/lecturer/data-bank', icon: 'database', label: 'Data Bank' }] : []),
+      // { path: '/executionboard', icon: 'view_kanban', label: 'Execution Board' },
+      // ...(releaseFeatureFlags.evaluations ? [{ path: '/evaluations', icon: 'analytics', label: 'Evaluation Reports' }] : []),
+      // ...(releaseFeatureFlags.mentoring ? [{ path: '/sessions', icon: 'event', label: 'Sessions' }] : []),
+      { path: '/evaluation-grading', icon: 'grading', label: 'Evaluation & Grading' },
+    ],
+    MENTOR: [
+      // ...(releaseFeatureFlags.roleDashboards ? [{ path: '/mentor', icon: 'dashboard', label: 'Dashboard' }] : []),
+      { path: '/workspace', icon: 'view_kanban', label: 'Startup Workspace' },
+      { path: '/feedback', icon: 'chat', label: 'Send feedback' },
+      // ...(releaseFeatureFlags.workshops ? [{ path: '/workshops', icon: 'calendar_month', label: 'Workshops' }] : []),
+      // ...(releaseFeatureFlags.chat ? [{ path: '/chat', icon: 'chat', label: 'Group Chat' }] : []),
+      // ...(releaseFeatureFlags.mentoring ? [{ path: '/sessions', icon: 'event', label: 'Sessions' }] : []),
+      { path: '/evaluation-grading', icon: 'grading', label: 'Evaluation & Grading' },
+    ],
+    STUDENT: [
+      ...(classFeatureFlags.studentSelfService
+        ? [
+            { path: '/student/classes', icon: 'school', label: 'My Classes' },
+            { path: '/student/team', icon: 'group', label: 'My Team' },
+          ]
+        : []),
+      { path: '/student/workspace', icon: 'view_kanban', label: 'Startup Workspace' },
+      { path: '/feedback', icon: 'chat', label: 'Send feedback' },
+      // ...(releaseFeatureFlags.roleDashboards ? [{ path: '/student', icon: 'dashboard', label: 'Dashboard' }] : []),
+      // ...(releaseFeatureFlags.workshops ? [{ path: '/workshops', icon: 'calendar_month', label: 'Workshops' }] : []),
+      // ...(releaseFeatureFlags.chat ? [{ path: '/chat', icon: 'chat', label: 'Group Chat' }] : []),
+      // ...(releaseFeatureFlags.startupIdeas ? [{ path: '/student/idea/new', icon: 'rocket_launch', label: 'My Idea' }] : []),
+      { path: '/executionboard', icon: 'task_alt', label: 'Execution Board' },
+      // ...(releaseFeatureFlags.mentoring ? [{ path: '/sessions', icon: 'video_chat', label: 'Mentoring' }] : []),
+      { path: '/evaluation-grading', icon: 'grading', label: 'Evaluation & Grading' },
+    ],
+  };
+
+  const items = navItems[role] || navItems.STUDENT;
+  const feedbackItem = items.find((item) => item.path === '/feedback');
+  const navigationItems = items.filter((item) => item.path !== '/feedback');
+
+  const handleNavClick = () => {
+    if (onMobileClose) onMobileClose();
+  };
+
+  const renderNavItem = (item: NavItem) => {
+    const IconComp = iconMap[item.icon] || LayoutDashboard;
+    return (
+      <NavLink
+        key={item.path}
+        to={item.path}
+        end={item.path === '/admin' || item.path === '/lecturer' || item.path === '/mentor' || item.path === '/student'}
+        onClick={handleNavClick}
+        className={({ isActive }) => cn(
+          'flex items-center gap-3 rounded-xl transition-all duration-200 group relative px-3 py-2.5',
+          isActive
+            ? 'bg-primary-50 text-primary font-semibold shadow-xs'
+            : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
+        )}
+      >
+        {({ isActive }) => (
+          <>
+            {isActive && (
+              <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 bg-primary rounded-r-full" />
+            )}
+            <IconComp className={cn('w-[18px] h-[18px] shrink-0 transition-colors', isActive ? 'text-primary' : 'text-slate-400 group-hover:text-slate-600')} />
+            <span className="text-[13px] truncate">{item.label}</span>
+          </>
+        )}
+      </NavLink>
+    );
+  };
+
+  return (
+    <aside
+      className={cn(
+        'fixed left-0 top-0 h-screen z-50 flex flex-col bg-white/95 dark:bg-[#111827]/95 backdrop-blur-xl border-r border-slate-200/80 dark:border-white/10 transition-transform duration-300 ease-out w-[260px]',
+        mobileOpen ? 'translate-x-0' : '-translate-x-full',
+        'lg:translate-x-0'
+      )}
+    >
+      {/* Brand */}
+      <div className="flex items-center justify-between h-16 border-b border-slate-100 dark:border-white/10 px-4">
+        <div className="flex items-center gap-3">
+          <img src={logo} alt="EHub" className="w-9 h-9 rounded-xl object-contain shrink-0" />
+          <div className="min-w-0">
+            <h1 className="text-[15px] font-bold leading-tight tracking-tight"><span className="text-[#F08A5D]">E</span><span className="text-[#1E5E9F] dark:text-[#79A8D9]">HUB</span></h1>
+            <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-[0.12em]">Startup Portal</p>
+          </div>
+        </div>
+        <button
+          onClick={onMobileClose}
+          className="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-600 transition-colors lg:hidden"
+          aria-label="Close sidebar"
+        >
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+
+      {/* Navigation */}
+      <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto scrollbar-thin">
+        <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider px-3 mb-3 mt-1">Navigation</p>
+        {navigationItems.map(renderNavItem)}
+      </nav>
+
+      {/* Bottom Section */}
+      <div className="border-t border-slate-100 p-3 space-y-2">
+        {role === 'STUDENT' && (
+          <button
+            onClick={() => { navigate('/student/idea/new'); handleNavClick(); }}
+            className="w-full bg-primary hover:bg-primary-dark text-white font-semibold py-2.5 rounded-xl flex items-center justify-center gap-2 shadow-sm hover:shadow-glow-primary transition-all active:scale-[0.98] text-[13px]"
+          >
+            <Plus className="w-4 h-4" />
+            New Idea
+          </button>
+        )}
+
+        {feedbackItem && renderNavItem(feedbackItem)}
+
+        <button
+          onClick={handleLogout}
+          className="w-full flex items-center gap-3 rounded-xl text-danger hover:bg-danger-50 transition-all text-[13px] font-medium px-3 py-2.5"
+        >
+          <LogOut className="w-[18px] h-[18px]" />
+          <span>Sign Out</span>
+        </button>
+      </div>
+    </aside>
+  );
+};
+
+export default Sidebar;

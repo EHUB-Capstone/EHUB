@@ -21,4 +21,13 @@ public static class SystemRoles
         Student,
         Mentor
     ];
+
+    public static bool IsPublicRegisterRole(string role)
+    {
+        for (int i = 0; i < PublicRegisterRoles.Length; i++)
+        {
+            if (PublicRegisterRoles[i] == role) return true;
+        }
+        return false;
+    }
 }

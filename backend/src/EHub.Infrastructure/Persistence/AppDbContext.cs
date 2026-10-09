@@ -3,42 +3,78 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using EHub.Application.Common.Interfaces.Persistence;
+using EHub.Application.Common.Interfaces.Services;
 using EHub.Domain.Common;
 using EHub.Domain.Entities;
+using EHub.Domain.Enums;
 
 namespace EHub.Infrastructure.Persistence;
 
 public class AppDbContext : DbContext, IApplicationDbContext
 {
-    public AppDbContext(DbContextOptions<AppDbContext> options) : base(options)
+    private readonly IOutboxWakeSignal? _outboxWakeSignal;
+    private bool _hasUnsignaledOutboxMessages;
+
+    public AppDbContext(
+        DbContextOptions<AppDbContext> options,
+        IOutboxWakeSignal? outboxWakeSignal = null) : base(options)
     {
+        _outboxWakeSignal = outboxWakeSignal;
     }
 
     public DbSet<User> Users => Set<User>();
     public DbSet<Role> Roles => Set<Role>();
     public DbSet<UserRole> UserRoles => Set<UserRole>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
+    public DbSet<PendingRegistration> PendingRegistrations => Set<PendingRegistration>();
     public DbSet<Semester> Semesters => Set<Semester>();
+    public DbSet<SemesterAuditLog> SemesterAuditLogs => Set<SemesterAuditLog>();
+    public DbSet<SemesterStaffAssignment> SemesterStaffAssignments => Set<SemesterStaffAssignment>();
     public DbSet<Course> Courses => Set<Course>();
+    public DbSet<StartupIndustry> StartupIndustries => Set<StartupIndustry>();
     public DbSet<Class> Classes => Set<Class>();
     public DbSet<ClassLecturer> ClassLecturers => Set<ClassLecturer>();
+    public DbSet<ClassAuditLog> ClassAuditLogs => Set<ClassAuditLog>();
+    public DbSet<ClassImportSession> ClassImportSessions => Set<ClassImportSession>();
+    public DbSet<LecturerImportSession> LecturerImportSessions => Set<LecturerImportSession>();
+    public DbSet<MentorImportSession> MentorImportSessions => Set<MentorImportSession>();
+    public DbSet<MentorImportDraft> MentorImportDrafts => Set<MentorImportDraft>();
+    public DbSet<MentorAllocationSession> MentorAllocationSessions => Set<MentorAllocationSession>();
+    public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
     public DbSet<Student> Students => Set<Student>();
     public DbSet<ClassStudent> ClassStudents => Set<ClassStudent>();
     public DbSet<Team> Teams => Set<Team>();
     public DbSet<TeamMember> TeamMembers => Set<TeamMember>();
+    public DbSet<TeamContinuation> TeamContinuations => Set<TeamContinuation>();
+    public DbSet<TeamContinuationMember> TeamContinuationMembers => Set<TeamContinuationMember>();
+    public DbSet<TeamProposal> TeamProposals => Set<TeamProposal>();
+    public DbSet<TeamProposalMember> TeamProposalMembers => Set<TeamProposalMember>();
+    public DbSet<TeamProposalHistory> TeamProposalHistory => Set<TeamProposalHistory>();
+    public DbSet<TeamFormation> TeamFormations => Set<TeamFormation>();
+    public DbSet<TeamFormationInvitation> TeamFormationInvitations => Set<TeamFormationInvitation>();
+    public DbSet<ProjectDirection> ProjectDirections => Set<ProjectDirection>();
+    public DbSet<ProjectDirectionReview> ProjectDirectionReviews => Set<ProjectDirectionReview>();
     public DbSet<Project> Projects => Set<Project>();
     public DbSet<ProjectTag> ProjectTags => Set<ProjectTag>();
+    public DbSet<ProjectActivityLog> ProjectActivityLogs => Set<ProjectActivityLog>();
     public DbSet<Checkpoint> Checkpoints => Set<Checkpoint>();
+    public DbSet<ClassCheckpointSchedule> ClassCheckpointSchedules => Set<ClassCheckpointSchedule>();
     public DbSet<Submission> Submissions => Set<Submission>();
     public DbSet<SubmissionFile> SubmissionFiles => Set<SubmissionFile>();
+    public DbSet<SubmissionUploadSession> SubmissionUploadSessions => Set<SubmissionUploadSession>();
+    public DbSet<SubmissionLink> SubmissionLinks => Set<SubmissionLink>();
+    public DbSet<SubmissionRequirementContent> SubmissionRequirementContents => Set<SubmissionRequirementContent>();
     public DbSet<SubmissionFeedback> SubmissionFeedbacks => Set<SubmissionFeedback>();
     public DbSet<Rubric> Rubrics => Set<Rubric>();
     public DbSet<RubricCriterion> RubricCriteria => Set<RubricCriterion>();
     public DbSet<Evaluation> Evaluations => Set<Evaluation>();
     public DbSet<EvaluationDetail> EvaluationDetails => Set<EvaluationDetail>();
+    public DbSet<EvaluationMemberScore> EvaluationMemberScores => Set<EvaluationMemberScore>();
     public DbSet<EvaluationHistory> EvaluationHistories => Set<EvaluationHistory>();
     public DbSet<MentorProfile> MentorProfiles => Set<MentorProfile>();
     public DbSet<MentorAssignment> MentorAssignments => Set<MentorAssignment>();
+    public DbSet<TemporaryMentorAssignment> TemporaryMentorAssignments => Set<TemporaryMentorAssignment>();
+    public DbSet<SemesterTemporaryMentor> SemesterTemporaryMentors => Set<SemesterTemporaryMentor>();
     public DbSet<MentoringSession> MentoringSessions => Set<MentoringSession>();
     public DbSet<MentoringActionItem> MentoringActionItems => Set<MentoringActionItem>();
     public DbSet<MentoringAttendance> MentoringAttendances => Set<MentoringAttendance>();
@@ -64,7 +100,11 @@ public class AppDbContext : DbContext, IApplicationDbContext
     public DbSet<Milestone> Milestones => Set<Milestone>();
     public DbSet<SprintTask> SprintTasks => Set<SprintTask>();
     public DbSet<WeeklyTask> WeeklyTasks => Set<WeeklyTask>();
+    public DbSet<WeeklyTaskTeamProgress> WeeklyTaskTeamProgress => Set<WeeklyTaskTeamProgress>();
     public DbSet<ProjectAnalysis> ProjectAnalyses => Set<ProjectAnalysis>();
+    public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
+    public DbSet<ProductFeedback> ProductFeedbacks => Set<ProductFeedback>();
+    public DbSet<ProductFeedbackAttachment> ProductFeedbackAttachments => Set<ProductFeedbackAttachment>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -74,6 +114,10 @@ public class AppDbContext : DbContext, IApplicationDbContext
 
     public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
+        var hasNewOutboxMessages = ChangeTracker.Entries<OutboxMessage>()
+            .Any(entry => entry.State == EntityState.Added && entry.Entity.Status == OutboxMessageStatus.Pending);
+        var hasExplicitTransaction = Database.CurrentTransaction != null;
+
         foreach (var entry in ChangeTracker.Entries<AuditableEntity>())
         {
             switch (entry.State)
@@ -95,6 +139,31 @@ public class AppDbContext : DbContext, IApplicationDbContext
             }
         }
 
-        return await base.SaveChangesAsync(cancellationToken);
+        var savedChanges = await base.SaveChangesAsync(cancellationToken);
+        if (hasNewOutboxMessages && hasExplicitTransaction)
+        {
+            _hasUnsignaledOutboxMessages = true;
+        }
+        else if (hasNewOutboxMessages)
+        {
+            _outboxWakeSignal?.Signal();
+        }
+
+        return savedChanges;
+    }
+
+    internal void SignalCommittedOutbox()
+    {
+        if (!_hasUnsignaledOutboxMessages) return;
+        _hasUnsignaledOutboxMessages = false;
+        _outboxWakeSignal?.Signal();
+    }
+
+    internal void DiscardUncommittedOutboxSignal() => _hasUnsignaledOutboxMessages = false;
+
+    public void ClearChanges()
+    {
+        _hasUnsignaledOutboxMessages = false;
+        ChangeTracker.Clear();
     }
 }

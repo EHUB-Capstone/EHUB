@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using EHub.Domain.Entities;
+using EHub.Domain.Enums;
 
 namespace EHub.Infrastructure.Persistence.Configurations;
 
@@ -27,6 +28,13 @@ public class SubmissionFileConfiguration : IEntityTypeConfiguration<SubmissionFi
             .HasMaxLength(256)
             .IsRequired();
 
+        builder.Property(sf => sf.VersionNumber)
+            .HasColumnName("version_number")
+            .IsRequired();
+
+        builder.HasIndex(sf => new { sf.SubmissionId, sf.VersionNumber })
+            .IsUnique();
+
         builder.Property(sf => sf.FileUrl)
             .HasColumnName("file_url")
             .HasMaxLength(1000)
@@ -36,6 +44,17 @@ public class SubmissionFileConfiguration : IEntityTypeConfiguration<SubmissionFi
             .HasColumnName("cloudinary_public_id")
             .HasMaxLength(256)
             .IsRequired();
+
+        builder.Property(sf => sf.StorageProvider)
+            .HasColumnName("storage_provider")
+            .HasConversion<string>()
+            .HasMaxLength(20)
+            .HasDefaultValue(SubmissionStorageProvider.Cloudinary)
+            .IsRequired();
+
+        builder.Property(sf => sf.StorageKey)
+            .HasColumnName("storage_key")
+            .HasMaxLength(512);
 
         builder.Property(sf => sf.MimeType)
             .HasColumnName("mime_type")
@@ -51,6 +70,42 @@ public class SubmissionFileConfiguration : IEntityTypeConfiguration<SubmissionFi
             .HasConversion<string>()
             .HasMaxLength(30)
             .IsRequired();
+
+        builder.Property(sf => sf.PreviewPdfUrl)
+            .HasColumnName("preview_pdf_url")
+            .HasMaxLength(1000);
+
+        builder.Property(sf => sf.PreviewPdfPublicId)
+            .HasColumnName("preview_pdf_public_id")
+            .HasMaxLength(256);
+
+        builder.Property(sf => sf.PreviewSourceVersionNumber)
+            .HasColumnName("preview_source_version_number");
+
+        builder.Property(sf => sf.PreviewGeneratedAt)
+            .HasColumnName("preview_generated_at");
+
+        builder.Property(sf => sf.PreviewStatus)
+            .HasColumnName("preview_status")
+            .HasConversion<string>()
+            .HasMaxLength(20)
+            .HasDefaultValue(SubmissionPreviewStatus.None)
+            .IsRequired();
+
+        builder.Property(sf => sf.PreviewAttemptCount)
+            .HasColumnName("preview_attempt_count")
+            .HasDefaultValue(0)
+            .IsRequired();
+
+        builder.Property(sf => sf.PreviewNextAttemptAtUtc)
+            .HasColumnName("preview_next_attempt_at_utc");
+
+        builder.Property(sf => sf.PreviewLastError)
+            .HasColumnName("preview_last_error")
+            .HasMaxLength(500);
+
+        // The background job polls for Pending rows that are due.
+        builder.HasIndex(sf => new { sf.PreviewStatus, sf.PreviewNextAttemptAtUtc });
 
         builder.Property(sf => sf.UploadedById)
             .HasColumnName("uploaded_by_id");

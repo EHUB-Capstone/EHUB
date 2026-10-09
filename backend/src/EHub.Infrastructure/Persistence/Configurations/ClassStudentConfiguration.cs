@@ -12,6 +12,10 @@ public class ClassStudentConfiguration : IEntityTypeConfiguration<ClassStudent>
 
         builder.HasKey(cs => new { cs.ClassId, cs.StudentId });
 
+        builder.Property(cs => cs.Version)
+            .IsRowVersion()
+            .HasColumnName("xmin");
+
         builder.Property(cs => cs.ClassId)
             .HasColumnName("class_id")
             .IsRequired();
@@ -20,15 +24,55 @@ public class ClassStudentConfiguration : IEntityTypeConfiguration<ClassStudent>
             .HasColumnName("student_id")
             .IsRequired();
 
+        builder.Property(cs => cs.SemesterId)
+            .HasColumnName("semester_id")
+            .IsRequired();
+
+        builder.Property(cs => cs.CourseId)
+            .HasColumnName("course_id")
+            .IsRequired();
+
         builder.Property(cs => cs.MemberCode)
             .HasColumnName("member_code")
             .HasMaxLength(50);
+
+        builder.Property(cs => cs.SemesterGroupName)
+            .HasColumnName("semester_group_name")
+            .HasMaxLength(100);
 
         builder.Property(cs => cs.EnrollmentStatus)
             .HasColumnName("enrollment_status")
             .HasConversion<string>()
             .HasMaxLength(20)
             .IsRequired();
+
+        builder.Property(cs => cs.CountsTowardCourseSemesterLimit)
+            .HasColumnName("counts_toward_course_semester_limit")
+            .HasDefaultValue(true)
+            .IsRequired();
+
+        builder.Property(cs => cs.CompletedAtUtc)
+            .HasColumnName("completed_at_utc");
+
+        builder.Property(cs => cs.CompletedByUserId)
+            .HasColumnName("completed_by_user_id");
+
+        builder.Property(cs => cs.MajorCodeAtEnrollment)
+            .HasColumnName("major_code_at_enrollment")
+            .HasMaxLength(20)
+            .IsRequired();
+
+        builder.Property(cs => cs.MajorVerificationStatus)
+            .HasColumnName("major_verification_status")
+            .HasConversion<string>()
+            .HasMaxLength(20)
+            .IsRequired();
+
+        builder.Property(cs => cs.MajorVerifiedAtUtc)
+            .HasColumnName("major_verified_at_utc");
+
+        builder.Property(cs => cs.MajorVerifiedByUserId)
+            .HasColumnName("major_verified_by_user_id");
 
         builder.Property(cs => cs.ExamDate)
             .HasColumnName("exam_date");
@@ -77,6 +121,20 @@ public class ClassStudentConfiguration : IEntityTypeConfiguration<ClassStudent>
             .IsUnique()
             .HasFilter("member_code IS NOT NULL"); // Filtered index to allow multiple null values in Postgres/EF Core!
 
+        builder.HasIndex(cs => new { cs.StudentId, cs.SemesterId, cs.CourseId })
+            .IsUnique()
+            .HasFilter("counts_toward_course_semester_limit = true");
+
+        builder.ToTable(table =>
+        {
+            table.HasCheckConstraint(
+                "CK_class_students_status_counting",
+                "(enrollment_status = 'Dropped' AND counts_toward_course_semester_limit = false) OR (enrollment_status IN ('Active', 'Completed') AND counts_toward_course_semester_limit = true)");
+            table.HasCheckConstraint(
+                "CK_class_students_completion_metadata",
+                "(enrollment_status = 'Completed' AND completed_at_utc IS NOT NULL) OR (enrollment_status <> 'Completed' AND completed_at_utc IS NULL)");
+        });
+
         // Relationships configuration
         builder.HasOne(cs => cs.Class)
             .WithMany(c => c.ClassStudents)
@@ -87,5 +145,15 @@ public class ClassStudentConfiguration : IEntityTypeConfiguration<ClassStudent>
             .WithMany(s => s.ClassStudents)
             .HasForeignKey(cs => cs.StudentId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne(cs => cs.MajorVerifiedByUser)
+            .WithMany()
+            .HasForeignKey(cs => cs.MajorVerifiedByUserId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        builder.HasOne(cs => cs.CompletedByUser)
+            .WithMany()
+            .HasForeignKey(cs => cs.CompletedByUserId)
+            .OnDelete(DeleteBehavior.SetNull);
     }
 }

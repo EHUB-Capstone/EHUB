@@ -1,0 +1,178 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1580" height="1120" viewBox="0 0 1580 1120" role="img" aria-labelledby="title desc">
+  <title id="title">Review of the proposed EHub package diagram</title>
+  <desc id="desc">The proposed structure is shown on the left with five incorrect areas highlighted in red. Correct replacements are shown on the right in green.</desc>
+  <defs>
+    <marker id="arrowRed" markerWidth="11" markerHeight="11" refX="9" refY="5.5" orient="auto"><path d="M0 0 L11 5.5 L0 11 Z" fill="#c62828"/></marker>
+    <marker id="arrowGreen" markerWidth="11" markerHeight="11" refX="9" refY="5.5" orient="auto"><path d="M0 0 L11 5.5 L0 11 Z" fill="#2e7d32"/></marker>
+    <style>
+      .title{font:700 29px 'Segoe UI',Arial,sans-serif;fill:#18324a}
+      .subtitle{font:400 15px 'Segoe UI',Arial,sans-serif;fill:#587083}
+      .heading{font:700 19px 'Segoe UI',Arial,sans-serif;fill:#18324a}
+      .pkg{font:700 15px 'Segoe UI',Arial,sans-serif;fill:#17324d}
+      .txt{font:400 13px 'Segoe UI',Arial,sans-serif;fill:#364f63}
+      .small{font:400 12px 'Segoe UI',Arial,sans-serif;fill:#4c6375}
+      .badText{font:600 13px 'Segoe UI',Arial,sans-serif;fill:#9b1c1c}
+      .goodText{font:600 13px 'Segoe UI',Arial,sans-serif;fill:#1b5e20}
+      .badLayer{fill:#fff2f2;stroke:#c62828;stroke-width:2}
+      .goodLayer{fill:#eff9ef;stroke:#2e7d32;stroke-width:2}
+      .neutralLayer{fill:#e8f6ff;stroke:#4285a8;stroke-width:1.7}
+      .node{fill:#fff;stroke:#657985;stroke-width:1.2}
+      .badNode{fill:#fff;stroke:#d32f2f;stroke-width:2}
+      .goodNode{fill:#fff;stroke:#43a047;stroke-width:1.6}
+      .callBad{fill:#c62828}
+      .callGood{fill:#2e7d32}
+      .num{font:700 14px 'Segoe UI',Arial,sans-serif;fill:#fff}
+      .badArrow{fill:none;stroke:#c62828;stroke-width:2;stroke-dasharray:7 5;marker-end:url(#arrowRed)}
+      .goodArrow{fill:none;stroke:#2e7d32;stroke-width:2;marker-end:url(#arrowGreen)}
+      .divider{stroke:#b0bec5;stroke-width:1.5;stroke-dasharray:6 6}
+    </style>
+  </defs>
+
+  <rect width="1580" height="1120" fill="#fff"/>
+  <text x="790" y="43" text-anchor="middle" class="title">Review cấu trúc Package Diagram của EHub</text>
+  <text x="790" y="70" text-anchor="middle" class="subtitle">Bên trái: cấu trúc đề xuất đang sai · Bên phải: cấu trúc nên dùng trước khi bổ sung code</text>
+  <line x1="755" y1="98" x2="755" y2="1040" class="divider"/>
+  <text x="385" y="112" text-anchor="middle" class="heading">SƠ ĐỒ HIỆN TẠI — CẦN SỬA</text>
+  <text x="1125" y="112" text-anchor="middle" class="heading">CẤU TRÚC ĐÚNG ĐỀ XUẤT</text>
+
+  <!-- LEFT: proposed diagram -->
+  <rect x="40" y="140" width="680" height="870" class="neutralLayer"/>
+  <rect x="54" y="127" width="170" height="30" class="badNode"/>
+  <text x="139" y="147" text-anchor="middle" class="badText">Backend API</text>
+  <circle cx="226" cy="142" r="13" class="callBad"/><text x="226" y="147" text-anchor="middle" class="num">1</text>
+
+  <rect x="70" y="175" width="620" height="135" class="neutralLayer"/>
+  <text x="85" y="197" class="pkg">API Layer (Controllers)</text>
+  <rect x="95" y="215" width="175" height="35" class="node"/><text x="182" y="237" text-anchor="middle" class="small">AdminUsersController</text>
+  <rect x="292" y="215" width="175" height="35" class="node"/><text x="379" y="237" text-anchor="middle" class="small">ClassesController</text>
+  <rect x="489" y="215" width="175" height="35" class="node"/><text x="576" y="237" text-anchor="middle" class="small">StudentClassesController</text>
+  <rect x="95" y="263" width="175" height="35" class="node"/><text x="182" y="285" text-anchor="middle" class="small">TeamsController</text>
+  <rect x="292" y="263" width="175" height="35" class="node"/><text x="379" y="285" text-anchor="middle" class="small">SubjectsController</text>
+  <rect x="489" y="263" width="175" height="35" class="node"/><text x="576" y="285" text-anchor="middle" class="small">...</text>
+
+  <path d="M380 310 V345" class="badArrow"/><text x="390" y="334" class="badText">chuỗi import</text>
+  <rect x="70" y="350" width="620" height="115" class="badLayer"/>
+  <text x="85" y="372" class="badText">Contracts + Shared Layer</text>
+  <circle cx="681" cy="361" r="13" class="callBad"/><text x="681" y="366" text-anchor="middle" class="num">2</text>
+  <rect x="95" y="392" width="175" height="38" class="badNode"/><text x="182" y="416" text-anchor="middle" class="small">Contracts DTOs</text>
+  <rect x="292" y="392" width="175" height="38" class="badNode"/><text x="379" y="416" text-anchor="middle" class="small">ApiResponse / Paging</text>
+  <rect x="489" y="392" width="175" height="38" class="badNode"/><text x="576" y="409" text-anchor="middle" class="small">Shared Results / Errors /</text><text x="576" y="425" text-anchor="middle" class="small">Constants</text>
+
+  <path d="M380 465 V500" class="badArrow"/>
+  <rect x="70" y="505" width="620" height="115" class="neutralLayer"/>
+  <text x="85" y="527" class="pkg">Application Layer</text>
+  <rect x="95" y="550" width="175" height="42" class="node"/><text x="182" y="576" text-anchor="middle" class="small">Features</text>
+  <rect x="292" y="550" width="175" height="42" class="node"/><text x="379" y="576" text-anchor="middle" class="small">Common</text>
+  <rect x="489" y="550" width="175" height="42" class="node"/><text x="576" y="576" text-anchor="middle" class="small">Validators</text>
+
+  <path d="M380 620 V655" class="badArrow"/>
+  <rect x="70" y="660" width="620" height="145" class="badLayer"/>
+  <text x="85" y="682" class="badText">Domain Layer — đang đặt theo tên Controller</text>
+  <circle cx="681" cy="671" r="13" class="callBad"/><text x="681" y="676" text-anchor="middle" class="num">3</text>
+  <rect x="95" y="705" width="175" height="35" class="badNode"/><text x="182" y="727" text-anchor="middle" class="small">AdminUsers</text>
+  <rect x="292" y="705" width="175" height="35" class="badNode"/><text x="379" y="727" text-anchor="middle" class="small">Classes</text>
+  <rect x="489" y="705" width="175" height="35" class="badNode"/><text x="576" y="727" text-anchor="middle" class="small">StudentClasses</text>
+  <rect x="95" y="753" width="175" height="35" class="badNode"/><text x="182" y="775" text-anchor="middle" class="small">Teams</text>
+  <rect x="292" y="753" width="175" height="35" class="badNode"/><text x="379" y="775" text-anchor="middle" class="small">Subjects</text>
+
+  <path d="M380 805 V840" class="badArrow"/>
+  <circle cx="450" cy="822" r="13" class="callBad"/><text x="450" y="827" text-anchor="middle" class="num">5</text>
+  <rect x="70" y="845" width="620" height="145" class="badLayer"/>
+  <text x="85" y="867" class="badText">Infrastructure — Repository được tạo theo Controller</text>
+  <circle cx="681" cy="856" r="13" class="callBad"/><text x="681" y="861" text-anchor="middle" class="num">4</text>
+  <rect x="95" y="890" width="175" height="35" class="badNode"/><text x="182" y="912" text-anchor="middle" class="small">AdminUsersRepository</text>
+  <rect x="292" y="890" width="175" height="35" class="badNode"/><text x="379" y="912" text-anchor="middle" class="small">ClassesRepository</text>
+  <rect x="489" y="890" width="175" height="35" class="badNode"/><text x="576" y="912" text-anchor="middle" class="small">StudentClassesRepository</text>
+  <rect x="95" y="938" width="175" height="35" class="badNode"/><text x="182" y="960" text-anchor="middle" class="small">TeamsRepository</text>
+  <rect x="292" y="938" width="175" height="35" class="badNode"/><text x="379" y="960" text-anchor="middle" class="small">SubjectsRepository</text>
+
+  <!-- RIGHT: corrections -->
+  <rect x="790" y="140" width="670" height="870" class="goodLayer"/>
+  <rect x="810" y="127" width="190" height="30" class="goodNode"/>
+  <text x="905" y="147" text-anchor="middle" class="goodText">EHub Backend</text>
+  <circle cx="1010" cy="142" r="13" class="callGood"/><text x="1010" y="147" text-anchor="middle" class="num">1</text>
+  <text x="1035" y="147" class="goodText">Khung chứa toàn bộ solution, không chỉ API</text>
+
+  <rect x="810" y="175" width="630" height="120" class="goodLayer"/>
+  <text x="825" y="198" class="pkg">EHub.Api — Presentation</text>
+  <rect x="835" y="218" width="270" height="48" class="goodNode"/><text x="970" y="239" text-anchor="middle" class="small">Controllers: Auth · Users · Classes</text><text x="970" y="256" text-anchor="middle" class="small">Students · Subjects · Teams</text>
+  <rect x="1130" y="218" width="285" height="48" class="goodNode"/><text x="1272" y="239" text-anchor="middle" class="small">Middlewares · Filters · Extensions</text><text x="1272" y="256" text-anchor="middle" class="small">Dependency Injection</text>
+
+  <rect x="810" y="325" width="300" height="140" class="goodLayer"/>
+  <text x="825" y="348" class="goodText">EHub.Contracts</text>
+  <circle cx="1098" cy="338" r="13" class="callGood"/><text x="1098" y="343" text-anchor="middle" class="num">2</text>
+  <rect x="835" y="370" width="250" height="62" class="goodNode"/><text x="960" y="392" text-anchor="middle" class="small">Request / Response DTOs</text><text x="960" y="411" text-anchor="middle" class="small">Auth · Classes · Subjects · Teams · Users</text>
+  <rect x="1140" y="325" width="300" height="140" class="goodLayer"/>
+  <text x="1155" y="348" class="goodText">EHub.Shared</text>
+  <rect x="1165" y="370" width="250" height="62" class="goodNode"/><text x="1290" y="392" text-anchor="middle" class="small">Results · Errors · Constants</text><text x="1290" y="411" text-anchor="middle" class="small">Security</text>
+
+  <rect x="810" y="500" width="630" height="120" class="goodLayer"/>
+  <text x="825" y="523" class="pkg">EHub.Application</text>
+  <rect x="835" y="545" width="180" height="48" class="goodNode"/><text x="925" y="565" text-anchor="middle" class="small">Features</text><text x="925" y="582" text-anchor="middle" class="small">Admin · Auth · Classes...</text>
+  <rect x="1035" y="545" width="180" height="48" class="goodNode"/><text x="1125" y="565" text-anchor="middle" class="small">Common</text><text x="1125" y="582" text-anchor="middle" class="small">Interfaces · Exceptions</text>
+  <rect x="1235" y="545" width="180" height="48" class="goodNode"/><text x="1325" y="565" text-anchor="middle" class="small">Validators</text><text x="1325" y="582" text-anchor="middle" class="small">Auth · Subjects</text>
+
+  <rect x="810" y="655" width="630" height="160" class="goodLayer"/>
+  <text x="825" y="678" class="goodText">EHub.Domain — chia theo nghiệp vụ / aggregate</text>
+  <circle cx="1428" cy="668" r="13" class="callGood"/><text x="1428" y="673" text-anchor="middle" class="num">3</text>
+  <rect x="835" y="700" width="180" height="42" class="goodNode"/><text x="925" y="726" text-anchor="middle" class="small">Identity</text>
+  <rect x="1035" y="700" width="180" height="42" class="goodNode"/><text x="1125" y="726" text-anchor="middle" class="small">Academic</text>
+  <rect x="1235" y="700" width="180" height="42" class="goodNode"/><text x="1325" y="726" text-anchor="middle" class="small">Teams &amp; Projects</text>
+  <rect x="835" y="758" width="180" height="42" class="goodNode"/><text x="925" y="784" text-anchor="middle" class="small">Assessment</text>
+  <rect x="1035" y="758" width="180" height="42" class="goodNode"/><text x="1125" y="784" text-anchor="middle" class="small">Mentoring</text>
+  <rect x="1235" y="758" width="180" height="42" class="goodNode"/><text x="1325" y="776" text-anchor="middle" class="small">Communication</text><text x="1325" y="793" text-anchor="middle" class="small">Execution · DataBank</text>
+
+  <rect x="810" y="845" width="630" height="145" class="goodLayer"/>
+  <text x="825" y="868" class="goodText">EHub.Infrastructure — chia theo kỹ thuật triển khai</text>
+  <circle cx="1428" cy="858" r="13" class="callGood"/><text x="1428" y="863" text-anchor="middle" class="num">4</text>
+  <rect x="835" y="892" width="180" height="42" class="goodNode"/><text x="925" y="910" text-anchor="middle" class="small">Persistence</text><text x="925" y="927" text-anchor="middle" class="small">DbContext · Repositories</text>
+  <rect x="1035" y="892" width="180" height="42" class="goodNode"/><text x="1125" y="918" text-anchor="middle" class="small">Identity</text>
+  <rect x="1235" y="892" width="180" height="42" class="goodNode"/><text x="1325" y="918" text-anchor="middle" class="small">Services · Storage</text>
+  <rect x="835" y="948" width="180" height="28" class="goodNode"/><text x="925" y="967" text-anchor="middle" class="small">BackgroundJobs</text>
+  <rect x="1035" y="948" width="180" height="28" class="goodNode"/><text x="1125" y="967" text-anchor="middle" class="small">Migrations · Seed</text>
+  <rect x="1235" y="948" width="180" height="28" class="goodNode"/><text x="1325" y="967" text-anchor="middle" class="small">Options</text>
+
+  <!-- Complete dependency arrows on the corrected diagram -->
+  <path d="M900 295 V325" class="goodArrow"/>
+  <text x="908" y="316" class="goodText">API → Contracts</text>
+
+  <path d="M1300 295 V325" class="goodArrow"/>
+  <text x="1308" y="316" class="goodText">API → Shared</text>
+
+  <path d="M1415 275 H1490 V555 H1440" class="goodArrow"/>
+  <text x="1498" y="405" class="goodText" transform="rotate(90 1498 405)">API → Application</text>
+
+  <path d="M1040 500 V480 H960 V465" class="goodArrow"/>
+  <text x="968" y="486" class="goodText">Application → Contracts</text>
+
+  <path d="M1240 500 V465" class="goodArrow"/>
+  <text x="1248" y="486" class="goodText">Application → Shared</text>
+
+  <path d="M1125 620 V655" class="goodArrow"/>
+  <text x="1135" y="645" class="goodText">Application → Domain</text>
+
+  <path d="M1125 845 V815" class="goodArrow"/>
+  <text x="1135" y="839" class="goodText">Infrastructure → Domain</text>
+
+  <path d="M1440 900 H1515 V580 H1440" class="goodArrow"/>
+  <text x="1523" y="790" class="goodText" transform="rotate(-90 1523 790)">Infrastructure → Application (implements interfaces)</text>
+
+  <path d="M1380 845 H1465 V430 H1440" class="goodArrow"/>
+  <text x="1473" y="725" class="goodText" transform="rotate(-90 1473 725)">Infrastructure → Shared</text>
+
+  <path d="M1415 245 H1550 V930 H1440" class="goodArrow"/>
+  <text x="1558" y="510" class="goodText" transform="rotate(90 1558 510)">API → Infrastructure (DI registration)</text>
+
+  <circle cx="815" cy="1038" r="13" class="callGood"/><text x="815" y="1043" text-anchor="middle" class="num">5</text>
+  <text x="840" y="1043" class="goodText">Quy tắc:</text>
+  <text x="910" y="1043" class="txt">mũi tên đi từ package sử dụng đến package được import; Domain không phụ thuộc tầng bên ngoài.</text>
+  <path d="M700 825 C760 825 750 1038 800 1038" class="badArrow"/>
+
+  <!-- mapping arrows between wrong and corrected areas -->
+  <path d="M720 142 H785" class="goodArrow"/>
+  <path d="M720 405 C755 405 765 395 805 395" class="goodArrow"/>
+  <path d="M720 730 C755 730 765 730 805 730" class="goodArrow"/>
+  <path d="M720 915 C755 915 765 915 805 915" class="goodArrow"/>
+
+  <text x="790" y="1090" text-anchor="middle" class="subtitle">Không nên bổ sung code theo khối màu đỏ; hãy sửa package diagram trước rồi mới refactor hoặc tạo package mới.</text>
+</svg>

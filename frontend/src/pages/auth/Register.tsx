@@ -1,5 +1,656 @@
-import React from 'react';
+import { useState, useEffect, useRef } from 'react';
+import type { ChangeEvent, ClipboardEvent, FormEvent, KeyboardEvent } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
+import {
+  User, Mail, Lock, ArrowRight, Eye, EyeOff,
+  ShieldCheck, RefreshCw, Clock, AlertTriangle,
+  Sun, Moon, CheckCircle,
+} from 'lucide-react';
+import toast from 'react-hot-toast';
+import { resendRegistrationOtp } from '../../api/authApi';
+import { useTheme } from '../../context/ThemeContext';
+import { useAuth } from '../../hooks/useAuth';
+import { AUTH_ERROR_CODES } from '../../types/auth';
+import { TEAM_MAJOR_GROUPS } from '../../constants/majors';
+import { parseApiError } from '../../utils/apiError';
+import {
+  AUTH_FIELD_LIMITS,
+  REGISTER_FIELDS,
+  mapApiFieldErrors,
+  normalizeRegisterPayload,
+  toFieldErrorMap,
+  validateRegisterPayload,
+} from '../../utils/authValidation';
+import type { AuthFieldErrors, RegisterField } from '../../utils/authValidation';
+import logo from '../../assets/logo.png';
 
-export const Register: React.FC = () => {
-  return <div>Register</div>;
+const OTP_EXPIRE_SECONDS = 5 * 60;
+const RESEND_COOLDOWN    = 60;
+const PENDING_OTP_STORAGE_KEY = 'ehub_pending_registration_otp';
+
+type Role = 'STUDENT' | 'LECTURER' | 'MENTOR';
+interface StoredOtpSession {
+  registrationId: string;
+  maskedEmail: string;
+  verificationExpiresAtUtc: string | null;
+  resendAvailableAtUtc: string | null;
+}
+
+const secondsUntil = (value: string | null | undefined, fallback = 0) => {
+  if (!value) return fallback;
+  const timestamp = Date.parse(value);
+  if (Number.isNaN(timestamp)) return fallback;
+  return Math.max(0, Math.ceil((timestamp - Date.now()) / 1000));
 };
+
+const BACKEND_ROLE_BY_FORM_ROLE: Record<Role, string> = {
+  STUDENT: 'Student',
+  LECTURER: 'Lecturer',
+  MENTOR: 'Mentor',
+};
+
+// Approval pending screen shown to LECTURER/MENTOR after register
+const PendingApprovalScreen: React.FC<{ email: string; onBack: () => void }> = ({ email, onBack }) => {
+  const statusRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    statusRef.current?.focus();
+  }, []);
+
+  return (
+    <motion.div
+      ref={statusRef}
+      role="status"
+      aria-live="polite"
+      aria-atomic="true"
+      tabIndex={-1}
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="w-full max-w-[420px] text-center outline-none"
+    >
+      <div className="w-[72px] h-[72px] rounded-[24px] bg-blue-500/15 border border-blue-500/30 flex items-center justify-center mx-auto mb-6">
+        <ShieldCheck size={34} className="text-blue-400" />
+      </div>
+      <h1 className="text-[24px] font-extrabold text-slate-900 dark:text-slate-50 mb-2">Account Pending Approval</h1>
+      <p className="text-slate-500 dark:text-slate-400 text-[14px] mb-2">Your registration was submitted successfully.</p>
+      <p className="text-blue-400 text-[14px] font-bold mb-6">{email}</p>
+      <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-4 mb-6 text-left">
+        <p className="text-[13px] text-slate-600 dark:text-slate-300 leading-[1.7]">
+          An admin will review and approve your <strong>Mentor / Lecturer</strong> account shortly.
+          You will be able to sign in once approved.
+        </p>
+      </div>
+      <button onClick={onBack}
+        className="w-full h-12 rounded-[14px] border border-[#E5E7EB] dark:border-white/10 bg-white dark:bg-white/5 text-slate-700 dark:text-slate-300 font-semibold text-[14px] cursor-pointer hover:bg-slate-50 dark:hover:bg-white/10 transition-colors">
+        ← Back to Register
+      </button>
+    </motion.div>
+  );
+};
+
+const Register: React.FC = () => {
+  const { isDark, toggleTheme } = useTheme();
+  const { register, verifyRegistrationOtp } = useAuth();
+
+  /* Step 1 */
+  const [name,            setName]            = useState<string>('');
+  const [email,           setEmail]           = useState<string>('');
+  const [password,        setPassword]        = useState<string>('');
+  const [confirmPassword, setConfirmPassword] = useState<string>('');
+  const [role,            setRole]            = useState<Role>('STUDENT');
+  const [major,           setMajor]           = useState<string>('');
+  const [loading,         setLoading]         = useState<boolean>(false);
+  const [showPass,        setShowPass]        = useState<boolean>(false);
+  const [showConfirm,     setShowConfirm]     = useState<boolean>(false);
+  const [registrationFailed, setRegistrationFailed] = useState<boolean>(false);
+  const [pendingApproval, setPendingApproval] = useState<boolean>(false);
+  const [fieldErrors,     setFieldErrors]     = useState<AuthFieldErrors<RegisterField>>({});
+  const [formError,       setFormError]       = useState<string>('');
+
+  /* Step 2 OTP */
+  const [step,           setStep]           = useState<1 | 2>(1);
+  const [otpValues,      setOtpValues]      = useState<string[]>(['','','','','','']);
+  const [otpLoading,     setOtpLoading]     = useState<boolean>(false);
+  const [countdown,      setCountdown]      = useState<number>(OTP_EXPIRE_SECONDS);
+  const [resendCooldown, setResendCooldown] = useState<number>(0);
+  const [resendLoading,  setResendLoading]  = useState<boolean>(false);
+  const [registrationId, setRegistrationId] = useState<string | null>(null);
+  const [maskedEmail,     setMaskedEmail]     = useState<string>('');
+  const otpRefs = useRef<(HTMLInputElement | null)[]>([]);
+
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    try {
+      const rawSession = sessionStorage.getItem(PENDING_OTP_STORAGE_KEY);
+      if (!rawSession) return;
+      const stored = JSON.parse(rawSession) as StoredOtpSession;
+      if (!stored.registrationId || !stored.maskedEmail) return;
+
+      setRegistrationId(stored.registrationId);
+      setMaskedEmail(stored.maskedEmail);
+      setCountdown(secondsUntil(stored.verificationExpiresAtUtc));
+      setResendCooldown(secondsUntil(stored.resendAvailableAtUtc));
+      setStep(2);
+      requestAnimationFrame(() => otpRefs.current[0]?.focus());
+    } catch {
+      sessionStorage.removeItem(PENDING_OTP_STORAGE_KEY);
+    }
+  // Restore the server-issued challenge once when the page is opened.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (step !== 2 || countdown <= 0) return;
+    const t = setInterval(() => setCountdown(c => c - 1), 1000);
+    return () => clearInterval(t);
+  }, [step, countdown]);
+
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const t = setInterval(() => setResendCooldown(c => c - 1), 1000);
+    return () => clearInterval(t);
+  }, [resendCooldown]);
+
+  const fmt = (s: number) => `${Math.floor(s/60).toString().padStart(2,'0')}:${(s%60).toString().padStart(2,'0')}`;
+
+  const currentRegisterPayload = () => ({
+    fullName: name,
+    email,
+    password,
+    confirmPassword,
+    role: BACKEND_ROLE_BY_FORM_ROLE[role],
+    majorCode: role === 'STUDENT' ? major : undefined,
+  });
+
+  const clearFieldError = (field: RegisterField) => {
+    setFieldErrors(current => {
+      if (!current[field]) return current;
+      const next = { ...current };
+      delete next[field];
+      return next;
+    });
+    setFormError('');
+  };
+
+  const validateField = (field: RegisterField) => {
+    const error = validateRegisterPayload(currentRegisterPayload()).find(item => item.field === field);
+    setFieldErrors(current => {
+      const next = { ...current };
+      if (error) next[field] = error.message;
+      else delete next[field];
+      return next;
+    });
+  };
+
+  const focusFirstError = (errors: AuthFieldErrors<RegisterField>) => {
+    const firstField = REGISTER_FIELDS.find(field => errors[field]);
+    const elementIdByField: Record<RegisterField, string> = {
+      fullName: 'reg-name',
+      email: 'reg-email',
+      password: 'reg-password',
+      confirmPassword: 'reg-confirm',
+      role: 'reg-role-student',
+      majorCode: 'reg-major',
+    };
+    if (firstField) requestAnimationFrame(() => document.getElementById(elementIdByField[firstField])?.focus());
+  };
+
+  /* ─── Handlers ─────────────────────────────────── */
+  const handleRegister = async (e: FormEvent) => {
+    e.preventDefault();
+    const payload = currentRegisterPayload();
+    const nextFieldErrors = toFieldErrorMap(validateRegisterPayload(payload));
+    setFieldErrors(nextFieldErrors);
+    setFormError('');
+    if (Object.keys(nextFieldErrors).length > 0) {
+      focusFirstError(nextFieldErrors);
+      return;
+    }
+
+    const normalizedPayload = normalizeRegisterPayload(payload);
+    if (normalizedPayload.fullName !== name) setName(normalizedPayload.fullName);
+    if (normalizedPayload.email !== email) setEmail(normalizedPayload.email);
+    setLoading(true); setRegistrationFailed(false);
+    try {
+      const result = await register(normalizedPayload);
+      if (!result.requiresEmailVerification || !result.registrationId) {
+        throw new Error('The server did not create an email verification challenge.');
+      }
+
+      setRegistrationId(result.registrationId);
+      setMaskedEmail(result.maskedEmail || normalizedPayload.email);
+      setOtpValues(['','','','','','']);
+      setCountdown(secondsUntil(result.verificationExpiresAtUtc, OTP_EXPIRE_SECONDS));
+      setResendCooldown(secondsUntil(result.resendAvailableAtUtc, RESEND_COOLDOWN));
+      sessionStorage.setItem(PENDING_OTP_STORAGE_KEY, JSON.stringify({
+        registrationId: result.registrationId,
+        maskedEmail: result.maskedEmail || normalizedPayload.email,
+        verificationExpiresAtUtc: result.verificationExpiresAtUtc,
+        resendAvailableAtUtc: result.resendAvailableAtUtc,
+      } satisfies StoredOtpSession));
+      setStep(2);
+      toast.success(result.message);
+      requestAnimationFrame(() => otpRefs.current[0]?.focus());
+    } catch (err: unknown) {
+      const { code, message, fieldErrors: apiFieldErrors } = parseApiError(err, 'Registration failed.');
+      const mappedFieldErrors = mapApiFieldErrors(apiFieldErrors, REGISTER_FIELDS);
+
+      if (code === AUTH_ERROR_CODES.REGISTRATION_FAILED) {
+        setRegistrationFailed(true);
+      } else if (code === AUTH_ERROR_CODES.INVALID_ROLE) {
+        mappedFieldErrors.role = message;
+      } else if (code === AUTH_ERROR_CODES.INVALID_MAJOR) {
+        mappedFieldErrors.majorCode = message;
+      } else if (code === AUTH_ERROR_CODES.STUDENT_MAJOR_REQUIRED) {
+        mappedFieldErrors.majorCode = message;
+      }
+      setFieldErrors(mappedFieldErrors);
+      focusFirstError(mappedFieldErrors);
+      if (Object.keys(mappedFieldErrors).length === 0) setFormError(message);
+    } finally { setLoading(false); }
+  };
+
+  const handleOtpChange = (idx: number, val: string) => {
+    if (!/^\d?$/.test(val)) return;
+    const next = [...otpValues]; next[idx] = val; setOtpValues(next);
+    if (val && idx < 5) otpRefs.current[idx + 1]?.focus();
+  };
+  const handleOtpKeyDown = (idx: number, e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Backspace' && !otpValues[idx] && idx > 0) otpRefs.current[idx - 1]?.focus();
+  };
+  const handleOtpPaste = (e: ClipboardEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const pasted = e.clipboardData.getData('text').replace(/\D/g,'').slice(0,6);
+    if (!pasted) return;
+    const next = [...otpValues];
+    pasted.split('').forEach((ch, i) => { next[i] = ch; });
+    setOtpValues(next);
+    otpRefs.current[Math.min(pasted.length, 5)]?.focus();
+  };
+
+  const handleVerifyOtp = async (e: FormEvent) => {
+    e.preventDefault();
+    const otp = otpValues.join('');
+    if (!registrationId) return void toast.error('Registration session not found. Please register again.');
+    if (otp.length !== 6) return void toast.error('Enter all 6 digits.');
+    if (countdown <= 0)   return void toast.error('OTP expired. Request a new one.');
+    setOtpLoading(true);
+    try {
+      const result = await verifyRegistrationOtp({ registrationId, otp });
+      sessionStorage.removeItem(PENDING_OTP_STORAGE_KEY);
+      toast.success(result.message);
+      if (result.requiresApproval) {
+        setPendingApproval(true);
+      } else {
+        navigate('/student');
+      }
+    } catch (err: unknown) {
+      const { code, message } = parseApiError(err, 'Verification failed.');
+      if (code === AUTH_ERROR_CODES.VERIFICATION_CODE_EXPIRED) setCountdown(0);
+      toast.error(message);
+      setOtpValues(['','','','','','']); otpRefs.current[0]?.focus();
+    } finally { setOtpLoading(false); }
+  };
+
+  const handleResend = async () => {
+    if (resendCooldown > 0 || !registrationId) return;
+    setResendLoading(true);
+    try {
+      const result = await resendRegistrationOtp({ registrationId });
+      toast.success(result.message);
+      setOtpValues(['','','','','','']);
+      setCountdown(secondsUntil(result.verificationExpiresAtUtc, OTP_EXPIRE_SECONDS));
+      setResendCooldown(secondsUntil(result.resendAvailableAtUtc, RESEND_COOLDOWN));
+      sessionStorage.setItem(PENDING_OTP_STORAGE_KEY, JSON.stringify({
+        registrationId,
+        maskedEmail: result.maskedEmail || maskedEmail,
+        verificationExpiresAtUtc: result.verificationExpiresAtUtc,
+        resendAvailableAtUtc: result.resendAvailableAtUtc,
+      } satisfies StoredOtpSession));
+      otpRefs.current[0]?.focus();
+    } catch (err: unknown) {
+      toast.error(parseApiError(err, 'Failed to resend OTP.').message);
+    } finally { setResendLoading(false); }
+  };
+
+  /* ─── Render ───────────────────────────────────── */
+  return (
+    <div className="min-h-screen flex font-sans transition-colors duration-300 bg-white dark:bg-[#0F172A]">
+
+      {/* ── LEFT PANEL ── */}
+      <div className="hidden lg:flex w-[40%] flex-col justify-between p-12 relative overflow-hidden bg-[#0F172A]">
+        <div className="absolute -top-[10%] -right-[10%] w-[360px] h-[360px] rounded-full bg-[#EA6A12]/12 blur-[110px]" />
+
+        <div className="relative z-10">
+          <Link to="/" className="inline-flex items-center gap-2.5 no-underline">
+            <img src={logo} alt="EHub" className="w-10 h-10 object-contain" />
+            <span className="text-[20px] font-extrabold tracking-tight">
+              <span className="text-[#F3A07A]">E</span>
+              <span className="text-[#79A8D9]">HUB</span>
+            </span>
+          </Link>
+        </div>
+
+        <div className="relative z-10">
+          <h2 className="text-[32px] font-extrabold text-white leading-[1.2] mb-4 tracking-tight">
+            Join the future of <span className="text-[#EA6A12]">student startups</span>
+          </h2>
+          <p className="text-white/50 text-[15px] leading-[1.7] mb-9">
+            Create your account and start managing your startup journey with mentors, evaluations, and AI-powered insights.
+          </p>
+          
+          <div className="flex flex-col gap-3.5">
+            {['Free to join, forever', 'AI-powered project evaluation', 'Connect with expert mentors', 'Track your startup progress'].map((t, i) => (
+              <div key={i} className="flex items-center gap-3">
+                <CheckCircle size={18} color="#EA6A12" />
+                <span className="text-white/65 text-[14px]">{t}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="relative z-10 h-10" />
+      </div>
+
+      {/* ── RIGHT PANEL ── */}
+      <div className="flex-1 flex flex-col items-center justify-center p-[32px_24px] overflow-y-auto relative">
+
+        {/* Theme toggle */}
+        <button onClick={toggleTheme}
+          className="absolute top-6 right-6 w-10 h-10 rounded-[14px] border border-[#E5E7EB] dark:border-white/10 bg-white dark:bg-white/5 cursor-pointer flex items-center justify-center text-[#64748B] dark:text-slate-400 transition-all hover:bg-[#F8FAFC] dark:hover:bg-white/10"
+          aria-label="Toggle theme"
+        >
+          {isDark ? <Sun size={18} /> : <Moon size={18} />}
+        </button>
+
+        <AnimatePresence mode="wait">
+
+          {/* ── PENDING APPROVAL (LECTURER/MENTOR after register) ── */}
+          {pendingApproval && (
+            <PendingApprovalScreen
+              key="pending"
+              email={maskedEmail || email}
+              onBack={() => {
+                setPendingApproval(false);
+                setStep(1);
+                setRegistrationId(null);
+                setMaskedEmail('');
+                setOtpValues(['','','','','','']);
+              }}
+            />
+          )}
+
+          {/* ── STEP 1: Registration form ── */}
+          {!pendingApproval && step === 1 && (
+            <motion.div key="step1"
+              initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}
+              transition={{ duration: 0.3 }}
+              className="w-full max-w-[420px]">
+
+              {/* Mobile logo */}
+              <div className="lg:hidden text-center mb-7">
+                <Link to="/" className="inline-flex items-center gap-2.5 no-underline">
+                  <img src={logo} alt="EHub" className="w-[36px] h-[36px] object-contain" />
+                  <span className="text-[18px] font-extrabold tracking-tight">
+                    <span className="text-[#F08A5D]">E</span><span className="text-[#1E5E9F] dark:text-[#79A8D9]">HUB</span>
+                  </span>
+                </Link>
+              </div>
+
+              <h1 className="text-[26px] font-extrabold text-[#0F172A] dark:text-slate-50 mb-1.5 tracking-tight">Create your account</h1>
+              <p className="text-[#64748B] dark:text-slate-400 text-[14px] mb-6">Join EHub and start your startup journey</p>
+
+              {/* Email taken banner */}
+              <AnimatePresence>
+                {registrationFailed && (
+                  <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
+                    className="bg-red-500/10 border border-red-500/30 rounded-xl p-3.5 flex gap-3 mb-4.5">
+                    <AlertTriangle size={18} className="text-red-400 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-[13px] font-semibold text-red-400 mb-1">Unable to create account</p>
+                      <p className="text-[12px] text-slate-500 dark:text-slate-400 mb-2">Please try signing in or resetting your password.</p>
+                      <div className="flex gap-3">
+                        <Link to="/login" state={{ prefillEmail: email }} className="text-[12px] font-semibold text-red-400 underline">Sign in →</Link>
+                        <Link to="/forgot-password" className="text-[12px] font-semibold text-slate-500 dark:text-slate-400 underline">Forgot password?</Link>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {formError && (
+                <div id="register-form-error" role="alert"
+                  className="bg-red-500/10 border border-red-500/30 rounded-xl p-3.5 flex gap-3 mb-4.5">
+                  <AlertTriangle size={18} className="text-red-500 shrink-0 mt-0.5" />
+                  <p className="text-[13px] text-red-500 dark:text-red-400">{formError}</p>
+                </div>
+              )}
+
+              <form onSubmit={handleRegister} className="flex flex-col gap-3.5" noValidate aria-describedby={formError ? 'register-form-error' : undefined}>
+                {/* Name */}
+                <div>
+                  <label htmlFor="reg-name" className="block text-[13px] font-semibold text-slate-900 dark:text-slate-50 mb-1.5">Full Name</label>
+                  <div className="relative">
+                    <User size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                    <input id="reg-name" type="text" value={name}
+                      onChange={(e: ChangeEvent<HTMLInputElement>) => { setName(e.target.value); clearFieldError('fullName'); }}
+                      onBlur={() => validateField('fullName')}
+                      placeholder="Nguyen Van A" autoComplete="name" required maxLength={AUTH_FIELD_LIMITS.fullNameMax}
+                      aria-invalid={Boolean(fieldErrors.fullName)} aria-describedby={fieldErrors.fullName ? 'reg-name-error' : undefined}
+                      className={`w-full py-2.5 pr-3.5 pl-10 rounded-[14px] border bg-[#F8FAFC] dark:bg-white/5 text-[#0F172A] dark:text-slate-100 text-[14px] outline-none transition-colors ${fieldErrors.fullName ? 'border-red-500 focus:border-red-500' : 'border-[#E5E7EB] dark:border-white/10 focus:border-[#EA6A12] dark:focus:border-[#EA6A12]'}`}
+                    />
+                  </div>
+                  {fieldErrors.fullName && <p id="reg-name-error" role="alert" className="mt-1.5 text-[12px] text-red-500 dark:text-red-400">{fieldErrors.fullName}</p>}
+                </div>
+
+                {/* Email */}
+                <div>
+                  <label htmlFor="reg-email" className="block text-[13px] font-semibold text-slate-900 dark:text-slate-50 mb-1.5">Email</label>
+                  <div className="relative">
+                    <Mail size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                    <input id="reg-email" type="email" value={email} onChange={(e: ChangeEvent<HTMLInputElement>) => { setEmail(e.target.value); setRegistrationFailed(false); clearFieldError('email'); }}
+                      onBlur={() => validateField('email')}
+                      placeholder="you@example.com" autoComplete="email" required maxLength={AUTH_FIELD_LIMITS.emailMax}
+                      aria-invalid={Boolean(fieldErrors.email)} aria-describedby={fieldErrors.email ? 'reg-email-error' : undefined}
+                      className={`w-full py-2.5 pr-3.5 pl-10 rounded-[14px] border bg-[#F8FAFC] dark:bg-white/5 text-[#0F172A] dark:text-slate-100 text-[14px] outline-none transition-colors ${fieldErrors.email ? 'border-red-500 focus:border-red-500' : 'border-[#E5E7EB] dark:border-white/10 focus:border-[#EA6A12] dark:focus:border-[#EA6A12]'}`}
+                    />
+                  </div>
+                  {fieldErrors.email && <p id="reg-email-error" role="alert" className="mt-1.5 text-[12px] text-red-500 dark:text-red-400">{fieldErrors.email}</p>}
+                </div>
+
+                {/* Password */}
+                <div>
+                  <label htmlFor="reg-password" className="block text-[13px] font-semibold text-slate-900 dark:text-slate-50 mb-1.5">Password</label>
+                  <div className="relative">
+                    <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                    <input id="reg-password" type={showPass ? 'text' : 'password'} value={password}
+                      onChange={(e: ChangeEvent<HTMLInputElement>) => { setPassword(e.target.value); clearFieldError('password'); clearFieldError('confirmPassword'); }}
+                      onBlur={() => { validateField('password'); if (confirmPassword) validateField('confirmPassword'); }}
+                      placeholder="6–100 characters" autoComplete="new-password" required
+                      minLength={AUTH_FIELD_LIMITS.passwordMin} maxLength={AUTH_FIELD_LIMITS.passwordMax}
+                      aria-invalid={Boolean(fieldErrors.password)} aria-describedby={fieldErrors.password ? 'reg-password-error' : 'reg-password-help'}
+                      className={`w-full py-2.5 pr-11 pl-10 rounded-[14px] border bg-[#F8FAFC] dark:bg-white/5 text-[#0F172A] dark:text-slate-100 text-[14px] outline-none transition-colors ${fieldErrors.password ? 'border-red-500 focus:border-red-500' : 'border-[#E5E7EB] dark:border-white/10 focus:border-[#EA6A12] dark:focus:border-[#EA6A12]'}`}
+                    />
+                    <button type="button" onClick={() => setShowPass(p => !p)}
+                      aria-label={showPass ? 'Hide password' : 'Show password'}
+                      className="absolute right-3.5 top-1/2 -translate-y-1/2 bg-transparent border-none cursor-pointer text-slate-400 p-0">
+                      {showPass ? <EyeOff size={15} /> : <Eye size={15} />}
+                    </button>
+                  </div>
+                  {fieldErrors.password
+                    ? <p id="reg-password-error" role="alert" className="mt-1.5 text-[12px] text-red-500 dark:text-red-400">{fieldErrors.password}</p>
+                    : <p id="reg-password-help" className="mt-1.5 text-[11px] text-slate-500 dark:text-slate-400">Use 6–100 characters.</p>}
+                </div>
+
+                {/* Confirm Password */}
+                <div>
+                  <label htmlFor="reg-confirm" className="block text-[13px] font-semibold text-slate-900 dark:text-slate-50 mb-1.5">Confirm Password</label>
+                  <div className="relative">
+                    <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                    <input id="reg-confirm" type={showConfirm ? 'text' : 'password'} value={confirmPassword}
+                      onChange={(e: ChangeEvent<HTMLInputElement>) => { setConfirmPassword(e.target.value); clearFieldError('confirmPassword'); }}
+                      onBlur={() => validateField('confirmPassword')}
+                      placeholder="Re-enter password" autoComplete="new-password" required
+                      aria-invalid={Boolean(fieldErrors.confirmPassword)} aria-describedby={fieldErrors.confirmPassword ? 'reg-confirm-error' : undefined}
+                      className={`w-full py-2.5 pr-11 pl-10 rounded-[14px] border bg-[#F8FAFC] dark:bg-white/5 text-[#0F172A] dark:text-slate-100 text-[14px] outline-none transition-colors ${fieldErrors.confirmPassword ? 'border-red-500 focus:border-red-500' : 'border-[#E5E7EB] dark:border-white/10 focus:border-[#EA6A12] dark:focus:border-[#EA6A12]'}`}
+                    />
+                    <button type="button" onClick={() => setShowConfirm(p => !p)}
+                      aria-label={showConfirm ? 'Hide confirm password' : 'Show confirm password'}
+                      className="absolute right-3.5 top-1/2 -translate-y-1/2 bg-transparent border-none cursor-pointer text-slate-400 p-0">
+                      {showConfirm ? <EyeOff size={15} /> : <Eye size={15} />}
+                    </button>
+                  </div>
+                  {fieldErrors.confirmPassword && <p id="reg-confirm-error" role="alert" className="mt-1.5 text-[12px] text-red-500 dark:text-red-400">{fieldErrors.confirmPassword}</p>}
+                </div>
+
+                {/* Role */}
+                <div>
+                  <span id="reg-role-label" className="block text-[13px] font-semibold text-slate-900 dark:text-slate-50 mb-2">Role</span>
+                  <div role="radiogroup" aria-labelledby="reg-role-label" aria-invalid={Boolean(fieldErrors.role)} aria-describedby={fieldErrors.role ? 'reg-role-error' : undefined}
+                    className={`grid grid-cols-3 gap-2 p-1 rounded-[14px] border bg-[#F8FAFC] dark:bg-white/5 ${fieldErrors.role ? 'border-red-500' : 'border-[#E5E7EB] dark:border-white/10'}`}>
+                    {(['STUDENT','LECTURER','MENTOR'] as Role[]).map(r => (
+                      <label key={r} className="cursor-pointer">
+                        <input id={`reg-role-${r.toLowerCase()}`} type="radio" name="role" value={r} checked={role === r}
+                          onChange={() => { setRole(r); if (r !== 'STUDENT') setMajor(''); clearFieldError('role'); clearFieldError('majorCode'); }}
+                          className="sr-only" />
+                        <div className={`text-center py-[9px] px-1 rounded-[9px] text-[13px] font-semibold transition-all ${
+                          role === r 
+                            ? 'bg-white text-[#EA6A12] border border-[#EA6A12]/30 shadow-[0_10px_24px_rgba(234,106,18,0.12)] dark:bg-[#EA6A12]/15'
+                            : 'bg-transparent text-slate-500 dark:text-slate-400 border border-transparent shadow-none'
+                        }`}>
+                          {r.charAt(0) + r.slice(1).toLowerCase()}
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                  {fieldErrors.role && <p id="reg-role-error" role="alert" className="mt-1.5 text-[12px] text-red-500 dark:text-red-400">{fieldErrors.role}</p>}
+                </div>
+
+                {/* Major (STUDENT only) */}
+                {role === 'STUDENT' && (
+                  <div>
+                    <label htmlFor="reg-major" className="block text-[13px] font-semibold text-slate-900 dark:text-slate-50 mb-1.5">Major</label>
+                    <select id="reg-major" value={major} onChange={(e: ChangeEvent<HTMLSelectElement>) => { setMajor(e.target.value); clearFieldError('majorCode'); }}
+                      onBlur={() => validateField('majorCode')} required
+                      aria-invalid={Boolean(fieldErrors.majorCode)} aria-describedby={fieldErrors.majorCode ? 'reg-major-error' : undefined}
+                      className={`w-full py-2.5 px-3.5 rounded-[14px] border bg-[#F8FAFC] dark:bg-white/5 text-[14px] outline-none transition-colors text-[#0F172A] dark:text-slate-100 ${fieldErrors.majorCode ? 'border-red-500 focus:border-red-500' : 'border-[#E5E7EB] dark:border-white/10 focus:border-[#EA6A12] dark:focus:border-[#EA6A12]'}`}
+                    >
+                      <option value="" className="text-slate-500">-- Select Major --</option>
+                      {TEAM_MAJOR_GROUPS.map(g => (
+                        <optgroup key={g.key} label={g.label} className="text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800">
+                          {g.majors.map(m => <option key={m.code} value={m.code}>{m.code} - {m.name}</option>)}
+                        </optgroup>
+                      ))}
+                    </select>
+                    {fieldErrors.majorCode && <p id="reg-major-error" role="alert" className="mt-1.5 text-[12px] text-red-500 dark:text-red-400">{fieldErrors.majorCode}</p>}
+                  </div>
+                )}
+
+                {/* Submit */}
+                <button type="submit" disabled={loading}
+                  className={`w-full h-14 rounded-[14px] border-none font-semibold text-[15px] text-white flex items-center justify-center gap-2 mt-1 transition-all duration-200 ease-out bg-[linear-gradient(135deg,#EA6A12,#D97706)] shadow-[0_10px_28px_rgba(234,106,18,0.18)] ${loading ? 'opacity-70 cursor-not-allowed' : 'cursor-pointer hover:-translate-y-0.5 hover:shadow-[0_14px_36px_rgba(234,106,18,0.22)]'}`}
+                >
+                  {loading
+                    ? <div className="w-[18px] h-[18px] rounded-full border-2 border-white/50 border-t-white animate-spin" />
+                    : <><span>Create Account</span><ArrowRight size={17} /></>
+                  }
+                </button>
+              </form>
+
+              <p className="text-center mt-5 text-[14px] text-slate-500 dark:text-slate-400">
+                Already have an account?{' '}
+                <Link to="/login" className="text-[#EA6A12] font-bold no-underline">Sign in</Link>
+              </p>
+            </motion.div>
+          )}
+
+          {/* ── STEP 2: OTP ── */}
+          {step === 2 && (
+            <motion.div key="step2"
+              initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }}
+              transition={{ duration: 0.3 }}
+              className="w-full max-w-[400px] text-center">
+
+              {/* Icon */}
+              <div className="w-[72px] h-[72px] rounded-[24px] bg-[#0F172A] flex items-center justify-center mx-auto mb-6 shadow-[0_22px_55px_rgba(15,23,42,0.18)]">
+                <ShieldCheck size={34} color="#fff" />
+              </div>
+
+              <h1 className="text-[24px] font-extrabold text-slate-900 dark:text-slate-50 mb-2">Verify your email</h1>
+              <p className="text-slate-500 dark:text-slate-400 text-[14px] mb-1">OTP code sent to</p>
+              <p className="text-[#EA6A12] text-[14px] font-bold mb-6">{maskedEmail || email}</p>
+
+              {/* Countdown */}
+              <div className={`inline-flex items-center gap-2 px-4.5 py-2 rounded-full mb-7 text-[13px] font-bold border ${countdown > 60 ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-500' : countdown > 0 ? 'bg-amber-500/10 border-amber-500/30 text-amber-500' : 'bg-red-500/10 border-red-500/30 text-red-500'}`}>
+                <Clock size={14} />
+                {countdown > 0 ? `Expires in ${fmt(countdown)}` : 'OTP expired — request a new one'}
+              </div>
+
+              {/* OTP inputs */}
+              <form onSubmit={handleVerifyOtp}>
+                <div className="flex gap-2.5 justify-center mb-6" onPaste={handleOtpPaste}>
+                  {otpValues.map((val, idx) => (
+                    <input key={idx}
+                      ref={el => { otpRefs.current[idx] = el; }}
+                      type="text" inputMode="numeric" maxLength={1} value={val}
+                      onChange={(e: ChangeEvent<HTMLInputElement>) => handleOtpChange(idx, e.target.value)}
+                      onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => handleOtpKeyDown(idx, e)}
+                      className={`w-[52px] h-[60px] text-center text-[22px] font-extrabold rounded-xl border-2 outline-none transition-all ${
+                        val 
+                          ? 'border-[#EA6A12] bg-orange-50 dark:bg-[#EA6A12]/10 text-[#EA6A12]'
+                          : 'border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 text-slate-900 dark:text-slate-50'
+                      }`}
+                    />
+                  ))}
+                </div>
+
+                <button type="submit" disabled={otpLoading || countdown <= 0}
+                  className={`w-full h-14 rounded-[14px] border-none font-semibold text-[15px] text-white flex items-center justify-center gap-2 transition-all duration-200 ease-out bg-[linear-gradient(135deg,#EA6A12,#D97706)] shadow-[0_10px_28px_rgba(234,106,18,0.18)] ${
+                    (otpLoading || countdown <= 0) 
+                      ? 'opacity-60 cursor-not-allowed' 
+                      : 'cursor-pointer hover:-translate-y-0.5 hover:shadow-[0_14px_36px_rgba(234,106,18,0.22)]'
+                  }`}
+                >
+                  {otpLoading
+                    ? <div className="w-[18px] h-[18px] rounded-full border-2 border-white/50 border-t-white animate-spin" />
+                    : 'Verify OTP'
+                  }
+                </button>
+              </form>
+
+              {/* Resend */}
+              <div className="mt-5">
+                <p className="text-[13px] text-slate-500 dark:text-slate-400 mb-2">Didn't receive the email?</p>
+                <button onClick={handleResend} disabled={resendCooldown > 0 || resendLoading}
+                  className={`bg-transparent border-none inline-flex items-center gap-1.5 text-[13px] font-bold ${
+                    (resendCooldown > 0 || resendLoading) 
+                      ? 'cursor-not-allowed text-slate-500 dark:text-slate-400' 
+                      : 'cursor-pointer text-[#EA6A12]'
+                  }`}>
+                  <RefreshCw size={14} className={resendLoading ? 'animate-spin' : ''} />
+                  {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : resendLoading ? 'Sending...' : 'Resend OTP'}
+                </button>
+              </div>
+
+              <button onClick={() => {
+                setStep(1);
+                setOtpValues(['','','','','','']);
+                setRegistrationId(null);
+                setMaskedEmail('');
+                sessionStorage.removeItem(PENDING_OTP_STORAGE_KEY);
+              }}
+                className="mt-4 bg-transparent border-none cursor-pointer text-[13px] text-slate-500 dark:text-slate-400 w-full hover:text-slate-700 dark:hover:text-slate-300 transition-colors">
+                ← Use a different email address
+              </button>
+            </motion.div>
+          )}
+
+        </AnimatePresence>
+      </div>
+    </div>
+  );
+};
+
+export default Register;

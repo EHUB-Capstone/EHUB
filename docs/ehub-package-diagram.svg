@@ -1,0 +1,185 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1660" viewBox="0 0 1200 1660" role="img" aria-labelledby="title desc">
+  <title id="title">EHub backend package diagram</title>
+  <desc id="desc">UML package diagram showing the EHub API, Application, Contracts, Shared, Domain, and Infrastructure packages and their dependencies.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L10,5 L0,10 Z" fill="#263238"/>
+    </marker>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="125%">
+      <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#263238" flood-opacity="0.14"/>
+    </filter>
+    <style>
+      .title { font: 700 28px 'Segoe UI', Arial, sans-serif; fill: #183153; }
+      .subtitle { font: 400 15px 'Segoe UI', Arial, sans-serif; fill: #536579; }
+      .package-title { font: 700 18px 'Segoe UI', Arial, sans-serif; fill: #17324d; }
+      .box-title { font: 600 15px 'Segoe UI', Arial, sans-serif; fill: #183153; }
+      .box-text { font: 400 13px 'Segoe UI', Arial, sans-serif; fill: #40556a; }
+      .dependency { font: 600 13px 'Segoe UI', Arial, sans-serif; fill: #34495e; }
+      .outer { fill: #eaf2ff; stroke: #5b8bc9; stroke-width: 2; }
+      .layer { fill: #edf8ee; stroke: #69a86d; stroke-width: 2; }
+      .tab { fill: #d8eed9; stroke: #69a86d; stroke-width: 2; }
+      .component { fill: #ffffff; stroke: #637381; stroke-width: 1.5; }
+      .arrow { fill: none; stroke: #263238; stroke-width: 2; marker-end: url(#arrow); }
+      .dashed { stroke-dasharray: 7 6; }
+    </style>
+  </defs>
+
+  <rect width="1200" height="1660" fill="#ffffff"/>
+  <text x="600" y="48" text-anchor="middle" class="title">EHub Backend — Package Diagram</text>
+  <text x="600" y="76" text-anchor="middle" class="subtitle">ASP.NET Core · Clean Architecture · CQRS</text>
+
+  <g filter="url(#shadow)">
+    <path class="outer" d="M55 135 H275 V105 H475 V135 H1145 V1605 H55 Z"/>
+    <text x="75" y="126" class="package-title">EHub Backend</text>
+  </g>
+
+  <!-- API package -->
+  <g>
+    <path class="layer" d="M105 205 H275 V175 H445 V205 H1095 V405 H105 Z"/>
+    <rect class="tab" x="105" y="175" width="340" height="42"/>
+    <text x="122" y="202" class="package-title">EHub.Api — Presentation</text>
+
+    <rect class="component" x="135" y="240" width="260" height="125" rx="3"/>
+    <text x="265" y="268" text-anchor="middle" class="box-title">Controllers</text>
+    <text x="265" y="294" text-anchor="middle" class="box-text">Auth · AdminUsers · Users</text>
+    <text x="265" y="316" text-anchor="middle" class="box-text">Classes · StudentClasses · Subjects</text>
+    <text x="265" y="338" text-anchor="middle" class="box-text">Teams · Dashboard · Tracking · Chat</text>
+
+    <rect class="component" x="470" y="240" width="260" height="125" rx="3"/>
+    <text x="600" y="268" text-anchor="middle" class="box-title">HTTP Pipeline</text>
+    <text x="600" y="294" text-anchor="middle" class="box-text">Middlewares · Filters</text>
+    <text x="600" y="316" text-anchor="middle" class="box-text">Configurations · Extensions</text>
+    <text x="600" y="338" text-anchor="middle" class="box-text">Authentication · Authorization</text>
+
+    <rect class="component" x="805" y="240" width="260" height="125" rx="3"/>
+    <text x="935" y="268" text-anchor="middle" class="box-title">Composition Root</text>
+    <text x="935" y="294" text-anchor="middle" class="box-text">Dependency Injection</text>
+    <text x="935" y="316" text-anchor="middle" class="box-text">Application registration</text>
+    <text x="935" y="338" text-anchor="middle" class="box-text">Infrastructure registration</text>
+  </g>
+
+  <!-- API dependencies -->
+  <path class="arrow dashed" d="M370 405 V455 H300 V510"/>
+  <text x="315" y="447" class="dependency">&lt;&lt;uses&gt;&gt;</text>
+  <path class="arrow dashed" d="M540 405 V465 H585 V510"/>
+  <text x="470" y="457" class="dependency">&lt;&lt;uses&gt;&gt;</text>
+  <path class="arrow dashed" d="M840 405 V455 H905 V510"/>
+  <text x="780" y="447" class="dependency">&lt;&lt;uses&gt;&gt;</text>
+
+  <!-- Application package -->
+  <g>
+    <path class="layer" d="M105 540 H295 V510 H480 V540 H1095 V780 H105 Z"/>
+    <rect class="tab" x="105" y="510" width="375" height="42"/>
+    <text x="122" y="537" class="package-title">EHub.Application — Use Cases</text>
+
+    <rect class="component" x="135" y="575" width="280" height="155" rx="3"/>
+    <text x="275" y="603" text-anchor="middle" class="box-title">Features / CQRS</text>
+    <text x="275" y="629" text-anchor="middle" class="box-text">Admin · Auth · Classes</text>
+    <text x="275" y="651" text-anchor="middle" class="box-text">Dashboard · Subjects</text>
+    <text x="275" y="673" text-anchor="middle" class="box-text">Teams · Tracking</text>
+    <text x="275" y="703" text-anchor="middle" class="box-text">Commands · Queries · Handlers</text>
+
+    <rect class="component" x="460" y="575" width="280" height="155" rx="3"/>
+    <text x="600" y="603" text-anchor="middle" class="box-title">Common Interfaces</text>
+    <text x="600" y="629" text-anchor="middle" class="box-text">Persistence · Identity</text>
+    <text x="600" y="651" text-anchor="middle" class="box-text">Services · Authorization</text>
+    <text x="600" y="673" text-anchor="middle" class="box-text">IApplicationDbContext</text>
+    <text x="600" y="695" text-anchor="middle" class="box-text">Repositories · IUnitOfWork</text>
+
+    <rect class="component" x="785" y="575" width="280" height="155" rx="3"/>
+    <text x="925" y="603" text-anchor="middle" class="box-title">Validation &amp; Common</text>
+    <text x="925" y="629" text-anchor="middle" class="box-text">Validators · Exceptions</text>
+    <text x="925" y="651" text-anchor="middle" class="box-text">Identity models</text>
+    <text x="925" y="673" text-anchor="middle" class="box-text">PermissionService</text>
+    <text x="925" y="695" text-anchor="middle" class="box-text">Business rules</text>
+  </g>
+
+  <!-- Supporting packages -->
+  <g>
+    <path class="layer" d="M105 850 H235 V820 H365 V850 H575 V1010 H105 Z"/>
+    <rect class="tab" x="105" y="820" width="260" height="42"/>
+    <text x="122" y="847" class="package-title">EHub.Contracts</text>
+    <rect class="component" x="135" y="885" width="410" height="85" rx="3"/>
+    <text x="340" y="914" text-anchor="middle" class="box-title">API Contracts / DTOs</text>
+    <text x="340" y="940" text-anchor="middle" class="box-text">Classes · Subjects · Teams · Users</text>
+
+    <path class="layer" d="M625 850 H755 V820 H885 V850 H1095 V1010 H625 Z"/>
+    <rect class="tab" x="625" y="820" width="260" height="42"/>
+    <text x="642" y="847" class="package-title">EHub.Shared</text>
+    <rect class="component" x="655" y="885" width="410" height="85" rx="3"/>
+    <text x="860" y="914" text-anchor="middle" class="box-title">Cross-cutting Building Blocks</text>
+    <text x="860" y="940" text-anchor="middle" class="box-text">Results · Errors · Constants · Security</text>
+  </g>
+
+  <path class="arrow dashed" d="M320 780 V820"/>
+  <text x="335" y="807" class="dependency">&lt;&lt;uses&gt;&gt;</text>
+  <path class="arrow dashed" d="M865 780 V820"/>
+  <text x="880" y="807" class="dependency">&lt;&lt;uses&gt;&gt;</text>
+
+  <!-- Domain package -->
+  <g>
+    <path class="layer" d="M105 1080 H275 V1050 H445 V1080 H1095 V1290 H105 Z"/>
+    <rect class="tab" x="105" y="1050" width="340" height="42"/>
+    <text x="122" y="1077" class="package-title">EHub.Domain — Core Model</text>
+
+    <rect class="component" x="135" y="1115" width="275" height="135" rx="3"/>
+    <text x="272" y="1143" text-anchor="middle" class="box-title">Academic</text>
+    <text x="272" y="1169" text-anchor="middle" class="box-text">Course · Semester · Class</text>
+    <text x="272" y="1191" text-anchor="middle" class="box-text">Student · ClassStudent</text>
+    <text x="272" y="1213" text-anchor="middle" class="box-text">Lecturer · Enrollment</text>
+
+    <rect class="component" x="462" y="1115" width="275" height="135" rx="3"/>
+    <text x="600" y="1143" text-anchor="middle" class="box-title">Team &amp; Project</text>
+    <text x="600" y="1169" text-anchor="middle" class="box-text">Team · TeamMember · Project</text>
+    <text x="600" y="1191" text-anchor="middle" class="box-text">Proposal · ProjectDirection</text>
+    <text x="600" y="1213" text-anchor="middle" class="box-text">StartupLineage</text>
+
+    <rect class="component" x="790" y="1115" width="275" height="135" rx="3"/>
+    <text x="927" y="1143" text-anchor="middle" class="box-title">Execution &amp; Collaboration</text>
+    <text x="927" y="1169" text-anchor="middle" class="box-text">Evaluation · Rubric · Submission</text>
+    <text x="927" y="1191" text-anchor="middle" class="box-text">Chat · Mentoring · Workshop</text>
+    <text x="927" y="1213" text-anchor="middle" class="box-text">Tasks · Milestone · Notification</text>
+  </g>
+
+  <path class="arrow dashed" d="M600 780 V1050"/>
+  <rect x="532" y="890" width="136" height="26" fill="#ffffff"/>
+  <text x="600" y="908" text-anchor="middle" class="dependency">&lt;&lt;uses&gt;&gt;</text>
+
+  <!-- Infrastructure package -->
+  <g>
+    <path class="layer" d="M105 1360 H305 V1330 H505 V1360 H1095 V1565 H105 Z"/>
+    <rect class="tab" x="105" y="1330" width="400" height="42"/>
+    <text x="122" y="1357" class="package-title">EHub.Infrastructure — Adapters</text>
+
+    <rect class="component" x="130" y="1395" width="220" height="125" rx="3"/>
+    <text x="240" y="1423" text-anchor="middle" class="box-title">Persistence</text>
+    <text x="240" y="1449" text-anchor="middle" class="box-text">EF Core · DbContext</text>
+    <text x="240" y="1471" text-anchor="middle" class="box-text">Repositories · UnitOfWork</text>
+    <text x="240" y="1493" text-anchor="middle" class="box-text">Migrations · Seed</text>
+
+    <rect class="component" x="370" y="1395" width="220" height="125" rx="3"/>
+    <text x="480" y="1423" text-anchor="middle" class="box-title">Identity</text>
+    <text x="480" y="1449" text-anchor="middle" class="box-text">JWT · Google Auth</text>
+    <text x="480" y="1471" text-anchor="middle" class="box-text">Password Hashing</text>
+    <text x="480" y="1493" text-anchor="middle" class="box-text">Refresh Tokens</text>
+
+    <rect class="component" x="610" y="1395" width="220" height="125" rx="3"/>
+    <text x="720" y="1423" text-anchor="middle" class="box-title">Services &amp; Storage</text>
+    <text x="720" y="1449" text-anchor="middle" class="box-text">Email · DateTime</text>
+    <text x="720" y="1471" text-anchor="middle" class="box-text">Chat Synchronization</text>
+    <text x="720" y="1493" text-anchor="middle" class="box-text">File Storage</text>
+
+    <rect class="component" x="850" y="1395" width="220" height="125" rx="3"/>
+    <text x="960" y="1423" text-anchor="middle" class="box-title">Background Jobs</text>
+    <text x="960" y="1449" text-anchor="middle" class="box-text">Outbox Processor</text>
+    <text x="960" y="1471" text-anchor="middle" class="box-text">Event Dispatcher</text>
+    <text x="960" y="1493" text-anchor="middle" class="box-text">Import Cleanup</text>
+  </g>
+
+  <path class="arrow dashed" d="M430 1330 V1288"/>
+  <text x="270" y="1318" class="dependency">&lt;&lt;persists entities&gt;&gt;</text>
+  <path class="arrow dashed" d="M750 1330 V1290 H1130 V650 H1095"/>
+  <text x="978" y="1318" class="dependency">&lt;&lt;implements&gt;&gt;</text>
+
+  <text x="75" y="1635" class="subtitle">Dependency direction is derived from the current EHub project references and Application interfaces.</text>
+</svg>

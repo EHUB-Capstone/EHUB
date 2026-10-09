@@ -14,20 +14,39 @@ public class Project : AuditableEntity
     public string? Description { get; set; }
     public string? Problem { get; set; }
     public string? Solution { get; set; }
+    public string? TargetUsers { get; set; }
+    public string? ZaloGroupUrl { get; set; }
     public string? StartupField { get; set; }
     public string? BusinessModel { get; set; }
     public string? Technology { get; set; }
 
     public ProjectStatus Status { get; set; } = ProjectStatus.Draft;
     public bool IsHighPotential { get; set; } = false;
+    public bool IsFunded { get; set; } = false;
+    public bool IsAwarded { get; set; } = false;
+
+    // Why the project carries its achievement labels, and who last changed them and when. These are kept apart from
+    // UpdatedAt/UpdatedBy, which any other edit of the project overwrites.
+    public string? AchievementNote { get; set; }
+    public DateTime? AchievementsUpdatedAt { get; set; }
+    public Guid? AchievementsUpdatedBy { get; set; }
+
+    // PostgreSQL optimistic concurrency token mapped to the system xmin column.
+    public uint Version { get; set; }
 
     public Guid? CreatedById { get; set; }
     public virtual User? Creator { get; set; }
 
     public DateTime? SubmittedAt { get; set; }
 
+    // Identity shared by every semester-specific instance of the same project.
+    public Guid ProjectLineageId { get; set; } = Guid.NewGuid();
+    public Guid? PreviousProjectId { get; set; }
+    public virtual Project? PreviousProject { get; set; }
+
     // Navigation properties
     public virtual ICollection<ProjectTag> ProjectTags { get; set; } = new List<ProjectTag>();
+    public virtual ICollection<ProjectActivityLog> ActivityLogs { get; set; } = new List<ProjectActivityLog>();
     public virtual ICollection<Submission> Submissions { get; set; } = new List<Submission>();
     public virtual ICollection<Evaluation> Evaluations { get; set; } = new List<Evaluation>();
     public virtual ICollection<MentorAssignment> MentorAssignments { get; set; } = new List<MentorAssignment>();

@@ -15,13 +15,11 @@ public class StudentConfiguration : IEntityTypeConfiguration<Student>
 
         builder.Property(s => s.RollNumber)
             .HasColumnName("roll_number")
-            .HasMaxLength(20)
-            .IsRequired();
+            .HasMaxLength(20);
 
         builder.Property(s => s.NormalizedRollNumber)
             .HasColumnName("normalized_roll_number")
-            .HasMaxLength(20)
-            .IsRequired();
+            .HasMaxLength(20);
 
         builder.Property(s => s.FullName)
             .HasColumnName("full_name")
@@ -32,9 +30,9 @@ public class StudentConfiguration : IEntityTypeConfiguration<Student>
             .HasColumnName("email")
             .HasMaxLength(150);
 
-        builder.Property(s => s.Major)
-            .HasColumnName("major")
-            .HasMaxLength(100);
+        builder.Property(s => s.MajorCode)
+            .HasColumnName("major_code")
+            .HasMaxLength(50);
 
         builder.Property(s => s.ProgramGroup)
             .HasColumnName("program_group")
@@ -73,7 +71,7 @@ public class StudentConfiguration : IEntityTypeConfiguration<Student>
 
         // 1-to-1 relationship with User
         builder.HasOne(s => s.User)
-            .WithOne()
+            .WithOne(u => u.Student)
             .HasForeignKey<Student>(s => s.UserId)
             .OnDelete(DeleteBehavior.Restrict);
     }

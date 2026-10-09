@@ -1,5 +1,365 @@
-import React from 'react';
+// @ts-nocheck
+import { useState, useEffect, useRef } from 'react';
+import { useAuth } from '../../hooks/useAuth';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { Mail, Key, User, ShieldCheck, Camera, ArrowLeft, Eye, EyeOff } from 'lucide-react';
+import Button from '../../components/ui/Button';
+import Badge from '../../components/ui/Badge';
+import { changePassword, getCurrentUser, updateProfile } from '../../api/authApi';
+import toast from 'react-hot-toast';
+import { motion } from 'framer-motion';
+import { TEAM_MAJOR_GROUPS, ALL_TEAM_MAJOR_CODES } from '../../constants/majors';
+import { parseApiError } from '../../utils/apiError';
 
-export const ProfileSettings: React.FC = () => {
-  return <div>ProfileSettings</div>;
+const roleBadgeVariant = { ADMIN: 'Approved', LECTURER: 'Submitted', MENTOR: 'Review', STUDENT: 'Reviewed' };
+const roleLabel = { ADMIN: 'Administrator', LECTURER: 'Lecturer', MENTOR: 'Mentor', STUDENT: 'Student' };
+
+const ProfileSettings = () => {
+  const { user, updateUser, refreshUser } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const activeTab = location.pathname === '/settings' ? 'password' : 'profile';
+
+  useEffect(() => {
+    if (location.state?.message) {
+      toast.error(location.state.message, { id: 'missing-major-toast', duration: 5000 });
+      // clear the state so it doesn't trigger again on refresh
+      window.history.replaceState({}, document.title);
+    }
+  }, [location]);
+  
+  // Profile state
+  const [name, setName] = useState(user?.name || '');
+  const nameEditedRef = useRef(false);
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+  const [major, setMajor] = useState(user?.major || '');
+  const majorEditedRef = useRef(false);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+
+  // Password state
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [isSavingPassword, setIsSavingPassword] = useState(false);
+
+  const role = user?.role?.toUpperCase() || 'STUDENT';
+  const myClassesPath = role === 'STUDENT' ? '/student/classes' : role === 'ADMIN' ? '/admin/classes' : '/lecturer/classes';
+
+  useEffect(() => {
+    if (role === 'STUDENT') {
+      void refreshUser().catch(() => toast.error('Unable to refresh profile information. Reload to retry.'));
+    }
+  }, [refreshUser, role]);
+
+  useEffect(() => {
+    if (!nameEditedRef.current) setName(user?.name || '');
+    if (!majorEditedRef.current) setMajor(user?.major || '');
+  }, [user?.name, user?.major]);
+
+  const handleUpdateProfile = async (e) => {
+    e.preventDefault();
+    if (isSavingProfile) return;
+    if (!name.trim()) return toast.error('Name is required');
+    setIsSavingProfile(true);
+    try {
+      const formData = new FormData();
+      formData.append('fullName', name.trim());
+      if (avatarFile) {
+        formData.append('avatar', avatarFile);
+      }
+      if (role === 'STUDENT' && major) {
+        formData.append('major', major);
+      }
+      const profile = await updateProfile(formData);
+      updateUser({
+        fullName: profile.fullName,
+        name: profile.fullName,
+        avatarUrl: profile.avatarUrl,
+        avatar: profile.avatarUrl || undefined,
+        majorCode: profile.majorCode,
+        major: profile.majorCode,
+      });
+      nameEditedRef.current = false;
+      majorEditedRef.current = false;
+      setAvatarFile(null);
+      if (avatarInputRef.current) {
+        avatarInputRef.current.value = '';
+      }
+      toast.success('Profile updated successfully');
+    } catch (err) {
+      const error = parseApiError(err, 'Failed to update profile');
+      toast.error(error.message);
+      if (role === 'STUDENT' && (error.code === 'MAJOR_LOCKED' || error.code === 'CLASS_ENROLLMENT_MAJOR_LOCKED')) {
+        majorEditedRef.current = false;
+        setMajor(user?.majorCode ?? user?.major ?? '');
+        try {
+          const currentUser = await getCurrentUser();
+          setMajor(currentUser.majorCode ?? '');
+          updateUser({ majorCode: currentUser.majorCode, major: currentUser.majorCode });
+        } catch {
+          toast.error('Unable to refresh your saved major. Reload to verify it.');
+        }
+      }
+    } finally {
+      setIsSavingProfile(false);
+    }
+  };
+
+  const handleAvatarChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] || null;
+    if (file && (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > 5 * 1024 * 1024)) {
+      event.target.value = '';
+      toast.error('Choose a JPEG, PNG, or WebP image no larger than 5 MB.');
+      return;
+    }
+    setAvatarFile(file);
+  };
+
+  const handleChangePassword = async (e) => {
+    e.preventDefault();
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      return toast.error('Please fill all password fields');
+    }
+    if (newPassword.length < 6) {
+      return toast.error('New password must be at least 6 characters');
+    }
+    if (newPassword !== confirmPassword) {
+      return toast.error('New passwords do not match');
+    }
+    
+    setIsSavingPassword(true);
+    try {
+      await changePassword({ currentPassword, newPassword, confirmPassword });
+      toast.success('Password changed successfully');
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+    } catch (err) {
+      toast.error(parseApiError(err, 'Failed to change password').message);
+    } finally {
+      setIsSavingPassword(false);
+    }
+  };
+
+  const tabs = [
+    { id: 'profile', label: 'Profile', icon: User, path: '/profile' },
+    { id: 'password', label: 'Security Settings', icon: Key, path: '/settings' },
+  ];
+
+  const isMissingMajor = role === 'STUDENT' && (!user?.major || !ALL_TEAM_MAJOR_CODES.includes(user.major.toUpperCase()));
+
+  return (
+    <div className="max-w-4xl mx-auto">
+      {/* Header */}
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-6 sm:mb-8">
+        <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">{activeTab === 'profile' ? 'My Profile' : 'Account Settings'}</h1>
+        <p className="text-slate-500 mt-1">{activeTab === 'profile' ? 'View and update your personal details' : 'Manage your account security preferences'}</p>
+      </motion.div>
+
+      {/* ── Missing Major Banner ── */}
+      {isMissingMajor && (
+        <motion.div
+          initial={{ opacity: 0, y: -12 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-6 flex items-start gap-3 bg-amber-50 border border-amber-300 rounded-2xl p-4 shadow-sm"
+        >
+          <span className="text-2xl">⚠️</span>
+          <div>
+            <p className="font-semibold text-amber-800 text-sm">You have not selected a major.</p>
+            <p className="text-xs text-amber-700 mt-0.5">
+              Select a <strong>Major</strong> here or from your own row in a class before creating or joining a team.
+            </p>
+          </div>
+        </motion.div>
+      )}
+
+      {/* Profile Banner */}
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}
+        className="bg-gradient-to-r from-primary to-secondary rounded-2xl p-6 sm:p-8 mb-6 text-white relative overflow-hidden"
+      >
+        <div className="absolute top-0 right-0 w-40 h-40 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2" />
+        <div className="absolute bottom-0 left-1/3 w-24 h-24 bg-white/5 rounded-full translate-y-1/2" />
+        <div className="flex flex-col sm:flex-row items-center gap-4 relative z-10">
+          <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-white/20 backdrop-blur-sm border-2 border-white/30 flex items-center justify-center overflow-hidden shrink-0">
+            {user?.avatar ? (
+              <img src={user.avatar} alt="Avatar" className="w-full h-full object-cover" />
+            ) : (
+              <span className="text-2xl sm:text-3xl font-bold">{user?.name?.charAt(0)?.toUpperCase() || 'U'}</span>
+            )}
+          </div>
+          <div className="text-center sm:text-left">
+            <h2 className="text-xl sm:text-2xl font-bold">{user?.name || 'User'}</h2>
+            <p className="text-white/70 text-sm">{user?.email || ''}</p>
+            <Badge variant={roleBadgeVariant[role]} size="sm" className="mt-2 bg-white/20 border-white/30 text-white">
+              {roleLabel[role] || role}
+            </Badge>
+          </div>
+        </div>
+      </motion.div>
+
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
+        className="bg-white rounded-2xl border border-slate-200/60 shadow-sm overflow-hidden flex flex-col md:flex-row min-h-[420px]"
+      >
+        {/* Sidebar Tabs */}
+        <div className="w-full md:w-56 bg-slate-50/50 border-b md:border-b-0 md:border-r border-slate-200/60 p-3 md:p-4 flex md:flex-col gap-1 overflow-x-auto">
+          {tabs.map(tab => (
+            <button
+              key={tab.id}
+              className={`flex items-center gap-2.5 px-4 py-2.5 rounded-xl text-sm font-medium transition-all whitespace-nowrap ${
+                activeTab === tab.id
+                  ? 'bg-white text-primary shadow-sm border border-slate-200/50'
+                  : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800'
+              }`}
+              onClick={() => navigate(tab.path)}
+            >
+              <tab.icon className="w-4 h-4 shrink-0" /> {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 p-5 sm:p-8">
+          {activeTab === 'profile' && (
+            <div className="max-w-md">
+              <h2 className="text-lg font-bold text-slate-900 mb-1">Profile Information</h2>
+              <p className="text-sm text-slate-500 mb-6">Update your personal details</p>
+              <form onSubmit={handleUpdateProfile} className="space-y-5">
+                <div>
+                  <label htmlFor="profile-email" className="block text-sm font-medium text-slate-700 mb-1.5">Email Address</label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <input id="profile-email" type="email" value={user?.email || ''} disabled className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 text-slate-500 cursor-not-allowed text-sm" />
+                  </div>
+                  <p className="text-xs text-slate-400 mt-1.5">Email cannot be changed</p>
+                </div>
+
+                <div>
+                  <label htmlFor="profile-role" className="block text-sm font-medium text-slate-700 mb-1.5">Role</label>
+                  <div className="relative">
+                    <ShieldCheck className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <input id="profile-role" type="text" value={roleLabel[role] || role} disabled className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 text-slate-500 cursor-not-allowed font-medium text-sm" />
+                  </div>
+                </div>
+
+                <div>
+                  <label htmlFor="profile-name" className="block text-sm font-medium text-slate-700 mb-1.5">Full Name</label>
+                  <input id="profile-name" type="text" value={name} onChange={e => { nameEditedRef.current = true; setName(e.target.value); }} placeholder="Your name" className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-slate-900 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none" />
+                </div>
+
+                <div>
+                  <label htmlFor="profile-avatar" className="block text-sm font-medium text-slate-700 mb-1.5">Avatar (Optional)</label>
+                  <div className="relative">
+                    <Camera className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <input ref={avatarInputRef} id="profile-avatar" type="file" accept="image/jpeg,image/png,image/webp" onChange={handleAvatarChange} className="w-full bg-white border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 text-slate-900 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none file:mr-3 file:border-0 file:bg-transparent file:text-sm file:font-medium" />
+                  </div>
+                  <p className="text-xs text-slate-400 mt-1.5">JPEG, PNG, or WebP; maximum 5 MB.</p>
+                </div>
+
+                {role === 'STUDENT' && (
+                    <div>
+                      <label htmlFor="profile-major" className="block text-sm font-medium text-slate-700 mb-1.5">Major</label>
+                      <select
+                        id="profile-major"
+                        value={major} onChange={e => { majorEditedRef.current = true; setMajor(e.target.value); }}
+                        disabled={isSavingProfile}
+                        className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-slate-900 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none"
+                      >
+                        <option value="">-- Select a major --</option>
+                        {TEAM_MAJOR_GROUPS.map(group => (
+                          <optgroup key={group.key} label={group.label}>
+                            {group.majors.map(m => (
+                              <option key={m.code} value={m.code}>{m.code} - {m.name}</option>
+                            ))}
+                          </optgroup>
+                        ))}
+                      </select>
+                    </div>
+                )}
+
+                <div className="pt-2 flex flex-col sm:flex-row gap-3">
+                  <Button type="submit" variant="primary" isLoading={isSavingProfile} disabled={isSavingProfile}>
+                    Save Changes
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="primary"
+                    icon={ArrowLeft}
+                    onClick={() => navigate(myClassesPath)}
+                    className="bg-secondary hover:bg-secondary-dark hover:shadow-glow-cyan focus:ring-secondary/20"
+                  >
+                    Back my classes
+                  </Button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          {activeTab === 'password' && (
+            <div className="max-w-md">
+              <h2 className="text-lg font-bold text-slate-900 mb-1">Change Password</h2>
+              <p className="text-sm text-slate-500 mb-6">Ensure your account is secure</p>
+              <form onSubmit={handleChangePassword} className="space-y-5">
+                <div>
+                  <label htmlFor="current-pw" className="block text-sm font-medium text-slate-700 mb-1.5">Current Password</label>
+                  <div className="relative">
+                    <input id="current-pw" type={showCurrentPassword ? 'text' : 'password'} value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} required autoComplete="current-password" placeholder="••••••••" className="w-full bg-white border border-slate-200 rounded-xl pl-4 pr-11 py-2.5 text-slate-900 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none" />
+                    <button
+                      type="button"
+                      onClick={() => setShowCurrentPassword(visible => !visible)}
+                      aria-label={showCurrentPassword ? 'Hide current password' : 'Show current password'}
+                      className="absolute right-3.5 top-1/2 -translate-y-1/2 bg-transparent border-none cursor-pointer text-slate-400 p-0 hover:text-slate-600"
+                    >
+                      {showCurrentPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="w-full h-px bg-slate-100 my-2" />
+
+                <div>
+                  <label htmlFor="new-pw" className="block text-sm font-medium text-slate-700 mb-1.5">New Password</label>
+                  <div className="relative">
+                    <input id="new-pw" type={showNewPassword ? 'text' : 'password'} value={newPassword} onChange={e => setNewPassword(e.target.value)} required minLength={6} autoComplete="new-password" placeholder="Min 6 characters" className="w-full bg-white border border-slate-200 rounded-xl pl-4 pr-11 py-2.5 text-slate-900 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none" />
+                    <button
+                      type="button"
+                      onClick={() => setShowNewPassword(visible => !visible)}
+                      aria-label={showNewPassword ? 'Hide new password' : 'Show new password'}
+                      className="absolute right-3.5 top-1/2 -translate-y-1/2 bg-transparent border-none cursor-pointer text-slate-400 p-0 hover:text-slate-600"
+                    >
+                      {showNewPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label htmlFor="confirm-pw" className="block text-sm font-medium text-slate-700 mb-1.5">Confirm New Password</label>
+                  <div className="relative">
+                    <input id="confirm-pw" type={showConfirmPassword ? 'text' : 'password'} value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} required minLength={6} autoComplete="new-password" placeholder="Re-enter new password" className="w-full bg-white border border-slate-200 rounded-xl pl-4 pr-11 py-2.5 text-slate-900 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none" />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPassword(visible => !visible)}
+                      aria-label={showConfirmPassword ? 'Hide confirm password' : 'Show confirm password'}
+                      className="absolute right-3.5 top-1/2 -translate-y-1/2 bg-transparent border-none cursor-pointer text-slate-400 p-0 hover:text-slate-600"
+                    >
+                      {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="pt-2">
+                  <Button type="submit" variant="gradient" isLoading={isSavingPassword}>Update Password</Button>
+                </div>
+              </form>
+            </div>
+          )}
+        </div>
+      </motion.div>
+    </div>
+  );
 };
+
+export default ProfileSettings;

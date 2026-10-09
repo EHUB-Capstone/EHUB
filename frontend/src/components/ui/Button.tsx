@@ -1,5 +1,69 @@
-import React from 'react';
+import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from 'react';
+import type { LucideIcon } from 'lucide-react';
+import { cn } from '../../utils/cn';
+import { Loader2 } from 'lucide-react';
 
-export const Button: React.FC = () => {
-  return <div>Button</div>;
+const variants = {
+  primary: 'bg-primary text-white hover:bg-primary-dark shadow-sm hover:shadow-glow-primary',
+  secondary: 'bg-slate-900 text-white hover:bg-slate-800 shadow-sm dark:bg-slate-700 dark:hover:bg-slate-600',
+  outline: 'border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-400',
+  ghost: 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+  danger: 'bg-danger text-white hover:bg-danger-dark shadow-sm',
+  gradient: 'bg-gradient-primary text-white shadow-sm hover:shadow-glow-primary hover:opacity-95',
+  'ghost-primary': 'text-primary hover:bg-primary-50',
 };
+
+const sizes = {
+  xs: 'h-7 px-2.5 text-caption gap-1',
+  sm: 'h-8 px-3 text-body-sm gap-1.5',
+  md: 'h-9 px-4 text-body gap-2',
+  lg: 'h-11 px-6 text-body-lg gap-2',
+  xl: 'h-12 px-8 text-body-lg gap-2.5',
+};
+
+export type ButtonVariant = keyof typeof variants;
+export type ButtonSize = keyof typeof sizes;
+
+export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+  variant?: ButtonVariant;
+  size?: ButtonSize;
+  isLoading?: boolean;
+  icon?: LucideIcon;
+  iconRight?: LucideIcon;
+  children?: ReactNode;
+}
+
+const Button = forwardRef<HTMLButtonElement, ButtonProps>(({
+  className,
+  variant = 'primary',
+  size = 'md',
+  isLoading = false,
+  children,
+  disabled,
+  type = 'button',
+  icon: Icon,
+  iconRight: IconRight,
+  ...props
+}, ref) => {
+  return (
+    <button
+      ref={ref}
+      type={type}
+      disabled={disabled || isLoading}
+      className={cn(
+        'inline-flex items-center justify-center font-medium rounded-xl transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:ring-offset-1 disabled:opacity-50 disabled:pointer-events-none active:scale-[0.98]',
+        variants[variant],
+        sizes[size],
+        className
+      )}
+      {...props}>
+      {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
+      {!isLoading && Icon && <Icon className="h-4 w-4" />}
+      {children}
+      {IconRight && <IconRight className="h-4 w-4" />}
+    </button>
+  );
+});
+
+Button.displayName = 'Button';
+export default Button;

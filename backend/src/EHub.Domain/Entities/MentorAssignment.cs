@@ -22,6 +22,7 @@ public class MentorAssignment : AuditableEntity
     public DateTime AssignedAt { get; set; } = DateTime.UtcNow;
     public DateTime? EndedAt { get; set; }
 
+    public MentorType Slot { get; set; } = MentorType.Enterprise;
     public MentorAssignmentStatus Status { get; set; } = MentorAssignmentStatus.Active;
     public string? Note { get; set; }
 

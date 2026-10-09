@@ -1,0 +1,300 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { weeklyTaskSavePayload } from '../src/utils/weeklyTaskPayload.ts';
+import { resolveWorkspaceTab, workspaceTabSearch } from '../src/utils/workspaceNavigation.ts';
+import type { WeeklyTask, SaveWeeklyTaskPayload } from '../src/types/workspaceTools.ts';
+import {
+  getDropStatus,
+  getTaskDropIndex,
+  isTaskStatusMutableType,
+  moveTaskStatusInBoard,
+  normalizeBoardResponse,
+  normalizeFilters,
+} from '../src/features/execution-board/boardUtils.ts';
+import { taskProgress } from '../src/utils/taskProgress.ts';
+import { filterWorkspaces, groupWorkspacesByClass, normalizeAccessibleWorkspaces, parseWorkspaceSemester, resolveWorkspaceSemesterScope } from '../src/utils/workspaceHub.ts';
+import {
+  CHECKPOINT_UPLOAD_MAX_FILE_SIZE,
+  CHECKPOINT_UPLOAD_TIMEOUT_MS,
+  checkpointUploadFailureMessage,
+  isCheckpointFilePreviewable,
+  validateCheckpointUploadFile,
+} from '../src/utils/checkpointUpload.ts';
+import {
+  normalizeCheckpointLinkUrl,
+  validateCheckpointLinkUrl,
+} from '../src/utils/checkpointLink.ts';
+
+test('checkpoint links accept only normalized public HTTPS URLs', () => {
+  assert.equal(validateCheckpointLinkUrl('drive.google.com/file/example'), null);
+  assert.equal(normalizeCheckpointLinkUrl('drive.google.com/file/example'), 'https://drive.google.com/file/example');
+  for (const value of [
+    'http://example.com',
+    'https://localhost/demo',
+    'https://127.0.0.1/demo',
+    'https://192.168.1.2/demo',
+    'https://user:password@example.com/demo',
+    'javascript:alert(1)',
+  ]) {
+    assert.notEqual(validateCheckpointLinkUrl(value), null, value);
+  }
+});
+
+test('checkpoint uploads validate empty, oversized, and unsupported files before sending', () => {
+  assert.equal(validateCheckpointUploadFile({ name: 'report.pdf', size: 1 }), null);
+  assert.equal(validateCheckpointUploadFile({ name: 'REPORT.PDF', size: CHECKPOINT_UPLOAD_MAX_FILE_SIZE }), null);
+  assert.match(validateCheckpointUploadFile({ name: 'empty.pdf', size: 0 }) ?? '', /empty/);
+  assert.match(validateCheckpointUploadFile({ name: 'large.pdf', size: CHECKPOINT_UPLOAD_MAX_FILE_SIZE + 1 }) ?? '', /100 MB/);
+  assert.match(validateCheckpointUploadFile({ name: 'malware.exe', size: 1 }) ?? '', /unsupported format/);
+});
+
+test('checkpoint preview is offered only for PDF, DOCX, and PPTX files', () => {
+  assert.equal(isCheckpointFilePreviewable('report.PDF'), true);
+  assert.equal(isCheckpointFilePreviewable('plan.docx'), true);
+  assert.equal(isCheckpointFilePreviewable('pitch.pptx'), true);
+  assert.equal(isCheckpointFilePreviewable('archive.zip'), false);
+  assert.equal(isCheckpointFilePreviewable('report.pdf.exe'), false);
+});
+
+test('checkpoint uploads explain timeout and request-size failures per file', () => {
+  assert.equal(CHECKPOINT_UPLOAD_TIMEOUT_MS, 90_000);
+  assert.match(checkpointUploadFailureMessage({ code: 'ECONNABORTED' }, 'pitch.pptx'), /too long/);
+  assert.match(checkpointUploadFailureMessage({ response: { status: 413 } }, 'pitch.pptx'), /100 MB/);
+  assert.equal(
+    checkpointUploadFailureMessage({ response: { data: { message: 'Checkpoint is closed.' } } }, 'pitch.pptx'),
+    'Checkpoint is closed.',
+  );
+  assert.match(
+    checkpointUploadFailureMessage({ code: 'ERR_NETWORK' }, 'report.docx'),
+    /backend is running/,
+  );
+  assert.match(
+    checkpointUploadFailureMessage({ response: { status: 500 } }, 'report.docx'),
+    /server could not process/,
+  );
+});
+
+test('workspace hub reads the accessible workspace array from the API envelope', () => {
+  const workspaces = [{
+    teamId: 'team-1',
+    teamName: 'Phoenix Founders',
+    classId: 'class-1',
+    classCode: 'SE1818',
+    courseCode: 'EXE101',
+    semester: 'FA26',
+    accessMode: 'READ_WRITE' as const,
+    isArchived: false,
+    isCurrent: true,
+    hasWorkspace: true,
+  }];
+
+  assert.deepEqual(normalizeAccessibleWorkspaces({
+    success: true,
+    message: 'Accessible workspaces retrieved.',
+    data: workspaces,
+  }), workspaces);
+  assert.deepEqual(normalizeAccessibleWorkspaces({
+    success: false,
+    message: 'Forbidden',
+    data: workspaces,
+  }), []);
+});
+
+test('workspace hub groups teams by class code and sorts class and team names naturally', () => {
+  const base = {
+    courseCode: 'EXE101',
+    semester: 'SU26',
+    accessMode: 'READ_WRITE' as const,
+    isArchived: false,
+    isCurrent: true,
+    hasWorkspace: true,
+  };
+  const groups = groupWorkspacesByClass([
+    { ...base, teamId: 'team-3', teamName: 'Team 10', classId: 'class-10', classCode: 'SE10' },
+    { ...base, teamId: 'team-2', teamName: 'Team 2', classId: 'class-2', classCode: 'SE2' },
+    { ...base, teamId: 'team-1', teamName: 'Team 1', classId: 'class-10', classCode: 'SE10' },
+  ]);
+
+  assert.deepEqual(groups.map(group => group.classCode), ['SE2', 'SE10']);
+  assert.deepEqual(groups[1].workspaces.map(workspace => workspace.teamName), ['Team 1', 'Team 10']);
+  assert.deepEqual(groupWorkspacesByClass(groups.flatMap(group => group.workspaces), 'class-desc').map(group => group.classCode), ['SE10', 'SE2']);
+  assert.deepEqual(groupWorkspacesByClass(groups.flatMap(group => group.workspaces), 'team-desc')[1].workspaces.map(workspace => workspace.teamName), ['Team 10', 'Team 1']);
+});
+
+test('workspace hub filters by the same semester and year used in class links', () => {
+  const base = {
+    courseCode: 'EXE201',
+    accessMode: 'READ_WRITE' as const,
+    isArchived: false,
+    isCurrent: true,
+    hasWorkspace: true,
+  };
+  const workspaces = [
+    { ...base, teamId: 'team-1', teamName: 'Phoenix', classId: 'class-1', classCode: 'EXE201_8', semester: 'FA2026' },
+    { ...base, teamId: 'team-2', teamName: 'Orbit', classId: 'class-2', classCode: 'EXE101_1', courseCode: 'EXE101', semester: 'FA26', hasWorkspace: false },
+    { ...base, teamId: 'team-3', teamName: 'Atlas', classId: 'class-3', classCode: 'EXE201_3', semester: 'SP2027', accessMode: 'READ_ONLY' as const },
+  ];
+
+  assert.deepEqual(parseWorkspaceSemester('FA2026'), { semester: 'FA', year: '2026' });
+  assert.deepEqual(parseWorkspaceSemester('FA26'), { semester: 'FA', year: '2026' });
+  assert.deepEqual(filterWorkspaces(workspaces, { semester: 'FA', year: '2026' }).map(team => team.teamId), ['team-1', 'team-2']);
+  assert.deepEqual(filterWorkspaces(workspaces, { semester: 'all', year: 'all' }).map(team => team.teamId), ['team-1', 'team-2', 'team-3']);
+  assert.deepEqual(filterWorkspaces(workspaces, { semester: 'none', year: 'none' }), []);
+  assert.deepEqual(filterWorkspaces(workspaces, { search: 'PHOENIX', subject: 'EXE201', workspaceStatus: 'created', access: 'READ_WRITE' }).map(team => team.teamId), ['team-1']);
+  assert.deepEqual(filterWorkspaces(workspaces, { workspaceStatus: 'not-created' }).map(team => team.teamId), ['team-2']);
+  assert.deepEqual(filterWorkspaces(workspaces, { access: 'READ_ONLY' }).map(team => team.teamId), ['team-3']);
+});
+
+test('workspace hub defaults to the active semester without overriding explicit filters', () => {
+  const active = { semester: 'FA', year: 2026 };
+  assert.deepEqual(resolveWorkspaceSemesterScope(new URLSearchParams(), active), {
+    semester: 'FA', year: '2026', isDefault: true, usesFallback: false,
+  });
+  assert.deepEqual(resolveWorkspaceSemesterScope(new URLSearchParams('search=team'), active), {
+    semester: 'FA', year: '2026', isDefault: true, usesFallback: false,
+  });
+  assert.deepEqual(resolveWorkspaceSemesterScope(new URLSearchParams('semester=SP&year=2025'), active), {
+    semester: 'SP', year: '2025', isDefault: false, usesFallback: false,
+  });
+  assert.deepEqual(resolveWorkspaceSemesterScope(new URLSearchParams('semester=all&year=all'), active), {
+    semester: 'all', year: 'all', isDefault: false, usesFallback: false,
+  });
+  assert.deepEqual(resolveWorkspaceSemesterScope(new URLSearchParams(), null), {
+    semester: 'none', year: 'none', isDefault: true, usesFallback: false,
+  });
+});
+
+test('table and board summary use API progress instead of status estimates', () => {
+  const tasks = [{ _id: 'review', status: 'REVIEW', completionPercentage: 0 }, { _id: 'working', status: 'IN_PROGRESS', completionPercentage: 30 }];
+  const board = normalizeBoardResponse({ data: { teamTasks: tasks } });
+  assert.equal(taskProgress(tasks[0]), 0);
+  assert.equal(taskProgress(tasks[1]), 30);
+  assert.equal(board.summary.completionPercentage, 15);
+});
+
+test('reopening completed task resets optimistic progress to unchanged checklist progress', () => {
+  const checklist = [{ text: 'First', isCompleted: true }, { text: 'Second', isCompleted: false }];
+  const board = normalizeBoardResponse({ tasks: [{ _id: 'task', status: 'COMPLETED', completionPercentage: 100, checklist }] });
+  const reopened = moveTaskStatusInBoard(board, 'task', 'REVIEW');
+  assert.equal(taskProgress(reopened.tasks[0]), 50);
+  assert.deepEqual(reopened.tasks[0].checklist, checklist);
+  const completed = moveTaskStatusInBoard(reopened, 'task', 'COMPLETED');
+  assert.equal(taskProgress(completed.tasks[0]), 100);
+  assert.deepEqual(completed.tasks[0].checklist, checklist);
+});
+
+test('progress safely handles missing or invalid API values', () => {
+  for (const value of [undefined, null, NaN, Infinity, -1]) assert.equal(taskProgress({ completionPercentage: value }), 0);
+  assert.equal(taskProgress({ completionPercentage: 150 }), 100);
+});
+
+test('execution board includes all three roadmap sources and preserves status', () => {
+  const board = normalizeBoardResponse({ data: {
+    courseTasks: [{ _id: 'course', status: 'TODO' }],
+    classTasks: [{ _id: 'class', status: 'IN_PROGRESS' }],
+    teamTasks: [{ _id: 'team', status: 'COMPLETED' }],
+  } });
+  assert.equal(board.tasks.length, 3);
+  assert.equal(board.grouped.TODO[0]._id, 'course');
+  assert.equal(board.grouped.IN_PROGRESS[0]._id, 'class');
+  assert.equal(board.grouped.COMPLETED[0]._id, 'team');
+  const moved = moveTaskStatusInBoard(board, 'team', 'REVIEW');
+  assert.equal(moved.grouped.REVIEW[0]._id, 'team');
+  assert.equal(moved.tasks.length, 3);
+});
+
+test('execution board resolves drag targets from empty columns and task cards', () => {
+  const taskStatuses = new Map([
+    ['task-in-review', 'REVIEW'],
+  ]);
+
+  assert.equal(getDropStatus({ id: 'column-IN_PROGRESS' }, taskStatuses), 'IN_PROGRESS');
+  assert.equal(getDropStatus({ id: 'column-tab-COMPLETED' }, taskStatuses), 'COMPLETED');
+  assert.equal(getDropStatus({ id: 'task-in-review' }, taskStatuses), 'REVIEW');
+  assert.equal(getDropStatus(null, taskStatuses), null);
+});
+
+test('execution board prioritizes live droppable data after a card changes columns', () => {
+  const staleTaskStatuses = new Map([
+    ['moving-task', 'TODO'],
+  ]);
+
+  assert.equal(getDropStatus({
+    id: 'moving-task',
+    data: { current: { type: 'task', status: 'REVIEW' } },
+  }, staleTaskStatuses), 'REVIEW');
+});
+
+test('execution board inserts a dragged task beside the card under the pointer', () => {
+  const tasks = [
+    { _id: 'review-a' },
+    { _id: 'moving-task' },
+    { _id: 'review-b' },
+  ];
+
+  assert.equal(getTaskDropIndex({
+    tasks,
+    activeTaskId: 'moving-task',
+    overTaskId: 'review-b',
+    insertAfter: false,
+  }), 1);
+  assert.equal(getTaskDropIndex({
+    tasks,
+    activeTaskId: 'moving-task',
+    overTaskId: 'review-b',
+    insertAfter: true,
+  }), 2);
+});
+
+test('execution board can cycle a task through every status without duplicating or losing it', () => {
+  const statuses = ['IN_PROGRESS', 'REVIEW', 'COMPLETED', 'OVERDUE', 'TODO'];
+  let board = normalizeBoardResponse({
+    tasks: [{ _id: 'moving-task', status: 'TODO' }],
+  });
+
+  for (let cycle = 0; cycle < 3; cycle += 1) {
+    for (const status of statuses) {
+      board = moveTaskStatusInBoard(board, 'moving-task', status);
+      assert.equal(board.tasks[0].status, status);
+      assert.equal(board.grouped[status].filter((task) => task._id === 'moving-task').length, 1);
+      assert.equal(Object.values(board.grouped).flat().length, 1);
+    }
+  }
+});
+
+test('all execution board task sources allow team-scoped status updates', () => {
+  assert.equal(isTaskStatusMutableType({ taskType: 'COURSE_TEMPLATE' }), true);
+  assert.equal(isTaskStatusMutableType({ taskType: 'CLASS_TASK' }), true);
+  assert.equal(isTaskStatusMutableType({ taskType: 'TEAM_TASK' }), true);
+  assert.equal(isTaskStatusMutableType({ taskType: 'UNKNOWN' }), false);
+});
+
+test('all weeks omits week restriction while forwarding board filters', () => {
+  assert.deepEqual(normalizeFilters({ week: 'ALL', assignee: 'ALL', priority: 'HIGH', search: '  test  ' }), { priority: 'HIGH', search: 'test' });
+});
+
+const draft: SaveWeeklyTaskPayload = { title: 'Edited title', taskType: 'TEAM_TASK', weekNumber: 1, courseCode: 'EXE101' };
+
+for (const status of ['TODO', 'IN_PROGRESS', 'REVIEW', 'COMPLETED', 'CANCELLED', 'OVERDUE'] as const) {
+  test(`editing details preserves ${status}`, () => {
+    const existing = { status, attachments: [{ name: 'Brief', url: 'https://example.com' }], visibleToStudents: false } as WeeklyTask;
+    const result = weeklyTaskSavePayload(existing, draft);
+    assert.equal(result.status, status);
+    assert.equal(result.title, draft.title);
+    assert.deepEqual(result.attachments, existing.attachments);
+    assert.equal(result.visibleToStudents, false);
+  });
+}
+test('new tasks default to To Do', () => {
+  assert.equal(weeklyTaskSavePayload(null, draft).status, 'TODO');
+});
+for (const tab of ['overview', 'roadmap', 'shortcut'] as const) {
+  test(`URL restores ${tab} after reload`, () => {
+    const search = workspaceTabSearch('?tab=roadmap&teamId=team-1', tab);
+    assert.equal(resolveWorkspaceTab(search), tab);
+    assert.equal(new URLSearchParams(search).get('teamId'), 'team-1');
+  });
+}
+test('invalid tab falls back to overview', () => {
+  assert.equal(resolveWorkspaceTab('?tab=invalid'), 'overview');
+});

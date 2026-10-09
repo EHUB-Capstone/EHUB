@@ -30,11 +30,17 @@ jobs:
           cache: "npm"
           cache-dependency-path: frontend/package-lock.json
 
-      - name: Install dependencies
-        run: npm install
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
 
       - name: Type check
         run: npm run type-check
+
+      - name: Run tests
+        run: npm test
 
       - name: Build
         run: npm run build

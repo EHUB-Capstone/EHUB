@@ -12,23 +12,31 @@ public class Team : AuditableEntity
 
     public string TeamCode { get; set; } = string.Empty;
     public string TeamName { get; set; } = string.Empty;
+    public string? Description { get; set; }
 
     public TeamStatus Status { get; set; } = TeamStatus.Active;
-
-    public Guid? LeaderId { get; set; }
-    public Guid? MentorId { get; set; }
 
     public Guid? CreatedById { get; set; }
     public virtual User? Creator { get; set; }
 
     public DateTime? ArchivedAt { get; set; }
+    public uint Version { get; set; }
+
+    // Identity shared by every semester-specific instance of the same team.
+    public Guid TeamLineageId { get; set; } = Guid.NewGuid();
+    public Guid? PreviousTeamId { get; set; }
+    public virtual Team? PreviousTeam { get; set; }
 
     // Navigation properties
     public virtual ICollection<TeamMember> TeamMembers { get; set; } = new List<TeamMember>();
     public virtual Project? Project { get; set; }
     public virtual ICollection<MentorAssignment> MentorAssignments { get; set; } = new List<MentorAssignment>();
+    public virtual ICollection<TemporaryMentorAssignment> TemporaryMentorAssignments { get; set; } = new List<TemporaryMentorAssignment>();
     public virtual ICollection<ChatGroup> ChatGroups { get; set; } = new List<ChatGroup>();
     public virtual ICollection<Milestone> Milestones { get; set; } = new List<Milestone>();
     public virtual ICollection<SprintTask> SprintTasks { get; set; } = new List<SprintTask>();
     public virtual ICollection<WeeklyTask> WeeklyTasks { get; set; } = new List<WeeklyTask>();
+    public virtual ICollection<WeeklyTaskTeamProgress> WeeklyTaskProgress { get; set; } = new List<WeeklyTaskTeamProgress>();
+    public virtual ICollection<TeamProposal> ApprovedProposals { get; set; } = new List<TeamProposal>();
+    public virtual ProjectDirection? ProjectDirection { get; set; }
 }

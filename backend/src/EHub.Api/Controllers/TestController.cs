@@ -3,20 +3,33 @@ using System.Collections.Generic;
 using Microsoft.AspNetCore.Mvc;
 using EHub.Application.Common.Exceptions;
 using EHub.Contracts.Common;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Mvc.Filters;
 
 namespace EHub.Api.Controllers;
 
 [ApiController]
 [Route("api/test")]
-public class TestController : ControllerBase
+public sealed class TestController(IWebHostEnvironment environment) : Controller
 {
+    public override void OnActionExecuting(ActionExecutingContext context)
+    {
+        if (!environment.IsDevelopment())
+        {
+            context.Result = NotFound();
+            return;
+        }
+
+        base.OnActionExecuting(context);
+    }
+
     [HttpGet("validation")]
     public IActionResult GetValidationError()
     {
         var errors = new List<ValidationError>
         {
             new() { Field = "Email", Message = "Email is required", Code = "EMAIL_REQUIRED" },
-            new() { Field = "Password", Message = "Password must be at least 8 characters", Code = "PASSWORD_TOO_SHORT" }
+            new() { Field = "Password", Message = "Password must be at least 6 characters", Code = "PASSWORD_TOO_SHORT" }
         };
         throw new ValidationException(errors);
     }

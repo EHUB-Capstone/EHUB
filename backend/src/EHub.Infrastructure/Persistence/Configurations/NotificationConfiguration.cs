@@ -13,6 +13,9 @@ public class NotificationConfiguration : IEntityTypeConfiguration<Notification>
         builder.HasKey(n => n.Id);
         builder.Property(n => n.Id).HasColumnName("id");
 
+        builder.Property(n => n.SourceEventId)
+            .HasColumnName("source_event_id");
+
         builder.Property(n => n.RecipientUserId)
             .HasColumnName("recipient_user_id")
             .IsRequired();
@@ -65,6 +68,9 @@ public class NotificationConfiguration : IEntityTypeConfiguration<Notification>
         builder.HasIndex(n => new { n.RecipientUserId, n.IsRead });
         builder.HasIndex(n => new { n.RecipientUserId, n.CreatedAt });
         builder.HasIndex(n => new { n.RecipientUserId, n.Type });
+        builder.HasIndex(n => new { n.SourceEventId, n.RecipientUserId })
+            .IsUnique()
+            .HasFilter("source_event_id IS NOT NULL");
 
         // Audit & Soft Delete properties configuration
         builder.Property(n => n.CreatedAt).HasColumnName("created_at").IsRequired();

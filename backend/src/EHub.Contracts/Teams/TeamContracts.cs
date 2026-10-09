@@ -1,0 +1,365 @@
+using System.Text.Json.Serialization;
+
+namespace EHub.Contracts.Teams;
+
+public sealed class TeamMemberDto
+{
+    public Guid StudentId { get; init; }
+    public string RollNumber { get; init; } = string.Empty;
+    public string FullName { get; init; } = string.Empty;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Email { get; init; }
+    public string MajorCode { get; init; } = string.Empty;
+    public string RoleInTeam { get; init; } = string.Empty;
+    public DateTime JoinedAtUtc { get; init; }
+}
+
+public sealed class MentorSummaryDto
+{
+    public Guid MentorProfileId { get; init; }
+    public Guid UserId { get; init; }
+    public string FullName { get; init; } = string.Empty;
+    public string Email { get; init; } = string.Empty;
+    public string? Organization { get; init; }
+    public string MentorType { get; init; } = string.Empty;
+    public string? Department { get; init; }
+    public string? JobTitle { get; init; }
+    public string? ContractType { get; init; }
+    // True for a mentor who has no account yet: their id is the id of the incomplete-mentor record, not of a profile.
+    public bool IsTemporary { get; init; }
+    // Only filled in the mentor pickers, where lecturers search mentors by tag.
+    public EHub.Contracts.Mentors.MentorTagsDto? Tags { get; init; }
+}
+
+public sealed class MentorAssignmentDto
+{
+    public Guid AssignmentId { get; init; }
+    public Guid TeamId { get; init; }
+    public string TeamName { get; init; } = string.Empty;
+    public Guid ClassId { get; init; }
+    public MentorSummaryDto Mentor { get; init; } = new();
+    public string Status { get; init; } = string.Empty;
+    public DateTime AssignedAtUtc { get; init; }
+    public DateTime? EndedAtUtc { get; init; }
+    public string? Note { get; init; }
+    public string Slot { get; init; } = string.Empty;
+}
+
+public sealed class MentorCandidateDto
+{
+    public MentorSummaryDto Mentor { get; init; } = new();
+    public bool IsTemporary { get; init; }
+    public int ActiveTeamCount { get; init; }
+}
+
+public sealed class TeamMajorCompositionDto
+{
+    public bool IsValid { get; init; }
+    public IReadOnlyCollection<string> MissingGroups { get; init; } = Array.Empty<string>();
+    public IReadOnlyCollection<string> MembersWithoutValidMajor { get; init; } = Array.Empty<string>();
+    public string? Message { get; init; }
+}
+
+public sealed class TeamMajorWarningDto
+{
+    public Guid TeamId { get; init; }
+    public string TeamCode { get; init; } = string.Empty;
+    public string TeamName { get; init; } = string.Empty;
+    public TeamMajorCompositionDto MajorComposition { get; init; } = new();
+}
+
+public sealed class TeamDto
+{
+    public Guid Id { get; init; }
+    public Guid ClassId { get; init; }
+    public string TeamCode { get; init; } = string.Empty;
+    public string TeamName { get; init; } = string.Empty;
+    public string? Description { get; init; }
+    public string? ProjectName { get; init; }
+    public string? ProjectDescription { get; init; }
+    public string Status { get; init; } = string.Empty;
+    public bool HasChatGroup { get; init; }
+    public Guid? LeaderId { get; init; }
+    public IReadOnlyCollection<TeamMemberDto> Members { get; init; } = Array.Empty<TeamMemberDto>();
+    public IReadOnlyCollection<MentorAssignmentDto> CurrentMentorAssignments { get; init; } = Array.Empty<MentorAssignmentDto>();
+    public MentorAssignmentDto? CurrentMentorAssignment { get; init; }
+    public TeamMajorCompositionDto MajorComposition { get; init; } = new() { IsValid = true };
+    public Guid TeamLineageId { get; init; }
+    public bool IsContinued { get; init; }
+    public string? ContinuedFromSemesterCode { get; init; }
+    public string? ContinuedFromClassCode { get; init; }
+    public string RowVersion { get; init; } = string.Empty;
+}
+
+public sealed class CreateClassManagerTeamRequest
+{
+    public string TeamName { get; init; } = string.Empty;
+    public IReadOnlyCollection<Guid> MemberStudentIds { get; init; } = Array.Empty<Guid>();
+    public Guid LeaderStudentId { get; init; }
+}
+
+public sealed class UpdateTeamMembersRequest
+{
+    public string? TeamName { get; init; }
+    public string? Description { get; init; }
+    public IReadOnlyCollection<Guid> MemberIds { get; init; } = Array.Empty<Guid>();
+    public Guid LeaderStudentId { get; init; }
+    public string Mode { get; init; } = "standard";
+    public string RowVersion { get; init; } = string.Empty;
+}
+
+public sealed class AssignTeamLeaderRequest
+{
+    public Guid StudentId { get; init; }
+    public string RowVersion { get; init; } = string.Empty;
+}
+
+public sealed class AssignMentorRequest
+{
+    // The mentor profile id, or the incomplete-mentor id when Temporary is true.
+    public Guid MentorProfileId { get; init; }
+    public bool Temporary { get; init; }
+    public string? Note { get; init; }
+}
+
+// One past (ended) assignment of the signed-in mentor, for the read-only history list.
+public sealed class MentorHistoryItemDto
+{
+    public Guid AssignmentId { get; init; }
+    public Guid TeamId { get; init; }
+    public string TeamName { get; init; } = string.Empty;
+    public string? ProjectName { get; init; }
+    public Guid ClassId { get; init; }
+    public string ClassCode { get; init; } = string.Empty;
+    public string SubjectCode { get; init; } = string.Empty;
+    public string SemesterCode { get; init; } = string.Empty;
+    public string Slot { get; init; } = string.Empty;
+    public DateTime AssignedAtUtc { get; init; }
+    public DateTime EndedAtUtc { get; init; }
+    // "ClassCompleted" when the assignment ended together with its class, otherwise "EndedEarly" (replaced or ended by an admin).
+    public string EndedBecause { get; init; } = string.Empty;
+}
+
+// Ends the current assignment of a slot and gives it to another mentor of the same type, all in one save.
+public sealed class ReplaceMentorRequest
+{
+    public Guid AssignmentId { get; init; }
+    public Guid MentorProfileId { get; init; }
+    public bool Temporary { get; init; }
+    public string Reason { get; init; } = string.Empty;
+    public string? Note { get; init; }
+}
+
+// Assigns one mentor to several teams of a class. Either every team is assigned or none is.
+public sealed class AssignMentorBatchRequest
+{
+    public Guid MentorProfileId { get; init; }
+    public bool Temporary { get; init; }
+    public IReadOnlyCollection<Guid> TeamIds { get; init; } = Array.Empty<Guid>();
+}
+
+public sealed class AssignMentorBatchResponse
+{
+    public int AssignedCount { get; init; }
+    public int AlreadyAssignedCount { get; init; }
+}
+
+public sealed class EndMentorAssignmentRequest
+{
+    public Guid AssignmentId { get; init; }
+    public string Reason { get; init; } = string.Empty;
+}
+
+public sealed class TeamProposalMemberDto
+{
+    public Guid StudentId { get; init; }
+    public string RollNumber { get; init; } = string.Empty;
+    public string FullName { get; init; } = string.Empty;
+    public string MajorCode { get; init; } = string.Empty;
+    public bool IsLeader { get; init; }
+}
+
+public sealed class TeamProposalDto
+{
+    public Guid Id { get; init; }
+    public Guid ClassId { get; init; }
+    public string TeamName { get; init; } = string.Empty;
+    public string? Description { get; init; }
+    public string? ProjectName { get; init; }
+    public string Status { get; init; } = string.Empty;
+    public string? LatestReviewComment { get; init; }
+    public Guid? ApprovedTeamId { get; init; }
+    public IReadOnlyCollection<TeamProposalMemberDto> Members { get; init; } = Array.Empty<TeamProposalMemberDto>();
+    public string RowVersion { get; init; } = string.Empty;
+}
+
+public sealed class CreateTeamProposalRequest
+{
+    public string TeamName { get; init; } = string.Empty;
+    public string? Description { get; init; }
+    public string? ProjectName { get; init; }
+    public IReadOnlyCollection<Guid> MemberIds { get; init; } = Array.Empty<Guid>();
+    public Guid LeaderStudentId { get; init; }
+}
+
+public sealed class SubmitStudentTeamProposalRequest
+{
+    public IReadOnlyCollection<Guid> StudentIds { get; init; } = Array.Empty<Guid>();
+    public Guid LeaderStudentId { get; init; }
+    public string GroupName { get; init; } = string.Empty;
+    public string ProjectName { get; init; } = string.Empty;
+    public bool IsProjectNameSameAsGroup { get; init; }
+    public string Description { get; init; } = string.Empty;
+}
+
+public sealed class SubmitTeamProposalRequest
+{
+    public string RowVersion { get; init; } = string.Empty;
+}
+
+public sealed class CancelTeamProposalRequest
+{
+    public string RowVersion { get; init; } = string.Empty;
+    public string Reason { get; init; } = string.Empty;
+}
+
+public sealed class UpdateTeamProposalRequest
+{
+    public string TeamName { get; init; } = string.Empty;
+    public string? Description { get; init; }
+    public string? ProjectName { get; init; }
+    public IReadOnlyCollection<Guid> MemberIds { get; init; } = Array.Empty<Guid>();
+    public Guid LeaderStudentId { get; init; }
+    public string RowVersion { get; init; } = string.Empty;
+}
+
+public sealed class ReviewTeamProposalRequest
+{
+    public string Decision { get; init; } = string.Empty;
+    public string? Status { get; init; }
+    public string? Comment { get; init; }
+    public string RowVersion { get; init; } = string.Empty;
+}
+
+public sealed class TeamProposalHistoryDto
+{
+    public Guid Id { get; init; }
+    public string? FromStatus { get; init; }
+    public string ToStatus { get; init; } = string.Empty;
+    public string Action { get; init; } = string.Empty;
+    public string? Comment { get; init; }
+    public Guid PerformedByUserId { get; init; }
+    public DateTime OccurredAtUtc { get; init; }
+}
+
+public sealed class ProjectDirectionDto
+{
+    public Guid Id { get; init; }
+    public Guid TeamId { get; init; }
+    public string Title { get; init; } = string.Empty;
+    public string Summary { get; init; } = string.Empty;
+    public bool IsProjectProfileChangeProposal { get; init; }
+    public string? CurrentTitle { get; init; }
+    public string? CurrentSummary { get; init; }
+    public IReadOnlyCollection<string> StartupIndustries { get; init; } = Array.Empty<string>();
+    public string Status { get; init; } = string.Empty;
+    public DateTime? SubmittedAtUtc { get; init; }
+    public DateTime? ReviewedAtUtc { get; init; }
+    public string RowVersion { get; init; } = string.Empty;
+    public IReadOnlyCollection<ProjectDirectionReviewDto> Reviews { get; init; } = Array.Empty<ProjectDirectionReviewDto>();
+}
+
+public sealed class SaveProjectDirectionRequest
+{
+    public string Title { get; init; } = string.Empty;
+    public string Summary { get; init; } = string.Empty;
+    public IReadOnlyCollection<Guid>? StartupIndustryIds { get; init; }
+    public string? RowVersion { get; init; }
+}
+
+public sealed class ProjectDirectionStateRequest
+{
+    public string RowVersion { get; init; } = string.Empty;
+}
+
+public sealed class ReviewProjectDirectionRequest
+{
+    public string Decision { get; init; } = string.Empty;
+    public string? Comment { get; init; }
+    public string RowVersion { get; init; } = string.Empty;
+}
+
+public sealed class ProjectDirectionReviewDto
+{
+    public Guid Id { get; init; }
+    public string FromStatus { get; init; } = string.Empty;
+    public string ToStatus { get; init; } = string.Empty;
+    public string Comment { get; init; } = string.Empty;
+    public Guid ReviewedByUserId { get; init; }
+    public DateTime OccurredAtUtc { get; init; }
+}
+
+public sealed class StudentClassSummaryDto
+{
+    public Guid Id { get; init; }
+    public string Slug { get; init; } = string.Empty;
+    public string ClassCode { get; init; } = string.Empty;
+    public string SubjectCode { get; init; } = string.Empty;
+    public string SubjectName { get; init; } = string.Empty;
+    public string Semester { get; init; } = string.Empty;
+    public int Year { get; init; }
+    public string ClassStatus { get; init; } = string.Empty;
+    public string EnrollmentStatus { get; init; } = string.Empty;
+    public StudentClassLecturerDto? LectureId { get; init; }
+    public IReadOnlyCollection<MentorSummaryDto> Mentors { get; init; } = Array.Empty<MentorSummaryDto>();
+}
+
+public sealed class StudentClassLecturerDto
+{
+    public Guid Id { get; init; }
+    public string Name { get; init; } = string.Empty;
+    public string Email { get; init; } = string.Empty;
+}
+
+public sealed class MyClassesResponse
+{
+    public IReadOnlyCollection<StudentClassSummaryDto> Classes { get; init; } = Array.Empty<StudentClassSummaryDto>();
+}
+
+public sealed class StudentClassDetailResponse
+{
+    public StudentClassSummaryDto Class { get; init; } = new();
+    public IReadOnlyCollection<StudentClassMemberDto> Students { get; init; } = Array.Empty<StudentClassMemberDto>();
+    public IReadOnlyCollection<TeamDto> Teams { get; init; } = Array.Empty<TeamDto>();
+}
+
+public sealed class StudentClassMemberDto
+{
+    public Guid StudentId { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public Guid? UserId { get; init; }
+    public string RollNumber { get; init; } = string.Empty;
+    public string FullName { get; init; } = string.Empty;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Email { get; init; }
+    public string MajorCode { get; init; } = string.Empty;
+    public string? ProfileMajorCode { get; init; }
+    public string EnrollmentMajorCode { get; init; } = string.Empty;
+    public string MajorVerificationStatus { get; init; } = string.Empty;
+    public bool CanEditMajor { get; init; }
+    public bool IsMajorLocked { get; init; }
+    public string EnrollmentStatus { get; init; } = string.Empty;
+    public Guid? TeamId { get; init; }
+    public bool HasPendingTeamInvitation { get; init; }
+    public Guid? PendingTeamFormationId { get; init; }
+    public string? PendingTeamName { get; init; }
+    public string? PendingTeamInvitationStatus { get; init; }
+    public bool IsPendingTeamFormationMember { get; init; }
+}
+
+public sealed class MyTeamResponse
+{
+    public TeamDto? Team { get; init; }
+    public StudentClassSummaryDto? Class { get; init; }
+    public IReadOnlyCollection<TeamMemberDto> Members { get; init; } = Array.Empty<TeamMemberDto>();
+}

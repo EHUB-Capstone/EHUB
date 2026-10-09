@@ -1,0 +1,2912 @@
+using System;
+using System.Linq;
+using System.Net;
+using System.Net.Http;
+using System.Net.Http.Headers;
+using System.Net.Http.Json;
+using System.IO;
+using System.Text.Json;
+using System.Threading.Tasks;
+using ClosedXML.Excel;
+using EHub.Application.Common.Interfaces.Identity;
+using EHub.Application.Common.Interfaces.Persistence;
+using EHub.Application.Common.Interfaces.Services;
+using EHub.Application.Features.Classes.AddStudentToClass;
+using EHub.Application.Features.Classes.CreateClass;
+using EHub.Application.Features.Classes.Common;
+using EHub.Application.Features.Classes.ImportStudents;
+using EHub.Application.Features.Classes.UpdateClass;
+using EHub.Application.Features.Classes.UpdateClassSchedule;
+using EHub.Contracts.Classes;
+using EHub.Contracts.Common;
+using EHub.Contracts.Auth;
+using EHub.Contracts.Subjects;
+using EHub.Domain.Entities;
+using EHub.Domain.Enums;
+using EHub.IntegrationTests.Common;
+using EHub.Infrastructure.Persistence;
+using EHub.Shared.Constants;
+using EHub.Shared.Errors;
+using FluentAssertions;
+using Microsoft.AspNetCore.Http;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.Extensions.DependencyInjection;
+using Xunit;
+
+namespace EHub.IntegrationTests.Classes;
+
+[Collection("Sequential")]
+public sealed class ClassSafetyHotfixIntegrationTests
+{
+    private readonly CustomWebApplicationFactory _factory;
+    private readonly HttpClient _client;
+
+    public ClassSafetyHotfixIntegrationTests(CustomWebApplicationFactory factory)
+    {
+        _factory = factory;
+        _client = factory.CreateClient();
+    }
+
+    [Fact]
+    public async Task InvalidSchedulePayload_Returns400ValidationError()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateClassSeedAsync(context, "http-validation");
+        context.ChangeTracker.Clear();
+        var targetClass = await context.Classes.SingleAsync(@class => @class.Id == seed.ClassId);
+        var admin = await context.Users.SingleAsync(user => user.Id == seed.AdminId);
+        var token = GenerateToken(scope.ServiceProvider, admin, SystemRoles.Admin);
+
+        var request = CreateAuthorizedPutRequest(
+            $"/api/classes/{seed.ClassId}/schedule",
+            token,
+            new UpdateClassScheduleRequest
+            {
+                RowVersion = targetClass.Version.ToString(),
+                Schedules =
+                [
+                    new ClassScheduleSlotDto
+                    {
+                        DayOfWeek = DayOfWeek.Monday,
+                        SlotNumber = 0,
+                        Room = "SH-101"
+                    }
+                ]
+            });
+
+        var response = await _client.SendAsync(request);
+        var body = await response.Content.ReadFromJsonAsync<ApiResponse<object>>();
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        body.Should().NotBeNull();
+        body!.Code.Should().Be(ErrorCodes.ClassValidationError);
+    }
+
+    [Fact]
+    public async Task GetClassDetail_BySlug_ReturnsMatchingClass()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateClassSeedAsync(context, "slug-detail");
+        var admin = await context.Users.SingleAsync(user => user.Id == seed.AdminId);
+        var token = GenerateToken(scope.ServiceProvider, admin, SystemRoles.Admin);
+
+        using var request = CreateAuthorizedGetRequest($"/api/classes/{seed.Slug}", token);
+
+        var response = await _client.SendAsync(request);
+        var body = await response.Content.ReadFromJsonAsync<ApiResponse<ClassResponse>>();
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        body.Should().NotBeNull();
+        body!.Data.Should().NotBeNull();
+        body.Data!.Id.Should().Be(seed.ClassId);
+        body.Data.Slug.Should().Be(seed.Slug);
+    }
+
+    [Fact]
+    public async Task GetClassDetail_ByMissingSlug_Returns404()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var admin = await context.Users
+            .Include(user => user.UserRoles)
+            .ThenInclude(userRole => userRole.Role)
+            .FirstAsync(user => user.UserRoles.Any(userRole => userRole.Role.Name == SystemRoles.Admin));
+        var token = GenerateToken(scope.ServiceProvider, admin, SystemRoles.Admin);
+        var missingSlug = $"missing-class-{Guid.NewGuid():N}"[..28].ToLowerInvariant();
+
+        using var request = CreateAuthorizedGetRequest($"/api/classes/{missingSlug}", token);
+
+        var response = await _client.SendAsync(request);
+        var body = await response.Content.ReadFromJsonAsync<ApiResponse<object>>();
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        body.Should().NotBeNull();
+        body!.Code.Should().Be(ErrorCodes.ClassNotFound);
+    }
+
+    [Fact]
+    public async Task UnassignedLecturerUpdatingSchedule_Returns403ClassAccessDenied()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateClassSeedAsync(context, "http-access");
+        var unassignedLecturer = await CreateLecturerAsync(context, "http-unassigned");
+        context.ChangeTracker.Clear();
+        var targetClass = await context.Classes.SingleAsync(@class => @class.Id == seed.ClassId);
+        var token = GenerateToken(scope.ServiceProvider, unassignedLecturer, SystemRoles.Lecturer);
+
+        var request = CreateAuthorizedPutRequest(
+            $"/api/classes/{seed.ClassId}/schedule",
+            token,
+            new UpdateClassScheduleRequest
+            {
+                RowVersion = targetClass.Version.ToString(),
+                Schedules =
+                [
+                    new ClassScheduleSlotDto
+                    {
+                        DayOfWeek = DayOfWeek.Tuesday,
+                        SlotNumber = 2,
+                        Room = "SH-202"
+                    }
+                ]
+            });
+
+        var response = await _client.SendAsync(request);
+        var body = await response.Content.ReadFromJsonAsync<ApiResponse<object>>();
+
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        body.Should().NotBeNull();
+        body!.Code.Should().Be(ErrorCodes.ClassAccessDenied);
+    }
+
+    [Fact]
+    public async Task ClassList_ReturnsAllClassesForAdmin_ButOnlyAssignedClassesForLecturer()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateClassSeedAsync(context, "class-list-ownership");
+        var admin = await context.Users.SingleAsync(user => user.Id == seed.AdminId);
+        var assignedLecturer = await context.Users.SingleAsync(user => user.Id == seed.LecturerId);
+        var otherLecturer = await CreateLecturerAsync(context, "class-list-other");
+        var sourceClass = await context.Classes.AsNoTracking()
+            .SingleAsync(@class => @class.Id == seed.ClassId);
+        var otherClass = new Class
+        {
+            ClassCode = $"{sourceClass.ClassCode}_2",
+            Slug = UniqueSlug(sourceClass.Slug, "owner"),
+            ClassIndex = sourceClass.ClassIndex + 1,
+            CourseId = sourceClass.CourseId,
+            SemesterId = sourceClass.SemesterId,
+            PrimaryLecturerId = otherLecturer.Id,
+            ScheduleJson = sourceClass.ScheduleJson,
+            Status = ClassStatus.Active,
+            CreatedById = seed.AdminId,
+            CreatedBy = seed.AdminId
+        };
+        context.Classes.Add(otherClass);
+        context.ClassLecturers.Add(new ClassLecturer
+        {
+            ClassId = otherClass.Id,
+            LecturerId = otherLecturer.Id,
+            IsPrimary = true,
+            AssignedById = seed.AdminId
+        });
+        await context.SaveChangesAsync();
+
+        var adminToken = GenerateToken(scope.ServiceProvider, admin, SystemRoles.Admin);
+        var assignedToken = GenerateToken(scope.ServiceProvider, assignedLecturer, SystemRoles.Lecturer);
+        var otherToken = GenerateToken(scope.ServiceProvider, otherLecturer, SystemRoles.Lecturer);
+
+        var adminResult = await GetClassListAsync(adminToken);
+        adminResult.TotalCount.Should().Be(2);
+        adminResult.Items.Should().HaveCount(2);
+        adminResult.Items.Should().Contain(item => item.Id == seed.ClassId);
+        adminResult.Items.Should().Contain(item => item.Id == otherClass.Id);
+
+        var assignedResult = await GetClassListAsync(assignedToken);
+        assignedResult.TotalCount.Should().Be(1);
+        assignedResult.Items.Should().ContainSingle();
+        assignedResult.Items.Should().Contain(item => item.Id == seed.ClassId);
+        assignedResult.Items.Should().NotContain(item => item.Id == otherClass.Id);
+        assignedResult.Items.Should().OnlyContain(item => item.PrimaryLecturerId == seed.LecturerId);
+
+        var otherResult = await GetClassListAsync(otherToken);
+        otherResult.TotalCount.Should().Be(1);
+        otherResult.Items.Should().ContainSingle();
+        otherResult.Items.Should().Contain(item => item.Id == otherClass.Id);
+        otherResult.Items.Should().NotContain(item => item.Id == seed.ClassId);
+        otherResult.Items.Should().OnlyContain(item => item.PrimaryLecturerId == otherLecturer.Id);
+
+        async Task<ClassListResponse> GetClassListAsync(string token)
+        {
+            using var request = new HttpRequestMessage(
+                HttpMethod.Get,
+            $"/api/classes?page=1&pageSize=100&status=Active&semesterId={sourceClass.SemesterId}&courseId={sourceClass.CourseId}");
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            var response = await _client.SendAsync(request);
+            response.StatusCode.Should().Be(HttpStatusCode.OK);
+            var body = await response.Content.ReadFromJsonAsync<ApiResponse<ClassListResponse>>();
+            body.Should().NotBeNull();
+            body!.Success.Should().BeTrue();
+            body.Data.Should().NotBeNull();
+            return body.Data!;
+        }
+    }
+
+    [Fact]
+    public async Task ConflictingSchedule_Returns409ScheduleConflict()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateClassSeedAsync(context, "http-conflict");
+        await CreateConflictingClassAsync(context, seed);
+        context.ChangeTracker.Clear();
+        var targetClass = await context.Classes.SingleAsync(@class => @class.Id == seed.ClassId);
+        var admin = await context.Users.SingleAsync(user => user.Id == seed.AdminId);
+        var token = GenerateToken(scope.ServiceProvider, admin, SystemRoles.Admin);
+
+        var request = CreateAuthorizedPutRequest(
+            $"/api/classes/{seed.ClassId}/schedule",
+            token,
+            new UpdateClassScheduleRequest
+            {
+                RowVersion = targetClass.Version.ToString(),
+                Schedules =
+                [
+                    new ClassScheduleSlotDto
+                    {
+                        DayOfWeek = DayOfWeek.Monday,
+                        SlotNumber = 1,
+                        Room = "SH-101"
+                    }
+                ]
+            });
+
+        var response = await _client.SendAsync(request);
+        var body = await response.Content.ReadFromJsonAsync<ApiResponse<object>>();
+
+        response.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        body.Should().NotBeNull();
+        body!.Code.Should().Be(ErrorCodes.ClassScheduleConflict);
+    }
+
+    [Fact]
+    public async Task UpdatingSchedule_DoesNotChangeTeachingAssignment()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateClassSeedAsync(context, "schedule");
+        context.ChangeTracker.Clear();
+
+        var trackedClass = await context.Classes.SingleAsync(@class => @class.Id == seed.ClassId);
+        var rowVersion = trackedClass.Version.ToString();
+        context.ChangeTracker.Clear();
+
+        var handler = new UpdateClassScheduleCommandHandler(
+            context,
+            scope.ServiceProvider.GetRequiredService<IUnitOfWork>());
+        var result = await handler.HandleAsync(
+            seed.ClassId,
+            new UpdateClassScheduleRequest
+            {
+                RowVersion = rowVersion,
+                Schedules =
+                [
+                    new ClassScheduleSlotDto
+                    {
+                        DayOfWeek = DayOfWeek.Tuesday,
+                        SlotNumber = 2,
+                        Room = "SH-201"
+                    }
+                ]
+            },
+            seed.LecturerId,
+            SystemRoles.Lecturer);
+
+        result.IsSuccess.Should().BeTrue();
+        context.ChangeTracker.Clear();
+        var updatedClass = await context.Classes.AsNoTracking().SingleAsync(@class => @class.Id == seed.ClassId);
+        updatedClass.PrimaryLecturerId.Should().Be(seed.LecturerId);
+        updatedClass.ScheduleJson.Should().Contain("slotNumber");
+    }
+
+    [Fact]
+    public async Task AdminCreatedAssignedClass_StaysDraftUntilAssignedLecturerAddsSchedule()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateClassSeedAsync(context, "draft-lifecycle");
+        var sourceClass = await context.Classes.AsNoTracking().SingleAsync(@class => @class.Id == seed.ClassId);
+        var nextIndex = 2;
+        while (await context.Classes.AnyAsync(@class =>
+                   @class.SemesterId == sourceClass.SemesterId &&
+                   @class.CourseId == sourceClass.CourseId &&
+                   @class.ClassIndex == nextIndex))
+        {
+            nextIndex++;
+        }
+
+        var createHandler = new CreateClassCommandHandler(context);
+        var createResult = await createHandler.HandleAsync(
+            new CreateClassRequest
+            {
+                CourseId = sourceClass.CourseId,
+                SemesterId = sourceClass.SemesterId,
+                ClassIndex = nextIndex,
+                PrimaryLecturerId = seed.LecturerId
+            },
+            seed.AdminId,
+            SystemRoles.Admin);
+
+        createResult.IsSuccess.Should().BeTrue();
+        createResult.Value.Status.Should().Be(nameof(ClassStatus.Active));
+        createResult.Value.PrimaryLecturerId.Should().Be(seed.LecturerId);
+        context.ChangeTracker.Clear();
+
+        var draft = await context.Classes.SingleAsync(@class => @class.Id == createResult.Value.Id);
+        var scheduleHandler = new UpdateClassScheduleCommandHandler(
+            context,
+            scope.ServiceProvider.GetRequiredService<IUnitOfWork>());
+        var scheduleResult = await scheduleHandler.HandleAsync(
+            draft.Id,
+            new UpdateClassScheduleRequest
+            {
+                RowVersion = draft.Version.ToString(),
+                Schedules =
+                [
+                    new ClassScheduleSlotDto
+                    {
+                        DayOfWeek = DayOfWeek.Saturday,
+                        SlotNumber = 4,
+                        Room = $"DRAFT-{nextIndex}"
+                    }
+                ]
+            },
+            seed.LecturerId,
+            SystemRoles.Lecturer);
+
+        scheduleResult.IsSuccess.Should().BeTrue();
+        scheduleResult.Value.Status.Should().Be(nameof(ClassStatus.Active));
+    }
+
+    [Fact]
+    public async Task AdminCanCreateUnassignedClassThenAssignItToLecturer()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateClassSeedAsync(context, "create-then-assign");
+        var sourceClass = await context.Classes.AsNoTracking().SingleAsync(@class => @class.Id == seed.ClassId);
+        var nextIndex = 2;
+        while (await context.Classes.AnyAsync(@class =>
+                   @class.SemesterId == sourceClass.SemesterId &&
+                   @class.CourseId == sourceClass.CourseId &&
+                   @class.ClassIndex == nextIndex))
+        {
+            nextIndex++;
+        }
+
+        var createResult = await new CreateClassCommandHandler(context).HandleAsync(
+            new CreateClassRequest
+            {
+                CourseId = sourceClass.CourseId,
+                SemesterId = sourceClass.SemesterId,
+                ClassIndex = nextIndex,
+                PrimaryLecturerId = null
+            },
+            seed.AdminId,
+            SystemRoles.Admin);
+
+        createResult.IsSuccess.Should().BeTrue();
+        createResult.Value.Status.Should().Be(nameof(ClassStatus.Draft));
+        createResult.Value.PrimaryLecturerId.Should().BeNull();
+        context.ChangeTracker.Clear();
+
+        var assignResult = await new UpdateClassCommandHandler(
+                context,
+                scope.ServiceProvider.GetRequiredService<IUnitOfWork>())
+            .UpdateTeachingAssignmentAsync(
+                createResult.Value.Id,
+                new UpdateTeachingAssignmentRequest
+                {
+                    PrimaryLecturerId = seed.LecturerId,
+                    RowVersion = createResult.Value.RowVersion
+                },
+                seed.AdminId,
+                SystemRoles.Admin);
+
+        assignResult.IsSuccess.Should().BeTrue();
+        assignResult.Value.PrimaryLecturerId.Should().Be(seed.LecturerId);
+        assignResult.Value.Status.Should().Be(nameof(ClassStatus.Active));
+        context.ChangeTracker.Clear();
+        var persistedClass = await context.Classes.AsNoTracking()
+            .SingleAsync(@class => @class.Id == createResult.Value.Id);
+        persistedClass.PrimaryLecturerId.Should().Be(seed.LecturerId);
+        (await context.ClassLecturers.AsNoTracking().CountAsync(assignment =>
+            assignment.ClassId == createResult.Value.Id &&
+            assignment.LecturerId == seed.LecturerId &&
+            assignment.IsPrimary)).Should().Be(1);
+    }
+
+    [Fact]
+    public async Task LecturerCannotCreateClassesThroughSingleOrBulkEndpoints()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateClassSeedAsync(context, "admin-only-create");
+        var sourceClass = await context.Classes.AsNoTracking().SingleAsync(@class => @class.Id == seed.ClassId);
+        var lecturer = await context.Users.SingleAsync(user => user.Id == seed.LecturerId);
+        var token = GenerateToken(scope.ServiceProvider, lecturer, SystemRoles.Lecturer);
+        var nextIndex = 2;
+        while (await context.Classes.AnyAsync(@class =>
+                   @class.SemesterId == sourceClass.SemesterId &&
+                   @class.CourseId == sourceClass.CourseId &&
+                   @class.ClassIndex == nextIndex))
+        {
+            nextIndex++;
+        }
+
+        using var singleRequest = CreateAuthorizedPostRequest(
+            "/api/classes",
+            token,
+            new CreateClassRequest
+            {
+                CourseId = sourceClass.CourseId,
+                SemesterId = sourceClass.SemesterId,
+                ClassIndex = nextIndex
+            });
+        var singleResponse = await _client.SendAsync(singleRequest);
+
+        using var bulkPreviewRequest = CreateAuthorizedPostRequest(
+            "/api/classes/bulk/preview",
+            token,
+            new CreateBulkClassesRequest
+            {
+                CourseId = sourceClass.CourseId,
+                SemesterId = sourceClass.SemesterId,
+                ClassIndices = [nextIndex]
+            });
+        var bulkPreviewResponse = await _client.SendAsync(bulkPreviewRequest);
+
+        singleResponse.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        bulkPreviewResponse.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        context.ChangeTracker.Clear();
+        (await context.Classes.AsNoTracking().AnyAsync(@class =>
+            @class.SemesterId == sourceClass.SemesterId &&
+            @class.CourseId == sourceClass.CourseId &&
+            @class.ClassIndex == nextIndex)).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task DatabaseRejectsTwoCountedEnrollmentsForSameStudentCourseAndSemester()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateClassSeedAsync(context, "enrollment-unique");
+        var sourceClass = await context.Classes.AsNoTracking().SingleAsync(@class => @class.Id == seed.ClassId);
+        var secondClass = new Class
+        {
+            ClassCode = $"{sourceClass.ClassCode}_ALT_{Guid.NewGuid():N}"[..Math.Min(50, sourceClass.ClassCode.Length + 13)],
+            Slug = UniqueSlug(sourceClass.Slug, "alt"),
+            ClassIndex = 99,
+            CourseId = sourceClass.CourseId,
+            SemesterId = sourceClass.SemesterId,
+            PrimaryLecturerId = seed.LecturerId,
+            Status = ClassStatus.Draft,
+            CreatedById = seed.AdminId,
+            CreatedBy = seed.AdminId
+        };
+        var studentCode = "SE" + Guid.NewGuid().ToString("N")[..8].ToUpperInvariant();
+        var student = new Student
+        {
+            RollNumber = studentCode,
+            NormalizedRollNumber = studentCode,
+            FullName = "Unique Enrollment Student",
+            Email = $"unique-{Guid.NewGuid():N}@example.com",
+            MajorCode = MajorCodes.BIT_SE,
+            Status = StudentStatus.Active,
+            CreatedBy = seed.AdminId
+        };
+        context.Classes.Add(secondClass);
+        context.ClassLecturers.Add(new ClassLecturer
+        {
+            ClassId = secondClass.Id,
+            LecturerId = seed.LecturerId,
+            IsPrimary = true,
+            AssignedById = seed.AdminId
+        });
+        context.Students.Add(student);
+        context.ClassStudents.Add(new ClassStudent
+        {
+            ClassId = seed.ClassId,
+            StudentId = student.Id,
+            SemesterId = sourceClass.SemesterId,
+            CourseId = sourceClass.CourseId,
+            EnrollmentStatus = EnrollmentStatus.Active,
+            CountsTowardCourseSemesterLimit = true,
+            MajorCodeAtEnrollment = MajorCodes.BIT_SE
+        });
+        await context.SaveChangesAsync();
+
+        context.ClassStudents.Add(new ClassStudent
+        {
+            ClassId = secondClass.Id,
+            StudentId = student.Id,
+            SemesterId = sourceClass.SemesterId,
+            CourseId = sourceClass.CourseId,
+            EnrollmentStatus = EnrollmentStatus.Active,
+            CountsTowardCourseSemesterLimit = true,
+            MajorCodeAtEnrollment = MajorCodes.BIT_SE
+        });
+
+        var save = () => context.SaveChangesAsync();
+        await save.Should().ThrowAsync<DbUpdateException>();
+    }
+
+    [Fact]
+    public async Task ReassigningLecturer_RevokesOldOwnership_PreservesSchedule_AndWritesAudit()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateClassSeedAsync(context, "assignment");
+        var newLecturer = await CreateLecturerAsync(context, "new-assignment");
+        context.ChangeTracker.Clear();
+
+        var trackedClass = await context.Classes.SingleAsync(@class => @class.Id == seed.ClassId);
+        var rowVersion = trackedClass.Version.ToString();
+        var persistedScheduleJson = trackedClass.ScheduleJson;
+        context.ChangeTracker.Clear();
+
+        var handler = new UpdateClassCommandHandler(
+            context,
+            scope.ServiceProvider.GetRequiredService<IUnitOfWork>());
+        var result = await handler.UpdateTeachingAssignmentAsync(
+            seed.ClassId,
+            new UpdateTeachingAssignmentRequest
+            {
+                PrimaryLecturerId = newLecturer.Id,
+                RowVersion = rowVersion
+            },
+            seed.AdminId,
+            SystemRoles.Admin);
+
+        result.IsSuccess.Should().BeTrue();
+        context.ChangeTracker.Clear();
+
+        var updatedClass = await context.Classes.AsNoTracking().SingleAsync(@class => @class.Id == seed.ClassId);
+        var assignments = await context.ClassLecturers.AsNoTracking()
+            .Where(assignment => assignment.ClassId == seed.ClassId)
+            .ToListAsync();
+        var audit = await context.ClassAuditLogs.AsNoTracking()
+            .SingleAsync(log => log.ClassId == seed.ClassId && log.Action == "TEACHING_ASSIGNMENT_CHANGED");
+
+        updatedClass.PrimaryLecturerId.Should().Be(newLecturer.Id);
+        updatedClass.ScheduleJson.Should().Be(persistedScheduleJson);
+        assignments.Should().ContainSingle(assignment => assignment.LecturerId == newLecturer.Id && assignment.IsPrimary);
+        assignments.Should().NotContain(assignment => assignment.LecturerId == seed.LecturerId);
+        audit.PerformedByUserId.Should().Be(seed.AdminId);
+        audit.DetailsJson.Should().Contain(seed.LecturerId.ToString());
+        audit.DetailsJson.Should().Contain(newLecturer.Id.ToString());
+    }
+
+    [Fact]
+    public async Task UnassigningActiveClass_Returns409AndKeepsLecturerOwnership()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateClassSeedAsync(context, "active-unassign");
+        context.ChangeTracker.Clear();
+        var targetClass = await context.Classes.SingleAsync(@class => @class.Id == seed.ClassId);
+        var admin = await context.Users.SingleAsync(user => user.Id == seed.AdminId);
+        var token = GenerateToken(scope.ServiceProvider, admin, SystemRoles.Admin);
+
+        var request = CreateAuthorizedPutRequest(
+            $"/api/classes/{seed.ClassId}/teaching-assignment",
+            token,
+            new UpdateTeachingAssignmentRequest
+            {
+                PrimaryLecturerId = null,
+                RowVersion = targetClass.Version.ToString()
+            });
+
+        var response = await _client.SendAsync(request);
+        var body = await response.Content.ReadFromJsonAsync<ApiResponse<object>>();
+
+        response.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        body!.Code.Should().Be(ErrorCodes.ClassLecturerRequired);
+        context.ChangeTracker.Clear();
+        (await context.Classes.AsNoTracking().SingleAsync(@class => @class.Id == seed.ClassId))
+            .PrimaryLecturerId.Should().Be(seed.LecturerId);
+        (await context.ClassLecturers.AsNoTracking().CountAsync(assignment => assignment.ClassId == seed.ClassId))
+            .Should().Be(1);
+    }
+
+    [Fact]
+    public async Task AddingExistingStudent_WithoutMajor_UsesRegisteredProfileMajor()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateClassSeedAsync(context, "major-snapshot");
+        var studentCode = "SE" + Guid.NewGuid().ToString("N")[..8].ToUpperInvariant();
+        var student = new Student
+        {
+            RollNumber = studentCode,
+            NormalizedRollNumber = studentCode,
+            FullName = "Profile Source Of Truth",
+            Email = $"snapshot-{Guid.NewGuid():N}@example.com",
+            MajorCode = MajorCodes.BIT_AI,
+            Status = StudentStatus.Active,
+            CreatedBy = seed.AdminId
+        };
+        context.Students.Add(student);
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        var handler = new AddStudentToClassCommandHandler(context);
+        var result = await handler.HandleAsync(
+            seed.ClassId,
+            new AddStudentToClassRequest
+            {
+                StudentCode = studentCode,
+                FullName = "Attempted Profile Overwrite",
+                Email = student.Email!,
+                MajorCode = null
+            },
+            seed.LecturerId,
+            SystemRoles.Lecturer);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.MajorCode.Should().Be(MajorCodes.BIT_AI);
+        result.Value.ProfileMajorCode.Should().Be(MajorCodes.BIT_AI);
+        context.ChangeTracker.Clear();
+
+        var persistedProfile = await context.Students.AsNoTracking().SingleAsync(item => item.Id == student.Id);
+        var enrollment = await context.ClassStudents.AsNoTracking()
+            .SingleAsync(item => item.ClassId == seed.ClassId && item.StudentId == student.Id);
+        persistedProfile.FullName.Should().Be("Profile Source Of Truth");
+        persistedProfile.MajorCode.Should().Be(MajorCodes.BIT_AI);
+        enrollment.MajorCodeAtEnrollment.Should().Be(MajorCodes.BIT_AI);
+        enrollment.MajorVerificationStatus.Should().Be(EnrollmentMajorVerificationStatus.Unverified);
+    }
+
+    [Fact]
+    public async Task AddingExistingStudent_WithDifferentMajor_ReturnsSpecificMismatchWithoutEnrollment()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateClassSeedAsync(context, "major-mismatch");
+        var studentCode = "SE" + Guid.NewGuid().ToString("N")[..8].ToUpperInvariant();
+        var student = new Student
+        {
+            RollNumber = studentCode,
+            NormalizedRollNumber = studentCode,
+            FullName = "Registered Major Student",
+            Email = $"major-mismatch-{Guid.NewGuid():N}@example.com",
+            MajorCode = MajorCodes.BIT_AI,
+            Status = StudentStatus.Active,
+            CreatedBy = seed.AdminId
+        };
+        context.Students.Add(student);
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        var result = await new AddStudentToClassCommandHandler(context).HandleAsync(
+            seed.ClassId,
+            new AddStudentToClassRequest
+            {
+                StudentCode = studentCode,
+                FullName = student.FullName,
+                Email = student.Email!,
+                MajorCode = MajorCodes.BIT_SE
+            },
+            seed.LecturerId,
+            SystemRoles.Lecturer);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be(ErrorCodes.ClassStudentMajorMismatch);
+        result.Error.Message.Should().Contain(MajorCodes.BIT_AI);
+        context.ChangeTracker.Clear();
+        (await context.ClassStudents.AsNoTracking().AnyAsync(item =>
+            item.ClassId == seed.ClassId && item.StudentId == student.Id)).Should().BeFalse();
+        (await context.Students.AsNoTracking().SingleAsync(item => item.Id == student.Id)).MajorCode
+            .Should().Be(MajorCodes.BIT_AI);
+    }
+
+    [Fact]
+    public async Task AddingStudent_WhenCodeAndEmailBelongToDifferentProfiles_ReturnsSpecificIdentityConflict()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateClassSeedAsync(context, "student-identity-conflict");
+        var codeOwnerCode = "SE" + Guid.NewGuid().ToString("N")[..8].ToUpperInvariant();
+        var emailOwnerCode = "SE" + Guid.NewGuid().ToString("N")[..8].ToUpperInvariant();
+        var codeOwner = new Student
+        {
+            RollNumber = codeOwnerCode,
+            NormalizedRollNumber = codeOwnerCode,
+            FullName = "Code Owner",
+            Email = $"code-owner-{Guid.NewGuid():N}@example.com",
+            MajorCode = MajorCodes.BIT_AI,
+            Status = StudentStatus.Active,
+            CreatedBy = seed.AdminId
+        };
+        var emailOwner = new Student
+        {
+            RollNumber = emailOwnerCode,
+            NormalizedRollNumber = emailOwnerCode,
+            FullName = "Email Owner",
+            Email = $"email-owner-{Guid.NewGuid():N}@example.com",
+            MajorCode = MajorCodes.BIT_SE,
+            Status = StudentStatus.Active,
+            CreatedBy = seed.AdminId
+        };
+        context.Students.AddRange(codeOwner, emailOwner);
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        var result = await new AddStudentToClassCommandHandler(context).HandleAsync(
+            seed.ClassId,
+            new AddStudentToClassRequest
+            {
+                StudentCode = codeOwnerCode,
+                FullName = codeOwner.FullName,
+                Email = emailOwner.Email!,
+                MajorCode = null
+            },
+            seed.LecturerId,
+            SystemRoles.Lecturer);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be(ErrorCodes.ClassStudentIdentityConflict);
+        result.Error.Message.Should().Contain(codeOwnerCode);
+        result.Error.Message.Should().Contain(emailOwner.Email!);
+        context.ChangeTracker.Clear();
+        (await context.ClassStudents.AsNoTracking().AnyAsync(item => item.ClassId == seed.ClassId))
+            .Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task AddingNewStudent_WithoutMajor_CreatesUndeclaredEnrollmentAndLeavesProfileMajorEmpty()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateClassSeedAsync(context, "new-student-major-required");
+        var studentCode = "SE" + Guid.NewGuid().ToString("N")[..8].ToUpperInvariant();
+        var email = $"new-student-{Guid.NewGuid():N}@example.com";
+
+        var result = await new AddStudentToClassCommandHandler(context).HandleAsync(
+            seed.ClassId,
+            new AddStudentToClassRequest
+            {
+                StudentCode = studentCode,
+                FullName = "New Student",
+                Email = email,
+                MajorCode = null
+            },
+            seed.LecturerId,
+            SystemRoles.Lecturer);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.MajorCode.Should().Be(MajorCodes.Undeclared);
+        result.Value.ProfileMajorCode.Should().BeNull();
+        context.ChangeTracker.Clear();
+        var student = await context.Students.AsNoTracking().SingleAsync(item => item.NormalizedRollNumber == studentCode);
+        student.MajorCode.Should().BeNull();
+        (await context.ClassStudents.AsNoTracking().SingleAsync(item =>
+            item.ClassId == seed.ClassId && item.StudentId == student.Id)).MajorCodeAtEnrollment
+            .Should().Be(MajorCodes.Undeclared);
+    }
+
+    [Fact]
+    public async Task AssignedLecturerCanPreviewAndCommitImport_AndSessionCannotBeReused()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateClassSeedAsync(context, "lecturer-import");
+        var lecturer = await context.Users.SingleAsync(user => user.Id == seed.LecturerId);
+        var token = GenerateToken(scope.ServiceProvider, lecturer, SystemRoles.Lecturer);
+        var studentCode = "SE" + Guid.NewGuid().ToString("N")[..8].ToUpperInvariant();
+        var studentEmail = $"import-{Guid.NewGuid():N}@example.com";
+
+        using var multipart = new MultipartFormDataContent();
+        var fileContent = new ByteArrayContent(CreateImportWorkbook(studentCode, studentEmail, MajorCodes.BIT_SE));
+        fileContent.Headers.ContentType = new MediaTypeHeaderValue("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        multipart.Add(fileContent, "file", "students.xlsx");
+        using var previewRequest = new HttpRequestMessage(HttpMethod.Post, $"/api/classes/{seed.ClassId}/import-students/preview")
+        {
+            Content = multipart
+        };
+        previewRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var previewResponse = await _client.SendAsync(previewRequest);
+        var previewBody = await previewResponse.Content.ReadFromJsonAsync<ApiResponse<ImportStudentsPreviewResponse>>();
+
+        previewResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        previewBody!.Data!.SessionId.Should().NotBeEmpty();
+        previewBody.Data.ValidRowsCount.Should().Be(1);
+
+        using var commitRequest = new HttpRequestMessage(HttpMethod.Post, $"/api/classes/{seed.ClassId}/import-students/commit")
+        {
+            Content = JsonContent.Create(new CommitImportStudentsRequest { SessionId = previewBody.Data.SessionId })
+        };
+        commitRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        var commitResponse = await _client.SendAsync(commitRequest);
+        var commitBody = await commitResponse.Content.ReadFromJsonAsync<ApiResponse<ImportStudentsCommitResponse>>();
+
+        commitResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        commitBody!.Data!.InsertedCount.Should().Be(1);
+        commitBody.Data.ErrorCount.Should().Be(0);
+
+        using var replayRequest = new HttpRequestMessage(HttpMethod.Post, $"/api/classes/{seed.ClassId}/import-students/commit")
+        {
+            Content = JsonContent.Create(new CommitImportStudentsRequest { SessionId = previewBody.Data.SessionId })
+        };
+        replayRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        var replayResponse = await _client.SendAsync(replayRequest);
+        var replayBody = await replayResponse.Content.ReadFromJsonAsync<ApiResponse<object>>();
+
+        replayResponse.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        replayBody!.Code.Should().Be(ErrorCodes.ClassImportSessionInvalid);
+        context.ChangeTracker.Clear();
+
+        var importedProfile = await context.Students.AsNoTracking()
+            .SingleAsync(student => student.NormalizedRollNumber == studentCode);
+        importedProfile.FullName.Should().Be("Imported Student");
+        var enrollment = await context.ClassStudents.AsNoTracking()
+            .SingleAsync(item => item.ClassId == seed.ClassId && item.StudentId == importedProfile.Id);
+        enrollment.MajorCodeAtEnrollment.Should().Be(MajorCodes.BIT_SE);
+        (await context.ClassImportSessions.AsNoTracking().SingleAsync(item => item.Id == previewBody.Data.SessionId))
+            .Status.Should().Be(ClassImportSessionStatus.Consumed);
+
+        var googleLogin = await _client.PostAsJsonAsync("/api/auth/google", new GoogleLoginRequest { IdToken = studentEmail });
+        googleLogin.StatusCode.Should().Be(HttpStatusCode.OK);
+        var googleSession = await googleLogin.Content.ReadFromJsonAsync<ApiResponse<AuthResponse>>();
+        googleSession!.Data!.User.FullName.Should().Be("Imported Student");
+        context.ChangeTracker.Clear();
+        (await context.Students.AsNoTracking().SingleAsync(student => student.Id == importedProfile.Id))
+            .UserId.Should().Be(googleSession.Data.User.Id);
+    }
+
+    [Fact]
+    public async Task ImportingDroppedStudent_ReactivatesExistingEnrollmentWithoutCreatingDuplicate()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateClassSeedAsync(context, "import-dropped-student");
+        var targetClass = await context.Classes.AsNoTracking()
+            .SingleAsync(@class => @class.Id == seed.ClassId);
+        var lecturer = await context.Users.SingleAsync(user => user.Id == seed.LecturerId);
+        var token = GenerateToken(scope.ServiceProvider, lecturer, SystemRoles.Lecturer);
+        var studentCode = "SE" + Guid.NewGuid().ToString("N")[..8].ToUpperInvariant();
+        var studentEmail = $"dropped-import-{Guid.NewGuid():N}@example.com";
+        var student = new Student
+        {
+            RollNumber = studentCode,
+            NormalizedRollNumber = studentCode,
+            FullName = "Dropped Import Student",
+            Email = studentEmail,
+            MajorCode = MajorCodes.BIT_SE,
+            Status = StudentStatus.Active,
+            CreatedBy = seed.AdminId
+        };
+        var enrollment = new ClassStudent
+        {
+            ClassId = seed.ClassId,
+            StudentId = student.Id,
+            SemesterId = targetClass.SemesterId,
+            CourseId = targetClass.CourseId,
+            EnrollmentStatus = EnrollmentStatus.Dropped,
+            CountsTowardCourseSemesterLimit = false,
+            MajorCodeAtEnrollment = MajorCodes.BIT_SE,
+            MajorVerificationStatus = EnrollmentMajorVerificationStatus.Matched,
+            MajorVerifiedAtUtc = DateTime.UtcNow.AddDays(-1),
+            MajorVerifiedByUserId = seed.LecturerId
+        };
+        context.Students.Add(student);
+        context.ClassStudents.Add(enrollment);
+        await context.SaveChangesAsync();
+        // Compare persisted timestamps on both sides: PostgreSQL stores microsecond precision.
+        await context.Entry(enrollment).ReloadAsync();
+        var enrollmentCreatedAt = enrollment.CreatedAt;
+        context.ChangeTracker.Clear();
+
+        using var multipart = new MultipartFormDataContent();
+        var fileContent = new ByteArrayContent(CreateImportWorkbook(studentCode, studentEmail, MajorCodes.BIT_AI));
+        fileContent.Headers.ContentType = new MediaTypeHeaderValue("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        multipart.Add(fileContent, "file", "students.xlsx");
+        using var previewRequest = new HttpRequestMessage(HttpMethod.Post, $"/api/classes/{seed.ClassId}/import-students/preview")
+        {
+            Content = multipart
+        };
+        previewRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var previewResponse = await _client.SendAsync(previewRequest);
+        var previewBody = await previewResponse.Content.ReadFromJsonAsync<ApiResponse<ImportStudentsPreviewResponse>>();
+
+        previewResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        previewBody!.Data!.ValidRowsCount.Should().Be(1);
+        previewBody.Data.ErrorRowsCount.Should().Be(0);
+        previewBody.Data.Rows.Should().ContainSingle(row => row.Status == "ReEnroll" && row.IsValid);
+
+        using var commitRequest = new HttpRequestMessage(HttpMethod.Post, $"/api/classes/{seed.ClassId}/import-students/commit")
+        {
+            Content = JsonContent.Create(new CommitImportStudentsRequest { SessionId = previewBody.Data.SessionId })
+        };
+        commitRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        var commitResponse = await _client.SendAsync(commitRequest);
+        var commitBody = await commitResponse.Content.ReadFromJsonAsync<ApiResponse<ImportStudentsCommitResponse>>();
+
+        commitResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        commitBody!.Data!.InsertedCount.Should().Be(0);
+        commitBody.Data.UpdatedCount.Should().Be(1);
+        commitBody.Data.ErrorCount.Should().Be(0);
+        context.ChangeTracker.Clear();
+
+        var restoredEnrollments = await context.ClassStudents.AsNoTracking()
+            .Where(item => item.ClassId == seed.ClassId && item.StudentId == student.Id)
+            .ToListAsync();
+        restoredEnrollments.Should().ContainSingle();
+        restoredEnrollments[0].EnrollmentStatus.Should().Be(EnrollmentStatus.Active);
+        restoredEnrollments[0].CountsTowardCourseSemesterLimit.Should().BeTrue();
+        restoredEnrollments[0].CreatedAt.Should().Be(enrollmentCreatedAt);
+        restoredEnrollments[0].MajorCodeAtEnrollment.Should().Be(MajorCodes.BIT_AI);
+        restoredEnrollments[0].MajorVerificationStatus.Should().Be(EnrollmentMajorVerificationStatus.Unverified);
+        restoredEnrollments[0].MajorVerifiedAtUtc.Should().BeNull();
+        restoredEnrollments[0].MajorVerifiedByUserId.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task ImportRegisteredStudentWithMissingRollNumber_CompletesProfileAndEnrollsStudent()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateClassSeedAsync(context, "import-missing-roll-number");
+        var lecturer = await context.Users.SingleAsync(user => user.Id == seed.LecturerId);
+        var token = GenerateToken(scope.ServiceProvider, lecturer, SystemRoles.Lecturer);
+        var studentCode = "SE" + Guid.NewGuid().ToString("N")[..8].ToUpperInvariant();
+        var studentEmail = $"missing-roll-{Guid.NewGuid():N}@example.com";
+        var googleLogin = await _client.PostAsJsonAsync("/api/auth/google", new GoogleLoginRequest { IdToken = studentEmail });
+        googleLogin.StatusCode.Should().Be(HttpStatusCode.OK);
+        var googleSession = await googleLogin.Content.ReadFromJsonAsync<ApiResponse<AuthResponse>>();
+        googleSession!.Data!.User.FullName.Should().Be("Google Test User");
+        var student = await context.Students.AsNoTracking()
+            .SingleAsync(item => item.UserId == googleSession.Data.User.Id);
+        var studentId = student.Id;
+        context.ChangeTracker.Clear();
+
+        using var multipart = new MultipartFormDataContent();
+        var fileContent = new ByteArrayContent(CreateImportWorkbook(studentCode, studentEmail, MajorCodes.BIT_SE));
+        fileContent.Headers.ContentType = new MediaTypeHeaderValue("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        multipart.Add(fileContent, "file", "students.xlsx");
+        using var previewRequest = new HttpRequestMessage(HttpMethod.Post, $"/api/classes/{seed.ClassId}/import-students/preview")
+        {
+            Content = multipart
+        };
+        previewRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var previewResponse = await _client.SendAsync(previewRequest);
+        var previewBody = await previewResponse.Content.ReadFromJsonAsync<ApiResponse<ImportStudentsPreviewResponse>>();
+
+        previewResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        previewBody!.Data!.ValidRowsCount.Should().Be(1);
+        previewBody.Data.ErrorRowsCount.Should().Be(0);
+
+        using var commitRequest = new HttpRequestMessage(HttpMethod.Post, $"/api/classes/{seed.ClassId}/import-students/commit")
+        {
+            Content = JsonContent.Create(new CommitImportStudentsRequest { SessionId = previewBody.Data.SessionId })
+        };
+        commitRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        var commitResponse = await _client.SendAsync(commitRequest);
+        var commitBody = await commitResponse.Content.ReadFromJsonAsync<ApiResponse<ImportStudentsCommitResponse>>();
+
+        commitResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        commitBody!.Data!.InsertedCount.Should().Be(1);
+        commitBody.Data.UpdatedCount.Should().Be(1);
+        commitBody.Data.ErrorCount.Should().Be(0);
+        context.ChangeTracker.Clear();
+
+        var completedProfile = await context.Students.AsNoTracking().SingleAsync(item => item.Id == studentId);
+        completedProfile.RollNumber.Should().Be(studentCode);
+        completedProfile.NormalizedRollNumber.Should().Be(studentCode);
+        completedProfile.UserId.Should().Be(googleSession.Data.User.Id);
+        completedProfile.FullName.Should().Be("Imported Student");
+        (await context.Users.AsNoTracking().SingleAsync(item => item.Id == googleSession.Data.User.Id))
+            .FullName.Should().Be("Imported Student");
+        (await context.ClassStudents.AsNoTracking().AnyAsync(item =>
+            item.ClassId == seed.ClassId && item.StudentId == studentId)).Should().BeTrue();
+
+        var secondLogin = await _client.PostAsJsonAsync("/api/auth/google", new GoogleLoginRequest { IdToken = studentEmail });
+        secondLogin.StatusCode.Should().Be(HttpStatusCode.OK);
+        (await secondLogin.Content.ReadFromJsonAsync<ApiResponse<AuthResponse>>())!
+            .Data!.User.FullName.Should().Be("Imported Student");
+    }
+
+    [Fact]
+    public async Task ReimportActiveStudent_UpdatesStudentAndUserNamesWithoutChangingEnrollment()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateClassSeedAsync(context, "reimport-name");
+        var lecturer = await context.Users.SingleAsync(user => user.Id == seed.LecturerId);
+        var token = GenerateToken(scope.ServiceProvider, lecturer, SystemRoles.Lecturer);
+        var studentCode = "SE" + Guid.NewGuid().ToString("N")[..8].ToUpperInvariant();
+        var studentEmail = $"reimport-{Guid.NewGuid():N}@example.com";
+
+        var googleLogin = await _client.PostAsJsonAsync("/api/auth/google", new GoogleLoginRequest { IdToken = studentEmail });
+        googleLogin.StatusCode.Should().Be(HttpStatusCode.OK);
+        var googleSession = await googleLogin.Content.ReadFromJsonAsync<ApiResponse<AuthResponse>>();
+        var studentUserId = googleSession!.Data!.User.Id;
+        var student = await context.Students.SingleAsync(item => item.UserId == studentUserId);
+        var targetClass = await context.Classes.AsNoTracking().SingleAsync(item => item.Id == seed.ClassId);
+        student.RollNumber = studentCode;
+        student.NormalizedRollNumber = studentCode;
+        context.ClassStudents.Add(new ClassStudent
+        {
+            ClassId = seed.ClassId,
+            StudentId = student.Id,
+            SemesterId = targetClass.SemesterId,
+            CourseId = targetClass.CourseId,
+            EnrollmentStatus = EnrollmentStatus.Active,
+            CountsTowardCourseSemesterLimit = true,
+            MajorCodeAtEnrollment = MajorCodes.BIT_SE
+        });
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        using var multipart = new MultipartFormDataContent();
+        var fileContent = new ByteArrayContent(CreateImportWorkbook(studentCode, studentEmail, MajorCodes.BIT_SE));
+        fileContent.Headers.ContentType = new MediaTypeHeaderValue("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        multipart.Add(fileContent, "file", "students.xlsx");
+        using var previewRequest = new HttpRequestMessage(HttpMethod.Post, $"/api/classes/{seed.ClassId}/import-students/preview")
+        {
+            Content = multipart
+        };
+        previewRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        var previewResponse = await _client.SendAsync(previewRequest);
+        var previewBody = await previewResponse.Content.ReadFromJsonAsync<ApiResponse<ImportStudentsPreviewResponse>>();
+        previewResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        previewBody!.Data!.Rows.Should().ContainSingle(row => row.IsValid && row.Status == "UpdateProfile");
+
+        using var commitRequest = new HttpRequestMessage(HttpMethod.Post, $"/api/classes/{seed.ClassId}/import-students/commit")
+        {
+            Content = JsonContent.Create(new CommitImportStudentsRequest { SessionId = previewBody.Data.SessionId })
+        };
+        commitRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        var commitResponse = await _client.SendAsync(commitRequest);
+        var commitBody = await commitResponse.Content.ReadFromJsonAsync<ApiResponse<ImportStudentsCommitResponse>>();
+        commitResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        commitBody!.Data!.InsertedCount.Should().Be(0);
+        commitBody.Data.UpdatedCount.Should().Be(1);
+        commitBody.Data.ErrorCount.Should().Be(0);
+
+        context.ChangeTracker.Clear();
+        (await context.Students.AsNoTracking().SingleAsync(item => item.Id == student.Id))
+            .FullName.Should().Be("Imported Student");
+        (await context.Users.AsNoTracking().SingleAsync(item => item.Id == studentUserId))
+            .FullName.Should().Be("Imported Student");
+        (await context.ClassStudents.AsNoTracking().Where(item => item.ClassId == seed.ClassId && item.StudentId == student.Id)
+            .ToListAsync()).Should().ContainSingle(item =>
+                item.EnrollmentStatus == EnrollmentStatus.Active && item.MajorCodeAtEnrollment == MajorCodes.BIT_SE);
+
+        using var rosterRequest = CreateAuthorizedGetRequest($"/api/classes/{seed.ClassId}/students", token);
+        var rosterResponse = await _client.SendAsync(rosterRequest);
+        var rosterBody = await rosterResponse.Content.ReadFromJsonAsync<ApiResponse<ClassRosterListResponse>>();
+        rosterResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        rosterBody!.Data!.Items.Should().ContainSingle(item => item.StudentId == student.Id && item.FullName == "Imported Student");
+    }
+
+    [Fact]
+    public async Task AddingAlreadyEnrolledStudent_DoesNotMutateStudentProfile()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateClassSeedAsync(context, "student");
+        var student = new Student
+        {
+            RollNumber = "SE" + Guid.NewGuid().ToString("N")[..8].ToUpperInvariant(),
+            FullName = "Original Student Name",
+            Email = $"original-{Guid.NewGuid():N}@example.com",
+            MajorCode = MajorCodes.BIT_SE,
+            Status = StudentStatus.Active,
+            CreatedBy = seed.AdminId
+        };
+        student.NormalizedRollNumber = student.RollNumber;
+        context.Students.Add(student);
+        context.ClassStudents.Add(new ClassStudent
+        {
+            ClassId = seed.ClassId,
+            StudentId = student.Id,
+            SemesterId = (await context.Classes.AsNoTracking().SingleAsync(@class => @class.Id == seed.ClassId)).SemesterId,
+            CourseId = (await context.Classes.AsNoTracking().SingleAsync(@class => @class.Id == seed.ClassId)).CourseId,
+            EnrollmentStatus = EnrollmentStatus.Active,
+            CountsTowardCourseSemesterLimit = true,
+            MajorCodeAtEnrollment = MajorCodes.BIT_SE
+        });
+        await context.SaveChangesAsync();
+        var originalName = student.FullName;
+        var originalEmail = student.Email;
+        context.ChangeTracker.Clear();
+
+        var handler = new AddStudentToClassCommandHandler(context);
+        var result = await handler.HandleAsync(
+            seed.ClassId,
+            new AddStudentToClassRequest
+            {
+                StudentCode = student.RollNumber!,
+                FullName = "Mutated Name Must Not Persist",
+                Email = student.Email!,
+                MajorCode = MajorCodes.BIT_AI
+            },
+            seed.AdminId,
+            SystemRoles.Admin);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be(ErrorCodes.ClassStudentAlreadyEnrolled);
+        context.ChangeTracker.Clear();
+
+        var unchangedStudent = await context.Students.AsNoTracking().SingleAsync(item => item.Id == student.Id);
+        unchangedStudent.FullName.Should().Be(originalName);
+        unchangedStudent.Email.Should().Be(originalEmail);
+        unchangedStudent.MajorCode.Should().Be(MajorCodes.BIT_SE);
+    }
+
+    [Fact]
+    public async Task TeamAssignmentImport_CreatesTeamMembershipsAndProjectMetadata()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateClassSeedAsync(context, "team-assignment-import");
+        var majors = new[] { MajorCodes.BIT_SE, MajorCodes.BIT_SE, MajorCodes.BIT_SE, MajorCodes.BIT_SE };
+        var students = majors.Select((major, index) => new Student
+        {
+            RollNumber = $"TA{Guid.NewGuid():N}"[..10].ToUpperInvariant(),
+            FullName = $"Team Assignment Student {index + 1}",
+            Email = $"team-assignment-{Guid.NewGuid():N}@example.com",
+            MajorCode = major,
+            Status = StudentStatus.Active,
+            CreatedBy = seed.AdminId
+        }).ToArray();
+        foreach (var student in students)
+        {
+            student.NormalizedRollNumber = student.RollNumber;
+        }
+        context.Students.AddRange(students);
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        using var workbook = new XLWorkbook();
+        var worksheet = workbook.Worksheets.Add("Sheet1");
+        var headers = new[] { "RollNumber", "Fullname", "Email", "Group", "Project", "Zalo", "Description" };
+        for (var column = 0; column < headers.Length; column++)
+        {
+            worksheet.Cell(1, column + 1).Value = headers[column];
+        }
+        for (var index = 0; index < students.Length; index++)
+        {
+            var row = index + 2;
+            worksheet.Cell(row, 1).Value = students[index].NormalizedRollNumber;
+            worksheet.Cell(row, 2).Value = index == 0 ? "Imported Team Member" : students[index].FullName;
+            worksheet.Cell(row, 3).Value = students[index].Email;
+            worksheet.Cell(row, 4).Value = "NextWave Tech";
+            worksheet.Cell(row, 5).Value = "SnapPose";
+        }
+        worksheet.Cell(2, 6).Value = "https://zalo.me/g/snap-pose";
+        worksheet.Cell(2, 7).Value = "An AI-assisted photography application for guided poses and better framing.";
+        using var stream = new MemoryStream();
+        workbook.SaveAs(stream);
+        stream.Position = 0;
+        IFormFile file = new FormFile(stream, 0, stream.Length, "file", "team-assignment.xlsx");
+
+        var previewHandler = new PreviewImportStudentsCommandHandler(context);
+        var preview = await previewHandler.HandleAsync(
+            seed.ClassId,
+            file,
+            seed.AdminId,
+            SystemRoles.Admin);
+
+        preview.IsSuccess.Should().BeTrue();
+        preview.Value.ImportMode.Should().Be("TeamAssignment");
+        preview.Value.ValidRowsCount.Should().Be(4);
+        preview.Value.TeamCount.Should().Be(1);
+        context.ChangeTracker.Clear();
+
+        var handler = new CommitImportStudentsCommandHandler(
+            context,
+            new EHub.Infrastructure.Persistence.UnitOfWork(context));
+        var result = await handler.HandleAsync(
+            seed.ClassId,
+            new CommitImportStudentsRequest { SessionId = preview.Value.SessionId },
+            seed.AdminId,
+            SystemRoles.Admin);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.ImportMode.Should().Be("TeamAssignment");
+        result.Value.InsertedCount.Should().Be(4);
+        result.Value.CreatedTeamCount.Should().Be(1);
+        result.Value.CreatedMembershipCount.Should().Be(4);
+        result.Value.CreatedProjectCount.Should().Be(1);
+        context.ChangeTracker.Clear();
+
+        var team = await context.Teams.AsNoTracking()
+            .Include(item => item.TeamMembers)
+            .Include(item => item.Project)
+            .Include(item => item.ProjectDirection)
+            .SingleAsync(item => item.ClassId == seed.ClassId && item.TeamName == "NextWave Tech");
+        team.TeamMembers.Should().HaveCount(4);
+        team.TeamMembers.Single(item => item.StudentId == students[0].Id)
+            .RoleInTeam.Should().Be(TeamMemberRole.Leader);
+        team.TeamMembers.Where(item => item.StudentId != students[0].Id)
+            .Should().OnlyContain(item => item.RoleInTeam == TeamMemberRole.Member);
+        (await context.Students.AsNoTracking().SingleAsync(item => item.Id == students[0].Id))
+            .FullName.Should().Be("Imported Team Member");
+        (await context.ClassStudents.AsNoTracking().CountAsync(item =>
+            item.ClassId == seed.ClassId && item.EnrollmentStatus == EnrollmentStatus.Active)).Should().Be(4);
+        team.Project.Should().NotBeNull();
+        team.Project!.Name.Should().Be("SnapPose");
+        team.Project.ZaloGroupUrl.Should().Be("https://zalo.me/g/snap-pose");
+        team.Project.Description.Should().Be("An AI-assisted photography application for guided poses and better framing.");
+        team.ProjectDirection.Should().NotBeNull();
+        team.ProjectDirection!.Title.Should().Be("SnapPose");
+        team.ProjectDirection.Summary.Should().Be("An AI-assisted photography application for guided poses and better framing.");
+        team.ProjectDirection.Status.Should().Be(ProjectDirectionStatus.Draft);
+        (await context.ClassAuditLogs.AsNoTracking().AnyAsync(log =>
+            log.ClassId == seed.ClassId && log.Action == "TEAM_ASSIGNMENT_IMPORT_COMMITTED")).Should().BeTrue();
+        (await context.ClassImportSessions.AsNoTracking().SingleAsync(item => item.Id == preview.Value.SessionId))
+            .Status.Should().Be(ClassImportSessionStatus.Consumed);
+    }
+
+    [Fact]
+    public async Task ImportSystemFailure_RollsBackProfilesEnrollmentsAuditAndOutbox()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var seedContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateClassSeedAsync(seedContext, "import-rollback");
+        var studentCode = "SE" + Guid.NewGuid().ToString("N")[..8].ToUpperInvariant();
+        var email = $"rollback-{Guid.NewGuid():N}@example.com";
+        var session = new ClassImportSession
+        {
+            Id = Guid.NewGuid(),
+            ClassId = seed.ClassId,
+            UserId = seed.AdminId,
+            Status = ClassImportSessionStatus.Available,
+            CreatedAtUtc = DateTime.UtcNow,
+            ExpiresAtUtc = DateTime.UtcNow.AddMinutes(30),
+            ValidRowsJson = JsonSerializer.Serialize(new[]
+            {
+                new ImportStudentRowPreviewDto
+                {
+                    RowNumber = 2,
+                    StudentCode = studentCode,
+                    FullName = "Rollback Student",
+                    Email = email,
+                    MajorCode = MajorCodes.BIT_SE,
+                    IsValid = true,
+                    Status = "Valid"
+                }
+            }, new JsonSerializerOptions(JsonSerializerDefaults.Web))
+        };
+        seedContext.ClassImportSessions.Add(session);
+        await seedContext.SaveChangesAsync();
+        seedContext.ChangeTracker.Clear();
+
+        var options = new DbContextOptionsBuilder<AppDbContext>()
+            .UseNpgsql(seedContext.Database.GetConnectionString())
+            .AddInterceptors(new ThrowWhenEnrollmentIsInsertedInterceptor())
+            .Options;
+        await using var failingContext = new AppDbContext(options);
+        var handler = new CommitImportStudentsCommandHandler(
+            failingContext,
+            new EHub.Infrastructure.Persistence.UnitOfWork(failingContext));
+
+        var result = await handler.HandleAsync(
+            seed.ClassId,
+            new CommitImportStudentsRequest { SessionId = session.Id },
+            seed.AdminId,
+            SystemRoles.Admin);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be(ErrorCodes.ClassStudentEnrollmentConflict);
+        seedContext.ChangeTracker.Clear();
+        (await seedContext.Students.AsNoTracking().AnyAsync(student => student.NormalizedRollNumber == studentCode))
+            .Should().BeFalse();
+        (await seedContext.ClassStudents.AsNoTracking().AnyAsync(enrollment => enrollment.ClassId == seed.ClassId))
+            .Should().BeFalse();
+        (await seedContext.ClassAuditLogs.AsNoTracking().AnyAsync(log =>
+            log.ClassId == seed.ClassId && log.Action == "STUDENT_IMPORT_COMMITTED"))
+            .Should().BeFalse();
+        (await seedContext.OutboxMessages.AsNoTracking().AnyAsync(message => message.AggregateId == seed.ClassId))
+            .Should().BeFalse();
+        (await seedContext.ClassImportSessions.AsNoTracking().SingleAsync(item => item.Id == session.Id))
+            .Status.Should().Be(ClassImportSessionStatus.Available);
+    }
+
+    [Fact]
+    public async Task ConcurrentEnrollment_OnlyOneClassCanCountForTheCourseAndSemester()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var seedContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateClassSeedAsync(seedContext, "concurrent-enrollment");
+        var siblingClassId = await CreateSiblingClassAsync(seedContext, seed);
+        var studentCode = "SE" + Guid.NewGuid().ToString("N")[..8].ToUpperInvariant();
+        var student = new Student
+        {
+            RollNumber = studentCode,
+            NormalizedRollNumber = studentCode,
+            FullName = "Concurrent Student",
+            Email = $"concurrent-{Guid.NewGuid():N}@example.com",
+            MajorCode = MajorCodes.BIT_SE,
+            Status = StudentStatus.Active,
+            CreatedBy = seed.AdminId
+        };
+        seedContext.Students.Add(student);
+        await seedContext.SaveChangesAsync();
+        seedContext.ChangeTracker.Clear();
+
+        var connectionString = seedContext.Database.GetConnectionString();
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseNpgsql(connectionString).Options;
+        await using var firstContext = new AppDbContext(options);
+        await using var secondContext = new AppDbContext(options);
+        var request = new AddStudentToClassRequest
+        {
+            StudentCode = studentCode,
+            FullName = student.FullName,
+            Email = student.Email!,
+            MajorCode = MajorCodes.BIT_SE
+        };
+
+        var results = await Task.WhenAll(
+            new AddStudentToClassCommandHandler(firstContext).HandleAsync(
+                seed.ClassId, request, seed.AdminId, SystemRoles.Admin),
+            new AddStudentToClassCommandHandler(secondContext).HandleAsync(
+                siblingClassId, request, seed.AdminId, SystemRoles.Admin));
+
+        results.Count(result => result.IsSuccess).Should().Be(1);
+        results.Count(result => result.IsFailure && result.Error.Code == ErrorCodes.ClassStudentEnrollmentConflict)
+            .Should().Be(1);
+        seedContext.ChangeTracker.Clear();
+        (await seedContext.ClassStudents.AsNoTracking().CountAsync(enrollment =>
+            enrollment.StudentId == student.Id && enrollment.CountsTowardCourseSemesterLimit))
+            .Should().Be(1);
+    }
+
+    [Fact]
+    public async Task ArchiveAndRestore_PreserveData_WriteAudit_AndAreIdempotent()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateClassSeedAsync(context, "lifecycle-roundtrip");
+        context.ChangeTracker.Clear();
+        var admin = await context.Users.SingleAsync(user => user.Id == seed.AdminId);
+        var token = GenerateToken(scope.ServiceProvider, admin, SystemRoles.Admin);
+        var version = (await context.Classes.AsNoTracking().SingleAsync(item => item.Id == seed.ClassId)).Version.ToString();
+        var archivePayload = new ChangeClassLifecycleRequest { RowVersion = version, Reason = "End of local test cycle" };
+
+        using var archiveRequest = CreateAuthorizedPostRequest($"/api/classes/{seed.ClassId}/archive", token, archivePayload);
+        var archiveResponse = await _client.SendAsync(archiveRequest);
+        archiveResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        using var repeatedArchiveRequest = CreateAuthorizedPostRequest($"/api/classes/{seed.ClassId}/archive", token, archivePayload);
+        (await _client.SendAsync(repeatedArchiveRequest)).StatusCode.Should().Be(HttpStatusCode.OK);
+
+        context.ChangeTracker.Clear();
+        var archived = await context.Classes.AsNoTracking().SingleAsync(item => item.Id == seed.ClassId);
+        archived.Status.Should().Be(ClassStatus.Archived);
+        ClassScheduleRules.Deserialize(archived.ScheduleJson).Should().BeEquivalentTo(
+            ClassScheduleRules.Deserialize(seed.ScheduleJson));
+        archived.StatusBeforeArchive.Should().Be(ClassStatus.Active);
+        (await context.ClassAuditLogs.CountAsync(item => item.ClassId == seed.ClassId && item.Action == "CLASS_ARCHIVED")).Should().Be(1);
+
+        using var restoreRequest = CreateAuthorizedPostRequest($"/api/classes/{seed.ClassId}/restore", token,
+            new ChangeClassLifecycleRequest { RowVersion = archived.Version.ToString(), Reason = "Continue the class" });
+        (await _client.SendAsync(restoreRequest)).StatusCode.Should().Be(HttpStatusCode.OK);
+
+        context.ChangeTracker.Clear();
+        var restored = await context.Classes.AsNoTracking().SingleAsync(item => item.Id == seed.ClassId);
+        restored.Status.Should().Be(ClassStatus.Active);
+        restored.ArchivedAtUtc.Should().BeNull();
+        restored.StatusBeforeArchive.Should().BeNull();
+        (await context.ClassAuditLogs.CountAsync(item => item.ClassId == seed.ClassId && item.Action == "CLASS_RESTORED")).Should().Be(1);
+    }
+
+    [Fact]
+    public async Task ConcurrentRestore_ProducesOneStateTransitionAndOneAuditRecord()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateClassSeedAsync(context, "lifecycle-concurrency");
+        context.ChangeTracker.Clear();
+        var admin = await context.Users.SingleAsync(user => user.Id == seed.AdminId);
+        var token = GenerateToken(scope.ServiceProvider, admin, SystemRoles.Admin);
+        var initialVersion = (await context.Classes.AsNoTracking().SingleAsync(item => item.Id == seed.ClassId)).Version.ToString();
+        using var archiveRequest = CreateAuthorizedPostRequest($"/api/classes/{seed.ClassId}/archive", token,
+            new ChangeClassLifecycleRequest { RowVersion = initialVersion, Reason = "Prepare restore concurrency test" });
+        (await _client.SendAsync(archiveRequest)).StatusCode.Should().Be(HttpStatusCode.OK);
+        context.ChangeTracker.Clear();
+        var archivedVersion = (await context.Classes.AsNoTracking().SingleAsync(item => item.Id == seed.ClassId)).Version.ToString();
+        var payload = new ChangeClassLifecycleRequest { RowVersion = archivedVersion, Reason = "Concurrent restore request" };
+
+        using var firstRequest = CreateAuthorizedPostRequest($"/api/classes/{seed.ClassId}/restore", token, payload);
+        using var secondRequest = CreateAuthorizedPostRequest($"/api/classes/{seed.ClassId}/restore", token, payload);
+        var responses = await Task.WhenAll(_client.SendAsync(firstRequest), _client.SendAsync(secondRequest));
+        var responseBodies = await Task.WhenAll(responses.Select(response => response.Content.ReadAsStringAsync()));
+
+        responses.Should().OnlyContain(response =>
+            response.StatusCode == HttpStatusCode.OK || response.StatusCode == HttpStatusCode.Conflict,
+            "lifecycle concurrency must be mapped to a safe response; bodies were: {0}", string.Join(" | ", responseBodies));
+        context.ChangeTracker.Clear();
+        (await context.Classes.AsNoTracking().SingleAsync(item => item.Id == seed.ClassId)).Status.Should().Be(ClassStatus.Active);
+        (await context.ClassAuditLogs.CountAsync(item => item.ClassId == seed.ClassId && item.Action == "CLASS_RESTORED")).Should().Be(1);
+    }
+
+    [Fact]
+    public async Task ChatRepair_AllowsAssignedLecturer_RejectsOtherLecturer_IsIdempotent_AndFollowsArchiveState()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateClassSeedAsync(context, "chat-repair");
+        context.ChangeTracker.Clear();
+        var admin = await context.Users.SingleAsync(user => user.Id == seed.AdminId);
+        var lecturer = await context.Users.SingleAsync(user => user.Id == seed.LecturerId);
+        var otherLecturer = await CreateLecturerAsync(context, "other-chat-repair");
+        var adminToken = GenerateToken(scope.ServiceProvider, admin, SystemRoles.Admin);
+        var lecturerToken = GenerateToken(scope.ServiceProvider, lecturer, SystemRoles.Lecturer);
+        var otherLecturerToken = GenerateToken(scope.ServiceProvider, otherLecturer, SystemRoles.Lecturer);
+
+        using var forbiddenRequest = CreateAuthorizedPostRequest(
+            $"/api/classes/{seed.ClassId}/repair-chat-memberships", otherLecturerToken, new { });
+        (await _client.SendAsync(forbiddenRequest)).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        using var repairRequest = CreateAuthorizedPostRequest(
+            $"/api/classes/{seed.ClassId}/repair-chat-memberships", lecturerToken, new { });
+        (await _client.SendAsync(repairRequest)).StatusCode.Should().Be(HttpStatusCode.OK);
+        using var repeatedRepairRequest = CreateAuthorizedPostRequest(
+            $"/api/classes/{seed.ClassId}/repair-chat-memberships", lecturerToken, new { });
+        (await _client.SendAsync(repeatedRepairRequest)).StatusCode.Should().Be(HttpStatusCode.OK);
+        using var adminRepairRequest = CreateAuthorizedPostRequest(
+            $"/api/classes/{seed.ClassId}/repair-chat-memberships", adminToken, new { });
+        (await _client.SendAsync(adminRepairRequest)).StatusCode.Should().Be(HttpStatusCode.OK);
+
+        context.ChangeTracker.Clear();
+        var group = await context.ChatGroups.AsNoTracking()
+            .SingleAsync(item => item.ClassId == seed.ClassId && item.GroupType == ChatGroupType.ClassGroup);
+        (await context.ChatGroupMembers.AsNoTracking().CountAsync(item =>
+            item.ChatGroupId == group.Id && item.UserId == seed.LecturerId && item.IsActive)).Should().Be(1);
+        group.IsReadOnly.Should().BeFalse();
+
+        var version = (await context.Classes.AsNoTracking().SingleAsync(item => item.Id == seed.ClassId)).Version.ToString();
+        using var archiveRequest = CreateAuthorizedPostRequest($"/api/classes/{seed.ClassId}/archive", lecturerToken,
+            new ChangeClassLifecycleRequest { RowVersion = version, Reason = "Verify archived chat read-only state" });
+        (await _client.SendAsync(archiveRequest)).StatusCode.Should().Be(HttpStatusCode.OK);
+        using var archivedRepairRequest = CreateAuthorizedPostRequest(
+            $"/api/classes/{seed.ClassId}/repair-chat-memberships", lecturerToken, new { });
+        (await _client.SendAsync(archivedRepairRequest)).StatusCode.Should().Be(HttpStatusCode.OK);
+
+        context.ChangeTracker.Clear();
+        (await context.ChatGroups.AsNoTracking().SingleAsync(item => item.Id == group.Id)).IsReadOnly.Should().BeTrue();
+        (await context.ClassAuditLogs.AsNoTracking().CountAsync(item =>
+            item.ClassId == seed.ClassId && item.Action == "CHAT_MEMBERSHIPS_REPAIRED")).Should().Be(4);
+    }
+
+    [Fact]
+    public async Task OfficialMajorFile_SynchronizesEnrollmentAndProfile_WithoutImportingTeams()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateClassSeedAsync(context, "official-major-file");
+        var lecturer = await context.Users.SingleAsync(user => user.Id == seed.LecturerId);
+        var otherLecturer = await CreateLecturerAsync(context, "other-major-file");
+        var assignedToken = GenerateToken(scope.ServiceProvider, lecturer, SystemRoles.Lecturer);
+        var otherToken = GenerateToken(scope.ServiceProvider, otherLecturer, SystemRoles.Lecturer);
+        var targetClass = await context.Classes.AsNoTracking().SingleAsync(item => item.Id == seed.ClassId);
+        var rollNumber = "SE" + Guid.NewGuid().ToString("N")[..8].ToUpperInvariant();
+        var student = new Student
+        {
+            RollNumber = rollNumber,
+            NormalizedRollNumber = rollNumber,
+            FullName = "Synthetic Major Student",
+            Email = $"major-file-{Guid.NewGuid():N}@example.com",
+            MajorCode = MajorCodes.BIT_AI,
+            Status = StudentStatus.Active,
+            CreatedBy = seed.AdminId
+        };
+        context.Students.Add(student);
+        context.ClassStudents.Add(new ClassStudent
+        {
+            ClassId = seed.ClassId,
+            StudentId = student.Id,
+            Student = student,
+            SemesterId = targetClass.SemesterId,
+            CourseId = targetClass.CourseId,
+            EnrollmentStatus = EnrollmentStatus.Active,
+            CountsTowardCourseSemesterLimit = true,
+            MajorCodeAtEnrollment = MajorCodes.Undeclared
+        });
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        var workbook = CreateOfficialMajorWorkbook(rollNumber, MajorCodes.BBA_FIN);
+        var url = $"/api/classes/{seed.ClassId}/major-verification/synchronize";
+        var previewUrl = $"/api/classes/{seed.ClassId}/major-verification/preview";
+
+        using var previewContent = CreateMajorUpload(workbook);
+        using var previewRequest = new HttpRequestMessage(HttpMethod.Post, previewUrl) { Content = previewContent };
+        previewRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", assignedToken);
+        var previewResponse = await _client.SendAsync(previewRequest);
+        previewResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        var preview = await previewResponse.Content.ReadFromJsonAsync<ApiResponse<VerifyClassMajorsResponse>>();
+        preview!.Data!.Mismatched.Should().ContainSingle();
+        var previewRow = preview.Data.Mismatched.Single();
+        previewRow.MajorInDb.Should().Be(MajorCodes.Undeclared);
+        previewRow.MajorInProfile.Should().Be(MajorCodes.BIT_AI);
+        previewRow.MajorInFile.Should().Be(MajorCodes.BBA_FIN);
+        (await context.ClassStudents.AsNoTracking().SingleAsync(item =>
+            item.ClassId == seed.ClassId && item.StudentId == student.Id))
+            .MajorVerificationStatus.Should().Be(EnrollmentMajorVerificationStatus.Unverified);
+        (await context.ClassAuditLogs.AsNoTracking().CountAsync(item =>
+            item.ClassId == seed.ClassId && item.Action == "ENROLLMENT_MAJORS_VERIFIED")).Should().Be(0);
+
+        using var forbiddenPreviewContent = CreateMajorUpload(workbook);
+        using var forbiddenPreviewRequest = new HttpRequestMessage(HttpMethod.Post, previewUrl) { Content = forbiddenPreviewContent };
+        forbiddenPreviewRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", otherToken);
+        (await _client.SendAsync(forbiddenPreviewRequest)).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        using var duplicateContent = CreateMajorUpload(CreateOfficialMajorWorkbook(rollNumber, MajorCodes.BBA_FIN, duplicateRoll: true));
+        using var duplicateRequest = new HttpRequestMessage(HttpMethod.Post, url) { Content = duplicateContent };
+        duplicateRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", assignedToken);
+        (await _client.SendAsync(duplicateRequest)).StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await context.Students.AsNoTracking().SingleAsync(item => item.Id == student.Id)).MajorCode.Should().Be(MajorCodes.BIT_AI);
+
+        using var unauthenticatedContent = CreateMajorUpload(workbook);
+        (await _client.PostAsync(url, unauthenticatedContent)).StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+
+        using var forbiddenContent = CreateMajorUpload(workbook);
+        using var forbiddenRequest = new HttpRequestMessage(HttpMethod.Post, url) { Content = forbiddenContent };
+        forbiddenRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", otherToken);
+        (await _client.SendAsync(forbiddenRequest)).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        using var allowedContent = CreateMajorUpload(workbook);
+        using var allowedRequest = new HttpRequestMessage(HttpMethod.Post, url) { Content = allowedContent };
+        allowedRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", assignedToken);
+        var response = await _client.SendAsync(allowedRequest);
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<ApiResponse<VerifyClassMajorsResponse>>();
+        body!.Data!.SynchronizedEnrollmentCount.Should().Be(1);
+        body.Data.SynchronizedProfileCount.Should().Be(1);
+        body.Data.Matched.Should().ContainSingle();
+
+        context.ChangeTracker.Clear();
+        (await context.Students.AsNoTracking().SingleAsync(item => item.Id == student.Id)).MajorCode.Should().Be(MajorCodes.BBA_FIN);
+        var enrollment = await context.ClassStudents.AsNoTracking()
+            .SingleAsync(item => item.ClassId == seed.ClassId && item.StudentId == student.Id);
+        enrollment.MajorCodeAtEnrollment.Should().Be(MajorCodes.BBA_FIN);
+        enrollment.MajorVerificationStatus.Should().Be(EnrollmentMajorVerificationStatus.Matched);
+        (await context.Teams.AsNoTracking().CountAsync(item => item.ClassId == seed.ClassId)).Should().Be(0);
+
+        var classToLock = await context.Classes.SingleAsync(item => item.Id == seed.ClassId);
+        classToLock.IsEnrollmentMajorLocked = true;
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+        using var lockedContent = CreateMajorUpload(CreateOfficialMajorWorkbook(rollNumber, MajorCodes.BIT_SE));
+        using var lockedRequest = new HttpRequestMessage(HttpMethod.Post, url) { Content = lockedContent };
+        lockedRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", assignedToken);
+        (await _client.SendAsync(lockedRequest)).StatusCode.Should().Be(HttpStatusCode.Conflict);
+        (await context.Students.AsNoTracking().SingleAsync(item => item.Id == student.Id)).MajorCode.Should().Be(MajorCodes.BBA_FIN);
+    }
+
+    [Fact]
+    public async Task OfficialMajorFile_LocksMajorsAutomaticallyOnceEveryStudentIsVerified_AndNotifiesStudents()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateClassSeedAsync(context, "major-auto-lock");
+        var lecturer = await context.Users.SingleAsync(user => user.Id == seed.LecturerId);
+        var lecturerToken = GenerateToken(scope.ServiceProvider, lecturer, SystemRoles.Lecturer);
+        var targetClass = await context.Classes.AsNoTracking().SingleAsync(item => item.Id == seed.ClassId);
+        var studentRole = await context.Roles.SingleAsync(role => role.Name == SystemRoles.Student);
+
+        var enrolled = new List<(Student Student, string RollNumber)>();
+        for (var index = 0; index < 2; index++)
+        {
+            var email = $"auto-lock-{Guid.NewGuid():N}@example.com";
+            var user = new User
+            {
+                FullName = $"Auto Lock Student {index}",
+                Email = email,
+                NormalizedEmail = email.ToLowerInvariant(),
+                PasswordHash = "integration-test-only",
+                Status = UserStatus.Active,
+                IsEmailVerified = true
+            };
+            user.UserRoles.Add(new UserRole { UserId = user.Id, User = user, RoleId = studentRole.Id, Role = studentRole });
+            var rollNumber = "SE" + Guid.NewGuid().ToString("N")[..8].ToUpperInvariant();
+            var student = new Student
+            {
+                UserId = user.Id,
+                User = user,
+                RollNumber = rollNumber,
+                NormalizedRollNumber = rollNumber,
+                FullName = user.FullName,
+                Email = email,
+                MajorCode = MajorCodes.BIT_AI,
+                Status = StudentStatus.Active,
+                CreatedBy = seed.AdminId
+            };
+            context.Students.Add(student);
+            context.ClassStudents.Add(new ClassStudent
+            {
+                ClassId = seed.ClassId,
+                StudentId = student.Id,
+                Student = student,
+                SemesterId = targetClass.SemesterId,
+                CourseId = targetClass.CourseId,
+                EnrollmentStatus = EnrollmentStatus.Active,
+                CountsTowardCourseSemesterLimit = true,
+                MajorCodeAtEnrollment = MajorCodes.Undeclared
+            });
+            enrolled.Add((student, rollNumber));
+        }
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        async Task<ApiResponse<VerifyClassMajorsResponse>> SendAsync(string path, params (string RollNumber, string Major)[] rows)
+        {
+            using var content = CreateMajorUpload(CreateOfficialMajorWorkbook(rows));
+            using var request = new HttpRequestMessage(HttpMethod.Post, $"/api/classes/{seed.ClassId}/major-verification/{path}")
+            {
+                Content = content
+            };
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", lecturerToken);
+            var response = await _client.SendAsync(request);
+            response.StatusCode.Should().Be(HttpStatusCode.OK);
+            return (await response.Content.ReadFromJsonAsync<ApiResponse<VerifyClassMajorsResponse>>())!;
+        }
+
+        async Task<bool> IsLockedAsync()
+        {
+            context.ChangeTracker.Clear();
+            return (await context.Classes.AsNoTracking().SingleAsync(item => item.Id == seed.ClassId)).IsEnrollmentMajorLocked;
+        }
+
+        var both = new[]
+        {
+            (enrolled[0].RollNumber, MajorCodes.BBA_FIN),
+            (enrolled[1].RollNumber, MajorCodes.BIT_SE)
+        };
+
+        // A preview never changes the class, even when every student would be verified.
+        var preview = await SendAsync("preview", both);
+        preview.Data!.MajorsAutoLocked.Should().BeFalse();
+        (await IsLockedAsync()).Should().BeFalse();
+
+        // One student is missing from the file, so the class is not fully verified yet.
+        var partial = await SendAsync("synchronize", both[0]);
+        partial.Data!.MajorsAutoLocked.Should().BeFalse();
+        partial.Data.IsMajorLocked.Should().BeFalse();
+        (await IsLockedAsync()).Should().BeFalse();
+
+        // Verifying the remaining student locks the class in the same request.
+        var complete = await SendAsync("synchronize", both);
+        complete.Data!.MajorsAutoLocked.Should().BeTrue();
+        complete.Data.IsMajorLocked.Should().BeTrue();
+        (await IsLockedAsync()).Should().BeTrue();
+        (await context.ClassAuditLogs.AsNoTracking().CountAsync(item =>
+            item.ClassId == seed.ClassId && item.Action == "ENROLLMENT_MAJOR_LOCKED")).Should().Be(1);
+
+        // Students receive one bell notification each, and replaying the event does not duplicate it.
+        var lockEvent = await context.OutboxMessages.AsNoTracking().SingleAsync(item =>
+            item.AggregateId == seed.ClassId && item.Type == "Class.EnrollmentMajorsAutoLocked.v1");
+        var dispatcher = scope.ServiceProvider.GetRequiredService<IOutboxEventDispatcher>();
+        await dispatcher.DispatchAsync(lockEvent);
+        await dispatcher.DispatchAsync(lockEvent);
+        var notifications = await context.Notifications.AsNoTracking()
+            .Where(item => item.SourceEventId == lockEvent.EventId)
+            .ToArrayAsync();
+        notifications.Select(item => item.RecipientUserId)
+            .Should().BeEquivalentTo(enrolled.Select(item => item.Student.UserId!.Value));
+        notifications.Should().OnlyContain(item =>
+            item.Title == "Major verification completed" && item.Link == $"/student/classes/{seed.ClassId}");
+
+        // The lock now blocks further synchronization until a lecturer unlocks the class.
+        using var lockedContent = CreateMajorUpload(CreateOfficialMajorWorkbook(both));
+        using var lockedRequest = new HttpRequestMessage(HttpMethod.Post,
+            $"/api/classes/{seed.ClassId}/major-verification/synchronize") { Content = lockedContent };
+        lockedRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", lecturerToken);
+        (await _client.SendAsync(lockedRequest)).StatusCode.Should().Be(HttpStatusCode.Conflict);
+        context.ChangeTracker.Clear();
+        (await context.OutboxMessages.AsNoTracking().CountAsync(item =>
+            item.AggregateId == seed.ClassId && item.Type == "Class.EnrollmentMajorsAutoLocked.v1")).Should().Be(1);
+    }
+
+    [Fact]
+    public async Task OfficialMajorFile_WarnsAboutTeamMajorComposition_AndClearsItWhenTeamIsFixed()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateClassSeedAsync(context, "team-major-warning");
+        var lecturer = await context.Users.SingleAsync(user => user.Id == seed.LecturerId);
+        var lecturerToken = GenerateToken(scope.ServiceProvider, lecturer, SystemRoles.Lecturer);
+        var targetClass = await context.Classes.AsNoTracking().SingleAsync(item => item.Id == seed.ClassId);
+
+        var team = new Team
+        {
+            ClassId = seed.ClassId,
+            TeamCode = $"{targetClass.ClassCode}_TEAM_1",
+            TeamName = "Major Warning Team",
+            Status = TeamStatus.Active,
+            CreatedById = seed.AdminId,
+            CreatedBy = seed.AdminId
+        };
+        context.Teams.Add(team);
+        var majors = new[] { MajorCodes.BBA_MKT, MajorCodes.BBA_FIN, MajorCodes.BEN, MajorCodes.BIT_SE };
+        var rollNumbers = new List<string>();
+        for (var index = 0; index < majors.Length; index++)
+        {
+            var rollNumber = "SE" + Guid.NewGuid().ToString("N")[..8].ToUpperInvariant();
+            rollNumbers.Add(rollNumber);
+            var student = new Student
+            {
+                RollNumber = rollNumber,
+                NormalizedRollNumber = rollNumber,
+                FullName = $"Team Major Student {index}",
+                Email = $"team-major-{Guid.NewGuid():N}@example.com",
+                MajorCode = majors[index],
+                Status = StudentStatus.Active,
+                CreatedBy = seed.AdminId
+            };
+            var enrollment = new ClassStudent
+            {
+                ClassId = seed.ClassId,
+                StudentId = student.Id,
+                Student = student,
+                SemesterId = targetClass.SemesterId,
+                CourseId = targetClass.CourseId,
+                EnrollmentStatus = EnrollmentStatus.Active,
+                CountsTowardCourseSemesterLimit = true,
+                MajorCodeAtEnrollment = majors[index]
+            };
+            context.Students.Add(student);
+            context.ClassStudents.Add(enrollment);
+            context.TeamMembers.Add(new TeamMember
+            {
+                Team = team,
+                ClassId = seed.ClassId,
+                StudentId = student.Id,
+                ClassStudent = enrollment,
+                RoleInTeam = index == 0 ? TeamMemberRole.Leader : TeamMemberRole.Member
+            });
+        }
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        async Task<ApiResponse<VerifyClassMajorsResponse>> SendMajorFileAsync(string path, string rollNumber, string majorCode)
+        {
+            using var content = CreateMajorUpload(CreateOfficialMajorWorkbook(rollNumber, majorCode));
+            using var request = new HttpRequestMessage(HttpMethod.Post, $"/api/classes/{seed.ClassId}/major-verification/{path}")
+            {
+                Content = content
+            };
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", lecturerToken);
+            var response = await _client.SendAsync(request);
+            response.StatusCode.Should().Be(HttpStatusCode.OK);
+            return (await response.Content.ReadFromJsonAsync<ApiResponse<VerifyClassMajorsResponse>>())!;
+        }
+
+        async Task<EHub.Contracts.Teams.TeamDto> GetTeamAsync()
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, $"/api/teams/{team.Id}");
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", lecturerToken);
+            var response = await _client.SendAsync(request);
+            response.StatusCode.Should().Be(HttpStatusCode.OK);
+            return (await response.Content.ReadFromJsonAsync<ApiResponse<EHub.Contracts.Teams.TeamDto>>())!.Data!;
+        }
+
+        // The team starts valid: three GROUP_1 members and one GROUP_2 member.
+        (await GetTeamAsync()).MajorComposition.IsValid.Should().BeTrue();
+
+        // A preview never reports team warnings because it changes nothing.
+        var preview = await SendMajorFileAsync("preview", rollNumbers[3], MajorCodes.BBA_TM);
+        preview.Data!.TeamMajorWarnings.Should().BeEmpty();
+        (await GetTeamAsync()).MajorComposition.IsValid.Should().BeTrue();
+
+        // Official file moves the only GROUP_2 student to GROUP_1: the team now fails the rule.
+        var broken = await SendMajorFileAsync("synchronize", rollNumbers[3], MajorCodes.BBA_TM);
+        var warning = broken.Data!.TeamMajorWarnings.Should().ContainSingle().Subject;
+        warning.TeamId.Should().Be(team.Id);
+        warning.TeamName.Should().Be("Major Warning Team");
+        warning.MajorComposition.IsValid.Should().BeFalse();
+        warning.MajorComposition.MissingGroups.Should().Equal("GROUP_2");
+        warning.MajorComposition.Message.Should().Contain("GROUP_2");
+
+        // The warning is advisory only: team and members are untouched, and the team read reports it too.
+        var warnedTeam = await GetTeamAsync();
+        warnedTeam.Members.Should().HaveCount(4);
+        warnedTeam.MajorComposition.IsValid.Should().BeFalse();
+        warnedTeam.MajorComposition.MissingGroups.Should().Equal("GROUP_2");
+        context.ChangeTracker.Clear();
+        (await context.Teams.AsNoTracking().SingleAsync(item => item.Id == team.Id)).Status.Should().Be(TeamStatus.Active);
+        (await context.TeamMembers.AsNoTracking().CountAsync(item =>
+            item.TeamId == team.Id && item.CountsTowardActiveTeam)).Should().Be(4);
+
+        // Correcting the major clears the warning.
+        var fixedResult = await SendMajorFileAsync("synchronize", rollNumbers[3], MajorCodes.BIT_AI);
+        fixedResult.Data!.TeamMajorWarnings.Should().BeEmpty();
+        (await GetTeamAsync()).MajorComposition.IsValid.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task GroupProjectConsistency_WarnsWhenGroupAndProjectAreNotOneToOne_WithAccessChecks()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateClassSeedAsync(context, "group-project-consistency");
+        var lecturer = await context.Users.SingleAsync(user => user.Id == seed.LecturerId);
+        var otherLecturer = await CreateLecturerAsync(context, "other-group-project");
+        var lecturerToken = GenerateToken(scope.ServiceProvider, lecturer, SystemRoles.Lecturer);
+        var otherToken = GenerateToken(scope.ServiceProvider, otherLecturer, SystemRoles.Lecturer);
+        var targetClass = await context.Classes.AsNoTracking().SingleAsync(item => item.Id == seed.ClassId);
+
+        Team CreateTeam(string code, string projectName)
+        {
+            var team = new Team
+            {
+                ClassId = seed.ClassId,
+                TeamCode = $"{targetClass.ClassCode}_{code}",
+                TeamName = $"Team {code}",
+                Status = TeamStatus.Active,
+                CreatedById = seed.AdminId,
+                CreatedBy = seed.AdminId
+            };
+            context.Teams.Add(team);
+            context.Projects.Add(new Project { Team = team, Name = projectName, CreatedById = seed.AdminId });
+            return team;
+        }
+
+        var teamA = CreateTeam("GP_A", "Project A");
+        var teamB = CreateTeam("GP_B", "Project B");
+        var enrollments = new List<ClassStudent>();
+        var layout = new[]
+        {
+            (Team: teamA, Group: "G01"), (Team: teamA, Group: "G01"),
+            (Team: teamB, Group: "G01"), (Team: teamB, Group: "G02")
+        };
+        for (var index = 0; index < layout.Length; index++)
+        {
+            var rollNumber = "SE" + Guid.NewGuid().ToString("N")[..8].ToUpperInvariant();
+            var student = new Student
+            {
+                RollNumber = rollNumber,
+                NormalizedRollNumber = rollNumber,
+                FullName = $"Group Project Student {index}",
+                Email = $"group-project-{Guid.NewGuid():N}@example.com",
+                MajorCode = MajorCodes.BIT_SE,
+                Status = StudentStatus.Active,
+                CreatedBy = seed.AdminId
+            };
+            var enrollment = new ClassStudent
+            {
+                ClassId = seed.ClassId,
+                StudentId = student.Id,
+                Student = student,
+                SemesterId = targetClass.SemesterId,
+                CourseId = targetClass.CourseId,
+                EnrollmentStatus = EnrollmentStatus.Active,
+                CountsTowardCourseSemesterLimit = true,
+                MajorCodeAtEnrollment = MajorCodes.BIT_SE,
+                SemesterGroupName = layout[index].Group
+            };
+            enrollments.Add(enrollment);
+            context.Students.Add(student);
+            context.ClassStudents.Add(enrollment);
+            context.TeamMembers.Add(new TeamMember
+            {
+                Team = layout[index].Team,
+                ClassId = seed.ClassId,
+                StudentId = student.Id,
+                ClassStudent = enrollment
+            });
+        }
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        var url = $"/api/classes/{seed.ClassId}/group-project-consistency";
+        async Task<HttpResponseMessage> GetAsync(string? token)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, url);
+            if (token != null) request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            return await _client.SendAsync(request);
+        }
+
+        (await GetAsync(null)).StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+        (await GetAsync(otherToken)).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        var response = await GetAsync(lecturerToken);
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = (await response.Content.ReadFromJsonAsync<ApiResponse<GroupProjectConsistencyResponse>>())!.Data!;
+        body.IsConsistent.Should().BeFalse();
+        body.Warnings.Should().HaveCount(2);
+        body.Warnings.Should().ContainSingle(item =>
+            item.Type == GroupProjectWarningTypes.GroupHasMultipleProjects &&
+            item.Subject == "G01" &&
+            item.Message == "Group `G01` is assigned to multiple projects: `Project A`, `Project B`.");
+        body.Warnings.Should().ContainSingle(item =>
+            item.Type == GroupProjectWarningTypes.ProjectHasMultipleGroups &&
+            item.Subject == "Project B" &&
+            item.Message == "Project `Project B` is assigned to multiple groups: `G01`, `G02`.");
+
+        // Warning is advisory: nothing about the teams or enrollments changed.
+        (await context.TeamMembers.AsNoTracking().CountAsync(item => item.ClassId == seed.ClassId)).Should().Be(4);
+
+        // Moving the third student to G02 makes G01 <-> Project A and G02 <-> Project B.
+        var toFix = await context.ClassStudents.SingleAsync(item => item.ClassId == seed.ClassId && item.StudentId == enrollments[2].StudentId);
+        toFix.SemesterGroupName = "G02";
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        var fixedResponse = await GetAsync(lecturerToken);
+        fixedResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        var fixedBody = (await fixedResponse.Content.ReadFromJsonAsync<ApiResponse<GroupProjectConsistencyResponse>>())!.Data!;
+        fixedBody.IsConsistent.Should().BeTrue();
+        fixedBody.Warnings.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task SemesterGroupFile_PreviewsAndImportsByRollNumber_WithAccessAndValidationChecks()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateClassSeedAsync(context, "semester-groups");
+        var lecturer = await context.Users.SingleAsync(user => user.Id == seed.LecturerId);
+        var otherLecturer = await CreateLecturerAsync(context, "other-semester-groups");
+        var assignedToken = GenerateToken(scope.ServiceProvider, lecturer, SystemRoles.Lecturer);
+        var otherToken = GenerateToken(scope.ServiceProvider, otherLecturer, SystemRoles.Lecturer);
+        var classScope = await context.Classes.AsNoTracking()
+            .Where(item => item.Id == seed.ClassId)
+            .Select(item => new { item.SemesterId, item.CourseId, SemesterCode = item.Semester.Code })
+            .SingleAsync();
+        var letters = new string(classScope.SemesterCode.Where(char.IsLetter).ToArray()).ToUpperInvariant();
+        var digits = new string(classScope.SemesterCode.Where(char.IsDigit).ToArray());
+        var expectedHeader = $"Group {letters}{(digits.Length > 2 ? digits[^2..] : digits)}";
+        var rollNumber = "SE" + Guid.NewGuid().ToString("N")[..8].ToUpperInvariant();
+        var student = new Student
+        {
+            RollNumber = rollNumber,
+            NormalizedRollNumber = rollNumber,
+            FullName = "Semester Group Student",
+            Email = $"semester-group-{Guid.NewGuid():N}@example.com",
+            MajorCode = MajorCodes.BIT_SE,
+            Status = StudentStatus.Active,
+            CreatedBy = seed.AdminId
+        };
+        context.Students.Add(student);
+        context.ClassStudents.Add(new ClassStudent
+        {
+            ClassId = seed.ClassId,
+            StudentId = student.Id,
+            Student = student,
+            SemesterId = classScope.SemesterId,
+            CourseId = classScope.CourseId,
+            EnrollmentStatus = EnrollmentStatus.Active,
+            CountsTowardCourseSemesterLimit = true,
+            MajorCodeAtEnrollment = MajorCodes.BIT_SE
+        });
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        var workbook = CreateSemesterGroupWorkbook(expectedHeader, rollNumber, "EXE201g_8G1");
+        var previewUrl = $"/api/classes/{seed.ClassId}/semester-groups/preview";
+        var importUrl = $"/api/classes/{seed.ClassId}/semester-groups/import";
+
+        using var previewContent = CreateMajorUpload(workbook);
+        using var previewRequest = new HttpRequestMessage(HttpMethod.Post, previewUrl) { Content = previewContent };
+        previewRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", assignedToken);
+        var previewResponse = await _client.SendAsync(previewRequest);
+        previewResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        var preview = await previewResponse.Content.ReadFromJsonAsync<ApiResponse<SemesterGroupImportResponse>>();
+        preview!.Data!.ExpectedColumnName.Should().Be(expectedHeader);
+        preview.Data.ChangedRowsCount.Should().Be(1);
+        preview.Data.ErrorRowsCount.Should().Be(0);
+        (await context.ClassStudents.AsNoTracking().SingleAsync(item =>
+            item.ClassId == seed.ClassId && item.StudentId == student.Id)).SemesterGroupName.Should().BeNull();
+
+        using var invalidContent = CreateMajorUpload(CreateSemesterGroupWorkbook("Group WRONG", rollNumber, "EXE201g_8G1"));
+        using var invalidRequest = new HttpRequestMessage(HttpMethod.Post, previewUrl) { Content = invalidContent };
+        invalidRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", assignedToken);
+        (await _client.SendAsync(invalidRequest)).StatusCode.Should().Be(HttpStatusCode.BadRequest);
+
+        using var unauthenticatedContent = CreateMajorUpload(workbook);
+        (await _client.PostAsync(importUrl, unauthenticatedContent)).StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+
+        using var forbiddenContent = CreateMajorUpload(workbook);
+        using var forbiddenRequest = new HttpRequestMessage(HttpMethod.Post, importUrl) { Content = forbiddenContent };
+        forbiddenRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", otherToken);
+        (await _client.SendAsync(forbiddenRequest)).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        using var importContent = CreateMajorUpload(workbook);
+        using var importRequest = new HttpRequestMessage(HttpMethod.Post, importUrl) { Content = importContent };
+        importRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", assignedToken);
+        var importResponse = await _client.SendAsync(importRequest);
+        importResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        var imported = await importResponse.Content.ReadFromJsonAsync<ApiResponse<SemesterGroupImportResponse>>();
+        imported!.Data!.UpdatedCount.Should().Be(1);
+
+        context.ChangeTracker.Clear();
+        (await context.ClassStudents.AsNoTracking().SingleAsync(item =>
+            item.ClassId == seed.ClassId && item.StudentId == student.Id)).SemesterGroupName.Should().Be("EXE201g_8G1");
+        (await context.ClassAuditLogs.AsNoTracking().CountAsync(item =>
+            item.ClassId == seed.ClassId && item.Action == "SEMESTER_GROUPS_IMPORTED")).Should().Be(1);
+    }
+
+    [Fact]
+    public async Task AssignedLecturer_CanManageMajorLifecycleRepairAndAudit_WhileOtherLecturerCannot()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateClassSeedAsync(context, "assigned-permissions");
+        var assignedLecturer = await context.Users.SingleAsync(user => user.Id == seed.LecturerId);
+        var otherLecturer = await CreateLecturerAsync(context, "other-permissions");
+        var assignedToken = GenerateToken(scope.ServiceProvider, assignedLecturer, SystemRoles.Lecturer);
+        var otherToken = GenerateToken(scope.ServiceProvider, otherLecturer, SystemRoles.Lecturer);
+        var enrollmentScope = await context.Classes.AsNoTracking()
+            .Where(item => item.Id == seed.ClassId)
+            .Select(item => new { item.SemesterId, item.CourseId })
+            .SingleAsync();
+        var studentCode = "SE" + Guid.NewGuid().ToString("N")[..8].ToUpperInvariant();
+        var student = new Student
+        {
+            RollNumber = studentCode,
+            NormalizedRollNumber = studentCode,
+            FullName = "Permission Student",
+            Email = $"permission-{Guid.NewGuid():N}@example.com",
+            MajorCode = MajorCodes.BIT_SE,
+            Status = StudentStatus.Active,
+            CreatedBy = seed.AdminId
+        };
+        context.Students.Add(student);
+        context.ClassStudents.Add(new ClassStudent
+        {
+            ClassId = seed.ClassId,
+            StudentId = student.Id,
+            Student = student,
+            SemesterId = enrollmentScope.SemesterId,
+            CourseId = enrollmentScope.CourseId,
+            EnrollmentStatus = EnrollmentStatus.Active,
+            CountsTowardCourseSemesterLimit = true,
+            MajorCodeAtEnrollment = MajorCodes.BIT_SE
+        });
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        using var forbiddenVerificationContent = new MultipartFormDataContent();
+        var forbiddenVerificationFile = new ByteArrayContent(CreateImportWorkbook(studentCode, student.Email!, MajorCodes.BIT_SE));
+        forbiddenVerificationFile.Headers.ContentType = new MediaTypeHeaderValue("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        forbiddenVerificationContent.Add(forbiddenVerificationFile, "file", "major-verification.xlsx");
+        using var forbiddenVerification = new HttpRequestMessage(HttpMethod.Post, $"/api/classes/{seed.ClassId}/major-verification")
+        {
+            Content = forbiddenVerificationContent
+        };
+        forbiddenVerification.Headers.Authorization = new AuthenticationHeaderValue("Bearer", otherToken);
+        (await _client.SendAsync(forbiddenVerification)).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        using var allowedVerificationContent = new MultipartFormDataContent();
+        var allowedVerificationFile = new ByteArrayContent(CreateImportWorkbook(studentCode, student.Email!, MajorCodes.BIT_SE));
+        allowedVerificationFile.Headers.ContentType = new MediaTypeHeaderValue("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        allowedVerificationContent.Add(allowedVerificationFile, "file", "major-verification.xlsx");
+        using var allowedVerification = new HttpRequestMessage(HttpMethod.Post, $"/api/classes/{seed.ClassId}/major-verification")
+        {
+            Content = allowedVerificationContent
+        };
+        allowedVerification.Headers.Authorization = new AuthenticationHeaderValue("Bearer", assignedToken);
+        (await _client.SendAsync(allowedVerification)).StatusCode.Should().Be(HttpStatusCode.OK);
+
+        using var forbiddenAssignment = CreateAuthorizedPutRequest(
+            $"/api/classes/{seed.ClassId}/teaching-assignment",
+            assignedToken,
+            new UpdateTeachingAssignmentRequest
+            {
+                PrimaryLecturerId = otherLecturer.Id,
+                RowVersion = (await context.Classes.AsNoTracking().SingleAsync(item => item.Id == seed.ClassId)).Version.ToString()
+            });
+        (await _client.SendAsync(forbiddenAssignment)).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        using var forbiddenMajorCorrection = CreateAuthorizedPutRequest(
+            $"/api/classes/{seed.ClassId}/students/{student.Id}/major",
+            otherToken,
+            new UpdateClassStudentRequest { MajorCode = MajorCodes.BIT_AI, Reason = "Attempted correction outside assigned class" });
+        (await _client.SendAsync(forbiddenMajorCorrection)).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        // Verifying the only student completes the class, which locks major updates automatically.
+        // A correction needs an explicit unlock first.
+        using var lockedMajorCorrection = CreateAuthorizedPutRequest(
+            $"/api/classes/{seed.ClassId}/students/{student.Id}/major",
+            assignedToken,
+            new UpdateClassStudentRequest { MajorCode = MajorCodes.BIT_AI, Reason = "Correction while locked" });
+        (await _client.SendAsync(lockedMajorCorrection)).StatusCode.Should().Be(HttpStatusCode.Conflict);
+        using var unlockRequest = new HttpRequestMessage(HttpMethod.Delete, $"/api/classes/{seed.ClassId}/major-lock");
+        unlockRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", assignedToken);
+        (await _client.SendAsync(unlockRequest)).StatusCode.Should().Be(HttpStatusCode.OK);
+
+        using var allowedMajorCorrection = CreateAuthorizedPutRequest(
+            $"/api/classes/{seed.ClassId}/students/{student.Id}/major",
+            assignedToken,
+            new UpdateClassStudentRequest { MajorCode = MajorCodes.BIT_AI, Reason = "Correction by assigned lecturer" });
+        (await _client.SendAsync(allowedMajorCorrection)).StatusCode.Should().Be(HttpStatusCode.OK);
+
+        using var forbiddenLock = CreateAuthorizedPostRequest($"/api/classes/{seed.ClassId}/major-lock", otherToken, new { });
+        (await _client.SendAsync(forbiddenLock)).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        using var allowedLock = CreateAuthorizedPostRequest($"/api/classes/{seed.ClassId}/major-lock", assignedToken, new { });
+        (await _client.SendAsync(allowedLock)).StatusCode.Should().Be(HttpStatusCode.OK);
+
+        using var forbiddenAudit = new HttpRequestMessage(HttpMethod.Get, $"/api/classes/{seed.ClassId}/audit?page=1&pageSize=25");
+        forbiddenAudit.Headers.Authorization = new AuthenticationHeaderValue("Bearer", otherToken);
+        (await _client.SendAsync(forbiddenAudit)).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        using var allowedAudit = new HttpRequestMessage(HttpMethod.Get, $"/api/classes/{seed.ClassId}/audit?page=1&pageSize=25");
+        allowedAudit.Headers.Authorization = new AuthenticationHeaderValue("Bearer", assignedToken);
+        (await _client.SendAsync(allowedAudit)).StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var activeVersion = (await context.Classes.AsNoTracking().SingleAsync(item => item.Id == seed.ClassId)).Version.ToString();
+        using var forbiddenArchive = CreateAuthorizedPostRequest(
+            $"/api/classes/{seed.ClassId}/archive",
+            otherToken,
+            new ChangeClassLifecycleRequest { RowVersion = activeVersion, Reason = "Attempt outside assigned class" });
+        (await _client.SendAsync(forbiddenArchive)).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        using var allowedArchive = CreateAuthorizedPostRequest(
+            $"/api/classes/{seed.ClassId}/archive",
+            assignedToken,
+            new ChangeClassLifecycleRequest { RowVersion = activeVersion, Reason = "Archive by assigned lecturer" });
+        (await _client.SendAsync(allowedArchive)).StatusCode.Should().Be(HttpStatusCode.OK);
+
+        context.ChangeTracker.Clear();
+        var archivedVersion = (await context.Classes.AsNoTracking().SingleAsync(item => item.Id == seed.ClassId)).Version.ToString();
+        using var forbiddenRestore = CreateAuthorizedPostRequest(
+            $"/api/classes/{seed.ClassId}/restore",
+            otherToken,
+            new ChangeClassLifecycleRequest { RowVersion = archivedVersion, Reason = "Attempt restore outside assigned class" });
+        (await _client.SendAsync(forbiddenRestore)).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        using var allowedRestore = CreateAuthorizedPostRequest(
+            $"/api/classes/{seed.ClassId}/restore",
+            assignedToken,
+            new ChangeClassLifecycleRequest { RowVersion = archivedVersion, Reason = "Restore by assigned lecturer" });
+        (await _client.SendAsync(allowedRestore)).StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task CompleteAndReopenClass_TransitionsEnrollments_EnforcesReadOnly_AndKeepsStudentHistory()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateClassSeedAsync(context, "completion-roundtrip");
+        var admin = await context.Users.SingleAsync(user => user.Id == seed.AdminId);
+        var lecturer = await context.Users.SingleAsync(user => user.Id == seed.LecturerId);
+        var studentRole = await context.Roles.SingleAsync(role => role.Name == SystemRoles.Student);
+        var email = $"completion-{Guid.NewGuid():N}@example.com";
+        var studentUser = new User
+        {
+            FullName = "Completion Student",
+            Email = email,
+            NormalizedEmail = email.ToLowerInvariant(),
+            PasswordHash = "integration-test-only",
+            Status = UserStatus.Active,
+            IsEmailVerified = true
+        };
+        studentUser.UserRoles.Add(new UserRole
+        {
+            UserId = studentUser.Id,
+            User = studentUser,
+            RoleId = studentRole.Id,
+            Role = studentRole
+        });
+        var rollNumber = $"SE{Guid.NewGuid():N}"[..10].ToUpperInvariant();
+        var student = new Student
+        {
+            UserId = studentUser.Id,
+            User = studentUser,
+            RollNumber = rollNumber,
+            NormalizedRollNumber = rollNumber,
+            FullName = studentUser.FullName,
+            Email = email,
+            MajorCode = MajorCodes.BIT_SE,
+            Status = StudentStatus.Active,
+            CreatedBy = seed.AdminId
+        };
+        var targetClass = await context.Classes.SingleAsync(item => item.Id == seed.ClassId);
+        context.Students.Add(student);
+        context.ClassStudents.Add(new ClassStudent
+        {
+            ClassId = targetClass.Id,
+            Class = targetClass,
+            StudentId = student.Id,
+            Student = student,
+            SemesterId = targetClass.SemesterId,
+            CourseId = targetClass.CourseId,
+            EnrollmentStatus = EnrollmentStatus.Active,
+            CountsTowardCourseSemesterLimit = true,
+            MajorCodeAtEnrollment = MajorCodes.BIT_SE
+        });
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        var lecturerToken = GenerateToken(scope.ServiceProvider, lecturer, SystemRoles.Lecturer);
+        var adminToken = GenerateToken(scope.ServiceProvider, admin, SystemRoles.Admin);
+        var studentToken = GenerateToken(scope.ServiceProvider, studentUser, SystemRoles.Student);
+        using (var repair = CreateAuthorizedPostRequest(
+                   $"/api/classes/{seed.ClassId}/repair-chat-memberships", lecturerToken, new { }))
+            (await _client.SendAsync(repair)).StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var version = (await context.Classes.AsNoTracking().SingleAsync(item => item.Id == seed.ClassId)).Version.ToString();
+        using var complete = CreateAuthorizedPostRequest(
+            $"/api/classes/{seed.ClassId}/complete",
+            lecturerToken,
+            new ChangeClassLifecycleRequest { RowVersion = version, Reason = "Academic work has been finalized" });
+        (await _client.SendAsync(complete)).StatusCode.Should().Be(HttpStatusCode.OK);
+
+        await scope.ServiceProvider.GetRequiredService<IClassChatMembershipSynchronizer>()
+            .SynchronizeAsync(seed.ClassId, seed.LecturerId);
+
+        context.ChangeTracker.Clear();
+        var completedClass = await context.Classes.AsNoTracking().SingleAsync(item => item.Id == seed.ClassId);
+        var completedEnrollment = await context.ClassStudents.AsNoTracking()
+            .SingleAsync(item => item.ClassId == seed.ClassId && item.StudentId == student.Id);
+        completedClass.Status.Should().Be(ClassStatus.Completed);
+        completedClass.CompletedAtUtc.Should().NotBeNull();
+        completedEnrollment.EnrollmentStatus.Should().Be(EnrollmentStatus.Completed);
+        completedEnrollment.CompletedAtUtc.Should().NotBeNull();
+        completedEnrollment.CountsTowardCourseSemesterLimit.Should().BeTrue();
+        (await context.ChatGroups.AsNoTracking().SingleAsync(item =>
+            item.ClassId == seed.ClassId && item.GroupType == ChatGroupType.ClassGroup)).IsReadOnly.Should().BeTrue();
+        (await context.ChatGroupMembers.AsNoTracking().SingleAsync(item =>
+            item.ChatGroup.ClassId == seed.ClassId &&
+            item.ChatGroup.GroupType == ChatGroupType.ClassGroup &&
+            item.StudentId == student.Id)).IsActive.Should().BeTrue();
+        (await context.ClassAuditLogs.CountAsync(item => item.ClassId == seed.ClassId && item.Action == "CLASS_COMPLETED"))
+            .Should().Be(1);
+        (await context.OutboxMessages.CountAsync(item => item.AggregateId == seed.ClassId && item.Type == "Class.Completed.v1"))
+            .Should().Be(1);
+
+        using var forbiddenMutation = CreateAuthorizedPostRequest(
+            $"/api/classes/{seed.ClassId}/students",
+            lecturerToken,
+            new AddStudentToClassRequest
+            {
+                StudentCode = $"SE{Guid.NewGuid():N}"[..10].ToUpperInvariant(),
+                FullName = "Read Only Student",
+                Email = $"readonly-{Guid.NewGuid():N}@example.com",
+                MajorCode = MajorCodes.BIT_SE
+            });
+        var mutationResponse = await _client.SendAsync(forbiddenMutation);
+        mutationResponse.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        (await mutationResponse.Content.ReadFromJsonAsync<ApiResponse<object>>())!.Code.Should().Be(ErrorCodes.ClassCompleted);
+
+        using var history = new HttpRequestMessage(HttpMethod.Get, "/api/classes/my-classes?scope=History");
+        history.Headers.Authorization = new AuthenticationHeaderValue("Bearer", studentToken);
+        var historyResponse = await _client.SendAsync(history);
+        historyResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        (await historyResponse.Content.ReadAsStringAsync()).Should().Contain(targetClass.ClassCode);
+
+        using var archiveCompleted = CreateAuthorizedPostRequest(
+            $"/api/classes/{seed.ClassId}/archive",
+            lecturerToken,
+            new ChangeClassLifecycleRequest { RowVersion = completedClass.Version.ToString(), Reason = "Preserve completed history" });
+        (await _client.SendAsync(archiveCompleted)).StatusCode.Should().Be(HttpStatusCode.OK);
+        context.ChangeTracker.Clear();
+        var archivedCompleted = await context.Classes.AsNoTracking().SingleAsync(item => item.Id == seed.ClassId);
+        archivedCompleted.Status.Should().Be(ClassStatus.Archived);
+        archivedCompleted.StatusBeforeArchive.Should().Be(ClassStatus.Completed);
+
+        using (var archivedDetail = new HttpRequestMessage(HttpMethod.Get, $"/api/classes/{seed.ClassId}"))
+        {
+            archivedDetail.Headers.Authorization = new AuthenticationHeaderValue("Bearer", adminToken);
+            var archivedDetailResponse = await _client.SendAsync(archivedDetail);
+            archivedDetailResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+            var archivedDetailBody = await archivedDetailResponse.Content.ReadFromJsonAsync<ApiResponse<ClassResponse>>();
+            archivedDetailBody!.Data!.StudentCount.Should().Be(1);
+            archivedDetailBody.Data.StatusBeforeArchive.Should().Be(nameof(ClassStatus.Completed));
+        }
+
+        using var restoreCompleted = CreateAuthorizedPostRequest(
+            $"/api/classes/{seed.ClassId}/restore",
+            lecturerToken,
+            new ChangeClassLifecycleRequest { RowVersion = archivedCompleted.Version.ToString(), Reason = "Restore completed history" });
+        (await _client.SendAsync(restoreCompleted)).StatusCode.Should().Be(HttpStatusCode.OK);
+        context.ChangeTracker.Clear();
+        completedClass = await context.Classes.AsNoTracking().SingleAsync(item => item.Id == seed.ClassId);
+        completedClass.Status.Should().Be(ClassStatus.Completed);
+
+        using var lecturerReopen = CreateAuthorizedPostRequest(
+            $"/api/classes/{seed.ClassId}/reopen",
+            lecturerToken,
+            new ChangeClassLifecycleRequest { RowVersion = completedClass.Version.ToString(), Reason = "Lecturer cannot reopen" });
+        (await _client.SendAsync(lecturerReopen)).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        using var adminReopen = CreateAuthorizedPostRequest(
+            $"/api/classes/{seed.ClassId}/reopen",
+            adminToken,
+            new ChangeClassLifecycleRequest { RowVersion = completedClass.Version.ToString(), Reason = "Correction window approved" });
+        (await _client.SendAsync(adminReopen)).StatusCode.Should().Be(HttpStatusCode.OK);
+
+        context.ChangeTracker.Clear();
+        (await context.Classes.AsNoTracking().SingleAsync(item => item.Id == seed.ClassId)).Status.Should().Be(ClassStatus.Active);
+        var reopenedEnrollment = await context.ClassStudents.AsNoTracking()
+            .SingleAsync(item => item.ClassId == seed.ClassId && item.StudentId == student.Id);
+        reopenedEnrollment.EnrollmentStatus.Should().Be(EnrollmentStatus.Active);
+        reopenedEnrollment.CompletedAtUtc.Should().BeNull();
+        (await context.ChatGroups.AsNoTracking().SingleAsync(item =>
+            item.ClassId == seed.ClassId && item.GroupType == ChatGroupType.ClassGroup)).IsReadOnly.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task BulkCreate_AssignsDifferentLecturersToExplicitClassIndices()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateClassSeedAsync(context, "bulk-multi-assignment");
+        var secondLecturer = await CreateLecturerAsync(context, "bulk-multi-assignment-second");
+        var sourceClass = await context.Classes.SingleAsync(item => item.Id == seed.ClassId);
+        var semester = await context.Semesters.SingleAsync(item => item.Id == sourceClass.SemesterId);
+        semester.Status = SemesterStatus.Active;
+        semester.StartDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-30));
+        semester.EndDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(30));
+        await context.SaveChangesAsync();
+
+        var firstIndex = await context.Classes
+            .Where(item => item.CourseId == sourceClass.CourseId && item.SemesterId == sourceClass.SemesterId)
+            .MaxAsync(item => item.ClassIndex) + 1;
+        var indices = new[] { firstIndex, firstIndex + 1, firstIndex + 2 };
+        var admin = await context.Users.SingleAsync(user => user.Id == seed.AdminId);
+        var token = GenerateToken(scope.ServiceProvider, admin, SystemRoles.Admin);
+
+        using var request = CreateAuthorizedPostRequest(
+            "/api/classes/bulk/commit",
+            token,
+            new CreateBulkClassesRequest
+            {
+                CourseId = sourceClass.CourseId,
+                SemesterId = sourceClass.SemesterId,
+                ClassIndices = indices,
+                LecturerAssignments =
+                [
+                    new BulkClassLecturerAssignmentRequest
+                    {
+                        LecturerId = seed.LecturerId,
+                        ClassIndices = [indices[0], indices[2]]
+                    },
+                    new BulkClassLecturerAssignmentRequest
+                    {
+                        LecturerId = secondLecturer.Id,
+                        ClassIndices = [indices[1]]
+                    }
+                ]
+            });
+
+        var response = await _client.SendAsync(request);
+        var body = await response.Content.ReadFromJsonAsync<ApiResponse<ClassResponse[]>>();
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        body.Should().NotBeNull();
+        body!.Data.Should().HaveCount(3);
+        body.Data!.Single(item => item.ClassIndex == indices[0]).PrimaryLecturerId.Should().Be(seed.LecturerId);
+        body.Data.Single(item => item.ClassIndex == indices[1]).PrimaryLecturerId.Should().Be(secondLecturer.Id);
+        body.Data.Single(item => item.ClassIndex == indices[2]).PrimaryLecturerId.Should().Be(seed.LecturerId);
+
+        context.ChangeTracker.Clear();
+        var created = await context.Classes.AsNoTracking()
+            .Where(item => item.CourseId == sourceClass.CourseId && indices.Contains(item.ClassIndex))
+            .ToListAsync();
+        created.Should().HaveCount(3);
+        created.Single(item => item.ClassIndex == indices[1]).PrimaryLecturerId.Should().Be(secondLecturer.Id);
+        (await context.ClassLecturers.AsNoTracking()
+            .CountAsync(item => created.Select(createdClass => createdClass.Id).Contains(item.ClassId) && item.IsPrimary))
+            .Should().Be(3);
+    }
+
+    [Fact]
+    public async Task BulkPreview_WhenAssignmentsOverlap_Returns400WithoutCreatingClasses()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateClassSeedAsync(context, "bulk-overlap");
+        var secondLecturer = await CreateLecturerAsync(context, "bulk-overlap-second");
+        var sourceClass = await context.Classes.SingleAsync(item => item.Id == seed.ClassId);
+        var semester = await context.Semesters.SingleAsync(item => item.Id == sourceClass.SemesterId);
+        semester.Status = SemesterStatus.Active;
+        semester.StartDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-30));
+        semester.EndDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(30));
+        await context.SaveChangesAsync();
+        var classIndex = await context.Classes
+            .Where(item => item.CourseId == sourceClass.CourseId && item.SemesterId == sourceClass.SemesterId)
+            .MaxAsync(item => item.ClassIndex) + 1;
+        var admin = await context.Users.SingleAsync(user => user.Id == seed.AdminId);
+        var token = GenerateToken(scope.ServiceProvider, admin, SystemRoles.Admin);
+
+        using var request = CreateAuthorizedPostRequest(
+            "/api/classes/bulk/preview",
+            token,
+            new CreateBulkClassesRequest
+            {
+                CourseId = sourceClass.CourseId,
+                SemesterId = sourceClass.SemesterId,
+                ClassIndices = [classIndex],
+                LecturerAssignments =
+                [
+                    new BulkClassLecturerAssignmentRequest { LecturerId = seed.LecturerId, ClassIndices = [classIndex] },
+                    new BulkClassLecturerAssignmentRequest { LecturerId = secondLecturer.Id, ClassIndices = [classIndex] }
+                ]
+            });
+
+        var response = await _client.SendAsync(request);
+        var body = await response.Content.ReadFromJsonAsync<ApiResponse<object>>();
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        body!.Code.Should().Be(ErrorCodes.ClassValidationError);
+        body.Message.Should().Contain("more than one lecturer");
+        (await context.Classes.AsNoTracking().AnyAsync(item =>
+            item.CourseId == sourceClass.CourseId &&
+            item.SemesterId == sourceClass.SemesterId &&
+            item.ClassIndex == classIndex)).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task AdminCanPlanAndCorrectSemesterDates_WithAuditAndConcurrency()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var admin = await context.Users
+            .Include(user => user.UserRoles)
+            .ThenInclude(userRole => userRole.Role)
+            .FirstAsync(user => user.UserRoles.Any(userRole => userRole.Role.Name == SystemRoles.Admin));
+        var token = GenerateToken(scope.ServiceProvider, admin, SystemRoles.Admin);
+        var year = DateTime.UtcNow.Year + 2;
+        var startDate = new DateOnly(year, 1, 5);
+        var endDate = new DateOnly(year, 4, 20);
+
+        using var planRequest = CreateAuthorizedPostRequest(
+            "/api/subjects/semesters",
+            token,
+            new PlanSemesterRequest
+            {
+                Semester = "SP",
+                Year = year,
+                StartDate = startDate,
+                EndDate = endDate
+            });
+        var planResponse = await _client.SendAsync(planRequest);
+        var plannedBody = await planResponse.Content.ReadFromJsonAsync<ApiResponse<SemesterResponse>>();
+
+        planResponse.StatusCode.Should().Be(HttpStatusCode.Created);
+        plannedBody!.Data!.Status.Should().Be(nameof(SemesterStatus.Planned));
+        plannedBody.Data.StartDate.Should().Be(startDate);
+
+        using var duplicateRequest = CreateAuthorizedPostRequest(
+            "/api/subjects/semesters",
+            token,
+            new PlanSemesterRequest
+            {
+                Semester = "SP",
+                Year = year,
+                StartDate = new DateOnly(year, 5, 1),
+                EndDate = new DateOnly(year, 8, 31)
+            });
+        var duplicateResponse = await _client.SendAsync(duplicateRequest);
+        var duplicateBody = await duplicateResponse.Content.ReadFromJsonAsync<ApiResponse<object>>();
+
+        duplicateResponse.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        duplicateBody!.Code.Should().Be(ErrorCodes.SemesterAlreadyPlanned);
+        duplicateBody.Message.Should().Be($"SP {year} has already been planned. You can edit its dates instead.");
+
+        using var overlapRequest = CreateAuthorizedPostRequest(
+            "/api/subjects/semesters",
+            token,
+            new PlanSemesterRequest
+            {
+                Semester = "FA",
+                Year = year,
+                StartDate = new DateOnly(year, 4, 20),
+                EndDate = new DateOnly(year, 9, 30)
+            });
+        var overlapResponse = await _client.SendAsync(overlapRequest);
+        var overlapBody = await overlapResponse.Content.ReadFromJsonAsync<ApiResponse<object>>();
+
+        overlapResponse.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        overlapBody!.Code.Should().Be(ErrorCodes.SemesterDateOverlap);
+        overlapBody.Message.Should().Contain($"SP {year}");
+        overlapBody.Message.Should().Contain($"{startDate:dd/MM/yyyy} – {endDate:dd/MM/yyyy}");
+
+        var correctedStart = startDate.AddDays(2);
+        var correctedEnd = endDate.AddDays(2);
+        using var updateRequest = new HttpRequestMessage(
+            HttpMethod.Put,
+            $"/api/subjects/semesters/{plannedBody.Data.Id}/dates")
+        {
+            Content = JsonContent.Create(new UpdateSemesterDatesRequest
+            {
+                StartDate = correctedStart,
+                EndDate = correctedEnd,
+                RowVersion = plannedBody.Data.RowVersion,
+                Reason = "Academic calendar correction"
+            })
+        };
+        updateRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        var updateResponse = await _client.SendAsync(updateRequest);
+        var updatedBody = await updateResponse.Content.ReadFromJsonAsync<ApiResponse<SemesterResponse>>();
+
+        updateResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        updatedBody!.Data!.StartDate.Should().Be(correctedStart);
+        updatedBody.Data.EndDate.Should().Be(correctedEnd);
+        updatedBody.Data.RowVersion.Should().NotBe(plannedBody.Data.RowVersion);
+
+        using var summerRequest = CreateAuthorizedPostRequest(
+            "/api/subjects/semesters",
+            token,
+            new PlanSemesterRequest
+            {
+                Semester = "SU",
+                Year = year,
+                StartDate = correctedEnd.AddDays(1),
+                EndDate = new DateOnly(year, 8, 31)
+            });
+        var summerResponse = await _client.SendAsync(summerRequest);
+        summerResponse.StatusCode.Should().Be(HttpStatusCode.Created);
+
+        using var fallRequest = CreateAuthorizedPostRequest(
+            "/api/subjects/semesters",
+            token,
+            new PlanSemesterRequest
+            {
+                Semester = "FA",
+                Year = year,
+                StartDate = new DateOnly(year, 9, 1),
+                EndDate = new DateOnly(year + 1, 1, 15)
+            });
+        var fallResponse = await _client.SendAsync(fallRequest);
+        var fallBody = await fallResponse.Content.ReadFromJsonAsync<ApiResponse<SemesterResponse>>();
+
+        fallResponse.StatusCode.Should().Be(HttpStatusCode.Created);
+        fallBody!.Data!.EndDate.Should().Be(new DateOnly(year + 1, 1, 15));
+
+        context.ChangeTracker.Clear();
+        var auditActions = await context.SemesterAuditLogs.AsNoTracking()
+            .Where(item => item.SemesterId == plannedBody.Data.Id)
+            .Select(item => item.Action)
+            .ToListAsync();
+        auditActions.Should().Contain("SEMESTER_PLANNED");
+        auditActions.Should().Contain("SEMESTER_DATES_UPDATED");
+    }
+
+    [Fact]
+    public async Task PlanSemester_WhenTwoRequestsUseSameSemesterAndYear_CreatesOnlyOne()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var admin = await context.Users
+            .Include(user => user.UserRoles)
+            .ThenInclude(userRole => userRole.Role)
+            .FirstAsync(user => user.UserRoles.Any(userRole => userRole.Role.Name == SystemRoles.Admin));
+        var token = GenerateToken(scope.ServiceProvider, admin, SystemRoles.Admin);
+        var year = DateTime.UtcNow.Year + 1;
+        var payload = new PlanSemesterRequest
+        {
+            Semester = "SU",
+            Year = year,
+            StartDate = new DateOnly(year, 5, 1),
+            EndDate = new DateOnly(year, 8, 31)
+        };
+        using var firstRequest = CreateAuthorizedPostRequest("/api/subjects/semesters", token, payload);
+        using var secondRequest = CreateAuthorizedPostRequest("/api/subjects/semesters", token, payload);
+
+        var responses = await Task.WhenAll(
+            _client.SendAsync(firstRequest),
+            _client.SendAsync(secondRequest));
+
+        responses.Count(response => response.StatusCode == HttpStatusCode.Created).Should().Be(1);
+        responses.Count(response => response.StatusCode == HttpStatusCode.Conflict).Should().Be(1);
+        var conflictResponse = responses.Single(response => response.StatusCode == HttpStatusCode.Conflict);
+        var conflictBody = await conflictResponse.Content.ReadFromJsonAsync<ApiResponse<object>>();
+        conflictBody!.Code.Should().Be(ErrorCodes.SemesterAlreadyPlanned);
+
+        context.ChangeTracker.Clear();
+        (await context.Semesters.AsNoTracking().CountAsync(item =>
+            item.Term == SemesterTerm.Summer && item.Year == year)).Should().Be(1);
+    }
+
+    private static async Task<ClassSeed> CreateClassSeedAsync(AppDbContext context, string suffix)
+    {
+        var admin = await context.Users
+            .Include(user => user.UserRoles)
+            .ThenInclude(userRole => userRole.Role)
+            .FirstAsync(user => user.UserRoles.Any(userRole => userRole.Role.Name == SystemRoles.Admin));
+        var lecturer = await CreateLecturerAsync(context, suffix);
+        var unique = Guid.NewGuid().ToString("N")[..8].ToUpperInvariant();
+        var course = new Course
+        {
+            Code = $"C{unique}",
+            Name = $"Safety Course {unique}",
+            Status = CourseStatus.Active,
+            CreatedBy = admin.Id
+        };
+        var semester = await context.Semesters.FirstAsync(item => item.Status == SemesterStatus.Active);
+        semester.StartDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-30));
+        semester.EndDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(30));
+        var scheduleJson = $"[{{\"dayOfWeek\":1,\"slotNumber\":1,\"room\":\"SH-{unique}\"}}]";
+        var @class = new Class
+        {
+            ClassCode = $"{course.Code}_1",
+            Slug = ClassSlugRules.BuildBaseSlug(semester.Code, course.Code, 1),
+            ClassIndex = 1,
+            CourseId = course.Id,
+            Course = course,
+            SemesterId = semester.Id,
+            Semester = semester,
+            PrimaryLecturerId = lecturer.Id,
+            PrimaryLecturer = lecturer,
+            ScheduleJson = scheduleJson,
+            Status = ClassStatus.Active,
+            CreatedById = admin.Id,
+            CreatedBy = admin.Id
+        };
+
+        context.Courses.Add(course);
+        context.Classes.Add(@class);
+        context.ClassLecturers.Add(new ClassLecturer
+        {
+            ClassId = @class.Id,
+            LecturerId = lecturer.Id,
+            IsPrimary = true,
+            AssignedById = admin.Id
+        });
+        await context.SaveChangesAsync();
+
+        return new ClassSeed(@class.Id, @class.Slug, admin.Id, lecturer.Id, scheduleJson);
+    }
+
+    private static async Task<User> CreateLecturerAsync(AppDbContext context, string suffix)
+    {
+        var lecturerRole = await context.Roles.SingleAsync(role => role.Name == SystemRoles.Lecturer);
+        var email = $"safety-{suffix}-{Guid.NewGuid():N}@example.com";
+        var lecturer = new User
+        {
+            FullName = $"Safety Lecturer {suffix}",
+            Email = email,
+            NormalizedEmail = email.ToLowerInvariant(),
+            PasswordHash = "integration-test-only",
+            Status = UserStatus.Active,
+            IsEmailVerified = true
+        };
+        lecturer.UserRoles.Add(new UserRole
+        {
+            UserId = lecturer.Id,
+            RoleId = lecturerRole.Id,
+            User = lecturer,
+            Role = lecturerRole
+        });
+        context.Users.Add(lecturer);
+        await context.SaveChangesAsync();
+
+        var activeSemesterIds = await context.Semesters
+            .Where(semester => semester.Status == SemesterStatus.Active)
+            .Select(semester => semester.Id)
+            .ToListAsync();
+        context.SemesterStaffAssignments.AddRange(activeSemesterIds.Select(semesterId => new SemesterStaffAssignment
+        {
+            SemesterId = semesterId,
+            UserId = lecturer.Id,
+            Role = SemesterStaffRole.Lecturer,
+            Status = SemesterStaffStatus.Active
+        }));
+        await context.SaveChangesAsync();
+        return lecturer;
+    }
+
+    private static async Task CreateConflictingClassAsync(AppDbContext context, ClassSeed seed)
+    {
+        var targetClass = await context.Classes.AsNoTracking()
+            .SingleAsync(@class => @class.Id == seed.ClassId);
+        var unique = Guid.NewGuid().ToString("N")[..8].ToUpperInvariant();
+        var course = new Course
+        {
+            Code = $"C{unique}",
+            Name = $"Conflict Course {unique}",
+            Status = CourseStatus.Active,
+            CreatedBy = seed.AdminId
+        };
+        var conflictingClass = new Class
+        {
+            ClassCode = $"{course.Code}_1",
+            Slug = UniqueSlug(course.Code, "conflict"),
+            ClassIndex = 1,
+            CourseId = course.Id,
+            Course = course,
+            SemesterId = targetClass.SemesterId,
+            PrimaryLecturerId = seed.LecturerId,
+            ScheduleJson = seed.ScheduleJson,
+            Status = ClassStatus.Active,
+            CreatedById = seed.AdminId,
+            CreatedBy = seed.AdminId
+        };
+        context.Courses.Add(course);
+        context.Classes.Add(conflictingClass);
+        context.ClassLecturers.Add(new ClassLecturer
+        {
+            ClassId = conflictingClass.Id,
+            LecturerId = seed.LecturerId,
+            IsPrimary = true,
+            AssignedById = seed.AdminId
+        });
+        await context.SaveChangesAsync();
+    }
+
+    private static async Task<Guid> CreateSiblingClassAsync(AppDbContext context, ClassSeed seed)
+    {
+        var targetClass = await context.Classes.AsNoTracking()
+            .SingleAsync(@class => @class.Id == seed.ClassId);
+        var sibling = new Class
+        {
+            ClassCode = $"{targetClass.ClassCode}_S{Guid.NewGuid():N}"[..Math.Min(50, targetClass.ClassCode.Length + 10)],
+            Slug = UniqueSlug(targetClass.Slug, "sibling"),
+            ClassIndex = targetClass.ClassIndex + 100,
+            CourseId = targetClass.CourseId,
+            SemesterId = targetClass.SemesterId,
+            PrimaryLecturerId = seed.LecturerId,
+            ScheduleJson = "[{\"dayOfWeek\":5,\"slotNumber\":6,\"room\":\"SH-506\"}]",
+            Status = ClassStatus.Active,
+            CreatedById = seed.AdminId,
+            CreatedBy = seed.AdminId
+        };
+        context.Classes.Add(sibling);
+        context.ClassLecturers.Add(new ClassLecturer
+        {
+            ClassId = sibling.Id,
+            LecturerId = seed.LecturerId,
+            IsPrimary = true,
+            AssignedById = seed.AdminId
+        });
+        await context.SaveChangesAsync();
+        return sibling.Id;
+    }
+
+    private static string GenerateToken(IServiceProvider services, User user, string role) =>
+        services.GetRequiredService<IJwtTokenService>()
+            .GenerateAccessToken(user, [role])
+            .Token;
+
+    private static HttpRequestMessage CreateAuthorizedGetRequest(string url, string token)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Get, url);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        return request;
+    }
+
+    private static HttpRequestMessage CreateAuthorizedPutRequest(string url, string token, object payload)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Put, url)
+        {
+            Content = JsonContent.Create(payload)
+        };
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        return request;
+    }
+
+    private static HttpRequestMessage CreateAuthorizedPostRequest(string url, string token, object payload)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, url)
+        {
+            Content = JsonContent.Create(payload)
+        };
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        return request;
+    }
+
+    private static string UniqueSlug(string prefix, string suffix)
+    {
+        var unique = Guid.NewGuid().ToString("N")[..8].ToLowerInvariant();
+        var slug = ClassSlugRules.NormalizeSegment($"{prefix}-{suffix}-{unique}");
+        return slug.Length <= ClassSlugRules.MaxLength
+            ? slug
+            : slug[..ClassSlugRules.MaxLength].Trim('-');
+    }
+
+    private static byte[] CreateImportWorkbook(string studentCode, string email, string majorCode)
+    {
+        using var workbook = new XLWorkbook();
+        var worksheet = workbook.Worksheets.Add("Students");
+        worksheet.Cell(1, 1).Value = "StudentCode";
+        worksheet.Cell(1, 2).Value = "FullName";
+        worksheet.Cell(1, 3).Value = "Email";
+        worksheet.Cell(1, 4).Value = "MajorCode";
+        worksheet.Cell(2, 1).Value = studentCode;
+        worksheet.Cell(2, 2).Value = "Imported Student";
+        worksheet.Cell(2, 3).Value = email;
+        worksheet.Cell(2, 4).Value = majorCode;
+
+        using var stream = new MemoryStream();
+        workbook.SaveAs(stream);
+        return stream.ToArray();
+    }
+
+    private static byte[] CreateOfficialMajorWorkbook(IEnumerable<(string RollNumber, string Major)> rows)
+    {
+        using var workbook = new XLWorkbook();
+        var worksheet = workbook.Worksheets.Add("Class Roster");
+        worksheet.Cell(1, 1).Value = "RollNumber";
+        worksheet.Cell(1, 2).Value = "Chuyên ngành";
+        var rowNumber = 2;
+        foreach (var (rollNumber, major) in rows)
+        {
+            worksheet.Cell(rowNumber, 1).Value = rollNumber;
+            worksheet.Cell(rowNumber, 2).Value = major;
+            rowNumber++;
+        }
+        using var stream = new MemoryStream();
+        workbook.SaveAs(stream);
+        return stream.ToArray();
+    }
+
+    private static byte[] CreateOfficialMajorWorkbook(string rollNumber, string majorCode, bool duplicateRoll = false)
+    {
+        using var workbook = new XLWorkbook();
+        var worksheet = workbook.Worksheets.Add("Class Roster");
+        worksheet.Cell(1, 1).Value = "RollNumber";
+        worksheet.Cell(1, 2).Value = "Chuyên ngành";
+        worksheet.Cell(1, 3).Value = "GroupName";
+        worksheet.Cell(2, 1).Value = rollNumber;
+        worksheet.Cell(2, 2).Value = majorCode;
+        worksheet.Cell(2, 3).Value = "IGNORED_TEAM";
+        if (duplicateRoll)
+        {
+            worksheet.Cell(3, 1).Value = rollNumber;
+            worksheet.Cell(3, 2).Value = majorCode;
+        }
+        using var stream = new MemoryStream();
+        workbook.SaveAs(stream);
+        return stream.ToArray();
+    }
+
+    private static byte[] CreateSemesterGroupWorkbook(string groupHeader, string rollNumber, string groupName)
+    {
+        using var workbook = new XLWorkbook();
+        var worksheet = workbook.Worksheets.Add("Class Roster");
+        worksheet.Cell(1, 1).Value = "RollNumber";
+        worksheet.Cell(1, 2).Value = groupHeader;
+        worksheet.Cell(2, 1).Value = rollNumber;
+        worksheet.Cell(2, 2).Value = groupName;
+        using var stream = new MemoryStream();
+        workbook.SaveAs(stream);
+        return stream.ToArray();
+    }
+
+    private static MultipartFormDataContent CreateMajorUpload(byte[] workbook)
+    {
+        var content = new MultipartFormDataContent();
+        var file = new ByteArrayContent(workbook);
+        file.Headers.ContentType = new MediaTypeHeaderValue("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        content.Add(file, "file", "official-majors.xlsx");
+        return content;
+    }
+
+    private sealed record ClassSeed(
+        Guid ClassId,
+        string Slug,
+        Guid AdminId,
+        Guid LecturerId,
+        string ScheduleJson);
+
+    private sealed class ThrowWhenEnrollmentIsInsertedInterceptor : SaveChangesInterceptor
+    {
+        public override ValueTask<InterceptionResult<int>> SavingChangesAsync(
+            DbContextEventData eventData,
+            InterceptionResult<int> result,
+            CancellationToken cancellationToken = default)
+        {
+            if (eventData.Context?.ChangeTracker.Entries<ClassStudent>()
+                .Any(entry => entry.State == EntityState.Added) == true)
+            {
+                throw new DbUpdateException("Simulated system failure while persisting an enrollment.");
+            }
+
+            return base.SavingChangesAsync(eventData, result, cancellationToken);
+        }
+    }
+}

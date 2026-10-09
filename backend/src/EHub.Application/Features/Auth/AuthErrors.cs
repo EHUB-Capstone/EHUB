@@ -1,0 +1,114 @@
+using EHub.Shared.Errors;
+
+namespace EHub.Application.Features.Auth;
+
+public static class AuthErrors
+{
+    public static readonly Error InvalidCredentials = new(
+        ErrorCodes.AuthInvalidCredentials,
+        "Invalid email or password.");
+
+    public static readonly Error RegistrationFailed = new(
+        ErrorCodes.AuthRegistrationFailed,
+        "Unable to create account. Please try signing in or resetting your password.");
+
+    public static readonly Error InvalidRole = new(
+        ErrorCodes.AuthInvalidRole,
+        "Role must be Student, Lecturer, or Mentor.");
+
+    public static readonly Error InvalidMajor = new(
+        ErrorCodes.AuthInvalidMajor,
+        "Selected major is invalid.");
+
+    public static readonly Error StudentMajorRequired = new(
+        ErrorCodes.AuthStudentMajorRequired,
+        "Major is required for Student role.");
+
+    public static readonly Error AccountPendingApproval = new(
+        ErrorCodes.AuthAccountPendingApproval,
+        "Your account is pending admin approval.");
+
+    public static readonly Error AccountRejected = new(
+        ErrorCodes.AuthAccountRejected,
+        "Your account registration has been rejected.");
+
+    public static readonly Error UserBlocked = new(
+        ErrorCodes.AuthUserBlocked,
+        "Your account has been blocked.");
+
+    public static readonly Error UserInactive = new(
+        ErrorCodes.AuthUserInactive,
+        "Your account is inactive.");
+
+    public static readonly Error AccountNotRegistered = new(
+        ErrorCodes.AuthAccountNotRegistered,
+        "Account is not registered. Please create an account first.");
+
+    public static readonly Error InvalidGoogleToken = new(
+        ErrorCodes.AuthInvalidGoogleToken,
+        "Invalid Google token.");
+
+    public static readonly Error GoogleEmailNotVerified = new(
+        ErrorCodes.AuthGoogleEmailNotVerified,
+        "Google email is not verified.");
+
+    public static readonly Error RefreshTokenInvalid = new(
+        ErrorCodes.AuthRefreshTokenInvalid,
+        "Refresh token is invalid.");
+
+    public static readonly Error RefreshTokenExpired = new(
+        ErrorCodes.AuthRefreshTokenExpired,
+        "Refresh token has expired.");
+
+    public static readonly Error RefreshTokenRevoked = new(
+        ErrorCodes.AuthRefreshTokenRevoked,
+        "Refresh token has been revoked.");
+
+    public static readonly Error PasswordResetTokenInvalid = new(
+        ErrorCodes.AuthPasswordResetTokenInvalid,
+        "Password reset token is invalid or expired.");
+
+    public static readonly Error CurrentPasswordInvalid = new(
+        ErrorCodes.AuthCurrentPasswordInvalid,
+        "Current password is incorrect.");
+
+    public static readonly Error EmailVerificationRequired = new(
+        ErrorCodes.AuthEmailVerificationRequired,
+        "Verify your email address before signing in.");
+
+    public static readonly Error RegistrationNotFound = new(
+        ErrorCodes.AuthRegistrationNotFound,
+        "Registration is invalid or no longer available.");
+
+    public static readonly Error VerificationCodeInvalid = new(
+        ErrorCodes.AuthVerificationCodeInvalid,
+        "The verification code is invalid.");
+
+    public static readonly Error VerificationCodeExpired = new(
+        ErrorCodes.AuthVerificationCodeExpired,
+        "The verification code has expired. Request a new code.");
+
+    public static readonly Error VerificationAttemptsExceeded = new(
+        ErrorCodes.AuthVerificationAttemptsExceeded,
+        "Too many invalid verification attempts. Start a new registration.");
+
+    public static readonly Error VerificationResendTooSoon = new(
+        ErrorCodes.AuthVerificationResendTooSoon,
+        "Please wait before requesting another verification code.");
+
+    public static readonly Error VerificationRateLimited = new(
+        ErrorCodes.AuthVerificationRateLimited,
+        "The verification code resend limit has been reached. Try again later.");
+
+    public static readonly Error EmailDeliveryFailed = new(
+        ErrorCodes.AuthEmailDeliveryFailed,
+        "The verification email could not be delivered. Please try again.");
+
+    public static readonly Error EmailTemporarilyUnavailable = new(
+        ErrorCodes.AuthEmailTemporarilyUnavailable,
+        "Verification emails are temporarily unavailable. Please try again later.");
+
+    public static readonly Error RegistrationAlreadyCompleted = new(
+        ErrorCodes.AuthRegistrationAlreadyCompleted,
+        "This registration has already been completed.");
+}

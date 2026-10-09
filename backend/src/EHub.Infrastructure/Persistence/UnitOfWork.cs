@@ -1,0 +1,111 @@
+using System;
+using System.Data;
+using System.Threading;
+using System.Threading.Tasks;
+using EHub.Application.Common.Exceptions;
+using Microsoft.EntityFrameworkCore;
+using EHub.Application.Common.Interfaces.Persistence;
+using Npgsql;
+
+namespace EHub.Infrastructure.Persistence;
+
+public class UnitOfWork : IUnitOfWork
+{
+    private readonly AppDbContext _context;
+
+    public UnitOfWork(AppDbContext context)
+    {
+        _context = context;
+    }
+
+    public async Task<int> SaveChangesAsync(
+        CancellationToken cancellationToken = default)
+    {
+        return await _context.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task ExecuteInTransactionAsync(
+        Func<CancellationToken, Task> action,
+        CancellationToken cancellationToken = default)
+    {
+        using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
+        try
+        {
+            await action(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            _context.SignalCommittedOutbox();
+        }
+        catch
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            _context.DiscardUncommittedOutboxSignal();
+            throw;
+        }
+    }
+
+    public async Task<TResult> ExecuteInTransactionAsync<TResult>(
+        Func<CancellationToken, Task<TResult>> action,
+        CancellationToken cancellationToken = default)
+    {
+        using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
+        try
+        {
+            var result = await action(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            _context.SignalCommittedOutbox();
+            return result;
+        }
+        catch
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            _context.DiscardUncommittedOutboxSignal();
+            throw;
+        }
+    }
+
+    public async Task<TResult> ExecuteInSerializableTransactionAsync<TResult>(
+        Func<CancellationToken, Task<TResult>> action,
+        CancellationToken cancellationToken = default)
+    {
+        await using var transaction = await _context.Database.BeginTransactionAsync(
+            IsolationLevel.Serializable,
+            cancellationToken);
+        try
+        {
+            var result = await action(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            _context.SignalCommittedOutbox();
+            return result;
+        }
+        catch (Exception exception) when (ContainsTransactionConflict(exception))
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            _context.DiscardUncommittedOutboxSignal();
+            throw new SerializableTransactionConflictException(
+                "The serializable transaction conflicted with another concurrent transaction.",
+                exception);
+        }
+        catch
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            _context.DiscardUncommittedOutboxSignal();
+            throw;
+        }
+    }
+
+    private static bool ContainsTransactionConflict(Exception exception)
+    {
+        for (var current = exception; current != null; current = current.InnerException)
+        {
+            if (current is DbUpdateConcurrencyException)
+                return true;
+
+            if (current is PostgresException postgresException &&
+                (postgresException.SqlState == PostgresErrorCodes.SerializationFailure ||
+                 postgresException.SqlState == PostgresErrorCodes.DeadlockDetected))
+                return true;
+        }
+
+        return false;
+    }
+}

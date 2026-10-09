@@ -1,0 +1,1038 @@
+using System;
+using System.Linq;
+using System.Net;
+using System.Net.Http;
+using System.Net.Http.Headers;
+using System.Net.Http.Json;
+using System.Text.Json;
+using System.Threading.Tasks;
+using Xunit;
+using FluentAssertions;
+using EHub.Application.Common.Interfaces.Services;
+using EHub.Contracts.Auth;
+using EHub.Contracts.Common;
+using EHub.Contracts.Teams;
+using EHub.IntegrationTests.Common;
+using EHub.Infrastructure.Persistence;
+using EHub.Shared.Constants;
+using EHub.Shared.Errors;
+using EHub.Domain.Entities;
+using EHub.Domain.Enums;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace EHub.IntegrationTests.Auth;
+
+[Collection("Sequential")]
+public class AuthIntegrationTests
+{
+    private readonly CustomWebApplicationFactory _factory;
+    private readonly HttpClient _client;
+
+    public AuthIntegrationTests(CustomWebApplicationFactory factory)
+    {
+        _factory = factory;
+        _client = factory.CreateClient();
+    }
+
+    [Fact]
+    public async Task GoogleLogin_Should_CreateStudent_AndPersistSelectedMajor()
+    {
+        var email = $"google-{Guid.NewGuid()}@example.com";
+        var login = await _client.PostAsJsonAsync("/api/auth/google", new GoogleLoginRequest { IdToken = email });
+        login.StatusCode.Should().Be(HttpStatusCode.OK);
+        var session = (await login.Content.ReadFromJsonAsync<ApiResponse<AuthResponse>>())!.Data!;
+        session.User.Roles.Should().ContainSingle().Which.Should().Be(SystemRoles.Student);
+        session.User.MajorCode.Should().BeNull();
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", session.AccessToken);
+        var enrollmentIds = await SeedMajorUpdateEnrollmentsAsync(session.User.Id, false);
+        var classDetail = await _client.GetFromJsonAsync<ApiResponse<StudentClassDetailResponse>>(
+            $"/api/classes/my-class-detail/{enrollmentIds.ActiveClassId}");
+        classDetail!.Data!.Students.Should().ContainSingle();
+        classDetail.Data.Students.Single().Should().Match<StudentClassMemberDto>(member =>
+            member.StudentId == enrollmentIds.StudentId &&
+            member.ProfileMajorCode == null &&
+            member.EnrollmentMajorCode == MajorCodes.BIT_GD &&
+            member.MajorVerificationStatus == nameof(EnrollmentMajorVerificationStatus.Matched) &&
+            member.CanEditMajor &&
+            !member.IsMajorLocked);
+
+        using var form = new MultipartFormDataContent();
+        form.Add(new StringContent("Google Student"), "fullName");
+        form.Add(new StringContent("BIT_SE"), "major");
+        var updated = await _client.PutAsync("/api/auth/update-profile", form);
+        updated.StatusCode.Should().Be(HttpStatusCode.OK);
+        var me = await _client.GetFromJsonAsync<ApiResponse<CurrentUserResponse>>("/api/auth/me");
+        me!.Data!.MajorCode.Should().Be("BIT_SE");
+
+        using (var verificationScope = _factory.Services.CreateScope())
+        {
+            var context = verificationScope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var activeEnrollment = await context.ClassStudents.AsNoTracking()
+                .SingleAsync(item => item.ClassId == enrollmentIds.ActiveClassId && item.StudentId == enrollmentIds.StudentId);
+            var completedEnrollment = await context.ClassStudents.AsNoTracking()
+                .SingleAsync(item => item.ClassId == enrollmentIds.CompletedClassId && item.StudentId == enrollmentIds.StudentId);
+            activeEnrollment.MajorCodeAtEnrollment.Should().Be("BIT_SE");
+            activeEnrollment.MajorVerificationStatus.Should().Be(EnrollmentMajorVerificationStatus.Unverified);
+            completedEnrollment.MajorCodeAtEnrollment.Should().Be("BIT_GD");
+            (await context.OutboxMessages.AnyAsync(message =>
+                message.Type == "Class.MajorUpdated.v1" && message.AggregateId == enrollmentIds.ActiveClassId))
+                .Should().BeTrue();
+        }
+
+        var unverifiedClassDetail = await _client.GetFromJsonAsync<ApiResponse<StudentClassDetailResponse>>(
+            $"/api/classes/my-class-detail/{enrollmentIds.ActiveClassId}");
+        unverifiedClassDetail!.Data!.Students.Single().MajorVerificationStatus.Should().Be(
+            nameof(EnrollmentMajorVerificationStatus.Unverified));
+
+        using (var verificationScope = _factory.Services.CreateScope())
+        {
+            var context = verificationScope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var enrollmentToVerify = await context.ClassStudents.SingleAsync(item =>
+                item.ClassId == enrollmentIds.ActiveClassId && item.StudentId == enrollmentIds.StudentId);
+            enrollmentToVerify.MajorVerificationStatus = EnrollmentMajorVerificationStatus.Matched;
+            await context.SaveChangesAsync();
+        }
+
+        var verifiedClassDetail = await _client.GetFromJsonAsync<ApiResponse<StudentClassDetailResponse>>(
+            $"/api/classes/my-class-detail/{enrollmentIds.ActiveClassId}");
+        verifiedClassDetail!.Data!.Students.Single().MajorVerificationStatus.Should().Be(
+            nameof(EnrollmentMajorVerificationStatus.Matched));
+
+        var repeated = await _client.PostAsJsonAsync("/api/auth/google", new GoogleLoginRequest { IdToken = email });
+        repeated.StatusCode.Should().Be(HttpStatusCode.OK);
+        var secondSession = (await repeated.Content.ReadFromJsonAsync<ApiResponse<AuthResponse>>())!.Data!;
+        secondSession.User.Id.Should().Be(session.User.Id);
+        secondSession.User.MajorCode.Should().Be("BIT_SE");
+    }
+
+    [Fact]
+    public async Task UpdateMajor_Should_ReturnConflict_AndKeepDataUnchanged_WhenAnyActiveClassLocksMajors()
+    {
+        var email = $"google-locked-{Guid.NewGuid()}@example.com";
+        var login = await _client.PostAsJsonAsync("/api/auth/google", new GoogleLoginRequest { IdToken = email });
+        var session = (await login.Content.ReadFromJsonAsync<ApiResponse<AuthResponse>>())!.Data!;
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", session.AccessToken);
+        var enrollmentIds = await SeedMajorUpdateEnrollmentsAsync(session.User.Id, true);
+        var classDetail = await _client.GetFromJsonAsync<ApiResponse<StudentClassDetailResponse>>(
+            $"/api/classes/my-class-detail/{enrollmentIds.ActiveClassId}");
+        classDetail!.Data!.Students.Single().Should().Match<StudentClassMemberDto>(member =>
+            !member.CanEditMajor && member.IsMajorLocked);
+
+        var response = await _client.PutAsJsonAsync(
+            "/api/auth/update-major",
+            new UpdateOwnMajorRequest { MajorCode = "BIT_SE" });
+
+        response.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        var body = await response.Content.ReadFromJsonAsync<ApiResponse<object>>();
+        body!.Code.Should().Be(ErrorCodes.ClassEnrollmentMajorLocked);
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        (await context.Students.AsNoTracking().SingleAsync(item => item.Id == enrollmentIds.StudentId))
+            .MajorCode.Should().BeNull();
+        (await context.ClassStudents.AsNoTracking().SingleAsync(item =>
+            item.ClassId == enrollmentIds.ActiveClassId && item.StudentId == enrollmentIds.StudentId))
+            .MajorCodeAtEnrollment.Should().Be("BIT_GD");
+    }
+
+    [Fact]
+    public async Task UpdateMajor_Should_ReturnConflict_AndKeepDataUnchanged_WhenTeamWouldLoseBitMember()
+    {
+        var email = $"google-team-{Guid.NewGuid()}@example.com";
+        var login = await _client.PostAsJsonAsync("/api/auth/google", new GoogleLoginRequest { IdToken = email });
+        var session = (await login.Content.ReadFromJsonAsync<ApiResponse<AuthResponse>>())!.Data!;
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", session.AccessToken);
+        var enrollmentIds = await SeedMajorUpdateEnrollmentsAsync(session.User.Id, false);
+        await SeedTeamWithCurrentStudentAsOnlyBitMemberAsync(enrollmentIds.StudentId, enrollmentIds.ActiveClassId);
+
+        var response = await _client.PutAsJsonAsync(
+            "/api/auth/update-major",
+            new UpdateOwnMajorRequest { MajorCode = MajorCodes.BBA_MKT });
+
+        response.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        var body = await response.Content.ReadFromJsonAsync<ApiResponse<object>>();
+        body!.Code.Should().Be(ErrorCodes.TeamMajorCompositionInvalid);
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        (await context.Students.AsNoTracking().SingleAsync(item => item.Id == enrollmentIds.StudentId))
+            .MajorCode.Should().BeNull();
+        (await context.ClassStudents.AsNoTracking().SingleAsync(item =>
+            item.ClassId == enrollmentIds.ActiveClassId && item.StudentId == enrollmentIds.StudentId))
+            .MajorCodeAtEnrollment.Should().Be(MajorCodes.BIT_GD);
+    }
+
+    [Fact]
+    public async Task UpdateMajor_Should_ReturnUnauthorized_WhenTokenIsMissing()
+    {
+        _client.DefaultRequestHeaders.Authorization = null;
+
+        var response = await _client.PutAsJsonAsync(
+            "/api/auth/update-major",
+            new UpdateOwnMajorRequest { MajorCode = "BIT_SE" });
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task StudentClassDetail_Should_MarkClassmatesReservedByPendingTeamInvitations()
+    {
+        var email = $"google-reservation-{Guid.NewGuid()}@example.com";
+        var login = await _client.PostAsJsonAsync("/api/auth/google", new GoogleLoginRequest { IdToken = email });
+        var session = (await login.Content.ReadFromJsonAsync<ApiResponse<AuthResponse>>())!.Data!;
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", session.AccessToken);
+        var enrollmentIds = await SeedMajorUpdateEnrollmentsAsync(session.User.Id, false);
+
+        Guid reservedStudentId;
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var creatorEnrollment = await context.ClassStudents.AsNoTracking().SingleAsync(item =>
+                item.ClassId == enrollmentIds.ActiveClassId && item.StudentId == enrollmentIds.StudentId);
+            var now = DateTime.UtcNow;
+            var suffix = Guid.NewGuid().ToString("N")[..8].ToUpperInvariant();
+            var reservedStudent = new Student
+            {
+                RollNumber = $"RS{suffix}",
+                NormalizedRollNumber = $"RS{suffix}",
+                FullName = "Reserved Classmate",
+                Email = $"reserved-{suffix}@example.com".ToLowerInvariant(),
+                MajorCode = MajorCodes.BBA_MKT,
+                Status = StudentStatus.Active,
+                CreatedAt = now
+            };
+            var reservedEnrollment = new ClassStudent
+            {
+                ClassId = enrollmentIds.ActiveClassId,
+                StudentId = reservedStudent.Id,
+                Student = reservedStudent,
+                SemesterId = creatorEnrollment.SemesterId,
+                CourseId = creatorEnrollment.CourseId,
+                EnrollmentStatus = EnrollmentStatus.Active,
+                CountsTowardCourseSemesterLimit = true,
+                MajorCodeAtEnrollment = MajorCodes.BBA_MKT,
+                CreatedAt = now,
+                UpdatedAt = now
+            };
+            var formation = new TeamFormation
+            {
+                ClassId = enrollmentIds.ActiveClassId,
+                CreatorStudentId = enrollmentIds.StudentId,
+                ProposedLeaderStudentId = enrollmentIds.StudentId,
+                TeamName = $"Reservation {suffix}",
+                NormalizedTeamName = $"reservation {suffix}".ToLowerInvariant(),
+                Status = TeamFormationStatus.Pending,
+                CreatedAt = now,
+                CreatedBy = session.User.Id
+            };
+            formation.Invitations.Add(new TeamFormationInvitation
+            {
+                FormationId = formation.Id,
+                Formation = formation,
+                ClassId = enrollmentIds.ActiveClassId,
+                StudentId = enrollmentIds.StudentId,
+                Status = TeamInvitationStatus.Accepted,
+                RespondedAtUtc = now
+            });
+            formation.Invitations.Add(new TeamFormationInvitation
+            {
+                FormationId = formation.Id,
+                Formation = formation,
+                ClassId = enrollmentIds.ActiveClassId,
+                StudentId = reservedStudent.Id,
+                ClassStudent = reservedEnrollment,
+                Status = TeamInvitationStatus.Pending
+            });
+            reservedStudentId = reservedStudent.Id;
+            context.Students.Add(reservedStudent);
+            context.ClassStudents.Add(reservedEnrollment);
+            context.TeamFormations.Add(formation);
+            await context.SaveChangesAsync();
+        }
+
+        var classDetail = await _client.GetFromJsonAsync<ApiResponse<StudentClassDetailResponse>>(
+            $"/api/classes/my-class-detail/{enrollmentIds.ActiveClassId}");
+
+        var creator = classDetail!.Data!.Students.Single(member => member.StudentId == enrollmentIds.StudentId);
+        creator.HasPendingTeamInvitation.Should().BeTrue();
+        creator.IsPendingTeamFormationMember.Should().BeTrue();
+        creator.PendingTeamInvitationStatus.Should().Be("Accepted");
+
+        var reservedClassmate = classDetail.Data.Students.Single(member => member.StudentId == reservedStudentId);
+        reservedClassmate.HasPendingTeamInvitation.Should().BeTrue();
+        reservedClassmate.IsPendingTeamFormationMember.Should().BeTrue();
+        reservedClassmate.PendingTeamName.Should().StartWith("Reservation ");
+        reservedClassmate.PendingTeamInvitationStatus.Should().Be("Pending");
+
+        var outsiderEmail = $"google-reservation-outsider-{Guid.NewGuid()}@example.com";
+        var outsiderLogin = await _client.PostAsJsonAsync("/api/auth/google", new GoogleLoginRequest { IdToken = outsiderEmail });
+        var outsiderSession = (await outsiderLogin.Content.ReadFromJsonAsync<ApiResponse<AuthResponse>>())!.Data!;
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var outsider = await context.Students.SingleAsync(item => item.UserId == outsiderSession.User.Id);
+            var referenceEnrollment = await context.ClassStudents.AsNoTracking().SingleAsync(item =>
+                item.ClassId == enrollmentIds.ActiveClassId && item.StudentId == enrollmentIds.StudentId);
+            var now = DateTime.UtcNow;
+            context.ClassStudents.Add(new ClassStudent
+            {
+                ClassId = enrollmentIds.ActiveClassId,
+                StudentId = outsider.Id,
+                SemesterId = referenceEnrollment.SemesterId,
+                CourseId = referenceEnrollment.CourseId,
+                EnrollmentStatus = EnrollmentStatus.Active,
+                CountsTowardCourseSemesterLimit = true,
+                MajorCodeAtEnrollment = MajorCodes.BIT_SE,
+                CreatedAt = now,
+                UpdatedAt = now
+            });
+            await context.SaveChangesAsync();
+        }
+
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", outsiderSession.AccessToken);
+        var outsiderClassDetail = await _client.GetFromJsonAsync<ApiResponse<StudentClassDetailResponse>>(
+            $"/api/classes/my-class-detail/{enrollmentIds.ActiveClassId}");
+        var reservedFromOutside = outsiderClassDetail!.Data!.Students.Single(member => member.StudentId == reservedStudentId);
+        reservedFromOutside.HasPendingTeamInvitation.Should().BeTrue();
+        reservedFromOutside.IsPendingTeamFormationMember.Should().BeFalse();
+        reservedFromOutside.PendingTeamFormationId.Should().BeNull();
+        reservedFromOutside.PendingTeamName.Should().BeNull();
+        reservedFromOutside.PendingTeamInvitationStatus.Should().BeNull();
+    }
+
+    private async Task<(Guid StudentId, Guid ActiveClassId, Guid CompletedClassId)> SeedMajorUpdateEnrollmentsAsync(
+        Guid userId,
+        bool lockActiveClass)
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var student = await context.Students.SingleAsync(item => item.UserId == userId);
+        var semester = await context.Semesters.OrderBy(item => item.CreatedAt).FirstAsync();
+        var activeCourse = await context.Courses.OrderBy(item => item.CreatedAt).FirstAsync();
+        var nextClassIndex = (await context.Classes
+            .Where(item => item.SemesterId == semester.Id && item.CourseId == activeCourse.Id)
+            .MaxAsync(item => (int?)item.ClassIndex) ?? 0) + 1;
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+        var now = DateTime.UtcNow;
+        var completedCourse = new Course
+        {
+            Code = $"H{suffix}",
+            Name = $"Historical course {suffix}",
+            Status = CourseStatus.Active,
+            CreatedAt = now
+        };
+        var activeClass = new EHub.Domain.Entities.Class
+        {
+            ClassCode = $"AUTH-{suffix}",
+            Slug = $"auth-{suffix}",
+            ClassIndex = nextClassIndex,
+            SemesterId = semester.Id,
+            CourseId = activeCourse.Id,
+            IsEnrollmentMajorLocked = lockActiveClass,
+            Status = ClassStatus.Draft,
+            CreatedAt = now
+        };
+        var completedClass = new EHub.Domain.Entities.Class
+        {
+            ClassCode = $"HIST-{suffix}",
+            Slug = $"hist-{suffix}",
+            ClassIndex = 1,
+            SemesterId = semester.Id,
+            CourseId = completedCourse.Id,
+            Status = ClassStatus.Completed,
+            CompletedAtUtc = now,
+            CompletionReason = "Integration test history",
+            CreatedAt = now
+        };
+        context.Courses.Add(completedCourse);
+        context.Classes.AddRange(activeClass, completedClass);
+        context.ClassStudents.AddRange(
+            new ClassStudent
+            {
+                ClassId = activeClass.Id,
+                StudentId = student.Id,
+                SemesterId = semester.Id,
+                CourseId = activeCourse.Id,
+                EnrollmentStatus = EnrollmentStatus.Active,
+                CountsTowardCourseSemesterLimit = true,
+                MajorCodeAtEnrollment = "BIT_GD",
+                MajorVerificationStatus = EnrollmentMajorVerificationStatus.Matched,
+                CreatedAt = now,
+                UpdatedAt = now
+            },
+            new ClassStudent
+            {
+                ClassId = completedClass.Id,
+                StudentId = student.Id,
+                SemesterId = semester.Id,
+                CourseId = completedCourse.Id,
+                EnrollmentStatus = EnrollmentStatus.Completed,
+                CountsTowardCourseSemesterLimit = true,
+                CompletedAtUtc = now,
+                MajorCodeAtEnrollment = "BIT_GD",
+                MajorVerificationStatus = EnrollmentMajorVerificationStatus.Matched,
+                CreatedAt = now,
+                UpdatedAt = now
+            });
+        await context.SaveChangesAsync();
+        return (student.Id, activeClass.Id, completedClass.Id);
+    }
+
+    private async Task SeedTeamWithCurrentStudentAsOnlyBitMemberAsync(Guid currentStudentId, Guid classId)
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var enrollment = await context.ClassStudents.AsNoTracking()
+            .SingleAsync(item => item.ClassId == classId && item.StudentId == currentStudentId);
+        var now = DateTime.UtcNow;
+        var suffix = Guid.NewGuid().ToString("N")[..8].ToUpperInvariant();
+        var businessStudents = Enumerable.Range(1, 3).Select(index => new Student
+        {
+            RollNumber = $"BA{suffix}{index}",
+            NormalizedRollNumber = $"BA{suffix}{index}",
+            FullName = $"Business Student {index}",
+            Email = $"business-{suffix}-{index}@example.com".ToLowerInvariant(),
+            MajorCode = MajorCodes.BBA_MKT,
+            Status = StudentStatus.Active
+        }).ToArray();
+        var team = new Team
+        {
+            ClassId = classId,
+            TeamCode = $"T-{suffix}",
+            TeamName = $"Major Team {suffix}",
+            Status = TeamStatus.Active,
+            CreatedAt = now
+        };
+        context.Students.AddRange(businessStudents);
+        context.Teams.Add(team);
+        foreach (var student in businessStudents)
+        {
+            context.ClassStudents.Add(new ClassStudent
+            {
+                ClassId = classId,
+                StudentId = student.Id,
+                SemesterId = enrollment.SemesterId,
+                CourseId = enrollment.CourseId,
+                EnrollmentStatus = EnrollmentStatus.Active,
+                CountsTowardCourseSemesterLimit = true,
+                MajorCodeAtEnrollment = MajorCodes.BBA_MKT,
+                CreatedAt = now,
+                UpdatedAt = now
+            });
+            context.TeamMembers.Add(new TeamMember
+            {
+                TeamId = team.Id,
+                ClassId = classId,
+                StudentId = student.Id,
+                RoleInTeam = TeamMemberRole.Member,
+                CountsTowardActiveTeam = true,
+                JoinedAt = now
+            });
+        }
+        context.TeamMembers.Add(new TeamMember
+        {
+            TeamId = team.Id,
+            ClassId = classId,
+            StudentId = currentStudentId,
+            RoleInTeam = TeamMemberRole.Leader,
+            CountsTowardActiveTeam = true,
+            JoinedAt = now
+        });
+        await context.SaveChangesAsync();
+    }
+
+    private string ExtractRefreshToken(HttpResponseMessage response)
+    {
+        if (response.Headers.TryGetValues("Set-Cookie", out var values))
+        {
+            var cookie = values.FirstOrDefault(v => v.StartsWith("ehub_refresh_token="));
+            if (cookie != null)
+            {
+                var parts = cookie.Split(';');
+                var firstPart = parts[0];
+                return firstPart.Substring("ehub_refresh_token=".Length);
+            }
+        }
+        return string.Empty;
+    }
+
+    private async Task<(HttpResponseMessage Response, RegisterResponse Body)> RegisterAndVerifyAsync(
+        RegisterRequest request)
+    {
+        FakeEmailService.LastRegistrationOtp = null;
+        FakeEmailService.LastRegistrationEmail = null;
+
+        var registerResponse = await _client.PostAsJsonAsync("/api/auth/register", request);
+        registerResponse.StatusCode.Should().Be(HttpStatusCode.Accepted);
+        var registerBody = await registerResponse.Content
+            .ReadFromJsonAsync<ApiResponse<RegisterResponse>>();
+        registerBody.Should().NotBeNull();
+        registerBody!.Data.Should().NotBeNull();
+        registerBody.Data!.RequiresEmailVerification.Should().BeTrue();
+        registerBody.Data.RegistrationId.Should().NotBeNull();
+        FakeEmailService.LastRegistrationOtp.Should().MatchRegex("^[0-9]{6}$");
+        FakeEmailService.LastRegistrationEmail.Should().Be(request.Email.ToLowerInvariant());
+
+        var verifyResponse = await _client.PostAsJsonAsync(
+            "/api/auth/register/verify-otp",
+            new VerifyRegistrationOtpRequest
+            {
+                RegistrationId = registerBody.Data.RegistrationId!.Value,
+                Otp = FakeEmailService.LastRegistrationOtp!
+            });
+        var verifyBody = await verifyResponse.Content
+            .ReadFromJsonAsync<ApiResponse<RegisterResponse>>();
+        verifyBody.Should().NotBeNull();
+        verifyBody!.Data.Should().NotBeNull();
+
+        return (verifyResponse, verifyBody.Data!);
+    }
+
+    [Fact]
+    public async Task RegisterAndVerify_Should_Create_Active_Student_When_Request_Is_Valid()
+    {
+        // Arrange
+        var uniqueEmail = $"student-{Guid.NewGuid()}@example.com";
+        var request = new RegisterRequest
+        {
+            FullName = "Student One",
+            Email = uniqueEmail,
+            Password = "Password123",
+            ConfirmPassword = "Password123",
+            Role = "Student",
+            MajorCode = "BIT_SE"
+        };
+
+        // Act
+        var (response, body) = await RegisterAndVerifyAsync(request);
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        body.User.Should().NotBeNull();
+        body.User!.Email.Should().Be(uniqueEmail);
+        body.RequiresEmailVerification.Should().BeFalse();
+        body.RequiresApproval.Should().BeFalse();
+
+        // Should also set the refresh token cookie
+        var refreshToken = ExtractRefreshToken(response);
+        refreshToken.Should().NotBeNullOrEmpty();
+    }
+
+    [Fact]
+    public async Task Register_Should_Return_Generic_400_When_Email_Already_Exists()
+    {
+        // Arrange
+        var email = $"student-{Guid.NewGuid()}@example.com";
+        var request = new RegisterRequest
+        {
+            FullName = "Student One",
+            Email = email,
+            Password = "Password123",
+            ConfirmPassword = "Password123",
+            Role = "Student",
+            MajorCode = "BIT_SE"
+        };
+
+        // Create first user
+        await RegisterAndVerifyAsync(request);
+
+        // Act - Attempt to register same email
+        var response = await _client.PostAsJsonAsync("/api/auth/register", request);
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        var body = await response.Content.ReadFromJsonAsync<ApiResponse<object>>();
+        body.Should().NotBeNull();
+        body!.Success.Should().BeFalse();
+        body.Code.Should().Be("AUTH_REGISTRATION_FAILED");
+        body.Message.Should().Be("Unable to create account. Please try signing in or resetting your password.");
+        body.Message.Should().NotContain(email);
+    }
+
+    [Fact]
+    public async Task Register_Should_Return_400_Bad_Request_When_Student_Missing_Major()
+    {
+        // Arrange
+        var request = new RegisterRequest
+        {
+            FullName = "Student Missing Major",
+            Email = $"student-{Guid.NewGuid()}@example.com",
+            Password = "Password123",
+            ConfirmPassword = "Password123",
+            Role = "Student",
+            MajorCode = null // Missing major
+        };
+
+        // Act
+        var response = await _client.PostAsJsonAsync("/api/auth/register", request);
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task Register_Should_Not_Create_LoginAccount_BeforeOtpVerification()
+    {
+        var email = $"unverified-{Guid.NewGuid()}@example.com";
+        var response = await _client.PostAsJsonAsync("/api/auth/register", new RegisterRequest
+        {
+            FullName = "Unverified Student",
+            Email = email,
+            Password = "Password123",
+            ConfirmPassword = "Password123",
+            Role = "Student",
+            MajorCode = "BIT_SE"
+        });
+
+        response.StatusCode.Should().Be(HttpStatusCode.Accepted);
+        ExtractRefreshToken(response).Should().BeEmpty();
+
+        var loginResponse = await _client.PostAsJsonAsync(
+            "/api/auth/login",
+            new EmailPasswordLoginRequest { Email = email, Password = "Password123" });
+        loginResponse.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task VerifyOtp_Should_RejectWrongCode_ThenAcceptDeliveredCode()
+    {
+        FakeEmailService.LastRegistrationOtp = null;
+        var registerResponse = await _client.PostAsJsonAsync("/api/auth/register", new RegisterRequest
+        {
+            FullName = "Otp Attempt Student",
+            Email = $"otp-{Guid.NewGuid()}@example.com",
+            Password = "Password123",
+            ConfirmPassword = "Password123",
+            Role = "Student",
+            MajorCode = "BIT_SE"
+        });
+        var registerBody = await registerResponse.Content
+            .ReadFromJsonAsync<ApiResponse<RegisterResponse>>();
+        var registrationId = registerBody!.Data!.RegistrationId!.Value;
+        var deliveredOtp = FakeEmailService.LastRegistrationOtp!;
+        var wrongOtp = deliveredOtp == "000000" ? "000001" : "000000";
+
+        var wrongResponse = await _client.PostAsJsonAsync(
+            "/api/auth/register/verify-otp",
+            new VerifyRegistrationOtpRequest { RegistrationId = registrationId, Otp = wrongOtp });
+        wrongResponse.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        var wrongBody = await wrongResponse.Content.ReadFromJsonAsync<ApiResponse<object>>();
+        wrongBody!.Code.Should().Be("AUTH_VERIFICATION_CODE_INVALID");
+
+        var correctResponse = await _client.PostAsJsonAsync(
+            "/api/auth/register/verify-otp",
+            new VerifyRegistrationOtpRequest { RegistrationId = registrationId, Otp = deliveredOtp });
+        correctResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        ExtractRefreshToken(correctResponse).Should().NotBeEmpty();
+    }
+
+    [Fact]
+    public async Task RegisterAndVerify_Should_Create_PendingApproval_Lecturer_When_Valid()
+    {
+        // Arrange
+        var email = $"lecturer-{Guid.NewGuid()}@example.com";
+        var request = new RegisterRequest
+        {
+            FullName = "Lecturer One",
+            Email = email,
+            Password = "Password123",
+            ConfirmPassword = "Password123",
+            Role = "Lecturer",
+            MajorCode = null
+        };
+
+        // Act
+        var (response, body) = await RegisterAndVerifyAsync(request);
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        body.RequiresEmailVerification.Should().BeFalse();
+        body.RequiresApproval.Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData("Lecturer")]
+    [InlineData("Mentor")]
+    public async Task RegisterAndVerify_Staff_Should_Notify_Admin_With_Approval_Link(string role)
+    {
+        var fullName = $"{role} Approval Applicant";
+        var (_, body) = await RegisterAndVerifyAsync(new RegisterRequest
+        {
+            FullName = fullName,
+            Email = $"{role.ToLowerInvariant()}-notification-{Guid.NewGuid()}@example.com",
+            Password = "Password123",
+            ConfirmPassword = "Password123",
+            Role = role,
+            MajorCode = null
+        });
+
+        body.User.Should().NotBeNull();
+        body.RequiresApproval.Should().BeTrue();
+
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var outboxMessage = await context.OutboxMessages
+            .SingleAsync(message =>
+                message.Type == "AccountApproval.Requested.v1" &&
+                message.AggregateId == body.User!.Id);
+
+        using (var payload = JsonDocument.Parse(outboxMessage.PayloadJson))
+        {
+            var data = payload.RootElement.GetProperty("data");
+            data.GetProperty("userId").GetGuid().Should().Be(body.User.Id);
+            data.GetProperty("fullName").GetString().Should().Be(fullName);
+            data.GetProperty("role").GetString().Should().Be(role);
+        }
+
+        var dispatcher = scope.ServiceProvider.GetRequiredService<IOutboxEventDispatcher>();
+        await dispatcher.DispatchAsync(outboxMessage);
+        await dispatcher.DispatchAsync(outboxMessage);
+
+        var administratorIds = await context.Users
+            .Where(user =>
+                user.Status == EHub.Domain.Enums.UserStatus.Active &&
+                user.UserRoles.Any(userRole => userRole.Role.Name == SystemRoles.Admin))
+            .Select(user => user.Id)
+            .ToArrayAsync();
+        administratorIds.Should().NotBeEmpty();
+
+        var notifications = await context.Notifications
+            .Where(notification => notification.SourceEventId == outboxMessage.EventId)
+            .ToArrayAsync();
+        notifications.Select(notification => notification.RecipientUserId)
+            .Should().BeEquivalentTo(administratorIds);
+        notifications.Should().OnlyContain(notification =>
+            notification.Type == EHub.Domain.Enums.NotificationType.AccountApprovalRequested &&
+            notification.Link == "/admin/account-approvals" &&
+            !notification.IsRead);
+    }
+
+    [Fact]
+    public async Task Login_Should_Succeed_When_Credentials_Are_Correct()
+    {
+        // Arrange
+        var email = $"student-{Guid.NewGuid()}@example.com";
+        var registerRequest = new RegisterRequest
+        {
+            FullName = "Student Login",
+            Email = email,
+            Password = "Password123",
+            ConfirmPassword = "Password123",
+            Role = "Student",
+            MajorCode = "BIT_SE"
+        };
+        await RegisterAndVerifyAsync(registerRequest);
+
+        var loginRequest = new EmailPasswordLoginRequest
+        {
+            Email = email,
+            Password = "Password123"
+        };
+
+        // Act
+        var response = await _client.PostAsJsonAsync("/api/auth/login", loginRequest);
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<ApiResponse<AuthResponse>>();
+        body.Should().NotBeNull();
+        body!.Success.Should().BeTrue();
+        body.Data.Should().NotBeNull();
+        body.Data!.AccessToken.Should().NotBeNullOrEmpty();
+
+        var refreshToken = ExtractRefreshToken(response);
+        refreshToken.Should().NotBeNullOrEmpty();
+    }
+
+    [Fact]
+    public async Task Login_Should_Return_401_When_Password_Is_Incorrect()
+    {
+        // Arrange
+        var email = $"student-{Guid.NewGuid()}@example.com";
+        var registerRequest = new RegisterRequest
+        {
+            FullName = "Student Login Wrong Pass",
+            Email = email,
+            Password = "Password123",
+            ConfirmPassword = "Password123",
+            Role = "Student",
+            MajorCode = "BIT_SE"
+        };
+        await RegisterAndVerifyAsync(registerRequest);
+
+        var loginRequest = new EmailPasswordLoginRequest
+        {
+            Email = email,
+            Password = "WrongPassword"
+        };
+
+        // Act
+        var response = await _client.PostAsJsonAsync("/api/auth/login", loginRequest);
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+        var body = await response.Content.ReadFromJsonAsync<ApiResponse<object>>();
+        body.Should().NotBeNull();
+        body!.Code.Should().Be("AUTH_INVALID_CREDENTIALS");
+    }
+
+    [Fact]
+    public async Task Login_Should_Return_403_When_Account_Is_Pending_Approval()
+    {
+        // Arrange
+        var email = $"lecturer-{Guid.NewGuid()}@example.com";
+        var registerRequest = new RegisterRequest
+        {
+            FullName = "Lecturer Pending Login",
+            Email = email,
+            Password = "Password123",
+            ConfirmPassword = "Password123",
+            Role = "Lecturer",
+            MajorCode = null
+        };
+        await RegisterAndVerifyAsync(registerRequest);
+
+        var loginRequest = new EmailPasswordLoginRequest
+        {
+            Email = email,
+            Password = "Password123"
+        };
+
+        // Act
+        var response = await _client.PostAsJsonAsync("/api/auth/login", loginRequest);
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        var body = await response.Content.ReadFromJsonAsync<ApiResponse<object>>();
+        body.Should().NotBeNull();
+        body!.Code.Should().Be("AUTH_ACCOUNT_PENDING_APPROVAL");
+    }
+
+    [Fact]
+    public async Task Me_Should_Return_401_When_No_Token_Is_Provided()
+    {
+        // Act
+        var response = await _client.GetAsync("/api/auth/me");
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task Me_Should_Return_200_When_Valid_Token_Is_Provided()
+    {
+        // Arrange
+        var email = $"student-{Guid.NewGuid()}@example.com";
+        var registerRequest = new RegisterRequest
+        {
+            FullName = "Student Token Test",
+            Email = email,
+            Password = "Password123",
+            ConfirmPassword = "Password123",
+            Role = "Student",
+            MajorCode = "BIT_SE"
+        };
+        await RegisterAndVerifyAsync(registerRequest);
+
+        var loginRequest = new EmailPasswordLoginRequest
+        {
+            Email = email,
+            Password = "Password123"
+        };
+        var loginResponse = await _client.PostAsJsonAsync("/api/auth/login", loginRequest);
+        var loginBody = await loginResponse.Content.ReadFromJsonAsync<ApiResponse<AuthResponse>>();
+        var token = loginBody!.Data!.AccessToken;
+
+        // Act
+        var request = new HttpRequestMessage(HttpMethod.Get, "/api/auth/me");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        var response = await _client.SendAsync(request);
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var meBody = await response.Content.ReadFromJsonAsync<ApiResponse<UserSummaryResponse>>();
+        meBody.Should().NotBeNull();
+        meBody!.Success.Should().BeTrue();
+        meBody.Data!.Email.Should().Be(email);
+        meBody.Data.Roles.Should().Contain("Student");
+    }
+
+    [Fact]
+    public async Task ChangePassword_Should_Return_401_When_No_Token_Is_Provided()
+    {
+        var response = await _client.PutAsJsonAsync("/api/auth/change-password", new ChangePasswordRequest
+        {
+            CurrentPassword = "OldPassword123",
+            NewPassword = "NewPassword123",
+            ConfirmPassword = "NewPassword123"
+        });
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task ChangePassword_Should_Verify_CurrentPassword_And_Update_Credentials()
+    {
+        var email = $"change-password-{Guid.NewGuid()}@example.com";
+        var (_, registration) = await RegisterAndVerifyAsync(new RegisterRequest
+        {
+            FullName = "Change Password User",
+            Email = email,
+            Password = "OldPassword123",
+            ConfirmPassword = "OldPassword123",
+            Role = "Student",
+            MajorCode = "BIT_SE"
+        });
+        var token = registration.AccessToken;
+        token.Should().NotBeNullOrWhiteSpace();
+
+        var wrongPasswordRequest = new HttpRequestMessage(HttpMethod.Put, "/api/auth/change-password")
+        {
+            Content = JsonContent.Create(new ChangePasswordRequest
+            {
+                CurrentPassword = "WrongPassword123",
+                NewPassword = "NewPassword123",
+                ConfirmPassword = "NewPassword123"
+            })
+        };
+        wrongPasswordRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        var wrongPasswordResponse = await _client.SendAsync(wrongPasswordRequest);
+
+        wrongPasswordResponse.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        var wrongPasswordBody = await wrongPasswordResponse.Content.ReadFromJsonAsync<ApiResponse<object>>();
+        wrongPasswordBody!.Code.Should().Be("AUTH_CURRENT_PASSWORD_INVALID");
+
+        var validRequest = new HttpRequestMessage(HttpMethod.Put, "/api/auth/change-password")
+        {
+            Content = JsonContent.Create(new ChangePasswordRequest
+            {
+                CurrentPassword = "OldPassword123",
+                NewPassword = "NewPassword123",
+                ConfirmPassword = "NewPassword123"
+            })
+        };
+        validRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        var validResponse = await _client.SendAsync(validRequest);
+        validResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var oldLoginResponse = await _client.PostAsJsonAsync("/api/auth/login", new EmailPasswordLoginRequest
+        {
+            Email = email,
+            Password = "OldPassword123"
+        });
+        oldLoginResponse.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+
+        var newLoginResponse = await _client.PostAsJsonAsync("/api/auth/login", new EmailPasswordLoginRequest
+        {
+            Email = email,
+            Password = "NewPassword123"
+        });
+        newLoginResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task RefreshToken_Should_Succeed_And_Rotate_Tokens_When_Valid()
+    {
+        // Arrange
+        var email = $"student-{Guid.NewGuid()}@example.com";
+        var registerRequest = new RegisterRequest
+        {
+            FullName = "Student Refresh Test",
+            Email = email,
+            Password = "Password123",
+            ConfirmPassword = "Password123",
+            Role = "Student",
+            MajorCode = "BIT_SE"
+        };
+        await RegisterAndVerifyAsync(registerRequest);
+
+        var loginResponse = await _client.PostAsJsonAsync("/api/auth/login", new EmailPasswordLoginRequest { Email = email, Password = "Password123" });
+        var firstRefreshToken = ExtractRefreshToken(loginResponse);
+
+        // Act - Call refresh using Cookie
+        var refreshRequest = new HttpRequestMessage(HttpMethod.Post, "/api/auth/refresh-token");
+        refreshRequest.Headers.Add("Cookie", $"ehub_refresh_token={firstRefreshToken}");
+        var refreshResponse = await _client.SendAsync(refreshRequest);
+
+        // Assert
+        refreshResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        var refreshBody = await refreshResponse.Content.ReadFromJsonAsync<ApiResponse<AuthResponse>>();
+        refreshBody.Should().NotBeNull();
+        refreshBody!.Success.Should().BeTrue();
+        refreshBody.Data!.AccessToken.Should().NotBeNullOrEmpty();
+
+        var newRefreshToken = ExtractRefreshToken(refreshResponse);
+        newRefreshToken.Should().NotBeNullOrEmpty();
+        newRefreshToken.Should().NotBe(firstRefreshToken);
+    }
+
+    [Fact]
+    public async Task RefreshToken_Should_Fail_When_Using_Old_Token_After_Rotation()
+    {
+        // Arrange
+        var email = $"student-{Guid.NewGuid()}@example.com";
+        var registerRequest = new RegisterRequest
+        {
+            FullName = "Student Rotate Test",
+            Email = email,
+            Password = "Password123",
+            ConfirmPassword = "Password123",
+            Role = "Student",
+            MajorCode = "BIT_SE"
+        };
+        await RegisterAndVerifyAsync(registerRequest);
+
+        var loginResponse = await _client.PostAsJsonAsync("/api/auth/login", new EmailPasswordLoginRequest { Email = email, Password = "Password123" });
+        var firstRefreshToken = ExtractRefreshToken(loginResponse);
+
+        // First rotation (valid)
+        var refreshRequest1 = new HttpRequestMessage(HttpMethod.Post, "/api/auth/refresh-token");
+        refreshRequest1.Headers.Add("Cookie", $"ehub_refresh_token={firstRefreshToken}");
+        var refreshResponse1 = await _client.SendAsync(refreshRequest1);
+        refreshResponse1.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        // Act - Attempt to use the first token again
+        var refreshRequest2 = new HttpRequestMessage(HttpMethod.Post, "/api/auth/refresh-token");
+        refreshRequest2.Headers.Add("Cookie", $"ehub_refresh_token={firstRefreshToken}");
+        var refreshResponse2 = await _client.SendAsync(refreshRequest2);
+
+        // Assert
+        refreshResponse2.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+        var body = await refreshResponse2.Content.ReadFromJsonAsync<ApiResponse<object>>();
+        body.Should().NotBeNull();
+        body!.Code.Should().Be("AUTH_REFRESH_TOKEN_REVOKED");
+    }
+
+    [Fact]
+    public async Task Logout_Should_Revoke_Refresh_Token_Successfully()
+    {
+        // Arrange
+        var email = $"student-{Guid.NewGuid()}@example.com";
+        var registerRequest = new RegisterRequest
+        {
+            FullName = "Student Logout Test",
+            Email = email,
+            Password = "Password123",
+            ConfirmPassword = "Password123",
+            Role = "Student",
+            MajorCode = "BIT_SE"
+        };
+        await RegisterAndVerifyAsync(registerRequest);
+
+        var loginResponse = await _client.PostAsJsonAsync("/api/auth/login", new EmailPasswordLoginRequest { Email = email, Password = "Password123" });
+        var refreshToken = ExtractRefreshToken(loginResponse);
+
+        // Act - Logout using Cookie
+        var logoutRequest = new HttpRequestMessage(HttpMethod.Post, "/api/auth/logout");
+        logoutRequest.Headers.Add("Cookie", $"ehub_refresh_token={refreshToken}");
+        var logoutResponse = await _client.SendAsync(logoutRequest);
+
+        // Assert
+        logoutResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        // Act - Attempt to refresh using the logged out token
+        var refreshRequest = new HttpRequestMessage(HttpMethod.Post, "/api/auth/refresh-token");
+        refreshRequest.Headers.Add("Cookie", $"ehub_refresh_token={refreshToken}");
+        var refreshResponse = await _client.SendAsync(refreshRequest);
+        refreshResponse.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+}

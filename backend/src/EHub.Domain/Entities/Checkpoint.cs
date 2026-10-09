@@ -16,6 +16,8 @@ public class Checkpoint : AuditableEntity
     public string Name { get; set; } = string.Empty;
     public int CheckpointNumber { get; set; }
     public string? Description { get; set; }
+    public string RequirementsJson { get; set; } = "[]";
+    public decimal CourseWeight { get; set; }
 
     public DateTime? OpenDate { get; set; }
     public DateTime? DueDate { get; set; }
@@ -28,4 +30,5 @@ public class Checkpoint : AuditableEntity
     // Navigation properties
     public virtual ICollection<Submission> Submissions { get; set; } = new List<Submission>();
     public virtual ICollection<Rubric> Rubrics { get; set; } = new List<Rubric>();
+    public virtual ICollection<ClassCheckpointSchedule> ClassSchedules { get; set; } = new List<ClassCheckpointSchedule>();
 }

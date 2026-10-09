@@ -1,0 +1,175 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="1760" viewBox="0 0 1400 1760" role="img" aria-labelledby="title desc">
+  <title id="title">Corrected EHub backend package diagram</title>
+  <desc id="desc">Package diagram of EHub.Api, EHub.Application, EHub.Contracts, EHub.Shared, EHub.Domain, and EHub.Infrastructure with source-code dependencies.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M0 0 L12 6 L0 12 Z" fill="#263238"/>
+    </marker>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="125%">
+      <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#17324d" flood-opacity="0.14"/>
+    </filter>
+    <style>
+      .heading{font:700 30px 'Segoe UI',Arial,sans-serif;fill:#15324b}
+      .subheading{font:400 15px 'Segoe UI',Arial,sans-serif;fill:#52677a}
+      .pkg-title{font:700 18px 'Segoe UI',Arial,sans-serif;fill:#17324d}
+      .node-title{font:600 15px 'Segoe UI',Arial,sans-serif;fill:#17324d}
+      .node-text{font:400 13px 'Segoe UI',Arial,sans-serif;fill:#40586d}
+      .dep-text{font:600 12px 'Segoe UI',Arial,sans-serif;fill:#263238}
+      .root{fill:#dff3ff;stroke:#247ba0;stroke-width:2}
+      .layer{fill:#ecf8d5;stroke:#5c8d35;stroke-width:2}
+      .tab{fill:#c9eda3;stroke:#5c8d35;stroke-width:2}
+      .node{fill:#fff;stroke:#546e7a;stroke-width:1.5}
+      .dep{fill:none;stroke:#263238;stroke-width:2;stroke-dasharray:7 6;marker-end:url(#arrow)}
+      .refbox{fill:#f7fafc;stroke:#90a4ae;stroke-width:1.5}
+    </style>
+  </defs>
+
+  <rect width="1400" height="1760" fill="#fff"/>
+  <text x="700" y="46" text-anchor="middle" class="heading">EHub Backend — Package Diagram</text>
+  <text x="700" y="73" text-anchor="middle" class="subheading">Corrected from the current ASP.NET Core solution structure</text>
+
+  <g filter="url(#shadow)">
+    <path class="root" d="M38 132 H235 V100 H450 V132 H1362 V1685 H38 Z"/>
+    <text x="58" y="124" class="pkg-title">EHub Backend</text>
+  </g>
+
+  <!-- API -->
+  <g>
+    <path class="layer" d="M82 205 H245 V175 H420 V205 H1190 V395 H82 Z"/>
+    <rect class="tab" x="82" y="175" width="338" height="42"/>
+    <text x="100" y="202" class="pkg-title">EHub.Api — Presentation</text>
+    <rect class="node" x="112" y="242" width="300" height="110" rx="3"/>
+    <text x="262" y="271" text-anchor="middle" class="node-title">Identity &amp; Access Controllers</text>
+    <text x="262" y="298" text-anchor="middle" class="node-text">AuthController · AdminUsersController</text>
+    <text x="262" y="322" text-anchor="middle" class="node-text">UsersController</text>
+    <rect class="node" x="485" y="242" width="300" height="110" rx="3"/>
+    <text x="635" y="271" text-anchor="middle" class="node-title">Academic Controllers</text>
+    <text x="635" y="298" text-anchor="middle" class="node-text">ClassesController · StudentClassesController</text>
+    <text x="635" y="322" text-anchor="middle" class="node-text">SubjectsController</text>
+    <rect class="node" x="858" y="242" width="300" height="110" rx="3"/>
+    <text x="1008" y="271" text-anchor="middle" class="node-title">Collaboration &amp; Monitoring</text>
+    <text x="1008" y="298" text-anchor="middle" class="node-text">TeamsController · ChatController</text>
+    <text x="1008" y="322" text-anchor="middle" class="node-text">DashboardController · TrackingController</text>
+  </g>
+
+  <!-- Contracts and Shared -->
+  <g>
+    <path class="layer" d="M82 470 H220 V440 H355 V470 H620 V650 H82 Z"/>
+    <rect class="tab" x="82" y="440" width="273" height="42"/>
+    <text x="100" y="467" class="pkg-title">EHub.Contracts</text>
+    <rect class="node" x="112" y="507" width="215" height="100" rx="3"/>
+    <text x="220" y="536" text-anchor="middle" class="node-title">Request DTOs</text>
+    <text x="220" y="563" text-anchor="middle" class="node-text">Auth · Classes · Subjects</text>
+    <text x="220" y="585" text-anchor="middle" class="node-text">Teams · Users</text>
+    <rect class="node" x="360" y="507" width="230" height="100" rx="3"/>
+    <text x="475" y="536" text-anchor="middle" class="node-title">Response DTOs</text>
+    <text x="475" y="563" text-anchor="middle" class="node-text">API contracts</text>
+    <text x="475" y="585" text-anchor="middle" class="node-text">Paging and result shapes</text>
+
+    <path class="layer" d="M652 470 H790 V440 H925 V470 H1190 V650 H652 Z"/>
+    <rect class="tab" x="652" y="440" width="273" height="42"/>
+    <text x="670" y="467" class="pkg-title">EHub.Shared</text>
+    <rect class="node" x="682" y="507" width="230" height="100" rx="3"/>
+    <text x="797" y="536" text-anchor="middle" class="node-title">Results &amp; Errors</text>
+    <text x="797" y="563" text-anchor="middle" class="node-text">Result · Result&lt;T&gt;</text>
+    <text x="797" y="585" text-anchor="middle" class="node-text">Error · ErrorCodes</text>
+    <rect class="node" x="945" y="507" width="215" height="100" rx="3"/>
+    <text x="1053" y="536" text-anchor="middle" class="node-title">Constants &amp; Security</text>
+    <text x="1053" y="563" text-anchor="middle" class="node-text">Roles · Policies · Claims</text>
+    <text x="1053" y="585" text-anchor="middle" class="node-text">SensitiveDataMasker</text>
+  </g>
+
+  <!-- Application -->
+  <g>
+    <path class="layer" d="M82 735 H245 V705 H420 V735 H1190 V930 H82 Z"/>
+    <rect class="tab" x="82" y="705" width="338" height="42"/>
+    <text x="100" y="732" class="pkg-title">EHub.Application — Use Cases</text>
+    <rect class="node" x="112" y="777" width="300" height="110" rx="3"/>
+    <text x="262" y="806" text-anchor="middle" class="node-title">Features</text>
+    <text x="262" y="833" text-anchor="middle" class="node-text">Admin · Auth · Classes · Dashboard</text>
+    <text x="262" y="857" text-anchor="middle" class="node-text">Subjects · Teams · Tracking</text>
+    <rect class="node" x="485" y="777" width="300" height="110" rx="3"/>
+    <text x="635" y="806" text-anchor="middle" class="node-title">Common</text>
+    <text x="635" y="833" text-anchor="middle" class="node-text">Interfaces · Exceptions</text>
+    <text x="635" y="857" text-anchor="middle" class="node-text">Models · Authorization Services</text>
+    <rect class="node" x="858" y="777" width="300" height="110" rx="3"/>
+    <text x="1008" y="806" text-anchor="middle" class="node-title">Validators</text>
+    <text x="1008" y="833" text-anchor="middle" class="node-text">Auth validators</text>
+    <text x="1008" y="857" text-anchor="middle" class="node-text">Subject validators</text>
+  </g>
+
+  <!-- Domain -->
+  <g>
+    <path class="layer" d="M82 1015 H225 V985 H370 V1015 H1190 V1260 H82 Z"/>
+    <rect class="tab" x="82" y="985" width="288" height="42"/>
+    <text x="100" y="1012" class="pkg-title">EHub.Domain</text>
+    <rect class="node" x="112" y="1057" width="310" height="72" rx="3"/>
+    <text x="267" y="1086" text-anchor="middle" class="node-title">Identity</text>
+    <text x="267" y="1110" text-anchor="middle" class="node-text">User · Role · UserRole · Tokens</text>
+    <rect class="node" x="480" y="1057" width="310" height="72" rx="3"/>
+    <text x="635" y="1086" text-anchor="middle" class="node-title">Academic</text>
+    <text x="635" y="1110" text-anchor="middle" class="node-text">Course · Semester · Class · Student</text>
+    <rect class="node" x="848" y="1057" width="310" height="72" rx="3"/>
+    <text x="1003" y="1086" text-anchor="middle" class="node-title">Teams &amp; Projects</text>
+    <text x="1003" y="1110" text-anchor="middle" class="node-text">Team · TeamMember · Project · Proposal</text>
+    <rect class="node" x="112" y="1155" width="310" height="72" rx="3"/>
+    <text x="267" y="1184" text-anchor="middle" class="node-title">Assessment</text>
+    <text x="267" y="1208" text-anchor="middle" class="node-text">Checkpoint · Submission · Rubric · Evaluation</text>
+    <rect class="node" x="480" y="1155" width="310" height="72" rx="3"/>
+    <text x="635" y="1184" text-anchor="middle" class="node-title">Mentoring &amp; Workshops</text>
+    <text x="635" y="1208" text-anchor="middle" class="node-text">MentorProfile · Sessions · Workshops</text>
+    <rect class="node" x="848" y="1155" width="310" height="72" rx="3"/>
+    <text x="1003" y="1184" text-anchor="middle" class="node-title">Communication &amp; Execution</text>
+    <text x="1003" y="1208" text-anchor="middle" class="node-text">Chat · Notification · Tasks · Milestone · DataBank</text>
+  </g>
+
+  <!-- Infrastructure -->
+  <g>
+    <path class="layer" d="M82 1350 H265 V1320 H450 V1350 H1190 V1565 H82 Z"/>
+    <rect class="tab" x="82" y="1320" width="368" height="42"/>
+    <text x="100" y="1347" class="pkg-title">EHub.Infrastructure — Adapters</text>
+    <rect class="node" x="112" y="1392" width="300" height="125" rx="3"/>
+    <text x="262" y="1421" text-anchor="middle" class="node-title">Persistence</text>
+    <text x="262" y="1448" text-anchor="middle" class="node-text">AppDbContext · UnitOfWork</text>
+    <text x="262" y="1472" text-anchor="middle" class="node-text">Repositories · Migrations · Seed</text>
+    <text x="262" y="1496" text-anchor="middle" class="node-text">Entity configurations</text>
+    <rect class="node" x="485" y="1392" width="300" height="125" rx="3"/>
+    <text x="635" y="1421" text-anchor="middle" class="node-title">Identity &amp; Services</text>
+    <text x="635" y="1448" text-anchor="middle" class="node-text">JWT · Google Auth · Password Hashing</text>
+    <text x="635" y="1472" text-anchor="middle" class="node-text">Email · DateTime · Chat Synchronization</text>
+    <text x="635" y="1496" text-anchor="middle" class="node-text">Storage</text>
+    <rect class="node" x="858" y="1392" width="300" height="125" rx="3"/>
+    <text x="1008" y="1421" text-anchor="middle" class="node-title">Background Jobs &amp; Options</text>
+    <text x="1008" y="1448" text-anchor="middle" class="node-text">Outbox Processor · Event Dispatcher</text>
+    <text x="1008" y="1472" text-anchor="middle" class="node-text">Import Cleanup</text>
+    <text x="1008" y="1496" text-anchor="middle" class="node-text">Email and identity options</text>
+  </g>
+
+  <!-- Core dependencies -->
+  <path class="dep" d="M1215 300 H1260 V805 H1190"/>
+  <text x="1268" y="550" class="dep-text" transform="rotate(90 1268 550)">&lt;&lt;import&gt;&gt; API → Application</text>
+  <path class="dep" d="M420 395 V420 H350 V440"/>
+  <text x="365" y="420" class="dep-text">API → Contracts</text>
+  <path class="dep" d="M880 395 V420 H790 V440"/>
+  <text x="895" y="420" class="dep-text">API → Shared</text>
+  <path class="dep" d="M420 705 V680 H350 V650"/>
+  <text x="365" y="683" class="dep-text">Application → Contracts</text>
+  <path class="dep" d="M880 705 V680 H790 V650"/>
+  <text x="895" y="683" class="dep-text">Application → Shared</text>
+  <path class="dep" d="M635 930 V985"/>
+  <text x="650" y="963" class="dep-text">Application → Domain</text>
+  <path class="dep" d="M1215 1435 H1322 V850 H1190"/>
+  <text x="1330" y="1115" class="dep-text" transform="rotate(-90 1330 1115)">&lt;&lt;implements/imports&gt;&gt; Infrastructure → Application</text>
+  <path class="dep" d="M430 1320 V1288 H330 V1260"/>
+  <text x="445" y="1293" class="dep-text">Infrastructure → Domain</text>
+  <path class="dep" d="M1158 1320 H1288 V607 H1190"/>
+  <text x="1296" y="980" class="dep-text" transform="rotate(-90 1296 980)">Infrastructure → Shared</text>
+  <path class="dep" d="M1190 330 H1345 V1455 H1190"/>
+  <text x="1353" y="825" class="dep-text" transform="rotate(90 1353 825)">API → Infrastructure (DI registration)</text>
+
+  <!-- Legend -->
+  <rect class="refbox" x="82" y="1605" width="1108" height="52" rx="3"/>
+  <path class="dep" d="M110 1631 H185"/>
+  <text x="205" y="1636" class="node-text">Dependency direction: client package → imported package. Infrastructure implements interfaces owned by Application.</text>
+  <text x="82" y="1720" class="subheading">Source basis: EHub.Api, EHub.Application, EHub.Contracts, EHub.Shared, EHub.Domain and EHub.Infrastructure project references.</text>
+</svg>

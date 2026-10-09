@@ -1,0 +1,510 @@
+using System.Globalization;
+using System.Text.Json;
+using ExcelDataReader;
+using EHub.Application.Common.Interfaces.Persistence;
+using EHub.Application.Features.Classes.Common;
+using EHub.Application.Features.Teams.Common;
+using EHub.Contracts.Classes;
+using EHub.Contracts.Teams;
+using EHub.Domain.Entities;
+using EHub.Domain.Enums;
+using EHub.Shared.Constants;
+using EHub.Shared.Errors;
+using EHub.Shared.Results;
+using Microsoft.AspNetCore.Http;
+using Microsoft.EntityFrameworkCore;
+
+namespace EHub.Application.Features.Classes.VerifyClassMajors;
+
+public sealed class VerifyClassMajorsCommandHandler : IVerifyClassMajorsCommandHandler
+{
+    private const long MaximumFileSize = 10 * 1024 * 1024;
+    private const int MaximumRows = 5_000;
+    private const string MajorsAutoLockedEventType = "Class.EnrollmentMajorsAutoLocked.v1";
+    private readonly IApplicationDbContext _context;
+
+    static VerifyClassMajorsCommandHandler()
+    {
+        System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
+    }
+
+    public VerifyClassMajorsCommandHandler(IApplicationDbContext context)
+    {
+        _context = context;
+    }
+
+    public async Task<Result<VerifyClassMajorsResponse>> PreviewAsync(
+        Guid classId,
+        IFormFile file,
+        Guid currentUserId,
+        string currentUserRole,
+        CancellationToken cancellationToken = default)
+        => await ProcessAsync(classId, file, currentUserId, currentUserRole,
+            synchronize: false, previewOnly: true, cancellationToken);
+
+    public async Task<Result<VerifyClassMajorsResponse>> HandleAsync(
+        Guid classId,
+        IFormFile file,
+        Guid currentUserId,
+        string currentUserRole,
+        CancellationToken cancellationToken = default)
+        => await ProcessAsync(classId, file, currentUserId, currentUserRole,
+            synchronize: false, previewOnly: false, cancellationToken);
+
+    public async Task<Result<VerifyClassMajorsResponse>> SynchronizeAsync(
+        Guid classId,
+        IFormFile file,
+        Guid currentUserId,
+        string currentUserRole,
+        CancellationToken cancellationToken = default)
+        => await ProcessAsync(classId, file, currentUserId, currentUserRole,
+            synchronize: true, previewOnly: false, cancellationToken);
+
+    private async Task<Result<VerifyClassMajorsResponse>> ProcessAsync(
+        Guid classId,
+        IFormFile file,
+        Guid currentUserId,
+        string currentUserRole,
+        bool synchronize,
+        bool previewOnly,
+        CancellationToken cancellationToken)
+    {
+        if (!ClassAuthorizationRules.IsStaff(currentUserRole))
+        {
+            return Failure(ErrorCodes.ClassAccessDenied, "Only an administrator or assigned lecturer can verify enrollment majors.");
+        }
+
+        var targetClass = await _context.Classes
+            .AsNoTracking()
+            .FirstOrDefaultAsync(@class => @class.Id == classId, cancellationToken);
+        if (targetClass == null)
+        {
+            return Failure(ErrorCodes.ClassNotFound, "The requested class was not found.");
+        }
+
+        if (!ClassAuthorizationRules.CanManageClass(
+                targetClass.PrimaryLecturerId,
+                currentUserId,
+                currentUserRole))
+        {
+            return Failure(ErrorCodes.ClassAccessDenied, "You can only verify enrollment majors for classes assigned to you.");
+        }
+
+        var mutationError = ClassStateRules.GetMutationError(targetClass.Status);
+        if (mutationError != null)
+        {
+            return Failure(mutationError.Code, mutationError.Message);
+        }
+
+        if (synchronize && targetClass.IsEnrollmentMajorLocked)
+        {
+            return Failure(ErrorCodes.ClassEnrollmentMajorLocked, "Unlock major updates before synchronizing the official file.");
+        }
+
+        if (file == null || file.Length == 0)
+        {
+            return Failure("Classes.FileEmpty", "The uploaded Excel file is empty.");
+        }
+
+        if (file.Length > MaximumFileSize)
+        {
+            return Failure("Classes.FileTooLarge", "Excel file size exceeds the 10 MB limit.");
+        }
+
+        var fileValidation = ExcelWorkbookSecurity.Validate(file);
+        if (fileValidation.IsFailure)
+        {
+            return Result.Failure<VerifyClassMajorsResponse>(fileValidation.Error);
+        }
+
+        var parsed = Parse(file);
+        if (parsed.IsFailure)
+        {
+            return Result.Failure<VerifyClassMajorsResponse>(parsed.Error);
+        }
+
+        var sourceRows = parsed.Value;
+        var duplicateCodes = sourceRows
+            .Where(row => !string.IsNullOrWhiteSpace(row.StudentCode))
+            .GroupBy(row => row.StudentCode, StringComparer.OrdinalIgnoreCase)
+            .Where(group => group.Count() > 1)
+            .Select(group => group.Key)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (synchronize && duplicateCodes.Count > 0)
+        {
+            return Failure(ErrorCodes.ClassValidationError, "The file contains duplicate RollNumber values. No majors were changed.");
+        }
+
+        if (synchronize && sourceRows.Any(row =>
+                string.IsNullOrWhiteSpace(row.StudentCode) || !MajorCodes.IsValid(row.MajorCode)))
+        {
+            return Failure(ErrorCodes.ClassValidationError, "Every file row needs a RollNumber and a valid major. No majors were changed.");
+        }
+
+        var sourceByCode = sourceRows
+            .Where(row => !string.IsNullOrWhiteSpace(row.StudentCode) && !duplicateCodes.Contains(row.StudentCode))
+            .ToDictionary(row => row.StudentCode, StringComparer.OrdinalIgnoreCase);
+
+        var enrollments = await _context.ClassStudents
+            .Include(enrollment => enrollment.Student)
+            .Where(enrollment =>
+                enrollment.ClassId == classId &&
+                enrollment.EnrollmentStatus == EnrollmentStatus.Active)
+            .OrderBy(enrollment => enrollment.Student.RollNumber)
+            .ToListAsync(cancellationToken);
+
+        if (synchronize && !enrollments.Any(enrollment => sourceByCode.ContainsKey(
+                (enrollment.Student.NormalizedRollNumber ?? enrollment.Student.RollNumber ?? string.Empty).Trim())))
+        {
+            return Failure(ErrorCodes.ClassValidationError, "No RollNumber in the file matches an active student in this class.");
+        }
+
+        // An older imported enrollment can still point to an unlinked Student row.
+        // Update only a uniquely linked profile with the same roster email in that case.
+        var linkedProfilesByEmail = new Dictionary<string, Student>(StringComparer.OrdinalIgnoreCase);
+        if (synchronize || previewOnly)
+        {
+            var rosterEmails = enrollments
+                .Where(enrollment => !string.IsNullOrWhiteSpace(enrollment.Student.Email))
+                .Select(enrollment => enrollment.Student.Email!.Trim().ToLowerInvariant())
+                .Distinct()
+                .ToArray();
+            linkedProfilesByEmail = (await _context.Students
+                    .Where(student => student.UserId.HasValue && student.Email != null &&
+                        rosterEmails.Contains(student.Email.ToLower()))
+                    .ToListAsync(cancellationToken))
+                .Where(student => !string.IsNullOrWhiteSpace(student.Email))
+                .GroupBy(student => student.Email!.Trim(), StringComparer.OrdinalIgnoreCase)
+                .Where(group => group.Count() == 1)
+                .ToDictionary(group => group.Key, group => group.Single(), StringComparer.OrdinalIgnoreCase);
+        }
+
+        var matched = new List<MajorVerificationRowDto>();
+        var mismatched = new List<MajorVerificationRowDto>();
+        var missing = new List<MajorVerificationRowDto>();
+        var notFound = new List<MajorVerificationRowDto>();
+        var rosterCodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var verifiedAt = DateTime.UtcNow;
+        var synchronizedEnrollmentCount = 0;
+        var synchronizedProfileCount = 0;
+        var verifiedStudentUserIds = new HashSet<Guid>();
+
+        foreach (var enrollment in enrollments)
+        {
+            var studentCode = (enrollment.Student.NormalizedRollNumber ?? enrollment.Student.RollNumber ?? string.Empty)
+                .Trim()
+                .ToUpperInvariant();
+            rosterCodes.Add(studentCode);
+
+            MajorSourceRow? source = null;
+            EnrollmentMajorVerificationStatus status;
+            string? message = null;
+            if (duplicateCodes.Contains(studentCode))
+            {
+                status = EnrollmentMajorVerificationStatus.NotFound;
+                message = "The verification file contains duplicate rows for this student code.";
+            }
+            else if (!sourceByCode.TryGetValue(studentCode, out source))
+            {
+                status = EnrollmentMajorVerificationStatus.NotFound;
+                message = "The active enrollment was not found in the verification file.";
+            }
+            else if (string.IsNullOrWhiteSpace(source.MajorCode) || !MajorCodes.IsValid(source.MajorCode))
+            {
+                status = EnrollmentMajorVerificationStatus.Missing;
+                message = string.IsNullOrWhiteSpace(source.MajorCode)
+                    ? "Major is missing in the verification file."
+                    : $"Major code '{source.MajorCode}' is not recognized.";
+            }
+            else if (string.Equals(source.MajorCode, enrollment.MajorCodeAtEnrollment, StringComparison.OrdinalIgnoreCase))
+            {
+                status = EnrollmentMajorVerificationStatus.Matched;
+            }
+            else
+            {
+                status = EnrollmentMajorVerificationStatus.Mismatched;
+                message = "The imported major differs from the enrollment snapshot.";
+            }
+
+            Student? linkedProfile = null;
+            if (!enrollment.Student.UserId.HasValue &&
+                !string.IsNullOrWhiteSpace(enrollment.Student.Email) &&
+                linkedProfilesByEmail.TryGetValue(enrollment.Student.Email.Trim(), out var registeredProfile) &&
+                (string.IsNullOrWhiteSpace(registeredProfile.NormalizedRollNumber ?? registeredProfile.RollNumber) ||
+                 string.Equals(registeredProfile.NormalizedRollNumber ?? registeredProfile.RollNumber,
+                     studentCode, StringComparison.OrdinalIgnoreCase)) &&
+                registeredProfile.Id != enrollment.Student.Id)
+            {
+                linkedProfile = registeredProfile;
+            }
+            var profileMajorBefore = (linkedProfile ?? enrollment.Student).MajorCode;
+
+            if (synchronize && source != null && MajorCodes.IsValid(source.MajorCode))
+            {
+                if (!string.Equals(enrollment.MajorCodeAtEnrollment, source.MajorCode, StringComparison.OrdinalIgnoreCase))
+                {
+                    enrollment.MajorCodeAtEnrollment = source.MajorCode;
+                    synchronizedEnrollmentCount++;
+                }
+
+                var profilesToUpdate = new List<Student> { enrollment.Student };
+                if (linkedProfile != null)
+                {
+                    profilesToUpdate.Add(linkedProfile);
+                }
+
+                foreach (var profile in profilesToUpdate)
+                {
+                    if (string.Equals(profile.MajorCode, source.MajorCode, StringComparison.OrdinalIgnoreCase)) continue;
+                    profile.MajorCode = source.MajorCode;
+                    profile.UpdatedAt = verifiedAt;
+                    profile.UpdatedBy = currentUserId;
+                    synchronizedProfileCount++;
+                }
+
+                status = EnrollmentMajorVerificationStatus.Matched;
+                message = null;
+            }
+
+            if (!previewOnly)
+            {
+                enrollment.MajorVerificationStatus = status;
+                enrollment.MajorVerifiedAtUtc = verifiedAt;
+                enrollment.MajorVerifiedByUserId = currentUserId;
+                enrollment.UpdatedAt = verifiedAt;
+            }
+
+            if (status == EnrollmentMajorVerificationStatus.Matched &&
+                (linkedProfile ?? enrollment.Student).UserId is { } studentUserId)
+            {
+                verifiedStudentUserIds.Add(studentUserId);
+            }
+
+            AddToBucket(new MajorVerificationRowDto
+            {
+                RowNumber = source?.RowNumber,
+                StudentId = enrollment.StudentId,
+                RollNumber = enrollment.Student.RollNumber ?? studentCode,
+                FullName = enrollment.Student.FullName,
+                Email = enrollment.Student.Email ?? string.Empty,
+                MajorInFile = source?.MajorCode,
+                MajorInDb = enrollment.MajorCodeAtEnrollment,
+                MajorInProfile = synchronize ? (linkedProfile ?? enrollment.Student).MajorCode : profileMajorBefore,
+                Status = status.ToString(),
+                Message = message
+            }, status, matched, mismatched, missing, notFound);
+        }
+
+        foreach (var source in sourceRows.Where(row =>
+                     string.IsNullOrWhiteSpace(row.StudentCode) ||
+                     !rosterCodes.Contains(row.StudentCode)))
+        {
+            notFound.Add(new MajorVerificationRowDto
+            {
+                RowNumber = source.RowNumber,
+                RollNumber = source.StudentCode,
+                MajorInFile = source.MajorCode,
+                Status = EnrollmentMajorVerificationStatus.NotFound.ToString(),
+                Message = string.IsNullOrWhiteSpace(source.StudentCode)
+                    ? "Student code is missing in this verification row."
+                    : "The student code was not found in the active class roster."
+            });
+        }
+
+        // Once every active student is verified the class is locked in the same transaction,
+        // so the roster cannot be re-verified or edited until a lecturer explicitly unlocks it.
+        var majorsAutoLocked = false;
+        if (!previewOnly &&
+            !targetClass.IsEnrollmentMajorLocked &&
+            enrollments.Count > 0 &&
+            matched.Count == enrollments.Count)
+        {
+            var classToLock = await _context.Classes
+                .FirstAsync(@class => @class.Id == classId, cancellationToken);
+            classToLock.IsEnrollmentMajorLocked = true;
+            majorsAutoLocked = true;
+
+            _context.ClassAuditLogs.Add(new ClassAuditLog
+            {
+                ClassId = classId,
+                Action = "ENROLLMENT_MAJOR_LOCKED",
+                PerformedByUserId = currentUserId,
+                OccurredAtUtc = verifiedAt,
+                DetailsJson = JsonSerializer.Serialize(new
+                {
+                    IsLocked = true,
+                    Automatic = true,
+                    VerifiedCount = matched.Count
+                })
+            });
+            ClassOutbox.Enqueue(_context, MajorsAutoLockedEventType, classId, new
+            {
+                VerifiedCount = matched.Count,
+                StudentUserIds = verifiedStudentUserIds.ToArray()
+            }, verifiedAt);
+        }
+
+        if (!previewOnly)
+        {
+            _context.ClassAuditLogs.Add(new ClassAuditLog
+            {
+                ClassId = classId,
+                Action = synchronize ? "ENROLLMENT_MAJORS_SYNCHRONIZED_FROM_FILE" : "ENROLLMENT_MAJORS_VERIFIED",
+                PerformedByUserId = currentUserId,
+                OccurredAtUtc = verifiedAt,
+                DetailsJson = JsonSerializer.Serialize(new
+                {
+                    FileName = Path.GetFileName(file.FileName),
+                    MatchedCount = matched.Count,
+                    MismatchedCount = mismatched.Count,
+                    MissingCount = missing.Count,
+                    NotFoundCount = notFound.Count,
+                    SynchronizedEnrollmentCount = synchronizedEnrollmentCount,
+                    SynchronizedProfileCount = synchronizedProfileCount
+                })
+            });
+            ClassOutbox.Enqueue(_context, synchronize ? "Class.EnrollmentMajorsSynchronizedFromFile.v1" : "Class.EnrollmentMajorsVerified.v1", classId, new
+            {
+                MatchedCount = matched.Count,
+                MismatchedCount = mismatched.Count,
+                MissingCount = missing.Count,
+                NotFoundCount = notFound.Count,
+                SynchronizedEnrollmentCount = synchronizedEnrollmentCount,
+                SynchronizedProfileCount = synchronizedProfileCount
+            }, verifiedAt);
+
+            try
+            {
+                await _context.SaveChangesAsync(cancellationToken);
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                return Failure(ErrorCodes.ClassConcurrencyConflict, "The roster changed concurrently. Refresh and verify the file again.");
+            }
+        }
+
+        return Result.Success(new VerifyClassMajorsResponse
+        {
+            Matched = matched,
+            Mismatched = mismatched,
+            Missing = missing,
+            NotFound = notFound,
+            SynchronizedEnrollmentCount = synchronizedEnrollmentCount,
+            SynchronizedProfileCount = synchronizedProfileCount,
+            IsMajorLocked = targetClass.IsEnrollmentMajorLocked || majorsAutoLocked,
+            MajorsAutoLocked = majorsAutoLocked,
+            TeamMajorWarnings = previewOnly
+                ? Array.Empty<TeamMajorWarningDto>()
+                : await GetTeamMajorWarningsAsync(classId, cancellationToken)
+        });
+    }
+
+    // Read-only check of every active team against the persisted majors, so a warning is
+    // reported right after verification without changing any team or member data.
+    private async Task<IReadOnlyCollection<TeamMajorWarningDto>> GetTeamMajorWarningsAsync(
+        Guid classId,
+        CancellationToken cancellationToken)
+    {
+        var teams = await _context.Teams
+            .AsNoTracking()
+            .Include(team => team.TeamMembers).ThenInclude(member => member.ClassStudent).ThenInclude(enrollment => enrollment.Student)
+            .Where(team => team.ClassId == classId && team.Status == TeamStatus.Active)
+            .OrderBy(team => team.TeamCode)
+            .ToListAsync(cancellationToken);
+
+        return teams
+            .Select(team => new TeamMajorWarningDto
+            {
+                TeamId = team.Id,
+                TeamCode = team.TeamCode,
+                TeamName = team.TeamName,
+                MajorComposition = TeamMajorCompositionRules.Evaluate(team)
+            })
+            .Where(warning => !warning.MajorComposition.IsValid)
+            .ToArray();
+    }
+
+    private static Result<List<MajorSourceRow>> Parse(IFormFile file)
+    {
+        try
+        {
+            using var stream = file.OpenReadStream();
+            using var reader = ExcelReaderFactory.CreateReader(stream);
+            if (!reader.Read())
+            {
+                return ParseFailure("The Excel worksheet contains no data.");
+            }
+
+            var studentCodeColumn = -1;
+            var majorCodeColumn = -1;
+            for (var column = 0; column < reader.FieldCount; column++)
+            {
+                var header = NormalizeHeader(reader.GetValue(column));
+                if (header is "studentcode" or "rollnumber" or "mssv" or "id") studentCodeColumn = column;
+                if (header is "majorcode" or "major" or "chuyênngành" or "chuyennganh") majorCodeColumn = column;
+            }
+
+            if (studentCodeColumn < 0 || majorCodeColumn < 0)
+            {
+                return ParseFailure("Excel header must contain StudentCode and MajorCode columns.");
+            }
+
+            var rows = new List<MajorSourceRow>();
+            var rowNumber = 1;
+            while (reader.Read())
+            {
+                rowNumber++;
+                if (rows.Count >= MaximumRows)
+                {
+                    return ParseFailure($"A verification file can contain at most {MaximumRows} data rows.");
+                }
+
+                var studentCode = GetText(reader.GetValue(studentCodeColumn)).ToUpperInvariant();
+                var majorCode = GetText(reader.GetValue(majorCodeColumn)).ToUpperInvariant();
+                if (string.IsNullOrWhiteSpace(studentCode) && string.IsNullOrWhiteSpace(majorCode))
+                {
+                    continue;
+                }
+
+                rows.Add(new MajorSourceRow(rowNumber, studentCode, majorCode));
+            }
+
+            return Result.Success(rows);
+        }
+        catch
+        {
+            return ParseFailure("Failed to parse the Excel verification file.");
+        }
+    }
+
+    private static string NormalizeHeader(object? value) =>
+        GetText(value).Replace(" ", string.Empty).ToLowerInvariant();
+
+    private static string GetText(object? value) =>
+        Convert.ToString(value, CultureInfo.InvariantCulture)?.Trim() ?? string.Empty;
+
+    private static void AddToBucket(
+        MajorVerificationRowDto row,
+        EnrollmentMajorVerificationStatus status,
+        ICollection<MajorVerificationRowDto> matched,
+        ICollection<MajorVerificationRowDto> mismatched,
+        ICollection<MajorVerificationRowDto> missing,
+        ICollection<MajorVerificationRowDto> notFound)
+    {
+        switch (status)
+        {
+            case EnrollmentMajorVerificationStatus.Matched: matched.Add(row); break;
+            case EnrollmentMajorVerificationStatus.Mismatched: mismatched.Add(row); break;
+            case EnrollmentMajorVerificationStatus.Missing: missing.Add(row); break;
+            default: notFound.Add(row); break;
+        }
+    }
+
+    private static Result<List<MajorSourceRow>> ParseFailure(string message) =>
+        Result.Failure<List<MajorSourceRow>>(new Error("Classes.InvalidExcelFormat", message));
+
+    private static Result<VerifyClassMajorsResponse> Failure(string code, string message) =>
+        Result.Failure<VerifyClassMajorsResponse>(new Error(code, message));
+
+    private sealed record MajorSourceRow(int RowNumber, string StudentCode, string MajorCode);
+}

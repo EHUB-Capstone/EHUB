@@ -1,5 +1,580 @@
-import React from 'react';
+import { useEffect, useRef, useState } from 'react';
+import toast from 'react-hot-toast';
+import {
+  AlertCircle,
+  ArrowLeft,
+  Check,
+  CheckCircle2,
+  Download,
+  FileSpreadsheet,
+  Info,
+  Loader2,
+  RotateCcw,
+  Upload,
+  X,
+} from 'lucide-react';
+import Button from '../ui/Button';
+import { classApi } from '../../api/classApi';
+import { parseApiError } from '../../utils/apiError';
+import TeamContinuationPanel from './TeamContinuationPanel';
+import { validateImportFileSelection } from '../../utils/classComponentPolicy';
+import type {
+  ImportStudentCommitError,
+  ImportStudentRowPreview,
+  ImportStudentsCommitResponse,
+  ImportStudentsPreviewResponse,
+} from '../../types/classes';
 
-export const ImportStudentsModal: React.FC = () => {
-  return <div>ImportStudentsModal</div>;
+interface ImportStudentsModalProps {
+  classId: string;
+  onClose: () => void;
+  onImported: () => void;
+}
+
+type ImportPhase = 'upload' | 'review' | 'result';
+
+const IMPORT_STEPS = [
+  { key: 'upload', label: 'Select file' },
+  { key: 'review', label: 'Review data' },
+  { key: 'result', label: 'Import result' },
+] as const;
+
+const phaseIndex = (phase: ImportPhase) => IMPORT_STEPS.findIndex((step) => step.key === phase);
+
+const formatFileSize = (bytes: number) => {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 };
+
+export default function ImportStudentsModal({
+  classId,
+  onClose,
+  onImported,
+}: ImportStudentsModalProps) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [phase, setPhase] = useState<ImportPhase>('upload');
+  const [file, setFile] = useState<File | null>(null);
+  const [previewData, setPreviewData] = useState<ImportStudentsPreviewResponse | null>(null);
+  const [commitResult, setCommitResult] = useState<ImportStudentsCommitResponse | null>(null);
+  const [fileError, setFileError] = useState('');
+  const [analyzing, setAnalyzing] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [dragActive, setDragActive] = useState(false);
+
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !importing) onClose();
+    };
+    window.addEventListener('keydown', handleEscape);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', handleEscape);
+    };
+  }, [importing, onClose]);
+
+  const resetImport = () => {
+    setPhase('upload');
+    setFile(null);
+    setPreviewData(null);
+    setCommitResult(null);
+    setFileError('');
+    setDragActive(false);
+    if (inputRef.current) inputRef.current.value = '';
+  };
+
+  const inspectFile = async (selectedFile?: File) => {
+    if (!selectedFile) return;
+
+    const validationError = validateImportFileSelection(selectedFile);
+    if (validationError) {
+      setFile(null);
+      setPreviewData(null);
+      setFileError(validationError);
+      return;
+    }
+
+    setFile(selectedFile);
+    setPreviewData(null);
+    setFileError('');
+    setAnalyzing(true);
+
+    try {
+      const formData = new FormData();
+      formData.append('file', selectedFile);
+
+      const res = await classApi.previewImportStudents(classId, formData);
+      const data = (res?.data || res) as ImportStudentsPreviewResponse;
+
+      setPreviewData(data);
+      setPhase('review');
+    } catch (error: unknown) {
+      setFileError(parseApiError(error, 'The file could not be read. Please check its format.').message);
+    } finally {
+      setAnalyzing(false);
+    }
+  };
+
+  const handleFileInput = (event: React.ChangeEvent<HTMLInputElement>) => {
+    void inspectFile(event.target.files?.[0]);
+    event.target.value = '';
+  };
+
+  const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    setDragActive(false);
+    void inspectFile(event.dataTransfer.files?.[0]);
+  };
+
+  const handleDownloadTemplate = async () => {
+    try {
+      const response = await classApi.getImportTemplate();
+      const blob = new Blob([response.data || response], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'Student_Import_Template.xlsx';
+      link.click();
+      window.URL.revokeObjectURL(url);
+      toast.success('Template downloaded');
+    } catch {
+      toast.error('Unable to download template');
+    }
+  };
+
+  const handleImport = async (synchronizeProfileMajors: boolean) => {
+    if (!previewData || !previewData.sessionId || previewData.validRowsCount === 0) return;
+
+    setImporting(true);
+    try {
+      const res = await classApi.commitImportStudents(classId, {
+        sessionId: previewData.sessionId,
+        synchronizeProfileMajors,
+      });
+      const result = (res?.data || res) as ImportStudentsCommitResponse;
+      setCommitResult(result);
+      setPhase('result');
+      onImported();
+      const committedCount = result.importMode === 'TeamAssignment'
+        ? result.createdMembershipCount
+        : result.insertedCount + result.updatedCount;
+      if (result.importMode === 'TeamAssignment' && result.createdTeamCount > 0) {
+        toast.success(`Added ${result.insertedCount} students, created ${result.createdTeamCount} teams and ${result.createdProjectCount} projects.`);
+      } else if (committedCount > 0) {
+        toast.success(
+          result.synchronizedMajorCount > 0
+            ? `Imported ${committedCount} students and synchronized ${result.synchronizedMajorCount} registered major${result.synchronizedMajorCount > 1 ? 's' : ''}.`
+            : result.errorCount > 0
+              ? `Imported ${committedCount} students; ${result.errorCount} rows require attention.`
+              : `Successfully imported ${committedCount} students.`,
+        );
+      } else if (result.errorCount > 0) {
+        toast.error(`No students were imported. ${result.errorCount} rows require attention.`);
+      } else {
+        toast('Import completed; no profile or enrollment changes were needed.');
+      }
+    } catch (err: unknown) {
+      toast.error(parseApiError(err, 'Failed to commit student import.').message);
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const currentStep = phaseIndex(phase);
+  const totalRows = previewData?.totalRows ?? 0;
+  const successCount = previewData?.validRowsCount ?? 0;
+  const failedCount = previewData?.errorRowsCount ?? 0;
+  const majorMismatchCount = previewData?.majorMismatchCount ?? 0;
+  const isTeamAssignment = previewData?.importMode === 'TeamAssignment';
+  const committedCount = commitResult?.importMode === 'TeamAssignment'
+    ? commitResult.createdMembershipCount
+    : (commitResult?.insertedCount ?? 0) + (commitResult?.updatedCount ?? 0);
+  const commitHasChanges = committedCount > 0;
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-end justify-center p-0 sm:items-center sm:p-6" role="dialog" aria-modal="true" aria-labelledby="import-students-title">
+      <button
+        type="button"
+        className="absolute inset-0 cursor-default bg-slate-900/45 backdrop-blur-sm"
+        onClick={importing ? undefined : onClose}
+        aria-label="Close import dialog"
+      />
+
+      <div className="relative flex max-h-[94vh] w-full max-w-4xl flex-col overflow-hidden rounded-t-2xl border border-slate-200/60 bg-white shadow-float animate-scale-in sm:max-h-[90vh] sm:rounded-2xl">
+        <header className="shrink-0 border-b border-slate-100 px-5 py-4 sm:px-6">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary-50 text-primary">
+                <FileSpreadsheet className="h-5 w-5" />
+              </div>
+              <div className="min-w-0">
+                <h2 id="import-students-title" className="text-lg font-bold text-slate-900">Import students or team assignments</h2>
+                <p className="truncate text-sm text-slate-500">One Excel file, validated before any class data changes</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={importing}
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 disabled:pointer-events-none disabled:opacity-50"
+              aria-label="Close"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+
+          <ol className="mt-4 grid grid-cols-3 gap-2" aria-label="Import progress">
+            {IMPORT_STEPS.map((step, index) => {
+              const complete = index < currentStep;
+              const active = index === currentStep;
+              return (
+                <li key={step.key} className="flex min-w-0 items-center gap-2">
+                  <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
+                    complete || active ? 'bg-primary text-white' : 'bg-slate-100 text-slate-400'
+                  }`}>
+                    {complete ? <Check className="h-3.5 w-3.5" /> : index + 1}
+                  </span>
+                  <span className={`truncate text-xs font-semibold sm:text-sm ${active ? 'text-slate-900' : 'text-slate-400'}`}>
+                    {step.label}
+                  </span>
+                  {index < IMPORT_STEPS.length - 1 && <span className="hidden h-px flex-1 bg-slate-200 sm:block" />}
+                </li>
+              );
+            })}
+          </ol>
+        </header>
+
+        <main className="flex-1 overflow-y-auto px-5 py-5 sm:px-6">
+          {phase === 'upload' && (
+            <div className="space-y-4">
+              <div className="flex flex-col gap-3 rounded-xl border border-secondary-100 bg-secondary-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-start gap-3">
+                  <Download className="mt-0.5 h-5 w-5 shrink-0 text-secondary" />
+                  <div>
+                    <p className="text-sm font-semibold text-secondary-dark">Start with the official EHUB template</p>
+                    <p className="mt-0.5 text-xs text-slate-500">Supports student roster import and complete Team + Project assignment.</p>
+                  </div>
+                </div>
+                <Button variant="outline" size="sm" icon={Download} onClick={() => void handleDownloadTemplate()} className="shrink-0 border-secondary-200 text-secondary">
+                  Download template (.xlsx)
+                </Button>
+              </div>
+
+              <div className="flex items-start gap-2.5 rounded-xl border border-slate-200 bg-slate-50 p-3.5">
+                <Info className="mt-0.5 h-4 w-4 shrink-0 text-secondary" />
+                <div className="text-xs leading-5 text-slate-600">
+                  <p><strong className="text-slate-700">Required columns:</strong> StudentCode (RollNumber), FullName, Email. The file name updates the student's class roster and profile name.</p>
+                  <p><strong className="text-slate-700">MajorCode:</strong> Optional for legacy files; missing values are imported as unverified.</p>
+                  <p><strong className="text-slate-700">Team assignment:</strong> Add Group and Project. EHUB adds or re-enrolls students in the class before creating teams; Zalo and Description may appear once per Group.</p>
+                  <p><strong className="text-slate-700">Automatic mode:</strong> If no Group value is present, EHUB keeps the existing student roster import flow.</p>
+                  <p><strong className="text-slate-700">Dropped students:</strong> Matching enrollments in this class will be re-enrolled instead of duplicated.</p>
+                  <p><strong className="text-slate-700">Limits:</strong> Max file size 10 MB · Maximum 5,000 rows · Validated line by line before commit</p>
+                </div>
+              </div>
+
+              <div
+                onDragEnter={() => setDragActive(true)}
+                onDragLeave={() => setDragActive(false)}
+                onDragOver={(event) => event.preventDefault()}
+                onDrop={handleDrop}
+                className={`rounded-2xl border-2 border-dashed px-5 py-10 text-center transition-colors ${
+                  fileError
+                    ? 'border-red-300 bg-red-50/60'
+                    : dragActive || file
+                      ? 'border-primary bg-primary-50'
+                      : 'border-slate-300 bg-white hover:border-primary hover:bg-primary-50/40'
+                }`}
+              >
+                <input ref={inputRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleFileInput} />
+                <div className={`mx-auto flex h-12 w-12 items-center justify-center rounded-2xl ${fileError ? 'bg-red-100 text-red-600' : 'bg-primary-50 text-primary'}`}>
+                  {analyzing ? <Loader2 className="h-6 w-6 animate-spin" /> : fileError ? <AlertCircle className="h-6 w-6" /> : <Upload className="h-6 w-6" />}
+                </div>
+
+                {analyzing ? (
+                  <>
+                    <p className="mt-4 text-sm font-semibold text-slate-800">Analyzing {file?.name}</p>
+                    <p className="mt-1 text-xs text-slate-500">Validating rows and checking cross-class conflicts…</p>
+                  </>
+                ) : (
+                  <>
+                    <p className="mt-4 text-sm font-semibold text-slate-800">
+                      {fileError ? 'This file cannot be used' : 'Drop your student list here'}
+                    </p>
+                    <p className={`mx-auto mt-1 max-w-lg text-xs ${fileError ? 'text-red-600' : 'text-slate-500'}`}>
+                      {fileError || 'Choose an Excel (.xlsx or .xls) file'}
+                    </p>
+                    <Button variant="outline" size="sm" className="mt-4" onClick={() => inputRef.current?.click()}>
+                      {fileError ? 'Choose another file' : 'Browse files'}
+                    </Button>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
+          {phase === 'review' && previewData && (
+            <div className="space-y-4">
+              <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3.5 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex min-w-0 items-center gap-3">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-secondary shadow-xs">
+                    <FileSpreadsheet className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-slate-800">{file?.name}</p>
+                    <p className="text-xs text-slate-500">{file ? formatFileSize(file.size) : ''} · {totalRows} data rows</p>
+                  </div>
+                </div>
+                <button type="button" onClick={resetImport} className="flex shrink-0 items-center gap-1.5 text-xs font-semibold text-primary hover:text-primary-dark">
+                  <RotateCcw className="h-3.5 w-3.5" /> Choose another file
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+                <SummaryCard label="Total rows" value={totalRows} tone="neutral" />
+                <SummaryCard label="Valid &amp; Ready" value={successCount} tone="success" />
+                <SummaryCard label="Errors / Skip" value={failedCount} tone="danger" />
+                {isTeamAssignment ? (
+                  <SummaryCard label="Teams ready" value={previewData.teamCount} tone={previewData.teamCount > 0 ? 'success' : 'warning'} />
+                ) : (
+                  <SummaryCard label="Major mismatches" value={majorMismatchCount} tone={majorMismatchCount > 0 ? 'warning' : 'success'} />
+                )}
+              </div>
+
+              {isTeamAssignment && (
+                <div className="flex items-start gap-2.5 rounded-xl border border-blue-200 bg-blue-50 p-3.5 text-sm text-blue-900">
+                  <Info className="mt-0.5 h-4 w-4 shrink-0" />
+                  <p><strong>Team assignment mode detected.</strong> EHUB will add or re-enroll the students in this class, create each valid Team and its Project, import Zalo/Description, then assign the members. Major composition is not required.</p>
+                </div>
+              )}
+
+              {!isTeamAssignment && majorMismatchCount > 0 && (
+                <div className="flex items-start gap-2.5 rounded-xl border border-orange-200 bg-orange-50 p-3.5 text-sm text-orange-900">
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                  <div>
+                    <p className="font-semibold">{majorMismatchCount} student{majorMismatchCount > 1 ? 's registered' : ' registered'} the wrong major.</p>
+                    <p className="mt-0.5 text-xs text-orange-800">Review the registered and imported values below. Majors are synchronized from the file only after you confirm the import.</p>
+                  </div>
+                </div>
+              )}
+
+              {failedCount > 0 && (
+                <div className="flex items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50 p-3.5 text-sm text-amber-800">
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                  <p><strong>{failedCount} row{failedCount > 1 ? 's have' : ' has'} validation errors.</strong> Invalid rows will be skipped; valid rows will be committed safely.</p>
+                </div>
+              )}
+
+              {isTeamAssignment && <TeamPreviewList teams={previewData.teams || []} />}
+              <TeamContinuationPanel summary={previewData.continuation} applied={false} />
+              <StudentRowsTable rows={previewData.rows || []} teamAssignment={isTeamAssignment} />
+            </div>
+          )}
+
+          {phase === 'result' && commitResult && (
+            <div className="space-y-5">
+              <div className={`rounded-2xl border p-5 text-center ${commitHasChanges ? 'border-green-200 bg-green-50' : 'border-amber-200 bg-amber-50'}`}>
+                <div className={`mx-auto flex h-12 w-12 items-center justify-center rounded-full ${commitHasChanges ? 'bg-green-100 text-green-600' : 'bg-amber-100 text-amber-600'}`}>
+                  {commitHasChanges ? <CheckCircle2 className="h-6 w-6" /> : <AlertCircle className="h-6 w-6" />}
+                </div>
+                <h3 className="mt-3 text-lg font-bold text-slate-900">
+                  {commitHasChanges
+                    ? commitResult.importMode === 'TeamAssignment' ? 'Teams and projects created successfully' : 'Import committed successfully'
+                    : commitResult.importMode === 'TeamAssignment' ? 'No teams were created' : commitResult.errorCount > 0 ? 'No students were imported' : 'No changes were needed'}
+                </h3>
+                <p className="mt-1 text-sm text-slate-600">
+                  {commitResult.importMode === 'TeamAssignment'
+                    ? `${commitResult.insertedCount} new enrollments, ${commitResult.updatedCount} updated, ${commitResult.createdTeamCount} teams, ${commitResult.createdProjectCount} projects, ${commitResult.createdMembershipCount} memberships, ${commitResult.skippedCount} rows skipped.`
+                    : `${commitResult.insertedCount} new inserted, ${commitResult.updatedCount} updated, ${commitResult.skippedCount} skipped.`}
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+                <SummaryCard label={commitResult.importMode === 'TeamAssignment' ? 'Teams' : 'Inserted'} value={commitResult.importMode === 'TeamAssignment' ? commitResult.createdTeamCount : commitResult.insertedCount} tone="success" />
+                <SummaryCard label={commitResult.importMode === 'TeamAssignment' ? 'Projects' : 'Updated'} value={commitResult.importMode === 'TeamAssignment' ? commitResult.createdProjectCount : commitResult.updatedCount} tone="neutral" />
+                <SummaryCard label={commitResult.importMode === 'TeamAssignment' ? 'Memberships' : 'Majors synced'} value={commitResult.importMode === 'TeamAssignment' ? commitResult.createdMembershipCount : commitResult.synchronizedMajorCount ?? 0} tone="success" />
+                <SummaryCard label="Skipped" value={commitResult.skippedCount} tone="danger" />
+              </div>
+
+              <TeamContinuationPanel summary={commitResult.continuation} applied />
+
+              {commitResult.errors?.length > 0 && (
+                <div className="overflow-hidden rounded-xl border border-amber-200 bg-amber-50">
+                  <div className="border-b border-amber-200 px-4 py-3 text-sm font-semibold text-amber-900">
+                    Rows skipped because data changed after preview
+                  </div>
+                  <div className="max-h-52 divide-y divide-amber-100 overflow-y-auto">
+                    {commitResult.errors.map((error: ImportStudentCommitError) => (
+                      <div key={`${error.rowNumber}-${error.studentCode}`} className="grid gap-1 px-4 py-3 text-xs sm:grid-cols-[5rem_8rem_1fr]">
+                        <span className="font-semibold text-amber-900">Row {error.rowNumber}</span>
+                        <span className="font-mono text-slate-700">{error.studentCode}</span>
+                        <span className="text-slate-600">{error.errorMessage}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </main>
+
+        <footer className="flex shrink-0 flex-col-reverse gap-2 border-t border-slate-100 bg-slate-50/60 px-5 py-4 sm:flex-row sm:justify-end sm:px-6">
+          {phase === 'upload' && (
+            <Button variant="outline" onClick={onClose}>Cancel</Button>
+          )}
+
+          {phase === 'review' && (
+            <>
+              <Button variant="outline" icon={ArrowLeft} onClick={resetImport} disabled={importing}>Back</Button>
+              <Button
+                variant="gradient"
+                icon={Upload}
+                isLoading={importing}
+                disabled={successCount === 0}
+                onClick={() => void handleImport(!isTeamAssignment && majorMismatchCount > 0)}
+              >
+                {successCount === 0
+                  ? 'No valid rows to commit'
+                  : isTeamAssignment
+                    ? `Create ${previewData?.teamCount ?? 0} team${(previewData?.teamCount ?? 0) === 1 ? '' : 's'} and assign ${successCount} students`
+                  : majorMismatchCount > 0
+                    ? `Import & synchronize ${majorMismatchCount} major${majorMismatchCount > 1 ? 's' : ''}`
+                    : `Commit ${successCount} valid student${successCount > 1 ? 's' : ''}`}
+              </Button>
+            </>
+          )}
+
+          {phase === 'result' && (
+            <>
+              <Button variant="gradient" icon={Check} onClick={onClose}>Done</Button>
+            </>
+          )}
+        </footer>
+      </div>
+    </div>
+  );
+}
+
+function SummaryCard({ label, value, tone }: { label: string; value: number; tone: 'neutral' | 'success' | 'danger' | 'warning' }) {
+  const styles = {
+    neutral: 'border-slate-200 bg-slate-50 text-slate-900',
+    success: 'border-green-200 bg-green-50 text-green-700',
+    danger: 'border-red-200 bg-red-50 text-red-600',
+    warning: 'border-orange-200 bg-orange-50 text-orange-700',
+  };
+
+  return (
+    <div className={`rounded-xl border p-3 text-center ${styles[tone]}`}>
+      <p className="text-xl font-bold sm:text-2xl">{value}</p>
+      <p className="mt-0.5 text-[11px] font-medium sm:text-xs">{label}</p>
+    </div>
+  );
+}
+
+function TeamPreviewList({ teams }: { teams: ImportStudentsPreviewResponse['teams'] }) {
+  return (
+    <div className="grid gap-2 sm:grid-cols-2">
+      {teams.map((team) => (
+        <div key={team.teamName} className={`rounded-xl border p-3.5 ${team.isValid ? 'border-green-200 bg-green-50/60' : 'border-red-200 bg-red-50/50'}`}>
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="truncate text-sm font-bold text-slate-900">{team.teamName}</p>
+              <p className="mt-0.5 truncate text-xs font-medium text-slate-600">Project: {team.projectName || 'Missing'}</p>
+            </div>
+            <span className={`shrink-0 rounded-full px-2 py-1 text-[11px] font-semibold ${team.isValid ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+              {team.validMemberCount}/{team.memberCount} ready
+            </span>
+          </div>
+          {team.zaloGroupUrl && <p className="mt-2 truncate text-xs text-slate-600">Zalo: {team.zaloGroupUrl}</p>}
+          {team.description && <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-600">{team.description}</p>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function StudentRowsTable({
+  rows,
+  compact = false,
+  teamAssignment = false,
+}: {
+  rows: ImportStudentRowPreview[];
+  compact?: boolean;
+  teamAssignment?: boolean;
+}) {
+  return (
+    <div className="overflow-hidden rounded-xl border border-slate-200">
+      <div className={`${compact ? 'max-h-52' : 'max-h-72'} overflow-auto`}>
+        <table className={`w-full ${teamAssignment ? 'min-w-[1050px]' : 'min-w-[900px]'} text-left text-xs`}>
+          <thead className="sticky top-0 z-10 bg-slate-50 text-slate-500">
+            <tr>
+              <th className="w-16 px-3 py-2.5 font-semibold">Row</th>
+              <th className="px-3 py-2.5 font-semibold">Student code</th>
+              <th className="px-3 py-2.5 font-semibold">Full name</th>
+              <th className="px-3 py-2.5 font-semibold">Email</th>
+              {teamAssignment && <th className="px-3 py-2.5 font-semibold">Group / Project</th>}
+              <th className="px-3 py-2.5 font-semibold">Registered major</th>
+              <th className="px-3 py-2.5 font-semibold">Major in file</th>
+              <th className="w-52 px-3 py-2.5 font-semibold">Validation</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100 bg-white">
+            {rows.map((row) => (
+              <tr key={row.rowNumber} className={row.isValid ? 'hover:bg-slate-50/60' : 'bg-red-50/50'}>
+                <td className="px-3 py-3 font-mono text-slate-400">{row.rowNumber}</td>
+                <td className="px-3 py-3 font-semibold text-slate-700">{row.studentCode || '—'}</td>
+                <td className="px-3 py-3 text-slate-700">{row.fullName || '—'}</td>
+                <td className="px-3 py-3 text-slate-600">{row.email || '—'}</td>
+                {teamAssignment && (
+                  <td className="px-3 py-3">
+                    <p className="font-semibold text-slate-700">{row.groupName || '—'}</p>
+                    <p className="mt-0.5 text-[11px] text-slate-500">{row.projectName || 'No project'}</p>
+                  </td>
+                )}
+                <td className={`px-3 py-3 font-mono ${row.needsMajorSync ? 'font-semibold text-red-600' : 'text-slate-600'}`}>
+                  {row.registeredMajorCode || '—'}
+                </td>
+                <td className={`px-3 py-3 font-mono ${row.needsMajorSync ? 'font-semibold text-primary' : 'text-slate-600'}`}>
+                  {row.majorCode && row.majorCode !== 'UNDECLARED' ? row.majorCode : '—'}
+                </td>
+                <td className="px-3 py-3">
+                  {!row.isValid ? (
+                    <span className="font-medium text-red-600">• {row.errorMessage}</span>
+                  ) : row.needsMajorSync ? (
+                    <div>
+                      <span className="inline-flex items-center gap-1 rounded-full bg-orange-100 px-2 py-1 font-semibold text-orange-700">
+                        <AlertCircle className="h-3 w-3" /> Needs synchronization
+                      </span>
+                      <p className="mt-1 max-w-xs text-[11px] leading-4 text-orange-700">{row.majorWarningMessage}</p>
+                    </div>
+                  ) : row.status === 'ReEnroll' ? (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-1 font-semibold text-blue-700">
+                      <RotateCcw className="h-3 w-3" /> Ready to re-enroll
+                    </span>
+                  ) : row.status === 'UpdateProfile' ? (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-1 font-semibold text-blue-700">
+                      <CheckCircle2 className="h-3 w-3" /> Ready to update profile
+                    </span>
+                  ) : row.majorComparisonStatus?.startsWith('AwaitingRegistration') ? (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-1 font-semibold text-slate-600">
+                      <Info className="h-3 w-3" /> Awaiting registration
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-1 font-semibold text-green-700">
+                      <CheckCircle2 className="h-3 w-3" /> Ready
+                    </span>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}

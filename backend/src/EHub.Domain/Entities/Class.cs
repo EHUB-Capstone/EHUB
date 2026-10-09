@@ -8,6 +8,7 @@ namespace EHub.Domain.Entities;
 public class Class : AuditableEntity
 {
     public string ClassCode { get; set; } = string.Empty;
+    public string Slug { get; set; } = string.Empty;
     public int ClassIndex { get; set; }
 
     public Guid SemesterId { get; set; }
@@ -16,14 +17,30 @@ public class Class : AuditableEntity
     public Guid CourseId { get; set; }
     public virtual Course Course { get; set; } = null!;
 
+    public Guid? PrimaryLecturerId { get; set; }
+    public virtual User? PrimaryLecturer { get; set; }
+
     public string? Room { get; set; }
     public string? ScheduleJson { get; set; }
 
-    public bool IsMajorLocked { get; set; } = false;
-    public ClassStatus Status { get; set; } = ClassStatus.Active;
+    public bool IsEnrollmentMajorLocked { get; set; } = false;
+    public ClassStatus Status { get; set; } = ClassStatus.Draft;
+
+    public DateTime? CompletedAtUtc { get; set; }
+    public Guid? CompletedByUserId { get; set; }
+    public virtual User? CompletedByUser { get; set; }
+    public string? CompletionReason { get; set; }
+
+    public DateTime? ArchivedAtUtc { get; set; }
+    public Guid? ArchivedByUserId { get; set; }
+    public virtual User? ArchivedByUser { get; set; }
+    public ClassStatus? StatusBeforeArchive { get; set; }
 
     public Guid? CreatedById { get; set; }
     public virtual User? Creator { get; set; }
+
+    // PostgreSQL optimistic concurrency token mapped to the system xmin column.
+    public uint Version { get; set; }
 
     // Navigation properties
     public virtual ICollection<ClassLecturer> ClassLecturers { get; set; } = new List<ClassLecturer>();
@@ -36,4 +53,7 @@ public class Class : AuditableEntity
     public virtual ICollection<WorkshopAttendance> WorkshopAttendances { get; set; } = new List<WorkshopAttendance>();
     public virtual ICollection<Milestone> Milestones { get; set; } = new List<Milestone>();
     public virtual ICollection<WeeklyTask> WeeklyTasks { get; set; } = new List<WeeklyTask>();
+    public virtual ICollection<ClassAuditLog> AuditLogs { get; set; } = new List<ClassAuditLog>();
+    public virtual ICollection<ClassCheckpointSchedule> CheckpointSchedules { get; set; } = new List<ClassCheckpointSchedule>();
+    public virtual ICollection<ClassImportSession> ImportSessions { get; set; } = new List<ClassImportSession>();
 }

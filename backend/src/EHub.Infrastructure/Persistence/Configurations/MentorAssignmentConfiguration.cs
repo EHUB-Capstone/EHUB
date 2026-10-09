@@ -35,6 +35,12 @@ public class MentorAssignmentConfiguration : IEntityTypeConfiguration<MentorAssi
         builder.Property(ma => ma.EndedAt)
             .HasColumnName("ended_at");
 
+        builder.Property(ma => ma.Slot)
+            .HasColumnName("slot")
+            .HasConversion<string>()
+            .HasMaxLength(20)
+            .IsRequired();
+
         builder.Property(ma => ma.Status)
             .HasColumnName("status")
             .HasConversion<string>()
@@ -53,7 +59,10 @@ public class MentorAssignmentConfiguration : IEntityTypeConfiguration<MentorAssi
         builder.HasIndex(ma => ma.Status);
         builder.HasIndex(ma => ma.AssignedAt);
         builder.HasIndex(ma => new { ma.MentorProfileId, ma.TeamId, ma.Status });
-        builder.HasIndex(ma => new { ma.TeamId, ma.Status });
+        builder.HasIndex(ma => new { ma.TeamId, ma.Slot, ma.Status });
+        builder.HasIndex(ma => new { ma.TeamId, ma.Slot })
+            .IsUnique()
+            .HasFilter("status = 'Active' AND is_deleted = false");
 
         // Audit & Soft Delete properties configuration
         builder.Property(ma => ma.CreatedAt).HasColumnName("created_at").IsRequired();

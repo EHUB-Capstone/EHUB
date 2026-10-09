@@ -1,1 +1,544 @@
 @import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ─── Tailwind v4: Custom theme via CSS variables ─── */
+@theme {
+  /* Colors */
+  --color-primary: #EA6A12;
+  --color-primary-light: #F08A5D;
+  --color-primary-lighter: #F6B27A;
+  --color-primary-dark: #C4570C;
+  --color-primary-50: #fff7ed;
+  --color-primary-100: #ffedd5;
+  --color-primary-200: #fed7aa;
+  --color-primary-300: #fdba74;
+  --color-primary-400: #fb923c;
+  --color-primary-500: #f97316;
+  --color-primary-600: #EA6A12;
+  --color-primary-700: #C4570C;
+  --color-primary-800: #9a4310;
+  --color-primary-900: #7c3510;
+
+  --color-secondary: #1E5E9F;
+  --color-secondary-light: #79A8D9;
+  --color-secondary-dark: #164A7F;
+  --color-secondary-50: #eaf2ff;
+  --color-secondary-100: #d5e4fc;
+  --color-secondary-200: #adc9f7;
+  --color-secondary-300: #85aef2;
+  --color-secondary-400: #5c93ed;
+  --color-secondary-500: #3371b8;
+  --color-secondary-600: #1E5E9F;
+  --color-secondary-700: #164A7F;
+
+  --color-cyan: #0084c8;
+  --color-cyan-light: #33a5dd;
+  --color-cyan-dark: #006296;
+  --color-cyan-50: #e6f6ff;
+  --color-cyan-100: #cceeff;
+  --color-cyan-200: #99ddff;
+  --color-cyan-300: #66ccff;
+  --color-cyan-400: #33bbff;
+  --color-cyan-500: #00aaff;
+  --color-cyan-600: #0084c8;
+
+  --color-success: #51B848;
+  --color-success-light: #7dd376;
+  --color-success-dark: #3e8f37;
+  --color-success-50: #ecfdf3;
+
+  --color-warning: #f59e0b;
+  --color-warning-light: #fef3c7;
+  --color-warning-dark: #d97706;
+  --color-warning-50: #fffbeb;
+
+  --color-danger: #ef4444;
+  --color-danger-light: #fee2e2;
+  --color-danger-dark: #dc2626;
+  --color-danger-50: #fef2f2;
+
+  --color-slate-25: #fcfcfd;
+
+  /* Fonts */
+  --font-sans: Inter, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  /* Shadows */
+  --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.03);
+  --shadow-soft: 0 1px 3px 0 rgb(0 0 0 / 0.04), 0 1px 2px -1px rgb(0 0 0 / 0.04);
+  --shadow-card: 0 2px 8px -2px rgb(0 0 0 / 0.05), 0 1px 4px -2px rgb(0 0 0 / 0.04);
+  --shadow-elevated: 0 4px 16px -4px rgb(0 0 0 / 0.08), 0 2px 6px -2px rgb(0 0 0 / 0.04);
+  --shadow-float: 0 8px 30px -6px rgb(0 0 0 / 0.1), 0 4px 10px -4px rgb(0 0 0 / 0.04);
+  --shadow-glow-primary: 0 14px 36px -12px rgba(234, 106, 18, 0.34);
+  --shadow-glow-cyan: 0 14px 36px -12px rgba(30, 94, 159, 0.28);
+
+  /* Animations */
+  --animate-fade-in: fadeIn 0.5s ease-out;
+  --animate-slide-up: slideUp 0.5s ease-out;
+  --animate-slide-down: slideDown 0.3s ease-out;
+  --animate-scale-in: scaleIn 0.3s ease-out;
+  --animate-pulse-soft: pulseSoft 3s infinite;
+}
+
+@keyframes fadeIn {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+@keyframes slideUp {
+  0% { opacity: 0; transform: translateY(16px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideDown {
+  0% { opacity: 0; transform: translateY(-8px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes scaleIn {
+  0% { opacity: 0; transform: scale(0.95); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes pulseSoft {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+/* ─── Global base ─── */
+html {
+  scroll-behavior: smooth;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-family: Inter, system-ui, sans-serif;
+}
+
+body {
+  background-color: #f8fafc;
+  color: #0f172a;
+  transition: background-color 200ms ease, color 200ms ease;
+}
+
+:root {
+  --app-toast-bg: #ffffff;
+  --app-toast-color: #0f172a;
+  --app-toast-border: #e2e8f0;
+}
+
+.dark body {
+  background-color: #0f172a;
+  color: #f8fafc;
+  --app-toast-bg: #111827;
+  --app-toast-color: #f8fafc;
+  --app-toast-border: rgba(255, 255, 255, 0.12);
+}
+
+::selection {
+  background-color: #fdede4;
+  color: #602c0d;
+}
+
+/* Tailwind v4 no longer sets a default border color, so a bare `border` or
+   `border-b` falls back to currentColor (the text color). Restore a neutral
+   default. It lives in @layer base so any `border-<color>` utility still wins. */
+@layer base {
+  *, ::after, ::before, ::backdrop, ::file-selector-button {
+    border-color: var(--color-slate-200);
+  }
+  .dark *, .dark ::after, .dark ::before, .dark ::backdrop {
+    border-color: rgba(255, 255, 255, 0.11);
+  }
+}
+
+/* ─── Gradient backgrounds ─── */
+.bg-gradient-primary {
+  background: linear-gradient(135deg, #EA6A12 0%, #D97706 100%);
+}
+
+.bg-gradient-hero {
+  background:
+    radial-gradient(ellipse at 20% 50%, rgba(243, 112, 33, 0.06) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 20%, rgba(3, 78, 162, 0.05) 0%, transparent 40%),
+    radial-gradient(ellipse at 60% 80%, rgba(81, 184, 72, 0.04) 0%, transparent 40%),
+    linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+}
+
+/* ─── Text gradients ─── */
+.text-gradient-primary {
+  background: linear-gradient(to right, #EA6A12, #1E5E9F);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ─── Glass card ─── */
+.glass-card {
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(226, 232, 240, 0.6);
+  border-radius: 1rem;
+  box-shadow: var(--shadow-card);
+}
+
+/* Dashboard surfaces share the visual language used by Home and Login. */
+.dashboard-shell {
+  background-color: #f8fafc;
+  background-image:
+    radial-gradient(ellipse at 12% 0%, rgba(234, 106, 18, 0.055), transparent 36%),
+    radial-gradient(ellipse at 92% 8%, rgba(30, 94, 159, 0.05), transparent 34%);
+  color: #0f172a;
+  transition: background-color 200ms ease, color 200ms ease;
+}
+
+.dark .dashboard-shell {
+  background-color: #0f172a;
+  background-image:
+    radial-gradient(ellipse at 12% 0%, rgba(234, 106, 18, 0.09), transparent 36%),
+    radial-gradient(ellipse at 92% 8%, rgba(121, 168, 217, 0.08), transparent 34%);
+  color: #f8fafc;
+  color-scheme: dark;
+}
+
+/* App-wide dark surfaces. Keeping this at the utility level also covers portals,
+   auth pages, student workspaces, tables and imported WDP modals. */
+.dark :where(.bg-white) { background-color: #111827; }
+.dark :where(.bg-white\/60) { background-color: rgba(17, 24, 39, 0.66); }
+.dark :where(.bg-white\/70) { background-color: rgba(17, 24, 39, 0.74); }
+.dark :where(.bg-white\/80) { background-color: rgba(17, 24, 39, 0.84); }
+.dark :where(.bg-white\/85) { background-color: rgba(17, 24, 39, 0.88); }
+.dark :where(.bg-white\/90) { background-color: rgba(17, 24, 39, 0.92); }
+.dark :where(.bg-white\/95) { background-color: rgba(17, 24, 39, 0.96); }
+
+.dark :where(.bg-slate-50, .bg-gray-50) { background-color: #162033; }
+.dark :where(
+  .bg-slate-50\/20, .bg-slate-50\/30, .bg-slate-50\/40,
+  .bg-slate-50\/50, .bg-slate-50\/60, .bg-slate-50\/70, .bg-slate-50\/80,
+  .bg-gray-50\/20, .bg-gray-50\/30, .bg-gray-50\/40, .bg-gray-50\/50
+) { background-color: rgba(30, 41, 59, 0.56); }
+.dark :where(.bg-slate-100, .bg-gray-100) { background-color: #1e293b; }
+.dark :where(.bg-slate-100\/60, .bg-slate-100\/80) { background-color: rgba(51, 65, 85, 0.64); }
+.dark :where(.bg-slate-200, .bg-gray-200) { background-color: #334155; }
+.dark :where(.bg-slate-300, .bg-gray-300) { background-color: #475569; }
+
+.dark :where(.bg-primary-50) { background-color: rgba(234, 106, 18, 0.12); }
+.dark :where(.bg-primary-100, .bg-primary-200) { background-color: rgba(234, 106, 18, 0.18); }
+.dark :where(.bg-success-50, .bg-green-50) { background-color: rgba(34, 197, 94, 0.11); }
+.dark :where(.bg-warning-50, .bg-amber-50, .bg-yellow-50) { background-color: rgba(245, 158, 11, 0.11); }
+.dark :where(.bg-danger-50, .bg-red-50) { background-color: rgba(239, 68, 68, 0.11); }
+.dark :where(.bg-secondary-50, .bg-blue-50, .bg-cyan-50) { background-color: rgba(121, 168, 217, 0.11); }
+
+/* Semantic chips and alert panels keep their meaning without becoming bright
+   islands inside the dark interface. */
+.dark :where(
+  .bg-blue-100, .bg-blue-100\/60, .bg-cyan-100, .bg-cyan-100\/40,
+  .bg-indigo-50, .bg-indigo-100, .bg-indigo-100\/50, .bg-indigo-200
+) { background-color: rgba(59, 130, 246, 0.16); }
+.dark :where(
+  .bg-green-100, .bg-green-200, .bg-emerald-50, .bg-emerald-50\/40,
+  .bg-emerald-50\/50, .bg-emerald-50\/60, .bg-emerald-100,
+  .bg-emerald-100\/60, .bg-emerald-200
+) { background-color: rgba(34, 197, 94, 0.15); }
+.dark :where(
+  .bg-orange-50, .bg-orange-50\/30, .bg-orange-50\/40, .bg-orange-50\/50,
+  .bg-orange-50\/70, .bg-orange-100, .bg-amber-100, .bg-amber-100\/50,
+  .bg-amber-100\/60, .bg-amber-200, .bg-yellow-100, .bg-yellow-200
+) { background-color: rgba(245, 158, 11, 0.15); }
+.dark :where(.bg-red-100, .bg-pink-50, .bg-pink-100) { background-color: rgba(239, 68, 68, 0.15); }
+.dark :where(.bg-purple-50, .bg-purple-100, .bg-violet-50) { background-color: rgba(168, 85, 247, 0.15); }
+
+.dark :where(.text-slate-950, .text-slate-900, .text-gray-900) { color: #f8fafc; }
+.dark :where(.text-slate-800, .text-gray-800) { color: #e2e8f0; }
+.dark :where(.text-slate-700, .text-gray-700) { color: #cbd5e1; }
+.dark :where(.text-slate-600, .text-gray-600) { color: #b6c2d1; }
+.dark :where(.text-slate-500, .text-gray-500) { color: #94a3b8; }
+.dark :where(.text-slate-400, .text-gray-400) { color: #8493aa; }
+.dark :where(.text-primary-dark) { color: #fb923c; }
+.dark :where(.text-secondary-dark) { color: #93c5fd; }
+.dark :where(.text-blue-600, .text-blue-700, .text-blue-800, .text-blue-900, .text-cyan-600, .text-cyan-700, .text-indigo-600, .text-indigo-600\/80, .text-indigo-700, .text-indigo-800) { color: #93c5fd; }
+.dark :where(.text-green-600, .text-green-700, .text-green-800, .text-green-900, .text-emerald-600, .text-emerald-700, .text-emerald-800) { color: #86efac; }
+.dark :where(.text-orange-600, .text-orange-700, .text-orange-800, .text-amber-600, .text-amber-600\/80, .text-amber-700, .text-amber-800, .text-amber-900, .text-yellow-600, .text-yellow-800, .text-yellow-900) { color: #fbbf24; }
+.dark :where(.text-red-600, .text-red-700, .text-red-800, .text-red-900, .text-pink-700) { color: #fca5a5; }
+.dark :where(.text-purple-600, .text-purple-700, .text-purple-800, .text-purple-900, .text-violet-600, .text-violet-700) { color: #d8b4fe; }
+.dark :where(.text-\[\#034EA2\]) { color: #79a8d9; }
+
+.dark :where(
+  .border-slate-50, .border-slate-100, .border-slate-100\/60,
+  .border-slate-200, .border-slate-200\/40, .border-slate-200\/50,
+  .border-slate-200\/60, .border-slate-200\/70, .border-slate-200\/80,
+  .border-slate-300, .border-slate-300\/60, .border-gray-100,
+  .border-gray-200, .border-gray-300
+) { border-color: rgba(255, 255, 255, 0.11); }
+/* Neutral default for form controls. It sits before the semantic border rules
+   below so error/warning/success borders on inputs still win. */
+.dark :where(input, select, textarea) { border-color: rgba(255, 255, 255, 0.12); }
+/* Arbitrary variants such as `[&>span:nth-child(odd)]:sm:border-slate-200` compile to
+   a class name the lists above cannot match, so match the class attribute instead. */
+.dark :where(
+  [class*="]:border-slate-100"], [class*="]:border-slate-200"], [class*="]:border-slate-300"],
+  [class*="]:sm:border-slate-100"], [class*="]:sm:border-slate-200"], [class*="]:sm:border-slate-300"]
+),
+.dark :where(
+  [class*="]:border-slate-100"], [class*="]:border-slate-200"], [class*="]:border-slate-300"],
+  [class*="]:sm:border-slate-100"], [class*="]:sm:border-slate-200"], [class*="]:sm:border-slate-300"]
+) > :where(*) { border-color: rgba(255, 255, 255, 0.11); }
+
+.dark :where(
+  .border-blue-50, .border-blue-100, .border-blue-100\/50, .border-blue-200,
+  .border-blue-200\/60, .border-blue-300, .border-cyan-100, .border-cyan-200,
+  .border-indigo-100, .border-indigo-100\/50, .border-indigo-200, .border-indigo-300
+) { border-color: rgba(96, 165, 250, 0.28); }
+.dark :where(
+  .border-green-50, .border-green-100, .border-green-200, .border-green-300,
+  .border-emerald-50, .border-emerald-100, .border-emerald-100\/60,
+  .border-emerald-200, .border-emerald-200\/50, .border-emerald-200\/60,
+  .border-emerald-300
+) { border-color: rgba(74, 222, 128, 0.28); }
+.dark :where(
+  .border-orange-50, .border-orange-100, .border-orange-200, .border-orange-200\/80,
+  .border-orange-300, .border-amber-50, .border-amber-100, .border-amber-100\/50,
+  .border-amber-200, .border-amber-200\/60, .border-amber-300,
+  .border-yellow-200, .border-yellow-300
+) { border-color: rgba(251, 191, 36, 0.3); }
+.dark :where(.border-red-50, .border-red-100, .border-red-200, .border-red-200\/50, .border-red-200\/60, .border-red-300, .border-pink-100, .border-pink-200) { border-color: rgba(248, 113, 113, 0.28); }
+.dark :where(.border-purple-100, .border-purple-200, .border-purple-300, .border-violet-200\/60) { border-color: rgba(192, 132, 252, 0.28); }
+
+.dark :where(.divide-slate-100, .divide-slate-200, .divide-gray-100, .divide-gray-200) > :not(:last-child) {
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.dark :where(input, select, textarea) {
+  background-color: rgba(15, 23, 42, 0.72);
+  color: #f8fafc;
+}
+
+.dark :where(input, textarea)::placeholder { color: #718096; }
+.dark :where(select option) { background-color: #111827; color: #f8fafc; }
+
+.dark :where(.hover\:bg-white):hover { background-color: #1e293b; }
+.dark :where(.hover\:bg-slate-50, .hover\:bg-gray-50):hover { background-color: #1e293b; }
+.dark :where(.hover\:bg-slate-100, .hover\:bg-gray-100):hover { background-color: #334155; }
+.dark :where(.hover\:text-slate-900, .hover\:text-gray-900):hover { color: #ffffff; }
+.dark :where(.hover\:text-slate-800, .hover\:text-gray-800):hover { color: #f1f5f9; }
+.dark :where(.focus\:bg-white):focus { background-color: #111827; }
+.dark :where(.disabled\:bg-slate-50, .disabled\:bg-gray-50):disabled { background-color: #1e293b; }
+
+/* ─── Dark coverage extension ───
+   These rules are unlayered, so they beat Tailwind utilities (@layer utilities).
+   Every light tint the app uses therefore needs an explicit dark counterpart here,
+   including opacity suffixes (`bg-amber-50/60` is not matched by `.bg-amber-50`).
+   `npm test` (tests/darkThemeCoverage.test.ts) fails when a light tint is missing. */
+
+/* Tinted surfaces */
+.dark :where(
+  .bg-amber-50\/20, .bg-amber-50\/30, .bg-amber-50\/40, .bg-amber-50\/60, .bg-amber-50\/80,
+  .bg-amber-200\/30, .bg-orange-50\/20, .bg-orange-50\/80, .bg-orange-100\/70, .bg-orange-200\/30
+) { background-color: rgba(245, 158, 11, 0.11); }
+.dark :where(.bg-rose-50, .bg-red-50\/40, .bg-red-50\/50, .bg-red-50\/60, .bg-danger-50\/60) { background-color: rgba(239, 68, 68, 0.11); }
+.dark :where(.bg-green-50\/60, .bg-emerald-50\/20) { background-color: rgba(34, 197, 94, 0.11); }
+.dark :where(
+  .bg-blue-50\/10, .bg-blue-50\/30, .bg-blue-50\/50, .bg-blue-50\/80,
+  .bg-indigo-50\/20, .bg-indigo-50\/30, .bg-indigo-50\/40, .bg-indigo-50\/70, .bg-indigo-50\/80,
+  .bg-secondary-50\/50, .bg-secondary-50\/70, .bg-secondary-100\/30
+) { background-color: rgba(121, 168, 217, 0.11); }
+.dark :where(.bg-secondary-100) { background-color: rgba(121, 168, 217, 0.16); }
+.dark :where(.bg-teal-50, .bg-teal-100) { background-color: rgba(20, 184, 166, 0.13); }
+.dark :where(.bg-violet-50\/50) { background-color: rgba(168, 85, 247, 0.12); }
+.dark :where(
+  .bg-primary-50\/20, .bg-primary-50\/30, .bg-primary-50\/40, .bg-primary-50\/50,
+  .bg-primary-50\/60, .bg-primary-50\/70, .bg-primary-50\/80, .bg-primary-100\/10
+) { background-color: rgba(234, 106, 18, 0.09); }
+.dark :where(.bg-primary-100\/30, .bg-primary-100\/40) { background-color: rgba(234, 106, 18, 0.13); }
+.dark :where(.bg-slate-50\/95) { background-color: rgba(22, 32, 51, 0.95); }
+.dark :where(.bg-slate-200\/60, .bg-slate-200\/80) { background-color: rgba(51, 65, 85, 0.64); }
+
+/* Floating panels (modals, dropdowns, dialogs) sit one step above cards. */
+.dark .bg-white:where(.shadow-float, .shadow-elevated) { background-color: #162033; }
+
+/* Slate overlays are invisible against a dark page; use a deeper scrim. */
+.dark :where(.inset-0):where(
+  .bg-slate-900\/30, .bg-slate-900\/40, .bg-slate-900\/45, .bg-slate-900\/50, .bg-slate-900\/60,
+  .bg-slate-950\/30, .bg-slate-950\/35, .bg-slate-950\/50, .bg-slate-950\/60
+) { background-color: rgba(2, 6, 23, 0.72); }
+
+/* Borders, rings and dividers */
+.dark :where(
+  .border-amber-200\/80, .border-orange-100\/70, .border-orange-100\/80, .border-orange-200\/70,
+  .border-warning-light
+) { border-color: rgba(251, 191, 36, 0.3); }
+.dark :where(.border-rose-100, .border-rose-200, .border-danger-light) { border-color: rgba(248, 113, 113, 0.28); }
+.dark :where(.border-success-light) { border-color: rgba(74, 222, 128, 0.28); }
+.dark :where(.border-primary-100, .border-primary-200, .border-primary-200\/60) { border-color: rgba(234, 106, 18, 0.28); }
+.dark :where(.border-primary-300) { border-color: rgba(234, 106, 18, 0.4); }
+.dark :where(.border-secondary-100, .border-secondary-200) { border-color: rgba(121, 168, 217, 0.28); }
+.dark :where(.border-teal-100) { border-color: rgba(45, 212, 191, 0.28); }
+.dark :where(.border-violet-100, .border-violet-200) { border-color: rgba(192, 132, 252, 0.28); }
+/* White rings/borders around avatars and badges are cut-outs against the card. */
+.dark :where(.border-white) { border-color: #111827; }
+.dark :where(.ring-white) { --tw-ring-color: #111827; }
+.dark :where(.ring-slate-200, .ring-slate-200\/70, .ring-slate-200\/80, .ring-slate-900\/10) { --tw-ring-color: rgba(255, 255, 255, 0.12); }
+.dark :where(.ring-amber-100, .ring-orange-200, .ring-primary-100, .ring-primary-200) { --tw-ring-color: rgba(234, 106, 18, 0.3); }
+.dark :where(.divide-slate-50) > :not(:last-child) { border-color: rgba(255, 255, 255, 0.08); }
+.dark :where(.divide-amber-100, .divide-orange-100) > :not(:last-child) { border-color: rgba(251, 191, 36, 0.2); }
+
+/* Semantic borders must win over the neutral rules above when an element carries
+   both (for example an invalid input: `border-slate-200 border-danger`). Keep these
+   after every neutral border rule. */
+.dark :where(.border-danger, .border-red-400, .border-red-500) { border-color: var(--color-danger); }
+.dark :where(.border-primary, .border-primary-500) { border-color: var(--color-primary); }
+.dark :where(.border-amber-400, .border-amber-500, .border-orange-400, .border-orange-500) { border-color: #f59e0b; }
+.dark :where(.border-green-400, .border-green-500, .border-emerald-600) { border-color: var(--color-success); }
+.dark :where(.border-blue-400) { border-color: #60a5fa; }
+.dark :where(.focus\:border-primary):focus { border-color: var(--color-primary); }
+.dark :where(.focus\:border-danger):focus { border-color: var(--color-danger); }
+
+/* Text that is too dark on a dark surface */
+.dark :where(.text-primary-700, .text-primary-800, .text-primary-dark) { color: #fb923c; }
+.dark :where(.text-secondary, .text-secondary\/80) { color: #79a8d9; }
+.dark :where(.text-rose-600, .text-rose-700) { color: #fda4af; }
+.dark :where(.text-teal-700) { color: #5eead4; }
+.dark :where(.text-indigo-900) { color: #93c5fd; }
+.dark :where(.text-orange-900) { color: #fbbf24; }
+.dark :where(.text-success-dark) { color: #86efac; }
+.dark :where(.text-warning-dark) { color: #fbbf24; }
+.dark :where(.text-danger-dark) { color: #fca5a5; }
+.dark :where(.hover\:text-primary-700, .hover\:text-primary-dark):hover { color: #fdba74; }
+.dark :where(.hover\:text-success-dark):hover { color: #bbf7d0; }
+.dark :where(.hover\:text-secondary-dark):hover { color: #bfdbfe; }
+
+/* Hover, active and disabled states */
+.dark :where(.hover\:bg-slate-200, .hover\:bg-gray-200):hover { background-color: #3b475c; }
+.dark :where(.hover\:bg-slate-300, .hover\:bg-gray-300):hover { background-color: #475569; }
+.dark :where(.active\:bg-slate-300):active { background-color: #475569; }
+.dark :where(
+  .hover\:bg-slate-50\/10, .hover\:bg-slate-50\/40, .hover\:bg-slate-50\/50,
+  .hover\:bg-slate-50\/60, .hover\:bg-slate-50\/70, .hover\:bg-slate-50\/80
+):hover { background-color: rgba(30, 41, 59, 0.56); }
+.dark :where(.hover\:bg-slate-100\/60):hover { background-color: rgba(51, 65, 85, 0.64); }
+.dark :where(.hover\:bg-white\/60, .hover\:bg-white\/70):hover { background-color: rgba(30, 41, 59, 0.74); }
+.dark :where(
+  .hover\:bg-primary-50, .hover\:bg-primary-50\/20, .hover\:bg-primary-50\/30, .hover\:bg-primary-50\/40,
+  .hover\:bg-orange-50, .hover\:bg-orange-50\/20, .hover\:bg-orange-50\/30, .hover\:bg-orange-50\/70
+):hover { background-color: rgba(234, 106, 18, 0.14); }
+.dark :where(.hover\:bg-primary-100, .hover\:bg-orange-100):hover { background-color: rgba(234, 106, 18, 0.2); }
+.dark :where(.hover\:bg-red-50, .hover\:bg-danger-50):hover { background-color: rgba(239, 68, 68, 0.14); }
+.dark :where(.hover\:bg-red-100, .hover\:bg-rose-100):hover { background-color: rgba(239, 68, 68, 0.2); }
+.dark :where(.hover\:bg-amber-50):hover { background-color: rgba(245, 158, 11, 0.14); }
+.dark :where(.hover\:bg-amber-100, .hover\:bg-amber-200):hover { background-color: rgba(245, 158, 11, 0.2); }
+.dark :where(.hover\:bg-green-50, .hover\:bg-emerald-50, .hover\:bg-success-50):hover { background-color: rgba(34, 197, 94, 0.14); }
+.dark :where(.hover\:bg-green-100, .hover\:bg-emerald-100):hover { background-color: rgba(34, 197, 94, 0.2); }
+.dark :where(.hover\:bg-blue-50, .hover\:bg-indigo-50, .hover\:bg-secondary-50):hover { background-color: rgba(121, 168, 217, 0.14); }
+.dark :where(.hover\:bg-blue-100, .hover\:bg-indigo-100, .hover\:bg-secondary-100):hover { background-color: rgba(121, 168, 217, 0.2); }
+.dark .group:hover :where(.group-hover\:bg-slate-50) { background-color: #1e293b; }
+.dark .group:hover :where(.group-hover\:bg-orange-50, .group-hover\:bg-primary-100\/20) { background-color: rgba(234, 106, 18, 0.14); }
+.dark :where(
+  .hover\:border-slate-100, .hover\:border-slate-200, .hover\:border-slate-300, .hover\:border-slate-400,
+  .hover\:border-gray-300
+):hover { border-color: rgba(255, 255, 255, 0.22); }
+.dark :where(
+  .hover\:border-primary-200, .hover\:border-primary-300, .hover\:border-orange-200, .hover\:border-orange-300
+):hover { border-color: rgba(234, 106, 18, 0.4); }
+.dark :where(.hover\:border-red-200, .hover\:border-red-300):hover { border-color: rgba(248, 113, 113, 0.4); }
+.dark :where(.hover\:border-green-300, .hover\:border-emerald-300):hover { border-color: rgba(74, 222, 128, 0.4); }
+.dark :where(.hover\:border-indigo-300, .hover\:border-secondary-300):hover { border-color: rgba(96, 165, 250, 0.4); }
+.dark :where(.active\:bg-emerald-200):active { background-color: rgba(34, 197, 94, 0.26); }
+.dark :where(.active\:bg-rose-200):active { background-color: rgba(239, 68, 68, 0.26); }
+.dark :where(.disabled\:bg-slate-100, .disabled\:bg-gray-100):disabled { background-color: #1e293b; }
+.dark :where(.disabled\:bg-slate-300):disabled { background-color: #334155; }
+.dark :where(.disabled\:border-slate-200):disabled { border-color: rgba(255, 255, 255, 0.11); }
+.dark :where(.disabled\:hover\:border-slate-200):disabled:hover { border-color: rgba(255, 255, 255, 0.11); }
+.dark :where(.disabled\:text-slate-600):disabled { color: #94a3b8; }
+.dark :where(.focus\:ring-blue-200):focus { --tw-ring-color: rgba(96, 165, 250, 0.4); }
+.dark :where(.focus\:ring-emerald-200):focus { --tw-ring-color: rgba(74, 222, 128, 0.4); }
+.dark :where(.focus\:ring-red-100):focus { --tw-ring-color: rgba(248, 113, 113, 0.35); }
+
+/* Hover/group-hover text: the base text rules above do not cover state variants. */
+.dark :where(.hover\:text-slate-600, .hover\:text-slate-700, .hover\:text-gray-600):hover { color: #e2e8f0; }
+.dark :where(
+  .hover\:text-red-600, .hover\:text-red-700, .hover\:text-red-800, .hover\:text-red-900, .hover\:text-rose-700
+):hover { color: #fecaca; }
+.dark :where(.hover\:text-blue-800, .hover\:text-blue-900):hover { color: #bfdbfe; }
+.dark :where(.hover\:text-emerald-700, .hover\:text-green-700, .hover\:text-green-800):hover { color: #bbf7d0; }
+.dark :where(.hover\:text-orange-600):hover { color: #fdba74; }
+.dark .group:hover :where(.group-hover\:text-slate-600) { color: #e2e8f0; }
+.dark .group:hover :where(.group-hover\:text-emerald-600) { color: #86efac; }
+.dark .group:hover :where(.group-hover\:text-orange-600) { color: #fdba74; }
+
+/* Gradient stops. Only the color variable is replaced, so the gradient direction
+   and any `from-x/80` opacity suffix keep working. */
+.dark :where(.from-white) { --tw-gradient-from: #111827; }
+.dark :where(.via-white) { --tw-gradient-via: #111827; }
+.dark :where(.to-white) { --tw-gradient-to: #111827; }
+.dark :where(.from-slate-100) { --tw-gradient-from: #1e293b; }
+.dark :where(.to-slate-200) { --tw-gradient-to: #334155; }
+.dark :where(.to-slate-50\/50) { --tw-gradient-to: rgba(22, 32, 51, 0.5); }
+.dark :where(.from-orange-50, .from-orange-50\/80, .from-amber-50) { --tw-gradient-from: rgba(245, 158, 11, 0.1); }
+.dark :where(.via-amber-50\/40, .via-amber-50\/70) { --tw-gradient-via: rgba(245, 158, 11, 0.08); }
+.dark :where(.to-amber-50\/70, .to-orange-50) { --tw-gradient-to: rgba(245, 158, 11, 0.1); }
+.dark :where(.to-red-50) { --tw-gradient-to: rgba(239, 68, 68, 0.1); }
+.dark :where(.from-blue-50, .from-indigo-50) { --tw-gradient-from: rgba(121, 168, 217, 0.1); }
+.dark :where(.to-blue-50\/60, .to-indigo-50, .to-secondary-50) { --tw-gradient-to: rgba(121, 168, 217, 0.1); }
+.dark :where(.to-blue-100) { --tw-gradient-to: rgba(121, 168, 217, 0.16); }
+.dark :where(.to-indigo-100\/30) { --tw-gradient-to: rgba(121, 168, 217, 0.1); }
+.dark :where(.from-purple-50) { --tw-gradient-from: rgba(168, 85, 247, 0.1); }
+.dark :where(.to-purple-100) { --tw-gradient-to: rgba(168, 85, 247, 0.16); }
+.dark :where(.from-primary-50, .from-primary-50\/60) { --tw-gradient-from: rgba(234, 106, 18, 0.09); }
+.dark :where(.to-primary-50\/30) { --tw-gradient-to: rgba(234, 106, 18, 0.07); }
+.dark :where(.from-primary-100) { --tw-gradient-from: rgba(234, 106, 18, 0.16); }
+.dark :where(.to-primary-100\/30) { --tw-gradient-to: rgba(234, 106, 18, 0.12); }
+.dark :where(.to-primary-200) { --tw-gradient-to: rgba(234, 106, 18, 0.24); }
+
+.dark :where(.shadow-sm, .shadow-card, .shadow-elevated, .shadow-float) {
+  --tw-shadow-color: rgba(0, 0, 0, 0.32);
+}
+
+.dark ::-webkit-scrollbar-thumb { background-color: #475569; }
+.dark ::-webkit-scrollbar-thumb:hover { background-color: #64748b; }
+
+/* ─── Hover lift ─── */
+.hover-lift {
+  transition: all 0.3s ease-out;
+}
+.hover-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-elevated);
+}
+
+/* ─── Animations ─── */
+.animate-scale-in {
+  animation: scaleIn 0.15s ease-out;
+}
+
+.animate-slide-down {
+  animation: slideDown 0.3s ease-out;
+}
+
+.animate-slide-in-right {
+  animation: slideInRight 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes slideInRight {
+  0% { opacity: 0; transform: translateX(100%); }
+  100% { opacity: 1; transform: translateX(0); }
+}
+
+/* ─── Line clamp ─── */
+.line-clamp-1 { overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 1; }
+.line-clamp-2 { overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.line-clamp-3 { overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
+
+/* ─── Scrollbar ─── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background-color: #cbd5e1;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: #94a3b8;
+}

@@ -19,12 +19,12 @@ public class ProjectTagConfiguration : IEntityTypeConfiguration<ProjectTag>
 
         builder.Property(pt => pt.TagName)
             .HasColumnName("tag_name")
-            .HasMaxLength(50)
+            .HasMaxLength(100)
             .IsRequired();
 
         builder.Property(pt => pt.NormalizedTagName)
             .HasColumnName("normalized_tag_name")
-            .HasMaxLength(50)
+            .HasMaxLength(100)
             .IsRequired();
 
         builder.Property(pt => pt.TagType)

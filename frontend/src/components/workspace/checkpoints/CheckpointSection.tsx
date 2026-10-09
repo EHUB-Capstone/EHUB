@@ -1,5 +1,174 @@
-import React from 'react';
+// @ts-nocheck
+// Startup checkpoints — overview grid + full-screen detail panel
+import { useState, useEffect, useCallback } from 'react';
+import { Flag, Loader2, Target } from 'lucide-react';
+import { checkpointApi } from '../../../api/checkpointApi';
+import CheckpointCard from './CheckpointCard';
+import CheckpointPanel from './CheckpointPanel';
+import ErrorState from '../../ui/ErrorState';
+import { buildWorkspaceCheckpointOverview } from '../../../utils/workspaceCheckpointOverview';
+import { subscribeProjectDirectionRealtime } from '../../../api/projectDirectionRealtime';
 
-export const CheckpointSection: React.FC = () => {
-  return <div>CheckpointSection</div>;
-};
+export default function CheckpointSection({
+  teamId,
+  workspaceClassName,
+  workspaceTeamName,
+  isEditable,
+  isReadOnly = false,
+  proposalId,
+  pitchDeckId,
+}) {
+  const [configs, setConfigs] = useState([]);
+  const [stats, setStats] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [selectedNumber, setSelectedNumber] = useState(null);
+  const [error, setError] = useState('');
+
+  const fetchStats = useCallback(async (silent = false) => {
+    if (!teamId) return;
+    if (!silent) {
+      setLoading(true);
+      setError('');
+      setConfigs([]);
+      setStats({});
+    }
+    try {
+      const res = await checkpointApi.getCheckpointData(String(teamId));
+      if (!res.success) throw new Error('Checkpoint request failed');
+      const overview = buildWorkspaceCheckpointOverview(
+        res.data?.checkpoints || [],
+        res.data?.submissions || [],
+      );
+      setConfigs(overview.checkpoints);
+      setStats(overview.stats);
+    } catch (e) {
+      if (!silent) {
+        setError(e?.response?.status === 404 || e?.status === 404
+          ? 'Checkpoints are not available on this server yet. Submission and feedback are unavailable.'
+          : 'Unable to load checkpoints. Please try again.');
+      }
+    } finally {
+      if (!silent) setLoading(false);
+    }
+  }, [teamId]);
+
+  useEffect(() => {
+    // Fetch checkpoint progress whenever the selected team changes.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void fetchStats();
+  }, [fetchStats]);
+
+  useEffect(() => {
+    const refresh = () => { if (!document.hidden) void fetchStats(true); };
+    const interval = window.setInterval(refresh, 60_000);
+    window.addEventListener('focus', refresh);
+    document.addEventListener('visibilitychange', refresh);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener('focus', refresh);
+      document.removeEventListener('visibilitychange', refresh);
+    };
+  }, [fetchStats]);
+
+  useEffect(() => subscribeProjectDirectionRealtime((event) => {
+    if (event.eventType === 'CheckpointRequirementsUpdated' && String(event.teamId) === String(teamId)) {
+      void fetchStats(true);
+    }
+  }, (reconnected) => {
+    if (reconnected) void fetchStats(true);
+  }), [fetchStats, teamId]);
+
+  const selected = configs.find((checkpoint) => checkpoint.number === selectedNumber) || null;
+
+  const completedCount = configs.filter((cp) => {
+    const s = stats[cp.number];
+    return (s?.count || 0) > 0 || (s?.linkCount || 0) > 0 || (s?.reqFilled || 0) > 0;
+  }).length;
+
+  if (error) return <section className="rounded-2xl border border-slate-200 bg-white p-5"><h2 className="mb-3 text-lg font-bold">Startup Checkpoints</h2><ErrorState message={error} onRetry={() => void fetchStats()} /></section>;
+
+  return (
+    <>
+      <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm overflow-hidden">
+        {/* Header */}
+        <div className="px-6 py-5 border-b border-slate-100 bg-gradient-to-r from-orange-50/80 via-white to-primary-50/30">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center shadow-md shadow-orange-200/50">
+                <Flag className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <h2 className="text-lg font-bold text-slate-900">Startup Checkpoints</h2>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  {configs.length} milestone stage{configs.length === 1 ? '' : 's'} · submit documents, links & receive feedback
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              {loading ? (
+                <Loader2 className="w-5 h-5 text-orange-400 animate-spin" />
+              ) : (
+                <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-slate-200/80 shadow-sm">
+                  <Target className="w-4 h-4 text-primary" />
+                  <span className="text-sm font-bold text-slate-700">
+                    {completedCount}
+                    <span className="text-slate-400 font-medium"> / {configs.length} completed</span>
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Progress bar */}
+          {!loading && configs.length > 0 && (
+            <div className="mt-4 h-2 rounded-full bg-slate-100 overflow-hidden">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-orange-400 to-orange-500 transition-all duration-500"
+                style={{ width: `${(completedCount / configs.length) * 100}%` }}
+              />
+            </div>
+          )}
+        </div>
+
+        {/* Vertical checkpoint list */}
+        <div className="px-4 py-6 sm:px-6">
+          {configs.length === 0 && !loading ? (
+            <p className="text-sm text-slate-400 text-center py-8">No checkpoints configured.</p>
+          ) : (
+            <div className="space-y-4">
+              {configs.map((cp, index) => (
+                <CheckpointCard
+                  key={cp.number}
+                  checkpoint={cp}
+                  submissionStats={stats}
+                  isLast={index === configs.length - 1}
+                  onOpen={() => setSelectedNumber(cp.number)}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {selected && (
+        <CheckpointPanel
+          checkpoint={selected}
+          checkpointCount={configs.length}
+          teamId={teamId}
+          workspaceClassName={workspaceClassName}
+          workspaceTeamName={workspaceTeamName}
+          isEditable={isEditable}
+          isReadOnly={isReadOnly}
+          proposalId={proposalId}
+          pitchDeckId={pitchDeckId}
+          onRequirementsSaved={() => void fetchStats(true)}
+          onClose={() => {
+            setSelectedNumber(null);
+            void fetchStats(true);
+          }}
+        />
+      )}
+    </>
+  );
+}

@@ -10,6 +10,11 @@ public enum NotificationType
     ProposalSubmitted,
     ProposalNeedsRevision,
     ProposalApproved,
+    ProjectDirectionSubmitted,
+    ProjectDirectionNeedsRevision,
+    ProjectDirectionApproved,
+    ProjectDirectionRejected,
     DeadlineReminder,
+    AccountApprovalRequested,
     SystemAnnouncement
 }
