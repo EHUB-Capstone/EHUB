@@ -14,7 +14,8 @@ public static class MentorFitScorer
             throw new ArgumentOutOfRangeException(nameof(semanticSimilarity));
 
         var normalizedProject = Normalize(projectText);
-        var expertiseMatches = profile.Expertise.Where(x => !string.IsNullOrWhiteSpace(x))
+        var expertiseMatches = profile.Expertise.Concat(profile.StartupDomains).Concat(profile.TechnologySkills)
+            .Concat(profile.Tags).Concat(profile.Experiences.Select(x => x.Area)).Where(x => !string.IsNullOrWhiteSpace(x))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Where(skill => Regex.IsMatch(normalizedProject,
                 @"(?<![\p{L}\p{N}+#.])" + Regex.Escape(Normalize(skill)) + @"(?![\p{L}\p{N}+#])",

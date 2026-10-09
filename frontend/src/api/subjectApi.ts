@@ -27,7 +27,7 @@ export const subjectApi = {
   update: (id: string, data: SaveSubjectPayload) => axiosClient.put(`/subjects/${id}`, data),
   delete: (id: string) => axiosClient.delete(`/subjects/${id}`),
   getCurrentSemester: () => axiosClient.get('/subjects/current-semester'),
-  getSemesters: () => axiosClient.get('/subjects/semesters'),
+  getSemesters: (signal?: AbortSignal) => axiosClient.get('/subjects/semesters', { signal }),
   getClassCreationSemesterOptions: () => axiosClient.get('/subjects/semesters/class-creation-options'),
   planSemester: (data: PlanSemesterPayload) => axiosClient.post('/subjects/semesters', data),
   updateSemesterDates: (id: string, data: UpdateSemesterDatesPayload) =>
@@ -41,16 +41,16 @@ export const subjectApi = {
     axiosClient.post(`/subjects/semesters/${id}/complete`, data),
   reopenSemester: (id: string, data: SemesterLifecyclePayload) =>
     axiosClient.post(`/subjects/semesters/${id}/reopen`, data),
-  getTeachingStaff: (params: { semester: SemesterCode; year: number }) =>
-    axiosClient.get('/subjects/teaching-staff', { params }),
+  getTeachingStaff: (params: { semester: SemesterCode; year: number }, signal?: AbortSignal) =>
+    axiosClient.get('/subjects/teaching-staff', { params, signal }),
   getTeachingStaffCandidates: () => axiosClient.get('/subjects/teaching-staff/candidates'),
-  addTeachingStaff: (data: { semester: SemesterCode; year: number; userId: string; role: 'LECTURER' | 'MENTOR' }) =>
-    axiosClient.post('/subjects/teaching-staff', data),
+  addTeachingStaff: (data: { semester: SemesterCode; year: number; userId: string; role: 'LECTURER' | 'MENTOR' }, signal?: AbortSignal) =>
+    axiosClient.post('/subjects/teaching-staff', data, { signal }),
   /** Adds several existing lecturers or mentors to a semester in one request. */
   addTeachingStaffBatch: (data: AddTeachingStaffBatchPayload) =>
     axiosClient.post('/subjects/teaching-staff/batch', data),
-  updateTeachingStaff: (id: string, data: { status: 'Active' | 'Inactive'; rowVersion: string }) =>
-    axiosClient.put(`/subjects/teaching-staff/${id}`, data),
+  updateTeachingStaff: (id: string, data: { status: 'Active' | 'Inactive'; rowVersion: string }, signal?: AbortSignal) =>
+    axiosClient.put(`/subjects/teaching-staff/${id}`, data, { signal }),
   /** Activates or deactivates a mentor without an account in a semester; id is the participation id. */
   updateTemporaryMentor: (id: string, data: { status: 'Active' | 'Inactive'; rowVersion: string }) =>
     axiosClient.put(`/subjects/teaching-staff/temporary-mentors/${id}`, data),

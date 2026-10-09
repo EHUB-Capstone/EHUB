@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import { mentorSupportApi } from '../../api/mentorSupportApi';
-import type { MentorProfile } from '../../types/mentoring';
+import type { MentorProfile, MentorProfileDraft } from '../../types/mentoring';
 import { parseApiError } from '../../utils/apiError';
 
-const emptyProfile: Pick<MentorProfile, 'mentorType' | 'expertise' | 'bio' | 'experience' | 'organization' | 'linkedInUrl' | 'portfolioUrl'> = {
+const emptyProfile: MentorProfileDraft = {
   mentorType: 'Unspecified', expertise: [], bio: '', experience: '', organization: '', linkedInUrl: '', portfolioUrl: '',
+  startupDomains: [], technologySkills: [], tags: [], experiences: [],
 };
 
 export default function MentorProfilePage() {

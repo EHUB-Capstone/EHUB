@@ -1,5 +1,6 @@
 using EHub.Application.Common.Interfaces.Identity;
 using EHub.Application.Features.Mentoring;
+using EHub.Application.Features.Mentoring.ManageProfiles;
 using EHub.Contracts.Common;
 using EHub.Contracts.Mentoring;
 using EHub.Shared.Constants;
@@ -14,8 +15,17 @@ namespace EHub.Api.Controllers;
 [Authorize]
 [Route("api/mentoring")]
 public sealed class MentoringController(ICurrentUserService currentUser, IMentorProfileHandler profiles,
-    IMentoringSessionHandler sessions) : ControllerBase
+    IMentoringSessionHandler sessions, IAdminMentorProfileHandler adminProfiles) : ControllerBase
 {
+    [HttpPost("profiles")]
+    [Authorize(Policy = SystemPolicies.AdminOnly)]
+    public async Task<IActionResult> CreateProfile([FromBody] SaveAdminMentorProfileRequest request, CancellationToken ct) =>
+        Respond(await adminProfiles.SaveAsync(null, request, ct));
+
+    [HttpPut("profiles/{id:guid}")]
+    [Authorize(Policy = SystemPolicies.AdminOnly)]
+    public async Task<IActionResult> UpdateManagedProfile(Guid id, [FromBody] SaveAdminMentorProfileRequest request, CancellationToken ct) =>
+        Respond(await adminProfiles.SaveAsync(id, request, ct));
     [HttpGet("profile")]
     [Authorize(Policy = SystemPolicies.MentorOnly)]
     public async Task<IActionResult> GetProfile(CancellationToken ct) => Respond(await profiles.GetMineAsync(UserId, ct));

@@ -88,6 +88,66 @@ test('mock authentication opens an admin session for protected UI testing', asyn
   assert.equal(me.data.email, 'admin@ehub.local');
 });
 
+test('admin mentor management mock creates and updates structured metadata and rejects duplicates', async () => {
+  resetMockState();
+  await axiosClient.post('/auth/login', { email: 'admin@ehub.local', password: 'Mock123!' });
+  const profile = { mentorType: 'Business', expertise: ['Product'], bio: 'Startup advisor',
+    startupDomains: ['Education'], technologySkills: ['Cloud'], tags: ['Founder'],
+    experiences: [{ kind: 'Technology', area: 'AI', years: 4, level: 'Advanced', notes: 'Products' }] };
+  const payload = { fullName: 'Demo Mentor', email: 'profile-test@example.test', temporaryPassword: 'Mock123!', profile };
+  const created = await axiosClient.post('/mentoring/profiles', payload);
+  assert.equal(created.data.email, payload.email);
+  assert.equal(created.data.experiences[0].area, 'AI');
+  const updated = await axiosClient.put(`/mentoring/profiles/${created.data.id}`, { ...payload, profile: { ...profile, tags: ['Advisor'] } });
+  assert.deepEqual(updated.data.tags, ['Advisor']);
+  await assert.rejects(axiosClient.post('/mentoring/profiles', payload),
+    (error: unknown) => (error as { response?: { status?: number } }).response?.status === 400);
+  await assert.rejects(axiosClient.put(`/mentoring/profiles/${created.data.id}`, { ...payload, profile: { ...profile, tags: ['AI', ' ai '] } }),
+    (error: unknown) => (error as { response?: { status?: number } }).response?.status === 400);
+  const directory = await axiosClient.get('/mentoring/directory');
+  assert.ok(directory.data.some((item: { id: string; tags: string[] }) => item.id === created.data.id && item.tags.includes('Advisor')));
+  resetMockState();
+});
+
+test('lecturer cannot manage mentor profiles in the mock', async () => {
+  resetMockState();
+  await axiosClient.post('/auth/login', { email: 'giang.lecturer@ehub.local', password: 'Mock123!' });
+  await assert.rejects(axiosClient.post('/mentoring/profiles', {}),
+    (error: unknown) => (error as { response?: { status?: number } }).response?.status === 403);
+  await assert.rejects(axiosClient.put('/mentoring/profiles/unknown', {}),
+    (error: unknown) => (error as { response?: { status?: number } }).response?.status === 403);
+  resetMockState();
+});
+
+test('mentor semester availability mock respects lifecycle, role and rowVersion', async () => {
+  resetMockState();
+  await axiosClient.post('/auth/login', { email: 'admin@ehub.local', password: 'Mock123!' });
+  const state = getMockState();
+  const mentor = state.users.find(x => x.email === 'yen.mentor@ehub.local')!;
+  mentor.status = 'APPROVED';
+  const params = { semester: 'FA', year: 2026 };
+  const added = await axiosClient.post('/subjects/teaching-staff', { ...params, userId: mentor.id, role: 'MENTOR' });
+  assert.equal(added.data.status, 'Active');
+  assert.equal(added.data.userId, mentor.id);
+  const listed = await axiosClient.get('/subjects/teaching-staff', { params });
+  assert.ok(listed.data.staff.some((x: { userId: string; rowVersion: string }) => x.userId === mentor.id && x.rowVersion === added.data.rowVersion));
+  const hasStatus = (status: number) => (error: unknown) => (error as { response?: { status?: number } }).response?.status === status;
+  await assert.rejects(axiosClient.put(`/subjects/teaching-staff/${added.data._id}`, { status: 'Inactive', rowVersion: 'stale' }), hasStatus(409));
+  const inactive = await axiosClient.put(`/subjects/teaching-staff/${added.data._id}`, { status: 'Inactive', rowVersion: added.data.rowVersion });
+  assert.equal(inactive.data.status, 'Inactive');
+  const active = await axiosClient.put(`/subjects/teaching-staff/${added.data._id}`, { status: 'Active', rowVersion: inactive.data.rowVersion });
+  assert.equal(active.data.status, 'Active');
+  await assert.rejects(axiosClient.post('/subjects/teaching-staff', { semester: 'SP', year: 2026, userId: mentor.id, role: 'MENTOR' }), hasStatus(400));
+  const assigned = state.users.find(x => x.email === 'khoa.mentor@ehub.local')!;
+  const assignedEntry = (await axiosClient.get('/subjects/teaching-staff', { params })).data.staff
+    .find((item: { userId: string }) => item.userId === assigned.id);
+  assert.ok(assignedEntry);
+  await assert.rejects(axiosClient.put(`/subjects/teaching-staff/${assignedEntry._id}`, { status: 'Inactive', rowVersion: assignedEntry.rowVersion }), hasStatus(400));
+  await axiosClient.post('/auth/login', { email: 'giang.lecturer@ehub.local', password: 'Mock123!' });
+  await assert.rejects(axiosClient.put(`/subjects/teaching-staff/${added.data._id}`, { status: 'Inactive', rowVersion: active.data.rowVersion }), hasStatus(403));
+  resetMockState();
+});
+
 test('mentor matching mock returns ranked candidates for an accessible team', async () => {
   resetMockState();
   await axiosClient.post('/auth/login', { email: 'admin@ehub.local', password: 'Mock123!' });

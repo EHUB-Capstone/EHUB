@@ -1,13 +1,17 @@
 import axiosClient from './axiosClient';
-import type { MentorProfile, MentorRecommendation, MentoringActionItem, MentoringFeedback, MentoringSession, SaveMentoringSession } from '../types/mentoring';
+import type { MentorProfile, MentorProfileDraft, SaveAdminMentorProfile, MentorRecommendation, MentoringActionItem, MentoringFeedback, MentoringSession, SaveMentoringSession } from '../types/mentoring';
 
 interface Envelope<T> { data: T }
 const data = <T>(value: Envelope<T>): T => value.data;
 
 export const mentorSupportApi = {
   getProfile: async (): Promise<MentorProfile> => data(await axiosClient.get('/mentoring/profile')),
-  updateProfile: async (profile: Pick<MentorProfile, 'mentorType' | 'expertise' | 'bio' | 'experience' | 'organization' | 'linkedInUrl' | 'portfolioUrl'>): Promise<MentorProfile> =>
+  updateProfile: async (profile: MentorProfileDraft): Promise<MentorProfile> =>
     data(await axiosClient.put('/mentoring/profile', profile)),
+  createManagedProfile: async (profile: SaveAdminMentorProfile, signal?: AbortSignal): Promise<MentorProfile> =>
+    data(await axiosClient.post('/mentoring/profiles', profile, { signal })),
+  updateManagedProfile: async (id: string, profile: SaveAdminMentorProfile, signal?: AbortSignal): Promise<MentorProfile> =>
+    data(await axiosClient.put(`/mentoring/profiles/${id}`, profile, { signal })),
   uploadDocument: async (kind: 'cv' | 'portfolio', file: File): Promise<MentorProfile> => {
     const form = new FormData();
     form.append('file', file);
@@ -15,7 +19,7 @@ export const mentorSupportApi = {
   },
   getDocument: async (mentorId: string, kind: 'cv' | 'portfolio'): Promise<Blob> =>
     axiosClient.get(`/mentoring/profiles/${mentorId}/documents/${kind}`, { responseType: 'blob' }),
-  getDirectory: async (): Promise<MentorProfile[]> => data(await axiosClient.get('/mentoring/directory')),
+  getDirectory: async (signal?: AbortSignal): Promise<MentorProfile[]> => data(await axiosClient.get('/mentoring/directory', { signal })),
   getRecommendations: async (teamId: string, signal?: AbortSignal): Promise<MentorRecommendation[]> =>
     data(await axiosClient.get(`/mentoring/teams/${teamId}/recommendations`, { timeout: 55_000, signal })),
   getSessions: async (teamId?: string): Promise<MentoringSession[]> =>

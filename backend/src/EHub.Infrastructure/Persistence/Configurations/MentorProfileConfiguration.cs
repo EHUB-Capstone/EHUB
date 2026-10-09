@@ -44,6 +44,9 @@ public class MentorProfileConfiguration : IEntityTypeConfiguration<MentorProfile
         builder.Property(mp => mp.Version)
             .IsRowVersion()
             .HasColumnName("xmin");
+        builder.Ignore(mp => mp.Tags);
+        builder.HasMany(mp => mp.Experiences).WithOne().HasForeignKey(x => x.MentorProfileId)
+            .OnDelete(DeleteBehavior.Cascade);
 
         builder.Property(mp => mp.Organization)
             .HasColumnName("organization")

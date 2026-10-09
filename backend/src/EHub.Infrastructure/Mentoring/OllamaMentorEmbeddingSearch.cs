@@ -118,8 +118,10 @@ public sealed class OllamaMentorEmbeddingSearch(AppDbContext db, HttpClient clie
     private static string BuildText(MentorProfile profile)
     {
         var text = string.Join('\n', new[] { $"Loại mentor: {profile.MentorType}",
-            $"Chuyên môn: {string.Join(", ", profile.Expertise)}", $"Kinh nghiệm: {profile.Experience}",
-            $"Giới thiệu: {profile.Bio}" });
+            $"Chuyên môn: {string.Join(", ", profile.Expertise)}", $"Lĩnh vực startup: {string.Join(", ", profile.StartupDomains)}",
+            $"Công nghệ: {string.Join(", ", profile.TechnologySkills)}", $"Tags: {string.Join(", ", profile.Tags)}",
+            string.Join('\n', profile.Experiences.Select(x => $"{x.Kind}: {x.Area}; {x.Years} năm; {x.Level}; {x.Notes}")),
+            $"Giới thiệu: {profile.Bio}", $"Kinh nghiệm: {profile.Experience}" });
         return text[..Math.Min(text.Length, 6000)];
     }
 

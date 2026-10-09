@@ -64,6 +64,14 @@ public sealed class MentoringWorkflowTests
         var directory = await handler.GetDirectoryAsync(lecturer.Id, SystemRoles.Lecturer, default);
         directory.Value.Should().HaveCount(2);
 
+        var availability = await context.SemesterStaffAssignments.SingleAsync(x => x.UserId == profile.UserId);
+        availability.Status = SemesterStaffStatus.Inactive;
+        await context.SaveChangesAsync();
+        var unavailableSemester = await handler.RecommendAsync(group.Id, lecturer.Id, SystemRoles.Lecturer, default);
+        unavailableSemester.Value.Should().ContainSingle().Which.Mentor.Id.Should().Be(otherProfile.Id);
+        availability.Status = SemesterStaffStatus.Active;
+        await context.SaveChangesAsync();
+
         embeddings.SimilaritiesAsync(Arg.Any<string>(), Arg.Any<IReadOnlyCollection<MentorProfile>>(),
             Arg.Any<CancellationToken>()).Returns<IReadOnlyDictionary<Guid, double>>(_ =>
                 throw new MentorEmbeddingUnavailableException());

@@ -18,6 +18,9 @@ public class MentorProfile : AuditableEntity
     public string[] TechnologySkills { get; set; } = Array.Empty<string>();
     // Free labels used to group or find mentors.
     public string[] MentorTags { get; set; } = Array.Empty<string>();
+    // The mentoring API uses the same tags as the admin profile API.
+    public string[] Tags { get => MentorTags; set => MentorTags = value; }
+    public virtual ICollection<MentorExperience> Experiences { get; set; } = new List<MentorExperience>();
     // Background of the mentor: experience, achievements, areas they can coach.
     public string? Bio { get; set; }
     // Free-text availability, for example "Weekday afternoons, online only". Status says whether the mentor can be assigned at all.

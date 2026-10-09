@@ -98,6 +98,8 @@ public static class DependencyInjection
         services.AddScoped<ISubjectRubricHandler, SubjectRubricHandler>();
         services.AddScoped<IStartupIndustryManagementHandler, StartupIndustryManagementHandler>();
         services.AddScoped<IMentorProfileHandler, MentorProfileHandler>();
+        services.AddScoped<EHub.Application.Features.Mentoring.ManageProfiles.IAdminMentorProfileHandler,
+            EHub.Application.Features.Mentoring.ManageProfiles.AdminMentorProfileHandler>();
         services.AddScoped<IMentoringSessionHandler, MentoringSessionHandler>();
         services.AddScoped<IStartupIndustryImportHandler, StartupIndustryImportHandler>();
 

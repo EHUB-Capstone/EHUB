@@ -97,6 +97,7 @@ export interface MockSemesterStaffAssignment {
   userId: string;
   role: 'LECTURER' | 'MENTOR';
   status: 'ACTIVE' | 'INACTIVE';
+  rowVersion?: string;
 }
 
 export interface MockRoadmapItem {

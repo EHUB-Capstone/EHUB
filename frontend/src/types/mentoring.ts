@@ -2,8 +2,13 @@ export interface MentorProfile {
   id: string;
   userId: string;
   fullName: string;
+  email: string;
   mentorType: 'Business' | 'IT' | 'Unspecified';
   expertise: string[];
+  startupDomains: string[];
+  technologySkills: string[];
+  tags: string[];
+  experiences: MentorExperience[];
   bio: string | null;
   experience: string | null;
   organization: string | null;
@@ -17,6 +22,24 @@ export interface MentorProfile {
   totalAssignments: number;
   totalSessions: number;
   averageFeedbackRating: number | null;
+}
+
+export interface MentorExperience {
+  kind: 'Startup' | 'Technology';
+  area: string;
+  years: number | null;
+  level: string | null;
+  notes: string | null;
+}
+
+export type MentorProfileDraft = Pick<MentorProfile, 'mentorType' | 'expertise' | 'startupDomains' |
+  'technologySkills' | 'tags' | 'experiences' | 'bio' | 'experience' | 'organization' | 'linkedInUrl' | 'portfolioUrl'>;
+
+export interface SaveAdminMentorProfile {
+  fullName: string;
+  email: string;
+  temporaryPassword?: string;
+  profile: MentorProfileDraft;
 }
 
 export interface MentorRecommendation {

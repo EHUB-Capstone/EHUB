@@ -9,7 +9,7 @@ import {
   validateLoginPayload,
   validateRegisterPayload,
 } from '../../utils/authValidation.ts';
-import type { MockCurriculum, MockSemester, MockUser } from '../mockState.ts';
+import type { MockCurriculum, MockSemester, MockUser, MockSemesterStaffAssignment } from '../mockState.ts';
 import type { MockReply } from '../mockHelpers.ts';
 import {
   allocateId,
@@ -29,6 +29,20 @@ import {
 } from '../mockHelpers.ts';
 
 const emptyCurriculum = (): MockCurriculum => ({ roadmapItems: [], rubrics: [], checkpoints: [], otherAssessments: [] });
+function staffResponse(entry: MockSemesterStaffAssignment) {
+  const state = getMockState();
+  const user = state.users.find(x => x.id === entry.userId)!;
+  const classes = state.classes.filter(x => x.semesterId === entry.semesterId && x.status !== 'Archived');
+  const assignments = entry.role === 'LECTURER'
+    ? classes.filter(x => x.primaryLecturerId === user.id).map(x => ({ _id: x.id, classCode: x.classCode, subjectCode: x.subjectCode }))
+    : state.teams.filter(team => classes.some(x => x.id === team.classId) &&
+      (team.currentMentorAssignments ?? (team.currentMentorAssignment ? [team.currentMentorAssignment] : []))
+        .some(x => x.mentor.userId === user.id && x.status === 'Active' && !x.endedAtUtc))
+      .map(team => { const cls = classes.find(x => x.id === team.classId)!; return { _id: team.id, classCode: cls.classCode, subjectCode: cls.subjectCode }; });
+  return { _id: entry.id, userId: user.id, name: user.name, email: user.email, avatar: user.avatar, role: entry.role,
+    status: entry.status === 'ACTIVE' ? 'Active' : 'Inactive', userStatus: user.status, isIncomplete: false,
+    missingFields: [], rowVersion: entry.rowVersion ?? '0', classCount: assignments.length, assignments };
+}
 const checkpointDefinitionId = (courseId: string, checkpointNumber: number) =>
   `00000000-0000-4000-8000-${String(3000 + Number(courseId.slice(-3)) * 10 + checkpointNumber).padStart(12, '0')}`;
 const checkpointEvaluationId = (teamId: string, checkpointNumber: number) =>
@@ -1164,20 +1178,58 @@ function registerSubjectHandlers(mock: MockAdapter): void {
     return ok({ results, addedCount, alreadyInListCount: 0, rejectedCount: results.length - addedCount }, 'Teaching staff batch processed successfully.');
   });
 
-  mock.onGet('/subjects/teaching-staff').reply(() => {
-    const staff = getMockState().users.filter((user) => user.role === 'LECTURER' || user.role === 'MENTOR').map((user) => {
-      const assignments = user.role === 'LECTURER'
-        ? getMockState().classes.filter((cls) => cls.primaryLecturerId === user.id && cls.status !== 'Archived').map((cls) => ({ _id: cls.id, classCode: cls.classCode, subjectCode: cls.subjectCode }))
-        : getMockState().teams.filter((team) => team.currentMentorAssignment?.mentor.userId === user.id && team.currentMentorAssignment.status === 'Active').map((team) => {
-          const cls = getMockState().classes.find((item) => item.id === team.classId);
-          return { _id: team.id, classCode: cls?.classCode || '-', subjectCode: cls?.subjectCode || '-' };
-        });
-      return { _id: user.id, name: user.name, email: user.email, avatar: user.avatar, role: user.role, status: user.status, classCount: assignments.length, assignments };
-    });
+  mock.onGet('/subjects/teaching-staff').reply(config => {
+    const state = getMockState();
+    const viewer = state.users.find(x => x.id === state.sessionUserId);
+    if (!viewer) return failure(401, 'COMMON_UNAUTHORIZED', 'Authentication required.');
+    if (!['ADMIN', 'LECTURER'].includes(viewer.role)) return failure(403, 'CLASS_ACCESS_DENIED', 'Staff role required.');
+    const params = requestParams(config);
+    const semester = state.semesters.find(x => x.semester === asString(params.semester) && x.year === asNumber(params.year, 0));
+    if (!semester) return failure(404, 'SEMESTER_NOT_FOUND', 'Semester was not found.');
+    const staff = state.semesterStaffAssignments.filter(x => x.semesterId === semester.id && state.users.some(u => u.id === x.userId)).map(staffResponse);
     const lecturers = staff.filter((item) => item.role === 'LECTURER').length;
     const mentors = staff.filter((item) => item.role === 'MENTOR').length;
     const assigned = staff.filter((item) => item.assignments.length > 0).length;
     return ok({ staff, summary: { lecturers, mentors, assigned, unassigned: staff.length - assigned, classes: getMockState().classes.filter((cls) => cls.status !== 'Archived').length } }, 'Teaching staff retrieved successfully.');
+  });
+
+  mock.onPost('/subjects/teaching-staff').reply(config => {
+    const state = getMockState();
+    const viewer = state.users.find(x => x.id === state.sessionUserId);
+    if (!viewer) return failure(401, 'COMMON_UNAUTHORIZED', 'Authentication required.');
+    if (viewer.role !== 'ADMIN') return failure(403, 'CLASS_ACCESS_DENIED', 'Admin role required.');
+    const body = parseBody(config);
+    const semester = state.semesters.find(x => x.semester === asString(body.semester) && x.year === asNumber(body.year, 0));
+    const user = state.users.find(x => x.id === asString(body.userId));
+    if (!semester || !['Active', 'Planned'].includes(semester.status)) return failure(400, 'SEMESTER_INVALID_STATE', 'This semester cannot be changed.');
+    if (!user || user.status !== 'APPROVED' || user.role !== body.role || !['MENTOR', 'LECTURER'].includes(user.role))
+      return failure(400, 'SEMESTER_STAFF_CONFLICT', 'An active user with the requested role is required.');
+    if (state.semesterStaffAssignments.some(x => x.semesterId === semester.id && x.userId === user.id && x.role === user.role))
+      return failure(400, 'SEMESTER_STAFF_CONFLICT', 'This user already has a semester entry.');
+    const entry: MockSemesterStaffAssignment = { id: allocateId(), semesterId: semester.id, userId: user.id, role: user.role as 'MENTOR' | 'LECTURER', status: 'ACTIVE', rowVersion: allocateRowVersion() };
+    state.semesterStaffAssignments.push(entry); persistMockState();
+    return ok(staffResponse(entry));
+  });
+
+  mock.onPut(/^\/subjects\/teaching-staff\/[^/]+$/).reply(config => {
+    const state = getMockState();
+    const viewer = state.users.find(x => x.id === state.sessionUserId);
+    if (!viewer) return failure(401, 'COMMON_UNAUTHORIZED', 'Authentication required.');
+    if (viewer.role !== 'ADMIN') return failure(403, 'CLASS_ACCESS_DENIED', 'Admin role required.');
+    const entry = state.semesterStaffAssignments.find(x => x.id === routeId(config, /^\/subjects\/teaching-staff\/([^/]+)$/));
+    if (!entry) return failure(404, 'SEMESTER_STAFF_NOT_FOUND', 'Entry was not found.');
+    const semester = state.semesters.find(x => x.id === entry.semesterId);
+    if (!semester || !['Active', 'Planned'].includes(semester.status)) return failure(400, 'SEMESTER_INVALID_STATE', 'This semester cannot be changed.');
+    const body = parseBody(config);
+    if (body.rowVersion !== (entry.rowVersion ?? '0')) return failure(409, 'SEMESTER_CONCURRENCY_CONFLICT', 'Availability changed. Reload and try again.');
+    if (body.status !== 'Active' && body.status !== 'Inactive') return failure(400, 'CLASS_VALIDATION_ERROR', 'Invalid status.');
+    const user = state.users.find(x => x.id === entry.userId);
+    if (body.status === 'Active' && (!user || user.status !== 'APPROVED' || user.role !== entry.role))
+      return failure(400, 'SEMESTER_STAFF_CONFLICT', 'The user must be active with the requested role.');
+    if (body.status === 'Inactive' && staffResponse(entry).assignments.length > 0)
+      return failure(400, 'SEMESTER_STAFF_CONFLICT', 'Reassign active classes or teams before removing availability.');
+    entry.status = body.status === 'Active' ? 'ACTIVE' : 'INACTIVE'; entry.rowVersion = allocateRowVersion();
+    persistMockState(); return ok(staffResponse(entry));
   });
 
   mock.onGet(/^\/subjects\/[^/]+\/curriculum$/).reply((config) => {

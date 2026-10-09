@@ -23,7 +23,7 @@ public sealed class MentorProfileHandler(IApplicationDbContext context, IMentorD
         var extension = Path.GetExtension(fileName).ToLowerInvariant();
         if (extension is not (".pdf" or ".docx"))
             return Result.Failure<MentorProfileResponse>(ErrorCodes.CommonValidationError, "Only PDF and DOCX documents are accepted.");
-        var profile = await context.MentorProfiles.Include(x => x.User)
+        var profile = await context.MentorProfiles.Include(x => x.User).Include(x => x.Experiences)
             .FirstOrDefaultAsync(x => x.UserId == userId, cancellationToken);
         if (profile is null)
             return Result.Failure<MentorProfileResponse>(ErrorCodes.CommonNotFoundError, "Mentor profile was not found.");
@@ -91,7 +91,7 @@ public sealed class MentorProfileHandler(IApplicationDbContext context, IMentorD
 
     public async Task<Result<MentorProfileResponse>> GetMineAsync(Guid userId, CancellationToken cancellationToken)
     {
-        var profile = await context.MentorProfiles.AsNoTracking().Include(x => x.User)
+        var profile = await context.MentorProfiles.AsNoTracking().Include(x => x.User).Include(x => x.Experiences)
             .FirstOrDefaultAsync(x => x.UserId == userId, cancellationToken);
         return profile is null
             ? Result.Failure<MentorProfileResponse>(ErrorCodes.CommonNotFoundError, "Mentor profile was not found.")
@@ -100,6 +100,9 @@ public sealed class MentorProfileHandler(IApplicationDbContext context, IMentorD
 
     public async Task<Result<MentorProfileResponse>> UpdateMineAsync(Guid userId, UpdateMentorProfileRequest request, CancellationToken cancellationToken)
     {
+        var validation = await new ManageProfiles.UpdateMentorProfileRequestValidator().ValidateAsync(request, cancellationToken);
+        if (!validation.IsValid)
+            return Result.Failure<MentorProfileResponse>(ErrorCodes.CommonValidationError, validation.Errors[0].ErrorMessage);
         if (request.MentorType is not ("Business" or "IT") || request.Expertise.Length is 0 or > 20 ||
             request.Expertise.Any(x => string.IsNullOrWhiteSpace(x) || x.Length > 80) ||
             (request.Bio?.Length ?? 0) > 2000 || (request.Experience?.Length ?? 0) > 4000 ||
@@ -107,7 +110,7 @@ public sealed class MentorProfileHandler(IApplicationDbContext context, IMentorD
             !ValidHttpsUrl(request.LinkedInUrl, 500) || !ValidHttpsUrl(request.PortfolioUrl, 1000))
             return Result.Failure<MentorProfileResponse>(ErrorCodes.CommonValidationError, "Mentor profile contains invalid fields.");
 
-        var profile = await context.MentorProfiles.Include(x => x.User)
+        var profile = await context.MentorProfiles.Include(x => x.User).Include(x => x.Experiences)
             .FirstOrDefaultAsync(x => x.UserId == userId, cancellationToken);
         if (profile is null)
             return Result.Failure<MentorProfileResponse>(ErrorCodes.CommonNotFoundError, "Mentor profile was not found.");
@@ -115,12 +118,7 @@ public sealed class MentorProfileHandler(IApplicationDbContext context, IMentorD
         if (profile.MentorType != request.MentorType)
             return Result.Failure<MentorProfileResponse>(ErrorCodes.CommonValidationError,
                 "Mentor type is managed by the administrator.");
-        profile.Expertise = request.Expertise.Select(x => x.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
-        profile.Bio = request.Bio?.Trim();
-        profile.Experience = request.Experience?.Trim();
-        profile.Organization = request.Organization?.Trim();
-        profile.LinkedInUrl = request.LinkedInUrl?.Trim();
-        profile.PortfolioUrl = request.PortfolioUrl?.Trim();
+        ApplyMetadata(profile, request);
         await context.SaveChangesAsync(cancellationToken);
         return Result.Success(Map(profile));
     }
@@ -128,7 +126,7 @@ public sealed class MentorProfileHandler(IApplicationDbContext context, IMentorD
     public async Task<Result<IReadOnlyCollection<MentorProfileResponse>>> GetDirectoryAsync(Guid userId, string role, CancellationToken cancellationToken)
     {
         if (!IsStaff(role)) return Forbidden<IReadOnlyCollection<MentorProfileResponse>>();
-        var query = context.MentorProfiles.AsNoTracking().Include(x => x.User).AsQueryable();
+        var query = context.MentorProfiles.AsNoTracking().Include(x => x.User).Include(x => x.Experiences).AsQueryable();
         if (role == SystemRoles.Lecturer)
             query = query.Where(x => x.Status == MentorProfileStatus.Active && x.User.Status == UserStatus.Active &&
                 context.SemesterStaffAssignments.Any(s => s.UserId == x.UserId &&
@@ -168,7 +166,7 @@ public sealed class MentorProfileHandler(IApplicationDbContext context, IMentorD
         if (role != SystemRoles.Admin && !(role == SystemRoles.Lecturer && team.Class.PrimaryLecturerId == userId))
             return Forbidden<IReadOnlyCollection<MentorRecommendationResponse>>();
 
-        var profiles = await context.MentorProfiles.AsNoTracking().Include(x => x.User)
+        var profiles = await context.MentorProfiles.AsNoTracking().Include(x => x.User).Include(x => x.Experiences)
             .Where(x => x.Status == MentorProfileStatus.Active && x.User.Status == UserStatus.Active &&
                 context.SemesterStaffAssignments.Any(s => s.SemesterId == team.Class.SemesterId &&
                     s.UserId == x.UserId && s.Role == SemesterStaffRole.Mentor && s.Status == SemesterStaffStatus.Active))
@@ -222,9 +220,40 @@ public sealed class MentorProfileHandler(IApplicationDbContext context, IMentorD
         (value.Length <= maxLength && Uri.TryCreate(value, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps);
     private static bool IsStaff(string role) => role is SystemRoles.Admin or SystemRoles.Lecturer;
     private static Result<T> Forbidden<T>() => Result.Failure<T>(ErrorCodes.ClassAccessDenied, "Access to mentor profiles is denied.");
-    private static MentorProfileResponse Map(MentorProfile x, int activeTeams = 0, int totalAssignments = 0,
+    internal static void ApplyMetadata(MentorProfile profile, UpdateMentorProfileRequest request)
+    {
+        profile.Expertise = request.Expertise.Select(x => x.Trim()).ToArray();
+        profile.StartupDomains = request.StartupDomains.Select(x => x.Trim()).ToArray();
+        profile.TechnologySkills = request.TechnologySkills.Select(x => x.Trim()).ToArray();
+        profile.Tags = request.Tags.Select(x => x.Trim()).ToArray();
+        profile.Bio = request.Bio?.Trim();
+        profile.Experience = request.Experience?.Trim();
+        profile.Organization = request.Organization?.Trim();
+        profile.LinkedInUrl = request.LinkedInUrl?.Trim();
+        profile.PortfolioUrl = request.PortfolioUrl?.Trim();
+        foreach (var previous in profile.Experiences.ToArray())
+            if (!request.Experiences.Any(x => x.Kind == previous.Kind && x.Area.Trim().Equals(previous.Area, StringComparison.OrdinalIgnoreCase)))
+                profile.Experiences.Remove(previous);
+        foreach (var entry in request.Experiences)
+        {
+            var existing = profile.Experiences.FirstOrDefault(x => x.Kind == entry.Kind && x.Area.Equals(entry.Area.Trim(), StringComparison.OrdinalIgnoreCase));
+            if (existing is null)
+            {
+                existing = new MentorExperience { MentorProfileId = profile.Id, Kind = entry.Kind, Area = entry.Area.Trim() };
+                profile.Experiences.Add(existing);
+            }
+            existing.Years = entry.Years;
+            existing.Level = entry.Level?.Trim();
+            existing.Notes = entry.Notes?.Trim();
+        }
+    }
+
+    internal static MentorProfileResponse Map(MentorProfile x, int activeTeams = 0, int totalAssignments = 0,
         int totalSessions = 0, double? averageRating = null) => new() { Id = x.Id, UserId = x.UserId,
-        FullName = x.User.FullName, MentorType = x.MentorType, Expertise = x.Expertise,
+        FullName = x.User.FullName, Email = x.User.Email, MentorType = x.MentorType, Expertise = x.Expertise,
+        StartupDomains = x.StartupDomains, TechnologySkills = x.TechnologySkills, Tags = x.Tags,
+        Experiences = x.Experiences.Select(e => new MentorExperienceDto { Kind = e.Kind, Area = e.Area,
+            Years = e.Years, Level = e.Level, Notes = e.Notes }).ToArray(),
         Bio = x.Bio, Experience = x.Experience, Organization = x.Organization,
         LinkedInUrl = x.LinkedInUrl, PortfolioUrl = x.PortfolioUrl, CvFileName = x.CvFileName,
         PortfolioFileName = x.PortfolioFileName,
