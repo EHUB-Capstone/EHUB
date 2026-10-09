@@ -15,11 +15,9 @@ export interface MentorImportRowPreview {
 
 export interface MentorImportPreview {
   sessionId: string;
-  semesterId: string;
   totalRows: number;
   createCount: number;
   updateCount: number;
-  addToSemesterCount: number;
   needsCompletionCount: number;
   completeDraftCount: number;
   errorCount: number;
@@ -27,12 +25,30 @@ export interface MentorImportPreview {
   rows: MentorImportRowPreview[];
 }
 
+/** A mentor kept in the master list without a login account yet. */
+export interface IncompleteMentor {
+  id: string;
+  fullName: string;
+  mentorType: MentorType;
+  email?: string | null;
+  missingFields: string[];
+  /** Teams that use this mentor as a temporary mentor while there is no account. */
+  activeTeamCount?: number;
+  updatedAtUtc: string;
+}
+
+export interface IncompleteMentorList {
+  mentors: IncompleteMentor[];
+  pagination: { total: number; page: number; limit: number; pages: number };
+}
+
 export interface MentorImportCommitResult {
   createdCount: number;
   updatedCount: number;
-  semesterAssignmentCount: number;
   draftSavedCount: number;
   draftCompletedCount: number;
+  /** Teams whose temporary mentor became the real mentor. */
+  temporaryAssignmentsConverted?: number;
 }
 
 export interface MentorAllocationRowPreview {
@@ -45,7 +61,110 @@ export interface MentorAllocationRowPreview {
   mentorProfileId: string;
   mentorName: string;
   mentorEmail: string;
+  /** The mentor has no account yet; the slot is filled as a temporary mentor. */
+  isTemporary?: boolean;
   resultingSemesterLoad: number;
+  /** "Retained" keeps the previous semester's mentor for a continuing team; "Allocated" is newly chosen; "Manual" is a hand edit. */
+  source?: 'Retained' | 'Allocated' | 'Manual';
+  /** Set when this row replaces the mentor currently in the slot; that assignment ends when the preview is confirmed. */
+  replacesAssignmentId?: string | null;
+  replacesMentorProfileId?: string | null;
+  replacesMentorName?: string | null;
+  replaceReason?: string | null;
+  mentorLoadBefore?: number | null;
+}
+
+/** A hand edit of one team slot. A null mentorProfileId leaves the slot empty. */
+export interface MentorAllocationEdit {
+  teamId: string;
+  mentorType: MentorType;
+  mentorProfileId: string | null;
+  /** Explicitly end the mentor currently in the slot; a reason of 3 to 1000 characters is then required. */
+  replace?: boolean;
+  reason?: string;
+}
+
+/** A mentor already assigned to a team slot. `replaced` is true when the preview ends this assignment. */
+export interface MentorAllocationExisting {
+  assignmentId: string;
+  teamId: string;
+  teamCode: string;
+  teamName: string;
+  classId: string;
+  classCode: string;
+  subjectCode: string;
+  mentorType: MentorType;
+  mentorProfileId: string;
+  mentorName: string;
+  replaced: boolean;
+}
+
+export interface MentorAllocationConflict {
+  teamId: string | null;
+  teamCode: string;
+  teamName: string;
+  mentorType: MentorType;
+  currentAssignmentId: string | null;
+  currentMentorProfileId: string | null;
+  currentMentorName: string | null;
+  proposedMentorProfileId: string | null;
+  proposedMentorName: string | null;
+  /** "SlotOccupied": resubmit the edit with replace to swap the mentor. "EditRejected": the edit was not applied. */
+  kind: 'SlotOccupied' | 'EditRejected';
+  message: string;
+}
+
+export type MentorAllocationSkipReason =
+  | 'MentorNotActiveInSemester'
+  | 'MentorUnavailable'
+  | 'SlotAlreadyFilled'
+  | 'NoContinuedTeam';
+
+export interface MentorAllocationSkipped {
+  teamId: string | null;
+  teamCode: string;
+  teamName: string;
+  classCode: string;
+  sourceTeamCode: string;
+  mentorType: MentorType;
+  mentorProfileId: string;
+  mentorName: string;
+  mentorEmail: string;
+  reason: MentorAllocationSkipReason;
+  message: string;
+}
+
+export type MentorAllocationStrategy = 'Balanced' | 'Random';
+
+/** A team slot that still has no mentor after the proposed allocation. */
+export interface MentorAllocationUnfilled {
+  teamId: string;
+  teamCode: string;
+  teamName: string;
+  classId: string;
+  classCode: string;
+  subjectCode: string;
+  mentorType: MentorType;
+}
+
+export interface MentorAllocationSubjectLoad {
+  subjectCode: string;
+  before: number;
+  added: number;
+  /** Assignments that end because the mentor of a slot was replaced. */
+  removed?: number;
+}
+
+/** Teams carried by an active mentor of the semester, before and after the proposed allocation. */
+export interface MentorAllocationMentorLoad {
+  mentorProfileId: string;
+  mentorName: string;
+  mentorEmail: string;
+  mentorType: MentorType;
+  contractType?: string | null;
+  subjects: MentorAllocationSubjectLoad[];
+  totalBefore: number;
+  totalAfter: number;
 }
 
 export interface MentorAllocationPreview {
@@ -55,12 +174,23 @@ export interface MentorAllocationPreview {
   teamCount: number;
   missingEnterpriseCount: number;
   missingAcademicCount: number;
+  retainedCount?: number;
+  strategy?: MentorAllocationStrategy;
+  unfilledEnterpriseCount?: number;
+  unfilledAcademicCount?: number;
+  replacementCount?: number;
   canCommit: boolean;
   warnings: string[];
   assignments: MentorAllocationRowPreview[];
+  skipped?: MentorAllocationSkipped[];
+  unfilled?: MentorAllocationUnfilled[];
+  mentorLoads?: MentorAllocationMentorLoad[];
+  conflicts?: MentorAllocationConflict[];
+  existingAssignments?: MentorAllocationExisting[];
 }
 
 export interface MentorAllocationCommitResult {
+  endedCount?: number;
   createdCount: number;
   skippedCount: number;
 }

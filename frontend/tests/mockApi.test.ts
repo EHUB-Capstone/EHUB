@@ -108,42 +108,6 @@ test('student cannot open the mentor directory mock', async () => {
     (error: unknown) => (error as { response?: { status?: number } }).response?.status === 403);
 });
 
-test('mock mentor carryover previews eligibility and adds only selected mentors to the target semester', async () => {
-  resetMockState();
-  await axiosClient.post('/auth/login', { email: 'admin@ehub.local', password: 'Mock123!' });
-  const state = getMockState();
-  const source = state.semesters.find(semester => semester.semester === 'SP' && semester.year === 2026);
-  const target = state.semesters.find(semester => semester.semester === 'FA' && semester.year === 2026);
-  const existingMentor = state.users.find(user => user.email === 'khoa.mentor@ehub.local');
-  const reusableMentor = state.users.find(user => user.email === 'yen.mentor@ehub.local');
-  assert.ok(source && target && existingMentor && reusableMentor);
-  reusableMentor.status = 'APPROVED';
-  state.semesterStaffAssignments.push(
-    { id: 'carryover-source-existing', semesterId: source.id, userId: existingMentor.id, role: 'MENTOR', status: 'ACTIVE' },
-    { id: 'carryover-source-reusable', semesterId: source.id, userId: reusableMentor.id, role: 'MENTOR', status: 'ACTIVE' },
-  );
-
-  const preview = await axiosClient.post('/subjects/teaching-staff/mentor-carryover/preview', {
-    sourceSemesterId: source.id,
-    targetSemesterId: target.id,
-  });
-  assert.equal(preview.data.totalCount, 2);
-  assert.equal(preview.data.eligibleCount, 1);
-  assert.equal(preview.data.alreadyAddedCount, 1);
-  assert.equal(preview.data.mentors.find((mentor: { userId: string }) => mentor.userId === reusableMentor.id).action, 'Add');
-
-  const committed = await axiosClient.post('/subjects/teaching-staff/mentor-carryover/commit', {
-    sourceSemesterId: source.id,
-    targetSemesterId: target.id,
-    mentorUserIds: [reusableMentor.id],
-  });
-  assert.equal(committed.data.addedCount, 1);
-  assert.equal(committed.data.reactivatedCount, 0);
-  assert.ok(state.semesterStaffAssignments.some(assignment =>
-    assignment.semesterId === target.id && assignment.userId === reusableMentor.id && assignment.status === 'ACTIVE'));
-  resetMockState();
-});
-
 test('admin class export accepts selected classes from one semester and returns one Excel blob', async () => {
   resetMockState();
   await axiosClient.post('/auth/login', { email: 'admin@ehub.local', password: 'Mock123!' });
@@ -1134,7 +1098,7 @@ test('mock team management supports proposal creation, update, duplicate prevent
   assert.ok(roster.every((student) => student.teamId === null));
 });
 
-test('mock student formation creates a team only after every invited member accepts', async () => {
+test('mock student formation creates a team only when the creator finalizes accepted members', async () => {
   resetMockState();
   const state = getMockState();
   const targetClass = state.classes.find((item) => item.status === 'Draft');
@@ -1148,7 +1112,7 @@ test('mock student formation creates a team only after every invited member acce
   roster[0].majorCode = 'UNDECLARED';
   const memberIds = roster.map((student) => student.studentId);
   const response = await axiosClient.post(`/classes/${targetClass.id}/team-formations`, {
-    memberStudentIds: memberIds,
+    inviteeStudentIds: memberIds.slice(1),
     leaderStudentId: memberIds[1],
     teamName: 'Student Venture Team',
   });
@@ -1156,6 +1120,9 @@ test('mock student formation creates a team only after every invited member acce
   assert.equal(response.data.status, 'Pending');
   assert.equal(response.data.invitations.length, 4);
   assert.equal(response.data.invitations.find((member: { isProposedLeader: boolean }) => member.isProposedLeader)?.studentId, memberIds[1]);
+  assert.equal(response.data.invitations.find((member: { isCreator: boolean }) => member.isCreator)?.status, 'Accepted');
+  assert.ok(response.data.invitations.filter((member: { isCreator: boolean }) => !member.isCreator)
+    .every((member: { status: string; expiresAtUtc: string }) => member.status === 'Pending' && Boolean(member.expiresAtUtc)));
   assert.equal(state.teams.some((team) => team.teamName === 'Student Venture Team'), false);
 
   const classDetail = await axiosClient.get(`/classes/my-class-detail/${targetClass.slug}`);
@@ -1171,7 +1138,7 @@ test('mock student formation creates a team only after every invited member acce
 
   await assert.rejects(
     axiosClient.post(`/classes/${targetClass.id}/team-formations`, {
-      memberStudentIds: memberIds,
+      inviteeStudentIds: memberIds.slice(1),
       leaderStudentId: memberIds[0],
       teamName: 'Second Open Formation',
     }),
@@ -1188,8 +1155,17 @@ test('mock student formation creates a team only after every invited member acce
     const invitations = await axiosClient.get('/team-formations/invitations/pending');
     assert.ok(invitations.data.some((formation: { id: string }) => formation.id === response.data.id));
     await axiosClient.post(`/team-formations/${response.data.id}/accept`);
-    if (memberId !== memberIds.at(-1)) assert.equal(state.teams.some((team) => team.teamName === 'Student Venture Team'), false);
+    // Accepting never creates the team, even when everyone has accepted.
+    assert.equal(state.teams.some((team) => team.teamName === 'Student Venture Team'), false);
   }
+
+  await axiosClient.post('/auth/login', { email: proposingStudent.email, password: 'Mock123!' });
+  const ready = await axiosClient.get(`/team-formations/${response.data.id}`);
+  assert.equal(ready.data.canFinalize, true);
+  assert.equal(ready.data.acceptedCount, 4);
+  assert.equal(ready.data.requiresLeaderSelection, false);
+  const finalized = await axiosClient.post(`/team-formations/${response.data.id}/finalize`, { confirmPendingInvitations: false });
+  assert.equal(finalized.data.status, 'Completed');
 
   const createdTeam = state.teams.find((team) => team.teamName === 'Student Venture Team');
   assert.ok(createdTeam);
@@ -1197,6 +1173,145 @@ test('mock student formation creates a team only after every invited member acce
   assert.equal(createdTeam.leaderId, memberIds[1]);
   assert.ok(roster.every((student) => student.teamId === createdTeam.id));
   assert.equal(state.formations.find((formation) => formation.id === response.data.id)?.status, 'Completed');
+
+  await assert.rejects(
+    axiosClient.post(`/team-formations/${response.data.id}/finalize`, { confirmPendingInvitations: false }),
+    (error: unknown) => (error as { response?: { status?: number } }).response?.status === 409,
+  );
+  assert.equal(state.teams.filter((team) => team.teamName === 'Student Venture Team').length, 1);
+});
+
+test('mock formation: declined and expired invitations keep it open, re-invites add history, finalize needs enough accepted members', async () => {
+  resetMockState();
+  const state = getMockState();
+  const targetClass = state.classes.find((item) => item.status === 'Draft');
+  assert.ok(targetClass);
+  const roster = state.rosters[targetClass.id];
+  const memberIds = roster.map((student) => student.studentId);
+  const userOf = (studentId: string) => {
+    const user = state.users.find((item) => item.id === studentId);
+    assert.ok(user);
+    return user;
+  };
+  const login = (studentId: string) => axiosClient.post('/auth/login', { email: userOf(studentId).email, password: 'Mock123!' });
+  const statusOf = (studentId: string, formationId: string) => {
+    const formation = state.formations.find((item) => item.id === formationId);
+    assert.ok(formation);
+    return formation.invitations.filter((item) => item.studentId === studentId).map((item) => item.status);
+  };
+
+  await login(memberIds[0]);
+  const created = await axiosClient.post(`/classes/${targetClass.id}/team-formations`, {
+    inviteeStudentIds: memberIds.slice(1),
+    leaderStudentId: memberIds[1],
+    teamName: 'Resilient Team',
+  });
+  const formationId = created.data.id as string;
+
+  // Decline does not cancel the formation.
+  await login(memberIds[1]);
+  await axiosClient.post(`/team-formations/${formationId}/decline`);
+  assert.equal(state.formations[0].status, 'Pending');
+  assert.deepEqual(statusOf(memberIds[1], formationId), ['Declined']);
+
+  // An overdue pending invitation expires without cancelling anything either.
+  state.formations[0].invitations.find((item) => item.studentId === memberIds[3])!.expiresAtUtc =
+    new Date(Date.now() - 1000).toISOString();
+  await login(memberIds[0]);
+  const afterExpiry = await axiosClient.get(`/team-formations/${formationId}`);
+  assert.equal(afterExpiry.data.status, 'Pending');
+  assert.deepEqual(statusOf(memberIds[3], formationId), ['Expired']);
+  assert.equal(afterExpiry.data.canFinalize, false);
+  assert.ok(afterExpiry.data.finalizeBlockers.length > 0);
+  await assert.rejects(
+    axiosClient.post(`/team-formations/${formationId}/finalize`, { confirmPendingInvitations: true }),
+    (error: unknown) => (error as { response?: { data?: { code?: string } } }).response?.data?.code === 'TEAM_FORMATION_NOT_READY',
+  );
+
+  // Pending and accepted students cannot be re-invited; declined and expired can, as new records.
+  await assert.rejects(
+    axiosClient.post(`/team-formations/${formationId}/invitations`, { studentIds: [memberIds[2]] }),
+    (error: unknown) => (error as { response?: { data?: { code?: string } } }).response?.data?.code === 'TEAM_INVITATION_CONFLICT',
+  );
+  await assert.rejects(
+    axiosClient.post(`/team-formations/${formationId}/invitations`, { studentIds: [memberIds[0]] }),
+    (error: unknown) => (error as { response?: { data?: { code?: string } } }).response?.data?.code === 'TEAM_INVITATION_CONFLICT',
+  );
+  await axiosClient.post(`/team-formations/${formationId}/invitations`, { studentIds: [memberIds[1], memberIds[3]] });
+  assert.deepEqual(statusOf(memberIds[1], formationId), ['Declined', 'Pending']);
+  assert.deepEqual(statusOf(memberIds[3], formationId), ['Expired', 'Pending']);
+
+  // Everyone accepts again and the creator may only finalize explicitly.
+  for (const studentId of memberIds.slice(1)) {
+    await login(studentId);
+    await axiosClient.post(`/team-formations/${formationId}/accept`);
+  }
+  await login(memberIds[0]);
+  assert.equal(state.teams.some((team) => team.teamName === 'Resilient Team'), false);
+  const finalized = await axiosClient.post(`/team-formations/${formationId}/finalize`, { confirmPendingInvitations: false });
+  assert.equal(finalized.data.status, 'Completed');
+  assert.equal(state.teams.find((team) => team.teamName === 'Resilient Team')?.members.length, 4);
+});
+
+test('mock formation: a leader who leaves must be replaced or re-accept, and the creator cannot leave', async () => {
+  resetMockState();
+  const state = getMockState();
+  const targetClass = state.classes.find((item) => item.status === 'Draft');
+  assert.ok(targetClass);
+  const roster = state.rosters[targetClass.id];
+  const memberIds = roster.map((student) => student.studentId);
+  const login = (studentId: string) => axiosClient.post('/auth/login', {
+    email: state.users.find((item) => item.id === studentId)!.email,
+    password: 'Mock123!',
+  });
+  const errorCode = (error: unknown) => (error as { response?: { data?: { code?: string } } }).response?.data?.code;
+
+  await login(memberIds[0]);
+  const created = await axiosClient.post(`/classes/${targetClass.id}/team-formations`, {
+    inviteeStudentIds: memberIds.slice(1),
+    leaderStudentId: memberIds[1],
+    teamName: 'Leader Change Team',
+  });
+  const formationId = created.data.id as string;
+  for (const studentId of memberIds.slice(1)) {
+    await login(studentId);
+    await axiosClient.post(`/team-formations/${formationId}/accept`);
+  }
+
+  // The creator cannot leave, only cancel.
+  await login(memberIds[0]);
+  await assert.rejects(
+    axiosClient.post(`/team-formations/${formationId}/leave`),
+    (error: unknown) => (error as { response?: { status?: number } }).response?.status === 403,
+  );
+
+  // The proposed leader leaves: the creator now has to choose a leader among the accepted members.
+  await login(memberIds[1]);
+  await axiosClient.post(`/team-formations/${formationId}/leave`);
+  await login(memberIds[0]);
+  const afterLeave = await axiosClient.get(`/team-formations/${formationId}`);
+  assert.equal(afterLeave.data.acceptedCount, 3);
+  assert.equal(afterLeave.data.requiresLeaderSelection, true);
+  assert.equal(afterLeave.data.canFinalize, false);
+
+  // Re-invited and accepted again, the proposed leader keeps the role and cannot be replaced.
+  await axiosClient.post(`/team-formations/${formationId}/invitations`, { studentIds: [memberIds[1]] });
+  assert.deepEqual(state.formations[0].invitations.filter((item) => item.studentId === memberIds[1]).map((item) => item.status),
+    ['Left', 'Pending']);
+  await login(memberIds[1]);
+  await axiosClient.post(`/team-formations/${formationId}/accept`);
+  await login(memberIds[0]);
+  await assert.rejects(
+    axiosClient.post(`/team-formations/${formationId}/finalize`, {
+      confirmPendingInvitations: false, leaderStudentId: memberIds[0],
+    }),
+    (error: unknown) => errorCode(error) === 'CLASS_VALIDATION_ERROR',
+  );
+  const finalized = await axiosClient.post(`/team-formations/${formationId}/finalize`, { confirmPendingInvitations: false });
+  assert.equal(finalized.data.status, 'Completed');
+  const team = state.teams.find((item) => item.teamName === 'Leader Change Team');
+  assert.equal(team?.members.length, 4);
+  assert.equal(team?.leaderId, memberIds[1]);
 });
 
 test('mock class managers create active teams directly without formations or proposals', async () => {
@@ -2020,4 +2135,31 @@ test('student information mock hides peer PII and previous scores recheck the cu
   await assert.rejects(axiosClient.get(previousUrl),
     (error: unknown) => (error as { response?: { status?: number } }).response?.status === 403);
   resetMockState();
+});
+
+test('mock mentor profile saves new values, bumps the version and rejects stale or invalid edits', async () => {
+  resetMockState();
+  await axiosClient.post('/auth/login', { email: 'admin@ehub.local', password: 'Mock123!' });
+  const unwrap = (response) => response.data?.data ?? response.data;
+  const users = await axiosClient.get('/users', { params: { role: 'MENTOR', limit: 50 } });
+  const mentor = unwrap(users).users.find((user) => user.mentorProfileId);
+  assert.ok(mentor, 'mentors expose the id of their profile page');
+
+  const first = unwrap(await axiosClient.get(`/admin/mentor-profiles/${mentor.mentorProfileId}`));
+  assert.equal(first.fullName, mentor.name);
+  const edit = (changes) => ({
+    rowVersion: first.rowVersion, status: first.status, expertise: first.expertise, bio: first.bio, availabilityNote: first.availabilityNote,
+    ...changes,
+  });
+
+  const saved = unwrap(await axiosClient.put(`/admin/mentor-profiles/${mentor.mentorProfileId}`, edit({ expertise: ['  Product  design ', 'AI'], bio: 'New background', status: 'Unavailable' })));
+  assert.deepEqual(saved.expertise, ['Product design', 'AI']);
+  assert.equal(saved.status, 'Unavailable');
+  assert.notEqual(saved.rowVersion, first.rowVersion);
+
+  await assert.rejects(axiosClient.put(`/admin/mentor-profiles/${mentor.mentorProfileId}`, edit({ bio: 'Stale' })), (error) => error.response.status === 409);
+  const fresh = { ...edit({}), rowVersion: saved.rowVersion };
+  await assert.rejects(axiosClient.put(`/admin/mentor-profiles/${mentor.mentorProfileId}`, { ...fresh, expertise: ['Sales', 'sales'] }), (error) => error.response.status === 400);
+  await assert.rejects(axiosClient.put(`/admin/mentor-profiles/${mentor.mentorProfileId}`, { ...fresh, status: 'Retired' }), (error) => error.response.status === 400);
+  await assert.rejects(axiosClient.get('/admin/mentor-profiles/does-not-exist'), (error) => error.response.status === 404);
 });

@@ -10,7 +10,9 @@ import { useAuth } from '../../hooks/useAuth';
 import EmptyState from '../../components/ui/EmptyState';
 import type { WorkspaceOption } from '../../types/workspaceTools';
 import { parseApiError } from '../../utils/apiError';
-import { filterWorkspaces, groupWorkspacesByClass, normalizeAccessibleWorkspaces, parseWorkspaceSemester, resolveWorkspaceSemesterScope } from '../../utils/workspaceHub';
+import { filterWorkspaces, groupWorkspacesByClass, latestWorkspaceSemester, normalizeAccessibleWorkspaces, parseWorkspaceSemester, resolveWorkspaceSemesterScope } from '../../utils/workspaceHub';
+import MentorHistorySection from '../../components/workspace/MentorHistorySection';
+import type { MentorHistoryItem } from '../../types/teamManagement';
 
 const roleHint = {
   ADMIN: 'Startup teams you can access',
@@ -26,6 +28,7 @@ export default function StartupWorkspaceHub() {
   const { user } = useAuth();
   const [teams, setTeams] = useState<WorkspaceOption[]>([]);
   const [activeSemester, setActiveSemester] = useState<{ semester: string; year: number } | null>(null);
+  const [history, setHistory] = useState<MentorHistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
   const appliedSearch = searchParams.get('search') || '';
@@ -37,7 +40,8 @@ export default function StartupWorkspaceHub() {
   }
 
   const subject = searchParams.get('subject') || '';
-  const semesterScope = resolveWorkspaceSemesterScope(searchParams, activeSemester);
+  const fallbackSemester = useMemo(() => latestWorkspaceSemester(teams), [teams]);
+  const semesterScope = resolveWorkspaceSemesterScope(searchParams, activeSemester, fallbackSemester);
   const { semester, year } = semesterScope;
   const workspaceStatus = searchParams.get('workspaceStatus') || '';
   const access = searchParams.get('access') || '';
@@ -90,6 +94,17 @@ export default function StartupWorkspaceHub() {
     // oxlint-disable-next-line react/set-state-in-effect -- fetch remote workspaces when the hub mounts
     void loadTeams();
   }, [loadTeams]);
+
+  // The previous-teams list is a convenience for mentors: if it cannot load, the hub still works without it.
+  const isMentor = (user?.role || '').toUpperCase() === 'MENTOR';
+  useEffect(() => {
+    if (!isMentor) return undefined;
+    let cancelled = false;
+    workspaceApi.getMyMentorHistory()
+      .then(response => { if (!cancelled && response.success) setHistory(response.data ?? []); })
+      .catch(() => { if (!cancelled) setHistory([]); });
+    return () => { cancelled = true; };
+  }, [isMentor]);
 
   const subjects = useMemo(() => [...new Set([...teams.map(team => team.courseCode), subject].filter(Boolean))].sort(), [teams, subject]);
   const years = useMemo(() => [...new Set([...teams.map(team => parseWorkspaceSemester(team.semester)?.year), year].filter((value): value is string => typeof value === 'string' && /^\d{4}$/.test(value)))].sort(), [teams, year]);
@@ -194,6 +209,12 @@ export default function StartupWorkspaceHub() {
         </form>
       </div>
 
+      {semesterScope.usesFallback && (
+        <p className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-2.5 text-xs text-blue-800">
+          No semester is active right now, so teams of the most recent semester ({semester}{year}) are shown. Choose another semester or year in the filters to see more.
+        </p>
+      )}
+
       {filtered.length === 0 ? (
         <EmptyState
           icon={Kanban}
@@ -274,6 +295,8 @@ export default function StartupWorkspaceHub() {
           ))}
         </div>
       )}
+
+      {isMentor && <MentorHistorySection items={history} />}
 
       <p className="text-xs text-slate-400 text-center pb-4">
         Open a team to review its project profile, roadmap, shortcuts, and checkpoint submissions.

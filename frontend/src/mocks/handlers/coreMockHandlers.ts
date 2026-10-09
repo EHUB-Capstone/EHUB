@@ -53,11 +53,6 @@ function semesterOverlapMessage(semester: MockSemester): string {
   return `This date range overlaps with ${semester.semester} ${semester.year} (${formatSemesterDate(semester.startDate!)} – ${formatSemesterDate(semester.endDate!)}).`;
 }
 
-function semesterOrder(semester: MockSemester): number {
-  const termOrder = { SP: 0, SU: 1, FA: 2 } as const;
-  return semester.year * 3 + termOrder[semester.semester];
-}
-
 const backendRole = (role: MockUser['role']): string =>
   role.charAt(0) + role.slice(1).toLowerCase();
 
@@ -132,6 +127,7 @@ function userResponse(user: MockUser) {
 
   return {
     ...user,
+    mentorProfileId: user.role === 'MENTOR' ? user.id : null,
     _id: user.id,
     fullName: user.name,
     rollNumber: user.studentId,
@@ -596,6 +592,7 @@ function registerUserHandlers(mock: MockAdapter): void {
     const query = asString(params.search).trim().toLowerCase();
     const role = asString(params.role).toUpperCase();
     const status = asString(params.status).toUpperCase();
+    const mentorType = asString(params.mentorType);
     const page = Math.max(1, asNumber(params.page, 1));
     const limit = Math.min(200, Math.max(1, asNumber(params.limit, 10)));
     let users = state.users.filter((user) =>
@@ -605,6 +602,7 @@ function registerUserHandlers(mock: MockAdapter): void {
       &&
       (!role || role === 'ALL' || user.role === role)
       && (!status || status === 'ALL' || user.status === status)
+      && (!mentorType || mentorType === 'ALL' || user.mentorType === mentorType)
       && (!query || [user.name, user.email, user.studentId].some((value) => value?.toLowerCase().includes(query))));
     const total = users.length;
     users = users.slice((page - 1) * limit, page * limit);
@@ -612,6 +610,68 @@ function registerUserHandlers(mock: MockAdapter): void {
       users: users.map(userResponse),
       pagination: { total, page, limit, pages: Math.max(1, Math.ceil(total / limit)) },
     }, 'Users retrieved successfully.');
+  });
+
+  function mentorProfileResponse(user: MockUser) {
+    const profile = user.mentorProfile ?? {
+      status: 'Active' as const, expertise: [], startupDomains: [], technologySkills: [], mentorTags: [], bio: null, availabilityNote: null, organization: null, department: null,
+      jobTitle: null, contractType: null, educationLevel: null, currentAddress: null, linkedInUrl: null, fptEmail: null,
+      dateOfBirth: null, version: 1,
+    };
+    const { version, ...fields } = profile;
+    const teams = getMockState().teams ?? [];
+    return {
+      id: user.id, userId: user.id, fullName: user.name, email: user.email, phone: user.phone, avatarUrl: user.avatar,
+      mentorType: user.mentorType ?? 'Enterprise', ...fields,
+      activeTeamCount: teams.filter((team) => team.currentMentorAssignments?.some((assignment) => assignment.mentor.userId === user.id && assignment.status === 'Active')).length,
+      rowVersion: String(version),
+    };
+  }
+
+  mock.onGet(/^\/admin\/mentor-profiles\/[^/]+$/).reply((config) => {
+    const state = getMockState();
+    const viewer = state.users.find((item) => item.id === state.sessionUserId);
+    if (!viewer) return failure(401, 'UNAUTHORIZED', 'Authentication is required.');
+    if (viewer.role !== 'ADMIN') return failure(403, 'COMMON_FORBIDDEN', 'Only an administrator can manage mentor profiles.');
+    const user = state.users.find((item) => item.id === routeId(config, /^\/admin\/mentor-profiles\/([^/]+)$/) && item.role === 'MENTOR');
+    return user ? ok(mentorProfileResponse(user), 'Mentor profile retrieved successfully.') : failure(404, 'MENTOR_PROFILE_NOT_FOUND', 'The mentor profile was not found.');
+  });
+
+  mock.onPut(/^\/admin\/mentor-profiles\/[^/]+$/).reply((config) => {
+    const state = getMockState();
+    const viewer = state.users.find((item) => item.id === state.sessionUserId);
+    if (!viewer) return failure(401, 'UNAUTHORIZED', 'Authentication is required.');
+    if (viewer.role !== 'ADMIN') return failure(403, 'COMMON_FORBIDDEN', 'Only an administrator can manage mentor profiles.');
+    const user = state.users.find((item) => item.id === routeId(config, /^\/admin\/mentor-profiles\/([^/]+)$/) && item.role === 'MENTOR');
+    if (!user) return failure(404, 'MENTOR_PROFILE_NOT_FOUND', 'The mentor profile was not found.');
+    const body = parseBody(config);
+    const current = mentorProfileResponse(user);
+    if (asString(body.rowVersion) !== current.rowVersion) {
+      return failure(409, 'MENTOR_PROFILE_CONFLICT', 'The mentor profile was changed by someone else. Reload it and try again.');
+    }
+    if (!['Active', 'Inactive', 'Unavailable'].includes(asString(body.status))) return failure(400, 'COMMON_VALIDATION_ERROR', 'Status must be Active, Inactive or Unavailable.');
+    const readTags = (key: string, label: string): { tags: string[] } | { error: MockReply } => {
+      const tags = (Array.isArray(body[key]) ? (body[key] as unknown[]).map((tag) => asString(tag).trim().replace(/\s+/g, ' ')) : []).filter(Boolean);
+      if (new Set(tags.map((tag) => tag.toLowerCase())).size !== tags.length) return { error: failure(400, 'COMMON_VALIDATION_ERROR', `${label} is listed more than once.`) };
+      if (tags.length > 20 || tags.some((tag) => tag.length < 2 || tag.length > 50)) return { error: failure(400, 'COMMON_VALIDATION_ERROR', `${label} tags must be 2 to 50 characters, up to 20.`) };
+      return { tags };
+    };
+    const expertise = readTags('expertise', 'An expertise');
+    const startupDomains = readTags('startupDomains', 'A startup domain');
+    const technologySkills = readTags('technologySkills', 'A technology skill');
+    const mentorTags = readTags('mentorTags', 'A mentor tag');
+    for (const result of [expertise, startupDomains, technologySkills, mentorTags]) if ('error' in result) return result.error;
+    if (asString(body.bio).length > 2000) return failure(400, 'COMMON_VALIDATION_ERROR', 'Background may contain at most 2000 characters.');
+    const text = (key: string) => asString(body[key]).trim() || null;
+    user.mentorProfile = {
+      status: asString(body.status) as 'Active' | 'Inactive' | 'Unavailable',
+      expertise: (expertise as { tags: string[] }).tags, startupDomains: (startupDomains as { tags: string[] }).tags, technologySkills: (technologySkills as { tags: string[] }).tags, mentorTags: (mentorTags as { tags: string[] }).tags, bio: text('bio'), availabilityNote: text('availabilityNote'), organization: text('organization'),
+      department: text('department'), jobTitle: text('jobTitle'), contractType: text('contractType'),
+      educationLevel: text('educationLevel'), currentAddress: text('currentAddress'), linkedInUrl: text('linkedInUrl'),
+      fptEmail: text('fptEmail'), dateOfBirth: text('dateOfBirth'), version: Number(current.rowVersion) + 1,
+    };
+    persistMockState();
+    return ok(mentorProfileResponse(user), 'Mentor profile updated successfully.');
   });
 
   mock.onPost(/^\/admin\/users\/[^/]+\/(approve|reject)$/).reply((config) => {
@@ -717,10 +777,25 @@ function registerUserHandlers(mock: MockAdapter): void {
       studentId: role === 'STUDENT' ? asString(body.studentId) || null : null,
       programGroup: role === 'STUDENT' ? asString(body.programGroup) || null : null,
       major: role === 'STUDENT' ? asString(body.major) || null : null,
+      ...(role === 'MENTOR' ? {
+        mentorType: asString(body.mentorType) === 'Academic' ? 'Academic' as const : 'Enterprise' as const,
+        mentorProfile: {
+          status: 'Active' as const,
+          expertise: Array.isArray(body.expertise) ? body.expertise.map(String) : [],
+          startupDomains: [], technologySkills: [], mentorTags: [],
+          bio: asString(body.bio).trim() || null,
+          availabilityNote: asString(body.availabilityNote).trim() || null,
+          organization: null, department: null, jobTitle: null, contractType: null, educationLevel: null,
+          currentAddress: null, linkedInUrl: null, fptEmail: null, dateOfBirth: null, version: 1,
+        },
+      } : {}),
       phone: asString(body.phone) || null,
       createdAt: new Date().toISOString(),
       lastSeen: null,
     };
+    if (role === 'MENTOR' && !['Enterprise', 'Academic'].includes(asString(body.mentorType))) {
+      return failure(400, 'VALIDATION_ERROR', 'Mentor type must be Enterprise or Academic.');
+    }
     getMockState().users.unshift(user);
     persistMockState();
     return created(userResponse(user), 'User created successfully.');
@@ -1062,115 +1137,31 @@ function registerSubjectHandlers(mock: MockAdapter): void {
     return ok(semester, `Semester ${reopen ? 'reopened' : 'completed'} successfully.`);
   });
 
-  mock.onPost('/subjects/teaching-staff/mentor-carryover/preview').reply((config) => {
-    const state = getMockState();
-    const viewer = state.users.find(item => item.id === state.sessionUserId);
-    if (viewer?.role !== 'ADMIN') return failure(403, 'CLASS_ACCESS_DENIED', 'Only an administrator can reuse mentors across semesters.');
-    const body = parseBody(config);
-    const sourceSemesterId = asString(body.sourceSemesterId);
-    const targetSemesterId = asString(body.targetSemesterId);
-    if (!sourceSemesterId || !targetSemesterId || sourceSemesterId === targetSemesterId)
-      return failure(400, 'CLASS_VALIDATION_ERROR', 'Different source and target semesters are required.');
-    const source = state.semesters.find(item => item.id === sourceSemesterId);
-    const target = state.semesters.find(item => item.id === targetSemesterId);
-    if (!source || !target) return failure(404, 'SEMESTER_NOT_FOUND', 'The source or target semester was not found.');
-    if (semesterOrder(source) >= semesterOrder(target))
-      return failure(400, 'CLASS_VALIDATION_ERROR', 'The source semester must be earlier than the target semester.');
-    if (target.status === 'Closing' || target.status === 'Completed' || target.status === 'Archived')
-      return failure(409, 'SEMESTER_INVALID_STATE', `Teaching staff of a ${target.status.toLowerCase()} semester cannot be changed.`);
-
-    const targetAssignments = new Map(state.semesterStaffAssignments
-      .filter(item => item.semesterId === targetSemesterId && item.role === 'MENTOR')
-      .map(item => [item.userId, item]));
-    const mentors = state.semesterStaffAssignments
-      .filter(item => item.semesterId === sourceSemesterId && item.role === 'MENTOR')
-      .map(assignment => {
-        const user = state.users.find(item => item.id === assignment.userId);
-        const targetAssignment = targetAssignments.get(assignment.userId);
-        const accountActive = user?.status === 'APPROVED' && user.role === 'MENTOR';
-        const canSelect = assignment.status === 'ACTIVE' && accountActive && targetAssignment?.status !== 'ACTIVE';
-        const action = assignment.status !== 'ACTIVE' || !accountActive
-          ? 'Unavailable'
-          : targetAssignment?.status === 'ACTIVE'
-            ? 'AlreadyAdded'
-            : targetAssignment
-              ? 'Reactivate'
-              : 'Add';
-        return {
-          userId: assignment.userId,
-          name: user?.name ?? 'Unknown mentor',
-          email: user?.email ?? '',
-          avatar: user?.avatar ?? null,
-          mentorType: 'Enterprise',
-          action,
-          canSelect,
-          message: action === 'Unavailable'
-            ? 'Mentor account or source assignment is inactive.'
-            : action === 'AlreadyAdded'
-              ? 'Already available in the target semester.'
-              : action === 'Reactivate'
-                ? 'Will be reactivated in the target semester.'
-                : 'Ready to add to the target semester.',
-        };
-      })
-      .sort((left, right) => left.name.localeCompare(right.name));
-    return ok({
-      sourceSemesterId,
-      targetSemesterId,
-      totalCount: mentors.length,
-      eligibleCount: mentors.filter(item => item.canSelect).length,
-      alreadyAddedCount: mentors.filter(item => item.action === 'AlreadyAdded').length,
-      unavailableCount: mentors.filter(item => item.action === 'Unavailable').length,
-      enterpriseCount: mentors.length,
-      academicCount: 0,
-      mentors,
-    }, 'Mentors available for reuse retrieved successfully.');
+  // The mock staff list is derived from every lecturer and mentor user, so these only keep the contract in sync;
+  // they do not model per-semester membership.
+  mock.onGet('/subjects/teaching-staff/candidates').reply(() => {
+    const candidates = getMockState().users
+      .filter((user) => (user.role === 'LECTURER' || user.role === 'MENTOR') && user.status === 'APPROVED')
+      .map((user) => ({ userId: user.id, name: user.name, email: user.email, avatar: user.avatar, role: user.role, mentorType: null, contractType: null,
+        tags: user.role === 'MENTOR' && user.mentorProfile ? { expertise: user.mentorProfile.expertise, startupDomains: user.mentorProfile.startupDomains, technologySkills: user.mentorProfile.technologySkills, mentorTags: user.mentorProfile.mentorTags } : null }));
+    return ok({ candidates }, 'Teaching staff candidates retrieved successfully.');
   });
 
-  mock.onPost('/subjects/teaching-staff/mentor-carryover/commit').reply((config) => {
-    const state = getMockState();
-    const viewer = state.users.find(item => item.id === state.sessionUserId);
-    if (viewer?.role !== 'ADMIN') return failure(403, 'CLASS_ACCESS_DENIED', 'Only an administrator can reuse mentors across semesters.');
+  mock.onPost('/subjects/teaching-staff/batch').reply((config) => {
     const body = parseBody(config);
-    const sourceSemesterId = asString(body.sourceSemesterId);
-    const targetSemesterId = asString(body.targetSemesterId);
-    const mentorUserIds = asStringArray(body.mentorUserIds);
-    const uniqueIds = [...new Set(mentorUserIds)];
-    if (!sourceSemesterId || !targetSemesterId || sourceSemesterId === targetSemesterId || uniqueIds.length === 0 || uniqueIds.length !== mentorUserIds.length)
-      return failure(400, 'CLASS_VALIDATION_ERROR', 'Select distinct mentors and use different source and target semesters.');
-    const source = state.semesters.find(item => item.id === sourceSemesterId);
-    const target = state.semesters.find(item => item.id === targetSemesterId);
-    if (!source || !target)
-      return failure(404, 'SEMESTER_NOT_FOUND', 'The source or target semester was not found.');
-    if (semesterOrder(source) >= semesterOrder(target))
-      return failure(400, 'CLASS_VALIDATION_ERROR', 'The source semester must be earlier than the target semester.');
-    if (target.status === 'Closing' || target.status === 'Completed' || target.status === 'Archived')
-      return failure(409, 'SEMESTER_INVALID_STATE', `Teaching staff of a ${target.status.toLowerCase()} semester cannot be changed.`);
-
-    const sourceAssignments = state.semesterStaffAssignments.filter(item =>
-      item.semesterId === sourceSemesterId && item.role === 'MENTOR' && uniqueIds.includes(item.userId));
-    const allEligible = sourceAssignments.length === uniqueIds.length && sourceAssignments.every(assignment => {
-      const user = state.users.find(item => item.id === assignment.userId);
-      return assignment.status === 'ACTIVE' && user?.role === 'MENTOR' && user.status === 'APPROVED';
+    const role = asString(body.role).toUpperCase();
+    const userIds = Array.isArray(body.userIds) ? [...new Set(body.userIds.map(String))] : [];
+    if (!['LECTURER', 'MENTOR'].includes(role) || userIds.length === 0) {
+      return failure(400, 'VALIDATION_ERROR', 'A valid role and at least one staff member are required.');
+    }
+    const results = userIds.map((userId) => {
+      const user = getMockState().users.find((item) => item.id === userId);
+      return user && user.status === 'APPROVED' && user.role === role
+        ? { userId, outcome: 'Added', message: null }
+        : { userId, outcome: 'Rejected', message: `The selected user is inactive or does not have ${role} role.` };
     });
-    if (!allEligible) return failure(409, 'SEMESTER_STAFF_CONFLICT', 'One or more selected mentors are no longer eligible. Preview again.');
-
-    let addedCount = 0;
-    let reactivatedCount = 0;
-    let alreadyAddedCount = 0;
-    uniqueIds.forEach(userId => {
-      const existing = state.semesterStaffAssignments.find(item => item.semesterId === targetSemesterId && item.userId === userId && item.role === 'MENTOR');
-      if (existing?.status === 'ACTIVE') alreadyAddedCount++;
-      else if (existing) {
-        existing.status = 'ACTIVE';
-        reactivatedCount++;
-      } else {
-        state.semesterStaffAssignments.push({ id: allocateId(), semesterId: targetSemesterId, userId, role: 'MENTOR', status: 'ACTIVE' });
-        addedCount++;
-      }
-    });
-    persistMockState();
-    return ok({ addedCount, reactivatedCount, alreadyAddedCount }, 'Selected mentors added to the target semester successfully.');
+    const addedCount = results.filter((item) => item.outcome === 'Added').length;
+    return ok({ results, addedCount, alreadyInListCount: 0, rejectedCount: results.length - addedCount }, 'Teaching staff batch processed successfully.');
   });
 
   mock.onGet('/subjects/teaching-staff').reply(() => {
@@ -1569,13 +1560,23 @@ function registerDashboardHandlers(mock: MockAdapter): void {
     const requestedSemesterId = asString(params.semesterId);
     const requestedCourseId = asString(params.courseId);
     const requestedClassId = asString(params.classId);
+    // Without an explicit choice: the active semester, else the latest semester the lecturer teaches in, else the latest one.
+    const termOrder: Record<string, number> = { SP: 1, SU: 2, FA: 3 };
+    const latestSemester = <T extends { year: number; semester: string }>(items: T[]) =>
+      [...items].sort((left, right) => right.year - left.year || (termOrder[right.semester] ?? 0) - (termOrder[left.semester] ?? 0))[0];
+    const openSemesters = state.semesters.filter((semester) => semester.status !== 'Archived');
+    const taughtSemesterIds = new Set(state.classes
+      .filter((cls) => cls.primaryLecturerId === state.sessionUserId)
+      .map((cls) => cls.semesterId));
     const selectedSemester = requestedSemesterId
-      ? state.semesters.find((semester) => semester.id === requestedSemesterId && semester.status !== 'Archived')
-      : state.semesters.find((semester) => semester.status === 'Active');
+      ? openSemesters.find((semester) => semester.id === requestedSemesterId)
+      : openSemesters.find((semester) => semester.status === 'Active')
+        ?? latestSemester(openSemesters.filter((semester) => taughtSemesterIds.has(semester.id)))
+        ?? latestSemester(openSemesters);
     if (!selectedSemester) {
       return failure(400, 'SEMESTER_NOT_FOUND', requestedSemesterId
         ? 'The selected semester does not exist or is archived.'
-        : 'No active semester is configured for the academic overview.');
+        : 'No semester is configured for the academic overview.');
     }
 
     const semesterCode = `${selectedSemester.semester}${selectedSemester.year}`;
@@ -1702,6 +1703,7 @@ function registerDashboardHandlers(mock: MockAdapter): void {
         semesterId: selectedSemester.id,
         semesterCode,
         semesterName: `${selectedSemester.semester} ${selectedSemester.year}`,
+        isActiveSemester: selectedSemester.status === 'Active',
         courseId: requestedCourseId || null,
         subjectCode: requestedCourseId ? semesterClasses.find((cls) => cls.courseId === requestedCourseId)?.subjectCode ?? null : null,
         subjectName: requestedCourseId ? semesterClasses.find((cls) => cls.courseId === requestedCourseId)?.subjectName ?? null : null,

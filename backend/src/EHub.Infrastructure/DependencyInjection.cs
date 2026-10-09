@@ -47,6 +47,7 @@ public static class DependencyInjection
         services.AddHostedService<PendingRegistrationCleanupService>();
         services.AddHostedService<PendingSubmissionUploadCleanupService>();
         services.AddHostedService<SubmissionPreviewGenerationService>();
+        services.AddHostedService<TeamFormationInvitationExpiryService>();
         services.AddScoped<IOutboxEventDispatcher, NotificationOutboxEventDispatcher>();
         services.AddSingleton<IOutboxWakeSignal, OutboxWakeSignal>();
         services.AddScoped<IClassChatMembershipSynchronizer, ClassChatMembershipSynchronizer>();

@@ -344,7 +344,7 @@ public sealed class ClassSafetyHotfixIntegrationTests
             SystemRoles.Admin);
 
         createResult.IsSuccess.Should().BeTrue();
-        createResult.Value.Status.Should().Be(nameof(ClassStatus.Draft));
+        createResult.Value.Status.Should().Be(nameof(ClassStatus.Active));
         createResult.Value.PrimaryLecturerId.Should().Be(seed.LecturerId);
         context.ChangeTracker.Clear();
 
@@ -421,7 +421,7 @@ public sealed class ClassSafetyHotfixIntegrationTests
 
         assignResult.IsSuccess.Should().BeTrue();
         assignResult.Value.PrimaryLecturerId.Should().Be(seed.LecturerId);
-        assignResult.Value.Status.Should().Be(nameof(ClassStatus.Draft));
+        assignResult.Value.Status.Should().Be(nameof(ClassStatus.Active));
         context.ChangeTracker.Clear();
         var persistedClass = await context.Classes.AsNoTracking()
             .SingleAsync(@class => @class.Id == createResult.Value.Id);

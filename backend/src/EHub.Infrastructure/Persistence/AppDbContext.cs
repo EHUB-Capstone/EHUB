@@ -74,6 +74,8 @@ public class AppDbContext : DbContext, IApplicationDbContext
     public DbSet<MentorProfile> MentorProfiles => Set<MentorProfile>();
     public DbSet<MentorEmbedding> MentorEmbeddings => Set<MentorEmbedding>();
     public DbSet<MentorAssignment> MentorAssignments => Set<MentorAssignment>();
+    public DbSet<TemporaryMentorAssignment> TemporaryMentorAssignments => Set<TemporaryMentorAssignment>();
+    public DbSet<SemesterTemporaryMentor> SemesterTemporaryMentors => Set<SemesterTemporaryMentor>();
     public DbSet<MentoringSession> MentoringSessions => Set<MentoringSession>();
     public DbSet<MentoringActionItem> MentoringActionItems => Set<MentoringActionItem>();
     public DbSet<MentoringAttendance> MentoringAttendances => Set<MentoringAttendance>();

@@ -12,6 +12,8 @@ internal sealed record WorkspaceAccess(
     Checkpoint Checkpoint,
     Project Project,
     ClassCheckpointSchedule? Schedule,
+    Guid ClassId,
+    Guid? LecturerUserId,
     bool IsMember,
     string UserName);
 
@@ -44,7 +46,9 @@ internal static class CheckpointWorkspaceAccess
         if (checkpoint is null || project is null) return Result.Failure<WorkspaceAccess>(ErrorCodes.WorkspaceNotFound, "The checkpoint workspace was not found.");
         var schedule = await context.ClassCheckpointSchedules.AsNoTracking()
             .FirstOrDefaultAsync(item => item.ClassId == team.ClassId && item.CheckpointId == checkpoint.Id, cancellationToken);
-        return Result.Success(new WorkspaceAccess(checkpoint, project, schedule, isMember, team.TeamMembers.FirstOrDefault(member => member.ClassStudent.Student.UserId == userId)?.ClassStudent.Student.FullName ?? string.Empty));
+        return Result.Success(new WorkspaceAccess(
+            checkpoint, project, schedule, team.ClassId, team.Class.PrimaryLecturerId, isMember,
+            team.TeamMembers.FirstOrDefault(member => member.ClassStudent.Student.UserId == userId)?.ClassStudent.Student.FullName ?? string.Empty));
     }
 
     public static Result EnsureOpen(ClassCheckpointSchedule? schedule, DateTime now)

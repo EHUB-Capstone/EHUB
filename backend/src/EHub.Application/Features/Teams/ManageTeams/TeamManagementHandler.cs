@@ -541,6 +541,7 @@ public sealed class TeamManagementHandler : ITeamManagementHandler
         return query.Include(team => team.Class).ThenInclude(item => item.ClassLecturers)
             .Include(team => team.TeamMembers).ThenInclude(member => member.ClassStudent).ThenInclude(enrollment => enrollment.Student)
             .Include(team => team.MentorAssignments).ThenInclude(assignment => assignment.MentorProfile).ThenInclude(profile => profile.User)
+            .Include(team => team.TemporaryMentorAssignments).ThenInclude(assignment => assignment.Draft)
             .Include(team => team.Project)
             .Include(team => team.PreviousTeam!).ThenInclude(previous => previous.Class).ThenInclude(@class => @class.Semester)
             .Include(team => team.ChatGroups);

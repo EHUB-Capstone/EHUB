@@ -71,6 +71,7 @@ public static class DependencyInjection
         services.AddScoped<IUserManagementHandler, UserManagementHandler>();
         services.AddScoped<EHub.Application.Features.Admin.Users.ImportLecturers.ILecturerImportHandler, EHub.Application.Features.Admin.Users.ImportLecturers.LecturerImportHandler>();
         services.AddScoped<EHub.Application.Features.Admin.Mentors.IMentorAdminHandler, EHub.Application.Features.Admin.Mentors.MentorAdminHandler>();
+        services.AddScoped<EHub.Application.Features.Admin.MentorProfiles.IMentorProfileHandler, EHub.Application.Features.Admin.MentorProfiles.MentorProfileHandler>();
 
         services.AddScoped<IGetAdminDashboardQueryHandler, GetAdminDashboardQueryHandler>();
         services.AddScoped<IGetAcademicOverviewQueryHandler, GetAcademicOverviewQueryHandler>();
@@ -118,6 +119,7 @@ public static class DependencyInjection
         services.AddScoped<EHub.Application.Features.Classes.ImportStudents.ICommitImportStudentsCommandHandler, EHub.Application.Features.Classes.ImportStudents.CommitImportStudentsCommandHandler>();
         services.AddScoped<EHub.Application.Features.Classes.ExportClassRoster.IExportClassRosterQueryHandler, EHub.Application.Features.Classes.ExportClassRoster.ExportClassRosterQueryHandler>();
         services.AddScoped<EHub.Application.Features.Classes.ExportAdminClassData.IExportAdminClassDataQueryHandler, EHub.Application.Features.Classes.ExportAdminClassData.ExportAdminClassDataQueryHandler>();
+        services.AddScoped<EHub.Application.Features.Admin.Mentors.ExportAssignments.IMentorAssignmentExportHandler, EHub.Application.Features.Admin.Mentors.ExportAssignments.MentorAssignmentExportHandler>();
         services.AddScoped<EHub.Application.Features.Classes.GetImportTemplate.IGetImportTemplateQueryHandler, EHub.Application.Features.Classes.GetImportTemplate.GetImportTemplateQueryHandler>();
         services.AddScoped<EHub.Application.Features.Classes.GetMajorVerificationTemplate.IGetMajorVerificationTemplateQueryHandler, EHub.Application.Features.Classes.GetMajorVerificationTemplate.GetMajorVerificationTemplateQueryHandler>();
         services.AddScoped<EHub.Application.Features.Classes.VerifyClassMajors.IVerifyClassMajorsCommandHandler, EHub.Application.Features.Classes.VerifyClassMajors.VerifyClassMajorsCommandHandler>();
@@ -135,6 +137,7 @@ public static class DependencyInjection
         services.AddScoped<EHub.Application.Features.Teams.MentorAssignments.IMentorAssignmentHandler, EHub.Application.Features.Teams.MentorAssignments.MentorAssignmentHandler>();
         services.AddScoped<EHub.Application.Features.Teams.TeamProposals.ITeamProposalHandler, EHub.Application.Features.Teams.TeamProposals.TeamProposalHandler>();
         services.AddScoped<EHub.Application.Features.Teams.TeamFormations.ITeamFormationHandler, EHub.Application.Features.Teams.TeamFormations.TeamFormationHandler>();
+        services.AddScoped<EHub.Application.Features.Teams.TeamFormations.ITeamFormationExpirationService, EHub.Application.Features.Teams.TeamFormations.TeamFormationExpirationService>();
         services.AddScoped<EHub.Application.Features.Teams.ProjectDirections.IProjectDirectionHandler, EHub.Application.Features.Teams.ProjectDirections.ProjectDirectionHandler>();
         services.AddScoped<EHub.Application.Features.Classes.StudentSelfService.IStudentClassSelfServiceHandler, EHub.Application.Features.Classes.StudentSelfService.StudentClassSelfServiceHandler>();
         services.AddScoped<EHub.Application.Features.Workspaces.IProjectWorkspaceHandler, EHub.Application.Features.Workspaces.ProjectWorkspaceHandler>();

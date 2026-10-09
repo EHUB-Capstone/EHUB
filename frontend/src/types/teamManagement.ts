@@ -1,3 +1,4 @@
+import type { MentorTagSet } from './mentorProfile';
 export type EntityReference = string | { _id?: string; id?: string; name?: string } | null | undefined;
 
 export interface TeamStudent {
@@ -87,6 +88,11 @@ export interface MentorAssignment {
     mentorType: 'Enterprise' | 'Academic';
     department?: string | null;
     jobTitle?: string | null;
+    contractType?: string | null;
+    /** True for a mentor who has no account yet; then mentorProfileId is the id of the incomplete-mentor record. */
+    isTemporary?: boolean;
+    /** Only in the mentor pickers. */
+    tags?: Partial<MentorTagSet> | null;
   };
   slot: 'Enterprise' | 'Academic';
   status: string;
@@ -97,6 +103,7 @@ export interface MentorAssignment {
 
 export interface MentorCandidate {
   mentor: MentorAssignment['mentor'];
+  isTemporary?: boolean;
   activeTeamCount: number;
 }
 
@@ -129,4 +136,21 @@ export interface TeamDraftValidation {
   isValid: boolean;
   errors: Partial<Record<TeamDraftField, string>>;
   conflicts: Map<string, string>;
+}
+
+/** One ended assignment of the signed-in mentor (read-only history). */
+export interface MentorHistoryItem {
+  assignmentId: string;
+  teamId: string;
+  teamName: string;
+  projectName?: string | null;
+  classId: string;
+  classCode: string;
+  subjectCode: string;
+  semesterCode: string;
+  slot: 'Enterprise' | 'Academic';
+  assignedAtUtc: string;
+  endedAtUtc: string;
+  /** "ClassCompleted" when it ended with the class, otherwise "EndedEarly". */
+  endedBecause: 'ClassCompleted' | 'EndedEarly';
 }

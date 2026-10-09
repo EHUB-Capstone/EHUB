@@ -89,10 +89,7 @@ const ProfileSettings = () => {
       if (avatarInputRef.current) {
         avatarInputRef.current.value = '';
       }
-      toast.success('Profile updated successfully', {
-        duration: 2000,
-        style: { marginTop: '64px' },
-      });
+      toast.success('Profile updated successfully');
     } catch (err) {
       const error = parseApiError(err, 'Failed to update profile');
       toast.error(error.message);

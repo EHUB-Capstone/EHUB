@@ -24,6 +24,11 @@ public sealed class MentorSummaryDto
     public string MentorType { get; init; } = string.Empty;
     public string? Department { get; init; }
     public string? JobTitle { get; init; }
+    public string? ContractType { get; init; }
+    // True for a mentor who has no account yet: their id is the id of the incomplete-mentor record, not of a profile.
+    public bool IsTemporary { get; init; }
+    // Only filled in the mentor pickers, where lecturers search mentors by tag.
+    public EHub.Contracts.Mentors.MentorTagsDto? Tags { get; init; }
 }
 
 public sealed class MentorAssignmentDto
@@ -43,6 +48,7 @@ public sealed class MentorAssignmentDto
 public sealed class MentorCandidateDto
 {
     public MentorSummaryDto Mentor { get; init; } = new();
+    public bool IsTemporary { get; init; }
     public int ActiveTeamCount { get; init; }
 }
 
@@ -110,8 +116,52 @@ public sealed class AssignTeamLeaderRequest
 
 public sealed class AssignMentorRequest
 {
+    // The mentor profile id, or the incomplete-mentor id when Temporary is true.
     public Guid MentorProfileId { get; init; }
+    public bool Temporary { get; init; }
     public string? Note { get; init; }
+}
+
+// One past (ended) assignment of the signed-in mentor, for the read-only history list.
+public sealed class MentorHistoryItemDto
+{
+    public Guid AssignmentId { get; init; }
+    public Guid TeamId { get; init; }
+    public string TeamName { get; init; } = string.Empty;
+    public string? ProjectName { get; init; }
+    public Guid ClassId { get; init; }
+    public string ClassCode { get; init; } = string.Empty;
+    public string SubjectCode { get; init; } = string.Empty;
+    public string SemesterCode { get; init; } = string.Empty;
+    public string Slot { get; init; } = string.Empty;
+    public DateTime AssignedAtUtc { get; init; }
+    public DateTime EndedAtUtc { get; init; }
+    // "ClassCompleted" when the assignment ended together with its class, otherwise "EndedEarly" (replaced or ended by an admin).
+    public string EndedBecause { get; init; } = string.Empty;
+}
+
+// Ends the current assignment of a slot and gives it to another mentor of the same type, all in one save.
+public sealed class ReplaceMentorRequest
+{
+    public Guid AssignmentId { get; init; }
+    public Guid MentorProfileId { get; init; }
+    public bool Temporary { get; init; }
+    public string Reason { get; init; } = string.Empty;
+    public string? Note { get; init; }
+}
+
+// Assigns one mentor to several teams of a class. Either every team is assigned or none is.
+public sealed class AssignMentorBatchRequest
+{
+    public Guid MentorProfileId { get; init; }
+    public bool Temporary { get; init; }
+    public IReadOnlyCollection<Guid> TeamIds { get; init; } = Array.Empty<Guid>();
+}
+
+public sealed class AssignMentorBatchResponse
+{
+    public int AssignedCount { get; init; }
+    public int AlreadyAssignedCount { get; init; }
 }
 
 public sealed class EndMentorAssignmentRequest

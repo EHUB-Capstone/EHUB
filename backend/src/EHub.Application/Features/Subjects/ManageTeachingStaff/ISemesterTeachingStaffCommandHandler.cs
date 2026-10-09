@@ -9,16 +9,17 @@ public interface ISemesterTeachingStaffCommandHandler
         AddSemesterTeachingStaffRequest request,
         CancellationToken cancellationToken = default);
 
-    Task<Result<TeachingStaffResponse>> UpdateAsync(
-        Guid assignmentId,
+    Task<Result<AddSemesterTeachingStaffBatchResponse>> AddBatchAsync(
+        AddSemesterTeachingStaffBatchRequest request,
+        CancellationToken cancellationToken = default);
+
+    Task<Result<TeachingStaffResponse>> UpdateTemporaryAsync(
+        Guid participationId,
         UpdateSemesterTeachingStaffRequest request,
         CancellationToken cancellationToken = default);
 
-    Task<Result<MentorCarryoverPreviewResponse>> PreviewMentorCarryoverAsync(
-        PreviewMentorCarryoverRequest request,
-        CancellationToken cancellationToken = default);
-
-    Task<Result<MentorCarryoverCommitResponse>> CommitMentorCarryoverAsync(
-        CommitMentorCarryoverRequest request,
+    Task<Result<TeachingStaffResponse>> UpdateAsync(
+        Guid assignmentId,
+        UpdateSemesterTeachingStaffRequest request,
         CancellationToken cancellationToken = default);
 }

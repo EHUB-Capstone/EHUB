@@ -12,7 +12,7 @@ public sealed class MentorImportSessionConfiguration : IEntityTypeConfiguration<
         builder.HasKey(item => item.Id);
         builder.Property(item => item.Id).HasColumnName("id");
         builder.Property(item => item.AdminUserId).HasColumnName("admin_user_id").IsRequired();
-        builder.Property(item => item.SemesterId).HasColumnName("semester_id").IsRequired();
+        builder.Property(item => item.SemesterId).HasColumnName("semester_id");
         builder.Property(item => item.RowsJson).HasColumnName("rows_json").HasColumnType("jsonb").IsRequired();
         builder.Property(item => item.Status).HasColumnName("status").HasConversion<string>().HasMaxLength(20).IsRequired();
         builder.Property(item => item.CreatedAtUtc).HasColumnName("created_at_utc").IsRequired();

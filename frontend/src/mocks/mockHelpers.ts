@@ -126,7 +126,7 @@ export function classMutationGuard(classId: string, rowVersion?: unknown): MockR
 
 export function touchClass(cls: MockClass): void {
   cls.rowVersion = nextRowVersion(state);
-  cls.status = cls.primaryLecturerId && cls.schedules.length > 0 ? 'Active' : 'Draft';
+  cls.status = cls.primaryLecturerId ? 'Active' : 'Draft';
   cls.previousStatus = cls.status;
   refreshClassCounts(cls.id);
 }

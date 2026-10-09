@@ -1,6 +1,7 @@
 using EHub.Application.Common.Interfaces.Persistence;
 using EHub.Application.Common.Interfaces.Services;
 using EHub.Application.Common.Interfaces.Storage;
+using EHub.Application.Features.Classes.Common;
 using EHub.Contracts.Workspaces;
 using EHub.Domain.Entities;
 using EHub.Domain.Enums;
@@ -234,6 +235,15 @@ public sealed class CheckpointFileUploadHandler(
                 tracked.Status = SubmissionUploadSessionStatus.Completed;
                 tracked.CompletedAtUtc = now;
                 tracked.SubmissionFileId = file.Id;
+                ClassOutbox.Enqueue(context, "CheckpointSubmission.Submitted.v1", access.Value.ClassId, new
+                {
+                    TeamId = teamId,
+                    CheckpointId = access.Value.Checkpoint.Id,
+                    CheckpointNumber = checkpointNumber,
+                    SubmissionId = submission.Id,
+                    SubmissionVersion = submission.VersionNumber,
+                    LecturerUserId = access.Value.LecturerUserId
+                }, now);
                 // Session state, Submission and SubmissionFile commit together or not at all.
                 await context.SaveChangesAsync(cancellationToken);
                 return Result.Success(Map(file, access.Value.UserName));

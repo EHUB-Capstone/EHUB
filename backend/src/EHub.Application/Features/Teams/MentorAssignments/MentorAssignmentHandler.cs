@@ -57,12 +57,21 @@ public sealed class MentorAssignmentHandler : IMentorAssignmentHandler
                     Organization = profile.Organization,
                     MentorType = profile.Type.ToString(),
                     Department = profile.Department,
-                    JobTitle = profile.JobTitle
+                    JobTitle = profile.JobTitle,
+                    ContractType = profile.ContractType,
+                    Tags = new EHub.Contracts.Mentors.MentorTagsDto
+                    {
+                        Expertise = profile.Expertise,
+                        StartupDomains = profile.StartupDomains,
+                        TechnologySkills = profile.TechnologySkills,
+                        MentorTags = profile.MentorTags
+                    }
                 },
                 ActiveTeamCount = profile.Assignments.Count(assignment => assignment.Status == MentorAssignmentStatus.Active && assignment.EndedAt == null && assignment.Team.Class.SemesterId == targetClass.SemesterId)
             })
             .ToListAsync(cancellationToken);
-        return Result.Success<IReadOnlyCollection<MentorCandidateDto>>(candidates);
+        var temporary = await LoadTemporaryCandidatesAsync(targetClass.SemesterId, cancellationToken);
+        return Result.Success<IReadOnlyCollection<MentorCandidateDto>>(candidates.Concat(temporary).ToList());
     }
 
     public async Task<Result<IReadOnlyCollection<MentorAssignmentDto>>> GetForClassAsync(
@@ -123,6 +132,7 @@ public sealed class MentorAssignmentHandler : IMentorAssignmentHandler
             return Failure(ErrorCodes.ClassValidationError, "Mentor profile id is required.");
         if ((request.Note?.Length ?? 0) > 1_000)
             return Failure(ErrorCodes.ClassValidationError, "Assignment note cannot exceed 1000 characters.");
+        if (request.Temporary) return await AssignTemporaryAsync(teamId, request, userId, role, cancellationToken);
 
         try
         {
@@ -169,6 +179,15 @@ public sealed class MentorAssignmentHandler : IMentorAssignmentHandler
                     .ToListAsync(transactionCancellationToken);
                 var same = current.FirstOrDefault(item => item.MentorProfileId == mentor.Id);
                 if (same != null) return Result.Success(TeamMappings.ToMentorAssignmentDto(same));
+
+                if (await _context.TemporaryMentorAssignments.AnyAsync(item =>
+                        item.TeamId == teamId && item.Slot == mentor.Type && item.Status == MentorAssignmentStatus.Active && item.EndedAt == null,
+                        transactionCancellationToken))
+                {
+                    return Failure(
+                        ErrorCodes.MentorAssignmentConflict,
+                        $"This team already has a temporary {mentor.Type} mentor. Replace it before assigning this mentor.");
+                }
 
                 if (current.Count > 0)
                 {
@@ -232,7 +251,7 @@ public sealed class MentorAssignmentHandler : IMentorAssignmentHandler
             return Result.Failure(new Error(ErrorCodes.ClassValidationError, "Assignment id is required."));
         var current = await _context.MentorAssignments.Include(item => item.Team).ThenInclude(item => item.Class)
             .FirstOrDefaultAsync(item => item.Id == request.AssignmentId && item.TeamId == teamId && item.Status == MentorAssignmentStatus.Active && item.EndedAt == null, cancellationToken);
-        if (current == null) return Result.Success();
+        if (current == null) return await EndTemporaryAsync(teamId, request, userId, role, cancellationToken);
 
         var isAdmin = IsRole(role, SystemRoles.Admin);
         var isAssignedLecturer = IsRole(role, SystemRoles.Lecturer) && current.Team.Class.PrimaryLecturerId == userId;
@@ -259,6 +278,543 @@ public sealed class MentorAssignmentHandler : IMentorAssignmentHandler
         await _context.SaveChangesAsync(cancellationToken);
         return Result.Success();
     }
+
+    // Past teams of the signed-in mentor. It lists only their own ended assignments and never opens the team itself,
+    // so a mentor who was replaced or whose class finished does not regain access to the workspace.
+    public async Task<Result<IReadOnlyCollection<MentorHistoryItemDto>>> GetMyHistoryAsync(
+        Guid userId, string role, CancellationToken cancellationToken = default)
+    {
+        if (!IsRole(role, SystemRoles.Mentor))
+            return Result.Failure<IReadOnlyCollection<MentorHistoryItemDto>>(new Error(ErrorCodes.ClassAccessDenied, "Only a mentor has a mentoring history."));
+
+        var rows = await _context.MentorAssignments.AsNoTracking()
+            .Where(item => item.MentorProfile.UserId == userId && item.Status == MentorAssignmentStatus.Ended && item.EndedAt != null)
+            .OrderByDescending(item => item.EndedAt)
+            .Select(item => new
+            {
+                item.Id,
+                item.TeamId,
+                TeamName = item.Team.TeamName,
+                ProjectName = item.Team.Project != null ? item.Team.Project.Name : null,
+                ClassId = item.Team.ClassId,
+                ClassCode = item.Team.Class.ClassCode,
+                SubjectCode = item.Team.Class.Course.Code,
+                SemesterCode = item.Team.Class.Semester.Code,
+                item.Slot,
+                item.AssignedAt,
+                EndedAt = item.EndedAt!.Value,
+                ClassCompletedAt = item.Team.Class.CompletedAtUtc
+            })
+            .Take(500)
+            .ToListAsync(cancellationToken);
+
+        IReadOnlyCollection<MentorHistoryItemDto> history = rows.Select(row => new MentorHistoryItemDto
+        {
+            AssignmentId = row.Id,
+            TeamId = row.TeamId,
+            TeamName = row.TeamName,
+            ProjectName = row.ProjectName,
+            ClassId = row.ClassId,
+            ClassCode = row.ClassCode,
+            SubjectCode = row.SubjectCode,
+            SemesterCode = row.SemesterCode,
+            Slot = row.Slot.ToString(),
+            AssignedAtUtc = row.AssignedAt,
+            EndedAtUtc = row.EndedAt,
+            EndedBecause = row.ClassCompletedAt != null && row.EndedAt >= row.ClassCompletedAt ? "ClassCompleted" : "EndedEarly"
+        }).ToArray();
+        return Result.Success(history);
+    }
+
+    public async Task<Result<MentorAssignmentDto>> ReplaceAsync(
+        Guid teamId, ReplaceMentorRequest request, Guid userId, string role, CancellationToken cancellationToken = default)
+    {
+        if (request.AssignmentId == Guid.Empty || request.MentorProfileId == Guid.Empty)
+            return Failure(ErrorCodes.ClassValidationError, "The current assignment and the replacement mentor are required.");
+        var reason = request.Reason?.Trim() ?? string.Empty;
+        if (reason.Length is < 3 or > 1_000)
+            return Failure(ErrorCodes.ClassValidationError, "A reason between 3 and 1000 characters is required.");
+        if ((request.Note?.Length ?? 0) > 1_000)
+            return Failure(ErrorCodes.ClassValidationError, "Assignment note cannot exceed 1000 characters.");
+
+        if (request.Temporary || await _context.TemporaryMentorAssignments.AnyAsync(item => item.Id == request.AssignmentId, cancellationToken))
+            return await ReplaceMixedAsync(teamId, request, reason, userId, role, cancellationToken);
+
+        try
+        {
+            return await _unitOfWork.ExecuteInSerializableTransactionAsync(async token =>
+            {
+                var current = await _context.MentorAssignments
+                    .Include(item => item.Team).ThenInclude(item => item.Class)
+                    .Include(item => item.MentorProfile).ThenInclude(profile => profile.User)
+                    .FirstOrDefaultAsync(item => item.Id == request.AssignmentId && item.TeamId == teamId &&
+                        item.Status == MentorAssignmentStatus.Active && item.EndedAt == null, token);
+                if (current == null)
+                    return Failure(ErrorCodes.MentorAssignmentConflict, "The current mentor assignment is no longer active. Refresh and try again.");
+
+                var team = current.Team;
+                if (!CanManage(role, userId, team.Class))
+                    return Failure(ErrorCodes.ClassAccessDenied, "Only an administrator or assigned lecturer can replace a mentor.");
+                if (team.Status != TeamStatus.Active)
+                    return Failure(ErrorCodes.TeamInactive, "A mentor can only be replaced on an active team.");
+                var mutationError = ClassStateRules.GetMutationError(team.Class.Status);
+                if (mutationError != null) return Failure(mutationError.Code, mutationError.Message);
+
+                var (mentor, mentorError) = await LoadUsableMentorAsync(request.MentorProfileId, team.Class.SemesterId, token);
+                if (mentorError != null) return Failure(mentorError.Code, mentorError.Message);
+                if (mentor!.Type != current.Slot)
+                    return Failure(ErrorCodes.ClassValidationError, "The replacement must be the same type of mentor as the current one.");
+                if (mentor.Id == current.MentorProfileId)
+                    return Failure(ErrorCodes.ClassValidationError, "The selected mentor is already assigned to this slot.");
+
+                var now = DateTime.UtcNow;
+                AddEndEffects(current, reason, userId, now);
+                // The old assignment is saved as ended before the new one is added, inside the same transaction.
+                await _context.SaveChangesAsync(token);
+                var assignment = AddAssignEffects(team, mentor, userId, request.Note, now);
+                await _context.SaveChangesAsync(token);
+                return Result.Success(TeamMappings.ToMentorAssignmentDto(assignment));
+            }, cancellationToken);
+        }
+        catch (DbUpdateException)
+        {
+            return Failure(ErrorCodes.MentorAssignmentConflict, "The mentor assignment changed concurrently. Refresh and try again.");
+        }
+        catch (SerializableTransactionConflictException)
+        {
+            return Failure(ErrorCodes.MentorAssignmentConflict, "The mentor assignment changed concurrently. Refresh and try again.");
+        }
+    }
+
+    public async Task<Result<AssignMentorBatchResponse>> AssignBatchAsync(
+        Guid classId, AssignMentorBatchRequest request, Guid userId, string role, CancellationToken cancellationToken = default)
+    {
+        const int maximumTeams = 200;
+        var teamIds = request.TeamIds.Where(id => id != Guid.Empty).Distinct().ToArray();
+        if (request.MentorProfileId == Guid.Empty || teamIds.Length == 0)
+            return BatchFailure(ErrorCodes.ClassValidationError, "Choose a mentor and at least one team.");
+        if (teamIds.Length > maximumTeams)
+            return BatchFailure(ErrorCodes.ClassValidationError, $"At most {maximumTeams} teams can be assigned at once.");
+        if (request.Temporary) return await AssignBatchTemporaryAsync(classId, request.MentorProfileId, teamIds, userId, role, cancellationToken);
+
+        try
+        {
+            return await _unitOfWork.ExecuteInSerializableTransactionAsync(async token =>
+            {
+                var targetClass = await _context.Classes.FirstOrDefaultAsync(item => item.Id == classId, token);
+                if (targetClass == null) return BatchFailure(ErrorCodes.ClassNotFound, "The requested class was not found.");
+                if (!CanManage(role, userId, targetClass))
+                    return BatchFailure(ErrorCodes.ClassAccessDenied, "Only an administrator or assigned lecturer can assign a mentor.");
+                var mutationError = ClassStateRules.GetMutationError(targetClass.Status);
+                if (mutationError != null) return BatchFailure(mutationError.Code, mutationError.Message);
+
+                var (mentor, mentorError) = await LoadUsableMentorAsync(request.MentorProfileId, targetClass.SemesterId, token);
+                if (mentorError != null) return BatchFailure(mentorError.Code, mentorError.Message);
+
+                // Only teams of this class are accepted, so a team id from another class can never be reached through it.
+                var teams = await _context.Teams.Where(item => item.ClassId == classId && teamIds.Contains(item.Id)).ToListAsync(token);
+                if (teams.Count != teamIds.Length)
+                    return BatchFailure(ErrorCodes.TeamNotFound, "Every selected team must belong to this class.");
+
+                var occupants = await _context.MentorAssignments
+                    .Where(item => teamIds.Contains(item.TeamId) && item.Slot == mentor!.Type &&
+                        item.Status == MentorAssignmentStatus.Active && item.EndedAt == null)
+                    .ToListAsync(token);
+                var temporaryOccupied = (await _context.TemporaryMentorAssignments.AsNoTracking()
+                    .Where(item => teamIds.Contains(item.TeamId) && item.Slot == mentor!.Type && item.Status == MentorAssignmentStatus.Active && item.EndedAt == null)
+                    .Select(item => item.TeamId).ToListAsync(token)).ToHashSet();
+                var problems = new List<string>();
+                var toAssign = new List<Team>();
+                var already = 0;
+                foreach (var team in teams.OrderBy(item => item.TeamCode))
+                {
+                    var occupant = occupants.FirstOrDefault(item => item.TeamId == team.Id);
+                    if (team.Status != TeamStatus.Active) problems.Add($"{team.TeamName} is not active");
+                    else if (occupant != null && occupant.MentorProfileId == mentor!.Id) already++;
+                    else if (occupant != null) problems.Add($"{team.TeamName} already has a {mentor!.Type} mentor");
+                    else if (temporaryOccupied.Contains(team.Id)) problems.Add($"{team.TeamName} already has a temporary {mentor!.Type} mentor");
+                    else toAssign.Add(team);
+                }
+                if (problems.Count > 0)
+                {
+                    return BatchFailure(
+                        ErrorCodes.MentorAssignmentConflict,
+                        $"Nothing was saved. {string.Join("; ", problems.Take(5))}{(problems.Count > 5 ? $"; and {problems.Count - 5} more" : string.Empty)}. Refresh and try again.");
+                }
+
+                var now = DateTime.UtcNow;
+                foreach (var team in toAssign) AddAssignEffects(team, mentor!, userId, null, now);
+                await _context.SaveChangesAsync(token);
+                return Result.Success(new AssignMentorBatchResponse { AssignedCount = toAssign.Count, AlreadyAssignedCount = already });
+            }, cancellationToken);
+        }
+        catch (DbUpdateException)
+        {
+            return BatchFailure(ErrorCodes.MentorAssignmentConflict, "The mentor assignments changed concurrently. Refresh and try again.");
+        }
+        catch (SerializableTransactionConflictException)
+        {
+            return BatchFailure(ErrorCodes.MentorAssignmentConflict, "The mentor assignments changed concurrently. Refresh and try again.");
+        }
+    }
+
+    // Mentors who have no account yet. They are listed once per person (same type and name), preferring the master-list record.
+    private async Task<List<MentorCandidateDto>> LoadTemporaryCandidatesAsync(Guid semesterId, CancellationToken token)
+    {
+        var drafts = await _context.MentorImportDrafts.AsNoTracking()
+            .Where(item => item.Status == MentorImportDraftStatus.NeedsCompletion).ToListAsync(token);
+        var chosen = drafts
+            .GroupBy(item => (item.Type, item.NormalizedFullName))
+            .Select(group => group.OrderBy(item => item.SemesterId == null ? 0 : 1).ThenByDescending(item => item.UpdatedAt ?? item.CreatedAt).First())
+            .OrderBy(item => item.FullName, StringComparer.CurrentCultureIgnoreCase)
+            .ToList();
+        var counts = await _context.TemporaryMentorAssignments.AsNoTracking()
+            .Where(item => item.Status == MentorAssignmentStatus.Active && item.EndedAt == null && item.Team.Class.SemesterId == semesterId)
+            .GroupBy(item => item.DraftId).Select(group => new { DraftId = group.Key, Count = group.Count() })
+            .ToDictionaryAsync(item => item.DraftId, item => item.Count, token);
+        return chosen.Select(draft => new MentorCandidateDto
+        {
+            IsTemporary = true,
+            ActiveTeamCount = counts.GetValueOrDefault(draft.Id),
+            Mentor = new MentorSummaryDto
+            {
+                MentorProfileId = draft.Id,
+                UserId = Guid.Empty,
+                FullName = draft.FullName,
+                Email = draft.Email ?? string.Empty,
+                Organization = draft.Organization,
+                MentorType = draft.Type.ToString(),
+                Department = draft.Department,
+                JobTitle = draft.JobTitle,
+                ContractType = draft.ContractType,
+                IsTemporary = true
+            }
+        }).ToList();
+    }
+
+    private Task<MentorImportDraft?> LoadUsableDraftAsync(Guid draftId, CancellationToken token) =>
+        _context.MentorImportDrafts.FirstOrDefaultAsync(item => item.Id == draftId && item.Status == MentorImportDraftStatus.NeedsCompletion, token);
+
+    private TemporaryMentorAssignment AddTemporaryAssignEffects(Team team, MentorImportDraft draft, Guid userId, string? note, DateTime now)
+    {
+        var assignment = new TemporaryMentorAssignment
+        {
+            TeamId = team.Id,
+            Team = team,
+            DraftId = draft.Id,
+            Draft = draft,
+            AssignedById = userId,
+            AssignedAt = now,
+            Slot = draft.Type,
+            Status = MentorAssignmentStatus.Active,
+            Note = note?.Trim(),
+            CreatedBy = userId
+        };
+        _context.TemporaryMentorAssignments.Add(assignment);
+        _context.ClassAuditLogs.Add(new ClassAuditLog
+        {
+            ClassId = team.ClassId,
+            Action = "TEMPORARY_MENTOR_ASSIGNED",
+            PerformedByUserId = userId,
+            OccurredAtUtc = now,
+            DetailsJson = JsonSerializer.Serialize(new { TeamId = team.Id, DraftId = draft.Id, Slot = draft.Type.ToString() })
+        });
+        return assignment;
+    }
+
+    private void AddTemporaryEndEffects(TemporaryMentorAssignment current, string reason, Guid userId, DateTime now)
+    {
+        current.Status = MentorAssignmentStatus.Ended;
+        current.EndedAt = now;
+        current.UpdatedBy = userId;
+        current.Note = string.IsNullOrWhiteSpace(current.Note) ? $"Ended: {reason}" : $"{current.Note}\nEnded: {reason}";
+        _context.ClassAuditLogs.Add(new ClassAuditLog
+        {
+            ClassId = current.Team.ClassId,
+            Action = "TEMPORARY_MENTOR_ASSIGNMENT_ENDED",
+            PerformedByUserId = userId,
+            OccurredAtUtc = now,
+            DetailsJson = JsonSerializer.Serialize(new { TeamId = current.TeamId, current.DraftId, Slot = current.Slot.ToString(), Reason = reason })
+        });
+    }
+
+    // True when the team slot already has a real or a temporary active mentor, optionally ignoring one temporary assignment.
+    private async Task<bool> SlotHasRealMentorAsync(Guid teamId, MentorType slot, CancellationToken token) =>
+        await _context.MentorAssignments.AnyAsync(item => item.TeamId == teamId && item.Slot == slot &&
+            item.Status == MentorAssignmentStatus.Active && item.EndedAt == null, token);
+
+    private async Task<Result<MentorAssignmentDto>> AssignTemporaryAsync(
+        Guid teamId, AssignMentorRequest request, Guid userId, string role, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await _unitOfWork.ExecuteInSerializableTransactionAsync(async token =>
+            {
+                var team = await _context.Teams.Include(item => item.Class).FirstOrDefaultAsync(item => item.Id == teamId, token);
+                if (team == null) return Failure(ErrorCodes.TeamNotFound, "The requested team was not found.");
+                if (!CanManage(role, userId, team.Class))
+                    return Failure(ErrorCodes.ClassAccessDenied, "Only an administrator or assigned lecturer can assign a mentor.");
+                if (team.Status != TeamStatus.Active)
+                    return Failure(ErrorCodes.TeamInactive, "A mentor can only be assigned to an active team.");
+                var mutationError = ClassStateRules.GetMutationError(team.Class.Status);
+                if (mutationError != null) return Failure(mutationError.Code, mutationError.Message);
+
+                var draft = await LoadUsableDraftAsync(request.MentorProfileId, token);
+                if (draft == null) return Failure(ErrorCodes.MentorNotAvailable, "The selected mentor is not available.");
+
+                var temporaryInSlot = await _context.TemporaryMentorAssignments.Include(item => item.Draft)
+                    .Where(item => item.TeamId == teamId && item.Slot == draft.Type && item.Status == MentorAssignmentStatus.Active && item.EndedAt == null)
+                    .ToListAsync(token);
+                var same = temporaryInSlot.FirstOrDefault(item => item.DraftId == draft.Id);
+                if (same != null)
+                {
+                    same.Team = team;
+                    return Result.Success(TemporaryMentors.ToDto(same));
+                }
+                if (temporaryInSlot.Count > 0 || await SlotHasRealMentorAsync(teamId, draft.Type, token))
+                {
+                    return Failure(
+                        ErrorCodes.MentorAssignmentConflict,
+                        $"This team already has an active {draft.Type} mentor. Replace the current mentor instead of adding another.");
+                }
+
+                var assignment = AddTemporaryAssignEffects(team, draft, userId, request.Note, DateTime.UtcNow);
+                await _context.SaveChangesAsync(token);
+                return Result.Success(TemporaryMentors.ToDto(assignment));
+            }, cancellationToken);
+        }
+        catch (DbUpdateException)
+        {
+            return Failure(ErrorCodes.MentorAssignmentConflict, "The mentor assignment changed concurrently. Refresh and try again.");
+        }
+        catch (SerializableTransactionConflictException)
+        {
+            return Failure(ErrorCodes.MentorAssignmentConflict, "The mentor assignment changed concurrently. Refresh and try again.");
+        }
+    }
+
+    private async Task<Result> EndTemporaryAsync(Guid teamId, EndMentorAssignmentRequest request, Guid userId, string role, CancellationToken cancellationToken)
+    {
+        var current = await _context.TemporaryMentorAssignments.Include(item => item.Draft).Include(item => item.Team).ThenInclude(item => item.Class)
+            .FirstOrDefaultAsync(item => item.Id == request.AssignmentId && item.TeamId == teamId &&
+                item.Status == MentorAssignmentStatus.Active && item.EndedAt == null, cancellationToken);
+        if (current == null) return Result.Success();
+        if (!CanManage(role, userId, current.Team.Class))
+            return Result.Failure(new Error(ErrorCodes.ClassAccessDenied, "Only an administrator or assigned lecturer can end a mentor assignment."));
+        var mutationError = ClassStateRules.GetMutationError(current.Team.Class.Status);
+        if (mutationError != null) return Result.Failure(mutationError);
+        AddTemporaryEndEffects(current, request.Reason.Trim(), userId, DateTime.UtcNow);
+        await _context.SaveChangesAsync(cancellationToken);
+        return Result.Success();
+    }
+
+    // Replaces the current mentor of a slot when the current mentor or the new one has no account yet.
+    private async Task<Result<MentorAssignmentDto>> ReplaceMixedAsync(
+        Guid teamId, ReplaceMentorRequest request, string reason, Guid userId, string role, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await _unitOfWork.ExecuteInSerializableTransactionAsync(async token =>
+            {
+                var realCurrent = await _context.MentorAssignments
+                    .Include(item => item.Team).ThenInclude(item => item.Class)
+                    .Include(item => item.MentorProfile).ThenInclude(profile => profile.User)
+                    .FirstOrDefaultAsync(item => item.Id == request.AssignmentId && item.TeamId == teamId &&
+                        item.Status == MentorAssignmentStatus.Active && item.EndedAt == null, token);
+                var temporaryCurrent = realCurrent != null ? null : await _context.TemporaryMentorAssignments
+                    .Include(item => item.Draft).Include(item => item.Team).ThenInclude(item => item.Class)
+                    .FirstOrDefaultAsync(item => item.Id == request.AssignmentId && item.TeamId == teamId &&
+                        item.Status == MentorAssignmentStatus.Active && item.EndedAt == null, token);
+                if (realCurrent == null && temporaryCurrent == null)
+                    return Failure(ErrorCodes.MentorAssignmentConflict, "The current mentor assignment is no longer active. Refresh and try again.");
+
+                var team = realCurrent?.Team ?? temporaryCurrent!.Team;
+                var slot = realCurrent?.Slot ?? temporaryCurrent!.Slot;
+                if (!CanManage(role, userId, team.Class))
+                    return Failure(ErrorCodes.ClassAccessDenied, "Only an administrator or assigned lecturer can replace a mentor.");
+                if (team.Status != TeamStatus.Active)
+                    return Failure(ErrorCodes.TeamInactive, "A mentor can only be replaced on an active team.");
+                var mutationError = ClassStateRules.GetMutationError(team.Class.Status);
+                if (mutationError != null) return Failure(mutationError.Code, mutationError.Message);
+
+                MentorProfile? newMentor = null;
+                MentorImportDraft? newDraft = null;
+                if (request.Temporary)
+                {
+                    newDraft = await LoadUsableDraftAsync(request.MentorProfileId, token);
+                    if (newDraft == null) return Failure(ErrorCodes.MentorNotAvailable, "The selected mentor is not available.");
+                    if (newDraft.Type != slot) return Failure(ErrorCodes.ClassValidationError, "The replacement must be the same type of mentor as the current one.");
+                    if (temporaryCurrent != null && temporaryCurrent.DraftId == newDraft.Id)
+                        return Failure(ErrorCodes.ClassValidationError, "The selected mentor is already assigned to this slot.");
+                }
+                else
+                {
+                    var (mentor, mentorError) = await LoadUsableMentorAsync(request.MentorProfileId, team.Class.SemesterId, token);
+                    if (mentorError != null) return Failure(mentorError.Code, mentorError.Message);
+                    newMentor = mentor!;
+                    if (newMentor.Type != slot) return Failure(ErrorCodes.ClassValidationError, "The replacement must be the same type of mentor as the current one.");
+                    if (realCurrent != null && newMentor.Id == realCurrent.MentorProfileId)
+                        return Failure(ErrorCodes.ClassValidationError, "The selected mentor is already assigned to this slot.");
+                }
+
+                var now = DateTime.UtcNow;
+                if (realCurrent != null) AddEndEffects(realCurrent, reason, userId, now);
+                else AddTemporaryEndEffects(temporaryCurrent!, reason, userId, now);
+                // The old assignment is saved as ended before the new one is added, inside the same transaction.
+                await _context.SaveChangesAsync(token);
+
+                if (newDraft != null)
+                {
+                    var created = AddTemporaryAssignEffects(team, newDraft, userId, request.Note, now);
+                    await _context.SaveChangesAsync(token);
+                    return Result.Success(TemporaryMentors.ToDto(created));
+                }
+                var assignment = AddAssignEffects(team, newMentor!, userId, request.Note, now);
+                await _context.SaveChangesAsync(token);
+                return Result.Success(TeamMappings.ToMentorAssignmentDto(assignment));
+            }, cancellationToken);
+        }
+        catch (DbUpdateException)
+        {
+            return Failure(ErrorCodes.MentorAssignmentConflict, "The mentor assignment changed concurrently. Refresh and try again.");
+        }
+        catch (SerializableTransactionConflictException)
+        {
+            return Failure(ErrorCodes.MentorAssignmentConflict, "The mentor assignment changed concurrently. Refresh and try again.");
+        }
+    }
+
+    private async Task<Result<AssignMentorBatchResponse>> AssignBatchTemporaryAsync(
+        Guid classId, Guid draftId, Guid[] teamIds, Guid userId, string role, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await _unitOfWork.ExecuteInSerializableTransactionAsync(async token =>
+            {
+                var targetClass = await _context.Classes.FirstOrDefaultAsync(item => item.Id == classId, token);
+                if (targetClass == null) return BatchFailure(ErrorCodes.ClassNotFound, "The requested class was not found.");
+                if (!CanManage(role, userId, targetClass))
+                    return BatchFailure(ErrorCodes.ClassAccessDenied, "Only an administrator or assigned lecturer can assign a mentor.");
+                var mutationError = ClassStateRules.GetMutationError(targetClass.Status);
+                if (mutationError != null) return BatchFailure(mutationError.Code, mutationError.Message);
+
+                var draft = await LoadUsableDraftAsync(draftId, token);
+                if (draft == null) return BatchFailure(ErrorCodes.MentorNotAvailable, "The selected mentor is not available.");
+
+                var teams = await _context.Teams.Where(item => item.ClassId == classId && teamIds.Contains(item.Id)).ToListAsync(token);
+                if (teams.Count != teamIds.Length)
+                    return BatchFailure(ErrorCodes.TeamNotFound, "Every selected team must belong to this class.");
+
+                var realOccupied = (await _context.MentorAssignments.AsNoTracking()
+                    .Where(item => teamIds.Contains(item.TeamId) && item.Slot == draft.Type && item.Status == MentorAssignmentStatus.Active && item.EndedAt == null)
+                    .Select(item => item.TeamId).ToListAsync(token)).ToHashSet();
+                var temporaryInSlot = await _context.TemporaryMentorAssignments.AsNoTracking()
+                    .Where(item => teamIds.Contains(item.TeamId) && item.Slot == draft.Type && item.Status == MentorAssignmentStatus.Active && item.EndedAt == null)
+                    .ToListAsync(token);
+                var problems = new List<string>();
+                var toAssign = new List<Team>();
+                var already = 0;
+                foreach (var team in teams.OrderBy(item => item.TeamCode))
+                {
+                    var temporary = temporaryInSlot.FirstOrDefault(item => item.TeamId == team.Id);
+                    if (team.Status != TeamStatus.Active) problems.Add($"{team.TeamName} is not active");
+                    else if (temporary != null && temporary.DraftId == draft.Id) already++;
+                    else if (temporary != null || realOccupied.Contains(team.Id)) problems.Add($"{team.TeamName} already has a {draft.Type} mentor");
+                    else toAssign.Add(team);
+                }
+                if (problems.Count > 0)
+                {
+                    return BatchFailure(
+                        ErrorCodes.MentorAssignmentConflict,
+                        $"Nothing was saved. {string.Join("; ", problems.Take(5))}{(problems.Count > 5 ? $"; and {problems.Count - 5} more" : string.Empty)}. Refresh and try again.");
+                }
+
+                var now = DateTime.UtcNow;
+                foreach (var team in toAssign) AddTemporaryAssignEffects(team, draft, userId, null, now);
+                await _context.SaveChangesAsync(token);
+                return Result.Success(new AssignMentorBatchResponse { AssignedCount = toAssign.Count, AlreadyAssignedCount = already });
+            }, cancellationToken);
+        }
+        catch (DbUpdateException)
+        {
+            return BatchFailure(ErrorCodes.MentorAssignmentConflict, "The mentor assignments changed concurrently. Refresh and try again.");
+        }
+        catch (SerializableTransactionConflictException)
+        {
+            return BatchFailure(ErrorCodes.MentorAssignmentConflict, "The mentor assignments changed concurrently. Refresh and try again.");
+        }
+    }
+
+    private static bool CanManage(string role, Guid userId, Class targetClass) =>
+        IsRole(role, SystemRoles.Admin) || (IsRole(role, SystemRoles.Lecturer) && targetClass.PrimaryLecturerId == userId);
+
+    // A mentor can be used only while their profile and account are active and they are listed as active for the class's semester.
+    private async Task<(MentorProfile? Mentor, Error? Error)> LoadUsableMentorAsync(Guid mentorProfileId, Guid semesterId, CancellationToken token)
+    {
+        var mentor = await _context.MentorProfiles.Include(profile => profile.User)
+            .FirstOrDefaultAsync(profile => profile.Id == mentorProfileId, token);
+        if (mentor == null || mentor.Status != MentorProfileStatus.Active || mentor.User.Status != UserStatus.Active)
+            return (null, new Error(ErrorCodes.MentorNotAvailable, "The selected mentor is not available."));
+        var isListed = await _context.SemesterStaffAssignments.AsNoTracking().AnyAsync(item =>
+            item.SemesterId == semesterId && item.UserId == mentor.UserId &&
+            item.Role == SemesterStaffRole.Mentor && item.Status == SemesterStaffStatus.Active, token);
+        return isListed
+            ? (mentor, null)
+            : (null, new Error(ErrorCodes.MentorNotAvailable, "The selected mentor is not active in this semester's teaching staff list."));
+    }
+
+    private MentorAssignment AddAssignEffects(Team team, MentorProfile mentor, Guid userId, string? note, DateTime now)
+    {
+        var assignment = new MentorAssignment
+        {
+            MentorProfileId = mentor.Id,
+            MentorProfile = mentor,
+            TeamId = team.Id,
+            Team = team,
+            AssignedById = userId,
+            AssignedAt = now,
+            Slot = mentor.Type,
+            Status = MentorAssignmentStatus.Active,
+            Note = note?.Trim(),
+            CreatedBy = userId
+        };
+        _context.MentorAssignments.Add(assignment);
+        _context.ClassAuditLogs.Add(new ClassAuditLog
+        {
+            ClassId = team.ClassId,
+            Action = "MENTOR_ASSIGNED",
+            PerformedByUserId = userId,
+            OccurredAtUtc = now,
+            DetailsJson = JsonSerializer.Serialize(new { TeamId = team.Id, MentorProfileId = mentor.Id, Slot = mentor.Type.ToString() })
+        });
+        ClassOutbox.Enqueue(_context, "Team.MentorAssignmentChanged.v1", team.ClassId, new
+        {
+            TeamId = team.Id,
+            MentorProfileId = mentor.Id,
+            MentorUserId = mentor.UserId,
+            Slot = mentor.Type.ToString(),
+            Action = "Assigned"
+        }, now);
+        return assignment;
+    }
+
+    private void AddEndEffects(MentorAssignment current, string reason, Guid userId, DateTime now)
+    {
+        current.Status = MentorAssignmentStatus.Ended;
+        current.EndedAt = now;
+        current.Note = string.IsNullOrWhiteSpace(current.Note) ? $"Ended: {reason}" : $"{current.Note}\nEnded: {reason}";
+        _context.ClassAuditLogs.Add(new ClassAuditLog
+        {
+            ClassId = current.Team.ClassId,
+            Action = "MENTOR_ASSIGNMENT_ENDED",
+            PerformedByUserId = userId,
+            OccurredAtUtc = now,
+            DetailsJson = JsonSerializer.Serialize(new { TeamId = current.TeamId, current.MentorProfileId, Slot = current.Slot.ToString(), Reason = reason })
+        });
+        ClassOutbox.Enqueue(_context, "Team.MentorAssignmentChanged.v1", current.Team.ClassId, new { TeamId = current.TeamId, Action = "Ended" }, now);
+    }
+
+    private static Result<AssignMentorBatchResponse> BatchFailure(string code, string message) => Result.Failure<AssignMentorBatchResponse>(new Error(code, message));
 
     private IQueryable<MentorAssignment> AssignmentQuery() => _context.MentorAssignments.AsNoTracking()
         .Include(item => item.Team)

@@ -122,20 +122,48 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
                 }
                 break;
             case "TeamFormation.Invited.v1":
-                await AddForStudentsAsync(message, data, "studentIds", "Team invitation",
-                    "You have been invited to join a team. Open My Team to respond.", cancellationToken);
+                var invitedTeamName = ReadString(data, "teamName");
+                var proposedLeaderId = ReadGuid(data, "proposedLeaderStudentId");
+                var invitedStudentIds = ReadGuids(data, "studentIds");
+                var invitedLeaderIds = proposedLeaderId.HasValue && invitedStudentIds.Contains(proposedLeaderId.Value)
+                    ? new[] { proposedLeaderId.Value }
+                    : [];
+                await AddForStudentIdsAsync(message, invitedLeaderIds, "Team invitation as Team Leader",
+                    $"You have been invited to join team \"{invitedTeamName}\" as Team Leader. " +
+                    "Open My Team and respond within 24 hours.", cancellationToken);
+                await AddForStudentIdsAsync(message, invitedStudentIds.Except(invitedLeaderIds).ToArray(), "Team invitation",
+                    $"You have been invited to join team \"{invitedTeamName}\". Open My Team and respond within 24 hours.",
+                    cancellationToken);
                 break;
             case "TeamFormation.Accepted.v1":
-                var creatorStudentId = ReadGuid(data, "creatorStudentId");
-                if (creatorStudentId.HasValue)
-                {
-                    var creatorUserId = await _context.Students.AsNoTracking()
-                        .Where(item => item.Id == creatorStudentId.Value).Select(item => item.UserId)
-                        .FirstOrDefaultAsync(cancellationToken);
-                    if (creatorUserId.HasValue)
-                        await AddAsync(message, creatorUserId.Value, NotificationType.SystemAnnouncement,
-                            "Team invitation accepted", "A member accepted your team invitation.", cancellationToken);
-                }
+                await AddForStudentIdsAsync(message, ReadGuidAsArray(data, "creatorStudentId"),
+                    "Team invitation accepted", "A member accepted your team invitation.", cancellationToken);
+                break;
+            case "TeamFormation.Declined.v1":
+                await AddForStudentIdsAsync(message, ReadGuidAsArray(data, "creatorStudentId"),
+                    "Team invitation declined",
+                    "A member declined your team invitation. You can invite another student or finalize without them.",
+                    cancellationToken);
+                break;
+            case "TeamFormation.Left.v1":
+                await AddForStudentIdsAsync(message, ReadGuidAsArray(data, "creatorStudentId"),
+                    "A member left your team",
+                    ReadBoolean(data, "wasProposedLeader")
+                        ? "Your proposed Team Leader left. Choose a new Team Leader when you finalize the team."
+                        : "An accepted member left your team formation. You can invite another student.",
+                    cancellationToken);
+                break;
+            case "TeamFormation.InvitationExpired.v1":
+                await AddForStudentIdsAsync(message, ReadGuidAsArray(data, "creatorStudentId"),
+                    "Team invitation expired",
+                    "An invitation was not answered within 24 hours and expired. You can invite the student again.",
+                    cancellationToken);
+                await AddForStudentsAsync(message, data, "studentIds", "Team invitation expired",
+                    "Your team invitation expired because it was not answered within 24 hours.", cancellationToken);
+                break;
+            case "TeamFormation.Closed.v1":
+                await AddForStudentsAsync(message, data, "studentIds", "Team invitation closed",
+                    "The team was finalized before you responded, so this invitation is closed.", cancellationToken);
                 break;
             case "TeamFormation.Cancelled.v1":
                 await AddForStudentsAsync(message, data, "studentIds", "Team formation cancelled",
@@ -224,6 +252,23 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
                 var lecturerUserId = ReadGuid(data, "lecturerUserId");
                 if (lecturerUserId.HasValue) realtimeNotificationRecipients = [lecturerUserId.Value];
                 realtimeNotificationTeamId = ReadGuid(data, "teamId");
+                break;
+            case "CheckpointSubmission.Submitted.v1":
+                var submissionVersion = data.TryGetProperty("submissionVersion", out var versionValue) && versionValue.TryGetInt32(out var parsedVersion)
+                    ? parsedVersion
+                    : 1;
+                var checkpointNumber = data.TryGetProperty("checkpointNumber", out var checkpointValue) && checkpointValue.TryGetInt32(out var parsedCheckpoint)
+                    ? parsedCheckpoint
+                    : 0;
+                var isResubmission = submissionVersion > 1;
+                var checkpointLabel = checkpointNumber > 0 ? $"Checkpoint {checkpointNumber}" : "a checkpoint";
+                await AddForOptionalUserAsync(
+                    message, data, "lecturerUserId", NotificationType.SubmissionSubmitted,
+                    isResubmission ? $"{checkpointLabel} resubmitted" : $"New {checkpointLabel} submission",
+                    isResubmission
+                        ? $"A team submitted version {submissionVersion} of {checkpointLabel} for your review."
+                        : $"A team submitted materials for {checkpointLabel} for your review.",
+                    cancellationToken);
                 break;
             case "ProjectDirection.Reviewed.v1":
                 var directionDecision = ReadString(data, "decision");
@@ -463,7 +508,8 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
         }
 
         if (message.Type is not ("TeamFormation.Invited.v1" or "TeamFormation.Accepted.v1" or
-            "TeamFormation.Cancelled.v1" or "TeamFormation.Completed.v1")) return;
+            "TeamFormation.Declined.v1" or "TeamFormation.Left.v1" or "TeamFormation.InvitationExpired.v1" or
+            "TeamFormation.Closed.v1" or "TeamFormation.Cancelled.v1" or "TeamFormation.Completed.v1")) return;
         using var document = JsonDocument.Parse(message.PayloadJson);
         if (!document.RootElement.TryGetProperty("data", out var data)) return;
         var formationId = ReadGuid(data, "formationId");
@@ -490,7 +536,16 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
         string body,
         CancellationToken cancellationToken)
     {
-        var studentIds = ReadGuids(data, propertyName);
+        await AddForStudentIdsAsync(message, ReadGuids(data, propertyName), title, body, cancellationToken);
+    }
+
+    private async Task AddForStudentIdsAsync(
+        OutboxMessage message,
+        Guid[] studentIds,
+        string title,
+        string body,
+        CancellationToken cancellationToken)
+    {
         if (studentIds.Length == 0) return;
         var userIds = await _context.Students.AsNoTracking()
             .Where(item => studentIds.Contains(item.Id) && item.UserId.HasValue)
@@ -751,6 +806,12 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
 
     private async Task<string?> BuildLinkAsync(OutboxMessage message, CancellationToken cancellationToken)
     {
+        if (message.Type == "CheckpointSubmission.Submitted.v1")
+        {
+            var teamId = ReadPayloadGuid(message.PayloadJson, "teamId");
+            return teamId.HasValue ? $"/workspace/teams/{teamId.Value}" : null;
+        }
+
         if (message.Type == "ProjectDirection.Submitted.v1")
         {
             var classPeriod = await _context.Classes
@@ -790,6 +851,8 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
             "TeamProposal.Reviewed.v1" or "ProjectDirection.Reviewed.v1" or
                 "Class.EnrollmentMajorsAutoLocked.v1" => $"/student/classes/{message.AggregateId}",
             "TeamFormation.Invited.v1" or "TeamFormation.Accepted.v1" or
+                "TeamFormation.Declined.v1" or "TeamFormation.Left.v1" or "TeamFormation.InvitationExpired.v1" or
+                "TeamFormation.Closed.v1" or
                 "TeamFormation.Cancelled.v1" or "TeamFormation.Completed.v1" => "/student/team",
             "Team.MentorAssignmentChanged.v1" => "/mentor/dashboard",
             CheckpointDeadlineEvents.ScheduleChanged or CheckpointDeadlineEvents.DeadlineReminder => "/student/workspace",
@@ -823,6 +886,9 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
         data.TryGetProperty(propertyName, out var value) && value.TryGetGuid(out var parsed)
             ? parsed
             : null;
+
+    private static Guid[] ReadGuidAsArray(JsonElement data, string propertyName) =>
+        ReadGuid(data, propertyName) is { } value ? [value] : [];
 
     private static Guid[] ReadGuids(JsonElement data, string propertyName) =>
         data.TryGetProperty(propertyName, out var values) && values.ValueKind == JsonValueKind.Array

@@ -1,3 +1,4 @@
+import type { MentorTagSet } from './mentorProfile';
 export type SemesterCode = 'SP' | 'SU' | 'FA';
 export type SemesterStatus = 'Planned' | 'Active' | 'Closing' | 'Completed' | 'Archived';
 export type SubjectStatus = 'active' | 'disabled';
@@ -141,14 +142,22 @@ export interface TeachingStaffDto {
   email: string;
   avatar?: string | null;
   role: 'LECTURER' | 'MENTOR';
+  /** Only set for mentors: Enterprise = enterprise mentor, Academic = lecturer mentor. */
+  mentorType?: 'Enterprise' | 'Academic' | null;
   status: 'Active' | 'Inactive' | 'Incomplete';
   userStatus: string;
   isIncomplete: boolean;
+  /** A mentor without an account yet who takes part in the semester; _id is then the participation id. */
+  isTemporary?: boolean;
+  /** The incomplete-mentor record behind a temporary row. */
+  draftId?: string | null;
   missingFields: string[];
   classCount: number;
   assignments: TeachingAssignmentDto[];
   rowVersion: string;
 }
+
+export type MentorKind = 'Enterprise' | 'Academic';
 
 export interface TeachingStaffCandidateDto {
   userId: string;
@@ -156,37 +165,37 @@ export interface TeachingStaffCandidateDto {
   email: string;
   avatar?: string | null;
   role: 'LECTURER' | 'MENTOR';
+  /** Only for mentors: Enterprise = enterprise mentor, Academic = lecturer mentor. */
+  mentorType?: MentorKind | null;
+  contractType?: string | null;
+  /** A mentor without an account yet; userId is then the id of the incomplete-mentor record. */
+  isTemporary?: boolean;
+  /** Only for mentors: what lecturers filter on when they pick a mentor. */
+  tags?: Partial<MentorTagSet> | null;
 }
 
-export type MentorCarryoverAction = 'Add' | 'Reactivate' | 'AlreadyAdded' | 'Unavailable';
+export type TeachingStaffBatchOutcome = 'Added' | 'AlreadyInList' | 'Rejected';
 
-export interface MentorCarryoverCandidate {
+export interface TeachingStaffBatchItem {
   userId: string;
-  name: string;
-  email: string;
-  avatar?: string | null;
-  mentorType: 'Enterprise' | 'Academic' | '';
-  action: MentorCarryoverAction;
-  canSelect: boolean;
-  message: string;
+  outcome: TeachingStaffBatchOutcome;
+  message?: string | null;
 }
 
-export interface MentorCarryoverPreview {
-  sourceSemesterId: string;
-  targetSemesterId: string;
-  totalCount: number;
-  eligibleCount: number;
-  alreadyAddedCount: number;
-  unavailableCount: number;
-  enterpriseCount: number;
-  academicCount: number;
-  mentors: MentorCarryoverCandidate[];
+export interface AddTeachingStaffBatchPayload {
+  semester: SemesterCode;
+  year: number;
+  role: 'LECTURER' | 'MENTOR';
+  userIds: string[];
+  /** True when userIds are incomplete-mentor records (mentors without an account yet). */
+  temporary?: boolean;
 }
 
-export interface MentorCarryoverCommitResult {
+export interface AddTeachingStaffBatchResponse {
+  results: TeachingStaffBatchItem[];
   addedCount: number;
-  reactivatedCount: number;
-  alreadyAddedCount: number;
+  alreadyInListCount: number;
+  rejectedCount: number;
 }
 
 export interface TeachingStaffSummary {

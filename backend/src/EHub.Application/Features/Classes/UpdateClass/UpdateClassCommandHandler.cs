@@ -333,7 +333,7 @@ public sealed class UpdateClassCommandHandler : IUpdateClassCommandHandler
 
         targetClass.PrimaryLecturerId = newLecturer?.Id;
         targetClass.PrimaryLecturer = newLecturer;
-        targetClass.Status = ClassScheduleRules.DetermineOperationalStatus(newLecturer?.Id, targetClass.ScheduleJson);
+        targetClass.Status = ClassScheduleRules.DetermineOperationalStatus(newLecturer?.Id);
         targetClass.UpdatedBy = currentUserId;
 
         _context.ClassAuditLogs.Add(new ClassAuditLog

@@ -58,7 +58,7 @@ public sealed partial class TeamWorkflowIntegrationTests
     }
 
     [Fact]
-    public async Task Formation_CreatesTeamOnlyAfterEveryMemberAccepts_AndUsesProposedLeader()
+    public async Task Formation_CreatesTeamOnlyWhenCreatorFinalizes_AndKeepsAcceptedProposedLeader()
     {
         using var scope = _factory.Services.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -67,7 +67,7 @@ public sealed partial class TeamWorkflowIntegrationTests
         var handler = scope.ServiceProvider.GetRequiredService<ITeamFormationHandler>();
         var created = await handler.CreateAsync(seed.ClassId, new CreateTeamFormationRequest
         {
-            TeamName = "Consenting Team", MemberStudentIds = seed.StudentIds,
+            TeamName = "Consenting Team", InviteeStudentIds = seed.StudentIds.Skip(1).ToArray(),
             LeaderStudentId = seed.StudentIds[1]
         }, seed.ProposerUserId, SystemRoles.Student);
         created.IsSuccess.Should().BeTrue(created.IsFailure ? created.Error.Message : "");
@@ -83,8 +83,15 @@ public sealed partial class TeamWorkflowIntegrationTests
             userId.Should().NotBeNull();
             var response = await handler.AcceptAsync(created.Value.Id, userId!.Value, SystemRoles.Student);
             response.IsSuccess.Should().BeTrue(response.IsFailure ? response.Error.Message : "");
-            (await context.Teams.CountAsync(item => item.ClassId == seed.ClassId)).Should().Be(index == seed.StudentIds.Length - 1 ? 1 : 0);
+            // Accepting never creates the official team; only the creator's finalize does.
+            (await context.Teams.CountAsync(item => item.ClassId == seed.ClassId)).Should().Be(0);
+            (await context.TeamMembers.CountAsync(item => item.ClassId == seed.ClassId)).Should().Be(0);
         }
+
+        var finalized = await handler.FinalizeAsync(created.Value.Id, new FinalizeTeamFormationRequest(),
+            seed.ProposerUserId, SystemRoles.Student);
+        finalized.IsSuccess.Should().BeTrue(finalized.IsFailure ? finalized.Error.Message : "");
+        finalized.Value.Status.Should().Be("Completed");
 
         context.ChangeTracker.Clear();
         var team = await context.Teams.AsNoTracking().Include(item => item.TeamMembers)
@@ -109,7 +116,7 @@ public sealed partial class TeamWorkflowIntegrationTests
         var handler = scope.ServiceProvider.GetRequiredService<ITeamFormationHandler>();
         var created = await handler.CreateAsync(seed.ClassId, new CreateTeamFormationRequest
         {
-            TeamName = "Realtime Formation", MemberStudentIds = seed.StudentIds,
+            TeamName = "Realtime Formation", InviteeStudentIds = seed.StudentIds.Skip(1).ToArray(),
             LeaderStudentId = seed.StudentIds[1]
         }, seed.ProposerUserId, SystemRoles.Student);
         created.IsSuccess.Should().BeTrue();
@@ -232,7 +239,7 @@ public sealed partial class TeamWorkflowIntegrationTests
         var handler = scope.ServiceProvider.GetRequiredService<ITeamFormationHandler>();
         var request = new CreateTeamFormationRequest
         {
-            TeamName = "First Formation", MemberStudentIds = seed.StudentIds,
+            TeamName = "First Formation", InviteeStudentIds = seed.StudentIds.Skip(1).ToArray(),
             LeaderStudentId = seed.StudentIds[1]
         };
         var first = await handler.CreateAsync(seed.ClassId, request, seed.ProposerUserId, SystemRoles.Student);
@@ -249,14 +256,14 @@ public sealed partial class TeamWorkflowIntegrationTests
         (await context.TeamFormationInvitations.CountAsync(item => item.FormationId == first.Value.Id && item.ReservationReleasedAtUtc == null)).Should().Be(0);
         var newFormation = await handler.CreateAsync(seed.ClassId, new CreateTeamFormationRequest
         {
-            TeamName = "Second Formation", MemberStudentIds = seed.StudentIds,
+            TeamName = "Second Formation", InviteeStudentIds = seed.StudentIds.Skip(1).ToArray(),
             LeaderStudentId = seed.StudentIds[1]
         }, seed.ProposerUserId, SystemRoles.Student);
         newFormation.IsSuccess.Should().BeTrue(newFormation.IsFailure ? newFormation.Error.Message : "");
     }
 
     [Fact]
-    public async Task Formation_DeclineCancelsWithoutCreatingTeam_AndReleasesReservations()
+    public async Task Formation_DeclineKeepsFormationPending_AndReleasesOnlyTheDecliningStudent()
     {
         using var scope = _factory.Services.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -265,7 +272,7 @@ public sealed partial class TeamWorkflowIntegrationTests
         var handler = scope.ServiceProvider.GetRequiredService<ITeamFormationHandler>();
         var created = await handler.CreateAsync(seed.ClassId, new CreateTeamFormationRequest
         {
-            TeamName = "Declined Formation", MemberStudentIds = seed.StudentIds,
+            TeamName = "Declined Formation", InviteeStudentIds = seed.StudentIds.Skip(1).ToArray(),
             LeaderStudentId = seed.StudentIds[1]
         }, seed.ProposerUserId, SystemRoles.Student);
         created.IsSuccess.Should().BeTrue();
@@ -275,16 +282,14 @@ public sealed partial class TeamWorkflowIntegrationTests
         var declined = await handler.DeclineAsync(created.Value.Id, decliningUserId!.Value, SystemRoles.Student);
 
         declined.IsSuccess.Should().BeTrue();
-        declined.Value.Status.Should().Be("Cancelled");
+        declined.Value.Status.Should().Be("Pending");
         (await context.Teams.CountAsync(item => item.ClassId == seed.ClassId)).Should().Be(0);
+        var released = await context.TeamFormationInvitations.AsNoTracking().Where(item => item.FormationId == created.Value.Id &&
+            item.ReservationReleasedAtUtc != null).ToListAsync();
+        released.Should().ContainSingle().Which.StudentId.Should().Be(seed.StudentIds[2]);
+        released[0].Status.Should().Be(TeamInvitationStatus.Declined);
         (await context.TeamFormationInvitations.CountAsync(item => item.FormationId == created.Value.Id &&
-            item.ReservationReleasedAtUtc == null)).Should().Be(0);
-        var replacement = await handler.CreateAsync(seed.ClassId, new CreateTeamFormationRequest
-        {
-            TeamName = "Replacement Formation", MemberStudentIds = seed.StudentIds,
-            LeaderStudentId = seed.StudentIds[1]
-        }, seed.ProposerUserId, SystemRoles.Student);
-        replacement.IsSuccess.Should().BeTrue(replacement.IsFailure ? replacement.Error.Message : "");
+            item.ReservationReleasedAtUtc == null)).Should().Be(3);
     }
 
     [Fact]
@@ -302,7 +307,7 @@ public sealed partial class TeamWorkflowIntegrationTests
         var handler = scope.ServiceProvider.GetRequiredService<ITeamFormationHandler>();
         var created = await handler.CreateAsync(seed.ClassId, new CreateTeamFormationRequest
         {
-            TeamName = "Late Login Formation", MemberStudentIds = seed.StudentIds,
+            TeamName = "Late Login Formation", InviteeStudentIds = seed.StudentIds.Skip(1).ToArray(),
             LeaderStudentId = seed.StudentIds[1]
         }, seed.ProposerUserId, SystemRoles.Student);
         created.IsSuccess.Should().BeTrue(created.IsFailure ? created.Error.Message : "");
@@ -529,7 +534,7 @@ public sealed partial class TeamWorkflowIntegrationTests
         var handler = scope.ServiceProvider.GetRequiredService<ITeamFormationHandler>();
         var result = await handler.CreateAsync(seed.ClassId, new CreateTeamFormationRequest
         {
-            TeamName = "Undeclared Proposer Team", MemberStudentIds = seed.StudentIds,
+            TeamName = "Undeclared Proposer Team", InviteeStudentIds = seed.StudentIds.Skip(1).ToArray(),
             LeaderStudentId = seed.StudentIds[0]
         }, seed.ProposerUserId, SystemRoles.Student);
 
@@ -539,7 +544,7 @@ public sealed partial class TeamWorkflowIntegrationTests
     }
 
     [Fact]
-    public async Task StudentWithoutMajor_CannotCreateTeam_WhenNoBusinessMajorRemains()
+    public async Task StudentWithoutMajor_CannotFinalizeTeam_WhenNoBusinessMajorRemains()
     {
         using var scope = _factory.Services.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -554,12 +559,22 @@ public sealed partial class TeamWorkflowIntegrationTests
         var handler = scope.ServiceProvider.GetRequiredService<ITeamFormationHandler>();
         var result = await handler.CreateAsync(seed.ClassId, new CreateTeamFormationRequest
         {
-            TeamName = "No Business Major Team", MemberStudentIds = seed.StudentIds,
+            TeamName = "No Business Major Team", InviteeStudentIds = seed.StudentIds.Skip(1).ToArray(),
             LeaderStudentId = seed.StudentIds[0]
         }, seed.ProposerUserId, SystemRoles.Student);
 
-        result.IsFailure.Should().BeTrue();
-        result.Error.Code.Should().Be(ErrorCodes.TeamMajorCompositionInvalid);
+        // Composition is only enforced at finalize, on the accepted members.
+        result.IsSuccess.Should().BeTrue(result.IsFailure ? result.Error.Message : "");
+        for (var index = 1; index < seed.StudentIds.Length; index++)
+        {
+            var memberUserId = await context.Students.AsNoTracking().Where(item => item.Id == seed.StudentIds[index])
+                .Select(item => item.UserId).SingleAsync();
+            (await handler.AcceptAsync(result.Value.Id, memberUserId!.Value, SystemRoles.Student)).IsSuccess.Should().BeTrue();
+        }
+        var finalized = await handler.FinalizeAsync(result.Value.Id, new FinalizeTeamFormationRequest(),
+            seed.ProposerUserId, SystemRoles.Student);
+        finalized.IsFailure.Should().BeTrue();
+        finalized.Error.Code.Should().Be(ErrorCodes.TeamFormationNotReady);
     }
 
     [Fact]
@@ -807,6 +822,7 @@ public sealed partial class TeamWorkflowIntegrationTests
             Email = $"team-flow-mentor-{unique}@ehub.local",
             Password = "QaMentor!123",
             Role = "MENTOR",
+            MentorType = "Enterprise",
             Status = "APPROVED"
         });
 
@@ -1042,7 +1058,7 @@ public sealed partial class TeamWorkflowIntegrationTests
         var formation = await formationHandler.CreateAsync(seed.ClassId, new CreateTeamFormationRequest
         {
             TeamName = "Reserved Student Team",
-            MemberStudentIds = seed.StudentIds,
+            InviteeStudentIds = seed.StudentIds.Skip(1).ToArray(),
             LeaderStudentId = seed.StudentIds[1]
         }, seed.ProposerUserId, SystemRoles.Student);
         formation.IsSuccess.Should().BeTrue();
@@ -4141,6 +4157,111 @@ public sealed partial class TeamWorkflowIntegrationTests
         var deleted = await handler.DeleteWeeklyTaskAsync(created.Value.Id, seed.ProposerUserId, SystemRoles.Student);
         deleted.IsFailure.Should().BeTrue();
         deleted.Error.Code.Should().Be(ErrorCodes.WorkspaceAccessDenied);
+    }
+
+    [Fact]
+    public async Task ReplacingAMentor_EndsTheOldAssignmentAndCreatesTheNewOneInOneSave()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateSeedAsync(context, createProposal: false, createTeam: true);
+        var replacement = await CreateListedMentorAsync(context, seed, MentorType.Enterprise, "replace-ok", listedInSemester: true);
+        var current = await context.MentorAssignments.AsNoTracking().SingleAsync(item => item.TeamId == seed.TeamId && item.EndedAt == null);
+        context.ChangeTracker.Clear();
+        var handler = new MentorAssignmentHandler(context, scope.ServiceProvider.GetRequiredService<EHub.Application.Common.Interfaces.Persistence.IUnitOfWork>());
+
+        var result = await handler.ReplaceAsync(seed.TeamId!.Value,
+            new ReplaceMentorRequest { AssignmentId = current.Id, MentorProfileId = replacement, Reason = "Better domain fit" },
+            seed.LecturerId, SystemRoles.Lecturer);
+
+        result.IsSuccess.Should().BeTrue(result.IsFailure ? result.Error.Message : string.Empty);
+        context.ChangeTracker.Clear();
+        var all = await context.MentorAssignments.AsNoTracking().Where(item => item.TeamId == seed.TeamId).ToListAsync();
+        all.Should().HaveCount(2, "the old assignment is kept as history");
+        var ended = all.Single(item => item.Id == current.Id);
+        ended.Status.Should().Be(MentorAssignmentStatus.Ended);
+        ended.EndedAt.Should().NotBeNull();
+        ended.Note.Should().Contain("Better domain fit");
+        all.Single(item => item.EndedAt == null).MentorProfileId.Should().Be(replacement);
+    }
+
+    [Fact]
+    public async Task ReplacingAMentor_ChangesNothingWhenTheReplacementCannotBeUsed()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateSeedAsync(context, createProposal: false, createTeam: true);
+        var notListed = await CreateListedMentorAsync(context, seed, MentorType.Enterprise, "replace-unlisted", listedInSemester: false);
+        var wrongType = await CreateListedMentorAsync(context, seed, MentorType.Academic, "replace-academic", listedInSemester: true);
+        var current = await context.MentorAssignments.AsNoTracking().SingleAsync(item => item.TeamId == seed.TeamId && item.EndedAt == null);
+        context.ChangeTracker.Clear();
+        var handler = new MentorAssignmentHandler(context, scope.ServiceProvider.GetRequiredService<EHub.Application.Common.Interfaces.Persistence.IUnitOfWork>());
+        Task<EHub.Shared.Results.Result<EHub.Contracts.Teams.MentorAssignmentDto>> Replace(Guid mentor, string reason, Guid userId, string role) =>
+            handler.ReplaceAsync(seed.TeamId!.Value, new ReplaceMentorRequest { AssignmentId = current.Id, MentorProfileId = mentor, Reason = reason }, userId, role);
+
+        (await Replace(notListed, "valid reason", seed.AdminId, SystemRoles.Admin)).Error.Code.Should().Be(ErrorCodes.MentorNotAvailable);
+        (await Replace(wrongType, "valid reason", seed.AdminId, SystemRoles.Admin)).Error.Code.Should().Be(ErrorCodes.ClassValidationError);
+        (await Replace(wrongType, "no", seed.AdminId, SystemRoles.Admin)).Error.Code.Should().Be(ErrorCodes.ClassValidationError);
+        (await Replace(current.MentorProfileId, "valid reason", seed.AdminId, SystemRoles.Admin)).Error.Code.Should().Be(ErrorCodes.ClassValidationError);
+        var stranger = await CreateUserAsync(context, SystemRoles.Lecturer, "not-the-owner");
+        (await Replace(notListed, "valid reason", stranger.Id, SystemRoles.Lecturer)).Error.Code.Should().Be(ErrorCodes.ClassAccessDenied);
+
+        context.ChangeTracker.Clear();
+        var all = await context.MentorAssignments.AsNoTracking().Where(item => item.TeamId == seed.TeamId).ToListAsync();
+        all.Should().ContainSingle("a failed replacement must keep the current mentor and add nobody");
+        all.Single().Status.Should().Be(MentorAssignmentStatus.Active);
+        all.Single().EndedAt.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task AssigningOneMentorToSeveralTeams_IsAllOrNothing_AndStaysInsideTheClass()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateSeedAsync(context, createProposal: false, createTeam: true);
+        var academic = await CreateListedMentorAsync(context, seed, MentorType.Academic, "batch-academic", listedInSemester: true);
+        var enterprise = await CreateListedMentorAsync(context, seed, MentorType.Enterprise, "batch-enterprise", listedInSemester: true);
+        context.ChangeTracker.Clear();
+        var handler = new MentorAssignmentHandler(context, scope.ServiceProvider.GetRequiredService<EHub.Application.Common.Interfaces.Persistence.IUnitOfWork>());
+        var both = new[] { seed.TeamId!.Value, seed.OtherTeamId!.Value };
+
+        var first = await handler.AssignBatchAsync(seed.ClassId, new AssignMentorBatchRequest { MentorProfileId = academic, TeamIds = both }, seed.LecturerId, SystemRoles.Lecturer);
+        var again = await handler.AssignBatchAsync(seed.ClassId, new AssignMentorBatchRequest { MentorProfileId = academic, TeamIds = both }, seed.AdminId, SystemRoles.Admin);
+        // The first team already has an enterprise mentor, so the other team must not be assigned either.
+        var conflict = await handler.AssignBatchAsync(seed.ClassId, new AssignMentorBatchRequest { MentorProfileId = enterprise, TeamIds = both }, seed.AdminId, SystemRoles.Admin);
+        var foreign = await handler.AssignBatchAsync(seed.ClassId, new AssignMentorBatchRequest { MentorProfileId = academic, TeamIds = [Guid.NewGuid()] }, seed.AdminId, SystemRoles.Admin);
+        var stranger = await CreateUserAsync(context, SystemRoles.Lecturer, "batch-stranger");
+        var denied = await handler.AssignBatchAsync(seed.ClassId, new AssignMentorBatchRequest { MentorProfileId = academic, TeamIds = both }, stranger.Id, SystemRoles.Lecturer);
+
+        first.IsSuccess.Should().BeTrue(first.IsFailure ? first.Error.Message : string.Empty);
+        first.Value.AssignedCount.Should().Be(2);
+        again.Value.AssignedCount.Should().Be(0);
+        again.Value.AlreadyAssignedCount.Should().Be(2, "assigning the same mentor again must not create duplicates");
+        conflict.Error.Code.Should().Be(ErrorCodes.MentorAssignmentConflict);
+        foreign.Error.Code.Should().Be(ErrorCodes.TeamNotFound);
+        denied.Error.Code.Should().Be(ErrorCodes.ClassAccessDenied);
+        context.ChangeTracker.Clear();
+        var active = await context.MentorAssignments.AsNoTracking().Where(item => both.Contains(item.TeamId) && item.EndedAt == null).ToListAsync();
+        active.Where(item => item.Slot == MentorType.Academic).Should().HaveCount(2);
+        active.Where(item => item.Slot == MentorType.Enterprise).Should().ContainSingle("the conflicting batch saved nothing");
+    }
+
+    private static async Task<Guid> CreateListedMentorAsync(AppDbContext context, WorkflowSeed seed, MentorType type, string suffix, bool listedInSemester)
+    {
+        var user = await CreateUserAsync(context, SystemRoles.Mentor, suffix);
+        var profile = new MentorProfile { UserId = user.Id, User = user, Type = type, Status = MentorProfileStatus.Active, CreatedBy = seed.AdminId };
+        context.MentorProfiles.Add(profile);
+        if (listedInSemester)
+        {
+            var semesterId = await context.Classes.Where(item => item.Id == seed.ClassId).Select(item => item.SemesterId).SingleAsync();
+            context.SemesterStaffAssignments.Add(new SemesterStaffAssignment
+            {
+                SemesterId = semesterId, UserId = user.Id, User = user, Role = SemesterStaffRole.Mentor,
+                Status = SemesterStaffStatus.Active, CreatedBy = seed.AdminId
+            });
+        }
+        await context.SaveChangesAsync();
+        return profile.Id;
     }
 
     private static async Task<WorkflowSeed> CreateSeedAsync(AppDbContext context, bool createProposal, bool createTeam)

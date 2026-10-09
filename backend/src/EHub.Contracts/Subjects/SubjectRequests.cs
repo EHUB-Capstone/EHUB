@@ -67,23 +67,21 @@ public sealed class AddSemesterTeachingStaffRequest
     public string Role { get; init; } = string.Empty;
 }
 
+// Adds several existing lecturers or mentors of one role to a semester in a single request.
+public sealed class AddSemesterTeachingStaffBatchRequest
+{
+    public string Semester { get; init; } = string.Empty;
+    public int Year { get; init; }
+    public string Role { get; init; } = string.Empty;
+    // When true, UserIds are ids of incomplete mentors (no account yet) and Role must be MENTOR.
+    public bool Temporary { get; init; }
+    public IReadOnlyCollection<Guid> UserIds { get; init; } = Array.Empty<Guid>();
+}
+
 public sealed class UpdateSemesterTeachingStaffRequest
 {
     public string Status { get; init; } = string.Empty;
     public string RowVersion { get; init; } = string.Empty;
-}
-
-public sealed class PreviewMentorCarryoverRequest
-{
-    public Guid SourceSemesterId { get; init; }
-    public Guid TargetSemesterId { get; init; }
-}
-
-public sealed class CommitMentorCarryoverRequest
-{
-    public Guid SourceSemesterId { get; init; }
-    public Guid TargetSemesterId { get; init; }
-    public IReadOnlyCollection<Guid> MentorUserIds { get; init; } = Array.Empty<Guid>();
 }
 
 public sealed class SaveRoadmapItemRequest

@@ -280,6 +280,35 @@ public sealed class SubjectsController : ControllerBase
                     "Teaching staff member added to the semester successfully."));
     }
 
+    [HttpPost("teaching-staff/batch")]
+    [Authorize(Policy = SystemPolicies.AdminOnly)]
+    public async Task<IActionResult> AddTeachingStaffBatch(
+        [FromBody] AddSemesterTeachingStaffBatchRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await _semesterTeachingStaffHandler.AddBatchAsync(request, cancellationToken);
+        return result.IsFailure
+            ? ToSemesterErrorResponse(result.Error)
+            : Ok(ApiResponse<AddSemesterTeachingStaffBatchResponse>.SuccessResponse(
+                result.Value!,
+                "Teaching staff batch processed successfully."));
+    }
+
+    [HttpPut("teaching-staff/temporary-mentors/{participationId:guid}")]
+    [Authorize(Policy = SystemPolicies.AdminOnly)]
+    public async Task<IActionResult> UpdateTemporaryMentor(
+        Guid participationId,
+        [FromBody] UpdateSemesterTeachingStaffRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await _semesterTeachingStaffHandler.UpdateTemporaryAsync(participationId, request, cancellationToken);
+        return result.IsFailure
+            ? ToSemesterErrorResponse(result.Error)
+            : Ok(ApiResponse<TeachingStaffResponse>.SuccessResponse(
+                result.Value!,
+                "Semester teaching staff entry updated successfully."));
+    }
+
     [HttpPut("teaching-staff/{assignmentId:guid}")]
     [Authorize(Policy = SystemPolicies.AdminOnly)]
     public async Task<IActionResult> UpdateTeachingStaff(
@@ -296,38 +325,6 @@ public sealed class SubjectsController : ControllerBase
             : Ok(ApiResponse<TeachingStaffResponse>.SuccessResponse(
                 result.Value!,
                 "Semester teaching staff entry updated successfully."));
-    }
-
-    [HttpPost("teaching-staff/mentor-carryover/preview")]
-    [Authorize(Policy = SystemPolicies.AdminOnly)]
-    public async Task<IActionResult> PreviewMentorCarryover(
-        [FromBody] PreviewMentorCarryoverRequest request,
-        CancellationToken cancellationToken)
-    {
-        var result = await _semesterTeachingStaffHandler.PreviewMentorCarryoverAsync(
-            request,
-            cancellationToken);
-        return result.IsFailure
-            ? ToSemesterErrorResponse(result.Error)
-            : Ok(ApiResponse<MentorCarryoverPreviewResponse>.SuccessResponse(
-                result.Value!,
-                "Mentors available for reuse retrieved successfully."));
-    }
-
-    [HttpPost("teaching-staff/mentor-carryover/commit")]
-    [Authorize(Policy = SystemPolicies.AdminOnly)]
-    public async Task<IActionResult> CommitMentorCarryover(
-        [FromBody] CommitMentorCarryoverRequest request,
-        CancellationToken cancellationToken)
-    {
-        var result = await _semesterTeachingStaffHandler.CommitMentorCarryoverAsync(
-            request,
-            cancellationToken);
-        return result.IsFailure
-            ? ToSemesterErrorResponse(result.Error)
-            : Ok(ApiResponse<MentorCarryoverCommitResponse>.SuccessResponse(
-                result.Value!,
-                "Selected mentors added to the target semester successfully."));
     }
 
     [HttpGet("{subjectCode}")]

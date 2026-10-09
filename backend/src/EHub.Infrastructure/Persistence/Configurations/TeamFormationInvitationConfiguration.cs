@@ -9,17 +9,24 @@ public sealed class TeamFormationInvitationConfiguration : IEntityTypeConfigurat
     public void Configure(EntityTypeBuilder<TeamFormationInvitation> builder)
     {
         builder.ToTable("team_formation_invitations", table =>
-            table.HasCheckConstraint("CK_team_formation_invitations_status", "status IN ('Pending', 'Accepted', 'Declined')"));
-        builder.HasKey(item => new { item.FormationId, item.StudentId });
+            table.HasCheckConstraint("CK_team_formation_invitations_status",
+                "status IN ('Pending', 'Accepted', 'Declined', 'Expired', 'Left')"));
+        builder.HasKey(item => item.Id);
+        builder.Property(item => item.Id).HasColumnName("id").ValueGeneratedNever();
         builder.Property(item => item.FormationId).HasColumnName("formation_id");
         builder.Property(item => item.ClassId).HasColumnName("class_id");
         builder.Property(item => item.StudentId).HasColumnName("student_id");
         builder.Property(item => item.Status).HasColumnName("status").HasConversion<string>().HasMaxLength(20).IsRequired();
+        builder.Property(item => item.CreatedAtUtc).HasColumnName("created_at_utc").IsRequired();
+        builder.Property(item => item.ExpiresAtUtc).HasColumnName("expires_at_utc");
         builder.Property(item => item.RespondedAtUtc).HasColumnName("responded_at_utc");
         builder.Property(item => item.ReservationReleasedAtUtc).HasColumnName("reservation_released_at_utc");
+        // At most one active invitation per student per class; released records are history.
         builder.HasIndex(item => new { item.ClassId, item.StudentId })
             .IsUnique().HasFilter("reservation_released_at_utc IS NULL");
+        builder.HasIndex(item => new { item.FormationId, item.StudentId });
         builder.HasIndex(item => new { item.StudentId, item.ReservationReleasedAtUtc });
+        builder.HasIndex(item => item.ExpiresAtUtc).HasFilter("status = 'Pending'");
         builder.HasOne(item => item.Formation).WithMany(formation => formation.Invitations)
             .HasForeignKey(item => item.FormationId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(item => item.ClassStudent).WithMany()

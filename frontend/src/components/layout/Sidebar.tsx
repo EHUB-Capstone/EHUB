@@ -196,7 +196,7 @@ const Sidebar = ({ mobileOpen, onMobileClose }: SidebarProps) => {
         {role === 'STUDENT' && (
           <button
             onClick={() => { navigate('/student/idea/new'); handleNavClick(); }}
-            className="w-full bg-gradient-to-r from-primary to-secondary text-white font-semibold py-2.5 rounded-xl flex items-center justify-center gap-2 shadow-sm hover:shadow-glow-primary transition-all active:scale-[0.98] text-[13px]"
+            className="w-full bg-primary hover:bg-primary-dark text-white font-semibold py-2.5 rounded-xl flex items-center justify-center gap-2 shadow-sm hover:shadow-glow-primary transition-all active:scale-[0.98] text-[13px]"
           >
             <Plus className="w-4 h-4" />
             New Idea

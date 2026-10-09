@@ -2,13 +2,14 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   BookOpen, Calendar, CheckCircle2, ChevronLeft, ChevronRight, CircleAlert, Edit3, Factory, Filter, GraduationCap, Plus,
-  History, LockKeyhole, RefreshCw, Search, ShieldAlert, Sparkles, Users,
+  LockKeyhole, RefreshCw, Search, ShieldAlert, Sparkles, Users,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { subjectApi } from '../../api/subjectApi';
 import SemesterDateRangePicker from '../../components/admin/SemesterDateRangePicker';
 import MentorAdministrationCard from '../../components/admin/MentorAdministrationCard';
-import MentorCarryoverModal from '../../components/admin/MentorCarryoverModal';
+import AddSemesterStaffModal from '../../components/admin/AddSemesterStaffModal';
+import TemporaryMentorBadge from '../../components/admin/TemporaryMentorBadge';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
@@ -18,10 +19,42 @@ import Modal from '../../components/ui/Modal';
 import { parseApiError } from '../../utils/apiError';
 import {
   filterTeachingStaff,
+  getStaffKind,
   paginateTeachingStaff,
+  type StaffKind,
+  type StaffRoleFilter,
   type StaffStatusFilter,
 } from '../../utils/teachingStaffDirectory';
+import { MENTOR_KIND_STYLES } from '../../utils/mentorKindStyles';
 import StartupIndustryManagement from './StartupIndustryManagement';
+
+const STAFF_KIND_STYLES: Record<StaffKind, {
+  label: string;
+  hint: string;
+  Icon: typeof Users;
+  badge: string;
+  avatar: string;
+  accent: string;
+}> = {
+  LECTURER: {
+    label: 'Lecturer',
+    hint: 'Teaches and manages classes',
+    Icon: GraduationCap,
+    badge: 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-400/40 dark:bg-blue-500/15 dark:text-blue-300',
+    avatar: 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300',
+    accent: 'border-l-blue-500',
+  },
+  ENTERPRISE_MENTOR: MENTOR_KIND_STYLES.Enterprise,
+  ACADEMIC_MENTOR: MENTOR_KIND_STYLES.Academic,
+  MENTOR: {
+    label: 'Mentor',
+    hint: 'Mentor',
+    Icon: Users,
+    badge: 'border-slate-200 bg-slate-50 text-slate-700 dark:border-white/20 dark:bg-white/10 dark:text-slate-200',
+    avatar: 'bg-slate-100 text-slate-600 dark:bg-white/10 dark:text-slate-200',
+    accent: 'border-l-slate-400',
+  },
+};
 import type {
   SemesterCode,
   SemesterCompletionPreview,
@@ -29,7 +62,6 @@ import type {
   SubjectDto,
   SubjectStatus,
   TeachingStaffDto,
-  TeachingStaffCandidateDto,
   TeachingStaffSummary,
 } from '../../types/subjects';
 
@@ -47,11 +79,6 @@ function initials(name: string) {
 
 function semesterLabel({ semester, year }: SemesterDto) {
   return `${semester} ${year}`;
-}
-
-function semesterChronology({ semester, year }: SemesterDto) {
-  const termOrder: Record<SemesterCode, number> = { SP: 0, SU: 1, FA: 2 };
-  return year * 3 + termOrder[semester];
 }
 
 function formatSemesterDate(value: string | null) {
@@ -130,19 +157,15 @@ const SubjectManagement = () => {
   const [staffSummary, setStaffSummary] = useState<TeachingStaffSummary>(emptySummary);
   const [staffLoading, setStaffLoading] = useState(false);
   const [staffSearch, setStaffSearch] = useState('');
-  const [staffRole, setStaffRole] = useState<'ALL' | TeachingStaffDto['role']>('ALL');
+  const [staffRole, setStaffRole] = useState<StaffRoleFilter>('ALL');
   const [staffStatus, setStaffStatus] = useState<StaffStatusFilter>('ALL');
   const [staffPage, setStaffPage] = useState(1);
   const [staffPageSize, setStaffPageSize] = useState<(typeof staffPageSizes)[number]>(10);
   const [staffModalOpen, setStaffModalOpen] = useState(false);
   const [editingStaff, setEditingStaff] = useState<TeachingStaffDto | null>(null);
-  const [staffModalRole, setStaffModalRole] = useState<TeachingStaffDto['role']>('LECTURER');
-  const [staffCandidates, setStaffCandidates] = useState<TeachingStaffCandidateDto[]>([]);
-  const [staffCandidateKey, setStaffCandidateKey] = useState('');
+  const [addStaffRole, setAddStaffRole] = useState<TeachingStaffDto['role'] | null>(null);
   const [staffEntryStatus, setStaffEntryStatus] = useState<'Active' | 'Inactive'>('Active');
   const [staffSaving, setStaffSaving] = useState(false);
-  const [staffCandidatesLoading, setStaffCandidatesLoading] = useState(false);
-  const [mentorCarryoverOpen, setMentorCarryoverOpen] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingSubject, setEditingSubject] = useState<SubjectDto | null>(null);
   const [form, setForm] = useState({ subjectCode: '', subjectName: '', status: 'active' as SubjectStatus });
@@ -283,7 +306,7 @@ const SubjectManagement = () => {
     setActiveTab('staff');
   };
 
-  const openAddStaff = async (role: TeachingStaffDto['role']) => {
+  const openAddStaff = (role: TeachingStaffDto['role']) => {
     const targetSemester = semesters.find(item =>
       item.semester === selectedSemester && item.year === selectedYear);
     if (!targetSemester) {
@@ -295,54 +318,26 @@ const SubjectManagement = () => {
       return;
     }
 
-    setEditingStaff(null);
-    setStaffModalRole(role);
-    setStaffCandidateKey('');
-    setStaffEntryStatus('Active');
-    setStaffModalOpen(true);
-    setStaffCandidatesLoading(true);
-    try {
-      const payload = responseData(await subjectApi.getTeachingStaffCandidates());
-      setStaffCandidates(payload.candidates ?? []);
-    } catch (error) {
-      toast.error(parseApiError(error, 'Failed to load eligible lecturers and mentors').message);
-      setStaffCandidates([]);
-    } finally {
-      setStaffCandidatesLoading(false);
-    }
+    setAddStaffRole(role);
   };
 
   const openEditStaff = (member: TeachingStaffDto) => {
-    if (member.isIncomplete) return;
+    if (member.isIncomplete && !member.isTemporary) return;
     setEditingStaff(member);
     setStaffEntryStatus(member.status === 'Inactive' ? 'Inactive' : 'Active');
     setStaffModalOpen(true);
   };
 
   const saveTeachingStaff = async () => {
+    if (!editingStaff) return;
     setStaffSaving(true);
     try {
-      if (editingStaff) {
-        await subjectApi.updateTeachingStaff(editingStaff._id, {
-          status: staffEntryStatus,
-          rowVersion: editingStaff.rowVersion,
-        });
-        toast.success(`${editingStaff.name} updated for ${selectedSemester} ${selectedYear}.`);
-      } else {
-        const candidate = staffCandidates.find(item => `${item.userId}:${item.role}` === staffCandidateKey);
-        if (!candidate) {
-          toast.error('Select an eligible lecturer or mentor.');
-          return;
-        }
-        await subjectApi.addTeachingStaff({
-          semester: selectedSemester,
-          year: selectedYear,
-          userId: candidate.userId,
-          role: candidate.role,
-        });
-        toast.success(`${candidate.name} added to ${selectedSemester} ${selectedYear}.`);
-      }
-
+      const update = editingStaff.isTemporary ? subjectApi.updateTemporaryMentor : subjectApi.updateTeachingStaff;
+      await update(editingStaff._id, {
+        status: staffEntryStatus,
+        rowVersion: editingStaff.rowVersion,
+      });
+      toast.success(`${editingStaff.name} updated for ${selectedSemester} ${selectedYear}.`);
       setStaffModalOpen(false);
       await loadStaff();
     } catch (error) {
@@ -587,11 +582,12 @@ const SubjectManagement = () => {
   const staffRangeEnd = staffPagination.rangeEnd;
   const hasStaffFilters = Boolean(staffSearch.trim()) || staffRole !== 'ALL' || staffStatus !== 'ALL';
 
-  const availableStaffCandidates = useMemo(() => {
-    const existingKeys = new Set(staff.map(member => `${member.userId}:${member.role}`));
-    return staffCandidates.filter(candidate =>
-      candidate.role === staffModalRole && !existingKeys.has(`${candidate.userId}:${candidate.role}`));
-  }, [staff, staffCandidates, staffModalRole]);
+  const existingStaffUserIds = useMemo(() => new Set(
+    staff
+      .filter(member => member.role === addStaffRole && (member.userId || member.isTemporary))
+      // A mentor without an account is identified by the id of their incomplete-mentor record.
+      .map(member => (member.isTemporary ? member.draftId : member.userId) as string)
+      .filter(Boolean)), [staff, addStaffRole]);
 
   const semesterScheduleYears = useMemo(() => Array.from(new Set(
     semesters.map(item => Number(item.year)),
@@ -655,19 +651,12 @@ const SubjectManagement = () => {
   const staffStats = [
     { label: 'Lecturers', value: staffSummary.lecturers, icon: GraduationCap, style: 'bg-primary text-white ring-primary-200 dark:ring-primary/50' },
     { label: 'Mentors', value: staffSummary.mentors, icon: Users, style: 'bg-secondary text-white ring-black/10 dark:ring-blue-300/40' },
-    { label: 'Needs info', value: staff.filter(member => member.isIncomplete).length, icon: CircleAlert, style: 'bg-warning text-white ring-black/10 dark:ring-amber-300/40' },
+    { label: 'Needs info', value: staff.filter(member => member.isIncomplete && !member.isTemporary).length, icon: CircleAlert, style: 'bg-warning text-white ring-black/10 dark:ring-amber-300/40' },
     { label: 'Assigned', value: staffSummary.assigned, icon: CheckCircle2, style: 'bg-success text-white ring-black/10 dark:ring-green-300/40' },
     { label: 'Unassigned', value: staffSummary.unassigned, icon: ShieldAlert, style: 'bg-slate-600 text-white ring-black/10 dark:bg-slate-500 dark:ring-slate-300/40' },
     { label: 'Classes', value: staffSummary.classes, icon: BookOpen, style: 'bg-cyan text-white ring-black/10 dark:ring-cyan-300/40' },
   ];
   const selectedSemesterRecord = semesters.find(item => item.semester === selectedSemester && Number(item.year) === selectedYear);
-  const mentorCarryoverSources = useMemo(() => {
-    if (!selectedSemesterRecord) return [];
-    const targetOrder = semesterChronology(selectedSemesterRecord);
-    return semesters
-      .filter(item => item.id !== selectedSemesterRecord.id && semesterChronology(item) < targetOrder)
-      .sort((left, right) => semesterChronology(right) - semesterChronology(left));
-  }, [selectedSemesterRecord, semesters]);
 
   return (
     <div className="space-y-6">
@@ -886,55 +875,44 @@ const SubjectManagement = () => {
           </aside>
         </div>
       ) : (
-        <section className="space-y-5">
-          <div className="flex flex-col gap-3 rounded-2xl border border-slate-200/70 bg-white p-4 shadow-sm md:flex-row md:items-end md:justify-between"><div className="flex flex-col gap-3 sm:flex-row"><label className="text-xs font-semibold uppercase text-slate-400">Semester<select value={selectedSemester} onChange={(event) => setSelectedSemester(event.target.value as SemesterCode)} className="mt-1.5 block rounded-xl border border-slate-200 px-3 py-2 text-sm font-normal text-slate-700 outline-none"><option value="SP">SP (Spring)</option><option value="SU">SU (Summer)</option><option value="FA">FA (Fall)</option></select></label><label className="text-xs font-semibold uppercase text-slate-400">Year<select value={selectedYear} onChange={(event) => setSelectedYear(Number(event.target.value))} className="mt-1.5 block rounded-xl border border-slate-200 px-3 py-2 text-sm font-normal text-slate-700 outline-none">{availableYears.map((year) => <option key={year} value={year}>{year}</option>)}</select></label></div><Button variant="outline" icon={Users} onClick={() => navigate('/admin/classes')}>Manage Assignments</Button></div>
-          <MentorAdministrationCard
-            semesterId={selectedSemesterRecord?.id}
-            semesterLabel={`${selectedSemester} ${selectedYear}`}
-            onImportCommitted={() => {
-              setStaffPage(1);
-              return loadStaff(selectedSemester, selectedYear);
-            }}
-          />
-          <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm dark:border-white/15 dark:bg-[#111827] dark:shadow-[0_10px_30px_rgba(0,0,0,0.18)]">
-            <header className="flex items-center gap-3 border-b border-slate-200/80 bg-slate-50/80 px-4 py-3 dark:border-white/10 dark:bg-white/[0.045]">
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-secondary text-white shadow-sm ring-1 ring-black/10 dark:ring-blue-300/40"><Users className="h-4.5 w-4.5" /></span>
-              <div><h2 className="text-sm font-bold text-slate-900">Staff overview</h2><p className="text-xs text-slate-500">Availability and assignment status for {selectedSemester} {selectedYear}</p></div>
-            </header>
-            <div className="grid grid-cols-2 gap-2 p-3 sm:grid-cols-3 xl:grid-cols-6">
+        <section className="space-y-4">
+          {/* Semester context and the numbers for it, kept together at the top */}
+          <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm dark:border-white/15 dark:bg-[#111827] dark:shadow-[0_10px_30px_rgba(0,0,0,0.18)]">
+            <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-end sm:justify-between">
+              <div className="flex flex-wrap items-end gap-3">
+                <label className="text-xs font-semibold uppercase text-slate-400">Semester
+                  <select value={selectedSemester} onChange={(event) => setSelectedSemester(event.target.value as SemesterCode)} className="mt-1.5 block rounded-xl border border-slate-200 px-3 py-2 text-sm font-normal text-slate-700 outline-none focus:border-primary">
+                    <option value="SP">SP (Spring)</option><option value="SU">SU (Summer)</option><option value="FA">FA (Fall)</option>
+                  </select>
+                </label>
+                <label className="text-xs font-semibold uppercase text-slate-400">Year
+                  <select value={selectedYear} onChange={(event) => setSelectedYear(Number(event.target.value))} className="mt-1.5 block rounded-xl border border-slate-200 px-3 py-2 text-sm font-normal text-slate-700 outline-none focus:border-primary">
+                    {availableYears.map((year) => <option key={year} value={year}>{year}</option>)}
+                  </select>
+                </label>
+                <p className="pb-2 text-xs text-slate-500">Staff overview for <strong className="font-semibold text-slate-700">{selectedSemester} {selectedYear}</strong></p>
+              </div>
+              <Button variant="outline" icon={Users} className="whitespace-nowrap" onClick={() => navigate('/admin/classes')}>Manage Assignments</Button>
+            </div>
+            <div className="grid grid-cols-2 gap-px border-t border-slate-200/80 bg-slate-200/80 sm:grid-cols-3 xl:grid-cols-6 dark:border-white/10 dark:bg-white/10">
               {staffStats.map(({ label, value, icon: Icon, style }) => (
-                <div key={label} className="flex items-center gap-3 rounded-xl border border-slate-200/80 bg-slate-50/70 px-3 py-2.5 dark:border-white/10 dark:bg-white/[0.035]">
+                <div key={label} className="flex items-center gap-3 bg-white px-4 py-3 dark:bg-[#111827]">
                   <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg shadow-sm ring-1 ring-inset ${style}`}><Icon className="h-4 w-4" /></span>
                   <div className="min-w-0"><p className="text-lg font-bold leading-5 text-slate-900">{value}</p><p className="truncate text-xs text-slate-500">{label}</p></div>
                 </div>
               ))}
             </div>
-          </section>
+          </div>
 
-          <section className="rounded-2xl border border-slate-200/80 bg-white p-3 shadow-sm dark:border-white/15 dark:bg-[#111827] dark:shadow-[0_10px_30px_rgba(0,0,0,0.18)]">
-            <header className="mb-3 flex items-center gap-3 border-b border-slate-100 pb-3 dark:border-white/10">
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary text-white shadow-sm ring-1 ring-primary-200 dark:ring-primary/50"><Filter className="h-4 w-4" /></span>
-              <div><h2 className="text-sm font-bold text-slate-900">Search and filters</h2><p className="text-xs text-slate-500">Find staff by identity, role, profile status or assignment.</p></div>
-            </header>
-            <div className="flex flex-col gap-2 xl:flex-row xl:items-center">
-              <div className="relative min-w-0 flex-1">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500 dark:text-slate-300" />
-                <input value={staffSearch} onChange={(event) => setStaffSearch(event.target.value)} placeholder="Search name, email, class, subject or missing field..." className="w-full rounded-xl border border-slate-200 bg-white py-2 pl-10 pr-4 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 dark:border-white/15 dark:bg-[#0f172a]" />
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <select aria-label="Filter teaching staff by role" value={staffRole} onChange={(event) => setStaffRole(event.target.value as typeof staffRole)} className="min-w-[135px] rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-primary">
-                  <option value="ALL">All roles</option><option value="LECTURER">Lecturers</option><option value="MENTOR">Mentors</option>
-                </select>
-                <select aria-label="Filter teaching staff by status" value={staffStatus} onChange={(event) => setStaffStatus(event.target.value as StaffStatusFilter)} className="min-w-[165px] rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-primary">
-                  <option value="ALL">All statuses</option><option value="ACTIVE">Active</option><option value="INACTIVE">Inactive</option><option value="NEEDS_INFORMATION">Needs information</option>
-                </select>
-                <select aria-label="Rows per page" value={staffPageSize} onChange={(event) => setStaffPageSize(Number(event.target.value) as (typeof staffPageSizes)[number])} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-primary">
-                  {staffPageSizes.map(size => <option key={size} value={size}>{size} / page</option>)}
-                </select>
-                {hasStaffFilters && <button type="button" onClick={() => { setStaffSearch(''); setStaffRole('ALL'); setStaffStatus('ALL'); }} className="px-2 py-2 text-sm font-semibold text-primary hover:text-primary-dark">Reset</button>}
-              </div>
-            </div>
-          </section>
+          <MentorAdministrationCard
+            semesterId={selectedSemesterRecord?.id}
+            semesterLabel={`${selectedSemester} ${selectedYear}`}
+            temporaryMentorCount={staff.filter(member => member.isTemporary && member.status === 'Active').length}
+            onImportCommitted={() => {
+              setStaffPage(1);
+              return loadStaff(selectedSemester, selectedYear);
+            }}
+          />
 
           <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm dark:border-white/15 dark:bg-[#111827] dark:shadow-[0_10px_30px_rgba(0,0,0,0.18)]">
             <header className="flex flex-col gap-3 border-b border-slate-200/80 bg-slate-50/80 px-4 py-3 dark:border-white/10 dark:bg-white/[0.045] sm:flex-row sm:items-center sm:justify-between">
@@ -946,19 +924,46 @@ const SubjectManagement = () => {
                 </div>
               </div>
               <div className="flex flex-wrap gap-2">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  icon={History}
-                  disabled={!selectedSemesterRecord || ['Closing', 'Completed', 'Archived'].includes(selectedSemesterRecord.status)}
-                  onClick={() => setMentorCarryoverOpen(true)}
-                >
-                  Reuse mentors
-                </Button>
-                <Button size="sm" variant="outline" icon={Plus} onClick={() => void openAddStaff('LECTURER')}>Add lecturer</Button>
-                <Button size="sm" variant="outline" icon={Plus} onClick={() => void openAddStaff('MENTOR')}>Add mentor</Button>
+                <Button size="sm" variant="outline" icon={Plus} onClick={() => void openAddStaff('LECTURER')}>Add lecturers</Button>
+                <Button size="sm" variant="outline" icon={Plus} onClick={() => void openAddStaff('MENTOR')}>Add mentors</Button>
               </div>
             </header>
+
+            <div className="space-y-3 border-b border-slate-100 px-4 py-3 dark:border-white/10">
+              <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
+                <div className="relative min-w-0 flex-1">
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500 dark:text-slate-300" />
+                  <input value={staffSearch} onChange={(event) => setStaffSearch(event.target.value)} placeholder="Search name, email, class, subject or missing field..." aria-label="Search teaching staff" className="w-full rounded-xl border border-slate-200 bg-white py-2 pl-10 pr-4 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 dark:border-white/15 dark:bg-[#0f172a]" />
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <select aria-label="Filter teaching staff by status" value={staffStatus} onChange={(event) => setStaffStatus(event.target.value as StaffStatusFilter)} className="min-w-[150px] rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-primary">
+                    <option value="ALL">All statuses</option><option value="ACTIVE">Active</option><option value="INACTIVE">Inactive</option><option value="TEMPORARY">Temporary</option>
+                  </select>
+                  <select aria-label="Rows per page" value={staffPageSize} onChange={(event) => setStaffPageSize(Number(event.target.value) as (typeof staffPageSizes)[number])} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-primary">
+                    {staffPageSizes.map(size => <option key={size} value={size}>{size} / page</option>)}
+                  </select>
+                  {hasStaffFilters && <button type="button" onClick={() => { setStaffSearch(''); setStaffRole('ALL'); setStaffStatus('ALL'); }} className="px-2 py-2 text-sm font-semibold text-primary hover:text-primary-dark">Reset</button>}
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Filter teaching staff by type">
+                {([['ALL', 'All', staff.length], ...(['LECTURER', 'ENTERPRISE_MENTOR', 'ACADEMIC_MENTOR'] as const).map(kind => [kind, STAFF_KIND_STYLES[kind].label, staff.filter(member => getStaffKind(member) === kind).length] as const)] as const).map(([kind, label, count]) => {
+                  const active = staffRole === kind;
+                  const style = kind === 'ALL' ? null : STAFF_KIND_STYLES[kind];
+                  const KindIcon = style?.Icon;
+                  return (
+                    <button
+                      key={kind}
+                      type="button"
+                      aria-pressed={active}
+                      onClick={() => setStaffRole(active && kind !== 'ALL' ? 'ALL' : kind)}
+                      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition ${style ? style.badge : 'border-slate-200 bg-slate-50 text-slate-700'} ${active ? 'ring-2 ring-primary/40' : 'opacity-80 hover:opacity-100'}`}
+                    >
+                      {KindIcon && <KindIcon className="h-3 w-3" aria-hidden="true" />}{label}<span className="opacity-70">· {count}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
 
             {staffLoading ? (
               <LoadingSkeleton variant="table" lines={6} className="p-4" />
@@ -970,29 +975,33 @@ const SubjectManagement = () => {
               </div>
             ) : (
               <div className="divide-y divide-slate-100">
-                {paginatedStaff.map((member) => (
-                  <article key={member._id} className="grid gap-3 border-l-2 border-l-transparent px-4 py-3 transition-colors hover:border-l-secondary hover:bg-slate-50/60 dark:hover:bg-white/[0.035] lg:grid-cols-[minmax(230px,1.25fr)_minmax(170px,auto)_minmax(230px,1fr)_36px] lg:items-center">
+                {paginatedStaff.map((member) => {
+                  const kindStyle = STAFF_KIND_STYLES[getStaffKind(member)];
+                  const KindIcon = kindStyle.Icon;
+                  return (
+                  <article key={member._id} className={`grid gap-3 border-l-4 px-4 py-3 transition-colors hover:bg-slate-50/60 dark:hover:bg-white/[0.035] lg:grid-cols-[minmax(230px,1.25fr)_minmax(190px,auto)_minmax(230px,1fr)_36px] lg:items-center ${kindStyle.accent}`}>
                     <div className="flex min-w-0 items-center gap-3">
-                      {member.avatar ? <img src={member.avatar} alt="" className="h-9 w-9 rounded-full object-cover" /> : <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold ${member.isIncomplete ? 'bg-amber-50 text-amber-700' : 'bg-slate-100 text-slate-600'}`}>{initials(member.name)}</span>}
+                      {member.avatar ? <img src={member.avatar} alt="" className="h-9 w-9 rounded-full object-cover" /> : <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold ${kindStyle.avatar}`}>{initials(member.name)}</span>}
                       <div className="min-w-0">
                         <p className="truncate text-sm font-semibold text-slate-900">{member.name}</p>
                         <p className={`truncate text-xs ${member.isIncomplete ? 'font-medium text-amber-600' : 'text-slate-500'}`}>{member.email || 'Email not provided'}</p>
-                        {member.isIncomplete && member.missingFields.length > 0 && <p title={member.missingFields.join(', ')} className="mt-0.5 truncate text-[11px] text-slate-400">Missing: {member.missingFields.join(', ')}</p>}
+                        {member.isIncomplete && !member.isTemporary && member.missingFields.length > 0 && <p title={member.missingFields.join(', ')} className="mt-0.5 truncate text-[11px] text-slate-400">Missing: {member.missingFields.join(', ')}</p>}
                         {!member.isIncomplete && member.userStatus !== 'Active' && <p className="mt-0.5 text-[11px] font-medium text-red-600">User account: {member.userStatus}</p>}
                       </div>
                     </div>
                     <div className="flex flex-wrap items-center gap-1.5">
-                      <span className={`rounded-full px-2 py-1 text-[11px] font-semibold ${member.role === 'LECTURER' ? 'bg-primary-50 text-primary' : 'bg-secondary-50 text-secondary'}`}>{member.role === 'LECTURER' ? 'Lecturer' : 'Mentor'}</span>
-                      {member.isIncomplete ? <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-700">Needs information</span> : <Badge variant={member.status === 'Active' ? 'Active' : 'Inactive'}>{member.status}</Badge>}
+                      <span title={kindStyle.hint} className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[11px] font-semibold ${kindStyle.badge}`}><KindIcon className="h-3 w-3" aria-hidden="true" />{kindStyle.label}</span>
+                      {member.isTemporary ? <><TemporaryMentorBadge className="py-1 text-[11px]" /><Badge variant={member.status === 'Active' ? 'Active' : 'Inactive'}>{member.status}</Badge></> : member.isIncomplete ? <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-700">Needs information</span> : <Badge variant={member.status === 'Active' ? 'Active' : 'Inactive'}>{member.status}</Badge>}
                     </div>
                     <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-                      {member.isIncomplete ? <span className="text-xs font-medium text-amber-700">Complete profile before assignment</span> : member.assignments.length ? <>{member.assignments.slice(0, 2).map(assignment => <span key={assignment._id} className="rounded-full border border-primary-100 bg-primary-50 px-2 py-1 text-[11px] font-semibold text-primary">{assignment.classCode} · {assignment.subjectCode}</span>)}{member.assignments.length > 2 && <span className="text-xs font-semibold text-slate-500">+{member.assignments.length - 2} more</span>}</> : <span className="text-xs text-slate-500">Not assigned · {member.classCount} classes</span>}
+                      {member.isIncomplete && !member.isTemporary ? <span className="text-xs font-medium text-amber-700">Complete profile before assignment</span> : member.assignments.length ? <>{member.assignments.slice(0, 2).map(assignment => <span key={assignment._id} className="rounded-full border border-primary-100 bg-primary-50 px-2 py-1 text-[11px] font-semibold text-primary">{assignment.classCode} · {assignment.subjectCode}</span>)}{member.assignments.length > 2 && <span className="text-xs font-semibold text-slate-500">+{member.assignments.length - 2} more</span>}</> : <span className="text-xs text-slate-500">Not assigned · {member.classCount} classes</span>}
                     </div>
                     <div className="flex justify-end">
-                      {!member.isIncomplete && <button type="button" onClick={() => openEditStaff(member)} className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-primary-50 hover:text-primary" aria-label={`Edit ${member.name} semester status`} title="Edit semester status"><Edit3 className="h-4 w-4" /></button>}
+                      {(!member.isIncomplete || member.isTemporary) && <button type="button" onClick={() => openEditStaff(member)} className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-primary-50 hover:text-primary" aria-label={`Edit ${member.name} semester status`} title="Edit semester status"><Edit3 className="h-4 w-4" /></button>}
                     </div>
                   </article>
-                ))}
+                  );
+                })}
               </div>
             )}
 
@@ -1013,91 +1022,52 @@ const SubjectManagement = () => {
       <Modal
         isOpen={staffModalOpen}
         onClose={() => setStaffModalOpen(false)}
-        title={editingStaff ? `Edit ${editingStaff.name}` : `Add Existing ${staffModalRole === 'LECTURER' ? 'Lecturer' : 'Mentor'} to ${selectedSemester} ${selectedYear}`}
-        submitText={staffSaving ? 'Saving...' : editingStaff ? 'Update Status' : 'Add to Semester'}
+        title={editingStaff ? `Edit ${editingStaff.name}` : 'Edit semester status'}
+        submitText={staffSaving ? 'Saving...' : 'Update Status'}
         isSubmitting={staffSaving}
         onSubmit={saveTeachingStaff}
       >
-        <div className="space-y-4">
-          {!editingStaff && (
-            <p className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs leading-5 text-blue-700">
-              This does not create a new account. Select an existing active {staffModalRole === 'LECTURER' ? 'Lecturer' : 'Mentor'} to make them available for assignments in this semester.
+        {editingStaff && (
+          <div className="space-y-4">
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <p className="font-semibold text-slate-900">{editingStaff.name}</p>
+              <p className="text-sm text-slate-500">{editingStaff.email}</p>
+              <p className="mt-1 text-xs font-semibold text-primary">
+                {editingStaff.role === 'LECTURER' ? 'Lecturer' : 'Mentor'} · {selectedSemester} {selectedYear}
+              </p>
+            </div>
+            <label className="block text-sm font-medium text-slate-700">
+              Semester status
+              <select
+                value={staffEntryStatus}
+                onChange={(event) => setStaffEntryStatus(event.target.value as 'Active' | 'Inactive')}
+                className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-primary"
+              >
+                <option value="Active">Active — available for new assignments</option>
+                <option value="Inactive">Inactive — hidden from assignment lists</option>
+              </select>
+            </label>
+            {editingStaff.classCount > 0 && staffEntryStatus === 'Inactive' && (
+              <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-700">
+                This member still has {editingStaff.classCount} class assignment(s). Reassign or end them before deactivation.
+              </p>
+            )}
+            <p className="rounded-xl bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-600">
+              Only active staff in this semester list are available for new class or team assignments.
             </p>
-          )}
-          {editingStaff ? (
-            <>
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                <p className="font-semibold text-slate-900">{editingStaff.name}</p>
-                <p className="text-sm text-slate-500">{editingStaff.email}</p>
-                <p className="mt-1 text-xs font-semibold text-primary">
-                  {editingStaff.role === 'LECTURER' ? 'Lecturer' : 'Mentor'} · {selectedSemester} {selectedYear}
-                </p>
-              </div>
-              <label className="block text-sm font-medium text-slate-700">
-                Semester status
-                <select
-                  value={staffEntryStatus}
-                  onChange={(event) => setStaffEntryStatus(event.target.value as 'Active' | 'Inactive')}
-                  className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-primary"
-                >
-                  <option value="Active">Active — available for new assignments</option>
-                  <option value="Inactive">Inactive — hidden from assignment lists</option>
-                </select>
-              </label>
-              {editingStaff.classCount > 0 && staffEntryStatus === 'Inactive' && (
-                <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-700">
-                  This member still has {editingStaff.classCount} class assignment(s). Reassign or end them before deactivation.
-                </p>
-              )}
-            </>
-          ) : staffCandidatesLoading ? (
-            <LoadingSkeleton variant="text" lines={4} />
-          ) : (
-            <>
-              <label className="block text-sm font-medium text-slate-700">
-                Existing active {staffModalRole === 'LECTURER' ? 'lecturer' : 'mentor'} *
-                <select
-                  value={staffCandidateKey}
-                  onChange={(event) => setStaffCandidateKey(event.target.value)}
-                  className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-primary"
-                >
-                  <option value="">Select a staff member</option>
-                  {availableStaffCandidates.map(candidate => (
-                    <option key={`${candidate.userId}:${candidate.role}`} value={`${candidate.userId}:${candidate.role}`}>
-                      {candidate.name} — {candidate.role === 'LECTURER' ? 'Lecturer' : 'Mentor'} ({candidate.email})
-                    </option>
-                  ))}
-                </select>
-              </label>
-              {availableStaffCandidates.length === 0 && (
-                <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
-                  No additional active {staffModalRole === 'LECTURER' ? 'Lecturer' : 'Mentor'} accounts are available for this semester.
-                </p>
-              )}
-            </>
-          )}
-          {!editingStaff && (
-            <p className="text-xs leading-5 text-slate-500">
-              Need to create a new staff account?{' '}
-              <Link to="/admin/users" className="font-semibold text-primary hover:underline">
-                Go to User Management
-              </Link>{' '}
-              first, then return here to add the account to this semester.
-            </p>
-          )}
-          <p className="rounded-xl bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-600">
-            Only active staff in this semester list are available for new class or team assignments.
-          </p>
-        </div>
+          </div>
+        )}
       </Modal>
 
-      {selectedSemesterRecord && (
-        <MentorCarryoverModal
-          isOpen={mentorCarryoverOpen}
-          onClose={() => setMentorCarryoverOpen(false)}
-          targetSemester={selectedSemesterRecord}
-          sourceSemesters={mentorCarryoverSources}
-          onCompleted={() => loadStaff(selectedSemester, selectedYear)}
+      {addStaffRole && (
+        <AddSemesterStaffModal
+          isOpen
+          role={addStaffRole}
+          semester={selectedSemester}
+          year={selectedYear}
+          existingUserIds={existingStaffUserIds}
+          onClose={() => setAddStaffRole(null)}
+          onChanged={() => loadStaff()}
         />
       )}
 
