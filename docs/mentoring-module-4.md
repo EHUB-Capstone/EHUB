@@ -27,6 +27,23 @@ Chỉ loại mentor, chuyên môn, kinh nghiệm và giới thiệu được g�
 - Backend dùng `Mentoring__OllamaBaseUrl=http://ollama:11434` và `Mentoring__EmbeddingModel=bge-m3`. Khi chạy backend ngoài Docker, đặt `Mentoring:OllamaBaseUrl` về địa chỉ Ollama nội bộ. Nếu Ollama chưa chạy hoặc chưa tải model, API gợi ý trả `503` với thông báo an toàn; chức năng phân công thủ công vẫn hoạt động.
 - Sau khi đổi mô hình embedding, phải cập nhật số chiều vector trong schema nếu mô hình mới không có 1024 chiều. Không dùng lẫn vector từ hai mô hình trong cùng phép so sánh.
 
+### Staging
+
+`docker-compose.staging.yml` cũng có pgvector và Ollama/BGE-M3. Staging giữ
+database volume `ehub-staging-postgres-data` và lưu model riêng trong
+`ehub-staging-ollama-data`, trên network `ehub-staging-private`; không publish
+cổng PostgreSQL, backend hoặc Ollama ra host. Image PostgreSQL staging được
+build bằng Dockerfile pgvector hiện có, với tag riêng để không retag production.
+Backend staging dùng `Mentoring__OllamaBaseUrl=http://ollama:11434` và
+`Mentoring__EmbeddingModel=bge-m3`.
+
+Theo [runbook staging](deployment/STAGING_VPS.md#7-build-migration-và-khởi-động),
+build image PostgreSQL, khởi động PostgreSQL/Ollama, tải `bge-m3`, rồi chạy
+initializer và ứng dụng bằng Compose staging. Backup trước khi nâng cấp
+database đang có; model pull thành công và gợi ý mentor hoạt động mới xác nhận
+AI đã sẵn sàng. Ollama staging có giới hạn 2 CPU / 3 GiB RAM riêng; kiểm tra
+tổng tài nguyên của cả staging và production trên VPS dùng chung.
+
 ### VPS Linux 4 vCPU / RAM 8 GB đang chạy E-HUB
 
 Compose production giới hạn riêng Ollama ở 2 CPU và 3 GiB RAM, không cho container dùng thêm swap. Đây là ngân sách ban đầu để thử nghiệm, không phải lượng RAM đã đo hoặc bảo đảm BGE-M3 chạy được với mọi đầu vào. Một model được nạp tại một thời điểm, cấu hình một yêu cầu xử lý đồng thời và hàng đợi tối đa 4 yêu cầu; khi quá tải API gợi ý có thể trả 503. Các biến này theo [tài liệu Ollama](https://docs.ollama.com/faq). Chế độ cloud được tắt.
