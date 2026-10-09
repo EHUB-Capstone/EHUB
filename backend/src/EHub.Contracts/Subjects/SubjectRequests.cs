@@ -73,6 +73,8 @@ public sealed class AddSemesterTeachingStaffBatchRequest
     public string Semester { get; init; } = string.Empty;
     public int Year { get; init; }
     public string Role { get; init; } = string.Empty;
+    // When true, UserIds are ids of incomplete mentors (no account yet) and Role must be MENTOR.
+    public bool Temporary { get; init; }
     public IReadOnlyCollection<Guid> UserIds { get; init; } = Array.Empty<Guid>();
 }
 

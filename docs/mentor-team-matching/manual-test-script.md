@@ -738,6 +738,81 @@ Các kiểm tra này không thuộc riêng yêu cầu nào nhưng cần đạt �
 - [ ] Cuối trang có mục **Previous teams** cho mentor từng làm ở lớp đã hoàn thành: tên nhóm, lớp, loại mentor (Enterprise/Lecturer) và dòng "Finished with the class on …". Các thẻ này **không bấm vào được** (không mở workspace).
 - [ ] Mentor đã bị thay giữa kỳ thấy dòng "Assignment ended early" và vẫn **không** mở được workspace của nhóm đó. Mentor chưa từng làm ở lớp nào thì không có mục Previous teams.
 
+### Kiểm tra 10.8. Hồ sơ mentor (EHUB-250)
+
+**Làm gì**
+1. Vào **Users**, bấm **Create User**, chọn Role = **Mentor**, chọn Mentor Type. Nhập thử Expertise (gõ chữ rồi Enter hoặc dấu phẩy), Background, Availability note rồi lưu.
+2. Ở danh sách Users, bấm vào **tên mentor** vừa tạo (chữ có gạch chân khi rê chuột).
+3. Ở trang hồ sơ bấm **Edit profile**. Thử: thêm vài expertise (cả một thẻ trùng, một thẻ chỉ 1 ký tự), nhập Background dài hơn 2000 ký tự, nhập LinkedIn không phải http/https, FPT email sai, ngày sinh năm 1800.
+4. Sửa lại cho đúng, đổi **Status** sang Unavailable, bấm **Save profile**.
+5. Mở cùng hồ sơ ở hai tab trình duyệt, sửa và lưu ở tab 1, rồi sửa và lưu ở tab 2.
+
+**Phải thấy gì**
+- [ ] Bước 1: tạo được mentor; thiếu Mentor Type thì báo lỗi; Expertise trùng hoặc Background quá dài thì báo lỗi và không tạo tài khoản.
+- [ ] Bước 2: mở được trang hồ sơ, thấy tên, email, tag loại mentor, trạng thái, số team đang phụ trách, expertise, background và ghi chú availability vừa nhập. Ô chưa có dữ liệu ghi "Not provided".
+- [ ] Bước 3: mỗi lỗi hiện thông báo ngay dưới ô; thẻ expertise trùng bị từ chối kèm lý do; các thẻ có nút xóa nhỏ. Nút **Save profile** chỉ sáng khi có thay đổi.
+- [ ] Bước 4: lưu thành công, trang hiển thị đúng dữ liệu mới. Nếu mentor còn team đang phụ trách thì có dòng cảnh báo vàng "chỉ ngừng nhận phân công mới". Mentor Unavailable không còn chọn được khi gán team.
+- [ ] Bước 5: tab 2 bị chặn với thông báo "changed by someone else" và nút **Reload the latest profile**; dữ liệu đã nhập ở tab 2 không bị mất cho tới khi bấm nút đó.
+- [ ] Loại mentor (Enterprise hoặc Lecturer) không đổi được ở hồ sơ. Tên, email, số điện thoại sửa ở Users (Edit).
+- [ ] Giảng viên hoặc mentor gõ thẳng địa chỉ `/admin/mentors/...` thì không vào được.
+
+### Kiểm tra 10.9. Expertise, domain, technology và tag của mentor (EHUB-251)
+
+**Làm gì**
+1. Đăng nhập Admin, mở hồ sơ một mentor (Users, bấm tên mentor), bấm **Edit profile**.
+2. Ở mục About có bốn ô thẻ: **Expertise**, **Startup domain**, **Technology skills**, **Mentor tags**. Thêm vài thẻ vào từng ô (gõ rồi Enter hoặc dấu phẩy). Thử: thẻ trùng (khác hoa thường), thẻ 1 ký tự, thẻ dài hơn 50 ký tự, thêm quá 20 thẻ vào một ô.
+3. Lưu, rồi làm tương tự với một mentor khác, dùng lại một vài thẻ trùng nghĩa (ví dụ "React", "react"). Khi gõ ở mentor thứ hai, trình duyệt gợi ý các thẻ đã dùng.
+4. Vào **Subject Management**, tab **Lecturers & Mentors by Semester**, bấm **Add mentors**. Trên danh sách có nút **Filter by tag**.
+5. Mở **Filter by tag**, tick một hoặc nhiều thẻ; thử gõ tên thẻ vào ô tìm kiếm.
+6. Vào một lớp, bấm **Manage** ở thẻ Mentors. Ở tab **One mentor, many teams** và ở hộp thoại **Assign / Replace** của từng nhóm cũng có **Filter by tag**.
+7. Đăng nhập giảng viên và mở lại hộp thoại chọn mentor của lớp mình dạy.
+
+**Phải thấy gì**
+- [ ] Bước 2: mỗi thẻ vừa thêm hiện thành chip có nút xóa; thẻ trùng, thẻ quá ngắn hoặc quá dài, quá 20 thẻ bị từ chối ngay dưới ô kèm lý do nêu tên loại (ví dụ "technology skill"). Lưu thì dữ liệu được giữ đúng thứ tự.
+- [ ] Trang xem hồ sơ tách bốn nhóm thẻ riêng; nhóm chưa có thì ghi "Not provided".
+- [ ] Bước 3: các cách viết chỉ khác hoa thường được gộp thành một gợi ý (giữ cách viết phổ biến nhất).
+- [ ] Bước 4, 5: nút **Filter by tag** liệt kê thẻ theo bốn nhóm kèm số mentor đang có thẻ đó; chọn thẻ thì danh sách chỉ còn mentor có **ít nhất một** thẻ đã chọn (chọn thêm thẻ thì danh sách rộng hơn). Có chip thẻ đã chọn kèm nút bỏ và nút **Clear**.
+- [ ] Mỗi mentor trong danh sách hiện tối đa 3 thẻ nhỏ và "+N" nếu còn nhiều hơn.
+- [ ] Ô tìm kiếm tìm được cả theo thẻ (tên, email, loại hợp đồng, thẻ).
+- [ ] Bước 6: bộ lọc hoạt động giống nhau ở cả ba nơi (Add mentors, One mentor many teams, Assign/Replace).
+- [ ] Bước 7: giảng viên **xem được thẻ và lọc** ở các hộp thoại chọn mentor nhưng **không vào được** trang hồ sơ mentor và không sửa được thẻ.
+
+### Kiểm tra 10.10. Mentor tạm (mentor chưa có email)
+
+**Chuẩn bị:** import một file mentor trong đó có ít nhất một mentor **chỉ có tên** (chưa có email), để mentor đó nằm ở **Users > Needs information**.
+
+**Làm gì**
+1. Mở một lớp đang hoạt động có nhóm trống vị trí mentor giảng viên (hoặc doanh nghiệp, đúng loại của mentor chỉ có tên), bấm **Manage** ở thẻ Mentors.
+2. Ở tab **By team**, bấm **Assign** ở ô trống. Trong danh sách có mentor chỉ có tên kèm nhãn vàng **Temporary** và dòng "No email yet". Chọn rồi bấm **Assign mentor**.
+3. Thử bấm **Assign** bằng mentor thật vào đúng vị trí đó, và **Replace** mentor tạm bằng mentor thật rồi ngược lại.
+4. Ở tab **One mentor, many teams** chọn mentor tạm, tick vài nhóm, bấm **Assign to N teams**.
+5. Trang chi tiết lớp: xem thẻ Mentors và danh sách nhóm. Ở trang Subject Management bấm **Preview assignment** cho kỳ đó.
+6. Bấm **Export** của kỳ.
+7. Import lại một file có đúng tên mentor đó **kèm email**, rồi vào lại Manage team mentors.
+8. Hoàn thành một lớp còn mentor tạm.
+
+**Phải thấy gì**
+- [ ] Bước 2: ô mentor hiện tên kèm nhãn **Temporary** và dòng "No account yet"; đầu bảng có dải vàng "N slots use a temporary mentor with no account yet".
+- [ ] Bước 3: vị trí đã có mentor tạm thì không thêm mentor thứ hai được (báo xung đột); Replace đổi qua lại trong một lần lưu và phân công cũ vẫn nằm trong lịch sử.
+- [ ] Bước 4: lưu một lần cho tất cả nhóm đã chọn, hoặc không nhóm nào nếu có nhóm xung đột.
+- [ ] Bước 5: tên hiển thị kèm "(no email yet)". Bản xem trước phân mentor **không tự đề xuất** mentor khác cho vị trí do mentor tạm giữ, và vị trí đó hiện là Current kèm tên mentor tạm.
+- [ ] Bước 6: file Excel ghi **"Tên (chưa có email)"** ở nhóm đó và mentor tạm có dòng trong sheet Tổng hợp với số nhóm đúng.
+- [ ] Bước 7: thông báo kết quả nêu "N team(s) switched from a temporary mentor to the new account"; nhãn Temporary biến mất, nhóm giờ có mentor thật (cùng ngày bắt đầu), mentor thật đăng nhập (sau Forgot Password) thấy nhóm đó; mục Needs information không còn mentor này.
+- [ ] Bước 8: mentor tạm kết thúc cùng lớp; lớp đã hoàn thành vẫn hiện tên mentor đó ở danh sách nhóm và trong file xuất.
+- [ ] Ở **Users > Needs information**, mentor đang được dùng ở nhóm có nhãn **Temporary** kèm "on N teams".
+- [ ] Mentor tạm không đăng nhập, không nhận thông báo, không xem được nhóm (chưa có tài khoản).
+
+**Thêm mentor tạm vào kỳ và dùng Balanced/Random**
+9. Ở **Lecturers & Mentors** (Subject Management > Staff), bấm **Add mentors**. Trong danh sách có mentor chưa có email kèm nhãn **Temporary**. Tick vài mentor (cả mentor có tài khoản và mentor tạm) rồi bấm **Add N mentors**.
+10. Ở thẻ **Mentor assignment** có ô "Include N mentors without an account yet" (đang tick). Chọn **Balanced** rồi **Preview assignment**; sau đó thử **Random**; rồi bỏ tick ô trên và xem trước lại.
+11. Bấm xác nhận lưu một bản xem trước có mentor tạm.
+12. Ở danh sách Teaching staff, bấm biểu tượng sửa của mentor tạm để chuyển **Inactive**.
+
+- [ ] Bước 9: mentor tạm xuất hiện trong danh sách kỳ với nhãn **Temporary** và trạng thái Active; mở lại hộp thoại thì họ nằm ở mục "Already in".
+- [ ] Bước 10: với Balanced, mentor tạm chưa có nhóm nào được ưu tiên trước; tên hiển thị kèm "(no email yet)". Bỏ tick ô "Include..." thì bản xem trước không còn mentor tạm.
+- [ ] Bước 11: các vị trí do mentor tạm nhận được lưu thành mentor tạm (nhãn Temporary ở Manage team mentors).
+- [ ] Bước 12: nếu mentor tạm đang giữ nhóm trong kỳ, hệ thống chặn chuyển Inactive và báo số nhóm; nếu không giữ nhóm thì chuyển được, và họ không còn được đề xuất khi Preview.
+
 **Kết luận phần kiểm tra chung:** ☐ Đạt  ☐ Đạt có điều kiện  ☐ Chưa đạt   Ghi chú: ……………………
 
 ---

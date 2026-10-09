@@ -42,12 +42,14 @@ export const mentorAdminApi = {
     seed?: number,
     strategy: MentorAllocationStrategy = 'Balanced',
     edits: MentorAllocationEdit[] = [],
+    includeTemporaryMentors = true,
   ): Promise<ApiEnvelope<MentorAllocationPreview>> =>
     axiosClient.post('/admin/mentors/allocations/preview', {
       semesterId,
       classIds: [],
       strategy,
       edits,
+      includeTemporaryMentors,
       ...(seed === undefined ? {} : { seed }),
     }),
 

@@ -127,6 +127,7 @@ function userResponse(user: MockUser) {
 
   return {
     ...user,
+    mentorProfileId: user.role === 'MENTOR' ? user.id : null,
     _id: user.id,
     fullName: user.name,
     rollNumber: user.studentId,
@@ -611,6 +612,68 @@ function registerUserHandlers(mock: MockAdapter): void {
     }, 'Users retrieved successfully.');
   });
 
+  function mentorProfileResponse(user: MockUser) {
+    const profile = user.mentorProfile ?? {
+      status: 'Active' as const, expertise: [], startupDomains: [], technologySkills: [], mentorTags: [], bio: null, availabilityNote: null, organization: null, department: null,
+      jobTitle: null, contractType: null, educationLevel: null, currentAddress: null, linkedInUrl: null, fptEmail: null,
+      dateOfBirth: null, version: 1,
+    };
+    const { version, ...fields } = profile;
+    const teams = getMockState().teams ?? [];
+    return {
+      id: user.id, userId: user.id, fullName: user.name, email: user.email, phone: user.phone, avatarUrl: user.avatar,
+      mentorType: user.mentorType ?? 'Enterprise', ...fields,
+      activeTeamCount: teams.filter((team) => team.currentMentorAssignments?.some((assignment) => assignment.mentor.userId === user.id && assignment.status === 'Active')).length,
+      rowVersion: String(version),
+    };
+  }
+
+  mock.onGet(/^\/admin\/mentor-profiles\/[^/]+$/).reply((config) => {
+    const state = getMockState();
+    const viewer = state.users.find((item) => item.id === state.sessionUserId);
+    if (!viewer) return failure(401, 'UNAUTHORIZED', 'Authentication is required.');
+    if (viewer.role !== 'ADMIN') return failure(403, 'COMMON_FORBIDDEN', 'Only an administrator can manage mentor profiles.');
+    const user = state.users.find((item) => item.id === routeId(config, /^\/admin\/mentor-profiles\/([^/]+)$/) && item.role === 'MENTOR');
+    return user ? ok(mentorProfileResponse(user), 'Mentor profile retrieved successfully.') : failure(404, 'MENTOR_PROFILE_NOT_FOUND', 'The mentor profile was not found.');
+  });
+
+  mock.onPut(/^\/admin\/mentor-profiles\/[^/]+$/).reply((config) => {
+    const state = getMockState();
+    const viewer = state.users.find((item) => item.id === state.sessionUserId);
+    if (!viewer) return failure(401, 'UNAUTHORIZED', 'Authentication is required.');
+    if (viewer.role !== 'ADMIN') return failure(403, 'COMMON_FORBIDDEN', 'Only an administrator can manage mentor profiles.');
+    const user = state.users.find((item) => item.id === routeId(config, /^\/admin\/mentor-profiles\/([^/]+)$/) && item.role === 'MENTOR');
+    if (!user) return failure(404, 'MENTOR_PROFILE_NOT_FOUND', 'The mentor profile was not found.');
+    const body = parseBody(config);
+    const current = mentorProfileResponse(user);
+    if (asString(body.rowVersion) !== current.rowVersion) {
+      return failure(409, 'MENTOR_PROFILE_CONFLICT', 'The mentor profile was changed by someone else. Reload it and try again.');
+    }
+    if (!['Active', 'Inactive', 'Unavailable'].includes(asString(body.status))) return failure(400, 'COMMON_VALIDATION_ERROR', 'Status must be Active, Inactive or Unavailable.');
+    const readTags = (key: string, label: string): { tags: string[] } | { error: MockReply } => {
+      const tags = (Array.isArray(body[key]) ? (body[key] as unknown[]).map((tag) => asString(tag).trim().replace(/\s+/g, ' ')) : []).filter(Boolean);
+      if (new Set(tags.map((tag) => tag.toLowerCase())).size !== tags.length) return { error: failure(400, 'COMMON_VALIDATION_ERROR', `${label} is listed more than once.`) };
+      if (tags.length > 20 || tags.some((tag) => tag.length < 2 || tag.length > 50)) return { error: failure(400, 'COMMON_VALIDATION_ERROR', `${label} tags must be 2 to 50 characters, up to 20.`) };
+      return { tags };
+    };
+    const expertise = readTags('expertise', 'An expertise');
+    const startupDomains = readTags('startupDomains', 'A startup domain');
+    const technologySkills = readTags('technologySkills', 'A technology skill');
+    const mentorTags = readTags('mentorTags', 'A mentor tag');
+    for (const result of [expertise, startupDomains, technologySkills, mentorTags]) if ('error' in result) return result.error;
+    if (asString(body.bio).length > 2000) return failure(400, 'COMMON_VALIDATION_ERROR', 'Background may contain at most 2000 characters.');
+    const text = (key: string) => asString(body[key]).trim() || null;
+    user.mentorProfile = {
+      status: asString(body.status) as 'Active' | 'Inactive' | 'Unavailable',
+      expertise: (expertise as { tags: string[] }).tags, startupDomains: (startupDomains as { tags: string[] }).tags, technologySkills: (technologySkills as { tags: string[] }).tags, mentorTags: (mentorTags as { tags: string[] }).tags, bio: text('bio'), availabilityNote: text('availabilityNote'), organization: text('organization'),
+      department: text('department'), jobTitle: text('jobTitle'), contractType: text('contractType'),
+      educationLevel: text('educationLevel'), currentAddress: text('currentAddress'), linkedInUrl: text('linkedInUrl'),
+      fptEmail: text('fptEmail'), dateOfBirth: text('dateOfBirth'), version: Number(current.rowVersion) + 1,
+    };
+    persistMockState();
+    return ok(mentorProfileResponse(user), 'Mentor profile updated successfully.');
+  });
+
   mock.onPost(/^\/admin\/users\/[^/]+\/(approve|reject)$/).reply((config) => {
     const match = config.url?.match(/^\/admin\/users\/([^/]+)\/(approve|reject)$/);
     const user = getMockState().users.find((item) => item.id === match?.[1]);
@@ -714,7 +777,18 @@ function registerUserHandlers(mock: MockAdapter): void {
       studentId: role === 'STUDENT' ? asString(body.studentId) || null : null,
       programGroup: role === 'STUDENT' ? asString(body.programGroup) || null : null,
       major: role === 'STUDENT' ? asString(body.major) || null : null,
-      ...(role === 'MENTOR' ? { mentorType: asString(body.mentorType) === 'Academic' ? 'Academic' as const : 'Enterprise' as const } : {}),
+      ...(role === 'MENTOR' ? {
+        mentorType: asString(body.mentorType) === 'Academic' ? 'Academic' as const : 'Enterprise' as const,
+        mentorProfile: {
+          status: 'Active' as const,
+          expertise: Array.isArray(body.expertise) ? body.expertise.map(String) : [],
+          startupDomains: [], technologySkills: [], mentorTags: [],
+          bio: asString(body.bio).trim() || null,
+          availabilityNote: asString(body.availabilityNote).trim() || null,
+          organization: null, department: null, jobTitle: null, contractType: null, educationLevel: null,
+          currentAddress: null, linkedInUrl: null, fptEmail: null, dateOfBirth: null, version: 1,
+        },
+      } : {}),
       phone: asString(body.phone) || null,
       createdAt: new Date().toISOString(),
       lastSeen: null,
@@ -1068,7 +1142,8 @@ function registerSubjectHandlers(mock: MockAdapter): void {
   mock.onGet('/subjects/teaching-staff/candidates').reply(() => {
     const candidates = getMockState().users
       .filter((user) => (user.role === 'LECTURER' || user.role === 'MENTOR') && user.status === 'APPROVED')
-      .map((user) => ({ userId: user.id, name: user.name, email: user.email, avatar: user.avatar, role: user.role, mentorType: null, contractType: null }));
+      .map((user) => ({ userId: user.id, name: user.name, email: user.email, avatar: user.avatar, role: user.role, mentorType: null, contractType: null,
+        tags: user.role === 'MENTOR' && user.mentorProfile ? { expertise: user.mentorProfile.expertise, startupDomains: user.mentorProfile.startupDomains, technologySkills: user.mentorProfile.technologySkills, mentorTags: user.mentorProfile.mentorTags } : null }));
     return ok({ candidates }, 'Teaching staff candidates retrieved successfully.');
   });
 

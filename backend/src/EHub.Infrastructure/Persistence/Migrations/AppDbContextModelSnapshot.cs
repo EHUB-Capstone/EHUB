@@ -2291,6 +2291,11 @@ namespace EHub.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<string>("AvailabilityNote")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("availability_note");
+
                     b.Property<string>("Bio")
                         .HasMaxLength(2000)
                         .HasColumnType("character varying(2000)")
@@ -2362,16 +2367,31 @@ namespace EHub.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(500)")
                         .HasColumnName("linkedin_url");
 
+                    b.PrimitiveCollection<string[]>("MentorTags")
+                        .IsRequired()
+                        .HasColumnType("text[]")
+                        .HasColumnName("mentor_tags");
+
                     b.Property<string>("Organization")
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)")
                         .HasColumnName("organization");
+
+                    b.PrimitiveCollection<string[]>("StartupDomains")
+                        .IsRequired()
+                        .HasColumnType("text[]")
+                        .HasColumnName("startup_domains");
 
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(30)
                         .HasColumnType("character varying(30)")
                         .HasColumnName("status");
+
+                    b.PrimitiveCollection<string[]>("TechnologySkills")
+                        .IsRequired()
+                        .HasColumnType("text[]")
+                        .HasColumnName("technology_skills");
 
                     b.Property<string>("Type")
                         .IsRequired()
@@ -2390,6 +2410,12 @@ namespace EHub.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("UserId")
                         .HasColumnType("uuid")
                         .HasColumnName("user_id");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
 
                     b.HasKey("Id");
 
@@ -4887,6 +4913,75 @@ namespace EHub.Infrastructure.Persistence.Migrations
                     b.ToTable("semester_staff_assignments", (string)null);
                 });
 
+            modelBuilder.Entity("EHub.Domain.Entities.SemesterTemporaryMentor", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deleted_at");
+
+                    b.Property<Guid?>("DeletedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("deleted_by");
+
+                    b.Property<Guid>("DraftId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("draft_id");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("is_deleted");
+
+                    b.Property<Guid>("SemesterId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("semester_id");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("status");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DraftId");
+
+                    b.HasIndex("SemesterId", "DraftId")
+                        .IsUnique();
+
+                    b.HasIndex("SemesterId", "Status");
+
+                    b.ToTable("semester_temporary_mentors", (string)null);
+                });
+
             modelBuilder.Entity("EHub.Domain.Entities.SprintTask", b =>
                 {
                     b.Property<Guid>("Id")
@@ -6433,6 +6528,93 @@ namespace EHub.Infrastructure.Persistence.Migrations
                         .HasFilter("counts_toward_open_proposal = true");
 
                     b.ToTable("team_proposal_members", (string)null);
+                });
+
+            modelBuilder.Entity("EHub.Domain.Entities.TemporaryMentorAssignment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("AssignedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("assigned_at");
+
+                    b.Property<Guid>("AssignedById")
+                        .HasColumnType("uuid")
+                        .HasColumnName("assigned_by_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deleted_at");
+
+                    b.Property<Guid?>("DeletedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("deleted_by");
+
+                    b.Property<Guid>("DraftId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("draft_id");
+
+                    b.Property<DateTime?>("EndedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("ended_at");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("is_deleted");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("note");
+
+                    b.Property<string>("Slot")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("slot");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("status");
+
+                    b.Property<Guid>("TeamId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("team_id");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DraftId");
+
+                    b.HasIndex("TeamId", "Slot")
+                        .IsUnique()
+                        .HasFilter("status = 'Active' AND is_deleted = false");
+
+                    b.HasIndex("TeamId", "Slot", "Status");
+
+                    b.ToTable("temporary_mentor_assignments", (string)null);
                 });
 
             modelBuilder.Entity("EHub.Domain.Entities.User", b =>
@@ -8162,6 +8344,25 @@ namespace EHub.Infrastructure.Persistence.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("EHub.Domain.Entities.SemesterTemporaryMentor", b =>
+                {
+                    b.HasOne("EHub.Domain.Entities.MentorImportDraft", "Draft")
+                        .WithMany()
+                        .HasForeignKey("DraftId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("EHub.Domain.Entities.Semester", "Semester")
+                        .WithMany()
+                        .HasForeignKey("SemesterId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Draft");
+
+                    b.Navigation("Semester");
+                });
+
             modelBuilder.Entity("EHub.Domain.Entities.SprintTask", b =>
                 {
                     b.HasOne("EHub.Domain.Entities.Student", "AssigneeStudent")
@@ -8603,6 +8804,25 @@ namespace EHub.Infrastructure.Persistence.Migrations
                     b.Navigation("Proposal");
                 });
 
+            modelBuilder.Entity("EHub.Domain.Entities.TemporaryMentorAssignment", b =>
+                {
+                    b.HasOne("EHub.Domain.Entities.MentorImportDraft", "Draft")
+                        .WithMany()
+                        .HasForeignKey("DraftId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("EHub.Domain.Entities.Team", "Team")
+                        .WithMany("TemporaryMentorAssignments")
+                        .HasForeignKey("TeamId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Draft");
+
+                    b.Navigation("Team");
+                });
+
             modelBuilder.Entity("EHub.Domain.Entities.UserRole", b =>
                 {
                     b.HasOne("EHub.Domain.Entities.Role", "Role")
@@ -8968,6 +9188,8 @@ namespace EHub.Infrastructure.Persistence.Migrations
                     b.Navigation("SprintTasks");
 
                     b.Navigation("TeamMembers");
+
+                    b.Navigation("TemporaryMentorAssignments");
 
                     b.Navigation("WeeklyTaskProgress");
 

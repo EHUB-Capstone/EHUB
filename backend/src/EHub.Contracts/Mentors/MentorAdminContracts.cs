@@ -48,6 +48,8 @@ public sealed class MentorImportCommitResponse
     public int UpdatedCount { get; init; }
     public int DraftSavedCount { get; init; }
     public int DraftCompletedCount { get; init; }
+    // Teams whose temporary mentor became the real mentor because the email arrived.
+    public int TemporaryAssignmentsConverted { get; init; }
 }
 
 // A mentor kept in the master list without a login account yet (for example the workbook had no email).
@@ -58,6 +60,8 @@ public sealed class IncompleteMentorResponse
     public string MentorType { get; init; } = string.Empty;
     public string? Email { get; init; }
     public IReadOnlyCollection<string> MissingFields { get; init; } = Array.Empty<string>();
+    // Teams that currently use this mentor as a temporary mentor; they stay without an account until an email arrives.
+    public int ActiveTeamCount { get; init; }
     public DateTime UpdatedAtUtc { get; init; }
 }
 
@@ -90,6 +94,8 @@ public sealed class PreviewMentorAllocationRequest
     public Guid SemesterId { get; init; }
     public IReadOnlyCollection<Guid> ClassIds { get; init; } = Array.Empty<Guid>();
     public int? Seed { get; init; }
+    // Mentors without an account that take part in the semester can be proposed too. Turn off to use registered mentors only.
+    public bool IncludeTemporaryMentors { get; init; } = true;
     // "Balanced" (default) or "Random".
     public string Strategy { get; init; } = MentorAllocationStrategies.Balanced;
     public IReadOnlyCollection<MentorAllocationEdit> Edits { get; init; } = Array.Empty<MentorAllocationEdit>();
@@ -109,6 +115,8 @@ public sealed class MentorAllocationRowPreview
     public string ClassCode { get; init; } = string.Empty;
     public string MentorType { get; init; } = string.Empty;
     public Guid MentorProfileId { get; init; }
+    // True when MentorProfileId is the id of a mentor without an account (an incomplete-mentor record).
+    public bool IsTemporary { get; init; }
     public string MentorName { get; init; } = string.Empty;
     public string MentorEmail { get; init; } = string.Empty;
     public int ResultingSemesterLoad { get; init; }

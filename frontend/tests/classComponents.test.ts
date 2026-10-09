@@ -64,7 +64,7 @@ const teachingStaffMember = (overrides: Partial<TeachingStaffDto>): TeachingStaf
   ...overrides,
 });
 
-test('teaching staff directory filters mentors that need information', () => {
+test('teaching staff directory filters temporary mentors', () => {
   const complete = teachingStaffMember({ _id: 'complete' });
   const incomplete = teachingStaffMember({
     _id: 'incomplete',
@@ -72,7 +72,8 @@ test('teaching staff directory filters mentors that need information', () => {
     name: 'Mentor Missing Email',
     email: '',
     status: 'Incomplete',
-    userStatus: 'NotCreated',
+    status: 'Active',
+    isTemporary: true,
     isIncomplete: true,
     missingFields: ['Email', 'Công ty'],
     rowVersion: '',
@@ -83,7 +84,7 @@ test('teaching staff directory filters mentors that need information', () => {
     filterTeachingStaff([complete, incomplete, lecturer], {
       search: '',
       role: 'ALL',
-      status: 'NEEDS_INFORMATION',
+      status: 'TEMPORARY',
     }).map(item => item._id),
     ['incomplete'],
   );

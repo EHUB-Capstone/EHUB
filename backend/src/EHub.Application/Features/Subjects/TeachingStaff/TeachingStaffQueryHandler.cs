@@ -1,4 +1,5 @@
 using EHub.Application.Features.Admin.Mentors;
+using EHub.Application.Features.Teams.Common;
 using EHub.Application.Common.Interfaces.Persistence;
 using EHub.Contracts.Subjects;
 using EHub.Domain.Entities;
@@ -48,6 +49,20 @@ public sealed class TeachingStaffQueryHandler(IApplicationDbContext context) : I
                 item.SemesterId == targetSemester.Id &&
                 item.Status == MentorImportDraftStatus.NeedsCompletion)
             .OrderBy(item => item.FullName)
+            .ToListAsync(cancellationToken);
+
+        // Mentors without an account that take part in this semester. They sit in the same list as everyone else.
+        var temporaryParticipants = await context.SemesterTemporaryMentors
+            .AsNoTracking()
+            .Include(item => item.Draft)
+            .Where(item => item.SemesterId == targetSemester.Id)
+            .ToListAsync(cancellationToken);
+        var participantDraftIds = temporaryParticipants.Select(item => item.DraftId).ToHashSet();
+        var temporaryAssignmentRows = await context.TemporaryMentorAssignments
+            .AsNoTracking()
+            .Where(item => item.Status == MentorAssignmentStatus.Active && item.EndedAt == null &&
+                           item.Team.Class.SemesterId == targetSemester.Id)
+            .Select(item => new { item.DraftId, item.Team.ClassId, item.Team.Class.ClassCode, SubjectCode = item.Team.Class.Course.Code })
             .ToListAsync(cancellationToken);
 
         var lecturerAssignments = await context.ClassLecturers
@@ -131,7 +146,7 @@ public sealed class TeachingStaffQueryHandler(IApplicationDbContext context) : I
             };
         });
 
-        var incompleteMentorResponse = incompleteMentors.Select(item => new TeachingStaffResponse
+        var incompleteMentorResponse = incompleteMentors.Where(item => !participantDraftIds.Contains(item.Id)).Select(item => new TeachingStaffResponse
         {
             Id = item.Id,
             UserId = null,
@@ -148,7 +163,41 @@ public sealed class TeachingStaffQueryHandler(IApplicationDbContext context) : I
             RowVersion = string.Empty
         });
 
+        var temporaryResponse = temporaryParticipants.Select(item =>
+        {
+            var classes = temporaryAssignmentRows
+                .Where(row => row.DraftId == item.DraftId)
+                .GroupBy(row => row.ClassId)
+                .Select(group => group.First())
+                .Select(row => new TeachingAssignmentResponse
+                {
+                    Id = $"{item.DraftId:N}-{row.ClassId:N}",
+                    ClassCode = row.ClassCode,
+                    SubjectCode = row.SubjectCode
+                })
+                .ToArray();
+            return new TeachingStaffResponse
+            {
+                Id = item.Id,
+                UserId = null,
+                DraftId = item.DraftId,
+                Name = item.Draft.FullName,
+                Email = item.Draft.Email ?? string.Empty,
+                Role = "MENTOR",
+                MentorType = item.Draft.Type.ToString(),
+                Status = item.Status.ToString(),
+                UserStatus = "NotCreated",
+                IsIncomplete = true,
+                IsTemporary = true,
+                MissingFields = MentorDraftFields.GetMissing(item.Draft),
+                ClassCount = classes.Length,
+                Assignments = classes,
+                RowVersion = item.Version.ToString()
+            };
+        });
+
         var response = activeStaffResponse
+            .Concat(temporaryResponse)
             .Concat(incompleteMentorResponse)
             .OrderBy(item => item.Name)
             .ThenBy(item => item.Role)
@@ -212,13 +261,42 @@ public sealed class TeachingStaffQueryHandler(IApplicationDbContext context) : I
                         : null,
                     ContractType = string.Equals(userRole.Role.Name, SystemRoles.Mentor, StringComparison.OrdinalIgnoreCase)
                         ? user.MentorProfile?.ContractType
+                        : null,
+                    Tags = string.Equals(userRole.Role.Name, SystemRoles.Mentor, StringComparison.OrdinalIgnoreCase) && user.MentorProfile is not null
+                        ? new EHub.Contracts.Mentors.MentorTagsDto
+                        {
+                            Expertise = user.MentorProfile.Expertise ?? [],
+                            StartupDomains = user.MentorProfile.StartupDomains ?? [],
+                            TechnologySkills = user.MentorProfile.TechnologySkills ?? [],
+                            MentorTags = user.MentorProfile.MentorTags ?? []
+                        }
                         : null
                 }))
             .ToArray();
 
+        // Incomplete mentors (no account yet) can be added to a semester too; one entry per person.
+        var drafts = await context.MentorImportDrafts
+            .AsNoTracking()
+            .Where(item => item.Status == MentorImportDraftStatus.NeedsCompletion)
+            .ToListAsync(cancellationToken);
+        var temporaryCandidates = drafts
+            .GroupBy(item => (item.Type, item.NormalizedFullName))
+            .Select(group => group.OrderBy(item => item.SemesterId == null ? 0 : 1).ThenByDescending(item => item.UpdatedAt ?? item.CreatedAt).First())
+            .OrderBy(item => item.FullName, StringComparer.CurrentCultureIgnoreCase)
+            .Select(draft => new TeachingStaffCandidateResponse
+            {
+                UserId = draft.Id,
+                Name = draft.FullName,
+                Email = draft.Email ?? string.Empty,
+                Role = "MENTOR",
+                MentorType = draft.Type.ToString(),
+                ContractType = draft.ContractType,
+                IsTemporary = true
+            });
+
         return Result.Success(new TeachingStaffCandidateListResponse
         {
-            Candidates = candidates
+            Candidates = candidates.Concat(temporaryCandidates).ToArray()
         });
     }
 

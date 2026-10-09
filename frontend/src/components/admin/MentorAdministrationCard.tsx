@@ -17,12 +17,15 @@ import MentorAllocationPreviewModal from './MentorAllocationPreviewModal';
 interface MentorAdministrationCardProps {
   semesterId?: string;
   semesterLabel: string;
+  /** Mentors without an account that are active in this semester. */
+  temporaryMentorCount?: number;
   onImportCommitted: () => Promise<void> | void;
 }
 
-export default function MentorAdministrationCard({ semesterId, semesterLabel, onImportCommitted }: MentorAdministrationCardProps) {
+export default function MentorAdministrationCard({ semesterId, semesterLabel, temporaryMentorCount = 0, onImportCommitted }: MentorAdministrationCardProps) {
   const [allocationPreview, setAllocationPreview] = useState<MentorAllocationPreview | null>(null);
   const [strategy, setStrategy] = useState<MentorAllocationStrategy>('Balanced');
+  const [includeTemporary, setIncludeTemporary] = useState(true);
   const [edits, setEdits] = useState<MentorAllocationEdit[]>([]);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewStale, setPreviewStale] = useState(false);
@@ -50,7 +53,7 @@ export default function MentorAdministrationCard({ semesterId, semesterLabel, on
   // Generates a preview. Re-using the seed and strategy keeps the proposal stable while the admin edits it by hand.
   const loadPreview = async (nextEdits: MentorAllocationEdit[], seed?: number) => {
     if (!semesterId) return null;
-    const response = await mentorAdminApi.previewAllocation(semesterId, seed, strategy, nextEdits);
+    const response = await mentorAdminApi.previewAllocation(semesterId, seed, strategy, nextEdits, includeTemporary);
     return response.data;
   };
 
@@ -184,6 +187,18 @@ export default function MentorAdministrationCard({ semesterId, semesterLabel, on
         <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-800">This semester has not been planned in the system yet.</p>
       ) : (
         <>
+          {temporaryMentorCount > 0 && (
+            <label className="mt-2 flex w-fit cursor-pointer items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-900">
+              <input
+                type="checkbox"
+                checked={includeTemporary}
+                disabled={busy !== null || previewOpen}
+                onChange={event => setIncludeTemporary(event.target.checked)}
+                className="h-3.5 w-3.5 rounded border-slate-300 accent-primary"
+              />
+              Include {temporaryMentorCount} mentor{temporaryMentorCount === 1 ? '' : 's'} without an account yet
+            </label>
+          )}
           <p className="mt-2 text-[11px] text-slate-400">{strategyHint} New mentors are imported in User Management, then added with Add mentors.</p>
 
           <MentorAllocationPreviewModal

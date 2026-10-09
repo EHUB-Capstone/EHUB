@@ -147,6 +147,8 @@ public static class ErrorCodes
     public const string TeamInvitationConflict = "TEAM_INVITATION_CONFLICT";
     public const string TeamApprovalConflict = "TEAM_APPROVAL_CONFLICT";
     public const string MentorNotAvailable = "MENTOR_NOT_AVAILABLE";
+    public const string MentorProfileNotFound = "MENTOR_PROFILE_NOT_FOUND";
+    public const string MentorProfileConflict = "MENTOR_PROFILE_CONFLICT";
     public const string MentorCapacityReached = "MENTOR_CAPACITY_REACHED";
     public const string MentorAssignmentConflict = "MENTOR_ASSIGNMENT_CONFLICT";
     public const string ProjectDirectionNotFound = "PROJECT_DIRECTION_NOT_FOUND";

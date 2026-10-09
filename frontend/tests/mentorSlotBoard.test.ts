@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   buildTeamSlotRows,
+  countTemporarySlots,
   eligibleTeamsForKind,
   filterMentorOptions,
   filterTeamSlotRows,
@@ -78,4 +79,15 @@ test('nextFocusIndex wraps in both directions and enters the dialog from outside
   assert.equal(nextFocusIndex(-1, 3, false), 0);
   assert.equal(nextFocusIndex(-1, 3, true), 2);
   assert.equal(nextFocusIndex(0, 0, false), -1);
+});
+
+test('countTemporarySlots counts the slots held by a mentor without an account', () => {
+  const temp = { ...assignment('Academic', 'T'), mentor: { ...assignment('Academic', 'T').mentor, isTemporary: true } } as MentorAssignment;
+  const rows = buildTeamSlotRows([
+    team('T1', [assignment('Enterprise', 'A'), temp]),
+    team('T2', [{ ...temp, assignmentId: 'x', slot: 'Enterprise' } as MentorAssignment]),
+    team('T3', [assignment('Enterprise', 'B')]),
+  ]);
+  assert.equal(countTemporarySlots(rows), 2);
+  assert.equal(countTemporarySlots([]), 0);
 });

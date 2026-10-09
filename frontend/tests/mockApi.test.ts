@@ -2116,3 +2116,30 @@ test('student information mock hides peer PII and previous scores recheck the cu
     (error: unknown) => (error as { response?: { status?: number } }).response?.status === 403);
   resetMockState();
 });
+
+test('mock mentor profile saves new values, bumps the version and rejects stale or invalid edits', async () => {
+  resetMockState();
+  await axiosClient.post('/auth/login', { email: 'admin@ehub.local', password: 'Mock123!' });
+  const unwrap = (response) => response.data?.data ?? response.data;
+  const users = await axiosClient.get('/users', { params: { role: 'MENTOR', limit: 50 } });
+  const mentor = unwrap(users).users.find((user) => user.mentorProfileId);
+  assert.ok(mentor, 'mentors expose the id of their profile page');
+
+  const first = unwrap(await axiosClient.get(`/admin/mentor-profiles/${mentor.mentorProfileId}`));
+  assert.equal(first.fullName, mentor.name);
+  const edit = (changes) => ({
+    rowVersion: first.rowVersion, status: first.status, expertise: first.expertise, bio: first.bio, availabilityNote: first.availabilityNote,
+    ...changes,
+  });
+
+  const saved = unwrap(await axiosClient.put(`/admin/mentor-profiles/${mentor.mentorProfileId}`, edit({ expertise: ['  Product  design ', 'AI'], bio: 'New background', status: 'Unavailable' })));
+  assert.deepEqual(saved.expertise, ['Product design', 'AI']);
+  assert.equal(saved.status, 'Unavailable');
+  assert.notEqual(saved.rowVersion, first.rowVersion);
+
+  await assert.rejects(axiosClient.put(`/admin/mentor-profiles/${mentor.mentorProfileId}`, edit({ bio: 'Stale' })), (error) => error.response.status === 409);
+  const fresh = { ...edit({}), rowVersion: saved.rowVersion };
+  await assert.rejects(axiosClient.put(`/admin/mentor-profiles/${mentor.mentorProfileId}`, { ...fresh, expertise: ['Sales', 'sales'] }), (error) => error.response.status === 400);
+  await assert.rejects(axiosClient.put(`/admin/mentor-profiles/${mentor.mentorProfileId}`, { ...fresh, status: 'Retired' }), (error) => error.response.status === 400);
+  await assert.rejects(axiosClient.get('/admin/mentor-profiles/does-not-exist'), (error) => error.response.status === 404);
+});

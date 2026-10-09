@@ -8,6 +8,10 @@ import { parseApiError } from '../../utils/apiError';
 import { isReplaceReasonValid } from '../../utils/mentorAllocationPreview';
 import { slotCandidates, type MentorOption, type MentorSlot } from '../../utils/mentorSlotBoard';
 import { matchesSearchQuery } from '../../utils/searchText';
+import { collectTagOptions, keepKnownTags, matchesAnyTag, tagSearchText } from '../../utils/mentorTags';
+import MentorTagChips from '../admin/MentorTagChips';
+import MentorTagFilter from '../admin/MentorTagFilter';
+import TemporaryMentorBadge from '../admin/TemporaryMentorBadge';
 import MentorKindTag from '../admin/MentorKindTag';
 import { MENTOR_KIND_STYLES } from '../../utils/mentorKindStyles';
 
@@ -27,17 +31,22 @@ export default function MentorSlotDialog({ team, slot, current, mentors, onClose
   const ref = useRef<HTMLDivElement>(null);
   const [search, setSearch] = useState('');
   const [selectedId, setSelectedId] = useState('');
+  const [tagFilter, setTagFilter] = useState<string[]>([]);
   const [reason, setReason] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const replacing = current !== null;
   useDialogA11y(ref, { onClose, busy: saving });
 
+  const slotMentors = useMemo(() => slotCandidates(mentors, slot, current?.mentor.mentorProfileId), [mentors, slot, current]);
+  const tagOptions = useMemo(() => collectTagOptions(slotMentors), [slotMentors]);
+  const activeTagFilter = useMemo(() => keepKnownTags(tagFilter, tagOptions), [tagFilter, tagOptions]);
   const candidates = useMemo(
-    () => slotCandidates(mentors, slot, current?.mentor.mentorProfileId)
-      .filter(option => matchesSearchQuery(search, [option.name, option.email, option.contractType ?? '']))
+    () => slotMentors
+      .filter(option => matchesAnyTag(option.tags, activeTagFilter))
+      .filter(option => matchesSearchQuery(search, [option.name, option.email, option.contractType ?? '', ...tagSearchText(option.tags)]))
       .sort((left, right) => left.activeTeamCount - right.activeTeamCount || left.name.localeCompare(right.name)),
-    [mentors, slot, current, search],
+    [slotMentors, activeTagFilter, search],
   );
   const canSave = selectedId !== '' && (!replacing || isReplaceReasonValid(reason)) && !saving;
   const label = MENTOR_KIND_STYLES[slot].label;
@@ -47,8 +56,9 @@ export default function MentorSlotDialog({ team, slot, current, mentors, onClose
     setSaving(true);
     setError('');
     try {
-      if (current) await teamApi.replaceMentor(team._id, current.assignmentId, selectedId, reason.trim());
-      else await teamApi.assignMentor(team._id, selectedId);
+      const temporary = Boolean(mentors.find(option => option._id === selectedId)?.isTemporary);
+      if (current) await teamApi.replaceMentor(team._id, current.assignmentId, selectedId, reason.trim(), null, temporary);
+      else await teamApi.assignMentor(team._id, selectedId, null, temporary);
       toast.success(replacing ? 'Mentor replaced' : 'Mentor assigned');
       await onSaved();
       onClose();
@@ -73,12 +83,13 @@ export default function MentorSlotDialog({ team, slot, current, mentors, onClose
         </div>
 
         <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-5">
+          <MentorTagFilter options={tagOptions} selected={activeTagFilter} onChange={setTagFilter} disabled={saving} />
           <div className="relative">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <input
               type="search"
               aria-label={`Search ${label.toLowerCase()}s`}
-              placeholder="Search by name, email or contract..."
+              placeholder="Search by name, email, contract or tag..."
               value={search}
               onChange={event => setSearch(event.target.value)}
               className="w-full rounded-xl border border-slate-200 py-2 pl-9 pr-3 text-xs outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
@@ -102,8 +113,9 @@ export default function MentorSlotDialog({ team, slot, current, mentors, onClose
                   className={`flex w-full items-center justify-between gap-3 rounded-xl border p-2.5 text-left transition disabled:opacity-60 ${checked ? 'border-primary/30 bg-primary-50/50' : 'border-slate-200 bg-white hover:border-slate-300'}`}
                 >
                   <div className="min-w-0">
-                    <p className="truncate text-xs font-semibold text-slate-800">{option.name}</p>
-                    <p className="truncate text-[10px] text-slate-400">{option.email}{option.contractType ? ` · ${option.contractType}` : ''} · {option.activeTeamCount} team{option.activeTeamCount === 1 ? '' : 's'} this semester</p>
+                    <p className="flex items-center gap-1.5 truncate text-xs font-semibold text-slate-800">{option.name}{option.isTemporary && <TemporaryMentorBadge />}</p>
+                    <p className="truncate text-[10px] text-slate-400">{option.isTemporary ? 'No email yet' : option.email}{option.contractType ? ` · ${option.contractType}` : ''} · {option.activeTeamCount} team{option.activeTeamCount === 1 ? '' : 's'} this semester</p>
+                    <MentorTagChips tags={option.tags} />
                   </div>
                   <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border ${checked ? 'border-primary bg-primary' : 'border-slate-300 bg-white'}`}>
                     {checked && <Check className="h-3 w-3 text-white" />}

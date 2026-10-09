@@ -3,6 +3,7 @@ using EHub.Application.Common.Interfaces.Persistence;
 using EHub.Application.Features.Classes.Common;
 using EHub.Application.Features.Classes.ExportAdminClassData;
 using EHub.Application.Features.Classes.ExportClassRoster;
+using EHub.Application.Features.Teams.Common;
 using EHub.Domain.Entities;
 using EHub.Domain.Enums;
 using EHub.Shared.Constants;
@@ -102,6 +103,15 @@ public sealed class MentorAssignmentExportHandler(
             .Select(item => new InEffectAssignment(
                 item.TeamId, item.Slot, item.MentorProfileId, item.MentorProfile.User.FullName, item.AssignedAt, item.Id))
             .ToListAsync(cancellationToken);
+        // Mentors without an account are exported by name, marked so that nobody mistakes them for registered mentors.
+        rows.AddRange(await context.TemporaryMentorAssignments.AsNoTracking()
+            .Where(item => item.Team.Class.SemesterId == semesterId && item.Team.Status == TeamStatus.Active &&
+                ((item.Status == MentorAssignmentStatus.Active && item.EndedAt == null) ||
+                 (item.Status == MentorAssignmentStatus.Ended && item.EndedAt != null &&
+                  item.Team.Class.CompletedAtUtc != null && item.EndedAt >= item.Team.Class.CompletedAtUtc)))
+            .Select(item => new InEffectAssignment(
+                item.TeamId, item.Slot, item.DraftId, item.Draft.FullName + TemporaryMentors.ExportSuffix, item.AssignedAt, item.Id))
+            .ToListAsync(cancellationToken));
 
         return rows
             .GroupBy(item => (item.TeamId, item.Slot))
@@ -113,13 +123,18 @@ public sealed class MentorAssignmentExportHandler(
     private async Task<List<ExportMentor>> LoadMentorsAsync(Guid semesterId, HashSet<Guid> mentorsWithTeams, CancellationToken cancellationToken)
     {
         var ids = mentorsWithTeams.ToArray();
-        return await context.MentorProfiles.AsNoTracking()
+        var registered = await context.MentorProfiles.AsNoTracking()
             .Where(profile => ids.Contains(profile.Id) ||
                 context.SemesterStaffAssignments.Any(staff =>
                     staff.SemesterId == semesterId && staff.UserId == profile.UserId &&
                     staff.Role == SemesterStaffRole.Mentor && staff.Status == SemesterStaffStatus.Active))
             .Select(profile => new ExportMentor(profile.Id, profile.User.FullName, profile.Type, profile.ContractType))
             .ToListAsync(cancellationToken);
+        var temporary = await context.MentorImportDrafts.AsNoTracking()
+            .Where(draft => ids.Contains(draft.Id))
+            .Select(draft => new ExportMentor(draft.Id, draft.FullName + TemporaryMentors.ExportSuffix, draft.Type, draft.ContractType))
+            .ToListAsync(cancellationToken);
+        return registered.Concat(temporary).ToList();
     }
 
     private static bool UsesCompletedRoster(Class item) =>
