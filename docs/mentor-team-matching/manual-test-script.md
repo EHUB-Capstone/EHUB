@@ -777,6 +777,42 @@ Các kiểm tra này không thuộc riêng yêu cầu nào nhưng cần đạt �
 - [ ] Bước 6: bộ lọc hoạt động giống nhau ở cả ba nơi (Add mentors, One mentor many teams, Assign/Replace).
 - [ ] Bước 7: giảng viên **xem được thẻ và lọc** ở các hộp thoại chọn mentor nhưng **không vào được** trang hồ sơ mentor và không sửa được thẻ.
 
+### Kiểm tra 10.10. Mentor tạm (mentor chưa có email)
+
+**Chuẩn bị:** import một file mentor trong đó có ít nhất một mentor **chỉ có tên** (chưa có email), để mentor đó nằm ở **Users > Needs information**.
+
+**Làm gì**
+1. Mở một lớp đang hoạt động có nhóm trống vị trí mentor giảng viên (hoặc doanh nghiệp, đúng loại của mentor chỉ có tên), bấm **Manage** ở thẻ Mentors.
+2. Ở tab **By team**, bấm **Assign** ở ô trống. Trong danh sách có mentor chỉ có tên kèm nhãn vàng **Temporary** và dòng "No email yet". Chọn rồi bấm **Assign mentor**.
+3. Thử bấm **Assign** bằng mentor thật vào đúng vị trí đó, và **Replace** mentor tạm bằng mentor thật rồi ngược lại.
+4. Ở tab **One mentor, many teams** chọn mentor tạm, tick vài nhóm, bấm **Assign to N teams**.
+5. Trang chi tiết lớp: xem thẻ Mentors và danh sách nhóm. Ở trang Subject Management bấm **Preview assignment** cho kỳ đó.
+6. Bấm **Export** của kỳ.
+7. Import lại một file có đúng tên mentor đó **kèm email**, rồi vào lại Manage team mentors.
+8. Hoàn thành một lớp còn mentor tạm.
+
+**Phải thấy gì**
+- [ ] Bước 2: ô mentor hiện tên kèm nhãn **Temporary** và dòng "No account yet"; đầu bảng có dải vàng "N slots use a temporary mentor with no account yet".
+- [ ] Bước 3: vị trí đã có mentor tạm thì không thêm mentor thứ hai được (báo xung đột); Replace đổi qua lại trong một lần lưu và phân công cũ vẫn nằm trong lịch sử.
+- [ ] Bước 4: lưu một lần cho tất cả nhóm đã chọn, hoặc không nhóm nào nếu có nhóm xung đột.
+- [ ] Bước 5: tên hiển thị kèm "(no email yet)". Bản xem trước phân mentor **không tự đề xuất** mentor khác cho vị trí do mentor tạm giữ, và vị trí đó hiện là Current kèm tên mentor tạm.
+- [ ] Bước 6: file Excel ghi **"Tên (chưa có email)"** ở nhóm đó và mentor tạm có dòng trong sheet Tổng hợp với số nhóm đúng.
+- [ ] Bước 7: thông báo kết quả nêu "N team(s) switched from a temporary mentor to the new account"; nhãn Temporary biến mất, nhóm giờ có mentor thật (cùng ngày bắt đầu), mentor thật đăng nhập (sau Forgot Password) thấy nhóm đó; mục Needs information không còn mentor này.
+- [ ] Bước 8: mentor tạm kết thúc cùng lớp; lớp đã hoàn thành vẫn hiện tên mentor đó ở danh sách nhóm và trong file xuất.
+- [ ] Ở **Users > Needs information**, mentor đang được dùng ở nhóm có nhãn **Temporary** kèm "on N teams".
+- [ ] Mentor tạm không đăng nhập, không nhận thông báo, không xem được nhóm (chưa có tài khoản).
+
+**Thêm mentor tạm vào kỳ và dùng Balanced/Random**
+9. Ở **Lecturers & Mentors** (Subject Management > Staff), bấm **Add mentors**. Trong danh sách có mentor chưa có email kèm nhãn **Temporary**. Tick vài mentor (cả mentor có tài khoản và mentor tạm) rồi bấm **Add N mentors**.
+10. Ở thẻ **Mentor assignment** có ô "Include N mentors without an account yet" (đang tick). Chọn **Balanced** rồi **Preview assignment**; sau đó thử **Random**; rồi bỏ tick ô trên và xem trước lại.
+11. Bấm xác nhận lưu một bản xem trước có mentor tạm.
+12. Ở danh sách Teaching staff, bấm biểu tượng sửa của mentor tạm để chuyển **Inactive**.
+
+- [ ] Bước 9: mentor tạm xuất hiện trong danh sách kỳ với nhãn **Temporary** và trạng thái Active; mở lại hộp thoại thì họ nằm ở mục "Already in".
+- [ ] Bước 10: với Balanced, mentor tạm chưa có nhóm nào được ưu tiên trước; tên hiển thị kèm "(no email yet)". Bỏ tick ô "Include..." thì bản xem trước không còn mentor tạm.
+- [ ] Bước 11: các vị trí do mentor tạm nhận được lưu thành mentor tạm (nhãn Temporary ở Manage team mentors).
+- [ ] Bước 12: nếu mentor tạm đang giữ nhóm trong kỳ, hệ thống chặn chuyển Inactive và báo số nhóm; nếu không giữ nhóm thì chuyển được, và họ không còn được đề xuất khi Preview.
+
 **Kết luận phần kiểm tra chung:** ☐ Đạt  ☐ Đạt có điều kiện  ☐ Chưa đạt   Ghi chú: ……………………
 
 ---

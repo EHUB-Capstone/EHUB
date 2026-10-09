@@ -170,6 +170,13 @@ public sealed class SemesterTeachingStaffCommandHandler : ISemesterTeachingStaff
                 ErrorCodes.ClassValidationError, $"At most {MaximumBatchSize} staff members can be added at once.");
         }
 
+        if (request.Temporary)
+        {
+            if (role != SemesterStaffRole.Mentor)
+                return Failure<AddSemesterTeachingStaffBatchResponse>(ErrorCodes.ClassValidationError, "Only mentors can be added without an account.");
+            return await AddTemporaryBatchAsync(term, request.Year, userIds, cancellationToken);
+        }
+
         try
         {
             return await _unitOfWork.ExecuteInSerializableTransactionAsync(
@@ -272,6 +279,146 @@ public sealed class SemesterTeachingStaffCommandHandler : ISemesterTeachingStaff
             return Failure<AddSemesterTeachingStaffBatchResponse>(
                 ErrorCodes.SemesterStaffConflict,
                 "The semester teaching list changed concurrently. Reload and try again.");
+        }
+    }
+
+    private async Task<Result<AddSemesterTeachingStaffBatchResponse>> AddTemporaryBatchAsync(
+        SemesterTerm term, int year, Guid[] draftIds, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await _unitOfWork.ExecuteInSerializableTransactionAsync(async token =>
+            {
+                var semester = await _context.Semesters.FirstOrDefaultAsync(item => item.Term == term && item.Year == year, token);
+                if (semester == null)
+                    return Failure<AddSemesterTeachingStaffBatchResponse>(ErrorCodes.SemesterNotFound, "Plan the semester before configuring its teaching staff.");
+                var lifecycleError = GetSemesterMutationError(semester);
+                if (lifecycleError != null)
+                    return Failure<AddSemesterTeachingStaffBatchResponse>(lifecycleError.Code, lifecycleError.Message);
+
+                var drafts = await _context.MentorImportDrafts.Where(item => draftIds.Contains(item.Id)).ToDictionaryAsync(item => item.Id, token);
+                var existing = await _context.SemesterTemporaryMentors
+                    .Where(item => item.SemesterId == semester.Id && draftIds.Contains(item.DraftId))
+                    .ToDictionaryAsync(item => item.DraftId, token);
+
+                var results = new List<SemesterStaffBatchItemResponse>(draftIds.Length);
+                foreach (var draftId in draftIds)
+                {
+                    if (!drafts.TryGetValue(draftId, out var draft) || draft.Status != MentorImportDraftStatus.NeedsCompletion)
+                    {
+                        results.Add(new SemesterStaffBatchItemResponse
+                        {
+                            UserId = draftId,
+                            Outcome = SemesterStaffBatchOutcomes.Rejected,
+                            Message = "This mentor now has an account or no longer exists. Reload the list."
+                        });
+                        continue;
+                    }
+                    if (existing.TryGetValue(draftId, out var current))
+                    {
+                        results.Add(new SemesterStaffBatchItemResponse
+                        {
+                            UserId = draftId,
+                            Outcome = SemesterStaffBatchOutcomes.AlreadyInList,
+                            Message = current.Status == SemesterStaffStatus.Active
+                                ? "This mentor is already in the semester teaching list."
+                                : "This mentor is in the list as inactive. Edit the entry to reactivate it."
+                        });
+                        continue;
+                    }
+
+                    _context.SemesterTemporaryMentors.Add(new SemesterTemporaryMentor
+                    {
+                        SemesterId = semester.Id,
+                        DraftId = draft.Id,
+                        Status = SemesterStaffStatus.Active,
+                        CreatedBy = _currentUser.UserId
+                    });
+                    _context.SemesterAuditLogs.Add(new SemesterAuditLog
+                    {
+                        SemesterId = semester.Id,
+                        Action = "SEMESTER_TEMPORARY_MENTOR_ADDED",
+                        PerformedByUserId = _currentUser.UserId ?? Guid.Empty,
+                        OccurredAtUtc = DateTime.UtcNow,
+                        DetailsJson = JsonSerializer.Serialize(new { SemesterId = semester.Id, DraftId = draft.Id })
+                    });
+                    results.Add(new SemesterStaffBatchItemResponse { UserId = draftId, Outcome = SemesterStaffBatchOutcomes.Added });
+                }
+
+                await _unitOfWork.SaveChangesAsync(token);
+                return Result.Success(new AddSemesterTeachingStaffBatchResponse
+                {
+                    Results = results,
+                    AddedCount = results.Count(item => item.Outcome == SemesterStaffBatchOutcomes.Added),
+                    AlreadyInListCount = results.Count(item => item.Outcome == SemesterStaffBatchOutcomes.AlreadyInList),
+                    RejectedCount = results.Count(item => item.Outcome == SemesterStaffBatchOutcomes.Rejected)
+                });
+            }, cancellationToken);
+        }
+        catch (DbUpdateException)
+        {
+            return Failure<AddSemesterTeachingStaffBatchResponse>(ErrorCodes.SemesterStaffConflict, "The semester teaching list changed concurrently. Reload and try again.");
+        }
+        catch (SerializableTransactionConflictException)
+        {
+            return Failure<AddSemesterTeachingStaffBatchResponse>(ErrorCodes.SemesterStaffConflict, "The semester teaching list changed concurrently. Reload and try again.");
+        }
+    }
+
+    public async Task<Result<TeachingStaffResponse>> UpdateTemporaryAsync(
+        Guid participationId, UpdateSemesterTeachingStaffRequest request, CancellationToken cancellationToken = default)
+    {
+        if (!IsAdmin())
+            return Failure(ErrorCodes.ClassAccessDenied, "Only an administrator can manage semester teaching staff.");
+        if (!uint.TryParse(request.RowVersion, out var expectedVersion))
+            return Failure(ErrorCodes.ClassValidationError, "A valid rowVersion is required.");
+        if (!TryParseStatus(request.Status, out var nextStatus))
+            return Failure(ErrorCodes.ClassValidationError, "Status must be Active or Inactive.");
+
+        try
+        {
+            return await _unitOfWork.ExecuteInSerializableTransactionAsync(async token =>
+            {
+                var entry = await _context.SemesterTemporaryMentors.Include(item => item.Draft).Include(item => item.Semester)
+                    .FirstOrDefaultAsync(item => item.Id == participationId, token);
+                if (entry == null) return Failure(ErrorCodes.SemesterStaffNotFound, "The semester teaching entry was not found.");
+                if (entry.Version != expectedVersion)
+                    return Failure(ErrorCodes.SemesterStaffConflict, "The semester teaching entry was changed by someone else. Reload and try again.");
+                var lifecycleError = GetSemesterMutationError(entry.Semester);
+                if (lifecycleError != null) return Failure(lifecycleError.Code, lifecycleError.Message);
+
+                var teams = await _context.TemporaryMentorAssignments.CountAsync(item => item.DraftId == entry.DraftId &&
+                    item.Status == MentorAssignmentStatus.Active && item.EndedAt == null && item.Team.Class.SemesterId == entry.SemesterId, token);
+                if (nextStatus == SemesterStaffStatus.Inactive && teams > 0)
+                    return Failure(ErrorCodes.SemesterStaffConflict, $"This mentor still has {teams} team(s) in this semester. Reassign or end them first.");
+
+                entry.Status = nextStatus;
+                entry.UpdatedBy = _currentUser.UserId;
+                await _unitOfWork.SaveChangesAsync(token);
+                return Result.Success(new TeachingStaffResponse
+                {
+                    Id = entry.Id,
+                    DraftId = entry.DraftId,
+                    Name = entry.Draft.FullName,
+                    Email = entry.Draft.Email ?? string.Empty,
+                    Role = "MENTOR",
+                    MentorType = entry.Draft.Type.ToString(),
+                    Status = entry.Status.ToString(),
+                    UserStatus = "NotCreated",
+                    IsIncomplete = true,
+                    IsTemporary = true,
+                    ClassCount = teams,
+                    RowVersion = entry.Version.ToString()
+                });
+            }, cancellationToken);
+        }
+        catch (DbUpdateException)
+        {
+            return Failure(ErrorCodes.SemesterStaffConflict, "The semester teaching list changed concurrently. Reload and try again.");
+        }
+        catch (SerializableTransactionConflictException)
+        {
+            return Failure(ErrorCodes.SemesterStaffConflict, "The semester teaching list changed concurrently. Reload and try again.");
         }
     }
 

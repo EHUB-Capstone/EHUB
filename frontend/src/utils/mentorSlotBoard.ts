@@ -13,6 +13,8 @@ export interface MentorOption {
   organization?: string | null;
   mentorType: MentorSlot;
   contractType?: string | null;
+  /** True for a mentor who has no account yet. */
+  isTemporary?: boolean;
   tags?: Partial<MentorTagSet> | null;
   activeTeamCount: number;
 }
@@ -84,4 +86,9 @@ export function nextFocusIndex(current: number, count: number, backwards: boolea
   if (count <= 0) return -1;
   if (current < 0) return backwards ? count - 1 : 0;
   return backwards ? (current - 1 + count) % count : (current + 1) % count;
+}
+
+/** How many team slots currently rely on a mentor who has no account yet. */
+export function countTemporarySlots(rows: readonly TeamSlotRow[]): number {
+  return rows.reduce((total, row) => total + [row.enterprise, row.academic].filter(item => item?.mentor.isTemporary).length, 0);
 }

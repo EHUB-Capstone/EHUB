@@ -6,6 +6,7 @@ import { parseApiError } from '../../utils/apiError';
 import { summarizeMissingFields } from '../../utils/mentorMasterImport';
 import Button from '../ui/Button';
 import MentorKindTag from './MentorKindTag';
+import TemporaryMentorBadge from './TemporaryMentorBadge';
 import EmptyState from '../ui/EmptyState';
 import LoadingSkeleton from '../ui/LoadingSkeleton';
 
@@ -90,7 +91,15 @@ export default function IncompleteMentorsPanel({ search, mentorType, onUnfiltere
                     <td className="py-3.5 px-6">
                       <div className="flex flex-col items-start gap-1">
                         <span className="font-semibold text-slate-900">{mentor.fullName}</span>
-                        <MentorKindTag type={mentor.mentorType} />
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <MentorKindTag type={mentor.mentorType} />
+                          {(mentor.activeTeamCount ?? 0) > 0 && (
+                            <span className="inline-flex items-center gap-1">
+                              <TemporaryMentorBadge />
+                              <span className="text-[10px] font-semibold text-amber-800">on {mentor.activeTeamCount} team{mentor.activeTeamCount === 1 ? '' : 's'}</span>
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </td>
                     <td className="py-3.5 px-6">

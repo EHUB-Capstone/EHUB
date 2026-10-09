@@ -74,3 +74,13 @@ export function summarizeStaffBatch(
   if (response.rejectedCount > 0) return { tone: 'error', message: `No ${roleNoun}s were added.`, problems };
   return { tone: 'info', message: `Everyone selected was already in the semester list.`, problems };
 }
+
+/** Combines the results of several batch calls (accounts, then mentors without an account) into one. */
+export function mergeBatchResponses(responses: readonly AddTeachingStaffBatchResponse[]): AddTeachingStaffBatchResponse {
+  return {
+    results: responses.flatMap(item => item.results),
+    addedCount: responses.reduce((total, item) => total + item.addedCount, 0),
+    alreadyInListCount: responses.reduce((total, item) => total + item.alreadyInListCount, 0),
+    rejectedCount: responses.reduce((total, item) => total + item.rejectedCount, 0),
+  };
+}

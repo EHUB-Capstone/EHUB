@@ -147,6 +147,10 @@ export interface TeachingStaffDto {
   status: 'Active' | 'Inactive' | 'Incomplete';
   userStatus: string;
   isIncomplete: boolean;
+  /** A mentor without an account yet who takes part in the semester; _id is then the participation id. */
+  isTemporary?: boolean;
+  /** The incomplete-mentor record behind a temporary row. */
+  draftId?: string | null;
   missingFields: string[];
   classCount: number;
   assignments: TeachingAssignmentDto[];
@@ -164,6 +168,8 @@ export interface TeachingStaffCandidateDto {
   /** Only for mentors: Enterprise = enterprise mentor, Academic = lecturer mentor. */
   mentorType?: MentorKind | null;
   contractType?: string | null;
+  /** A mentor without an account yet; userId is then the id of the incomplete-mentor record. */
+  isTemporary?: boolean;
   /** Only for mentors: what lecturers filter on when they pick a mentor. */
   tags?: Partial<MentorTagSet> | null;
 }
@@ -181,6 +187,8 @@ export interface AddTeachingStaffBatchPayload {
   year: number;
   role: 'LECTURER' | 'MENTOR';
   userIds: string[];
+  /** True when userIds are incomplete-mentor records (mentors without an account yet). */
+  temporary?: boolean;
 }
 
 export interface AddTeachingStaffBatchResponse {

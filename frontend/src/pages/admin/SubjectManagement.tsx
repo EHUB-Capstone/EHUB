@@ -9,6 +9,7 @@ import { subjectApi } from '../../api/subjectApi';
 import SemesterDateRangePicker from '../../components/admin/SemesterDateRangePicker';
 import MentorAdministrationCard from '../../components/admin/MentorAdministrationCard';
 import AddSemesterStaffModal from '../../components/admin/AddSemesterStaffModal';
+import TemporaryMentorBadge from '../../components/admin/TemporaryMentorBadge';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
@@ -321,7 +322,7 @@ const SubjectManagement = () => {
   };
 
   const openEditStaff = (member: TeachingStaffDto) => {
-    if (member.isIncomplete) return;
+    if (member.isIncomplete && !member.isTemporary) return;
     setEditingStaff(member);
     setStaffEntryStatus(member.status === 'Inactive' ? 'Inactive' : 'Active');
     setStaffModalOpen(true);
@@ -331,7 +332,8 @@ const SubjectManagement = () => {
     if (!editingStaff) return;
     setStaffSaving(true);
     try {
-      await subjectApi.updateTeachingStaff(editingStaff._id, {
+      const update = editingStaff.isTemporary ? subjectApi.updateTemporaryMentor : subjectApi.updateTeachingStaff;
+      await update(editingStaff._id, {
         status: staffEntryStatus,
         rowVersion: editingStaff.rowVersion,
       });
@@ -582,8 +584,10 @@ const SubjectManagement = () => {
 
   const existingStaffUserIds = useMemo(() => new Set(
     staff
-      .filter(member => member.role === addStaffRole && member.userId)
-      .map(member => member.userId as string)), [staff, addStaffRole]);
+      .filter(member => member.role === addStaffRole && (member.userId || member.isTemporary))
+      // A mentor without an account is identified by the id of their incomplete-mentor record.
+      .map(member => (member.isTemporary ? member.draftId : member.userId) as string)
+      .filter(Boolean)), [staff, addStaffRole]);
 
   const semesterScheduleYears = useMemo(() => Array.from(new Set(
     semesters.map(item => Number(item.year)),
@@ -647,7 +651,7 @@ const SubjectManagement = () => {
   const staffStats = [
     { label: 'Lecturers', value: staffSummary.lecturers, icon: GraduationCap, style: 'bg-primary text-white ring-primary-200 dark:ring-primary/50' },
     { label: 'Mentors', value: staffSummary.mentors, icon: Users, style: 'bg-secondary text-white ring-black/10 dark:ring-blue-300/40' },
-    { label: 'Needs info', value: staff.filter(member => member.isIncomplete).length, icon: CircleAlert, style: 'bg-warning text-white ring-black/10 dark:ring-amber-300/40' },
+    { label: 'Needs info', value: staff.filter(member => member.isIncomplete && !member.isTemporary).length, icon: CircleAlert, style: 'bg-warning text-white ring-black/10 dark:ring-amber-300/40' },
     { label: 'Assigned', value: staffSummary.assigned, icon: CheckCircle2, style: 'bg-success text-white ring-black/10 dark:ring-green-300/40' },
     { label: 'Unassigned', value: staffSummary.unassigned, icon: ShieldAlert, style: 'bg-slate-600 text-white ring-black/10 dark:bg-slate-500 dark:ring-slate-300/40' },
     { label: 'Classes', value: staffSummary.classes, icon: BookOpen, style: 'bg-cyan text-white ring-black/10 dark:ring-cyan-300/40' },
@@ -903,6 +907,7 @@ const SubjectManagement = () => {
           <MentorAdministrationCard
             semesterId={selectedSemesterRecord?.id}
             semesterLabel={`${selectedSemester} ${selectedYear}`}
+            temporaryMentorCount={staff.filter(member => member.isTemporary && member.status === 'Active').length}
             onImportCommitted={() => {
               setStaffPage(1);
               return loadStaff(selectedSemester, selectedYear);
@@ -932,7 +937,7 @@ const SubjectManagement = () => {
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <select aria-label="Filter teaching staff by status" value={staffStatus} onChange={(event) => setStaffStatus(event.target.value as StaffStatusFilter)} className="min-w-[150px] rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-primary">
-                    <option value="ALL">All statuses</option><option value="ACTIVE">Active</option><option value="INACTIVE">Inactive</option><option value="NEEDS_INFORMATION">Needs information</option>
+                    <option value="ALL">All statuses</option><option value="ACTIVE">Active</option><option value="INACTIVE">Inactive</option><option value="TEMPORARY">Temporary</option>
                   </select>
                   <select aria-label="Rows per page" value={staffPageSize} onChange={(event) => setStaffPageSize(Number(event.target.value) as (typeof staffPageSizes)[number])} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-primary">
                     {staffPageSizes.map(size => <option key={size} value={size}>{size} / page</option>)}
@@ -980,19 +985,19 @@ const SubjectManagement = () => {
                       <div className="min-w-0">
                         <p className="truncate text-sm font-semibold text-slate-900">{member.name}</p>
                         <p className={`truncate text-xs ${member.isIncomplete ? 'font-medium text-amber-600' : 'text-slate-500'}`}>{member.email || 'Email not provided'}</p>
-                        {member.isIncomplete && member.missingFields.length > 0 && <p title={member.missingFields.join(', ')} className="mt-0.5 truncate text-[11px] text-slate-400">Missing: {member.missingFields.join(', ')}</p>}
+                        {member.isIncomplete && !member.isTemporary && member.missingFields.length > 0 && <p title={member.missingFields.join(', ')} className="mt-0.5 truncate text-[11px] text-slate-400">Missing: {member.missingFields.join(', ')}</p>}
                         {!member.isIncomplete && member.userStatus !== 'Active' && <p className="mt-0.5 text-[11px] font-medium text-red-600">User account: {member.userStatus}</p>}
                       </div>
                     </div>
                     <div className="flex flex-wrap items-center gap-1.5">
                       <span title={kindStyle.hint} className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[11px] font-semibold ${kindStyle.badge}`}><KindIcon className="h-3 w-3" aria-hidden="true" />{kindStyle.label}</span>
-                      {member.isIncomplete ? <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-700">Needs information</span> : <Badge variant={member.status === 'Active' ? 'Active' : 'Inactive'}>{member.status}</Badge>}
+                      {member.isTemporary ? <><TemporaryMentorBadge className="py-1 text-[11px]" /><Badge variant={member.status === 'Active' ? 'Active' : 'Inactive'}>{member.status}</Badge></> : member.isIncomplete ? <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-700">Needs information</span> : <Badge variant={member.status === 'Active' ? 'Active' : 'Inactive'}>{member.status}</Badge>}
                     </div>
                     <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-                      {member.isIncomplete ? <span className="text-xs font-medium text-amber-700">Complete profile before assignment</span> : member.assignments.length ? <>{member.assignments.slice(0, 2).map(assignment => <span key={assignment._id} className="rounded-full border border-primary-100 bg-primary-50 px-2 py-1 text-[11px] font-semibold text-primary">{assignment.classCode} · {assignment.subjectCode}</span>)}{member.assignments.length > 2 && <span className="text-xs font-semibold text-slate-500">+{member.assignments.length - 2} more</span>}</> : <span className="text-xs text-slate-500">Not assigned · {member.classCount} classes</span>}
+                      {member.isIncomplete && !member.isTemporary ? <span className="text-xs font-medium text-amber-700">Complete profile before assignment</span> : member.assignments.length ? <>{member.assignments.slice(0, 2).map(assignment => <span key={assignment._id} className="rounded-full border border-primary-100 bg-primary-50 px-2 py-1 text-[11px] font-semibold text-primary">{assignment.classCode} · {assignment.subjectCode}</span>)}{member.assignments.length > 2 && <span className="text-xs font-semibold text-slate-500">+{member.assignments.length - 2} more</span>}</> : <span className="text-xs text-slate-500">Not assigned · {member.classCount} classes</span>}
                     </div>
                     <div className="flex justify-end">
-                      {!member.isIncomplete && <button type="button" onClick={() => openEditStaff(member)} className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-primary-50 hover:text-primary" aria-label={`Edit ${member.name} semester status`} title="Edit semester status"><Edit3 className="h-4 w-4" /></button>}
+                      {(!member.isIncomplete || member.isTemporary) && <button type="button" onClick={() => openEditStaff(member)} className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-primary-50 hover:text-primary" aria-label={`Edit ${member.name} semester status`} title="Edit semester status"><Edit3 className="h-4 w-4" /></button>}
                     </div>
                   </article>
                   );

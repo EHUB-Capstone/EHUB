@@ -10,6 +10,7 @@ import { normalizeManagedTeam } from '../../utils/teamManagement';
 import { getSelectionState, keepEligibleSelection, setVisibleSelection, toggleSelection } from '../../utils/mentorBatchAssignment';
 import {
   buildTeamSlotRows,
+  countTemporarySlots,
   eligibleTeamsForKind,
   filterMentorOptions,
   filterTeamSlotRows,
@@ -24,6 +25,7 @@ import type { ManagedTeam, MentorAssignment, MentorCandidate } from '../../types
 import type { ApiEnvelope } from '../../types/classes';
 import MentorKindTag from '../admin/MentorKindTag';
 import MentorTagChips from '../admin/MentorTagChips';
+import TemporaryMentorBadge from '../admin/TemporaryMentorBadge';
 import MentorTagFilter from '../admin/MentorTagFilter';
 import { collectTagOptions, keepKnownTags } from '../../utils/mentorTags';
 import ConfirmDialog from '../ui/ConfirmDialog';
@@ -107,6 +109,7 @@ export default function AssignMentorsModal({ classId, onClose, onAssigned }: Ass
         mentorType: candidate.mentor.mentorType,
         contractType: candidate.mentor.contractType,
         tags: candidate.mentor.tags,
+        isTemporary: Boolean(candidate.isTemporary || candidate.mentor.isTemporary),
         activeTeamCount: candidate.activeTeamCount,
       })));
       setTeams((Array.isArray(teamData) ? teamData : []).map(normalizeManagedTeam));
@@ -135,6 +138,7 @@ export default function AssignMentorsModal({ classId, onClose, onAssigned }: Ass
   const slotRows = useMemo(() => buildTeamSlotRows(teams), [teams]);
   const visibleRows = useMemo(() => filterTeamSlotRows(slotRows, slotFilter, teamSearch), [slotRows, slotFilter, teamSearch]);
   const missingTeamCount = slotRows.filter(row => row.missingCount > 0).length;
+  const temporarySlotCount = countTemporarySlots(slotRows);
 
   const confirmEnd = async () => {
     if (!pendingEnd || endReason.trim().length < 3) return;
@@ -190,7 +194,7 @@ export default function AssignMentorsModal({ classId, onClose, onAssigned }: Ass
     setBulkResult(null);
     try {
       // One request, one transaction: either every chosen team gets the mentor or none does.
-      await classApi.assignMentorBatch(classId, selectedMentor._id, chosenTeamIds);
+      await classApi.assignMentorBatch(classId, selectedMentor._id, chosenTeamIds, Boolean(selectedMentor.isTemporary));
       if (!mounted.current) return;
       const message = `${selectedMentor.name} assigned to ${chosenTeamIds.length} team${chosenTeamIds.length === 1 ? '' : 's'}.`;
       setBulkResult({ tone: 'success', message });
@@ -260,6 +264,11 @@ export default function AssignMentorsModal({ classId, onClose, onAssigned }: Ass
                 {mentors.length === 0 && (
                   <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
                     No mentor is active in this semester yet. Add mentors to the semester first (Subject Management &gt; Lecturers &amp; Mentors &gt; Add mentors), then assign them here.
+                  </p>
+                )}
+                {temporarySlotCount > 0 && (
+                  <p role="status" className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                    {temporarySlotCount} slot{temporarySlotCount === 1 ? '' : 's'} use a temporary mentor with no account yet. They cannot log in or see their team until their email is added through Import Mentors.
                   </p>
                 )}
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -366,7 +375,7 @@ export default function AssignMentorsModal({ classId, onClose, onAssigned }: Ass
                                 {mentor.name?.charAt(0)?.toUpperCase() || 'M'}
                               </div>
                               <div className="min-w-0">
-                                <p className="truncate text-xs font-semibold text-slate-800">{mentor.name}</p>
+                                <p className="flex items-center gap-1.5 truncate text-xs font-semibold text-slate-800">{mentor.name}{mentor.isTemporary && <TemporaryMentorBadge />}</p>
                                 <p className="truncate text-[10px] text-slate-400">{style.label}{mentor.contractType ? ` · ${mentor.contractType}` : ''} · {mentor.activeTeamCount} team{mentor.activeTeamCount === 1 ? '' : 's'} this semester</p>
                                 <MentorTagChips tags={mentor.tags} />
                               </div>

@@ -21,6 +21,10 @@ internal static class TeamMappings
             .OrderBy(assignment => assignment.Slot)
             .ThenByDescending(assignment => assignment.AssignedAt)
             .Select(ToMentorAssignmentDto)
+            .Concat((team.TemporaryMentorAssignments ?? [])
+                .Where(assignment => assignment.Draft is not null && TemporaryMentors.IsInEffect(assignment, completedAt))
+                .OrderBy(assignment => assignment.Slot).ThenByDescending(assignment => assignment.AssignedAt)
+                .Select(TemporaryMentors.ToDto))
             .ToArray();
         var members = team.TeamMembers
             .Where(member => member.CountsTowardActiveTeam)

@@ -1,4 +1,5 @@
 using EHub.Application.Common.Interfaces.Persistence;
+using EHub.Application.Features.Teams.Common;
 using EHub.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 
@@ -34,7 +35,24 @@ internal static class ClassRosterMentorResolver
             })
             .ToListAsync(cancellationToken);
 
-        return assignments
+        var temporary = await context.TemporaryMentorAssignments
+            .AsNoTracking()
+            .Where(assignment =>
+                targetClassIds.Contains(assignment.Team.ClassId) &&
+                assignment.Team.Status == TeamStatus.Active &&
+                assignment.Status == MentorAssignmentStatus.Active &&
+                assignment.EndedAt == null)
+            .OrderByDescending(assignment => assignment.AssignedAt)
+            .ThenBy(assignment => assignment.Id)
+            .Select(assignment => new
+            {
+                assignment.TeamId,
+                assignment.Slot,
+                FullName = assignment.Draft.FullName + TemporaryMentors.ExportSuffix
+            })
+            .ToListAsync(cancellationToken);
+
+        return assignments.Concat(temporary)
             .GroupBy(assignment => assignment.TeamId)
             .ToDictionary(
                 group => group.Key,

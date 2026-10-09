@@ -2,6 +2,7 @@ import { Plus, RefreshCw, UserMinus } from 'lucide-react';
 import type { ManagedTeam, MentorAssignment } from '../../types/teamManagement';
 import type { MentorSlot, TeamSlotRow } from '../../utils/mentorSlotBoard';
 import { MENTOR_KIND_STYLES } from '../../utils/mentorKindStyles';
+import TemporaryMentorBadge from '../admin/TemporaryMentorBadge';
 
 interface MentorTeamsBoardProps {
   rows: TeamSlotRow[];
@@ -43,8 +44,11 @@ export default function MentorTeamsBoard({ rows, disabled, onAssign, onReplace, 
                     {assignment ? (
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
-                          <p className="truncate text-xs font-semibold text-slate-800" title={assignment.mentor.fullName}>{assignment.mentor.fullName}</p>
-                          <p className="truncate text-[10px] text-slate-400" title={assignment.mentor.email}>{assignment.mentor.email}</p>
+                          <p className="flex items-center gap-1.5 truncate text-xs font-semibold text-slate-800" title={assignment.mentor.fullName}>
+                            <span className="truncate">{assignment.mentor.isTemporary ? assignment.mentor.fullName.replace(/ \(no email yet\)$/, '') : assignment.mentor.fullName}</span>
+                            {assignment.mentor.isTemporary && <TemporaryMentorBadge />}
+                          </p>
+                          <p className="truncate text-[10px] text-slate-400" title={assignment.mentor.email}>{assignment.mentor.isTemporary ? 'No account yet: add their email to activate' : assignment.mentor.email}</p>
                         </div>
                         <div className="flex shrink-0 gap-1">
                           <button

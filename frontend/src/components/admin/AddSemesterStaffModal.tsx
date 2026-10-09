@@ -12,6 +12,7 @@ import {
 } from '../../utils/mentorBatchAssignment';
 import {
   groupCandidates,
+  mergeBatchResponses,
   summarizeStaffBatch,
   type MentorKindFilter,
   type StaffBatchSummary,
@@ -27,6 +28,7 @@ import Modal from '../ui/Modal';
 import MentorKindTag from './MentorKindTag';
 import MentorTagChips from './MentorTagChips';
 import MentorTagFilter from './MentorTagFilter';
+import TemporaryMentorBadge from './TemporaryMentorBadge';
 import { collectTagOptions, keepKnownTags } from '../../utils/mentorTags';
 
 interface AddSemesterStaffModalProps {
@@ -117,18 +119,31 @@ export default function AddSemesterStaffModal({
     setSubmitting(true);
     setSummary(null);
     try {
-      const response = await subjectApi.addTeachingStaffBatch({ semester, year, role, userIds: chosen }) as { data?: AddTeachingStaffBatchResponse };
-      if (!mounted.current || !response?.data) return;
+      // Accounts and mentors without an account go through the same endpoint with a different flag.
+      const temporaryIds = new Set(candidates.filter(item => item.isTemporary).map(item => item.userId));
+      const accountIds = chosen.filter(id => !temporaryIds.has(id));
+      const withoutAccountIds = chosen.filter(id => temporaryIds.has(id));
+      const responses: AddTeachingStaffBatchResponse[] = [];
+      if (accountIds.length > 0) {
+        const response = await subjectApi.addTeachingStaffBatch({ semester, year, role, userIds: accountIds }) as { data?: AddTeachingStaffBatchResponse };
+        if (response?.data) responses.push(response.data);
+      }
+      if (withoutAccountIds.length > 0) {
+        const response = await subjectApi.addTeachingStaffBatch({ semester, year, role, userIds: withoutAccountIds, temporary: true }) as { data?: AddTeachingStaffBatchResponse };
+        if (response?.data) responses.push(response.data);
+      }
+      if (!mounted.current || responses.length === 0) return;
+      const merged = mergeBatchResponses(responses);
 
       const nameById = new Map(candidates.map(item => [item.userId, item.name]));
-      const result = summarizeStaffBatch(response.data, id => nameById.get(id) ?? 'Unknown account', roleNoun);
+      const result = summarizeStaffBatch(merged, id => nameById.get(id) ?? 'Unknown account', roleNoun);
       setSummary(result);
       if (result.tone === 'success') toast.success(result.message);
       else if (result.tone === 'error') toast.error(result.message);
       else toast(result.message, { icon: result.tone === 'partial' ? '⚠️' : 'ℹ️' });
 
       setSelected([]);
-      if (response.data.addedCount > 0) await onChanged();
+      if (merged.addedCount > 0) await onChanged();
     } catch (error) {
       toast.error(parseApiError(error, `Failed to add ${roleNoun}s to the semester`).message);
     } finally {
@@ -157,6 +172,7 @@ export default function AddSemesterStaffModal({
           This does not create new accounts. Tick the existing active {roleNoun}s who take part in {semesterLabel}.
           Need a new account?{' '}
           <Link to="/admin/users" className="font-semibold underline">Go to User Management</Link> first.
+          {role === 'MENTOR' && <> Mentors marked <TemporaryMentorBadge /> have no account yet: they can be used in teams (also by Balanced and Random assignment) but cannot log in until their email is added.</>}
         </p>
 
         {summary && (
@@ -301,8 +317,8 @@ function CandidateInfo({ candidate }: { candidate: TeachingStaffCandidateDto }) 
         {candidate.name.trim().charAt(0).toUpperCase() || '?'}
       </span>
       <div className="min-w-0">
-        <p className="truncate text-xs font-semibold text-slate-800">{candidate.name}</p>
-        <p className="truncate text-[10px] text-slate-400">{candidate.email}</p>
+        <p className="flex items-center gap-1.5 truncate text-xs font-semibold text-slate-800"><span className="truncate">{candidate.name}</span>{candidate.isTemporary && <TemporaryMentorBadge />}</p>
+        <p className="truncate text-[10px] text-slate-400">{candidate.isTemporary ? (candidate.email || 'No email yet') : candidate.email}</p>
         <MentorTagChips tags={candidate.tags} />
       </div>
       {candidate.mentorType && (

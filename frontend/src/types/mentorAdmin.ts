@@ -32,6 +32,8 @@ export interface IncompleteMentor {
   mentorType: MentorType;
   email?: string | null;
   missingFields: string[];
+  /** Teams that use this mentor as a temporary mentor while there is no account. */
+  activeTeamCount?: number;
   updatedAtUtc: string;
 }
 
@@ -45,6 +47,8 @@ export interface MentorImportCommitResult {
   updatedCount: number;
   draftSavedCount: number;
   draftCompletedCount: number;
+  /** Teams whose temporary mentor became the real mentor. */
+  temporaryAssignmentsConverted?: number;
 }
 
 export interface MentorAllocationRowPreview {
@@ -57,6 +61,8 @@ export interface MentorAllocationRowPreview {
   mentorProfileId: string;
   mentorName: string;
   mentorEmail: string;
+  /** The mentor has no account yet; the slot is filled as a temporary mentor. */
+  isTemporary?: boolean;
   resultingSemesterLoad: number;
   /** "Retained" keeps the previous semester's mentor for a continuing team; "Allocated" is newly chosen; "Manual" is a hand edit. */
   source?: 'Retained' | 'Allocated' | 'Manual';

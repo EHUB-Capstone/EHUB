@@ -3,6 +3,7 @@ using System;
 using EHub.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace EHub.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20261009042048_AddTemporaryMentorAssignments")]
+    partial class AddTemporaryMentorAssignments
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -4913,75 +4916,6 @@ namespace EHub.Infrastructure.Persistence.Migrations
                     b.ToTable("semester_staff_assignments", (string)null);
                 });
 
-            modelBuilder.Entity("EHub.Domain.Entities.SemesterTemporaryMentor", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at");
-
-                    b.Property<Guid?>("CreatedBy")
-                        .HasColumnType("uuid")
-                        .HasColumnName("created_by");
-
-                    b.Property<DateTime?>("DeletedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("deleted_at");
-
-                    b.Property<Guid?>("DeletedBy")
-                        .HasColumnType("uuid")
-                        .HasColumnName("deleted_by");
-
-                    b.Property<Guid>("DraftId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("draft_id");
-
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("is_deleted");
-
-                    b.Property<Guid>("SemesterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("semester_id");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)")
-                        .HasColumnName("status");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("updated_at");
-
-                    b.Property<Guid?>("UpdatedBy")
-                        .HasColumnType("uuid")
-                        .HasColumnName("updated_by");
-
-                    b.Property<uint>("Version")
-                        .IsConcurrencyToken()
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("xid")
-                        .HasColumnName("xmin");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("DraftId");
-
-                    b.HasIndex("SemesterId", "DraftId")
-                        .IsUnique();
-
-                    b.HasIndex("SemesterId", "Status");
-
-                    b.ToTable("semester_temporary_mentors", (string)null);
-                });
-
             modelBuilder.Entity("EHub.Domain.Entities.SprintTask", b =>
                 {
                     b.Property<Guid>("Id")
@@ -8342,25 +8276,6 @@ namespace EHub.Infrastructure.Persistence.Migrations
                     b.Navigation("Semester");
 
                     b.Navigation("User");
-                });
-
-            modelBuilder.Entity("EHub.Domain.Entities.SemesterTemporaryMentor", b =>
-                {
-                    b.HasOne("EHub.Domain.Entities.MentorImportDraft", "Draft")
-                        .WithMany()
-                        .HasForeignKey("DraftId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("EHub.Domain.Entities.Semester", "Semester")
-                        .WithMany()
-                        .HasForeignKey("SemesterId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Draft");
-
-                    b.Navigation("Semester");
                 });
 
             modelBuilder.Entity("EHub.Domain.Entities.SprintTask", b =>

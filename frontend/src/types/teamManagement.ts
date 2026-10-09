@@ -89,6 +89,8 @@ export interface MentorAssignment {
     department?: string | null;
     jobTitle?: string | null;
     contractType?: string | null;
+    /** True for a mentor who has no account yet; then mentorProfileId is the id of the incomplete-mentor record. */
+    isTemporary?: boolean;
     /** Only in the mentor pickers. */
     tags?: Partial<MentorTagSet> | null;
   };
@@ -101,6 +103,7 @@ export interface MentorAssignment {
 
 export interface MentorCandidate {
   mentor: MentorAssignment['mentor'];
+  isTemporary?: boolean;
   activeTeamCount: number;
 }
 

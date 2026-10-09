@@ -10,8 +10,8 @@ export const teamApi = {
 
   // ─── Assignment ──────────────────────────────────────────────────────────
   getMentorAssignments: (teamId) => runClassFeatureRequest(classFeatureFlags.mentorAssignment, 'Class mentor assignment', () => axiosClient.get(`/teams/${teamId}/mentor-assignments`)),
-  assignMentor: (teamId, mentorProfileId, note = null) => runClassFeatureRequest(classFeatureFlags.mentorAssignment, 'Class mentor assignment', () => axiosClient.post(`/teams/${teamId}/mentor-assignments`, { mentorProfileId, note })),
-  replaceMentor: (teamId, assignmentId, mentorProfileId, reason, note = null) => runClassFeatureRequest(classFeatureFlags.mentorAssignment, 'Class mentor assignment', () => axiosClient.post(`/teams/${teamId}/mentor-assignments/replace`, { assignmentId, mentorProfileId, reason, note })),
+  assignMentor: (teamId, mentorProfileId, note = null, temporary = false) => runClassFeatureRequest(classFeatureFlags.mentorAssignment, 'Class mentor assignment', () => axiosClient.post(`/teams/${teamId}/mentor-assignments`, { mentorProfileId, note, temporary })),
+  replaceMentor: (teamId, assignmentId, mentorProfileId, reason, note = null, temporary = false) => runClassFeatureRequest(classFeatureFlags.mentorAssignment, 'Class mentor assignment', () => axiosClient.post(`/teams/${teamId}/mentor-assignments/replace`, { assignmentId, mentorProfileId, reason, note, temporary })),
   endMentorAssignment: (teamId, assignmentId, reason) => runClassFeatureRequest(classFeatureFlags.mentorAssignment, 'Class mentor assignment', () => axiosClient.post(`/teams/${teamId}/mentor-assignments/end`, { assignmentId, reason })),
   assignLeader: (teamId, studentId, rowVersion) => runClassFeatureRequest(classFeatureFlags.teamManagement, 'Class team management', () => axiosClient.put(`/teams/${teamId}/leader`, { studentId, rowVersion })),
 

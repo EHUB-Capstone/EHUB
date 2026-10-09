@@ -294,6 +294,21 @@ public sealed class SubjectsController : ControllerBase
                 "Teaching staff batch processed successfully."));
     }
 
+    [HttpPut("teaching-staff/temporary-mentors/{participationId:guid}")]
+    [Authorize(Policy = SystemPolicies.AdminOnly)]
+    public async Task<IActionResult> UpdateTemporaryMentor(
+        Guid participationId,
+        [FromBody] UpdateSemesterTeachingStaffRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await _semesterTeachingStaffHandler.UpdateTemporaryAsync(participationId, request, cancellationToken);
+        return result.IsFailure
+            ? ToSemesterErrorResponse(result.Error)
+            : Ok(ApiResponse<TeachingStaffResponse>.SuccessResponse(
+                result.Value!,
+                "Semester teaching staff entry updated successfully."));
+    }
+
     [HttpPut("teaching-staff/{assignmentId:guid}")]
     [Authorize(Policy = SystemPolicies.AdminOnly)]
     public async Task<IActionResult> UpdateTeachingStaff(
