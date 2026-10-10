@@ -184,6 +184,36 @@ public sealed class WorkspaceCheckpointsController(
         return ToFeedbackResponse(result);
     }
 
+    [HttpPost("teams/{teamId:guid}/checkpoints/{checkpointNumber:int}/deadline-extension-requests")]
+    [Authorize(Policy = SystemPolicies.StudentOnly)]
+    public async Task<IActionResult> CreateDeadlineExtensionRequest(
+        Guid teamId,
+        int checkpointNumber,
+        [FromBody] CreateCheckpointDeadlineExtensionRequest request,
+        [FromServices] EHub.Application.Features.Workspaces.DeadlineExtensions.ICheckpointDeadlineExtensionRequestHandler handler,
+        CancellationToken cancellationToken)
+    {
+        var result = await handler.CreateAsync(teamId, checkpointNumber, request, UserId, Role, cancellationToken);
+        return result.IsSuccess
+            ? Ok(ApiResponse<CheckpointDeadlineExtensionRequestResponse>.SuccessResponse(result.Value, "Deadline extension request sent."))
+            : ToErrorResponse(result.Error);
+    }
+
+    [HttpGet("teams/{teamId:guid}/checkpoints/{checkpointNumber:int}/deadline-extension-requests/mine")]
+    [Authorize(Policy = SystemPolicies.StudentOnly)]
+    public async Task<IActionResult> GetMyDeadlineExtensionRequest(
+        Guid teamId,
+        int checkpointNumber,
+        [FromQuery] DateTime deadlineUtc,
+        [FromServices] EHub.Application.Features.Workspaces.DeadlineExtensions.ICheckpointDeadlineExtensionRequestHandler handler,
+        CancellationToken cancellationToken)
+    {
+        var result = await handler.GetMineAsync(teamId, checkpointNumber, deadlineUtc, UserId, Role, cancellationToken);
+        return result.IsSuccess
+            ? Ok(ApiResponse<CheckpointDeadlineExtensionRequestResponse>.SuccessResponse(result.Value, "Deadline extension request retrieved."))
+            : ToErrorResponse(result.Error);
+    }
+
     [HttpDelete("teams/{teamId:guid}/checkpoints/{checkpointNumber:int}/feedback/{feedbackId:guid}")]
     public async Task<IActionResult> DeleteFeedback(Guid teamId, int checkpointNumber, Guid feedbackId, [FromServices] ICheckpointFeedbackHandler handler, CancellationToken cancellationToken)
     {

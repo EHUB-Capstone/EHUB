@@ -174,6 +174,8 @@ public static class ErrorCodes
     public const string WorkspaceTagDuplicated = "WORKSPACE_TAG_DUPLICATED";
     public const string WorkspaceConcurrencyConflict = "WORKSPACE_CONCURRENCY_CONFLICT";
     public const string WorkspaceCheckpointNotOpen = "WORKSPACE_CHECKPOINT_NOT_OPEN";
+    public const string WorkspaceDeadlineExtensionAlreadyRequested = "WORKSPACE_DEADLINE_EXTENSION_ALREADY_REQUESTED";
+    public const string WorkspaceDeadlineExtensionNotOverdue = "WORKSPACE_DEADLINE_EXTENSION_NOT_OVERDUE";
     public const string WorkspaceFilePreviewUnsupported = "WORKSPACE_FILE_PREVIEW_UNSUPPORTED";
     public const string WorkspaceFilePreviewConversionFailed = "WORKSPACE_FILE_PREVIEW_CONVERSION_FAILED";
     public const string WorkspaceFilePreviewUnavailable = "WORKSPACE_FILE_PREVIEW_UNAVAILABLE";

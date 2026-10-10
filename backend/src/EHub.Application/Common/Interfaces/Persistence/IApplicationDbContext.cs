@@ -44,6 +44,7 @@ public interface IApplicationDbContext
     DbSet<ProjectActivityLog> ProjectActivityLogs { get; }
     DbSet<Checkpoint> Checkpoints { get; }
     DbSet<ClassCheckpointSchedule> ClassCheckpointSchedules { get; }
+    DbSet<CheckpointDeadlineExtensionRequest> CheckpointDeadlineExtensionRequests { get; }
     DbSet<Submission> Submissions { get; }
     DbSet<SubmissionFile> SubmissionFiles { get; }
     DbSet<SubmissionUploadSession> SubmissionUploadSessions { get; }
