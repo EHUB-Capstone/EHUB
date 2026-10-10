@@ -421,6 +421,9 @@ function registerAuthHandlers(mock: MockAdapter): void {
       majorCode: body.majorCode === undefined || body.majorCode === null
         ? undefined
         : asString(body.majorCode),
+      mentorType: body.mentorType === undefined || body.mentorType === null
+        ? undefined
+        : asString(body.mentorType),
     };
     const validationErrors = validateRegisterPayload(rawPayload);
     if (validationErrors.length > 0) return validationFailure(validationErrors);

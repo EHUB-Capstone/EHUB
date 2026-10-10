@@ -3,25 +3,26 @@ using System;
 using EHub.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
-using Pgvector;
 
 #nullable disable
 
 namespace EHub.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20261010064641_AddPendingRegistrationMentorType")]
+    partial class AddPendingRegistrationMentorType
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
                 .HasAnnotation("ProductVersion", "10.0.9")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
-            NpgsqlModelBuilderExtensions.HasPostgresExtension(modelBuilder, "vector");
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
             modelBuilder.Entity("EHub.Domain.Entities.AcademicDataset", b =>
@@ -2089,56 +2090,6 @@ namespace EHub.Infrastructure.Persistence.Migrations
                     b.ToTable("mentor_assignments", (string)null);
                 });
 
-            modelBuilder.Entity("EHub.Domain.Entities.MentorExperience", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<string>("Area")
-                        .IsRequired()
-                        .HasMaxLength(80)
-                        .HasColumnType("character varying(80)")
-                        .HasColumnName("area");
-
-                    b.Property<string>("Kind")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
-                        .HasColumnName("kind");
-
-                    b.Property<string>("Level")
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("level");
-
-                    b.Property<Guid>("MentorProfileId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("mentor_profile_id");
-
-                    b.Property<string>("Notes")
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)")
-                        .HasColumnName("notes");
-
-                    b.Property<decimal?>("Years")
-                        .HasPrecision(4, 1)
-                        .HasColumnType("numeric(4,1)")
-                        .HasColumnName("years");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("MentorProfileId", "Kind", "Area")
-                        .IsUnique();
-
-                    b.ToTable("mentor_experiences", null, t =>
-                        {
-                            t.HasCheckConstraint("ck_mentor_experience_kind", "kind IN ('Startup', 'Technology')");
-
-                            t.HasCheckConstraint("ck_mentor_experience_years", "years IS NULL OR (years >= 0 AND years <= 80)");
-                        });
-                });
-
             modelBuilder.Entity("EHub.Domain.Entities.MentorImportDraft", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2371,21 +2322,6 @@ namespace EHub.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(500)")
                         .HasColumnName("current_address");
 
-                    b.Property<string>("CvFileName")
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)")
-                        .HasColumnName("cv_file_name");
-
-                    b.Property<string>("CvPublicId")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)")
-                        .HasColumnName("cv_public_id");
-
-                    b.Property<string>("CvStorageUrl")
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)")
-                        .HasColumnName("cv_storage_url");
-
                     b.Property<DateOnly?>("DateOfBirth")
                         .HasColumnType("date")
                         .HasColumnName("date_of_birth");
@@ -2407,11 +2343,6 @@ namespace EHub.Infrastructure.Persistence.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)")
                         .HasColumnName("education_level");
-
-                    b.Property<string>("Experience")
-                        .HasMaxLength(4000)
-                        .HasColumnType("character varying(4000)")
-                        .HasColumnName("experience");
 
                     b.PrimitiveCollection<string[]>("Expertise")
                         .IsRequired()
@@ -2448,26 +2379,6 @@ namespace EHub.Infrastructure.Persistence.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)")
                         .HasColumnName("organization");
-
-                    b.Property<string>("PortfolioFileName")
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)")
-                        .HasColumnName("portfolio_file_name");
-
-                    b.Property<string>("PortfolioPublicId")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)")
-                        .HasColumnName("portfolio_public_id");
-
-                    b.Property<string>("PortfolioStorageUrl")
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)")
-                        .HasColumnName("portfolio_storage_url");
-
-                    b.Property<string>("PortfolioUrl")
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)")
-                        .HasColumnName("portfolio_url");
 
                     b.PrimitiveCollection<string[]>("StartupDomains")
                         .IsRequired()
@@ -2701,75 +2612,6 @@ namespace EHub.Infrastructure.Persistence.Migrations
                             t.HasCheckConstraint("CK_MentoringAttendance_HasIdentification", "user_id IS NOT NULL OR student_id IS NOT NULL OR name IS NOT NULL OR email IS NOT NULL");
 
                             t.HasCheckConstraint("CK_MentoringAttendance_SingleParticipantType", "NOT (user_id IS NOT NULL AND student_id IS NOT NULL)");
-                        });
-                });
-
-            modelBuilder.Entity("EHub.Domain.Entities.MentoringFeedback", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<string>("Comment")
-                        .IsRequired()
-                        .HasMaxLength(2000)
-                        .HasColumnType("character varying(2000)")
-                        .HasColumnName("comment");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at");
-
-                    b.Property<Guid?>("CreatedBy")
-                        .HasColumnType("uuid")
-                        .HasColumnName("created_by");
-
-                    b.Property<DateTime?>("DeletedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("deleted_at");
-
-                    b.Property<Guid?>("DeletedBy")
-                        .HasColumnType("uuid")
-                        .HasColumnName("deleted_by");
-
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("is_deleted");
-
-                    b.Property<Guid>("MentoringSessionId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("mentoring_session_id");
-
-                    b.Property<int>("Rating")
-                        .HasColumnType("integer")
-                        .HasColumnName("rating");
-
-                    b.Property<Guid>("StudentUserId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("student_user_id");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("updated_at");
-
-                    b.Property<Guid?>("UpdatedBy")
-                        .HasColumnType("uuid")
-                        .HasColumnName("updated_by");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("StudentUserId");
-
-                    b.HasIndex("MentoringSessionId", "StudentUserId")
-                        .IsUnique()
-                        .HasFilter("is_deleted = false");
-
-                    b.ToTable("mentoring_feedback", null, t =>
-                        {
-                            t.HasCheckConstraint("CK_MentoringFeedback_Rating", "rating >= 1 AND rating <= 5");
                         });
                 });
 
@@ -7405,38 +7247,6 @@ namespace EHub.Infrastructure.Persistence.Migrations
                         });
                 });
 
-            modelBuilder.Entity("EHub.Infrastructure.Persistence.MentorEmbedding", b =>
-                {
-                    b.Property<Guid>("MentorProfileId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("mentor_profile_id");
-
-                    b.Property<string>("ContentHash")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
-                        .HasColumnName("content_hash");
-
-                    b.Property<Vector>("Embedding")
-                        .IsRequired()
-                        .HasColumnType("vector(1024)")
-                        .HasColumnName("embedding");
-
-                    b.Property<string>("ModelName")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
-                        .HasColumnName("model_name");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("updated_at");
-
-                    b.HasKey("MentorProfileId");
-
-                    b.ToTable("mentor_embeddings", (string)null);
-                });
-
             modelBuilder.Entity("EHub.Domain.Entities.AcademicDataset", b =>
                 {
                     b.HasOne("EHub.Domain.Entities.Class", "Class")
@@ -7968,15 +7778,6 @@ namespace EHub.Infrastructure.Persistence.Migrations
                     b.Navigation("Team");
                 });
 
-            modelBuilder.Entity("EHub.Domain.Entities.MentorExperience", b =>
-                {
-                    b.HasOne("EHub.Domain.Entities.MentorProfile", null)
-                        .WithMany("Experiences")
-                        .HasForeignKey("MentorProfileId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
             modelBuilder.Entity("EHub.Domain.Entities.MentorImportDraft", b =>
                 {
                     b.HasOne("EHub.Domain.Entities.MentorProfile", "ConvertedMentorProfile")
@@ -8071,25 +7872,6 @@ namespace EHub.Infrastructure.Persistence.Migrations
                     b.Navigation("Student");
 
                     b.Navigation("User");
-                });
-
-            modelBuilder.Entity("EHub.Domain.Entities.MentoringFeedback", b =>
-                {
-                    b.HasOne("EHub.Domain.Entities.MentoringSession", "MentoringSession")
-                        .WithMany("Feedback")
-                        .HasForeignKey("MentoringSessionId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("EHub.Domain.Entities.User", "StudentUser")
-                        .WithMany()
-                        .HasForeignKey("StudentUserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("MentoringSession");
-
-                    b.Navigation("StudentUser");
                 });
 
             modelBuilder.Entity("EHub.Domain.Entities.MentoringSession", b =>
@@ -9183,15 +8965,6 @@ namespace EHub.Infrastructure.Persistence.Migrations
                     b.Navigation("Workshop");
                 });
 
-            modelBuilder.Entity("EHub.Infrastructure.Persistence.MentorEmbedding", b =>
-                {
-                    b.HasOne("EHub.Domain.Entities.MentorProfile", null)
-                        .WithOne()
-                        .HasForeignKey("EHub.Infrastructure.Persistence.MentorEmbedding", "MentorProfileId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
             modelBuilder.Entity("EHub.Domain.Entities.AcademicDataset", b =>
                 {
                     b.Navigation("FieldHistories");
@@ -9282,8 +9055,6 @@ namespace EHub.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("EHub.Domain.Entities.MentorProfile", b =>
                 {
                     b.Navigation("Assignments");
-
-                    b.Navigation("Experiences");
                 });
 
             modelBuilder.Entity("EHub.Domain.Entities.MentoringSession", b =>
@@ -9291,8 +9062,6 @@ namespace EHub.Infrastructure.Persistence.Migrations
                     b.Navigation("ActionItems");
 
                     b.Navigation("Attendances");
-
-                    b.Navigation("Feedback");
                 });
 
             modelBuilder.Entity("EHub.Domain.Entities.Milestone", b =>

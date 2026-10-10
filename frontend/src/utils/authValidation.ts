@@ -17,6 +17,8 @@ export const BACKEND_MAJOR_CODES = PROGRAM_GROUPS.flatMap((group) =>
 
 const backendMajorCodes = new Set(BACKEND_MAJOR_CODES.map((code) => code.toUpperCase()));
 
+const MENTOR_TYPES = new Set(['enterprise', 'academic']);
+
 export const LOGIN_FIELDS = ['email', 'password'] as const;
 export const REGISTER_FIELDS = [
   'fullName',
@@ -25,6 +27,7 @@ export const REGISTER_FIELDS = [
   'confirmPassword',
   'role',
   'majorCode',
+  'mentorType',
 ] as const;
 
 export type LoginField = (typeof LOGIN_FIELDS)[number];
@@ -64,6 +67,8 @@ export function normalizeRegisterPayload(payload: RegisterPayload): RegisterPayl
     confirmPassword: payload.confirmPassword,
     role: payload.role,
     majorCode: majorCode || undefined,
+    // Only a Mentor carries a type; the key is left out for every other role.
+    ...(payload.role === 'Mentor' && payload.mentorType?.trim() ? { mentorType: payload.mentorType.trim() } : {}),
   };
 }
 
@@ -163,6 +168,23 @@ export function validateRegisterPayload(payload: RegisterPayload): AuthValidatio
       message: 'Selected major is invalid.',
       code: 'AUTH_INVALID_MAJOR',
     });
+  }
+
+  if (payload.role === 'Mentor') {
+    const mentorType = (payload.mentorType ?? '').trim();
+    if (mentorType.length === 0) {
+      errors.push({
+        field: 'mentorType',
+        message: 'Choose Enterprise mentor or Lecturer mentor.',
+        code: 'AUTH_MENTOR_TYPE_REQUIRED',
+      });
+    } else if (!MENTOR_TYPES.has(mentorType.toLowerCase())) {
+      errors.push({
+        field: 'mentorType',
+        message: 'Mentor type must be Enterprise or Academic.',
+        code: 'AUTH_INVALID_MENTOR_TYPE',
+      });
+    }
   }
 
   return errors;
