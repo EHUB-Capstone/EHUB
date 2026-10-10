@@ -7,19 +7,19 @@ import type {
   MentorType,
 } from '../../types/mentorAdmin';
 import {
-  MAX_REPLACE_REASON_LENGTH,
   buildTeamGrid,
   getMentorCandidates,
   getSubjectColumns,
-  isReplaceReasonValid,
   skipReasonLabel,
   summarizePreview,
   type SlotState,
   type SlotView,
   type TeamGridRow,
 } from '../../utils/mentorAllocationPreview';
+import { buildChangeReason, isChangeReasonValid } from '../../utils/mentorChangeReasons';
 import Button from '../ui/Button';
 import Modal from '../ui/Modal';
+import MentorChangeReasonField from './MentorChangeReasonField';
 
 type PreviewTab = 'teams' | 'mentors' | 'attention';
 type TeamFilter = 'all' | 'attention' | 'changed';
@@ -323,10 +323,11 @@ function SlotEditor({
 }) {
   const occupied = slot.state === 'existing' || slot.replacesCurrent;
   const [mentorId, setMentorId] = useState(presetMentorId ?? '');
-  const [reason, setReason] = useState('');
+  const [reasonCode, setReasonCode] = useState('');
+  const [reasonNote, setReasonNote] = useState('');
   const sameAsCurrent = occupied && mentorId !== '' && mentorId === (slot.currentMentorProfileId ?? slot.mentorProfileId);
   const needsReason = occupied && mentorId !== '' && !sameAsCurrent;
-  const reasonOk = !needsReason || isReplaceReasonValid(reason);
+  const reasonOk = !needsReason || isChangeReasonValid(reasonCode, reasonNote);
   const canApply = !sameAsCurrent && reasonOk && (mentorId !== '' || !occupied);
   const fieldId = `${teamId}-${type}`;
 
@@ -336,7 +337,7 @@ function SlotEditor({
       teamId,
       mentorType: type,
       mentorProfileId: mentorId === '' ? null : mentorId,
-      ...(needsReason ? { replace: true, reason: reason.trim() } : {}),
+      ...(needsReason ? { replace: true, reason: buildChangeReason(reasonCode, reasonNote) } : {}),
     });
   };
 
@@ -360,22 +361,14 @@ function SlotEditor({
       </select>
       {candidates.length === 0 && <p className="text-[11px] text-amber-700">No active {slotLabel[type].toLowerCase()} in this semester.</p>}
       {needsReason && (
-        <div>
-          <label htmlFor={`reason-${fieldId}`} className="block text-[11px] font-semibold text-slate-600">
-            Reason for replacing {slot.currentMentorName ?? slot.mentorName}
-          </label>
-          <textarea
-            id={`reason-${fieldId}`}
-            value={reason}
-            onChange={event => setReason(event.target.value)}
-            maxLength={MAX_REPLACE_REASON_LENGTH}
-            rows={2}
-            className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-700 outline-none focus:border-primary"
-          />
-          <p className={`text-[11px] ${reasonOk ? 'text-slate-500' : 'text-red-700'}`}>
-            The current assignment ends when you save. At least 3 characters are required.
-          </p>
-        </div>
+        <MentorChangeReasonField
+          idPrefix={`reason-${fieldId}`}
+          mentorName={slot.currentMentorName ?? slot.mentorName}
+          code={reasonCode}
+          note={reasonNote}
+          onCodeChange={setReasonCode}
+          onNoteChange={setReasonNote}
+        />
       )}
       <div className="flex justify-end gap-1.5">
         <Button size="xs" variant="ghost" onClick={onCancel}>Cancel</Button>

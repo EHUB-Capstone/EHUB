@@ -892,7 +892,7 @@ const SubjectManagement = () => {
                 </label>
                 <p className="pb-2 text-xs text-slate-500">Staff overview for <strong className="font-semibold text-slate-700">{selectedSemester} {selectedYear}</strong></p>
               </div>
-              <Button variant="outline" icon={Users} className="whitespace-nowrap" onClick={() => navigate('/admin/classes')}>Manage Assignments</Button>
+              <Button variant="outline" icon={Users} className="whitespace-nowrap" title="Open the Classes page to assign lecturers to classes" onClick={() => navigate('/admin/classes')}>Go to Classes</Button>
             </div>
             <div className="grid grid-cols-2 gap-px border-t border-slate-200/80 bg-slate-200/80 sm:grid-cols-3 xl:grid-cols-6 dark:border-white/10 dark:bg-white/10">
               {staffStats.map(({ label, value, icon: Icon, style }) => (

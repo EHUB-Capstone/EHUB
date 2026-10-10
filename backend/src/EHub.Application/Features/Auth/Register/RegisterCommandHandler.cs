@@ -111,6 +111,23 @@ public sealed class RegisterCommandHandler : IRegisterCommandHandler
             }
         }
 
+        MentorType? mentorType = null;
+        if (roleName == SystemRoles.Mentor)
+        {
+            if (string.IsNullOrWhiteSpace(request.MentorType))
+            {
+                return Result.Failure<RegisterResult>(AuthErrors.MentorTypeRequired);
+            }
+
+            if (!Enum.TryParse<MentorType>(request.MentorType.Trim(), ignoreCase: true, out var parsedType) ||
+                !Enum.IsDefined(parsedType))
+            {
+                return Result.Failure<RegisterResult>(AuthErrors.InvalidMentorType);
+            }
+
+            mentorType = parsedType;
+        }
+
         var now = _dateTimeProvider.UtcNow;
         var registration = await _pendingRegistrationRepository.GetByNormalizedEmailAsync(
             normalizedEmail,
@@ -162,6 +179,7 @@ public sealed class RegisterCommandHandler : IRegisterCommandHandler
             registration.MajorCode = roleName == SystemRoles.Student
                 ? request.MajorCode!.Trim().ToUpperInvariant()
                 : null;
+            registration.MentorType = mentorType;
             registration.Status = PendingRegistrationStatus.Pending;
             registration.CompletedAtUtc = null;
             registration.CompletedUserId = null;
@@ -177,7 +195,8 @@ public sealed class RegisterCommandHandler : IRegisterCommandHandler
                 RoleName = roleName,
                 MajorCode = roleName == SystemRoles.Student
                     ? request.MajorCode!.Trim().ToUpperInvariant()
-                    : null
+                    : null,
+                MentorType = mentorType
             };
             await _pendingRegistrationRepository.AddAsync(registration, cancellationToken);
         }

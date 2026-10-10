@@ -307,6 +307,54 @@ public sealed class MentorAdminHandler(
         }
     }
 
+    public async Task<Result<MentorSemesterClassListResponse>> GetSemesterClassesAsync(Guid semesterId, CancellationToken cancellationToken = default)
+    {
+        if (!TryGetAdminId(out _)) return Failure<MentorSemesterClassListResponse>(ErrorCodes.CommonUnauthorizedError, "An authenticated administrator is required.");
+        if (semesterId == Guid.Empty || !await context.Semesters.AsNoTracking().AnyAsync(item => item.Id == semesterId, cancellationToken))
+            return Failure<MentorSemesterClassListResponse>(ErrorCodes.SemesterNotFound, "The selected semester was not found.");
+
+        var classes = await context.Classes.AsNoTracking()
+            .Where(item => item.SemesterId == semesterId && item.Status == ClassStatus.Active)
+            .OrderBy(item => item.ClassCode)
+            .Select(item => new { item.Id, item.ClassCode, SubjectCode = item.Course.Code, Lecturer = item.PrimaryLecturer != null ? item.PrimaryLecturer.FullName : null })
+            .ToListAsync(cancellationToken);
+        var classIds = classes.Select(item => item.Id).ToArray();
+        var teams = await context.Teams.AsNoTracking()
+            .Where(item => classIds.Contains(item.ClassId) && item.Status == TeamStatus.Active)
+            .Select(item => new { item.Id, item.ClassId })
+            .ToListAsync(cancellationToken);
+        var teamIds = teams.Select(item => item.Id).ToArray();
+        var filled = (await context.MentorAssignments.AsNoTracking()
+                .Where(item => teamIds.Contains(item.TeamId) && item.Status == MentorAssignmentStatus.Active && item.EndedAt == null)
+                .Select(item => new { item.TeamId, item.Slot })
+                .ToListAsync(cancellationToken))
+            .Select(item => (item.TeamId, item.Slot, Temporary: false))
+            .Concat((await context.TemporaryMentorAssignments.AsNoTracking()
+                    .Where(item => teamIds.Contains(item.TeamId) && item.Status == MentorAssignmentStatus.Active && item.EndedAt == null)
+                    .Select(item => new { item.TeamId, item.Slot })
+                    .ToListAsync(cancellationToken))
+                .Select(item => (item.TeamId, item.Slot, Temporary: true)))
+            .ToList();
+
+        var rows = classes.Select(item =>
+        {
+            var classTeams = teams.Where(team => team.ClassId == item.Id).Select(team => team.Id).ToHashSet();
+            var slots = filled.Where(entry => classTeams.Contains(entry.TeamId)).ToList();
+            return new MentorSemesterClassResponse
+            {
+                ClassId = item.Id,
+                ClassCode = item.ClassCode,
+                SubjectCode = item.SubjectCode,
+                LecturerName = item.Lecturer,
+                TeamCount = classTeams.Count,
+                MissingEnterpriseCount = classTeams.Count - slots.Select(entry => (entry.TeamId, entry.Slot)).Distinct().Count(entry => entry.Slot == MentorType.Enterprise),
+                MissingAcademicCount = classTeams.Count - slots.Select(entry => (entry.TeamId, entry.Slot)).Distinct().Count(entry => entry.Slot == MentorType.Academic),
+                TemporarySlotCount = slots.Count(entry => entry.Temporary)
+            };
+        }).ToArray();
+        return Result.Success(new MentorSemesterClassListResponse { Classes = rows });
+    }
+
     public async Task<Result<MentorAllocationPreviewResponse>> PreviewAllocationAsync(PreviewMentorAllocationRequest request, CancellationToken cancellationToken = default)
     {
         if (!TryGetAdminId(out var adminId)) return Failure<MentorAllocationPreviewResponse>(ErrorCodes.CommonUnauthorizedError, "An authenticated administrator is required.");
@@ -622,6 +670,9 @@ public sealed class MentorAdminHandler(
                 }
 
                 var now = dateTimeProvider.UtcNow;
+                var replacedMentorIds = replacements.Values.Select(item => item.MentorProfileId).Distinct().ToArray();
+                var replacedUserIds = await context.MentorProfiles.AsNoTracking().Where(item => replacedMentorIds.Contains(item.Id))
+                    .Select(item => new { item.Id, item.UserId }).ToDictionaryAsync(item => item.Id, item => item.UserId, token);
                 // End the replaced assignments first and save, so the unique "one active mentor per slot" rule is never
                 // violated. Both steps stay inside this serializable transaction and are rolled back together on failure.
                 foreach (var (row, previous) in replacements)
@@ -637,6 +688,9 @@ public sealed class MentorAdminHandler(
                         DetailsJson = JsonSerializer.Serialize(new { row.TeamId, previous.MentorProfileId, Slot = previous.Slot.ToString(), Reason = reason, AllocationSessionId = session.Id })
                     });
                     ClassOutbox.Enqueue(context, "Team.MentorAssignmentChanged.v1", row.ClassId, new { row.TeamId, Action = "Ended" }, now);
+                    MentorChangeNotifications.Enqueue(context, row.ClassId, row.TeamId, row.TeamCode,
+                        replacedUserIds.TryGetValue(previous.MentorProfileId, out var previousUserId) ? previousUserId : null,
+                        row.ReplacesMentorName ?? "A mentor", row.MentorName, reason, adminId, now);
                 }
                 foreach (var (row, previous) in temporaryReplacements)
                 {
@@ -650,6 +704,8 @@ public sealed class MentorAdminHandler(
                         ClassId = row.ClassId, Action = "TEMPORARY_MENTOR_ASSIGNMENT_ENDED", PerformedByUserId = adminId, OccurredAtUtc = now,
                         DetailsJson = JsonSerializer.Serialize(new { row.TeamId, previous.DraftId, Slot = previous.Slot.ToString(), Reason = reason, AllocationSessionId = session.Id })
                     });
+                    MentorChangeNotifications.Enqueue(context, row.ClassId, row.TeamId, row.TeamCode, null,
+                        row.ReplacesMentorName ?? "A mentor", row.MentorName, reason, adminId, now);
                 }
                 if (replacements.Count + temporaryReplacements.Count > 0) await context.SaveChangesAsync(token);
 

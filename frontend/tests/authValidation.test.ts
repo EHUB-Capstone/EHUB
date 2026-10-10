@@ -165,7 +165,7 @@ test('registration requires confirmation and uses the backend mismatch error cod
 test('registration accepts only the three exact public backend role values', () => {
   assert.deepEqual([...PUBLIC_REGISTER_ROLES].sort(), ['Lecturer', 'Mentor', 'Student']);
   for (const role of PUBLIC_REGISTER_ROLES) {
-    const payload = validRegister({ role, majorCode: role === 'Student' ? 'BIT_SE' : undefined });
+    const payload = validRegister({ role, majorCode: role === 'Student' ? 'BIT_SE' : undefined, mentorType: role === 'Mentor' ? 'Enterprise' : undefined });
     assert.equal(errorsFor(validateRegisterPayload(payload), 'role').length, 0, role);
   }
 
@@ -320,4 +320,22 @@ test('BBA_MC uses the Multimedia Communication display name in every major dropd
   assert.equal(teamMajor?.name, 'Multimedia Communication');
   assert.equal(programMajor?.name, 'Multimedia Communication');
   assert.equal(getMajorName('BBA_MC'), 'Multimedia Communication');
+});
+
+test('a Mentor must choose Enterprise or Academic, other roles do not need a mentor type', () => {
+  const mentor = (mentorType?: string) => validRegister({ role: 'Mentor', majorCode: undefined, mentorType });
+  assert.deepEqual(errorsFor(validateRegisterPayload(mentor(undefined)), 'mentorType'), [
+    { field: 'mentorType', message: 'Choose Enterprise mentor or Lecturer mentor.', code: 'AUTH_MENTOR_TYPE_REQUIRED' },
+  ]);
+  assert.deepEqual(errorsFor(validateRegisterPayload(mentor('Freelancer')), 'mentorType'), [
+    { field: 'mentorType', message: 'Mentor type must be Enterprise or Academic.', code: 'AUTH_INVALID_MENTOR_TYPE' },
+  ]);
+  assert.equal(errorsFor(validateRegisterPayload(mentor('Enterprise')), 'mentorType').length, 0);
+  assert.equal(errorsFor(validateRegisterPayload(mentor('academic')), 'mentorType').length, 0);
+  assert.equal(errorsFor(validateRegisterPayload(validRegister({ role: 'Lecturer', majorCode: undefined })), 'mentorType').length, 0);
+});
+
+test('normalizing a registration keeps the mentor type only for mentors', () => {
+  assert.equal(normalizeRegisterPayload(validRegister({ role: 'Mentor', majorCode: undefined, mentorType: ' Academic ' })).mentorType, 'Academic');
+  assert.equal(normalizeRegisterPayload(validRegister({ role: 'Student', mentorType: 'Academic' })).mentorType, undefined);
 });

@@ -464,6 +464,7 @@ test('mock staff registration creates an admin notification linked to account ap
     password: 'Secret123!',
     confirmPassword: 'Secret123!',
     role: 'Mentor',
+    mentorType: 'Enterprise',
   });
 
   await axiosClient.post('/auth/register/verify-otp', {
@@ -495,6 +496,7 @@ test('mock register hides whether an email already belongs to an account', async
       password: 'Secret123!',
       confirmPassword: 'Secret123!',
       role: 'Mentor',
+      mentorType: 'Academic',
     }),
     (error: unknown) => {
       const response = (error as {

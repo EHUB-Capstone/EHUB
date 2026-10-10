@@ -301,6 +301,9 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
                 await AddForOptionalUserAsync(message, data, "mentorUserId", NotificationType.MentorAssigned,
                     "Mentor assignment", "You have been assigned to mentor a team.", cancellationToken);
                 break;
+            case "Team.MentorChanged.v1":
+                await AddMentorChangedNotificationsAsync(message, data, cancellationToken);
+                break;
             default:
                 _logger.LogDebug("Outbox event {OutboxEventId} {OutboxEventType} has no notification projection", message.EventId, message.Type);
                 break;
@@ -449,6 +452,41 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
             await AddAsync(message, recipient,
                 isReminder ? NotificationType.DeadlineReminder : NotificationType.SystemAnnouncement,
                 title, body, cancellationToken);
+        }
+    }
+
+    // A team lost a mentor: tell the lecturer of the class and, when they have an account, the former mentor.
+    // The person who made the change is not told about their own action.
+    private async Task AddMentorChangedNotificationsAsync(OutboxMessage message, JsonElement data, CancellationToken cancellationToken)
+    {
+        var actorUserId = ReadGuid(data, "actorUserId");
+        var previousMentorUserId = ReadGuid(data, "previousMentorUserId");
+        var teamCode = ReadString(data, "teamCode");
+        var previousName = ReadString(data, "previousMentorName");
+        var newName = ReadString(data, "newMentorName");
+        var reason = ReadString(data, "reason");
+        var classDetails = await GetClassEmailDetailsAsync(message.AggregateId, cancellationToken);
+        var lecturerId = await _context.Classes.AsNoTracking()
+            .Where(item => item.Id == message.AggregateId)
+            .Select(item => item.PrimaryLecturerId)
+            .FirstOrDefaultAsync(cancellationToken);
+        var reasonText = string.IsNullOrWhiteSpace(reason) ? string.Empty : $" Reason: {reason}";
+        var outcome = string.IsNullOrWhiteSpace(newName) ? "was removed" : $"was replaced by {newName}";
+
+        if (lecturerId.HasValue && lecturerId != actorUserId && lecturerId != previousMentorUserId)
+        {
+            await AddAsync(message, lecturerId.Value, NotificationType.SystemAnnouncement,
+                $"Mentor changed for team {teamCode}",
+                $"Mentor {previousName} {outcome} on team {teamCode} of class {classDetails.ClassCode}.{reasonText}",
+                cancellationToken);
+        }
+
+        if (previousMentorUserId.HasValue && previousMentorUserId != actorUserId)
+        {
+            await AddAsync(message, previousMentorUserId.Value, NotificationType.SystemAnnouncement,
+                $"You are no longer mentoring team {teamCode}",
+                $"Your mentor assignment for team {teamCode} of class {classDetails.ClassCode} has ended.{reasonText}",
+                cancellationToken);
         }
     }
 
