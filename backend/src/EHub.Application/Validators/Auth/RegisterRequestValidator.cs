@@ -1,5 +1,6 @@
 using FluentValidation;
 using EHub.Contracts.Auth;
+using EHub.Domain.Enums;
 using EHub.Shared.Constants;
 using EHub.Shared.Errors;
 using System.Linq;
@@ -36,6 +37,17 @@ public sealed class RegisterRequestValidator : AbstractValidator<RegisterRequest
             .Must(role => SystemRoles.PublicRegisterRoles.Contains(role))
             .WithMessage($"Role is invalid. Only {string.Join(", ", SystemRoles.PublicRegisterRoles)} roles are allowed for public registration.")
             .WithErrorCode(ErrorCodes.AuthInvalidRole);
+
+        RuleFor(x => x.MentorType)
+            .NotEmpty().WithMessage("Mentor type is required for Mentor role.")
+            .WithErrorCode(ErrorCodes.AuthMentorTypeRequired)
+            .When(x => x.Role == SystemRoles.Mentor);
+
+        RuleFor(x => x.MentorType)
+            .Must(type => Enum.TryParse<MentorType>(type?.Trim(), ignoreCase: true, out var parsed) && Enum.IsDefined(parsed))
+            .WithMessage("Mentor type must be Enterprise or Academic.")
+            .WithErrorCode(ErrorCodes.AuthInvalidMentorType)
+            .When(x => x.Role == SystemRoles.Mentor && !string.IsNullOrWhiteSpace(x.MentorType));
 
         RuleFor(x => x.MajorCode)
             .NotEmpty().WithMessage("Major is required for Student role.")

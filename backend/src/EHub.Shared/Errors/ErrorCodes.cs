@@ -30,6 +30,8 @@ public static class ErrorCodes
     public const string AuthPasswordConfirmationMismatch = "AUTH_PASSWORD_CONFIRMATION_MISMATCH";
     public const string AuthStudentMajorRequired = "AUTH_STUDENT_MAJOR_REQUIRED";
     public const string AuthInvalidMajor = "AUTH_INVALID_MAJOR";
+    public const string AuthMentorTypeRequired = "AUTH_MENTOR_TYPE_REQUIRED";
+    public const string AuthInvalidMentorType = "AUTH_INVALID_MENTOR_TYPE";
     public const string AuthEmailVerificationRequired = "AUTH_EMAIL_VERIFICATION_REQUIRED";
     public const string AuthRegistrationNotFound = "AUTH_REGISTRATION_NOT_FOUND";
     public const string AuthVerificationCodeInvalid = "AUTH_VERIFICATION_CODE_INVALID";

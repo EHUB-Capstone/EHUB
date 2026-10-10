@@ -817,6 +817,60 @@ Các kiểm tra này không thuộc riêng yêu cầu nào nhưng cần đạt �
 
 ---
 
+### Kiểm tra 10.11. Manage mentors theo kỳ (không cần vào từng lớp)
+
+**Làm gì**
+1. Ở **Subject Management > Lecturers & Mentors**, thẻ **Mentor assignment**, bấm **Manage mentors**.
+2. Thử ô tìm kiếm, ô lọc môn (EXE101/EXE201) và ô "Only classes missing mentors".
+3. Bấm **Manage** ở một lớp, gán/thay/kết thúc mentor cho vài nhóm rồi đóng hộp thoại.
+4. Bấm **Close** để đóng danh sách lớp, rồi bấm **Preview assignment** để xem số liệu khớp.
+
+**Phải thấy gì**
+- [ ] Bước 1: danh sách các lớp đang hoạt động của kỳ; mỗi lớp có môn, giảng viên chính, số nhóm và nhãn "N missing" (vàng) hoặc "Complete" (xanh). Lớp thiếu nhiều mentor nhất nằm trên cùng. Lớp có mentor tạm có nhãn **Temporary**.
+- [ ] Bước 2: bộ lọc hoạt động đúng; lớp chưa có nhóm hiện "No teams" và không bấm Manage được.
+- [ ] Bước 3: mở đúng hộp thoại Manage team mentors của lớp đó; sau khi đóng quay lại danh sách lớp và số "missing" đã cập nhật ngay, không cần tải lại trang.
+- [ ] Bước 4: số vị trí còn thiếu khớp với bản xem trước chia mentor.
+- [ ] Giảng viên không phải admin không thấy trang này (vẫn gán mentor ở trang chi tiết lớp của mình).
+
+---
+
+### Kiểm tra 10.12. Đăng ký mentor ở trang Register có chọn loại mentor
+
+**Làm gì**
+1. Mở trang **Register**, chọn Role = **Mentor**.
+2. Bấm **Create Account** khi chưa chọn loại mentor.
+3. Chọn **Enterprise mentor** (hoặc **Lecturer mentor**), nhập đủ thông tin và bấm **Create Account**, nhập mã OTP.
+4. Đăng nhập admin, mở **Account Approvals** duyệt tài khoản, rồi vào **Users** lọc Role = Mentors.
+
+**Phải thấy gì**
+- [ ] Bước 1: khi chọn Mentor xuất hiện thêm ô "Mentor type" với hai lựa chọn Enterprise mentor / Lecturer mentor; chọn Student hoặc Lecturer thì ô này ẩn.
+- [ ] Bước 2: báo "Choose Enterprise mentor or Lecturer mentor." và không gửi đăng ký.
+- [ ] Bước 3: đăng ký thành công, chuyển sang bước nhập OTP.
+- [ ] Bước 4: mentor mới có đúng nhãn loại đã chọn (Enterprise cam / Lecturer xanh lá), sau đó có thể được thêm vào kỳ như các mentor khác.
+- [ ] Nếu báo "The verification email could not be delivered": đây là lỗi cấu hình gửi email của máy chủ (mọi role đều bị), không phải lỗi form. Xem log API dòng "SMTP stage failed" để biết bước lỗi.
+
+---
+
+### Kiểm tra 10.13. Lý do chọn sẵn và thông báo khi đổi mentor
+
+**Chuẩn bị:** lớp có giảng viên chính **khác** tài khoản admin đang thao tác, và một nhóm đang có mentor (có tài khoản) ở vị trí cần đổi.
+
+**Làm gì**
+1. Ở **Preview assignment**, bấm **Change** ở vị trí đã có mentor, chọn mentor khác. Ở ô **Reason for replacing...** chọn một lý do trong danh sách, bấm **Replace**, rồi **Confirm and save**.
+2. Ở trang chi tiết lớp > **Manage** > By team, bấm **Replace** ở một nhóm, chọn lý do rồi lưu.
+3. Cũng ở By team, bấm **End** một mentor và nhập lý do.
+4. Đăng nhập bằng tài khoản **giảng viên chính của lớp** và bằng tài khoản **mentor cũ**, mở chuông thông báo.
+
+**Phải thấy gì**
+- [ ] Bước 1–2: ô lý do là danh sách chọn sẵn (Mentor is no longer available / Mentor is overloaded / Schedule conflict / Team requested a change / Rebalance mentor workload / Other). Chọn lý do có sẵn là đủ; chọn **Other** thì phải nhập mô tả ít nhất 3 ký tự. Ô ghi chú thêm là tuỳ chọn.
+- [ ] Bước 1–2: lịch sử phân công của nhóm ghi lý do dạng "Mentor is overloaded: 6 teams" (nếu có ghi chú).
+- [ ] Bước 4: giảng viên chính nhận "Mentor changed for team ..." nêu tên mentor cũ, mentor mới (hoặc "was removed") và lý do; mentor cũ nhận "You are no longer mentoring team ..." kèm lý do.
+- [ ] Admin thực hiện thay đổi không nhận thông báo về chính thao tác đó. Nếu giảng viên chính là người đổi thì cũng không tự nhận.
+- [ ] Mentor tạm (chưa có tài khoản) bị thay thì chỉ giảng viên chính nhận thông báo.
+- [ ] Sinh viên của nhóm **không** nhận thông báo này.
+
+---
+
 ## Phần 4. Hạn chế đã biết (chỉ ghi nhận, chưa tính là lỗi mới)
 
 ### Mở lại lớp đã hoàn thành

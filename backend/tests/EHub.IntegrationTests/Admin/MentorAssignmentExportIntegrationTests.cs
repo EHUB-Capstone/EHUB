@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using ClosedXML.Excel;
 using EHub.Application.Common.Interfaces.Identity;
+using EHub.Application.Common.Interfaces.Services;
 using EHub.Contracts.Auth;
 using EHub.Contracts.Classes;
 using EHub.Contracts.Common;
@@ -493,6 +494,209 @@ public sealed class MentorAssignmentExportIntegrationTests(CustomWebApplicationF
         {
             preview.Unfilled.Should().NotContain(item => item.TeamId == freshTeamId && item.MentorType == "Academic");
         }
+    }
+
+    [Fact]
+    public async Task SemesterClasses_ShouldCountOpenMentorSlotsPerClass_AndRequireAnAdministrator()
+    {
+        var token = await GetAdminTokenAsync();
+        var seed = await SeedLifecycleAsync(2054, 2097);
+
+        var before = (await GetJsonAsync<MentorSemesterClassListResponse>(token, $"/api/admin/mentors/semesters/{seed.TargetSemesterId}/classes")).Classes.Single(item => item.ClassId == seed.TargetClassId);
+        before.TeamCount.Should().Be(1);
+        before.MissingEnterpriseCount.Should().Be(1);
+        before.MissingAcademicCount.Should().Be(1);
+        before.TemporarySlotCount.Should().Be(0);
+
+        var draft = await CreateDraftAsync("Counted Lecturer", MentorType.Academic);
+        (await PostAsync(token, $"/api/teams/{seed.TargetTeamId}/mentor-assignments", new AssignMentorRequest { MentorProfileId = draft, Temporary = true }))
+            .StatusCode.Should().Be(HttpStatusCode.OK);
+        (await PostAsync(token, $"/api/teams/{seed.TargetTeamId}/mentor-assignments", new AssignMentorRequest { MentorProfileId = seed.EnterpriseMentorId }))
+            .StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var after = (await GetJsonAsync<MentorSemesterClassListResponse>(token, $"/api/admin/mentors/semesters/{seed.TargetSemesterId}/classes")).Classes.Single(item => item.ClassId == seed.TargetClassId);
+        after.MissingEnterpriseCount.Should().Be(0);
+        after.MissingAcademicCount.Should().Be(0, "a temporary mentor fills the slot");
+        after.TemporarySlotCount.Should().Be(1);
+
+        using var anonymous = await _client.GetAsync($"/api/admin/mentors/semesters/{seed.TargetSemesterId}/classes");
+        anonymous.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+
+        string lecturerToken;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var user = await context.MentorProfiles.AsNoTracking().Where(item => item.Id == seed.AcademicMentorId).Select(item => item.User).SingleAsync();
+            lecturerToken = scope.ServiceProvider.GetRequiredService<IJwtTokenService>().GenerateAccessToken(user, [SystemRoles.Lecturer]).Token;
+        }
+        using var forbidden = new HttpRequestMessage(HttpMethod.Get, $"/api/admin/mentors/semesters/{seed.TargetSemesterId}/classes");
+        forbidden.Headers.Authorization = new AuthenticationHeaderValue("Bearer", lecturerToken);
+        (await _client.SendAsync(forbidden)).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        using var missing = new HttpRequestMessage(HttpMethod.Get, $"/api/admin/mentors/semesters/{Guid.NewGuid()}/classes");
+        missing.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        (await _client.SendAsync(missing)).StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task ManualAssignmentAfterAPreview_ShouldRejectTheOldPreview_AndANewPreviewShouldRespectIt()
+    {
+        var token = await GetAdminTokenAsync();
+        var seed = await SeedLifecycleAsync(2055, 2098);
+
+        // A team with no previous mentors, so the preview proposes both of its slots.
+        Guid freshTeamId;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var context = await NewSeedContextAsync(scope);
+            var targetClass = await context.Context.Classes.Include(item => item.Course).Include(item => item.Semester).SingleAsync(item => item.Id == seed.TargetClassId);
+            var fresh = context.Team(targetClass, "ManualAfter", 2);
+            await context.Context.SaveChangesAsync();
+            freshTeamId = fresh.Id;
+        }
+
+        async Task<MentorAllocationPreviewResponse> PreviewAsync() =>
+            (await (await PostAsync(token, "/api/admin/mentors/allocations/preview", new PreviewMentorAllocationRequest { SemesterId = seed.TargetSemesterId, ClassIds = [seed.TargetClassId], Seed = 3 }))
+                .Content.ReadFromJsonAsync<ApiResponse<MentorAllocationPreviewResponse>>())!.Data!;
+
+        var oldPreview = await PreviewAsync();
+        oldPreview.Assignments.Should().Contain(item => item.TeamId == freshTeamId && item.MentorType == "Academic");
+        oldPreview.Assignments.Should().Contain(item => item.TeamId == freshTeamId && item.MentorType == "Enterprise");
+
+        // Someone fills the academic slot by hand through the class dialog before the preview is saved.
+        (await PostAsync(token, $"/api/teams/{freshTeamId}/mentor-assignments", new AssignMentorRequest { MentorProfileId = seed.AcademicMentorId }))
+            .StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var rejected = await PostAsync(token, "/api/admin/mentors/allocations/commit", new CommitMentorAllocationRequest { SessionId = oldPreview.SessionId });
+        rejected.StatusCode.Should().Be(HttpStatusCode.Conflict, await rejected.Content.ReadAsStringAsync());
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var active = await db.MentorAssignments.AsNoTracking().Where(item => item.TeamId == freshTeamId && item.Status == MentorAssignmentStatus.Active).ToListAsync();
+            active.Should().ContainSingle("nothing from the old preview may be saved").Which.Slot.Should().Be(MentorType.Academic);
+        }
+
+        // A fresh preview treats the hand-made assignment as current and only fills the open slot.
+        var newPreview = await PreviewAsync();
+        newPreview.Assignments.Should().NotContain(item => item.TeamId == freshTeamId && item.MentorType == "Academic");
+        newPreview.ExistingAssignments.Should().Contain(item => item.TeamId == freshTeamId && item.MentorType == "Academic" && item.MentorProfileId == seed.AcademicMentorId);
+        newPreview.Assignments.Should().Contain(item => item.TeamId == freshTeamId && item.MentorType == "Enterprise");
+        var saved = await PostAsync(token, "/api/admin/mentors/allocations/commit", new CommitMentorAllocationRequest { SessionId = newPreview.SessionId });
+        saved.StatusCode.Should().Be(HttpStatusCode.OK, await saved.Content.ReadAsStringAsync());
+
+        using var verify = factory.Services.CreateScope();
+        var finalState = await verify.ServiceProvider.GetRequiredService<AppDbContext>().MentorAssignments.AsNoTracking()
+            .Where(item => item.TeamId == freshTeamId && item.Status == MentorAssignmentStatus.Active).ToListAsync();
+        finalState.Should().HaveCount(2);
+        finalState.Select(item => item.Slot).Should().BeEquivalentTo([MentorType.Academic, MentorType.Enterprise]);
+        finalState.Single(item => item.Slot == MentorType.Academic).MentorProfileId.Should().Be(seed.AcademicMentorId);
+    }
+
+    [Fact]
+    public async Task ReplacingAMentor_ShouldNotifyTheLecturerAndTheFormerMentor_ButNotTheAdminWhoDidIt()
+    {
+        var token = await GetAdminTokenAsync();
+        var seed = await SeedLifecycleAsync(2056, 2100);
+        var (lecturerUserId, formerMentorUserId) = await UseLecturerAsync(seed);
+
+        (await PostAsync(token, $"/api/teams/{seed.TargetTeamId}/mentor-assignments", new AssignMentorRequest { MentorProfileId = seed.AcademicMentorId }))
+            .StatusCode.Should().Be(HttpStatusCode.OK);
+        var assignment = await CurrentAssignmentIdAsync(seed.TargetTeamId);
+        var draft = await CreateDraftAsync("Replacement Lecturer", MentorType.Academic);
+        var reason = "Mentor is overloaded: 6 teams";
+        (await PostAsync(token, $"/api/teams/{seed.TargetTeamId}/mentor-assignments/replace", new ReplaceMentorRequest { AssignmentId = assignment, MentorProfileId = draft, Temporary = true, Reason = reason }))
+            .StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var notifications = await DispatchMentorChangesAsync(seed.TargetClassId);
+        var lecturerMessage = notifications.Single(item => item.RecipientUserId == lecturerUserId);
+        lecturerMessage.Body.Should().Contain("was replaced by Replacement Lecturer").And.Contain(reason);
+        lecturerMessage.Body.Should().NotContain("(no email yet)");
+        var formerMessage = notifications.Single(item => item.RecipientUserId == formerMentorUserId);
+        formerMessage.Title.Should().StartWith("You are no longer mentoring team");
+        formerMessage.Body.Should().Contain(reason);
+        notifications.Should().HaveCount(2, "the admin who made the change is not told about it");
+    }
+
+    [Fact]
+    public async Task EndingAMentor_ShouldNotifyTheLecturerAndTheFormerMentorWithTheReason()
+    {
+        var token = await GetAdminTokenAsync();
+        var seed = await SeedLifecycleAsync(2057, 2092);
+        var (lecturerUserId, formerMentorUserId) = await UseLecturerAsync(seed);
+
+        (await PostAsync(token, $"/api/teams/{seed.TargetTeamId}/mentor-assignments", new AssignMentorRequest { MentorProfileId = seed.AcademicMentorId }))
+            .StatusCode.Should().Be(HttpStatusCode.OK);
+        var assignment = await CurrentAssignmentIdAsync(seed.TargetTeamId);
+        var reason = "Mentor is no longer available";
+        (await PostAsync(token, $"/api/teams/{seed.TargetTeamId}/mentor-assignments/end", new EndMentorAssignmentRequest { AssignmentId = assignment, Reason = reason }))
+            .StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var notifications = await DispatchMentorChangesAsync(seed.TargetClassId);
+        notifications.Single(item => item.RecipientUserId == lecturerUserId).Body.Should().Contain("was removed").And.Contain(reason);
+        notifications.Single(item => item.RecipientUserId == formerMentorUserId).Body.Should().Contain(reason);
+    }
+
+    [Fact]
+    public async Task ReplacingAMentorInAnAllocationPreview_ShouldNotifyTheLecturerAndTheFormerMentor()
+    {
+        var token = await GetAdminTokenAsync();
+        var seed = await SeedLifecycleAsync(2058, 2091);
+        var (lecturerUserId, formerMentorUserId) = await UseLecturerAsync(seed);
+        (await PostAsync(token, $"/api/teams/{seed.TargetTeamId}/mentor-assignments", new AssignMentorRequest { MentorProfileId = seed.AcademicMentorId }))
+            .StatusCode.Should().Be(HttpStatusCode.OK);
+        var draft = await CreateDraftAsync("Preview Replacement", MentorType.Academic);
+        await PostAsync(token, "/api/subjects/teaching-staff/batch", new AddSemesterTeachingStaffBatchRequest { Semester = "SP", Year = 2091, Role = "MENTOR", Temporary = true, UserIds = [draft] });
+        var reason = "Rebalance mentor workload";
+
+        var edit = new MentorAllocationEdit { TeamId = seed.TargetTeamId, MentorType = "Academic", MentorProfileId = draft, Replace = true, Reason = reason };
+        var previewResponse = await PostAsync(token, "/api/admin/mentors/allocations/preview", new PreviewMentorAllocationRequest { SemesterId = seed.TargetSemesterId, ClassIds = [seed.TargetClassId], Seed = 5, Edits = [edit] });
+        var preview = (await previewResponse.Content.ReadFromJsonAsync<ApiResponse<MentorAllocationPreviewResponse>>())!.Data!;
+        preview.Assignments.Should().Contain(item => item.TeamId == seed.TargetTeamId && item.MentorType == "Academic" && item.MentorProfileId == draft);
+        var commit = await PostAsync(token, "/api/admin/mentors/allocations/commit", new CommitMentorAllocationRequest { SessionId = preview.SessionId });
+        commit.StatusCode.Should().Be(HttpStatusCode.OK, await commit.Content.ReadAsStringAsync());
+
+        var notifications = await DispatchMentorChangesAsync(seed.TargetClassId);
+        notifications.Single(item => item.RecipientUserId == lecturerUserId).Body.Should().Contain("was replaced by Preview Replacement").And.Contain(reason);
+        notifications.Single(item => item.RecipientUserId == formerMentorUserId).Body.Should().Contain(reason);
+        notifications.Should().HaveCount(2);
+    }
+
+    // The class lecturer must be someone other than the admin who acts, and not the mentor being replaced.
+    private async Task<(Guid LecturerUserId, Guid FormerMentorUserId)> UseLecturerAsync(LifecycleSeed seed)
+    {
+        using var scope = factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var lecturerUserId = await context.MentorProfiles.Where(item => item.Id == seed.EnterpriseMentorId).Select(item => item.UserId).SingleAsync();
+        var formerMentorUserId = await context.MentorProfiles.Where(item => item.Id == seed.AcademicMentorId).Select(item => item.UserId).SingleAsync();
+        var targetClass = await context.Classes.SingleAsync(item => item.Id == seed.TargetClassId);
+        targetClass.PrimaryLecturerId = lecturerUserId;
+        await context.SaveChangesAsync();
+        return (lecturerUserId, formerMentorUserId);
+    }
+
+    private async Task<Guid> CurrentAssignmentIdAsync(Guid teamId)
+    {
+        using var scope = factory.Services.CreateScope();
+        return await scope.ServiceProvider.GetRequiredService<AppDbContext>().MentorAssignments.AsNoTracking()
+            .Where(item => item.TeamId == teamId && item.Status == MentorAssignmentStatus.Active && item.EndedAt == null)
+            .Select(item => item.Id).SingleAsync();
+    }
+
+    private async Task<List<Notification>> DispatchMentorChangesAsync(Guid classId)
+    {
+        using var scope = factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var events = await context.OutboxMessages.Where(item => item.AggregateId == classId && item.Type == "Team.MentorChanged.v1").ToListAsync();
+        events.Should().NotBeEmpty();
+        var dispatcher = scope.ServiceProvider.GetRequiredService<IOutboxEventDispatcher>();
+        foreach (var message in events)
+        {
+            await dispatcher.DispatchAsync(message);
+            await dispatcher.DispatchAsync(message); // a retry must not create duplicates
+        }
+        await context.SaveChangesAsync();
+        var ids = events.Select(item => item.EventId).ToArray();
+        return await context.Notifications.AsNoTracking().Where(item => ids.Contains(item.SourceEventId!.Value)).ToListAsync();
     }
 
     private async Task<HttpResponseMessage> PutAsync(string token, string url, object body)
