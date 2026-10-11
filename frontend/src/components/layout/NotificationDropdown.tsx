@@ -123,6 +123,8 @@ const NotificationDropdown = () => {
       case 'DEADLINE_REMINDER':
         return <Calendar className="w-4 h-4 text-indigo-500" />;
       case 'EVALUATION':
+      case 'EvaluationPublished':
+      case 'EVALUATION_PUBLISHED':
         return <Brain className="w-4 h-4 text-emerald-500" />;
       case 'MENTORING':
         return <Award className="w-4 h-4 text-amber-500" />;
