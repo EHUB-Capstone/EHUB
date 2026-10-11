@@ -166,7 +166,7 @@ public sealed class UpdateClassScheduleCommandHandler : IUpdateClassScheduleComm
 
         var previousSchedules = ClassScheduleRules.Deserialize(targetClass.ScheduleJson);
         targetClass.ScheduleJson = ClassScheduleRules.Serialize(normalizedSchedules);
-        targetClass.Status = ClassScheduleRules.DetermineOperationalStatus(targetClass.PrimaryLecturerId, targetClass.ScheduleJson);
+        targetClass.Status = ClassScheduleRules.DetermineOperationalStatus(targetClass.PrimaryLecturerId);
         targetClass.UpdatedBy = currentUserId;
 
         _context.ClassAuditLogs.Add(new ClassAuditLog

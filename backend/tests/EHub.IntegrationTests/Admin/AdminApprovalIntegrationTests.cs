@@ -194,6 +194,7 @@ public class AdminApprovalIntegrationTests
             Password = "Password123",
             ConfirmPassword = "Password123",
             Role = "Mentor",
+            MentorType = "Academic",
             MajorCode = null
         };
         var registerBody = await RegisterAndVerifyAsync(registerRequest);

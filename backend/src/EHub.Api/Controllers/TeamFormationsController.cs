@@ -49,6 +49,21 @@ public sealed class TeamFormationsController : ControllerBase
         CancellationToken cancellationToken) =>
         Respond(await handler.DeclineAsync(formationId, UserId, Role, cancellationToken), "Invitation declined.");
 
+    [HttpPost("team-formations/{formationId:guid}/invitations")]
+    public async Task<IActionResult> Invite(Guid formationId, [FromBody] InviteTeamFormationMembersRequest request,
+        [FromServices] ITeamFormationHandler handler, CancellationToken cancellationToken) =>
+        Respond(await handler.InviteAsync(formationId, request, UserId, Role, cancellationToken), "Invitations sent.");
+
+    [HttpPost("team-formations/{formationId:guid}/leave")]
+    public async Task<IActionResult> Leave(Guid formationId, [FromServices] ITeamFormationHandler handler,
+        CancellationToken cancellationToken) =>
+        Respond(await handler.LeaveAsync(formationId, UserId, Role, cancellationToken), "You left the formation.");
+
+    [HttpPost("team-formations/{formationId:guid}/finalize")]
+    public async Task<IActionResult> Finalize(Guid formationId, [FromBody] FinalizeTeamFormationRequest request,
+        [FromServices] ITeamFormationHandler handler, CancellationToken cancellationToken) =>
+        Respond(await handler.FinalizeAsync(formationId, request, UserId, Role, cancellationToken), "Team created.");
+
     [HttpPost("team-formations/{formationId:guid}/cancel")]
     public async Task<IActionResult> Cancel(Guid formationId, [FromServices] ITeamFormationHandler handler,
         CancellationToken cancellationToken) =>

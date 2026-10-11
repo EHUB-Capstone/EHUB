@@ -73,6 +73,10 @@ public sealed class TeamsController : ControllerBase
     public async Task<IActionResult> AssignMentor(Guid teamId, [FromBody] AssignMentorRequest request, [FromServices] IMentorAssignmentHandler handler, CancellationToken cancellationToken) =>
         ToResponse(await handler.AssignAsync(teamId, request, UserId, Role, cancellationToken), "Mentor assigned.");
 
+    [HttpGet("mentors/me/assignment-history")]
+    public async Task<IActionResult> GetMyMentorHistory([FromServices] IMentorAssignmentHandler handler, CancellationToken cancellationToken) =>
+        ToResponse(await handler.GetMyHistoryAsync(UserId, Role, cancellationToken), "Mentoring history retrieved.");
+
     [HttpPost("teams/{teamId:guid}/mentor-assignments/replace")]
     public async Task<IActionResult> ReplaceMentor(Guid teamId, [FromBody] ReplaceMentorRequest request, [FromServices] IMentorAssignmentHandler handler, CancellationToken cancellationToken) =>
         ToResponse(await handler.ReplaceAsync(teamId, request, UserId, Role, cancellationToken), "Mentor replaced.");

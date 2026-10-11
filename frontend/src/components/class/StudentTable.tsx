@@ -309,7 +309,7 @@ export default function StudentTable({
       ) : (
         <div
           aria-busy={refreshing || undefined}
-          className={`overflow-x-auto transition-opacity duration-150 ${refreshing ? 'opacity-60' : 'opacity-100'}`}
+          className={`@container overflow-x-auto transition-opacity duration-150 ${refreshing ? 'opacity-60' : 'opacity-100'}`}
         >
           <table className="w-full text-sm">
             <thead className="bg-slate-50 border-b border-slate-100">
@@ -329,9 +329,9 @@ export default function StudentTable({
                 <th className="px-3 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-slate-500">Major</th>
                 <th className="hidden px-3 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-slate-500 lg:table-cell">{groupColumnLabel}</th>
                 {!hideProjectName && (
-                  <th className="hidden px-3 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-slate-500 2xl:table-cell">Project Name</th>
+                  <th className="hidden px-3 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-slate-500 @4xl:table-cell">Project Name</th>
                 )}
-                <th className="hidden w-1/4 px-3 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-slate-500 2xl:table-cell">Description</th>
+                <th className="hidden w-1/4 px-3 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-slate-500 @5xl:table-cell">Description</th>
                 <th className="px-3 py-2.5 text-center text-[10px] font-bold uppercase tracking-wider text-slate-500">Team Status</th>
                 <th className="px-3 py-2.5 text-center text-[10px] font-bold uppercase tracking-wider text-slate-500">Enrollment</th>
                 {(onDeleteStudent || onReEnrollStudent) && (
@@ -450,12 +450,12 @@ export default function StudentTable({
                     </td>
 
                     {!hideProjectName && (
-                      <td className="hidden max-w-[150px] truncate px-3 py-2.5 text-xs text-slate-500 2xl:table-cell" title={team?.projectName}>
+                      <td className="hidden max-w-[150px] truncate px-3 py-2.5 text-xs text-slate-500 @4xl:table-cell" title={team?.projectName}>
                         {(!s.teamId || isFirstInTeam) ? (team?.projectName || '—') : ''}
                       </td>
                     )}
 
-                    <td className="hidden px-3 py-2.5 text-xs text-slate-500 2xl:table-cell" title={team?.projectDescription || team?.description}>
+                    <td className="hidden px-3 py-2.5 text-xs text-slate-500 @5xl:table-cell" title={team?.projectDescription || team?.description}>
                       {(!s.teamId || isFirstInTeam) ? (
                         <div className="max-w-sm whitespace-pre-wrap break-words leading-5">{team?.projectDescription || team?.description || '—'}</div>
                       ) : ''}

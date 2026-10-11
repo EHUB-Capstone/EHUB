@@ -109,6 +109,10 @@ public sealed class TeachingStaffResponse
     public string Status { get; init; } = string.Empty;
     public string UserStatus { get; init; } = string.Empty;
     public bool IsIncomplete { get; init; }
+    // True for a mentor taking part in the semester without an account; Id is then the id of that participation.
+    public bool IsTemporary { get; init; }
+    // The incomplete-mentor record behind a temporary row, so pickers can tell who is already in the semester.
+    public Guid? DraftId { get; init; }
     public IReadOnlyCollection<string> MissingFields { get; init; } = Array.Empty<string>();
     public int ClassCount { get; init; }
     public IReadOnlyCollection<TeachingAssignmentResponse> Assignments { get; init; } = Array.Empty<TeachingAssignmentResponse>();
@@ -125,6 +129,9 @@ public sealed class TeachingStaffCandidateResponse
     // Only set for mentors: "Enterprise" (enterprise mentor) or "Academic" (lecturer mentor).
     public string? MentorType { get; init; }
     public string? ContractType { get; init; }
+    // True for an incomplete mentor; UserId is then the id of the incomplete-mentor record.
+    public bool IsTemporary { get; init; }
+    public EHub.Contracts.Mentors.MentorTagsDto? Tags { get; init; }
 }
 
 public static class SemesterStaffBatchOutcomes

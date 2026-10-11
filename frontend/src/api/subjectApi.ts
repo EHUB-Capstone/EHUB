@@ -51,6 +51,9 @@ export const subjectApi = {
     axiosClient.post('/subjects/teaching-staff/batch', data),
   updateTeachingStaff: (id: string, data: { status: 'Active' | 'Inactive'; rowVersion: string }) =>
     axiosClient.put(`/subjects/teaching-staff/${id}`, data),
+  /** Activates or deactivates a mentor without an account in a semester; id is the participation id. */
+  updateTemporaryMentor: (id: string, data: { status: 'Active' | 'Inactive'; rowVersion: string }) =>
+    axiosClient.put(`/subjects/teaching-staff/temporary-mentors/${id}`, data),
   getCurriculum: (subjectCode: string) => axiosClient.get(`/subjects/${subjectCode}/curriculum`),
   synchronizeCheckpoints: (subjectCode: string, data: unknown) => axiosClient.put(`/subjects/${subjectCode}/checkpoints`, data),
   createRoadmapItem: (subjectCode: string, data: unknown) => axiosClient.post(`/subjects/${subjectCode}/roadmap`, data),

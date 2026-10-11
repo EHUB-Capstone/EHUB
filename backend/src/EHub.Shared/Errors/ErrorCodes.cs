@@ -30,6 +30,8 @@ public static class ErrorCodes
     public const string AuthPasswordConfirmationMismatch = "AUTH_PASSWORD_CONFIRMATION_MISMATCH";
     public const string AuthStudentMajorRequired = "AUTH_STUDENT_MAJOR_REQUIRED";
     public const string AuthInvalidMajor = "AUTH_INVALID_MAJOR";
+    public const string AuthMentorTypeRequired = "AUTH_MENTOR_TYPE_REQUIRED";
+    public const string AuthInvalidMentorType = "AUTH_INVALID_MENTOR_TYPE";
     public const string AuthEmailVerificationRequired = "AUTH_EMAIL_VERIFICATION_REQUIRED";
     public const string AuthRegistrationNotFound = "AUTH_REGISTRATION_NOT_FOUND";
     public const string AuthVerificationCodeInvalid = "AUTH_VERIFICATION_CODE_INVALID";
@@ -140,8 +142,15 @@ public static class ErrorCodes
     public const string TeamFormationNotFound = "TEAM_FORMATION_NOT_FOUND";
     public const string TeamFormationStateInvalid = "TEAM_FORMATION_STATE_INVALID";
     public const string TeamFormationReservationConflict = "TEAM_FORMATION_RESERVATION_CONFLICT";
+    public const string TeamFormationCapacityConflict = "TEAM_FORMATION_CAPACITY_CONFLICT";
+    public const string TeamFormationNotReady = "TEAM_FORMATION_NOT_READY";
+    public const string TeamFormationPendingConfirmationRequired = "TEAM_FORMATION_PENDING_CONFIRMATION_REQUIRED";
+    public const string TeamInvitationExpired = "TEAM_INVITATION_EXPIRED";
+    public const string TeamInvitationConflict = "TEAM_INVITATION_CONFLICT";
     public const string TeamApprovalConflict = "TEAM_APPROVAL_CONFLICT";
     public const string MentorNotAvailable = "MENTOR_NOT_AVAILABLE";
+    public const string MentorProfileNotFound = "MENTOR_PROFILE_NOT_FOUND";
+    public const string MentorProfileConflict = "MENTOR_PROFILE_CONFLICT";
     public const string MentorCapacityReached = "MENTOR_CAPACITY_REACHED";
     public const string MentorAssignmentConflict = "MENTOR_ASSIGNMENT_CONFLICT";
     public const string ProjectDirectionNotFound = "PROJECT_DIRECTION_NOT_FOUND";

@@ -152,7 +152,7 @@ public sealed class ClassLifecycleCommandHandler : IClassLifecycleCommandHandler
                 return Failure(ErrorCodes.ClassRestoreInvalid, validationError);
 
             var restoredStatus = targetClass.StatusBeforeArchive ??
-                ClassScheduleRules.DetermineOperationalStatus(targetClass.PrimaryLecturerId, targetClass.ScheduleJson);
+                ClassScheduleRules.DetermineOperationalStatus(targetClass.PrimaryLecturerId);
             if (restoredStatus == ClassStatus.Archived)
                 restoredStatus = ClassStatus.Draft;
 
@@ -179,7 +179,7 @@ public sealed class ClassLifecycleCommandHandler : IClassLifecycleCommandHandler
     private async Task<string?> ValidateRestoreAsync(Class targetClass, CancellationToken cancellationToken)
     {
         var intendedStatus = targetClass.StatusBeforeArchive ??
-            ClassScheduleRules.DetermineOperationalStatus(targetClass.PrimaryLecturerId, targetClass.ScheduleJson);
+            ClassScheduleRules.DetermineOperationalStatus(targetClass.PrimaryLecturerId);
 
         if (targetClass.Course.Status != CourseStatus.Active)
             return "The subject is inactive and must be activated before this class can be restored.";
@@ -199,9 +199,6 @@ public sealed class ClassLifecycleCommandHandler : IClassLifecycleCommandHandler
         var scheduleValidation = ClassScheduleRules.Validate(schedules);
         if (scheduleValidation != null)
             return scheduleValidation;
-
-        if (intendedStatus == ClassStatus.Active && schedules.Count == 0)
-            return "An active class must have at least one schedule slot before it can be restored.";
 
         if (targetClass.PrimaryLecturerId.HasValue)
         {

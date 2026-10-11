@@ -10,6 +10,26 @@ export interface MockUser {
   role: 'ADMIN' | 'LECTURER' | 'MENTOR' | 'STUDENT';
   /** Only for mentors: Enterprise = enterprise mentor, Academic = lecturer mentor. */
   mentorType?: 'Enterprise' | 'Academic';
+  /** Editable mentor profile fields, kept apart from the account so the mock mirrors the real API. */
+  mentorProfile?: {
+    status: 'Active' | 'Inactive' | 'Unavailable';
+    expertise: string[];
+    startupDomains: string[];
+    technologySkills: string[];
+    mentorTags: string[];
+    bio: string | null;
+    availabilityNote: string | null;
+    organization: string | null;
+    department: string | null;
+    jobTitle: string | null;
+    contractType: string | null;
+    educationLevel: string | null;
+    currentAddress: string | null;
+    linkedInUrl: string | null;
+    fptEmail: string | null;
+    dateOfBirth: string | null;
+    version: number;
+  };
   status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'BLOCKED' | 'INACTIVE';
   studentId: string | null;
   programGroup: string | null;

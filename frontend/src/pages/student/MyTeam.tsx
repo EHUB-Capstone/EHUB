@@ -9,6 +9,7 @@ import EmptyState from '../../components/ui/EmptyState';
 import OwnTeamMajorWarning from '../../components/class/OwnTeamMajorWarning';
 import { getDisplayTeamName } from '../../utils/teamDisplay';
 import { unwrapApiData } from '../../utils/classMappers';
+import { isOpenFormationForMe } from '../../utils/teamFormation';
 import { entityId, getTeamMajorWarning, getTeamMembers, normalizeManagedTeam } from '../../utils/teamManagement';
 import PendingTeamFormationView from './PendingTeamFormationView';
 import { subscribeProjectDirectionRealtime } from '../../api/projectDirectionRealtime';
@@ -100,7 +101,7 @@ export default function MyTeam() {
   const displayTeamName = getDisplayTeamName(team) || 'Unnamed Team';
   const leaderId = entityId(team?.leaderId);
   const majorWarning = team ? getTeamMajorWarning(team) : null;
-  const pendingFormations = formations.filter(formation => formation.status === 'Pending');
+  const pendingFormations = formations.filter(isOpenFormationForMe);
   const selectedFormation = pendingFormations.find(formation => formation.id === selectedFormationId)
     ?? (!team ? pendingFormations[0] : null);
   const showViewSwitcher = pendingFormations.length + (team ? 1 : 0) > 1;
@@ -220,7 +221,7 @@ export default function MyTeam() {
             <div className="pt-2">
               <button
                 onClick={() => navigate('/student/workspace')}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-primary to-secondary text-white hover:opacity-95 hover:scale-[1.01] active:scale-95 transition-all text-sm font-bold rounded-xl cursor-pointer shadow-sm"
+                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-primary text-white hover:bg-primary-dark hover:scale-[1.01] active:scale-95 transition-all text-sm font-bold rounded-xl cursor-pointer shadow-sm"
               >
                 <Sparkles className="w-4 h-4 animate-pulse" />
                 Open Startup Workspace

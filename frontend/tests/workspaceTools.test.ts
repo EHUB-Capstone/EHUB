@@ -148,19 +148,19 @@ test('workspace hub filters by the same semester and year used in class links', 
 test('workspace hub defaults to the active semester without overriding explicit filters', () => {
   const active = { semester: 'FA', year: 2026 };
   assert.deepEqual(resolveWorkspaceSemesterScope(new URLSearchParams(), active), {
-    semester: 'FA', year: '2026', isDefault: true,
+    semester: 'FA', year: '2026', isDefault: true, usesFallback: false,
   });
   assert.deepEqual(resolveWorkspaceSemesterScope(new URLSearchParams('search=team'), active), {
-    semester: 'FA', year: '2026', isDefault: true,
+    semester: 'FA', year: '2026', isDefault: true, usesFallback: false,
   });
   assert.deepEqual(resolveWorkspaceSemesterScope(new URLSearchParams('semester=SP&year=2025'), active), {
-    semester: 'SP', year: '2025', isDefault: false,
+    semester: 'SP', year: '2025', isDefault: false, usesFallback: false,
   });
   assert.deepEqual(resolveWorkspaceSemesterScope(new URLSearchParams('semester=all&year=all'), active), {
-    semester: 'all', year: 'all', isDefault: false,
+    semester: 'all', year: 'all', isDefault: false, usesFallback: false,
   });
   assert.deepEqual(resolveWorkspaceSemesterScope(new URLSearchParams(), null), {
-    semester: 'none', year: 'none', isDefault: true,
+    semester: 'none', year: 'none', isDefault: true, usesFallback: false,
   });
 });
 

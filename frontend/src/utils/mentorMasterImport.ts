@@ -24,6 +24,8 @@ export function describeMasterImportResult(result: MentorImportCommitResult): st
   const parts = [plural(result.createdCount, 'new account'), `${result.updatedCount} updated`];
   if (result.draftSavedCount > 0) parts.push(`${result.draftSavedCount} saved as incomplete`);
   if (result.draftCompletedCount > 0) parts.push(`${result.draftCompletedCount} completed`);
+  const converted = result.temporaryAssignmentsConverted ?? 0;
+  if (converted > 0) parts.push(`${plural(converted, 'team')} switched from a temporary mentor to the new account`);
   const hint = result.createdCount > 0 ? ' New accounts can use Forgot Password to set their first password.' : '';
   return `Mentor import completed: ${parts.join(', ')}.${hint}`;
 }

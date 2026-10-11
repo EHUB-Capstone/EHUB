@@ -47,8 +47,8 @@ export const classApi = {
     axiosClient.get(`/classes/${id}/mentors`)),
   getMentorCandidates: (id: string) => runClassFeatureRequest(classFeatureFlags.mentorAssignment, 'Class mentor assignment', () =>
     axiosClient.get(`/classes/${id}/mentor-candidates`)),
-  assignMentorBatch: (id: string, mentorProfileId: string, teamIds: string[]) => runClassFeatureRequest(classFeatureFlags.mentorAssignment, 'Class mentor assignment', () =>
-    axiosClient.post(`/classes/${id}/mentor-assignments/batch`, { mentorProfileId, teamIds })),
+  assignMentorBatch: (id: string, mentorProfileId: string, teamIds: string[], temporary = false) => runClassFeatureRequest(classFeatureFlags.mentorAssignment, 'Class mentor assignment', () =>
+    axiosClient.post(`/classes/${id}/mentor-assignments/batch`, { mentorProfileId, teamIds, temporary })),
   updateSchedule: (id: string, schedule: unknown) => axiosClient.put(`/classes/${id}/schedule`, schedule),
   updateTeachingAssignment: (id: string, data: unknown) => axiosClient.put(`/classes/${id}/teaching-assignment`, data),
   repairChatMemberships: (id: string) => runClassFeatureRequest(classFeatureFlags.chatBackfill, 'Class chat repair', () =>

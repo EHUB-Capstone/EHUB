@@ -75,6 +75,8 @@ export interface RegisterPayload {
   confirmPassword: string;
   role: string;
   majorCode?: string;
+  /** Required for the Mentor role: Enterprise (industry mentor) or Academic (lecturer mentor). */
+  mentorType?: string;
 }
 
 export interface LoginPayload {
@@ -143,6 +145,8 @@ export const AUTH_ERROR_CODES = {
   INVALID_ROLE:             'AUTH_INVALID_ROLE',
   INVALID_MAJOR:            'AUTH_INVALID_MAJOR',
   STUDENT_MAJOR_REQUIRED:   'AUTH_STUDENT_MAJOR_REQUIRED',
+  MENTOR_TYPE_REQUIRED:     'AUTH_MENTOR_TYPE_REQUIRED',
+  INVALID_MENTOR_TYPE:      'AUTH_INVALID_MENTOR_TYPE',
   PASSWORD_CONFIRMATION_MISMATCH: 'AUTH_PASSWORD_CONFIRMATION_MISMATCH',
   PASSWORD_RESET_TOKEN_INVALID: 'AUTH_PASSWORD_RESET_TOKEN_INVALID',
   PASSWORD_RESET_RATE_LIMITED:  'AUTH_PASSWORD_RESET_RATE_LIMITED',

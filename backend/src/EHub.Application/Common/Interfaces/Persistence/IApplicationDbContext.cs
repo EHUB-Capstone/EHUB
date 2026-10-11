@@ -58,6 +58,8 @@ public interface IApplicationDbContext
     DbSet<EvaluationHistory> EvaluationHistories { get; }
     DbSet<MentorProfile> MentorProfiles { get; }
     DbSet<MentorAssignment> MentorAssignments { get; }
+    DbSet<TemporaryMentorAssignment> TemporaryMentorAssignments { get; }
+    DbSet<SemesterTemporaryMentor> SemesterTemporaryMentors { get; }
     DbSet<MentoringSession> MentoringSessions { get; }
     DbSet<MentoringActionItem> MentoringActionItems { get; }
     DbSet<MentoringAttendance> MentoringAttendances { get; }

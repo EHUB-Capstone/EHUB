@@ -4,12 +4,15 @@ import type {
   TeachingStaffCandidateDto,
 } from '../types/subjects';
 import { matchesSearchQuery } from './searchText.ts';
+import { matchesAnyTag, tagSearchText } from './mentorTags.ts';
 
 export type MentorKindFilter = 'ALL' | MentorKind;
 
 export interface CandidateFilters {
   search: string;
   mentorType: MentorKindFilter;
+  /** Selected tag keys; a mentor needs any one of them. Empty means no tag filter. */
+  tags?: readonly string[];
 }
 
 export interface CandidateGroups {
@@ -32,7 +35,8 @@ export function groupCandidates(
   const matching = candidates
     .filter(candidate => candidate.role === role)
     .filter(candidate => role !== 'MENTOR' || filters.mentorType === 'ALL' || candidate.mentorType === filters.mentorType)
-    .filter(candidate => matchesSearchQuery(filters.search, [candidate.name, candidate.email, candidate.contractType]))
+    .filter(candidate => role !== 'MENTOR' || matchesAnyTag(candidate.tags, filters.tags ?? []))
+    .filter(candidate => matchesSearchQuery(filters.search, [candidate.name, candidate.email, candidate.contractType, ...tagSearchText(candidate.tags)]))
     .sort(byName);
 
   return {
@@ -69,4 +73,14 @@ export function summarizeStaffBatch(
   if (added > 0) return { tone: 'partial', message: `Added ${plural(added, roleNoun)}, ${skipped} skipped.`, problems };
   if (response.rejectedCount > 0) return { tone: 'error', message: `No ${roleNoun}s were added.`, problems };
   return { tone: 'info', message: `Everyone selected was already in the semester list.`, problems };
+}
+
+/** Combines the results of several batch calls (accounts, then mentors without an account) into one. */
+export function mergeBatchResponses(responses: readonly AddTeachingStaffBatchResponse[]): AddTeachingStaffBatchResponse {
+  return {
+    results: responses.flatMap(item => item.results),
+    addedCount: responses.reduce((total, item) => total + item.addedCount, 0),
+    alreadyInListCount: responses.reduce((total, item) => total + item.alreadyInListCount, 0),
+    rejectedCount: responses.reduce((total, item) => total + item.rejectedCount, 0),
+  };
 }

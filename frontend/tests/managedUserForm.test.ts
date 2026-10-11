@@ -11,8 +11,8 @@ test('mentorTypeError requires a valid mentor type only for mentors', () => {
   assert.equal(mentorTypeError('MENTOR', 'Academic'), null);
 });
 
-test('toManagedUserPayload sends the mentor type only for mentors', () => {
-  const base = { name: 'A', email: 'a@b.vn', role: 'MENTOR', mentorType: 'Academic' };
+test('toManagedUserPayload sends the mentor-only fields only for mentors', () => {
+  const base = { name: 'A', email: 'a@b.vn', role: 'MENTOR', mentorType: 'Academic', expertise: ['AI'], bio: 'Bio', availabilityNote: 'Fridays' };
   assert.deepEqual(toManagedUserPayload(base), base);
   assert.deepEqual(toManagedUserPayload({ ...base, role: 'STUDENT' }), { name: 'A', email: 'a@b.vn', role: 'STUDENT' });
 });

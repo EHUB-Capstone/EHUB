@@ -13,8 +13,12 @@ export function mentorTypeError(role: string, mentorType: string): string | null
     : 'Choose whether this mentor is an Enterprise mentor or a Lecturer mentor';
 }
 
-/** The mentor type is only sent for mentors, so other roles never carry a stale value from the form. */
-export function toManagedUserPayload<T extends { role: string; mentorType: string }>(form: T): Omit<T, 'mentorType'> & { mentorType?: string } {
-  const { mentorType, ...rest } = form;
-  return form.role === 'MENTOR' ? { ...rest, mentorType } : rest;
+const MENTOR_ONLY_FIELDS = ['mentorType', 'expertise', 'bio', 'availabilityNote'] as const;
+
+/** Mentor-only fields (type, expertise, background, availability) are sent only for mentors, so other roles never carry stale values. */
+export function toManagedUserPayload<T extends { role: string; mentorType: string; expertise: string[]; bio: string; availabilityNote: string }>(
+  form: T,
+): Omit<T, (typeof MENTOR_ONLY_FIELDS)[number]> & Partial<Pick<T, (typeof MENTOR_ONLY_FIELDS)[number]>> {
+  const { mentorType, expertise, bio, availabilityNote, ...rest } = form;
+  return form.role === 'MENTOR' ? { ...rest, mentorType, expertise, bio, availabilityNote } : rest;
 }

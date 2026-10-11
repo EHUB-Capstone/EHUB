@@ -87,7 +87,7 @@ public sealed class CreateBulkClassesCommandHandler : ICreateBulkClassesCommandH
                 SemesterId = semester.Id,
                 CourseId = course.Id,
                 PrimaryLecturerId = lecturer?.Id,
-                Status = ClassStatus.Draft,
+                Status = ClassScheduleRules.DetermineOperationalStatus(lecturer?.Id),
                 CreatedById = currentUserId
             };
 

@@ -1,5 +1,7 @@
 import type { ManagedTeam, MentorAssignment } from '../types/teamManagement';
+import type { MentorTagSet } from '../types/mentorProfile';
 import { canAssignMentorTypeToTeam } from './teamManagement.ts';
+import { matchesAnyTag, tagSearchText } from './mentorTags.ts';
 import { matchesSearchQuery } from './searchText.ts';
 
 export type MentorSlot = MentorAssignment['slot'];
@@ -11,6 +13,9 @@ export interface MentorOption {
   organization?: string | null;
   mentorType: MentorSlot;
   contractType?: string | null;
+  /** True for a mentor who has no account yet. */
+  isTemporary?: boolean;
+  tags?: Partial<MentorTagSet> | null;
   activeTeamCount: number;
 }
 
@@ -52,10 +57,16 @@ export function filterTeamSlotRows(rows: readonly TeamSlotRow[], filter: SlotFil
 export type MentorKindFilter = 'ALL' | MentorSlot;
 
 /** Mentors matching the search text and kind chip. */
-export function filterMentorOptions(options: readonly MentorOption[], search: string, kind: MentorKindFilter): MentorOption[] {
+export function filterMentorOptions(
+  options: readonly MentorOption[],
+  search: string,
+  kind: MentorKindFilter,
+  tagKeys: readonly string[] = [],
+): MentorOption[] {
   return options.filter(option =>
     (kind === 'ALL' || option.mentorType === kind)
-    && matchesSearchQuery(search, [option.name, option.email, option.contractType ?? '']));
+    && matchesAnyTag(option.tags, tagKeys)
+    && matchesSearchQuery(search, [option.name, option.email, option.contractType ?? '', ...tagSearchText(option.tags)]));
 }
 
 /** Mentors that can take a given slot: the right kind, and never the mentor who already holds it. */
@@ -75,4 +86,9 @@ export function nextFocusIndex(current: number, count: number, backwards: boolea
   if (count <= 0) return -1;
   if (current < 0) return backwards ? count - 1 : 0;
   return backwards ? (current - 1 + count) % count : (current + 1) % count;
+}
+
+/** How many team slots currently rely on a mentor who has no account yet. */
+export function countTemporarySlots(rows: readonly TeamSlotRow[]): number {
+  return rows.reduce((total, row) => total + [row.enterprise, row.academic].filter(item => item?.mentor.isTemporary).length, 0);
 }

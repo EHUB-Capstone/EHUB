@@ -21,9 +21,29 @@ public class MentorProfileConfiguration : IEntityTypeConfiguration<MentorProfile
             .HasColumnName("expertise")
             .HasColumnType("text[]");
 
+        builder.Property(mp => mp.StartupDomains)
+            .HasColumnName("startup_domains")
+            .HasColumnType("text[]");
+
+        builder.Property(mp => mp.TechnologySkills)
+            .HasColumnName("technology_skills")
+            .HasColumnType("text[]");
+
+        builder.Property(mp => mp.MentorTags)
+            .HasColumnName("mentor_tags")
+            .HasColumnType("text[]");
+
         builder.Property(mp => mp.Bio)
             .HasColumnName("bio")
             .HasMaxLength(2000);
+
+        builder.Property(mp => mp.AvailabilityNote)
+            .HasColumnName("availability_note")
+            .HasMaxLength(500);
+
+        builder.Property(mp => mp.Version)
+            .IsRowVersion()
+            .HasColumnName("xmin");
 
         builder.Property(mp => mp.Organization)
             .HasColumnName("organization")

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { AddTeachingStaffBatchResponse, TeachingStaffCandidateDto } from '../src/types/subjects.ts';
-import { groupCandidates, summarizeStaffBatch } from '../src/utils/semesterStaffCandidates.ts';
+import { groupCandidates, mergeBatchResponses, summarizeStaffBatch } from '../src/utils/semesterStaffCandidates.ts';
 
 const candidate = (overrides: Partial<TeachingStaffCandidateDto>): TeachingStaffCandidateDto => ({
   userId: 'u1',
@@ -102,4 +102,13 @@ test('summarizeStaffBatch distinguishes nothing added because of rejections from
     response({ alreadyInListCount: 1, results: [{ userId: 'a', outcome: 'AlreadyInList' }] }), nameOf, 'lecturer');
   assert.equal(info.tone, 'info');
   assert.equal(info.problems[0].message, 'Already in the semester list.');
+});
+
+test('mergeBatchResponses adds up the results of the account call and the no-account call', () => {
+  const merged = mergeBatchResponses([
+    { results: [{ userId: 'a', outcome: 'Added' }], addedCount: 1, alreadyInListCount: 0, rejectedCount: 0 },
+    { results: [{ userId: 'b', outcome: 'AlreadyInList' }, { userId: 'c', outcome: 'Rejected' }], addedCount: 0, alreadyInListCount: 1, rejectedCount: 1 },
+  ]);
+  assert.equal(merged.results.length, 3);
+  assert.deepEqual([merged.addedCount, merged.alreadyInListCount, merged.rejectedCount], [1, 1, 1]);
 });

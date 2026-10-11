@@ -38,22 +38,14 @@ public sealed class ClassScheduleRulesTests
     }
 
     [Theory]
-    [InlineData(true, true, ClassStatus.Active)]
-    [InlineData(true, false, ClassStatus.Draft)]
-    [InlineData(false, true, ClassStatus.Draft)]
-    public void DetermineOperationalStatus_RequiresLecturerAndSchedule(
+    [InlineData(true, ClassStatus.Active)]
+    [InlineData(false, ClassStatus.Draft)]
+    public void DetermineOperationalStatus_RequiresOnlyLecturer(
         bool hasLecturer,
-        bool hasSchedule,
         ClassStatus expectedStatus)
     {
         var lecturerId = hasLecturer ? Guid.NewGuid() : (Guid?)null;
-        var scheduleJson = hasSchedule
-            ? ClassScheduleRules.Serialize(new[]
-            {
-                new ClassScheduleSlotDto { DayOfWeek = DayOfWeek.Wednesday, SlotNumber = 2 }
-            })
-            : ClassScheduleRules.Serialize(Array.Empty<ClassScheduleSlotDto>());
 
-        ClassScheduleRules.DetermineOperationalStatus(lecturerId, scheduleJson).Should().Be(expectedStatus);
+        ClassScheduleRules.DetermineOperationalStatus(lecturerId).Should().Be(expectedStatus);
     }
 }

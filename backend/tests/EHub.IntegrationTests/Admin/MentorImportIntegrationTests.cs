@@ -968,6 +968,134 @@ public sealed class MentorImportIntegrationTests(CustomWebApplicationFactory fac
         return body!.Data!.AccessToken;
     }
 
+    // A mentor workbook with two real mentors plus whatever leftovers the caller adds to the enterprise sheet.
+    private static byte[] CreateWorkbookWithLeftovers(Action<IXLWorksheet> addLeftovers)
+    {
+        using var workbook = new XLWorkbook();
+        var enterprise = workbook.Worksheets.Add("DS Mentor_FA26");
+        enterprise.Cell(1, 1).Value = "STT";
+        enterprise.Cell(1, 2).Value = "Họ và tên";
+        enterprise.Cell(1, 8).Value = "Email";
+        for (var row = 2; row <= 3; row++)
+        {
+            enterprise.Cell(row, 1).Value = row - 1;
+            enterprise.Cell(row, 2).Value = $"Leftover Mentor {Guid.NewGuid():N}";
+            enterprise.Cell(row, 8).Value = $"leftover-{Guid.NewGuid():N}@example.com";
+        }
+        addLeftovers(enterprise);
+
+        var academic = workbook.Worksheets.Add("Mentor IT_FA26");
+        academic.Cell(1, 1).Value = "STT";
+        academic.Cell(1, 2).Value = "Họ tên";
+        academic.Cell(2, 1).Value = 1;
+        academic.Cell(2, 2).Value = $"Leftover Lecturer {Guid.NewGuid():N}";
+
+        using var stream = new MemoryStream();
+        workbook.SaveAs(stream);
+        return stream.ToArray();
+    }
+
+    private async Task<(HttpStatusCode Status, MentorImportPreviewResponse? Preview, string Body)> PreviewWorkbookAsync(byte[] workbook)
+    {
+        var token = await GetAdminTokenAsync();
+        using var request = CreateMasterPreviewRequest(workbook, token);
+        var response = await _client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
+        var preview = response.IsSuccessStatusCode
+            ? System.Text.Json.JsonSerializer.Deserialize<ApiResponse<MentorImportPreviewResponse>>(body, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web))!.Data
+            : null;
+        return (response.StatusCode, preview, body);
+    }
+
+    [Fact]
+    public async Task MasterImportPreview_ShouldIgnoreLeftoverRows_BelowTheMentorList()
+    {
+        // Empty but formatted rows far below the data, as left by a re-saved Excel file or a Google Sheets export.
+        var workbook = CreateWorkbookWithLeftovers(sheet =>
+        {
+            for (var row = 600; row <= 1000; row++) sheet.Cell(row, 2).Style.Fill.BackgroundColor = XLColor.White;
+        });
+
+        var (status, preview, body) = await PreviewWorkbookAsync(workbook);
+
+        status.Should().Be(HttpStatusCode.OK, body);
+        preview!.TotalRows.Should().Be(3, "two enterprise mentors and one lecturer; the empty rows are not data");
+        preview.ErrorCount.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task MasterImportPreview_ShouldIgnoreRowsThatOnlyHaveARunningNumber()
+    {
+        var workbook = CreateWorkbookWithLeftovers(sheet =>
+        {
+            for (var row = 4; row <= 700; row++) sheet.Cell(row, 1).Value = row - 1;
+        });
+
+        var (status, preview, body) = await PreviewWorkbookAsync(workbook);
+
+        status.Should().Be(HttpStatusCode.OK, body);
+        preview!.TotalRows.Should().Be(3);
+        preview.ErrorCount.Should().Be(0, "numbered rows without a mentor are not mentors");
+    }
+
+    [Fact]
+    public async Task MasterImportPreview_ShouldIgnoreEmptyFormattedColumnsBeyondTheLimit()
+    {
+        var workbook = CreateWorkbookWithLeftovers(sheet => sheet.Cell(2, 40).Style.Fill.BackgroundColor = XLColor.White);
+
+        var (status, preview, body) = await PreviewWorkbookAsync(workbook);
+
+        status.Should().Be(HttpStatusCode.OK, body);
+        preview!.TotalRows.Should().Be(3);
+    }
+
+    [Fact]
+    public async Task MasterImportPreview_ShouldRejectDataInColumnsBeyondTheLimit_WithAClearMessage()
+    {
+        var workbook = CreateWorkbookWithLeftovers(sheet => sheet.Cell(2, 40).Value = "stray note");
+
+        var (status, _, body) = await PreviewWorkbookAsync(workbook);
+
+        status.Should().Be(HttpStatusCode.BadRequest);
+        body.Should().Contain("at most 20 columns").And.Contain("MENTOR_IMPORT_FILE_INVALID");
+    }
+
+    [Fact]
+    public async Task MasterImportPreview_ShouldRejectMoreThan500RealMentorRows_AndSayHowManyThereAre()
+    {
+        var workbook = CreateWorkbookWithLeftovers(sheet =>
+        {
+            for (var row = 4; row <= 502; row++)
+            {
+                sheet.Cell(row, 1).Value = row - 1;
+                sheet.Cell(row, 2).Value = $"Bulk Mentor {row}";
+            }
+        });
+
+        var (status, _, body) = await PreviewWorkbookAsync(workbook);
+
+        status.Should().Be(HttpStatusCode.BadRequest);
+        body.Should().Contain("501 mentor rows").And.Contain("at most 500");
+    }
+
+    [Fact]
+    public async Task MasterImportPreview_ShouldStillAcceptExactly500MentorRows()
+    {
+        var workbook = CreateWorkbookWithLeftovers(sheet =>
+        {
+            for (var row = 4; row <= 501; row++)
+            {
+                sheet.Cell(row, 1).Value = row - 1;
+                sheet.Cell(row, 2).Value = $"Bulk Mentor {Guid.NewGuid():N}";
+            }
+        });
+
+        var (status, preview, body) = await PreviewWorkbookAsync(workbook);
+
+        status.Should().Be(HttpStatusCode.OK, body);
+        preview!.TotalRows.Should().Be(501, "500 enterprise mentors and one lecturer");
+    }
+
     private static byte[] CreateMentorWorkbook(
         string enterpriseEmail,
         string academicEmail,

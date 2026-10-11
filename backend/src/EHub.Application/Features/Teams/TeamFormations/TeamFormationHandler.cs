@@ -1,5 +1,6 @@
 using EHub.Application.Common.Exceptions;
 using EHub.Application.Common.Interfaces.Persistence;
+using EHub.Application.Common.Interfaces.Services;
 using EHub.Application.Features.Classes.Common;
 using EHub.Contracts.Teams;
 using EHub.Domain.Entities;
@@ -13,22 +14,15 @@ namespace EHub.Application.Features.Teams.TeamFormations;
 
 public sealed class TeamFormationHandler : ITeamFormationHandler
 {
-    private static readonly HashSet<string> GroupOneMajors = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "BBA_HM", "BBA_IB", "BBA_MC", "BBA_MKT", "BEN", "BBA_TM", "BBA_FIN"
-    };
-    private static readonly HashSet<string> GroupTwoMajors = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "BIT_AI", "BIT_GD", "BIT_IA", "BIT_SE"
-    };
-
     private readonly IApplicationDbContext _context;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IDateTimeProvider _clock;
 
-    public TeamFormationHandler(IApplicationDbContext context, IUnitOfWork unitOfWork)
+    public TeamFormationHandler(IApplicationDbContext context, IUnitOfWork unitOfWork, IDateTimeProvider clock)
     {
         _context = context;
         _unitOfWork = unitOfWork;
+        _clock = clock;
     }
 
     public async Task<Result<TeamFormationDto>> CreateAsync(
@@ -37,26 +31,30 @@ public sealed class TeamFormationHandler : ITeamFormationHandler
         var creatorId = await GetCurrentStudentIdAsync(userId, role, cancellationToken);
         if (!creatorId.HasValue) return Failure(ErrorCodes.ClassAccessDenied, "Only a linked student can create a formation.");
         var teamName = request.TeamName?.Trim() ?? string.Empty;
-        if (teamName.Length is < 3 or > 60)
+        if (teamName.Length is < TeamFormationRules.MinTeamNameLength or > TeamFormationRules.MaxTeamNameLength)
             return Failure(ErrorCodes.ClassValidationError, "Team name must be between 3 and 60 characters.");
-        var ids = request.MemberStudentIds?.ToArray() ?? [];
-        if (ids.Length is < 4 or > 6 || ids.Distinct().Count() != ids.Length)
-            return Failure(ErrorCodes.ClassValidationError, "Select 4 to 6 unique students.");
-        if (!ids.Contains(creatorId.Value) || !ids.Contains(request.LeaderStudentId))
-            return Failure(ErrorCodes.ClassValidationError, "Creator and proposed leader must both be selected members.");
+        var inviteeIds = request.InviteeStudentIds?.ToArray() ?? [];
+        if (inviteeIds.Length is < 1 or > TeamFormationRules.MaxMembers - 1 || inviteeIds.Distinct().Count() != inviteeIds.Length)
+            return Failure(ErrorCodes.ClassValidationError, "Invite 1 to 5 unique students.");
+        if (inviteeIds.Contains(creatorId.Value))
+            return Failure(ErrorCodes.ClassValidationError, "The creator is added automatically and must not be invited.");
+        if (request.LeaderStudentId != creatorId.Value && !inviteeIds.Contains(request.LeaderStudentId))
+            return Failure(ErrorCodes.ClassValidationError, "The proposed leader must be the creator or an invited student.");
+        var ids = new[] { creatorId.Value }.Concat(inviteeIds).ToArray();
 
         try
         {
             return await _unitOfWork.ExecuteInSerializableTransactionAsync(async ct =>
             {
+                var now = _clock.UtcNow;
                 var targetClass = await _context.Classes.FirstOrDefaultAsync(item => item.Id == classId, ct);
                 if (targetClass is null) return Failure(ErrorCodes.ClassNotFound, "The requested class was not found.");
-                var members = await ValidateMembersAsync(classId, ids, request.LeaderStudentId, null, ct);
+                await SweepAsync(classId, now, ct);
+                var members = await ValidateEligibilityAsync(classId, ids, null, ct);
                 if (members.IsFailure) return Failure(members.Error.Code, members.Error.Message);
                 var nameError = await ValidateNameAsync(classId, teamName, null, ct);
                 if (nameError is not null) return Failure(nameError.Value.Code, nameError.Value.Message);
 
-                var now = DateTime.UtcNow;
                 var formation = new TeamFormation
                 {
                     ClassId = classId,
@@ -71,29 +69,66 @@ public sealed class TeamFormationHandler : ITeamFormationHandler
                 };
                 foreach (var member in members.Value)
                 {
-                    formation.Invitations.Add(new TeamFormationInvitation
-                    {
-                        FormationId = formation.Id,
-                        Formation = formation,
-                        ClassId = classId,
-                        StudentId = member.StudentId,
-                        ClassStudent = member,
-                        Status = member.StudentId == creatorId.Value ? TeamInvitationStatus.Accepted : TeamInvitationStatus.Pending,
-                        RespondedAtUtc = member.StudentId == creatorId.Value ? now : null
-                    });
+                    var isCreator = member.StudentId == creatorId.Value;
+                    formation.Invitations.Add(NewInvitation(formation, member, isCreator, now));
                 }
                 _context.TeamFormations.Add(formation);
-                ClassOutbox.Enqueue(_context, "TeamFormation.Invited.v1", classId, new
-                {
-                    FormationId = formation.Id,
-                    StudentIds = ids.Where(id => id != creatorId.Value).ToArray()
-                }, now);
+                EnqueueInvited(formation, inviteeIds, now);
                 await _context.SaveChangesAsync(ct);
-                return Result.Success(ToDto(formation, creatorId.Value));
+                return Result.Success(await ToDtoAsync(formation, creatorId.Value, now, ct));
             }, cancellationToken);
         }
         catch (DbUpdateException) { return Failure(ErrorCodes.TeamFormationReservationConflict, "A selected student or team name is reserved by another formation."); }
         catch (SerializableTransactionConflictException) { return Failure(ErrorCodes.ClassConcurrencyConflict, "Formation conflicted with another request. Refresh and try again."); }
+    }
+
+    public async Task<Result<TeamFormationDto>> InviteAsync(
+        Guid formationId, InviteTeamFormationMembersRequest request, Guid userId, string role, CancellationToken cancellationToken = default)
+    {
+        var studentId = await GetCurrentStudentIdAsync(userId, role, cancellationToken);
+        if (!studentId.HasValue) return Failure(ErrorCodes.ClassAccessDenied, "Only a linked student can invite members.");
+        var newIds = request.StudentIds?.ToArray() ?? [];
+        if (newIds.Length == 0 || newIds.Distinct().Count() != newIds.Length)
+            return Failure(ErrorCodes.ClassValidationError, "Select at least one unique student to invite.");
+
+        try
+        {
+            return await _unitOfWork.ExecuteInSerializableTransactionAsync(async ct =>
+            {
+                var now = _clock.UtcNow;
+                var formation = await LoadForUpdateAsync(formationId, now, ct);
+                if (formation is null) return Failure(ErrorCodes.TeamFormationNotFound, "Formation not found.");
+                if (formation.CreatorStudentId != studentId.Value)
+                    return Failure(ErrorCodes.ClassAccessDenied, "Only the creator can invite members.");
+                if (formation.Status != TeamFormationStatus.Pending)
+                    return Failure(ErrorCodes.TeamFormationStateInvalid, "Only a pending formation can invite members.");
+
+                var active = ActiveInvitations(formation).ToArray();
+                foreach (var id in newIds)
+                {
+                    var existing = active.FirstOrDefault(item => item.StudentId == id);
+                    if (existing is null) continue;
+                    return Failure(ErrorCodes.TeamInvitationConflict, existing.Status == TeamInvitationStatus.Accepted
+                        ? "This student already accepted and cannot be re-invited."
+                        : "This student already has a pending invitation.");
+                }
+                if (active.Length + newIds.Length > TeamFormationRules.MaxMembers)
+                    return Failure(ErrorCodes.TeamFormationCapacityConflict, "A team can have at most 6 members including pending invitations.");
+
+                var members = await ValidateEligibilityAsync(formation.ClassId, newIds, formation.Id, ct);
+                if (members.IsFailure) return Failure(members.Error.Code, members.Error.Message);
+
+                foreach (var member in members.Value)
+                    formation.Invitations.Add(NewInvitation(formation, member, isCreator: false, now));
+                formation.UpdatedAt = now;
+                formation.UpdatedBy = userId;
+                EnqueueInvited(formation, newIds, now);
+                await _context.SaveChangesAsync(ct);
+                return Result.Success(await ToDtoAsync(formation, studentId.Value, now, ct));
+            }, cancellationToken);
+        }
+        catch (DbUpdateException) { return Failure(ErrorCodes.TeamFormationReservationConflict, "A selected student is reserved by another formation."); }
+        catch (SerializableTransactionConflictException) { return Failure(ErrorCodes.ClassConcurrencyConflict, "Formation changed concurrently. Refresh and try again."); }
     }
 
     public async Task<Result<IReadOnlyCollection<TeamFormationDto>>> GetMineAsync(
@@ -105,7 +140,7 @@ public sealed class TeamFormationHandler : ITeamFormationHandler
             item.Invitations.Any(invitation => invitation.StudentId == studentId.Value));
         if (classId.HasValue) query = query.Where(item => item.ClassId == classId.Value);
         var formations = await query.OrderByDescending(item => item.CreatedAt).ToArrayAsync(cancellationToken);
-        return Result.Success<IReadOnlyCollection<TeamFormationDto>>(formations.Select(item => ToDto(item, studentId.Value)).ToArray());
+        return Result.Success<IReadOnlyCollection<TeamFormationDto>>(await ToDtosAsync(formations, studentId.Value, cancellationToken));
     }
 
     public async Task<Result<IReadOnlyCollection<TeamFormationDto>>> GetPendingInvitationsAsync(
@@ -113,11 +148,13 @@ public sealed class TeamFormationHandler : ITeamFormationHandler
     {
         var studentId = await GetCurrentStudentIdAsync(userId, role, cancellationToken);
         if (!studentId.HasValue) return FailureList(ErrorCodes.ClassAccessDenied, "Only a linked student can view invitations.");
+        var now = _clock.UtcNow;
         var formations = await FormationQuery().Where(item => item.Status == TeamFormationStatus.Pending &&
             item.Invitations.Any(invitation => invitation.StudentId == studentId.Value &&
-                invitation.Status == TeamInvitationStatus.Pending && invitation.ReservationReleasedAtUtc == null))
+                invitation.Status == TeamInvitationStatus.Pending && invitation.ReservationReleasedAtUtc == null &&
+                (invitation.ExpiresAtUtc == null || invitation.ExpiresAtUtc > now)))
             .OrderByDescending(item => item.CreatedAt).ToArrayAsync(cancellationToken);
-        return Result.Success<IReadOnlyCollection<TeamFormationDto>>(formations.Select(item => ToDto(item, studentId.Value)).ToArray());
+        return Result.Success<IReadOnlyCollection<TeamFormationDto>>(await ToDtosAsync(formations, studentId.Value, cancellationToken));
     }
 
     public async Task<Result<TeamFormationDto>> GetAsync(
@@ -129,19 +166,11 @@ public sealed class TeamFormationHandler : ITeamFormationHandler
         if (formation is null) return Failure(ErrorCodes.TeamFormationNotFound, "Formation not found.");
         if (!formation.Invitations.Any(item => item.StudentId == studentId.Value))
             return Failure(ErrorCodes.ClassAccessDenied, "You cannot view this formation.");
-        return Result.Success(ToDto(formation, studentId.Value));
+        return Result.Success(await ToDtoAsync(formation, studentId.Value, _clock.UtcNow, cancellationToken));
     }
 
-    public Task<Result<TeamFormationDto>> AcceptAsync(
-        Guid formationId, Guid userId, string role, CancellationToken cancellationToken = default) =>
-        RespondAsync(formationId, userId, role, accept: true, cancellationToken);
-
-    public Task<Result<TeamFormationDto>> DeclineAsync(
-        Guid formationId, Guid userId, string role, CancellationToken cancellationToken = default) =>
-        RespondAsync(formationId, userId, role, accept: false, cancellationToken);
-
-    private async Task<Result<TeamFormationDto>> RespondAsync(
-        Guid formationId, Guid userId, string role, bool accept, CancellationToken cancellationToken)
+    public async Task<Result<TeamFormationDto>> AcceptAsync(
+        Guid formationId, Guid userId, string role, CancellationToken cancellationToken = default)
     {
         var studentId = await GetCurrentStudentIdAsync(userId, role, cancellationToken);
         if (!studentId.HasValue) return Failure(ErrorCodes.ClassAccessDenied, "Only a linked student can respond to invitations.");
@@ -149,101 +178,206 @@ public sealed class TeamFormationHandler : ITeamFormationHandler
         {
             return await _unitOfWork.ExecuteInSerializableTransactionAsync(async ct =>
             {
-                var formation = await FormationQuery(tracking: true).FirstOrDefaultAsync(item => item.Id == formationId, ct);
-                if (formation is null) return Failure(ErrorCodes.TeamFormationNotFound, "Formation not found.");
-                var invitation = formation.Invitations.SingleOrDefault(item => item.StudentId == studentId.Value);
-                if (invitation is null) return Failure(ErrorCodes.ClassAccessDenied, "This invitation is not yours.");
-                if (formation.Status != TeamFormationStatus.Pending || invitation.Status != TeamInvitationStatus.Pending ||
-                    invitation.ReservationReleasedAtUtc.HasValue)
+                var now = _clock.UtcNow;
+                var found = await FindOwnInvitationAsync(formationId, studentId.Value, now, ct);
+                if (found.IsFailure) return Failure(found.Error.Code, found.Error.Message);
+                var (formation, invitation) = found.Value;
+                if (formation.Status != TeamFormationStatus.Pending)
+                    return Failure(ErrorCodes.TeamFormationStateInvalid, "This invitation is no longer pending.");
+                if (invitation.Status == TeamInvitationStatus.Expired)
+                    return Failure(ErrorCodes.TeamInvitationExpired, "This invitation has expired. Ask the creator to invite you again.");
+                if (invitation.Status != TeamInvitationStatus.Pending || invitation.ReservationReleasedAtUtc.HasValue)
                     return Failure(ErrorCodes.TeamFormationStateInvalid, "This invitation is no longer pending.");
 
-                var now = DateTime.UtcNow;
-                if (accept)
-                {
-                    var ids = formation.Invitations.Select(item => item.StudentId).ToArray();
-                    if (!ids.Contains(formation.CreatorStudentId) || !ids.Contains(formation.ProposedLeaderStudentId))
-                        return Failure(ErrorCodes.ClassValidationError, "Creator and proposed leader must remain selected members.");
-                    var members = await ValidateMembersAsync(formation.ClassId, ids, formation.ProposedLeaderStudentId, formation.Id, ct);
-                    if (members.IsFailure) return Failure(members.Error.Code, members.Error.Message);
-                    var nameError = await ValidateNameAsync(formation.ClassId, formation.TeamName, formation.Id, ct);
-                    if (nameError is not null) return Failure(nameError.Value.Code, nameError.Value.Message);
+                var eligible = await ValidateEligibilityAsync(formation.ClassId, [studentId.Value], formation.Id, ct);
+                if (eligible.IsFailure) return Failure(eligible.Error.Code, eligible.Error.Message);
 
-                    invitation.Status = TeamInvitationStatus.Accepted;
-                    invitation.RespondedAtUtc = now;
-                    formation.UpdatedAt = now;
-                    formation.UpdatedBy = userId;
-                    if (formation.Invitations.All(item => item.Status == TeamInvitationStatus.Accepted))
-                    {
-                        var teamCode = await CreateNextTeamCodeAsync(formation.Class, ct);
-                        var team = new Team
-                        {
-                            ClassId = formation.ClassId,
-                            TeamCode = teamCode,
-                            TeamName = formation.TeamName,
-                            Status = TeamStatus.Active,
-                            CreatedById = userId,
-                            CreatedBy = userId
-                        };
-                        foreach (var member in members.Value)
-                        {
-                            team.TeamMembers.Add(new TeamMember
-                            {
-                                TeamId = team.Id,
-                                Team = team,
-                                ClassId = formation.ClassId,
-                                StudentId = member.StudentId,
-                                ClassStudent = member,
-                                RoleInTeam = member.StudentId == formation.ProposedLeaderStudentId
-                                    ? TeamMemberRole.Leader : TeamMemberRole.Member,
-                                CountsTowardActiveTeam = true,
-                                JoinedAt = now,
-                                CreatedById = userId
-                            });
-                        }
-                        _context.Teams.Add(team);
-                        formation.Status = TeamFormationStatus.Completed;
-                        formation.CompletedTeamId = team.Id;
-                        formation.CompletedTeam = team;
-                        formation.CompletedAtUtc = now;
-                        ReleaseReservations(formation, now);
-                        ClassOutbox.Enqueue(_context, "Team.Created.v1", formation.ClassId, new
-                        {
-                            TeamId = team.Id,
-                            StudentUserIds = members.Value.Where(item => item.Student.UserId.HasValue)
-                                .Select(item => item.Student.UserId!.Value).Distinct().ToArray()
-                        }, now);
-                        ClassOutbox.Enqueue(_context, "TeamFormation.Completed.v1", formation.ClassId, new
-                        {
-                            FormationId = formation.Id,
-                            StudentIds = ids
-                        }, now);
-                    }
-                    else
-                    {
-                        ClassOutbox.Enqueue(_context, "TeamFormation.Accepted.v1", formation.ClassId, new
-                        {
-                            FormationId = formation.Id,
-                            CreatorStudentId = formation.CreatorStudentId
-                        }, now);
-                    }
-                }
-                else
+                invitation.Status = TeamInvitationStatus.Accepted;
+                invitation.RespondedAtUtc = now;
+                formation.UpdatedAt = now;
+                formation.UpdatedBy = userId;
+                ClassOutbox.Enqueue(_context, "TeamFormation.Accepted.v1", formation.ClassId, new
                 {
-                    invitation.Status = TeamInvitationStatus.Declined;
-                    invitation.RespondedAtUtc = now;
-                    formation.Status = TeamFormationStatus.Cancelled;
-                    formation.CancelledAtUtc = now;
-                    formation.UpdatedAt = now;
-                    formation.UpdatedBy = userId;
-                    ReleaseReservations(formation, now);
-                    ClassOutbox.Enqueue(_context, "TeamFormation.Cancelled.v1", formation.ClassId, new
+                    FormationId = formation.Id,
+                    CreatorStudentId = formation.CreatorStudentId
+                }, now);
+                await _context.SaveChangesAsync(ct);
+                return Result.Success(await ToDtoAsync(formation, studentId.Value, now, ct));
+            }, cancellationToken);
+        }
+        catch (DbUpdateException) { return Failure(ErrorCodes.TeamMembershipConflict, "You joined another team. Refresh and try again."); }
+        catch (SerializableTransactionConflictException) { return Failure(ErrorCodes.ClassConcurrencyConflict, "Formation changed concurrently. Refresh and try again."); }
+    }
+
+    public async Task<Result<TeamFormationDto>> DeclineAsync(
+        Guid formationId, Guid userId, string role, CancellationToken cancellationToken = default)
+    {
+        var studentId = await GetCurrentStudentIdAsync(userId, role, cancellationToken);
+        if (!studentId.HasValue) return Failure(ErrorCodes.ClassAccessDenied, "Only a linked student can respond to invitations.");
+        try
+        {
+            return await _unitOfWork.ExecuteInSerializableTransactionAsync(async ct =>
+            {
+                var now = _clock.UtcNow;
+                var found = await FindOwnInvitationAsync(formationId, studentId.Value, now, ct);
+                if (found.IsFailure) return Failure(found.Error.Code, found.Error.Message);
+                var (formation, invitation) = found.Value;
+                if (formation.Status != TeamFormationStatus.Pending)
+                    return Failure(ErrorCodes.TeamFormationStateInvalid, "This invitation is no longer pending.");
+                if (invitation.Status == TeamInvitationStatus.Expired)
+                    return Failure(ErrorCodes.TeamInvitationExpired, "This invitation has expired.");
+                if (invitation.Status != TeamInvitationStatus.Pending || invitation.ReservationReleasedAtUtc.HasValue)
+                    return Failure(ErrorCodes.TeamFormationStateInvalid, "This invitation is no longer pending.");
+
+                invitation.Status = TeamInvitationStatus.Declined;
+                invitation.RespondedAtUtc = now;
+                invitation.ReservationReleasedAtUtc = now;
+                formation.UpdatedAt = now;
+                formation.UpdatedBy = userId;
+                ClassOutbox.Enqueue(_context, "TeamFormation.Declined.v1", formation.ClassId, new
+                {
+                    FormationId = formation.Id,
+                    CreatorStudentId = formation.CreatorStudentId,
+                    StudentId = studentId.Value
+                }, now);
+                await _context.SaveChangesAsync(ct);
+                return Result.Success(await ToDtoAsync(formation, studentId.Value, now, ct));
+            }, cancellationToken);
+        }
+        catch (SerializableTransactionConflictException) { return Failure(ErrorCodes.ClassConcurrencyConflict, "Formation changed concurrently. Refresh and try again."); }
+    }
+
+    public async Task<Result<TeamFormationDto>> LeaveAsync(
+        Guid formationId, Guid userId, string role, CancellationToken cancellationToken = default)
+    {
+        var studentId = await GetCurrentStudentIdAsync(userId, role, cancellationToken);
+        if (!studentId.HasValue) return Failure(ErrorCodes.ClassAccessDenied, "Only a linked student can leave a formation.");
+        try
+        {
+            return await _unitOfWork.ExecuteInSerializableTransactionAsync(async ct =>
+            {
+                var now = _clock.UtcNow;
+                var found = await FindOwnInvitationAsync(formationId, studentId.Value, now, ct);
+                if (found.IsFailure) return Failure(found.Error.Code, found.Error.Message);
+                var (formation, invitation) = found.Value;
+                if (formation.CreatorStudentId == studentId.Value)
+                    return Failure(ErrorCodes.ClassAccessDenied, "The creator cannot leave; cancel the formation instead.");
+                if (formation.Status != TeamFormationStatus.Pending ||
+                    invitation.Status != TeamInvitationStatus.Accepted || invitation.ReservationReleasedAtUtc.HasValue)
+                    return Failure(ErrorCodes.TeamFormationStateInvalid, "Only an accepted member of a pending formation can leave.");
+
+                invitation.Status = TeamInvitationStatus.Left;
+                invitation.RespondedAtUtc = now;
+                invitation.ReservationReleasedAtUtc = now;
+                formation.UpdatedAt = now;
+                formation.UpdatedBy = userId;
+                ClassOutbox.Enqueue(_context, "TeamFormation.Left.v1", formation.ClassId, new
+                {
+                    FormationId = formation.Id,
+                    CreatorStudentId = formation.CreatorStudentId,
+                    StudentId = studentId.Value,
+                    WasProposedLeader = formation.ProposedLeaderStudentId == studentId.Value
+                }, now);
+                await _context.SaveChangesAsync(ct);
+                return Result.Success(await ToDtoAsync(formation, studentId.Value, now, ct));
+            }, cancellationToken);
+        }
+        catch (SerializableTransactionConflictException) { return Failure(ErrorCodes.ClassConcurrencyConflict, "Formation changed concurrently. Refresh and try again."); }
+    }
+
+    public async Task<Result<TeamFormationDto>> FinalizeAsync(
+        Guid formationId, FinalizeTeamFormationRequest request, Guid userId, string role, CancellationToken cancellationToken = default)
+    {
+        var studentId = await GetCurrentStudentIdAsync(userId, role, cancellationToken);
+        if (!studentId.HasValue) return Failure(ErrorCodes.ClassAccessDenied, "Only a linked student can finalize a formation.");
+        try
+        {
+            return await _unitOfWork.ExecuteInSerializableTransactionAsync(async ct =>
+            {
+                var now = _clock.UtcNow;
+                var formation = await LoadForUpdateAsync(formationId, now, ct);
+                if (formation is null) return Failure(ErrorCodes.TeamFormationNotFound, "Formation not found.");
+                if (formation.CreatorStudentId != studentId.Value)
+                    return Failure(ErrorCodes.ClassAccessDenied, "Only the creator can finalize this formation.");
+                if (formation.Status != TeamFormationStatus.Pending)
+                    return Failure(ErrorCodes.TeamFormationStateInvalid, "Only a pending formation can be finalized.");
+
+                var active = ActiveInvitations(formation).ToArray();
+                var accepted = active.Where(item => item.Status == TeamInvitationStatus.Accepted).ToArray();
+                var pending = active.Where(item => item.Status == TeamInvitationStatus.Pending).ToArray();
+                if (pending.Length > 0 && !request.ConfirmPendingInvitations)
+                    return Failure(ErrorCodes.TeamFormationPendingConfirmationRequired,
+                        "Some invitations are still waiting for a response. Confirm to close them and finalize the team.");
+
+                var acceptedIds = accepted.Select(item => item.StudentId).ToArray();
+                if (acceptedIds.Length < TeamFormationRules.MinMembers || acceptedIds.Length > TeamFormationRules.MaxMembers)
+                    return Failure(ErrorCodes.TeamFormationNotReady, string.Join(" ", BuildBlockers(acceptedIds.Length, [])));
+
+                var leaderId = ResolveLeader(formation, acceptedIds, request.LeaderStudentId, out var leaderError);
+                if (leaderError is not null) return Failure(ErrorCodes.ClassValidationError, leaderError);
+
+                var members = await ValidateEligibilityAsync(formation.ClassId, acceptedIds, formation.Id, ct);
+                if (members.IsFailure) return Failure(members.Error.Code, members.Error.Message);
+                var blockers = BuildBlockers(acceptedIds.Length, await ResolveMajorsAsync(members.Value, ct));
+                if (blockers.Count > 0) return Failure(ErrorCodes.TeamFormationNotReady, string.Join(" ", blockers));
+                var nameError = await ValidateNameAsync(formation.ClassId, formation.TeamName, formation.Id, ct);
+                if (nameError is not null) return Failure(nameError.Value.Code, nameError.Value.Message);
+
+                var teamCode = await CreateNextTeamCodeAsync(formation.Class, ct);
+                var team = new Team
+                {
+                    ClassId = formation.ClassId,
+                    TeamCode = teamCode,
+                    TeamName = formation.TeamName,
+                    Status = TeamStatus.Active,
+                    CreatedById = userId,
+                    CreatedBy = userId
+                };
+                foreach (var member in members.Value)
+                {
+                    team.TeamMembers.Add(new TeamMember
+                    {
+                        TeamId = team.Id,
+                        Team = team,
+                        ClassId = formation.ClassId,
+                        StudentId = member.StudentId,
+                        ClassStudent = member,
+                        RoleInTeam = member.StudentId == leaderId ? TeamMemberRole.Leader : TeamMemberRole.Member,
+                        CountsTowardActiveTeam = true,
+                        JoinedAt = now,
+                        CreatedById = userId
+                    });
+                }
+                _context.Teams.Add(team);
+                formation.ProposedLeaderStudentId = leaderId;
+                formation.Status = TeamFormationStatus.Completed;
+                formation.CompletedTeamId = team.Id;
+                formation.CompletedTeam = team;
+                formation.CompletedAtUtc = now;
+                formation.UpdatedAt = now;
+                formation.UpdatedBy = userId;
+                ReleaseReservations(formation, now);
+                ClassOutbox.Enqueue(_context, "Team.Created.v1", formation.ClassId, new
+                {
+                    TeamId = team.Id,
+                    StudentUserIds = members.Value.Where(item => item.Student.UserId.HasValue)
+                        .Select(item => item.Student.UserId!.Value).Distinct().ToArray()
+                }, now);
+                ClassOutbox.Enqueue(_context, "TeamFormation.Completed.v1", formation.ClassId, new
+                {
+                    FormationId = formation.Id,
+                    StudentIds = acceptedIds
+                }, now);
+                if (pending.Length > 0)
+                {
+                    ClassOutbox.Enqueue(_context, "TeamFormation.Closed.v1", formation.ClassId, new
                     {
                         FormationId = formation.Id,
-                        StudentIds = formation.Invitations.Select(item => item.StudentId).ToArray()
+                        StudentIds = pending.Select(item => item.StudentId).Distinct().ToArray()
                     }, now);
                 }
                 await _context.SaveChangesAsync(ct);
-                return Result.Success(ToDto(formation, studentId.Value));
+                return Result.Success(await ToDtoAsync(formation, studentId.Value, now, ct));
             }, cancellationToken);
         }
         catch (DbUpdateException) { return Failure(ErrorCodes.TeamMembershipConflict, "A selected student joined another team. Refresh and try again."); }
@@ -259,13 +393,15 @@ public sealed class TeamFormationHandler : ITeamFormationHandler
         {
             return await _unitOfWork.ExecuteInSerializableTransactionAsync(async ct =>
             {
-                var formation = await FormationQuery(tracking: true).FirstOrDefaultAsync(item => item.Id == formationId, ct);
+                var now = _clock.UtcNow;
+                var formation = await LoadForUpdateAsync(formationId, now, ct);
                 if (formation is null) return Failure(ErrorCodes.TeamFormationNotFound, "Formation not found.");
                 if (formation.CreatorStudentId != studentId.Value)
                     return Failure(ErrorCodes.ClassAccessDenied, "Only the creator can cancel this formation.");
                 if (formation.Status != TeamFormationStatus.Pending)
                     return Failure(ErrorCodes.TeamFormationStateInvalid, "Only a pending formation can be cancelled.");
-                var now = DateTime.UtcNow;
+                var notified = ActiveInvitations(formation).Select(item => item.StudentId)
+                    .Where(id => id != studentId.Value).Distinct().ToArray();
                 formation.Status = TeamFormationStatus.Cancelled;
                 formation.CancelledAtUtc = now;
                 formation.UpdatedAt = now;
@@ -274,20 +410,111 @@ public sealed class TeamFormationHandler : ITeamFormationHandler
                 ClassOutbox.Enqueue(_context, "TeamFormation.Cancelled.v1", formation.ClassId, new
                 {
                     FormationId = formation.Id,
-                    StudentIds = formation.Invitations.Select(item => item.StudentId).ToArray()
+                    StudentIds = notified
                 }, now);
                 await _context.SaveChangesAsync(ct);
-                return Result.Success(ToDto(formation, studentId.Value));
+                return Result.Success(await ToDtoAsync(formation, studentId.Value, now, ct));
             }, cancellationToken);
         }
         catch (SerializableTransactionConflictException) { return Failure(ErrorCodes.ClassConcurrencyConflict, "Formation changed concurrently. Refresh and try again."); }
     }
 
-    private async Task<Result<List<ClassStudent>>> ValidateMembersAsync(
-        Guid classId, IReadOnlyCollection<Guid> ids, Guid leaderId, Guid? currentFormationId, CancellationToken ct)
+    // ----- Shared helpers -----
+
+    /// <summary>Expires overdue pending invitations of the class so reservations are accurate before validating.</summary>
+    private async Task SweepAsync(Guid classId, DateTime now, CancellationToken ct)
     {
-        if (ids.Count is < 4 or > 6 || ids.Distinct().Count() != ids.Count || !ids.Contains(leaderId))
-            return MemberFailure(ErrorCodes.ClassValidationError, "Formation requires 4 to 6 unique members and one selected leader.");
+        var expired = await TeamFormationExpiry.ApplyAsync(_context, now, classId, null, 200, ct);
+        if (expired > 0) await _context.SaveChangesAsync(ct);
+    }
+
+    private async Task<TeamFormation?> LoadForUpdateAsync(Guid formationId, DateTime now, CancellationToken ct)
+    {
+        var classId = await _context.TeamFormations.AsNoTracking().Where(item => item.Id == formationId)
+            .Select(item => (Guid?)item.ClassId).FirstOrDefaultAsync(ct);
+        if (!classId.HasValue) return null;
+        await SweepAsync(classId.Value, now, ct);
+        return await FormationQuery(tracking: true).FirstOrDefaultAsync(item => item.Id == formationId, ct);
+    }
+
+    private async Task<Result<(TeamFormation Formation, TeamFormationInvitation Invitation)>> FindOwnInvitationAsync(
+        Guid formationId, Guid studentId, DateTime now, CancellationToken ct)
+    {
+        var formation = await LoadForUpdateAsync(formationId, now, ct);
+        if (formation is null)
+            return Result.Failure<(TeamFormation, TeamFormationInvitation)>(
+                new Error(ErrorCodes.TeamFormationNotFound, "Formation not found."));
+        var invitation = formation.Invitations.Where(item => item.StudentId == studentId)
+            .OrderByDescending(item => item.CreatedAtUtc).FirstOrDefault();
+        if (invitation is null)
+            return Result.Failure<(TeamFormation, TeamFormationInvitation)>(
+                new Error(ErrorCodes.ClassAccessDenied, "This invitation is not yours."));
+        return Result.Success((formation, invitation));
+    }
+
+    private static IEnumerable<TeamFormationInvitation> ActiveInvitations(TeamFormation formation) =>
+        formation.Invitations.Where(item => item.ReservationReleasedAtUtc == null);
+
+    private static TeamFormationInvitation NewInvitation(
+        TeamFormation formation, ClassStudent member, bool isCreator, DateTime now) => new()
+    {
+        FormationId = formation.Id,
+        Formation = formation,
+        ClassId = formation.ClassId,
+        StudentId = member.StudentId,
+        ClassStudent = member,
+        Status = isCreator ? TeamInvitationStatus.Accepted : TeamInvitationStatus.Pending,
+        CreatedAtUtc = now,
+        ExpiresAtUtc = isCreator ? null : now.Add(TeamFormationRules.InvitationLifetime),
+        RespondedAtUtc = isCreator ? now : null
+    };
+
+    private void EnqueueInvited(TeamFormation formation, IReadOnlyCollection<Guid> inviteeIds, DateTime now) =>
+        ClassOutbox.Enqueue(_context, "TeamFormation.Invited.v1", formation.ClassId, new
+        {
+            FormationId = formation.Id,
+            StudentIds = inviteeIds.ToArray(),
+            ProposedLeaderStudentId = formation.ProposedLeaderStudentId,
+            TeamName = formation.TeamName
+        }, now);
+
+    /// <summary>
+    /// The proposed leader keeps the role once they accepted. Otherwise the creator must choose an accepted member.
+    /// </summary>
+    private static Guid ResolveLeader(
+        TeamFormation formation, IReadOnlyCollection<Guid> acceptedIds, Guid? requested, out string? error)
+    {
+        error = null;
+        if (acceptedIds.Contains(formation.ProposedLeaderStudentId))
+        {
+            if (requested.HasValue && requested.Value != formation.ProposedLeaderStudentId)
+                error = "The proposed leader accepted the invitation and cannot be replaced.";
+            return formation.ProposedLeaderStudentId;
+        }
+        if (!requested.HasValue || !acceptedIds.Contains(requested.Value))
+        {
+            error = "Choose a team leader from the accepted members.";
+            return Guid.Empty;
+        }
+        return requested.Value;
+    }
+
+    private static List<string> BuildBlockers(int acceptedCount, IReadOnlyCollection<string?> acceptedMajors)
+    {
+        var blockers = new List<string>();
+        if (acceptedCount < TeamFormationRules.MinMembers)
+            blockers.Add($"At least {TeamFormationRules.MinMembers} accepted members are required.");
+        else if (acceptedCount > TeamFormationRules.MaxMembers)
+            blockers.Add($"At most {TeamFormationRules.MaxMembers} members are allowed.");
+        else if (!TeamFormationRules.HasGroupOne(acceptedMajors) || !TeamFormationRules.HasGroupTwo(acceptedMajors))
+            blockers.Add("Team must include at least one BBA and one BIT student.");
+        return blockers;
+    }
+
+    /// <summary>Individual eligibility only; team composition is checked at finalize.</summary>
+    private async Task<Result<List<ClassStudent>>> ValidateEligibilityAsync(
+        Guid classId, IReadOnlyCollection<Guid> ids, Guid? currentFormationId, CancellationToken ct)
+    {
         var targetClass = await _context.Classes.AsNoTracking().FirstOrDefaultAsync(item => item.Id == classId, ct);
         if (targetClass is null) return MemberFailure(ErrorCodes.ClassNotFound, "Class not found.");
         var stateError = ClassStateRules.GetMutationError(targetClass.Status);
@@ -324,10 +551,14 @@ public sealed class TeamFormationHandler : ITeamFormationHandler
                 ErrorCodes.TeamFormationReservationConflict,
                 $"{studentLabel} has another pending team invitation.");
         }
+        return Result.Success(enrollments);
+    }
 
+    private async Task<string?[]> ResolveMajorsAsync(IReadOnlyCollection<ClassStudent> enrollments, CancellationToken ct)
+    {
         var registeredMajors = await RegisteredStudentMajorResolver.LoadByEmailAsync(
             _context, enrollments.Select(item => item.Student.Email), ct);
-        var majors = enrollments.Select(item =>
+        return enrollments.Select(item =>
         {
             var major = StudentEnrollmentRules.ResolveEffectiveMajorCode(item.MajorCodeAtEnrollment, item.Student.MajorCode);
             if (!MajorCodes.IsValid(major) && !string.IsNullOrWhiteSpace(item.Student.Email) &&
@@ -335,17 +566,13 @@ public sealed class TeamFormationHandler : ITeamFormationHandler
                 major = registeredMajor;
             return major?.Trim();
         }).ToArray();
-        if (!majors.Any(major => major is not null && GroupOneMajors.Contains(major)) ||
-            !majors.Any(major => major is not null && GroupTwoMajors.Contains(major)))
-            return MemberFailure(ErrorCodes.TeamMajorCompositionInvalid, "Team requires at least one Group 1 and one Group 2 major.");
-        return Result.Success(enrollments);
     }
 
     private async Task<(string Code, string Message)?> ValidateNameAsync(
         Guid classId, string teamName, Guid? currentFormationId, CancellationToken ct)
     {
         var normalized = teamName.Trim().ToLowerInvariant();
-        if (normalized.Length is < 3 or > 60)
+        if (normalized.Length is < TeamFormationRules.MinTeamNameLength or > TeamFormationRules.MaxTeamNameLength)
             return (ErrorCodes.ClassValidationError, "Team name must be between 3 and 60 characters.");
         if (await _context.Teams.AsNoTracking().AnyAsync(item =>
             item.ClassId == classId && item.TeamName.ToLower() == normalized, ct) ||
@@ -390,33 +617,86 @@ public sealed class TeamFormationHandler : ITeamFormationHandler
 
     private static void ReleaseReservations(TeamFormation formation, DateTime now)
     {
-        foreach (var invitation in formation.Invitations)
+        foreach (var invitation in formation.Invitations.Where(item => item.ReservationReleasedAtUtc == null))
             invitation.ReservationReleasedAtUtc = now;
     }
 
-    private static TeamFormationDto ToDto(TeamFormation formation, Guid myStudentId) => new()
+    // ----- DTO mapping -----
+
+    /// <summary>Overdue pending records are reported as Expired even before the background job releases them.</summary>
+    private static TeamInvitationStatus EffectiveStatus(TeamFormation formation, TeamFormationInvitation invitation, DateTime now) =>
+        formation.Status == TeamFormationStatus.Pending && invitation.Status == TeamInvitationStatus.Pending &&
+        invitation.ReservationReleasedAtUtc == null && invitation.ExpiresAtUtc.HasValue && invitation.ExpiresAtUtc.Value <= now
+            ? TeamInvitationStatus.Expired
+            : invitation.Status;
+
+    private async Task<IReadOnlyCollection<TeamFormationDto>> ToDtosAsync(
+        IEnumerable<TeamFormation> formations, Guid myStudentId, CancellationToken ct)
     {
-        Id = formation.Id,
-        ClassId = formation.ClassId,
-        ClassCode = formation.Class.ClassCode,
-        TeamName = formation.TeamName,
-        CreatorStudentId = formation.CreatorStudentId,
-        MyStudentId = myStudentId,
-        ProposedLeaderStudentId = formation.ProposedLeaderStudentId,
-        Status = formation.Status.ToString(),
-        CompletedTeamId = formation.CompletedTeamId,
-        CreatedAtUtc = formation.CreatedAt,
-        Invitations = formation.Invitations.OrderBy(item => item.ClassStudent.Student.RollNumber)
-            .Select(item => new TeamFormationInvitationDto
-            {
-                StudentId = item.StudentId,
-                FullName = item.ClassStudent.Student.FullName,
-                RollNumber = item.ClassStudent.Student.RollNumber ?? string.Empty,
-                Status = item.Status.ToString(),
-                IsCreator = item.StudentId == formation.CreatorStudentId,
-                IsProposedLeader = item.StudentId == formation.ProposedLeaderStudentId
-            }).ToArray()
-    };
+        var now = _clock.UtcNow;
+        var result = new List<TeamFormationDto>();
+        foreach (var formation in formations) result.Add(await ToDtoAsync(formation, myStudentId, now, ct));
+        return result;
+    }
+
+    private async Task<TeamFormationDto> ToDtoAsync(
+        TeamFormation formation, Guid myStudentId, DateTime now, CancellationToken ct)
+    {
+        var isPending = formation.Status == TeamFormationStatus.Pending;
+        var active = isPending
+            ? formation.Invitations.Where(item => item.ReservationReleasedAtUtc == null &&
+                EffectiveStatus(formation, item, now) is TeamInvitationStatus.Pending or TeamInvitationStatus.Accepted).ToArray()
+            : [];
+        var accepted = active.Where(item => item.Status == TeamInvitationStatus.Accepted).ToArray();
+        var blockers = new List<string>();
+        if (isPending)
+        {
+            string?[] majors = [];
+            if (accepted.Length is >= TeamFormationRules.MinMembers and <= TeamFormationRules.MaxMembers)
+                majors = await ResolveMajorsAsync(accepted.Select(item => item.ClassStudent).ToArray(), ct);
+            blockers = BuildBlockers(accepted.Length, majors);
+        }
+        var latestByStudent = formation.Invitations.GroupBy(item => item.StudentId)
+            .ToDictionary(group => group.Key, group => group.OrderByDescending(item => item.CreatedAtUtc).First().Id);
+
+        return new TeamFormationDto
+        {
+            Id = formation.Id,
+            ClassId = formation.ClassId,
+            ClassCode = formation.Class.ClassCode,
+            TeamName = formation.TeamName,
+            CreatorStudentId = formation.CreatorStudentId,
+            MyStudentId = myStudentId,
+            ProposedLeaderStudentId = formation.ProposedLeaderStudentId,
+            Status = formation.Status.ToString(),
+            CompletedTeamId = formation.CompletedTeamId,
+            CreatedAtUtc = formation.CreatedAt,
+            ServerTimeUtc = now,
+            AcceptedCount = accepted.Length,
+            PendingCount = active.Length - accepted.Length,
+            ActiveCount = active.Length,
+            CanFinalize = isPending && blockers.Count == 0,
+            FinalizeBlockers = blockers,
+            RequiresLeaderSelection = isPending &&
+                accepted.All(item => item.StudentId != formation.ProposedLeaderStudentId),
+            Invitations = formation.Invitations
+                .OrderBy(item => item.ClassStudent.Student.RollNumber).ThenBy(item => item.CreatedAtUtc)
+                .Select(item => new TeamFormationInvitationDto
+                {
+                    Id = item.Id,
+                    StudentId = item.StudentId,
+                    FullName = item.ClassStudent.Student.FullName,
+                    RollNumber = item.ClassStudent.Student.RollNumber ?? string.Empty,
+                    Status = EffectiveStatus(formation, item, now).ToString(),
+                    IsCreator = item.StudentId == formation.CreatorStudentId,
+                    IsProposedLeader = item.StudentId == formation.ProposedLeaderStudentId,
+                    IsCurrent = latestByStudent[item.StudentId] == item.Id,
+                    CreatedAtUtc = item.CreatedAtUtc,
+                    ExpiresAtUtc = item.ExpiresAtUtc,
+                    RespondedAtUtc = item.RespondedAtUtc
+                }).ToArray()
+        };
+    }
 
     private static Result<List<ClassStudent>> MemberFailure(string code, string message) =>
         Result.Failure<List<ClassStudent>>(new Error(code, message));

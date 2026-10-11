@@ -34,6 +34,12 @@ test('describeMasterImportResult reports incomplete and completed mentors only w
   assert.match(text, /1 completed/);
 });
 
+test('describeMasterImportResult says how many teams switched from a temporary mentor to the new account', () => {
+  assert.match(describeMasterImportResult({ ...emptyResult, createdCount: 1, temporaryAssignmentsConverted: 2 }), /2 teams switched from a temporary mentor/);
+  assert.match(describeMasterImportResult({ ...emptyResult, temporaryAssignmentsConverted: 1 }), /1 team switched/);
+  assert.doesNotMatch(describeMasterImportResult({ ...emptyResult, createdCount: 1 }), /switched/);
+});
+
 test('emailCellText shows a neutral hint when the file has no email', () => {
   assert.deepEqual(emailCellText(' a@b.vn '), { text: 'a@b.vn', provided: true });
   assert.deepEqual(emailCellText(''), { text: 'No email yet', provided: false });

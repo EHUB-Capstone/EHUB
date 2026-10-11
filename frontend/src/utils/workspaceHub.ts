@@ -21,13 +21,33 @@ export interface WorkspaceHubFilters {
 export function resolveWorkspaceSemesterScope(
   params: URLSearchParams,
   activeSemester: { semester: string; year: number } | null,
-): { semester: string; year: string; isDefault: boolean } {
+  /** Used when no semester is active, so the page still opens on the most recent semester that has teams. */
+  fallbackSemester: { semester: string; year: number } | null = null,
+): { semester: string; year: string; isDefault: boolean; usesFallback: boolean } {
   const isDefault = !params.has('semester') && !params.has('year');
+  const defaultSemester = activeSemester ?? fallbackSemester;
   return {
-    semester: isDefault ? activeSemester?.semester ?? 'none' : params.get('semester') || 'all',
-    year: isDefault ? String(activeSemester?.year ?? 'none') : params.get('year') || 'all',
+    semester: isDefault ? defaultSemester?.semester ?? 'none' : params.get('semester') || 'all',
+    year: isDefault ? String(defaultSemester?.year ?? 'none') : params.get('year') || 'all',
     isDefault,
+    usesFallback: isDefault && !activeSemester && fallbackSemester !== null,
   };
+}
+
+const TERM_ORDER: Record<string, number> = { SP: 0, SU: 1, FA: 2 };
+
+/** The most recent semester among the workspaces: the latest year, then Fall over Summer over Spring. */
+export function latestWorkspaceSemester(workspaces: readonly { semester: string }[]): { semester: string; year: number } | null {
+  let best: { semester: string; year: number } | null = null;
+  for (const workspace of workspaces) {
+    const parsed = parseWorkspaceSemester(workspace.semester);
+    if (!parsed) continue;
+    const candidate = { semester: parsed.semester, year: Number(parsed.year) };
+    if (!best || candidate.year > best.year || (candidate.year === best.year && TERM_ORDER[candidate.semester] > TERM_ORDER[best.semester])) {
+      best = candidate;
+    }
+  }
+  return best;
 }
 
 const naturalCollator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });

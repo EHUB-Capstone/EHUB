@@ -4,7 +4,7 @@ namespace EHub.Application.Features.Admin.Mentors;
 
 internal sealed record AllocationTeam(Guid Id, Guid ClassId, string Code, string Name);
 
-internal sealed record AllocationMentor(Guid Id, string Name, string Email, MentorType Type);
+internal sealed record AllocationMentor(Guid Id, string Name, string Email, MentorType Type, bool IsTemporary = false);
 
 internal sealed record AllocationExistingAssignment(Guid TeamId, Guid MentorProfileId, MentorType Slot);
 

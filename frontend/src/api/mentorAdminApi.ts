@@ -7,6 +7,7 @@ import type {
   MentorAllocationStrategy,
   MentorImportCommitResult,
   MentorImportPreview,
+  MentorSemesterClassList,
 } from '../types/mentorAdmin';
 
 interface ApiEnvelope<T> {
@@ -37,17 +38,23 @@ export const mentorAdminApi = {
   commitImport: (sessionId: string): Promise<ApiEnvelope<MentorImportCommitResult>> =>
     axiosClient.post('/admin/mentors/imports/commit', { sessionId }),
 
+  /** Active classes of a semester with their open mentor slots. */
+  getSemesterClasses: (semesterId: string): Promise<ApiEnvelope<MentorSemesterClassList>> =>
+    axiosClient.get(`/admin/mentors/semesters/${semesterId}/classes`),
+
   previewAllocation: (
     semesterId: string,
     seed?: number,
     strategy: MentorAllocationStrategy = 'Balanced',
     edits: MentorAllocationEdit[] = [],
+    includeTemporaryMentors = true,
   ): Promise<ApiEnvelope<MentorAllocationPreview>> =>
     axiosClient.post('/admin/mentors/allocations/preview', {
       semesterId,
       classIds: [],
       strategy,
       edits,
+      includeTemporaryMentors,
       ...(seed === undefined ? {} : { seed }),
     }),
 
