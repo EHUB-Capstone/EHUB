@@ -875,8 +875,7 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
             return $"/lecturer/classes?{string.Join('&', query)}";
         }
 
-        if (message.Type == "ProjectDirection.Reviewed.v1"
-            && ReadPayloadBoolean(message.PayloadJson, "isProjectProfileChangeProposal"))
+        if (message.Type == "ProjectDirection.Reviewed.v1")
         {
             var teamId = ReadPayloadGuid(message.PayloadJson, "teamId");
             return teamId.HasValue ? $"/student/workspace/{teamId.Value}" : "/student/workspace";
@@ -886,7 +885,7 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
         {
             "AccountApproval.Requested.v1" => "/admin/account-approvals",
             "TeamProposal.Submitted.v1" => $"/classes/{message.AggregateId}",
-            "TeamProposal.Reviewed.v1" or "ProjectDirection.Reviewed.v1" or
+            "TeamProposal.Reviewed.v1" or
                 "Class.EnrollmentMajorsAutoLocked.v1" => $"/student/classes/{message.AggregateId}",
             "TeamFormation.Invited.v1" or "TeamFormation.Accepted.v1" or
                 "TeamFormation.Declined.v1" or "TeamFormation.Left.v1" or "TeamFormation.InvitationExpired.v1" or
@@ -906,13 +905,6 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
             && property.TryGetGuid(out var value)
                 ? value
                 : null;
-    }
-
-    private static bool ReadPayloadBoolean(string payloadJson, string propertyName)
-    {
-        using var document = JsonDocument.Parse(payloadJson);
-        return document.RootElement.TryGetProperty("data", out var data)
-            && ReadBoolean(data, propertyName);
     }
 
     private static string ReadString(JsonElement data, string propertyName) =>

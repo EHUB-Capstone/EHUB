@@ -8,6 +8,7 @@ import { toClassViewModel, unwrapApiData } from '../../utils/classMappers';
 import {
   buildLecturerDirectionOverviewLink,
   getLegacyNotificationClassId,
+  isProjectDirectionReviewedNotification,
   isProjectDirectionSubmittedNotification,
 } from '../../utils/notificationNavigation';
 import { subscribeProjectDirectionRealtime } from '../../api/projectDirectionRealtime';
@@ -74,6 +75,12 @@ const NotificationDropdown = () => {
     setIsOpen(false);
     const notificationId = getNotificationId(n);
     let targetLink = n.link;
+
+    // Older review notifications were saved with a My Classes link. Keep them
+    // useful after the deep-link target moved to the team's workspace.
+    if (isProjectDirectionReviewedNotification(n) && n.data?.teamId) {
+      targetLink = `/student/workspace/${n.data.teamId}`;
+    }
 
     if (isProjectDirectionSubmittedNotification(n) && !n.link?.startsWith('/lecturer/classes')) {
       const classId = getLegacyNotificationClassId(n);
