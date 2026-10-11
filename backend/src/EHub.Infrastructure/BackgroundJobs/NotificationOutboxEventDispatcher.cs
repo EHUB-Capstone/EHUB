@@ -270,6 +270,29 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
                         : $"A team submitted materials for {checkpointLabel} for your review.",
                     cancellationToken);
                 break;
+            case "Evaluation.Published.v1":
+                var publishedCheckpointNumber = data.TryGetProperty("checkpointNumber", out var publishedCheckpointValue) &&
+                                                publishedCheckpointValue.TryGetInt32(out var parsedPublishedCheckpoint)
+                    ? parsedPublishedCheckpoint
+                    : 0;
+                var publishedCheckpointTitle = ReadString(data, "checkpointTitle");
+                var publishedCheckpointLabel = publishedCheckpointNumber > 0
+                    ? $"Checkpoint {publishedCheckpointNumber}"
+                    : "checkpoint";
+                var publishedCheckpointDescription = !string.IsNullOrWhiteSpace(publishedCheckpointTitle)
+                    ? $"{publishedCheckpointLabel}: {publishedCheckpointTitle}"
+                    : publishedCheckpointLabel;
+                realtimeNotificationRecipients = ReadGuids(data, "studentUserIds");
+                realtimeNotificationTeamId = ReadGuid(data, "teamId");
+                await AddForUsersAsync(
+                    message,
+                    data,
+                    "studentUserIds",
+                    NotificationType.EvaluationPublished,
+                    $"{publishedCheckpointLabel} result is available",
+                    $"Your result for {publishedCheckpointDescription} has been published. Open Evaluation & Grading to view your score and feedback.",
+                    cancellationToken);
+                break;
             case "ProjectDirection.Reviewed.v1":
                 var directionDecision = ReadString(data, "decision");
                 var isProfileChangeReview = ReadBoolean(data, "isProjectProfileChangeProposal");
@@ -879,6 +902,14 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
         {
             var teamId = ReadPayloadGuid(message.PayloadJson, "teamId");
             return teamId.HasValue ? $"/student/workspace/{teamId.Value}" : "/student/workspace";
+        }
+
+        if (message.Type == "Evaluation.Published.v1")
+        {
+            var teamId = ReadPayloadGuid(message.PayloadJson, "teamId");
+            return teamId.HasValue
+                ? $"/evaluation-grading?teamId={teamId.Value}"
+                : "/evaluation-grading";
         }
 
         return message.Type switch
