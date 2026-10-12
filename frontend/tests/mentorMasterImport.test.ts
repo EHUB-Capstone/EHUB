@@ -50,3 +50,9 @@ test('summarizeMissingFields keeps the first few names and counts the rest', () 
   assert.deepEqual(summarizeMissingFields(['Email', 'SDT', 'Công ty', 'Loại HĐ', 'Địa chỉ']), { count: 5, preview: ['Email', 'SDT', 'Công ty'], hiddenCount: 2 });
   assert.deepEqual(summarizeMissingFields([]), { count: 0, preview: [], hiddenCount: 0 });
 });
+
+test('describeMasterImportResult says when semester entries moved onto the new account', () => {
+  assert.match(describeMasterImportResult({ ...emptyResult, temporarySemestersConverted: 2 }), /2 semester entries moved onto the account/);
+  assert.match(describeMasterImportResult({ ...emptyResult, temporarySemestersConverted: 1 }), /1 semester entry moved/);
+  assert.doesNotMatch(describeMasterImportResult(emptyResult), /semester entr/);
+});

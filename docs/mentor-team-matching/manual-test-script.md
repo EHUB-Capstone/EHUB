@@ -871,6 +871,26 @@ Các kiểm tra này không thuộc riêng yêu cầu nào nhưng cần đạt �
 
 ---
 
+### Kiểm tra 10.14. Import email cho mentor tạm: mentor tự cập nhật trong kỳ, không bị nhân đôi
+
+**Chuẩn bị:** một mentor chưa có email, đã được **Add mentors** vào một kỳ (đang có nhãn **Temporary**), tốt nhất đã gán vào một nhóm.
+
+**Làm gì**
+1. Import file có thêm email cho đúng mentor đó (Users > Import > Import Mentors) và bấm Import.
+2. Mở **Subject Management > Lecturers & Mentors**, chọn đúng kỳ, tìm mentor đó.
+3. (Tuỳ chọn) Trước bước 1, chuyển mentor tạm sang **Inactive** ở kỳ, sau đó làm lại bước 1–2.
+4. Import lại cùng file một lần nữa.
+
+**Phải thấy gì**
+- [ ] Bước 1: thông báo kết quả nêu "N semester entries moved onto the account, no need to add the mentor again" (và "N teams switched..." nếu mentor đang giữ nhóm).
+- [ ] Bước 2: mentor chỉ còn **một dòng**, không còn nhãn **Temporary**, hiện đầy đủ email, trạng thái Active như trước; không cần Add mentors lại. Nhóm đã gán vẫn đúng mentor đó. Số liệu "Teaching staff directory" không còn tăng thừa.
+- [ ] Bước 2: bấm **Preview assignment** (Balanced/Random) vẫn đề xuất được mentor này như mentor thường.
+- [ ] Bước 3: mentor đã chuyển vẫn **Inactive** sau khi có tài khoản.
+- [ ] Bước 4: không thêm dòng mới, không có gì thay đổi.
+- [ ] Sau khi deploy bản có migration làm sạch (chạy `--initialize-database`): các mentor từng bị nhân đôi chỉ còn một dòng. **Sao lưu database trước khi chạy.**
+
+---
+
 ## Phần 4. Hạn chế đã biết (chỉ ghi nhận, chưa tính là lỗi mới)
 
 ### Mở lại lớp đã hoàn thành

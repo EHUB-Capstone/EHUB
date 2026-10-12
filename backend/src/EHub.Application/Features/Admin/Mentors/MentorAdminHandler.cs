@@ -174,6 +174,7 @@ public sealed class MentorAdminHandler(
                 var created = 0;
                 var updated = 0;
                 var temporaryConverted = 0;
+                var participationConverted = 0;
                 var draftsSaved = 0;
                 var draftsCompleted = 0;
                 var now = dateTimeProvider.UtcNow;
@@ -264,8 +265,9 @@ public sealed class MentorAdminHandler(
                             sibling.ConvertedAtUtc = now;
                             sibling.UpdatedBy = adminId;
                         }
-                        temporaryConverted += await ConvertTemporaryAssignmentsAsync(
-                            siblings.Select(item => item.Id).Append(completingDraft.Id).ToArray(), user, adminId, now, token);
+                        var convertedDraftIds = siblings.Select(item => item.Id).Append(completingDraft.Id).ToArray();
+                        temporaryConverted += await ConvertTemporaryAssignmentsAsync(convertedDraftIds, user, adminId, now, token);
+                        participationConverted += await ConvertTemporaryParticipationAsync(convertedDraftIds, user, adminId, now, token);
                     }
 
                     CancelPendingRegistration(row.Email, user.Id, pendingByEmail, now, adminId);
@@ -280,7 +282,8 @@ public sealed class MentorAdminHandler(
                     UpdatedCount = updated,
                     DraftSavedCount = draftsSaved,
                     DraftCompletedCount = draftsCompleted,
-                    TemporaryAssignmentsConverted = temporaryConverted
+                    TemporaryAssignmentsConverted = temporaryConverted,
+                    TemporarySemestersConverted = participationConverted
                 };
             }, cancellationToken);
             return Result.Success(response);
@@ -852,6 +855,46 @@ public sealed class MentorAdminHandler(
 
     // The mentor now has an account. Their temporary assignments become real ones on the same team and slot, keeping the
     // original start date. Assignments that ended together with a completed class are kept as ended history for the mentor.
+    // The mentor now has an account, so every semester they took part in as a mentor without one lists the account instead.
+    // The account keeps the same Active/Inactive status and the old entry is retired, so the mentor appears once, without the
+    // Temporary label, and nobody has to add them to the semester again.
+    private async Task<int> ConvertTemporaryParticipationAsync(Guid[] draftIds, User user, Guid adminId, DateTime now, CancellationToken token)
+    {
+        var participants = await context.SemesterTemporaryMentors.Where(item => draftIds.Contains(item.DraftId)).ToListAsync(token);
+        var converted = 0;
+        foreach (var participant in participants)
+        {
+            var staff = context.SemesterStaffAssignments.Local.FirstOrDefault(item =>
+                    item.SemesterId == participant.SemesterId && item.UserId == user.Id && item.Role == SemesterStaffRole.Mentor && !item.IsDeleted)
+                ?? await context.SemesterStaffAssignments.FirstOrDefaultAsync(item =>
+                    item.SemesterId == participant.SemesterId && item.UserId == user.Id && item.Role == SemesterStaffRole.Mentor, token);
+            if (staff is null)
+            {
+                context.SemesterStaffAssignments.Add(new SemesterStaffAssignment
+                {
+                    SemesterId = participant.SemesterId, UserId = user.Id, Role = SemesterStaffRole.Mentor,
+                    Status = participant.Status, CreatedBy = adminId
+                });
+            }
+            else if (staff.Status == SemesterStaffStatus.Inactive && participant.Status == SemesterStaffStatus.Active)
+            {
+                staff.Status = SemesterStaffStatus.Active;
+                staff.UpdatedBy = adminId;
+            }
+
+            participant.IsDeleted = true;
+            participant.DeletedAt = now;
+            participant.DeletedBy = adminId;
+            context.SemesterAuditLogs.Add(new SemesterAuditLog
+            {
+                SemesterId = participant.SemesterId, Action = "SEMESTER_TEMPORARY_MENTOR_CONVERTED", PerformedByUserId = adminId, OccurredAtUtc = now,
+                DetailsJson = JsonSerializer.Serialize(new { participant.SemesterId, participant.DraftId, user.Id, Status = participant.Status.ToString() })
+            });
+            converted++;
+        }
+        return converted;
+    }
+
     private async Task<int> ConvertTemporaryAssignmentsAsync(Guid[] draftIds, User user, Guid adminId, DateTime now, CancellationToken token)
     {
         var temporary = (await context.TemporaryMentorAssignments.Include(item => item.Team).ThenInclude(item => item.Class)

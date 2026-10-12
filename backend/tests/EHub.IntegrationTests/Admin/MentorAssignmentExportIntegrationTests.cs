@@ -17,6 +17,7 @@ using EHub.IntegrationTests.Common;
 using EHub.Shared.Constants;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace EHub.IntegrationTests.Admin;
@@ -697,6 +698,117 @@ public sealed class MentorAssignmentExportIntegrationTests(CustomWebApplicationF
         await context.SaveChangesAsync();
         var ids = events.Select(item => item.EventId).ToArray();
         return await context.Notifications.AsNoTracking().Where(item => ids.Contains(item.SourceEventId!.Value)).ToListAsync();
+    }
+
+    [Fact]
+    public async Task ImportingTheEmail_ShouldMoveTheSemesterEntryOntoTheAccount_WithoutAddingTheMentorAgain()
+    {
+        var token = await GetAdminTokenAsync();
+        var seed = await SeedLifecycleAsync(2045, 2089);
+        var name = $"Moved Lecturer {Guid.NewGuid().ToString("N")[..6]}";
+        var draft = await CreateDraftAsync(name, MentorType.Academic, makeUnique: false);
+        await AddTemporaryParticipantAsync(token, draft, 2089);
+        (await PostAsync(token, $"/api/teams/{seed.TargetTeamId}/mentor-assignments", new AssignMentorRequest { MentorProfileId = draft, Temporary = true }))
+            .StatusCode.Should().Be(HttpStatusCode.OK);
+        var before = (await GetJsonAsync<TeachingStaffListResponse>(token, "/api/subjects/teaching-staff?semester=SP&year=2089")).Staff.Single(item => item.DraftId == draft);
+        before.IsTemporary.Should().BeTrue();
+
+        var email = $"moved-{Guid.NewGuid():N}@example.edu.vn";
+        var commit = await ImportMasterAsync(token, email, name);
+        commit.TemporarySemestersConverted.Should().Be(1);
+        commit.TemporaryAssignmentsConverted.Should().Be(1);
+
+        var staff = (await GetJsonAsync<TeachingStaffListResponse>(token, "/api/subjects/teaching-staff?semester=SP&year=2089")).Staff;
+        var matching = staff.Where(item => item.Name == name).ToArray();
+        matching.Should().ContainSingle("the mentor appears once, as the account");
+        matching[0].IsTemporary.Should().BeFalse("the email is known now, so the Temporary label is gone");
+        matching[0].IsIncomplete.Should().BeFalse();
+        matching[0].Status.Should().Be("Active");
+        matching[0].Email.Should().Be(email);
+        staff.Should().NotContain(item => item.DraftId == draft);
+
+        using var scope = factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        (await context.SemesterTemporaryMentors.IgnoreQueryFilters().AsNoTracking().SingleAsync(item => item.DraftId == draft)).IsDeleted.Should().BeTrue();
+        (await context.SemesterAuditLogs.AsNoTracking().AnyAsync(item => item.SemesterId == seed.TargetSemesterId && item.Action == "SEMESTER_TEMPORARY_MENTOR_CONVERTED")).Should().BeTrue();
+
+        // The converted account is a normal participant: Balanced and Random can use it without adding it again.
+        var participants = await context.SemesterStaffAssignments.AsNoTracking()
+            .Where(item => item.SemesterId == seed.TargetSemesterId && item.Role == SemesterStaffRole.Mentor && item.User.NormalizedEmail == email).ToListAsync();
+        participants.Should().ContainSingle().Which.Status.Should().Be(SemesterStaffStatus.Active);
+    }
+
+    [Fact]
+    public async Task ImportingTheEmail_ShouldKeepAnInactiveSemesterEntryInactive_AndNeverCreateADuplicate()
+    {
+        var token = await GetAdminTokenAsync();
+        var seed = await SeedLifecycleAsync(2046, 2090);
+        var name = $"Paused Lecturer {Guid.NewGuid().ToString("N")[..6]}";
+        var draft = await CreateDraftAsync(name, MentorType.Academic, makeUnique: false);
+        await AddTemporaryParticipantAsync(token, draft, 2090);
+        var row = (await GetJsonAsync<TeachingStaffListResponse>(token, "/api/subjects/teaching-staff?semester=SP&year=2090")).Staff.Single(item => item.DraftId == draft);
+        (await PutAsync(token, $"/api/subjects/teaching-staff/temporary-mentors/{row.Id}", new UpdateSemesterTeachingStaffRequest { Status = "Inactive", RowVersion = row.RowVersion }))
+            .StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var email = $"paused-{Guid.NewGuid():N}@example.edu.vn";
+        (await ImportMasterAsync(token, email, name)).TemporarySemestersConverted.Should().Be(1);
+        // Importing the same file again changes nothing and cannot add the mentor a second time.
+        (await ImportMasterAsync(token, email, name)).TemporarySemestersConverted.Should().Be(0);
+
+        var matching = (await GetJsonAsync<TeachingStaffListResponse>(token, "/api/subjects/teaching-staff?semester=SP&year=2090")).Staff.Where(item => item.Name == name).ToArray();
+        matching.Should().ContainSingle();
+        matching[0].Status.Should().Be("Inactive");
+        matching[0].IsTemporary.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task ReconcileMigration_ShouldMoveStaleSemesterEntriesOntoTheAccount_AndLeaveOtherEntriesAlone()
+    {
+        Guid semesterId, stalePendingId, staleConvertedId, userId;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var seedContext = await NewSeedContextAsync(scope);
+            var semester = seedContext.Semester("MG", SemesterTerm.Spring, 2087);
+            var converted = seedContext.Mentor(MentorType.Academic, "Migrated Mentor", null);
+            var stillPending = new MentorImportDraft { Type = MentorType.Academic, FullName = "Still Pending", NormalizedFullName = "still pending", Status = MentorImportDraftStatus.NeedsCompletion };
+            var convertedDraft = new MentorImportDraft
+            {
+                Type = MentorType.Academic, FullName = "Migrated Mentor", NormalizedFullName = "migrated mentor",
+                Status = MentorImportDraftStatus.Converted, ConvertedMentorProfileId = converted.Id, ConvertedMentorProfile = converted
+            };
+            seedContext.Context.MentorImportDrafts.AddRange(stillPending, convertedDraft);
+            var staleConverted = new SemesterTemporaryMentor { SemesterId = semester.Id, Semester = semester, DraftId = convertedDraft.Id, Draft = convertedDraft, Status = SemesterStaffStatus.Active };
+            var stalePending = new SemesterTemporaryMentor { SemesterId = semester.Id, Semester = semester, DraftId = stillPending.Id, Draft = stillPending, Status = SemesterStaffStatus.Active };
+            seedContext.Context.SemesterTemporaryMentors.AddRange(staleConverted, stalePending);
+            await seedContext.Context.SaveChangesAsync();
+            (semesterId, stalePendingId, staleConvertedId, userId) = (semester.Id, stalePending.Id, staleConverted.Id, converted.UserId);
+        }
+
+        // Re-run the cleanup the way a deployment does: step back to the migration before it, then apply it again.
+        using (var scope = factory.Services.CreateScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var migrations = context.Database.GetMigrations().ToList();
+            var index = migrations.FindIndex(item => item.EndsWith("ReconcileConvertedTemporaryMentors"));
+            index.Should().BeGreaterThan(0);
+            var migrator = ((IInfrastructure<IServiceProvider>)context.Database).Instance.GetRequiredService<Microsoft.EntityFrameworkCore.Migrations.IMigrator>();
+            await migrator.MigrateAsync(migrations[index - 1]);
+            await migrator.MigrateAsync();
+        }
+
+        using var verify = factory.Services.CreateScope();
+        var db = verify.ServiceProvider.GetRequiredService<AppDbContext>();
+        (await db.SemesterStaffAssignments.AsNoTracking().SingleAsync(item => item.SemesterId == semesterId && item.UserId == userId && item.Role == SemesterStaffRole.Mentor))
+            .Status.Should().Be(SemesterStaffStatus.Active);
+        (await db.SemesterTemporaryMentors.IgnoreQueryFilters().AsNoTracking().SingleAsync(item => item.Id == staleConvertedId)).IsDeleted.Should().BeTrue();
+        (await db.SemesterTemporaryMentors.IgnoreQueryFilters().AsNoTracking().SingleAsync(item => item.Id == stalePendingId)).IsDeleted
+            .Should().BeFalse("a mentor who still has no account keeps the entry");
+    }
+
+    private async Task AddTemporaryParticipantAsync(string token, Guid draft, int year)
+    {
+        var response = await PostAsync(token, "/api/subjects/teaching-staff/batch", new AddSemesterTeachingStaffBatchRequest { Semester = "SP", Year = year, Role = "MENTOR", Temporary = true, UserIds = [draft] });
+        response.StatusCode.Should().Be(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
     }
 
     private async Task<HttpResponseMessage> PutAsync(string token, string url, object body)

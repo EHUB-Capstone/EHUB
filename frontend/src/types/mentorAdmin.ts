@@ -49,6 +49,8 @@ export interface MentorImportCommitResult {
   draftCompletedCount: number;
   /** Teams whose temporary mentor became the real mentor. */
   temporaryAssignmentsConverted?: number;
+  /** Semesters where the mentor now appears as the account instead of a mentor without one. */
+  temporarySemestersConverted?: number;
 }
 
 export interface MentorAllocationRowPreview {

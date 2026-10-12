@@ -50,6 +50,8 @@ public sealed class MentorImportCommitResponse
     public int DraftCompletedCount { get; init; }
     // Teams whose temporary mentor became the real mentor because the email arrived.
     public int TemporaryAssignmentsConverted { get; init; }
+    // Semesters where the mentor now appears as the account instead of a mentor without one.
+    public int TemporarySemestersConverted { get; init; }
 }
 
 // A mentor kept in the master list without a login account yet (for example the workbook had no email).
