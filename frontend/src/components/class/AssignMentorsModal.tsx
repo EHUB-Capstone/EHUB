@@ -356,7 +356,7 @@ export default function AssignMentorsModal({ classId, onClose, onAssigned }: Ass
                         <p className="px-4 py-8 text-center text-xs text-slate-400">
                           {mentors.length === 0
                             ? 'No mentor is active in this semester yet. Add mentors to the semester first (Subject Management > Lecturers & Mentors > Add mentors).'
-                            : 'No mentors match this filter.'}
+                            : 'No mentors match this filter. A mentor who is not in this semester is not listed: add them first in Subject Management > Lecturers & Mentors > Add mentors.'}
                         </p>
                       ) : filteredMentors.map(mentor => {
                         const isChecked = selectedMentorId === mentor._id;

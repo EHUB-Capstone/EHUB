@@ -150,10 +150,46 @@ public sealed class UserManagementHandler(IApplicationDbContext context, ICurren
         if (requestedRole == SystemRoles.Mentor && !await context.MentorProfiles.AnyAsync(item => item.UserId == user.Id, token)) await context.MentorProfiles.AddAsync(NewMentorProfile(user, ParseMentorType(request.MentorType)!.Value, request), token);
         await context.SaveChangesAsync(token); return Result.Success(ToResponse(user, request));
     }
+    // Tells the admin, before anything is removed, whether the account can be deleted and, if not, exactly why.
+    public async Task<Result<UserDeletionCheckResponse>> GetDeletionCheckAsync(Guid id, CancellationToken token = default)
+    {
+        var user = await GetUserEntityAsync(id, token);
+        if (user is null) return Fail<UserDeletionCheckResponse>("NOT_FOUND", "User was not found.");
+        var reasons = await CollectDeletionBlockersAsync(user, token);
+        return Result.Success(new UserDeletionCheckResponse { CanDelete = reasons.Count == 0, Reasons = reasons });
+    }
+
     public async Task<Result> DeleteUserAsync(Guid id, CancellationToken token = default)
     {
-        if (id == currentUser.UserId) return Fail("BUSINESS_RULE", "You cannot delete your own account."); var user = await GetUserEntityAsync(id, token); if (user is null) return Fail("NOT_FOUND", "User was not found."); if (user.UserRoles.Any(item => item.Role.Name == SystemRoles.Admin) && await AdminCount(token) <= 1) return Fail("BUSINESS_RULE", "The last admin cannot be deleted."); if (user.Student is not null || await context.Evaluations.AnyAsync(item => item.EvaluatorId == id, token) || await context.Classes.AnyAsync(item => item.CreatedById == id, token) || await context.Projects.AnyAsync(item => item.CreatedById == id, token)) return Fail("RELATED_DATA_EXISTS", "This account has important related data and cannot be deleted."); context.Users.Remove(user); await context.SaveChangesAsync(token); return Result.Success();
+        var user = await GetUserEntityAsync(id, token);
+        if (user is null) return Fail("NOT_FOUND", "User was not found.");
+
+        var reasons = await CollectDeletionBlockersAsync(user, token);
+        if (reasons.Count > 0)
+            return Fail(id == currentUser.UserId ? "BUSINESS_RULE" : "RELATED_DATA_EXISTS", UserDeletionRules.Explain(user.FullName, reasons));
+
+        // Nothing depends on the account any more. Its own records go with it, so its email and roll number can be used again.
+        var staff = await context.SemesterStaffAssignments.Where(item => item.UserId == id).ToListAsync(token);
+        context.SemesterStaffAssignments.RemoveRange(staff);
+        var profile = await context.MentorProfiles.FirstOrDefaultAsync(item => item.UserId == id, token);
+        if (profile is not null) context.MentorProfiles.Remove(profile);
+        if (user.Student is not null) context.Students.Remove(user.Student);
+        // The account is soft-deleted by hand: removing the tracked entity makes EF refuse to detach its role links.
+        user.IsDeleted = true;
+        user.DeletedAt = DateTime.UtcNow;
+        user.DeletedBy = currentUser.UserId;
+        await context.SaveChangesAsync(token);
+        return Result.Success();
     }
+
+    private async Task<List<string>> CollectDeletionBlockersAsync(User user, CancellationToken token)
+    {
+        if (user.Id == currentUser.UserId)
+            return ["you cannot delete your own account"];
+        var isLastAdmin = user.UserRoles.Any(item => item.Role.Name == SystemRoles.Admin) && await AdminCount(token) <= 1;
+        return await UserDeletionRules.FindBlockersAsync(context, user, isLastAdmin, token);
+    }
+
     private async Task<IReadOnlyDictionary<Guid, UserAcademicContext>> GetCurrentSemesterContextsAsync(
         Guid[] userIds,
         CancellationToken token)
@@ -302,7 +338,7 @@ public sealed class UserManagementHandler(IApplicationDbContext context, ICurren
         return null;
     }
     private Task<User?> GetUserEntityAsync(Guid id, CancellationToken token) => context.Users.Include(user => user.UserRoles).ThenInclude(item => item.Role).Include(user => user.Student).FirstOrDefaultAsync(user => user.Id == id, token);
-    private Task<int> AdminCount(CancellationToken token) => context.UserRoles.CountAsync(item => item.Role.Name == SystemRoles.Admin, token);
+    private Task<int> AdminCount(CancellationToken token) => context.UserRoles.CountAsync(item => item.Role.Name == SystemRoles.Admin && !item.User.IsDeleted, token);
     private static bool TryRole(string value, out string role) { role = NormalizeRole(value); return SystemRoles.All.Contains(role); } private static string NormalizeRole(string value) => value.Trim().ToLowerInvariant() switch { "admin" => SystemRoles.Admin, "lecturer" => SystemRoles.Lecturer, "mentor" => SystemRoles.Mentor, "student" => SystemRoles.Student, _ => string.Empty }; private static bool TryStatus(string value, out UserStatus status) { status = ToStatus(value); return value.Equals("PENDING", StringComparison.OrdinalIgnoreCase) || value.Equals("APPROVED", StringComparison.OrdinalIgnoreCase) || value.Equals("REJECTED", StringComparison.OrdinalIgnoreCase); } private static UserStatus ToStatus(string value) => value.Trim().ToUpperInvariant() switch { "PENDING" => UserStatus.PendingApproval, "REJECTED" => UserStatus.Rejected, _ => UserStatus.Active }; private static string ToStatus(UserStatus value) => value == UserStatus.PendingApproval ? "PENDING" : value == UserStatus.Rejected ? "REJECTED" : "APPROVED"; private static string? Clean(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
     private static Student NewStudent(User user, SaveManagedUserRequest request) => new() { UserId = user.Id, FullName = user.FullName, Email = user.Email, RollNumber = request.StudentId!.Trim(), NormalizedRollNumber = request.StudentId.Trim().ToUpperInvariant(), MajorCode = request.Major!.Trim().ToUpperInvariant(), AvatarUrl = user.AvatarUrl, ProgramGroup = ProgramGroup.Standard }; private static MentorProfile NewMentorProfile(User user, MentorType type, SaveManagedUserRequest request) => new() { UserId = user.Id, User = user, Type = type, Status = MentorProfileStatus.Active, Expertise = MentorProfileRules.NormalizeExpertise(request.Expertise).Values, Bio = MentorProfileRules.Clean(request.Bio), AvailabilityNote = MentorProfileRules.Clean(request.AvailabilityNote) }; private static void UpdateStudent(Student student, SaveManagedUserRequest request, User user) { student.IsDeleted = false; student.FullName = user.FullName; student.Email = user.Email; student.RollNumber = request.StudentId!.Trim(); student.NormalizedRollNumber = request.StudentId.Trim().ToUpperInvariant(); student.MajorCode = request.Major!.Trim().ToUpperInvariant(); }
     private static ManagedUserResponse ToResponse(

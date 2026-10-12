@@ -9,5 +9,6 @@ public interface IUserManagementHandler
     Task<Result<ManagedUserResponse>> GetUserAsync(Guid id, CancellationToken cancellationToken = default);
     Task<Result<ManagedUserResponse>> CreateUserAsync(SaveManagedUserRequest request, CancellationToken cancellationToken = default);
     Task<Result<ManagedUserResponse>> UpdateUserAsync(Guid id, SaveManagedUserRequest request, CancellationToken cancellationToken = default);
+    Task<Result<UserDeletionCheckResponse>> GetDeletionCheckAsync(Guid id, CancellationToken cancellationToken = default);
     Task<Result> DeleteUserAsync(Guid id, CancellationToken cancellationToken = default);
 }

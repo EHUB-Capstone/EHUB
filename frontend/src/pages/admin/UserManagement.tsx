@@ -52,6 +52,8 @@ export default function UserManagement() {
   const [incompleteRefresh, setIncompleteRefresh] = useState(0);
   const [deleteTarget, setDeleteTarget] = useState<any | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  // Whether the account can be deleted, asked from the server when the dialog opens: { loading } | { canDelete, reasons }.
+  const [deleteCheck, setDeleteCheck] = useState<{ loading: boolean; canDelete: boolean; reasons: string[] }>({ loading: false, canDelete: true, reasons: [] });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingUser, setEditingUser] = useState<any | null>(null);
   const [rowActionId, setRowActionId] = useState<string | null>(null);
@@ -215,8 +217,17 @@ export default function UserManagement() {
     setIsModalOpen(true);
   };
 
-  const handleDelete = (id: string, name: string) => {
+  const handleDelete = async (id: string, name: string) => {
     setDeleteTarget({ id, name });
+    setDeleteCheck({ loading: true, canDelete: true, reasons: [] });
+    try {
+      const response = await userApi.deletionCheck(id);
+      const result = response?.data ?? response;
+      setDeleteCheck({ loading: false, canDelete: Boolean(result?.canDelete), reasons: result?.reasons ?? [] });
+    } catch {
+      // If the check itself fails the server still refuses an unsafe delete when the admin confirms.
+      setDeleteCheck({ loading: false, canDelete: true, reasons: [] });
+    }
   };
 
   const confirmDelete = async () => {
@@ -228,7 +239,9 @@ export default function UserManagement() {
       toast.success('User account deleted successfully!');
       setDeleteTarget(null);
     } catch (error) {
-      toast.error(parseApiError(error, 'Failed to delete user').message);
+      // The server names what still depends on the account, so the message is shown in full and the dialog closes.
+      toast.error(parseApiError(error, 'Failed to delete user').message, { duration: 8000 });
+      setDeleteTarget(null);
     } finally {
       setIsDeleting(false);
     }
@@ -389,6 +402,7 @@ export default function UserManagement() {
           search={debouncedSearch}
           mentorType={mentorTypeFilter}
           onUnfilteredTotal={setIncompleteCount}
+          onChanged={() => { void loadIncompleteCount(); void fetchUsers(); }}
         />
       )}
 
@@ -426,7 +440,8 @@ export default function UserManagement() {
                   <th className="py-3.5 px-6 text-xs text-slate-400 uppercase text-left font-semibold tracking-wider">Class</th>
                   <th className="py-3.5 px-6 text-xs text-slate-400 uppercase text-left font-semibold tracking-wider">Group Name</th>
                   <th className="py-3.5 px-6 text-xs text-slate-400 uppercase text-left font-semibold tracking-wider">Joined Date</th>
-                  <th className="py-3.5 px-6 text-xs text-slate-400 uppercase text-right font-semibold tracking-wider">Actions</th>
+                  {/* Stays pinned to the right edge, so Edit and Delete are visible without scrolling the table sideways. */}
+                  <th className="sticky right-0 z-[1] bg-slate-50 py-3.5 px-6 text-xs text-slate-400 uppercase text-right font-semibold tracking-wider shadow-[-8px_0_8px_-8px_rgba(15,23,42,0.12)]">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -488,7 +503,7 @@ export default function UserManagement() {
                     <td className="py-3.5 px-6 text-xs text-slate-400">
                       {user.createdAt ? new Date(user.createdAt).toLocaleDateString() : '—'}
                     </td>
-                    <td className="py-3.5 px-6 text-right">
+                    <td className="sticky right-0 z-[1] bg-white py-3.5 px-6 text-right shadow-[-8px_0_8px_-8px_rgba(15,23,42,0.12)] group-hover:bg-slate-50">
                       <div className="flex items-center justify-end gap-1.5">
                         {user.status === 'PENDING' && (
                           <>
@@ -528,7 +543,7 @@ export default function UserManagement() {
                           aria-label={`Delete ${user.name}`}
                           title="Delete User"
                           className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-all"
-                          onClick={() => handleDelete(user.id || user._id, `${user.name} (${user.email})`)}
+                          onClick={() => void handleDelete(user.id || user._id, `${user.name} (${user.email})`)}
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
@@ -791,8 +806,22 @@ export default function UserManagement() {
         onClose={() => setDeleteTarget(null)}
         onConfirm={confirmDelete}
         title="Delete User Account"
-        description={`Are you sure you want to delete ${deleteTarget?.name}? This action cannot be undone.`}
+        description={deleteCheck.loading
+          ? `Checking whether ${deleteTarget?.name} can be deleted...`
+          : deleteCheck.canDelete
+            ? `Are you sure you want to delete ${deleteTarget?.name}? This action cannot be undone.`
+            : `${deleteTarget?.name} cannot be deleted right now.`}
         isSubmitting={isDeleting}
+        confirmDisabled={deleteCheck.loading || !deleteCheck.canDelete}
+        details={!deleteCheck.loading && !deleteCheck.canDelete ? (
+          <div role="alert" className="rounded-xl bg-red-50 px-4 py-3 text-left text-sm text-red-700">
+            <p className="font-semibold">Why it cannot be deleted</p>
+            <ul className="mt-1 list-disc space-y-0.5 pl-5">
+              {deleteCheck.reasons.map(reason => <li key={reason}>{reason.charAt(0).toUpperCase() + reason.slice(1)}</li>)}
+            </ul>
+            <p className="mt-2 text-xs text-red-600">Remove or reassign these first, or block the account instead so it can no longer sign in.</p>
+          </div>
+        ) : undefined}
       />
     </div>
   );

@@ -103,6 +103,14 @@ public sealed class UsersController(IUserManagementHandler handler) : Controller
         return ToActionResult(result, "User updated successfully.");
     }
 
+    [HttpGet("{id:guid}/deletion-check")]
+    [Authorize(Policy = SystemPolicies.AdminOnly)]
+    public async Task<IActionResult> CheckUserDeletion(Guid id, CancellationToken cancellationToken)
+    {
+        var result = await handler.GetDeletionCheckAsync(id, cancellationToken);
+        return ToActionResult(result, "Deletion check completed.");
+    }
+
     [HttpDelete("{id:guid}")]
     [Authorize(Policy = SystemPolicies.AdminOnly)]
     public async Task<IActionResult> DeleteUser(

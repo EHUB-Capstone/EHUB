@@ -34,6 +34,8 @@ public sealed class MentorImportPreviewResponse
     public int CompleteDraftCount { get; init; }
     public int ErrorCount { get; init; }
     public bool CanCommit { get; init; }
+    // Things the admin should know before confirming, such as columns of the file that were not recognised.
+    public IReadOnlyCollection<string> Warnings { get; init; } = Array.Empty<string>();
     public IReadOnlyCollection<MentorImportRowPreview> Rows { get; init; } = Array.Empty<MentorImportRowPreview>();
 }
 
@@ -50,6 +52,8 @@ public sealed class MentorImportCommitResponse
     public int DraftCompletedCount { get; init; }
     // Teams whose temporary mentor became the real mentor because the email arrived.
     public int TemporaryAssignmentsConverted { get; init; }
+    // Semesters where the mentor now appears as the account instead of a mentor without one.
+    public int TemporarySemestersConverted { get; init; }
 }
 
 // A mentor kept in the master list without a login account yet (for example the workbook had no email).
@@ -63,6 +67,37 @@ public sealed class IncompleteMentorResponse
     // Teams that currently use this mentor as a temporary mentor; they stay without an account until an email arrives.
     public int ActiveTeamCount { get; init; }
     public DateTime UpdatedAtUtc { get; init; }
+    // What is known so far, so the edit form can start from it.
+    public string? FptEmail { get; init; }
+    public string? Phone { get; init; }
+    public DateOnly? DateOfBirth { get; init; }
+    public string? ContractType { get; init; }
+    public string? EducationLevel { get; init; }
+    public string? CurrentAddress { get; init; }
+    public string? Organization { get; init; }
+    public string? Department { get; init; }
+    public string? JobTitle { get; init; }
+    // True when the edit gave the mentor an email: the account now exists and the mentor left the Needs information list.
+    public bool BecameAccount { get; init; }
+    public int TeamsSwitched { get; init; }
+    public int SemestersMoved { get; init; }
+}
+
+// Edits an incomplete mentor. The login email is not part of it: it arrives through an import, which creates the account.
+public sealed class UpdateIncompleteMentorRequest
+{
+    public string FullName { get; init; } = string.Empty;
+    // When given, the mentor gets a login account right away (the same result as importing a file with this email).
+    public string? Email { get; init; }
+    public string? FptEmail { get; init; }
+    public string? Phone { get; init; }
+    public DateOnly? DateOfBirth { get; init; }
+    public string? ContractType { get; init; }
+    public string? EducationLevel { get; init; }
+    public string? CurrentAddress { get; init; }
+    public string? Organization { get; init; }
+    public string? Department { get; init; }
+    public string? JobTitle { get; init; }
 }
 
 public sealed class IncompleteMentorListResponse

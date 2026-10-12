@@ -462,10 +462,15 @@ public sealed class MentorAssignmentHandler : IMentorAssignmentHandler
     }
 
     // Mentors who have no account yet. They are listed once per person (same type and name), preferring the master-list record.
+    // Mentors who have no account yet. Like mentors with an account they must first be added to the semester, so the class
+    // dialog offers exactly the people Balanced and Random can use. One entry per person (same type and name).
     private async Task<List<MentorCandidateDto>> LoadTemporaryCandidatesAsync(Guid semesterId, CancellationToken token)
     {
-        var drafts = await _context.MentorImportDrafts.AsNoTracking()
-            .Where(item => item.Status == MentorImportDraftStatus.NeedsCompletion).ToListAsync(token);
+        var drafts = await _context.SemesterTemporaryMentors.AsNoTracking()
+            .Where(item => item.SemesterId == semesterId && item.Status == SemesterStaffStatus.Active &&
+                           item.Draft.Status == MentorImportDraftStatus.NeedsCompletion)
+            .Select(item => item.Draft)
+            .ToListAsync(token);
         var chosen = drafts
             .GroupBy(item => (item.Type, item.NormalizedFullName))
             .Select(group => group.OrderBy(item => item.SemesterId == null ? 0 : 1).ThenByDescending(item => item.UpdatedAt ?? item.CreatedAt).First())
@@ -495,8 +500,10 @@ public sealed class MentorAssignmentHandler : IMentorAssignmentHandler
         }).ToList();
     }
 
-    private Task<MentorImportDraft?> LoadUsableDraftAsync(Guid draftId, CancellationToken token) =>
-        _context.MentorImportDrafts.FirstOrDefaultAsync(item => item.Id == draftId && item.Status == MentorImportDraftStatus.NeedsCompletion, token);
+    // The mentor must still lack an account and must have been added to the semester, the same rule as for mentors with an account.
+    private Task<MentorImportDraft?> LoadUsableDraftAsync(Guid draftId, Guid semesterId, CancellationToken token) =>
+        _context.MentorImportDrafts.FirstOrDefaultAsync(item => item.Id == draftId && item.Status == MentorImportDraftStatus.NeedsCompletion &&
+            _context.SemesterTemporaryMentors.Any(entry => entry.DraftId == item.Id && entry.SemesterId == semesterId && entry.Status == SemesterStaffStatus.Active), token);
 
     private TemporaryMentorAssignment AddTemporaryAssignEffects(Team team, MentorImportDraft draft, Guid userId, string? note, DateTime now)
     {
@@ -565,8 +572,8 @@ public sealed class MentorAssignmentHandler : IMentorAssignmentHandler
                 var mutationError = ClassStateRules.GetMutationError(team.Class.Status);
                 if (mutationError != null) return Failure(mutationError.Code, mutationError.Message);
 
-                var draft = await LoadUsableDraftAsync(request.MentorProfileId, token);
-                if (draft == null) return Failure(ErrorCodes.MentorNotAvailable, "The selected mentor is not available.");
+                var draft = await LoadUsableDraftAsync(request.MentorProfileId, team.Class.SemesterId, token);
+                if (draft == null) return Failure(ErrorCodes.MentorNotAvailable, "The selected mentor is not active in this semester's teaching staff list.");
 
                 var temporaryInSlot = await _context.TemporaryMentorAssignments.Include(item => item.Draft)
                     .Where(item => item.TeamId == teamId && item.Slot == draft.Type && item.Status == MentorAssignmentStatus.Active && item.EndedAt == null)
@@ -647,8 +654,8 @@ public sealed class MentorAssignmentHandler : IMentorAssignmentHandler
                 MentorImportDraft? newDraft = null;
                 if (request.Temporary)
                 {
-                    newDraft = await LoadUsableDraftAsync(request.MentorProfileId, token);
-                    if (newDraft == null) return Failure(ErrorCodes.MentorNotAvailable, "The selected mentor is not available.");
+                    newDraft = await LoadUsableDraftAsync(request.MentorProfileId, team.Class.SemesterId, token);
+                    if (newDraft == null) return Failure(ErrorCodes.MentorNotAvailable, "The selected mentor is not active in this semester's teaching staff list.");
                     if (newDraft.Type != slot) return Failure(ErrorCodes.ClassValidationError, "The replacement must be the same type of mentor as the current one.");
                     if (temporaryCurrent != null && temporaryCurrent.DraftId == newDraft.Id)
                         return Failure(ErrorCodes.ClassValidationError, "The selected mentor is already assigned to this slot.");
@@ -705,8 +712,8 @@ public sealed class MentorAssignmentHandler : IMentorAssignmentHandler
                 var mutationError = ClassStateRules.GetMutationError(targetClass.Status);
                 if (mutationError != null) return BatchFailure(mutationError.Code, mutationError.Message);
 
-                var draft = await LoadUsableDraftAsync(draftId, token);
-                if (draft == null) return BatchFailure(ErrorCodes.MentorNotAvailable, "The selected mentor is not available.");
+                var draft = await LoadUsableDraftAsync(draftId, targetClass.SemesterId, token);
+                if (draft == null) return BatchFailure(ErrorCodes.MentorNotAvailable, "The selected mentor is not active in this semester's teaching staff list.");
 
                 var teams = await _context.Teams.Where(item => item.ClassId == classId && teamIds.Contains(item.Id)).ToListAsync(token);
                 if (teams.Count != teamIds.Length)
