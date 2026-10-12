@@ -521,77 +521,6 @@ namespace EHub.Infrastructure.Persistence.Migrations
                     b.ToTable("checkpoints", (string)null);
                 });
 
-            modelBuilder.Entity("EHub.Domain.Entities.CheckpointDeadlineExtensionRequest", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("CheckpointId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("checkpoint_id");
-
-                    b.Property<Guid>("ClassId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("class_id");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid?>("CreatedBy")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("DeadlineUtc")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("deadline_utc");
-
-                    b.Property<DateTime?>("DeletedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid?>("DeletedBy")
-                        .HasColumnType("uuid");
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("Reason")
-                        .IsRequired()
-                        .HasMaxLength(2000)
-                        .HasColumnType("character varying(2000)")
-                        .HasColumnName("reason");
-
-                    b.Property<DateTime>("RequestedAtUtc")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("requested_at_utc");
-
-                    b.Property<Guid>("RequestedById")
-                        .HasColumnType("uuid")
-                        .HasColumnName("requested_by_id");
-
-                    b.Property<Guid>("TeamId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("team_id");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid?>("UpdatedBy")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CheckpointId");
-
-                    b.HasIndex("RequestedById");
-
-                    b.HasIndex("ClassId", "RequestedAtUtc");
-
-                    b.HasIndex("TeamId", "CheckpointId", "DeadlineUtc")
-                        .IsUnique();
-
-                    b.ToTable("checkpoint_deadline_extension_requests", (string)null);
-                });
-
             modelBuilder.Entity("EHub.Domain.Entities.Class", b =>
                 {
                     b.Property<Guid>("Id")
@@ -7434,41 +7363,6 @@ namespace EHub.Infrastructure.Persistence.Migrations
                     b.Navigation("Course");
 
                     b.Navigation("Creator");
-                });
-
-            modelBuilder.Entity("EHub.Domain.Entities.CheckpointDeadlineExtensionRequest", b =>
-                {
-                    b.HasOne("EHub.Domain.Entities.Checkpoint", "Checkpoint")
-                        .WithMany()
-                        .HasForeignKey("CheckpointId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("EHub.Domain.Entities.Class", "Class")
-                        .WithMany()
-                        .HasForeignKey("ClassId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("EHub.Domain.Entities.User", "RequestedBy")
-                        .WithMany()
-                        .HasForeignKey("RequestedById")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("EHub.Domain.Entities.Team", "Team")
-                        .WithMany()
-                        .HasForeignKey("TeamId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Checkpoint");
-
-                    b.Navigation("Class");
-
-                    b.Navigation("RequestedBy");
-
-                    b.Navigation("Team");
                 });
 
             modelBuilder.Entity("EHub.Domain.Entities.Class", b =>

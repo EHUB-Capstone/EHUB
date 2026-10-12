@@ -346,7 +346,7 @@ public sealed class LecturerCheckpointManagementHandler(
         });
 
         await QueueDeadlineNotificationsAsync(classId, checkpointId, checkpoint.Number,
-            start, end, now, isNew || oldStart != start || oldEnd != end, isReopen, cancellationToken);
+            start, end, now, isNew || oldStart != start || oldEnd != end, cancellationToken);
 
         await context.SaveChangesAsync(cancellationToken);
         return Result.Success(ToScheduleResponse(classRow, checkpoint, schedule, now));
@@ -472,7 +472,6 @@ public sealed class LecturerCheckpointManagementHandler(
             await QueueDeadlineNotificationsAsync(target.ClassId, target.CheckpointId,
                 definition.Number, start, end, now,
                 oldSchedule is null || target.StartDateUtc != start || target.EndDateUtc != end,
-                isReopen,
                 cancellationToken);
 
             var @class = classesById[target.ClassId];
@@ -502,7 +501,6 @@ public sealed class LecturerCheckpointManagementHandler(
         DateTime end,
         DateTime now,
         bool scheduleChanged,
-        bool isReopen,
         CancellationToken cancellationToken)
     {
         if (!scheduleChanged) return;
@@ -529,7 +527,7 @@ public sealed class LecturerCheckpointManagementHandler(
 
         if (end <= now) return;
 
-        var notification = new { checkpointId, checkpointNumber, startDateUtc = start, endDateUtc = end, isReopen };
+        var notification = new { checkpointId, checkpointNumber, startDateUtc = start, endDateUtc = end };
         ClassOutbox.Enqueue(context, CheckpointDeadlineEvents.ScheduleChanged,
             classId, notification, now);
         var reminderAt = end.Subtract(CheckpointDeadlineEvents.ReminderLeadTime);

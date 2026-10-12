@@ -101,14 +101,22 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
             case CheckpointDeadlineEvents.DeadlineOverdue:
                 await AddCheckpointOverdueNotificationsAsync(message, data, cancellationToken);
                 break;
-            case CheckpointDeadlineEvents.DeadlineExtensionRequested:
-                await AddDeadlineExtensionRequestNotificationsAsync(message, data, cancellationToken);
-                break;
             case ClassEmailEventType:
-                await _emailService.SendClassNotificationAsync(
-                    ReadString(data, "email"), ReadString(data, "fullName"),
-                    ReadString(data, "subject"), ReadString(data, "title"),
-                    ReadString(data, "body"), cancellationToken);
+                var actionUrl = ReadString(data, "actionUrl");
+                if (string.IsNullOrWhiteSpace(actionUrl))
+                {
+                    await _emailService.SendClassNotificationAsync(
+                        ReadString(data, "email"), ReadString(data, "fullName"),
+                        ReadString(data, "subject"), ReadString(data, "title"),
+                        ReadString(data, "body"), cancellationToken);
+                }
+                else
+                {
+                    await _emailService.SendClassNotificationWithActionAsync(
+                        ReadString(data, "email"), ReadString(data, "fullName"),
+                        ReadString(data, "subject"), ReadString(data, "title"),
+                        ReadString(data, "body"), ReadString(data, "actionLabel"), actionUrl, cancellationToken);
+                }
                 break;
             case "TeamProposal.Submitted.v1":
                 if (ReadBoolean(data, "adminReviewRequired"))
@@ -436,11 +444,8 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
 
         var deadline = schedule.EndDateUtc.ToString("dd/MM/yyyy HH:mm 'UTC'", System.Globalization.CultureInfo.InvariantCulture);
         var label = $"Checkpoint {number}";
-        var isReopen = ReadBoolean(data, "isReopen");
-        var title = isReopen ? $"{label} deadline reopened" : $"{label} schedule updated";
-        var body = isReopen
-            ? $"Your lecturer reopened {label} for class {schedule.ClassCode}. New deadline: {deadline}. Open your workspace to submit."
-            : $"{label} for class {schedule.ClassCode} is scheduled. Deadline: {deadline}. Open your workspace for the full schedule.";
+        var title = $"{label} schedule updated";
+        var body = $"{label} for class {schedule.ClassCode} is scheduled. Deadline: {deadline}. Open your workspace for the full schedule.";
         foreach (var recipient in recipients)
         {
             await AddAsync(message, recipient, NotificationType.SystemAnnouncement, title, body, cancellationToken);
@@ -474,8 +479,7 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
             item.ClassStudent.Student.User != null && item.ClassStudent.Student.User.Status == UserStatus.Active &&
             !submittedTeamIds.Contains(item.TeamId)).Select(item => new DeadlineRecipient(
                 item.TeamId, item.Team.TeamName, item.ClassStudent.Student.UserId!.Value,
-                item.ClassStudent.Student.User!.Email, item.ClassStudent.Student.FullName,
-                item.RoleInTeam == TeamMemberRole.Leader)).ToArrayAsync(cancellationToken);
+                item.ClassStudent.Student.User!.Email, item.ClassStudent.Student.FullName)).ToArrayAsync(cancellationToken);
         var deadline = deadlineUtc.ToString("dd/MM/yyyy HH:mm 'UTC'", System.Globalization.CultureInfo.InvariantCulture);
         var label = $"Checkpoint {checkpointNumber}";
         foreach (var recipient in members)
@@ -487,8 +491,7 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
             var payload = JsonSerializer.Serialize(new { data = new
             {
                 teamId = recipient.TeamId, checkpointId, checkpointNumber, classId = message.AggregateId,
-                classCode, teamName = recipient.TeamName, deadlineUtc, isOverdue = overdue,
-                isTeamLeader = recipient.IsTeamLeader
+                classCode, teamName = recipient.TeamName, deadlineUtc, isOverdue = overdue
             } }, JsonOptions);
             var workspaceLink = $"/student/workspace/{recipient.TeamId}";
             await AddAsync(message, recipient.UserId, overdue ? NotificationType.DeadlineOverdue : NotificationType.DeadlineReminder,
@@ -496,32 +499,12 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
             if (!string.IsNullOrWhiteSpace(recipient.Email))
             {
                 var subject = overdue ? $"E-HUB: {label} deadline missed" : $"E-HUB: {label} is due in one day";
+                var emailBody = overdue
+                    ? $"Your team missed this checkpoint deadline.\n\nTeam: {recipient.TeamName}\nClass: {classCode}\nCheckpoint: {label}\nDeadline: {deadline}"
+                    : $"Your team has one day remaining to submit this checkpoint.\n\nTeam: {recipient.TeamName}\nClass: {classCode}\nCheckpoint: {label}\nDeadline: {deadline}";
                 await QueueClassEmailAsync(message, recipient.Email, recipient.FullName, subject, title,
-                    $"{body}\n\nOpen your workspace: {BuildFrontendUrl(workspaceLink)}", cancellationToken);
+                    emailBody, cancellationToken, "Open workspace", BuildFrontendUrl(workspaceLink));
             }
-        }
-    }
-
-    private async Task AddDeadlineExtensionRequestNotificationsAsync(OutboxMessage message, JsonElement data, CancellationToken cancellationToken)
-    {
-        var primaryLecturerIds = await _context.Classes.AsNoTracking().Where(item => item.Id == message.AggregateId)
-            .Select(item => item.PrimaryLecturerId).Where(item => item.HasValue).Select(item => item!.Value).ToArrayAsync(cancellationToken);
-        var assignedLecturerIds = await _context.ClassLecturers.AsNoTracking().Where(item => item.ClassId == message.AggregateId)
-            .Select(item => item.LecturerId).ToArrayAsync(cancellationToken);
-        var recipients = await _context.Users.AsNoTracking().Where(item => primaryLecturerIds.Concat(assignedLecturerIds).Contains(item.Id) &&
-            item.Status == UserStatus.Active).Select(item => new { item.Id, item.Email, item.FullName }).ToArrayAsync(cancellationToken);
-        var teamName = ReadString(data, "teamName");
-        var classCode = ReadString(data, "classCode");
-        var checkpointNumber = data.TryGetProperty("checkpointNumber", out var number) && number.TryGetInt32(out var parsed) ? parsed : 0;
-        var link = $"/lecturer/classes?tab=checkpoint&classId={message.AggregateId}&checkpointNumber={checkpointNumber}";
-        var title = "Deadline extension requested";
-        var body = $"Team {teamName} in class {classCode} requested that you reopen Checkpoint {checkpointNumber}.";
-        foreach (var recipient in recipients)
-        {
-            await AddAsync(message, recipient.Id, NotificationType.DeadlineExtensionRequested, title, body, cancellationToken, link);
-            if (!string.IsNullOrWhiteSpace(recipient.Email))
-                await QueueClassEmailAsync(message, recipient.Email, recipient.FullName,
-                    "E-HUB: deadline extension requested", title, $"{body}\n\nSign in to E-HUB: {BuildFrontendUrl("/login")}", cancellationToken);
         }
     }
 
@@ -709,7 +692,9 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
         string subject,
         string title,
         string body,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? actionLabel = null,
+        string? actionUrl = null)
     {
         // One durable delivery per source event and recipient, including replays of
         // a source event after a crash. The existing unique event_id index is the guard.
@@ -731,7 +716,7 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
             PayloadJson = JsonSerializer.Serialize(new
             {
                 sourceEventId = source.EventId,
-                data = new { email = normalizedEmail, fullName, subject, title, body }
+                data = new { email = normalizedEmail, fullName, subject, title, body, actionLabel, actionUrl }
             }, JsonOptions)
         });
     }
@@ -937,11 +922,13 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
 
     private string BuildFrontendUrl(string path)
     {
-        var baseUrl = _frontendOptions.BaseUrl?.TrimEnd('/');
+        var baseUrl = string.IsNullOrWhiteSpace(_frontendOptions.EmailBaseUrl)
+            ? _frontendOptions.BaseUrl?.TrimEnd('/')
+            : _frontendOptions.EmailBaseUrl.TrimEnd('/');
         return string.IsNullOrWhiteSpace(baseUrl) ? path : $"{baseUrl}{path}";
     }
 
-    private sealed record DeadlineRecipient(Guid TeamId, string TeamName, Guid UserId, string? Email, string FullName, bool IsTeamLeader);
+    private sealed record DeadlineRecipient(Guid TeamId, string TeamName, Guid UserId, string? Email, string FullName);
 
     private static Guid? ReadPayloadGuid(string payloadJson, string propertyName)
     {
