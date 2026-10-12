@@ -194,3 +194,20 @@ export interface MentorAllocationCommitResult {
   createdCount: number;
   skippedCount: number;
 }
+
+/** One active class of a semester with how many of its mentor slots are still empty. */
+export interface MentorSemesterClass {
+  classId: string;
+  classCode: string;
+  subjectCode: string;
+  lecturerName?: string | null;
+  teamCount: number;
+  missingEnterpriseCount: number;
+  missingAcademicCount: number;
+  /** Slots held by a mentor who has no account yet. */
+  temporarySlotCount: number;
+}
+
+export interface MentorSemesterClassList {
+  classes: MentorSemesterClass[];
+}

@@ -250,3 +250,22 @@ public sealed class MentorAllocationCommitResponse
     public int CreatedCount { get; init; }
     public int SkippedCount { get; init; }
 }
+
+// One active class of a semester with how many mentor slots of its teams are still empty.
+public sealed class MentorSemesterClassResponse
+{
+    public Guid ClassId { get; init; }
+    public string ClassCode { get; init; } = string.Empty;
+    public string SubjectCode { get; init; } = string.Empty;
+    public string? LecturerName { get; init; }
+    public int TeamCount { get; init; }
+    public int MissingEnterpriseCount { get; init; }
+    public int MissingAcademicCount { get; init; }
+    // Slots held by a mentor who has no account yet.
+    public int TemporarySlotCount { get; init; }
+}
+
+public sealed class MentorSemesterClassListResponse
+{
+    public IReadOnlyCollection<MentorSemesterClassResponse> Classes { get; init; } = Array.Empty<MentorSemesterClassResponse>();
+}

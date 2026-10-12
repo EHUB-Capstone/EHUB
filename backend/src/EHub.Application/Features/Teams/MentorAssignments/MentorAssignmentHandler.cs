@@ -250,6 +250,7 @@ public sealed class MentorAssignmentHandler : IMentorAssignmentHandler
         if (request.AssignmentId == Guid.Empty)
             return Result.Failure(new Error(ErrorCodes.ClassValidationError, "Assignment id is required."));
         var current = await _context.MentorAssignments.Include(item => item.Team).ThenInclude(item => item.Class)
+            .Include(item => item.MentorProfile).ThenInclude(profile => profile.User)
             .FirstOrDefaultAsync(item => item.Id == request.AssignmentId && item.TeamId == teamId && item.Status == MentorAssignmentStatus.Active && item.EndedAt == null, cancellationToken);
         if (current == null) return await EndTemporaryAsync(teamId, request, userId, role, cancellationToken);
 
@@ -275,6 +276,8 @@ public sealed class MentorAssignmentHandler : IMentorAssignmentHandler
             DetailsJson = JsonSerializer.Serialize(new { TeamId = teamId, current.MentorProfileId, Slot = current.Slot.ToString(), Reason = request.Reason.Trim() })
         });
         ClassOutbox.Enqueue(_context, "Team.MentorAssignmentChanged.v1", current.Team.ClassId, new { TeamId = teamId, Action = "Ended" }, now);
+        MentorChangeNotifications.Enqueue(_context, current.Team.ClassId, teamId, current.Team.TeamCode, current.MentorProfile.UserId,
+            current.MentorProfile.User.FullName, null, request.Reason.Trim(), userId, now);
         await _context.SaveChangesAsync(cancellationToken);
         return Result.Success();
     }
@@ -368,7 +371,7 @@ public sealed class MentorAssignmentHandler : IMentorAssignmentHandler
                     return Failure(ErrorCodes.ClassValidationError, "The selected mentor is already assigned to this slot.");
 
                 var now = DateTime.UtcNow;
-                AddEndEffects(current, reason, userId, now);
+                AddEndEffects(current, reason, userId, now, mentor.User.FullName);
                 // The old assignment is saved as ended before the new one is added, inside the same transaction.
                 await _context.SaveChangesAsync(token);
                 var assignment = AddAssignEffects(team, mentor, userId, request.Note, now);
@@ -522,7 +525,7 @@ public sealed class MentorAssignmentHandler : IMentorAssignmentHandler
         return assignment;
     }
 
-    private void AddTemporaryEndEffects(TemporaryMentorAssignment current, string reason, Guid userId, DateTime now)
+    private void AddTemporaryEndEffects(TemporaryMentorAssignment current, string reason, Guid userId, DateTime now, string? replacementName)
     {
         current.Status = MentorAssignmentStatus.Ended;
         current.EndedAt = now;
@@ -536,6 +539,9 @@ public sealed class MentorAssignmentHandler : IMentorAssignmentHandler
             OccurredAtUtc = now,
             DetailsJson = JsonSerializer.Serialize(new { TeamId = current.TeamId, current.DraftId, Slot = current.Slot.ToString(), Reason = reason })
         });
+        // A mentor without an account cannot be notified, but the lecturer of the class is told.
+        MentorChangeNotifications.Enqueue(_context, current.Team.ClassId, current.TeamId, current.Team.TeamCode, null,
+            current.Draft.FullName, replacementName, reason, userId, now);
     }
 
     // True when the team slot already has a real or a temporary active mentor, optionally ignoring one temporary assignment.
@@ -603,7 +609,7 @@ public sealed class MentorAssignmentHandler : IMentorAssignmentHandler
             return Result.Failure(new Error(ErrorCodes.ClassAccessDenied, "Only an administrator or assigned lecturer can end a mentor assignment."));
         var mutationError = ClassStateRules.GetMutationError(current.Team.Class.Status);
         if (mutationError != null) return Result.Failure(mutationError);
-        AddTemporaryEndEffects(current, request.Reason.Trim(), userId, DateTime.UtcNow);
+        AddTemporaryEndEffects(current, request.Reason.Trim(), userId, DateTime.UtcNow, null);
         await _context.SaveChangesAsync(cancellationToken);
         return Result.Success();
     }
@@ -658,8 +664,9 @@ public sealed class MentorAssignmentHandler : IMentorAssignmentHandler
                 }
 
                 var now = DateTime.UtcNow;
-                if (realCurrent != null) AddEndEffects(realCurrent, reason, userId, now);
-                else AddTemporaryEndEffects(temporaryCurrent!, reason, userId, now);
+                var replacementName = newDraft?.FullName ?? newMentor?.User.FullName;
+                if (realCurrent != null) AddEndEffects(realCurrent, reason, userId, now, replacementName);
+                else AddTemporaryEndEffects(temporaryCurrent!, reason, userId, now, replacementName);
                 // The old assignment is saved as ended before the new one is added, inside the same transaction.
                 await _context.SaveChangesAsync(token);
 
@@ -798,7 +805,7 @@ public sealed class MentorAssignmentHandler : IMentorAssignmentHandler
         return assignment;
     }
 
-    private void AddEndEffects(MentorAssignment current, string reason, Guid userId, DateTime now)
+    private void AddEndEffects(MentorAssignment current, string reason, Guid userId, DateTime now, string? replacementName = null)
     {
         current.Status = MentorAssignmentStatus.Ended;
         current.EndedAt = now;
@@ -812,6 +819,8 @@ public sealed class MentorAssignmentHandler : IMentorAssignmentHandler
             DetailsJson = JsonSerializer.Serialize(new { TeamId = current.TeamId, current.MentorProfileId, Slot = current.Slot.ToString(), Reason = reason })
         });
         ClassOutbox.Enqueue(_context, "Team.MentorAssignmentChanged.v1", current.Team.ClassId, new { TeamId = current.TeamId, Action = "Ended" }, now);
+        MentorChangeNotifications.Enqueue(_context, current.Team.ClassId, current.TeamId, current.Team.TeamCode, current.MentorProfile.UserId,
+            current.MentorProfile.User.FullName, replacementName, reason, userId, now);
     }
 
     private static Result<AssignMentorBatchResponse> BatchFailure(string code, string message) => Result.Failure<AssignMentorBatchResponse>(new Error(code, message));

@@ -44,6 +44,11 @@ public sealed class MentorAdminController(IMentorAdminHandler handler, IMentorAs
     public async Task<IActionResult> CommitImport([FromBody] CommitMentorImportRequest request, CancellationToken cancellationToken) =>
         ToResponse(await handler.CommitImportAsync(request, cancellationToken), "Mentors imported successfully.");
 
+    // Active classes of a semester with their open mentor slots, so an admin can pick a class to manage.
+    [HttpGet("semesters/{semesterId:guid}/classes")]
+    public async Task<IActionResult> GetSemesterClasses(Guid semesterId, CancellationToken cancellationToken) =>
+        ToResponse(await handler.GetSemesterClassesAsync(semesterId, cancellationToken), "Semester classes retrieved successfully.");
+
     [HttpPost("allocations/preview")]
     public async Task<IActionResult> PreviewAllocation([FromBody] PreviewMentorAllocationRequest request, CancellationToken cancellationToken) =>
         ToResponse(await handler.PreviewAllocationAsync(request, cancellationToken), "Balanced mentor allocation preview generated successfully.");

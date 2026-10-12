@@ -289,6 +289,29 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
                         : $"A team submitted materials for {checkpointLabel} for your review.",
                     cancellationToken);
                 break;
+            case "Evaluation.Published.v1":
+                var publishedCheckpointNumber = data.TryGetProperty("checkpointNumber", out var publishedCheckpointValue) &&
+                                                publishedCheckpointValue.TryGetInt32(out var parsedPublishedCheckpoint)
+                    ? parsedPublishedCheckpoint
+                    : 0;
+                var publishedCheckpointTitle = ReadString(data, "checkpointTitle");
+                var publishedCheckpointLabel = publishedCheckpointNumber > 0
+                    ? $"Checkpoint {publishedCheckpointNumber}"
+                    : "checkpoint";
+                var publishedCheckpointDescription = !string.IsNullOrWhiteSpace(publishedCheckpointTitle)
+                    ? $"{publishedCheckpointLabel}: {publishedCheckpointTitle}"
+                    : publishedCheckpointLabel;
+                realtimeNotificationRecipients = ReadGuids(data, "studentUserIds");
+                realtimeNotificationTeamId = ReadGuid(data, "teamId");
+                await AddForUsersAsync(
+                    message,
+                    data,
+                    "studentUserIds",
+                    NotificationType.EvaluationPublished,
+                    $"{publishedCheckpointLabel} result is available",
+                    $"Your result for {publishedCheckpointDescription} has been published. Open Evaluation & Grading to view your score and feedback.",
+                    cancellationToken);
+                break;
             case "ProjectDirection.Reviewed.v1":
                 var directionDecision = ReadString(data, "decision");
                 var isProfileChangeReview = ReadBoolean(data, "isProjectProfileChangeProposal");
@@ -319,6 +342,9 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
             case "Team.MentorAssignmentChanged.v1" when ReadString(data, "action") is "Assigned" or "Reassigned":
                 await AddForOptionalUserAsync(message, data, "mentorUserId", NotificationType.MentorAssigned,
                     "Mentor assignment", "You have been assigned to mentor a team.", cancellationToken);
+                break;
+            case "Team.MentorChanged.v1":
+                await AddMentorChangedNotificationsAsync(message, data, cancellationToken);
                 break;
             default:
                 _logger.LogDebug("Outbox event {OutboxEventId} {OutboxEventType} has no notification projection", message.EventId, message.Type);
@@ -505,6 +531,41 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
                 await QueueClassEmailAsync(message, recipient.Email, recipient.FullName, subject, title,
                     emailBody, cancellationToken, "Open workspace", BuildFrontendUrl(workspaceLink));
             }
+        }
+    }
+
+    // A team lost a mentor: tell the lecturer of the class and, when they have an account, the former mentor.
+    // The person who made the change is not told about their own action.
+    private async Task AddMentorChangedNotificationsAsync(OutboxMessage message, JsonElement data, CancellationToken cancellationToken)
+    {
+        var actorUserId = ReadGuid(data, "actorUserId");
+        var previousMentorUserId = ReadGuid(data, "previousMentorUserId");
+        var teamCode = ReadString(data, "teamCode");
+        var previousName = ReadString(data, "previousMentorName");
+        var newName = ReadString(data, "newMentorName");
+        var reason = ReadString(data, "reason");
+        var classDetails = await GetClassEmailDetailsAsync(message.AggregateId, cancellationToken);
+        var lecturerId = await _context.Classes.AsNoTracking()
+            .Where(item => item.Id == message.AggregateId)
+            .Select(item => item.PrimaryLecturerId)
+            .FirstOrDefaultAsync(cancellationToken);
+        var reasonText = string.IsNullOrWhiteSpace(reason) ? string.Empty : $" Reason: {reason}";
+        var outcome = string.IsNullOrWhiteSpace(newName) ? "was removed" : $"was replaced by {newName}";
+
+        if (lecturerId.HasValue && lecturerId != actorUserId && lecturerId != previousMentorUserId)
+        {
+            await AddAsync(message, lecturerId.Value, NotificationType.SystemAnnouncement,
+                $"Mentor changed for team {teamCode}",
+                $"Mentor {previousName} {outcome} on team {teamCode} of class {classDetails.ClassCode}.{reasonText}",
+                cancellationToken);
+        }
+
+        if (previousMentorUserId.HasValue && previousMentorUserId != actorUserId)
+        {
+            await AddAsync(message, previousMentorUserId.Value, NotificationType.SystemAnnouncement,
+                $"You are no longer mentoring team {teamCode}",
+                $"Your mentor assignment for team {teamCode} of class {classDetails.ClassCode} has ended.{reasonText}",
+                cancellationToken);
         }
     }
 
@@ -897,18 +958,25 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
             return $"/lecturer/classes?{string.Join('&', query)}";
         }
 
-        if (message.Type == "ProjectDirection.Reviewed.v1"
-            && ReadPayloadBoolean(message.PayloadJson, "isProjectProfileChangeProposal"))
+        if (message.Type == "ProjectDirection.Reviewed.v1")
         {
             var teamId = ReadPayloadGuid(message.PayloadJson, "teamId");
             return teamId.HasValue ? $"/student/workspace/{teamId.Value}" : "/student/workspace";
+        }
+
+        if (message.Type == "Evaluation.Published.v1")
+        {
+            var teamId = ReadPayloadGuid(message.PayloadJson, "teamId");
+            return teamId.HasValue
+                ? $"/evaluation-grading?teamId={teamId.Value}"
+                : "/evaluation-grading";
         }
 
         return message.Type switch
         {
             "AccountApproval.Requested.v1" => "/admin/account-approvals",
             "TeamProposal.Submitted.v1" => $"/classes/{message.AggregateId}",
-            "TeamProposal.Reviewed.v1" or "ProjectDirection.Reviewed.v1" or
+            "TeamProposal.Reviewed.v1" or
                 "Class.EnrollmentMajorsAutoLocked.v1" => $"/student/classes/{message.AggregateId}",
             "TeamFormation.Invited.v1" or "TeamFormation.Accepted.v1" or
                 "TeamFormation.Declined.v1" or "TeamFormation.Left.v1" or "TeamFormation.InvitationExpired.v1" or
@@ -938,13 +1006,6 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
             && property.TryGetGuid(out var value)
                 ? value
                 : null;
-    }
-
-    private static bool ReadPayloadBoolean(string payloadJson, string propertyName)
-    {
-        using var document = JsonDocument.Parse(payloadJson);
-        return document.RootElement.TryGetProperty("data", out var data)
-            && ReadBoolean(data, propertyName);
     }
 
     private static string ReadString(JsonElement data, string propertyName) =>

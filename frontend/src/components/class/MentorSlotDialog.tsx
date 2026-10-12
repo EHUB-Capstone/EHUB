@@ -5,7 +5,8 @@ import { teamApi } from '../../api/teamApi';
 import { useDialogA11y } from '../../hooks/useDialogA11y';
 import type { ManagedTeam, MentorAssignment } from '../../types/teamManagement';
 import { parseApiError } from '../../utils/apiError';
-import { isReplaceReasonValid } from '../../utils/mentorAllocationPreview';
+import { buildChangeReason, isChangeReasonValid } from '../../utils/mentorChangeReasons';
+import MentorChangeReasonField from '../admin/MentorChangeReasonField';
 import { slotCandidates, type MentorOption, type MentorSlot } from '../../utils/mentorSlotBoard';
 import { matchesSearchQuery } from '../../utils/searchText';
 import { collectTagOptions, keepKnownTags, matchesAnyTag, tagSearchText } from '../../utils/mentorTags';
@@ -32,7 +33,8 @@ export default function MentorSlotDialog({ team, slot, current, mentors, onClose
   const [search, setSearch] = useState('');
   const [selectedId, setSelectedId] = useState('');
   const [tagFilter, setTagFilter] = useState<string[]>([]);
-  const [reason, setReason] = useState('');
+  const [reasonCode, setReasonCode] = useState('');
+  const [reasonNote, setReasonNote] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const replacing = current !== null;
@@ -48,7 +50,7 @@ export default function MentorSlotDialog({ team, slot, current, mentors, onClose
       .sort((left, right) => left.activeTeamCount - right.activeTeamCount || left.name.localeCompare(right.name)),
     [slotMentors, activeTagFilter, search],
   );
-  const canSave = selectedId !== '' && (!replacing || isReplaceReasonValid(reason)) && !saving;
+  const canSave = selectedId !== '' && (!replacing || isChangeReasonValid(reasonCode, reasonNote)) && !saving;
   const label = MENTOR_KIND_STYLES[slot].label;
 
   const save = async () => {
@@ -57,7 +59,7 @@ export default function MentorSlotDialog({ team, slot, current, mentors, onClose
     setError('');
     try {
       const temporary = Boolean(mentors.find(option => option._id === selectedId)?.isTemporary);
-      if (current) await teamApi.replaceMentor(team._id, current.assignmentId, selectedId, reason.trim(), null, temporary);
+      if (current) await teamApi.replaceMentor(team._id, current.assignmentId, selectedId, buildChangeReason(reasonCode, reasonNote), null, temporary);
       else await teamApi.assignMentor(team._id, selectedId, null, temporary);
       toast.success(replacing ? 'Mentor replaced' : 'Mentor assigned');
       await onSaved();
@@ -127,15 +129,14 @@ export default function MentorSlotDialog({ team, slot, current, mentors, onClose
 
           {replacing && (
             <div>
-              <label htmlFor="replace-reason" className="mb-1 block text-xs font-semibold text-slate-700">Reason for replacing {current.mentor.fullName} *</label>
-              <textarea
-                id="replace-reason"
-                rows={2}
-                value={reason}
+              <MentorChangeReasonField
+                idPrefix="replace-reason"
+                mentorName={current.mentor.fullName}
+                code={reasonCode}
+                note={reasonNote}
                 disabled={saving}
-                onChange={event => setReason(event.target.value)}
-                placeholder="At least 3 characters"
-                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+                onCodeChange={setReasonCode}
+                onNoteChange={setReasonNote}
               />
               <p className="mt-1 text-[11px] text-slate-400">The current assignment is ended and kept in the history, and the new mentor starts in the same save.</p>
             </div>

@@ -20,6 +20,14 @@ public static class AuthErrors
         ErrorCodes.AuthInvalidMajor,
         "Selected major is invalid.");
 
+    public static readonly Error MentorTypeRequired = new(
+        ErrorCodes.AuthMentorTypeRequired,
+        "Mentor type is required for Mentor role.");
+
+    public static readonly Error InvalidMentorType = new(
+        ErrorCodes.AuthInvalidMentorType,
+        "Mentor type must be Enterprise or Academic.");
+
     public static readonly Error StudentMajorRequired = new(
         ErrorCodes.AuthStudentMajorRequired,
         "Major is required for Student role.");

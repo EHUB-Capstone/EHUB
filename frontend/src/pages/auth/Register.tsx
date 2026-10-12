@@ -100,6 +100,7 @@ const Register: React.FC = () => {
   const [confirmPassword, setConfirmPassword] = useState<string>('');
   const [role,            setRole]            = useState<Role>('STUDENT');
   const [major,           setMajor]           = useState<string>('');
+  const [mentorType,      setMentorType]      = useState<string>('');
   const [loading,         setLoading]         = useState<boolean>(false);
   const [showPass,        setShowPass]        = useState<boolean>(false);
   const [showConfirm,     setShowConfirm]     = useState<boolean>(false);
@@ -162,6 +163,7 @@ const Register: React.FC = () => {
     confirmPassword,
     role: BACKEND_ROLE_BY_FORM_ROLE[role],
     majorCode: role === 'STUDENT' ? major : undefined,
+    mentorType: role === 'MENTOR' ? mentorType : undefined,
   });
 
   const clearFieldError = (field: RegisterField) => {
@@ -193,6 +195,7 @@ const Register: React.FC = () => {
       confirmPassword: 'reg-confirm',
       role: 'reg-role-student',
       majorCode: 'reg-major',
+      mentorType: 'reg-mentor-type-enterprise',
     };
     if (firstField) requestAnimationFrame(() => document.getElementById(elementIdByField[firstField])?.focus());
   };
@@ -245,6 +248,8 @@ const Register: React.FC = () => {
         mappedFieldErrors.majorCode = message;
       } else if (code === AUTH_ERROR_CODES.STUDENT_MAJOR_REQUIRED) {
         mappedFieldErrors.majorCode = message;
+      } else if (code === AUTH_ERROR_CODES.MENTOR_TYPE_REQUIRED || code === AUTH_ERROR_CODES.INVALID_MENTOR_TYPE) {
+        mappedFieldErrors.mentorType = message;
       }
       setFieldErrors(mappedFieldErrors);
       focusFirstError(mappedFieldErrors);
@@ -513,7 +518,7 @@ const Register: React.FC = () => {
                     {(['STUDENT','LECTURER','MENTOR'] as Role[]).map(r => (
                       <label key={r} className="cursor-pointer">
                         <input id={`reg-role-${r.toLowerCase()}`} type="radio" name="role" value={r} checked={role === r}
-                          onChange={() => { setRole(r); if (r !== 'STUDENT') setMajor(''); clearFieldError('role'); clearFieldError('majorCode'); }}
+                          onChange={() => { setRole(r); if (r !== 'STUDENT') setMajor(''); if (r !== 'MENTOR') setMentorType(''); clearFieldError('role'); clearFieldError('majorCode'); clearFieldError('mentorType'); }}
                           className="sr-only" />
                         <div className={`text-center py-[9px] px-1 rounded-[9px] text-[13px] font-semibold transition-all ${
                           role === r 
@@ -545,6 +550,32 @@ const Register: React.FC = () => {
                       ))}
                     </select>
                     {fieldErrors.majorCode && <p id="reg-major-error" role="alert" className="mt-1.5 text-[12px] text-red-500 dark:text-red-400">{fieldErrors.majorCode}</p>}
+                  </div>
+                )}
+
+                {/* Mentor type (MENTOR only) */}
+                {role === 'MENTOR' && (
+                  <div>
+                    <span id="reg-mentor-type-label" className="block text-[13px] font-semibold text-slate-900 dark:text-slate-50 mb-2">Mentor type</span>
+                    <div role="radiogroup" aria-labelledby="reg-mentor-type-label" aria-invalid={Boolean(fieldErrors.mentorType)} aria-describedby={fieldErrors.mentorType ? 'reg-mentor-type-error' : undefined}
+                      className={`grid grid-cols-2 gap-2 p-1 rounded-[14px] border bg-[#F8FAFC] dark:bg-white/5 ${fieldErrors.mentorType ? 'border-red-500' : 'border-[#E5E7EB] dark:border-white/10'}`}>
+                      {([['Enterprise', 'Enterprise mentor', 'Works at a company or startup'], ['Academic', 'Lecturer mentor', 'IT lecturer or academic']] as const).map(([value, label, hint]) => (
+                        <label key={value} className="cursor-pointer">
+                          <input id={`reg-mentor-type-${value.toLowerCase()}`} type="radio" name="mentorType" value={value} checked={mentorType === value}
+                            onChange={() => { setMentorType(value); clearFieldError('mentorType'); }}
+                            className="sr-only" />
+                          <div className={`text-center py-[8px] px-1 rounded-[9px] transition-all ${
+                            mentorType === value
+                              ? 'bg-white text-[#EA6A12] border border-[#EA6A12]/30 shadow-[0_10px_24px_rgba(234,106,18,0.12)] dark:bg-[#EA6A12]/15'
+                              : 'bg-transparent text-slate-500 dark:text-slate-400 border border-transparent shadow-none'
+                          }`}>
+                            <span className="block text-[13px] font-semibold">{label}</span>
+                            <span className="block text-[11px] font-normal opacity-80">{hint}</span>
+                          </div>
+                        </label>
+                      ))}
+                    </div>
+                    {fieldErrors.mentorType && <p id="reg-mentor-type-error" role="alert" className="mt-1.5 text-[12px] text-red-500 dark:text-red-400">{fieldErrors.mentorType}</p>}
                   </div>
                 )}
 

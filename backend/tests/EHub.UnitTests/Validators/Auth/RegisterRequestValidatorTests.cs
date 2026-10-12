@@ -247,11 +247,49 @@ public class RegisterRequestValidatorTests
             Password = "Password123",
             ConfirmPassword = "Password123",
             Role = SystemRoles.Mentor,
-            MajorCode = null
+            MajorCode = null,
+            MentorType = "Academic"
         };
 
         var result = _validator.Validate(request);
 
         Assert.True(result.IsValid);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("Freelancer")]
+    public void Should_Have_Error_When_Mentor_Type_Is_Missing_Or_Unknown(string? mentorType)
+    {
+        var request = new RegisterRequest
+        {
+            FullName = "Le Van C",
+            Email = "mentor@fpt.edu.vn",
+            Password = "Password123",
+            ConfirmPassword = "Password123",
+            Role = SystemRoles.Mentor,
+            MentorType = mentorType
+        };
+
+        var result = _validator.Validate(request);
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, error => error.PropertyName == nameof(RegisterRequest.MentorType));
+    }
+
+    [Fact]
+    public void Should_Not_Require_Mentor_Type_For_Lecturers()
+    {
+        var request = new RegisterRequest
+        {
+            FullName = "Le Van D",
+            Email = "lecturer@fpt.edu.vn",
+            Password = "Password123",
+            ConfirmPassword = "Password123",
+            Role = SystemRoles.Lecturer
+        };
+
+        Assert.True(_validator.Validate(request).IsValid);
     }
 }

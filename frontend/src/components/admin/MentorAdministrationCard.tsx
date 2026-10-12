@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { FileSpreadsheet, Shuffle, Users } from 'lucide-react';
+import { FileSpreadsheet, Shuffle, UserCog, Users } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { mentorAdminApi } from '../../api/mentorAdminApi';
 import type {
@@ -13,6 +13,7 @@ import { keepAppliedEdits, removeEdit, upsertEdit } from '../../utils/mentorAllo
 import Button from '../ui/Button';
 import ConfirmDialog from '../ui/ConfirmDialog';
 import MentorAllocationPreviewModal from './MentorAllocationPreviewModal';
+import SemesterMentorManager from './SemesterMentorManager';
 
 interface MentorAdministrationCardProps {
   semesterId?: string;
@@ -28,6 +29,7 @@ export default function MentorAdministrationCard({ semesterId, semesterLabel, te
   const [includeTemporary, setIncludeTemporary] = useState(true);
   const [edits, setEdits] = useState<MentorAllocationEdit[]>([]);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [managerOpen, setManagerOpen] = useState(false);
   const [previewStale, setPreviewStale] = useState(false);
   const [confirmReplacement, setConfirmReplacement] = useState(false);
   const [busy, setBusy] = useState<'export' | 'preview-allocation' | 'refresh-allocation' | 'commit-allocation' | null>(null);
@@ -178,6 +180,7 @@ export default function MentorAdministrationCard({ semesterId, semesterLabel, te
               ))}
             </div>
             <Button size="sm" className="whitespace-nowrap" icon={Shuffle} onClick={() => void previewAllocation()} isLoading={busy === 'preview-allocation'}>Preview assignment</Button>
+            <Button size="sm" variant="outline" className="whitespace-nowrap" icon={UserCog} onClick={() => setManagerOpen(true)}>Manage mentors</Button>
             <Button size="sm" variant="outline" className="whitespace-nowrap" icon={FileSpreadsheet} onClick={() => void exportAssignments()} isLoading={busy === 'export'}>Export</Button>
           </div>
         )}
@@ -201,6 +204,13 @@ export default function MentorAdministrationCard({ semesterId, semesterLabel, te
           )}
           <p className="mt-2 text-[11px] text-slate-400">{strategyHint} New mentors are imported in User Management, then added with Add mentors.</p>
 
+          <SemesterMentorManager
+            isOpen={managerOpen}
+            semesterId={semesterId}
+            semesterLabel={semesterLabel}
+            onClose={() => setManagerOpen(false)}
+            onChanged={onImportCommitted}
+          />
           <MentorAllocationPreviewModal
             isOpen={previewOpen}
             preview={allocationPreview}

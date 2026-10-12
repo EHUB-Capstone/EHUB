@@ -201,6 +201,7 @@ public sealed class VerifyRegistrationOtpCommandHandler : IVerifyRegistrationOtp
                 new MentorProfile
                 {
                     UserId = user.Id,
+                    Type = registration.MentorType ?? MentorType.Enterprise,
                     Status = MentorProfileStatus.Active
                 },
                 cancellationToken);

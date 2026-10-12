@@ -16,6 +16,9 @@ internal static class MentorImportWorkbookParser
     private const int MaximumRowsPerSheet = 500;
     private const int MaximumHeaderSearchRows = 20;
     private const int MaximumColumns = 20;
+    // Spreadsheets saved by Excel or exported from Google Sheets often carry thousands of empty, formatted rows.
+    // They are skipped, so only a sheet that is absurdly large is rejected before it is read in full.
+    private const int MaximumPhysicalRowsPerSheet = 50_000;
     private static readonly IReadOnlyDictionary<string, string[]> EnterpriseColumns = new Dictionary<string, string[]>
     {
         ["stt"] = ["stt"],
@@ -103,24 +106,41 @@ internal static class MentorImportWorkbookParser
         while (reader.Read())
         {
             rowNumber++;
-            if (reader.FieldCount > MaximumColumns)
-                return RowFailure(sheetName, $"may contain at most {MaximumColumns} columns.");
-            if (rowNumber > MaximumRowsPerSheet + MaximumHeaderSearchRows + 1)
-                return RowFailure(sheetName, $"may contain at most {MaximumRowsPerSheet} data rows.");
-            rows.Add(new SpreadsheetRow(rowNumber, Enumerable.Range(0, reader.FieldCount)
-                .Select(index => CellText(reader.GetValue(index))).ToArray()));
+            if (rowNumber > MaximumPhysicalRowsPerSheet)
+                return RowFailure(sheetName, $"has more than {MaximumPhysicalRowsPerSheet:N0} rows. Delete the empty rows below the mentor list and upload the file again.");
+
+            var cells = Enumerable.Range(0, reader.FieldCount).Select(index => CellText(reader.GetValue(index))).ToArray();
+            // Columns beyond the limit are ignored while they are empty (leftover formatting); real content there is rejected.
+            if (cells.Skip(MaximumColumns).Any(value => !string.IsNullOrWhiteSpace(value)))
+                return RowFailure(sheetName, $"may contain at most {MaximumColumns} columns. Remove the extra columns that contain data.");
+            // A blank row is not data and never counts toward the row limit.
+            if (cells.All(string.IsNullOrWhiteSpace)) continue;
+            rows.Add(new SpreadsheetRow(rowNumber, cells.Take(MaximumColumns).ToArray()));
         }
         return rows.Count == 0 ? RowFailure(sheetName, "contains no data.") : Result.Success(rows);
     }
+
+    // A row holds a mentor when any recognised column other than the running number (STT) has a value.
+    // Rows with only a number, or with only notes in unrecognised columns, are leftovers and are ignored.
+    private static SpreadsheetRow[] SelectMentorRows(IReadOnlyList<SpreadsheetRow> rows, (SpreadsheetRow Row, Dictionary<string, int> Columns) header)
+    {
+        var contentColumns = header.Columns.Where(item => !string.Equals(item.Key, "stt", StringComparison.OrdinalIgnoreCase)).Select(item => item.Value).ToArray();
+        return rows
+            .Where(item => item.RowNumber > header.Row.RowNumber)
+            .Where(item => contentColumns.Any(index => index < item.Cells.Count && !string.IsNullOrWhiteSpace(item.Cells[index])))
+            .ToArray();
+    }
+
+    private static Result<List<MentorImportCandidate>> TooManyRows(string sheetName, int count) =>
+        Failure($"Sheet '{sheetName}' has {count} mentor rows; at most {MaximumRowsPerSheet} are allowed per import. Split the list into several files.");
 
     private static Result<List<MentorImportCandidate>> ParseEnterprise(IReadOnlyList<SpreadsheetRow> rows)
     {
         var header = FindHeader(rows, EnterpriseColumns, ["fullname"]);
         if (header is null) return Failure($"Sheet '{EnterpriseSheetName}' must contain a mentor name column such as 'Họ và tên'.");
 
-        var dataRows = rows.Where(item => item.RowNumber > header.Value.Row.RowNumber && item.Cells.Any(value => !string.IsNullOrWhiteSpace(value))).ToArray();
-        if (dataRows.Length > MaximumRowsPerSheet)
-            return Failure($"Sheet '{EnterpriseSheetName}' may contain at most {MaximumRowsPerSheet} data rows.");
+        var dataRows = SelectMentorRows(rows, header.Value);
+        if (dataRows.Length > MaximumRowsPerSheet) return TooManyRows(EnterpriseSheetName, dataRows.Length);
         var result = new List<MentorImportCandidate>();
         foreach (var row in dataRows)
         {
@@ -158,9 +178,8 @@ internal static class MentorImportWorkbookParser
         var header = FindHeader(rows, AcademicColumns, ["fullname"]);
         if (header is null) return Failure($"Sheet '{AcademicSheetName}' must contain a mentor name column such as 'Họ tên'.");
 
-        var dataRows = rows.Where(item => item.RowNumber > header.Value.Row.RowNumber && item.Cells.Any(value => !string.IsNullOrWhiteSpace(value))).ToArray();
-        if (dataRows.Length > MaximumRowsPerSheet)
-            return Failure($"Sheet '{AcademicSheetName}' may contain at most {MaximumRowsPerSheet} data rows.");
+        var dataRows = SelectMentorRows(rows, header.Value);
+        if (dataRows.Length > MaximumRowsPerSheet) return TooManyRows(AcademicSheetName, dataRows.Length);
         var result = new List<MentorImportCandidate>();
         foreach (var row in dataRows)
         {
