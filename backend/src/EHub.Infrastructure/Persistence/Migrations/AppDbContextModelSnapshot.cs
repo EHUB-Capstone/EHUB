@@ -5356,10 +5356,12 @@ namespace EHub.Infrastructure.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("NormalizedRollNumber")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("is_deleted = false");
 
                     b.HasIndex("RollNumber")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("is_deleted = false");
 
                     b.HasIndex("UserId")
                         .IsUnique();
@@ -6711,10 +6713,12 @@ namespace EHub.Infrastructure.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("Email")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("is_deleted = false");
 
                     b.HasIndex("NormalizedEmail")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("is_deleted = false");
 
                     b.ToTable("users", (string)null);
                 });

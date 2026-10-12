@@ -53,8 +53,9 @@ public class StudentConfiguration : IEntityTypeConfiguration<Student>
             .IsRequired();
 
         // Unique indexes
-        builder.HasIndex(s => s.RollNumber).IsUnique();
-        builder.HasIndex(s => s.NormalizedRollNumber).IsUnique();
+        // Unique only among live students, so the roll number of a deleted student can be used again.
+        builder.HasIndex(s => s.RollNumber).IsUnique().HasFilter("is_deleted = false");
+        builder.HasIndex(s => s.NormalizedRollNumber).IsUnique().HasFilter("is_deleted = false");
         builder.HasIndex(s => s.UserId).IsUnique();
 
         // Audit & Soft Delete properties configuration

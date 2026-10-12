@@ -18,6 +18,7 @@ import type { MentorImportCommitResult, MentorImportPreview } from '../../types/
 import { parseApiError } from '../../utils/apiError';
 import {
   countMasterImportChanges,
+  describeImportAction,
   describeMasterImportResult,
   emailCellText,
   validateMentorWorkbook,
@@ -131,6 +132,7 @@ export default function ImportMentorsModal({ onClose, onImported }: ImportMentor
 
   const currentStep = steps.findIndex((step) => step.key === phase);
   const changeCount = preview ? countMasterImportChanges(preview) : 0;
+  const action = preview ? describeImportAction(preview) : { label: 'Import', breakdown: '' };
 
   return (
     <div className="fixed inset-0 z-[70] flex items-end justify-center p-0 sm:items-center sm:p-6" role="dialog" aria-modal="true" aria-labelledby="import-mentors-title">
@@ -203,14 +205,17 @@ export default function ImportMentorsModal({ onClose, onImported }: ImportMentor
                 <button type="button" onClick={reset} className="flex shrink-0 items-center gap-1.5 text-xs font-semibold text-primary"><RotateCcw className="h-3.5 w-3.5" /> Choose another file</button>
               </div>
 
-              <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-5">
+              <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-6">
                 <SummaryCard label="Total" value={preview.totalRows} tone="neutral" />
                 <SummaryCard label="Create" value={preview.createCount} tone="success" />
+                <SummaryCard label="Complete record" value={preview.completeDraftCount} tone="success" />
                 <SummaryCard label="Update" value={preview.updateCount} tone="warning" />
                 <SummaryCard label="Incomplete" value={preview.needsCompletionCount} tone="warning" />
                 <SummaryCard label="Errors" value={preview.errorCount} tone="danger" />
               </div>
 
+              {preview.canCommit && changeCount > 0 && action.breakdown && <p role="status" className="text-xs font-semibold text-slate-600">When you confirm: {action.breakdown}.</p>}
+              {(preview.warnings ?? []).map(warning => <Notice key={warning} text={warning} />)}
               {preview.needsCompletionCount > 0 && <Notice text={`${preview.needsCompletionCount} mentor(s) have no login email yet. They will be saved as incomplete and no account is created until an email is provided.`} />}
               {preview.errorCount > 0 && <Notice text="Resolve every invalid row in the source file, then preview again. No account has been changed." />}
               {!preview.canCommit && preview.errorCount === 0 && <Notice text="There is nothing to import from this file." />}
@@ -231,7 +236,7 @@ export default function ImportMentorsModal({ onClose, onImported }: ImportMentor
 
         <footer className="flex shrink-0 flex-col-reverse gap-2 border-t border-slate-100 bg-slate-50/60 px-5 py-4 sm:flex-row sm:justify-end sm:px-6">
           {phase === 'upload' && <Button variant="outline" onClick={onClose}>Cancel</Button>}
-          {phase === 'review' && <><Button variant="outline" icon={ArrowLeft} onClick={reset} disabled={importing}>Back</Button><Button variant="gradient" icon={Upload} isLoading={importing} disabled={!preview?.canCommit} onClick={() => void commit()}>Import {changeCount} mentor(s)</Button></>}
+          {phase === 'review' && <><Button variant="outline" icon={ArrowLeft} onClick={reset} disabled={importing}>Back</Button><Button variant="gradient" icon={Upload} isLoading={importing} disabled={!preview?.canCommit} onClick={() => void commit()}>{action.label}</Button></>}
           {phase === 'result' && <Button variant="gradient" icon={Check} onClick={onClose}>Done</Button>}
         </footer>
       </div>

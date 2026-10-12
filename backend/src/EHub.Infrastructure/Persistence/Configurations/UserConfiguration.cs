@@ -28,11 +28,14 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
             .HasMaxLength(320)
             .IsRequired();
 
+        // Unique only among live accounts, so the email of a deleted account can be used again.
         builder.HasIndex(u => u.Email)
-            .IsUnique();
+            .IsUnique()
+            .HasFilter("is_deleted = false");
 
         builder.HasIndex(u => u.NormalizedEmail)
-            .IsUnique();
+            .IsUnique()
+            .HasFilter("is_deleted = false");
 
         builder.Property(u => u.PasswordHash)
             .HasColumnName("password_hash")

@@ -10,6 +10,7 @@ using EHub.Contracts.Common;
 using EHub.Contracts.Mentors;
 using EHub.Contracts.Subjects;
 using EHub.Contracts.Teams;
+using EHub.Contracts.Users;
 using EHub.Domain.Entities;
 using EHub.Domain.Enums;
 using EHub.Infrastructure.Persistence;
@@ -228,8 +229,8 @@ public sealed class MentorAssignmentExportIntegrationTests(CustomWebApplicationF
     {
         var token = await GetAdminTokenAsync();
         var seed = await SeedLifecycleAsync(2111, 2112);
-        var first = await CreateDraftAsync("Temp Lecturer A", MentorType.Academic);
-        var second = await CreateDraftAsync("Temp Lecturer B", MentorType.Academic);
+        var first = await CreateDraftAsync("Temp Lecturer A", MentorType.Academic, participateIn: seed.TargetSemesterId);
+        var second = await CreateDraftAsync("Temp Lecturer B", MentorType.Academic, participateIn: seed.TargetSemesterId);
 
         var candidates = await GetJsonAsync<List<MentorCandidateDto>>(token, $"/api/classes/{seed.TargetClassId}/mentor-candidates");
         candidates.Should().Contain(item => item.IsTemporary && item.Mentor.MentorProfileId == first && item.Mentor.IsTemporary && item.Mentor.MentorType == "Academic");
@@ -267,8 +268,8 @@ public sealed class MentorAssignmentExportIntegrationTests(CustomWebApplicationF
     {
         var token = await GetAdminTokenAsync();
         var seed = await SeedLifecycleAsync(2113, 2114);
-        var first = await CreateDraftAsync("Swap Lecturer A", MentorType.Academic);
-        var second = await CreateDraftAsync("Swap Lecturer B", MentorType.Academic);
+        var first = await CreateDraftAsync("Swap Lecturer A", MentorType.Academic, participateIn: seed.TargetSemesterId);
+        var second = await CreateDraftAsync("Swap Lecturer B", MentorType.Academic, participateIn: seed.TargetSemesterId);
         var assigned = await PostAsync(token, $"/api/teams/{seed.TargetTeamId}/mentor-assignments", new AssignMentorRequest { MentorProfileId = first, Temporary = true });
         var temporary = (await assigned.Content.ReadFromJsonAsync<ApiResponse<MentorAssignmentDto>>())!.Data!;
 
@@ -287,7 +288,7 @@ public sealed class MentorAssignmentExportIntegrationTests(CustomWebApplicationF
         again.Mentor.IsTemporary.Should().BeTrue();
 
         // wrong type is refused and changes nothing
-        var enterpriseDraft = await CreateDraftAsync("Swap Enterprise", MentorType.Enterprise);
+        var enterpriseDraft = await CreateDraftAsync("Swap Enterprise", MentorType.Enterprise, participateIn: seed.TargetSemesterId);
         (await PostAsync(token, $"/api/teams/{seed.TargetTeamId}/mentor-assignments/replace",
             new ReplaceMentorRequest { AssignmentId = again.AssignmentId, MentorProfileId = enterpriseDraft, Temporary = true, Reason = "Wrong kind" }))
             .StatusCode.Should().Be(HttpStatusCode.BadRequest);
@@ -306,7 +307,7 @@ public sealed class MentorAssignmentExportIntegrationTests(CustomWebApplicationF
     {
         var token = await GetAdminTokenAsync();
         var seed = await SeedLifecycleAsync(2115, 2116);
-        var draft = await CreateDraftAsync("Batch Lecturer", MentorType.Academic);
+        var draft = await CreateDraftAsync("Batch Lecturer", MentorType.Academic, participateIn: seed.TargetSemesterId);
         var url = $"/api/classes/{seed.TargetClassId}/mentor-assignments/batch";
 
         var first = await PostAsync(token, url, new AssignMentorBatchRequest { MentorProfileId = draft, Temporary = true, TeamIds = [seed.TargetTeamId] });
@@ -325,7 +326,7 @@ public sealed class MentorAssignmentExportIntegrationTests(CustomWebApplicationF
     {
         var token = await GetAdminTokenAsync();
         var seed = await SeedLifecycleAsync(2117, 2118);
-        var draft = await CreateDraftAsync("Held Lecturer", MentorType.Academic);
+        var draft = await CreateDraftAsync("Held Lecturer", MentorType.Academic, participateIn: seed.TargetSemesterId);
         (await PostAsync(token, $"/api/teams/{seed.TargetTeamId}/mentor-assignments", new AssignMentorRequest { MentorProfileId = draft, Temporary = true }))
             .StatusCode.Should().Be(HttpStatusCode.OK);
 
@@ -345,7 +346,7 @@ public sealed class MentorAssignmentExportIntegrationTests(CustomWebApplicationF
         var token = await GetAdminTokenAsync();
         var seed = await SeedLifecycleAsync(2119, 2120);
         var name = $"Convert Lecturer {Guid.NewGuid().ToString("N")[..6]}";
-        var draft = await CreateDraftAsync(name, MentorType.Academic, makeUnique: false);
+        var draft = await CreateDraftAsync(name, MentorType.Academic, makeUnique: false, participateIn: seed.TargetSemesterId);
         (await PostAsync(token, $"/api/teams/{seed.TargetTeamId}/mentor-assignments", new AssignMentorRequest { MentorProfileId = draft, Temporary = true }))
             .StatusCode.Should().Be(HttpStatusCode.OK);
 
@@ -380,7 +381,7 @@ public sealed class MentorAssignmentExportIntegrationTests(CustomWebApplicationF
         var token = await GetAdminTokenAsync();
         var seed = await SeedLifecycleAsync(2121, 2122);
         var name = $"Finish Lecturer {Guid.NewGuid().ToString("N")[..6]}";
-        var draft = await CreateDraftAsync(name, MentorType.Academic, makeUnique: false);
+        var draft = await CreateDraftAsync(name, MentorType.Academic, makeUnique: false, participateIn: seed.TargetSemesterId);
         (await PostAsync(token, $"/api/teams/{seed.TargetTeamId}/mentor-assignments", new AssignMentorRequest { MentorProfileId = draft, Temporary = true }))
             .StatusCode.Should().Be(HttpStatusCode.OK);
         uint version;
@@ -509,7 +510,7 @@ public sealed class MentorAssignmentExportIntegrationTests(CustomWebApplicationF
         before.MissingAcademicCount.Should().Be(1);
         before.TemporarySlotCount.Should().Be(0);
 
-        var draft = await CreateDraftAsync("Counted Lecturer", MentorType.Academic);
+        var draft = await CreateDraftAsync("Counted Lecturer", MentorType.Academic, participateIn: seed.TargetSemesterId);
         (await PostAsync(token, $"/api/teams/{seed.TargetTeamId}/mentor-assignments", new AssignMentorRequest { MentorProfileId = draft, Temporary = true }))
             .StatusCode.Should().Be(HttpStatusCode.OK);
         (await PostAsync(token, $"/api/teams/{seed.TargetTeamId}/mentor-assignments", new AssignMentorRequest { MentorProfileId = seed.EnterpriseMentorId }))
@@ -603,7 +604,7 @@ public sealed class MentorAssignmentExportIntegrationTests(CustomWebApplicationF
         (await PostAsync(token, $"/api/teams/{seed.TargetTeamId}/mentor-assignments", new AssignMentorRequest { MentorProfileId = seed.AcademicMentorId }))
             .StatusCode.Should().Be(HttpStatusCode.OK);
         var assignment = await CurrentAssignmentIdAsync(seed.TargetTeamId);
-        var draft = await CreateDraftAsync("Replacement Lecturer", MentorType.Academic);
+        var draft = await CreateDraftAsync("Replacement Lecturer", MentorType.Academic, participateIn: seed.TargetSemesterId);
         var reason = "Mentor is overloaded: 6 teams";
         (await PostAsync(token, $"/api/teams/{seed.TargetTeamId}/mentor-assignments/replace", new ReplaceMentorRequest { AssignmentId = assignment, MentorProfileId = draft, Temporary = true, Reason = reason }))
             .StatusCode.Should().Be(HttpStatusCode.OK);
@@ -732,6 +733,13 @@ public sealed class MentorAssignmentExportIntegrationTests(CustomWebApplicationF
         (await context.SemesterTemporaryMentors.IgnoreQueryFilters().AsNoTracking().SingleAsync(item => item.DraftId == draft)).IsDeleted.Should().BeTrue();
         (await context.SemesterAuditLogs.AsNoTracking().AnyAsync(item => item.SemesterId == seed.TargetSemesterId && item.Action == "SEMESTER_TEMPORARY_MENTOR_CONVERTED")).Should().BeTrue();
 
+        // The class dialog offers the mentor as a normal account, once, and no longer as a mentor without one.
+        var candidates = await GetJsonAsync<List<MentorCandidateDto>>(token, $"/api/classes/{seed.TargetClassId}/mentor-candidates");
+        var offered = candidates.Where(item => item.Mentor.FullName == name).ToArray();
+        offered.Should().ContainSingle();
+        offered[0].IsTemporary.Should().BeFalse();
+        offered[0].Mentor.Email.Should().Be(email);
+
         // The converted account is a normal participant: Balanced and Random can use it without adding it again.
         var participants = await context.SemesterStaffAssignments.AsNoTracking()
             .Where(item => item.SemesterId == seed.TargetSemesterId && item.Role == SemesterStaffRole.Mentor && item.User.NormalizedEmail == email).ToListAsync();
@@ -784,16 +792,13 @@ public sealed class MentorAssignmentExportIntegrationTests(CustomWebApplicationF
             (semesterId, stalePendingId, staleConvertedId, userId) = (semester.Id, stalePending.Id, staleConverted.Id, converted.UserId);
         }
 
-        // Re-run the cleanup the way a deployment does: step back to the migration before it, then apply it again.
+        // Run the cleanup SQL of the migration against this data (the migration itself ran when the test database was created).
         using (var scope = factory.Services.CreateScope())
         {
             var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-            var migrations = context.Database.GetMigrations().ToList();
-            var index = migrations.FindIndex(item => item.EndsWith("ReconcileConvertedTemporaryMentors"));
-            index.Should().BeGreaterThan(0);
-            var migrator = ((IInfrastructure<IServiceProvider>)context.Database).Instance.GetRequiredService<Microsoft.EntityFrameworkCore.Migrations.IMigrator>();
-            await migrator.MigrateAsync(migrations[index - 1]);
-            await migrator.MigrateAsync();
+            var migration = new EHub.Infrastructure.Persistence.Migrations.ReconcileConvertedTemporaryMentors();
+            foreach (var operation in migration.UpOperations.OfType<Microsoft.EntityFrameworkCore.Migrations.Operations.SqlOperation>())
+                await context.Database.ExecuteSqlRawAsync(operation.Sql);
         }
 
         using var verify = factory.Services.CreateScope();
@@ -803,6 +808,244 @@ public sealed class MentorAssignmentExportIntegrationTests(CustomWebApplicationF
         (await db.SemesterTemporaryMentors.IgnoreQueryFilters().AsNoTracking().SingleAsync(item => item.Id == staleConvertedId)).IsDeleted.Should().BeTrue();
         (await db.SemesterTemporaryMentors.IgnoreQueryFilters().AsNoTracking().SingleAsync(item => item.Id == stalePendingId)).IsDeleted
             .Should().BeFalse("a mentor who still has no account keeps the entry");
+    }
+
+    [Fact]
+    public async Task ClassDialog_ShouldOnlyOfferMentorsWithoutAnAccountThatWereAddedToTheSemester()
+    {
+        var token = await GetAdminTokenAsync();
+        var seed = await SeedLifecycleAsync(2047, 2079);
+        var notInSemester = await CreateDraftAsync("Outside Lecturer", MentorType.Academic);
+        var inSemester = await CreateDraftAsync("Inside Lecturer", MentorType.Academic, participateIn: seed.TargetSemesterId);
+        var paused = await CreateDraftAsync("Paused Inside Lecturer", MentorType.Academic, participateIn: seed.TargetSemesterId);
+        using (var scope = factory.Services.CreateScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            (await context.SemesterTemporaryMentors.SingleAsync(item => item.DraftId == paused)).Status = SemesterStaffStatus.Inactive;
+            await context.SaveChangesAsync();
+        }
+
+        var offered = (await GetJsonAsync<List<MentorCandidateDto>>(token, $"/api/classes/{seed.TargetClassId}/mentor-candidates")).Where(item => item.IsTemporary).Select(item => item.Mentor.MentorProfileId).ToArray();
+        offered.Should().Contain(inSemester);
+        offered.Should().NotContain([notInSemester, paused], "only active members of the semester are offered, like for Balanced and Random");
+
+        // The same rule is enforced when assigning, not only when listing.
+        foreach (var blocked in new[] { notInSemester, paused })
+        {
+            var response = await PostAsync(token, $"/api/teams/{seed.TargetTeamId}/mentor-assignments", new AssignMentorRequest { MentorProfileId = blocked, Temporary = true });
+            response.StatusCode.Should().NotBe(HttpStatusCode.OK, "a mentor who is not in the semester cannot be assigned");
+            (await response.Content.ReadAsStringAsync()).Should().Contain("not active in this semester");
+            var batch = await PostAsync(token, $"/api/classes/{seed.TargetClassId}/mentor-assignments/batch", new AssignMentorBatchRequest { MentorProfileId = blocked, TeamIds = [seed.TargetTeamId], Temporary = true });
+            batch.StatusCode.Should().NotBe(HttpStatusCode.OK);
+        }
+        (await PostAsync(token, $"/api/teams/{seed.TargetTeamId}/mentor-assignments", new AssignMentorRequest { MentorProfileId = inSemester, Temporary = true }))
+            .StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    private async Task<HttpResponseMessage> SendAsync(HttpMethod method, string token, string url, object? body = null)
+    {
+        using var request = new HttpRequestMessage(method, url);
+        if (body is not null) request.Content = JsonContent.Create(body);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        return await _client.SendAsync(request);
+    }
+
+    private async Task<Guid> CreateManagedUserAsync(string token, SaveManagedUserRequest request)
+    {
+        var response = await PostAsync(token, "/api/users", request);
+        response.StatusCode.Should().BeOneOf([HttpStatusCode.OK, HttpStatusCode.Created], await response.Content.ReadAsStringAsync());
+        return (await response.Content.ReadFromJsonAsync<ApiResponse<ManagedUserResponse>>())!.Data!.Id;
+    }
+
+    [Fact]
+    public async Task DeleteUser_ShouldExplainWhyAnAccountWithClassesOrTeamAssignmentsCannotBeDeleted()
+    {
+        var token = await GetAdminTokenAsync();
+        var seed = await SeedLifecycleAsync(2030, 2031);
+        var (lecturerUserId, mentorUserId) = await UseLecturerAsync(seed);
+        (await PostAsync(token, $"/api/teams/{seed.TargetTeamId}/mentor-assignments", new AssignMentorRequest { MentorProfileId = seed.AcademicMentorId }))
+            .StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var check = await GetJsonAsync<UserDeletionCheckResponse>(token, $"/api/users/{lecturerUserId}/deletion-check");
+        check.CanDelete.Should().BeFalse();
+        check.Reasons.Should().Contain(item => item.Contains("teaches 1 class"));
+
+        var lecturerDelete = await SendAsync(HttpMethod.Delete, token, $"/api/users/{lecturerUserId}");
+        lecturerDelete.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        var lecturerBody = await lecturerDelete.Content.ReadAsStringAsync();
+        lecturerBody.Should().Contain("cannot be deleted because").And.Contain("teaches 1 class").And.Contain("RELATED_DATA_EXISTS");
+
+        var mentorDelete = await SendAsync(HttpMethod.Delete, token, $"/api/users/{mentorUserId}");
+        mentorDelete.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        (await mentorDelete.Content.ReadAsStringAsync()).Should().Contain("assigned to 2 teams right now");
+    }
+
+    [Fact]
+    public async Task DeleteUser_ShouldRemoveAnAccountNothingDependsOn_AndLetItsEmailBeUsedAgain()
+    {
+        var token = await GetAdminTokenAsync();
+        var seed = await SeedLifecycleAsync(2032, 2033);
+        var email = $"removable-{Guid.NewGuid():N}@example.edu.vn";
+        var request = new SaveManagedUserRequest { Name = "Removable Mentor", Email = email, Password = "Password123", Role = "MENTOR", MentorType = "Academic", Status = "APPROVED" };
+        var userId = await CreateManagedUserAsync(token, request);
+        using (var scope = factory.Services.CreateScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            context.SemesterStaffAssignments.Add(new SemesterStaffAssignment { SemesterId = seed.TargetSemesterId, UserId = userId, Role = SemesterStaffRole.Mentor, Status = SemesterStaffStatus.Active });
+            await context.SaveChangesAsync();
+        }
+        (await GetJsonAsync<UserDeletionCheckResponse>(token, $"/api/users/{userId}/deletion-check")).CanDelete.Should().BeTrue();
+
+        var delete = await SendAsync(HttpMethod.Delete, token, $"/api/users/{userId}");
+        delete.StatusCode.Should().Be(HttpStatusCode.OK, await delete.Content.ReadAsStringAsync());
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            (await context.Users.IgnoreQueryFilters().AsNoTracking().SingleAsync(item => item.Id == userId)).IsDeleted.Should().BeTrue();
+            (await context.SemesterStaffAssignments.AnyAsync(item => item.UserId == userId)).Should().BeFalse("the semester entries go with the account");
+            (await context.MentorProfiles.AnyAsync(item => item.UserId == userId)).Should().BeFalse();
+        }
+        (await SendAsync(HttpMethod.Delete, token, $"/api/users/{userId}")).StatusCode.Should().Be(HttpStatusCode.NotFound);
+
+        // The email is free again.
+        var again = await PostAsync(token, "/api/users", request);
+        again.StatusCode.Should().BeOneOf(HttpStatusCode.OK, HttpStatusCode.Created);
+    }
+
+    [Fact]
+    public async Task DeleteUser_ShouldRefuseAStudentInAClass_ButDeleteOneWithNoClass()
+    {
+        var token = await GetAdminTokenAsync();
+        var seed = await SeedLifecycleAsync(2034, 2035);
+        var suffix = Guid.NewGuid().ToString("N")[..6].ToUpperInvariant();
+        var free = await CreateManagedUserAsync(token, new SaveManagedUserRequest { Name = "Free Student", Email = $"free-{suffix}@example.com", Password = "Password123", Role = "STUDENT", StudentId = $"FR{suffix}", Major = "BIT_SE", ProgramGroup = "BIT", Status = "APPROVED" });
+        var enrolled = await CreateManagedUserAsync(token, new SaveManagedUserRequest { Name = "Enrolled Student", Email = $"enrolled-{suffix}@example.com", Password = "Password123", Role = "STUDENT", StudentId = $"EN{suffix}", Major = "BIT_SE", ProgramGroup = "BIT", Status = "APPROVED" });
+        using (var scope = factory.Services.CreateScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var student = await context.Students.SingleAsync(item => item.UserId == enrolled);
+            var targetClass = await context.Classes.AsNoTracking().SingleAsync(item => item.Id == seed.TargetClassId);
+            context.ClassStudents.Add(new ClassStudent
+            {
+                ClassId = targetClass.Id, StudentId = student.Id, CourseId = targetClass.CourseId, MajorCodeAtEnrollment = "SE",
+                EnrollmentStatus = EnrollmentStatus.Active, CountsTowardCourseSemesterLimit = true
+            });
+            await context.SaveChangesAsync();
+        }
+
+        var refused = await SendAsync(HttpMethod.Delete, token, $"/api/users/{enrolled}");
+        refused.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        (await refused.Content.ReadAsStringAsync()).Should().Contain("enrolled in 1 class");
+        (await SendAsync(HttpMethod.Delete, token, $"/api/users/{free}")).StatusCode.Should().Be(HttpStatusCode.OK);
+
+        using var verify = factory.Services.CreateScope();
+        var db = verify.ServiceProvider.GetRequiredService<AppDbContext>();
+        (await db.Students.IgnoreQueryFilters().AsNoTracking().SingleAsync(item => item.UserId == free)).IsDeleted.Should().BeTrue("the student record goes with the account, freeing the roll number");
+    }
+
+    [Fact]
+    public async Task DeleteUser_ShouldRefuseYourOwnAccount_AndRequireAnAdministrator()
+    {
+        var token = await GetAdminTokenAsync();
+        Guid adminId;
+        string lecturerToken;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var admin = await context.Users.SingleAsync(item => item.NormalizedEmail == "admin@ehub.test");
+            adminId = admin.Id;
+            lecturerToken = scope.ServiceProvider.GetRequiredService<IJwtTokenService>().GenerateAccessToken(admin, [SystemRoles.Lecturer]).Token;
+        }
+
+        var own = await SendAsync(HttpMethod.Delete, token, $"/api/users/{adminId}");
+        own.StatusCode.Should().NotBe(HttpStatusCode.OK);
+        (await own.Content.ReadAsStringAsync()).Should().Contain("cannot delete your own account");
+        using var anonymous = new HttpRequestMessage(HttpMethod.Delete, $"/api/users/{adminId}");
+        (await _client.SendAsync(anonymous)).StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+        (await SendAsync(HttpMethod.Delete, lecturerToken, $"/api/users/{adminId}")).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        (await SendAsync(HttpMethod.Get, lecturerToken, $"/api/users/{adminId}/deletion-check")).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task IncompleteMentor_ShouldBeEditedAndDeleted_AndNotDeletedWhileTeamsUseIt()
+    {
+        var token = await GetAdminTokenAsync();
+        var seed = await SeedLifecycleAsync(2036, 2037);
+        var editable = await CreateDraftAsync("Editable Lecturer", MentorType.Academic, participateIn: seed.TargetSemesterId);
+        var other = await CreateDraftAsync("Other Lecturer", MentorType.Academic);
+
+        var newName = $"Renamed Lecturer {Guid.NewGuid().ToString("N")[..6]}";
+        var edit = await SendAsync(HttpMethod.Put, token, $"/api/admin/mentors/incomplete/{editable}", new UpdateIncompleteMentorRequest { FullName = newName, Department = "Bộ môn CNTT", JobTitle = "Giảng viên" });
+        edit.StatusCode.Should().Be(HttpStatusCode.OK, await edit.Content.ReadAsStringAsync());
+        var listed = (await GetJsonAsync<IncompleteMentorListResponse>(token, $"/api/admin/mentors/incomplete?search={Uri.EscapeDataString(newName)}")).Mentors.Single();
+        listed.FullName.Should().Be(newName);
+        listed.Department.Should().Be("Bộ môn CNTT");
+        listed.MissingFields.Should().NotContain("Phòng ban trực tiếp").And.Contain("Email công việc");
+
+        (await SendAsync(HttpMethod.Put, token, $"/api/admin/mentors/incomplete/{editable}", new UpdateIncompleteMentorRequest { FullName = " " }))
+            .StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        string otherName;
+        using (var scope = factory.Services.CreateScope())
+            otherName = (await scope.ServiceProvider.GetRequiredService<AppDbContext>().MentorImportDrafts.AsNoTracking().SingleAsync(item => item.Id == other)).FullName;
+        var duplicate = await SendAsync(HttpMethod.Put, token, $"/api/admin/mentors/incomplete/{editable}", new UpdateIncompleteMentorRequest { FullName = otherName });
+        duplicate.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        (await SendAsync(HttpMethod.Put, token, $"/api/admin/mentors/incomplete/{Guid.NewGuid()}", new UpdateIncompleteMentorRequest { FullName = "Nobody Here" })).StatusCode.Should().Be(HttpStatusCode.NotFound);
+
+        // In use: a team still has the mentor, so the delete is refused with the reason.
+        (await PostAsync(token, $"/api/teams/{seed.TargetTeamId}/mentor-assignments", new AssignMentorRequest { MentorProfileId = editable, Temporary = true })).StatusCode.Should().Be(HttpStatusCode.OK);
+        var blocked = await SendAsync(HttpMethod.Delete, token, $"/api/admin/mentors/incomplete/{editable}");
+        blocked.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        (await blocked.Content.ReadAsStringAsync()).Should().Contain("1 team uses them as a mentor right now");
+
+        // A mentor nobody uses is deleted together with their semester entries.
+        var free = await CreateDraftAsync("Unused Lecturer", MentorType.Academic, participateIn: seed.TargetSemesterId);
+        (await SendAsync(HttpMethod.Delete, token, $"/api/admin/mentors/incomplete/{free}")).StatusCode.Should().Be(HttpStatusCode.OK);
+        using (var scope = factory.Services.CreateScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            (await context.MentorImportDrafts.AnyAsync(item => item.Id == free)).Should().BeFalse();
+            (await context.SemesterTemporaryMentors.AnyAsync(item => item.DraftId == free)).Should().BeFalse();
+        }
+        (await SendAsync(HttpMethod.Delete, token, $"/api/admin/mentors/incomplete/{free}")).StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task IncompleteMentor_GivenAnEmail_ShouldBecomeAnAccountWithTheirTeamsAndSemester_AndBadEmailsAreRefused()
+    {
+        var token = await GetAdminTokenAsync();
+        var seed = await SeedLifecycleAsync(2038, 2039);
+        var name = $"Promoted Lecturer {Guid.NewGuid().ToString("N")[..6]}";
+        var draft = await CreateDraftAsync(name, MentorType.Academic, makeUnique: false, participateIn: seed.TargetSemesterId);
+        (await PostAsync(token, $"/api/teams/{seed.TargetTeamId}/mentor-assignments", new AssignMentorRequest { MentorProfileId = draft, Temporary = true })).StatusCode.Should().Be(HttpStatusCode.OK);
+
+        (await SendAsync(HttpMethod.Put, token, $"/api/admin/mentors/incomplete/{draft}", new UpdateIncompleteMentorRequest { FullName = name, Email = "not-an-email" }))
+            .StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        var taken = await SendAsync(HttpMethod.Put, token, $"/api/admin/mentors/incomplete/{draft}", new UpdateIncompleteMentorRequest { FullName = name, Email = "admin@ehub.test" });
+        taken.StatusCode.Should().Be(HttpStatusCode.BadRequest, "the email belongs to an account that is not a mentor");
+
+        var email = $"promoted-{Guid.NewGuid():N}@fpt.edu.vn";
+        var response = await SendAsync(HttpMethod.Put, token, $"/api/admin/mentors/incomplete/{draft}", new UpdateIncompleteMentorRequest { FullName = name, Email = email, Department = "Bộ môn CNTT" });
+        response.StatusCode.Should().Be(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+        var result = (await response.Content.ReadFromJsonAsync<ApiResponse<IncompleteMentorResponse>>())!.Data!;
+        result.BecameAccount.Should().BeTrue();
+        result.TeamsSwitched.Should().Be(1);
+        result.SemestersMoved.Should().Be(1);
+        result.Email.Should().Be(email);
+
+        // The mentor left Needs information and exists as an account, in the semester and on the team.
+        (await GetJsonAsync<IncompleteMentorListResponse>(token, $"/api/admin/mentors/incomplete?search={Uri.EscapeDataString(name)}")).Mentors.Should().BeEmpty();
+        var staff = (await GetJsonAsync<TeachingStaffListResponse>(token, "/api/subjects/teaching-staff?semester=SP&year=2039")).Staff.Where(item => item.Name == name).ToArray();
+        staff.Should().ContainSingle().Which.IsTemporary.Should().BeFalse();
+        var team = (await GetJsonAsync<List<TeamDto>>(token, $"/api/classes/{seed.TargetClassId}/teams")).Single(item => item.Id == seed.TargetTeamId);
+        team.CurrentMentorAssignments.Should().ContainSingle(item => item.Mentor.FullName == name && !item.Mentor.IsTemporary && item.Mentor.Email == email);
+        using var scope = factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var user = await context.Users.Include(item => item.MentorProfile).SingleAsync(item => item.NormalizedEmail == email);
+        user.MentorProfile!.Type.Should().Be(MentorType.Academic);
+        user.MentorProfile.Department.Should().Be("Bộ môn CNTT");
+        (await SendAsync(HttpMethod.Put, token, $"/api/admin/mentors/incomplete/{draft}", new UpdateIncompleteMentorRequest { FullName = name, Email = email }))
+            .StatusCode.Should().Be(HttpStatusCode.NotFound, "the mentor is no longer incomplete");
     }
 
     private async Task AddTemporaryParticipantAsync(string token, Guid draft, int year)
@@ -818,7 +1061,9 @@ public sealed class MentorAssignmentExportIntegrationTests(CustomWebApplicationF
         return await _client.SendAsync(request);
     }
 
-    private async Task<Guid> CreateDraftAsync(string name, MentorType type, bool makeUnique = true)
+    // A mentor without an account. With participateIn the mentor is also added to that semester, which is required before
+    // the mentor can be assigned to a team or offered in the class dialog.
+    private async Task<Guid> CreateDraftAsync(string name, MentorType type, bool makeUnique = true, Guid? participateIn = null)
     {
         using var scope = factory.Services.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -826,6 +1071,8 @@ public sealed class MentorAssignmentExportIntegrationTests(CustomWebApplicationF
         var fullName = makeUnique ? $"{name} {unique}" : name;
         var draft = new MentorImportDraft { Type = type, FullName = fullName, NormalizedFullName = fullName.ToLowerInvariant(), Status = MentorImportDraftStatus.NeedsCompletion };
         context.MentorImportDrafts.Add(draft);
+        if (participateIn is { } semesterId)
+            context.SemesterTemporaryMentors.Add(new SemesterTemporaryMentor { SemesterId = semesterId, DraftId = draft.Id, Status = SemesterStaffStatus.Active });
         await context.SaveChangesAsync();
         return draft.Id;
     }

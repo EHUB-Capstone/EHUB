@@ -1,5 +1,6 @@
 import axiosClient from './axiosClient';
 import type {
+  IncompleteMentor,
   IncompleteMentorList,
   MentorAllocationCommitResult,
   MentorAllocationEdit,
@@ -8,6 +9,7 @@ import type {
   MentorImportCommitResult,
   MentorImportPreview,
   MentorSemesterClassList,
+  UpdateIncompleteMentorPayload,
 } from '../types/mentorAdmin';
 
 interface ApiEnvelope<T> {
@@ -34,6 +36,12 @@ export const mentorAdminApi = {
     params: { page?: number; limit?: number; search?: string; mentorType?: string } = {},
   ): Promise<ApiEnvelope<IncompleteMentorList>> =>
     axiosClient.get('/admin/mentors/incomplete', { params }),
+
+  updateIncompleteMentor: (id: string, payload: UpdateIncompleteMentorPayload): Promise<ApiEnvelope<IncompleteMentor>> =>
+    axiosClient.put(`/admin/mentors/incomplete/${id}`, payload),
+
+  deleteIncompleteMentor: (id: string): Promise<ApiEnvelope<null>> =>
+    axiosClient.delete(`/admin/mentors/incomplete/${id}`),
 
   commitImport: (sessionId: string): Promise<ApiEnvelope<MentorImportCommitResult>> =>
     axiosClient.post('/admin/mentors/imports/commit', { sessionId }),

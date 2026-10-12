@@ -8,6 +8,8 @@ public interface IMentorAdminHandler
 {
     Task<Result<(byte[] FileBytes, string ContentType, string FileName)>> GetTemplateAsync(CancellationToken cancellationToken = default);
     Task<Result<IncompleteMentorListResponse>> GetIncompleteMasterMentorsAsync(int page, int limit, string? search, string? mentorType, CancellationToken cancellationToken = default);
+    Task<Result<IncompleteMentorResponse>> UpdateIncompleteMentorAsync(Guid id, UpdateIncompleteMentorRequest request, CancellationToken cancellationToken = default);
+    Task<Result> DeleteIncompleteMentorAsync(Guid id, CancellationToken cancellationToken = default);
     Task<Result<MentorImportPreviewResponse>> PreviewImportAsync(IFormFile file, CancellationToken cancellationToken = default);
     Task<Result<MentorImportCommitResponse>> CommitImportAsync(CommitMentorImportRequest request, CancellationToken cancellationToken = default);
     Task<Result<MentorSemesterClassListResponse>> GetSemesterClassesAsync(Guid semesterId, CancellationToken cancellationToken = default);

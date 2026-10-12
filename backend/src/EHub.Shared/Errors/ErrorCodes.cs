@@ -67,6 +67,9 @@ public static class ErrorCodes
     public const string MentorImportSessionExpired = "MENTOR_IMPORT_SESSION_EXPIRED";
     public const string MentorImportSessionAlreadyProcessing = "MENTOR_IMPORT_SESSION_ALREADY_PROCESSING";
     public const string MentorImportConflict = "MENTOR_IMPORT_CONFLICT";
+    public const string MentorIncompleteNotFound = "MENTOR_INCOMPLETE_NOT_FOUND";
+    public const string MentorIncompleteInUseConflict = "MENTOR_INCOMPLETE_IN_USE_CONFLICT";
+    public const string MentorIncompleteNameConflict = "MENTOR_INCOMPLETE_NAME_CONFLICT";
     public const string MentorAllocationInvalid = "MENTOR_ALLOCATION_INVALID";
     public const string MentorAllocationSessionInvalid = "MENTOR_ALLOCATION_SESSION_INVALID";
     public const string MentorAllocationSessionExpired = "MENTOR_ALLOCATION_SESSION_EXPIRED";

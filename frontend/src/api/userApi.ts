@@ -6,6 +6,8 @@ export const userApi = {
   getById: (id) => axiosClient.get(`/users/${id}`),
   create: (data) => axiosClient.post('/users', data),
   update: (id, data) => axiosClient.put(`/users/${id}`, data),
+  /** Whether an account can be deleted and, when it cannot, why. */
+  deletionCheck: (id) => axiosClient.get(`/users/${id}/deletion-check`),
   delete: (id) => axiosClient.delete(`/users/${id}`),
   previewLecturerImport: (formData) =>
     axiosClient.post('/users/import-lecturers/preview', formData, {

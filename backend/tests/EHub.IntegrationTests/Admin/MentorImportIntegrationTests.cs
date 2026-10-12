@@ -1008,6 +1008,32 @@ public sealed class MentorImportIntegrationTests(CustomWebApplicationFactory fac
     }
 
     [Fact]
+    public async Task MasterImportPreview_FptEmailTitle_ShouldBeUsedAsTheLoginEmail_AndUnknownColumnsShouldBeReported()
+    {
+        using var workbook = new XLWorkbook();
+        var enterprise = workbook.Worksheets.Add("DS Mentor_FA26");
+        string[] enterpriseHeaders = ["STT", "Họ và tên", "FPT email", "Ghi chú riêng"];
+        for (var index = 0; index < enterpriseHeaders.Length; index++) enterprise.Cell(1, index + 1).Value = enterpriseHeaders[index];
+        var enterpriseEmail = $"fpt-{Guid.NewGuid():N}@fpt.edu.vn";
+        enterprise.Cell(2, 1).Value = 1; enterprise.Cell(2, 2).Value = $"Fpt Titled {Guid.NewGuid().ToString("N")[..6]}"; enterprise.Cell(2, 3).Value = enterpriseEmail; enterprise.Cell(2, 4).Value = "x";
+        var academic = workbook.Worksheets.Add("Mentor IT_FA26");
+        academic.Cell(1, 1).Value = "STT"; academic.Cell(1, 2).Value = "Họ tên"; academic.Cell(1, 3).Value = "FPT email";
+        var academicEmail = $"fpt-{Guid.NewGuid():N}@fpt.edu.vn";
+        academic.Cell(2, 1).Value = 1; academic.Cell(2, 2).Value = $"Fpt Lecturer {Guid.NewGuid().ToString("N")[..6]}"; academic.Cell(2, 3).Value = academicEmail;
+        using var stream = new MemoryStream();
+        workbook.SaveAs(stream);
+
+        var (status, preview, body) = await PreviewWorkbookAsync(stream.ToArray());
+
+        status.Should().Be(HttpStatusCode.OK, body);
+        preview!.NeedsCompletionCount.Should().Be(0, "both mentors have an email through the FPT email title");
+        preview.CreateCount.Should().Be(2);
+        preview.Rows.Select(item => item.Email).Should().BeEquivalentTo(enterpriseEmail, academicEmail);
+        preview.Warnings.Should().Contain(item => item.Contains("Ghi chú riêng"));
+        preview.Warnings.Should().Contain(item => item.Contains("FPT email is used as the login email"));
+    }
+
+    [Fact]
     public async Task MasterImportPreview_ShouldIgnoreLeftoverRows_BelowTheMentorList()
     {
         // Empty but formatted rows far below the data, as left by a re-saved Excel file or a Google Sheets export.

@@ -891,6 +891,47 @@ Các kiểm tra này không thuộc riêng yêu cầu nào nhưng cần đạt �
 
 ---
 
+### Kiểm tra 10.15. Import: tên cột email FPT và nút xác nhận
+
+**Làm gì**
+1. Mở bản sao file mẫu. Ở cả hai sheet, đổi tên cột email đăng nhập thành **"FPT email"** (hoặc "Email FPT"). Với sheet `DS Mentor_FA26`, xoá luôn cột "Email" cũ. Thêm một cột có tên lạ (ví dụ "Ghi chú riêng").
+2. Import file đó ở Users > Import > Import Mentors và xem bước xem trước.
+3. Import một file chỉ gồm mentor đã có tài khoản (chỉ cập nhật), rồi một file gồm mentor chưa có email vừa được bổ sung email.
+
+**Phải thấy gì**
+- [ ] Bước 2: mentor **không** bị đánh dấu Incomplete vì thiếu email; email trong bảng là email FPT. Có cảnh báo "...FPT email is used as the login email." và cảnh báo "these columns are not recognised and were ignored: Ghi chú riêng".
+- [ ] Bước 3 (chỉ cập nhật): nút ghi **"Update N mentors"**, và có dòng "When you confirm: N updated."
+- [ ] Bước 3 (bổ sung email): có ô **Complete record**; Total khớp tổng các ô; nút ghi **"Create N accounts"** hoặc **"Apply N changes"** (khi lẫn nhiều loại), với N đúng bằng số dòng sẽ thay đổi, không còn con số nhỏ hơn thực tế.
+- [ ] Khi cột "Email" có giá trị thì vẫn dùng cột "Email", cột FPT email chỉ lưu thêm.
+
+---
+
+### Kiểm tra 10.16. User Management: sửa/xoá mentor chưa đủ thông tin, bảng Accounts gọn, xoá tài khoản có kiểm tra
+
+**Làm gì**
+1. Ở **Users > Needs information**, bấm biểu tượng **bút chì** ở một mentor, đổi tên/chức danh/phòng ban (hoặc SĐT, công ty với mentor doanh nghiệp) rồi **Save changes**.
+2. Ở đây bấm **thùng rác** ở một mentor chưa được gán vào nhóm nào, xác nhận xoá. Sau đó thử xoá một mentor đang giữ nhóm (nhãn Temporary "on N teams").
+3. Ở tab **Accounts**, nhìn bảng ở màn hình laptop (khoảng 1280px) và thu nhỏ cửa sổ.
+4. Bấm thùng rác ở: (a) một sinh viên chưa thuộc lớp nào, (b) một sinh viên đang học lớp, (c) giảng viên đang dạy lớp, (d) mentor đang được gán nhóm hoặc đã từng được gán, (e) chính tài khoản admin đang đăng nhập.
+5. Sau khi xoá (a), tạo lại tài khoản mới với đúng email đó.
+
+**Phải thấy gì**
+- [ ] Bước 1: cửa sổ sửa có đúng các ô theo loại mentor; không có ô email đăng nhập (kèm giải thích email thêm bằng import); lưu xong danh sách cập nhật, số "missing" đổi theo. Tên trùng với một mentor chưa có email khác thì báo lỗi rõ ràng và giữ nguyên dữ liệu đã nhập.
+- [ ] Bước 2: mentor chưa dùng ở đâu xoá được và biến mất khỏi danh sách (và khỏi các kỳ đã thêm). Mentor đang giữ nhóm không xoá được, thông báo nêu số nhóm cần thay/kết thúc trước.
+- [ ] Bước 3: các cột giữ nguyên như cũ (User, Role, Status, Student ID / Major, Semester, Class, Group Name, Joined Date, Actions). Cột Actions luôn dính ở mép phải: thấy nút Edit/Delete ngay mà không cần kéo bảng sang trái, kể cả khi cửa sổ hẹp; các cột khác vẫn cuộn ngang được.
+- [ ] Bước 4: hộp thoại xoá tự kiểm tra trước. (a) xoá được. (b)(c)(d)(e) hiện khung đỏ "Why it cannot be deleted" liệt kê lý do cụ thể (ví dụ "the student is enrolled in 1 class", "the lecturer teaches 2 classes (EXE101_..., ...)", "the mentor is assigned to 2 teams right now", "you cannot delete your own account"); nút Delete bị khoá.
+- [ ] Bước 5: tạo lại được, không còn lỗi "email đã tồn tại" hay lỗi 500.
+- [ ] Sau khi xoá, tài khoản không đăng nhập được và biến mất khỏi mọi danh sách.
+
+**Thêm email trực tiếp ở cửa sổ sửa mentor (Needs information)**
+6. Bấm bút chì ở một mentor chưa có email (tốt nhất mentor đang giữ nhóm và đã Add vào một kỳ), nhập **Login email** hợp lệ rồi bấm **Save and create account**. Thử thêm email sai định dạng, và email đã thuộc tài khoản không phải mentor (ví dụ email admin).
+
+- [ ] Bước 6: có thông báo "X now has an account (N teams switched, M semesters moved)". Mentor biến mất khỏi **Needs information**, số trên tab giảm, và xuất hiện ở tab **Accounts** (Role Mentor, đúng loại). Ở **Lecturers & Mentors** mentor chỉ còn một dòng, không còn nhãn Temporary, vẫn thuộc kỳ; nhóm đã gán vẫn giữ đúng mentor đó (không còn nhãn Temporary). Email sai định dạng hoặc thuộc tài khoản khác thì báo lỗi rõ ràng, không lưu gì, dữ liệu đã nhập vẫn còn. Mentor dùng Forgot Password để đặt mật khẩu đầu tiên.
+
+**Lưu ý triển khai:** có migration `AllowReusingDeletedUserEmailAndRollNumber` (đổi ràng buộc duy nhất của email và mã sinh viên thành chỉ áp dụng cho tài khoản chưa xoá). **Sao lưu database trước khi chạy.** Rollback (`Down`) sẽ lỗi nếu lúc đó đã có tài khoản xoá và tài khoản mới trùng email, nên cần xử lý các email trùng trước khi quay lại.
+
+---
+
 ## Phần 4. Hạn chế đã biết (chỉ ghi nhận, chưa tính là lỗi mới)
 
 ### Mở lại lớp đã hoàn thành
