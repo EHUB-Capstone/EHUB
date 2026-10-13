@@ -668,7 +668,7 @@ namespace EHub.Infrastructure.Persistence.Migrations
 
                     b.ToTable("classes", null, t =>
                         {
-                            t.HasCheckConstraint("CK_classes_active_requires_lecturer_and_schedule", "status <> 'Active' OR (primary_lecturer_id IS NOT NULL AND schedule_json IS NOT NULL AND jsonb_typeof(schedule_json) = 'array' AND jsonb_array_length(schedule_json) > 0)");
+                            t.HasCheckConstraint("CK_classes_active_requires_lecturer", "status <> 'Active' OR primary_lecturer_id IS NOT NULL");
 
                             t.HasCheckConstraint("CK_classes_completion_metadata", "status <> 'Completed' OR (completed_at_utc IS NOT NULL AND completion_reason IS NOT NULL)");
                         });
