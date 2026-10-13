@@ -121,6 +121,8 @@ const NotificationDropdown = () => {
       case 'SEMINAR':
       case 'DeadlineReminder':
       case 'DEADLINE_REMINDER':
+      case 'DeadlineOverdue':
+      case 'DEADLINE_OVERDUE':
         return <Calendar className="w-4 h-4 text-indigo-500" />;
       case 'EVALUATION':
       case 'EvaluationPublished':

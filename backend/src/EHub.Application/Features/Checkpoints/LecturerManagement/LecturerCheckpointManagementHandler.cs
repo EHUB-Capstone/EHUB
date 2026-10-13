@@ -536,6 +536,8 @@ public sealed class LecturerCheckpointManagementHandler(
             ClassOutbox.Enqueue(context, CheckpointDeadlineEvents.DeadlineReminder,
                 classId, notification, now, reminderAt);
         }
+        ClassOutbox.Enqueue(context, CheckpointDeadlineEvents.DeadlineOverdue,
+            classId, notification, now, end);
     }
 
     private static ClassCheckpointScheduleResponse ToScheduleResponse(
