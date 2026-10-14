@@ -17,6 +17,7 @@ using Microsoft.Extensions.DependencyInjection;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text.Json;
 
 namespace EHub.IntegrationTests.Classes;
 
@@ -187,11 +188,27 @@ public sealed partial class TeamWorkflowIntegrationTests
 
         first.VersionNumber.Should().Be(1);
         second.VersionNumber.Should().Be(2);
+        var uploadedSubmissions = await fixture.Context.SubmissionFiles.AsNoTracking()
+            .Where(item => item.Id == first.Id || item.Id == second.Id)
+            .Select(item => new { item.SubmissionId, item.Submission.CheckpointId })
+            .ToArrayAsync();
         var events = await fixture.Context.OutboxMessages.AsNoTracking()
-            .Where(item => item.Type == "CheckpointSubmission.Submitted.v1")
+            .Where(item => item.Type == "CheckpointSubmission.Submitted.v1" &&
+                item.AggregateId == fixture.Seed.ClassId)
             .OrderBy(item => item.OccurredAtUtc)
             .ToArrayAsync();
         events.Should().HaveCount(2);
+        foreach (var @event in events)
+        {
+            using var payload = JsonDocument.Parse(@event.PayloadJson);
+            var data = payload.RootElement.GetProperty("data");
+            var submissionId = data.GetProperty("submissionId").GetGuid();
+            data.GetProperty("teamId").GetGuid().Should().Be(fixture.Seed.TeamId!.Value);
+            data.GetProperty("checkpointNumber").GetInt32().Should().Be(1);
+            uploadedSubmissions.Should().ContainSingle(item => item.SubmissionId == submissionId);
+            data.GetProperty("checkpointId").GetGuid().Should().Be(
+                uploadedSubmissions.Single(item => item.SubmissionId == submissionId).CheckpointId);
+        }
 
         var dispatcher = fixture.Scope.ServiceProvider.GetRequiredService<IOutboxEventDispatcher>();
         foreach (var @event in events)
@@ -201,7 +218,7 @@ public sealed partial class TeamWorkflowIntegrationTests
 
         var notifications = await fixture.Context.Notifications.AsNoTracking()
             .Where(item => item.SourceEventId.HasValue &&
-    events.Select(@event => @event.EventId).Contains(item.SourceEventId.Value))
+                events.Select(@event => @event.EventId).Contains(item.SourceEventId.Value))
             .OrderBy(item => item.CreatedAt)
             .ToArrayAsync();
         notifications.Should().HaveCount(2);

@@ -9,7 +9,8 @@ Không dùng cấu hình Vercel/Render/Neon trong `STAGING_ENVIRONMENT.md` cho m
 
 ```text
 Browser -> Cloudflare -> host Nginx :443 -> staging frontend 127.0.0.1:3001
-        -> frontend Nginx /api -> staging backend :8080 -> staging PostgreSQL :5432
+        -> frontend Nginx /api -> staging backend :8080 -> staging PostgreSQL/pgvector :5432
+                                                     -> staging Ollama :11434
 ```
 
 | Thành phần | Production | Staging |
@@ -18,19 +19,21 @@ Browser -> Cloudflare -> host Nginx :443 -> staging frontend 127.0.0.1:3001
 | Compose project | `ehub-production` | `ehub-staging` |
 | Frontend loopback | `127.0.0.1:3000` | `127.0.0.1:3001` |
 | Backend/frontend images | `ehub-backend`, `ehub-frontend` | `ehub-staging-backend`, `ehub-staging-frontend` |
+| PostgreSQL image | `ehub-postgres-pgvector:18-alpine` | `ehub-staging-postgres-pgvector:18-alpine` |
 | PostgreSQL volume | `ehub-production-postgres-data` | `ehub-staging-postgres-data` |
+| Ollama model volume | `ehub-production-ollama-data` | `ehub-staging-ollama-data` |
 | Docker network | `ehub-production-private` | `ehub-staging-private` |
 | Env thật | `.env.production` | `.env.staging` |
 | Backup | `/opt/ehub/backups` | `/opt/ehub/staging/backups` |
 
 Project, tên image, volume, network và cổng staging được cố định trong Compose.
 Không có biến `BACKEND_IMAGE`, `FRONTEND_IMAGE` hoặc `FRONTEND_HOST_PORT` để
-ghi đè chúng. Backend và PostgreSQL không publish cổng host. PostgreSQL 18
+ghi đè chúng. Backend, PostgreSQL và Ollama không publish cổng host. PostgreSQL 18
 mount volume tại `/var/lib/postgresql` giống production.
 
 | File | Vai trò |
 | --- | --- |
-| `docker-compose.staging.yml` | Ba dịch vụ staging, healthcheck, restart và giới hạn log |
+| `docker-compose.staging.yml` | Bốn dịch vụ staging, pgvector, Ollama, healthcheck, restart và giới hạn log |
 | `.env.staging.example` | Mẫu cấu hình an toàn; env thật được tạo trên VPS |
 | `deploy/nginx/staging.e-hub.com.vn.bootstrap.conf` | HTTP ACME và thông báo khởi tạo, chưa phục vụ ứng dụng |
 | `deploy/nginx/staging.e-hub.com.vn.conf` | HTTPS proxy tới staging, log riêng, noindex và health nội bộ |
@@ -203,12 +206,23 @@ Không sử dụng mảng `COMPOSE` còn sót từ thao tác production.
 
 Build lần lượt ngoài thời gian demo; giữ phiên SSH thứ hai để xem `free -h`,
 `docker stats --no-stream`, `df -h`. Giới hạn container không giới hạn build.
+Ollama staging có ngân sách riêng 2 CPU / 3 GiB RAM, một model và một yêu cầu
+đồng thời; cộng cả tài nguyên production khi đánh giá VPS dùng chung. Đây là
+giới hạn khởi đầu, chưa phải kết quả benchmark trên VPS.
+
+PostgreSQL staging dùng Dockerfile pgvector 0.8.6 trên nền PostgreSQL 18 Alpine
+hiện có. Nếu staging đã có database, backup và kiểm tra khả năng restore trước
+khi thay image; giữ volume `ehub-staging-postgres-data`. Không xóa volume để
+giải quyết lỗi migration. Migration AI đã commit sẽ bật extension `vector`.
 
 ```bash
+"${STAGING_COMPOSE[@]}" build postgres
 "${STAGING_COMPOSE[@]}" build backend
 "${STAGING_COMPOSE[@]}" build frontend
-"${STAGING_COMPOSE[@]}" up -d postgres
+"${STAGING_COMPOSE[@]}" up -d postgres ollama
 "${STAGING_COMPOSE[@]}" ps
+"${STAGING_COMPOSE[@]}" exec ollama ollama pull bge-m3
+"${STAGING_COMPOSE[@]}" exec ollama ollama list
 "${STAGING_COMPOSE[@]}" run --rm backend --initialize-database
 ```
 
@@ -216,6 +230,12 @@ Chờ PostgreSQL staging healthy. Initializer phải kết thúc thành công; n
 dụng migrations đã commit, seed danh mục và admin đầu tiên, rồi thoát. Lỗi
 migration phải dừng deployment. Không đổi schema thủ công và không chạy
 initializer như command startup lâu dài của backend.
+
+Phải tải thành công và thấy `bge-m3` trong danh sách model. Model được giữ
+trong volume `ehub-staging-ollama-data`; không tải lại nếu model đã có.
+Healthcheck Ollama chỉ xác nhận server đang trả lời, không xác nhận model đã
+tải. Backend dùng `Mentoring__OllamaBaseUrl=http://ollama:11434` và
+`Mentoring__EmbeddingModel=bge-m3` từ Compose, không cần thêm secret mới.
 
 Sau khi thành công, mở `.env.staging` và chỉ xóa giá trị sau
 `ADMIN_SEED_PASSWORD=`. Tài khoản và password hash vẫn nằm trong database.
@@ -227,7 +247,7 @@ Tiếp tục:
 "${STAGING_COMPOSE[@]}" ps
 ```
 
-Ba dịch vụ staging phải healthy. Kiểm tra loopback trước khi mở domain:
+Bốn dịch vụ staging phải healthy. Kiểm tra loopback trước khi mở domain:
 
 ```bash
 curl --fail --silent --show-error --header 'Host: staging.e-hub.com.vn' --write-out '\nHTTP %{http_code}\n' http://127.0.0.1:3001/healthz
@@ -237,11 +257,15 @@ sudo ss -lntup
 ```
 
 Mong đợi HTTP 200 và readiness có PostgreSQL healthy. Chỉ cổng 3001 bind
-loopback; 5432 và 8080 không được public. Khi lỗi, xem bounded logs:
+loopback; 5432, 8080 và 11434 không được public. Kiểm tra gợi ý mentor với
+một team và mentor đủ điều kiện trong giao diện staging: phải có kết quả
+matching, không nhận 503 do Ollama/model. Readiness backend không kiểm tra
+model Ollama. Khi lỗi, xem bounded logs:
 
 ```bash
 "${STAGING_COMPOSE[@]}" logs --tail 100 backend
 "${STAGING_COMPOSE[@]}" logs --tail 100 frontend
+"${STAGING_COMPOSE[@]}" logs --tail 100 ollama
 ```
 
 ## 8. DNS và HTTP bootstrap
@@ -392,9 +416,13 @@ ngày khi dữ liệu test cần giữ; lên lịch tự động sau khi đã th
 
 ```bash
 "${STAGING_COMPOSE[@]}" config --quiet
+"${STAGING_COMPOSE[@]}" build postgres
 "${STAGING_COMPOSE[@]}" build backend
 "${STAGING_COMPOSE[@]}" build frontend
 "${STAGING_COMPOSE[@]}" stop frontend backend
+"${STAGING_COMPOSE[@]}" up -d postgres ollama
+"${STAGING_COMPOSE[@]}" exec ollama ollama pull bge-m3
+"${STAGING_COMPOSE[@]}" exec ollama ollama list
 "${STAGING_COMPOSE[@]}" run --rm backend --initialize-database
 "${STAGING_COMPOSE[@]}" up -d --force-recreate backend frontend
 "${STAGING_COMPOSE[@]}" ps
@@ -412,9 +440,20 @@ theo HEAD đang thay đổi của `develop`.
 
 ## 13. Điều kiện hoàn thành
 
-1. Ba container staging healthy và đúng image/SHA.
+1. Bốn container staging healthy, đúng image/SHA, có `bge-m3` và gợi ý mentor hoạt động.
 2. HTTPS và tuyến Cloudflare hoạt động; certificate renewal có timer và dry-run đạt.
 3. Google/SMTP/Cloudinary/R2 staging hoạt động với dữ liệu test.
 4. Database, volume, network, storage và logs tách biệt; production vẫn hoạt động.
 5. Backup/checksum đã chép offsite và có restore drill.
 6. Nhóm ghi lại người triển khai, SHA, tên backup và kết quả smoke tests.
+
+## 14. Kiểm tra cấu hình AI trong source (2026-10-09)
+
+- Compose staging và production đều đạt `config --quiet` với file `.example` tương ứng.
+- Cấu hình staging đã kiểm tra image/build pgvector, model `bge-m3`, URL Ollama,
+  network nội bộ, không publish cổng database/backend/Ollama, volume riêng,
+  giới hạn RAM và healthcheck Ollama.
+- YAML CI đã parse thành công; có trigger `docker/**`, build PostgreSQL/pgvector,
+  backend/frontend và validate cả hai Compose.
+- Đây là kiểm tra cấu hình trong source. Chưa build image, tải model hoặc chạy
+  migration trên VPS; các bước triển khai và smoke test vẫn thực hiện theo runbook.

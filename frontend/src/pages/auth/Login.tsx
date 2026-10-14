@@ -14,6 +14,8 @@ import { useAuth } from '../../hooks/useAuth';
 import { AUTH_ERROR_CODES } from '../../types/auth';
 import { parseApiError } from '../../utils/apiError';
 import { classFeatureFlags } from '../../config/classFeatureFlags';
+import { mentorSupportApi } from '../../api/mentorSupportApi';
+import { needsMentorProfileSetup } from '../../utils/mentorProfiles';
 import {
   AUTH_FIELD_LIMITS,
   LOGIN_FIELDS,
@@ -74,7 +76,10 @@ const Login: React.FC = () => {
   const location  = useLocation();
   const state     = location.state as LocationState | null;
   const googleButtonContainer = useRef<HTMLDivElement>(null);
+  const profileCheckController = useRef<AbortController | null>(null);
   const [googleButtonWidth, setGoogleButtonWidth] = useState(320);
+
+  useEffect(() => () => profileCheckController.current?.abort(), []);
 
   useEffect(() => {
     const container = googleButtonContainer.current;
@@ -91,11 +96,25 @@ const Login: React.FC = () => {
     if (state?.isPending) setPendingApproval(true);
   }, [state]);
 
-  const redirectByRole = (roles: string[]) => {
+  const redirectByRole = async (roles: string[]) => {
     const normalizedRoles = roles.map(normalizeRole);
     if (normalizedRoles.includes('ADMIN'))         navigate('/admin');
     else if (normalizedRoles.includes('LECTURER')) navigate('/lecturer');
-    else if (normalizedRoles.includes('MENTOR'))   navigate('/workspace');
+    else if (normalizedRoles.includes('MENTOR')) {
+      profileCheckController.current?.abort();
+      const controller = new AbortController();
+      profileCheckController.current = controller;
+      let destination = '/profile';
+      try {
+        const profile = await mentorSupportApi.getProfile(controller.signal);
+        if (!needsMentorProfileSetup(profile)) destination = '/mentor';
+      } catch {
+        // The profile page provides its own error and retry state if the profile cannot be loaded.
+      } finally {
+        if (profileCheckController.current === controller) profileCheckController.current = null;
+      }
+      if (!controller.signal.aborted) navigate(destination, { replace: true });
+    }
     else if (normalizedRoles.includes('STUDENT')) {
       navigate(classFeatureFlags.studentSelfService ? '/student/classes' : '/student/workspace', { replace: true });
     }
@@ -151,7 +170,7 @@ const Login: React.FC = () => {
     try {
       const user = await loginWithEmail(normalizedPayload);
       toast.success('Login successful!');
-      redirectByRole(user.roles as string[]);
+      await redirectByRole(user.roles as string[]);
     } catch (err: unknown) {
       const { code, message, fieldErrors: apiFieldErrors } = parseApiError(err, 'Login failed.');
       const mappedFieldErrors = mapApiFieldErrors(apiFieldErrors, LOGIN_FIELDS);
@@ -181,7 +200,7 @@ const Login: React.FC = () => {
 
     try {
       const user = await loginWithGoogle(credentialResponse.credential);
-      redirectByRole(user.roles as string[]);
+      await redirectByRole(user.roles as string[]);
     } catch (err: unknown) {
       const { code, message } = parseApiError(err, 'Google sign-in failed.');
       if (code === AUTH_ERROR_CODES.ACCOUNT_NOT_REGISTERED) {

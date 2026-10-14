@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
+import { Link } from 'react-router-dom';
 import { X, Loader2, Search, Check, Users, Minus, CircleAlert, CheckCircle2 } from 'lucide-react';
 import { classApi } from '../../api/classApi';
 import { teamApi } from '../../api/teamApi';
@@ -222,6 +223,7 @@ export default function AssignMentorsModal({ classId, onClose, onAssigned }: Ass
         <div ref={dialogRef} tabIndex={-1} className="relative flex max-h-[calc(100dvh-1rem)] w-full max-w-4xl flex-col overflow-hidden rounded-t-2xl bg-white shadow-float outline-none animate-scale-in sm:max-h-[calc(100dvh-3rem)] sm:rounded-2xl">
           <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-5 py-4">
             <div>
+              <Link to="/mentors" className="text-xs text-primary">Mentor directory</Link>
               <h2 id="manage-mentors-title" className="text-lg font-bold text-slate-900">Manage team mentors</h2>
               <p className="mt-0.5 text-xs font-medium text-slate-400">See which teams still need a mentor, assign, replace or end a mentor</p>
             </div>

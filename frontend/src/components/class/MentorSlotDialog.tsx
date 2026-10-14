@@ -1,7 +1,9 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import { Check, Loader2, Search, X } from 'lucide-react';
 import { teamApi } from '../../api/teamApi';
+import { mentorSupportApi } from '../../api/mentorSupportApi';
+import type { MentorRecommendation } from '../../types/mentoring';
 import { useDialogA11y } from '../../hooks/useDialogA11y';
 import type { ManagedTeam, MentorAssignment } from '../../types/teamManagement';
 import { parseApiError } from '../../utils/apiError';
@@ -37,10 +39,24 @@ export default function MentorSlotDialog({ team, slot, current, mentors, onClose
   const [reasonNote, setReasonNote] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [recommendationAttempt, setRecommendationAttempt] = useState(0);
+  const [recommendationResult, setRecommendationResult] = useState<{ teamId: string; attempt: number; items: MentorRecommendation[]; error: string } | null>(null);
+  const recommendationsLoading = recommendationResult?.teamId !== team._id || recommendationResult.attempt !== recommendationAttempt;
+  const recommendationsError = recommendationsLoading ? '' : recommendationResult.error;
   const replacing = current !== null;
   useDialogA11y(ref, { onClose, busy: saving });
 
   const slotMentors = useMemo(() => slotCandidates(mentors, slot, current?.mentor.mentorProfileId), [mentors, slot, current]);
+  const recommendations = recommendationsLoading ? [] : recommendationResult.items.filter(item =>
+    slotMentors.some(option => !option.isTemporary && option._id === item.mentor.id)).slice(0, 5);
+  useEffect(() => {
+    let active = true;
+    const controller = new AbortController();
+    mentorSupportApi.getRecommendations(team._id, controller.signal)
+      .then(items => { if (active) setRecommendationResult({ teamId: team._id, attempt: recommendationAttempt, items, error: '' }); })
+      .catch(requestError => { if (active) setRecommendationResult({ teamId: team._id, attempt: recommendationAttempt, items: [], error: parseApiError(requestError, 'Could not load recommendations').message }); });
+    return () => { active = false; controller.abort(); };
+  }, [team._id, recommendationAttempt]);
   const tagOptions = useMemo(() => collectTagOptions(slotMentors), [slotMentors]);
   const activeTagFilter = useMemo(() => keepKnownTags(tagFilter, tagOptions), [tagFilter, tagOptions]);
   const candidates = useMemo(
@@ -85,6 +101,22 @@ export default function MentorSlotDialog({ team, slot, current, mentors, onClose
         </div>
 
         <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-5">
+          <section className="rounded-xl border border-slate-100 bg-slate-50/50 p-3" aria-label="Mentor recommendations">
+            <h4 className="text-sm font-semibold text-slate-900">Suggested mentors for this team</h4>
+            <p className="mt-1 text-xs text-slate-600">Scores use project descriptions, tags and mentor expertise. A lecturer makes the final choice.</p>
+            {recommendationsLoading ? <p className="mt-2 text-xs">Calculating recommendations…</p> :
+              recommendationsError ? <div role="alert" className="mt-2 text-xs text-red-700">{recommendationsError}
+                <button type="button" className="ml-2 underline" disabled={saving} onClick={() => setRecommendationAttempt(value => value + 1)}>Retry</button>
+              </div> :
+              recommendations.length === 0 ? <p className="mt-2 text-xs">No eligible recommendations for this slot.</p> :
+              <div className="mt-2 max-h-44 space-y-2 overflow-y-auto">{recommendations.map(item =>
+                <button key={item.mentor.id} type="button" disabled={saving || !item.hasCapacity}
+                  onClick={() => setSelectedId(item.mentor.id)}
+                  className="w-full rounded-lg border bg-white p-2 text-left text-xs disabled:opacity-50">
+                  <span className="font-semibold">{item.mentor.fullName}</span> · Điểm xếp hạng {item.fitScore}/100
+                  <span className="block text-slate-600">{item.reasons.join(' · ')}</span>
+                </button>)}</div>}
+          </section>
           <MentorTagFilter options={tagOptions} selected={activeTagFilter} onChange={setTagFilter} disabled={saving} />
           <div className="relative">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />

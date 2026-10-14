@@ -37,6 +37,7 @@ using EHub.Shared.Errors;
 using EHub.Shared.Results;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
+using Pgvector.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Migrations.Operations;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -360,7 +361,7 @@ public sealed partial class TeamWorkflowIntegrationTests
         seedContext.ChangeTracker.Clear();
         var rowVersion = (await seedContext.TeamProposals.AsNoTracking().SingleAsync(item => item.Id == seed.ProposalId)).Version.ToString();
         var options = new DbContextOptionsBuilder<AppDbContext>()
-            .UseNpgsql(seedContext.Database.GetConnectionString())
+            .UseNpgsql(_factory.TestConnectionString, b => b.UseVector())
             .Options;
 
         await using var firstContext = new AppDbContext(options);
@@ -1807,7 +1808,7 @@ public sealed partial class TeamWorkflowIntegrationTests
         closedFileDelete.Error.Code.Should().Be(ErrorCodes.WorkspaceCheckpointNotOpen);
 
         var options = new DbContextOptionsBuilder<AppDbContext>()
-            .UseNpgsql(context.Database.GetConnectionString()).Options;
+            .UseNpgsql(_factory.TestConnectionString, b => b.UseVector()).Options;
         await using var firstContext = new AppDbContext(options);
         await using var secondContext = new AppDbContext(options);
         var firstWriter = await firstContext.Submissions.SingleAsync(item => item.TeamId == seed.TeamId &&
@@ -2126,7 +2127,7 @@ public sealed partial class TeamWorkflowIntegrationTests
             .Select(item => new { item.RecipientUserId, item.Type, item.Link }).ToArrayAsync();
         reminderNotifications.Select(item => item.RecipientUserId).Should().BeEquivalentTo(studentUserIds);
         reminderNotifications.Should().OnlyContain(item =>
-            item.Type == NotificationType.DeadlineReminder && item.Link == "/student/workspace");
+            item.Type == NotificationType.DeadlineReminder && item.Link == $"/student/workspace/{seed.TeamId}");
 
         var thirdEnd = clock.UtcNow.AddDays(5);
         var revised = await manager.SaveScheduleAsync(seed.ClassId, checkpoint.Id,

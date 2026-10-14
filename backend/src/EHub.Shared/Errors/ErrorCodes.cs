@@ -10,6 +10,7 @@ public static class ErrorCodes
     public const string CommonForbiddenError = "COMMON_FORBIDDEN";
     public const string CommonUnauthorizedError = "COMMON_UNAUTHORIZED";
     public const string CommonBusinessRuleViolation = "COMMON_BUSINESS_RULE_VIOLATION";
+    public const string MentorCvExtractionUnavailable = "MENTOR_CV_EXTRACTION_UNAVAILABLE";
 
     // Auth error codes
     public const string AuthInvalidCredentials = "AUTH_INVALID_CREDENTIALS";
@@ -156,6 +157,7 @@ public static class ErrorCodes
     public const string MentorProfileConflict = "MENTOR_PROFILE_CONFLICT";
     public const string MentorCapacityReached = "MENTOR_CAPACITY_REACHED";
     public const string MentorAssignmentConflict = "MENTOR_ASSIGNMENT_CONFLICT";
+    public const string MentorMatchingUnavailable = "MENTOR_MATCHING_UNAVAILABLE";
     public const string ProjectDirectionNotFound = "PROJECT_DIRECTION_NOT_FOUND";
     public const string ProjectDirectionStateInvalid = "PROJECT_DIRECTION_STATE_INVALID";
     public const string NotificationNotFound = "NOTIFICATION_NOT_FOUND";
