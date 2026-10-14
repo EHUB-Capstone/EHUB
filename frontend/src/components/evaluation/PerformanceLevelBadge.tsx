@@ -50,14 +50,14 @@ const LEVEL_CONFIG = {
 
 const SIZE_CLASSES = {
   sm: {
-    badge: 'text-[11px] px-2 py-0.5 gap-1',
+    badge: 'text-caption px-2 py-0.5 gap-1',
     dot: 'w-1.5 h-1.5',
-    label: 'text-[10px]',
+    label: 'text-overline',
   },
   md: {
     badge: 'text-xs px-2.5 py-1 gap-1.5',
     dot: 'w-2 h-2',
-    label: 'text-[11px]',
+    label: 'text-caption',
   },
   lg: {
     badge: 'text-sm px-3 py-1.5 gap-2',
@@ -121,7 +121,7 @@ export const MentorRubricRow = ({ criterionName, weight, level, label, comment }
     {/* Left — criterion info */}
     <div className="flex-1 min-w-0">
       <p className="font-semibold text-slate-900 text-sm">{criterionName}</p>
-      <span className="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-bold text-slate-600 mt-1">
+      <span className="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-caption font-bold text-slate-600 mt-1">
         Weight: {weight}%
       </span>
     </div>
@@ -168,7 +168,7 @@ export const MentorEvaluationCard = ({ evaluation, showIndividualScore = false }
 
         <div className="flex flex-col items-end gap-1.5">
           <span
-            className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-bold ${
+            className={`inline-flex rounded-full px-2 py-0.5 text-caption font-bold ${
               evaluation?.status === 'SUBMITTED' || evaluation?.status === 'PUBLISHED'
                 ? 'bg-emerald-50 text-emerald-700'
                 : 'bg-amber-50 text-amber-700'
@@ -184,7 +184,7 @@ export const MentorEvaluationCard = ({ evaluation, showIndividualScore = false }
       {showIndividualScore && <div className="grid gap-2 border-b border-slate-200 p-4">
         {showIndividualScore && (
           <div className="rounded-xl border border-blue-100 bg-blue-50 p-3">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-blue-500">My score</p>
+            <p className="text-overline font-bold uppercase tracking-wider text-blue-500">My score</p>
             <p className={`mt-1 font-black ${ownScore !== null && ownScore !== undefined ? 'text-xl text-blue-700' : 'text-sm text-slate-400'}`}>
               {ownScore !== null && ownScore !== undefined ? `${Number(ownScore).toFixed(2)} / 10` : 'Pending publication'}
             </p>

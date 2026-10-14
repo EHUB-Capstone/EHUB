@@ -256,7 +256,7 @@ export default function FileUploadZone({
         <p className={`font-semibold text-slate-700 ${isLarge ? 'text-sm' : 'text-xs'}`}>
           {dragging ? 'Drop files here' : 'Drag & drop or click to upload'}
         </p>
-        <p className={`text-slate-400 ${isLarge ? 'text-xs' : 'text-[10px]'}`}>
+        <p className={`text-slate-400 ${isLarge ? 'text-xs' : 'text-overline'}`}>
           PDF · DOCX · PPTX · Max {CHECKPOINT_UPLOAD_MAX_FILE_SIZE_MB} MB per file
         </p>
       </div>
@@ -276,7 +276,7 @@ export default function FileUploadZone({
               <button
                 type="button"
                 onClick={clearFinished}
-                className="text-[11px] font-semibold text-slate-500 hover:text-slate-700"
+                className="text-caption font-semibold text-slate-500 hover:text-slate-700"
               >
                 Clear finished
               </button>
@@ -319,7 +319,7 @@ function UploadRow({
         <p className="min-w-0 flex-1 truncate text-xs font-semibold text-slate-700" title={item.file.name}>
           {item.file.name}
         </p>
-        <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${badge}`}>
+        <span className={`shrink-0 rounded-full px-2 py-0.5 text-overline font-bold ${badge}`}>
           {STATUS_LABEL[item.status]}
         </span>
         {item.status === 'failed' && (
@@ -360,7 +360,7 @@ function UploadRow({
         </div>
       )}
 
-      <p className={`mt-1 text-[10px] ${item.status === 'failed' ? 'text-red-600' : 'text-slate-400'}`}>
+      <p className={`mt-1 text-overline ${item.status === 'failed' ? 'text-red-600' : 'text-slate-400'}`}>
         {item.status === 'failed' && item.error}
         {item.status === 'queued' && `${formatFileSize(item.file.size)} · waiting for earlier uploads`}
         {item.status === 'uploading' && `${item.percent}% · ${formatFileSize(sentBytes)} of ${formatFileSize(item.file.size)}`}

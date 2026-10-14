@@ -175,10 +175,10 @@ export default function RubricForm({
           <h3 className="truncate text-sm font-bold text-slate-900">{title} · Enter scores</h3>
           <p className="text-xs text-slate-500">Type a score for each criterion.</p>
           <div className="mt-2 flex items-center gap-2">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Evaluation status</span>
+            <span className="text-overline font-bold uppercase tracking-wider text-slate-400">Evaluation status</span>
             <span
               aria-label={`Evaluation status: ${statusPresentation.label}`}
-              className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${statusPresentation.className}`}
+              className={`inline-flex rounded-full border px-2.5 py-1 text-overline font-bold uppercase tracking-wide ${statusPresentation.className}`}
             >
               {statusPresentation.label}
             </span>
@@ -205,7 +205,7 @@ export default function RubricForm({
                 <label htmlFor={`rubric-score-${checkpointNumber}-${index}`} className="block truncate text-sm font-medium text-slate-800">
                   {item.criterionName}
                 </label>
-                <span className="text-[11px] text-slate-400">{item.weight}% weight</span>
+                <span className="text-caption text-slate-400">{item.weight}% weight</span>
               </div>
               {hideSensitiveScores ? (
                 <span className="text-xs text-slate-500">Score hidden</span>
@@ -226,7 +226,7 @@ export default function RubricForm({
                     />
                     <span className="shrink-0 pl-1 text-xs text-slate-400">/ {item.maxScore}</span>
                   </div>
-                  {error && <span id={`rubric-error-${checkpointNumber}-${index}`} className="text-right text-[10px] text-red-600">{error}</span>}
+                  {error && <span id={`rubric-error-${checkpointNumber}-${index}`} className="text-right text-overline text-red-600">{error}</span>}
                 </div>
               )}
             </div>
@@ -245,7 +245,7 @@ export default function RubricForm({
             <Users className="h-4 w-4 shrink-0 text-primary" />
             <span>
               <span className="block text-xs font-semibold text-slate-700">Individual member scores</span>
-              <span className="block text-[11px] text-slate-500">
+              <span className="block text-caption text-slate-500">
                 {Object.keys(memberOverrides).length === 0
                   ? `All ${members.length} members use the Total score`
                   : `${Object.keys(memberOverrides).length} custom score${Object.keys(memberOverrides).length === 1 ? '' : 's'}`}
@@ -260,13 +260,13 @@ export default function RubricForm({
         {memberScoresExpanded && (
           <div className="border-t border-slate-200 bg-white px-3 py-2">
             <div className="mb-2 flex items-center justify-between gap-3">
-              <p className="text-[11px] text-slate-500">Default: Total {checkpointTotal.toFixed(2)} / 10</p>
+              <p className="text-caption text-slate-500">Default: Total {checkpointTotal.toFixed(2)} / 10</p>
               {Object.keys(memberOverrides).length > 0 && (
                 <button
                   type="button"
                   disabled={readOnly}
                   onClick={() => setMemberOverrides({})}
-                  className="inline-flex items-center gap-1 text-[11px] font-semibold text-primary hover:text-primary/80 disabled:opacity-50"
+                  className="inline-flex items-center gap-1 text-caption font-semibold text-primary-700 hover:text-primary-700/80 disabled:opacity-50"
                 >
                   <RotateCcw className="h-3 w-3" /> Reset all
                 </button>
@@ -283,7 +283,7 @@ export default function RubricForm({
                     <div key={member.studentId} className="flex min-h-12 items-center gap-3 py-2">
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-medium text-slate-800">{member.fullName}</p>
-                        <p className="text-[11px] text-slate-400">
+                        <p className="text-caption text-slate-400">
                           {member.rollNumber || 'Student'} · {isOverridden ? 'Custom score' : 'Uses Total'}
                         </p>
                       </div>
@@ -301,14 +301,14 @@ export default function RubricForm({
                             />
                             <span className="pl-1 text-xs text-slate-400">/10</span>
                           </div>
-                          {error && <span className="text-[10px] text-red-600">{error}</span>}
+                          {error && <span className="text-overline text-red-600">{error}</span>}
                         </div>
                         <button
                           type="button"
                           onClick={() => resetMemberScore(member.studentId)}
                           disabled={readOnly || !isOverridden}
                           aria-label={`Reset score for ${member.fullName}`}
-                          className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-primary disabled:invisible"
+                          className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-primary-700 disabled:invisible"
                         >
                           <RotateCcw className="h-3.5 w-3.5" />
                         </button>

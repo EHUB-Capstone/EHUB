@@ -567,7 +567,7 @@ export default function CheckpointFilePreviewModal({
       >
         <header className="flex min-h-16 shrink-0 items-center gap-3 border-b border-slate-200 bg-white px-3 py-3 sm:px-5">
           <div className="flex min-w-0 flex-1 items-center gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary-50 text-primary ring-1 ring-primary/10">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary-50 text-primary-700 ring-1 ring-primary/10">
               <FileText className="h-5 w-5" />
             </div>
             <h2 id="checkpoint-file-preview-title" className="min-w-0 truncate text-sm font-bold text-slate-900 sm:text-base" title={file.originalName}>
@@ -656,7 +656,7 @@ export default function CheckpointFilePreviewModal({
 
               <button
                 type="button"
-                className={`${viewerControlClass} ${fitMode === 'width' ? 'bg-primary-50 text-primary hover:bg-primary-100 hover:text-primary-dark' : ''}`}
+                className={`${viewerControlClass} ${fitMode === 'width' ? 'bg-primary-50 text-primary-700 hover:bg-primary-100 hover:text-primary-dark' : ''}`}
                 onClick={() => setFitMode('width')}
                 aria-pressed={fitMode === 'width'}
                 title="Fit width"
@@ -666,7 +666,7 @@ export default function CheckpointFilePreviewModal({
               </button>
               <button
                 type="button"
-                className={`${viewerControlClass} ${fitMode === 'page' ? 'bg-primary-50 text-primary hover:bg-primary-100 hover:text-primary-dark' : ''}`}
+                className={`${viewerControlClass} ${fitMode === 'page' ? 'bg-primary-50 text-primary-700 hover:bg-primary-100 hover:text-primary-dark' : ''}`}
                 onClick={() => setFitMode('page')}
                 aria-pressed={fitMode === 'page'}
                 title="Fit page"

@@ -177,7 +177,7 @@ export default function TeamManagementModal({
       <div className="relative flex max-h-[95vh] w-full max-w-5xl flex-col overflow-hidden rounded-t-2xl border border-slate-200/60 bg-white shadow-float animate-scale-in sm:max-h-[92vh] sm:rounded-2xl">
         <header className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-100 px-5 py-4 sm:px-6">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-50 text-primary">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-50 text-primary-700">
               <UserCheck className="h-5 w-5" />
             </div>
             <div>
@@ -250,7 +250,7 @@ export default function TeamManagementModal({
                     </div>
                   </div>
                   {draft.memberIds.length > 0 && (
-                    <span className="rounded-full bg-primary-50 px-2.5 py-1 text-xs font-bold text-primary">{draft.memberIds.length} selected</span>
+                    <span className="rounded-full bg-primary-50 px-2.5 py-1 text-xs font-bold text-primary-700">{draft.memberIds.length} selected</span>
                   )}
                 </div>
 
@@ -302,15 +302,15 @@ export default function TeamManagementModal({
                       <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border ${selected ? 'border-primary bg-primary text-white' : 'border-slate-300 bg-white text-transparent'}`}>
                         <Check className="h-3.5 w-3.5" />
                       </span>
-                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-secondary-300 to-secondary text-xs font-bold text-white">{student.fullName.charAt(0).toUpperCase()}</span>
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white bg-secondary">{student.fullName.charAt(0).toUpperCase()}</span>
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-sm font-semibold text-slate-800">{student.fullName}</span>
                         <span className="block truncate text-xs text-slate-500">{student.rollNumber || 'No student code'}{student.major ? ` · ${student.major}` : ''}</span>
                       </span>
                       {assignedElsewhere ? (
-                        <span className="max-w-36 rounded-full bg-amber-100 px-2 py-1 text-right text-[10px] font-semibold text-amber-700">In {assignment?.teamName}</span>
+                        <span className="max-w-36 rounded-full bg-amber-100 px-2 py-1 text-right text-overline font-semibold text-amber-700">In {assignment?.teamName}</span>
                       ) : selected ? (
-                        <span className="text-xs font-semibold text-primary">Selected</span>
+                        <span className="text-xs font-semibold text-primary-700">Selected</span>
                       ) : null}
                     </button>
                   );
@@ -325,7 +325,7 @@ export default function TeamManagementModal({
           <div className="flex gap-2">
             <Button variant="outline" onClick={onClose}>Cancel</Button>
             <Button
-              variant="gradient"
+              variant="primary"
               icon={UserCheck}
               isLoading={submitting}
               disabled={!validation.isValid}

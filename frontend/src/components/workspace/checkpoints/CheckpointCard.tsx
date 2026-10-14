@@ -84,7 +84,7 @@ export default function CheckpointCard({
           </div>
 
           <div className="min-w-0 flex-1">
-            <p className="text-[10px] font-bold uppercase text-slate-400">
+            <p className="text-overline font-bold uppercase text-slate-400">
               Checkpoint {checkpoint.number}
             </p>
             <h3 className="mt-0.5 text-sm font-bold text-slate-900 transition-colors group-hover:text-orange-600 sm:text-base">
@@ -95,38 +95,38 @@ export default function CheckpointCard({
             </p>
 
             <div className="mt-3 flex flex-wrap items-center gap-2">
-              <span className={`rounded-md px-2.5 py-1 text-[10px] font-bold ${scheduleStyle}`}>
+              <span className={`rounded-md px-2.5 py-1 text-overline font-bold ${scheduleStyle}`}>
                 {checkpoint.scheduleStatus}
               </span>
               {reqTotal > 0 && (
-                <span className={`rounded-md px-2.5 py-1 text-[10px] font-bold ${hasRequirements ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
+                <span className={`rounded-md px-2.5 py-1 text-overline font-bold ${hasRequirements ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
                   {reqFilled}/{reqTotal} requirements
                 </span>
               )}
-              <span className={`rounded-md px-2.5 py-1 text-[10px] font-bold ${hasFiles ? 'bg-orange-100 text-orange-700' : 'bg-slate-100 text-slate-500'}`}>
+              <span className={`rounded-md px-2.5 py-1 text-overline font-bold ${hasFiles ? 'bg-orange-100 text-orange-700' : 'bg-slate-100 text-slate-500'}`}>
                 {fileCount} file{fileCount !== 1 ? 's' : ''}
               </span>
-              <span className={`rounded-md px-2.5 py-1 text-[10px] font-bold ${hasLinks ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-500'}`}>
+              <span className={`rounded-md px-2.5 py-1 text-overline font-bold ${hasLinks ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-500'}`}>
                 {linkCount} link{linkCount !== 1 ? 's' : ''}
               </span>
               {latestVersion > 0 && (
-                <span className="rounded-md bg-orange-100 px-2.5 py-1 text-[10px] font-bold text-orange-700">
+                <span className="rounded-md bg-orange-100 px-2.5 py-1 text-overline font-bold text-orange-700">
                   Latest: Version {latestVersion}
                 </span>
               )}
               {!hasSubmission && (
-                <span className="rounded-md bg-slate-100 px-2.5 py-1 text-[10px] font-medium text-slate-500">
+                <span className="rounded-md bg-slate-100 px-2.5 py-1 text-overline font-medium text-slate-500">
                   Not submitted
                 </span>
               )}
               {hasFiles && latest && (
-                <span className="flex min-w-0 max-w-full items-center gap-1 text-[10px] text-slate-400 sm:max-w-[240px]">
+                <span className="flex min-w-0 max-w-full items-center gap-1 text-overline text-slate-400 sm:max-w-[240px]">
                   <FileText className="h-3 w-3 shrink-0 text-orange-400" />
                   <span className="truncate">{latest.originalName}</span>
                 </span>
               )}
             </div>
-            <p className="mt-2 flex items-center gap-1.5 text-[10px] text-slate-500">
+            <p className="mt-2 flex items-center gap-1.5 text-overline text-slate-500">
               <Clock3 className="h-3 w-3" />
               {checkpoint.startDateUtc && checkpoint.endDateUtc
                 ? `${formatDate(checkpoint.startDateUtc)} → ${formatDate(checkpoint.endDateUtc)}`

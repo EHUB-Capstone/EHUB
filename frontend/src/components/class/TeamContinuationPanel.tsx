@@ -44,7 +44,7 @@ export default function TeamContinuationPanel({ summary, applied }: TeamContinua
           <li key={item.sourceTeamId} className="px-4 py-3 text-xs">
             <div className="flex flex-wrap items-center gap-2">
               <span className="font-semibold text-slate-900">{item.teamName}</span>
-              <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${outcomeStyles[item.outcome] ?? outcomeStyles.NoChange}`}>
+              <span className={`rounded-full px-2 py-0.5 text-overline font-bold uppercase ${outcomeStyles[item.outcome] ?? outcomeStyles.NoChange}`}>
                 {continuationOutcomeLabel(item.outcome)}
               </span>
               <span className="text-slate-500">

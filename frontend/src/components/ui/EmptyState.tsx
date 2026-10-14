@@ -25,11 +25,11 @@ const EmptyState = ({ icon: Icon = FileSearch, title = 'No data found', descript
 
   return (
     <div className={cn('flex flex-col items-center justify-center py-16 px-6 text-center', className)}>
-      <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mb-5">
-        <Icon className="w-7 h-7 text-slate-400" />
+      <div className="w-16 h-16 rounded-2xl bg-primary-50 flex items-center justify-center mb-5">
+        <Icon className="w-7 h-7 text-primary-700" aria-hidden="true" />
       </div>
-      <h3 className="text-subheading text-slate-700 mb-2">{title}</h3>
-      <p className="text-body text-slate-500 max-w-sm mb-6">{description}</p>
+      <h3 className="text-subheading text-secondary mb-2">{title}</h3>
+      <p className="text-body text-slate-600 max-w-sm mb-6">{description}</p>
       {actionConfig ? (
         <Button variant="primary" onClick={actionConfig.onClick} isLoading={actionConfig.isLoading}>
           {actionConfig.label}

@@ -9,7 +9,7 @@ export default function RankingTable({ rankings }: { rankings: TeamRankingViewIt
   </div>;
   return <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
     <table className="w-full text-left text-sm">
-      <thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr>
+      <thead className="bg-slate-50 text-xs uppercase text-slate-600"><tr>
         <th scope="col" className="px-4 py-4">Rank</th>
         <th scope="col" className="px-5 py-4">Team / Project</th>
         <th scope="col" className="px-4 py-4">Class / Subject</th>

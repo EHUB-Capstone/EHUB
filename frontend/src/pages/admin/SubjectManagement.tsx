@@ -651,10 +651,10 @@ const SubjectManagement = () => {
   const staffStats = [
     { label: 'Lecturers', value: staffSummary.lecturers, icon: GraduationCap, style: 'bg-primary text-white ring-primary-200 dark:ring-primary/50' },
     { label: 'Mentors', value: staffSummary.mentors, icon: Users, style: 'bg-secondary text-white ring-black/10 dark:ring-blue-300/40' },
-    { label: 'Needs info', value: staff.filter(member => member.isIncomplete && !member.isTemporary).length, icon: CircleAlert, style: 'bg-warning text-white ring-black/10 dark:ring-amber-300/40' },
-    { label: 'Assigned', value: staffSummary.assigned, icon: CheckCircle2, style: 'bg-success text-white ring-black/10 dark:ring-green-300/40' },
+    { label: 'Needs info', value: staff.filter(member => member.isIncomplete && !member.isTemporary).length, icon: CircleAlert, style: 'bg-warning-dark text-white ring-black/10 dark:ring-amber-300/40' },
+    { label: 'Assigned', value: staffSummary.assigned, icon: CheckCircle2, style: 'bg-success-dark text-white ring-black/10 dark:ring-green-300/40' },
     { label: 'Unassigned', value: staffSummary.unassigned, icon: ShieldAlert, style: 'bg-slate-600 text-white ring-black/10 dark:bg-slate-500 dark:ring-slate-300/40' },
-    { label: 'Classes', value: staffSummary.classes, icon: BookOpen, style: 'bg-cyan text-white ring-black/10 dark:ring-cyan-300/40' },
+    { label: 'Classes', value: staffSummary.classes, icon: BookOpen, style: 'bg-info-dark text-white ring-black/10 dark:ring-blue-300/40' },
   ];
   const selectedSemesterRecord = semesters.find(item => item.semester === selectedSemester && Number(item.year) === selectedYear);
 
@@ -662,7 +662,7 @@ const SubjectManagement = () => {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 sm:text-3xl">
+          <h1 className="text-heading sm:text-display text-secondary tracking-tight">
             {activeTab === 'subjects' ? 'Subject & Semester' : activeTab === 'industries' ? 'Startup Industries' : 'Lecturers & Mentors'}
           </h1>
           <p className="mt-1 text-slate-500">
@@ -682,13 +682,13 @@ const SubjectManagement = () => {
       </div>
 
       <div className="inline-flex w-full gap-1 overflow-x-auto rounded-xl bg-slate-100 p-1 sm:w-auto">
-        <button type="button" onClick={() => setActiveTab('subjects')} className={`inline-flex shrink-0 items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition ${activeTab === 'subjects' ? 'bg-white text-primary shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+        <button type="button" onClick={() => setActiveTab('subjects')} className={`inline-flex shrink-0 items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition ${activeTab === 'subjects' ? 'bg-white text-primary-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
           <BookOpen className="h-4 w-4" /> Subject & Semester
         </button>
-        <button type="button" onClick={openStaffTab} className={`inline-flex shrink-0 items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition ${activeTab === 'staff' ? 'bg-white text-primary shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+        <button type="button" onClick={openStaffTab} className={`inline-flex shrink-0 items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition ${activeTab === 'staff' ? 'bg-white text-primary-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
           <Users className="h-4 w-4" /> Lecturers & Mentors by Semester
         </button>
-        <button type="button" onClick={() => setActiveTab('industries')} className={`inline-flex shrink-0 items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition ${activeTab === 'industries' ? 'bg-white text-primary shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+        <button type="button" onClick={() => setActiveTab('industries')} className={`inline-flex shrink-0 items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition ${activeTab === 'industries' ? 'bg-white text-primary-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
           <Factory className="h-4 w-4" /> Startup Industries
         </button>
       </div>
@@ -712,14 +712,14 @@ const SubjectManagement = () => {
             </div>
             <div className="overflow-hidden rounded-2xl border border-slate-200/70 bg-white shadow-sm">
               {subjectsLoading ? <LoadingSkeleton variant="table" lines={6} className="p-4" /> : subjects.length === 0 ? <EmptyState icon={BookOpen} title="No subjects found" description="Try adjusting your search or add a new subject." action={{ label: 'Add Subject', onClick: openAdd }} /> : (
-                <div aria-busy={subjectsRefreshing || undefined} className={`overflow-x-auto transition-opacity duration-150 ${subjectsRefreshing ? 'opacity-60' : 'opacity-100'}`}><table className="w-full min-w-[620px]"><thead><tr className="border-b border-slate-100 bg-slate-50"><th className="px-6 py-3 text-left text-xs font-semibold uppercase text-slate-400">Subject Code</th><th className="px-6 py-3 text-left text-xs font-semibold uppercase text-slate-400">Subject Name</th><th className="px-6 py-3 text-left text-xs font-semibold uppercase text-slate-400">Status</th><th className="px-6 py-3 text-right text-xs font-semibold uppercase text-slate-400">Actions</th></tr></thead>
-                  <tbody>{subjects.map((subject) => <tr key={subject._id} className="group border-b border-slate-50 last:border-0 hover:bg-slate-50/80"><td className="px-6 py-3.5"><div className="flex items-center gap-3"><span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary-50 font-mono text-xs font-bold text-primary">{subject.subjectCode.slice(0, 3)}</span><Link to={`/admin/subjects/${subject.subjectCode}`} className="font-mono font-semibold text-slate-900 hover:text-primary hover:underline">{subject.subjectCode}</Link></div></td><td className="px-6 py-3.5 text-sm font-medium text-slate-700">{subject.subjectName}</td><td className="px-6 py-3.5"><Badge variant={subject.status === 'active' ? 'Active' : 'Overdue'}>{subject.status === 'active' ? 'Active' : 'Disabled'}</Badge></td><td className="px-6 py-3.5"><div className="flex justify-end gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100"><button type="button" title="Edit Subject" onClick={() => openEdit(subject)} className="rounded-lg p-2 text-slate-400 hover:bg-primary-50 hover:text-primary"><Edit3 className="h-4 w-4" /></button>{subject.status !== 'disabled' && <button type="button" title="Disable Subject" onClick={() => setDisableTarget(subject)} className="rounded-lg p-2 text-slate-400 hover:bg-danger-50 hover:text-danger"><LockKeyhole className="h-4 w-4" /></button>}</div></td></tr>)}</tbody></table></div>
+                <div aria-busy={subjectsRefreshing || undefined} className={`overflow-x-auto transition-opacity duration-150 ${subjectsRefreshing ? 'opacity-60' : 'opacity-100'}`}><table className="w-full min-w-[620px]"><thead><tr className="border-b border-slate-100 bg-slate-50"><th className="px-6 py-3 text-left text-xs font-semibold uppercase text-slate-600">Subject Code</th><th className="px-6 py-3 text-left text-xs font-semibold uppercase text-slate-600">Subject Name</th><th className="px-6 py-3 text-left text-xs font-semibold uppercase text-slate-600">Status</th><th className="px-6 py-3 text-right text-xs font-semibold uppercase text-slate-600">Actions</th></tr></thead>
+                  <tbody>{subjects.map((subject) => <tr key={subject._id} className="group border-b border-slate-50 last:border-0 hover:bg-slate-50/80"><td className="px-6 py-3.5"><div className="flex items-center gap-3"><span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary-50 font-mono text-xs font-bold text-primary-700">{subject.subjectCode.slice(0, 3)}</span><Link to={`/admin/subjects/${subject.subjectCode}`} className="font-mono font-semibold text-slate-900 hover:text-primary-700 hover:underline">{subject.subjectCode}</Link></div></td><td className="px-6 py-3.5 text-sm font-medium text-slate-700">{subject.subjectName}</td><td className="px-6 py-3.5"><Badge variant={subject.status === 'active' ? 'Active' : 'Overdue'}>{subject.status === 'active' ? 'Active' : 'Disabled'}</Badge></td><td className="px-6 py-3.5"><div className="flex justify-end gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100"><button type="button" title="Edit Subject" onClick={() => openEdit(subject)} className="rounded-lg p-2 text-slate-400 hover:bg-primary-50 hover:text-primary-700"><Edit3 className="h-4 w-4" /></button>{subject.status !== 'disabled' && <button type="button" title="Disable Subject" onClick={() => setDisableTarget(subject)} className="rounded-lg p-2 text-slate-400 hover:bg-danger-50 hover:text-danger"><LockKeyhole className="h-4 w-4" /></button>}</div></td></tr>)}</tbody></table></div>
               )}</div>
           </div>
           <aside className="rounded-2xl border border-slate-200/70 bg-white p-5 shadow-sm">
             <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2"><Calendar className="h-5 w-5 text-primary" /><h2 className="font-bold text-slate-800">Semester Schedule</h2></div>
-              <button type="button" onClick={openPlanSemester} className="rounded-lg p-1.5 text-primary hover:bg-primary-50" title="Plan a semester"><Plus className="h-4 w-4" /></button>
+              <button type="button" onClick={openPlanSemester} className="rounded-lg p-1.5 text-primary-700 hover:bg-primary-50" title="Plan a semester"><Plus className="h-4 w-4" /></button>
             </div>
             <div className={`mt-4 rounded-xl border p-3 ${currentSemester && semesterTiming(currentSemester) === 'Ended' ? 'border-red-200 bg-red-50' : 'border-slate-100 bg-slate-50'}`}>
               <div className="flex items-start justify-between gap-2">
@@ -727,7 +727,7 @@ const SubjectManagement = () => {
                   <p className="text-xs font-medium text-slate-400">Active semester</p>
                   <p className="mt-1 text-lg font-bold text-slate-900">{currentSemester ? semesterLabel(currentSemester) : 'None'}</p>
                 </div>
-                {currentSemester && <button type="button" onClick={() => openEditSemesterDates(currentSemester)} className="rounded-lg p-1.5 text-slate-400 hover:bg-white hover:text-primary" title="Edit semester dates"><Edit3 className="h-4 w-4" /></button>}
+                {currentSemester && <button type="button" onClick={() => openEditSemesterDates(currentSemester)} className="rounded-lg p-1.5 text-slate-400 hover:bg-white hover:text-primary-700" title="Edit semester dates"><Edit3 className="h-4 w-4" /></button>}
               </div>
               {currentSemester && (
                 <>
@@ -748,14 +748,14 @@ const SubjectManagement = () => {
             <div className="mt-4 border-t border-slate-100 pt-3">
               <div className="flex items-center justify-between gap-2">
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Planned semesters</p>
-                <button type="button" onClick={openPlanSemester} className="text-xs font-semibold text-primary">Add</button>
+                <button type="button" onClick={openPlanSemester} className="text-xs font-semibold text-primary-700">Add</button>
               </div>
               <div className="mt-2 flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50 px-2 py-1.5">
                 <button
                   type="button"
                   disabled={previousSemesterScheduleYear === null}
                   onClick={() => previousSemesterScheduleYear !== null && setSemesterScheduleYear(previousSemesterScheduleYear)}
-                  className="rounded-md p-1 text-slate-500 hover:bg-white hover:text-primary disabled:cursor-not-allowed disabled:opacity-30"
+                  className="rounded-md p-1 text-slate-500 hover:bg-white hover:text-primary-700 disabled:cursor-not-allowed disabled:opacity-30"
                   aria-label={previousSemesterScheduleYear === null ? 'No earlier semester year' : `View semester schedule for ${previousSemesterScheduleYear}`}
                   title={previousSemesterScheduleYear === null ? 'No earlier semester year' : `View ${previousSemesterScheduleYear}`}
                 >
@@ -766,7 +766,7 @@ const SubjectManagement = () => {
                   type="button"
                   disabled={nextSemesterScheduleYear === null}
                   onClick={() => nextSemesterScheduleYear !== null && setSemesterScheduleYear(nextSemesterScheduleYear)}
-                  className="rounded-md p-1 text-slate-500 hover:bg-white hover:text-primary disabled:cursor-not-allowed disabled:opacity-30"
+                  className="rounded-md p-1 text-slate-500 hover:bg-white hover:text-primary-700 disabled:cursor-not-allowed disabled:opacity-30"
                   aria-label={nextSemesterScheduleYear === null ? 'No later semester year' : `View semester schedule for ${nextSemesterScheduleYear}`}
                   title={nextSemesterScheduleYear === null ? 'No later semester year' : `View ${nextSemesterScheduleYear}`}
                 >
@@ -788,10 +788,10 @@ const SubjectManagement = () => {
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0">
                             <p className="font-semibold text-slate-800">{semesterLabel(item)}</p>
-                            <p className="mt-0.5 text-[11px] text-slate-500">{formatSemesterDate(item.startDate)} – {formatSemesterDate(item.endDate)}</p>
-                            <p className={`mt-0.5 text-[11px] font-semibold ${timing === 'Ended' ? 'text-red-600' : timing === 'In progress' ? 'text-green-700' : 'text-blue-600'}`}>{timing}</p>
+                            <p className="mt-0.5 text-caption text-slate-500">{formatSemesterDate(item.startDate)} – {formatSemesterDate(item.endDate)}</p>
+                            <p className={`mt-0.5 text-caption font-semibold ${timing === 'Ended' ? 'text-red-600' : timing === 'In progress' ? 'text-green-700' : 'text-blue-600'}`}>{timing}</p>
                           </div>
-                          <button type="button" onClick={() => openEditSemesterDates(item)} className="rounded p-1 text-slate-400 hover:bg-white hover:text-primary" title="Edit dates"><Edit3 className="h-3.5 w-3.5" /></button>
+                          <button type="button" onClick={() => openEditSemesterDates(item)} className="rounded p-1 text-slate-400 hover:bg-white hover:text-primary-700" title="Edit dates"><Edit3 className="h-3.5 w-3.5" /></button>
                         </div>
                         <button
                           type="button"
@@ -804,7 +804,7 @@ const SubjectManagement = () => {
                             }
                             void activateSemester(item);
                           }}
-                          className="mt-2 w-full rounded-lg border border-primary-200 bg-white px-2 py-1.5 font-semibold text-primary disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400"
+                          className="mt-2 w-full rounded-lg border border-primary-200 bg-white px-2 py-1.5 font-semibold text-primary-700 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400"
                           title={timing !== 'In progress'
                             ? 'Activation is available only between the configured dates'
                             : currentSemester && semesterTiming(currentSemester) !== 'Ended'
@@ -830,7 +830,7 @@ const SubjectManagement = () => {
                       <div className="flex items-center justify-between gap-2">
                         <div>
                           <p className="font-semibold text-amber-900">{semesterLabel(item)}</p>
-                          <p className="mt-0.5 text-[11px] text-amber-700">Resolve remaining classes, then complete this semester.</p>
+                          <p className="mt-0.5 text-caption text-amber-700">Resolve remaining classes, then complete this semester.</p>
                         </div>
                         <button
                           type="button"
@@ -860,7 +860,7 @@ const SubjectManagement = () => {
                         type="button"
                         disabled={Boolean(currentSemester)}
                         onClick={() => setSemesterLifecycleTarget({ semester: item, action: 'reopen' })}
-                        className="font-semibold text-primary disabled:cursor-not-allowed disabled:opacity-40"
+                        className="font-semibold text-primary-700 disabled:cursor-not-allowed disabled:opacity-40"
                         title={currentSemester ? 'Complete the active semester before reopening another one' : 'Reopen semester'}
                       >
                         Reopen
@@ -877,7 +877,7 @@ const SubjectManagement = () => {
       ) : (
         <section className="space-y-4">
           {/* Semester context and the numbers for it, kept together at the top */}
-          <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm dark:border-white/15 dark:bg-[#111827] dark:shadow-[0_10px_30px_rgba(0,0,0,0.18)]">
+          <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm dark:border-white/15 dark:bg-dark-surface dark:shadow-[0_10px_30px_rgba(0,0,0,0.18)]">
             <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-end sm:justify-between">
               <div className="flex flex-wrap items-end gap-3">
                 <label className="text-xs font-semibold uppercase text-slate-400">Semester
@@ -896,7 +896,7 @@ const SubjectManagement = () => {
             </div>
             <div className="grid grid-cols-2 gap-px border-t border-slate-200/80 bg-slate-200/80 sm:grid-cols-3 xl:grid-cols-6 dark:border-white/10 dark:bg-white/10">
               {staffStats.map(({ label, value, icon: Icon, style }) => (
-                <div key={label} className="flex items-center gap-3 bg-white px-4 py-3 dark:bg-[#111827]">
+                <div key={label} className="flex items-center gap-3 bg-white px-4 py-3 dark:bg-dark-surface">
                   <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg shadow-sm ring-1 ring-inset ${style}`}><Icon className="h-4 w-4" /></span>
                   <div className="min-w-0"><p className="text-lg font-bold leading-5 text-slate-900">{value}</p><p className="truncate text-xs text-slate-500">{label}</p></div>
                 </div>
@@ -914,12 +914,12 @@ const SubjectManagement = () => {
             }}
           />
 
-          <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm dark:border-white/15 dark:bg-[#111827] dark:shadow-[0_10px_30px_rgba(0,0,0,0.18)]">
+          <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm dark:border-white/15 dark:bg-dark-surface dark:shadow-[0_10px_30px_rgba(0,0,0,0.18)]">
             <header className="flex flex-col gap-3 border-b border-slate-200/80 bg-slate-50/80 px-4 py-3 dark:border-white/10 dark:bg-white/[0.045] sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center gap-3">
                 <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-secondary text-white shadow-sm ring-1 ring-black/10 dark:ring-blue-300/40"><Users className="h-4.5 w-4.5" /></span>
                 <div>
-                  <div className="flex items-center gap-2"><h2 className="font-bold text-slate-900">Teaching staff directory</h2><span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-xs font-semibold text-slate-700 shadow-sm dark:border-white/15 dark:bg-[#0f172a]">{visibleStaff.length}</span></div>
+                  <div className="flex items-center gap-2"><h2 className="font-bold text-slate-900">Teaching staff directory</h2><span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-xs font-semibold text-slate-700 shadow-sm dark:border-white/15 dark:bg-dark-page">{visibleStaff.length}</span></div>
                   <p className="mt-0.5 text-xs text-slate-500">Lecturers and mentors for {selectedSemester} {selectedYear}</p>
                 </div>
               </div>
@@ -933,7 +933,7 @@ const SubjectManagement = () => {
               <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
                 <div className="relative min-w-0 flex-1">
                   <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500 dark:text-slate-300" />
-                  <input value={staffSearch} onChange={(event) => setStaffSearch(event.target.value)} placeholder="Search name, email, class, subject or missing field..." aria-label="Search teaching staff" className="w-full rounded-xl border border-slate-200 bg-white py-2 pl-10 pr-4 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 dark:border-white/15 dark:bg-[#0f172a]" />
+                  <input value={staffSearch} onChange={(event) => setStaffSearch(event.target.value)} placeholder="Search name, email, class, subject or missing field..." aria-label="Search teaching staff" className="w-full rounded-xl border border-slate-200 bg-white py-2 pl-10 pr-4 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 dark:border-white/15 dark:bg-dark-page" />
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <select aria-label="Filter teaching staff by status" value={staffStatus} onChange={(event) => setStaffStatus(event.target.value as StaffStatusFilter)} className="min-w-[150px] rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-primary">
@@ -942,7 +942,7 @@ const SubjectManagement = () => {
                   <select aria-label="Rows per page" value={staffPageSize} onChange={(event) => setStaffPageSize(Number(event.target.value) as (typeof staffPageSizes)[number])} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-primary">
                     {staffPageSizes.map(size => <option key={size} value={size}>{size} / page</option>)}
                   </select>
-                  {hasStaffFilters && <button type="button" onClick={() => { setStaffSearch(''); setStaffRole('ALL'); setStaffStatus('ALL'); }} className="px-2 py-2 text-sm font-semibold text-primary hover:text-primary-dark">Reset</button>}
+                  {hasStaffFilters && <button type="button" onClick={() => { setStaffSearch(''); setStaffRole('ALL'); setStaffStatus('ALL'); }} className="px-2 py-2 text-sm font-semibold text-primary-700 hover:text-primary-dark">Reset</button>}
                 </div>
               </div>
               <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Filter teaching staff by type">
@@ -956,7 +956,7 @@ const SubjectManagement = () => {
                       type="button"
                       aria-pressed={active}
                       onClick={() => setStaffRole(active && kind !== 'ALL' ? 'ALL' : kind)}
-                      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition ${style ? style.badge : 'border-slate-200 bg-slate-50 text-slate-700'} ${active ? 'ring-2 ring-primary/40' : 'opacity-80 hover:opacity-100'}`}
+                      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-caption font-semibold transition ${style ? style.badge : 'border-slate-200 bg-slate-50 text-slate-700'} ${active ? 'ring-2 ring-primary/40' : 'opacity-80 hover:opacity-100'}`}
                     >
                       {KindIcon && <KindIcon className="h-3 w-3" aria-hidden="true" />}{label}<span className="opacity-70">· {count}</span>
                     </button>
@@ -971,7 +971,7 @@ const SubjectManagement = () => {
               <div className="px-5 py-10 text-center">
                 <p className="text-sm font-semibold text-slate-700">No teaching staff found</p>
                 <p className="mt-1 text-sm text-slate-500">{hasStaffFilters ? 'Try another search or reset the current filters.' : `Add lecturers or mentors to ${selectedSemester} ${selectedYear}.`}</p>
-                {hasStaffFilters && <button type="button" onClick={() => { setStaffSearch(''); setStaffRole('ALL'); setStaffStatus('ALL'); }} className="mt-3 text-sm font-semibold text-primary hover:underline">Clear filters</button>}
+                {hasStaffFilters && <button type="button" onClick={() => { setStaffSearch(''); setStaffRole('ALL'); setStaffStatus('ALL'); }} className="mt-3 text-sm font-semibold text-primary-700 hover:underline">Clear filters</button>}
               </div>
             ) : (
               <div className="divide-y divide-slate-100">
@@ -985,19 +985,19 @@ const SubjectManagement = () => {
                       <div className="min-w-0">
                         <p className="truncate text-sm font-semibold text-slate-900">{member.name}</p>
                         <p className={`truncate text-xs ${member.isIncomplete ? 'font-medium text-amber-600' : 'text-slate-500'}`}>{member.email || 'Email not provided'}</p>
-                        {member.isIncomplete && !member.isTemporary && member.missingFields.length > 0 && <p title={member.missingFields.join(', ')} className="mt-0.5 truncate text-[11px] text-slate-400">Missing: {member.missingFields.join(', ')}</p>}
-                        {!member.isIncomplete && member.userStatus !== 'Active' && <p className="mt-0.5 text-[11px] font-medium text-red-600">User account: {member.userStatus}</p>}
+                        {member.isIncomplete && !member.isTemporary && member.missingFields.length > 0 && <p title={member.missingFields.join(', ')} className="mt-0.5 truncate text-caption text-slate-400">Missing: {member.missingFields.join(', ')}</p>}
+                        {!member.isIncomplete && member.userStatus !== 'Active' && <p className="mt-0.5 text-caption font-medium text-red-600">User account: {member.userStatus}</p>}
                       </div>
                     </div>
                     <div className="flex flex-wrap items-center gap-1.5">
-                      <span title={kindStyle.hint} className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[11px] font-semibold ${kindStyle.badge}`}><KindIcon className="h-3 w-3" aria-hidden="true" />{kindStyle.label}</span>
-                      {member.isTemporary ? <><TemporaryMentorBadge className="py-1 text-[11px]" /><Badge variant={member.status === 'Active' ? 'Active' : 'Inactive'}>{member.status}</Badge></> : member.isIncomplete ? <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-700">Needs information</span> : <Badge variant={member.status === 'Active' ? 'Active' : 'Inactive'}>{member.status}</Badge>}
+                      <span title={kindStyle.hint} className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-caption font-semibold ${kindStyle.badge}`}><KindIcon className="h-3 w-3" aria-hidden="true" />{kindStyle.label}</span>
+                      {member.isTemporary ? <><TemporaryMentorBadge className="py-1 text-caption" /><Badge variant={member.status === 'Active' ? 'Active' : 'Inactive'}>{member.status}</Badge></> : member.isIncomplete ? <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-1 text-caption font-semibold text-amber-700">Needs information</span> : <Badge variant={member.status === 'Active' ? 'Active' : 'Inactive'}>{member.status}</Badge>}
                     </div>
                     <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-                      {member.isIncomplete && !member.isTemporary ? <span className="text-xs font-medium text-amber-700">Complete profile before assignment</span> : member.assignments.length ? <>{member.assignments.slice(0, 2).map(assignment => <span key={assignment._id} className="rounded-full border border-primary-100 bg-primary-50 px-2 py-1 text-[11px] font-semibold text-primary">{assignment.classCode} · {assignment.subjectCode}</span>)}{member.assignments.length > 2 && <span className="text-xs font-semibold text-slate-500">+{member.assignments.length - 2} more</span>}</> : <span className="text-xs text-slate-500">Not assigned · {member.classCount} classes</span>}
+                      {member.isIncomplete && !member.isTemporary ? <span className="text-xs font-medium text-amber-700">Complete profile before assignment</span> : member.assignments.length ? <>{member.assignments.slice(0, 2).map(assignment => <span key={assignment._id} className="rounded-full border border-primary-100 bg-primary-50 px-2 py-1 text-caption font-semibold text-primary-700">{assignment.classCode} · {assignment.subjectCode}</span>)}{member.assignments.length > 2 && <span className="text-xs font-semibold text-slate-500">+{member.assignments.length - 2} more</span>}</> : <span className="text-xs text-slate-500">Not assigned · {member.classCount} classes</span>}
                     </div>
                     <div className="flex justify-end">
-                      {(!member.isIncomplete || member.isTemporary) && <button type="button" onClick={() => openEditStaff(member)} className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-primary-50 hover:text-primary" aria-label={`Edit ${member.name} semester status`} title="Edit semester status"><Edit3 className="h-4 w-4" /></button>}
+                      {(!member.isIncomplete || member.isTemporary) && <button type="button" onClick={() => openEditStaff(member)} className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-primary-50 hover:text-primary-700" aria-label={`Edit ${member.name} semester status`} title="Edit semester status"><Edit3 className="h-4 w-4" /></button>}
                     </div>
                   </article>
                   );
@@ -1032,7 +1032,7 @@ const SubjectManagement = () => {
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
               <p className="font-semibold text-slate-900">{editingStaff.name}</p>
               <p className="text-sm text-slate-500">{editingStaff.email}</p>
-              <p className="mt-1 text-xs font-semibold text-primary">
+              <p className="mt-1 text-xs font-semibold text-primary-700">
                 {editingStaff.role === 'LECTURER' ? 'Lecturer' : 'Mentor'} · {selectedSemester} {selectedYear}
               </p>
             </div>
@@ -1175,7 +1175,7 @@ const SubjectManagement = () => {
               <Link
                 key={item.classId}
                 to={`/classes/${item.slug || item.classId}`}
-                className="flex items-center justify-between gap-3 rounded-lg border border-amber-100 bg-white px-3 py-2 text-sm transition hover:border-primary-200 hover:text-primary"
+                className="flex items-center justify-between gap-3 rounded-lg border border-amber-100 bg-white px-3 py-2 text-sm transition hover:border-primary-200 hover:text-primary-700"
               >
                 <span className="min-w-0">
                   <span className="block truncate font-semibold">{item.classCode}</span>
@@ -1186,7 +1186,7 @@ const SubjectManagement = () => {
             ))}
             <Link
               to={`/admin/classes?semester=${semesterLifecycleTarget.semester.semester}&year=${semesterLifecycleTarget.semester.year}`}
-              className="block text-center text-xs font-semibold text-primary hover:underline"
+              className="block text-center text-xs font-semibold text-primary-700 hover:underline"
             >
               View all classes in {semesterLabel(semesterLifecycleTarget.semester)}
             </Link>

@@ -48,7 +48,7 @@ export default function MentorChangeReasonField({
           className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
         />
       )}
-      <p className="text-[11px] text-slate-400">
+      <p className="text-caption text-slate-400">
         The lecturer of the class and the replaced mentor (if they have an account) are notified with this reason.
       </p>
     </div>

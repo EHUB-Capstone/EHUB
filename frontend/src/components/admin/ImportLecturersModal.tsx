@@ -170,7 +170,7 @@ export default function ImportLecturersModal({ onClose, onImported }: ImportLect
         <header className="shrink-0 border-b border-slate-100 px-5 py-4 sm:px-6">
           <div className="flex items-start justify-between gap-4">
             <div className="flex min-w-0 items-center gap-3">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary-50 text-primary"><FileSpreadsheet className="h-5 w-5" /></div>
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary-50 text-primary-700"><FileSpreadsheet className="h-5 w-5" /></div>
               <div>
                 <h2 id="import-lecturers-title" className="text-lg font-bold text-slate-900">Import Lecturer accounts</h2>
                 <p className="text-sm text-slate-500">Validate the Excel file before creating active accounts</p>
@@ -212,7 +212,7 @@ export default function ImportLecturersModal({ onClose, onImported }: ImportLect
                 className={`rounded-2xl border-2 border-dashed px-5 py-10 text-center transition-colors ${error ? 'border-red-300 bg-red-50/60' : dragActive || file ? 'border-primary bg-primary-50' : 'border-slate-300 hover:border-primary hover:bg-primary-50/40'}`}
               >
                 <input ref={inputRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={(event) => { void inspectFile(event.target.files?.[0]); event.target.value = ''; }} />
-                <div className={`mx-auto flex h-12 w-12 items-center justify-center rounded-2xl ${error ? 'bg-red-100 text-red-600' : 'bg-primary-50 text-primary'}`}>
+                <div className={`mx-auto flex h-12 w-12 items-center justify-center rounded-2xl ${error ? 'bg-red-100 text-red-600' : 'bg-primary-50 text-primary-700'}`}>
                   {analyzing ? <Loader2 className="h-6 w-6 animate-spin" /> : error ? <AlertCircle className="h-6 w-6" /> : <Upload className="h-6 w-6" />}
                 </div>
                 <p className="mt-4 text-sm font-semibold text-slate-800">{analyzing ? `Analyzing ${file?.name}` : error ? 'This file cannot be used' : 'Drop the lecturer list here'}</p>
@@ -226,7 +226,7 @@ export default function ImportLecturersModal({ onClose, onImported }: ImportLect
             <div className="space-y-4">
               <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3.5">
                 <div className="min-w-0"><p className="truncate text-sm font-semibold text-slate-800">{file?.name}</p><p className="text-xs text-slate-500">{preview.totalRows} lecturer row(s)</p></div>
-                <button type="button" onClick={reset} className="flex shrink-0 items-center gap-1.5 text-xs font-semibold text-primary"><RotateCcw className="h-3.5 w-3.5" /> Choose another file</button>
+                <button type="button" onClick={reset} className="flex shrink-0 items-center gap-1.5 text-xs font-semibold text-primary-700"><RotateCcw className="h-3.5 w-3.5" /> Choose another file</button>
               </div>
 
               <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-5">
@@ -259,8 +259,8 @@ export default function ImportLecturersModal({ onClose, onImported }: ImportLect
 
         <footer className="flex shrink-0 flex-col-reverse gap-2 border-t border-slate-100 bg-slate-50/60 px-5 py-4 sm:flex-row sm:justify-end sm:px-6">
           {phase === 'upload' && <Button variant="outline" onClick={onClose}>Cancel</Button>}
-          {phase === 'review' && <><Button variant="outline" icon={ArrowLeft} onClick={reset} disabled={importing}>Back</Button><Button variant="gradient" icon={Upload} isLoading={importing} disabled={!preview?.canCommit} onClick={() => void commit()}>Import {preview ? preview.readyCount + preview.willActivateCount : 0} account(s)</Button></>}
-          {phase === 'result' && <Button variant="gradient" icon={Check} onClick={onClose}>Done</Button>}
+          {phase === 'review' && <><Button variant="outline" icon={ArrowLeft} onClick={reset} disabled={importing}>Back</Button><Button variant="primary" icon={Upload} isLoading={importing} disabled={!preview?.canCommit} onClick={() => void commit()}>Import {preview ? preview.readyCount + preview.willActivateCount : 0} account(s)</Button></>}
+          {phase === 'result' && <Button variant="primary" icon={Check} onClick={onClose}>Done</Button>}
         </footer>
       </div>
     </div>
@@ -284,7 +284,7 @@ function LecturerRowsTable({ rows }: { rows: LecturerImportRow[] }) {
   return (
     <div className="overflow-hidden rounded-xl border border-slate-200"><div className="max-h-80 overflow-auto">
       <table className="w-full min-w-[760px] text-left text-xs">
-        <thead className="sticky top-0 z-10 bg-slate-50 text-slate-500"><tr><th className="px-3 py-2.5">Row</th><th className="px-3 py-2.5">Lecturer</th><th className="px-3 py-2.5">Position</th><th className="px-3 py-2.5">Google login email</th><th className="px-3 py-2.5">Result</th></tr></thead>
+        <thead className="sticky top-0 z-10 bg-slate-50 text-slate-600"><tr><th className="px-3 py-2.5">Row</th><th className="px-3 py-2.5">Lecturer</th><th className="px-3 py-2.5">Position</th><th className="px-3 py-2.5">Google login email</th><th className="px-3 py-2.5">Result</th></tr></thead>
         <tbody className="divide-y divide-slate-100 bg-white">{rows.map((row) => <tr key={row.rowNumber} className={!row.isValid ? 'bg-red-50/50' : 'hover:bg-slate-50'}><td className="px-3 py-3 font-mono text-slate-400">{row.rowNumber}</td><td className="px-3 py-3 font-semibold text-slate-700">{row.fullName || '—'}</td><td className="px-3 py-3 text-slate-600">{row.position || '—'}</td><td className="px-3 py-3 text-slate-700">{row.googleEmail || '—'}</td><td className="px-3 py-3"><span className={`inline-flex rounded-full px-2 py-1 font-semibold ${statusStyle[row.status]}`}>{row.status}</span>{row.message && <p className="mt-1 max-w-xs leading-4 text-slate-500">{row.message}</p>}</td></tr>)}</tbody>
       </table>
     </div></div>

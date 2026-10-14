@@ -141,7 +141,7 @@ const EvaluationPage = () => {
   return (
     <div className="space-y-6">
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-        <h1 className="text-3xl font-bold text-slate-900">{isLecturer ? 'Evaluate Startup Ideas' : 'Feedback & Evaluation'}</h1>
+        <h1 className="text-heading sm:text-display text-secondary tracking-tight">{isLecturer ? 'Evaluate Startup Ideas' : 'Feedback & Evaluation'}</h1>
         <p className="text-slate-500 mt-1">{isLecturer ? `${pendingIdeas.length} ideas pending review` : 'View your lecturer feedback'}</p>
       </motion.div>
 
@@ -209,7 +209,7 @@ const EvaluationPage = () => {
                   </div>
 
                   {/* Total Score Preview */}
-                  <div className="mt-6 p-5 rounded-xl bg-gradient-to-r from-primary-50 to-secondary-50 border border-primary-100 flex items-center justify-between">
+                  <div className="mt-6 p-5 rounded-xl border border-primary-100 flex items-center justify-between bg-primary-50">
                     <div>
                       <p className="text-sm text-slate-600 font-medium">Total Score</p>
                       <p className="text-xs text-slate-400">Average of all criteria</p>
@@ -232,7 +232,7 @@ const EvaluationPage = () => {
                   </div>
 
                   <div className="mt-5 flex justify-end">
-                    <Button variant="gradient" size="md" icon={Award} isLoading={saving} onClick={handleSubmit}>Submit Evaluation</Button>
+                    <Button variant="primary" size="md" icon={Award} isLoading={saving} onClick={handleSubmit}>Submit Evaluation</Button>
                   </div>
                 </motion.div>
               )}

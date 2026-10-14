@@ -189,7 +189,7 @@ export default function ProjectDataFilters({
             </span>
           )}
           {activeKeys.map(key => (
-            <span key={key} className="inline-flex items-center gap-1 rounded-full border border-primary-100 bg-primary-50 py-0.5 pl-2.5 pr-1 text-xs text-primary">
+            <span key={key} className="inline-flex items-center gap-1 rounded-full border border-primary-100 bg-primary-50 py-0.5 pl-2.5 pr-1 text-xs text-primary-700">
               {FILTER_LABELS[key]}: {valueLabel(key)}
               <button
                 type="button"

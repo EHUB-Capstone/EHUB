@@ -87,7 +87,7 @@ export default function RenameClassModal({ classId, currentCode, onClose, onRena
               <div className="flex items-center gap-2 text-sm font-mono">
                 <span className="text-slate-400 line-through">{currentCode}</span>
                 <span className="text-slate-400">→</span>
-                <span className="text-primary font-semibold">{value.trim().toUpperCase()}</span>
+                <span className="text-primary-700 font-semibold">{value.trim().toUpperCase()}</span>
               </div>
             </div>
           )}

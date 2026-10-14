@@ -6,29 +6,42 @@ interface ThemeContextType {
   toggleTheme: () => void;
 }
 
+// The legacy 'ehub-theme' key was written automatically (default dark) for every
+// visitor, so it cannot tell us what a user chose. Only an explicit toggle is stored.
+const THEME_PREF_KEY = 'ehub-theme-pref';
+
 const ThemeContext = createContext<ThemeContextType>({
-  isDark: true,
+  isDark: false,
   toggleTheme: () => {},
 });
 
+const readPreference = (): boolean => {
+  try {
+    return localStorage.getItem(THEME_PREF_KEY) === 'dark';
+  } catch {
+    return false;
+  }
+};
+
 export const ThemeProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [isDark, setIsDark] = useState<boolean>(() => {
-    const saved = localStorage.getItem('ehub-theme');
-    return saved ? saved === 'dark' : true; // default dark
-  });
+  const [isDark, setIsDark] = useState<boolean>(readPreference);
 
   useEffect(() => {
-    localStorage.setItem('ehub-theme', isDark ? 'dark' : 'light');
     document.documentElement.style.colorScheme = isDark ? 'dark' : 'light';
-    
-    if (isDark) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
+    document.documentElement.classList.toggle('dark', isDark);
   }, [isDark]);
 
-  const toggleTheme = () => setIsDark(prev => !prev);
+  const toggleTheme = () => {
+    setIsDark((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem(THEME_PREF_KEY, next ? 'dark' : 'light');
+      } catch {
+        // Storage can be blocked; the theme still changes for this session.
+      }
+      return next;
+    });
+  };
 
   return (
     <ThemeContext.Provider value={{ isDark, toggleTheme }}>

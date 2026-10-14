@@ -123,7 +123,7 @@ const NotificationDropdown = () => {
       case 'DEADLINE_REMINDER':
       case 'DeadlineOverdue':
       case 'DEADLINE_OVERDUE':
-        return <Calendar className="w-4 h-4 text-indigo-500" />;
+        return <Calendar className="w-4 h-4 text-secondary" />;
       case 'EVALUATION':
       case 'EvaluationPublished':
       case 'EVALUATION_PUBLISHED':
@@ -135,7 +135,7 @@ const NotificationDropdown = () => {
         return <Kanban className="w-4 h-4 text-sky-500" />;
       case 'TEAM':
       case 'CLASS':
-        return <MessageSquare className="w-4 h-4 text-purple-500" />;
+        return <MessageSquare className="w-4 h-4 text-secondary" />;
       case 'AccountApprovalRequested':
       case 'ACCOUNT_APPROVAL_REQUESTED':
         return <UserCheck className="w-4 h-4 text-amber-500" />;
@@ -151,25 +151,25 @@ const NotificationDropdown = () => {
           setIsOpen(!isOpen);
           if (!isOpen) fetchNotifications();
         }}
-        className="relative w-9 h-9 rounded-xl flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-all focus:outline-none"
+        className="relative w-9 h-9 rounded-xl flex items-center justify-center text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-colors focus-visible:outline-primary-600"
         aria-label="Notifications"
       >
         <Bell className="w-[18px] h-[18px]" />
         {unreadCount > 0 && (
-          <span className="absolute top-1.5 right-1.5 min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-white font-bold text-[9px] flex items-center justify-center border border-white ring-2 ring-white animate-pulse">
+          <span className="absolute top-1.5 right-1.5 min-w-[16px] h-4 px-1 rounded-full bg-primary text-white font-bold text-[9px] flex items-center justify-center border border-white ring-2 ring-white animate-pulse">
             {unreadCount > 9 ? '9+' : unreadCount}
           </span>
         )}
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-2xl shadow-float border border-slate-100 overflow-hidden z-50 py-1 origin-top-right animate-scale-in">
+        <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-2xl shadow-float border border-slate-200 overflow-hidden z-50 py-1 origin-top-right animate-scale-in">
           {/* Header */}
-          <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-slate-50/50">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 bg-slate-50">
             <h3 className="font-semibold text-slate-800 text-sm flex items-center gap-1.5">
               <span>Notifications</span>
               {unreadCount > 0 && (
-                <span className="bg-red-100 text-red-600 text-[11px] font-bold px-1.5 py-0.5 rounded-full">
+                <span className="bg-primary-50 text-primary-800 text-[11px] font-bold px-1.5 py-0.5 rounded-full">
                   {unreadCount} new
                 </span>
               )}
@@ -177,7 +177,7 @@ const NotificationDropdown = () => {
             {unreadCount > 0 && (
               <button
                 onClick={handleMarkAllRead}
-                className="text-xs font-semibold text-primary hover:text-primary-700 flex items-center gap-1 transition-colors"
+                className="text-xs font-semibold text-primary-700 hover:text-primary-800 flex items-center gap-1 transition-colors"
               >
                 <Check className="w-3.5 h-3.5" /> Mark all read
               </button>

@@ -31,7 +31,7 @@ const assigneeLabel = (task: DetailTask) => {
 
 const Field = ({ label, children }: { label: string; children: ReactNode }) => (
   <div>
-    <dt className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{label}</dt>
+    <dt className="text-caption font-semibold uppercase tracking-wide text-slate-400">{label}</dt>
     <dd className="mt-0.5 text-sm text-slate-700">{children}</dd>
   </div>
 );
@@ -61,11 +61,11 @@ export default function TaskDetailModal({ task, onClose, onEdit }: TaskDetailMod
       <div className="space-y-5">
         <div>
           <div className="mb-2 flex flex-wrap items-center gap-1.5">
-            <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${statusCfg.bg} ${statusCfg.text}`}>
+            <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-caption font-semibold ${statusCfg.bg} ${statusCfg.text}`}>
               <span className={`h-1.5 w-1.5 rounded-full ${statusCfg.dot}`} />
               {statusCfg.label}
             </span>
-            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${priorityCfg.bg} ${priorityCfg.text}`}>
+            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-caption font-semibold ${priorityCfg.bg} ${priorityCfg.text}`}>
               {priorityCfg.label}
             </span>
             <span className="text-xs text-slate-400">{TASK_TYPE_LABEL[task.taskType] || 'Task'} · Week {task.weekNumber}</span>
@@ -74,7 +74,7 @@ export default function TaskDetailModal({ task, onClose, onEdit }: TaskDetailMod
         </div>
 
         <div>
-          <h4 className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Description</h4>
+          <h4 className="mb-1 text-caption font-semibold uppercase tracking-wide text-slate-400">Description</h4>
           {task.description ? (
             <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-slate-700 [overflow-wrap:anywhere]">{task.description}</p>
           ) : (
@@ -100,7 +100,7 @@ export default function TaskDetailModal({ task, onClose, onEdit }: TaskDetailMod
 
         {checklist.length > 0 && (
           <div>
-            <h4 className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+            <h4 className="mb-1.5 text-caption font-semibold uppercase tracking-wide text-slate-400">
               Checklist ({checklist.filter((item) => item.isCompleted).length}/{checklist.length})
             </h4>
             <ul className="space-y-1">
@@ -119,7 +119,7 @@ export default function TaskDetailModal({ task, onClose, onEdit }: TaskDetailMod
         <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
           <Button variant="outline" onClick={onClose}>Close</Button>
           {onEdit && (
-            <Button variant="gradient" icon={Pencil} onClick={() => onEdit(task)}>Edit</Button>
+            <Button variant="primary" icon={Pencil} onClick={() => onEdit(task)}>Edit</Button>
           )}
         </div>
       </div>

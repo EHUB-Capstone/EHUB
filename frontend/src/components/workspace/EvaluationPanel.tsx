@@ -47,12 +47,12 @@ function EvaluationHistoryEntries({ history, compact = false }) {
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-bold uppercase tracking-wider text-slate-600">{item.action}</span>
-                  <span className="rounded-md bg-white px-1.5 py-0.5 text-[10px] font-bold text-slate-400 ring-1 ring-slate-200">v{item.version}</span>
+                  <span className="rounded-md bg-white px-1.5 py-0.5 text-overline font-bold text-slate-400 ring-1 ring-slate-200">v{item.version}</span>
                 </div>
                 <p className="mt-1 truncate font-semibold text-slate-900">{item.changedBy?.name || 'System'}</p>
                 <p className="text-slate-500">{new Date(item.createdAt).toLocaleString()}</p>
               </div>
-              <span className="shrink-0 rounded-lg border border-slate-200 bg-white px-2 py-1 font-semibold text-primary group-open:hidden">View details</span>
+              <span className="shrink-0 rounded-lg border border-slate-200 bg-white px-2 py-1 font-semibold text-primary-700 group-open:hidden">View details</span>
               <span className="hidden shrink-0 rounded-lg border border-slate-200 bg-white px-2 py-1 font-semibold text-slate-600 group-open:inline">Hide details</span>
             </div>
           </summary>
@@ -234,7 +234,7 @@ export default function EvaluationPanel({
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-primary">
+              <div className="flex items-center gap-2 text-caption font-bold uppercase tracking-wider text-primary-700">
                 <ClipboardCheck className="h-4 w-4" /> Checkpoint evaluation
               </div>
               <h2 className="mt-1 truncate text-lg font-black text-slate-900">{checkpointTitle}</h2>
@@ -247,7 +247,7 @@ export default function EvaluationPanel({
               </p>
             </div>
             {activeEvaluation?.status && (
-              <span className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold ${activeEvaluation.status === 'SUBMITTED' || activeEvaluation.status === 'PUBLISHED'
+              <span className={`shrink-0 rounded-full px-2.5 py-1 text-overline font-bold ${activeEvaluation.status === 'SUBMITTED' || activeEvaluation.status === 'PUBLISHED'
                 ? 'bg-emerald-50 text-emerald-700'
                 : 'bg-amber-50 text-amber-700'
                 }`}>
@@ -258,12 +258,12 @@ export default function EvaluationPanel({
 
           <div className="mt-4 grid grid-cols-2 gap-2">
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Evaluations</p>
+              <p className="text-overline font-semibold uppercase tracking-wider text-slate-400">Evaluations</p>
               <p className="mt-1 text-xl font-black text-slate-900">{summary?.evaluationCount ?? evaluations.length}</p>
             </div>
             {(isMentor || isStudent) ? (
               <div className="rounded-xl border border-slate-200 bg-white p-3">
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Performance</p>
+                <p className="text-overline font-semibold uppercase tracking-wider text-slate-400">Performance</p>
                 <div className="mt-1">
                   {summary?.overallPerformance?.level && summary.overallPerformance.level !== 'Unscored'
                     ? <PerformanceLevelBadge level={summary.overallPerformance.level} label={summary.overallPerformance.label} size="sm" />
@@ -272,7 +272,7 @@ export default function EvaluationPanel({
               </div>
             ) : (
               <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-3">
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-500">Average score</p>
+                <p className="text-overline font-semibold uppercase tracking-wider text-emerald-500">Average score</p>
                 <p className="mt-1 text-xl font-black text-emerald-700">{Number(latestScore || 0).toFixed(2)} / 10</p>
               </div>
             )}
@@ -316,7 +316,7 @@ export default function EvaluationPanel({
                         <p className="truncate text-sm font-semibold text-slate-900">{evaluation.lecturerId?.name || 'Evaluator'}</p>
                         <p className="text-xs text-slate-400">{evaluation.status || 'DRAFT'}</p>
                       </div>
-                      <p className="text-xl font-black text-primary">{Number(evaluation.checkpointTotal || evaluation.weightedScore || 0).toFixed(2)}</p>
+                      <p className="text-xl font-black text-primary-700">{Number(evaluation.checkpointTotal || evaluation.weightedScore || 0).toFixed(2)}</p>
                     </div>
                     {evaluation.overallFeedback && <p className="mt-2 whitespace-pre-wrap text-sm text-slate-600">{evaluation.overallFeedback}</p>}
                   </article>
@@ -346,7 +346,7 @@ export default function EvaluationPanel({
       <div className="bg-white rounded-2xl border border-slate-200/70 shadow-sm p-5 sm:p-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-primary">
+            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-primary-700">
               <ClipboardCheck className="w-4 h-4" /> Rubric evaluation workflow
             </div>
             <h2 className="mt-2 text-2xl font-black text-slate-900">{checkpointTitle}</h2>
@@ -479,10 +479,10 @@ export default function EvaluationPanel({
                           <p className="text-xs text-slate-400">{ev.evaluatorRole} · {new Date(ev.updatedAt).toLocaleString()}</p>
                         </div>
                         <div className="text-right">
-                          <span className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-bold mb-1 ${ev.status === 'SUBMITTED' || ev.status === 'PUBLISHED' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>
+                          <span className={`inline-flex rounded-full px-2 py-0.5 text-caption font-bold mb-1 ${ev.status === 'SUBMITTED' || ev.status === 'PUBLISHED' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>
                             {ev.status || 'DRAFT'}
                           </span>
-                          <p className="text-2xl font-black text-primary">{Number(ev.checkpointTotal || ev.weightedScore || 0).toFixed(2)}</p>
+                          <p className="text-2xl font-black text-primary-700">{Number(ev.checkpointTotal || ev.weightedScore || 0).toFixed(2)}</p>
                           <p className="text-xs text-slate-400">/ 10</p>
                         </div>
                       </div>

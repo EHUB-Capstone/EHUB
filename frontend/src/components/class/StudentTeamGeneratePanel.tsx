@@ -313,12 +313,12 @@ export default function StudentTeamGeneratePanel({
             {proposal && <div>
               <label className="mb-1.5 flex items-center justify-between gap-2 text-xs font-semibold text-slate-600">
                 <span>Project name <span className="text-red-500">*</span></span>
-                <span className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-slate-500">
+                <span className="flex items-center gap-1.5 text-overline font-medium uppercase tracking-wide text-slate-500">
                   <input
                     type="checkbox"
                     checked={isProjectNameSameAsGroup}
                     onChange={e => setIsProjectNameSameAsGroup(e.target.checked)}
-                    className="rounded border-slate-300 text-primary focus:ring-primary"
+                    className="rounded border-slate-300 text-primary-700 focus:ring-primary"
                   />
                   Same as team
                 </span>
@@ -367,14 +367,14 @@ export default function StudentTeamGeneratePanel({
         {/* Validation Info & Submit */}
         <div className="order-1 grid lg:grid-cols-[minmax(0,1fr)_260px]">
           <div className="min-w-0 p-3">
-            <h4 className="mb-2 flex items-center gap-2 text-[11px] font-bold uppercase tracking-wide text-slate-600">
+            <h4 className="mb-2 flex items-center gap-2 text-caption font-bold uppercase tracking-wide text-slate-600">
               <Users className="h-4 w-4" /> Team requirements
             </h4>
             
             <div className="grid overflow-hidden rounded-lg border border-slate-200 text-xs sm:grid-cols-2 [&>span]:min-h-11 [&>span]:px-3 [&>span]:py-2 [&>span:nth-child(-n+2)]:border-b [&>span:nth-child(odd)]:sm:border-r [&>span:nth-child(odd)]:sm:border-slate-200">
               {isFormationFlow ? (
                 <span className={`flex items-center gap-1.5 font-medium ${formationMembersValid ? 'text-green-600' : studentCount > 0 ? 'text-red-500' : 'text-slate-400'}`}>
-                  <span className={`w-4 h-4 rounded-full flex items-center justify-center text-white text-[10px] ${formationMembersValid ? 'bg-green-500' : studentCount > 0 ? 'bg-red-400' : 'bg-slate-300'}`}>
+                  <span className={`w-4 h-4 rounded-full flex items-center justify-center text-white text-overline ${formationMembersValid ? 'bg-green-500' : studentCount > 0 ? 'bg-red-400' : 'bg-slate-300'}`}>
                     {formationMembersValid ? '✓' : '✗'}
                   </span>
                   {inviteMode
@@ -383,7 +383,7 @@ export default function StudentTeamGeneratePanel({
                 </span>
               ) : (
                 <span className={`flex items-center gap-1.5 font-medium ${(studentCount >= 4 && studentCount <= 6) ? 'text-green-600' : studentCount > 0 ? 'text-red-500' : 'text-slate-400'}`}>
-                  <span className={`w-4 h-4 rounded-full flex items-center justify-center text-white text-[10px] ${(studentCount >= 4 && studentCount <= 6) ? 'bg-green-500' : studentCount > 0 ? 'bg-red-400' : 'bg-slate-300'}`}>
+                  <span className={`w-4 h-4 rounded-full flex items-center justify-center text-white text-overline ${(studentCount >= 4 && studentCount <= 6) ? 'bg-green-500' : studentCount > 0 ? 'bg-red-400' : 'bg-slate-300'}`}>
                     {(studentCount >= 4 && studentCount <= 6) ? '✓' : '✗'}
                   </span>
                   4–6 members ({studentCount}/6)
@@ -392,21 +392,21 @@ export default function StudentTeamGeneratePanel({
 
               {/* Group rules are checked when the creator finalizes, so they only guide formations. */}
               <span className={`flex items-center gap-1.5 font-medium ${hasGroup1 ? 'text-green-600' : isFormationFlow ? 'text-amber-600' : studentCount > 0 ? 'text-red-500' : 'text-slate-400'}`}>
-                <span className={`w-4 h-4 rounded-full flex items-center justify-center text-white text-[10px] shrink-0 ${hasGroup1 ? 'bg-green-500' : isFormationFlow ? 'bg-amber-400' : studentCount > 0 ? 'bg-red-400' : 'bg-slate-300'}`}>
+                <span className={`w-4 h-4 rounded-full flex items-center justify-center text-white text-overline shrink-0 ${hasGroup1 ? 'bg-green-500' : isFormationFlow ? 'bg-amber-400' : studentCount > 0 ? 'bg-red-400' : 'bg-slate-300'}`}>
                   {hasGroup1 ? '✓' : isFormationFlow ? '!' : '✗'}
                 </span>
                 <span>{isFormationFlow ? 'Group 1 (BBA) needed to finalize' : 'Group 1 (BBA) required'}</span>
               </span>
 
               <span className={`flex items-center gap-1.5 font-medium ${hasGroup2 ? 'text-green-600' : isFormationFlow ? 'text-amber-600' : studentCount > 0 ? 'text-red-500' : 'text-slate-400'}`}>
-                <span className={`w-4 h-4 rounded-full flex items-center justify-center text-white text-[10px] shrink-0 ${hasGroup2 ? 'bg-green-500' : isFormationFlow ? 'bg-amber-400' : studentCount > 0 ? 'bg-red-400' : 'bg-slate-300'}`}>
+                <span className={`w-4 h-4 rounded-full flex items-center justify-center text-white text-overline shrink-0 ${hasGroup2 ? 'bg-green-500' : isFormationFlow ? 'bg-amber-400' : studentCount > 0 ? 'bg-red-400' : 'bg-slate-300'}`}>
                   {hasGroup2 ? '✓' : isFormationFlow ? '!' : '✗'}
                 </span>
                 <span>{isFormationFlow ? 'Group 2 (BIT) needed to finalize' : 'Group 2 (BIT) required'}</span>
               </span>
               
               <span className={`hidden items-center gap-1.5 font-medium ${hasCurrentUser ? 'text-green-600' : 'text-red-500'}`}>
-                <span className={`w-4 h-4 rounded-full flex items-center justify-center text-white text-[10px] shrink-0 ${hasCurrentUser ? 'bg-green-500' : 'bg-red-400'}`}>
+                <span className={`w-4 h-4 rounded-full flex items-center justify-center text-white text-overline shrink-0 ${hasCurrentUser ? 'bg-green-500' : 'bg-red-400'}`}>
                   {hasCurrentUser ? '✓' : '✗'}
                 </span>
                 <span>You must be a team member</span>
@@ -414,7 +414,7 @@ export default function StudentTeamGeneratePanel({
 
               {!inviteMode && (
                 <span className={`flex items-center gap-1.5 font-medium ${hasLeader ? 'text-green-600' : 'text-red-500'}`}>
-                  <span className={`w-4 h-4 rounded-full flex items-center justify-center text-white text-[10px] shrink-0 ${hasLeader ? 'bg-green-500' : 'bg-red-400'}`}>
+                  <span className={`w-4 h-4 rounded-full flex items-center justify-center text-white text-overline shrink-0 ${hasLeader ? 'bg-green-500' : 'bg-red-400'}`}>
                     {hasLeader ? '✓' : '×'}
                   </span>
                   <span>{isFormationFlow ? 'Proposed Team Leader required' : 'Team Leader required'}</span>
@@ -423,13 +423,13 @@ export default function StudentTeamGeneratePanel({
             </div>
 
             {uniqueMajors.length > 0 && (
-              <p className="mt-1.5 text-[10px] text-slate-500">
+              <p className="mt-1.5 text-overline text-slate-500">
                 Majors: {uniqueMajors.join(', ')}
               </p>
             )}
 
             {missingMajorCount > 0 && (
-              <div className="mt-1.5 flex items-start gap-2 text-[10px] text-amber-700">
+              <div className="mt-1.5 flex items-start gap-2 text-overline text-amber-700">
                 <AlertCircle className="w-4 h-4 text-amber-500 shrink-0" />
                 <p className="text-xs text-amber-700">
                   {missingMajorCount} selected student(s) have no declared major and do not count toward either major group.
@@ -438,7 +438,7 @@ export default function StudentTeamGeneratePanel({
             )}
             
             {isFormationFlow && studentCount > 0 && (
-              <div className="mt-1.5 flex items-start gap-2 text-[10px] text-slate-600">
+              <div className="mt-1.5 flex items-start gap-2 text-overline text-slate-600">
                 <AlertCircle className="w-4 h-4 text-slate-400 shrink-0" />
                 <p className="text-xs font-medium">
                   {inviteMode
@@ -449,7 +449,7 @@ export default function StudentTeamGeneratePanel({
             )}
 
             {!isFormationFlow && studentCount > 0 && !isFullyValid && (
-              <div className="mt-1.5 flex items-start gap-2 text-[10px] text-orange-700">
+              <div className="mt-1.5 flex items-start gap-2 text-overline text-orange-700">
                 <AlertTriangle className="w-4 h-4 text-orange-500 shrink-0" />
                 <p className="text-xs text-orange-700 font-medium">
                   Select 4–6 members and include both GROUP_1 and GROUP_2.
@@ -461,7 +461,7 @@ export default function StudentTeamGeneratePanel({
           <div className="border-t border-slate-200 bg-slate-50/60 p-3 lg:border-l lg:border-t-0">
             {!inviteMode && (
               <>
-                <label htmlFor="proposed-team-leader" className="mb-1.5 flex items-center gap-1 text-[11px] font-bold text-slate-600">
+                <label htmlFor="proposed-team-leader" className="mb-1.5 flex items-center gap-1 text-caption font-bold text-slate-600">
                   <Crown className="h-3.5 w-3.5 text-amber-500" /> {isFormationFlow ? 'Proposed Team Leader' : 'Team Leader'} <span className="text-red-500">*</span>
                 </label>
                 <select
@@ -547,7 +547,7 @@ export default function StudentTeamGeneratePanel({
                   <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                     <Users className="h-4 w-4 text-primary" /> Team members
                   </h3>
-                  <span className="rounded-full bg-primary-50 px-2.5 py-1 text-xs font-bold text-primary">
+                  <span className="rounded-full bg-primary-50 px-2.5 py-1 text-xs font-bold text-primary-700">
                     {selectedStudents.length} members
                   </span>
                 </div>
@@ -556,7 +556,7 @@ export default function StudentTeamGeneratePanel({
                     const isLeader = student._id === selectedLeaderId;
                     return (
                       <div key={student._id} className="flex items-center gap-3 px-3 py-2.5">
-                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-50 text-sm font-bold text-primary">
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-50 text-sm font-bold text-primary-700">
                           {student.fullName?.charAt(0)?.toUpperCase() || '?'}
                         </div>
                         <div className="min-w-0 flex-1">
@@ -566,7 +566,7 @@ export default function StudentTeamGeneratePanel({
                           </p>
                         </div>
                         {isLeader && (
-                          <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-50 px-2 py-1 text-[11px] font-bold text-amber-700">
+                          <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-50 px-2 py-1 text-caption font-bold text-amber-700">
                             <Crown className="h-3 w-3" /> Team Leader
                           </span>
                         )}

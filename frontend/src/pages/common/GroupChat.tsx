@@ -16,7 +16,7 @@ import { matchesSearchQuery } from '../../utils/searchText';
 // ─── Role helpers ────────────────────────────────────────────────────────────
 const roleConfig = {
   ADMIN:    { color: 'bg-red-50 text-red-700 border-red-200',     icon: <Shield       className="w-3 h-3 text-red-500 shrink-0" />,     label: 'Admin' },
-  LECTURER: { color: 'bg-purple-50 text-purple-700 border-purple-200', icon: <GraduationCap className="w-3 h-3 text-purple-500 shrink-0" />, label: 'Lecturer' },
+  LECTURER: { color: 'bg-secondary-50 text-secondary border-secondary-200', icon: <GraduationCap className="w-3 h-3 text-secondary shrink-0" />, label: 'Lecturer' },
   MENTOR:   { color: 'bg-amber-50 text-amber-700 border-amber-200',  icon: <Star         className="w-3 h-3 text-amber-500 shrink-0" />,    label: 'Mentor' },
   STUDENT:  { color: 'bg-blue-50 text-blue-700 border-blue-200',   icon: null,                                                            label: 'Student' },
 };
@@ -99,7 +99,7 @@ function StickerPicker({ activeCategory, onCategoryChange, onSelect }) {
             aria-pressed={activeCategory === key}
             className={`flex h-10 flex-1 items-center justify-center border-b-2 transition-colors ${
               activeCategory === key
-                ? 'border-primary text-primary'
+                ? 'border-primary text-primary-700'
                 : 'border-transparent text-slate-400 hover:bg-white hover:text-slate-700'
             }`}
           >
@@ -155,7 +155,7 @@ const Avatar = ({ src, name, size = 'md' }) => {
   const initial = (name || '?')[0].toUpperCase();
   if (src) return <img src={src} alt={name} className={`${sz} rounded-full border border-slate-200 object-cover shrink-0`} />;
   return (
-    <div className={`${sz} rounded-full bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center text-white font-bold shrink-0`}>
+    <div className={`${sz} rounded-full flex items-center justify-center text-white font-bold shrink-0 bg-primary`}>
       {initial}
     </div>
   );
@@ -249,7 +249,7 @@ function MembersPanel({ chatGroupId, currentUserId, onClose, onNicknameChange })
             {!editing && (
               <button
                 onClick={() => setEditing(true)}
-                className="text-[11px] text-primary hover:text-primary-700 font-semibold flex items-center gap-0.5 cursor-pointer"
+                className="text-caption text-primary-700 hover:text-primary-700 font-semibold flex items-center gap-0.5 cursor-pointer"
               >
                 <Pencil className="w-3 h-3" /> Edit
               </button>
@@ -315,7 +315,7 @@ function MembersPanel({ chatGroupId, currentUserId, onClose, onNicknameChange })
                     <p className="text-xs font-bold text-primary-700 break-words leading-snug">
                       {m.nickname}
                     </p>
-                    <p className="text-[10px] text-slate-500 font-medium break-words leading-snug mt-0.5">
+                    <p className="text-overline text-slate-500 font-medium break-words leading-snug mt-0.5">
                       {m.displayName || 'Unknown'}
                     </p>
                   </>
@@ -327,13 +327,13 @@ function MembersPanel({ chatGroupId, currentUserId, onClose, onNicknameChange })
                 <div className="flex items-center gap-1.5 flex-wrap mt-1">
                   {roleBadge(m.role)}
                   {m.userId?.toString() === currentUserId?.toString() && (
-                    <span className="text-[9px] text-primary font-bold bg-primary-50 border border-primary-100 px-1.5 py-0.5 rounded-md">
+                    <span className="text-[9px] text-primary-700 font-bold bg-primary-50 border border-primary-100 px-1.5 py-0.5 rounded-md">
                       You
                     </span>
                   )}
                 </div>
                 {m.email && (
-                  <p className="text-[10px] text-slate-400 break-words mt-0.5">{m.email}</p>
+                  <p className="text-overline text-slate-400 break-words mt-0.5">{m.email}</p>
                 )}
               </div>
             </div>
@@ -734,7 +734,7 @@ export default function GroupChat() {
                   }}
                   className={`w-full text-left p-3 rounded-xl transition-all flex items-start gap-3 relative ${
                     isSelected
-                      ? 'bg-primary-50/80 border-primary-100 text-primary shadow-xs'
+                      ? 'bg-primary-50/80 border-primary-100 text-primary-700 shadow-xs'
                       : 'hover:bg-slate-100/60 text-slate-700'
                   }`}
                 >
@@ -746,10 +746,10 @@ export default function GroupChat() {
 
                   <div className="min-w-0 flex-1">
                     {/* Group name in EXE201g format */}
-                    <p className={`font-bold text-sm truncate ${isSelected ? 'text-primary' : 'text-slate-800'}`}>
+                    <p className={`font-bold text-sm truncate ${isSelected ? 'text-primary-700' : 'text-slate-800'}`}>
                       {c.groupName}
                     </p>
-                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mt-0.5">
+                    <p className="text-overline font-semibold text-slate-400 uppercase tracking-wider mt-0.5">
                       {c.class?.classCode || 'Startup Group'} • {c.memberCount ?? 0} members
                     </p>
                     <p className="text-xs text-slate-400 truncate mt-1">
@@ -778,14 +778,14 @@ export default function GroupChat() {
                 >
                   <Menu className="h-4 w-4" />
                 </button>
-                <div className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary-100 text-primary sm:flex">
+                <div className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary-100 text-primary-700 sm:flex">
                   <MessageSquare className="w-5 h-5" />
                 </div>
                 <div className="min-w-0">
                   <h2 className="truncate text-sm font-bold leading-tight text-slate-900 sm:text-base">
                     {selectedChannel.groupName}
                   </h2>
-                  <p className="mt-0.5 truncate font-mono text-[11px] text-slate-400 sm:text-xs">
+                  <p className="mt-0.5 truncate font-mono text-caption text-slate-400 sm:text-xs">
                     Class: {selectedChannel.class?.classCode || '—'} · {selectedChannel.team?.teamCode || 'General'} · {channelMembers.length || selectedChannel.memberCount || 0} members
                   </p>
                 </div>
@@ -859,7 +859,7 @@ export default function GroupChat() {
                           senderAvatar ? (
                             <img src={senderAvatar} alt={resolvedName} className="h-7 w-7 shrink-0 rounded-full border border-slate-100 object-cover sm:h-8 sm:w-8" />
                           ) : (
-                            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-slate-300 bg-gradient-to-br from-slate-300 to-slate-400 sm:h-8 sm:w-8">
+                            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-slate-300 sm:h-8 sm:w-8 bg-slate-100">
                               <User className="h-3.5 w-3.5 text-white sm:h-4 sm:w-4" />
                             </div>
                           )
@@ -877,7 +877,7 @@ export default function GroupChat() {
                                   {resolvedName}
                                 </span>
                                 {hasNickname && (
-                                  <span className="text-[10px] text-slate-400 font-medium">({m.senderName})</span>
+                                  <span className="text-overline text-slate-400 font-medium">({m.senderName})</span>
                                 )}
                                 {roleBadge(m.senderRole)}
                               </>
@@ -902,7 +902,7 @@ export default function GroupChat() {
                                   <button
                                     type="button"
                                     onClick={() => handleStartEdit(m)}
-                                    className="px-1.5 py-1 text-slate-400 hover:bg-slate-100 hover:text-primary"
+                                    className="px-1.5 py-1 text-slate-400 hover:bg-slate-100 hover:text-primary-700"
                                     title="Edit message"
                                   >
                                     <Pencil className="h-3 w-3" />
@@ -1021,12 +1021,12 @@ export default function GroupChat() {
                                   title={reaction.names.join(', ')}
                                   className={`inline-flex h-6 items-center gap-1 rounded-full border px-2 text-xs transition-colors ${
                                     reaction.reactedByMe
-                                      ? 'border-primary-200 bg-primary-50 text-primary'
+                                      ? 'border-primary-200 bg-primary-50 text-primary-700'
                                       : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
                                   }`}
                                 >
                                   <span>{reaction.emoji}</span>
-                                  <span className="text-[10px] font-bold">{reaction.count}</span>
+                                  <span className="text-overline font-bold">{reaction.count}</span>
                                 </button>
                               ))}
                             </div>
@@ -1063,7 +1063,7 @@ export default function GroupChat() {
             {/* Input Form */}
             <div className="shrink-0 space-y-2 border-t border-slate-100 bg-white p-3 sm:p-4">
               {editingMessage && (
-                <div className="flex items-center justify-between gap-2 rounded-xl border border-primary-100 bg-primary-50 px-3 py-2 text-xs text-primary">
+                <div className="flex items-center justify-between gap-2 rounded-xl border border-primary-100 bg-primary-50 px-3 py-2 text-xs text-primary-700">
                   <span className="font-semibold">Editing message</span>
                   <button
                     type="button"
@@ -1109,7 +1109,7 @@ export default function GroupChat() {
                       key={member.userId || member.studentId || index}
                       type="button"
                       onClick={() => insertMention(member)}
-                      className="rounded-lg bg-slate-50 px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-primary-50 hover:text-primary"
+                      className="rounded-lg bg-slate-50 px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-primary-50 hover:text-primary-700"
                     >
                       {getMentionToken(member)}
                     </button>

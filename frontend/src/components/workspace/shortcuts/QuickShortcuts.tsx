@@ -56,7 +56,7 @@ export default function QuickShortcuts({ teamId, isEditable, isReadOnly = false 
       : shortcuts.length === 0 ? <EmptyState icon={Link2} title="No shortcuts yet" description="Add the first shared resource for this workspace." />
       : <ul className="mt-3 overflow-visible rounded-xl border border-slate-200 bg-white">{shortcuts.map(shortcut => <li key={shortcut._id} className="group flex items-center gap-3 border-b border-slate-100 px-3 py-2.5 last:border-b-0 hover:bg-slate-50">
         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-slate-100"><Link2 className="h-4 w-4 text-slate-500" /></div>
-        <a href={shortcut.url} target="_blank" rel="noopener noreferrer" className="min-w-0 flex-1"><p className="truncate text-sm font-medium text-slate-800 group-hover:text-primary">{shortcut.name}</p><p className="truncate text-xs text-slate-500">{displayUrl(shortcut.url)}</p></a>
+        <a href={shortcut.url} target="_blank" rel="noopener noreferrer" className="min-w-0 flex-1"><p className="truncate text-sm font-medium text-slate-800 group-hover:text-primary-700">{shortcut.name}</p><p className="truncate text-xs text-slate-500">{displayUrl(shortcut.url)}</p></a>
         {canManage(shortcut) && <ShortcutActions onEdit={() => { setEditing(shortcut); setModalOpen(true); }} onDelete={() => setDeleteTarget(shortcut)} />}
       </li>)}</ul>}
     <AddShortcutModal isOpen={modalOpen} onClose={closeModal} onSubmit={submit} initialData={editing} isSaving={save.isPending} />

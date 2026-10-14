@@ -183,7 +183,7 @@ export default function StudentAssignmentModal({
       <div className="relative flex max-h-[95vh] w-full max-w-5xl flex-col overflow-hidden rounded-t-2xl border border-slate-200/60 bg-white shadow-float animate-scale-in sm:max-h-[92vh] sm:rounded-2xl">
         <header className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-100 px-5 py-4 sm:px-6">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-50 text-primary">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-50 text-primary-700">
               <UserRoundCheck className="h-5 w-5" />
             </div>
             <div>
@@ -279,7 +279,7 @@ export default function StudentAssignmentModal({
                   {loadingCandidates ? (
                     <span className="flex items-center gap-1.5 text-xs text-slate-400"><Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading directory</span>
                   ) : (
-                    <span className="rounded-full bg-primary-50 px-2.5 py-1 text-xs font-bold text-primary">{draft.studentIds.length} selected</span>
+                    <span className="rounded-full bg-primary-50 px-2.5 py-1 text-xs font-bold text-primary-700">{draft.studentIds.length} selected</span>
                   )}
                 </div>
                 <div className="relative mt-3">
@@ -319,21 +319,21 @@ export default function StudentAssignmentModal({
                       <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border ${selected ? 'border-primary bg-primary text-white' : 'border-slate-300 bg-white text-transparent'}`}>
                         <Check className="h-3.5 w-3.5" />
                       </span>
-                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-secondary-300 to-secondary text-xs font-bold text-white">{student.fullName.charAt(0).toUpperCase()}</span>
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white bg-secondary">{student.fullName.charAt(0).toUpperCase()}</span>
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-sm font-semibold text-slate-800">{student.fullName}</span>
                         <span className="block truncate text-xs text-slate-500">{student.rollNumber || 'No student code'}{student.major ? ` · ${student.major}` : ''}</span>
                       </span>
                       <span className="flex max-w-40 shrink-0 flex-col items-end gap-1">
                         {outsideClass ? (
-                          <span className="rounded-full bg-red-100 px-2 py-1 text-right text-[10px] font-semibold text-red-700">Not in {classInfo.code}</span>
+                          <span className="rounded-full bg-red-100 px-2 py-1 text-right text-overline font-semibold text-red-700">Not in {classInfo.code}</span>
                         ) : belongsToClass ? (
-                          <span className="rounded-full bg-green-100 px-2 py-1 text-[10px] font-semibold text-green-700">In {classInfo.code}</span>
+                          <span className="rounded-full bg-green-100 px-2 py-1 text-overline font-semibold text-green-700">In {classInfo.code}</span>
                         ) : (
-                          <span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-semibold text-slate-600">Unassigned</span>
+                          <span className="rounded-full bg-slate-100 px-2 py-1 text-overline font-semibold text-slate-600">Unassigned</span>
                         )}
-                        {conflict && <span className="max-w-40 truncate text-[10px] font-semibold text-amber-700">Team: {assignment.teamName}</span>}
-                        {alreadyAtDestination && <span className="text-[10px] font-semibold text-slate-500">Already assigned</span>}
+                        {conflict && <span className="max-w-40 truncate text-overline font-semibold text-amber-700">Team: {assignment.teamName}</span>}
+                        {alreadyAtDestination && <span className="text-overline font-semibold text-slate-500">Already assigned</span>}
                       </span>
                     </button>
                   );
@@ -347,7 +347,7 @@ export default function StudentAssignmentModal({
           <p className="text-xs text-slate-500">Changes are applied consistently to the class roster and team member list.</p>
           <div className="flex gap-2">
             <Button variant="outline" onClick={onClose} disabled={saving}>Cancel</Button>
-            <Button variant="gradient" icon={saving ? Loader2 : UserRoundCheck} onClick={handleSubmit} disabled={saving}>
+            <Button variant="primary" icon={saving ? Loader2 : UserRoundCheck} onClick={handleSubmit} disabled={saving}>
               {saving ? 'Saving assignment...' : draft.mode === 'CLASS' ? 'Assign to class' : 'Assign to team'}
             </Button>
           </div>

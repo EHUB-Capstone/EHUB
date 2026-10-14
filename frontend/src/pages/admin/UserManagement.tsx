@@ -302,7 +302,7 @@ export default function UserManagement() {
       {/* ── Header ── */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
         <div className="min-w-0">
-          <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">User Management</h1>
+          <h1 className="text-heading sm:text-display text-secondary tracking-tight">User Management</h1>
           <p className="text-slate-500 mt-1">
             {view === 'accounts'
               ? `${totalItems} user accounts registered on the platform`
@@ -331,7 +331,7 @@ export default function UserManagement() {
           >
             {label}
             {key === 'incomplete' && incompleteCount > 0 && (
-              <span className={`rounded-full px-1.5 text-[11px] font-bold ${view === key ? 'bg-white/25 text-white' : 'bg-amber-100 text-amber-800'}`}>{incompleteCount}</span>
+              <span className={`rounded-full px-1.5 text-caption font-bold ${view === key ? 'bg-white/25 text-white' : 'bg-amber-100 text-amber-800'}`}>{incompleteCount}</span>
             )}
           </button>
         ))}
@@ -417,7 +417,7 @@ export default function UserManagement() {
           <div className="relative">
             {isRefreshing && (
               <div
-                className="pointer-events-none absolute right-4 top-3 z-10 flex items-center gap-2 rounded-full border border-primary-100 bg-white/95 px-3 py-1.5 text-xs font-medium text-primary shadow-sm"
+                className="pointer-events-none absolute right-4 top-3 z-10 flex items-center gap-2 rounded-full border border-primary-100 bg-white/95 px-3 py-1.5 text-xs font-medium text-primary-700 shadow-sm"
                 role="status"
                 aria-live="polite"
               >
@@ -432,16 +432,16 @@ export default function UserManagement() {
               <table className="w-full min-w-[1220px]">
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50/60">
-                  <th className="py-3.5 px-6 text-xs text-slate-400 uppercase text-left font-semibold tracking-wider">User</th>
-                  <th className="py-3.5 px-6 text-xs text-slate-400 uppercase text-left font-semibold tracking-wider">Role</th>
-                  <th className="py-3.5 px-6 text-xs text-slate-400 uppercase text-left font-semibold tracking-wider">Status</th>
-                  <th className="py-3.5 px-6 text-xs text-slate-400 uppercase text-left font-semibold tracking-wider">Student ID / Major</th>
-                  <th className="py-3.5 px-6 text-xs text-slate-400 uppercase text-left font-semibold tracking-wider">Semester</th>
-                  <th className="py-3.5 px-6 text-xs text-slate-400 uppercase text-left font-semibold tracking-wider">Class</th>
-                  <th className="py-3.5 px-6 text-xs text-slate-400 uppercase text-left font-semibold tracking-wider">Group Name</th>
-                  <th className="py-3.5 px-6 text-xs text-slate-400 uppercase text-left font-semibold tracking-wider">Joined Date</th>
+                  <th className="py-3.5 px-6 text-xs text-slate-600 uppercase text-left font-semibold tracking-wider">User</th>
+                  <th className="py-3.5 px-6 text-xs text-slate-600 uppercase text-left font-semibold tracking-wider">Role</th>
+                  <th className="py-3.5 px-6 text-xs text-slate-600 uppercase text-left font-semibold tracking-wider">Status</th>
+                  <th className="py-3.5 px-6 text-xs text-slate-600 uppercase text-left font-semibold tracking-wider">Student ID / Major</th>
+                  <th className="py-3.5 px-6 text-xs text-slate-600 uppercase text-left font-semibold tracking-wider">Semester</th>
+                  <th className="py-3.5 px-6 text-xs text-slate-600 uppercase text-left font-semibold tracking-wider">Class</th>
+                  <th className="py-3.5 px-6 text-xs text-slate-600 uppercase text-left font-semibold tracking-wider">Group Name</th>
+                  <th className="py-3.5 px-6 text-xs text-slate-600 uppercase text-left font-semibold tracking-wider">Joined Date</th>
                   {/* Stays pinned to the right edge, so Edit and Delete are visible without scrolling the table sideways. */}
-                  <th className="sticky right-0 z-[1] bg-slate-50 py-3.5 px-6 text-xs text-slate-400 uppercase text-right font-semibold tracking-wider shadow-[-8px_0_8px_-8px_rgba(15,23,42,0.12)]">Actions</th>
+                  <th className="sticky right-0 z-[1] bg-slate-50 py-3.5 px-6 text-xs text-slate-600 uppercase text-right font-semibold tracking-wider shadow-[-8px_0_8px_-8px_rgba(15,23,42,0.12)]">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -452,13 +452,13 @@ export default function UserManagement() {
                         {user.avatar ? (
                           <img src={user.avatar} alt="" className="w-9 h-9 rounded-xl object-cover shrink-0" />
                         ) : (
-                          <div className="w-9 h-9 rounded-xl bg-primary-100 flex items-center justify-center font-bold text-primary shrink-0">
+                          <div className="w-9 h-9 rounded-xl bg-primary-100 flex items-center justify-center font-bold text-primary-700 shrink-0">
                             {user.name?.charAt(0)?.toUpperCase() || '?'}
                           </div>
                         )}
                         <div className="min-w-0">
                           {user.role === 'MENTOR' && user.mentorProfileId
-                            ? <Link to={`/admin/mentors/${user.mentorProfileId}`} className="block truncate font-semibold text-slate-900 hover:text-primary hover:underline" title="Open mentor profile">{user.name}</Link>
+                            ? <Link to={`/admin/mentors/${user.mentorProfileId}`} className="block truncate font-semibold text-slate-900 hover:text-primary-700 hover:underline" title="Open mentor profile">{user.name}</Link>
                             : <div className="font-semibold text-slate-900 truncate">{user.name}</div>}
                           <div className="text-xs text-slate-400 truncate flex items-center gap-1">
                             <Mail className="w-3 h-3 inline" /> {user.email}
@@ -533,7 +533,7 @@ export default function UserManagement() {
                           type="button"
                           aria-label={`Edit ${user.name}`}
                           title="Edit User"
-                          className="p-1.5 rounded-lg text-slate-400 hover:text-primary hover:bg-primary-50 transition-all"
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-primary-700 hover:bg-primary-50 transition-all"
                           onClick={() => openEditModal(user)}
                         >
                           <Edit className="w-4 h-4" />
@@ -712,7 +712,7 @@ export default function UserManagement() {
           )}
 
           {formData.role === 'MENTOR' && editingUser?.mentorProfileId && (
-            <Link to={`/admin/mentors/${editingUser.mentorProfileId}`} className="inline-flex text-xs font-semibold text-primary hover:underline">
+            <Link to={`/admin/mentors/${editingUser.mentorProfileId}`} className="inline-flex text-xs font-semibold text-primary-700 hover:underline">
               Open the full mentor profile (expertise, background, availability)
             </Link>
           )}

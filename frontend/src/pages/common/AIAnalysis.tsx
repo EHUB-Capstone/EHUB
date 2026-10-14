@@ -15,7 +15,7 @@ import RubricGeneratorTab from '../../components/ai/RubricGeneratorTab';
 import SentimentAnalysisTab from '../../components/ai/SentimentAnalysisTab';
 
 const ScoreRing = ({ score, label, colorOverride }) => {
-  const color = colorOverride || (score >= 80 ? '#51B848' : score >= 60 ? '#F37021' : '#ef4444');
+  const color = colorOverride || (score >= 80 ? '#16A34A' : score >= 60 ? '#F56A2A' : '#DC2626');
   const circumference = 2 * Math.PI * 35;
   const dash = (score / 100) * circumference;
 
@@ -177,10 +177,10 @@ const AIAnalysis = () => {
   return (
     <div className="space-y-6 max-w-6xl mx-auto">
       {/* Header */}
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-gradient-to-r from-[#034EA2] to-[#1e88e5] rounded-2xl p-8 text-white shadow-md">
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl p-8 text-white shadow-md bg-secondary">
         <div className="flex items-center gap-4">
           <div className="p-4 bg-white/10 rounded-xl">
-            <Brain className="w-10 h-10 text-[#F37021]" />
+            <Brain className="w-10 h-10 text-primary-600" />
           </div>
           <div>
             <h1 className="text-2xl md:text-3xl font-bold mb-1">Direct AI Startup Analysis</h1>
@@ -191,39 +191,39 @@ const AIAnalysis = () => {
 
       <div className="flex border-b border-slate-200 overflow-x-auto no-scrollbar bg-white rounded-t-2xl shadow-sm">
         <button
-          className={`px-6 py-4 font-semibold text-sm transition-colors relative whitespace-nowrap ${activeTab === 'analysis' ? 'text-[#034EA2]' : 'text-slate-500 hover:text-slate-700'}`}
+          className={`px-6 py-4 font-semibold text-sm transition-colors relative whitespace-nowrap ${activeTab === 'analysis' ? 'text-secondary' : 'text-slate-500 hover:text-slate-700'}`}
           onClick={() => setActiveTab('analysis')}
         >
           <div className="flex items-center gap-2"><Brain className="w-4 h-4" /> AI Analysis</div>
-          {activeTab === 'analysis' && <motion.div layoutId="tabIndicator" className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#034EA2]" />}
+          {activeTab === 'analysis' && <motion.div layoutId="tabIndicator" className="absolute bottom-0 left-0 right-0 h-0.5 bg-secondary" />}
         </button>
         <button
-          className={`px-6 py-4 font-semibold text-sm transition-colors relative whitespace-nowrap ${activeTab === 'suggestion' ? 'text-[#F37021]' : 'text-slate-500 hover:text-slate-700'}`}
+          className={`px-6 py-4 font-semibold text-sm transition-colors relative whitespace-nowrap ${activeTab === 'suggestion' ? 'text-primary-600' : 'text-slate-500 hover:text-slate-700'}`}
           onClick={() => setActiveTab('suggestion')}
         >
           <div className="flex items-center gap-2"><Lightbulb className="w-4 h-4" /> AI Suggestion</div>
-          {activeTab === 'suggestion' && <motion.div layoutId="tabIndicator" className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#F37021]" />}
+          {activeTab === 'suggestion' && <motion.div layoutId="tabIndicator" className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />}
         </button>
         <button
-          className={`px-6 py-4 font-semibold text-sm transition-colors relative whitespace-nowrap ${activeTab === 'similar' ? 'text-[#034EA2]' : 'text-slate-500 hover:text-slate-700'}`}
+          className={`px-6 py-4 font-semibold text-sm transition-colors relative whitespace-nowrap ${activeTab === 'similar' ? 'text-secondary' : 'text-slate-500 hover:text-slate-700'}`}
           onClick={() => setActiveTab('similar')}
         >
           <div className="flex items-center gap-2"><Search className="w-4 h-4" /> Similar Ideas</div>
-          {activeTab === 'similar' && <motion.div layoutId="tabIndicator" className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#034EA2]" />}
+          {activeTab === 'similar' && <motion.div layoutId="tabIndicator" className="absolute bottom-0 left-0 right-0 h-0.5 bg-secondary" />}
         </button>
         <button
-          className={`px-6 py-4 font-semibold text-sm transition-colors relative whitespace-nowrap ${activeTab === 'rubric' ? 'text-[#51B848]' : 'text-slate-500 hover:text-slate-700'}`}
+          className={`px-6 py-4 font-semibold text-sm transition-colors relative whitespace-nowrap ${activeTab === 'rubric' ? 'text-success' : 'text-slate-500 hover:text-slate-700'}`}
           onClick={() => setActiveTab('rubric')}
         >
           <div className="flex items-center gap-2"><BookOpen className="w-4 h-4" /> Rubric Generator</div>
-          {activeTab === 'rubric' && <motion.div layoutId="tabIndicator" className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#51B848]" />}
+          {activeTab === 'rubric' && <motion.div layoutId="tabIndicator" className="absolute bottom-0 left-0 right-0 h-0.5 bg-success" />}
         </button>
         <button
-          className={`px-6 py-4 font-semibold text-sm transition-colors relative whitespace-nowrap ${activeTab === 'sentiment' ? 'text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
+          className={`px-6 py-4 font-semibold text-sm transition-colors relative whitespace-nowrap ${activeTab === 'sentiment' ? 'text-secondary' : 'text-slate-500 hover:text-slate-700'}`}
           onClick={() => setActiveTab('sentiment')}
         >
           <div className="flex items-center gap-2"><MessageCircle className="w-4 h-4" /> Sentiment Analysis</div>
-          {activeTab === 'sentiment' && <motion.div layoutId="tabIndicator" className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600" />}
+          {activeTab === 'sentiment' && <motion.div layoutId="tabIndicator" className="absolute bottom-0 left-0 right-0 h-0.5 bg-secondary-700" />}
         </button>
       </div>
 
@@ -234,42 +234,42 @@ const AIAnalysis = () => {
         <div className="lg:col-span-4 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
           <div className="p-5 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
              <h2 className="font-semibold text-slate-800 text-lg">{activeTab === 'analysis' ? 'Idea Data' : 'Suggestion Config'}</h2>
-             <span className="text-xs font-medium px-2 py-1 bg-blue-100 text-[#034EA2] rounded-md">Input</span>
+             <span className="text-xs font-medium px-2 py-1 bg-blue-100 text-secondary rounded-md">Input</span>
           </div>
           <div className="p-5 flex-1">
             {activeTab === 'analysis' ? (
               <form onSubmit={handleAnalyze} className="space-y-4 flex flex-col h-full">
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1">Startup Name *</label>
-                  <input required name="startup_name" value={formData.startup_name} onChange={handleChange} className="w-full text-sm border-slate-200 rounded-lg focus:ring-[#034EA2] focus:border-[#034EA2]" placeholder="e.g. EduTrack" />
+                  <input required name="startup_name" value={formData.startup_name} onChange={handleChange} className="w-full text-sm border-slate-200 rounded-lg focus:ring-secondary focus:border-secondary" placeholder="e.g. EduTrack" />
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1">Problem *</label>
-                  <textarea required rows={2} name="problem" value={formData.problem} onChange={handleChange} className="w-full text-sm border-slate-200 rounded-lg focus:ring-[#034EA2] focus:border-[#034EA2]" placeholder="Describe the customer pain point..." />
+                  <textarea required rows={2} name="problem" value={formData.problem} onChange={handleChange} className="w-full text-sm border-slate-200 rounded-lg focus:ring-secondary focus:border-secondary" placeholder="Describe the customer pain point..." />
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1">Solution *</label>
-                  <textarea required rows={2} name="solution" value={formData.solution} onChange={handleChange} className="w-full text-sm border-slate-200 rounded-lg focus:ring-[#034EA2] focus:border-[#034EA2]" placeholder="How does your product solve the problem..." />
+                  <textarea required rows={2} name="solution" value={formData.solution} onChange={handleChange} className="w-full text-sm border-slate-200 rounded-lg focus:ring-secondary focus:border-secondary" placeholder="How does your product solve the problem..." />
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1">Target Customer *</label>
-                  <input required name="target_customer" value={formData.target_customer} onChange={handleChange} className="w-full text-sm border-slate-200 rounded-lg focus:ring-[#034EA2] focus:border-[#034EA2]" placeholder="e.g. Students aged 18-24" />
+                  <input required name="target_customer" value={formData.target_customer} onChange={handleChange} className="w-full text-sm border-slate-200 rounded-lg focus:ring-secondary focus:border-secondary" placeholder="e.g. Students aged 18-24" />
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1">Business Model</label>
-                  <input name="business_model" value={formData.business_model} onChange={handleChange} className="w-full text-sm border-slate-200 rounded-lg focus:ring-[#034EA2] focus:border-[#034EA2]" placeholder="e.g. B2B SaaS, Freemium" />
+                  <input name="business_model" value={formData.business_model} onChange={handleChange} className="w-full text-sm border-slate-200 rounded-lg focus:ring-secondary focus:border-secondary" placeholder="e.g. B2B SaaS, Freemium" />
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1">Technology</label>
-                  <input name="technology" value={formData.technology} onChange={handleChange} className="w-full text-sm border-slate-200 rounded-lg focus:ring-[#034EA2] focus:border-[#034EA2]" placeholder="e.g. React Native, AI, Blockchain" />
+                  <input name="technology" value={formData.technology} onChange={handleChange} className="w-full text-sm border-slate-200 rounded-lg focus:ring-secondary focus:border-secondary" placeholder="e.g. React Native, AI, Blockchain" />
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1">Market</label>
-                  <input name="market" value={formData.market} onChange={handleChange} className="w-full text-sm border-slate-200 rounded-lg focus:ring-[#034EA2] focus:border-[#034EA2]" placeholder="e.g. EdTech Vietnam" />
+                  <input name="market" value={formData.market} onChange={handleChange} className="w-full text-sm border-slate-200 rounded-lg focus:ring-secondary focus:border-secondary" placeholder="e.g. EdTech Vietnam" />
                 </div>
                 
                 <div className="pt-4 mt-auto">
-                  <Button type="submit" className="w-full bg-[#034EA2] hover:bg-[#023B7A] text-white" isLoading={analyzing} disabled={analyzing} icon={Zap}>
+                  <Button type="submit" className="w-full bg-secondary hover:bg-secondary-700 text-white" isLoading={analyzing} disabled={analyzing} icon={Zap}>
                     Analyze with AI
                   </Button>
                 </div>
@@ -282,7 +282,7 @@ const AIAnalysis = () => {
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1">Current Stage *</label>
-                  <select required name="stage" value={suggestData.stage} onChange={handleSuggestChange} className="w-full text-sm border-slate-200 rounded-lg focus:ring-[#F37021] focus:border-[#F37021]">
+                  <select required name="stage" value={suggestData.stage} onChange={handleSuggestChange} className="w-full text-sm border-slate-200 rounded-lg focus:ring-primary focus:border-primary">
                     <option value="Idea">Idea (Just an idea)</option>
                     <option value="Prototype">Prototype (Building a draft)</option>
                     <option value="MVP">MVP (Have a sample product)</option>
@@ -291,7 +291,7 @@ const AIAnalysis = () => {
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1">Focus Area *</label>
-                  <select required name="focus_area" value={suggestData.focus_area} onChange={handleSuggestChange} className="w-full text-sm border-slate-200 rounded-lg focus:ring-[#F37021] focus:border-[#F37021]">
+                  <select required name="focus_area" value={suggestData.focus_area} onChange={handleSuggestChange} className="w-full text-sm border-slate-200 rounded-lg focus:ring-primary focus:border-primary">
                     <option value="General">General (Overview)</option>
                     <option value="Product">Product (Features)</option>
                     <option value="Market">Market (Customers)</option>
@@ -299,7 +299,7 @@ const AIAnalysis = () => {
                   </select>
                 </div>
                 <div className="pt-4 mt-auto">
-                  <Button type="submit" className="w-full bg-[#F37021] hover:bg-[#d96015] text-white" isLoading={suggesting} disabled={suggesting} icon={Lightbulb}>
+                  <Button type="submit" className="w-full bg-primary hover:bg-primary-600 text-white" isLoading={suggesting} disabled={suggesting} icon={Lightbulb}>
                     Get AI Suggestions
                   </Button>
                 </div>
@@ -313,8 +313,8 @@ const AIAnalysis = () => {
           {activeTab === 'analysis' && (
             analyzing ? (
               <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-12 flex flex-col items-center justify-center min-h-[500px]">
-                 <div className="w-16 h-16 border-4 border-[#034EA2]/30 border-t-[#034EA2] rounded-full animate-spin mb-4"></div>
-                 <h3 className="text-xl font-semibold text-[#034EA2]">AI is analyzing your startup...</h3>
+                 <div className="w-16 h-16 border-4 border-secondary/30 border-t-secondary rounded-full animate-spin mb-4"></div>
+                 <h3 className="text-xl font-semibold text-secondary">AI is analyzing your startup...</h3>
                  <p className="text-slate-500 mt-2">This may take a few seconds.</p>
               </div>
             ) : !analysis ? (
@@ -331,18 +331,18 @@ const AIAnalysis = () => {
               {/* Scores Header */}
               <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
                 <div className="flex flex-col items-center border-b border-slate-100 pb-6 mb-6">
-                   <h2 className="text-2xl font-bold text-[#034EA2] mb-1">Analysis Results</h2>
+                   <h2 className="text-2xl font-bold text-secondary mb-1">Analysis Results</h2>
                    {analysis.overall_score === 50 && analysis.ai_feedback?.includes("phản hồi dự phòng") && (
                      <div className="mb-2 bg-orange-100 text-orange-800 text-xs px-3 py-1.5 rounded-md flex items-center gap-1.5 font-medium border border-orange-200">
                        <AlertTriangle className="w-3.5 h-3.5" />
                        AI is using a fallback response.
                      </div>
                    )}
-                   <p className="text-slate-500 text-sm">Risk Level: <span className={`font-bold ${analysis.risk_level === 'Low' ? 'text-[#51B848]' : analysis.risk_level === 'High' ? 'text-red-500' : 'text-[#F37021]'}`}>{analysis.risk_level || 'Unknown'}</span></p>
+                   <p className="text-slate-500 text-sm">Risk Level: <span className={`font-bold ${analysis.risk_level === 'Low' ? 'text-success' : analysis.risk_level === 'High' ? 'text-red-500' : 'text-primary-600'}`}>{analysis.risk_level || 'Unknown'}</span></p>
                 </div>
                 
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                  <ScoreRing score={analysis.overall_score ?? 'N/A'} label="Overall" colorOverride="#034EA2" />
+                  <ScoreRing score={analysis.overall_score ?? 'N/A'} label="Overall" colorOverride="#17365D" />
                   <ScoreRing score={analysis.innovation_score ?? 'N/A'} label="Innovation" />
                   <ScoreRing score={analysis.feasibility_score ?? 'N/A'} label="Feasibility" />
                   <ScoreRing score={analysis.market_potential_score ?? 'N/A'} label="Market" />
@@ -351,11 +351,11 @@ const AIAnalysis = () => {
               </div>
 
               {/* Feedback & Recommendation */}
-              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 rounded-2xl p-6">
+              <div className="border border-blue-100 rounded-2xl p-6 bg-secondary">
                 <div className="flex items-start gap-4">
-                  <div className="p-3 bg-white rounded-xl shadow-sm"><Lightbulb className="w-6 h-6 text-[#034EA2]" /></div>
+                  <div className="p-3 bg-white rounded-xl shadow-sm"><Lightbulb className="w-6 h-6 text-secondary" /></div>
                   <div>
-                    <h3 className="text-lg font-bold text-[#034EA2] mb-2">AI Feedback & Recommendation</h3>
+                    <h3 className="text-lg font-bold text-secondary mb-2">AI Feedback & Recommendation</h3>
                     <p className="text-slate-700 leading-relaxed mb-3">{analysis.ai_feedback}</p>
                     <div className="p-4 bg-white/60 rounded-xl border border-blue-100/50">
                       <span className="font-semibold text-slate-800">Next Step: </span>
@@ -369,11 +369,11 @@ const AIAnalysis = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 {/* Strengths */}
                 <div className="bg-white rounded-2xl border border-green-200 shadow-sm p-6">
-                  <h3 className="text-lg font-bold text-[#51B848] mb-4 flex items-center gap-2"><CheckCircle className="w-5 h-5" />Strengths</h3>
+                  <h3 className="text-lg font-bold text-success mb-4 flex items-center gap-2"><CheckCircle className="w-5 h-5" />Strengths</h3>
                   <ul className="space-y-3">
                     {Array.isArray(analysis.strengths) && analysis.strengths.map((item, i) => (
                       <li key={i} className="flex items-start gap-3 text-sm text-slate-700">
-                        <div className="w-1.5 h-1.5 bg-[#51B848] rounded-full mt-1.5 shrink-0" />
+                        <div className="w-1.5 h-1.5 bg-success rounded-full mt-1.5 shrink-0" />
                         <span className="leading-relaxed">{typeof item === 'string' ? item : JSON.stringify(item)}</span>
                       </li>
                     ))}
@@ -395,11 +395,11 @@ const AIAnalysis = () => {
 
                 {/* Opportunities */}
                 <div className="bg-white rounded-2xl border border-blue-200 shadow-sm p-6">
-                  <h3 className="text-lg font-bold text-[#034EA2] mb-4 flex items-center gap-2"><TrendingUp className="w-5 h-5" />Opportunities</h3>
+                  <h3 className="text-lg font-bold text-secondary mb-4 flex items-center gap-2"><TrendingUp className="w-5 h-5" />Opportunities</h3>
                   <ul className="space-y-3">
                     {Array.isArray(analysis.opportunities) && analysis.opportunities.map((item, i) => (
                       <li key={i} className="flex items-start gap-3 text-sm text-slate-700">
-                        <div className="w-1.5 h-1.5 bg-[#034EA2] rounded-full mt-1.5 shrink-0" />
+                        <div className="w-1.5 h-1.5 bg-secondary rounded-full mt-1.5 shrink-0" />
                         <span className="leading-relaxed">{typeof item === 'string' ? item : JSON.stringify(item)}</span>
                       </li>
                     ))}
@@ -408,11 +408,11 @@ const AIAnalysis = () => {
 
                 {/* Threats */}
                 <div className="bg-white rounded-2xl border border-orange-200 shadow-sm p-6">
-                  <h3 className="text-lg font-bold text-[#F37021] mb-4 flex items-center gap-2"><ShieldAlert className="w-5 h-5" />Threats</h3>
+                  <h3 className="text-lg font-bold text-primary-600 mb-4 flex items-center gap-2"><ShieldAlert className="w-5 h-5" />Threats</h3>
                   <ul className="space-y-3">
                     {Array.isArray(analysis.threats) && analysis.threats.map((item, i) => (
                       <li key={i} className="flex items-start gap-3 text-sm text-slate-700">
-                        <div className="w-1.5 h-1.5 bg-[#F37021] rounded-full mt-1.5 shrink-0" />
+                        <div className="w-1.5 h-1.5 bg-primary rounded-full mt-1.5 shrink-0" />
                         <span className="leading-relaxed">{typeof item === 'string' ? item : JSON.stringify(item)}</span>
                       </li>
                     ))}
@@ -427,8 +427,8 @@ const AIAnalysis = () => {
           {activeTab === 'suggestion' && (
             suggesting ? (
               <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-12 flex flex-col items-center justify-center min-h-[500px]">
-                 <div className="w-16 h-16 border-4 border-[#F37021]/30 border-t-[#F37021] rounded-full animate-spin mb-4"></div>
-                 <h3 className="text-xl font-semibold text-[#F37021]">Generating suggestions...</h3>
+                 <div className="w-16 h-16 border-4 border-primary/30 border-t-primary rounded-full animate-spin mb-4"></div>
+                 <h3 className="text-xl font-semibold text-primary-600">Generating suggestions...</h3>
                  <p className="text-slate-500 mt-2">AI is crafting actionable advice for your startup.</p>
               </div>
             ) : !suggestion ? (
@@ -451,7 +451,7 @@ const AIAnalysis = () => {
                 
                 {/* Suggestions List */}
                 <div className="space-y-4">
-                  <h2 className="text-2xl font-bold text-[#F37021] flex items-center gap-2 mb-4">
+                  <h2 className="text-2xl font-bold text-primary-600 flex items-center gap-2 mb-4">
                     <Lightbulb className="w-6 h-6" /> Actionable Suggestions
                   </h2>
                   
@@ -471,7 +471,7 @@ const AIAnalysis = () => {
                           <p className="text-slate-700 text-sm leading-relaxed">{typeof item.current_issue === 'string' ? item.current_issue : 'N/A'}</p>
                         </div>
                         <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
-                          <p className="text-xs font-bold text-[#F37021] uppercase tracking-wider mb-1 flex items-center gap-1"><Zap className="w-3.5 h-3.5" /> AI Suggestion</p>
+                          <p className="text-xs font-bold text-primary-600 uppercase tracking-wider mb-1 flex items-center gap-1"><Zap className="w-3.5 h-3.5" /> AI Suggestion</p>
                           <p className="text-slate-800 font-medium leading-relaxed">{typeof item.suggestion === 'string' ? item.suggestion : 'N/A'}</p>
                         </div>
                         <div>
@@ -486,18 +486,18 @@ const AIAnalysis = () => {
                 {/* MVP & Next Steps Grid */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                   {/* MVP */}
-                  <div className="bg-gradient-to-br from-[#034EA2] to-blue-700 rounded-2xl p-6 text-white shadow-sm md:col-span-2">
-                    <h3 className="text-lg font-bold mb-3 flex items-center gap-2"><Rocket className="w-5 h-5 text-[#F37021]" /> MVP Recommendation</h3>
+                  <div className="rounded-2xl p-6 text-white shadow-sm md:col-span-2 bg-secondary">
+                    <h3 className="text-lg font-bold mb-3 flex items-center gap-2"><Rocket className="w-5 h-5 text-primary-600" /> MVP Recommendation</h3>
                     <p className="text-white/90 leading-relaxed text-lg">{suggestion.mvp_recommendation || 'N/A'}</p>
                   </div>
 
                   {/* Next Steps */}
                   <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-                    <h3 className="text-lg font-bold text-[#034EA2] mb-4 flex items-center gap-2"><LayoutTemplate className="w-5 h-5" /> Next Steps</h3>
+                    <h3 className="text-lg font-bold text-secondary mb-4 flex items-center gap-2"><LayoutTemplate className="w-5 h-5" /> Next Steps</h3>
                     <ul className="space-y-3">
                       {Array.isArray(suggestion.next_steps) && suggestion.next_steps.map((step, i) => (
                         <li key={i} className="flex items-start gap-3 text-sm text-slate-700">
-                          <div className="w-6 h-6 rounded-full bg-blue-100 text-[#034EA2] font-bold flex items-center justify-center shrink-0 text-xs mt-0.5">{i + 1}</div>
+                          <div className="w-6 h-6 rounded-full bg-blue-100 text-secondary font-bold flex items-center justify-center shrink-0 text-xs mt-0.5">{i + 1}</div>
                           <span className="leading-relaxed mt-0.5">{typeof step === 'string' ? step : JSON.stringify(step)}</span>
                         </li>
                       ))}
@@ -506,11 +506,11 @@ const AIAnalysis = () => {
 
                   {/* Mentor Questions */}
                   <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-                    <h3 className="text-lg font-bold text-[#F37021] mb-4 flex items-center gap-2"><MessageCircle className="w-5 h-5" /> Mentor Questions</h3>
+                    <h3 className="text-lg font-bold text-primary-600 mb-4 flex items-center gap-2"><MessageCircle className="w-5 h-5" /> Mentor Questions</h3>
                     <ul className="space-y-3">
                       {Array.isArray(suggestion.mentor_questions) && suggestion.mentor_questions.map((q, i) => (
                         <li key={i} className="flex items-start gap-3 text-sm text-slate-700">
-                          <div className="w-1.5 h-1.5 bg-[#F37021] rounded-full mt-2 shrink-0" />
+                          <div className="w-1.5 h-1.5 bg-primary rounded-full mt-2 shrink-0" />
                           <span className="leading-relaxed italic">{typeof q === 'string' ? q : JSON.stringify(q)}</span>
                         </li>
                       ))}

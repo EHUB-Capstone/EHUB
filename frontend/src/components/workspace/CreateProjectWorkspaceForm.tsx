@@ -95,7 +95,7 @@ export default function CreateProjectWorkspaceForm({ team, proposal, classInfo, 
   return (
     <div className="mx-auto max-w-3xl rounded-2xl border border-slate-200 bg-white shadow-sm">
       <div className="flex items-start gap-3 border-b border-slate-100 px-5 py-4">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary-50 text-primary"><FolderKanban className="h-5 w-5" /></div>
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary-50 text-primary-700"><FolderKanban className="h-5 w-5" /></div>
         <div>
           <h2 className="text-lg font-bold text-slate-900">Create project workspace</h2>
           <p className="mt-0.5 text-xs text-slate-500">{contextLabel || 'This workspace will be linked to your team’s academic context.'}</p>

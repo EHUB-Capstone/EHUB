@@ -53,7 +53,7 @@ const ForgotPassword = (): React.ReactElement => {
     <div className="min-h-screen bg-gradient-hero flex items-center justify-center p-6 relative overflow-hidden">
       {/* Decorative blobs */}
       <div className="absolute top-[-15%] left-[-10%] w-[500px] h-[500px] bg-primary-100/40 rounded-full blur-[120px]" />
-      <div className="absolute bottom-[-10%] right-[-5%] w-[400px] h-[400px] bg-cyan-100/40 rounded-full blur-[100px]" />
+      <div className="absolute bottom-[-10%] right-[-5%] w-[400px] h-[400px] bg-info-50 rounded-full blur-[100px]" />
       <div className="absolute top-[30%] right-[15%] w-[250px] h-[250px] bg-secondary-100/30 rounded-full blur-[80px]" />
 
       <div className="w-full max-w-[440px] relative z-10">
@@ -63,11 +63,11 @@ const ForgotPassword = (): React.ReactElement => {
             <Link to="/" className="mb-5 inline-flex items-center gap-2.5 no-underline">
               <img src={logo} alt="EHub" className="w-[38px] h-[38px] object-contain" />
               <span className="text-[20px] font-extrabold tracking-tight">
-                <span className="text-[#F08A5D]">E</span>
-                <span className="text-[#1E5E9F]">HUB</span>
+                <span className="text-primary-400">E</span>
+                <span className="text-secondary">HUB</span>
               </span>
             </Link>
-            <h1 className="text-heading font-bold text-slate-900">Forgot Password</h1>
+            <h1 className="text-heading font-bold text-secondary">Forgot Password</h1>
             <p className="text-body text-slate-500 mt-1">Enter your email and we'll send you instructions to reset your password.</p>
           </div>
 
@@ -104,7 +104,7 @@ const ForgotPassword = (): React.ReactElement => {
                 />
               </div>
 
-              <Button type="submit" variant="gradient" className="w-full" size="lg" isLoading={isLoading}>
+              <Button type="submit" variant="primary" className="w-full" size="lg" isLoading={isLoading}>
                 Send Reset Link
               </Button>
             </form>

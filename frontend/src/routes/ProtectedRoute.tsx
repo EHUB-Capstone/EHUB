@@ -30,14 +30,14 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        background: '#0F172A',
+        background: '#0B1626',
       }}>
         <div style={{
           width: 36,
           height: 36,
           borderRadius: '50%',
-          border: '3px solid rgba(234,106,18,0.25)',
-          borderTopColor: '#EA6A12',
+          border: '3px solid rgba(245,106,42,0.25)',
+          borderTopColor: '#F56A2A',
           animation: 'spin 0.8s linear infinite',
         }} />
         <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>

@@ -135,7 +135,7 @@ export default function TeamWorkspace() {
         <p className="text-slate-500 mt-2">{errorMsg}</p>
         <button
           onClick={() => navigate(-1)}
-          className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-primary hover:underline"
+          className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-primary-700 hover:underline"
         >
           <ArrowLeft className="w-4 h-4" /> Go Back
         </button>
@@ -146,7 +146,7 @@ export default function TeamWorkspace() {
   if (!data) {
     return (
       <div className="max-w-2xl mx-auto text-center py-16 px-4 bg-white rounded-2xl border border-slate-200/60 shadow-sm mt-8">
-        <div className="w-16 h-16 bg-primary-50 text-primary rounded-2xl flex items-center justify-center mx-auto mb-4 border border-primary-100">
+        <div className="w-16 h-16 bg-primary-50 text-primary-700 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-primary-100">
           <Users className="w-8 h-8" />
         </div>
         <h2 className="text-xl font-bold text-slate-800">No Team Assigned</h2>
@@ -180,10 +180,10 @@ export default function TeamWorkspace() {
       <div className="mx-auto max-w-6xl space-y-6">
         <div className="flex flex-col items-start justify-between gap-4 rounded-2xl border border-slate-200/60 bg-white p-6 shadow-sm sm:flex-row sm:items-center">
           <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-primary-500 to-secondary text-white shadow-sm"><Award className="h-6 w-6" /></div>
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-white shadow-sm bg-primary"><Award className="h-6 w-6" /></div>
             <div>
-              <span className="rounded-md border border-primary-100 bg-primary-50 px-2 py-0.5 text-xs font-semibold text-primary">{cls?.classCode}</span>
-              <h1 className="mt-1 text-2xl font-bold text-slate-900">{displayTeamName}</h1>
+              <span className="rounded-md border border-primary-100 bg-primary-50 px-2 py-0.5 text-xs font-semibold text-primary-700">{cls?.classCode}</span>
+              <h1 className="mt-1 text-heading sm:text-display text-secondary tracking-tight">{displayTeamName}</h1>
               <p className="mt-0.5 text-sm text-slate-500">No project workspace has been created for this team.</p>
             </div>
           </div>
@@ -210,16 +210,16 @@ export default function TeamWorkspace() {
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white rounded-2xl border border-slate-200/60 p-6 shadow-sm">
         <div className="flex items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-primary-500 to-secondary flex items-center justify-center text-white shrink-0 shadow-sm">
+          <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-white shrink-0 shadow-sm bg-primary">
             <Award className="w-6 h-6" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <span className="text-xs font-semibold px-2 py-0.5 bg-primary-50 text-primary border border-primary-100 rounded-md">
+              <span className="text-xs font-semibold px-2 py-0.5 bg-primary-50 text-primary-700 border border-primary-100 rounded-md">
                 {cls?.classCode}
               </span>
             </div>
-            <h1 className="text-2xl font-bold text-slate-900 mt-1">{displayTeamName} Workspace</h1>
+            <h1 className="mt-1 text-heading sm:text-display text-secondary tracking-tight">{displayTeamName} Workspace</h1>
             <p className="text-sm text-slate-500 mt-0.5">{team.description || 'Startup Workspace'}</p>
           </div>
         </div>
@@ -260,7 +260,7 @@ export default function TeamWorkspace() {
             key={key}
             onClick={() => setActiveTab(key)}
             className={`flex items-center gap-1.5 py-3 px-6 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${activeTab === key
-                ? 'border-primary text-primary'
+                ? 'border-primary text-primary-700'
                 : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
               }`}
           >
@@ -311,7 +311,7 @@ export default function TeamWorkspace() {
               {/* Lecturer */}
               {lecturer && (
                 <div className="bg-slate-50/50 rounded-xl p-3 border border-slate-100">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Lecturer</p>
+                  <p className="text-overline font-bold text-slate-400 uppercase tracking-wider">Lecturer</p>
                   <div className="flex items-center gap-2.5 mt-1.5">
                     <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-semibold text-xs">
                       {lecturer.name?.charAt(0)}
@@ -326,7 +326,7 @@ export default function TeamWorkspace() {
 
               {/* Mentor */}
               <div className="bg-slate-50/50 rounded-xl p-3 border border-slate-100">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Mentors</p>
+                <p className="text-overline font-bold text-slate-400 uppercase tracking-wider">Mentors</p>
                 {mentors.length ? (
                   <div className="mt-1.5 space-y-2.5">{mentors.map(currentMentor => <div key={currentMentor.id || currentMentor._id || currentMentor.email} className="flex items-center gap-2.5">
                     <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center text-amber-600 font-semibold text-xs">
@@ -344,20 +344,20 @@ export default function TeamWorkspace() {
 
               {/* Members List */}
               <div className="space-y-3">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-1">Startup Team Members</p>
+                <p className="text-overline font-bold text-slate-400 uppercase tracking-wider px-1">Startup Team Members</p>
                 <div className="space-y-2">
                   {members && members.map(member => (
                     <div key={member._id} className="flex items-center justify-between p-2.5 rounded-xl hover:bg-slate-50/60 border border-transparent hover:border-slate-100 transition-all">
                       <div className="flex items-center gap-2.5 min-w-0">
-                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary-100 to-primary-200 flex items-center justify-center text-primary font-bold text-xs">
+                        <div className="w-8 h-8 rounded-full flex items-center justify-center text-primary-700 font-bold text-xs bg-primary-100">
                           {member.fullName?.charAt(0)}
                         </div>
                         <div className="min-w-0">
                           <p className="text-sm font-semibold text-slate-800 truncate">{member.fullName}</p>
-                          <p className="text-[10px] text-slate-400 font-mono">{member.rollNumber}</p>
+                          <p className="text-overline text-slate-400 font-mono">{member.rollNumber}</p>
                         </div>
                       </div>
-                      <span className="text-[10px] font-bold px-2 py-0.5 bg-slate-100 text-slate-500 rounded-md">
+                      <span className="text-overline font-bold px-2 py-0.5 bg-slate-100 text-slate-500 rounded-md">
                         {member.roleInTeam || 'Member'}
                       </span>
                     </div>

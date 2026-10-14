@@ -57,7 +57,7 @@ const STATUS_LABELS: Record<AccountApprovalStatus, string> = {
 
 const ROLE_STYLES = {
   LECTURER: 'bg-secondary-50 text-secondary',
-  MENTOR: 'bg-purple-100 text-purple-700',
+  MENTOR: 'bg-secondary-100 text-secondary',
 };
 
 function formatDate(value: string): string {
@@ -132,10 +132,10 @@ export default function AccountApprovalBoard({
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-primary">
+          <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-primary-700">
             <ShieldCheck className="h-4 w-4" /> Admin review
           </div>
-          <h1 className="text-2xl font-bold text-slate-900 sm:text-3xl">Account approvals</h1>
+          <h1 className="text-heading sm:text-display text-secondary tracking-tight">Account approvals</h1>
           <p className="mt-1 text-sm text-slate-500">Review Lecturer and Mentor registration requests before granting access.</p>
         </div>
         <div className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-800">
@@ -171,7 +171,7 @@ export default function AccountApprovalBoard({
                   className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition-all ${statusFilter === tab.value ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-700'}`}
                 >
                   {tab.label}
-                  <span className={`rounded-full px-1.5 py-0.5 text-[10px] ${statusFilter === tab.value ? 'bg-primary-50 text-primary' : 'bg-slate-200 text-slate-500'}`}>{tab.count}</span>
+                  <span className={`rounded-full px-1.5 py-0.5 text-overline ${statusFilter === tab.value ? 'bg-primary-50 text-primary-700' : 'bg-slate-200 text-slate-500'}`}>{tab.count}</span>
                 </button>
               ))}
             </div>
@@ -219,12 +219,12 @@ export default function AccountApprovalBoard({
             <table className="w-full min-w-[860px] text-sm">
               <thead className="bg-slate-50/80">
                 <tr className="border-b border-slate-100">
-                  <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">Applicant</th>
-                  <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">Role</th>
-                  <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">Organization / Expertise</th>
-                  <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">Submitted</th>
-                  <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">Status</th>
-                  <th className="px-5 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-400">Actions</th>
+                  <th className="px-5 py-3 text-left text-caption font-semibold uppercase tracking-wider text-slate-600">Applicant</th>
+                  <th className="px-5 py-3 text-left text-caption font-semibold uppercase tracking-wider text-slate-600">Role</th>
+                  <th className="px-5 py-3 text-left text-caption font-semibold uppercase tracking-wider text-slate-600">Organization / Expertise</th>
+                  <th className="px-5 py-3 text-left text-caption font-semibold uppercase tracking-wider text-slate-600">Submitted</th>
+                  <th className="px-5 py-3 text-left text-caption font-semibold uppercase tracking-wider text-slate-600">Status</th>
+                  <th className="px-5 py-3 text-right text-caption font-semibold uppercase tracking-wider text-slate-600">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -232,7 +232,7 @@ export default function AccountApprovalBoard({
                   <tr key={request.id} className="transition-colors hover:bg-slate-50/70">
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary-100 to-primary-200 text-xs font-bold text-primary">{initials(request.fullName)}</div>
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary-100 text-xs font-bold text-primary-700">{initials(request.fullName)}</div>
                         <div className="min-w-0">
                           <p className="truncate font-semibold text-slate-900">{request.fullName}</p>
                           <p className="truncate text-xs text-slate-500">{request.email}</p>
@@ -301,7 +301,7 @@ interface StatCardProps {
 const STAT_TONES = {
   amber: 'bg-amber-100 text-amber-600',
   blue: 'bg-secondary-100 text-secondary',
-  purple: 'bg-purple-100 text-purple-600',
+  purple: 'bg-secondary-100 text-secondary',
   green: 'bg-green-100 text-green-600',
 };
 
@@ -341,7 +341,7 @@ function ApprovalDetailsModal({ request, onClose, onApprove, onReject, isProcess
       <div className="relative max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-t-2xl border border-slate-200 bg-white shadow-float sm:rounded-2xl">
         <header className="flex items-start justify-between border-b border-slate-100 p-5 sm:p-6">
           <div className="flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-primary-100 to-primary-200 text-sm font-bold text-primary">{initials(request.fullName)}</div>
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary-100 text-sm font-bold text-primary-700">{initials(request.fullName)}</div>
             <div>
               <h2 id="approval-detail-title" className="text-lg font-bold text-slate-900">{request.fullName}</h2>
               <div className="mt-1 flex flex-wrap gap-2"><RoleBadge role={request.role} /><StatusBadge status={request.status} /></div>
@@ -399,7 +399,7 @@ interface DetailItemProps {
 }
 
 function DetailItem({ icon: Icon, label, value }: DetailItemProps) {
-  return <div className="flex items-start gap-3 rounded-xl border border-slate-200 bg-white p-3"><Icon className="mt-0.5 h-4 w-4 shrink-0 text-primary" /><div className="min-w-0"><p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">{label}</p><p className="mt-0.5 break-words text-sm font-medium text-slate-700">{value}</p></div></div>;
+  return <div className="flex items-start gap-3 rounded-xl border border-slate-200 bg-white p-3"><Icon className="mt-0.5 h-4 w-4 shrink-0 text-primary" /><div className="min-w-0"><p className="text-overline font-semibold uppercase tracking-wider text-slate-400">{label}</p><p className="mt-0.5 break-words text-sm font-medium text-slate-700">{value}</p></div></div>;
 }
 
 function DetailRow({ label, value }: { label: string; value: string }) {

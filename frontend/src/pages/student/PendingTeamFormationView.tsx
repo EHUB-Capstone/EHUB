@@ -15,7 +15,7 @@ export default function PendingTeamFormationView({ formation, onChanged }: Props
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">My Team</h1>
+          <h1 className="text-heading sm:text-display text-secondary tracking-tight">My Team</h1>
           <p className="mt-1 text-sm text-slate-500">
             Team invitation in class <span className="font-semibold text-slate-700">{formation.classCode}</span>.
           </p>
@@ -26,9 +26,9 @@ export default function PendingTeamFormationView({ formation, onChanged }: Props
       </div>
 
       <div className="max-w-2xl space-y-6">
-        <section className="relative space-y-4 overflow-hidden rounded-2xl border border-slate-200/60 bg-gradient-to-br from-white to-slate-50/50 p-6 shadow-sm" aria-label={`Team formation ${formation.teamName}`}>
+        <section className="relative space-y-4 overflow-hidden rounded-2xl border border-slate-200/60 p-6 shadow-sm bg-white" aria-label={`Team formation ${formation.teamName}`}>
           <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-secondary shadow-sm">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl shadow-sm bg-primary">
               <Users className="h-6 w-6 text-white" />
             </div>
             <div className="min-w-0">

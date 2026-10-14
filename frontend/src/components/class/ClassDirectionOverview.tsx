@@ -338,7 +338,7 @@ export default function ClassDirectionOverview({ semester, year, initialClassId 
                     <p className="mt-0.5 text-xs text-slate-500">
                       Class: {team.overviewClassCode || '—'} · Team: {team.teamName || 'Unnamed team'} · Leader: {team.leaderName}
                     </p>
-                    {isProfileChangeProposal && <span className="mt-2 inline-flex rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-xs font-bold text-violet-700">Project Profile change request</span>}
+                    {isProfileChangeProposal && <span className="mt-2 inline-flex rounded-full border border-secondary-200 bg-secondary-50 px-2.5 py-1 text-xs font-bold text-secondary">Project Profile change request</span>}
                   </div>
                   <div className="flex items-center gap-2">
                     <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${statusStyles[status]}`}>
@@ -370,11 +370,11 @@ export default function ClassDirectionOverview({ semester, year, initialClassId 
                           <p className="mt-3 text-xs font-semibold text-slate-500">Description</p>
                           <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-slate-700">{team.projectDirectionCurrentSummary}</p>
                         </div>
-                        <div className="rounded-xl border border-violet-200 bg-violet-50/50 p-4">
-                          <p className="text-xs font-bold uppercase tracking-wide text-violet-700">Proposed change</p>
-                          <p className="mt-3 text-xs font-semibold text-violet-600">Project name</p>
+                        <div className="rounded-xl border border-secondary-200 bg-secondary-50 p-4">
+                          <p className="text-xs font-bold uppercase tracking-wide text-secondary">Proposed change</p>
+                          <p className="mt-3 text-xs font-semibold text-secondary">Project name</p>
                           <p className="mt-1 font-semibold text-slate-900">{team.projectDirectionTitle}</p>
-                          <p className="mt-3 text-xs font-semibold text-violet-600">Description</p>
+                          <p className="mt-3 text-xs font-semibold text-secondary">Description</p>
                           <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-slate-700">{team.projectDirection}</p>
                         </div>
                       </div>
