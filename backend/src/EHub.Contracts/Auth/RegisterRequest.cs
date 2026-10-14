@@ -8,4 +8,6 @@ public sealed class RegisterRequest
     public string ConfirmPassword { get; init; } = string.Empty;
     public string Role { get; init; } = string.Empty;
     public string? MajorCode { get; init; }
+    // Required for the Mentor role: "Enterprise" (industry mentor) or "Academic" (lecturer mentor).
+    public string? MentorType { get; init; }
 }

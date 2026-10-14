@@ -18,6 +18,7 @@ public sealed class PendingRegistrationConfiguration : IEntityTypeConfiguration<
         builder.Property(item => item.PasswordHash).HasColumnName("password_hash").HasMaxLength(256).IsRequired();
         builder.Property(item => item.RoleName).HasColumnName("role_name").HasMaxLength(30).IsRequired();
         builder.Property(item => item.MajorCode).HasColumnName("major_code").HasMaxLength(50);
+        builder.Property(item => item.MentorType).HasColumnName("mentor_type").HasConversion<string>().HasMaxLength(20);
         builder.Property(item => item.OtpHash).HasColumnName("otp_hash").HasMaxLength(128).IsRequired();
         builder.Property(item => item.OtpExpiresAtUtc).HasColumnName("otp_expires_at_utc").IsRequired();
         builder.Property(item => item.FailedAttemptCount).HasColumnName("failed_attempt_count").IsRequired();

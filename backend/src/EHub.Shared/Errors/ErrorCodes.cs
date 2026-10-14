@@ -30,6 +30,8 @@ public static class ErrorCodes
     public const string AuthPasswordConfirmationMismatch = "AUTH_PASSWORD_CONFIRMATION_MISMATCH";
     public const string AuthStudentMajorRequired = "AUTH_STUDENT_MAJOR_REQUIRED";
     public const string AuthInvalidMajor = "AUTH_INVALID_MAJOR";
+    public const string AuthMentorTypeRequired = "AUTH_MENTOR_TYPE_REQUIRED";
+    public const string AuthInvalidMentorType = "AUTH_INVALID_MENTOR_TYPE";
     public const string AuthEmailVerificationRequired = "AUTH_EMAIL_VERIFICATION_REQUIRED";
     public const string AuthRegistrationNotFound = "AUTH_REGISTRATION_NOT_FOUND";
     public const string AuthVerificationCodeInvalid = "AUTH_VERIFICATION_CODE_INVALID";
@@ -65,6 +67,9 @@ public static class ErrorCodes
     public const string MentorImportSessionExpired = "MENTOR_IMPORT_SESSION_EXPIRED";
     public const string MentorImportSessionAlreadyProcessing = "MENTOR_IMPORT_SESSION_ALREADY_PROCESSING";
     public const string MentorImportConflict = "MENTOR_IMPORT_CONFLICT";
+    public const string MentorIncompleteNotFound = "MENTOR_INCOMPLETE_NOT_FOUND";
+    public const string MentorIncompleteInUseConflict = "MENTOR_INCOMPLETE_IN_USE_CONFLICT";
+    public const string MentorIncompleteNameConflict = "MENTOR_INCOMPLETE_NAME_CONFLICT";
     public const string MentorAllocationInvalid = "MENTOR_ALLOCATION_INVALID";
     public const string MentorAllocationSessionInvalid = "MENTOR_ALLOCATION_SESSION_INVALID";
     public const string MentorAllocationSessionExpired = "MENTOR_ALLOCATION_SESSION_EXPIRED";

@@ -32,11 +32,11 @@ export const STATUS_CFG = {
   },
   REVIEW: {
     label: 'Review',
-    bg: 'bg-violet-50',
-    text: 'text-violet-700',
-    dot: 'bg-violet-500',
-    border: 'border-violet-200',
-    accent: 'bg-violet-500',
+    bg: 'bg-secondary-50',
+    text: 'text-secondary',
+    dot: 'bg-secondary',
+    border: 'border-secondary-200',
+    accent: 'bg-secondary',
   },
   COMPLETED: {
     label: 'Completed',

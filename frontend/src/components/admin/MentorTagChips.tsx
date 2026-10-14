@@ -14,9 +14,9 @@ export default function MentorTagChips({ tags, max = 3 }: MentorTagChipsProps) {
   return (
     <div className="mt-1 flex flex-wrap items-center gap-1" title={list.map(tag => tag.label).join(', ')}>
       {list.slice(0, max).map(tag => (
-        <span key={`${tag.category}:${tag.label}`} className="rounded-full border border-slate-200 bg-slate-50 px-1.5 py-0 text-[10px] font-medium text-slate-500">{tag.label}</span>
+        <span key={`${tag.category}:${tag.label}`} className="rounded-full border border-slate-200 bg-slate-50 px-1.5 py-0 text-overline font-medium text-slate-500">{tag.label}</span>
       ))}
-      {list.length > max && <span className="text-[10px] font-medium text-slate-400">+{list.length - max}</span>}
+      {list.length > max && <span className="text-overline font-medium text-slate-400">+{list.length - max}</span>}
     </div>
   );
 }

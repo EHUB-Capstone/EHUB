@@ -11,6 +11,8 @@ public sealed class PendingRegistration : AuditableEntity
     public string PasswordHash { get; set; } = string.Empty;
     public string RoleName { get; set; } = string.Empty;
     public string? MajorCode { get; set; }
+    // Only for the Mentor role: the kind of mentor chosen at registration.
+    public MentorType? MentorType { get; set; }
     public string OtpHash { get; set; } = string.Empty;
     public DateTime OtpExpiresAtUtc { get; set; }
     public int FailedAttemptCount { get; set; }

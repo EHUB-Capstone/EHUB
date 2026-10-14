@@ -21,7 +21,7 @@ const SWIPE_THRESHOLD = 72;
 const SWIPE_LIMIT = 120;
 
 const Badge = ({ children, className = '' }) => (
-  <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${className}`}>
+  <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-caption font-semibold ${className}`}>
     {children}
   </span>
 );
@@ -253,7 +253,7 @@ function TaskCard({
                 ref={setActivatorNodeRef}
                 {...attributes}
                 {...listeners}
-                className="inline-flex touch-none cursor-grab items-center rounded-md p-1.5 text-slate-400 transition-colors hover:bg-primary-50 hover:text-primary focus:outline-none focus:ring-2 focus:ring-primary/30 active:cursor-grabbing"
+                className="inline-flex touch-none cursor-grab items-center rounded-md p-1.5 text-slate-400 transition-colors hover:bg-primary-50 hover:text-primary-700 focus:outline-none focus:ring-2 focus:ring-primary/30 active:cursor-grabbing"
                 aria-label={`Drag ${task.title}`}
                 title="Drag this task to another status"
               >
@@ -298,7 +298,7 @@ function TaskCard({
 
         {checklist.length > 0 && (
           <div className="mb-3">
-            <div className="mb-1 flex items-center justify-between text-[10px] font-medium text-slate-400">
+            <div className="mb-1 flex items-center justify-between text-overline font-medium text-slate-400">
               <span>Checklist</span>
               <span>{checklistDone}/{checklist.length}</span>
             </div>
@@ -313,7 +313,7 @@ function TaskCard({
 
         {checklist.length === 0 && (
           <div className="mb-3">
-            <div className="mb-1 flex items-center justify-between text-[10px] font-medium text-slate-400">
+            <div className="mb-1 flex items-center justify-between text-overline font-medium text-slate-400">
               <span>Progress</span>
               <span>{taskProgress(task)}%</span>
             </div>
@@ -323,7 +323,7 @@ function TaskCard({
           </div>
         )}
 
-        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-400">
+        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-caption text-slate-400">
           <span className="rounded bg-blue-50 px-1.5 py-0.5 font-semibold text-blue-700">W{task.weekNumber}</span>
           {assigneeName && <span className="flex items-center gap-1"><User className="h-3 w-3" />{assigneeName}</span>}
           {dueDate && <span className={`flex items-center gap-1 ${isOverdue ? 'font-semibold text-red-500' : ''}`}><Clock className="h-3 w-3" />{dueDate}</span>}
@@ -337,7 +337,7 @@ function TaskCard({
             <button
               type="button"
               onClick={() => onStatusChange(task._id, 'COMPLETED')}
-              className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] font-semibold text-emerald-700 transition-colors hover:bg-emerald-50"
+              className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-caption font-semibold text-emerald-700 transition-colors hover:bg-emerald-50"
             >
               <CheckCircle2 className="h-3.5 w-3.5" />
               Complete
@@ -349,7 +349,7 @@ function TaskCard({
                 onClick={() => setStatusOpen((value) => !value)}
                 aria-haspopup="menu"
                 aria-expanded={statusOpen}
-                className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-slate-500 transition-colors hover:text-slate-800"
+                className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-caption font-medium text-slate-500 transition-colors hover:text-slate-800"
               >
                 Move <ChevronDown className="h-3 w-3" />
               </button>

@@ -77,14 +77,14 @@ function App(): React.ReactElement {
                     background: 'var(--app-toast-bg)',
                     color: 'var(--app-toast-color)',
                     border: '1px solid var(--app-toast-border)',
-                    borderRadius: '12px',
+                    borderRadius: '10px',
                     fontFamily: 'Inter, sans-serif',
                     fontSize: '14px',
                     padding: '12px 16px',
-                    boxShadow: '0 4px 16px -4px rgb(0 0 0 / 0.2)',
+                    boxShadow: '0 4px 16px -4px rgb(23 54 93 / 0.18)',
                   },
-                  success: { iconTheme: { primary: '#51B848', secondary: '#fff' } },
-                  error: { duration: 3500, iconTheme: { primary: '#ef4444', secondary: '#fff' } },
+                  success: { iconTheme: { primary: '#16A34A', secondary: '#fff' } },
+                  error: { duration: 3500, iconTheme: { primary: '#DC2626', secondary: '#fff' } },
                 }}
               />
 

@@ -76,10 +76,10 @@ const SentimentAnalysisTab = ({ ideaId }) => {
                      result?.summary?.includes("Chưa thể phân tích");
 
   const getSentimentColor = (sentiment) => {
-    if (sentiment === 'Positive') return 'text-[#51B848] bg-green-100 border-green-200';
+    if (sentiment === 'Positive') return 'text-success bg-green-100 border-green-200';
     if (sentiment === 'Negative') return 'text-red-600 bg-red-100 border-red-200';
-    if (sentiment === 'Mixed') return 'text-[#F37021] bg-orange-100 border-orange-200';
-    return 'text-[#034EA2] bg-blue-100 border-blue-200';
+    if (sentiment === 'Mixed') return 'text-primary-600 bg-orange-100 border-orange-200';
+    return 'text-secondary bg-blue-100 border-blue-200';
   };
 
   return (
@@ -88,7 +88,7 @@ const SentimentAnalysisTab = ({ ideaId }) => {
       <div className="lg:col-span-5 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
         <div className="p-5 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
            <h2 className="font-semibold text-slate-800 text-lg">Feedback Input</h2>
-           <span className="text-xs font-medium px-2 py-1 bg-blue-100 text-[#034EA2] rounded-md">Input</span>
+           <span className="text-xs font-medium px-2 py-1 bg-blue-100 text-secondary rounded-md">Input</span>
         </div>
         <div className="p-5 flex-1 overflow-y-auto max-h-[600px] no-scrollbar">
           <form onSubmit={handleAnalyze} className="space-y-4 flex flex-col h-full">
@@ -105,7 +105,7 @@ const SentimentAnalysisTab = ({ ideaId }) => {
                     )}
                   </div>
                   <div className="space-y-3">
-                    <select value={fb.author_type} onChange={(e) => handleChange(fb.id, 'author_type', e.target.value)} className="w-full text-sm border-slate-200 rounded-lg focus:ring-[#034EA2] focus:border-[#034EA2] bg-white">
+                    <select value={fb.author_type} onChange={(e) => handleChange(fb.id, 'author_type', e.target.value)} className="w-full text-sm border-slate-200 rounded-lg focus:ring-secondary focus:border-secondary bg-white">
                       <option value="mentor">Mentor</option>
                       <option value="student">Student</option>
                       <option value="lecturer">Lecturer</option>
@@ -114,7 +114,7 @@ const SentimentAnalysisTab = ({ ideaId }) => {
                       rows={3} 
                       value={fb.content} 
                       onChange={(e) => handleChange(fb.id, 'content', e.target.value)} 
-                      className="w-full text-sm border-slate-200 rounded-lg focus:ring-[#034EA2] focus:border-[#034EA2] bg-white" 
+                      className="w-full text-sm border-slate-200 rounded-lg focus:ring-secondary focus:border-secondary bg-white" 
                       placeholder="Nhập nội dung feedback (VD: Sản phẩm rất tốt nhưng UX hơi khó dùng...)" 
                     />
                   </div>
@@ -122,12 +122,12 @@ const SentimentAnalysisTab = ({ ideaId }) => {
               ))}
             </div>
 
-            <button type="button" onClick={handleAddFeedback} className="flex items-center justify-center gap-2 w-full py-3 border-2 border-dashed border-slate-300 rounded-xl text-slate-500 hover:text-[#034EA2] hover:border-[#034EA2] hover:bg-blue-50 transition-colors font-medium text-sm">
+            <button type="button" onClick={handleAddFeedback} className="flex items-center justify-center gap-2 w-full py-3 border-2 border-dashed border-slate-300 rounded-xl text-slate-500 hover:text-secondary hover:border-secondary hover:bg-blue-50 transition-colors font-medium text-sm">
               <Plus className="w-4 h-4" /> Add Feedback
             </button>
             
             <div className="pt-4 mt-auto">
-              <Button type="submit" className="w-full bg-[#034EA2] hover:bg-[#023B7A] text-white" isLoading={loading} disabled={loading} icon={Heart}>
+              <Button type="submit" className="w-full bg-secondary hover:bg-secondary-700 text-white" isLoading={loading} disabled={loading} icon={Heart}>
                 Analyze Sentiment
               </Button>
             </div>
@@ -139,8 +139,8 @@ const SentimentAnalysisTab = ({ ideaId }) => {
       <div className="lg:col-span-7">
         {loading ? (
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-12 flex flex-col items-center justify-center min-h-[500px]">
-             <div className="w-16 h-16 border-4 border-[#034EA2]/30 border-t-[#034EA2] rounded-full animate-spin mb-4"></div>
-             <h3 className="text-xl font-semibold text-[#034EA2]">Analyzing sentiments...</h3>
+             <div className="w-16 h-16 border-4 border-secondary/30 border-t-secondary rounded-full animate-spin mb-4"></div>
+             <h3 className="text-xl font-semibold text-secondary">Analyzing sentiments...</h3>
              <p className="text-slate-500 mt-2">AI is reading between the lines to gauge user emotions.</p>
           </div>
         ) : !result ? (
@@ -173,10 +173,10 @@ const SentimentAnalysisTab = ({ ideaId }) => {
                <div className="flex-1 space-y-3 w-full">
                  <div className="flex items-center justify-between mb-1">
                    <span className="text-sm font-semibold text-slate-700 flex items-center gap-2"><BarChart3 className="w-4 h-4" /> AI Confidence Score</span>
-                   <span className="text-sm font-bold text-[#034EA2]">{result.sentiment_score !== null && result.sentiment_score !== undefined ? Math.round(result.sentiment_score * 100) : 'N/A'}%</span>
+                   <span className="text-sm font-bold text-secondary">{result.sentiment_score !== null && result.sentiment_score !== undefined ? Math.round(result.sentiment_score * 100) : 'N/A'}%</span>
                  </div>
                  <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
-                   <div className="bg-gradient-to-r from-blue-400 to-[#034EA2] h-2.5 rounded-full" style={{ width: `${result.sentiment_score ? Math.round(result.sentiment_score * 100) : 0}%` }}></div>
+                   <div className="h-2.5 rounded-full bg-secondary" style={{ width: `${result.sentiment_score ? Math.round(result.sentiment_score * 100) : 0}%` }}></div>
                  </div>
                  <p className="text-sm text-slate-600 mt-3 leading-relaxed">{typeof result.summary === 'string' ? result.summary : 'N/A'}</p>
                </div>
@@ -203,7 +203,7 @@ const SentimentAnalysisTab = ({ ideaId }) => {
 
             {/* Feedback Results */}
             <div className="space-y-4">
-              <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2"><MessageSquare className="w-5 h-5 text-[#F37021]" /> Individual Breakdown</h3>
+              <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2"><MessageSquare className="w-5 h-5 text-primary-600" /> Individual Breakdown</h3>
               {Array.isArray(result.results) && result.results.length > 0 ? (
                  result.results.map((item, idx) => (
                    <div key={idx} className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
@@ -223,7 +223,7 @@ const SentimentAnalysisTab = ({ ideaId }) => {
                            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Key Phrases</p>
                            <div className="flex flex-wrap gap-2">
                              {item.key_phrases.map((phrase, pIdx) => (
-                               <span key={pIdx} className="px-2.5 py-1 bg-[#034EA2]/10 text-[#034EA2] text-xs font-medium rounded-md">
+                               <span key={pIdx} className="px-2.5 py-1 bg-secondary/10 text-secondary text-xs font-medium rounded-md">
                                  {typeof phrase === 'string' ? phrase : JSON.stringify(phrase)}
                                </span>
                              ))}
@@ -233,7 +233,7 @@ const SentimentAnalysisTab = ({ ideaId }) => {
                        
                        {Array.isArray(item.concerns) && item.concerns.length > 0 && (
                          <div className="bg-orange-50 p-3 rounded-xl border border-orange-100">
-                           <p className="text-xs font-bold text-[#F37021] uppercase tracking-wider mb-2 flex items-center gap-1"><ShieldAlert className="w-3.5 h-3.5" /> Concerns Detected</p>
+                           <p className="text-xs font-bold text-primary-600 uppercase tracking-wider mb-2 flex items-center gap-1"><ShieldAlert className="w-3.5 h-3.5" /> Concerns Detected</p>
                            <ul className="space-y-1.5">
                              {item.concerns.map((concern, cIdx) => (
                                <li key={cIdx} className="text-sm text-slate-700 flex items-start gap-2">

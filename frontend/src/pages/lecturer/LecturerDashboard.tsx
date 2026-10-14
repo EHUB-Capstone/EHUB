@@ -30,6 +30,7 @@ import EmptyState from '../../components/ui/EmptyState';
 import ErrorState from '../../components/ui/ErrorState';
 import LoadingSkeleton from '../../components/ui/LoadingSkeleton';
 import Button from '../../components/ui/Button';
+import { CHART_COLORS } from '../../constants/chartColors';
 import type {
   AcademicOverviewFilterOptions,
   AcademicOverviewFilters,
@@ -56,37 +57,37 @@ const metricPresentation: Record<string, MetricPresentation> = {
     icon: GraduationCap,
     description: 'Assigned academic scope',
     iconClass: 'bg-blue-50 text-blue-600',
-    accentClass: 'from-blue-500 to-cyan-400',
+    accentClass: 'bg-info',
   },
   teams: {
     icon: Users,
     description: 'Active teams',
-    iconClass: 'bg-cyan-50 text-cyan-600',
-    accentClass: 'from-cyan-500 to-teal-400',
+    iconClass: 'bg-info-50 text-info-dark',
+    accentClass: 'bg-info',
   },
   projects: {
     icon: FolderKanban,
     description: 'Non-archived projects',
-    iconClass: 'bg-indigo-50 text-indigo-600',
-    accentClass: 'from-indigo-500 to-violet-400',
+    iconClass: 'bg-secondary-50 text-secondary',
+    accentClass: 'bg-secondary',
   },
   submissions: {
     icon: ClipboardCheck,
     description: 'Unique team–checkpoints',
     iconClass: 'bg-emerald-50 text-emerald-600',
-    accentClass: 'from-emerald-500 to-green-400',
+    accentClass: 'bg-success',
   },
   evaluations: {
     icon: BadgeCheck,
     description: 'Finalized evaluations',
-    iconClass: 'bg-violet-50 text-violet-600',
-    accentClass: 'from-violet-500 to-fuchsia-400',
+    iconClass: 'bg-secondary-50 text-secondary',
+    accentClass: 'bg-secondary',
   },
   'potential-projects': {
     icon: Star,
     description: 'High-potential projects',
     iconClass: 'bg-amber-50 text-amber-600',
-    accentClass: 'from-amber-500 to-orange-400',
+    accentClass: 'bg-warning',
   },
 };
 
@@ -111,7 +112,7 @@ function MetricCard({
       transition={{ duration: 0.35, delay }}
       className="group relative overflow-hidden rounded-2xl border border-slate-200/70 bg-white p-5 shadow-card transition-all duration-300 hover:-translate-y-0.5 hover:shadow-elevated"
     >
-      <div className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${presentation.accentClass}`} />
+      <div className={`absolute inset-x-0 top-0 h-1 ${presentation.accentClass}`} />
       <div className="mb-5 flex items-start justify-between gap-3">
         <div>
           <p className="text-xs font-bold uppercase tracking-[0.12em] text-slate-400">{title}</p>
@@ -176,8 +177,8 @@ const LecturerDashboard = () => {
     if (!overview) return [];
     const potential = overview.metrics.totalPotentialProjects;
     return [
-      { name: 'Potential', value: potential, color: '#f59e0b' },
-      { name: 'Other projects', value: Math.max(0, overview.metrics.totalProjects - potential), color: '#dbeafe' },
+      { name: 'Potential', value: potential, color: CHART_COLORS.brand },
+      { name: 'Other projects', value: Math.max(0, overview.metrics.totalProjects - potential), color: CHART_COLORS.grid },
     ];
   }, [overview]);
 
@@ -336,7 +337,7 @@ const LecturerDashboard = () => {
                     )}
                   </div>
                   <ProgressRow label="Submitted" value={checkpoint.submittedTeams} total={checkpoint.expectedTeams} color="bg-emerald-500" />
-                  <ProgressRow label="Evaluated" value={checkpoint.evaluatedProjects} total={checkpoint.expectedTeams} color="bg-violet-500" />
+                  <ProgressRow label="Evaluated" value={checkpoint.evaluatedProjects} total={checkpoint.expectedTeams} color="bg-secondary" />
                 </div>
               ))}
             </div>
@@ -345,7 +346,7 @@ const LecturerDashboard = () => {
 
         <div className="space-y-5">
           <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <div className="border-b border-slate-100 bg-gradient-to-r from-amber-50 to-red-50 p-5">
+            <div className="border-b border-slate-100 p-5 bg-amber-50">
               <h2 className="flex items-center gap-2 text-lg font-bold text-slate-900">
                 <AlertTriangle className="h-5 w-5 text-amber-500" /> Attention Required
               </h2>
@@ -366,7 +367,7 @@ const LecturerDashboard = () => {
               />
             </div>
           </div>
-          <div className="relative overflow-hidden rounded-2xl border border-amber-100 bg-gradient-to-br from-white via-amber-50/40 to-orange-50 p-5 shadow-sm">
+          <div className="relative overflow-hidden rounded-2xl border border-amber-100 p-5 shadow-sm bg-white">
             <div className="absolute -right-8 -top-8 h-28 w-28 rounded-full bg-amber-200/30 blur-2xl" />
             <h2 className="flex items-center gap-2 text-lg font-bold text-slate-900">
               <Sparkles className="h-5 w-5 text-amber-500" /> Project Portfolio
@@ -413,7 +414,7 @@ const LecturerDashboard = () => {
         </div>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[720px] text-sm">
-            <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-400">
+            <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-600">
               <tr>
                 {['Class', 'Teams', 'Projects', 'Submissions', 'Evaluations', 'Potential'].map((heading) => (
                   <th key={heading} className="px-5 py-3 font-semibold">{heading}</th>
@@ -427,7 +428,7 @@ const LecturerDashboard = () => {
                   <td className="px-5 py-3.5 text-slate-600">{number(item.teams)}</td>
                   <td className="px-5 py-3.5 text-slate-600">{number(item.projects)}</td>
                   <td className="px-5 py-3.5 text-emerald-700">{number(item.submissions)}</td>
-                  <td className="px-5 py-3.5 text-violet-700">{number(item.evaluations)}</td>
+                  <td className="px-5 py-3.5 text-secondary">{number(item.evaluations)}</td>
                   <td className="px-5 py-3.5">
                     <span className="inline-flex items-center gap-1 rounded-lg bg-amber-50 px-2 py-1 font-semibold text-amber-700">
                       <Star className="h-3.5 w-3.5" /> {number(item.potentialProjects)}
@@ -457,7 +458,7 @@ const LecturerDashboard = () => {
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[700px] text-sm">
-              <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-400">
+              <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-600">
                 <tr>
                   {['Rank', 'Team', 'Class', 'Project', 'Progress', 'Course Total'].map((heading) => (
                     <th key={heading} className="px-5 py-3 font-semibold">{heading}</th>
@@ -477,7 +478,7 @@ const LecturerDashboard = () => {
                     <td className="px-5 py-3.5 text-slate-600">{team.projectName || '—'}</td>
                     <td className="px-5 py-3.5 text-slate-600">{team.completedComponents}/{team.totalComponents}</td>
                     <td className="px-5 py-3.5">
-                      <span className="rounded-lg bg-primary-50 px-2.5 py-1 font-bold text-primary">{team.courseTotal.toFixed(2)}</span>
+                      <span className="rounded-lg bg-primary-50 px-2.5 py-1 font-bold text-primary-700">{team.courseTotal.toFixed(2)}</span>
                     </td>
                   </tr>
                 ))}
@@ -572,7 +573,7 @@ function DashboardFilters({
           Reset
         </Button>
       </div>
-      {busy && <p className="mt-3 text-xs font-medium text-primary" role="status">Updating dashboard…</p>}
+      {busy && <p className="mt-3 text-xs font-medium text-primary-700" role="status">Updating dashboard…</p>}
     </section>
   );
 }
@@ -590,17 +591,17 @@ function DashboardHero({
 }) {
   return (
     <header
-      className="overflow-hidden rounded-2xl border border-orange-100 bg-gradient-to-r from-orange-50 via-white to-amber-50/70 p-5 shadow-sm sm:min-h-[132px] sm:p-6"
+      className="overflow-hidden rounded-2xl border border-orange-100 p-5 shadow-sm sm:min-h-[132px] sm:p-6 bg-white"
     >
       <div className="flex min-h-[84px] flex-col justify-between gap-5 sm:flex-row sm:items-center">
         <div className="flex items-start gap-4">
-          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-orange-500 text-white shadow-md shadow-orange-200/60">
+          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-white shadow-md shadow-orange-200/60 bg-primary">
             <GraduationCap className="h-6 w-6" />
           </span>
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-2xl font-black tracking-tight text-slate-900">Academic Overview</h1>
-              <span className="rounded-full border border-primary-100 bg-primary-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-primary">
+              <h1 className="text-heading sm:text-display text-secondary tracking-tight">Academic Overview</h1>
+              <span className="rounded-full border border-primary-100 bg-primary-50 px-2.5 py-1 text-overline font-bold uppercase tracking-wider text-primary-700">
                 {semesterLabel}
               </span>
             </div>

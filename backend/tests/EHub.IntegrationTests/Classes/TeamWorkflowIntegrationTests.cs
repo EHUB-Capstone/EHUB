@@ -2521,6 +2521,20 @@ public sealed partial class TeamWorkflowIntegrationTests
         var published = await handler.PublishAsync(saved.Value.Id, seed.LecturerId, SystemRoles.Lecturer);
         published.IsSuccess.Should().BeTrue();
         published.Value.Status.Should().Be("PUBLISHED");
+        var publicationEvent = await context.OutboxMessages.AsNoTracking()
+            .SingleAsync(item => item.Type == "Evaluation.Published.v1" && item.AggregateId == saved.Value.Id);
+        publicationEvent.PayloadJson.Should().Contain("studentUserIds");
+        publicationEvent.PayloadJson.Should().Contain(seed.TeamId.Value.ToString());
+        await scope.ServiceProvider.GetRequiredService<IOutboxEventDispatcher>().DispatchAsync(publicationEvent);
+        context.ChangeTracker.Clear();
+        var publishedNotifications = await context.Notifications.AsNoTracking()
+            .Where(item => item.SourceEventId == publicationEvent.EventId)
+            .ToArrayAsync();
+        publishedNotifications.Should().HaveCount(seed.StudentIds.Count());
+        publishedNotifications.Should().OnlyContain(item =>
+            item.Type == NotificationType.EvaluationPublished &&
+            item.Title == "Checkpoint 1 result is available" &&
+            item.Link == $"/evaluation-grading?teamId={seed.TeamId.Value}");
 
         context.ChangeTracker.Clear();
         var publishedStudentSummary = await handler.GetSummaryAsync(

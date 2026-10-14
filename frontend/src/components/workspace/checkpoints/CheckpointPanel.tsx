@@ -55,7 +55,7 @@ function SectionTitle({ icon: Icon, children, count, subtitle }) {
         </span>
         {children}
         {count != null && (
-          <span className="ml-auto text-xs font-bold text-primary bg-primary-50 px-2.5 py-0.5 rounded-full border border-primary-100">
+          <span className="ml-auto text-xs font-bold text-primary-700 bg-primary-50 px-2.5 py-0.5 rounded-full border border-primary-100">
             {count}
           </span>
         )}
@@ -279,7 +279,7 @@ export default function CheckpointPanel({
 
       <div className="relative flex flex-col h-full w-full bg-slate-50 animate-checkpoint-panel shadow-2xl">
         {/* Header */}
-        <header className="shrink-0 relative overflow-hidden border-b border-orange-100/80 bg-gradient-to-r from-orange-50 via-amber-50/70 to-white text-slate-900">
+        <header className="shrink-0 relative overflow-hidden border-b border-orange-100/80 text-slate-900 bg-white">
           <div className="absolute -left-16 -top-24 h-64 w-64 rounded-full bg-orange-200/30 blur-3xl pointer-events-none" />
           <div className="absolute -top-20 right-0 w-72 h-72 rounded-full bg-amber-100/50 blur-3xl pointer-events-none" />
 
@@ -295,11 +295,11 @@ export default function CheckpointPanel({
               </button>
 
               <div className="flex items-start gap-3 sm:gap-4 flex-1 min-w-0">
-                <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-br from-orange-500 to-primary-dark text-white border border-orange-400/50 shadow-md shadow-orange-200/60 flex items-center justify-center shrink-0">
+                <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl text-white border border-orange-400/50 shadow-md shadow-orange-200/60 flex items-center justify-center shrink-0 bg-primary">
                   <Icon className="w-6 h-6 sm:w-7 sm:h-7" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-[10px] sm:text-xs font-bold uppercase tracking-widest text-primary">
+                  <p className="text-overline sm:text-xs font-bold uppercase tracking-widest text-primary-700">
                     Checkpoint {checkpoint.number} of {checkpointCount}
                   </p>
                   <h1 className="text-lg sm:text-2xl font-bold mt-0.5 leading-tight">
@@ -333,7 +333,7 @@ export default function CheckpointPanel({
               <button
                 type="button"
                 onClick={onClose}
-                className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-white/80 hover:bg-orange-50 border border-orange-200/80 text-slate-600 hover:text-primary shadow-sm flex items-center justify-center transition-all shrink-0"
+                className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-white/80 hover:bg-orange-50 border border-orange-200/80 text-slate-600 hover:text-primary-700 shadow-sm flex items-center justify-center transition-all shrink-0"
                 aria-label="Close"
               >
                 <X className="w-5 h-5" />
@@ -360,7 +360,7 @@ export default function CheckpointPanel({
                 onClick={() => setShowEvaluation((current) => !current)}
                 aria-expanded={showEvaluation}
                 aria-controls="checkpoint-evaluation-panel"
-                className="inline-flex items-center gap-1.5 rounded-lg border border-orange-200 bg-orange-100/70 px-3 py-1.5 text-xs font-bold text-primary transition hover:bg-orange-100"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-orange-200 bg-orange-100/70 px-3 py-1.5 text-xs font-bold text-primary-700 transition hover:bg-orange-100"
               >
                 {showEvaluation ? <PanelRightClose className="h-3.5 w-3.5" /> : <PanelRightOpen className="h-3.5 w-3.5" />}
                 {showEvaluation ? 'Hide evaluation' : isLecturer ? 'Open grading' : 'Show evaluation'}
@@ -406,7 +406,7 @@ export default function CheckpointPanel({
                         }`}
                     >
                       <span
-                        className={`w-5 h-5 rounded-md flex items-center justify-center text-[10px] ${filled
+                        className={`w-5 h-5 rounded-md flex items-center justify-center text-overline ${filled
                             ? 'bg-primary text-white'
                             : 'bg-slate-200 text-slate-600'
                           }`}
@@ -458,11 +458,11 @@ export default function CheckpointPanel({
                           <div className="min-w-0">
                             <div className="font-semibold text-slate-900 flex items-center gap-2 flex-wrap">
                               <span>{r.label}</span>
-                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white text-amber-700 border border-amber-200">{r.weight}%</span>
+                              <span className="text-overline font-bold px-2 py-0.5 rounded-full bg-white text-amber-700 border border-amber-200">{r.weight}%</span>
                             </div>
                             {r.description && <p className="text-xs text-slate-600 mt-1">{r.description}</p>}
                             {Array.isArray(r.levels) && r.levels.length > 0 && (
-                              <div className="mt-2 flex flex-wrap gap-1.5 text-[10px] text-slate-500">
+                              <div className="mt-2 flex flex-wrap gap-1.5 text-overline text-slate-500">
                                 {r.levels.map((level) => (
                                   <span key={level.key} className="px-2 py-1 rounded-full bg-white border border-slate-200">
                                     {level.label} {level.range}
@@ -483,7 +483,7 @@ export default function CheckpointPanel({
               <div className="shrink-0 px-5 py-4 border-t border-slate-200 bg-white">
                 <Button
                   type="button"
-                  variant="gradient"
+                  variant="primary"
                   size="lg"
                   className="w-full"
                   isLoading={savingRequirements}
@@ -493,7 +493,7 @@ export default function CheckpointPanel({
                 >
                   Save all requirements
                 </Button>
-                <p className="text-[10px] text-slate-400 text-center mt-2">
+                <p className="text-overline text-slate-400 text-center mt-2">
                   Saves all requirement fields for this checkpoint
                 </p>
               </div>
@@ -610,7 +610,7 @@ export default function CheckpointPanel({
                             <div
                               className={`w-11 h-11 rounded-lg ${style.bg} flex items-center justify-center shrink-0`}
                             >
-                              <span className={`text-[10px] font-extrabold ${style.text}`}>
+                              <span className={`text-overline font-extrabold ${style.text}`}>
                                 {style.label}
                               </span>
                             </div>
@@ -625,11 +625,11 @@ export default function CheckpointPanel({
                                 {formatBytes(file.fileSize)} · {file.uploadedBy?.name || 'Unknown'}
                               </p>
                               {file.versionNumber > 0 && (
-                                <span className="mt-1 inline-flex rounded-md bg-orange-100 px-2 py-0.5 text-[10px] font-bold text-orange-700">
+                                <span className="mt-1 inline-flex rounded-md bg-orange-100 px-2 py-0.5 text-overline font-bold text-orange-700">
                                   Version {file.versionNumber}
                                 </span>
                               )}
-                              <p className="text-[10px] text-slate-400 mt-0.5">
+                              <p className="text-overline text-slate-400 mt-0.5">
                                 {new Date(file.uploadedAt).toLocaleString()}
                               </p>
                             </div>
@@ -642,7 +642,7 @@ export default function CheckpointPanel({
                                 onClick={() => setPreviewFile(file)}
                                 onMouseEnter={warmUpPdfPreview}
                                 onFocus={warmUpPdfPreview}
-                                className="flex-1 inline-flex items-center justify-center gap-2 py-2 rounded-lg border border-primary-200 bg-white text-primary text-xs font-bold hover:bg-primary-50 transition-all"
+                                className="flex-1 inline-flex items-center justify-center gap-2 py-2 rounded-lg border border-primary-200 bg-white text-primary-700 text-xs font-bold hover:bg-primary-50 transition-all"
                               >
                                 <Eye className="w-3.5 h-3.5" />
                                 Preview
@@ -733,17 +733,17 @@ export default function CheckpointPanel({
                             <Link2 className="h-4 w-4 text-primary" />
                           </div>
                           <div className="min-w-0 flex-1">
-                            <a href={link.url} target="_blank" rel="noopener noreferrer" className="inline-flex max-w-full items-center gap-1.5 font-bold text-slate-800 hover:text-primary">
+                            <a href={link.url} target="_blank" rel="noopener noreferrer" className="inline-flex max-w-full items-center gap-1.5 font-bold text-slate-800 hover:text-primary-700">
                               <span className="truncate">{link.name}</span><ExternalLink className="h-3.5 w-3.5 shrink-0" />
                             </a>
                             <p className="truncate text-xs text-slate-500" title={link.url}>{displayLinkHost(link.url)}</p>
-                            <p className="mt-1 text-[10px] text-slate-400">
+                            <p className="mt-1 text-overline text-slate-400">
                               Version {link.versionNumber} · {link.submittedBy?.name || 'Unknown'} · {new Date(link.submittedAt).toLocaleString()}
                             </p>
                           </div>
                           {canManage && (
                             <div className="flex shrink-0 gap-2">
-                              <button type="button" onClick={() => setEditingLink(link)} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600 hover:border-primary hover:text-primary">
+                              <button type="button" onClick={() => setEditingLink(link)} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600 hover:border-primary hover:text-primary-700">
                                 <Pencil className="h-3.5 w-3.5" /> Edit
                               </button>
                               <button type="button" onClick={() => setDeleteLinkTarget(link)} className="rounded-lg border border-slate-200 px-3 py-2 text-slate-500 hover:border-red-200 hover:bg-red-50 hover:text-red-600" aria-label={`Delete ${link.name}`}>
@@ -810,7 +810,7 @@ export default function CheckpointPanel({
           >
             <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3">
               <div className="flex min-w-0 items-center gap-2">
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-primary-100 bg-primary-50 text-primary">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-primary-100 bg-primary-50 text-primary-700">
                   <ClipboardCheck className="h-4 w-4" />
                 </span>
                 <div className="min-w-0">

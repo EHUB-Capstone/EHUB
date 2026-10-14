@@ -53,22 +53,22 @@ const ConfirmDialog = ({
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="" size={size}>
       <div className="flex flex-col items-center text-center space-y-4 pt-4">
-        <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mb-2">
-          <AlertTriangle className="w-8 h-8 text-red-500" />
+        <div className="w-16 h-16 bg-danger-50 rounded-full flex items-center justify-center mb-2">
+          <AlertTriangle className="w-8 h-8 text-danger-dark" aria-hidden="true" />
         </div>
-        <h3 className="text-xl font-bold text-slate-900">{title}</h3>
-        <p className="text-slate-500">{description}</p>
+        <h3 className="text-heading text-secondary">{title}</h3>
+        <p className="text-body-lg text-slate-600">{description}</p>
         {details}
         {onReasonChange && (
           <label className="w-full text-left">
-            <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">{reasonLabel}</span>
+            <span className="mb-1.5 block text-body-sm font-semibold text-secondary">{reasonLabel}</span>
             <textarea
               value={reason ?? ''}
               onChange={(event) => onReasonChange(event.target.value)}
               rows={3}
               maxLength={500}
               placeholder="Enter a clear reason for the audit trail"
-              className="w-full resize-none rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15"
+              className="w-full resize-none rounded-lg border border-slate-300 px-3 py-2 text-body outline-none transition hover:border-slate-400 focus:border-primary-600 focus:ring-2 focus:ring-primary/30"
             />
             {reasonInvalid && <span className="mt-1 block text-xs text-amber-600">Reason must contain at least 3 characters.</span>}
           </label>

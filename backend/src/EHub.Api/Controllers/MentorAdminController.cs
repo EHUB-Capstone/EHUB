@@ -40,9 +40,25 @@ public sealed class MentorAdminController(IMentorAdminHandler handler, IMentorAs
         CancellationToken cancellationToken = default) =>
         ToResponse(await handler.GetIncompleteMasterMentorsAsync(page, limit, search, mentorType, cancellationToken), "Incomplete mentors retrieved successfully.");
 
+    [HttpPut("incomplete/{id:guid}")]
+    public async Task<IActionResult> UpdateIncompleteMentor(Guid id, [FromBody] UpdateIncompleteMentorRequest request, CancellationToken cancellationToken) =>
+        ToResponse(await handler.UpdateIncompleteMentorAsync(id, request, cancellationToken), "Mentor updated successfully.");
+
+    [HttpDelete("incomplete/{id:guid}")]
+    public async Task<IActionResult> DeleteIncompleteMentor(Guid id, CancellationToken cancellationToken)
+    {
+        var result = await handler.DeleteIncompleteMentorAsync(id, cancellationToken);
+        return result.IsSuccess ? Ok(ApiResponse<object?>.SuccessResponse(null, "Mentor deleted successfully.")) : ToError(result.Error);
+    }
+
     [HttpPost("imports/commit")]
     public async Task<IActionResult> CommitImport([FromBody] CommitMentorImportRequest request, CancellationToken cancellationToken) =>
         ToResponse(await handler.CommitImportAsync(request, cancellationToken), "Mentors imported successfully.");
+
+    // Active classes of a semester with their open mentor slots, so an admin can pick a class to manage.
+    [HttpGet("semesters/{semesterId:guid}/classes")]
+    public async Task<IActionResult> GetSemesterClasses(Guid semesterId, CancellationToken cancellationToken) =>
+        ToResponse(await handler.GetSemesterClassesAsync(semesterId, cancellationToken), "Semester classes retrieved successfully.");
 
     [HttpPost("allocations/preview")]
     public async Task<IActionResult> PreviewAllocation([FromBody] PreviewMentorAllocationRequest request, CancellationToken cancellationToken) =>

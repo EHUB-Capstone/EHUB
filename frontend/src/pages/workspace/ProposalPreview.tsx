@@ -6,7 +6,7 @@ import InlineCommentUI from '../../components/workspace/InlineCommentUI';
 const statusColors = {
   DRAFT: 'bg-slate-100 text-slate-600 border border-slate-200',
   SUBMITTED: 'bg-blue-50 text-blue-600 border border-blue-200',
-  REVIEWED: 'bg-purple-50 text-purple-600 border border-purple-200',
+  REVIEWED: 'bg-secondary-50 text-secondary border border-secondary-200',
   APPROVED: 'bg-emerald-50 text-emerald-600 border border-emerald-200',
   REJECTED: 'bg-red-50 text-red-600 border border-red-200'
 };
@@ -21,7 +21,7 @@ export default function ProposalPreview({ proposal, onBack }) {
         {onBack && (
           <button 
             onClick={onBack}
-            className="mt-4 text-sm font-semibold text-primary hover:underline"
+            className="mt-4 text-sm font-semibold text-primary-700 hover:underline"
           >
             Go Back
           </button>
@@ -49,7 +49,7 @@ export default function ProposalPreview({ proposal, onBack }) {
   return (
     <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm overflow-hidden max-w-4xl mx-auto">
       {/* Header */}
-      <div className="bg-gradient-to-r from-slate-900 to-slate-800 p-6 sm:p-8 text-white relative">
+      <div className="p-6 sm:p-8 text-white relative bg-secondary">
         <div className="flex items-center justify-between flex-wrap gap-4">
           <button
             onClick={onBack}

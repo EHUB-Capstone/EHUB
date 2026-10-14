@@ -55,7 +55,8 @@ public sealed class TeachingStaffQueryHandler(IApplicationDbContext context) : I
         var temporaryParticipants = await context.SemesterTemporaryMentors
             .AsNoTracking()
             .Include(item => item.Draft)
-            .Where(item => item.SemesterId == targetSemester.Id)
+            // Once a mentor has an account the account is listed instead, so a converted entry never shows twice.
+            .Where(item => item.SemesterId == targetSemester.Id && item.Draft.Status == MentorImportDraftStatus.NeedsCompletion)
             .ToListAsync(cancellationToken);
         var participantDraftIds = temporaryParticipants.Select(item => item.DraftId).ToHashSet();
         var temporaryAssignmentRows = await context.TemporaryMentorAssignments

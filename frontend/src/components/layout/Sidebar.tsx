@@ -140,10 +140,10 @@ const Sidebar = ({ mobileOpen, onMobileClose }: SidebarProps) => {
         end={item.path === '/admin' || item.path === '/lecturer' || item.path === '/mentor' || item.path === '/student'}
         onClick={handleNavClick}
         className={({ isActive }) => cn(
-          'flex items-center gap-3 rounded-xl transition-all duration-200 group relative px-3 py-2.5',
+          'flex items-center gap-3 rounded-lg transition-colors duration-200 group relative px-3 py-2.5',
           isActive
-            ? 'bg-primary-50 text-primary font-semibold shadow-xs'
-            : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
+            ? 'bg-white/10 text-white font-semibold'
+            : 'text-white/70 hover:text-white hover:bg-white/10'
         )}
       >
         {({ isActive }) => (
@@ -151,7 +151,7 @@ const Sidebar = ({ mobileOpen, onMobileClose }: SidebarProps) => {
             {isActive && (
               <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 bg-primary rounded-r-full" />
             )}
-            <IconComp className={cn('w-[18px] h-[18px] shrink-0 transition-colors', isActive ? 'text-primary' : 'text-slate-400 group-hover:text-slate-600')} />
+            <IconComp className={cn('w-[18px] h-[18px] shrink-0 transition-colors', isActive ? 'text-primary-400' : 'text-white/50 group-hover:text-white/80')} />
             <span className="text-[13px] truncate">{item.label}</span>
           </>
         )}
@@ -162,23 +162,23 @@ const Sidebar = ({ mobileOpen, onMobileClose }: SidebarProps) => {
   return (
     <aside
       className={cn(
-        'fixed left-0 top-0 h-screen z-50 flex flex-col bg-white/95 dark:bg-[#111827]/95 backdrop-blur-xl border-r border-slate-200/80 dark:border-white/10 transition-transform duration-300 ease-out w-[260px]',
+        'fixed left-0 top-0 h-screen z-50 flex flex-col bg-secondary dark:bg-secondary-800 border-r border-secondary-700 dark:border-white/10 text-white transition-transform duration-300 ease-out w-[260px]',
         mobileOpen ? 'translate-x-0' : '-translate-x-full',
         'lg:translate-x-0'
       )}
     >
       {/* Brand */}
-      <div className="flex items-center justify-between h-16 border-b border-slate-100 dark:border-white/10 px-4">
+      <div className="flex items-center justify-between h-16 border-b border-white/10 px-4">
         <div className="flex items-center gap-3">
           <img src={logo} alt="EHub" className="w-9 h-9 rounded-xl object-contain shrink-0" />
           <div className="min-w-0">
-            <h1 className="text-[15px] font-bold leading-tight tracking-tight"><span className="text-[#F08A5D]">E</span><span className="text-[#1E5E9F] dark:text-[#79A8D9]">HUB</span></h1>
-            <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-[0.12em]">Startup Portal</p>
+            <h1 className="text-[15px] font-bold leading-tight tracking-tight"><span className="text-primary">E</span><span className="text-white">HUB</span></h1>
+            <p className="text-overline text-white/60 uppercase tracking-[0.12em]">Startup Portal</p>
           </div>
         </div>
         <button
           onClick={onMobileClose}
-          className="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-600 transition-colors lg:hidden"
+          className="w-8 h-8 rounded-lg hover:bg-white/10 flex items-center justify-center text-white/70 hover:text-white transition-colors lg:hidden"
           aria-label="Close sidebar"
         >
           <X className="w-4 h-4" />
@@ -187,16 +187,16 @@ const Sidebar = ({ mobileOpen, onMobileClose }: SidebarProps) => {
 
       {/* Navigation */}
       <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto scrollbar-thin">
-        <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider px-3 mb-3 mt-1">Navigation</p>
+        <p className="text-overline text-white/50 uppercase px-3 mb-3 mt-1">Navigation</p>
         {navigationItems.map(renderNavItem)}
       </nav>
 
       {/* Bottom Section */}
-      <div className="border-t border-slate-100 p-3 space-y-2">
+      <div className="border-t border-white/10 p-3 space-y-2">
         {role === 'STUDENT' && (
           <button
             onClick={() => { navigate('/student/idea/new'); handleNavClick(); }}
-            className="w-full bg-primary hover:bg-primary-dark text-white font-semibold py-2.5 rounded-xl flex items-center justify-center gap-2 shadow-sm hover:shadow-glow-primary transition-all active:scale-[0.98] text-[13px]"
+            className="w-full bg-primary hover:bg-primary-600 text-white font-semibold py-2.5 rounded-lg flex items-center justify-center gap-2 shadow-sm transition-colors text-[13px]"
           >
             <Plus className="w-4 h-4" />
             New Idea
@@ -207,7 +207,7 @@ const Sidebar = ({ mobileOpen, onMobileClose }: SidebarProps) => {
 
         <button
           onClick={handleLogout}
-          className="w-full flex items-center gap-3 rounded-xl text-danger hover:bg-danger-50 transition-all text-[13px] font-medium px-3 py-2.5"
+          className="w-full flex items-center gap-3 rounded-lg text-red-300 hover:text-red-200 hover:bg-white/10 transition-colors text-[13px] font-medium px-3 py-2.5"
         >
           <LogOut className="w-[18px] h-[18px]" />
           <span>Sign Out</span>

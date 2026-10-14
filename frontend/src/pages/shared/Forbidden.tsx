@@ -25,12 +25,12 @@ const Forbidden = () => {
           <div className="w-20 h-20 bg-danger-50 rounded-2xl flex items-center justify-center mx-auto mb-6">
             <ShieldAlert className="w-10 h-10 text-danger" />
           </div>
-          <h1 className="text-5xl font-black text-slate-900 tracking-tight mb-2">403</h1>
+          <h1 className="text-5xl font-black text-secondary tracking-tight mb-2">403</h1>
           <h2 className="text-xl font-bold text-slate-800 mb-3">Access Denied</h2>
           <p className="text-body text-slate-500 leading-relaxed mb-8">
             You do not have permission to view this page. If you believe this is an error, please contact your administrator.
           </p>
-          <Button variant="gradient" size="lg" className="w-full" icon={ArrowLeft} onClick={handleBack}>
+          <Button variant="primary" size="lg" className="w-full" icon={ArrowLeft} onClick={handleBack}>
             Go back to dashboard
           </Button>
         </div>

@@ -77,12 +77,12 @@ export default function TaskCard({ task, onEdit, onStatusChange, isEditable, mem
       {/* Priority + Overdue badges */}
       <div className="flex items-center gap-1.5 flex-wrap">
         <span
-          className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide ${priorityClass}`}
+          className={`inline-flex items-center px-2 py-0.5 rounded-full text-overline font-semibold uppercase tracking-wide ${priorityClass}`}
         >
           {task.priority || 'LOW'}
         </span>
         {overdue && (
-          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide bg-red-500 text-white">
+          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-overline font-semibold uppercase tracking-wide bg-red-500 text-white">
             Overdue
           </span>
         )}
@@ -104,7 +104,7 @@ export default function TaskCard({ task, onEdit, onStatusChange, isEditable, mem
 
       {/* Milestone */}
       {milestoneName && (
-        <div className="flex items-center gap-1.5 text-xs text-purple-600">
+        <div className="flex items-center gap-1.5 text-xs text-secondary">
           <Flag size={12} className="shrink-0" />
           <span className="truncate">{milestoneName}</span>
         </div>

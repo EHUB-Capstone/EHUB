@@ -7,7 +7,7 @@ export default function TemporaryMentorBadge({ className = '' }: TemporaryMentor
   return (
     <span
       title="This mentor has no account yet. They cannot log in or see the team until an email is added."
-      className={`inline-flex items-center whitespace-nowrap rounded-full border border-amber-200 bg-amber-50 px-2 py-0 text-[10px] font-semibold text-amber-800 ${className}`}
+      className={`inline-flex items-center whitespace-nowrap rounded-full border border-amber-200 bg-amber-50 px-2 py-0 text-overline font-semibold text-amber-800 ${className}`}
     >
       Temporary
     </span>

@@ -36,7 +36,7 @@ const WorkshopPreviewModal = ({
 
   const getDerivedFormatBadge = () => {
     switch (format) {
-      case 'ONLINE': return <span className="bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded text-xs font-bold">ONLINE</span>;
+      case 'ONLINE': return <span className="bg-secondary-100 text-secondary px-2 py-0.5 rounded text-xs font-bold">ONLINE</span>;
       case 'OFFLINE': return <span className="bg-amber-100 text-amber-700 px-2 py-0.5 rounded text-xs font-bold">OFFLINE</span>;
       case 'HYBRID': return <span className="bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded text-xs font-bold">HYBRID</span>;
       default: return null;
@@ -94,9 +94,9 @@ const WorkshopPreviewModal = ({
             <div className="space-y-3">
               {(format === 'ONLINE' || format === 'HYBRID') && (
                 <div className="flex items-start gap-2">
-                  <Link2 className="w-4 h-4 text-indigo-500 mt-0.5" />
+                  <Link2 className="w-4 h-4 text-secondary mt-0.5" />
                   <div>
-                    <p className="text-xs font-semibold text-indigo-600/80 uppercase">Meeting URL</p>
+                    <p className="text-xs font-semibold text-secondary/80 uppercase">Meeting URL</p>
                     <p className="text-sm text-slate-800 truncate max-w-[200px]" title={meetingLink}>
                       {meetingLink || 'Not provided'}
                     </p>
@@ -120,12 +120,12 @@ const WorkshopPreviewModal = ({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
 
               {/* Online Classes */}
-              <div className="border border-indigo-100 rounded-xl bg-indigo-50/30 overflow-hidden flex flex-col">
-                <div className="bg-indigo-50 px-3 py-2 border-b border-indigo-100 flex justify-between items-center shrink-0">
-                  <div className="flex items-center gap-1.5 text-xs font-bold text-indigo-700 uppercase">
+              <div className="border border-secondary-100 rounded-xl bg-secondary-50 overflow-hidden flex flex-col">
+                <div className="bg-secondary-50 px-3 py-2 border-b border-secondary-100 flex justify-between items-center shrink-0">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-secondary uppercase">
                     <Monitor className="w-3.5 h-3.5" /> Online Classes
                   </div>
-                  <span className="bg-indigo-200 text-indigo-800 text-[10px] px-1.5 py-0.5 rounded-full font-bold">
+                  <span className="bg-secondary-100 text-secondary text-overline px-1.5 py-0.5 rounded-full font-bold">
                     {onlineClassIds.length}
                   </span>
                 </div>
@@ -133,7 +133,7 @@ const WorkshopPreviewModal = ({
                   {onlineClassIds.length > 0 ? (
                     onlineClassIds.map(id => (
                       <div key={id} className="text-xs text-slate-700 flex items-center gap-2">
-                        <span className="w-1.5 h-1.5 rounded-full bg-indigo-400"></span>
+                        <span className="w-1.5 h-1.5 rounded-full bg-secondary-400"></span>
                         {getClassName(id)}
                       </div>
                     ))
@@ -149,7 +149,7 @@ const WorkshopPreviewModal = ({
                   <div className="flex items-center gap-1.5 text-xs font-bold text-amber-700 uppercase">
                     <Globe className="w-3.5 h-3.5" /> Offline Classes
                   </div>
-                  <span className="bg-amber-200 text-amber-800 text-[10px] px-1.5 py-0.5 rounded-full font-bold">
+                  <span className="bg-amber-200 text-amber-800 text-overline px-1.5 py-0.5 rounded-full font-bold">
                     {offlineClassIds.length}
                   </span>
                 </div>

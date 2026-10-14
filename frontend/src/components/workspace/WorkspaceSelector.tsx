@@ -53,11 +53,11 @@ export default function WorkspaceSelector({ selectedWorkspace, availableWorkspac
         aria-expanded={open}
       >
         <span className="flex min-w-0 items-center gap-2">
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary-50 text-primary">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary-50 text-primary-700">
             <History className="h-4 w-4" />
           </span>
           <span className="min-w-0">
-            <span className="block text-[10px] font-bold uppercase tracking-wide text-slate-400">
+            <span className="block text-overline font-bold uppercase tracking-wide text-slate-400">
               Workspace
             </span>
             <span className="block truncate text-sm font-bold text-slate-800">
@@ -68,12 +68,12 @@ export default function WorkspaceSelector({ selectedWorkspace, availableWorkspac
 
         <span className="flex shrink-0 items-center gap-2">
           {selectedWorkspace.isArchived ? (
-            <span className="hidden items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700 sm:inline-flex">
+            <span className="hidden items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-overline font-bold text-amber-700 sm:inline-flex">
               <Archive className="h-3 w-3" />
               Archived
             </span>
           ) : (
-            <span className="hidden rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700 sm:inline-flex">
+            <span className="hidden rounded-full bg-emerald-50 px-2 py-0.5 text-overline font-bold text-emerald-700 sm:inline-flex">
               Current
             </span>
           )}
@@ -85,7 +85,7 @@ export default function WorkspaceSelector({ selectedWorkspace, availableWorkspac
         <div className="absolute right-0 z-50 mt-2 w-full min-w-[320px] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl sm:w-[360px]">
           <div className="border-b border-slate-100 px-3 py-2">
             <p className="text-xs font-bold text-slate-800">Switch workspace</p>
-            <p className="text-[11px] text-slate-400">Move between detected EXE101, EXE201, and archived startup workspaces.</p>
+            <p className="text-caption text-slate-400">Move between detected EXE101, EXE201, and archived startup workspaces.</p>
           </div>
 
           <div className="max-h-72 overflow-y-auto p-1" role="listbox" aria-label="Available workspaces">
@@ -100,7 +100,7 @@ export default function WorkspaceSelector({ selectedWorkspace, availableWorkspac
                   type="button"
                   onClick={() => handleSelect(workspace.teamId)}
                   className={`flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-left transition-colors ${
-                    isSelected ? 'bg-primary-50 text-primary' : 'text-slate-700 hover:bg-slate-50'
+                    isSelected ? 'bg-primary-50 text-primary-700' : 'text-slate-700 hover:bg-slate-50'
                   }`}
                   role="option"
                   aria-selected={isSelected}
@@ -120,7 +120,7 @@ export default function WorkspaceSelector({ selectedWorkspace, availableWorkspac
                   </span>
 
                   <span className="flex shrink-0 items-center gap-2">
-                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                    <span className={`rounded-full px-2 py-0.5 text-overline font-bold ${
                       workspace.accessMode === 'READ_ONLY'
                         ? 'bg-amber-50 text-amber-700'
                         : 'bg-emerald-50 text-emerald-700'
@@ -143,7 +143,7 @@ export default function WorkspaceSelector({ selectedWorkspace, availableWorkspac
       )}
 
       {!hasMultipleWorkspaces && (
-        <p className="mt-1 text-[11px] font-medium text-slate-400">
+        <p className="mt-1 text-caption font-medium text-slate-400">
           No related EXE101/EXE201 workspace detected yet.
         </p>
       )}

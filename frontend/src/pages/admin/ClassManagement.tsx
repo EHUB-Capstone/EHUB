@@ -413,7 +413,7 @@ export default function ClassManagement() {
       {/* ── Header ── */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">{isLecturer ? 'My Classes' : 'Class Management'}</h1>
+          <h1 className="text-heading sm:text-display text-secondary tracking-tight">{isLecturer ? 'My Classes' : 'Class Management'}</h1>
           <p className="text-slate-500 mt-1">{totalCount} class{totalCount !== 1 ? 'es' : ''} found</p>
         </div>
         <div className="flex gap-2 flex-wrap">
@@ -652,7 +652,7 @@ export default function ClassManagement() {
                 checked={allSelectableSelected}
                 onChange={toggleSelectPage}
                 disabled={selectableClasses.length === 0}
-                className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
+                className="h-4 w-4 rounded border-slate-300 text-primary-700 focus:ring-primary"
               />
               Select All
             </label>
@@ -666,7 +666,7 @@ export default function ClassManagement() {
                 type="button"
                 disabled={selectedClasses.length === 0 || bulkBusy || bulkExporting}
                 onClick={handleBulkExport}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50/70 px-3 py-2 text-xs font-semibold text-indigo-700 transition hover:bg-indigo-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/25 disabled:cursor-not-allowed disabled:opacity-40"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-secondary-200 bg-secondary-50 px-3 py-2 text-xs font-semibold text-secondary transition hover:bg-secondary-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/25 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {bulkExporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
                 Export Class Data ({selectedClasses.length})
@@ -677,7 +677,7 @@ export default function ClassManagement() {
                 type="button"
                 disabled={assignableSelectedClasses.length === 0 || bulkBusy}
                 onClick={() => setBulkAssignOpen(true)}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-primary-200 px-3 py-2 text-xs font-semibold text-primary transition hover:bg-primary-50 disabled:cursor-not-allowed disabled:opacity-40"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-primary-200 px-3 py-2 text-xs font-semibold text-primary-700 transition hover:bg-primary-50 disabled:cursor-not-allowed disabled:opacity-40"
                 title={selectedClasses.length > assignableSelectedClasses.length ? 'Completed classes are excluded from lecturer assignment.' : undefined}
               >
                 <UserRoundCheck className="h-4 w-4" /> Assign Lecturer ({assignableSelectedClasses.length})
@@ -742,7 +742,7 @@ export default function ClassManagement() {
                         <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${semesterColor[cls.semester] || 'bg-slate-100 text-slate-600'}`}>
                           {cls.semester} {cls.year}
                         </span>
-                        <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-primary-50 text-primary">
+                        <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-primary-50 text-primary-700">
                           {cls.subjectCode}
                         </span>
                         <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${statusColor[cls.status] || 'bg-slate-100 text-slate-600'}`}>{cls.status}</span>
@@ -757,7 +757,7 @@ export default function ClassManagement() {
                             checked={selectedClassIds.has(cls._id)}
                             onChange={() => toggleClassSelection(cls._id)}
                             aria-label={`Select ${cls.classCode}`}
-                            className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
+                            className="h-4 w-4 rounded border-slate-300 text-primary-700 focus:ring-primary"
                           />
                         </label>
                       )}
@@ -776,14 +776,14 @@ export default function ClassManagement() {
                         <p className="text-sm font-medium text-slate-800 truncate">{cls.lectureId?.name || 'Unknown'}</p>
                       </div>
                       {isAdmin && cls.status !== 'Completed' && cls.status !== 'Archived' && (
-                        <button type="button" onClick={(event) => { event.stopPropagation(); setAssignTarget(cls); }} className="rounded-lg px-2 py-1 text-[11px] font-semibold text-primary hover:bg-primary-50">Change</button>
+                        <button type="button" onClick={(event) => { event.stopPropagation(); setAssignTarget(cls); }} className="rounded-lg px-2 py-1 text-caption font-semibold text-primary-700 hover:bg-primary-50">Change</button>
                       )}
                     </div>
                   ) : (
                     <div className="mb-2 flex items-center justify-between gap-2 rounded-xl border border-amber-100 bg-amber-50 p-2">
                       <p className="text-xs font-medium text-amber-700">⚠ Unassigned Draft</p>
                       {isAdmin && cls.status === 'Draft' && (
-                        <button type="button" onClick={(event) => { event.stopPropagation(); setAssignTarget(cls); }} className="rounded-lg bg-white px-2 py-1 text-[11px] font-semibold text-amber-700 shadow-xs hover:bg-amber-100">Assign Lecturer</button>
+                        <button type="button" onClick={(event) => { event.stopPropagation(); setAssignTarget(cls); }} className="rounded-lg bg-white px-2 py-1 text-caption font-semibold text-amber-700 shadow-xs hover:bg-amber-100">Assign Lecturer</button>
                       )}
                     </div>
                   )}
@@ -810,8 +810,8 @@ export default function ClassManagement() {
                   {/* Schedule */}
                   {cls.schedules.length > 0 ? (
                     <div className="flex items-center gap-2 mb-4 p-2 bg-slate-50 rounded-xl">
-                      <div className="w-7 h-7 rounded-lg bg-indigo-100 flex items-center justify-center shrink-0">
-                        <Calendar className="w-4 h-4 text-indigo-500" />
+                      <div className="w-7 h-7 rounded-lg bg-secondary-100 flex items-center justify-center shrink-0">
+                        <Calendar className="w-4 h-4 text-secondary" />
                       </div>
                       <div className="min-w-0 flex-1">
                         <p className="text-xs text-slate-400">{cls.schedules.length} weekly session{cls.schedules.length === 1 ? '' : 's'}</p>
@@ -864,7 +864,7 @@ export default function ClassManagement() {
                   ) : cls.status !== 'Completed' && canManageClassRecord(cls) && (isAdmin || classFeatureFlags.lecturerStudentImport) && (
                     <button
                       onClick={(e) => { e.stopPropagation(); setImportTarget(cls._id); }}
-                      className="flex-1 flex items-center justify-center gap-1.5 text-xs text-primary hover:text-primary-dark font-medium transition-colors border-l border-slate-100"
+                      className="flex-1 flex items-center justify-center gap-1.5 text-xs text-primary-700 hover:text-primary-dark font-medium transition-colors border-l border-slate-100"
                     >
                       <Upload className="w-3.5 h-3.5" /> Import Students
                     </button>
@@ -996,7 +996,7 @@ export default function ClassManagement() {
               <div><p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-400">Updated classes</p><div className="flex max-h-24 flex-wrap gap-1.5 overflow-y-auto">{bulkResult.result.succeeded.map((code) => <span key={code} className="rounded-md bg-green-50 px-2 py-1 font-mono text-xs font-semibold text-green-700">{code}</span>)}</div></div>
             )}
             {bulkResult.result.failed.length > 0 && (
-              <div><p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-400">Classes requiring attention</p><div className="max-h-56 space-y-2 overflow-y-auto">{bulkResult.result.failed.map((failure) => <div key={failure.classId} className="rounded-xl border border-red-100 bg-red-50 p-3"><div className="flex items-center justify-between gap-2"><span className="font-mono text-sm font-bold text-red-800">{failure.classCode}</span>{failure.code && <span className="rounded bg-white px-1.5 py-0.5 text-[10px] font-semibold text-red-600">{failure.code}</span>}</div><p className="mt-1 text-xs leading-5 text-red-700">{failure.message}</p></div>)}</div></div>
+              <div><p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-400">Classes requiring attention</p><div className="max-h-56 space-y-2 overflow-y-auto">{bulkResult.result.failed.map((failure) => <div key={failure.classId} className="rounded-xl border border-red-100 bg-red-50 p-3"><div className="flex items-center justify-between gap-2"><span className="font-mono text-sm font-bold text-red-800">{failure.classCode}</span>{failure.code && <span className="rounded bg-white px-1.5 py-0.5 text-overline font-semibold text-red-600">{failure.code}</span>}</div><p className="mt-1 text-xs leading-5 text-red-700">{failure.message}</p></div>)}</div></div>
             )}
             <div className="flex justify-end border-t border-slate-100 pt-4"><Button onClick={() => setBulkResult(null)}>Close</Button></div>
           </div>

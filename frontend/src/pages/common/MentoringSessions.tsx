@@ -400,9 +400,9 @@ const MentoringSessions = () => {
         <table className="w-full min-w-[700px] border-collapse">
           <thead>
             <tr className="bg-slate-50/70 border-b border-slate-200">
-              <th className="py-3 px-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider w-[150px]">Time / Slot</th>
+              <th className="py-3 px-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider w-[150px]">Time / Slot</th>
               {TEACHING_DAYS.map(d => (
-                <th key={d} className="py-3 px-4 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                <th key={d} className="py-3 px-4 text-center text-xs font-semibold text-slate-600 uppercase tracking-wider">
                   {d}
                 </th>
               ))}
@@ -420,10 +420,10 @@ const MentoringSessions = () => {
                   return (
                     <td key={day} className="py-3 px-3 align-middle border-r border-slate-100 last:border-r-0 text-center">
                       {cls ? (
-                        <div className="p-3 rounded-xl bg-gradient-to-br from-primary-50/60 to-primary-100/30 border border-primary-200/60 shadow-xs inline-block w-full">
-                          <div className="font-bold text-primary text-sm truncate">{cls.classCode}</div>
-                          <div className="text-[11px] font-semibold text-slate-500 mt-1">{cls.subjectCode}</div>
-                          <div className="inline-flex items-center gap-1 mt-2 text-[10px] bg-white px-2.5 py-0.5 rounded-full border border-primary-200 text-primary font-medium">
+                        <div className="p-3 rounded-xl border border-primary-200/60 shadow-xs inline-block w-full bg-primary">
+                          <div className="font-bold text-primary-700 text-sm truncate">{cls.classCode}</div>
+                          <div className="text-caption font-semibold text-slate-500 mt-1">{cls.subjectCode}</div>
+                          <div className="inline-flex items-center gap-1 mt-2 text-overline bg-white px-2.5 py-0.5 rounded-full border border-primary-200 text-primary-700 font-medium">
                             Room: {cls.schedule.room || 'TBD'}
                           </div>
                         </div>
@@ -447,12 +447,12 @@ const MentoringSessions = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-end">
         <div>
-          <h1 className="text-3xl font-bold text-slate-900">Schedules & Timetable</h1>
+          <h1 className="text-heading sm:text-display text-secondary tracking-tight">Schedules & Timetable</h1>
           <p className="text-slate-500 mt-1">Manage your weekly learning classes and mentoring sessions</p>
         </div>
         {activeView === 'mentoring' && (
           <Button 
-            variant="gradient" 
+            variant="primary" 
             size="sm" 
             icon={Plus} 
             onClick={openAdd}
@@ -470,7 +470,7 @@ const MentoringSessions = () => {
           onClick={() => setActiveView('timetable')}
           className={`pb-3 text-sm font-semibold border-b-2 transition-all flex items-center gap-2 relative ${
             activeView === 'timetable'
-              ? 'border-primary text-primary font-bold'
+              ? 'border-primary text-primary-700 font-bold'
               : 'border-transparent text-slate-400 hover:text-slate-600'
           }`}
         >
@@ -481,7 +481,7 @@ const MentoringSessions = () => {
           onClick={() => setActiveView('mentoring')}
           className={`pb-3 text-sm font-semibold border-b-2 transition-all flex items-center gap-2 relative ${
             activeView === 'mentoring'
-              ? 'border-primary text-primary font-bold'
+              ? 'border-primary text-primary-700 font-bold'
               : 'border-transparent text-slate-400 hover:text-slate-600'
           }`}
         >
@@ -562,7 +562,7 @@ const MentoringSessions = () => {
                         </p>
                       </div>
                       <div className="flex gap-2 shrink-0 ml-2 items-start">
-                        <button onClick={() => openEdit(s)} className="p-1 rounded text-slate-400 hover:text-primary hover:bg-white transition-all" title="Edit session" aria-label="Edit session"><Edit className="w-3 h-3" /></button>
+                        <button onClick={() => openEdit(s)} className="p-1 rounded text-slate-400 hover:text-primary-700 hover:bg-white transition-all" title="Edit session" aria-label="Edit session"><Edit className="w-3 h-3" /></button>
                         <button
                           onClick={() => handleDelete(s)}
                           title={user?.role === 'ADMIN' ? 'Delete session' : 'Cancel session'}
@@ -603,7 +603,7 @@ const MentoringSessions = () => {
                       <p className="text-xs text-slate-400">{new Date(s.meetingDate).toLocaleDateString()}</p>
                     </div>
                     <div className="flex gap-1 opacity-0 group-hover:opacity-100">
-                      <button onClick={() => openEdit(s)} className="p-1 rounded text-slate-400 hover:text-primary" title="Edit session" aria-label="Edit session"><Edit className="w-3 h-3" /></button>
+                      <button onClick={() => openEdit(s)} className="p-1 rounded text-slate-400 hover:text-primary-700" title="Edit session" aria-label="Edit session"><Edit className="w-3 h-3" /></button>
                       <button onClick={() => handleDelete(s)} title={user?.role === 'ADMIN' ? 'Delete session' : 'Cancel session'} aria-label={user?.role === 'ADMIN' ? 'Delete session' : 'Cancel session'} className="p-1 rounded text-slate-400 hover:text-red-500"><Trash2 className="w-3 h-3" /></button>
                     </div>
                   </div>
@@ -783,7 +783,7 @@ const MentoringSessions = () => {
             <button 
               type="button" 
               onClick={() => setForm({ ...form, actionItems: [...form.actionItems, ''] })} 
-              className="text-sm text-primary hover:underline"
+              className="text-sm text-primary-700 hover:underline"
             >
               + Add action item
             </button>

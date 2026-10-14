@@ -22,6 +22,8 @@ export interface MentorImportPreview {
   completeDraftCount: number;
   errorCount: number;
   canCommit: boolean;
+  /** Things to know before confirming, such as columns of the file that were not recognised. */
+  warnings?: string[];
   rows: MentorImportRowPreview[];
 }
 
@@ -35,6 +37,36 @@ export interface IncompleteMentor {
   /** Teams that use this mentor as a temporary mentor while there is no account. */
   activeTeamCount?: number;
   updatedAtUtc: string;
+  /** What is known so far, so the edit form can start from it. */
+  fptEmail?: string | null;
+  phone?: string | null;
+  dateOfBirth?: string | null;
+  contractType?: string | null;
+  educationLevel?: string | null;
+  currentAddress?: string | null;
+  organization?: string | null;
+  department?: string | null;
+  jobTitle?: string | null;
+  /** Set after an edit that gave the mentor an email: the account now exists. */
+  becameAccount?: boolean;
+  teamsSwitched?: number;
+  semestersMoved?: number;
+}
+
+/** Edits an incomplete mentor. The login email is not part of it: it arrives through an import. */
+export interface UpdateIncompleteMentorPayload {
+  fullName: string;
+  /** When given, the mentor gets a login account right away. */
+  email?: string | null;
+  jobTitle?: string | null;
+  department?: string | null;
+  fptEmail?: string | null;
+  phone?: string | null;
+  dateOfBirth?: string | null;
+  contractType?: string | null;
+  educationLevel?: string | null;
+  currentAddress?: string | null;
+  organization?: string | null;
 }
 
 export interface IncompleteMentorList {
@@ -49,6 +81,8 @@ export interface MentorImportCommitResult {
   draftCompletedCount: number;
   /** Teams whose temporary mentor became the real mentor. */
   temporaryAssignmentsConverted?: number;
+  /** Semesters where the mentor now appears as the account instead of a mentor without one. */
+  temporarySemestersConverted?: number;
 }
 
 export interface MentorAllocationRowPreview {
@@ -193,4 +227,21 @@ export interface MentorAllocationCommitResult {
   endedCount?: number;
   createdCount: number;
   skippedCount: number;
+}
+
+/** One active class of a semester with how many of its mentor slots are still empty. */
+export interface MentorSemesterClass {
+  classId: string;
+  classCode: string;
+  subjectCode: string;
+  lecturerName?: string | null;
+  teamCount: number;
+  missingEnterpriseCount: number;
+  missingAcademicCount: number;
+  /** Slots held by a mentor who has no account yet. */
+  temporarySlotCount: number;
+}
+
+export interface MentorSemesterClassList {
+  classes: MentorSemesterClass[];
 }

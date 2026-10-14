@@ -10,7 +10,7 @@ import test from 'node:test';
 const srcDir = new URL('../src/', import.meta.url);
 const srcPath = decodeURIComponent(srcDir.pathname).replace(/^\/([A-Za-z]:)/, '$1');
 
-const COLORS = 'amber|orange|yellow|green|emerald|red|rose|pink|purple|violet|indigo|blue|sky|cyan|teal|lime|primary|secondary|success|warning|danger';
+const COLORS = 'amber|orange|yellow|green|emerald|red|rose|pink|purple|violet|indigo|blue|sky|cyan|teal|lime|primary|secondary|success|warning|danger|info';
 const STATE_VARIANTS = new Set(['hover', 'focus', 'active', 'disabled', 'group-hover', 'focus-within']);
 
 const lightTintPatterns = [
@@ -23,7 +23,7 @@ const lightTintPatterns = [
   /^text-(?:slate|gray)-(?:600|700|800|900|950)$/,
   new RegExp(`^(?:from|via|to)-(?:slate|gray|${COLORS})-(?:50|100|200)(?:/\\d+)?$`),
   /^(?:from|via|to)-white(?:\/(?:[5-9]\d))?$/,
-  /^border-(?:success|warning|danger)-light$/,
+  /^border-(?:success|warning|danger|info)-light$/,
 ];
 
 function listSourceFiles(dir: string): string[] {

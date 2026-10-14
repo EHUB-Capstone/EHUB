@@ -181,19 +181,19 @@ export default function ProjectProfileEditor() {
   if (loading) return <div className="flex min-h-[60vh] items-center justify-center" role="status"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
 
   if (loadError || !workspace?.project) {
-    return <div className="mx-auto max-w-xl rounded-2xl border border-red-100 bg-white p-8 text-center shadow-sm"><h1 className="text-xl font-bold text-slate-900">Unable to open Project Profile</h1><p className="mt-2 text-sm text-slate-600">{loadError}</p><div className="mt-5 flex justify-center gap-2"><button type="button" onClick={() => navigate(workspacePath)} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold">Back to workspace</button><button type="button" onClick={() => void load()} className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white">Retry</button></div></div>;
+    return <div className="mx-auto max-w-xl rounded-2xl border border-red-100 bg-white p-8 text-center shadow-sm"><h1 className="text-heading sm:text-display text-secondary tracking-tight">Unable to open Project Profile</h1><p className="mt-2 text-sm text-slate-600">{loadError}</p><div className="mt-5 flex justify-center gap-2"><button type="button" onClick={() => navigate(workspacePath)} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold">Back to workspace</button><button type="button" onClick={() => void load()} className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white">Retry</button></div></div>;
   }
 
   if (!isApproved) {
-    return <div className="mx-auto max-w-xl rounded-2xl border border-amber-200 bg-amber-50 p-8 text-center"><LockKeyhole className="mx-auto h-8 w-8 text-amber-600" /><h1 className="mt-3 text-xl font-bold text-slate-900">Project Profile is not available yet</h1><p className="mt-2 text-sm text-slate-600">The Project Direction must be approved by the assigned lecturer first.</p><button type="button" onClick={() => navigate(workspacePath)} className="mt-5 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white">Back to workspace</button></div>;
+    return <div className="mx-auto max-w-xl rounded-2xl border border-amber-200 bg-amber-50 p-8 text-center"><LockKeyhole className="mx-auto h-8 w-8 text-amber-600" /><h1 className="mt-3 text-heading sm:text-display text-secondary tracking-tight">Project Profile is not available yet</h1><p className="mt-2 text-sm text-slate-600">The Project Direction must be approved by the assigned lecturer first.</p><button type="button" onClick={() => navigate(workspacePath)} className="mt-5 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white">Back to workspace</button></div>;
   }
 
   return (
     <div className="mx-auto max-w-4xl space-y-5">
-      <button type="button" onClick={() => navigate(workspacePath)} className="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-primary"><ArrowLeft className="h-4 w-4" /> Back to workspace</button>
+      <button type="button" onClick={() => navigate(workspacePath)} className="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-primary-700"><ArrowLeft className="h-4 w-4" /> Back to workspace</button>
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <header className="flex flex-col gap-3 border-b border-slate-100 bg-slate-50/60 px-6 py-5 sm:flex-row sm:items-start sm:justify-between">
-          <div className="flex gap-3"><span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary-50 text-primary"><FolderKanban className="h-5 w-5" /></span><div><h1 className="text-xl font-bold text-slate-900">Project Profile</h1><p className="mt-1 text-sm text-slate-500">Keep the project name, description, problem, solution, and target users clear and up to date.</p></div></div>
+          <div className="flex gap-3"><span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary-50 text-primary-700"><FolderKanban className="h-5 w-5" /></span><div><h1 className="text-heading sm:text-display text-secondary tracking-tight">Project Profile</h1><p className="mt-1 text-sm text-slate-500">Keep the project name, description, problem, solution, and target users clear and up to date.</p></div></div>
           <span className="self-start rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">Approved</span>
         </header>
 

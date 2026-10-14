@@ -7,19 +7,19 @@ import type {
   MentorType,
 } from '../../types/mentorAdmin';
 import {
-  MAX_REPLACE_REASON_LENGTH,
   buildTeamGrid,
   getMentorCandidates,
   getSubjectColumns,
-  isReplaceReasonValid,
   skipReasonLabel,
   summarizePreview,
   type SlotState,
   type SlotView,
   type TeamGridRow,
 } from '../../utils/mentorAllocationPreview';
+import { buildChangeReason, isChangeReasonValid } from '../../utils/mentorChangeReasons';
 import Button from '../ui/Button';
 import Modal from '../ui/Modal';
+import MentorChangeReasonField from './MentorChangeReasonField';
 
 type PreviewTab = 'teams' | 'mentors' | 'attention';
 type TeamFilter = 'all' | 'attention' | 'changed';
@@ -48,7 +48,7 @@ const slotLabel: Record<MentorType, string> = { Enterprise: 'Enterprise mentor',
 
 const stateStyle: Record<SlotState, { label: string; className: string }> = {
   existing: { label: 'Current', className: 'bg-slate-100 text-slate-600' },
-  retained: { label: 'Kept', className: 'bg-primary-50 text-primary' },
+  retained: { label: 'Kept', className: 'bg-primary-50 text-primary-700' },
   allocated: { label: 'New', className: 'bg-green-50 text-green-700' },
   manual: { label: 'Manual', className: 'bg-amber-50 text-amber-700' },
   unfilled: { label: 'Missing', className: 'bg-red-50 text-red-700' },
@@ -185,7 +185,7 @@ export default function MentorAllocationPreviewModal({
                 <div className="max-h-[48vh] overflow-auto rounded-xl border border-slate-200 bg-white">
                   <table className="w-full min-w-[820px] text-left text-xs">
                     <caption className="sr-only">Mentors of each team after this preview</caption>
-                    <thead className="sticky top-0 z-10 bg-slate-50 text-slate-500">
+                    <thead className="sticky top-0 z-10 bg-slate-50 text-slate-600">
                       <tr>
                         <th scope="col" className="px-3 py-2">Team</th>
                         <th scope="col" className="px-3 py-2">{slotLabel.Enterprise}</th>
@@ -252,7 +252,7 @@ function TeamRow({
       <td className="px-3 py-2">
         <span className="block font-semibold text-slate-800">{row.teamCode}</span>
         <span className="block text-slate-500">{row.teamName}</span>
-        <span className="text-[11px] text-slate-400">{row.classCode}{row.subjectCode ? ` · ${row.subjectCode}` : ''}</span>
+        <span className="text-caption text-slate-400">{row.classCode}{row.subjectCode ? ` · ${row.subjectCode}` : ''}</span>
       </td>
       {(['Enterprise', 'Academic'] as const).map(type => {
         const slot = type === 'Enterprise' ? row.enterprise : row.academic;
@@ -297,13 +297,13 @@ function SlotCell({ slot }: { slot: SlotView }) {
   return (
     <div>
       <div className="flex flex-wrap items-center gap-1.5">
-        <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${style.className}`}>{style.label}</span>
+        <span className={`rounded-full px-2 py-0.5 text-overline font-semibold ${style.className}`}>{style.label}</span>
         {slot.mentorName
           ? <span className="font-medium text-slate-800">{slot.mentorName}</span>
           : <span className="text-slate-400">No mentor</span>}
       </div>
       {slot.replacesCurrent && slot.currentMentorName && (
-        <p className="mt-1 text-[11px] text-amber-700">Replaces <span className="line-through">{slot.currentMentorName}</span> (assignment ends on save)</p>
+        <p className="mt-1 text-caption text-amber-700">Replaces <span className="line-through">{slot.currentMentorName}</span> (assignment ends on save)</p>
       )}
     </div>
   );
@@ -323,10 +323,11 @@ function SlotEditor({
 }) {
   const occupied = slot.state === 'existing' || slot.replacesCurrent;
   const [mentorId, setMentorId] = useState(presetMentorId ?? '');
-  const [reason, setReason] = useState('');
+  const [reasonCode, setReasonCode] = useState('');
+  const [reasonNote, setReasonNote] = useState('');
   const sameAsCurrent = occupied && mentorId !== '' && mentorId === (slot.currentMentorProfileId ?? slot.mentorProfileId);
   const needsReason = occupied && mentorId !== '' && !sameAsCurrent;
-  const reasonOk = !needsReason || isReplaceReasonValid(reason);
+  const reasonOk = !needsReason || isChangeReasonValid(reasonCode, reasonNote);
   const canApply = !sameAsCurrent && reasonOk && (mentorId !== '' || !occupied);
   const fieldId = `${teamId}-${type}`;
 
@@ -336,13 +337,13 @@ function SlotEditor({
       teamId,
       mentorType: type,
       mentorProfileId: mentorId === '' ? null : mentorId,
-      ...(needsReason ? { replace: true, reason: reason.trim() } : {}),
+      ...(needsReason ? { replace: true, reason: buildChangeReason(reasonCode, reasonNote) } : {}),
     });
   };
 
   return (
     <div className="mt-2 space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-2.5">
-      <label htmlFor={`mentor-${fieldId}`} className="block text-[11px] font-semibold text-slate-600">
+      <label htmlFor={`mentor-${fieldId}`} className="block text-caption font-semibold text-slate-600">
         {slotLabel[type]} for {teamCode}
       </label>
       <select
@@ -358,24 +359,16 @@ function SlotEditor({
           </option>
         ))}
       </select>
-      {candidates.length === 0 && <p className="text-[11px] text-amber-700">No active {slotLabel[type].toLowerCase()} in this semester.</p>}
+      {candidates.length === 0 && <p className="text-caption text-amber-700">No active {slotLabel[type].toLowerCase()} in this semester.</p>}
       {needsReason && (
-        <div>
-          <label htmlFor={`reason-${fieldId}`} className="block text-[11px] font-semibold text-slate-600">
-            Reason for replacing {slot.currentMentorName ?? slot.mentorName}
-          </label>
-          <textarea
-            id={`reason-${fieldId}`}
-            value={reason}
-            onChange={event => setReason(event.target.value)}
-            maxLength={MAX_REPLACE_REASON_LENGTH}
-            rows={2}
-            className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-700 outline-none focus:border-primary"
-          />
-          <p className={`text-[11px] ${reasonOk ? 'text-slate-500' : 'text-red-700'}`}>
-            The current assignment ends when you save. At least 3 characters are required.
-          </p>
-        </div>
+        <MentorChangeReasonField
+          idPrefix={`reason-${fieldId}`}
+          mentorName={slot.currentMentorName ?? slot.mentorName}
+          code={reasonCode}
+          note={reasonNote}
+          onCodeChange={setReasonCode}
+          onNoteChange={setReasonNote}
+        />
       )}
       <div className="flex justify-end gap-1.5">
         <Button size="xs" variant="ghost" onClick={onCancel}>Cancel</Button>
@@ -395,7 +388,7 @@ function MentorLoadTable({ preview }: { preview: MentorAllocationPreview }) {
     <section aria-label="Load by mentor" className="max-h-[52vh] overflow-auto rounded-xl border border-slate-200 bg-white">
       <table className="w-full min-w-[720px] text-left text-xs">
         <caption className="sr-only">Teams carried by every active mentor, before and after this preview</caption>
-        <thead className="sticky top-0 z-10 bg-slate-50 text-slate-500">
+        <thead className="sticky top-0 z-10 bg-slate-50 text-slate-600">
           <tr>
             <th scope="col" className="px-3 py-2">Mentor</th>
             <th scope="col" className="px-3 py-2">Type</th>
@@ -416,7 +409,7 @@ function MentorLoadTable({ preview }: { preview: MentorAllocationPreview }) {
                   return <td key={code} className="px-3 py-2">{entry ? formatChange(entry.before, entry.added, entry.removed ?? 0) : '0'}</td>;
                 })}
                 <td className="px-3 py-2 font-semibold text-slate-800">{mentor.totalBefore === mentor.totalAfter ? mentor.totalAfter : `${mentor.totalBefore} → ${mentor.totalAfter}`}</td>
-                <td className="px-3 py-2">{unassigned ? <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">Unassigned</span> : <span className="text-slate-500">Assigned</span>}</td>
+                <td className="px-3 py-2">{unassigned ? <span className="rounded-full bg-amber-50 px-2 py-0.5 text-overline font-semibold text-amber-700">Unassigned</span> : <span className="text-slate-500">Assigned</span>}</td>
               </tr>
             );
           })}
@@ -467,8 +460,8 @@ function AttentionPanel({
             {skipped.map((item, index) => (
               <li key={`${item.sourceTeamCode}-${item.mentorType}-${index}`} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500 opacity-70">
                 <span className="font-semibold">{item.mentorName || 'Unknown mentor'}</span> · {slotLabel[item.mentorType]} · {item.teamCode || item.sourceTeamCode}
-                <span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600">{skipReasonLabel[item.reason]}</span>
-                <span className="mt-0.5 block text-[11px]">{item.message}</span>
+                <span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-overline font-semibold text-slate-600">{skipReasonLabel[item.reason]}</span>
+                <span className="mt-0.5 block text-caption">{item.message}</span>
               </li>
             ))}
           </ul>
@@ -499,7 +492,7 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
       role="tab"
       aria-selected={active}
       onClick={onClick}
-      className={`-mb-px border-b-2 px-3 py-2 text-sm font-semibold transition-colors ${active ? 'border-primary text-primary' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
+      className={`-mb-px border-b-2 px-3 py-2 text-sm font-semibold transition-colors ${active ? 'border-primary text-primary-700' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
     >
       {children}
     </button>
@@ -509,7 +502,7 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
 function Metric({ label, value, danger = false, warning = false }: { label: string; value: number; danger?: boolean; warning?: boolean }) {
   return (
     <div className={`rounded-lg px-3 py-2 ${danger ? 'bg-red-50 text-red-700' : warning ? 'bg-amber-50 text-amber-700' : 'bg-slate-50 text-slate-700'}`}>
-      <span className="block text-[10px] uppercase text-slate-400">{label}</span>
+      <span className="block text-overline uppercase text-slate-400">{label}</span>
       <strong className="text-base">{value}</strong>
     </div>
   );

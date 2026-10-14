@@ -41,7 +41,7 @@ export default function MyClasses() {
       {/* Page Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">My Classes</h1>
+          <h1 className="text-heading sm:text-display text-secondary tracking-tight">My Classes</h1>
           <p className="text-sm text-slate-500 mt-1">View current enrollments or completed academic history.</p>
         </div>
         <div className="inline-flex self-start rounded-xl border border-slate-200 bg-slate-50 p-1">
@@ -81,16 +81,16 @@ export default function MyClasses() {
                 className="bg-white rounded-2xl border border-slate-200/60 shadow-sm hover:shadow-md hover:border-slate-300 transition-all flex flex-col justify-between overflow-hidden group"
               >
                 {/* Header Gradient Accent */}
-                <div className="h-2 bg-gradient-to-r from-primary-400 to-secondary" />
+                <div className="h-2 bg-primary" />
 
                 <div className="p-6 flex-1 space-y-4">
                   {/* Subject and Semester info */}
                   <div className="flex justify-between items-start">
                     <div>
-                      <span className="px-2.5 py-1 bg-primary-50 text-primary text-xs font-semibold rounded-lg uppercase tracking-wider">
+                      <span className="px-2.5 py-1 bg-primary-50 text-primary-700 text-xs font-semibold rounded-lg uppercase tracking-wider">
                         {cls.subjectCode}
                       </span>
-                      <h2 className="text-xl font-bold text-slate-900 mt-2 group-hover:text-primary transition-colors">
+                      <h2 className="text-xl font-bold text-slate-900 mt-2 group-hover:text-primary-700 transition-colors">
                         {cls.classCode}
                       </h2>
                     </div>
@@ -119,7 +119,7 @@ export default function MyClasses() {
                         className="w-10 h-10 rounded-full object-cover border border-slate-100 shrink-0"
                       />
                     ) : (
-                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-slate-100 to-slate-200 border border-slate-200 flex items-center justify-center shrink-0">
+                      <div className="w-10 h-10 rounded-full border border-slate-200 flex items-center justify-center shrink-0 bg-slate-100">
                         <User className="w-5 h-5 text-slate-400" />
                       </div>
                     )}

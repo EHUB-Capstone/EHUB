@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
-import { AlertCircle, AlertTriangle, ArrowLeft, ArrowRight, RotateCcw, UserX } from 'lucide-react';
+import { AlertCircle, AlertTriangle, ArrowLeft, ArrowRight, Pencil, RotateCcw, Trash2, UserX } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { mentorAdminApi } from '../../api/mentorAdminApi';
 import type { IncompleteMentor, IncompleteMentorList } from '../../types/mentorAdmin';
 import { parseApiError } from '../../utils/apiError';
 import { summarizeMissingFields } from '../../utils/mentorMasterImport';
 import Button from '../ui/Button';
+import ConfirmDialog from '../ui/ConfirmDialog';
+import IncompleteMentorEditModal from './IncompleteMentorEditModal';
 import MentorKindTag from './MentorKindTag';
 import TemporaryMentorBadge from './TemporaryMentorBadge';
 import EmptyState from '../ui/EmptyState';
@@ -16,16 +19,21 @@ interface IncompleteMentorsPanelProps {
   mentorType: string;
   /** Called with the unfiltered total so the tab badge stays accurate. */
   onUnfilteredTotal?: (total: number) => void;
+  /** Called after a mentor was edited or deleted, so the parent can refresh its own numbers. */
+  onChanged?: () => void;
 }
 
 const PAGE_SIZE = 10;
 
 /** Mentors saved without a login account yet. Mount it with a `key` that changes with the filters to restart at page 1. */
-export default function IncompleteMentorsPanel({ search, mentorType, onUnfilteredTotal }: IncompleteMentorsPanelProps) {
+export default function IncompleteMentorsPanel({ search, mentorType, onUnfilteredTotal, onChanged }: IncompleteMentorsPanelProps) {
   const [page, setPage] = useState(1);
   const [data, setData] = useState<IncompleteMentorList | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState<IncompleteMentor | null>(null);
+  const [deleting, setDeleting] = useState<IncompleteMentor | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
 
   const load = useCallback(async (isCancelled: () => boolean = () => false) => {
     setLoading(true);
@@ -53,6 +61,25 @@ export default function IncompleteMentorsPanel({ search, mentorType, onUnfiltere
     return () => { cancelled = true; };
   }, [load]);
 
+  const confirmDelete = async () => {
+    if (!deleting || deleteBusy) return;
+    setDeleteBusy(true);
+    try {
+      await mentorAdminApi.deleteIncompleteMentor(deleting.id);
+      toast.success(`${deleting.fullName} deleted.`);
+      setDeleting(null);
+      // The last row of a later page may have been removed, so step back instead of showing an empty page.
+      if (mentors.length === 1 && page > 1) setPage(page - 1); else await load();
+      onChanged?.();
+    } catch (requestError: unknown) {
+      // The reason (for example teams still using the mentor) is shown as is; the dialog closes so the list can be fixed first.
+      toast.error(parseApiError(requestError, 'Failed to delete the mentor').message, { duration: 8000 });
+      setDeleting(null);
+    } finally {
+      setDeleteBusy(false);
+    }
+  };
+
   const mentors: IncompleteMentor[] = data?.mentors ?? [];
   const totalPages = data?.pagination.pages ?? 1;
 
@@ -75,12 +102,13 @@ export default function IncompleteMentorsPanel({ search, mentorType, onUnfiltere
         <div className="p-12"><EmptyState icon={UserX} title="No mentors need information" description={search || mentorType !== 'ALL' ? 'Try adjusting your search or filters' : 'Every imported mentor has a login email.'} /></div>
       ) : (
         <div className={`overflow-x-auto transition-opacity duration-200 ${loading ? 'pointer-events-none opacity-60' : 'opacity-100'}`} aria-busy={loading}>
-          <table className="w-full min-w-[720px]">
+          <table className="w-full min-w-[640px]">
             <thead>
               <tr className="border-b border-slate-100 bg-slate-50/60">
-                <th className="py-3.5 px-6 text-xs text-slate-400 uppercase text-left font-semibold tracking-wider">Mentor</th>
-                <th className="py-3.5 px-6 text-xs text-slate-400 uppercase text-left font-semibold tracking-wider">Status</th>
-                <th className="py-3.5 px-6 text-xs text-slate-400 uppercase text-left font-semibold tracking-wider">Missing information</th>
+                <th className="py-3.5 px-6 text-xs text-slate-600 uppercase text-left font-semibold tracking-wider">Mentor</th>
+                <th className="py-3.5 px-6 text-xs text-slate-600 uppercase text-left font-semibold tracking-wider">Status</th>
+                <th className="py-3.5 px-6 text-xs text-slate-600 uppercase text-left font-semibold tracking-wider">Missing information</th>
+                <th className="sticky right-0 bg-slate-50 py-3.5 px-4 text-xs text-slate-600 uppercase text-right font-semibold tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -96,14 +124,14 @@ export default function IncompleteMentorsPanel({ search, mentorType, onUnfiltere
                           {(mentor.activeTeamCount ?? 0) > 0 && (
                             <span className="inline-flex items-center gap-1">
                               <TemporaryMentorBadge />
-                              <span className="text-[10px] font-semibold text-amber-800">on {mentor.activeTeamCount} team{mentor.activeTeamCount === 1 ? '' : 's'}</span>
+                              <span className="text-overline font-semibold text-amber-800">on {mentor.activeTeamCount} team{mentor.activeTeamCount === 1 ? '' : 's'}</span>
                             </span>
                           )}
                         </div>
                       </div>
                     </td>
                     <td className="py-3.5 px-6">
-                      <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
+                      <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-caption font-semibold text-amber-800">
                         <AlertTriangle className="h-3 w-3" /> Needs information
                       </span>
                     </td>
@@ -113,6 +141,28 @@ export default function IncompleteMentorsPanel({ search, mentorType, onUnfiltere
                         <span className="ml-1 text-slate-500">· {missing.preview.join(', ')}{missing.hiddenCount > 0 ? ` +${missing.hiddenCount} more` : ''}</span>
                       )}
                     </td>
+                    <td className="sticky right-0 bg-white py-3.5 px-4 text-right shadow-[-8px_0_8px_-8px_rgba(15,23,42,0.12)]">
+                      <div className="flex items-center justify-end gap-1.5">
+                        <button
+                          type="button"
+                          aria-label={`Edit ${mentor.fullName}`}
+                          title="Edit mentor"
+                          className="rounded-lg p-1.5 text-slate-400 transition-all hover:bg-primary-50 hover:text-primary-700"
+                          onClick={() => setEditing(mentor)}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          aria-label={`Delete ${mentor.fullName}`}
+                          title="Delete mentor"
+                          className="rounded-lg p-1.5 text-slate-400 transition-all hover:bg-red-50 hover:text-red-500"
+                          onClick={() => setDeleting(mentor)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </td>
                   </tr>
                 );
               })}
@@ -120,6 +170,22 @@ export default function IncompleteMentorsPanel({ search, mentorType, onUnfiltere
           </table>
         </div>
       )}
+
+      {editing && (
+        <IncompleteMentorEditModal
+          mentor={editing}
+          onClose={() => setEditing(null)}
+          onSaved={() => { setEditing(null); void load(); onChanged?.(); }}
+        />
+      )}
+      <ConfirmDialog
+        isOpen={deleting !== null}
+        onClose={() => { if (!deleteBusy) setDeleting(null); }}
+        onConfirm={confirmDelete}
+        title="Delete mentor"
+        description={`Delete ${deleting?.fullName ?? 'this mentor'}? They are also removed from the semesters they were added to. A mentor who is or was on a team cannot be deleted.`}
+        isSubmitting={deleteBusy}
+      />
 
       {!error && totalPages > 1 && (
         <div className="border-t border-slate-100 px-6 py-3.5 bg-slate-50/50 flex items-center justify-between">

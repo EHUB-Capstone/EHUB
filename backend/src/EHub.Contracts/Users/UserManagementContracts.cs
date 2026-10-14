@@ -48,3 +48,10 @@ public sealed class ManagedUserListResponse
 }
 
 public sealed class PaginationResponse { public int Total { get; init; } public int Page { get; init; } public int Limit { get; init; } public int Pages { get; init; } }
+
+// Whether an account can be deleted and, when it cannot, the reasons shown to the admin.
+public sealed class UserDeletionCheckResponse
+{
+    public bool CanDelete { get; init; }
+    public IReadOnlyCollection<string> Reasons { get; init; } = Array.Empty<string>();
+}

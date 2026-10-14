@@ -662,6 +662,7 @@ public class AuthIntegrationTests
             Password = "Password123",
             ConfirmPassword = "Password123",
             Role = role,
+            MentorType = role == "Mentor" ? "Academic" : null,
             MajorCode = null
         });
 

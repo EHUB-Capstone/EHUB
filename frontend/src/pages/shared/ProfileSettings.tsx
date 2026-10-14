@@ -156,7 +156,7 @@ const ProfileSettings = () => {
     <div className="max-w-4xl mx-auto">
       {/* Header */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-6 sm:mb-8">
-        <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">{activeTab === 'profile' ? 'My Profile' : 'Account Settings'}</h1>
+        <h1 className="text-heading sm:text-display text-secondary tracking-tight">{activeTab === 'profile' ? 'My Profile' : 'Account Settings'}</h1>
         <p className="text-slate-500 mt-1">{activeTab === 'profile' ? 'View and update your personal details' : 'Manage your account security preferences'}</p>
       </motion.div>
 
@@ -179,7 +179,7 @@ const ProfileSettings = () => {
 
       {/* Profile Banner */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}
-        className="bg-gradient-to-r from-primary to-secondary rounded-2xl p-6 sm:p-8 mb-6 text-white relative overflow-hidden"
+        className="rounded-2xl p-6 sm:p-8 mb-6 text-white relative overflow-hidden bg-primary"
       >
         <div className="absolute top-0 right-0 w-40 h-40 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2" />
         <div className="absolute bottom-0 left-1/3 w-24 h-24 bg-white/5 rounded-full translate-y-1/2" />
@@ -211,7 +211,7 @@ const ProfileSettings = () => {
               key={tab.id}
               className={`flex items-center gap-2.5 px-4 py-2.5 rounded-xl text-sm font-medium transition-all whitespace-nowrap ${
                 activeTab === tab.id
-                  ? 'bg-white text-primary shadow-sm border border-slate-200/50'
+                  ? 'bg-white text-primary-700 shadow-sm border border-slate-200/50'
                   : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800'
               }`}
               onClick={() => navigate(tab.path)}
@@ -351,7 +351,7 @@ const ProfileSettings = () => {
                 </div>
 
                 <div className="pt-2">
-                  <Button type="submit" variant="gradient" isLoading={isSavingPassword}>Update Password</Button>
+                  <Button type="submit" variant="primary" isLoading={isSavingPassword}>Update Password</Button>
                 </div>
               </form>
             </div>

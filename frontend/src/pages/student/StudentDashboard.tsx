@@ -95,11 +95,11 @@ const StudentDashboard = () => {
       {/* Header */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-3">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">Welcome, {user?.name?.split(' ')[0] || 'Student'} 🚀</h1>
+          <h1 className="text-heading sm:text-display text-secondary tracking-tight">Welcome, {user?.name?.split(' ')[0] || 'Student'} 🚀</h1>
           <p className="text-slate-500 mt-1">{myClass ? `${myClass.name} • ${myClass.semester}` : 'No class assigned yet'}</p>
         </div>
         {!startupIdea && hasTeam && (
-          <Button variant="gradient" size="sm" icon={Plus} onClick={() => navigate('/student/idea/new')}>Submit Idea</Button>
+          <Button variant="primary" size="sm" icon={Plus} onClick={() => navigate('/student/idea/new')}>Submit Idea</Button>
         )}
       </motion.div>
 
@@ -139,7 +139,7 @@ const StudentDashboard = () => {
                       <Button variant="outline" size="sm" onClick={() => navigate(`/student/idea/${startupIdea._id}`)}>View Details</Button>
                       <Button variant="primary" size="sm" onClick={() => navigate('/student/idea/new')}>Edit Idea</Button>
                       <Button
-                        variant="gradient"
+                        variant="primary"
                         size="sm"
                         icon={Zap}
                         isLoading={analyzing}
@@ -185,12 +185,12 @@ const StudentDashboard = () => {
                 <h3 className="text-lg font-semibold text-slate-900 mb-4 flex items-center gap-2"><Users className="w-5 h-5 text-secondary" />My Team</h3>
                 <div className="mb-3">
                   <p className="text-xl font-bold text-slate-900">{team.name}</p>
-                  <p className="text-sm text-slate-500">Your role: <span className="font-semibold text-primary">{roleInTeam || 'Member'}</span></p>
+                  <p className="text-sm text-slate-500">Your role: <span className="font-semibold text-primary-700">{roleInTeam || 'Member'}</span></p>
                 </div>
                 <div className="space-y-2.5">
                   {team.members?.map(m => (
                     <div key={m.userId?._id} className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-primary-100 to-primary-200 flex items-center justify-center text-xs font-bold text-primary shrink-0">
+                      <div className="w-8 h-8 rounded-xl flex items-center justify-center text-xs font-bold text-primary-700 shrink-0 bg-primary-100">
                         {m.userId?.name?.charAt(0)}
                       </div>
                       <div className="min-w-0">
@@ -204,7 +204,7 @@ const StudentDashboard = () => {
 
               {/* AI Analysis Preview */}
               {aiAnalysis && (
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }} className="bg-gradient-to-br from-primary-600 to-secondary-600 rounded-2xl p-5 text-white">
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }} className="rounded-2xl p-5 text-white bg-primary">
                   <div className="flex items-center gap-2 mb-3">
                     <Brain className="w-5 h-5" />
                     <h3 className="font-semibold">AI Analysis</h3>
@@ -261,17 +261,17 @@ const StudentDashboard = () => {
                     <div className="grid grid-cols-3 gap-2">
                       <div className="bg-blue-50 rounded-xl p-2.5 text-center">
                         <p className="text-lg font-black text-blue-600">{weeklyStats.pending ?? 0}</p>
-                        <p className="text-[10px] text-blue-400 font-semibold">Pending</p>
+                        <p className="text-overline text-blue-400 font-semibold">Pending</p>
                       </div>
                       <div className="bg-emerald-50 rounded-xl p-2.5 text-center">
                         <p className="text-lg font-black text-emerald-600">{weeklyStats.completed ?? 0}</p>
-                        <p className="text-[10px] text-emerald-400 font-semibold">Done</p>
+                        <p className="text-overline text-emerald-400 font-semibold">Done</p>
                       </div>
                       <div className={`rounded-xl p-2.5 text-center ${weeklyStats.overdue > 0 ? 'bg-red-50' : 'bg-slate-50'}`}>
                         <p className={`text-lg font-black ${weeklyStats.overdue > 0 ? 'text-red-600' : 'text-slate-400'}`}>
                           {weeklyStats.overdue ?? 0}
                         </p>
-                        <p className={`text-[10px] font-semibold ${weeklyStats.overdue > 0 ? 'text-red-400' : 'text-slate-400'}`}>Overdue</p>
+                        <p className={`text-overline font-semibold ${weeklyStats.overdue > 0 ? 'text-red-400' : 'text-slate-400'}`}>Overdue</p>
                       </div>
                     </div>
 
@@ -307,7 +307,7 @@ const StudentDashboard = () => {
 
               {/* Sessions */}
               <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.49 }} className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-5">
-                <h3 className="font-semibold text-slate-900 mb-3 flex items-center gap-2"><Calendar className="w-4 h-4 text-cyan-500" />Mentoring Sessions</h3>
+                <h3 className="font-semibold text-slate-900 mb-3 flex items-center gap-2"><Calendar className="w-4 h-4 text-info-dark" />Mentoring Sessions</h3>
                 {mentoringSessions.length === 0 ? (
                   <p className="text-sm text-slate-400">No sessions scheduled</p>
                 ) : (

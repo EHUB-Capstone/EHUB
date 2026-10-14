@@ -373,9 +373,14 @@ public sealed class CheckpointEvaluationHandler(
                 item.RubricCriterion.Key, item.Score, item.Comment)).ToArray(),
             evaluation.MemberScores.Select(item => new ValidatedMemberScore(item.StudentId, item.Score)).ToArray(),
             evaluation.Rubric, team, userId, now);
+        var checkpointNumber = evaluation.Rubric.Checkpoint?.CheckpointNumber;
+        if (checkpointNumber.HasValue)
+        {
+            EvaluationOutbox.EnqueuePublished(
+                context, evaluation, team, checkpointNumber.Value, evaluation.Rubric.Checkpoint!.Name, now);
+        }
         await context.SaveChangesAsync(cancellationToken);
 
-        var checkpointNumber = evaluation.Rubric.Checkpoint?.CheckpointNumber;
         if (checkpointNumber.HasValue)
             await PublishUpdatedAsync(team, checkpointNumber.Value, cancellationToken);
 
@@ -485,6 +490,16 @@ public sealed class CheckpointEvaluationHandler(
                     item.RubricCriterion.Key, item.Score, item.Comment)).ToArray(),
                 evaluation.MemberScores.Select(item => new ValidatedMemberScore(item.StudentId, item.Score)).ToArray(),
                 evaluation.Rubric, evaluation.Project.Team, userId, now);
+            if (isPublish && evaluation.Rubric.Checkpoint is not null)
+            {
+                EvaluationOutbox.EnqueuePublished(
+                    context,
+                    evaluation,
+                    evaluation.Project.Team,
+                    evaluation.Rubric.Checkpoint.CheckpointNumber,
+                    evaluation.Rubric.Checkpoint.Name,
+                    now);
+            }
         }
 
         if (changed.Length > 0)

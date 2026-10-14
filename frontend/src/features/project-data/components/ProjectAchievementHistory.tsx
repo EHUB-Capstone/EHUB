@@ -67,15 +67,15 @@ function HistoryEntry({ entry }: { entry: ProjectAchievementHistoryItem }) {
         <>
           <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
             {view.isCarriedOver && (
-              <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[11px] font-semibold text-slate-500">Carried over</span>
+              <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-caption font-semibold text-slate-500">Carried over</span>
             )}
             {entry.added.map(label => (
-              <span key={`add-${label}`} className={cn('rounded-full border px-2 py-0.5 text-[11px] font-semibold', ACHIEVEMENT_STYLES[label].className)}>
+              <span key={`add-${label}`} className={cn('rounded-full border px-2 py-0.5 text-caption font-semibold', ACHIEVEMENT_STYLES[label].className)}>
                 <span className="sr-only">Added </span>+ {label}
               </span>
             ))}
             {entry.removed.map(label => (
-              <span key={`remove-${label}`} className="rounded-full border border-danger-light bg-danger-50 px-2 py-0.5 text-[11px] font-semibold text-danger line-through">
+              <span key={`remove-${label}`} className="rounded-full border border-danger-light bg-danger-50 px-2 py-0.5 text-caption font-semibold text-danger line-through">
                 <span className="sr-only">Removed </span>− {label}
               </span>
             ))}

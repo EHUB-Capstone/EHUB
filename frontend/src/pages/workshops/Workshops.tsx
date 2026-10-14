@@ -120,7 +120,7 @@ const Workshops = () => {
       {/* Header */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-2">
+          <h1 className="flex items-center gap-2 text-heading sm:text-display text-secondary tracking-tight">
             <Calendar className="w-8 h-8 text-primary" />
             <span>Workshops & Seminars</span>
           </h1>
@@ -175,7 +175,7 @@ const Workshops = () => {
               key={f}
               onClick={() => setFilter(f)}
               className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-all whitespace-nowrap ${filter === f
-                  ? 'bg-white text-primary shadow-sm border border-slate-200/50'
+                  ? 'bg-white text-primary-700 shadow-sm border border-slate-200/50'
                   : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'
                 }`}
             >
