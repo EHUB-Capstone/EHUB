@@ -88,7 +88,7 @@ export default function PitchDeckUpload({ teamId, latestDeck, pitchDecks, isEdit
           <h2 className="text-lg font-bold text-slate-800">Pitch Deck</h2>
         </div>
         {latestDeck && (
-          <span className="px-2 py-0.5 bg-primary-50 border border-primary-100 text-primary rounded-full text-xs font-bold">
+          <span className="px-2 py-0.5 bg-primary-50 border border-primary-100 text-primary-700 rounded-full text-xs font-bold">
             Ver {latestDeck.versionNumber} Active
           </span>
         )}
@@ -152,7 +152,7 @@ export default function PitchDeckUpload({ teamId, latestDeck, pitchDecks, isEdit
           <div className="flex gap-2">
             <button 
               onClick={() => handleDownload(latestDeck._id)}
-              className="p-2 border border-slate-200 bg-white text-slate-600 rounded-xl hover:text-primary hover:border-primary/50 transition-all shadow-xs"
+              className="p-2 border border-slate-200 bg-white text-slate-600 rounded-xl hover:text-primary-700 hover:border-primary/50 transition-all shadow-xs"
               title="Download File"
             >
               <Download className="w-4 h-4" />
@@ -187,7 +187,7 @@ export default function PitchDeckUpload({ teamId, latestDeck, pitchDecks, isEdit
                     <p className="text-xs font-semibold text-slate-700 truncate" title={deck.originalName}>
                       {deck.originalName}
                     </p>
-                    <p className="text-[10px] text-slate-400">
+                    <p className="text-overline text-slate-400">
                       {formatBytes(deck.fileSize)} - Version {deck.versionNumber}
                       {getWorkspaceLabel(deck.teamId) ? ` - ${getWorkspaceLabel(deck.teamId)}` : ''}
                     </p>
@@ -196,7 +196,7 @@ export default function PitchDeckUpload({ teamId, latestDeck, pitchDecks, isEdit
                 <div className="flex gap-1.5">
                   <button 
                     onClick={() => handleDownload(deck._id)}
-                    className="p-1.5 border border-slate-200/50 bg-white text-slate-500 rounded-lg hover:text-primary transition-all"
+                    className="p-1.5 border border-slate-200/50 bg-white text-slate-500 rounded-lg hover:text-primary-700 transition-all"
                   >
                     <Download className="w-3.5 h-3.5" />
                   </button>

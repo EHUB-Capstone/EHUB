@@ -72,7 +72,7 @@ const PendingApprovalScreen: React.FC<{ email: string; onBack: () => void }> = (
       <div className="w-[72px] h-[72px] rounded-[24px] bg-blue-500/15 border border-blue-500/30 flex items-center justify-center mx-auto mb-6">
         <ShieldCheck size={34} className="text-blue-400" />
       </div>
-      <h1 className="text-[24px] font-extrabold text-slate-900 dark:text-slate-50 mb-2">Account Pending Approval</h1>
+      <h1 className="text-[24px] font-extrabold text-secondary dark:text-slate-50 mb-2">Account Pending Approval</h1>
       <p className="text-slate-500 dark:text-slate-400 text-[14px] mb-2">Your registration was submitted successfully.</p>
       <p className="text-blue-400 text-[14px] font-bold mb-6">{email}</p>
       <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-4 mb-6 text-left">
@@ -82,7 +82,7 @@ const PendingApprovalScreen: React.FC<{ email: string; onBack: () => void }> = (
         </p>
       </div>
       <button onClick={onBack}
-        className="w-full h-12 rounded-[14px] border border-[#E5E7EB] dark:border-white/10 bg-white dark:bg-white/5 text-slate-700 dark:text-slate-300 font-semibold text-[14px] cursor-pointer hover:bg-slate-50 dark:hover:bg-white/10 transition-colors">
+        className="w-full h-12 rounded-[14px] border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 text-slate-700 dark:text-slate-300 font-semibold text-[14px] cursor-pointer hover:bg-slate-50 dark:hover:bg-white/10 transition-colors">
         ← Back to Register
       </button>
     </motion.div>
@@ -322,25 +322,25 @@ const Register: React.FC = () => {
 
   /* ─── Render ───────────────────────────────────── */
   return (
-    <div className="min-h-screen flex font-sans transition-colors duration-300 bg-white dark:bg-[#0F172A]">
+    <div className="min-h-screen flex font-sans transition-colors duration-300 bg-white dark:bg-dark-page">
 
       {/* ── LEFT PANEL ── */}
-      <div className="hidden lg:flex w-[40%] flex-col justify-between p-12 relative overflow-hidden bg-[#0F172A]">
-        <div className="absolute -top-[10%] -right-[10%] w-[360px] h-[360px] rounded-full bg-[#EA6A12]/12 blur-[110px]" />
+      <div className="hidden lg:flex w-[40%] flex-col justify-between p-12 relative overflow-hidden bg-secondary">
+        <div className="absolute -top-[10%] -right-[10%] w-[360px] h-[360px] rounded-full bg-primary/12 blur-[110px]" />
 
         <div className="relative z-10">
           <Link to="/" className="inline-flex items-center gap-2.5 no-underline">
             <img src={logo} alt="EHub" className="w-10 h-10 object-contain" />
             <span className="text-[20px] font-extrabold tracking-tight">
-              <span className="text-[#F3A07A]">E</span>
-              <span className="text-[#79A8D9]">HUB</span>
+              <span className="text-primary-300">E</span>
+              <span className="text-secondary-300">HUB</span>
             </span>
           </Link>
         </div>
 
         <div className="relative z-10">
           <h2 className="text-[32px] font-extrabold text-white leading-[1.2] mb-4 tracking-tight">
-            Join the future of <span className="text-[#EA6A12]">student startups</span>
+            Join the future of <span className="text-primary-600">student startups</span>
           </h2>
           <p className="text-white/50 text-[15px] leading-[1.7] mb-9">
             Create your account and start managing your startup journey with mentors, evaluations, and AI-powered insights.
@@ -349,7 +349,7 @@ const Register: React.FC = () => {
           <div className="flex flex-col gap-3.5">
             {['Free to join, forever', 'AI-powered project evaluation', 'Connect with expert mentors', 'Track your startup progress'].map((t, i) => (
               <div key={i} className="flex items-center gap-3">
-                <CheckCircle size={18} color="#EA6A12" />
+                <CheckCircle size={18} color="#F56A2A" />
                 <span className="text-white/65 text-[14px]">{t}</span>
               </div>
             ))}
@@ -364,7 +364,7 @@ const Register: React.FC = () => {
 
         {/* Theme toggle */}
         <button onClick={toggleTheme}
-          className="absolute top-6 right-6 w-10 h-10 rounded-[14px] border border-[#E5E7EB] dark:border-white/10 bg-white dark:bg-white/5 cursor-pointer flex items-center justify-center text-[#64748B] dark:text-slate-400 transition-all hover:bg-[#F8FAFC] dark:hover:bg-white/10"
+          className="absolute top-6 right-6 w-10 h-10 rounded-[14px] border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 cursor-pointer flex items-center justify-center text-slate-500 dark:text-slate-400 transition-all hover:bg-slate-50 dark:hover:bg-white/10"
           aria-label="Toggle theme"
         >
           {isDark ? <Sun size={18} /> : <Moon size={18} />}
@@ -399,13 +399,13 @@ const Register: React.FC = () => {
                 <Link to="/" className="inline-flex items-center gap-2.5 no-underline">
                   <img src={logo} alt="EHub" className="w-[36px] h-[36px] object-contain" />
                   <span className="text-[18px] font-extrabold tracking-tight">
-                    <span className="text-[#F08A5D]">E</span><span className="text-[#1E5E9F] dark:text-[#79A8D9]">HUB</span>
+                    <span className="text-primary-400">E</span><span className="text-secondary dark:text-secondary-300">HUB</span>
                   </span>
                 </Link>
               </div>
 
-              <h1 className="text-[26px] font-extrabold text-[#0F172A] dark:text-slate-50 mb-1.5 tracking-tight">Create your account</h1>
-              <p className="text-[#64748B] dark:text-slate-400 text-[14px] mb-6">Join EHub and start your startup journey</p>
+              <h1 className="text-[26px] font-extrabold text-secondary dark:text-slate-50 mb-1.5 tracking-tight">Create your account</h1>
+              <p className="text-slate-500 dark:text-slate-400 text-[14px] mb-6">Join EHub and start your startup journey</p>
 
               {/* Email taken banner */}
               <AnimatePresence>
@@ -444,7 +444,7 @@ const Register: React.FC = () => {
                       onBlur={() => validateField('fullName')}
                       placeholder="Nguyen Van A" autoComplete="name" required maxLength={AUTH_FIELD_LIMITS.fullNameMax}
                       aria-invalid={Boolean(fieldErrors.fullName)} aria-describedby={fieldErrors.fullName ? 'reg-name-error' : undefined}
-                      className={`w-full py-2.5 pr-3.5 pl-10 rounded-[14px] border bg-[#F8FAFC] dark:bg-white/5 text-[#0F172A] dark:text-slate-100 text-[14px] outline-none transition-colors ${fieldErrors.fullName ? 'border-red-500 focus:border-red-500' : 'border-[#E5E7EB] dark:border-white/10 focus:border-[#EA6A12] dark:focus:border-[#EA6A12]'}`}
+                      className={`w-full py-2.5 pr-3.5 pl-10 rounded-[14px] border bg-slate-50 dark:bg-white/5 text-slate-900 dark:text-slate-100 text-[14px] outline-none transition-colors ${fieldErrors.fullName ? 'border-red-500 focus:border-red-500' : 'border-slate-200 dark:border-white/10 focus:border-primary dark:focus:border-primary'}`}
                     />
                   </div>
                   {fieldErrors.fullName && <p id="reg-name-error" role="alert" className="mt-1.5 text-[12px] text-red-500 dark:text-red-400">{fieldErrors.fullName}</p>}
@@ -459,7 +459,7 @@ const Register: React.FC = () => {
                       onBlur={() => validateField('email')}
                       placeholder="you@example.com" autoComplete="email" required maxLength={AUTH_FIELD_LIMITS.emailMax}
                       aria-invalid={Boolean(fieldErrors.email)} aria-describedby={fieldErrors.email ? 'reg-email-error' : undefined}
-                      className={`w-full py-2.5 pr-3.5 pl-10 rounded-[14px] border bg-[#F8FAFC] dark:bg-white/5 text-[#0F172A] dark:text-slate-100 text-[14px] outline-none transition-colors ${fieldErrors.email ? 'border-red-500 focus:border-red-500' : 'border-[#E5E7EB] dark:border-white/10 focus:border-[#EA6A12] dark:focus:border-[#EA6A12]'}`}
+                      className={`w-full py-2.5 pr-3.5 pl-10 rounded-[14px] border bg-slate-50 dark:bg-white/5 text-slate-900 dark:text-slate-100 text-[14px] outline-none transition-colors ${fieldErrors.email ? 'border-red-500 focus:border-red-500' : 'border-slate-200 dark:border-white/10 focus:border-primary dark:focus:border-primary'}`}
                     />
                   </div>
                   {fieldErrors.email && <p id="reg-email-error" role="alert" className="mt-1.5 text-[12px] text-red-500 dark:text-red-400">{fieldErrors.email}</p>}
@@ -476,7 +476,7 @@ const Register: React.FC = () => {
                       placeholder="6–100 characters" autoComplete="new-password" required
                       minLength={AUTH_FIELD_LIMITS.passwordMin} maxLength={AUTH_FIELD_LIMITS.passwordMax}
                       aria-invalid={Boolean(fieldErrors.password)} aria-describedby={fieldErrors.password ? 'reg-password-error' : 'reg-password-help'}
-                      className={`w-full py-2.5 pr-11 pl-10 rounded-[14px] border bg-[#F8FAFC] dark:bg-white/5 text-[#0F172A] dark:text-slate-100 text-[14px] outline-none transition-colors ${fieldErrors.password ? 'border-red-500 focus:border-red-500' : 'border-[#E5E7EB] dark:border-white/10 focus:border-[#EA6A12] dark:focus:border-[#EA6A12]'}`}
+                      className={`w-full py-2.5 pr-11 pl-10 rounded-[14px] border bg-slate-50 dark:bg-white/5 text-slate-900 dark:text-slate-100 text-[14px] outline-none transition-colors ${fieldErrors.password ? 'border-red-500 focus:border-red-500' : 'border-slate-200 dark:border-white/10 focus:border-primary dark:focus:border-primary'}`}
                     />
                     <button type="button" onClick={() => setShowPass(p => !p)}
                       aria-label={showPass ? 'Hide password' : 'Show password'}
@@ -486,7 +486,7 @@ const Register: React.FC = () => {
                   </div>
                   {fieldErrors.password
                     ? <p id="reg-password-error" role="alert" className="mt-1.5 text-[12px] text-red-500 dark:text-red-400">{fieldErrors.password}</p>
-                    : <p id="reg-password-help" className="mt-1.5 text-[11px] text-slate-500 dark:text-slate-400">Use 6–100 characters.</p>}
+                    : <p id="reg-password-help" className="mt-1.5 text-caption text-slate-500 dark:text-slate-400">Use 6–100 characters.</p>}
                 </div>
 
                 {/* Confirm Password */}
@@ -499,7 +499,7 @@ const Register: React.FC = () => {
                       onBlur={() => validateField('confirmPassword')}
                       placeholder="Re-enter password" autoComplete="new-password" required
                       aria-invalid={Boolean(fieldErrors.confirmPassword)} aria-describedby={fieldErrors.confirmPassword ? 'reg-confirm-error' : undefined}
-                      className={`w-full py-2.5 pr-11 pl-10 rounded-[14px] border bg-[#F8FAFC] dark:bg-white/5 text-[#0F172A] dark:text-slate-100 text-[14px] outline-none transition-colors ${fieldErrors.confirmPassword ? 'border-red-500 focus:border-red-500' : 'border-[#E5E7EB] dark:border-white/10 focus:border-[#EA6A12] dark:focus:border-[#EA6A12]'}`}
+                      className={`w-full py-2.5 pr-11 pl-10 rounded-[14px] border bg-slate-50 dark:bg-white/5 text-slate-900 dark:text-slate-100 text-[14px] outline-none transition-colors ${fieldErrors.confirmPassword ? 'border-red-500 focus:border-red-500' : 'border-slate-200 dark:border-white/10 focus:border-primary dark:focus:border-primary'}`}
                     />
                     <button type="button" onClick={() => setShowConfirm(p => !p)}
                       aria-label={showConfirm ? 'Hide confirm password' : 'Show confirm password'}
@@ -514,7 +514,7 @@ const Register: React.FC = () => {
                 <div>
                   <span id="reg-role-label" className="block text-[13px] font-semibold text-slate-900 dark:text-slate-50 mb-2">Role</span>
                   <div role="radiogroup" aria-labelledby="reg-role-label" aria-invalid={Boolean(fieldErrors.role)} aria-describedby={fieldErrors.role ? 'reg-role-error' : undefined}
-                    className={`grid grid-cols-3 gap-2 p-1 rounded-[14px] border bg-[#F8FAFC] dark:bg-white/5 ${fieldErrors.role ? 'border-red-500' : 'border-[#E5E7EB] dark:border-white/10'}`}>
+                    className={`grid grid-cols-3 gap-2 p-1 rounded-[14px] border bg-slate-50 dark:bg-white/5 ${fieldErrors.role ? 'border-red-500' : 'border-slate-200 dark:border-white/10'}`}>
                     {(['STUDENT','LECTURER','MENTOR'] as Role[]).map(r => (
                       <label key={r} className="cursor-pointer">
                         <input id={`reg-role-${r.toLowerCase()}`} type="radio" name="role" value={r} checked={role === r}
@@ -522,7 +522,7 @@ const Register: React.FC = () => {
                           className="sr-only" />
                         <div className={`text-center py-[9px] px-1 rounded-[9px] text-[13px] font-semibold transition-all ${
                           role === r 
-                            ? 'bg-white text-[#EA6A12] border border-[#EA6A12]/30 shadow-[0_10px_24px_rgba(234,106,18,0.12)] dark:bg-[#EA6A12]/15'
+                            ? 'bg-white text-primary-600 border border-primary/30 shadow-[0_10px_24px_rgba(245,106,42,0.12)] dark:bg-primary/15'
                             : 'bg-transparent text-slate-500 dark:text-slate-400 border border-transparent shadow-none'
                         }`}>
                           {r.charAt(0) + r.slice(1).toLowerCase()}
@@ -540,7 +540,7 @@ const Register: React.FC = () => {
                     <select id="reg-major" value={major} onChange={(e: ChangeEvent<HTMLSelectElement>) => { setMajor(e.target.value); clearFieldError('majorCode'); }}
                       onBlur={() => validateField('majorCode')} required
                       aria-invalid={Boolean(fieldErrors.majorCode)} aria-describedby={fieldErrors.majorCode ? 'reg-major-error' : undefined}
-                      className={`w-full py-2.5 px-3.5 rounded-[14px] border bg-[#F8FAFC] dark:bg-white/5 text-[14px] outline-none transition-colors text-[#0F172A] dark:text-slate-100 ${fieldErrors.majorCode ? 'border-red-500 focus:border-red-500' : 'border-[#E5E7EB] dark:border-white/10 focus:border-[#EA6A12] dark:focus:border-[#EA6A12]'}`}
+                      className={`w-full py-2.5 px-3.5 rounded-[14px] border bg-slate-50 dark:bg-white/5 text-[14px] outline-none transition-colors text-slate-900 dark:text-slate-100 ${fieldErrors.majorCode ? 'border-red-500 focus:border-red-500' : 'border-slate-200 dark:border-white/10 focus:border-primary dark:focus:border-primary'}`}
                     >
                       <option value="" className="text-slate-500">-- Select Major --</option>
                       {TEAM_MAJOR_GROUPS.map(g => (
@@ -558,7 +558,7 @@ const Register: React.FC = () => {
                   <div>
                     <span id="reg-mentor-type-label" className="block text-[13px] font-semibold text-slate-900 dark:text-slate-50 mb-2">Mentor type</span>
                     <div role="radiogroup" aria-labelledby="reg-mentor-type-label" aria-invalid={Boolean(fieldErrors.mentorType)} aria-describedby={fieldErrors.mentorType ? 'reg-mentor-type-error' : undefined}
-                      className={`grid grid-cols-2 gap-2 p-1 rounded-[14px] border bg-[#F8FAFC] dark:bg-white/5 ${fieldErrors.mentorType ? 'border-red-500' : 'border-[#E5E7EB] dark:border-white/10'}`}>
+                      className={`grid grid-cols-2 gap-2 p-1 rounded-[14px] border bg-slate-50 dark:bg-white/5 ${fieldErrors.mentorType ? 'border-red-500' : 'border-slate-200 dark:border-white/10'}`}>
                       {([['Enterprise', 'Enterprise mentor', 'Works at a company or startup'], ['Academic', 'Lecturer mentor', 'IT lecturer or academic']] as const).map(([value, label, hint]) => (
                         <label key={value} className="cursor-pointer">
                           <input id={`reg-mentor-type-${value.toLowerCase()}`} type="radio" name="mentorType" value={value} checked={mentorType === value}
@@ -566,11 +566,11 @@ const Register: React.FC = () => {
                             className="sr-only" />
                           <div className={`text-center py-[8px] px-1 rounded-[9px] transition-all ${
                             mentorType === value
-                              ? 'bg-white text-[#EA6A12] border border-[#EA6A12]/30 shadow-[0_10px_24px_rgba(234,106,18,0.12)] dark:bg-[#EA6A12]/15'
+                              ? 'bg-white text-primary-600 border border-primary/30 shadow-[0_10px_24px_rgba(245,106,42,0.12)] dark:bg-primary/15'
                               : 'bg-transparent text-slate-500 dark:text-slate-400 border border-transparent shadow-none'
                           }`}>
                             <span className="block text-[13px] font-semibold">{label}</span>
-                            <span className="block text-[11px] font-normal opacity-80">{hint}</span>
+                            <span className="block text-caption font-normal opacity-80">{hint}</span>
                           </div>
                         </label>
                       ))}
@@ -581,7 +581,7 @@ const Register: React.FC = () => {
 
                 {/* Submit */}
                 <button type="submit" disabled={loading}
-                  className={`w-full h-14 rounded-[14px] border-none font-semibold text-[15px] text-white flex items-center justify-center gap-2 mt-1 transition-all duration-200 ease-out bg-[linear-gradient(135deg,#EA6A12,#D97706)] shadow-[0_10px_28px_rgba(234,106,18,0.18)] ${loading ? 'opacity-70 cursor-not-allowed' : 'cursor-pointer hover:-translate-y-0.5 hover:shadow-[0_14px_36px_rgba(234,106,18,0.22)]'}`}
+                  className={`w-full h-14 rounded-[14px] border-none font-semibold text-[15px] text-white flex items-center justify-center gap-2 mt-1 transition-all duration-200 ease-out bg-primary shadow-[0_10px_28px_rgba(245,106,42,0.18)] ${loading ? 'opacity-70 cursor-not-allowed' : 'cursor-pointer hover:-translate-y-0.5 hover:shadow-[0_14px_36px_rgba(245,106,42,0.22)]'}`}
                 >
                   {loading
                     ? <div className="w-[18px] h-[18px] rounded-full border-2 border-white/50 border-t-white animate-spin" />
@@ -592,7 +592,7 @@ const Register: React.FC = () => {
 
               <p className="text-center mt-5 text-[14px] text-slate-500 dark:text-slate-400">
                 Already have an account?{' '}
-                <Link to="/login" className="text-[#EA6A12] font-bold no-underline">Sign in</Link>
+                <Link to="/login" className="text-primary-600 font-bold no-underline">Sign in</Link>
               </p>
             </motion.div>
           )}
@@ -605,13 +605,13 @@ const Register: React.FC = () => {
               className="w-full max-w-[400px] text-center">
 
               {/* Icon */}
-              <div className="w-[72px] h-[72px] rounded-[24px] bg-[#0F172A] flex items-center justify-center mx-auto mb-6 shadow-[0_22px_55px_rgba(15,23,42,0.18)]">
+              <div className="w-[72px] h-[72px] rounded-[24px] bg-secondary flex items-center justify-center mx-auto mb-6 shadow-[0_22px_55px_rgba(15,23,42,0.18)]">
                 <ShieldCheck size={34} color="#fff" />
               </div>
 
-              <h1 className="text-[24px] font-extrabold text-slate-900 dark:text-slate-50 mb-2">Verify your email</h1>
+              <h1 className="text-[24px] font-extrabold text-secondary dark:text-slate-50 mb-2">Verify your email</h1>
               <p className="text-slate-500 dark:text-slate-400 text-[14px] mb-1">OTP code sent to</p>
-              <p className="text-[#EA6A12] text-[14px] font-bold mb-6">{maskedEmail || email}</p>
+              <p className="text-primary-600 text-[14px] font-bold mb-6">{maskedEmail || email}</p>
 
               {/* Countdown */}
               <div className={`inline-flex items-center gap-2 px-4.5 py-2 rounded-full mb-7 text-[13px] font-bold border ${countdown > 60 ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-500' : countdown > 0 ? 'bg-amber-500/10 border-amber-500/30 text-amber-500' : 'bg-red-500/10 border-red-500/30 text-red-500'}`}>
@@ -630,7 +630,7 @@ const Register: React.FC = () => {
                       onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => handleOtpKeyDown(idx, e)}
                       className={`w-[52px] h-[60px] text-center text-[22px] font-extrabold rounded-xl border-2 outline-none transition-all ${
                         val 
-                          ? 'border-[#EA6A12] bg-orange-50 dark:bg-[#EA6A12]/10 text-[#EA6A12]'
+                          ? 'border-primary bg-orange-50 dark:bg-primary/10 text-primary-600'
                           : 'border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 text-slate-900 dark:text-slate-50'
                       }`}
                     />
@@ -638,10 +638,10 @@ const Register: React.FC = () => {
                 </div>
 
                 <button type="submit" disabled={otpLoading || countdown <= 0}
-                  className={`w-full h-14 rounded-[14px] border-none font-semibold text-[15px] text-white flex items-center justify-center gap-2 transition-all duration-200 ease-out bg-[linear-gradient(135deg,#EA6A12,#D97706)] shadow-[0_10px_28px_rgba(234,106,18,0.18)] ${
+                  className={`w-full h-14 rounded-[14px] border-none font-semibold text-[15px] text-white flex items-center justify-center gap-2 transition-all duration-200 ease-out bg-primary shadow-[0_10px_28px_rgba(245,106,42,0.18)] ${
                     (otpLoading || countdown <= 0) 
                       ? 'opacity-60 cursor-not-allowed' 
-                      : 'cursor-pointer hover:-translate-y-0.5 hover:shadow-[0_14px_36px_rgba(234,106,18,0.22)]'
+                      : 'cursor-pointer hover:-translate-y-0.5 hover:shadow-[0_14px_36px_rgba(245,106,42,0.22)]'
                   }`}
                 >
                   {otpLoading
@@ -658,7 +658,7 @@ const Register: React.FC = () => {
                   className={`bg-transparent border-none inline-flex items-center gap-1.5 text-[13px] font-bold ${
                     (resendCooldown > 0 || resendLoading) 
                       ? 'cursor-not-allowed text-slate-500 dark:text-slate-400' 
-                      : 'cursor-pointer text-[#EA6A12]'
+                      : 'cursor-pointer text-primary-600'
                   }`}>
                   <RefreshCw size={14} className={resendLoading ? 'animate-spin' : ''} />
                   {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : resendLoading ? 'Sending...' : 'Resend OTP'}

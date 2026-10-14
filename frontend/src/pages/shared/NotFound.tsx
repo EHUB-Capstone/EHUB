@@ -25,7 +25,7 @@ const NotFound = () => {
           <div className="w-20 h-20 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-6">
             <SearchX className="w-10 h-10 text-slate-400" />
           </div>
-          <h1 className="text-5xl font-black text-slate-900 tracking-tight mb-2">404</h1>
+          <h1 className="text-5xl font-black text-secondary tracking-tight mb-2">404</h1>
           <h2 className="text-xl font-bold text-slate-800 mb-3">Page not found</h2>
           <p className="text-body text-slate-500 leading-relaxed mb-8">
             The page you are looking for doesn't exist or has been moved.
@@ -34,7 +34,7 @@ const NotFound = () => {
             <Button variant="outline" size="lg" className="flex-1" icon={ArrowLeft} onClick={() => navigate(-1)}>
               Go Back
             </Button>
-            <Button variant="gradient" size="lg" className="flex-1" icon={Home} onClick={handleBack}>
+            <Button variant="primary" size="lg" className="flex-1" icon={Home} onClick={handleBack}>
               Dashboard
             </Button>
           </div>

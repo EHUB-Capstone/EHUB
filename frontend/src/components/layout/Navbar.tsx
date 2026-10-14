@@ -87,7 +87,7 @@ const Navbar = ({ onMenuClick }) => {
   if (!user) return null;
 
   return (
-    <header className="bg-white/85 dark:bg-[#111827]/88 backdrop-blur-xl border-b border-slate-200/60 dark:border-white/10 sticky top-0 z-30 h-16 flex items-center justify-between px-4 sm:px-6 gap-4 transition-colors duration-200">
+    <header className="bg-white dark:bg-dark-surface border-b border-slate-200 dark:border-white/10 shadow-xs sticky top-0 z-30 h-16 flex items-center justify-between px-4 sm:px-6 gap-4 transition-colors duration-200">
       {/* Left: Hamburger */}
       <div className="flex items-center gap-3 flex-1 min-w-0">
         <button
@@ -104,7 +104,7 @@ const Navbar = ({ onMenuClick }) => {
         <button
           type="button"
           onClick={toggleTheme}
-          className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 text-slate-600 transition-all hover:bg-slate-200 hover:text-slate-900"
+          className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-100 text-slate-600 transition-colors hover:bg-slate-200 hover:text-slate-900"
           aria-label={isDark ? 'Switch to light theme' : 'Switch to dark theme'}
           title={isDark ? 'Light theme' : 'Dark theme'}
         >
@@ -125,16 +125,16 @@ const Navbar = ({ onMenuClick }) => {
             aria-haspopup="true"
           >
             <div className="hidden sm:flex flex-col items-end">
-              <span className="text-[13px] font-semibold text-slate-800 leading-tight">{user.name || 'User'}</span>
+              <span className="text-[13px] font-semibold text-secondary leading-tight">{user.name || 'User'}</span>
               <Badge variant={roleBadgeVariant[role]} size="xs">
                 {roleLabels[role] || role}
               </Badge>
             </div>
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary-100 to-primary-200 overflow-hidden border border-primary-100 flex items-center justify-center shrink-0">
+            <div className="w-9 h-9 rounded-xl bg-primary-100 overflow-hidden border border-primary-100 flex items-center justify-center shrink-0">
               {user.avatar ? (
                 <img src={user.avatar} alt="Avatar" className="w-full h-full object-cover" />
               ) : (
-                <span className="font-display font-bold text-primary text-[13px]">{user.name?.charAt(0)?.toUpperCase() || 'U'}</span>
+                <span className="font-display font-bold text-primary-700 text-[13px]">{user.name?.charAt(0)?.toUpperCase() || 'U'}</span>
               )}
             </div>
             <ChevronDown className={cn('w-3.5 h-3.5 text-slate-400 transition-transform duration-200', showProfileMenu && 'rotate-180')} />
@@ -147,20 +147,20 @@ const Navbar = ({ onMenuClick }) => {
                 <p className="text-xs text-slate-500 mt-0.5">{user.email || ''}</p>
               </div>
               <button
-                className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 hover:text-primary transition-colors flex items-center gap-2.5"
+                className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 hover:text-primary-700 transition-colors flex items-center gap-2.5"
                 onClick={() => { setShowProfileMenu(false); navigate('/settings'); }}
               >
                 <Settings className="w-4 h-4" /> Settings
               </button>
               <button
-                className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 hover:text-primary transition-colors flex items-center gap-2.5"
+                className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 hover:text-primary-700 transition-colors flex items-center gap-2.5"
                 onClick={() => { setShowProfileMenu(false); navigate('/profile'); }}
               >
                 <User className="w-4 h-4" /> Profile
               </button>
               <div className="h-px w-full bg-slate-100 my-1" />
               <button
-                className="w-full text-left px-4 py-2.5 text-sm text-danger hover:bg-danger-50 transition-colors flex items-center gap-2.5 font-medium"
+                className="w-full text-left px-4 py-2.5 text-sm text-danger-dark hover:bg-danger-50 transition-colors flex items-center gap-2.5 font-medium"
                 onClick={() => { logout(); navigate('/login'); }}
               >
                 <LogOut className="w-4 h-4" /> Sign Out
@@ -199,7 +199,7 @@ const Navbar = ({ onMenuClick }) => {
               <button
                 type="button"
                 onClick={() => closeClassConflictAlert(true)}
-                className="flex-1 px-4 py-2.5 rounded-xl bg-primary text-white text-sm font-medium hover:bg-primary-700 transition-all"
+                className="flex-1 px-4 py-2.5 rounded-lg bg-primary text-white text-sm font-medium hover:bg-primary-600 transition-colors"
               >
                 Check classes
               </button>

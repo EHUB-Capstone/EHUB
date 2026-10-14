@@ -55,11 +55,11 @@ export default function TeamFormationMemberList({ formation, onChanged }: Props)
                 <div className="flex flex-wrap items-center gap-1.5">
                   <span className="font-medium text-slate-800">{member.fullName}</span>
                   {member.studentId === formation.myStudentId && (
-                    <span className="rounded-md bg-primary-100 px-1.5 py-0.5 text-[10px] font-bold uppercase text-primary">You</span>
+                    <span className="rounded-md bg-primary-100 px-1.5 py-0.5 text-overline font-bold uppercase text-primary-700">You</span>
                   )}
                   {member.isCreator && <span className="text-xs text-slate-500">· Creator</span>}
                   {member.isProposedLeader && (
-                    <span className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-1.5 py-0.5 text-[10px] font-bold uppercase text-amber-700">
+                    <span className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-1.5 py-0.5 text-overline font-bold uppercase text-amber-700">
                       <Crown className="h-3 w-3" aria-hidden="true" /> {isPending ? 'Invited as Team Leader' : 'Team Leader'}
                     </span>
                   )}

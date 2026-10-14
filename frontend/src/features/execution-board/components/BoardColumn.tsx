@@ -57,7 +57,7 @@ function BoardColumn({
           {tasks.length === 0 && !showDropPlaceholder ? (
             <div
               className={`rounded-lg border border-dashed px-3 py-8 text-center text-xs font-medium transition-colors ${
-                highlighted ? 'border-primary-200 bg-primary-50 text-primary' : 'border-slate-200 bg-white/70 text-slate-400'
+                highlighted ? 'border-primary-200 bg-primary-50 text-primary-700' : 'border-slate-200 bg-white/70 text-slate-400'
               }`}
             >
               Drop task here

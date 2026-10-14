@@ -20,7 +20,7 @@ function Field({ id, label, children, hint }: { id: string; label: string; child
     <div>
       <label htmlFor={id} className="mb-1 block text-xs font-semibold text-slate-700">{label}</label>
       {children}
-      {hint && <p className="mt-1 text-[11px] text-slate-400">{hint}</p>}
+      {hint && <p className="mt-1 text-caption text-slate-400">{hint}</p>}
     </div>
   );
 }

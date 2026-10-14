@@ -204,13 +204,13 @@ const EvaluationSummary = ({
       {/* Statistics — hidden for Mentor/Student */}
       {!shouldHideSensitiveScores && (
         <div className="grid grid-cols-2 gap-4">
-          <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-4 border border-blue-200">
+          <div className="rounded-lg p-4 border border-blue-200 bg-blue-50">
             <div className="text-sm text-blue-700 font-semibold">Average Score</div>
             <div className="text-2xl font-bold text-blue-900 mt-1">{totalScore.toFixed(2)}</div>
           </div>
-          <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg p-4 border border-purple-200">
-            <div className="text-sm text-purple-700 font-semibold">Criteria Evaluated</div>
-            <div className="text-2xl font-bold text-purple-900 mt-1">{rubricScores.length}</div>
+          <div className="rounded-lg p-4 border border-secondary-200 bg-secondary-50">
+            <div className="text-sm text-secondary font-semibold">Criteria Evaluated</div>
+            <div className="text-2xl font-bold text-secondary mt-1">{rubricScores.length}</div>
           </div>
         </div>
       )}

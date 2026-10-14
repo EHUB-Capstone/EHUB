@@ -111,7 +111,7 @@ const IdeaForm = () => {
     <div className="max-w-3xl mx-auto space-y-6">
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
         <div className="flex items-center justify-between mb-1">
-          <h1 className="text-3xl font-bold text-slate-900">{existingIdea ? 'Edit Startup Idea' : 'Submit Startup Idea'}</h1>
+          <h1 className="text-heading sm:text-display text-secondary tracking-tight">{existingIdea ? 'Edit Startup Idea' : 'Submit Startup Idea'}</h1>
           {existingIdea && <span className="text-sm bg-amber-100 text-amber-700 px-3 py-1 rounded-full font-medium">{existingIdea.status}</span>}
         </div>
         <p className="text-slate-500">Describe your startup idea in detail. The more complete, the better the AI analysis.</p>
@@ -140,7 +140,7 @@ const IdeaForm = () => {
         <button
           type="button"
           onClick={() => setShowAdvanced(!showAdvanced)}
-          className="flex items-center gap-2 text-sm text-primary font-medium hover:underline"
+          className="flex items-center gap-2 text-sm text-primary-700 font-medium hover:underline"
         >
           {showAdvanced ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
           {showAdvanced ? 'Hide' : 'Show'} Advanced Fields (Business Model, Tech, Market, Competitors)
@@ -160,7 +160,7 @@ const IdeaForm = () => {
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.14 }} className="flex gap-3 justify-end">
         <Button variant="ghost" onClick={() => navigate('/student')}>Cancel</Button>
         <Button variant="outline" icon={Save} isLoading={saving} onClick={() => handleSave('DRAFT')}>Save Draft</Button>
-        <Button variant="gradient" icon={Send} isLoading={submitting} onClick={() => handleSave('SUBMITTED')}>Submit for Review</Button>
+        <Button variant="primary" icon={Send} isLoading={submitting} onClick={() => handleSave('SUBMITTED')}>Submit for Review</Button>
       </motion.div>
     </div>
   );

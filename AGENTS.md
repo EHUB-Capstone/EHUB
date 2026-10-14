@@ -141,6 +141,16 @@ dotnet ef migrations add <MeaningfulName> --project backend/src/EHub.Infrastruct
 - Không dùng `dangerouslySetInnerHTML` với dữ liệu server nếu chưa sanitize.
 - Cleanup timer, listener, SignalR/Socket subscription và request khi component unmount.
 
+### 6.1 Design system (Clean Enterprise + Startup Energy)
+
+- Token màu, cỡ chữ và shadow nằm trong `@theme` của `frontend/src/index.css`. Không dùng màu hex hoặc giá trị màu tùy ý (`text-[#034EA2]`, `bg-[#0F172A]`) trong `.tsx`; dùng token: `primary` (cam), `secondary` (navy), `slate`, `success`, `warning`, `danger`, `info`, `dark-page`, `dark-surface`. Test `noArbitraryHex` sẽ báo lỗi nếu vi phạm.
+- Nút primary dùng `bg-primary` (`#F56A2A`). Chữ cam trên nền sáng dùng `text-primary-700`. Mỗi trang hoặc dialog chỉ có một nút primary; ưu tiên component `Button` thay cho nút tự viết.
+- Trạng thái dùng tone semantic của `Badge` (`badgeTones`). Không tự chọn indigo, violet, purple hay cyan cho trạng thái. Bảng màu phân loại thuần trang trí (ví dụ màu theo ngành) là ngoại lệ có chủ đích.
+- Cỡ chữ dùng `text-display`, `text-heading`, `text-subheading`, `text-body-lg`, `text-body`, `text-body-sm`, `text-caption`, `text-overline`. Khi thêm token chữ mới phải đăng ký trong `frontend/src/utils/cn.ts`, nếu không `cn()` sẽ xóa nhầm class đó khi ghép với màu chữ.
+- Không dùng gradient trang trí và không dùng thẻ KPI nền navy. Nội dung nằm trong card dùng `Card tone="inset"`, không lồng card trong card.
+- Dark mode: mặc định là light; phần override dark nằm trong `index.css`. Class màu nhạt mới (`bg-*-50`, `border-*-200`…) phải có override `.dark`; `npm test` (`darkThemeCoverage`) sẽ báo nếu thiếu.
+- Màu biểu đồ lấy từ `frontend/src/constants/chartColors.ts`.
+
 ## 7. Test và điều kiện hoàn thành
 
 Backend, chạy từ `backend/`:

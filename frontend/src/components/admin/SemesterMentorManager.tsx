@@ -136,22 +136,22 @@ export default function SemesterMentorManager({ isOpen, semesterId, semesterLabe
                     <div className="min-w-0">
                       <p className="flex flex-wrap items-center gap-1.5 text-sm font-semibold text-slate-800">
                         {item.classCode}
-                        <span className="rounded-full bg-slate-100 px-2 py-0 text-[10px] font-semibold text-slate-600">{item.subjectCode}</span>
+                        <span className="rounded-full bg-slate-100 px-2 py-0 text-overline font-semibold text-slate-600">{item.subjectCode}</span>
                         {item.temporarySlotCount > 0 && <TemporaryMentorBadge />}
                       </p>
-                      <p className="truncate text-[11px] text-slate-500">
+                      <p className="truncate text-caption text-slate-500">
                         {item.lecturerName || 'No lecturer'} · {item.teamCount} team{item.teamCount === 1 ? '' : 's'}
                       </p>
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
                       {item.teamCount === 0 ? (
-                        <span className="text-[11px] text-slate-400">No teams</span>
+                        <span className="text-caption text-slate-400">No teams</span>
                       ) : missing > 0 ? (
-                        <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-800" title={`${item.missingEnterpriseCount} enterprise and ${item.missingAcademicCount} lecturer mentor slot(s) open`}>
+                        <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-caption font-semibold text-amber-800" title={`${item.missingEnterpriseCount} enterprise and ${item.missingAcademicCount} lecturer mentor slot(s) open`}>
                           {missing} missing
                         </span>
                       ) : (
-                        <span className="rounded-full border border-green-200 bg-green-50 px-2 py-0.5 text-[11px] font-semibold text-green-700">Complete</span>
+                        <span className="rounded-full border border-green-200 bg-green-50 px-2 py-0.5 text-caption font-semibold text-green-700">Complete</span>
                       )}
                       <Button size="sm" variant="outline" disabled={item.teamCount === 0} onClick={() => setSelected(item)}>Manage</Button>
                     </div>

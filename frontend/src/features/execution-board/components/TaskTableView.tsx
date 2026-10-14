@@ -8,7 +8,7 @@ import TruncatedText from '../../../components/ui/TruncatedText';
 
 function Badge({ children, className = '' }) {
   return (
-    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${className}`}>
+    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-caption font-semibold ${className}`}>
       {children}
     </span>
   );
@@ -53,7 +53,7 @@ function TaskTableView({ tasks, permissions, onEditTask, onDeleteTask, onStatusC
     <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
       <div className="overflow-x-auto">
         <table className="min-w-[1180px] w-full border-collapse text-left text-sm">
-          <thead className="sticky top-0 z-10 border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
+          <thead className="sticky top-0 z-10 border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-600">
             <tr>
               <th className="w-16 px-3 py-3">No.</th>
               <th className="min-w-[220px] px-3 py-3">Task Name</th>
@@ -99,7 +99,7 @@ function TaskTableView({ tasks, permissions, onEditTask, onDeleteTask, onStatusC
                         <select
                           value={status}
                           onChange={(event) => onStatusChange(task._id, event.target.value)}
-                          className={`h-7 rounded-full border border-transparent px-2.5 pr-7 text-[11px] font-semibold outline-none transition-colors focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20 ${statusCfg.bg} ${statusCfg.text}`}
+                          className={`h-7 rounded-full border border-transparent px-2.5 pr-7 text-caption font-semibold outline-none transition-colors focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20 ${statusCfg.bg} ${statusCfg.text}`}
                         >
                           {STATUSES.map((nextStatus) => {
                             const cfg = STATUS_CFG[nextStatus] || STATUS_CFG.TODO;

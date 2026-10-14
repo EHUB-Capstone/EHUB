@@ -139,11 +139,11 @@ export default function StartupWorkspaceHub() {
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div>
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center text-white shadow-sm">
+            <div className="w-11 h-11 rounded-2xl flex items-center justify-center text-white shadow-sm bg-primary">
               <Kanban className="w-5 h-5" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-slate-900">Startup Workspace</h1>
+              <h1 className="text-heading sm:text-display text-secondary tracking-tight">Startup Workspace</h1>
               <p className="text-sm text-slate-500 mt-0.5">
                 {roleHint[role] || 'Teams you can access'}
               </p>
@@ -258,17 +258,17 @@ export default function StartupWorkspaceHub() {
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
                           {team.isCurrent && (
-                            <span className="rounded-md border border-emerald-100 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-700">
+                            <span className="rounded-md border border-emerald-100 bg-emerald-50 px-2 py-0.5 text-overline font-bold uppercase tracking-wider text-emerald-700">
                               Current
                             </span>
                           )}
                           {team.isArchived && (
-                            <span className="inline-flex items-center gap-1 rounded-md border border-amber-100 bg-amber-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-700">
+                            <span className="inline-flex items-center gap-1 rounded-md border border-amber-100 bg-amber-50 px-2 py-0.5 text-overline font-bold uppercase tracking-wider text-amber-700">
                               <Archive className="w-3 h-3" /> Archived
                             </span>
                           )}
                         </div>
-                        <h3 className="mt-2 truncate text-lg font-bold text-slate-900 transition-colors group-hover:text-primary">
+                        <h3 className="mt-2 truncate text-lg font-bold text-slate-900 transition-colors group-hover:text-primary-700">
                           {team.teamName}
                         </h3>
                       </div>
@@ -276,10 +276,10 @@ export default function StartupWorkspaceHub() {
                     </div>
 
                     <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-slate-100">
-                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-lg bg-slate-50 text-slate-600 border border-slate-100">
+                      <span className="inline-flex items-center gap-1 text-overline font-semibold px-2 py-1 rounded-lg bg-slate-50 text-slate-600 border border-slate-100">
                         <FolderKanban className="w-3 h-3" /> {team.hasWorkspace ? 'Workspace created' : 'Not created yet'}
                       </span>
-                      <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-lg border ${
+                      <span className={`inline-flex items-center gap-1 text-overline font-semibold px-2 py-1 rounded-lg border ${
                         team.accessMode === 'READ_ONLY'
                           ? 'bg-amber-50 text-amber-700 border-amber-100'
                           : 'bg-emerald-50 text-emerald-700 border-emerald-100'

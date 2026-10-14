@@ -93,7 +93,7 @@ export default function ProgressSummary({ progressData, loading }) {
           icon={ListTodo}
           label="Total Tasks"
           value={totalTasks}
-          accent="bg-indigo-500"
+          accent="bg-secondary"
         />
         <StatCard
           icon={CheckCircle2}

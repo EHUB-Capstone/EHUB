@@ -382,18 +382,18 @@ export default function WorkshopAttendanceManager({ isOpen, onClose, workshop })
                     <table className="w-full text-left border-collapse">
                       <thead>
                         <tr className="bg-slate-50 border-b border-slate-200">
-                          <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Mode</th>
-                          <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Class Code</th>
-                          <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Subject</th>
-                          <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Action</th>
+                          <th className="px-6 py-4 text-xs font-bold text-slate-600 uppercase tracking-wider">Mode</th>
+                          <th className="px-6 py-4 text-xs font-bold text-slate-600 uppercase tracking-wider">Class Code</th>
+                          <th className="px-6 py-4 text-xs font-bold text-slate-600 uppercase tracking-wider">Subject</th>
+                          <th className="px-6 py-4 text-xs font-bold text-slate-600 uppercase tracking-wider text-right">Action</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
                         {currentClasses.map(c => (
                           <tr key={c._id} className="hover:bg-slate-50/40 transition-colors">
                             <td className="px-6 py-4 align-middle">
-                              <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-[10px] font-bold tracking-wide uppercase ${c.mode === 'ONLINE'
-                                ? 'bg-indigo-50 text-indigo-600 border border-indigo-100'
+                              <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-overline font-bold tracking-wide uppercase ${c.mode === 'ONLINE'
+                                ? 'bg-secondary-50 text-secondary border border-secondary-100'
                                 : 'bg-amber-50 text-amber-600 border border-amber-100'
                                 }`}>
                                 {c.mode === 'ONLINE' ? '💻 Online' : '🏢 Offline'}
@@ -409,7 +409,7 @@ export default function WorkshopAttendanceManager({ isOpen, onClose, workshop })
                               <button
                                 type="button"
                                 onClick={() => setSelectedClassId(c._id)}
-                                className="inline-flex items-center gap-1.5 px-4 py-2 bg-primary/10 hover:bg-primary text-primary hover:text-white text-xs font-bold rounded-xl transition-all shadow-xs active:scale-95"
+                                className="inline-flex items-center gap-1.5 px-4 py-2 bg-primary/10 hover:bg-primary text-primary-700 hover:text-white text-xs font-bold rounded-xl transition-all shadow-xs active:scale-95"
                               >
                                 <span>View Attendance</span>
                                 <span className="font-bold">→</span>
@@ -536,13 +536,13 @@ export default function WorkshopAttendanceManager({ isOpen, onClose, workshop })
                   <table className="w-full text-left border-collapse">
                     <thead>
                       <tr className="bg-slate-50 border-b border-slate-200">
-                        <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Student</th>
-                        <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Student ID</th>
-                        <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Major</th>
-                        <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Check-in Time</th>
-                        <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-center">Evidence</th>
-                        <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Status</th>
-                        <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Action</th>
+                        <th className="px-6 py-4 text-xs font-bold text-slate-600 uppercase tracking-wider">Student</th>
+                        <th className="px-6 py-4 text-xs font-bold text-slate-600 uppercase tracking-wider">Student ID</th>
+                        <th className="px-6 py-4 text-xs font-bold text-slate-600 uppercase tracking-wider">Major</th>
+                        <th className="px-6 py-4 text-xs font-bold text-slate-600 uppercase tracking-wider">Check-in Time</th>
+                        <th className="px-6 py-4 text-xs font-bold text-slate-600 uppercase tracking-wider text-center">Evidence</th>
+                        <th className="px-6 py-4 text-xs font-bold text-slate-600 uppercase tracking-wider">Status</th>
+                        <th className="px-6 py-4 text-xs font-bold text-slate-600 uppercase tracking-wider text-right">Action</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
@@ -561,7 +561,7 @@ export default function WorkshopAttendanceManager({ isOpen, onClose, workshop })
                               <div className="font-bold text-slate-700 text-sm">{s.studentName}</div>
                               <div className="text-xs text-slate-400 mt-0.5">{s.email}</div>
                               <div className="mt-1">
-                                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${s.mode === 'ONLINE' ? 'bg-indigo-50 text-indigo-600 border border-indigo-100' : 'bg-amber-50 text-amber-600 border border-amber-100'}`}>
+                                <span className={`text-overline font-semibold px-2 py-0.5 rounded-full ${s.mode === 'ONLINE' ? 'bg-secondary-50 text-secondary border border-secondary-100' : 'bg-amber-50 text-amber-600 border border-amber-100'}`}>
                                   Mode: {s.mode || 'N/A'}
                                 </span>
                               </div>
@@ -594,7 +594,7 @@ export default function WorkshopAttendanceManager({ isOpen, onClose, workshop })
                             <td className="px-6 py-4 align-middle">
                               {getStatusBadge(s.status)}
                               {s.status === 'REJECTED' && s.rejectReason && (
-                                <div className="text-[10px] text-rose-500 mt-1 max-w-[150px] truncate" title={s.rejectReason}>
+                                <div className="text-overline text-rose-500 mt-1 max-w-[150px] truncate" title={s.rejectReason}>
                                   Reason: {s.rejectReason}
                                 </div>
                               )}

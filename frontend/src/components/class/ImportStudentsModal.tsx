@@ -210,7 +210,7 @@ export default function ImportStudentsModal({
         <header className="shrink-0 border-b border-slate-100 px-5 py-4 sm:px-6">
           <div className="flex items-start justify-between gap-4">
             <div className="flex min-w-0 items-center gap-3">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary-50 text-primary">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary-50 text-primary-700">
                 <FileSpreadsheet className="h-5 w-5" />
               </div>
               <div className="min-w-0">
@@ -292,7 +292,7 @@ export default function ImportStudentsModal({
                 }`}
               >
                 <input ref={inputRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleFileInput} />
-                <div className={`mx-auto flex h-12 w-12 items-center justify-center rounded-2xl ${fileError ? 'bg-red-100 text-red-600' : 'bg-primary-50 text-primary'}`}>
+                <div className={`mx-auto flex h-12 w-12 items-center justify-center rounded-2xl ${fileError ? 'bg-red-100 text-red-600' : 'bg-primary-50 text-primary-700'}`}>
                   {analyzing ? <Loader2 className="h-6 w-6 animate-spin" /> : fileError ? <AlertCircle className="h-6 w-6" /> : <Upload className="h-6 w-6" />}
                 </div>
 
@@ -330,7 +330,7 @@ export default function ImportStudentsModal({
                     <p className="text-xs text-slate-500">{file ? formatFileSize(file.size) : ''} · {totalRows} data rows</p>
                   </div>
                 </div>
-                <button type="button" onClick={resetImport} className="flex shrink-0 items-center gap-1.5 text-xs font-semibold text-primary hover:text-primary-dark">
+                <button type="button" onClick={resetImport} className="flex shrink-0 items-center gap-1.5 text-xs font-semibold text-primary-700 hover:text-primary-dark">
                   <RotateCcw className="h-3.5 w-3.5" /> Choose another file
                 </button>
               </div>
@@ -432,7 +432,7 @@ export default function ImportStudentsModal({
             <>
               <Button variant="outline" icon={ArrowLeft} onClick={resetImport} disabled={importing}>Back</Button>
               <Button
-                variant="gradient"
+                variant="primary"
                 icon={Upload}
                 isLoading={importing}
                 disabled={successCount === 0}
@@ -451,7 +451,7 @@ export default function ImportStudentsModal({
 
           {phase === 'result' && (
             <>
-              <Button variant="gradient" icon={Check} onClick={onClose}>Done</Button>
+              <Button variant="primary" icon={Check} onClick={onClose}>Done</Button>
             </>
           )}
         </footer>
@@ -471,7 +471,7 @@ function SummaryCard({ label, value, tone }: { label: string; value: number; ton
   return (
     <div className={`rounded-xl border p-3 text-center ${styles[tone]}`}>
       <p className="text-xl font-bold sm:text-2xl">{value}</p>
-      <p className="mt-0.5 text-[11px] font-medium sm:text-xs">{label}</p>
+      <p className="mt-0.5 text-caption font-medium sm:text-xs">{label}</p>
     </div>
   );
 }
@@ -486,7 +486,7 @@ function TeamPreviewList({ teams }: { teams: ImportStudentsPreviewResponse['team
               <p className="truncate text-sm font-bold text-slate-900">{team.teamName}</p>
               <p className="mt-0.5 truncate text-xs font-medium text-slate-600">Project: {team.projectName || 'Missing'}</p>
             </div>
-            <span className={`shrink-0 rounded-full px-2 py-1 text-[11px] font-semibold ${team.isValid ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+            <span className={`shrink-0 rounded-full px-2 py-1 text-caption font-semibold ${team.isValid ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
               {team.validMemberCount}/{team.memberCount} ready
             </span>
           </div>
@@ -511,7 +511,7 @@ function StudentRowsTable({
     <div className="overflow-hidden rounded-xl border border-slate-200">
       <div className={`${compact ? 'max-h-52' : 'max-h-72'} overflow-auto`}>
         <table className={`w-full ${teamAssignment ? 'min-w-[1050px]' : 'min-w-[900px]'} text-left text-xs`}>
-          <thead className="sticky top-0 z-10 bg-slate-50 text-slate-500">
+          <thead className="sticky top-0 z-10 bg-slate-50 text-slate-600">
             <tr>
               <th className="w-16 px-3 py-2.5 font-semibold">Row</th>
               <th className="px-3 py-2.5 font-semibold">Student code</th>
@@ -533,13 +533,13 @@ function StudentRowsTable({
                 {teamAssignment && (
                   <td className="px-3 py-3">
                     <p className="font-semibold text-slate-700">{row.groupName || '—'}</p>
-                    <p className="mt-0.5 text-[11px] text-slate-500">{row.projectName || 'No project'}</p>
+                    <p className="mt-0.5 text-caption text-slate-500">{row.projectName || 'No project'}</p>
                   </td>
                 )}
                 <td className={`px-3 py-3 font-mono ${row.needsMajorSync ? 'font-semibold text-red-600' : 'text-slate-600'}`}>
                   {row.registeredMajorCode || '—'}
                 </td>
-                <td className={`px-3 py-3 font-mono ${row.needsMajorSync ? 'font-semibold text-primary' : 'text-slate-600'}`}>
+                <td className={`px-3 py-3 font-mono ${row.needsMajorSync ? 'font-semibold text-primary-700' : 'text-slate-600'}`}>
                   {row.majorCode && row.majorCode !== 'UNDECLARED' ? row.majorCode : '—'}
                 </td>
                 <td className="px-3 py-3">
@@ -550,7 +550,7 @@ function StudentRowsTable({
                       <span className="inline-flex items-center gap-1 rounded-full bg-orange-100 px-2 py-1 font-semibold text-orange-700">
                         <AlertCircle className="h-3 w-3" /> Needs synchronization
                       </span>
-                      <p className="mt-1 max-w-xs text-[11px] leading-4 text-orange-700">{row.majorWarningMessage}</p>
+                      <p className="mt-1 max-w-xs text-caption leading-4 text-orange-700">{row.majorWarningMessage}</p>
                     </div>
                   ) : row.status === 'ReEnroll' ? (
                     <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-1 font-semibold text-blue-700">

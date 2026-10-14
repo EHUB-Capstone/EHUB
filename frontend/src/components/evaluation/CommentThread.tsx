@@ -54,7 +54,7 @@ const CommentThread = ({
       {/* Comment Header */}
       <div className="flex items-start justify-between mb-2">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white font-bold text-sm">
+          <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm bg-secondary">
             {comment.authorName.charAt(0)}
           </div>
           <div>
@@ -169,7 +169,7 @@ const CommentThread = ({
                   >
                     <div className="flex items-start justify-between mb-2">
                       <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gray-400 to-gray-600 flex items-center justify-center text-white font-bold text-xs">
+                        <div className="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-xs bg-slate-500">
                           {reply.authorName.charAt(0)}
                         </div>
                         <div>

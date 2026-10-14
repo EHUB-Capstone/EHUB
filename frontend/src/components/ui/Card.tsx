@@ -1,9 +1,17 @@
 import { cn } from '../../utils/cn';
 import { motion } from 'framer-motion';
 
-const Card = ({ children, className, hover = true, padding = 'p-6', ...props }) => {
-  const Comp = hover ? motion.div : 'div';
-  const motionProps = hover ? {
+const tones = {
+  default: 'bg-white border border-slate-200 shadow-card',
+  // One per page at most: the single most important block (primary KPI, hero).
+  featured: 'bg-secondary text-white border border-secondary-700 shadow-elevated',
+  // For content nested inside another card, instead of a card within a card.
+  inset: 'bg-slate-50 border border-slate-200',
+};
+
+const Card = ({ children, className, hover = true, padding = 'p-6', tone = 'default', ...props }) => {
+  const Comp = hover && tone === 'default' ? motion.div : 'div';
+  const motionProps = hover && tone === 'default' ? {
     whileHover: { y: -2, boxShadow: '0 8px 30px -6px rgb(0 0 0 / 0.1)' },
     transition: { duration: 0.2 },
   } : {};
@@ -11,7 +19,8 @@ const Card = ({ children, className, hover = true, padding = 'p-6', ...props }) 
   return (
     <Comp
       className={cn(
-        'bg-white rounded-2xl border border-slate-200/60 shadow-card',
+        'rounded-2xl',
+        tones[tone as keyof typeof tones] ?? tones.default,
         padding,
         className
       )}
@@ -32,11 +41,11 @@ const CardHeader = ({ children, className }) => (
 const CardTitle = ({ children, className, icon: Icon }) => (
   <div className={cn('flex items-center gap-2.5', className)}>
     {Icon && (
-      <div className="w-9 h-9 rounded-xl bg-primary-50 flex items-center justify-center">
-        <Icon className="w-[18px] h-[18px] text-primary" />
+      <div className="w-9 h-9 rounded-lg bg-primary-50 flex items-center justify-center">
+        <Icon className="w-[18px] h-[18px] text-primary-700" />
       </div>
     )}
-    <h3 className="text-subheading text-slate-900">{children}</h3>
+    <h3 className="text-subheading text-secondary">{children}</h3>
   </div>
 );
 

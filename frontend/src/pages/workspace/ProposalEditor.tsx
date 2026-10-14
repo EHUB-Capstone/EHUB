@@ -217,7 +217,7 @@ export default function ProposalEditor() {
             <ArrowLeft className="w-5 h-5" />
           </button>
           <div>
-            <h1 className="text-xl font-bold text-slate-900">
+            <h1 className="text-heading sm:text-display text-secondary tracking-tight">
               {proposal ? `Edit Proposal: ${proposal.startupName}` : 'Create Startup Proposal'}
             </h1>
             <p className="text-sm text-slate-500 mt-0.5">
@@ -238,7 +238,7 @@ export default function ProposalEditor() {
           </Button>
           {proposal && (
             <Button 
-              variant="gradient" 
+              variant="primary" 
               size="sm" 
               icon={Send}
               isLoading={submitting}
@@ -294,7 +294,7 @@ export default function ProposalEditor() {
             value={form.changeNote}
             onChange={(e) => setForm({ ...form, changeNote: e.target.value })}
           />
-          <p className="text-[11px] text-slate-400">
+          <p className="text-caption text-slate-400">
             This comment helps your team keep track of what changed in this save version.
           </p>
         </div>

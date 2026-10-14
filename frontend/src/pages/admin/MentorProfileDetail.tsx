@@ -139,7 +139,7 @@ export default function MentorProfileDetail() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-5">
-      <Link to="/admin/users" className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-primary">
+      <Link to="/admin/users" className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-primary-700">
         <ArrowLeft className="h-3.5 w-3.5" /> Back to Users
       </Link>
 
@@ -148,10 +148,10 @@ export default function MentorProfileDetail() {
           {profile.avatarUrl ? (
             <img src={profile.avatarUrl} alt="" className="h-14 w-14 shrink-0 rounded-2xl object-cover" />
           ) : (
-            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-primary-100 text-xl font-bold text-primary">{profile.fullName.charAt(0).toUpperCase()}</div>
+            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-primary-100 text-xl font-bold text-primary-700">{profile.fullName.charAt(0).toUpperCase()}</div>
           )}
           <div className="min-w-0">
-            <h1 className="truncate text-2xl font-bold text-slate-900">{profile.fullName}</h1>
+            <h1 className="truncate text-heading sm:text-display text-secondary tracking-tight">{profile.fullName}</h1>
             <p className="truncate text-sm text-slate-500">{profile.email}{profile.phone ? ` · ${profile.phone}` : ''}</p>
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <MentorKindTag type={profile.mentorType} />
@@ -311,7 +311,7 @@ function Field({ label, error, counter, children }: { label: string; error?: str
         {counter && <span className="font-normal text-slate-400">{counter}</span>}
       </span>
       {children}
-      {error && <span role="alert" className="mt-1 block text-[11px] text-red-600">{error}</span>}
+      {error && <span role="alert" className="mt-1 block text-caption text-red-600">{error}</span>}
     </label>
   );
 }
@@ -329,7 +329,7 @@ function TagRow({ label, tags }: { label: string; tags: string[] }) {
   return (
     <ReadRow label={label}>
       {tags.length > 0
-        ? <div className="flex flex-wrap gap-1.5">{tags.map(tag => <span key={tag} className="rounded-full border border-primary-100 bg-primary-50 px-2.5 py-0.5 text-xs font-semibold text-primary">{tag}</span>)}</div>
+        ? <div className="flex flex-wrap gap-1.5">{tags.map(tag => <span key={tag} className="rounded-full border border-primary-100 bg-primary-50 px-2.5 py-0.5 text-xs font-semibold text-primary-700">{tag}</span>)}</div>
         : <Empty />}
     </ReadRow>
   );
@@ -344,7 +344,7 @@ function Detail({ label, value, href }: { label: string; value?: string | null; 
     <div className="min-w-0">
       <dt className="text-xs font-semibold uppercase tracking-wide text-slate-400">{label}</dt>
       <dd className="mt-0.5 truncate text-sm text-slate-700">
-        {value ? (href && /^https?:\/\//i.test(href) ? <a href={href} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">{value}</a> : value) : <span className="text-slate-400">Not provided</span>}
+        {value ? (href && /^https?:\/\//i.test(href) ? <a href={href} target="_blank" rel="noopener noreferrer" className="text-primary-700 hover:underline">{value}</a> : value) : <span className="text-slate-400">Not provided</span>}
       </dd>
     </div>
   );

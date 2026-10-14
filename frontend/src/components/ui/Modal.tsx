@@ -40,20 +40,20 @@ const Modal = ({ isOpen, onClose, title, children, submitText = 'Save', isSubmit
     <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-0 sm:p-6" role="dialog" aria-modal="true">
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+        className="absolute inset-0 bg-secondary-800/50 backdrop-blur-sm"
         onClick={onClose}
         aria-hidden="true"
       />
 
       {/* Content */}
-      <div className={`relative bg-white w-full ${modalSizes[size]} rounded-t-2xl sm:rounded-2xl shadow-float border border-slate-200/60 max-h-[90vh] flex flex-col animate-scale-in`}>
+      <div className={`relative bg-white w-full ${modalSizes[size]} rounded-t-2xl sm:rounded-2xl shadow-float border border-slate-200 max-h-[90vh] flex flex-col animate-scale-in`}>
         {/* Header */}
         {title && (
-          <div className="flex items-center justify-between px-5 sm:px-6 py-4 border-b border-slate-100 shrink-0">
-            <h2 className="text-lg font-bold text-slate-900">{title}</h2>
+          <div className="flex items-center justify-between px-5 sm:px-6 py-4 border-b border-slate-200 shrink-0">
+            <h2 className="text-heading text-secondary">{title}</h2>
             <button
               onClick={onClose}
-              className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-all"
+              className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-colors"
               aria-label="Close modal"
             >
               <X className="w-4 h-4" />
@@ -68,11 +68,11 @@ const Modal = ({ isOpen, onClose, title, children, submitText = 'Save', isSubmit
 
         {/* Footer */}
         {onSubmit && (
-          <div className="border-t border-slate-100 px-5 sm:px-6 py-4 flex justify-end gap-3 shrink-0 bg-slate-50/50">
+          <div className="border-t border-slate-200 px-5 sm:px-6 py-4 flex justify-end gap-3 shrink-0 bg-slate-50">
             <Button variant="outline" onClick={onClose} disabled={isSubmitting}>
               Cancel
             </Button>
-            <Button variant="gradient" onClick={onSubmit} isLoading={isSubmitting} disabled={submitDisabled}>
+            <Button variant="primary" onClick={onSubmit} isLoading={isSubmitting} disabled={submitDisabled}>
               {submitText}
             </Button>
           </div>

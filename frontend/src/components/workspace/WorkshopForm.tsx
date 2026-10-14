@@ -637,7 +637,7 @@ const WorkshopForm = ({ isOpen, onClose, workshop, onSave }) => {
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-bold text-indigo-600 uppercase tracking-wider mb-2 flex items-center gap-1">
+                      <label className="block text-xs font-bold text-secondary uppercase tracking-wider mb-2 flex items-center gap-1">
                         <Link2 className="w-3.5 h-3.5" /> Online Link {onlineClassIds.length > 0 && '*'}
                       </label>
                       <input
@@ -712,12 +712,12 @@ const WorkshopForm = ({ isOpen, onClose, workshop, onSave }) => {
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
                         {/* ONLINE CLASSES SECTION */}
-                        <div className="border border-indigo-100 rounded-2xl bg-indigo-50/20 overflow-hidden flex flex-col shadow-sm">
-                          <div className="bg-indigo-100/50 px-4 py-3 border-b border-indigo-100 flex justify-between items-center shrink-0">
-                            <div className="flex items-center gap-2 text-sm font-bold text-indigo-700">
+                        <div className="border border-secondary-100 rounded-2xl bg-secondary-50 overflow-hidden flex flex-col shadow-sm">
+                          <div className="bg-secondary-100 px-4 py-3 border-b border-secondary-100 flex justify-between items-center shrink-0">
+                            <div className="flex items-center gap-2 text-sm font-bold text-secondary">
                               <Monitor className="w-4 h-4" />
                               ONLINE CLASSES
-                              <span className="bg-indigo-200 text-indigo-800 px-2 py-0.5 rounded-full text-xs font-bold shadow-sm">
+                              <span className="bg-secondary-100 text-secondary px-2 py-0.5 rounded-full text-xs font-bold shadow-sm">
                                 {onlineClassIds.length} Selected
                               </span>
                             </div>
@@ -731,7 +731,7 @@ const WorkshopForm = ({ isOpen, onClose, workshop, onSave }) => {
                                   setOfflineClassIds([]);
                                   setOnlinePage(1);
                                 }}
-                                className="px-2.5 py-1 bg-white hover:bg-indigo-50 text-indigo-700 rounded-lg text-xs font-bold transition-all border border-indigo-200 shadow-sm"
+                                className="px-2.5 py-1 bg-white hover:bg-secondary-50 text-secondary rounded-lg text-xs font-bold transition-all border border-secondary-200 shadow-sm"
                               >
                                 Select All
                               </button>
@@ -757,7 +757,7 @@ const WorkshopForm = ({ isOpen, onClose, workshop, onSave }) => {
                                         return (
                                           <label
                                             key={c._id}
-                                            className={`flex items-center gap-3 p-2.5 rounded-xl border cursor-pointer transition-all ${isOnline ? 'bg-indigo-50/80 border-indigo-300 shadow-sm' : 'bg-white border-slate-100 opacity-60 hover:opacity-100'}`}
+                                            className={`flex items-center gap-3 p-2.5 rounded-xl border cursor-pointer transition-all ${isOnline ? 'bg-secondary-50 border-secondary-200 shadow-sm' : 'bg-white border-slate-100 opacity-60 hover:opacity-100'}`}
                                           >
                                             <input
                                               type="checkbox"
@@ -773,14 +773,14 @@ const WorkshopForm = ({ isOpen, onClose, workshop, onSave }) => {
                                                   setOfflineClassIds(prev => [...prev, c._id]);
                                                 }
                                               }}
-                                              className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                                              className="w-4 h-4 rounded text-secondary focus:ring-secondary-400 cursor-pointer"
                                             />
                                             <div className="flex flex-col min-w-0">
                                               <span className="text-sm font-bold text-slate-800 truncate">{c.classCode}</span>
-                                              <span className="text-[10px] font-semibold text-slate-500 truncate">{c.subjectCode}</span>
+                                              <span className="text-overline font-semibold text-slate-500 truncate">{c.subjectCode}</span>
                                             </div>
                                             {isOnline && (
-                                              <span className="ml-auto bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded text-[10px] font-bold shadow-sm">
+                                              <span className="ml-auto bg-secondary-100 text-secondary px-2 py-0.5 rounded text-overline font-bold shadow-sm">
                                                 ONLINE
                                               </span>
                                             )}
@@ -791,7 +791,7 @@ const WorkshopForm = ({ isOpen, onClose, workshop, onSave }) => {
 
                                     {/* Pagination Controls */}
                                     {totalPages > 1 && (
-                                      <div className="flex justify-between items-center pt-3 border-t border-indigo-100/50 text-xs mt-2 shrink-0">
+                                      <div className="flex justify-between items-center pt-3 border-t border-secondary-100 text-xs mt-2 shrink-0">
                                         <button
                                           type="button"
                                           disabled={currentPage === 1}
@@ -886,10 +886,10 @@ const WorkshopForm = ({ isOpen, onClose, workshop, onSave }) => {
                                             />
                                             <div className="flex flex-col min-w-0">
                                               <span className="text-sm font-bold text-slate-800 truncate">{c.classCode}</span>
-                                              <span className="text-[10px] font-semibold text-slate-500 truncate">{c.subjectCode}</span>
+                                              <span className="text-overline font-semibold text-slate-500 truncate">{c.subjectCode}</span>
                                             </div>
                                             {isOffline && (
-                                              <span className="ml-auto bg-amber-100 text-amber-700 px-2 py-0.5 rounded text-[10px] font-bold shadow-sm">
+                                              <span className="ml-auto bg-amber-100 text-amber-700 px-2 py-0.5 rounded text-overline font-bold shadow-sm">
                                                 OFFLINE
                                               </span>
                                             )}
@@ -945,8 +945,8 @@ const WorkshopForm = ({ isOpen, onClose, workshop, onSave }) => {
                       ) : (
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[160px] overflow-y-auto p-1">
                           {availableTeams.map(t => (
-                            <label key={t._id} className={`flex items-center gap-2 text-xs font-semibold p-2 cursor-pointer border rounded-lg transition-colors ${teamIds.includes(t._id) ? 'bg-primary/5 border-primary text-primary' : 'bg-slate-50 border-slate-200 text-slate-700 hover:border-slate-300'}`}>
-                              <input type="checkbox" checked={teamIds.includes(t._id)} onChange={() => toggleTeam(t._id)} className="rounded text-primary focus:ring-primary" />
+                            <label key={t._id} className={`flex items-center gap-2 text-xs font-semibold p-2 cursor-pointer border rounded-lg transition-colors ${teamIds.includes(t._id) ? 'bg-primary/5 border-primary text-primary-700' : 'bg-slate-50 border-slate-200 text-slate-700 hover:border-slate-300'}`}>
+                              <input type="checkbox" checked={teamIds.includes(t._id)} onChange={() => toggleTeam(t._id)} className="rounded text-primary-700 focus:ring-primary" />
                               <span className="truncate">{t.teamName}</span>
                             </label>
                           ))}
@@ -982,7 +982,7 @@ const WorkshopForm = ({ isOpen, onClose, workshop, onSave }) => {
                         <div className="p-3 bg-white rounded-full shadow-sm mb-2 group-hover:shadow-md transition-all">
                           <ImageIcon className="w-6 h-6 text-slate-400 group-hover:text-primary transition-colors" />
                         </div>
-                        <span className="text-xs font-bold text-slate-500 group-hover:text-primary transition-colors">Upload Banner</span>
+                        <span className="text-xs font-bold text-slate-500 group-hover:text-primary-700 transition-colors">Upload Banner</span>
                         <input type="file" accept="image/*" className="hidden" onChange={e => handleFileUpload(e, 'banner')} disabled={uploading} />
                       </label>
                     )}
@@ -1005,7 +1005,7 @@ const WorkshopForm = ({ isOpen, onClose, workshop, onSave }) => {
                         </div>
                       ))}
                     </div>
-                    <label className="flex items-center justify-center gap-2 w-full py-2.5 border border-dashed border-slate-300 bg-slate-50 rounded-xl text-xs font-bold text-slate-600 hover:border-primary hover:text-primary hover:bg-primary/5 cursor-pointer transition-all">
+                    <label className="flex items-center justify-center gap-2 w-full py-2.5 border border-dashed border-slate-300 bg-slate-50 rounded-xl text-xs font-bold text-slate-600 hover:border-primary hover:text-primary-700 hover:bg-primary/5 cursor-pointer transition-all">
                       <Upload size={16} /> Add File
                       <input type="file" className="hidden" onChange={e => handleFileUpload(e, 'attachment')} disabled={uploading} />
                     </label>
@@ -1021,7 +1021,7 @@ const WorkshopForm = ({ isOpen, onClose, workshop, onSave }) => {
                     <div className="grid grid-cols-1 gap-2 max-h-[220px] overflow-y-auto p-1">
                       {availableMentors.map(m => (
                         <label key={m._id} className={`flex items-center gap-3 p-2.5 cursor-pointer border rounded-xl transition-colors ${selectedMentors.includes(m._id) ? 'bg-primary/5 border-primary shadow-sm' : 'bg-slate-50 border-slate-200 hover:border-slate-300'}`}>
-                          <input type="checkbox" checked={selectedMentors.includes(m._id)} onChange={() => toggleMentor(m._id)} className="w-4 h-4 rounded text-primary focus:ring-primary" />
+                          <input type="checkbox" checked={selectedMentors.includes(m._id)} onChange={() => toggleMentor(m._id)} className="w-4 h-4 rounded text-primary-700 focus:ring-primary" />
                           <div className="flex items-center gap-2 truncate">
                             <div className="w-7 h-7 rounded-full bg-slate-200 flex items-center justify-center text-xs font-bold text-slate-500 shrink-0">
                               {m.name.charAt(0).toUpperCase()}
@@ -1042,12 +1042,12 @@ const WorkshopForm = ({ isOpen, onClose, workshop, onSave }) => {
           <div className="flex justify-between items-center px-6 py-4 border-t border-slate-100 bg-slate-50/50 shrink-0 rounded-b-2xl">
             <div className="flex gap-6">
               <label className="flex items-center gap-2 text-sm font-bold text-slate-700 cursor-pointer group">
-                <input type="radio" name="status" value="PUBLISHED" checked={status === 'PUBLISHED'} onChange={() => setStatus('PUBLISHED')} className="w-4 h-4 text-primary focus:ring-primary" />
-                <span className="group-hover:text-primary transition-colors">Publish</span>
+                <input type="radio" name="status" value="PUBLISHED" checked={status === 'PUBLISHED'} onChange={() => setStatus('PUBLISHED')} className="w-4 h-4 text-primary-700 focus:ring-primary" />
+                <span className="group-hover:text-primary-700 transition-colors">Publish</span>
               </label>
               <label className="flex items-center gap-2 text-sm font-bold text-slate-700 cursor-pointer group">
-                <input type="radio" name="status" value="DRAFT" checked={status === 'DRAFT'} onChange={() => setStatus('DRAFT')} className="w-4 h-4 text-primary focus:ring-primary" />
-                <span className="group-hover:text-primary transition-colors">Draft</span>
+                <input type="radio" name="status" value="DRAFT" checked={status === 'DRAFT'} onChange={() => setStatus('DRAFT')} className="w-4 h-4 text-primary-700 focus:ring-primary" />
+                <span className="group-hover:text-primary-700 transition-colors">Draft</span>
               </label>
             </div>
             <div className="flex gap-3">

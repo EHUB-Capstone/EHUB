@@ -48,7 +48,7 @@ function TermCard({ teamId, term }: { teamId: string; term: TeamLineageTerm }) {
             <span className="font-semibold text-slate-900">{term.semesterCode}</span>
             <span className="text-xs text-slate-500">{term.classCode}</span>
             {term.isCurrent && (
-              <span className="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-bold uppercase text-green-700">Current</span>
+              <span className="rounded-full bg-green-100 px-2 py-0.5 text-overline font-bold uppercase text-green-700">Current</span>
             )}
           </span>
           <span className="mt-0.5 block truncate text-xs text-slate-500">

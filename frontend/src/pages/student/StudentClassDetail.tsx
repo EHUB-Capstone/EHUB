@@ -333,19 +333,19 @@ export default function StudentClassDetail() {
       <div className="rounded-2xl border border-slate-200/60 bg-white p-6 shadow-sm">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
           <div className="flex min-w-0 items-start gap-4">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-primary-500 to-secondary flex items-center justify-center text-white shrink-0 shadow-sm">
+            <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-white shrink-0 shadow-sm bg-primary">
               <GraduationCap className="w-6 h-6" />
             </div>
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="text-xs font-semibold px-2 py-0.5 bg-primary-50 text-primary border border-primary-100 rounded-md uppercase">
+                <span className="text-xs font-semibold px-2 py-0.5 bg-primary-50 text-primary-700 border border-primary-100 rounded-md uppercase">
                   {cls?.subjectCode}
                 </span>
                 <span className="text-xs font-semibold px-2 py-0.5 bg-slate-100 text-slate-500 border border-slate-200/40 rounded-md">
                   {formatSemesterCode(cls?.semester, cls?.year)}
                 </span>
               </div>
-              <h1 className="text-2xl font-bold text-slate-900 mt-1.5">{cls?.classCode}</h1>
+              <h1 className="mt-1.5 text-heading sm:text-display text-secondary tracking-tight">{cls?.classCode}</h1>
               <p className="text-sm text-slate-500 mt-0.5">{cls?.description || 'Classroom for Startup Idea Development.'}</p>
             </div>
           </div>
@@ -353,7 +353,7 @@ export default function StudentClassDetail() {
           <div className="grid w-full gap-3 sm:grid-cols-2 lg:w-auto">
             {lecturer && (
               <div className="min-w-0 rounded-xl border border-slate-100 bg-slate-50 p-4 sm:min-w-[230px]">
-                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Lecturer</p>
+                <p className="text-overline font-semibold text-slate-400 uppercase tracking-wider">Lecturer</p>
                 <p className="font-bold text-slate-800 text-sm mt-1">{lecturer.name}</p>
                 <p className="text-xs text-slate-400 mt-0.5 flex items-center gap-1">
                   <Mail className="w-3.5 h-3.5 shrink-0 text-slate-300" />
@@ -364,8 +364,8 @@ export default function StudentClassDetail() {
 
             <div className="min-w-0 rounded-xl border border-slate-100 bg-slate-50 p-4 sm:min-w-[230px]">
               <div className="flex items-center justify-between gap-3">
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Mentors</p>
-                <span className="flex h-6 min-w-6 items-center justify-center rounded-full bg-primary-50 px-1.5 text-[11px] font-bold text-primary">
+                <p className="text-overline font-semibold uppercase tracking-wider text-slate-400">Mentors</p>
+                <span className="flex h-6 min-w-6 items-center justify-center rounded-full bg-primary-50 px-1.5 text-caption font-bold text-primary-700">
                   {classMentors.length}
                 </span>
               </div>
@@ -375,13 +375,13 @@ export default function StudentClassDetail() {
                     {classMentors.slice(0, 3).map(mentor => (
                       <span
                         key={mentor.mentorProfileId || mentor.userId || mentor.email}
-                        className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-white bg-gradient-to-br from-primary-100 to-secondary/20 text-[10px] font-bold text-primary"
+                        className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-white text-overline font-bold text-primary-700 bg-primary-100"
                       >
                         {mentorInitials(mentor.fullName || 'Mentor')}
                       </span>
                     ))}
                     {classMentors.length > 3 && (
-                      <span className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-white bg-slate-200 text-[10px] font-bold text-slate-600">
+                      <span className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-white bg-slate-200 text-overline font-bold text-slate-600">
                         +{classMentors.length - 3}
                       </span>
                     )}
@@ -389,7 +389,7 @@ export default function StudentClassDetail() {
                   <button
                     type="button"
                     onClick={() => setIsMentorModalOpen(true)}
-                    className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-primary transition hover:text-primary-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 rounded-md"
+                    className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-primary-700 transition hover:text-primary-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 rounded-md"
                   >
                     View mentors <ArrowRight className="h-3.5 w-3.5" />
                   </button>
@@ -423,19 +423,19 @@ export default function StudentClassDetail() {
             const affiliation = mentor.department || mentor.organization;
             return (
               <article key={mentor.mentorProfileId || mentor.userId || mentor.email} className="flex min-w-0 items-start gap-3 rounded-xl border border-slate-200/80 bg-slate-50/70 p-3.5">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary-100 to-secondary/20 text-xs font-bold text-primary ring-2 ring-white">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-xs font-bold text-primary-700 ring-2 ring-white bg-primary-100">
                   {mentorInitials(fullName)}
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-start gap-1.5">
                     <h3 className="min-w-0 text-sm font-bold leading-5 text-slate-800">{fullName}</h3>
-                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${mentor.mentorType === 'Academic' ? 'bg-blue-50 text-blue-700' : mentor.mentorType === 'Enterprise' ? 'bg-orange-50 text-orange-700' : 'bg-slate-100 text-slate-600'}`}>
+                    <span className={`rounded-full px-2 py-0.5 text-overline font-semibold ${mentor.mentorType === 'Academic' ? 'bg-blue-50 text-blue-700' : mentor.mentorType === 'Enterprise' ? 'bg-orange-50 text-orange-700' : 'bg-slate-100 text-slate-600'}`}>
                       {mentorRoleLabel(mentor.mentorType)}
                     </span>
                   </div>
                   {mentor.jobTitle && <p className="mt-1 text-xs font-medium text-slate-600">{mentor.jobTitle}</p>}
                   {affiliation && <p className="mt-0.5 text-xs leading-4 text-slate-400">{affiliation}</p>}
-                  <a href={`mailto:${mentor.email}`} className="mt-1.5 flex min-w-0 items-center gap-1 text-xs text-slate-400 transition hover:text-primary" title={mentor.email}>
+                  <a href={`mailto:${mentor.email}`} className="mt-1.5 flex min-w-0 items-center gap-1 text-xs text-slate-400 transition hover:text-primary-700" title={mentor.email}>
                     <Mail className="h-3.5 w-3.5 shrink-0" />
                     <span className="truncate">{mentor.email}</span>
                   </a>
@@ -556,7 +556,7 @@ export default function StudentClassDetail() {
           onClick={() => setActiveTab('classmates')}
           className={`px-5 py-3 text-sm font-semibold border-b-2 transition-all flex items-center gap-2 ${
             activeTab === 'classmates'
-              ? 'border-primary text-primary'
+              ? 'border-primary text-primary-700'
               : 'border-transparent text-slate-400 hover:text-slate-600'
           }`}
         >
@@ -566,7 +566,7 @@ export default function StudentClassDetail() {
           onClick={() => setActiveTab('teams')}
           className={`px-5 py-3 text-sm font-semibold border-b-2 transition-all flex items-center gap-2 ${
             activeTab === 'teams'
-              ? 'border-primary text-primary'
+              ? 'border-primary text-primary-700'
               : 'border-transparent text-slate-400 hover:text-slate-600'
           }`}
         >
