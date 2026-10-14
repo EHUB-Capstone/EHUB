@@ -95,7 +95,7 @@ export default function MentorSlotDialog({ team, slot, current, mentors, onClose
         <div className="flex items-start justify-between gap-3 border-b border-slate-100 px-5 py-4">
           <div className="min-w-0">
             <h3 id="mentor-slot-title" className="text-base font-bold text-slate-900">{replacing ? 'Replace' : 'Assign'} {label.toLowerCase()}</h3>
-            <p className="mt-0.5 truncate text-xs text-slate-500">{team.teamName || team.teamCode}{current ? ` · now ${current.mentor.fullName}` : ''}</p>
+            <p className="mt-0.5 truncate text-xs text-slate-500">{team.teamName}{current ? ` · now ${current.mentor.fullName}` : ''}</p>
           </div>
           <button type="button" onClick={onClose} disabled={saving} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 disabled:opacity-50" aria-label="Close"><X className="h-4 w-4" /></button>
         </div>

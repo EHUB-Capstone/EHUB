@@ -171,7 +171,7 @@ export default function AssignMentorsModal({ classId, onClose, onAssigned }: Ass
     [teams, selectedMentor],
   );
   const filteredTeams = useMemo(
-    () => eligibleTeams.filter(team => matchesSearchQuery(bulkTeamSearch, [team.teamName, team.teamCode, team.groupName])),
+    () => eligibleTeams.filter(team => matchesSearchQuery(bulkTeamSearch, [team.teamName, team.groupName])),
     [eligibleTeams, bulkTeamSearch],
   );
   // A tick never survives for a team that can no longer take this mentor (for example after a refresh).
@@ -459,7 +459,7 @@ export default function AssignMentorsModal({ classId, onClose, onAssigned }: Ass
                               <div className="min-w-0">
                                 <p className="truncate text-xs font-semibold text-slate-800">{team.teamName || 'Unnamed Team'}</p>
                                 <p className="truncate text-overline text-slate-400">
-                                  {team.teamCode || team.groupName || '—'} · {otherMentor ? `${MENTOR_KIND_STYLES[otherSlot].label}: ${otherMentor.mentor.fullName}` : `No ${MENTOR_KIND_STYLES[otherSlot].label.toLowerCase()} yet`}
+                                  {team.groupName || '—'} · {otherMentor ? `${MENTOR_KIND_STYLES[otherSlot].label}: ${otherMentor.mentor.fullName}` : `No ${MENTOR_KIND_STYLES[otherSlot].label.toLowerCase()} yet`}
                                 </p>
                               </div>
                             </div>

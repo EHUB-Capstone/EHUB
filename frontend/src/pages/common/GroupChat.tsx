@@ -786,7 +786,7 @@ export default function GroupChat() {
                     {selectedChannel.groupName}
                   </h2>
                   <p className="mt-0.5 truncate font-mono text-caption text-slate-400 sm:text-xs">
-                    Class: {selectedChannel.class?.classCode || '—'} · {selectedChannel.team?.teamCode || 'General'} · {channelMembers.length || selectedChannel.memberCount || 0} members
+                    Class: {selectedChannel.class?.classCode || '—'} · {selectedChannel.team ? 'Team chat' : 'General'} · {channelMembers.length || selectedChannel.memberCount || 0} members
                   </p>
                 </div>
               </div>

@@ -280,25 +280,26 @@ export default function LecturerCheckpointManagement({
       </section>
 
       <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className={`flex items-center justify-between gap-3 px-5 py-4 ${schedulesExpanded ? 'border-b border-slate-100' : ''}`}>
-          <div>
-            <h2 className="font-bold text-slate-900">Checkpoint schedules</h2>
-            <p className="mt-0.5 text-xs text-slate-500">Set checkpoint deadlines for your classes here.</p>
-          </div>
-          <div className="flex shrink-0 items-center gap-2">
-            {loading && <Loader2 className="h-4 w-4 animate-spin text-primary" />}
-            <button
-              type="button"
-              aria-label={schedulesExpanded ? 'Collapse checkpoint schedules' : 'Expand checkpoint schedules'}
-              aria-expanded={schedulesExpanded}
-              aria-controls="lecturer-checkpoint-schedules"
-              onClick={() => setSchedulesExpanded(current => !current)}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-600 transition hover:border-primary hover:text-primary-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
-            >
+        <h2>
+        <button
+          type="button"
+          aria-expanded={schedulesExpanded}
+          aria-controls="lecturer-checkpoint-schedules"
+          onClick={() => setSchedulesExpanded(current => !current)}
+          className={`group flex w-full cursor-pointer items-center justify-between gap-3 px-5 py-4 text-left transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/40 ${schedulesExpanded ? 'rounded-t-2xl border-b border-slate-100' : 'rounded-2xl'}`}
+        >
+          <span className="min-w-0">
+            <span className="block font-bold text-slate-900">Checkpoint schedules</span>
+            <span className="mt-0.5 block text-xs text-slate-500">Set checkpoint deadlines for your classes here.</span>
+          </span>
+          <span className="flex shrink-0 items-center gap-2">
+            {loading && <Loader2 className="h-4 w-4 animate-spin text-primary" aria-hidden="true" />}
+            <span aria-hidden="true" className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-600 transition group-hover:border-primary group-hover:text-primary-700">
               <ChevronDown className={`h-4 w-4 transition-transform ${schedulesExpanded ? 'rotate-180' : ''}`} />
-            </button>
-          </div>
-        </div>
+            </span>
+          </span>
+        </button>
+        </h2>
         <div id="lecturer-checkpoint-schedules" hidden={!schedulesExpanded}>
             {scheduleGroups.length === 0 ? (
               <p className="p-8 text-center text-sm text-slate-500">No checkpoint definitions match the selected classes.</p>

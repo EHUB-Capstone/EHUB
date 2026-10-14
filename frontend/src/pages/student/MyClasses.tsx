@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { GraduationCap, User, Mail, Calendar, ArrowRight, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { classApi } from '../../api/classApi';
@@ -10,7 +10,6 @@ export default function MyClasses() {
   const [classes, setClasses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [scope, setScope] = useState<'Current' | 'History'>('Current');
-  const navigate = useNavigate();
 
   useEffect(() => {
     const fetchClasses = async () => {
@@ -78,7 +77,7 @@ export default function MyClasses() {
             return (
               <div
                 key={cls.id || cls._id}
-                className="bg-white rounded-2xl border border-slate-200/60 shadow-sm hover:shadow-md hover:border-slate-300 transition-all flex flex-col justify-between overflow-hidden group"
+                className="relative bg-white rounded-2xl border border-slate-200/60 shadow-sm hover:shadow-md hover:border-slate-300 focus-within:ring-2 focus-within:ring-primary/40 transition-all flex flex-col justify-between overflow-hidden group"
               >
                 {/* Header Gradient Accent */}
                 <div className="h-2 bg-primary" />
@@ -91,7 +90,13 @@ export default function MyClasses() {
                         {cls.subjectCode}
                       </span>
                       <h2 className="text-xl font-bold text-slate-900 mt-2 group-hover:text-primary-700 transition-colors">
-                        {cls.classCode}
+                        {/* Stretched link: the whole card is the click target. */}
+                        <Link
+                          to={`/student/classes/${cls.slug || cls._id || cls.id}`}
+                          className="after:absolute after:inset-0 after:content-[''] focus-visible:outline-none"
+                        >
+                          {cls.classCode}
+                        </Link>
                       </h2>
                     </div>
                     <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 bg-slate-50 border border-slate-100 rounded-lg px-2 py-1">
@@ -147,12 +152,12 @@ export default function MyClasses() {
                 {/* Footer action */}
                 <div className="px-6 py-4 bg-slate-50/50 border-t border-slate-100 flex justify-between items-center group-hover:bg-slate-50 transition-colors">
                   <span className="text-xs text-slate-400 font-medium">Click to see your team or classmates</span>
-                  <button
-                    onClick={() => navigate(`/student/classes/${cls.slug || cls._id || cls.id}`)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 text-slate-700 rounded-xl text-xs font-semibold hover:bg-slate-50 shadow-xs active:scale-[0.98] transition-all"
+                  <span
+                    aria-hidden="true"
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 text-slate-700 rounded-xl text-xs font-semibold shadow-xs group-hover:border-primary group-hover:text-primary-700 transition-colors"
                   >
                     Enter Class <ArrowRight className="w-3.5 h-3.5" />
-                  </button>
+                  </span>
                 </div>
               </div>
             );

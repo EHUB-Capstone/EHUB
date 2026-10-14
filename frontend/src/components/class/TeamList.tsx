@@ -186,7 +186,6 @@ function TeamCard({
                 <h3 className="truncate font-bold text-slate-900">{team.teamName || 'Unnamed team'}</h3>
                 <span className={`rounded-full px-2 py-0.5 text-overline font-bold uppercase ${statusStyles[status] || statusStyles.ACTIVE}`}>{readableStatus(status)}</span>
               </div>
-              <p className="mt-0.5 font-mono text-xs text-slate-400">{team.teamCode || 'No team code'}</p>
               {team.isContinued && (
                 <p className="mt-1 text-xs font-medium text-secondary">
                   Continued from {team.continuedFromSemesterCode || 'the previous semester'}
@@ -226,18 +225,23 @@ function TeamCard({
 
         <p className="mt-3 text-xs font-medium text-slate-500">Chat: {team.hasChatGroup ? 'Chat' : 'No Chat'}</p>
 
-        <div className="mt-4 flex items-center justify-between gap-3">
+        <button
+          type="button"
+          onClick={() => setExpanded((value) => !value)}
+          aria-expanded={expanded}
+          className="group -mx-2 mt-4 flex w-[calc(100%+1rem)] cursor-pointer items-center justify-between gap-3 rounded-xl px-2 py-1.5 text-left transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+        >
           <div className="flex -space-x-2">
             {members.slice(0, 5).map((member) => (
               <span key={member._id} title={member.fullName} className={`flex h-8 w-8 items-center justify-center rounded-full border-2 border-white text-overline font-bold text-white ${member._id === leaderId ? 'bg-amber-500' : 'bg-secondary'}`}>{member.fullName.charAt(0).toUpperCase()}</span>
             ))}
             {members.length > 5 && <span className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-white bg-slate-200 text-overline font-bold text-slate-600">+{members.length - 5}</span>}
           </div>
-          <button type="button" onClick={() => setExpanded((value) => !value)} className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100" aria-expanded={expanded}>
+          <span className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-600 group-hover:bg-slate-100">
             {expanded ? 'Hide details' : 'View details'}
             {expanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
-          </button>
-        </div>
+          </span>
+        </button>
       </div>
 
       {expanded && (

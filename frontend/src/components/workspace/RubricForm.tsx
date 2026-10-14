@@ -26,6 +26,20 @@ const initialRows = (criteria, initialData) => {
   });
 };
 
+// Comparable form of everything the lecturer can edit, so opening the form and saving is not an update.
+const toNumberOrNull = (value) => (value === '' || value == null || !Number.isFinite(Number(value)) ? null : Number(value));
+const editableSnapshot = (rows, feedback, overrides) => JSON.stringify({
+  scores: rows.map((row) => [row.criterionKey, toNumberOrNull(row.score), row.comment || '']),
+  feedback: feedback || '',
+  members: Object.entries(overrides)
+    .map(([studentId, score]) => [studentId, toNumberOrNull(score)])
+    .sort(([left], [right]) => String(left).localeCompare(String(right))),
+});
+const savedOverrides = (initialData) => Object.fromEntries(
+  (initialData?.memberScores || [])
+    .filter((item) => item.isOverridden)
+    .map((item) => [item.studentId, String(item.score)]));
+
 const evaluationStatusPresentation = {
   DRAFT: {
     label: 'Draft',
@@ -66,6 +80,11 @@ export default function RubricForm({
       .map((item) => [item.studentId, String(item.score)])));
   const [attemptedSubmit, setAttemptedSubmit] = useState(false);
   const isSubmitted = initialData?.status === 'SUBMITTED' || initialData?.status === 'PUBLISHED';
+  const savedSnapshot = useMemo(
+    () => editableSnapshot(initialRows(criteria, initialData), initialData?.overallFeedback, savedOverrides(initialData)),
+    [criteria, initialData],
+  );
+  const hasChanges = editableSnapshot(rubricScores, overallFeedback, memberOverrides) !== savedSnapshot;
   const evaluationStatus = String(initialData?.status || 'NOT_GRADED').toUpperCase();
   const statusPresentation = evaluationStatusPresentation[evaluationStatus]
     || evaluationStatusPresentation.NOT_GRADED;
@@ -131,6 +150,8 @@ export default function RubricForm({
 
   const handleSubmit = (status) => {
     if (readOnly || !onSubmit) return;
+    // Saving an unchanged draft or submitted evaluation is not an update; submitting a draft still is.
+    if ((status === 'DRAFT' || isSubmitted) && !hasChanges) return;
     if (rubricScores.length === 0) {
       toast.error('No rubric criteria are configured for this checkpoint.');
       return;
@@ -216,6 +237,7 @@ export default function RubricForm({
                       id={`rubric-score-${checkpointNumber}-${index}`}
                       type="text"
                       inputMode="decimal"
+                      autoComplete="off"
                       value={item.score ?? ''}
                       onChange={(event) => handleScoreChange(index, event.target.value)}
                       disabled={readOnly}
@@ -293,6 +315,7 @@ export default function RubricForm({
                             <input
                               type="text"
                               inputMode="decimal"
+                      autoComplete="off"
                               aria-label={`Score for ${member.fullName}`}
                               value={isOverridden ? memberOverrides[member.studentId] : checkpointTotal.toFixed(2)}
                               onChange={(event) => updateMemberScore(member.studentId, event.target.value)}
@@ -358,11 +381,11 @@ export default function RubricForm({
       {onSubmit && !hideSensitiveScores && (
         <div className="mt-3 flex justify-end gap-2">
           {!isSubmitted && (
-            <button type="button" disabled={readOnly || rubricScores.length === 0} onClick={() => handleSubmit('DRAFT')} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+            <button type="button" disabled={readOnly || rubricScores.length === 0 || !hasChanges} title={hasChanges ? undefined : 'Make a change to save a new draft'} onClick={() => handleSubmit('DRAFT')} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
               Save draft
             </button>
           )}
-          <button type="button" disabled={readOnly || rubricScores.length === 0} onClick={() => handleSubmit('SUBMITTED')} className="rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-white hover:bg-primary/90 disabled:opacity-50">
+          <button type="button" disabled={readOnly || rubricScores.length === 0 || (isSubmitted && !hasChanges)} title={isSubmitted && !hasChanges ? 'Make a change to save a new version' : undefined} onClick={() => handleSubmit('SUBMITTED')} className="rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-white hover:bg-primary/90 disabled:opacity-50">
             {readOnly ? 'Saving...' : isSubmitted ? 'Save changes' : 'Submit evaluation'}
           </button>
         </div>

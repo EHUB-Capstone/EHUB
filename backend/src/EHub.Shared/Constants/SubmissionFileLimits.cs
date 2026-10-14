@@ -12,6 +12,9 @@ public static class SubmissionFileLimits
 
     public const int MaxPendingUploadSessionsPerUserTeam = 5;
 
+    /// <summary>Maximum active (not deleted) files a team may keep on one checkpoint.</summary>
+    public const int MaxActiveFilesPerCheckpoint = 5;
+
     /// <summary>Background preview generation: attempts before a file is marked Failed.</summary>
     public const int MaxPreviewGenerationAttempts = 3;
 

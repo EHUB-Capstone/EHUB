@@ -204,7 +204,7 @@ export default function ClassDirectionOverview({ semester, year, initialClassId 
         };
         overviewRef.current = nextOverview;
         setOverview(nextOverview);
-        const teamName = getDisplayTeamName(previousTeam) || previousTeam.teamCode || 'A team';
+        const teamName = getDisplayTeamName(previousTeam) || 'A team';
         toast(`${teamName} submitted a project direction for review.`, { id: `project-direction-submitted-${event.direction.rowVersion}` });
       },
       () => void synchronizeAfterReconnect(),
@@ -330,10 +330,13 @@ export default function ClassDirectionOverview({ semester, year, initialClassId 
             const approvedExpanded = !isApproved || expandedApprovedTeamIds.has(team._id) || team._id === focusTeamId;
             return (
               <section key={team._id} className={`${isApproved && !approvedExpanded ? 'py-3' : 'py-5 first:pt-4'} ${team._id === focusTeamId ? 'rounded-xl bg-primary-50/40 px-4 ring-2 ring-primary/15' : ''}`}>
-                <div className="flex flex-wrap items-start justify-between gap-3">
+                <div
+                  className={`flex flex-wrap items-start justify-between gap-3 ${isApproved ? 'cursor-pointer rounded-lg transition-colors hover:bg-slate-50' : ''}`}
+                  onClick={isApproved ? () => toggleApprovedTeam(team._id) : undefined}
+                >
                   <div>
                     <h3 className="font-bold text-slate-900">
-                      {team.projectDirectionTitle || team.projectName || getDisplayTeamName(team) || team.teamCode}
+                      {team.projectDirectionTitle || team.projectName || getDisplayTeamName(team)}
                     </h3>
                     <p className="mt-0.5 text-xs text-slate-500">
                       Class: {team.overviewClassCode || '—'} · Team: {team.teamName || 'Unnamed team'} · Leader: {team.leaderName}
@@ -347,7 +350,7 @@ export default function ClassDirectionOverview({ semester, year, initialClassId 
                     {isApproved && (
                       <button
                         type="button"
-                        onClick={() => toggleApprovedTeam(team._id)}
+                        onClick={(event) => { event.stopPropagation(); toggleApprovedTeam(team._id); }}
                         aria-expanded={approvedExpanded}
                         aria-label={`${approvedExpanded ? 'Collapse' : 'Expand'} approved proposal for ${team.teamName || team.projectDirectionTitle || 'team'}`}
                         className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-600 transition hover:border-emerald-300 hover:text-emerald-700"

@@ -82,7 +82,7 @@ export default function MentorAllocationPreviewModal({
       if (filter === 'attention' && !needsAttention) return false;
       if (filter === 'changed' && !changed) return false;
       if (!term) return true;
-      return [row.teamCode, row.teamName, row.classCode, row.enterprise.mentorName, row.academic.mentorName]
+      return [row.teamName, row.classCode, row.enterprise.mentorName, row.academic.mentorName]
         .some(value => value?.toLowerCase().includes(term));
     });
   }, [grid, filter, search]);
@@ -250,8 +250,7 @@ function TeamRow({
   return (
     <tr className="border-t border-slate-100 align-top">
       <td className="px-3 py-2">
-        <span className="block font-semibold text-slate-800">{row.teamCode}</span>
-        <span className="block text-slate-500">{row.teamName}</span>
+        <span className="block font-semibold text-slate-800">{row.teamName}</span>
         <span className="text-caption text-slate-400">{row.classCode}{row.subjectCode ? ` · ${row.subjectCode}` : ''}</span>
       </td>
       {(['Enterprise', 'Academic'] as const).map(type => {
@@ -263,11 +262,11 @@ function TeamRow({
             <SlotCell slot={slot} />
             {!editing && (
               <div className="mt-1.5 flex flex-wrap gap-1">
-                <Button size="xs" variant="ghost" icon={Pencil} disabled={disabled} onClick={() => onOpenEditor({ teamId: row.teamId, mentorType: type })} aria-label={`Change ${slotLabel[type].toLowerCase()} of ${row.teamCode}`}>
+                <Button size="xs" variant="ghost" icon={Pencil} disabled={disabled} onClick={() => onOpenEditor({ teamId: row.teamId, mentorType: type })} aria-label={`Change ${slotLabel[type].toLowerCase()} of ${row.teamName}`}>
                   Change
                 </Button>
                 {hasEdit && (
-                  <Button size="xs" variant="ghost" icon={Undo2} disabled={disabled} onClick={() => onRemoveEdit(row.teamId, type)} aria-label={`Undo edit of ${row.teamCode} ${slotLabel[type].toLowerCase()}`}>
+                  <Button size="xs" variant="ghost" icon={Undo2} disabled={disabled} onClick={() => onRemoveEdit(row.teamId, type)} aria-label={`Undo edit of ${row.teamName} ${slotLabel[type].toLowerCase()}`}>
                     Undo
                   </Button>
                 )}
@@ -275,7 +274,7 @@ function TeamRow({
             )}
             {editing && (
               <SlotEditor
-                teamCode={row.teamCode}
+                teamName={row.teamName}
                 type={type}
                 slot={slot}
                 candidates={getMentorCandidates(preview, type)}
@@ -310,10 +309,10 @@ function SlotCell({ slot }: { slot: SlotView }) {
 }
 
 function SlotEditor({
-  teamId, teamCode, type, slot, candidates, presetMentorId, onCancel, onApply,
+  teamId, teamName, type, slot, candidates, presetMentorId, onCancel, onApply,
 }: {
   teamId: string;
-  teamCode: string;
+  teamName: string;
   type: MentorType;
   slot: SlotView;
   candidates: ReturnType<typeof getMentorCandidates>;
@@ -344,7 +343,7 @@ function SlotEditor({
   return (
     <div className="mt-2 space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-2.5">
       <label htmlFor={`mentor-${fieldId}`} className="block text-caption font-semibold text-slate-600">
-        {slotLabel[type]} for {teamCode}
+        {slotLabel[type]} for {teamName}
       </label>
       <select
         id={`mentor-${fieldId}`}
@@ -443,7 +442,7 @@ function AttentionPanel({
           <ul className="space-y-2">
             {conflicts.map((conflict, index) => (
               <li key={`${conflict.teamId}-${conflict.mentorType}-${index}`} className="flex flex-col gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 sm:flex-row sm:items-center sm:justify-between">
-                <span><strong>{conflict.teamCode || 'Team'}</strong> · {slotLabel[conflict.mentorType]}: {conflict.message}</span>
+                <span><strong>{conflict.teamName || 'Team'}</strong> · {slotLabel[conflict.mentorType]}: {conflict.message}</span>
                 {conflict.kind === 'SlotOccupied' && conflict.teamId && (
                   <Button size="xs" variant="outline" onClick={() => onReplace(conflict)}>Replace…</Button>
                 )}
@@ -459,7 +458,7 @@ function AttentionPanel({
           <ul className="space-y-1.5">
             {skipped.map((item, index) => (
               <li key={`${item.sourceTeamCode}-${item.mentorType}-${index}`} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500 opacity-70">
-                <span className="font-semibold">{item.mentorName || 'Unknown mentor'}</span> · {slotLabel[item.mentorType]} · {item.teamCode || item.sourceTeamCode}
+                <span className="font-semibold">{item.mentorName || 'Unknown mentor'}</span> · {slotLabel[item.mentorType]} · {item.teamName || 'Team'}
                 <span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-overline font-semibold text-slate-600">{skipReasonLabel[item.reason]}</span>
                 <span className="mt-0.5 block text-caption">{item.message}</span>
               </li>
@@ -474,7 +473,7 @@ function AttentionPanel({
           <ul className="grid gap-1.5 sm:grid-cols-2">
             {unfilled.slice(0, 60).map(item => (
               <li key={`${item.teamId}-${item.mentorType}`} className="rounded-lg bg-red-50 px-3 py-1.5 text-xs text-red-700">
-                <strong>{item.teamCode}</strong> · {item.classCode} · {slotLabel[item.mentorType]}
+                <strong>{item.teamName}</strong> · {item.classCode} · {slotLabel[item.mentorType]}
               </li>
             ))}
           </ul>

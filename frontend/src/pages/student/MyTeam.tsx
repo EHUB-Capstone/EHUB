@@ -207,7 +207,6 @@ export default function MyTeam() {
               </div>
               <div>
                 <h2 className="text-2xl font-bold text-slate-900 leading-tight">{displayTeamName}</h2>
-                <p className="text-xs text-slate-400 font-mono mt-0.5 tracking-wider">{team.teamCode}</p>
               </div>
             </div>
 

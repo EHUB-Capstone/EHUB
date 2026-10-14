@@ -395,6 +395,8 @@ interface MockUploadSession {
 
 // Not persisted: an upload session only matters within one page load.
 const mockUploadSessions = new Map<string, MockUploadSession>();
+const MOCK_MAX_CHECKPOINT_FILES = 5;
+const MOCK_FILE_LIMIT_MESSAGE = `A checkpoint can contain at most ${MOCK_MAX_CHECKPOINT_FILES} files. Delete a file before uploading another.`;
 const mockPreviewPolls = new Map<string, number>();
 
 /** Stands in for the presigned R2 URL: the browser PUTs here through storageClient. */
@@ -1156,6 +1158,8 @@ export function registerWorkspaceMockHandlers(mock: MockAdapter): void {
       return failure(400, 'WORKSPACE_VALIDATION_ERROR', 'The file is empty.');
     if (size > MOCK_MAX_UPLOAD_BYTES)
       return failure(400, 'WORKSPACE_VALIDATION_ERROR', 'Files must not exceed 100 MB.');
+    if (filesForCheckpoint(teamId, number).length >= MOCK_MAX_CHECKPOINT_FILES)
+      return failure(400, 'WORKSPACE_VALIDATION_ERROR', MOCK_FILE_LIMIT_MESSAGE);
     const uploadId = allocateId();
     const now = Date.now();
     mockUploadSessions.set(uploadId, { teamId, number, fileName, extension, size, userId: user.id, putDone: false });
@@ -1187,6 +1191,8 @@ export function registerWorkspaceMockHandlers(mock: MockAdapter): void {
       return failure(409, 'WORKSPACE_UPLOAD_OBJECT_MISSING', 'The file has not finished uploading. Please retry.');
     const key = `${teamId}:${number}`;
     const existingFiles = filesForCheckpoint(teamId, number);
+    if (existingFiles.length >= MOCK_MAX_CHECKPOINT_FILES)
+      return failure(400, 'WORKSPACE_VALIDATION_ERROR', MOCK_FILE_LIMIT_MESSAGE);
     const existingLinks = linksForCheckpoint(teamId, number);
     const uploaded = {
       _id: allocateId(),

@@ -1,5 +1,7 @@
 export const CHECKPOINT_UPLOAD_ALLOWED_EXTENSIONS = ['.pdf', '.docx', '.pptx'] as const;
 export const CHECKPOINT_UPLOAD_MAX_FILE_SIZE_MB = 100;
+/** Active files a team may keep on one checkpoint (enforced by the backend as well). */
+export const CHECKPOINT_UPLOAD_MAX_FILES = 5;
 export const CHECKPOINT_UPLOAD_MAX_FILE_SIZE = CHECKPOINT_UPLOAD_MAX_FILE_SIZE_MB * 1024 * 1024;
 /** Timeout for the small JSON calls (initiate / complete). The file itself uses {@link checkpointPutTimeoutMs}. */
 export const CHECKPOINT_UPLOAD_TIMEOUT_MS = 90_000;

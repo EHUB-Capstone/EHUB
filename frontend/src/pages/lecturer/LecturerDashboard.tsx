@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import type { LucideIcon } from 'lucide-react';
 import {
   AlertTriangle,
@@ -473,7 +473,15 @@ const LecturerDashboard = () => {
                         {index + 1}
                       </span>
                     </td>
-                    <td className="px-5 py-3.5 font-semibold text-slate-900">{team.teamName}</td>
+                    <td className="px-5 py-3.5 font-semibold text-slate-900">
+                      <Link
+                        to={`/workspace/teams/${team.teamId}`}
+                        onClick={(event) => event.stopPropagation()}
+                        className="rounded hover:text-primary-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                      >
+                        {team.teamName}
+                      </Link>
+                    </td>
                     <td className="px-5 py-3.5 text-slate-600">{team.classCode}</td>
                     <td className="px-5 py-3.5 text-slate-600">{team.projectName || '—'}</td>
                     <td className="px-5 py-3.5 text-slate-600">{team.completedComponents}/{team.totalComponents}</td>

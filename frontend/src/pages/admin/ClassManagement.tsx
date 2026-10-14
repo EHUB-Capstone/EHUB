@@ -731,8 +731,18 @@ export default function ClassManagement() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.04 }}
-                className={`bg-white rounded-2xl border shadow-sm hover:shadow-elevated hover:-translate-y-1 transition-all group cursor-pointer ${selectedClassIds.has(cls._id) ? 'border-primary ring-2 ring-primary/15' : 'border-slate-200/60'}`}
+                className={`bg-white rounded-2xl border shadow-sm hover:shadow-elevated hover:-translate-y-1 transition-all group cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 ${selectedClassIds.has(cls._id) ? 'border-primary ring-2 ring-primary/15' : 'border-slate-200/60'}`}
                 onClick={() => navigate(`/classes/${cls.slug || cls._id || cls.id}`)}
+                role="link"
+                tabIndex={0}
+                aria-label={`Open class ${cls.classCode}`}
+                onKeyDown={(event) => {
+                  // Only react when the card itself has focus, so Enter on the checkbox or buttons inside keeps its own meaning.
+                  if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) {
+                    event.preventDefault();
+                    navigate(`/classes/${cls.slug || cls._id || cls.id}`);
+                  }
+                }}
               >
                 <div className="p-5">
                   {/* Top row */}

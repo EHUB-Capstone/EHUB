@@ -194,10 +194,14 @@ body {
   color: #7C2D0B;
 }
 
-/* Visible keyboard focus everywhere; mouse clicks do not show it. */
-:focus-visible {
-  outline: 2px solid var(--color-primary-600);
-  outline-offset: 2px;
+/* Visible keyboard focus everywhere; mouse clicks do not show it. It lives in @layer base so an
+   explicit `outline-none` / `focus:outline-none` utility (for example an input whose wrapper draws
+   the focus border) still wins; unlayered styles would override every Tailwind utility. */
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--color-primary-600);
+    outline-offset: 2px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -502,6 +506,7 @@ body {
 .dark :where(.hover\:bg-blue-50, .hover\:bg-indigo-50, .hover\:bg-secondary-50):hover { background-color: rgba(121, 168, 217, 0.14); }
 .dark :where(.hover\:bg-blue-100, .hover\:bg-indigo-100, .hover\:bg-secondary-100):hover { background-color: rgba(121, 168, 217, 0.2); }
 .dark .group:hover :where(.group-hover\:bg-slate-50) { background-color: #1B3050; }
+.dark .group:hover :where(.group-hover\:bg-slate-100) { background-color: #334155; }
 .dark .group:hover :where(.group-hover\:bg-orange-50, .group-hover\:bg-primary-100\/20) { background-color: rgba(245, 106, 42, 0.14); }
 .dark :where(
   .hover\:border-slate-100, .hover\:border-slate-200, .hover\:border-slate-300, .hover\:border-slate-400,
