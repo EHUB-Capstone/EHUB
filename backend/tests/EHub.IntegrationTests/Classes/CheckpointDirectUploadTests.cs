@@ -117,6 +117,55 @@ public sealed partial class TeamWorkflowIntegrationTests
     }
 
     [Fact]
+    public async Task DirectUpload_LimitsActiveFilesPerCheckpoint()
+    {
+        using var fixture = await CreateUploadFixtureAsync();
+        for (var index = 0; index < SubmissionFileLimits.MaxActiveFilesPerCheckpoint; index++)
+            await fixture.UploadStoredFileAsync($"file-{index}.pdf", System.Text.Encoding.ASCII.GetBytes($"%PDF-{index}"));
+
+        var rejected = await fixture.InitiateAsync("one-too-many.pdf");
+
+        rejected.IsFailure.Should().BeTrue();
+        rejected.Error.Code.Should().Be(ErrorCodes.WorkspaceValidationError);
+        rejected.Error.Message.Should().Contain($"at most {SubmissionFileLimits.MaxActiveFilesPerCheckpoint} files");
+        (await fixture.Context.SubmissionUploadSessions.AnyAsync(item => item.OriginalName == "one-too-many.pdf")).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task DirectUploadComplete_RejectsAndDeletesObjectWhenFileLimitWasReachedMeanwhile()
+    {
+        using var fixture = await CreateUploadFixtureAsync();
+        async Task<CheckpointFileUploadSessionResponse> StartAsync(int index)
+        {
+            var content = $"%PDF-parallel-{index:D2}";
+            var started = await fixture.InitiateAsync($"parallel-{index}.pdf", size: content.Length);
+            started.IsSuccess.Should().BeTrue();
+            fixture.PutObject(started.Value.UploadId, content);
+            return started.Value;
+        }
+
+        // Five uploads are in flight, four finish, then a sixth starts while only one slot is left.
+        var inFlight = new List<CheckpointFileUploadSessionResponse>();
+        for (var index = 0; index < SubmissionFileLimits.MaxActiveFilesPerCheckpoint; index++)
+            inFlight.Add(await StartAsync(index));
+        for (var index = 0; index < SubmissionFileLimits.MaxActiveFilesPerCheckpoint - 1; index++)
+            (await fixture.CompleteAsync(inFlight[index].UploadId)).IsSuccess.Should().BeTrue();
+        var extra = await StartAsync(SubmissionFileLimits.MaxActiveFilesPerCheckpoint);
+        (await fixture.CompleteAsync(inFlight[^1].UploadId)).IsSuccess.Should().BeTrue();
+        var objectKey = fixture.ObjectKeyOf(extra.UploadId);
+
+        var rejected = await fixture.CompleteAsync(extra.UploadId);
+
+        rejected.IsFailure.Should().BeTrue();
+        rejected.Error.Code.Should().Be(ErrorCodes.WorkspaceValidationError);
+        (await fixture.Context.SubmissionFiles.CountAsync(item => item.Submission.TeamId == fixture.Seed.TeamId))
+            .Should().Be(SubmissionFileLimits.MaxActiveFilesPerCheckpoint);
+        (await fixture.Context.SubmissionUploadSessions.AsNoTracking().SingleAsync(item => item.Id == extra.UploadId)).Status
+            .Should().Be(SubmissionUploadSessionStatus.Aborted);
+        fixture.Storage.Deleted.Should().Contain(objectKey);
+    }
+
+    [Fact]
     public async Task DirectUploadComplete_CreatesSubmissionFileOnlyAfterTheObjectExists()
     {
         using var fixture = await CreateUploadFixtureAsync();

@@ -150,6 +150,7 @@ dotnet ef migrations add <MeaningfulName> --project backend/src/EHub.Infrastruct
 - Không dùng gradient trang trí và không dùng thẻ KPI nền navy. Nội dung nằm trong card dùng `Card tone="inset"`, không lồng card trong card.
 - Dark mode: mặc định là light; phần override dark nằm trong `index.css`. Class màu nhạt mới (`bg-*-50`, `border-*-200`…) phải có override `.dark`; `npm test` (`darkThemeCoverage`) sẽ báo nếu thiếu.
 - Màu biểu đồ lấy từ `frontend/src/constants/chartColors.ts`.
+- Vùng bấm: vùng đóng/mở dùng cả hàng tiêu đề làm `<button>` có `aria-expanded`. Thẻ có một hành động chính dùng stretched link (`<Link>` với `after:absolute after:inset-0`, thẻ `relative`), nút phụ bên trong đặt `relative z-10`. Không đặt `onClick` lên `div`/`tr` mà không có link hoặc nút cho bàn phím. Nút chỉ có icon tối thiểu `h-9 w-9`.
 
 ## 7. Test và điều kiện hoàn thành
 

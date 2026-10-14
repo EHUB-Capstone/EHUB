@@ -298,7 +298,6 @@ export default function VerifyMajorModal({ classId, onClose, onUpdated }) {
                     {appliedSummary.teamWarnings.map(warning => (
                       <li key={warning.teamId}>
                         <span className="font-semibold">{warning.teamName}</span>
-                        {warning.teamCode ? <span className="font-mono text-amber-600"> ({warning.teamCode})</span> : null}
                         {' — '}{warning.majorComposition.message}
                       </li>
                     ))}

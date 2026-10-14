@@ -3,7 +3,7 @@ import toast from 'react-hot-toast';
 import { Search, Users, AlertTriangle, UserMinus, RotateCcw, ChevronLeft, ChevronRight, RefreshCw, Loader2 } from 'lucide-react';
 import EmptyState from '../ui/EmptyState';
 import { getMajorName, TEAM_MAJOR_GROUPS } from '../../constants/majors';
-import { isMissingTeamMajor } from '../../utils/teamManagement';
+import { isMissingTeamMajor, orderStudentsByTeamBlock } from '../../utils/teamManagement';
 import { shortenSemesterCode } from '../../utils/semester';
 import { matchesSearchQuery } from '../../utils/searchText';
 
@@ -88,7 +88,11 @@ export default function StudentTable({
   editableStudentId = undefined,
   onMajorChange = undefined,
   updatingMajor = false,
+  priorityTeamId = undefined,
+  descriptionFromWidth = '5xl',
 }) {
+  // Tailwind needs complete class names, so the two supported breakpoints are spelled out.
+  const descriptionVisibility = descriptionFromWidth === '4xl' ? '@4xl:table-cell' : '@5xl:table-cell';
   const students = useMemo(() => (Array.isArray(rawStudents) ? rawStudents : []), [rawStudents]);
   const teams = useMemo(() => (Array.isArray(rawTeams) ? rawTeams : []), [rawTeams]);
   const semesterCode = shortenSemesterCode(
@@ -127,33 +131,10 @@ export default function StudentTable({
       return matchSearch && matchMajor;
     });
 
-    const teamIndexMap = new Map();
-    teams.forEach((t, index) => teamIndexMap.set(t._id.toString(), index));
-
-    result.sort((a, b) => {
-      if (a.teamId && b.teamId) {
-        const aTeamId = a.teamId.toString();
-        const bTeamId = b.teamId.toString();
-        if (aTeamId === bTeamId) {
-          const t = teamMap.get(aTeamId);
-          // Leader first
-          const aId = typeof a._id === 'object' ? a._id.toString() : a._id;
-          const bId = typeof b._id === 'object' ? b._id.toString() : b._id;
-          const leaderId = t?.leaderId?._id ? t.leaderId._id.toString() : (typeof t?.leaderId === 'string' ? t.leaderId : null);
-          
-          if (leaderId === aId) return -1;
-          if (leaderId === bId) return 1;
-          return 0;
-        }
-        return (teamIndexMap.get(aTeamId) ?? 999) - (teamIndexMap.get(bTeamId) ?? 999);
-      }
-      if (a.teamId) return -1;
-      if (b.teamId) return 1;
-      return 0;
-    });
+    result = orderStudentsByTeamBlock(result, teams, priorityTeamId);
 
     return result;
-  }, [students, teams, deferredSearch, filterMajor, teamMap, serverQuery]);
+  }, [students, teams, deferredSearch, filterMajor, serverQuery, priorityTeamId]);
 
   const hideProjectName = useMemo(() => {
     if (teams.length === 0) return false;
@@ -331,7 +312,7 @@ export default function StudentTable({
                 {!hideProjectName && (
                   <th className="hidden px-3 py-2.5 text-left text-overline font-bold uppercase tracking-wider text-slate-600 @4xl:table-cell">Project Name</th>
                 )}
-                <th className="hidden w-1/4 px-3 py-2.5 text-left text-overline font-bold uppercase tracking-wider text-slate-600 @5xl:table-cell">Description</th>
+                <th className={`hidden w-1/4 px-3 py-2.5 text-left text-overline font-bold uppercase tracking-wider text-slate-600 ${descriptionVisibility}`}>Description</th>
                 <th className="px-3 py-2.5 text-center text-overline font-bold uppercase tracking-wider text-slate-600">Team Status</th>
                 <th className="px-3 py-2.5 text-center text-overline font-bold uppercase tracking-wider text-slate-600">Enrollment</th>
                 {(onDeleteStudent || onReEnrollStudent) && (
@@ -455,7 +436,7 @@ export default function StudentTable({
                       </td>
                     )}
 
-                    <td className="hidden px-3 py-2.5 text-xs text-slate-500 @5xl:table-cell" title={team?.projectDescription || team?.description}>
+                    <td className={`hidden px-3 py-2.5 text-xs text-slate-500 ${descriptionVisibility}`} title={team?.projectDescription || team?.description}>
                       {(!s.teamId || isFirstInTeam) ? (
                         <div className="max-w-sm whitespace-pre-wrap break-words leading-5">{team?.projectDescription || team?.description || '—'}</div>
                       ) : ''}

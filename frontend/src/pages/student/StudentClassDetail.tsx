@@ -15,7 +15,7 @@ import TeamSuggestionTooltip from '../../components/class/TeamSuggestionTooltip'
 import { useAuth } from '../../hooks/useAuth';
 import { unwrapApiData } from '../../utils/classMappers';
 import { isOpenFormationForMe, remainingInviteSlots } from '../../utils/teamFormation';
-import { entityId, getTeamMajorWarning, normalizeManagedTeam, normalizeTeamProposal, getTeamMemberIds, isMissingTeamMajor, isVerifiedEnrollmentMajor, mergeTeamsWithLinkedProposals } from '../../utils/teamManagement';
+import { entityId, getTeamMajorWarning, normalizeManagedTeam, normalizeTeamProposal, getTeamMemberIds, isMissingTeamMajor, isVerifiedEnrollmentMajor, mergeTeamsWithLinkedProposals, prioritizeOwnTeams, sortTeamsByCode } from '../../utils/teamManagement';
 import ProjectDirectionModal from '../../components/class/ProjectDirectionModal';
 import { teamApi } from '../../api/teamApi';
 import { parseApiError } from '../../utils/apiError';
@@ -136,7 +136,6 @@ export default function StudentClassDetail() {
   const loadedClassId = cls?.id || cls?._id || id;
   const students = Array.isArray(data?.students) ? data.students : [];
   const teams    = Array.isArray(data?.teams) ? data.teams : [];
-  const displayedTeams = mergeTeamsWithLinkedProposals(teams, proposals);
   const lecturer = cls?.lectureId;
   const classMentors: ClassMentorSummary[] = Array.isArray(cls?.mentors)
     ? [...cls.mentors].sort((left, right) => {
@@ -157,6 +156,12 @@ export default function StudentClassDetail() {
     ? teams.find(team => String(team._id) === String(currentStudent.teamId))
     : undefined;
   const ownTeamMajorWarning = ownTeam ? getTeamMajorWarning(ownTeam) : null;
+  // The student's own team (and own proposals) come first so they do not have to scroll to find them.
+  const displayedTeams = prioritizeOwnTeams(
+    mergeTeamsWithLinkedProposals(sortTeamsByCode(teams), proposals),
+    currentStudent?._id,
+    currentStudent?.teamId,
+  );
   const majorActionRequired = Boolean(currentStudent && isMissingTeamMajor(currentStudent.major));
   const majorVerified = isVerifiedEnrollmentMajor(currentStudent?.majorVerificationStatus);
   const openFormations = formations.filter(isOpenFormationForMe);
@@ -578,12 +583,14 @@ export default function StudentClassDetail() {
       {activeTab === 'classmates' ? (
         <StudentTable
           students={students}
-          teams={teams}
+          teams={sortTeamsByCode(teams)}
           cls={cls}
           selected={selected}
           onSelectionChange={setSelected}
           onRefresh={fetchClassDetail}
           maxSelection={canInviteMore ? inviteSlotsLeft : 6}
+          priorityTeamId={currentStudent?.teamId}
+          descriptionFromWidth="4xl"
           selectionDisabled={selectionDisabled}
           toolbarAction={!selectionDisabled && selected.length === 0 && !canInviteMore ? (
             <div className="flex items-center gap-2">

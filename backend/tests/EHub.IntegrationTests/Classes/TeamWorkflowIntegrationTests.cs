@@ -2447,6 +2447,29 @@ public sealed partial class TeamWorkflowIntegrationTests
         saved.Value.RubricScores.Select(item => item.CriterionKey).Should().Equal("clarity", "evidence");
         saved.Value.MemberScores!.Should().HaveCount(seed.StudentIds.Count());
         saved.Value.MemberScores.Should().OnlyContain(item => item.Score == 8.6m && !item.IsOverridden);
+
+        // Saving the same content again is not an update: no new history version and no new timestamp.
+        var historyBeforeUnchangedSave = await context.EvaluationHistories.AsNoTracking()
+            .CountAsync(item => item.EvaluationId == saved.Value.Id);
+        var updatedAtBeforeUnchangedSave = (await context.Evaluations.AsNoTracking().SingleAsync(item => item.Id == saved.Value.Id)).UpdatedAt;
+        var unchangedSave = await handler.SaveAsync(seed.TeamId.Value, 1,
+            new SaveWorkspaceCheckpointEvaluationRequest
+            {
+                Status = "SUBMITTED",
+                OverallFeedback = "Strong evidence and a clear startup direction.",
+                RubricScores = new[]
+                {
+                    new WorkspaceCheckpointCriterionScoreInput { CriterionKey = "clarity", Score = 9, Comment = "Clear." },
+                    new WorkspaceCheckpointCriterionScoreInput { CriterionKey = "evidence", Score = 8, Comment = "Good evidence." }
+                }
+            }, seed.LecturerId, SystemRoles.Lecturer);
+        unchangedSave.IsSuccess.Should().BeTrue();
+        unchangedSave.Value.Id.Should().Be(saved.Value.Id);
+        context.ChangeTracker.Clear();
+        (await context.EvaluationHistories.AsNoTracking().CountAsync(item => item.EvaluationId == saved.Value.Id))
+            .Should().Be(historyBeforeUnchangedSave);
+        (await context.Evaluations.AsNoTracking().SingleAsync(item => item.Id == saved.Value.Id)).UpdatedAt
+            .Should().Be(updatedAtBeforeUnchangedSave);
         var lecturerBatch = await handler.GetGradingBatchAsync(
             new EvaluationGradingBatchRequest { TeamIds = new[] { seed.TeamId.Value, seed.TeamId.Value } },
             seed.LecturerId, SystemRoles.Lecturer);

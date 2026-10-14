@@ -670,7 +670,7 @@ const MentoringSessions = () => {
                     <option value="">-- Choose Team --</option>
                     {selectedClassTeams.map(t => (
                       <option key={t._id} value={t._id}>
-                        {t.teamName} ({t.teamCode})
+                        {t.teamName}
                       </option>
                     ))}
                   </select>

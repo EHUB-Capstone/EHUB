@@ -30,7 +30,7 @@ export default function MentorTeamsBoard({ rows, disabled, onAssign, onReplace, 
             <tr key={row.team._id} className="align-top">
               <th scope="row" className="px-4 py-3 text-left font-normal">
                 <p className="text-xs font-bold text-slate-800">{row.team.teamName || 'Unnamed team'}</p>
-                <p className="mt-0.5 text-overline text-slate-400">{row.team.teamCode || row.team.groupName || '—'}</p>
+                <p className="mt-0.5 text-overline text-slate-400">{row.team.groupName || '—'}</p>
                 {row.missingCount > 0 && (
                   <span className="mt-1 inline-flex rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-overline font-semibold text-amber-800">
                     {row.missingCount === 2 ? 'No mentors yet' : 'Missing 1 mentor'}
