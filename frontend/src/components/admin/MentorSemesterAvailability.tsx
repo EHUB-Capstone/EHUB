@@ -6,6 +6,7 @@ import { parseApiError } from '../../utils/apiError';
 import Modal from '../ui/Modal';
 import Button from '../ui/Button';
 import ConfirmDialog from '../ui/ConfirmDialog';
+import Badge from '../ui/Badge';
 
 interface Row { semester: SemesterDto; staff?: TeachingStaffDto }
 export default function MentorSemesterAvailability({ profile, onClose }: { profile: MentorProfile; onClose: () => void }) {
@@ -52,12 +53,12 @@ export default function MentorSemesterAvailability({ profile, onClose }: { profi
     finally { busy.current = false; if (!controller.signal.aborted) { setSaving(false); setConfirm(null); } }
   };
   return <Modal isOpen onClose={() => { if (!busy.current) onClose(); }} title={`Semester availability · ${profile.fullName}`} size="lg">
-    <p className="mb-4 text-sm text-slate-600">Available mentors can be assigned and recommended for that semester. Availability cannot be removed while the mentor has active assignments.</p>
-    {error && <p role="alert" className="mb-3 rounded-lg bg-red-50 p-3 text-red-700">{error} <Button variant="ghost" disabled={saving} onClick={() => { setError(''); setReload(x => x + 1); }}>Retry</Button></p>}
-    {notice && <p role="status" className="mb-3 text-green-700">{notice}</p>}
+    <p className="mb-4 text-body text-slate-600">Available mentors can be assigned and recommended for that semester. Availability cannot be removed while the mentor has active assignments.</p>
+    {error && <p role="alert" className="mb-3 rounded-lg bg-danger-50 p-3 text-body text-danger-dark">{error} <Button variant="ghost" disabled={saving} onClick={() => { setError(''); setReload(x => x + 1); }}>Retry</Button></p>}
+    {notice && <p role="status" className="mb-3 text-body text-success-dark">{notice}</p>}
     {loading ? <p role="status">Loading semesters…</p> : rows.length === 0 ? <p>No semesters have been created.</p> :
       <ul className="divide-y divide-slate-200">{rows.map(row => <li key={row.semester.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
-        <div><p className="font-medium">{row.semester.semester} {row.semester.year}</p><p className="text-sm text-slate-500">{row.semester.status} · {row.staff?.status === 'Active' ? 'Available' : 'Unavailable'}</p></div>
+        <div><p className="text-subheading text-secondary">{row.semester.semester} {row.semester.year}</p><div className="mt-1 flex items-center gap-2 text-body text-slate-500"><span>{row.semester.status}</span><Badge variant={row.staff?.status === 'Active' ? 'success' : 'neutral'}>{row.staff?.status === 'Active' ? 'Available' : 'Unavailable'}</Badge></div></div>
         <Button variant="outline" size="sm" disabled={saving || !['Planned', 'Active'].includes(row.semester.status)} onClick={() => {
           if (row.staff?.status === 'Active') setConfirm(row); else void change(row);
         }}>{row.staff?.status === 'Active' ? 'Make unavailable' : 'Make available'}</Button>

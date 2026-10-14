@@ -2,8 +2,8 @@
 
 ## Phạm vi triển khai
 
-- Một hồ sơ mentor tồn tại xuyên học kỳ. Loại mentor do admin quản lý (`Enterprise`/`Academic`, hiển thị tương ứng `Business`/`IT` trong hồ sơ hỗ trợ). Mentor tự cập nhật chuyên môn, kinh nghiệm, giới thiệu, tổ chức, LinkedIn và portfolio URL.
-- Mentor tải CV hoặc portfolio dạng PDF/DOCX (tối đa 10 MB). Backend kiểm tra phần mở rộng và chữ ký/nội dung cấu trúc file trước khi lưu; chỉ mentor sở hữu, admin và giảng viên có phạm vi học kỳ phù hợp được tải xuống. URL lưu trữ không xuất hiện trong DTO.
+- Một hồ sơ mentor tồn tại xuyên học kỳ. Loại mentor do admin quản lý (`Enterprise`/`Academic`, hiển thị tương ứng `Business`/`IT` trong hồ sơ hỗ trợ). Mentor tự cập nhật chuyên môn, Skills, kinh nghiệm, giới thiệu, tổ chức, LinkedIn và portfolio URL. Skills dùng trường `technologySkills` hiện có, nhập/sửa thủ công; được phép để trống, tối đa 20 kỹ năng khác nhau, mỗi kỹ năng tối đa 80 ký tự.
+- Mentor tải CV hoặc portfolio dạng PDF/DOC/DOCX (tối đa 10 MB). CV được đọc ngay khi upload: học vấn, ngoại ngữ, thành tích và nghiên cứu đi vào phần giới thiệu; quá trình làm việc đi vào kinh nghiệm. Chuyên môn nhận diện được từ các phần này được bổ sung vào danh sách hiện có. Không trích Skills từ CV; kỹ năng đã lưu và kỹ năng đang nhập dở trên form được giữ nguyên khi upload CV/portfolio. Metadata tài liệu và chuyên môn mới được lưu cùng lần cập nhật hồ sơ; mentor xem và chỉnh lại trên form ngay sau khi upload. Portfolio chỉ được lưu như trước. Backend kiểm tra phần mở rộng và chữ ký/nội dung cấu trúc file trước khi lưu; chỉ mentor sở hữu, admin và giảng viên có phạm vi học kỳ phù hợp được tải xuống. URL lưu trữ không xuất hiện trong DTO.
 - Admin và giảng viên xem danh mục mentor cùng số nhóm đang phụ trách, tổng lần phân công, buổi mentoring và điểm phản hồi trung bình. Danh mục của giảng viên bị giới hạn theo học kỳ/lớp phụ trách.
 - Gợi ý mentor cho nhóm theo mô tả dự án, công nghệ, tag, chuyên môn và kinh nghiệm. API chỉ xét mentor có mặt trong danh sách nhân sự học kỳ, đang hoạt động và còn vị trí mentor theo loại trên nhóm. Điểm 0–100 và lý do được trả về để giảng viên chọn; API gợi ý không tự phân công.
 - Admin, giảng viên phụ trách hoặc mentor được phân công tạo, sửa, hoàn thành, hủy buổi mentoring và ghi action item. Sinh viên thuộc nhóm được xem buổi và gửi đánh giá 1–5 cùng nhận xét sau khi buổi kết thúc. Admin/giảng viên/mentor được xem đánh giá.
@@ -17,7 +17,28 @@ Nhóm cần có mô tả dự án, công nghệ, lĩnh vực hoặc tag trước
 
 Vector hồ sơ mentor được lưu trong PostgreSQL `mentor_embeddings` bằng pgvector. Hash của nội dung và tên mô hình giúp tạo lại vector khi mentor sửa hồ sơ hoặc đổi mô hình. Vector dự án được tạo khi yêu cầu gợi ý. Cosine được tính chính xác trong backend trên các mentor đã lọc, chưa dùng chỉ mục HNSW. Văn bản được giới hạn 6.000 ký tự, ưu tiên thông tin chuyên môn/công nghệ; mô hình được gọi theo batch 4 hồ sơ. Backend giới hạn tổng thời gian gợi ý 45 giây; cache đã ghi thành công được tái sử dụng khi người dùng thử lại.
 
-Chỉ loại mentor, chuyên môn, kinh nghiệm và giới thiệu được gửi tới Ollama nội bộ; không đọc CV hoặc gửi trường tên/email/URL tài liệu. Nội dung tự do do mentor nhập có thể chứa thông tin cá nhân. Mock frontend chỉ mô phỏng kết quả để phát triển giao diện, không chạy BGE-M3.
+CV được trích văn bản tại backend, không gửi file gốc đến AI. Bộ phân tích theo tiêu đề Việt/Anh lấy các mục chuyên môn; bỏ mục thông tin cá nhân, người thân, sở thích và chữ ký, đồng thời loại email/điện thoại/URL trong văn bản chuyên môn. Các tag phổ biến được nhận diện theo từ khóa; không dùng mô hình sinh văn bản để suy đoán công ty, số năm kinh nghiệm hoặc loại mentor. Loại mentor, chuyên môn, kinh nghiệm và giới thiệu đã lưu được gửi tới Ollama nội bộ khi staff yêu cầu gợi ý. Không gửi các trường tên/email/URL tài liệu. Nội dung mentor tự nhập vẫn có thể chứa thông tin cá nhân. Mock frontend chỉ mô phỏng trích xuất và kết quả matching để phát triển giao diện, không đọc file hoặc chạy BGE-M3.
+
+### Trích xuất CV khi upload
+
+- Hồ sơ chuyên môn và nộp CV nằm trong tab `Mentor profile & CV` của trang Profile chung (`/profile`), chỉ hiển thị cho role Mentor. Mentor có thêm tab thông tin cá nhân (`/profile?tab=personal`); các role khác tiếp tục dùng thông tin tài khoản của mình. Đường dẫn cũ `/mentor/profile` chuyển về `/profile`, không còn mục Mentor Profile riêng trên thanh bên. API hồ sơ/nộp CV vẫn yêu cầu quyền Mentor.
+- Hồ sơ đã có thông tin mở ở chế độ xem: chuyên môn/công nghệ dạng nhãn, giới thiệu/kinh nghiệm dạng nội dung đọc, tài liệu hiển thị tên file và nút tải xuống. `Edit profile` mở form; lưu thành công đóng form và đưa màn hình về đầu bản đã lưu. `Cancel` bỏ các chỉnh sửa chưa lưu và khôi phục dữ liệu đã lưu gần nhất. Lưu thất bại giữ form/dữ liệu để sửa và thử lại. Hồ sơ trống mở form nộp CV ngay; upload CV vẫn lưu kết quả trích xuất tại backend và để form mở cho mentor kiểm tra.
+- Sau khi đăng nhập email hoặc Google, mentor có hồ sơ chuyên môn trống được chuyển thẳng đến `/profile` để nộp CV/nhập thông tin. Có CV hoặc nội dung chuyên môn (giới thiệu, kinh nghiệm, chuyên môn, lĩnh vực, công nghệ, tag hoặc experience entry) thì vào Mentor Overview (`/mentor`). Chỉ thông tin tài khoản/tổ chức hoặc file portfolio chưa được xem là hồ sơ chuyên môn. Nếu tải hồ sơ lỗi, mở trang hồ sơ để hiển thị lỗi và cho phép retry.
+- PDF có văn bản: đọc bằng [PdfPig](https://github.com/UglyToad/PdfPig). PDF scan/ảnh chưa có OCR và file đặt mật khẩu bị từ chối với thông báo để người dùng đổi file.
+- DOCX: đọc các paragraph và bảng trong `word/document.xml`, giữ Unicode và nối text run. Không đọc liên kết ngoài; cấm DTD và giới hạn XML giải nén 2 MiB.
+- DOC cũ: dùng LibreOffice có sẵn trong image backend để chuyển sang PDF rồi đọc văn bản. Backend chạy ngoài Docker cần cài LibreOffice hoặc cấu hình `DocumentPreview:LibreOfficeExecutablePath`. Nếu converter chưa sẵn sàng, API trả `503`; mentor có thể chuyển sang DOCX/PDF và thử lại.
+- Tối đa 40 trang PDF và 60.000 ký tự văn bản. Cần tiêu đề mục rõ ràng như `QUÁ TRÌNH ĐÀO TẠO`, `KINH NGHIỆM LÀM VIỆC` hoặc `Education`, `Work experience`. CV không cần có mục Skills; nếu có, mục kỹ năng riêng không được trích vào hồ sơ. Nội dung được giới hạn theo các trường sẵn có: giới thiệu 2.000 ký tự, kinh nghiệm 4.000 ký tự, tối đa 20 tag mỗi danh sách. Mentor nên kiểm tra lại kết quả trên form.
+- Không sửa loại mentor, tổ chức, liên kết, Skills (`technologySkills`), tag thủ công hoặc các experience entry do người dùng quản lý. Phần giới thiệu/kinh nghiệm được cập nhật khi CV có mục tương ứng; mục thiếu giữ giá trị cũ. Tag chuyên môn được gộp vào danh sách hiện tại. Skills được chỉnh trong ô riêng trên form và lưu cùng hồ sơ; upload tài liệu không làm mất giá trị đã nhập. Không thay đổi schema hoặc API response.
+- Nếu đọc/trích xuất/upload thất bại thì CV và hồ sơ cũ được giữ lại. Nếu lưu database thất bại, file mới được dọn như luồng upload hiện có. Hash nội dung hồ sơ khiến vector được tạo lại ở lần gợi ý tiếp theo; không cần chạy AI ngay trong request upload.
+
+Chạy test với model thật (Ollama local đã tải `bge-m3`):
+
+```powershell
+$env:EHUB_TEST_REAL_OLLAMA = '1'
+dotnet test tests/EHub.IntegrationTests/EHub.IntegrationTests.csproj --filter "FullyQualifiedName~MentorCvUploadIntegrationTests"
+```
+
+Chạy từ `backend/`. Test tạo PostgreSQL tạm bằng Testcontainers, dùng tài khoản/CV hoàn toàn giả và thay file storage bằng bộ nhớ. Ca model thật được đánh dấu skipped khi chưa bật biến trên; các ca thông thường dùng HTTP double của Ollama để kiểm tra dữ liệu gửi đi và quyền API.
 
 ### Thiết lập VPS
 

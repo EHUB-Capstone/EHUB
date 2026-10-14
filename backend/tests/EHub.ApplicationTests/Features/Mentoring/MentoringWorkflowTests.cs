@@ -44,7 +44,8 @@ public sealed class MentoringWorkflowTests
         embeddings.SimilaritiesAsync(Arg.Any<string>(), Arg.Any<IReadOnlyCollection<MentorProfile>>(),
             Arg.Any<CancellationToken>()).Returns(new Dictionary<Guid, double>
                 { [profile.Id] = 0.8, [otherProfile.Id] = 0.2 });
-        var handler = new MentorProfileHandler(context, Substitute.For<IMentorDocumentStorageService>(), embeddings);
+        var handler = new MentorProfileHandler(context, Substitute.For<IMentorDocumentStorageService>(), embeddings,
+            Substitute.For<IMentorCvTextReader>());
 
         var denied = await handler.RecommendAsync(group.Id, Guid.NewGuid(), SystemRoles.Lecturer, default);
         var allowed = await handler.RecommendAsync(group.Id, lecturer.Id, SystemRoles.Lecturer, default);

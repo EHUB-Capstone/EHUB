@@ -29,7 +29,6 @@ const AccountApprovals = lazy(() => import('./pages/admin/AccountApprovals'));
 const LecturerDashboard = lazy(() => import('./pages/lecturer/LecturerDashboard'));
 const LecturerClasses = lazy(() => import('./pages/lecturer/LecturerClasses'));
 const MentorDashboard = lazy(() => import('./pages/mentor/MentorOverview'));
-const MentorProfilePage = lazy(() => import('./pages/mentor/MentorProfilePage'));
 const MentorDirectory = lazy(() => import('./pages/shared/MentorDirectory'));
 const MentoringSessionsPage = lazy(() => import('./pages/common/MentoringSessionsPage'));
 const StudentDashboard = lazy(() => import('./pages/student/StudentDashboard'));
@@ -112,7 +111,7 @@ function App(): React.ReactElement {
                   <Route path="/lecturer/classes" element={<ProtectedRoute allowedRoles={[...classRouteAccess.lecturerArea]}><LecturerClasses /></ProtectedRoute>} />
                   {releaseFeatureFlags.dataBank && <Route path="/lecturer/data-bank" element={<ProtectedRoute allowedRoles={['ADMIN', 'LECTURER']}><DataBankPage /></ProtectedRoute>} />}
                   <Route path="/mentor" element={<ProtectedRoute allowedRoles={['MENTOR']}>{releaseFeatureFlags.roleDashboards ? <MentorDashboard /> : <Navigate to="/workspace" replace />}</ProtectedRoute>} />
-                  <Route path="/mentor/profile" element={<ProtectedRoute allowedRoles={['MENTOR']}><MentorProfilePage /></ProtectedRoute>} />
+                  <Route path="/mentor/profile" element={<ProtectedRoute allowedRoles={['MENTOR']}><Navigate to="/profile" replace /></ProtectedRoute>} />
                   <Route path="/mentors" element={<ProtectedRoute allowedRoles={['ADMIN', 'LECTURER']}><MentorDirectory /></ProtectedRoute>} />
 
                   <Route path="/classes/:slug" element={<ProtectedRoute allowedRoles={[...classRouteAccess.classDetail]}><ClassDetail /></ProtectedRoute>} />

@@ -105,7 +105,7 @@ public sealed class MentoringController(ICurrentUserService currentUser, IMentor
         ? Ok(ApiResponse<T>.SuccessResponse(result.Value!))
         : result.Error.Code == ErrorCodes.ClassAccessDenied
             ? StatusCode(StatusCodes.Status403Forbidden, ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code))
-            : result.Error.Code == ErrorCodes.MentorMatchingUnavailable
+            : result.Error.Code is ErrorCodes.MentorMatchingUnavailable or ErrorCodes.MentorCvExtractionUnavailable
                 ? StatusCode(StatusCodes.Status503ServiceUnavailable, ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code))
             : result.Error.Code.EndsWith("NOT_FOUND", StringComparison.OrdinalIgnoreCase)
                 ? NotFound(ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code))

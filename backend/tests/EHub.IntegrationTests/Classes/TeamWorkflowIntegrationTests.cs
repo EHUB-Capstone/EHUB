@@ -2127,7 +2127,7 @@ public sealed partial class TeamWorkflowIntegrationTests
             .Select(item => new { item.RecipientUserId, item.Type, item.Link }).ToArrayAsync();
         reminderNotifications.Select(item => item.RecipientUserId).Should().BeEquivalentTo(studentUserIds);
         reminderNotifications.Should().OnlyContain(item =>
-            item.Type == NotificationType.DeadlineReminder && item.Link == "/student/workspace");
+            item.Type == NotificationType.DeadlineReminder && item.Link == $"/student/workspace/{seed.TeamId}");
 
         var thirdEnd = clock.UtcNow.AddDays(5);
         var revised = await manager.SaveScheduleAsync(seed.ClassId, checkpoint.Id,

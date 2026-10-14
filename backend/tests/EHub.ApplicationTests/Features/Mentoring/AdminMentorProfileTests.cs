@@ -52,7 +52,8 @@ public sealed class AdminMentorProfileTests
         var stored = await context.MentorProfiles.Include(x => x.User).Include(x => x.Experiences).SingleAsync();
         stored.User.NormalizedEmail.Should().Be("updated@example.test");
         stored.Experiences.Should().ContainSingle().Which.Area.Should().Be("Cloud");
-        var reader = new MentorProfileHandler(context, Substitute.For<IMentorDocumentStorageService>(), Substitute.For<IMentorEmbeddingSearch>());
+        var reader = new MentorProfileHandler(context, Substitute.For<IMentorDocumentStorageService>(), Substitute.For<IMentorEmbeddingSearch>(),
+            Substitute.For<IMentorCvTextReader>());
         var mine = await reader.GetMineAsync(stored.UserId, default);
         mine.Value.Experiences.Single().Years.Should().Be(5);
         mine.Value.TechnologySkills.Should().Contain("AI");

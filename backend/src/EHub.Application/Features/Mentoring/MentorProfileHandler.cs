@@ -2,6 +2,7 @@ using System.IO.Compression;
 using EHub.Application.Common.Interfaces.Persistence;
 using EHub.Application.Common.Interfaces.Services;
 using EHub.Application.Common.Interfaces.Storage;
+using EHub.Application.Features.Mentoring.ExtractCv;
 using EHub.Contracts.Mentoring;
 using EHub.Domain.Entities;
 using EHub.Domain.Enums;
@@ -13,7 +14,7 @@ using Microsoft.EntityFrameworkCore;
 namespace EHub.Application.Features.Mentoring;
 
 public sealed class MentorProfileHandler(IApplicationDbContext context, IMentorDocumentStorageService storage,
-    IMentorEmbeddingSearch embeddingSearch) : IMentorProfileHandler
+    IMentorEmbeddingSearch embeddingSearch, IMentorCvTextReader cvTextReader) : IMentorProfileHandler
 {
     public async Task<Result<MentorProfileResponse>> UploadDocumentAsync(Guid userId, string kind, Stream content,
         string fileName, long length, CancellationToken cancellationToken)
@@ -21,8 +22,8 @@ public sealed class MentorProfileHandler(IApplicationDbContext context, IMentorD
         if (kind is not ("cv" or "portfolio") || length is <= 0 or > 10 * 1024 * 1024)
             return Result.Failure<MentorProfileResponse>(ErrorCodes.CommonValidationError, "Document must be a CV or portfolio under 10 MB.");
         var extension = Path.GetExtension(fileName).ToLowerInvariant();
-        if (extension is not (".pdf" or ".docx"))
-            return Result.Failure<MentorProfileResponse>(ErrorCodes.CommonValidationError, "Only PDF and DOCX documents are accepted.");
+        if (extension is not (".pdf" or ".doc" or ".docx"))
+            return Result.Failure<MentorProfileResponse>(ErrorCodes.CommonValidationError, "Only PDF, DOC and DOCX documents are accepted.");
         var profile = await context.MentorProfiles.Include(x => x.User).Include(x => x.Experiences)
             .FirstOrDefaultAsync(x => x.UserId == userId, cancellationToken);
         if (profile is null)
@@ -31,6 +32,15 @@ public sealed class MentorProfileHandler(IApplicationDbContext context, IMentorD
         await content.CopyToAsync(buffer, cancellationToken);
         if (buffer.Length != length || !ValidDocument(buffer.ToArray(), extension))
             return Result.Failure<MentorProfileResponse>(ErrorCodes.CommonValidationError, "Document content does not match its format.");
+        MentorCvProfileData? extracted = null;
+        if (kind == "cv")
+        {
+            var text = await cvTextReader.ReadAsync(buffer.ToArray(), extension, cancellationToken);
+            if (text.IsFailure) return Result.Failure<MentorProfileResponse>(text.Error);
+            var parsed = MentorCvProfileParser.Parse(text.Value);
+            if (parsed.IsFailure) return Result.Failure<MentorProfileResponse>(parsed.Error);
+            extracted = parsed.Value;
+        }
         buffer.Position = 0;
         var safeName = Path.GetFileName(fileName);
         if (safeName.Length > 255) safeName = safeName[^255..];
@@ -41,6 +51,9 @@ public sealed class MentorProfileHandler(IApplicationDbContext context, IMentorD
         {
             profile.CvStorageUrl = uploaded.Value.Url; profile.CvPublicId = uploaded.Value.PublicId;
             profile.CvFileName = safeName;
+            if (extracted!.Bio is not null) profile.Bio = extracted.Bio;
+            if (extracted.Experience is not null) profile.Experience = extracted.Experience;
+            profile.Expertise = profile.Expertise.Concat(extracted.Expertise).Distinct(StringComparer.OrdinalIgnoreCase).Take(20).ToArray();
         }
         else
         {
@@ -75,14 +88,19 @@ public sealed class MentorProfileHandler(IApplicationDbContext context, IMentorD
             return Result.Failure<(byte[], string, string)>(ErrorCodes.CommonNotFoundError, "Document was not found.");
         var downloaded = await storage.DownloadAsync(url, cancellationToken);
         if (downloaded.IsFailure) return Result.Failure<(byte[], string, string)>(downloaded.Error);
-        var contentType = name.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase) ? "application/pdf" :
-            "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+        var contentType = Path.GetExtension(name).ToLowerInvariant() switch
+        {
+            ".pdf" => "application/pdf", ".doc" => "application/msword",
+            _ => "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        };
         return Result.Success((downloaded.Value, name, contentType));
     }
 
     private static bool ValidDocument(byte[] bytes, string extension)
     {
         if (extension == ".pdf") return bytes.Length >= 5 && bytes.AsSpan(0, 5).SequenceEqual("%PDF-"u8);
+        if (extension == ".doc") return bytes.Length >= 8 &&
+            bytes.AsSpan(0, 8).SequenceEqual(new byte[] { 0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1 });
         if (bytes.Length < 4 || bytes[0] != 0x50 || bytes[1] != 0x4B) return false;
         try { using var zip = new ZipArchive(new MemoryStream(bytes), ZipArchiveMode.Read);
             return zip.GetEntry("word/document.xml") is not null; }

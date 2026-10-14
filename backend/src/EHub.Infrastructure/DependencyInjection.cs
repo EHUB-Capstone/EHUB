@@ -97,6 +97,7 @@ public static class DependencyInjection
         services.AddHttpClient("CloudinarySubmissionFiles", client => client.Timeout = TimeSpan.FromSeconds(30));
         services.AddScoped<ISubmissionFileStorageService, CloudinarySubmissionFileStorageService>();
         services.AddScoped<IMentorDocumentStorageService, CloudinaryMentorDocumentStorageService>();
+        services.AddScoped<IMentorCvTextReader, MentorCvTextReader>();
         services.AddOptions<R2Options>()
             .Bind(configuration.GetSection(R2Options.SectionName))
             .Validate(options => !string.IsNullOrWhiteSpace(options.AccountId), "R2:AccountId is required.")

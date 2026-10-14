@@ -10,6 +10,7 @@ public static class ErrorCodes
     public const string CommonForbiddenError = "COMMON_FORBIDDEN";
     public const string CommonUnauthorizedError = "COMMON_UNAUTHORIZED";
     public const string CommonBusinessRuleViolation = "COMMON_BUSINESS_RULE_VIOLATION";
+    public const string MentorCvExtractionUnavailable = "MENTOR_CV_EXTRACTION_UNAVAILABLE";
 
     // Auth error codes
     public const string AuthInvalidCredentials = "AUTH_INVALID_CREDENTIALS";

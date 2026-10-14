@@ -7,6 +7,9 @@ import { useAuth } from '../../hooks/useAuth';
 import type { MentoringFeedback, MentoringSession, SaveMentoringSession } from '../../types/mentoring';
 import { parseApiError } from '../../utils/apiError';
 import { unwrapApiData } from '../../utils/classMappers';
+import Badge from '../../components/ui/Badge';
+import Button from '../../components/ui/Button';
+import Card from '../../components/ui/Card';
 
 interface TeamOption { id: string; teamName: string; teamCode?: string; assignments: MentorAssignment[] }
 const emptyForm: SaveMentoringSession = { teamId: '', title: '', description: '', startAt: '', endAt: '', location: '', meetingUrl: '' };
@@ -109,51 +112,51 @@ export default function MentoringSessionsPage() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  return <main className="mx-auto max-w-5xl space-y-6 p-4 sm:p-8">
-    <header><h1 className="text-2xl font-bold text-slate-900">Mentoring sessions</h1>
-      <p className="mt-1 text-sm text-slate-600">Schedule support, record outcomes, and track follow-up actions.</p></header>
-    {error && <p role="alert" className="rounded-lg bg-red-50 p-3 text-red-700">{error}</p>}
-    {notice && <p role="status" className="rounded-lg bg-green-50 p-3 text-green-800">{notice}</p>}
-    {canManage && <form onSubmit={save} className="grid gap-3 rounded-xl border bg-white p-5 sm:grid-cols-2">
-      <h2 className="text-lg font-semibold sm:col-span-2">{editingId ? 'Edit session' : 'Schedule session'}</h2>
-      <label className="text-sm">Team<select required value={form.teamId} onChange={event => setForm({ ...form, teamId: event.target.value, mentorAssignmentId: undefined })} className="mt-1 block w-full rounded-lg border p-2">
+  return <main className="mx-auto max-w-5xl space-y-6 p-4 text-body text-slate-700 sm:p-8">
+    <header><h1 className="text-display text-secondary">Mentoring sessions</h1>
+      <p className="mt-1 text-body text-slate-600">Schedule support, record outcomes, and track follow-up actions.</p></header>
+    {error && <p role="alert" className="rounded-lg bg-danger-50 p-3 text-body text-danger-dark">{error}</p>}
+    {notice && <p role="status" className="rounded-lg bg-success-50 p-3 text-body text-success-dark">{notice}</p>}
+    {canManage && <form onSubmit={save} className="grid gap-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-card sm:grid-cols-2">
+      <h2 className="text-heading text-secondary sm:col-span-2">{editingId ? 'Edit session' : 'Schedule session'}</h2>
+      <label className="text-body">Team<select required value={form.teamId} onChange={event => setForm({ ...form, teamId: event.target.value, mentorAssignmentId: undefined })} className="mt-1 block w-full rounded-lg border p-2">
         <option value="">Choose team</option>{teams.map(team => <option key={team.id} value={team.id}>{team.teamName} {team.teamCode}</option>)}</select></label>
-      <label className="text-sm">Mentor<select required disabled={Boolean(editingId)} value={form.mentorAssignmentId ?? ''} onChange={event => setForm({ ...form, mentorAssignmentId: event.target.value })} className="mt-1 block w-full rounded-lg border p-2">
+      <label className="text-body">Mentor<select required disabled={Boolean(editingId)} value={form.mentorAssignmentId ?? ''} onChange={event => setForm({ ...form, mentorAssignmentId: event.target.value })} className="mt-1 block w-full rounded-lg border p-2">
         <option value="">Choose mentor</option>{teams.find(team => team.id === form.teamId)?.assignments.map(a => <option key={a.assignmentId} value={a.assignmentId}>{a.mentor.fullName} · {a.slot}</option>)}</select></label>
-      <label className="text-sm">Title<input required maxLength={200} value={form.title} onChange={event => setForm({ ...form, title: event.target.value })} className="mt-1 block w-full rounded-lg border p-2" /></label>
-      <label className="text-sm">Starts<input required type="datetime-local" value={form.startAt} onChange={event => setForm({ ...form, startAt: event.target.value })} className="mt-1 block w-full rounded-lg border p-2" /></label>
-      <label className="text-sm">Ends<input required type="datetime-local" value={form.endAt} onChange={event => setForm({ ...form, endAt: event.target.value })} className="mt-1 block w-full rounded-lg border p-2" /></label>
-      <label className="text-sm">Location<input maxLength={300} value={form.location} onChange={event => setForm({ ...form, location: event.target.value })} className="mt-1 block w-full rounded-lg border p-2" /></label>
-      <label className="text-sm">Meeting HTTPS URL<input type="url" value={form.meetingUrl} onChange={event => setForm({ ...form, meetingUrl: event.target.value })} className="mt-1 block w-full rounded-lg border p-2" /></label>
-      <label className="text-sm sm:col-span-2">Description<textarea maxLength={2000} value={form.description} onChange={event => setForm({ ...form, description: event.target.value })} className="mt-1 block w-full rounded-lg border p-2" /></label>
-      <div className="flex gap-2 sm:col-span-2"><button disabled={saving} className="rounded-lg bg-indigo-600 px-4 py-2 text-white disabled:opacity-50">{saving ? 'Saving…' : editingId ? 'Save changes' : 'Schedule'}</button>
-        {editingId && <button type="button" onClick={() => { setEditingId(null); setForm(emptyForm); }} className="rounded-lg border px-4 py-2">Discard</button>}</div>
+      <label className="text-body">Title<input required maxLength={200} value={form.title} onChange={event => setForm({ ...form, title: event.target.value })} className="mt-1 block w-full rounded-lg border p-2" /></label>
+      <label className="text-body">Starts<input required type="datetime-local" value={form.startAt} onChange={event => setForm({ ...form, startAt: event.target.value })} className="mt-1 block w-full rounded-lg border p-2" /></label>
+      <label className="text-body">Ends<input required type="datetime-local" value={form.endAt} onChange={event => setForm({ ...form, endAt: event.target.value })} className="mt-1 block w-full rounded-lg border p-2" /></label>
+      <label className="text-body">Location<input maxLength={300} value={form.location} onChange={event => setForm({ ...form, location: event.target.value })} className="mt-1 block w-full rounded-lg border p-2" /></label>
+      <label className="text-body">Meeting HTTPS URL<input type="url" value={form.meetingUrl} onChange={event => setForm({ ...form, meetingUrl: event.target.value })} className="mt-1 block w-full rounded-lg border p-2" /></label>
+      <label className="text-body sm:col-span-2">Description<textarea maxLength={2000} value={form.description} onChange={event => setForm({ ...form, description: event.target.value })} className="mt-1 block w-full rounded-lg border p-2" /></label>
+      <div className="flex gap-2 sm:col-span-2"><Button type="submit" disabled={saving}>{saving ? 'Saving…' : editingId ? 'Save changes' : 'Schedule'}</Button>
+        {editingId && <Button variant="outline" onClick={() => { setEditingId(null); setForm(emptyForm); }}>Discard</Button>}</div>
     </form>}
-    <section className="space-y-3"><div className="flex items-center justify-between gap-3"><h2 className="text-lg font-semibold">History and upcoming</h2>
-      <select aria-label="Filter by team" value={teamId} onChange={event => setTeamId(event.target.value)} className="rounded-lg border p-2 text-sm"><option value="">All accessible teams</option>{teams.map(team => <option key={team.id} value={team.id}>{team.teamName}</option>)}</select></div>
-      {loading ? <p>Loading sessions…</p> : sessions.length === 0 ? <div className="rounded-xl border bg-white p-8 text-center text-slate-600">No mentoring sessions yet.</div> : sessions.map(session =>
-        <article key={session.id} className="space-y-3 rounded-xl border bg-white p-5"><div className="flex flex-wrap justify-between gap-3"><div><h3 className="font-semibold">{session.title}</h3>
-          <p className="text-sm text-slate-600">{teams.find(team => team.id === session.teamId)?.teamName ?? 'Team'} · {new Date(session.startAt).toLocaleString()} – {new Date(session.endAt).toLocaleString()}</p></div>
-          <span className="text-sm font-medium">{session.status}</span></div>
-          {session.description && <p className="text-sm">{session.description}</p>}
-          {session.location && <p className="text-sm text-slate-600">Location: {session.location}</p>}
-          {session.meetingUrl && <a className="text-sm text-indigo-700 underline" href={session.meetingUrl} target="_blank" rel="noopener noreferrer">Join meeting</a>}
-          {session.notes && <p className="rounded-lg bg-slate-50 p-3 text-sm"><strong>Notes:</strong> {session.notes}</p>}
-          {session.actionItems.length > 0 && <ul className="list-inside list-disc text-sm">{session.actionItems.map(item => <li key={item.id}>{item.content}</li>)}</ul>}
+    <section className="space-y-3"><div className="flex items-center justify-between gap-3"><h2 className="text-heading text-secondary">History and upcoming</h2>
+      <select aria-label="Filter by team" value={teamId} onChange={event => setTeamId(event.target.value)} className="rounded-lg border p-2 text-body"><option value="">All accessible teams</option>{teams.map(team => <option key={team.id} value={team.id}>{team.teamName}</option>)}</select></div>
+      {loading ? <p>Loading sessions…</p> : sessions.length === 0 ? <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-slate-600 shadow-card">No mentoring sessions yet.</div> : sessions.map(session =>
+        <article key={session.id} className="space-y-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-card"><div className="flex flex-wrap justify-between gap-3"><div><h3 className="text-subheading text-secondary">{session.title}</h3>
+          <p className="text-body text-slate-600">{teams.find(team => team.id === session.teamId)?.teamName ?? 'Team'} · {new Date(session.startAt).toLocaleString()} – {new Date(session.endAt).toLocaleString()}</p></div>
+          <Badge variant={session.status === 'Scheduled' ? 'info' : session.status === 'Completed' ? 'success' : session.status === 'Cancelled' ? 'neutral' : 'danger'}>{session.status}</Badge></div>
+          {session.description && <p className="text-body">{session.description}</p>}
+          {session.location && <p className="text-body text-slate-600">Location: {session.location}</p>}
+          {session.meetingUrl && <a className="text-body text-primary-700 underline" href={session.meetingUrl} target="_blank" rel="noopener noreferrer">Join meeting</a>}
+          {session.notes && <Card tone="inset" padding="p-3" className="text-body"><p><strong>Notes:</strong> {session.notes}</p></Card>}
+          {session.actionItems.length > 0 && <ul className="list-inside list-disc text-body">{session.actionItems.map(item => <li key={item.id}>{item.content}</li>)}</ul>}
           {canManage && session.status === 'Scheduled' && <div className="space-y-2"><textarea aria-label={`Notes for ${session.title}`} maxLength={10000} placeholder="Session outcomes and feedback" value={notes[session.id] ?? ''} onChange={event => setNotes(current => ({ ...current, [session.id]: event.target.value }))} className="w-full rounded-lg border p-2" />
-            <div className="flex gap-2"><button type="button" disabled={saving} onClick={() => edit(session)} className="rounded-lg border px-3 py-1 text-sm">Edit</button>
-              <button type="button" disabled={saving || new Date(session.endAt) > new Date()} onClick={() => void changeStatus(session, 'complete')} className="rounded-lg bg-indigo-600 px-3 py-1 text-sm text-white disabled:opacity-50">Complete</button>
-              <button type="button" disabled={saving} onClick={() => void changeStatus(session, 'cancel')} className="rounded-lg border border-red-200 px-3 py-1 text-sm text-red-700">Cancel</button></div></div>}
-          {canManage && session.status === 'Completed' && <div className="flex gap-2"><input aria-label={`Follow-up action for ${session.title}`} maxLength={2000} placeholder="New follow-up action" value={actionText[session.id] ?? ''} onChange={event => setActionText(current => ({ ...current, [session.id]: event.target.value }))} className="min-w-0 flex-1 rounded-lg border p-2 text-sm" />
-            <button type="button" disabled={saving} onClick={() => void addAction(session)} className="rounded-lg border px-3 text-sm">Add</button></div>}
-          {!canManage && session.status === 'Completed' && <div className="space-y-2 border-t pt-3"><h4 className="text-sm font-semibold">Feedback for your mentor</h4>
-            <label className="block text-sm">Rating<select value={feedbackRating[session.id] ?? 5} onChange={event => setFeedbackRating(current => ({ ...current, [session.id]: Number(event.target.value) }))} className="ml-2 rounded-lg border p-1">
+            <div className="flex gap-2"><Button variant="outline" size="sm" disabled={saving} onClick={() => edit(session)}>Edit</Button>
+              <Button variant="outline" size="sm" disabled={saving || new Date(session.endAt) > new Date()} onClick={() => void changeStatus(session, 'complete')}>Complete</Button>
+              <Button variant="danger-outline" size="sm" disabled={saving} onClick={() => void changeStatus(session, 'cancel')}>Cancel</Button></div></div>}
+          {canManage && session.status === 'Completed' && <div className="flex gap-2"><input aria-label={`Follow-up action for ${session.title}`} maxLength={2000} placeholder="New follow-up action" value={actionText[session.id] ?? ''} onChange={event => setActionText(current => ({ ...current, [session.id]: event.target.value }))} className="min-w-0 flex-1 rounded-lg border p-2 text-body" />
+            <Button variant="outline" size="sm" disabled={saving} onClick={() => void addAction(session)}>Add</Button></div>}
+          {!canManage && session.status === 'Completed' && <div className="space-y-2 border-t pt-3"><h4 className="text-subheading text-secondary">Feedback for your mentor</h4>
+            <label className="block text-body">Rating<select value={feedbackRating[session.id] ?? 5} onChange={event => setFeedbackRating(current => ({ ...current, [session.id]: Number(event.target.value) }))} className="ml-2 rounded-lg border p-1">
               {[1, 2, 3, 4, 5].map(value => <option key={value} value={value}>{value}/5</option>)}</select></label>
             <textarea aria-label="Mentor feedback comment" maxLength={2000} value={feedbackText[session.id] ?? ''} onChange={event => setFeedbackText(current => ({ ...current, [session.id]: event.target.value }))} className="w-full rounded-lg border p-2" placeholder="What was useful? What could improve?" />
-            <button type="button" disabled={saving} onClick={() => void saveFeedback(session)} className="rounded-lg bg-indigo-600 px-3 py-1 text-sm text-white disabled:opacity-50">Save feedback</button></div>}
-          {canManage && session.status === 'Completed' && <div className="border-t pt-3"><button type="button" onClick={() => void viewFeedback(session)} className="text-sm text-indigo-700 underline">View student feedback</button>
-            {feedbackBySession[session.id] && <div className="mt-2 space-y-2">{feedbackBySession[session.id].length === 0 ? <p className="text-sm text-slate-600">No feedback yet.</p> : feedbackBySession[session.id].map(item =>
-              <p key={item.id} className="rounded-lg bg-slate-50 p-2 text-sm">{item.rating}/5 · {item.comment}</p>)}</div>}</div>}
+            <Button variant="outline" size="sm" disabled={saving} onClick={() => void saveFeedback(session)}>Save feedback</Button></div>}
+          {canManage && session.status === 'Completed' && <div className="border-t pt-3"><button type="button" onClick={() => void viewFeedback(session)} className="text-body text-primary-700 underline">View student feedback</button>
+            {feedbackBySession[session.id] && <div className="mt-2 space-y-2">{feedbackBySession[session.id].length === 0 ? <p className="text-body text-slate-600">No feedback yet.</p> : feedbackBySession[session.id].map(item =>
+              <Card key={item.id} tone="inset" padding="p-2" className="text-body"><p>{item.rating}/5 · {item.comment}</p></Card>)}</div>}</div>}
         </article>)}
     </section>
   </main>;

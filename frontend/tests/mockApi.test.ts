@@ -88,18 +88,120 @@ test('mock authentication opens an admin session for protected UI testing', asyn
   assert.equal(me.data.email, 'admin@ehub.local');
 });
 
+test('mentor skills mock saves manual edits, trims values, and allows clearing the list', async () => {
+  resetMockState();
+  await axiosClient.post('/auth/login', { email: 'khoa.mentor@ehub.local', password: 'Mock123!' });
+  const draft = { mentorType: 'Business', expertise: ['Product'], startupDomains: [], technologySkills: ['  Problem solving  ', 'TypeScript'],
+    tags: [], experiences: [], bio: 'Startup advisor', experience: '', organization: '', linkedInUrl: '', portfolioUrl: '' };
+  const saved = await axiosClient.put('/mentoring/profile', draft);
+  assert.deepEqual(saved.data.technologySkills, ['Problem solving', 'TypeScript']);
+  assert.deepEqual((await axiosClient.get('/mentoring/profile')).data.technologySkills, ['Problem solving', 'TypeScript']);
+  const edited = await axiosClient.put('/mentoring/profile', { ...draft, technologySkills: ['Communication', '  Data analysis  '] });
+  assert.deepEqual(edited.data.technologySkills, ['Communication', 'Data analysis']);
+  assert.deepEqual((await axiosClient.get('/mentoring/profile')).data.technologySkills, ['Communication', 'Data analysis']);
+  const cleared = await axiosClient.put('/mentoring/profile', { ...draft, technologySkills: [] });
+  assert.deepEqual(cleared.data.technologySkills, []);
+  assert.deepEqual((await axiosClient.get('/mentoring/profile')).data.technologySkills, []);
+  resetMockState();
+});
+
+test('mentor skills mock rejects duplicate, blank, long, or excessive entries without changing saved skills', async () => {
+  resetMockState();
+  await axiosClient.post('/auth/login', { email: 'khoa.mentor@ehub.local', password: 'Mock123!' });
+  const skills = Array.from({ length: 20 }, (_, index) => `${index}`.padEnd(80, 'a'));
+  const draft = { mentorType: 'Business', expertise: ['Product'], startupDomains: [], technologySkills: skills,
+    tags: [], experiences: [], bio: 'Startup advisor', experience: '', organization: '', linkedInUrl: '', portfolioUrl: '' };
+  const saved = await axiosClient.put('/mentoring/profile', draft);
+  assert.deepEqual(saved.data.technologySkills, skills);
+  for (const technologySkills of [['React', '  react  '], [''], ['   '], ['x'.repeat(81)], Array.from({ length: 21 }, (_, index) => `Skill ${index}`)]) {
+    await assert.rejects(axiosClient.put('/mentoring/profile', { ...draft, technologySkills }),
+      (error: unknown) => {
+        const response = (error as { response?: { status?: number; data?: { code?: string; message?: string } } }).response;
+        return response?.status === 400 && response.data?.code === 'COMMON_VALIDATION_ERROR' && response.data?.message?.startsWith('Technology skills:');
+      });
+  }
+  assert.deepEqual((await axiosClient.get('/mentoring/profile')).data.technologySkills, skills);
+  resetMockState();
+});
+
+test('mentor CV upload mock preserves manual skills across document uploads and validation errors', async () => {
+  resetMockState();
+  await axiosClient.post('/auth/login', { email: 'khoa.mentor@ehub.local', password: 'Mock123!' });
+  const skills = ['Communication', 'TypeScript'];
+  await axiosClient.put('/mentoring/profile', { mentorType: 'Business', expertise: ['Product'], startupDomains: [], technologySkills: skills,
+    tags: [], experiences: [], bio: 'Startup advisor', experience: '', organization: '', linkedInUrl: '', portfolioUrl: '' });
+  const form = new FormData();
+  form.append('file', new File(['Synthetic mock CV\nSkills: Python, Docker, React'], 'cv.docx'));
+  const uploaded = await axiosClient.post('/mentoring/profile/documents/cv', form, { headers: { 'Content-Type': 'multipart/form-data' } });
+  assert.equal(uploaded.data.cvFileName, 'cv.docx');
+  assert.match(uploaded.data.bio, /Mock CV/);
+  assert.match(uploaded.data.experience, /marketing/);
+  assert.ok(uploaded.data.expertise.includes('Marketing'));
+  assert.deepEqual(uploaded.data.technologySkills, skills);
+  const portfolioForm = new FormData();
+  portfolioForm.append('file', new File(['Synthetic mock portfolio'], 'portfolio.pdf'));
+  const portfolio = await axiosClient.post('/mentoring/profile/documents/portfolio', portfolioForm, { headers: { 'Content-Type': 'multipart/form-data' } });
+  assert.equal(portfolio.data.portfolioFileName, 'portfolio.pdf');
+  assert.deepEqual(portfolio.data.technologySkills, skills);
+  for (const file of [new File([], 'empty.pdf'), new File(['invalid'], 'cv.exe')]) {
+    const invalid = new FormData();
+    invalid.append('file', file);
+    await assert.rejects(axiosClient.post('/mentoring/profile/documents/cv', invalid, { headers: { 'Content-Type': 'multipart/form-data' } }),
+      (error: unknown) => (error as { response?: { status?: number } }).response?.status === 400);
+  }
+  const stored = await axiosClient.get('/mentoring/profile');
+  assert.equal(stored.data.cvFileName, 'cv.docx');
+  assert.equal(stored.data.portfolioFileName, 'portfolio.pdf');
+  assert.deepEqual(stored.data.technologySkills, skills);
+  resetMockState();
+});
+
+test('mentor profile mock ignores stale response fields when saving after document uploads', async () => {
+  resetMockState();
+  await axiosClient.post('/auth/login', { email: 'khoa.mentor@ehub.local', password: 'Mock123!' });
+  const initial = (await axiosClient.get('/mentoring/profile')).data;
+  assert.equal(initial.cvFileName, null);
+  assert.equal(initial.portfolioFileName, null);
+  for (const kind of ['cv', 'portfolio']) {
+    const form = new FormData();
+    form.append('file', new File([`Synthetic ${kind}`], `${kind}.pdf`));
+    await axiosClient.post(`/mentoring/profile/documents/${kind}`, form, { headers: { 'Content-Type': 'multipart/form-data' } });
+  }
+  const skills = ['Communication', 'TypeScript'];
+  const saved = await axiosClient.put('/mentoring/profile', { ...initial, expertise: ['Product'], technologySkills: skills,
+    bio: 'Manually edited background', id: 'stale-profile', userId: 'another-user', fullName: 'Stale name', email: 'stale@example.test',
+    status: 'Inactive', maxTeams: 999, activeTeamCount: 999, totalAssignments: 999, totalSessions: 999, averageFeedbackRating: 1,
+    cvStorageUrl: 'https://example.test/stale-cv', portfolioStorageUrl: 'https://example.test/stale-portfolio' });
+  assert.equal(saved.data.cvFileName, 'cv.pdf');
+  assert.equal(saved.data.portfolioFileName, 'portfolio.pdf');
+  assert.deepEqual(saved.data.technologySkills, skills);
+  assert.equal(saved.data.bio, 'Manually edited background');
+  const stored = (await axiosClient.get('/mentoring/profile')).data;
+  for (const key of ['id', 'userId', 'fullName', 'email', 'mentorType', 'status', 'maxTeams', 'activeTeamCount', 'totalAssignments', 'totalSessions', 'averageFeedbackRating']) {
+    assert.equal(stored[key], initial[key], `Response-only ${key} stays unchanged`);
+  }
+  assert.equal(stored.cvFileName, 'cv.pdf');
+  assert.equal(stored.portfolioFileName, 'portfolio.pdf');
+  assert.deepEqual(stored.technologySkills, skills);
+  assert.equal('cvStorageUrl' in stored, false);
+  assert.equal('portfolioStorageUrl' in stored, false);
+  resetMockState();
+});
+
 test('admin mentor management mock creates and updates structured metadata and rejects duplicates', async () => {
   resetMockState();
   await axiosClient.post('/auth/login', { email: 'admin@ehub.local', password: 'Mock123!' });
   const profile = { mentorType: 'Business', expertise: ['Product'], bio: 'Startup advisor',
-    startupDomains: ['Education'], technologySkills: ['Cloud'], tags: ['Founder'],
+    startupDomains: ['Education'], technologySkills: ['  Cloud  '], tags: ['Founder'],
     experiences: [{ kind: 'Technology', area: 'AI', years: 4, level: 'Advanced', notes: 'Products' }] };
   const payload = { fullName: 'Demo Mentor', email: 'profile-test@example.test', temporaryPassword: 'Mock123!', profile };
   const created = await axiosClient.post('/mentoring/profiles', payload);
   assert.equal(created.data.email, payload.email);
   assert.equal(created.data.experiences[0].area, 'AI');
-  const updated = await axiosClient.put(`/mentoring/profiles/${created.data.id}`, { ...payload, profile: { ...profile, tags: ['Advisor'] } });
+  assert.deepEqual(created.data.technologySkills, ['Cloud']);
+  const updated = await axiosClient.put(`/mentoring/profiles/${created.data.id}`, { ...payload, profile: { ...profile, tags: ['Advisor'], technologySkills: ['Cloud', '  Data analysis  '] } });
   assert.deepEqual(updated.data.tags, ['Advisor']);
+  assert.deepEqual(updated.data.technologySkills, ['Cloud', 'Data analysis']);
   await assert.rejects(axiosClient.post('/mentoring/profiles', payload),
     (error: unknown) => (error as { response?: { status?: number } }).response?.status === 400);
   await assert.rejects(axiosClient.put(`/mentoring/profiles/${created.data.id}`, { ...payload, profile: { ...profile, tags: ['AI', ' ai '] } }),

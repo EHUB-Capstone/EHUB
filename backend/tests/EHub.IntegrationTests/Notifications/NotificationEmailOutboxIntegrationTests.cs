@@ -160,9 +160,8 @@ public sealed class NotificationEmailOutboxIntegrationTests(CustomWebApplication
     [Fact]
     public async Task AppDbContext_WakesOutboxOnlyAfterTheContainingCommit()
     {
-        using var scope = factory.Services.CreateScope();
-        var connectionString = scope.ServiceProvider.GetRequiredService<AppDbContext>().Database.GetConnectionString();
-        var options = new DbContextOptionsBuilder<AppDbContext>().UseNpgsql(connectionString).Options;
+        var connectionString = factory.TestConnectionString;
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseNpgsql(connectionString, b => b.UseVector()).Options;
         var wakeSignal = new RecordingOutboxWakeSignal();
         await using var context = new AppDbContext(options, wakeSignal);
 

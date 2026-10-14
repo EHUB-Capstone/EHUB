@@ -5,17 +5,19 @@ interface Envelope<T> { data: T }
 const data = <T>(value: Envelope<T>): T => value.data;
 
 export const mentorSupportApi = {
-  getProfile: async (): Promise<MentorProfile> => data(await axiosClient.get('/mentoring/profile')),
+  getProfile: async (signal?: AbortSignal): Promise<MentorProfile> => data(await axiosClient.get('/mentoring/profile', { signal })),
   updateProfile: async (profile: MentorProfileDraft): Promise<MentorProfile> =>
     data(await axiosClient.put('/mentoring/profile', profile)),
   createManagedProfile: async (profile: SaveAdminMentorProfile, signal?: AbortSignal): Promise<MentorProfile> =>
     data(await axiosClient.post('/mentoring/profiles', profile, { signal })),
   updateManagedProfile: async (id: string, profile: SaveAdminMentorProfile, signal?: AbortSignal): Promise<MentorProfile> =>
     data(await axiosClient.put(`/mentoring/profiles/${id}`, profile, { signal })),
-  uploadDocument: async (kind: 'cv' | 'portfolio', file: File): Promise<MentorProfile> => {
+  uploadDocument: async (kind: 'cv' | 'portfolio', file: File, signal?: AbortSignal): Promise<MentorProfile> => {
     const form = new FormData();
     form.append('file', file);
-    return data(await axiosClient.post(`/mentoring/profile/documents/${kind}`, form, { headers: { 'Content-Type': 'multipart/form-data' } }));
+    return data(await axiosClient.post(`/mentoring/profile/documents/${kind}`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' }, timeout: 90_000, signal,
+    }));
   },
   getDocument: async (mentorId: string, kind: 'cv' | 'portfolio'): Promise<Blob> =>
     axiosClient.get(`/mentoring/profiles/${mentorId}/documents/${kind}`, { responseType: 'blob' }),

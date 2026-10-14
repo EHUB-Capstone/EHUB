@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { useState, useEffect, useRef } from 'react';
+import { lazy, Suspense, useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Mail, Key, User, ShieldCheck, Camera, ArrowLeft, Eye, EyeOff } from 'lucide-react';
@@ -10,6 +10,9 @@ import toast from 'react-hot-toast';
 import { motion } from 'framer-motion';
 import { TEAM_MAJOR_GROUPS, ALL_TEAM_MAJOR_CODES } from '../../constants/majors';
 import { parseApiError } from '../../utils/apiError';
+import { resolveProfileTab } from '../../utils/profileNavigation';
+
+const MentorProfileSection = lazy(() => import('../mentor/MentorProfilePage'));
 
 const roleBadgeVariant = { ADMIN: 'Approved', LECTURER: 'Submitted', MENTOR: 'Review', STUDENT: 'Reviewed' };
 const roleLabel = { ADMIN: 'Administrator', LECTURER: 'Lecturer', MENTOR: 'Mentor', STUDENT: 'Student' };
@@ -18,7 +21,8 @@ const ProfileSettings = () => {
   const { user, updateUser, refreshUser } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
-  const activeTab = location.pathname === '/settings' ? 'password' : 'profile';
+  const role = user?.role?.toUpperCase() || 'STUDENT';
+  const activeTab = resolveProfileTab(location.pathname, location.search, role);
 
   useEffect(() => {
     if (location.state?.message) {
@@ -46,8 +50,7 @@ const ProfileSettings = () => {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isSavingPassword, setIsSavingPassword] = useState(false);
 
-  const role = user?.role?.toUpperCase() || 'STUDENT';
-  const myClassesPath = role === 'STUDENT' ? '/student/classes' : role === 'ADMIN' ? '/admin/classes' : '/lecturer/classes';
+  const myClassesPath = role === 'MENTOR' ? '/mentor' : role === 'STUDENT' ? '/student/classes' : role === 'ADMIN' ? '/admin/classes' : '/lecturer/classes';
 
   useEffect(() => {
     if (role === 'STUDENT') {
@@ -146,7 +149,8 @@ const ProfileSettings = () => {
   };
 
   const tabs = [
-    { id: 'profile', label: 'Profile', icon: User, path: '/profile' },
+    ...(role === 'MENTOR' ? [{ id: 'mentor', label: 'Mentor profile & CV', icon: User, path: '/profile' }] : []),
+    { id: 'profile', label: role === 'MENTOR' ? 'Personal information' : 'Profile', icon: User, path: role === 'MENTOR' ? '/profile?tab=personal' : '/profile' },
     { id: 'password', label: 'Security Settings', icon: Key, path: '/settings' },
   ];
 
@@ -156,8 +160,8 @@ const ProfileSettings = () => {
     <div className="max-w-4xl mx-auto">
       {/* Header */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-6 sm:mb-8">
-        <h1 className="text-heading sm:text-display text-secondary tracking-tight">{activeTab === 'profile' ? 'My Profile' : 'Account Settings'}</h1>
-        <p className="text-slate-500 mt-1">{activeTab === 'profile' ? 'View and update your personal details' : 'Manage your account security preferences'}</p>
+        <h1 className="text-heading sm:text-display text-secondary tracking-tight">{activeTab === 'password' ? 'Account Settings' : 'My Profile'}</h1>
+        <p className="text-slate-500 mt-1">{activeTab === 'password' ? 'Manage your account security preferences' : activeTab === 'mentor' ? 'Manage your expertise, experience and CV' : 'View and update your personal details'}</p>
       </motion.div>
 
       {/* ── Missing Major Banner ── */}
@@ -209,6 +213,7 @@ const ProfileSettings = () => {
           {tabs.map(tab => (
             <button
               key={tab.id}
+              aria-current={activeTab === tab.id ? 'page' : undefined}
               className={`flex items-center gap-2.5 px-4 py-2.5 rounded-xl text-sm font-medium transition-all whitespace-nowrap ${
                 activeTab === tab.id
                   ? 'bg-white text-primary-700 shadow-sm border border-slate-200/50'
@@ -223,6 +228,11 @@ const ProfileSettings = () => {
 
         {/* Content */}
         <div className="flex-1 p-5 sm:p-8">
+          {role === 'MENTOR' && activeTab === 'mentor' && (
+            <Suspense fallback={<p role="status">Loading mentor profile…</p>}>
+              <MentorProfileSection embedded />
+            </Suspense>
+          )}
           {activeTab === 'profile' && (
             <div className="max-w-md">
               <h2 className="text-lg font-bold text-slate-900 mb-1">Profile Information</h2>
@@ -291,7 +301,7 @@ const ProfileSettings = () => {
                     onClick={() => navigate(myClassesPath)}
                     className="bg-secondary hover:bg-secondary-dark hover:shadow-glow-cyan focus:ring-secondary/20"
                   >
-                    Back my classes
+                    {role === 'MENTOR' ? 'Back to overview' : 'Back my classes'}
                   </Button>
                 </div>
               </form>

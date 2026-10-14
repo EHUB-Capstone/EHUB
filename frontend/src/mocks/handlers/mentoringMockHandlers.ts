@@ -70,7 +70,8 @@ export function registerMentoringMockHandlers(mock: MockAdapter): void {
         studentId: null, programGroup: null, major: null, phone: null, createdAt: new Date().toISOString(), lastSeen: null });
       state.authPasswords[email] = asString(body.temporaryPassword);
     }
-    const updated: MentorProfile = { ...mentorProfile(userId)!, ...profile, fullName: name, email, userId };
+    const updated: MentorProfile = { ...mentorProfile(userId)!, ...profile,
+      technologySkills: profile.technologySkills.map(skill => skill.trim()), fullName: name, email, userId };
     profiles.set(userId, updated);
     return ok(updated);
   };
@@ -89,7 +90,16 @@ export function registerMentoringMockHandlers(mock: MockAdapter): void {
     const validation = validateMentorMetadata(metadata);
     if (validation) return failure(400, 'COMMON_VALIDATION_ERROR', validation);
     if (metadata.mentorType !== existing.mentorType) return failure(400, 'COMMON_VALIDATION_ERROR', 'Mentor type is managed by the administrator.');
-    const updated = { ...existing, ...body } as MentorProfile;
+    const updated: MentorProfile = { ...existing,
+      expertise: metadata.expertise.map(value => value.trim()),
+      startupDomains: metadata.startupDomains.map(value => value.trim()),
+      technologySkills: metadata.technologySkills.map(value => value.trim()),
+      tags: metadata.tags.map(value => value.trim()),
+      experiences: metadata.experiences.map(entry => ({ kind: entry.kind, area: entry.area.trim(), years: entry.years,
+        level: entry.level?.trim() ?? null, notes: entry.notes?.trim() ?? null })),
+      bio: metadata.bio?.trim() ?? null, experience: metadata.experience?.trim() ?? null,
+      organization: metadata.organization?.trim() ?? null, linkedInUrl: metadata.linkedInUrl?.trim() ?? null,
+      portfolioUrl: metadata.portfolioUrl?.trim() ?? null };
     profiles.set(user!.id, updated);
     return ok(updated);
   });
@@ -99,7 +109,13 @@ export function registerMentoringMockHandlers(mock: MockAdapter): void {
     const kind = routeId(config, /^\/mentoring\/profile\/documents\/(cv|portfolio)$/);
     const file = config.data instanceof FormData ? config.data.get('file') : null;
     if (!(file instanceof File)) return failure(400, 'COMMON_VALIDATION_ERROR', 'File is required.');
-    const updated = kind === 'cv' ? { ...existing, cvFileName: file.name } : { ...existing, portfolioFileName: file.name };
+    if (file.size === 0 || file.size > 10 * 1024 * 1024 || !/\.(pdf|doc|docx)$/i.test(file.name))
+      return failure(400, 'COMMON_VALIDATION_ERROR', 'Choose a non-empty PDF, DOC or DOCX up to 10 MB.');
+    // The mock simulates background, experience and expertise extraction without parsing the document.
+    // Skills are entered manually and remain unchanged for both document kinds.
+    const updated = kind === 'cv' ? { ...existing, cvFileName: file.name,
+      bio: 'Mock CV: education and professional background.', experience: 'Mock CV: work experience in marketing.',
+      expertise: [...new Set([...existing.expertise, 'Marketing'])].slice(0, 20) } : { ...existing, portfolioFileName: file.name };
     profiles.set(user!.id, updated);
     return ok(updated);
   });

@@ -5,9 +5,10 @@ import { parseApiError } from '../../utils/apiError';
 import { parseMentorTags, validateMentorMetadata } from '../../utils/mentorProfiles';
 import Button from '../ui/Button';
 import Modal from '../ui/Modal';
+import Card from '../ui/Card';
 
 interface Props { profile?: MentorProfile; onClose: () => void; onSaved: (profile: MentorProfile) => void }
-const inputClass = 'mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-sm';
+const inputClass = 'mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-body';
 const empty: MentorProfileDraft = { mentorType: 'Business', expertise: [], startupDomains: [], technologySkills: [], tags: [],
   experiences: [], bio: '', experience: '', organization: '', linkedInUrl: '', portfolioUrl: '' };
 const tagFields = [ ['expertise', 'Expertise'], ['startupDomains', 'Startup domains'],
@@ -46,43 +47,43 @@ export default function MentorProfileEditor({ profile, onClose, onSaved }: Props
     finally { busy.current = false; if (!controller.signal.aborted) setSaving(false); }
   };
   return <Modal isOpen onClose={() => { if (!busy.current) onClose(); }} title={profile ? 'Edit mentor profile' : 'Create mentor profile'} size="xl">
-    <form onSubmit={save} className="space-y-5">
-      {error && <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</p>}
+    <form onSubmit={save} className="space-y-5 text-body text-slate-700">
+      {error && <p role="alert" className="rounded-lg bg-danger-50 p-3 text-body text-danger-dark">{error}</p>}
       <fieldset disabled={saving} className="space-y-4">
         <div className="grid gap-4 sm:grid-cols-2">
-          <label className="text-sm font-medium">Full name<input required maxLength={100} value={name} onChange={e => setName(e.target.value)} className={inputClass} /></label>
-          <label className="text-sm font-medium">Email<input required type="email" maxLength={320} value={email} onChange={e => setEmail(e.target.value)} className={inputClass} /></label>
-          {!profile && <label className="text-sm font-medium">Temporary password<input required type="password" autoComplete="new-password" minLength={6} maxLength={100} value={password} onChange={e => setPassword(e.target.value)} className={inputClass} /></label>}
-          <label className="text-sm font-medium">Mentor type<select value={draft.mentorType} onChange={e => setDraft({ ...draft, mentorType: e.target.value as MentorProfile['mentorType'] })} className={inputClass}>
+          <label className="text-body font-medium">Full name<input required maxLength={100} value={name} onChange={e => setName(e.target.value)} className={inputClass} /></label>
+          <label className="text-body font-medium">Email<input required type="email" maxLength={320} value={email} onChange={e => setEmail(e.target.value)} className={inputClass} /></label>
+          {!profile && <label className="text-body font-medium">Temporary password<input required type="password" autoComplete="new-password" minLength={6} maxLength={100} value={password} onChange={e => setPassword(e.target.value)} className={inputClass} /></label>}
+          <label className="text-body font-medium">Mentor type<select value={draft.mentorType} onChange={e => setDraft({ ...draft, mentorType: e.target.value as MentorProfile['mentorType'] })} className={inputClass}>
             <option value="Business">Business</option><option value="IT">IT</option></select></label>
-          <label className="text-sm font-medium">Organization<input maxLength={200} value={draft.organization ?? ''} onChange={e => setDraft({ ...draft, organization: e.target.value })} className={inputClass} /></label>
+          <label className="text-body font-medium">Organization<input maxLength={200} value={draft.organization ?? ''} onChange={e => setDraft({ ...draft, organization: e.target.value })} className={inputClass} /></label>
         </div>
-        <label className="block text-sm font-medium">Professional background<textarea required maxLength={2000} rows={3} value={draft.bio ?? ''} onChange={e => setDraft({ ...draft, bio: e.target.value })} className={inputClass} /></label>
-        <div className="grid gap-4 sm:grid-cols-2">{tagFields.map(([key, label]) => <label key={key} className="text-sm font-medium">{label} (comma separated)
+        <label className="block text-body font-medium">Professional background<textarea required maxLength={2000} rows={3} value={draft.bio ?? ''} onChange={e => setDraft({ ...draft, bio: e.target.value })} className={inputClass} /></label>
+        <div className="grid gap-4 sm:grid-cols-2">{tagFields.map(([key, label]) => <label key={key} className="text-body font-medium">{label} (comma separated)
           <input required={key === 'expertise'} maxLength={1620} value={texts[key]} onChange={e => setTexts({ ...texts, [key]: e.target.value })} className={inputClass} />
         </label>)}</div>
-        <section className="space-y-3 rounded-xl border border-slate-200 p-4">
-          <h3 className="font-semibold">Startup and technology experience</h3>
-          <p className="text-sm text-slate-500">Add a domain or skill; years, level and notes are optional.</p>
-          {draft.experiences.map((entry, index) => <fieldset key={index} className="space-y-2 rounded-lg bg-slate-50 p-3">
-            <legend className="text-sm font-medium">Experience {index + 1}</legend>
+        <Card tone="inset" padding="p-4" className="space-y-3">
+          <h3 className="text-subheading text-secondary">Startup and technology experience</h3>
+          <p className="text-body text-slate-500">Add a domain or skill; years, level and notes are optional.</p>
+          {draft.experiences.map((entry, index) => <fieldset key={index} className="space-y-2 border-t border-slate-200 pt-3">
+            <legend className="text-body font-medium">Experience {index + 1}</legend>
             <div className="grid gap-3 sm:grid-cols-2">
-              <label className="text-sm">Type<select className={inputClass} value={entry.kind} onChange={e => setDraft({ ...draft, experiences: draft.experiences.map((x, i) => i === index ? { ...x, kind: e.target.value as 'Startup' | 'Technology' } : x) })}><option>Startup</option><option>Technology</option></select></label>
-              <label className="text-sm">Domain / technology / skill<input required maxLength={80} className={inputClass} value={entry.area} onChange={e => setDraft({ ...draft, experiences: draft.experiences.map((x, i) => i === index ? { ...x, area: e.target.value } : x) })} /></label>
-              <label className="text-sm">Years<input type="number" min={0} max={80} step={0.1} className={inputClass} value={entry.years ?? ''} onChange={e => setDraft({ ...draft, experiences: draft.experiences.map((x, i) => i === index ? { ...x, years: e.target.value === '' ? null : Number(e.target.value) } : x) })} /></label>
-              <label className="text-sm">Level<input maxLength={40} className={inputClass} value={entry.level ?? ''} onChange={e => setDraft({ ...draft, experiences: draft.experiences.map((x, i) => i === index ? { ...x, level: e.target.value } : x) })} placeholder="e.g. Advanced" /></label>
+              <label className="text-body">Type<select className={inputClass} value={entry.kind} onChange={e => setDraft({ ...draft, experiences: draft.experiences.map((x, i) => i === index ? { ...x, kind: e.target.value as 'Startup' | 'Technology' } : x) })}><option>Startup</option><option>Technology</option></select></label>
+              <label className="text-body">Domain / technology / skill<input required maxLength={80} className={inputClass} value={entry.area} onChange={e => setDraft({ ...draft, experiences: draft.experiences.map((x, i) => i === index ? { ...x, area: e.target.value } : x) })} /></label>
+              <label className="text-body">Years<input type="number" min={0} max={80} step={0.1} className={inputClass} value={entry.years ?? ''} onChange={e => setDraft({ ...draft, experiences: draft.experiences.map((x, i) => i === index ? { ...x, years: e.target.value === '' ? null : Number(e.target.value) } : x) })} /></label>
+              <label className="text-body">Level<input maxLength={40} className={inputClass} value={entry.level ?? ''} onChange={e => setDraft({ ...draft, experiences: draft.experiences.map((x, i) => i === index ? { ...x, level: e.target.value } : x) })} placeholder="e.g. Advanced" /></label>
             </div>
-            <label className="block text-sm">Notes<textarea rows={2} maxLength={1000} className={inputClass} value={entry.notes ?? ''} onChange={e => setDraft({ ...draft, experiences: draft.experiences.map((x, i) => i === index ? { ...x, notes: e.target.value } : x) })} /></label>
+            <label className="block text-body">Notes<textarea rows={2} maxLength={1000} className={inputClass} value={entry.notes ?? ''} onChange={e => setDraft({ ...draft, experiences: draft.experiences.map((x, i) => i === index ? { ...x, notes: e.target.value } : x) })} /></label>
             <Button variant="ghost" size="sm" onClick={() => setDraft({ ...draft, experiences: draft.experiences.filter((_, i) => i !== index) })}>Remove experience</Button>
           </fieldset>)}
           <Button variant="outline" disabled={draft.experiences.length >= 40} onClick={() => setDraft({ ...draft, experiences: [...draft.experiences, { kind: 'Startup', area: '', years: null, level: null, notes: null }] })}>Add experience</Button>
-        </section>
-        <label className="block text-sm font-medium">Additional experience<textarea maxLength={4000} rows={2} value={draft.experience ?? ''} onChange={e => setDraft({ ...draft, experience: e.target.value })} className={inputClass} /></label>
-        <div className="grid gap-4 sm:grid-cols-2">{(['linkedInUrl', 'portfolioUrl'] as const).map(key => <label key={key} className="text-sm font-medium">{key === 'linkedInUrl' ? 'LinkedIn HTTPS URL' : 'Portfolio HTTPS URL'}
+        </Card>
+        <label className="block text-body font-medium">Additional experience<textarea maxLength={4000} rows={2} value={draft.experience ?? ''} onChange={e => setDraft({ ...draft, experience: e.target.value })} className={inputClass} /></label>
+        <div className="grid gap-4 sm:grid-cols-2">{(['linkedInUrl', 'portfolioUrl'] as const).map(key => <label key={key} className="text-body font-medium">{key === 'linkedInUrl' ? 'LinkedIn HTTPS URL' : 'Portfolio HTTPS URL'}
           <input type="url" pattern="https://.*" maxLength={key === 'linkedInUrl' ? 500 : 1000} value={draft[key] ?? ''} onChange={e => setDraft({ ...draft, [key]: e.target.value })} className={inputClass} />
         </label>)}</div>
       </fieldset>
-      <p className="text-sm text-slate-500">Manage availability by semester using the Availability button after saving the profile.</p>
+      <p className="text-body text-slate-500">Manage availability by semester using the Availability button after saving the profile.</p>
       <div className="flex justify-end gap-3"><Button variant="outline" disabled={saving} onClick={onClose}>Cancel</Button><Button type="submit" isLoading={saving}>Save profile</Button></div>
     </form>
   </Modal>;

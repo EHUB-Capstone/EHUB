@@ -1,4 +1,13 @@
-import type { MentorProfileDraft } from '../types/mentoring.ts';
+import type { MentorProfile, MentorProfileDraft } from '../types/mentoring.ts';
+
+export function needsMentorProfileSetup(profile: MentorProfile | null): boolean {
+  if (!profile) return true;
+  const hasText = (value: string | null) => Boolean(value?.trim());
+  const hasProfessionalInformation = [profile.bio, profile.experience].some(hasText) ||
+    [profile.expertise, profile.startupDomains, profile.technologySkills, profile.tags].some(values => values.some(hasText)) ||
+    profile.experiences.some(entry => Boolean(entry.area.trim()));
+  return !hasText(profile.cvFileName) && !hasProfessionalInformation;
+}
 
 export const parseMentorTags = (text: string): string[] => text.trim() ? text.split(',').map(x => x.trim()) : [];
 

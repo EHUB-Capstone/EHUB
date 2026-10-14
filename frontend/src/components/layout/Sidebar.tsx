@@ -93,7 +93,6 @@ const Sidebar = ({ mobileOpen, onMobileClose }: SidebarProps) => {
     ],
     MENTOR: [
       ...(releaseFeatureFlags.roleDashboards ? [{ path: '/mentor', icon: 'dashboard', label: 'Mentor Overview' }] : []),
-      { path: '/mentor/profile', icon: 'group', label: 'Mentor Profile' },
       ...(releaseFeatureFlags.mentoring ? [{ path: '/sessions', icon: 'calendar_month', label: 'Mentoring Sessions' }] : []),
       // ...(releaseFeatureFlags.roleDashboards ? [{ path: '/mentor', icon: 'dashboard', label: 'Dashboard' }] : []),
       { path: '/workspace', icon: 'view_kanban', label: 'Startup Workspace' },

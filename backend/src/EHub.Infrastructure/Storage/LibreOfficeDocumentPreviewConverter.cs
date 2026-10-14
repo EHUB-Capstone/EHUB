@@ -38,11 +38,11 @@ public sealed class LibreOfficeDocumentPreviewConverter : IDocumentPreviewConver
         CancellationToken cancellationToken = default)
     {
         var extension = sourceExtension.ToLowerInvariant();
-        if (extension is not ".docx" and not ".pptx")
+        if (extension is not ".doc" and not ".docx" and not ".pptx")
         {
             return Result.Failure<DocumentPreviewConversionResult>(
                 ErrorCodes.WorkspaceFilePreviewUnsupported,
-                "Only DOCX and PPTX files can be converted to PDF preview.");
+                "Only DOC, DOCX and PPTX files can be converted to PDF preview.");
         }
 
         if (sourceContent.Length is <= 0 or > MaximumSourceBytes)
