@@ -304,6 +304,8 @@ export interface MockProjectDirection {
   title: string;
   summary: string;
   startupIndustries: string[];
+  // Industries waiting for lecturer review in a Project Profile change request.
+  proposedStartupIndustries?: string[] | null;
   status: string;
   submittedAtUtc: string | null;
   reviewedAtUtc: string | null;

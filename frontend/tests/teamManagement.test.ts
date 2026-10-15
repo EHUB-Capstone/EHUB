@@ -14,6 +14,7 @@ import {
   normalizeManagedTeam,
   normalizeTeamProposal,
   orderStudentsByTeamBlock,
+  orderStudentsForTeamEditing,
   prioritizeOwnTeams,
   sortTeamsByCode,
   resolveEffectiveTeamMajor,
@@ -22,6 +23,10 @@ import {
 } from '../src/utils/teamManagement.ts';
 import {
   appendWorkspaceTag,
+  haveSameIndustrySelection,
+  joinChangedFields,
+  resolveIndustryIds,
+  validateIndustrySelection,
   hasPersistedProjectProfile,
   resolveWorkspaceCreationDefaults,
   validateProjectProfile,
@@ -321,6 +326,43 @@ test('classmates list keeps team blocks together, leader first, and can put one 
   // A student without a team has no block to prioritise, so the list is unchanged.
   assert.deepEqual(orderStudentsByTeamBlock(roster, teams, '').map((item) => item._id), ['s-2', 's-1', 's-4', 's-5', 's-3']);
   assert.deepEqual(roster.map((item) => item._id), ['s-1', 's-2', 's-3', 's-4', 's-5'], 'input is not mutated');
+});
+
+test('Project Profile industry helpers map names to ids and compare selections', () => {
+  const options = [{ id: 'a', name: 'FinTech' }, { id: 'b', name: 'EdTech' }, { id: 'c', name: 'AgriTech' }];
+
+  assert.deepEqual(resolveIndustryIds(['  edtech', 'FINTECH', 'Retired industry'], options), ['a', 'b']);
+  assert.deepEqual(resolveIndustryIds([], options), []);
+  // Same industries in another order, case or with duplicates are one selection.
+  assert.equal(haveSameIndustrySelection(['FinTech', 'EdTech'], ['edtech ', 'FINTECH', 'fintech']), true);
+  assert.equal(haveSameIndustrySelection(['FinTech'], ['FinTech', 'EdTech']), false);
+  assert.equal(validateIndustrySelection([]), 'Select between 1 and 3 startup industries.');
+  assert.equal(validateIndustrySelection(['a', 'b', 'c', 'd']), 'Select between 1 and 3 startup industries.');
+  assert.equal(validateIndustrySelection(['a', 'b', 'c']), '');
+  assert.equal(joinChangedFields(['Startup industries']), 'Startup industries');
+  assert.equal(joinChangedFields(['Project name', 'Startup industries']), 'Project name and Startup industries');
+  assert.equal(joinChangedFields(['Project name', 'Description', 'Startup industries']), 'Project name, Description and Startup industries');
+});
+
+test('team editor lists members first, free students next and students of other teams last', () => {
+  const students = ['a', 'b', 'c', 'd', 'e', 'f'].map((_id) => ({ _id }));
+  const assignments = new Map([
+    ['a', { teamId: 'mine' }],
+    ['b', { teamId: 'other' }],
+    ['d', { teamId: 'other' }],
+    ['f', { teamId: 'mine' }],
+  ]);
+
+  const ordered = orderStudentsForTeamEditing(students, ['f', 'a'], assignments, 'mine');
+
+  // f, a are members; c, e are free; b, d belong to another team. Order inside a group is kept.
+  assert.deepEqual(ordered.map((item) => item._id), ['a', 'f', 'c', 'e', 'b', 'd']);
+  // A student picked in the draft stays at the top even if they were assigned elsewhere before.
+  assert.deepEqual(
+    orderStudentsForTeamEditing(students, ['b'], assignments, 'mine').map((item) => item._id),
+    ['b', 'a', 'c', 'e', 'f', 'd'],
+  );
+  assert.deepEqual(students.map((item) => item._id), ['a', 'b', 'c', 'd', 'e', 'f'], 'input is not mutated');
 });
 
 test('sorts teams by the number at the end of the team code, not alphabetically', () => {

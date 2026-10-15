@@ -18,6 +18,8 @@ public sealed class UpdateProjectWorkspaceRequest
     public string TargetUsers { get; init; } = string.Empty;
     public string ZaloGroupUrl { get; init; } = string.Empty;
     public IReadOnlyCollection<string> Keywords { get; init; } = Array.Empty<string>();
+    // Null leaves the startup industries untouched; a changed selection is sent to the lecturer for review.
+    public IReadOnlyCollection<Guid>? StartupIndustryIds { get; init; }
 }
 
 public sealed class ProjectWorkspaceDto

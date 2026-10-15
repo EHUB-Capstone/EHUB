@@ -15,6 +15,7 @@ public sealed class ProjectDirectionConfiguration : IEntityTypeConfiguration<Pro
         builder.Property(direction => direction.Title).HasColumnName("title").HasMaxLength(200).IsRequired();
         builder.Property(direction => direction.Summary).HasColumnName("summary").HasMaxLength(5_000).IsRequired();
         builder.Property(direction => direction.Status).HasColumnName("status").HasConversion<string>().HasMaxLength(30).IsRequired();
+        builder.Property(direction => direction.ProposedStartupIndustries).HasColumnName("proposed_startup_industries");
         builder.Property(direction => direction.SubmittedAtUtc).HasColumnName("submitted_at_utc");
         builder.Property(direction => direction.ReviewedAtUtc).HasColumnName("reviewed_at_utc");
         builder.Property(direction => direction.ReviewedByUserId).HasColumnName("reviewed_by_user_id");

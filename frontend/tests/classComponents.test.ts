@@ -563,6 +563,7 @@ test('lecturer review updates only the reviewed team without reloading the overv
     projectDirectionCurrentTitle: '',
     projectDirectionCurrentSummary: '',
     projectDirectionStartupIndustries: ['Healthcare / HealthTech', 'Education / EdTech'],
+    projectDirectionProposedStartupIndustries: null,
     projectDirectionReviewComment: 'Proceed with this scope.',
   });
   assert.equal(result[1], secondTeam);
@@ -600,4 +601,29 @@ test('project direction overview defaults to all assigned classes and preserves 
   assert.equal(resolveDirectionOverviewClassId(classIds, 'class-2', ''), 'class-2');
   assert.deepEqual(directionOverviewTargetClassIds(classIds, 'class-2'), ['class-2']);
   assert.equal(resolveDirectionOverviewClassId(classIds, 'missing-class', ''), '');
+});
+
+
+test('a revised Project Profile change request compares against the pending industries', () => {
+  const pendingChange = {
+    id: 'direction-1',
+    title: 'Approved name',
+    summary: 'The approved project summary stays the same.',
+    startupIndustries: ['FinTech', 'EdTech'],
+    proposedStartupIndustries: ['AgriTech'],
+    isProjectProfileChangeProposal: true,
+    status: 'NeedsRevision',
+    rowVersion: '21',
+  };
+
+  // The form shows the pending selection, so keeping it is not a change.
+  assert.equal(hasUnsavedProjectDirectionChanges(pendingChange, pendingChange.title, pendingChange.summary, ['AgriTech']), false);
+  // Returning to the approved industries is a change relative to what is pending.
+  assert.equal(hasUnsavedProjectDirectionChanges(pendingChange, pendingChange.title, pendingChange.summary, ['FinTech', 'EdTech']), true);
+
+  const rows = updateProjectDirectionOverviewTeams([{ _id: 'team-1' }], 'team-1', pendingChange);
+  assert.deepEqual(rows[0].projectDirectionStartupIndustries, ['FinTech', 'EdTech']);
+  assert.deepEqual(rows[0].projectDirectionProposedStartupIndustries, ['AgriTech']);
+  const noPending = updateProjectDirectionOverviewTeams([{ _id: 'team-1' }], 'team-1', { ...pendingChange, proposedStartupIndustries: null });
+  assert.equal(noPending[0].projectDirectionProposedStartupIndustries, null);
 });
