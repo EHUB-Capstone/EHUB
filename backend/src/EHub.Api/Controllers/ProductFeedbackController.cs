@@ -1,5 +1,6 @@
 using EHub.Application.Common.Interfaces.Identity;
 using EHub.Application.Features.ProductFeedback;
+using EHub.Api.Models.Common;
 using EHub.Contracts.Common;
 using EHub.Contracts.ProductFeedback;
 using EHub.Shared.Constants;
@@ -23,7 +24,7 @@ public sealed class ProductFeedbackController(ICurrentUserService current) : Con
     [HttpGet("{id:guid}")] public async Task<IActionResult> Get(Guid id, [FromServices] IProductFeedbackHandler handler, CancellationToken ct) => Out(await handler.GetAsync(id, U, R, ct), "Feedback retrieved.");
     [HttpDelete("{id:guid}")] public async Task<IActionResult> Delete(Guid id, [FromServices] IProductFeedbackHandler handler, CancellationToken ct) => !IsAdmin ? Forbid() : Out(await handler.DeleteAsync(id, ct), "Feedback deleted.");
     [HttpDelete] public async Task<IActionResult> DeleteAll([FromServices] IProductFeedbackHandler handler, CancellationToken ct) => !IsAdmin ? Forbid() : Out(await handler.DeleteAllAsync(ct), "All feedback deleted.");
-    [HttpPost("{id:guid}/attachments"), RequestSizeLimit(10 * 1024 * 1024)] public async Task<IActionResult> Upload(Guid id, IFormFile file, [FromServices] IProductFeedbackHandler handler, CancellationToken ct) { if (file is null) return BadRequest(); await using var stream = file.OpenReadStream(); return Out(await handler.UploadAsync(id, stream, file.FileName, file.Length, U, R, ct), "Attachment uploaded."); }
+    [HttpPost("{id:guid}/attachments"), Consumes("multipart/form-data"), RequestSizeLimit(10 * 1024 * 1024)] public async Task<IActionResult> Upload(Guid id, [FromForm] FileUploadForm request, [FromServices] IProductFeedbackHandler handler, CancellationToken ct) { await using var stream = request.File.OpenReadStream(); return Out(await handler.UploadAsync(id, stream, request.File.FileName, request.File.Length, U, R, ct), "Attachment uploaded."); }
     [HttpGet("{id:guid}/attachments/{attachmentId:guid}/download")] public async Task<IActionResult> Download(Guid id, Guid attachmentId, [FromServices] IProductFeedbackHandler handler, CancellationToken ct) { var result = await handler.DownloadAsync(id, attachmentId, U, R, ct); return result.IsSuccess ? File(result.Value.Content, result.Value.ContentType) : Err(result.Error); }
     IActionResult Out<T>(Result<T> result, string message) => result.IsSuccess ? Ok(ApiResponse<T>.SuccessResponse(result.Value!, message)) : Err(result.Error);
     IActionResult Out(Result result, string message) => result.IsSuccess ? Ok(ApiResponse<object?>.SuccessResponse(null, message)) : Err(result.Error);

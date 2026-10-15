@@ -5,6 +5,7 @@ using System.Security.Claims;
 using System.Threading;
 using System.Threading.Tasks;
 using EHub.Application.Common.Interfaces.Identity;
+using EHub.Api.Models.Common;
 using EHub.Application.Features.Classes.AddStudentToClass;
 using EHub.Application.Features.Classes.AssignStudents;
 using EHub.Application.Features.Classes.CreateBulkClasses;
@@ -606,13 +607,13 @@ public sealed class ClassesController : ControllerBase
     [HttpPost("{id:guid}/major-verification/preview")]
     public async Task<IActionResult> PreviewClassMajors(
         Guid id,
-        IFormFile file,
+        [FromForm] FileUploadForm request,
         [FromServices] IVerifyClassMajorsCommandHandler commandHandler,
         CancellationToken cancellationToken)
     {
         var result = await commandHandler.PreviewAsync(
             id,
-            file,
+            request.File,
             _currentUserService.UserId ?? Guid.Empty,
             GetCurrentUserRole(),
             cancellationToken);
@@ -627,13 +628,13 @@ public sealed class ClassesController : ControllerBase
     [HttpPost("{id:guid}/major-verification")]
     public async Task<IActionResult> VerifyClassMajors(
         Guid id,
-        IFormFile file,
+        [FromForm] FileUploadForm request,
         [FromServices] IVerifyClassMajorsCommandHandler commandHandler,
         CancellationToken cancellationToken)
     {
         var result = await commandHandler.HandleAsync(
             id,
-            file,
+            request.File,
             _currentUserService.UserId ?? Guid.Empty,
             GetCurrentUserRole(),
             cancellationToken);
@@ -651,13 +652,13 @@ public sealed class ClassesController : ControllerBase
     [HttpPost("{id:guid}/major-verification/synchronize")]
     public async Task<IActionResult> SynchronizeClassMajorsFromFile(
         Guid id,
-        IFormFile file,
+        [FromForm] FileUploadForm request,
         [FromServices] IVerifyClassMajorsCommandHandler commandHandler,
         CancellationToken cancellationToken)
     {
         var result = await commandHandler.SynchronizeAsync(
             id,
-            file,
+            request.File,
             _currentUserService.UserId ?? Guid.Empty,
             GetCurrentUserRole(),
             cancellationToken);
@@ -680,13 +681,13 @@ public sealed class ClassesController : ControllerBase
     [HttpPost("{id:guid}/semester-groups/preview")]
     public async Task<IActionResult> PreviewSemesterGroups(
         Guid id,
-        IFormFile file,
+        [FromForm] FileUploadForm request,
         [FromServices] IImportSemesterGroupsCommandHandler commandHandler,
         CancellationToken cancellationToken)
     {
         var result = await commandHandler.PreviewAsync(
             id,
-            file,
+            request.File,
             _currentUserService.UserId ?? Guid.Empty,
             GetCurrentUserRole(),
             cancellationToken);
@@ -700,13 +701,13 @@ public sealed class ClassesController : ControllerBase
     [HttpPost("{id:guid}/semester-groups/import")]
     public async Task<IActionResult> ImportSemesterGroups(
         Guid id,
-        IFormFile file,
+        [FromForm] FileUploadForm request,
         [FromServices] IImportSemesterGroupsCommandHandler commandHandler,
         CancellationToken cancellationToken)
     {
         var result = await commandHandler.ImportAsync(
             id,
-            file,
+            request.File,
             _currentUserService.UserId ?? Guid.Empty,
             GetCurrentUserRole(),
             cancellationToken);
@@ -820,7 +821,7 @@ public sealed class ClassesController : ControllerBase
     [HttpPost("{id:guid}/import-students/preview")]
     public async Task<IActionResult> PreviewImportStudents(
         Guid id,
-        IFormFile file,
+        [FromForm] FileUploadForm request,
         [FromServices] IPreviewImportStudentsCommandHandler commandHandler,
         CancellationToken cancellationToken)
     {
@@ -829,7 +830,7 @@ public sealed class ClassesController : ControllerBase
 
         var result = await commandHandler.HandleAsync(
             id,
-            file,
+            request.File,
             currentUserId,
             currentUserRole,
             cancellationToken);
