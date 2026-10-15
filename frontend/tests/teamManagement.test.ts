@@ -13,6 +13,9 @@ import {
   mergeTeamsWithLinkedProposals,
   normalizeManagedTeam,
   normalizeTeamProposal,
+  orderStudentsByTeamBlock,
+  prioritizeOwnTeams,
+  sortTeamsByCode,
   resolveEffectiveTeamMajor,
   validateTeamDraft,
   validateTeamSelection,
@@ -274,6 +277,62 @@ test('keeps an unlinked proposal visible as a standalone proposal card', () => {
   const result = mergeTeamsWithLinkedProposals([], [proposal]);
 
   assert.deepEqual(result, [proposal]);
+});
+
+test('shows the own team and own proposals of the current student first without reordering the rest', () => {
+  const card = (id: string, memberIds: string[], isProposal = false) => ({
+    _id: id,
+    teamName: id,
+    isProposal,
+    members: memberIds.map((studentId) => ({ studentId })),
+  }) as unknown as ManagedTeam;
+  const teams = [
+    card('team-1', ['s-1']),
+    card('team-2', ['s-2']),
+    card('team-3', ['s-3']),
+    card('proposal-1', ['s-9'], true),
+    card('proposal-2', ['s-2'], true),
+  ];
+
+  assert.deepEqual(prioritizeOwnTeams(teams, 's-3', 'team-3').map((item) => item._id),
+    ['team-3', 'team-1', 'team-2', 'proposal-1', 'proposal-2']);
+  assert.deepEqual(prioritizeOwnTeams(teams, 's-2', 'team-2').map((item) => item._id),
+    ['team-2', 'proposal-2', 'team-1', 'team-3', 'proposal-1']);
+  // No team and no proposal yet: the list is unchanged.
+  assert.deepEqual(prioritizeOwnTeams(teams, 's-404', null), teams);
+  assert.equal(prioritizeOwnTeams(teams, undefined, undefined), teams);
+});
+
+test('classmates list keeps team blocks together, leader first, and can put one team on top', () => {
+  const teams = [
+    { _id: 'team-1', leaderId: { _id: 's-2' } },
+    { _id: 'team-2', leaderId: 's-4' },
+  ];
+  const roster = [
+    { _id: 's-1', teamId: 'team-1' },
+    { _id: 's-2', teamId: 'team-1' },
+    { _id: 's-3', teamId: null },
+    { _id: 's-4', teamId: 'team-2' },
+    { _id: 's-5', teamId: 'team-2' },
+  ];
+
+  assert.deepEqual(orderStudentsByTeamBlock(roster, teams).map((item) => item._id), ['s-2', 's-1', 's-4', 's-5', 's-3']);
+  assert.deepEqual(orderStudentsByTeamBlock(roster, teams, 'team-2').map((item) => item._id), ['s-4', 's-5', 's-2', 's-1', 's-3']);
+  // A student without a team has no block to prioritise, so the list is unchanged.
+  assert.deepEqual(orderStudentsByTeamBlock(roster, teams, '').map((item) => item._id), ['s-2', 's-1', 's-4', 's-5', 's-3']);
+  assert.deepEqual(roster.map((item) => item._id), ['s-1', 's-2', 's-3', 's-4', 's-5'], 'input is not mutated');
+});
+
+test('sorts teams by the number at the end of the team code, not alphabetically', () => {
+  const codes = ['EXE201_8_TEAM_10', 'EXE201_8_TEAM_2', 'EXE201_8_TEAM_1', 'EXE201_8_TEAM_11', 'EXE201_8_TEAM_3']
+    .map((teamCode) => ({ teamCode, teamName: teamCode }));
+
+  assert.deepEqual(sortTeamsByCode(codes).map((team) => team.teamCode), [
+    'EXE201_8_TEAM_1', 'EXE201_8_TEAM_2', 'EXE201_8_TEAM_3', 'EXE201_8_TEAM_10', 'EXE201_8_TEAM_11',
+  ]);
+  // The input array is not mutated, and a team without a code falls back to its name.
+  assert.equal(codes[0].teamCode, 'EXE201_8_TEAM_10');
+  assert.deepEqual(sortTeamsByCode([{ teamCode: '', teamName: 'B' }, { teamCode: '', teamName: 'A' }]).map((team) => team.teamName), ['A', 'B']);
 });
 
 test('validates required project workspace information', () => {

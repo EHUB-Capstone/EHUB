@@ -94,21 +94,21 @@ const RubricGeneratorTab = ({ initialData }) => {
       <div className="lg:col-span-4 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
         <div className="p-5 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
            <h2 className="font-semibold text-slate-800 text-lg">Rubric Setup</h2>
-           <span className="text-xs font-medium px-2 py-1 bg-blue-100 text-[#034EA2] rounded-md">Input</span>
+           <span className="text-xs font-medium px-2 py-1 bg-blue-100 text-secondary rounded-md">Input</span>
         </div>
         <div className="p-5 flex-1">
           <form onSubmit={handleGenerate} className="space-y-4 flex flex-col h-full">
             <div>
               <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1">Tên Startup *</label>
-              <input required name="startup_name" value={formData.startup_name} onChange={handleChange} className="w-full text-sm border-slate-200 rounded-lg focus:ring-[#034EA2] focus:border-[#034EA2]" placeholder="e.g. EduTrack" />
+              <input required name="startup_name" value={formData.startup_name} onChange={handleChange} className="w-full text-sm border-slate-200 rounded-lg focus:ring-secondary focus:border-secondary" placeholder="e.g. EduTrack" />
             </div>
             <div>
               <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1">Mô hình kinh doanh *</label>
-              <input required name="business_model" value={formData.business_model} onChange={handleChange} className="w-full text-sm border-slate-200 rounded-lg focus:ring-[#034EA2] focus:border-[#034EA2]" placeholder="e.g. B2B SaaS" />
+              <input required name="business_model" value={formData.business_model} onChange={handleChange} className="w-full text-sm border-slate-200 rounded-lg focus:ring-secondary focus:border-secondary" placeholder="e.g. B2B SaaS" />
             </div>
             <div>
               <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1">Giai đoạn (Stage) *</label>
-              <select required name="stage" value={formData.stage} onChange={handleChange} className="w-full text-sm border-slate-200 rounded-lg focus:ring-[#034EA2] focus:border-[#034EA2]">
+              <select required name="stage" value={formData.stage} onChange={handleChange} className="w-full text-sm border-slate-200 rounded-lg focus:ring-secondary focus:border-secondary">
                 <option value="idea">Idea (Ý tưởng)</option>
                 <option value="prototype">Prototype (Nguyên mẫu)</option>
                 <option value="mvp">MVP (Sản phẩm tối thiểu)</option>
@@ -121,7 +121,7 @@ const RubricGeneratorTab = ({ initialData }) => {
               <div className="space-y-2">
                 {FOCUS_OPTIONS.map(opt => (
                   <label key={opt.id} className="flex items-center gap-2 cursor-pointer group">
-                    <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${focusAreas.includes(opt.id) ? 'bg-[#034EA2] border-[#034EA2]' : 'border-slate-300 group-hover:border-[#034EA2]'}`}>
+                    <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${focusAreas.includes(opt.id) ? 'bg-secondary border-secondary' : 'border-slate-300 group-hover:border-secondary'}`}>
                       {focusAreas.includes(opt.id) && <CheckSquare className="w-3.5 h-3.5 text-white" />}
                     </div>
                     <span className="text-sm text-slate-700 select-none">{opt.label}</span>
@@ -131,7 +131,7 @@ const RubricGeneratorTab = ({ initialData }) => {
             </div>
             
             <div className="pt-4 mt-auto">
-              <Button type="submit" className="w-full bg-[#034EA2] hover:bg-[#023B7A] text-white" isLoading={loading} disabled={loading} icon={BookOpen}>
+              <Button type="submit" className="w-full bg-secondary hover:bg-secondary-700 text-white" isLoading={loading} disabled={loading} icon={BookOpen}>
                 Generate Rubric
               </Button>
             </div>
@@ -143,8 +143,8 @@ const RubricGeneratorTab = ({ initialData }) => {
       <div className="lg:col-span-8">
         {loading ? (
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-12 flex flex-col items-center justify-center min-h-[500px]">
-             <div className="w-16 h-16 border-4 border-[#034EA2]/30 border-t-[#034EA2] rounded-full animate-spin mb-4"></div>
-             <h3 className="text-xl font-semibold text-[#034EA2]">Crafting questions...</h3>
+             <div className="w-16 h-16 border-4 border-secondary/30 border-t-secondary rounded-full animate-spin mb-4"></div>
+             <h3 className="text-xl font-semibold text-secondary">Crafting questions...</h3>
              <p className="text-slate-500 mt-2">AI is generating customized rubric and follow-up questions.</p>
           </div>
         ) : !result ? (
@@ -166,8 +166,8 @@ const RubricGeneratorTab = ({ initialData }) => {
             )}
             
             {/* Tips Card */}
-            <div className="bg-[#034EA2]/5 border border-[#034EA2]/20 rounded-2xl p-5 shadow-sm">
-               <h3 className="font-bold text-[#034EA2] mb-2 flex items-center gap-2"><MessageCircle className="w-5 h-5" /> Evaluation Tips for Mentor</h3>
+            <div className="bg-secondary/5 border border-secondary/20 rounded-2xl p-5 shadow-sm">
+               <h3 className="font-bold text-secondary mb-2 flex items-center gap-2"><MessageCircle className="w-5 h-5" /> Evaluation Tips for Mentor</h3>
                <p className="text-slate-700 leading-relaxed text-sm">{typeof result.evaluation_tips === 'string' ? result.evaluation_tips : 'N/A'}</p>
             </div>
 
@@ -177,7 +177,7 @@ const RubricGeneratorTab = ({ initialData }) => {
                  result.rubric_questions.map((item, idx) => (
                    <div key={idx} className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
                      <div className="p-5 border-b border-slate-100">
-                        <span className="inline-block px-3 py-1 bg-blue-100 text-[#034EA2] text-xs font-bold rounded-md uppercase tracking-wider mb-3">
+                        <span className="inline-block px-3 py-1 bg-blue-100 text-secondary text-xs font-bold rounded-md uppercase tracking-wider mb-3">
                            {typeof item.category === 'string' ? item.category : 'General'}
                         </span>
                         <h4 className="text-lg font-bold text-slate-800 leading-snug">{typeof item.question === 'string' ? item.question : 'N/A'}</h4>
@@ -187,11 +187,11 @@ const RubricGeneratorTab = ({ initialData }) => {
                         <h5 className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2"><FileText className="w-4 h-4" /> Scoring Guide</h5>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                           <div className="bg-white p-3 rounded-lg border border-green-100 shadow-sm">
-                            <span className="block font-black text-[#51B848] text-xl mb-1">5 pts</span>
+                            <span className="block font-black text-success text-xl mb-1">5 pts</span>
                             <span className="text-xs text-slate-600">{typeof item.scoring_guide?.["5"] === 'string' ? item.scoring_guide["5"] : 'N/A'}</span>
                           </div>
                           <div className="bg-white p-3 rounded-lg border border-orange-100 shadow-sm">
-                            <span className="block font-black text-[#F37021] text-xl mb-1">3 pts</span>
+                            <span className="block font-black text-primary-600 text-xl mb-1">3 pts</span>
                             <span className="text-xs text-slate-600">{typeof item.scoring_guide?.["3"] === 'string' ? item.scoring_guide["3"] : 'N/A'}</span>
                           </div>
                           <div className="bg-white p-3 rounded-lg border border-red-100 shadow-sm">
@@ -202,9 +202,9 @@ const RubricGeneratorTab = ({ initialData }) => {
                      </div>
                      
                      <div className="p-4 bg-orange-50/50 flex items-start gap-3">
-                        <Zap className="w-5 h-5 text-[#F37021] shrink-0 mt-0.5" />
+                        <Zap className="w-5 h-5 text-primary-600 shrink-0 mt-0.5" />
                         <div>
-                          <span className="block text-xs font-bold text-[#F37021] uppercase tracking-wider mb-1">Follow-up Question</span>
+                          <span className="block text-xs font-bold text-primary-600 uppercase tracking-wider mb-1">Follow-up Question</span>
                           <span className="text-sm font-medium text-slate-700 italic">{typeof item.follow_up === 'string' ? item.follow_up : 'N/A'}</span>
                         </div>
                      </div>

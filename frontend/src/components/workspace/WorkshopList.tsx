@@ -78,7 +78,7 @@ const WorkshopList = ({ workshops, onEdit, onDelete, onCheckIn, onManageAttendan
                 <div className="absolute inset-0 bg-gradient-to-b from-white/10 to-white"></div>
               </div>
             ) : (
-              <div className={`absolute top-0 right-0 w-24 h-24 bg-gradient-to-br ${ws.type === 'SEMINAR' ? 'from-indigo-50 to-indigo-100/30' : 'from-primary-50 to-primary-100/30'} rounded-bl-full -z-10`} />
+              <div className={`absolute top-0 right-0 w-24 h-24 ${ws.type === 'SEMINAR' ? 'bg-secondary-50' : 'bg-primary-50'} rounded-bl-full -z-10`} />
             )}
 
             {/* Header info */}
@@ -92,12 +92,12 @@ const WorkshopList = ({ workshops, onEdit, onDelete, onCheckIn, onManageAttendan
                     {ws.status}
                   </Badge>
                   {isLecturerOrAdmin && (
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-slate-100 text-slate-700">
+                    <span className="text-overline font-bold px-2 py-0.5 rounded-md bg-slate-100 text-slate-700">
                       {ws.format}
                     </span>
                   )}
                   {isStudent && studentMode && (
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md flex items-center gap-1 ${studentMode === 'ONLINE' ? 'bg-indigo-50 text-indigo-700 border border-indigo-100' : 'bg-amber-50 text-amber-700 border border-amber-100'
+                    <span className={`text-overline font-bold px-2 py-0.5 rounded-md flex items-center gap-1 ${studentMode === 'ONLINE' ? 'bg-secondary-50 text-secondary border border-secondary-100' : 'bg-amber-50 text-amber-700 border border-amber-100'
                       }`}>
                       {studentMode === 'ONLINE' ? <Monitor size={10} /> : <Globe size={10} />}
                       {studentMode}
@@ -126,7 +126,7 @@ const WorkshopList = ({ workshops, onEdit, onDelete, onCheckIn, onManageAttendan
               </div>
 
               <div>
-                <h4 className="font-bold text-slate-800 text-[15px] group-hover:text-primary transition-colors">
+                <h4 className="font-bold text-slate-800 text-[15px] group-hover:text-primary-700 transition-colors">
                   {ws.title}
                 </h4>
                 <p className="text-xs text-slate-500 font-semibold uppercase mt-0.5 tracking-wider">
@@ -139,12 +139,12 @@ const WorkshopList = ({ workshops, onEdit, onDelete, onCheckIn, onManageAttendan
               </p>
 
               {ws.checkInDeadline && (
-                <div className="text-[11px] font-semibold text-rose-500 bg-rose-50 px-2 py-1 rounded-md inline-block mt-2 border border-rose-100">
+                <div className="text-caption font-semibold text-rose-500 bg-rose-50 px-2 py-1 rounded-md inline-block mt-2 border border-rose-100">
                   Hạn check-in: {new Date(ws.checkInDeadline).toLocaleString()}
                 </div>
               )}
               {attendance && attendance.status === 'REJECTED' && attendance.rejectReason && (
-                <div className="text-[11px] font-semibold text-rose-600 bg-rose-50 px-2 py-1.5 rounded-md mt-2 border border-rose-200">
+                <div className="text-caption font-semibold text-rose-600 bg-rose-50 px-2 py-1.5 rounded-md mt-2 border border-rose-200">
                   Lý do từ chối: {attendance.rejectReason}
                 </div>
               )}
@@ -179,7 +179,7 @@ const WorkshopList = ({ workshops, onEdit, onDelete, onCheckIn, onManageAttendan
                           href={ws.meetingLink}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-primary/5 hover:bg-primary/10 border border-primary/10 rounded-xl text-xs font-bold text-primary transition-all flex-1 min-w-0"
+                          className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-primary/5 hover:bg-primary/10 border border-primary/10 rounded-xl text-xs font-bold text-primary-700 transition-all flex-1 min-w-0"
                         >
                           <span>Join Session</span>
                           <ExternalLink className="w-3 h-3" />
@@ -199,7 +199,7 @@ const WorkshopList = ({ workshops, onEdit, onDelete, onCheckIn, onManageAttendan
                           href={ws.meetingLink}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-primary/5 hover:bg-primary/10 border border-primary/10 rounded-xl text-xs font-bold text-primary transition-all flex-1 min-w-0"
+                          className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-primary/5 hover:bg-primary/10 border border-primary/10 rounded-xl text-xs font-bold text-primary-700 transition-all flex-1 min-w-0"
                         >
                           <span>Join Session</span>
                           <ExternalLink className="w-3 h-3" />
@@ -230,7 +230,7 @@ const WorkshopList = ({ workshops, onEdit, onDelete, onCheckIn, onManageAttendan
                 </div>
               </div>
 
-              <div className="flex items-center justify-between text-[10px] text-slate-400 pt-1 font-semibold">
+              <div className="flex items-center justify-between text-overline text-slate-400 pt-1 font-semibold">
                 <span>By: {ws.createdBy?.name || 'Instructor'}</span>
                 <span>Scheduled {new Date(ws.createdAt).toLocaleDateString()}</span>
               </div>

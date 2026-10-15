@@ -1,7 +1,10 @@
 // src/components/workspace/checkpoints/FileUploadZone.tsx
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { DragEvent } from 'react';
-import { AlertCircle, CheckCircle2, Loader2, RotateCcw, UploadCloud, X } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Info, Loader2, RotateCcw, Send, UploadCloud, X } from 'lucide-react';
+import { badgeTones } from '../../ui/Badge';
+import Button from '../../ui/Button';
+import ConfirmDialog from '../../ui/ConfirmDialog';
 import toast from 'react-hot-toast';
 import { checkpointApi } from '../../../api/checkpointApi';
 import type {
@@ -9,6 +12,7 @@ import type {
   CheckpointUploadSession,
 } from '../../../types/workspaceCheckpoints';
 import {
+  CHECKPOINT_UPLOAD_MAX_FILES,
   CHECKPOINT_UPLOAD_MAX_FILE_SIZE_MB,
   checkpointUploadFailureMessage,
   formatFileSize,
@@ -20,7 +24,11 @@ import {
 interface FileUploadZoneProps {
   teamId: string;
   checkpointNumber: number;
+  /** Files already submitted to this checkpoint; they count toward the per-checkpoint limit. */
+  existingFileCount?: number;
   onUploaded?: () => void | Promise<void>;
+  /** Reports whether files are selected or uploading but not yet submitted, so the host can confirm before leaving. */
+  onUnsentChange?: (hasUnsent: boolean) => void;
   variant?: 'default' | 'large';
 }
 
@@ -30,22 +38,26 @@ const isActive = (item: CheckpointUploadItem) =>
 const isCancelled = (error: unknown) => (error as { code?: string })?.code === 'ERR_CANCELED';
 
 const STATUS_LABEL: Record<CheckpointUploadItem['status'], string> = {
+  staged: 'Not submitted',
   queued: 'Waiting',
   uploading: 'Uploading',
   completing: 'Finishing',
-  completed: 'Completed',
+  completed: 'Submitted',
   failed: 'Failed',
 };
 
 export default function FileUploadZone({
   teamId,
   checkpointNumber,
+  existingFileCount = 0,
   onUploaded,
+  onUnsentChange,
   variant = 'default',
 }: FileUploadZoneProps) {
   const isLarge = variant === 'large';
   const [dragging, setDragging] = useState(false);
   const [items, setItems] = useState<CheckpointUploadItem[]>([]);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   // The queue loop reads the latest items synchronously, so state is mirrored in a ref.
   const itemsRef = useRef<CheckpointUploadItem[]>([]);
@@ -57,6 +69,10 @@ export default function FileUploadZone({
   useEffect(() => {
     onUploadedRef.current = onUploaded;
   }, [onUploaded]);
+  const onUnsentChangeRef = useRef(onUnsentChange);
+  useEffect(() => {
+    onUnsentChangeRef.current = onUnsentChange;
+  }, [onUnsentChange]);
 
   const commit = useCallback((next: CheckpointUploadItem[]) => {
     itemsRef.current = next;
@@ -77,16 +93,22 @@ export default function FileUploadZone({
     };
   }, []);
 
-  const hasActiveUploads = items.some(isActive);
+  const stagedItems = items.filter(item => item.status === 'staged');
+  const hasUnsentWork = items.some(isActive) || stagedItems.length > 0;
   useEffect(() => {
-    if (!hasActiveUploads) return undefined;
+    if (!hasUnsentWork) return undefined;
     const warnBeforeLeaving = (event: BeforeUnloadEvent) => {
       event.preventDefault();
       event.returnValue = '';
     };
     window.addEventListener('beforeunload', warnBeforeLeaving);
     return () => window.removeEventListener('beforeunload', warnBeforeLeaving);
-  }, [hasActiveUploads]);
+  }, [hasUnsentWork]);
+
+  useEffect(() => {
+    onUnsentChangeRef.current?.(hasUnsentWork);
+  }, [hasUnsentWork]);
+  useEffect(() => () => onUnsentChangeRef.current?.(false), []);
 
   const processItem = useCallback(async (item: CheckpointUploadItem) => {
     const controller = new AbortController();
@@ -164,24 +186,42 @@ export default function FileUploadZone({
   const addFiles = (rawFiles: FileList | File[] | null) => {
     const files = Array.from(rawFiles ?? []);
     const accepted: CheckpointUploadItem[] = [];
+    // Completed items are already part of existingFileCount once the list refreshes.
+    const reserved = itemsRef.current.filter(item => item.status !== 'completed').length;
+    let slotsLeft = Math.max(0, CHECKPOINT_UPLOAD_MAX_FILES - existingFileCount - reserved);
+    let skippedForLimit = 0;
     for (const file of files) {
       const validationMessage = validateCheckpointUploadFile(file);
       if (validationMessage) {
         toast.error(validationMessage);
         continue;
       }
+      if (slotsLeft <= 0) {
+        skippedForLimit += 1;
+        continue;
+      }
+      slotsLeft -= 1;
       accepted.push({
         id: `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
         file,
-        status: 'queued',
+        status: 'staged',
         percent: 0,
         putDone: false,
       });
     }
 
+    if (skippedForLimit > 0) {
+      toast.error(`A checkpoint can contain at most ${CHECKPOINT_UPLOAD_MAX_FILES} files. ${skippedForLimit} file${skippedForLimit !== 1 ? 's were' : ' was'} not added.`);
+    }
     if (fileRef.current) fileRef.current.value = '';
     if (!accepted.length) return;
     commit([...itemsRef.current, ...accepted]);
+  };
+
+  // Nothing is uploaded or submitted until the student confirms.
+  const submitStaged = () => {
+    commit(itemsRef.current.map(item => (item.status === 'staged' ? { ...item, status: 'queued' as const } : item)));
+    setConfirmOpen(false);
     void runQueue();
   };
 
@@ -207,7 +247,8 @@ export default function FileUploadZone({
     commit(itemsRef.current.filter(item => item.id !== id));
   };
 
-  const clearFinished = () => commit(itemsRef.current.filter(isActive));
+  const clearFinished = () => commit(itemsRef.current.filter(item => isActive(item) || item.status === 'staged'));
+  const clearStaged = () => commit(itemsRef.current.filter(item => item.status !== 'staged'));
 
   const onDrop = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault();
@@ -216,50 +257,59 @@ export default function FileUploadZone({
   };
 
   const finishedCount = items.filter(item => item.status === 'completed').length;
+  const usedSlots = existingFileCount + items.filter(item => item.status !== 'completed').length;
+  const limitReached = usedSlots >= CHECKPOINT_UPLOAD_MAX_FILES;
 
   return (
     <div className="space-y-3">
-      <div
-        role="button"
-        tabIndex={0}
-        aria-label={`Upload files. PDF, DOCX or PPTX, up to ${CHECKPOINT_UPLOAD_MAX_FILE_SIZE_MB} MB each.`}
-        onClick={() => fileRef.current?.click()}
-        onKeyDown={(event) => {
-          if (event.key === 'Enter' || event.key === ' ') {
-            event.preventDefault();
-            fileRef.current?.click();
-          }
-        }}
-        onDragOver={(event) => { event.preventDefault(); setDragging(true); }}
-        onDragLeave={() => setDragging(false)}
-        onDrop={onDrop}
-        className={`
-          relative border-2 border-dashed flex flex-col items-center justify-center gap-2 cursor-pointer select-none
-          transition-all duration-200 text-center
-          ${isLarge ? 'rounded-2xl min-h-[200px] p-8 gap-3' : 'rounded-xl min-h-[128px] p-5'}
-          ${dragging
-            ? 'border-orange-500 bg-orange-50 shadow-inner'
-            : 'border-slate-200 bg-white hover:border-orange-400/70 hover:bg-orange-50/30 hover:shadow-sm'}
-        `}
-      >
-        <input
-          ref={fileRef}
-          type="file"
-          multiple
-          accept=".pdf,.docx,.pptx"
-          className="hidden"
-          onChange={(event) => addFiles(event.target.files)}
-        />
-        <div className={`rounded-2xl bg-orange-50 flex items-center justify-center ${isLarge ? 'w-16 h-16' : 'w-12 h-12'}`}>
-          <UploadCloud className={`transition-colors ${isLarge ? 'w-9 h-9' : 'w-8 h-8'} ${dragging ? 'text-orange-500' : 'text-orange-400'}`} />
+      {limitReached ? (
+        <p role="status" className="flex items-start gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+          <Info className="mt-0.5 h-4 w-4 shrink-0 text-slate-500" aria-hidden="true" />
+          <span>You've reached the {CHECKPOINT_UPLOAD_MAX_FILES}-file limit for this checkpoint. Delete a file to add another.</span>
+        </p>
+      ) : (
+        <div
+          role="button"
+          tabIndex={0}
+          aria-label={`Upload files. PDF, DOCX or PPTX, up to ${CHECKPOINT_UPLOAD_MAX_FILE_SIZE_MB} MB each, ${CHECKPOINT_UPLOAD_MAX_FILES - usedSlots} more allowed.`}
+          onClick={() => fileRef.current?.click()}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault();
+              fileRef.current?.click();
+            }
+          }}
+          onDragOver={(event) => { event.preventDefault(); setDragging(true); }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={onDrop}
+          className={`
+            relative border-2 border-dashed flex flex-col items-center justify-center gap-2 cursor-pointer select-none
+            transition-all duration-200 text-center
+            ${isLarge ? 'rounded-2xl min-h-[160px] p-6 gap-2' : 'rounded-xl min-h-[128px] p-5'}
+            ${dragging
+              ? 'border-primary bg-primary-50'
+              : 'border-slate-300 bg-white hover:border-primary hover:bg-primary-50/40'}
+          `}
+        >
+          <input
+            ref={fileRef}
+            type="file"
+            multiple
+            accept=".pdf,.docx,.pptx"
+            className="hidden"
+            onChange={(event) => addFiles(event.target.files)}
+          />
+          <div className="rounded-2xl bg-primary-50 flex items-center justify-center w-12 h-12">
+            <UploadCloud className={`transition-colors ${isLarge ? 'w-7 h-7' : 'w-8 h-8'} text-primary-700`} />
+          </div>
+          <p className={`font-semibold text-slate-700 ${isLarge ? 'text-sm' : 'text-xs'}`}>
+            {dragging ? 'Drop files here' : 'Drag & drop files here, or click to browse'}
+          </p>
+          <p className={`text-slate-500 ${isLarge ? 'text-xs' : 'text-overline'}`}>
+            PDF · DOCX · PPTX · Max {CHECKPOINT_UPLOAD_MAX_FILE_SIZE_MB} MB per file · Up to {CHECKPOINT_UPLOAD_MAX_FILES} files per checkpoint ({CHECKPOINT_UPLOAD_MAX_FILES - usedSlots} more allowed)
+          </p>
         </div>
-        <p className={`font-semibold text-slate-700 ${isLarge ? 'text-sm' : 'text-xs'}`}>
-          {dragging ? 'Drop files here' : 'Drag & drop or click to upload'}
-        </p>
-        <p className={`text-slate-400 ${isLarge ? 'text-xs' : 'text-[10px]'}`}>
-          PDF · DOCX · PPTX · Max {CHECKPOINT_UPLOAD_MAX_FILE_SIZE_MB} MB per file
-        </p>
-      </div>
+      )}
 
       {items.length > 0 && (
         <ul className="space-y-2" aria-live="polite" aria-label="Upload progress">
@@ -276,7 +326,7 @@ export default function FileUploadZone({
               <button
                 type="button"
                 onClick={clearFinished}
-                className="text-[11px] font-semibold text-slate-500 hover:text-slate-700"
+                className="text-caption font-semibold text-slate-500 hover:text-slate-700"
               >
                 Clear finished
               </button>
@@ -284,6 +334,31 @@ export default function FileUploadZone({
           )}
         </ul>
       )}
+
+      {stagedItems.length > 0 && (
+        <div className="flex flex-col gap-3 rounded-xl border border-warning-light bg-warning-50 p-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm text-slate-800">
+            <span className="font-semibold">{stagedItems.length} file{stagedItems.length !== 1 ? 's' : ''} selected — not submitted yet.</span>{' '}
+            Review the list, then submit to send {stagedItems.length !== 1 ? 'them' : 'it'} to your lecturer.
+          </p>
+          <div className="flex shrink-0 gap-2">
+            <Button variant="ghost" onClick={clearStaged}>Remove all</Button>
+            <Button variant="primary" icon={Send} onClick={() => setConfirmOpen(true)}>
+              Submit {stagedItems.length} file{stagedItems.length !== 1 ? 's' : ''}
+            </Button>
+          </div>
+        </div>
+      )}
+
+      <ConfirmDialog
+        isOpen={confirmOpen}
+        onClose={() => setConfirmOpen(false)}
+        onConfirm={submitStaged}
+        title={`Submit ${stagedItems.length} file${stagedItems.length !== 1 ? 's' : ''}?`}
+        description="The selected files will be uploaded and submitted to this checkpoint. Your lecturer and team will be able to see them."
+        confirmText="Submit"
+        confirmVariant="primary"
+      />
     </div>
   );
 }
@@ -300,26 +375,27 @@ function UploadRow({
   const active = isActive(item);
   const sentBytes = Math.round((item.file.size * item.percent) / 100);
   const badge = {
-    queued: 'bg-slate-100 text-slate-600',
-    uploading: 'bg-orange-50 text-orange-600',
-    completing: 'bg-orange-50 text-orange-600',
-    completed: 'bg-emerald-50 text-emerald-600',
-    failed: 'bg-red-50 text-red-600',
+    staged: badgeTones.warning,
+    queued: badgeTones.neutral,
+    uploading: badgeTones.brand,
+    completing: badgeTones.brand,
+    completed: badgeTones.success,
+    failed: badgeTones.danger,
   }[item.status];
-  const barColor = item.status === 'failed' ? 'bg-red-400' : item.status === 'completed' ? 'bg-emerald-500' : 'bg-orange-500';
+  const barColor = item.status === 'failed' ? 'bg-danger' : item.status === 'completed' ? 'bg-success' : 'bg-primary';
 
   return (
     <li className="rounded-xl border border-slate-200 bg-white p-3">
       <div className="flex items-center gap-2">
-        {item.status === 'completed' && <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" aria-hidden="true" />}
-        {item.status === 'failed' && <AlertCircle className="h-4 w-4 shrink-0 text-red-500" aria-hidden="true" />}
+        {item.status === 'completed' && <CheckCircle2 className="h-4 w-4 shrink-0 text-success-dark" aria-hidden="true" />}
+        {item.status === 'failed' && <AlertCircle className="h-4 w-4 shrink-0 text-danger-dark" aria-hidden="true" />}
         {(item.status === 'uploading' || item.status === 'completing') && (
-          <Loader2 className="h-4 w-4 shrink-0 animate-spin text-orange-500" aria-hidden="true" />
+          <Loader2 className="h-4 w-4 shrink-0 animate-spin text-primary-700" aria-hidden="true" />
         )}
         <p className="min-w-0 flex-1 truncate text-xs font-semibold text-slate-700" title={item.file.name}>
           {item.file.name}
         </p>
-        <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${badge}`}>
+        <span className={`shrink-0 rounded-md border px-2 py-0.5 text-overline font-bold ${badge}`}>
           {STATUS_LABEL[item.status]}
         </span>
         {item.status === 'failed' && (
@@ -336,7 +412,7 @@ function UploadRow({
           <button
             type="button"
             onClick={onCancel}
-            aria-label={active ? `Cancel uploading ${item.file.name}` : `Dismiss ${item.file.name}`}
+            aria-label={active ? `Cancel uploading ${item.file.name}` : item.status === 'staged' ? `Remove ${item.file.name}` : `Dismiss ${item.file.name}`}
             className="shrink-0 rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
           >
             <X className="h-4 w-4" />
@@ -344,7 +420,7 @@ function UploadRow({
         )}
       </div>
 
-      {item.status !== 'queued' && (
+      {item.status !== 'queued' && item.status !== 'staged' && (
         <div
           className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-slate-200"
           role="progressbar"
@@ -360,12 +436,13 @@ function UploadRow({
         </div>
       )}
 
-      <p className={`mt-1 text-[10px] ${item.status === 'failed' ? 'text-red-600' : 'text-slate-400'}`}>
+      <p className={`mt-1 text-overline ${item.status === 'failed' ? 'text-danger-dark' : 'text-slate-500'}`}>
         {item.status === 'failed' && item.error}
+        {item.status === 'staged' && `${formatFileSize(item.file.size)} · will be submitted when you confirm`}
         {item.status === 'queued' && `${formatFileSize(item.file.size)} · waiting for earlier uploads`}
         {item.status === 'uploading' && `${item.percent}% · ${formatFileSize(sentBytes)} of ${formatFileSize(item.file.size)}`}
-        {item.status === 'completing' && 'Saving and validating file…'}
-        {item.status === 'completed' && `${formatFileSize(item.file.size)}${item.versionNumber ? ` · Version ${item.versionNumber}` : ''}`}
+        {item.status === 'completing' && 'Saving and validating file… not submitted until this finishes'}
+        {item.status === 'completed' && `Submitted · ${formatFileSize(item.file.size)}${item.versionNumber ? ` · Version ${item.versionNumber}` : ''}`}
       </p>
     </li>
   );

@@ -97,7 +97,7 @@ const BulkAssignLecturerModal = ({
     <Modal isOpen={isOpen} onClose={onClose} title="Assign Lecturer to Selected Classes" size="lg">
       <div className="space-y-5">
         <div className="rounded-xl border border-primary-100 bg-primary-50/50 p-3">
-          <p className="text-sm font-semibold text-primary">{classes.length} classes will use the same lecturer</p>
+          <p className="text-sm font-semibold text-primary-700">{classes.length} classes will use the same lecturer</p>
           <div className="mt-2 flex max-h-20 flex-wrap gap-1.5 overflow-y-auto">
             {classes.map((item) => (
               <span key={item._id} className="rounded-md bg-white px-2 py-1 font-mono text-xs font-semibold text-slate-600 shadow-xs">
@@ -134,7 +134,7 @@ const BulkAssignLecturerModal = ({
                 onClick={() => setSelectedId(lecturer._id)}
                 className={`flex w-full items-center gap-3 rounded-xl border p-3 text-left transition ${selected ? 'border-primary bg-primary-50 shadow-xs' : 'border-slate-200 bg-white hover:border-primary-200'}`}
               >
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-100 text-primary">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-100 text-primary-700">
                   <GraduationCap className="h-4 w-4" />
                 </span>
                 <span className="min-w-0 flex-1">
@@ -150,7 +150,7 @@ const BulkAssignLecturerModal = ({
         <div className="flex gap-3 border-t border-slate-100 pt-4">
           <Button variant="outline" className="flex-1" onClick={onClose} disabled={isSubmitting}>Cancel</Button>
           <Button
-            variant="gradient"
+            variant="primary"
             className="flex-1"
             onClick={() => void onAssign(selectedId)}
             disabled={!selectedId || isSubmitting || loadingLecturers}

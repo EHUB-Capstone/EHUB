@@ -51,7 +51,7 @@ export type SlotFilter = 'all' | 'missing';
 export function filterTeamSlotRows(rows: readonly TeamSlotRow[], filter: SlotFilter, search: string): TeamSlotRow[] {
   return rows.filter(row =>
     (filter === 'all' || row.missingCount > 0)
-    && matchesSearchQuery(search, [row.team.teamName, row.team.teamCode, row.team.groupName]));
+    && matchesSearchQuery(search, [row.team.teamName, row.team.groupName]));
 }
 
 export type MentorKindFilter = 'ALL' | MentorSlot;

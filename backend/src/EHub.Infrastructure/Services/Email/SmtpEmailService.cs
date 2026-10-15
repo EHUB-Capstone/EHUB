@@ -214,6 +214,57 @@ public sealed class SmtpEmailService : IEmailService
         _logger.LogInformation("Class notification email sent");
     }
 
+    public async Task SendClassNotificationWithActionAsync(
+        string toEmail,
+        string fullName,
+        string subject,
+        string title,
+        string message,
+        string actionLabel,
+        string actionUrl,
+        CancellationToken cancellationToken = default)
+    {
+        var safeFullName = WebUtility.HtmlEncode(fullName);
+        var safeTitle = WebUtility.HtmlEncode(title);
+        var safeMessage = WebUtility.HtmlEncode(message);
+        var safeActionLabel = WebUtility.HtmlEncode(actionLabel);
+        var safeActionUrl = WebUtility.HtmlEncode(actionUrl);
+        var htmlBody = $"""
+        <div style="margin:0;padding:24px;background:#f8fafc;font-family:Arial,sans-serif;color:#1e293b">
+            <div style="max-width:600px;margin:0 auto;background:#ffffff;border:1px solid #e2e8f0;border-radius:16px;overflow:hidden">
+                <div style="padding:20px 24px;background:linear-gradient(135deg,#f97316,#ea580c);color:#ffffff">
+                    <div style="font-size:12px;font-weight:700;letter-spacing:1px">EHUB · STARTUP PORTAL</div>
+                    <div style="margin-top:8px;font-size:23px;font-weight:700">{safeTitle}</div>
+                </div>
+                <div style="padding:24px">
+                    <p style="margin:0 0 16px;font-size:15px">Hello {safeFullName},</p>
+                    <div style="padding:16px;border-radius:12px;background:#fff7ed;border:1px solid #fed7aa;white-space:pre-line;font-size:14px;line-height:1.7">{safeMessage}</div>
+                    <p style="margin:20px 0 0">
+                        <a href="{safeActionUrl}" style="display:inline-block;padding:12px 18px;border-radius:8px;background:#f97316;color:#ffffff;text-decoration:none;font-size:14px;font-weight:700">{safeActionLabel}</a>
+                    </p>
+                </div>
+                <div style="padding:16px 24px;background:#f8fafc;border-top:1px solid #e2e8f0;color:#64748b;font-size:12px;line-height:1.5">
+                    This is an automated E-HUB notification. Please sign in and submit before the deadline when possible.
+                </div>
+            </div>
+        </div>
+        """;
+        var textBody = $"""
+        {title}
+
+        Hello {fullName},
+
+        {message}
+
+        {actionLabel}: {actionUrl}
+
+        EHUB - Entrepreneurship Hub
+        """;
+
+        await SendEmailAsync(toEmail, fullName, subject, htmlBody, textBody, cancellationToken);
+        _logger.LogInformation("Class notification email with action sent");
+    }
+
     private async Task SendEmailAsync(
         string toEmail,
         string toName,

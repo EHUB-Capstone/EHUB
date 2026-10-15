@@ -24,7 +24,7 @@ const roleLabel = (role) =>
 // ─── Avatar initial ───────────────────────────────────────────────────────────
 const Avatar = ({ name, avatarUrl, size = 'md' }) => {
   const [imageFailed, setImageFailed] = useState(false);
-  const sz = size === 'sm' ? 'w-7 h-7 text-[10px]' : 'w-8 h-8 text-xs';
+  const sz = size === 'sm' ? 'w-7 h-7 text-overline' : 'w-8 h-8 text-xs';
   return (
     <div className={`${sz} overflow-hidden rounded-full bg-orange-100 text-orange-700 font-bold flex items-center justify-center shrink-0`}>
       {avatarUrl && !imageFailed ? (
@@ -73,7 +73,7 @@ function FeedbackItem({ comment, replies, teamId, checkpointNumber, onPosted, on
             <span className={`text-[9px] font-bold px-1.5 py-px border rounded-md ${roleBadge(comment.user?.role)}`}>
               {roleLabel(comment.user?.role)}
             </span>
-            <span className="text-[10px] text-slate-400 flex items-center gap-1">
+            <span className="text-overline text-slate-400 flex items-center gap-1">
               <Calendar className="w-3 h-3" />
               {new Date(comment.createdAt).toLocaleString()}
             </span>
@@ -83,11 +83,11 @@ function FeedbackItem({ comment, replies, teamId, checkpointNumber, onPosted, on
           </p>
           <button
             onClick={() => { setOpen((o) => !o); setText(''); }}
-            className="text-[10px] font-bold text-orange-500 hover:text-orange-600 transition-colors"
+            className="text-overline font-bold text-orange-500 hover:text-orange-600 transition-colors"
           >
             {open ? 'Cancel' : 'Reply'}
           </button>
-          {canDelete && <button onClick={() => onRequestDelete(comment)} className="ml-3 text-[10px] font-bold text-slate-400 hover:text-red-600">Delete</button>}
+          {canDelete && <button onClick={() => onRequestDelete(comment)} className="ml-3 text-overline font-bold text-slate-400 hover:text-red-600">Delete</button>}
         </div>
       </div>
 
@@ -100,7 +100,7 @@ function FeedbackItem({ comment, replies, teamId, checkpointNumber, onPosted, on
               <Avatar name={r.user?.name} avatarUrl={r.user?.avatarUrl} size="sm" />
               <div className="flex-1 bg-slate-50/60 border border-slate-100 rounded-xl px-3 py-2 space-y-1">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-[11px] font-bold text-slate-800">{r.user?.name}</span>
+                  <span className="text-caption font-bold text-slate-800">{r.user?.name}</span>
                   <span className={`text-[8px] font-bold px-1.5 py-px border rounded-md ${roleBadge(r.user?.role)}`}>
                     {roleLabel(r.user?.role)}
                   </span>
@@ -108,7 +108,7 @@ function FeedbackItem({ comment, replies, teamId, checkpointNumber, onPosted, on
                     {new Date(r.createdAt).toLocaleString()}
                   </span>
                 </div>
-                <p className="text-[11px] text-slate-600 leading-relaxed whitespace-pre-wrap">
+                <p className="text-caption text-slate-600 leading-relaxed whitespace-pre-wrap">
                   {r.comment}
                 </p>
                 {(user?.role?.toUpperCase() === 'ADMIN' || r.user?._id === user?._id) && <button onClick={() => onRequestDelete(r)} className="inline-flex items-center gap-1 text-[9px] font-bold text-slate-400 hover:text-red-600"><Trash2 className="w-3 h-3" />Delete</button>}

@@ -46,7 +46,7 @@ const STATUSES = ['TODO', 'IN_PROGRESS', 'REVIEW', 'COMPLETED', 'OVERDUE'];
 const STATUS_CFG = {
   TODO:        { label: 'To Do',      bg: 'bg-slate-100',   text: 'text-slate-600',  dot: 'bg-slate-400'  },
   IN_PROGRESS: { label: 'In Progress',bg: 'bg-blue-50',     text: 'text-blue-600',   dot: 'bg-blue-500'   },
-  REVIEW:      { label: 'Review',     bg: 'bg-violet-50',   text: 'text-violet-600', dot: 'bg-violet-500' },
+  REVIEW:      { label: 'Review',     bg: 'bg-secondary-50',   text: 'text-secondary', dot: 'bg-secondary' },
   COMPLETED:   { label: 'Completed',  bg: 'bg-emerald-50',  text: 'text-emerald-600',dot: 'bg-emerald-500'},
   OVERDUE:     { label: 'Overdue',    bg: 'bg-red-50',      text: 'text-red-600',    dot: 'bg-red-500'    },
 };
@@ -74,7 +74,7 @@ const getTaskSaveErrorMessage = (error) => {
 // ─── Tiny helpers ─────────────────────────────────────────────────────────────
 
 const Badge = ({ children, className = '' }) => (
-  <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full ${className}`}>
+  <span className={`inline-flex items-center gap-1 text-caption font-semibold px-2 py-0.5 rounded-full ${className}`}>
     {children}
   </span>
 );
@@ -182,7 +182,7 @@ function TaskCard({ task, canEdit, canDelete, canUpdateSts, onEdit, onOpen, onDe
         {/* Checklist progress */}
         {checklist.length > 0 && (
           <div className="mb-3">
-            <div className="flex items-center justify-between text-[10px] text-slate-400 mb-1">
+            <div className="flex items-center justify-between text-overline text-slate-400 mb-1">
               <span>Checklist</span>
               <span>{checklistDone}/{checklist.length}</span>
             </div>
@@ -198,7 +198,7 @@ function TaskCard({ task, canEdit, canDelete, canUpdateSts, onEdit, onOpen, onDe
         {/* Completion % for items without checklist */}
         {checklist.length === 0 && task.completionPercentage > 0 && (
           <div className="mb-3">
-            <div className="flex items-center justify-between text-[10px] text-slate-400 mb-1">
+            <div className="flex items-center justify-between text-overline text-slate-400 mb-1">
               <span>Progress</span><span>{task.completionPercentage}%</span>
             </div>
             <div className="w-full h-1 bg-slate-100 rounded-full overflow-hidden">
@@ -208,7 +208,7 @@ function TaskCard({ task, canEdit, canDelete, canUpdateSts, onEdit, onOpen, onDe
         )}
 
         {/* Meta row */}
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-400">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-caption text-slate-400">
           {assigneeName && (
             <span className="flex items-center gap-1">
               <User className="w-3 h-3" />{assigneeName}
@@ -236,7 +236,7 @@ function TaskCard({ task, canEdit, canDelete, canUpdateSts, onEdit, onOpen, onDe
           <div className="mt-3 flex items-center gap-2 pt-3 border-t border-slate-100">
             <button
               onClick={() => onMarkComplete(task._id)}
-              className="flex items-center gap-1.5 text-[11px] font-semibold text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 px-2.5 py-1 rounded-lg transition-colors"
+              className="flex items-center gap-1.5 text-caption font-semibold text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 px-2.5 py-1 rounded-lg transition-colors"
             >
               <CheckCircle2 className="w-3.5 h-3.5" />Mark Complete
             </button>
@@ -244,7 +244,7 @@ function TaskCard({ task, canEdit, canDelete, canUpdateSts, onEdit, onOpen, onDe
             <div className="relative ml-auto">
               <button
                 onClick={() => setStatusOpen(p => !p)}
-                className="flex items-center gap-1 text-[11px] font-medium text-slate-500 hover:text-slate-700 hover:bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200 transition-colors"
+                className="flex items-center gap-1 text-caption font-medium text-slate-500 hover:text-slate-700 hover:bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200 transition-colors"
               >
                 Change Status <ChevronDown className="w-3 h-3" />
               </button>
@@ -287,11 +287,11 @@ function SectionPanel({ icon: Icon, label, sublabel, accentClass, tasks, emptyLa
             </div>
             <div>
               <h3 className="font-bold text-white text-sm">{label}</h3>
-              <p className="text-white/70 text-[11px]">{sublabel}</p>
+              <p className="text-white/70 text-caption">{sublabel}</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <span className="bg-white/20 text-white text-[11px] font-bold px-2 py-0.5 rounded-full">
+            <span className="bg-white/20 text-white text-caption font-bold px-2 py-0.5 rounded-full">
               {tasks.length}
             </span>
             {headerAction}
@@ -859,7 +859,7 @@ export default function WeeklyRoadmapPlanner({
           icon={BookOpen}
           label="Course Roadmap"
           sublabel="Syllabus requirements — read only"
-          accentClass="bg-gradient-to-br from-violet-600 to-violet-700"
+          accentClass="bg-secondary"
           tasks={courseTasks}
           emptyLabel="course tasks"
           renderCard={task => (
@@ -883,7 +883,7 @@ export default function WeeklyRoadmapPlanner({
           icon={ClipboardList}
           label="Class Requirements"
           sublabel="Instructor assignments for this class"
-          accentClass="bg-gradient-to-br from-emerald-500 to-emerald-700"
+          accentClass="bg-success-dark"
           tasks={classTasks}
           emptyLabel="class tasks"
           renderCard={task => (
@@ -907,7 +907,7 @@ export default function WeeklyRoadmapPlanner({
           icon={Users}
           label="Team Tasks"
           sublabel="Your team's execution tasks"
-          accentClass="bg-gradient-to-br from-blue-500 to-blue-700"
+          accentClass="bg-info-dark"
           tasks={filteredTeamTasks}
           emptyLabel="team tasks"
           renderCard={renderCard}

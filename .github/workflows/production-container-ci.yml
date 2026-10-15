@@ -13,6 +13,7 @@ on:
       - backend/**
       - frontend/**
       - deploy/**
+      - docker/**
       - scripts/production/**
       - scripts/staging/**
       - .gitattributes
@@ -29,6 +30,7 @@ on:
       - backend/**
       - frontend/**
       - deploy/**
+      - docker/**
       - scripts/production/**
       - scripts/staging/**
       - .gitattributes
@@ -98,7 +100,7 @@ jobs:
             nginx:1.27-alpine nginx -t
 
   validate-compose:
-    name: Validate production Compose
+    name: Validate production and staging Compose
     runs-on: ubuntu-latest
 
     steps:
@@ -118,6 +120,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          - component: postgres-pgvector
+            context: ./docker/postgres-pgvector
+            file: ./docker/postgres-pgvector/Dockerfile
+            build-args: ""
           - component: backend
             context: ./backend
             file: ./backend/Dockerfile

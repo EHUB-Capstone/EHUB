@@ -55,7 +55,7 @@ export default function ProjectWorkspaceProfile({ project, classInfo, activities
           <div>
             <div className="flex items-center gap-2">
               <h2 className="text-lg font-bold text-slate-900">{project.projectName}</h2>
-              <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-emerald-700">
+              <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-caption font-bold uppercase tracking-wide text-emerald-700">
                 {project.status || 'Draft'}
               </span>
             </div>
@@ -74,11 +74,11 @@ export default function ProjectWorkspaceProfile({ project, classInfo, activities
 
         <div className="grid border-t border-slate-100 bg-slate-50/60 sm:grid-cols-3">
           <div className="border-b border-slate-100 px-5 py-3 sm:border-b-0 sm:border-r">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Class</p>
+            <p className="text-overline font-bold uppercase tracking-wider text-slate-400">Class</p>
             <p className="mt-1 text-sm font-semibold text-slate-700">{classInfo.classCode || '—'}</p>
           </div>
           <div className="border-b border-slate-100 px-5 py-3 sm:border-b-0 sm:border-r">
-            <p className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+            <p className="flex items-center gap-1 text-overline font-bold uppercase tracking-wider text-slate-400">
               <GraduationCap className="h-3 w-3" /> Subject
             </p>
             <p className="mt-1 text-sm font-semibold text-slate-700">
@@ -86,7 +86,7 @@ export default function ProjectWorkspaceProfile({ project, classInfo, activities
             </p>
           </div>
           <div className="px-5 py-3">
-            <p className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+            <p className="flex items-center gap-1 text-overline font-bold uppercase tracking-wider text-slate-400">
               <CalendarDays className="h-3 w-3" /> Semester
             </p>
             <p className="mt-1 text-sm font-semibold text-slate-700">{classInfo.semesterCode || '—'}</p>
@@ -113,7 +113,7 @@ export default function ProjectWorkspaceProfile({ project, classInfo, activities
             {activities.map((activity, index) => (
               <li key={activity.id || index} className="relative flex gap-3 pb-5 last:pb-0">
                 {index < activities.length - 1 && <span className="absolute left-[15px] top-8 h-[calc(100%-1.5rem)] w-px bg-slate-200" />}
-                <span className="relative z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-primary-100 bg-primary-50 text-primary">
+                <span className="relative z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-primary-100 bg-primary-50 text-primary-700">
                   <Clock3 className="h-3.5 w-3.5" />
                 </span>
                 <div className="min-w-0 pt-0.5">

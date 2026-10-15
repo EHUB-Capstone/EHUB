@@ -8,6 +8,7 @@ using EHub.Infrastructure.Persistence;
 using EHub.Shared.Constants;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
+using Pgvector.EntityFrameworkCore;
 using Testcontainers.PostgreSql;
 
 namespace EHub.IntegrationTests.Admin;
@@ -15,7 +16,7 @@ namespace EHub.IntegrationTests.Admin;
 public sealed class UserManagementIntegrationTests : IAsyncLifetime
 {
     private readonly PostgreSqlContainer _postgresContainer =
-        new PostgreSqlBuilder("postgres:16-alpine")
+        new PostgreSqlBuilder("pgvector/pgvector:0.8.6-pg16")
             .WithDatabase("user_management_test_db")
             .WithUsername("user_management_test_user")
             .WithPassword("user_management_test_password")
@@ -28,7 +29,7 @@ public sealed class UserManagementIntegrationTests : IAsyncLifetime
     {
         await _postgresContainer.StartAsync();
         var options = new DbContextOptionsBuilder<AppDbContext>()
-            .UseNpgsql(_postgresContainer.GetConnectionString())
+            .UseNpgsql(_postgresContainer.GetConnectionString(), b => b.UseVector())
             .Options;
         _context = new AppDbContext(options);
         await _context.Database.EnsureCreatedAsync();

@@ -238,7 +238,7 @@ export default function AddSemesterStaffModal({
               <span>
                 <strong className="text-slate-700">{groups.available.length}</strong> available
                 {groups.inSemester.length > 0 && <> · {groups.inSemester.length} already in {semesterLabel}</>}
-                {chosen.length > 0 && <> · <strong className="text-primary">{chosen.length} selected</strong></>}
+                {chosen.length > 0 && <> · <strong className="text-primary-700">{chosen.length} selected</strong></>}
               </span>
               {groups.available.length > 0 && (
                 <button
@@ -291,11 +291,11 @@ export default function AddSemesterStaffModal({
                   })}
                   {groups.inSemester.length > 0 && (
                     <>
-                      <p className="px-1 pt-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Already in {semesterLabel}</p>
+                      <p className="px-1 pt-2 text-caption font-semibold uppercase tracking-wide text-slate-400">Already in {semesterLabel}</p>
                       {groups.inSemester.map(candidate => (
                         <div key={candidate.userId} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200/60 bg-white p-2.5 opacity-60">
                           <CandidateInfo candidate={candidate} />
-                          <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600">In semester</span>
+                          <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-overline font-semibold text-slate-600">In semester</span>
                         </div>
                       ))}
                     </>
@@ -318,7 +318,7 @@ function CandidateInfo({ candidate }: { candidate: TeachingStaffCandidateDto }) 
       </span>
       <div className="min-w-0">
         <p className="flex items-center gap-1.5 truncate text-xs font-semibold text-slate-800"><span className="truncate">{candidate.name}</span>{candidate.isTemporary && <TemporaryMentorBadge />}</p>
-        <p className="truncate text-[10px] text-slate-400">{candidate.isTemporary ? (candidate.email || 'No email yet') : candidate.email}</p>
+        <p className="truncate text-overline text-slate-400">{candidate.isTemporary ? (candidate.email || 'No email yet') : candidate.email}</p>
         <MentorTagChips tags={candidate.tags} />
       </div>
       {candidate.mentorType && (

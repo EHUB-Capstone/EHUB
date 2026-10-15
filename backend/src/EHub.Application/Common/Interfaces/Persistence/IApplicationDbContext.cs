@@ -63,6 +63,7 @@ public interface IApplicationDbContext
     DbSet<MentoringSession> MentoringSessions { get; }
     DbSet<MentoringActionItem> MentoringActionItems { get; }
     DbSet<MentoringAttendance> MentoringAttendances { get; }
+    DbSet<MentoringFeedback> MentoringFeedback { get; }
     DbSet<AcademicDataset> AcademicDatasets { get; }
     DbSet<DataBankColumn> DataBankColumns { get; }
     DbSet<DataBankImportBatch> DataBankImportBatches { get; }

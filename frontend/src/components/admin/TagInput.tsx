@@ -44,7 +44,7 @@ export default function TagInput({ label, value, onChange, addTag, placeholder, 
       <label htmlFor={id} className="mb-1 block text-xs font-semibold text-slate-700">{label}</label>
       <div className={`flex min-h-[42px] flex-wrap items-center gap-1.5 rounded-xl border bg-white px-2.5 py-1.5 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20 ${error ? 'border-red-300' : 'border-slate-200'} ${disabled ? 'opacity-60' : ''}`}>
         {value.map(tag => (
-          <span key={tag} className="inline-flex items-center gap-1 rounded-full border border-primary-100 bg-primary-50 px-2.5 py-0.5 text-xs font-semibold text-primary">
+          <span key={tag} className="inline-flex items-center gap-1 rounded-full border border-primary-100 bg-primary-50 px-2.5 py-0.5 text-xs font-semibold text-primary-700">
             {tag}
             {!disabled && (
               <button type="button" onClick={() => onChange(value.filter(item => item !== tag))} aria-label={`Remove ${tag}`} className="rounded-full p-0.5 hover:bg-primary-100">
@@ -72,7 +72,7 @@ export default function TagInput({ label, value, onChange, addTag, placeholder, 
           {suggestions.filter(item => !value.some(tag => tag.toLowerCase() === item.toLowerCase())).slice(0, 50).map(item => <option key={item} value={item} />)}
         </datalist>
       )}
-      <p id={`${id}-help`} role={error ? 'alert' : undefined} className={`mt-1 text-[11px] ${error ? 'text-red-600' : 'text-slate-400'}`}>
+      <p id={`${id}-help`} role={error ? 'alert' : undefined} className={`mt-1 text-caption ${error ? 'text-red-600' : 'text-slate-400'}`}>
         {error ?? hint ?? 'Press Enter or comma to add.'}
       </p>
     </div>

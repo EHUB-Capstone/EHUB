@@ -327,7 +327,7 @@ export default function BulkCreateModal({
                       {semesters.length === 0 && <option value="">No open semesters</option>}
                       {semesters.map(semester => <option key={semester.id} value={semester.id}>{semester.semester} {semester.year} — {semester.availability} ({semester.status})</option>)}
                     </select>
-                    {semesters.length === 0 && <p className="mt-1 text-[11px] text-amber-600">Complete expired semesters and configure the current or next semester first.</p>}
+                    {semesters.length === 0 && <p className="mt-1 text-caption text-amber-600">Complete expired semesters and configure the current or next semester first.</p>}
                   </div>
                   <div>
                     <label htmlFor="create-class-index" className="mb-1 block text-xs font-semibold text-slate-600">Starting class index *</label>
@@ -343,7 +343,7 @@ export default function BulkCreateModal({
                   <div className="mt-3 rounded-xl border border-slate-100 bg-slate-50 p-3">
                     <div className="mb-2 flex items-center justify-between gap-3">
                       <p className="text-xs font-semibold text-slate-500">Generated class codes</p>
-                      <p className="text-[11px] text-slate-400">Assign one or more of these classes to each lecturer below.</p>
+                      <p className="text-caption text-slate-400">Assign one or more of these classes to each lecturer below.</p>
                     </div>
                     <div className="max-h-44 overflow-y-auto pr-1">
                       <div className="flex flex-wrap gap-2">
@@ -365,11 +365,11 @@ export default function BulkCreateModal({
                               title={conflict ? 'Assigned to multiple lecturers' : assignment?.lecturer.name || 'Unassigned'}
                             >
                               <div className="flex items-center gap-1.5">
-                                <span className="text-[10px] font-bold opacity-70">#{classIndex}</span>
+                                <span className="text-overline font-bold opacity-70">#{classIndex}</span>
                                 <span className="font-mono text-xs font-semibold">{code}</span>
                               </div>
                               {assignmentMode === 'assign' && assignment && !conflict && (
-                                <p className="mt-0.5 max-w-28 truncate text-[10px] font-medium">{assignment.lecturer.name}</p>
+                                <p className="mt-0.5 max-w-28 truncate text-overline font-medium">{assignment.lecturer.name}</p>
                               )}
                             </div>
                           );
@@ -420,7 +420,7 @@ export default function BulkCreateModal({
                           <div key={lecturer._id} className={`grid gap-2 rounded-xl border p-2.5 sm:grid-cols-[minmax(0,1fr)_220px] ${parsed.error ? 'border-red-200 bg-red-50/40' : 'border-slate-100 bg-slate-50/60'}`}>
                             <div className="flex min-w-0 items-center gap-2">
                               <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white ${color.dot}`}>{lecturer.name.charAt(0).toUpperCase()}</div>
-                              <div className="min-w-0"><p className="truncate text-xs font-semibold text-slate-800">{lecturer.name}</p><p className="truncate text-[11px] text-slate-400">{lecturer.email}</p></div>
+                              <div className="min-w-0"><p className="truncate text-xs font-semibold text-slate-800">{lecturer.name}</p><p className="truncate text-caption text-slate-400">{lecturer.email}</p></div>
                             </div>
                             <div>
                               <input
@@ -433,7 +433,7 @@ export default function BulkCreateModal({
                                 aria-invalid={Boolean(parsed.error)}
                                 className={`w-full rounded-lg border bg-white px-3 py-2 text-xs outline-none focus:ring-2 ${parsed.error ? 'border-red-300 focus:border-red-400 focus:ring-red-100' : 'border-slate-200 focus:border-primary focus:ring-primary/20'}`}
                               />
-                              {parsed.error && <p className="mt-1 text-[10px] text-red-600">{parsed.error}</p>}
+                              {parsed.error && <p className="mt-1 text-overline text-red-600">{parsed.error}</p>}
                             </div>
                           </div>
                         );

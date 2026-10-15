@@ -204,7 +204,7 @@ export default function ClassDirectionOverview({ semester, year, initialClassId 
         };
         overviewRef.current = nextOverview;
         setOverview(nextOverview);
-        const teamName = getDisplayTeamName(previousTeam) || previousTeam.teamCode || 'A team';
+        const teamName = getDisplayTeamName(previousTeam) || 'A team';
         toast(`${teamName} submitted a project direction for review.`, { id: `project-direction-submitted-${event.direction.rowVersion}` });
       },
       () => void synchronizeAfterReconnect(),
@@ -330,15 +330,18 @@ export default function ClassDirectionOverview({ semester, year, initialClassId 
             const approvedExpanded = !isApproved || expandedApprovedTeamIds.has(team._id) || team._id === focusTeamId;
             return (
               <section key={team._id} className={`${isApproved && !approvedExpanded ? 'py-3' : 'py-5 first:pt-4'} ${team._id === focusTeamId ? 'rounded-xl bg-primary-50/40 px-4 ring-2 ring-primary/15' : ''}`}>
-                <div className="flex flex-wrap items-start justify-between gap-3">
+                <div
+                  className={`flex flex-wrap items-start justify-between gap-3 ${isApproved ? 'cursor-pointer rounded-lg transition-colors hover:bg-slate-50' : ''}`}
+                  onClick={isApproved ? () => toggleApprovedTeam(team._id) : undefined}
+                >
                   <div>
                     <h3 className="font-bold text-slate-900">
-                      {team.projectDirectionTitle || team.projectName || getDisplayTeamName(team) || team.teamCode}
+                      {team.projectDirectionTitle || team.projectName || getDisplayTeamName(team)}
                     </h3>
                     <p className="mt-0.5 text-xs text-slate-500">
                       Class: {team.overviewClassCode || '—'} · Team: {team.teamName || 'Unnamed team'} · Leader: {team.leaderName}
                     </p>
-                    {isProfileChangeProposal && <span className="mt-2 inline-flex rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-xs font-bold text-violet-700">Project Profile change request</span>}
+                    {isProfileChangeProposal && <span className="mt-2 inline-flex rounded-full border border-secondary-200 bg-secondary-50 px-2.5 py-1 text-xs font-bold text-secondary">Project Profile change request</span>}
                   </div>
                   <div className="flex items-center gap-2">
                     <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${statusStyles[status]}`}>
@@ -347,7 +350,7 @@ export default function ClassDirectionOverview({ semester, year, initialClassId 
                     {isApproved && (
                       <button
                         type="button"
-                        onClick={() => toggleApprovedTeam(team._id)}
+                        onClick={(event) => { event.stopPropagation(); toggleApprovedTeam(team._id); }}
                         aria-expanded={approvedExpanded}
                         aria-label={`${approvedExpanded ? 'Collapse' : 'Expand'} approved proposal for ${team.teamName || team.projectDirectionTitle || 'team'}`}
                         className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-600 transition hover:border-emerald-300 hover:text-emerald-700"
@@ -370,11 +373,11 @@ export default function ClassDirectionOverview({ semester, year, initialClassId 
                           <p className="mt-3 text-xs font-semibold text-slate-500">Description</p>
                           <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-slate-700">{team.projectDirectionCurrentSummary}</p>
                         </div>
-                        <div className="rounded-xl border border-violet-200 bg-violet-50/50 p-4">
-                          <p className="text-xs font-bold uppercase tracking-wide text-violet-700">Proposed change</p>
-                          <p className="mt-3 text-xs font-semibold text-violet-600">Project name</p>
+                        <div className="rounded-xl border border-secondary-200 bg-secondary-50 p-4">
+                          <p className="text-xs font-bold uppercase tracking-wide text-secondary">Proposed change</p>
+                          <p className="mt-3 text-xs font-semibold text-secondary">Project name</p>
                           <p className="mt-1 font-semibold text-slate-900">{team.projectDirectionTitle}</p>
-                          <p className="mt-3 text-xs font-semibold text-violet-600">Description</p>
+                          <p className="mt-3 text-xs font-semibold text-secondary">Description</p>
                           <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-slate-700">{team.projectDirection}</p>
                         </div>
                       </div>

@@ -105,10 +105,10 @@ export default function IncompleteMentorsPanel({ search, mentorType, onUnfiltere
           <table className="w-full min-w-[640px]">
             <thead>
               <tr className="border-b border-slate-100 bg-slate-50/60">
-                <th className="py-3.5 px-6 text-xs text-slate-400 uppercase text-left font-semibold tracking-wider">Mentor</th>
-                <th className="py-3.5 px-6 text-xs text-slate-400 uppercase text-left font-semibold tracking-wider">Status</th>
-                <th className="py-3.5 px-6 text-xs text-slate-400 uppercase text-left font-semibold tracking-wider">Missing information</th>
-                <th className="sticky right-0 bg-slate-50 py-3.5 px-4 text-xs text-slate-400 uppercase text-right font-semibold tracking-wider">Actions</th>
+                <th className="py-3.5 px-6 text-xs text-slate-600 uppercase text-left font-semibold tracking-wider">Mentor</th>
+                <th className="py-3.5 px-6 text-xs text-slate-600 uppercase text-left font-semibold tracking-wider">Status</th>
+                <th className="py-3.5 px-6 text-xs text-slate-600 uppercase text-left font-semibold tracking-wider">Missing information</th>
+                <th className="sticky right-0 bg-slate-50 py-3.5 px-4 text-xs text-slate-600 uppercase text-right font-semibold tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -124,14 +124,14 @@ export default function IncompleteMentorsPanel({ search, mentorType, onUnfiltere
                           {(mentor.activeTeamCount ?? 0) > 0 && (
                             <span className="inline-flex items-center gap-1">
                               <TemporaryMentorBadge />
-                              <span className="text-[10px] font-semibold text-amber-800">on {mentor.activeTeamCount} team{mentor.activeTeamCount === 1 ? '' : 's'}</span>
+                              <span className="text-overline font-semibold text-amber-800">on {mentor.activeTeamCount} team{mentor.activeTeamCount === 1 ? '' : 's'}</span>
                             </span>
                           )}
                         </div>
                       </div>
                     </td>
                     <td className="py-3.5 px-6">
-                      <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
+                      <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-caption font-semibold text-amber-800">
                         <AlertTriangle className="h-3 w-3" /> Needs information
                       </span>
                     </td>
@@ -147,7 +147,7 @@ export default function IncompleteMentorsPanel({ search, mentorType, onUnfiltere
                           type="button"
                           aria-label={`Edit ${mentor.fullName}`}
                           title="Edit mentor"
-                          className="rounded-lg p-1.5 text-slate-400 transition-all hover:bg-primary-50 hover:text-primary"
+                          className="rounded-lg p-1.5 text-slate-400 transition-all hover:bg-primary-50 hover:text-primary-700"
                           onClick={() => setEditing(mentor)}
                         >
                           <Pencil className="h-4 w-4" />

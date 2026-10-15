@@ -79,7 +79,7 @@ export default function StudentMajorActionCard({
               <GraduationCap className="h-5 w-5" />
             </div>
             <div className="min-w-0">
-              <span className="inline-flex items-center gap-1 rounded-full border border-orange-200 bg-white px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-orange-700">
+              <span className="inline-flex items-center gap-1 rounded-full border border-orange-200 bg-white px-2.5 py-1 text-overline font-bold uppercase tracking-wider text-orange-700">
                 <AlertTriangle className="h-3 w-3" /> Action Required
               </span>
               <h2 id="major-action-title" className="mt-2 text-base font-bold text-slate-900 sm:text-lg">
@@ -202,7 +202,7 @@ export default function StudentMajorActionCard({
               <CheckCircle2 className="h-5 w-5" />
             </div>
             <div className="min-w-0">
-              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-emerald-700">
+              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-overline font-bold uppercase tracking-wider text-emerald-700">
                 <CheckCircle2 className="h-3 w-3" /> Verified
               </span>
               <h2 id="major-status-title" className="mt-2 text-sm font-bold text-slate-900">Your Major</h2>
@@ -256,7 +256,7 @@ export default function StudentMajorActionCard({
             {needsReview ? <AlertTriangle className="h-5 w-5" /> : <Clock3 className="h-5 w-5" />}
           </div>
           <div className="min-w-0">
-            <span className="inline-flex rounded-full bg-amber-100 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-amber-800">
+            <span className="inline-flex rounded-full bg-amber-100 px-2.5 py-1 text-overline font-bold uppercase tracking-wider text-amber-800">
               {statusLabel}
             </span>
             <h2 id="major-status-title" className="mt-2 text-sm font-bold text-slate-900">Your Major</h2>

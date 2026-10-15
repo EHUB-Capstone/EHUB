@@ -112,12 +112,12 @@ export default function MyTeam() {
       </div>}
       {showViewSwitcher && <div className="flex flex-wrap gap-2" role="group" aria-label="Choose team or invitation">
         {team && <button type="button" aria-pressed={!selectedFormation} onClick={() => setSelectedFormationId(null)}
-          className={`rounded-lg border px-3 py-2 text-sm font-semibold ${!selectedFormation ? 'border-primary bg-primary-50 text-primary' : 'border-slate-200 bg-white text-slate-600'}`}>
+          className={`rounded-lg border px-3 py-2 text-sm font-semibold ${!selectedFormation ? 'border-primary bg-primary-50 text-primary-700' : 'border-slate-200 bg-white text-slate-600'}`}>
           Active team
         </button>}
         {pendingFormations.map(formation => <button key={formation.id} type="button"
           aria-pressed={selectedFormation?.id === formation.id} onClick={() => setSelectedFormationId(formation.id)}
-          className={`rounded-lg border px-3 py-2 text-sm font-semibold ${selectedFormation?.id === formation.id ? 'border-primary bg-primary-50 text-primary' : 'border-slate-200 bg-white text-slate-600'}`}>
+          className={`rounded-lg border px-3 py-2 text-sm font-semibold ${selectedFormation?.id === formation.id ? 'border-primary bg-primary-50 text-primary-700' : 'border-slate-200 bg-white text-slate-600'}`}>
           Invitation · {formation.classCode}
         </button>)}
       </div>}
@@ -135,7 +135,7 @@ export default function MyTeam() {
     return (
       <div className="max-w-4xl mx-auto space-y-6">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">My Team</h1>
+          <h1 className="text-heading sm:text-display text-secondary tracking-tight">My Team</h1>
           <p className="text-sm text-slate-500 mt-1">View and collaborate with your startup team members.</p>
         </div>
 
@@ -179,7 +179,7 @@ export default function MyTeam() {
       {/* Header */}
       <div className="flex justify-between items-start flex-wrap gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">My Team</h1>
+          <h1 className="text-heading sm:text-display text-secondary tracking-tight">My Team</h1>
           <p className="text-sm text-slate-500 mt-1">
             Collaborate with your startup team in class <span className="font-semibold text-slate-700">{cls?.classCode || '—'}</span>.
           </p>
@@ -198,16 +198,15 @@ export default function MyTeam() {
         {/* Left 2 Columns: Team Info & Members List */}
         <div className="md:col-span-2 space-y-6">
           {/* Team Profile Glass Card */}
-          <div className="bg-gradient-to-br from-white to-slate-50/50 rounded-2xl border border-slate-200/60 p-6 shadow-sm space-y-4 relative overflow-hidden group">
+          <div className="rounded-2xl border border-slate-200/60 p-6 shadow-sm space-y-4 relative overflow-hidden group bg-white">
             <div className="absolute right-0 top-0 w-32 h-32 bg-primary-100/10 rounded-full blur-2xl group-hover:bg-primary-100/20 transition-all duration-500" />
             
             <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center shadow-sm">
+              <div className="w-12 h-12 rounded-2xl flex items-center justify-center shadow-sm bg-primary">
                 <Users className="w-6 h-6 text-white" />
               </div>
               <div>
                 <h2 className="text-2xl font-bold text-slate-900 leading-tight">{displayTeamName}</h2>
-                <p className="text-xs text-slate-400 font-mono mt-0.5 tracking-wider">{team.teamCode}</p>
               </div>
             </div>
 
@@ -249,20 +248,20 @@ export default function MyTeam() {
                     }`}
                   >
                     <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-full bg-gradient-to-br from-secondary-300 to-secondary flex items-center justify-center text-white text-xs font-bold shrink-0">
+                      <div className="w-9 h-9 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0 bg-secondary">
                         {m.fullName?.charAt(0)?.toUpperCase() || '?'}
                       </div>
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
                           <span className="font-semibold text-slate-800 text-sm truncate">{m.fullName}</span>
                           {isLeader && (
-                            <span className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-1.5 py-0.5 text-[10px] font-bold uppercase text-amber-700">
+                            <span className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-1.5 py-0.5 text-overline font-bold uppercase text-amber-700">
                               <Crown className="h-3 w-3" />
                               Leader
                             </span>
                           )}
                           {isSelected && (
-                            <span className="px-1.5 py-0.5 bg-primary-100 text-primary text-[10px] font-bold rounded-md uppercase">
+                            <span className="px-1.5 py-0.5 bg-primary-100 text-primary-700 text-overline font-bold rounded-md uppercase">
                               You
                             </span>
                           )}
@@ -273,7 +272,7 @@ export default function MyTeam() {
 
                     <div className="flex items-center gap-2 shrink-0">
                       {m.major && (
-                        <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border ${majorColor(m.major)}`}>
+                        <span className={`text-overline font-bold uppercase px-2 py-0.5 rounded-full border ${majorColor(m.major)}`}>
                           {m.major}
                         </span>
                       )}
@@ -315,7 +314,7 @@ export default function MyTeam() {
             {mentorAssignments.length > 0 ? (
               <div className="space-y-3">
                 {mentorAssignments.map(assignment => <div key={assignment.assignmentId} className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-primary-100 flex items-center justify-center text-primary font-bold text-sm shrink-0">
+                  <div className="w-10 h-10 rounded-full bg-primary-100 flex items-center justify-center text-primary-700 font-bold text-sm shrink-0">
                     {assignment.mentor.fullName?.charAt(0)?.toUpperCase() || 'M'}
                   </div>
                   <div className="min-w-0">

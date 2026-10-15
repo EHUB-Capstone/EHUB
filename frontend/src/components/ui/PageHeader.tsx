@@ -61,12 +61,12 @@ const PageHeader = ({
         <nav className="flex items-center gap-1 mb-2" aria-label="Breadcrumb">
           {breadcrumb.map((crumb, i) => (
             <span key={crumb} className="flex items-center gap-1">
-              {i > 0 && <ChevronRight className="w-3.5 h-3.5 text-slate-300" />}
+              {i > 0 && <ChevronRight className="w-3.5 h-3.5 text-slate-400" />}
               <span className={cn(
-                'text-caption font-medium',
+                'text-overline uppercase',
                 i === breadcrumb.length - 1
-                  ? 'text-slate-600'
-                  : 'text-slate-400 hover:text-slate-600 cursor-pointer transition-colors'
+                  ? 'text-primary-700'
+                  : 'text-slate-500 hover:text-slate-700 cursor-pointer transition-colors'
               )}>
                 {crumb}
               </span>
@@ -80,18 +80,18 @@ const PageHeader = ({
         <div className="flex items-start gap-3">
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">{title}</h1>
+              <h1 className="text-heading sm:text-display text-secondary tracking-tight">{title}</h1>
               {badge && (
                 <span className={cn(
                   'inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border',
-                  badge.className || 'bg-primary-50 text-primary border-primary-100'
+                  badge.className || 'bg-primary-50 text-primary-800 border-primary-200'
                 )}>
                   {badge.text}
                 </span>
               )}
             </div>
             {subtitle && (
-              <p className="text-slate-500 mt-1 text-sm leading-relaxed">{subtitle}</p>
+              <p className="text-slate-600 mt-1 text-body leading-relaxed">{subtitle}</p>
             )}
           </div>
         </div>
@@ -114,7 +114,7 @@ const PageHeader = ({
           ))}
           {action && (
             <Button
-              variant={action.variant || 'gradient'}
+              variant={action.variant || 'primary'}
               size={action.size || 'md'}
               icon={action.icon}
               iconRight={action.iconRight}

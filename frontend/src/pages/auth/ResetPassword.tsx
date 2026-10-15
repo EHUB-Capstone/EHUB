@@ -75,7 +75,7 @@ const ResetPassword = (): React.ReactElement => {
       {/* Decorative blobs */}
       <div className="absolute top-[-15%] left-[-10%] w-[500px] h-[500px] bg-primary-100/40 rounded-full blur-[120px]" />
       <div className="absolute bottom-[-10%] right-[-5%] w-[400px] h-[400px] bg-secondary-100/30 rounded-full blur-[100px]" />
-      <div className="absolute top-[30%] right-[15%] w-[250px] h-[250px] bg-cyan-100/40 rounded-full blur-[80px]" />
+      <div className="absolute top-[30%] right-[15%] w-[250px] h-[250px] bg-info-50 rounded-full blur-[80px]" />
 
       <div className="w-full max-w-[440px] relative z-10">
         <div className="bg-white/90 backdrop-blur-xl border border-slate-200/60 rounded-2xl shadow-float p-8 sm:p-10">
@@ -84,11 +84,11 @@ const ResetPassword = (): React.ReactElement => {
             <Link to="/" className="mb-5 inline-flex items-center gap-2.5 no-underline">
               <img src={logo} alt="EHub" className="w-[38px] h-[38px] object-contain" />
               <span className="text-[20px] font-extrabold tracking-tight">
-                <span className="text-[#F08A5D]">E</span>
-                <span className="text-[#1E5E9F]">HUB</span>
+                <span className="text-primary-400">E</span>
+                <span className="text-secondary">HUB</span>
               </span>
             </Link>
-            <h1 className="text-heading font-bold text-slate-900">Create New Password</h1>
+            <h1 className="text-heading font-bold text-secondary">Create New Password</h1>
             <p className="text-body text-slate-500 mt-1">Your new password must be different from previously used passwords.</p>
           </div>
 
@@ -102,7 +102,7 @@ const ResetPassword = (): React.ReactElement => {
                 This link does not contain a reset token. Request a new password reset email.
               </p>
               <Link to="/forgot-password" className="w-full mt-4">
-                <Button variant="gradient" className="w-full">Request New Link</Button>
+                <Button variant="primary" className="w-full">Request New Link</Button>
               </Link>
             </div>
           ) : isSuccess ? (
@@ -115,7 +115,7 @@ const ResetPassword = (): React.ReactElement => {
                 Your password has been successfully reset. Redirecting to login...
               </p>
               <Link to="/login" className="w-full mt-4">
-                <Button variant="gradient" className="w-full" iconRight={ArrowRight}>Go to Login</Button>
+                <Button variant="primary" className="w-full" iconRight={ArrowRight}>Go to Login</Button>
               </Link>
             </div>
           ) : (
@@ -126,7 +126,7 @@ const ResetPassword = (): React.ReactElement => {
                   <div>
                     <p className="text-body-sm text-slate-700">{formError}</p>
                     {formError.includes('expired') && (
-                      <Link to="/forgot-password" className="mt-1 inline-block text-body-sm font-medium text-primary hover:underline">
+                      <Link to="/forgot-password" className="mt-1 inline-block text-body-sm font-medium text-primary-700 hover:underline">
                         Request a new reset link
                       </Link>
                     )}
@@ -176,7 +176,7 @@ const ResetPassword = (): React.ReactElement => {
                 />
               </div>
 
-              <Button type="submit" variant="gradient" className="w-full" size="lg" isLoading={isLoading}>
+              <Button type="submit" variant="primary" className="w-full" size="lg" isLoading={isLoading}>
                 Reset Password
               </Button>
             </form>

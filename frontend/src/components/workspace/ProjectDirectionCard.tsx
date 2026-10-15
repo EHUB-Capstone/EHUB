@@ -1,23 +1,22 @@
 // @ts-nocheck
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowRight, ChevronDown, FileText, FolderKanban, Loader2, RefreshCw, Save, Send, X } from 'lucide-react';
+import { ArrowRight, FileText, FolderKanban, Loader2, Save, Send } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { teamApi } from '../../api/teamApi';
 import { startupIndustryApi } from '../../api/startupIndustryApi';
 import { unwrapApiData } from '../../utils/classMappers';
 import { parseApiError } from '../../utils/apiError';
 import {
-  canSubmitProjectDirection,
   getProjectDirectionDraftSeed,
   getApprovedProjectProfileDisplay,
   getProjectDirectionDecisionNotice,
-  getProjectDirectionSubmitGuidance,
   hasUnsavedProjectDirectionChanges,
   hasProjectDirectionChanged,
   isProjectDirectionConcurrencyConflict,
   isProjectProfileAvailable,
 } from '../../utils/projectDirectionSync';
 import { subscribeProjectDirectionRealtime } from '../../api/projectDirectionRealtime';
+import StartupIndustryPicker from './StartupIndustryPicker';
 
 export default function ProjectDirectionCard({ team, project, canEdit, onOpenProjectProfile }) {
   const [direction, setDirection] = useState(null);
@@ -27,7 +26,6 @@ export default function ProjectDirectionCard({ team, project, canEdit, onOpenPro
   const [selectedIndustryIds, setSelectedIndustryIds] = useState([]);
   const [industriesLoading, setIndustriesLoading] = useState(true);
   const [industriesError, setIndustriesError] = useState('');
-  const [industriesOpen, setIndustriesOpen] = useState(false);
   const [industriesReload, setIndustriesReload] = useState(0);
   const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -136,35 +134,41 @@ export default function ProjectDirectionCard({ team, project, canEdit, onOpenPro
     };
   }, [applyDirection, direction?.status, team._id]);
 
+  // Persists the current form as a draft. Returns the saved direction, or null when the save was not applied.
+  const persistDraft = async () => {
+    const payload = {
+      title: title.trim(),
+      summary: summary.trim(),
+      ...(isProfileChangeProposal ? {} : { startupIndustryIds: selectedIndustryIds }),
+    };
+    let response;
+    try {
+      response = await teamApi.saveProjectDirection(team._id, {
+        ...payload,
+        rowVersion: direction?.rowVersion || null,
+      });
+    } catch (error) {
+      if (!isProjectDirectionConcurrencyConflict(parseApiError(error, '').code)) throw error;
+      const latest = unwrapApiData(await teamApi.getProjectDirection(team._id));
+      if (!['Draft', 'NeedsRevision'].includes(latest?.status)) {
+        toast.error(`Project direction is now ${latest?.status || 'in another state'}. Your changes remain on this form; reload before continuing.`);
+        return null;
+      }
+      response = await teamApi.saveProjectDirection(team._id, {
+        ...payload,
+        rowVersion: latest.rowVersion,
+      });
+    }
+    return unwrapApiData(response);
+  };
+
   const save = async () => {
     if (actionInFlightRef.current) return;
     actionInFlightRef.current = true;
     setActiveAction('save');
     try {
-      const payload = {
-        title: title.trim(),
-        summary: summary.trim(),
-        ...(isProfileChangeProposal ? {} : { startupIndustryIds: selectedIndustryIds }),
-      };
-      let response;
-      try {
-        response = await teamApi.saveProjectDirection(team._id, {
-          ...payload,
-          rowVersion: direction?.rowVersion || null,
-        });
-      } catch (error) {
-        if (!isProjectDirectionConcurrencyConflict(parseApiError(error, '').code)) throw error;
-        const latest = unwrapApiData(await teamApi.getProjectDirection(team._id));
-        if (!['Draft', 'NeedsRevision'].includes(latest?.status)) {
-          toast.error(`Project direction is now ${latest?.status || 'in another state'}. Your changes remain on this form; reload before continuing.`);
-          return;
-        }
-        response = await teamApi.saveProjectDirection(team._id, {
-          ...payload,
-          rowVersion: latest.rowVersion,
-        });
-      }
-      const value = unwrapApiData(response);
+      const value = await persistDraft();
+      if (!value) return;
       applyDirection(value);
       toast.success('Project direction saved as draft.');
     } catch (error) {
@@ -176,13 +180,21 @@ export default function ProjectDirectionCard({ team, project, canEdit, onOpenPro
   };
 
   const submit = async () => {
-    if (!direction || actionInFlightRef.current) return;
+    if (actionInFlightRef.current) return;
     actionInFlightRef.current = true;
     setActiveAction('submit');
     try {
+      // Unsaved edits are saved as a draft automatically so the user only needs one click.
+      let target = direction;
+      if (hasUnsavedChanges) {
+        target = await persistDraft();
+        if (!target) return;
+        applyDirection(target);
+      }
+      if (!target) return;
       let response;
       try {
-        response = await teamApi.submitProjectDirection(team._id, direction.rowVersion);
+        response = await teamApi.submitProjectDirection(team._id, target.rowVersion);
       } catch (error) {
         if (!isProjectDirectionConcurrencyConflict(parseApiError(error, '').code)) throw error;
         const latest = unwrapApiData(await teamApi.getProjectDirection(team._id));
@@ -223,8 +235,11 @@ export default function ProjectDirectionCard({ team, project, canEdit, onOpenPro
       && !industriesLoading
       && !industriesError));
   const hasUnsavedChanges = hasUnsavedProjectDirectionChanges(direction, title, summary, selectedIndustryNames);
-  const canSubmit = canSubmitProjectDirection(direction, title, summary, selectedIndustryNames);
-  const submitGuidance = getProjectDirectionSubmitGuidance(direction, title, summary, selectedIndustryNames);
+  // Submit saves pending edits first. A NeedsRevision direction must be changed before it can be resubmitted.
+  const canSubmit = valid && (direction?.status === 'NeedsRevision' ? hasUnsavedChanges : true);
+  const submitGuidance = direction?.status === 'NeedsRevision' && !hasUnsavedChanges
+    ? 'The lecturer requested changes. Update the Project Name, Project description, or Startup Industry, then select Submit.'
+    : '';
   const latestReview = direction?.reviews?.[0];
   const approvedProfile = getApprovedProjectProfileDisplay(direction, project);
 
@@ -313,90 +328,30 @@ export default function ProjectDirectionCard({ team, project, canEdit, onOpenPro
             <label id="direction-startup-industry-label" className="text-xs font-semibold text-slate-600">
               Startup Industry <span className="text-red-500">*</span>
             </label>
-            <div className="relative mt-1.5">
-              <div className={`rounded-xl border bg-white p-2 transition focus-within:ring-2 focus-within:ring-primary/15 ${selectedIndustryIds.length === 0 && !industriesLoading ? 'border-red-300' : 'border-slate-200 focus-within:border-primary'}`}>
-                {selectedIndustryIds.length > 0 && (
-                  <div className="mb-2 flex flex-wrap gap-1.5">
-                    {selectedIndustryIds.map((id) => industries.find((industry) => industry.id === id)).filter(Boolean).map((industry) => (
-                      <span key={industry.id} className="inline-flex items-center gap-1 rounded-md bg-primary-50 px-2 py-1 text-xs font-semibold text-primary-700">
-                        {industry.name}
-                        <button
-                          type="button"
-                          onClick={() => setSelectedIndustryIds((current) => current.filter((id) => id !== industry.id))}
-                        disabled={busy || isProfileChangeProposal}
-                          aria-label={`Remove ${industry.name}`}
-                          className="text-primary-400 hover:text-red-500 disabled:opacity-50"
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                )}
-                <button
-                  type="button"
-                  aria-labelledby="direction-startup-industry-label"
-                  aria-expanded={industriesOpen}
-                  aria-haspopup="listbox"
-                  disabled={busy || isProfileChangeProposal || industriesLoading || Boolean(industriesError) || industries.length === 0}
-                  onClick={() => setIndustriesOpen((open) => !open)}
-                  className="flex w-full items-center justify-between gap-3 rounded-lg px-1 py-1 text-left text-sm text-slate-500 outline-none disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  <span>{industriesLoading ? 'Loading industries…' : selectedIndustryIds.length >= 3 ? 'Maximum 3 industries selected' : 'Select startup industries'}</span>
-                  {industriesLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ChevronDown className={`h-4 w-4 transition ${industriesOpen ? 'rotate-180' : ''}`} />}
-                </button>
-              </div>
-              {industriesOpen && (
-                <div role="listbox" aria-multiselectable="true" aria-labelledby="direction-startup-industry-label" className="relative z-20 mt-1 w-full rounded-xl border border-slate-200 bg-white p-1.5 shadow-lg">
-                  {industries.map((industry) => {
-                    const selected = selectedIndustryIds.includes(industry.id);
-                    const disabled = !selected && selectedIndustryIds.length >= 3;
-                    return (
-                      <button
-                        key={industry.id}
-                        type="button"
-                        role="option"
-                        aria-selected={selected}
-                        disabled={busy || disabled}
-                        onClick={() => setSelectedIndustryIds((current) => selected
-                          ? current.filter((id) => id !== industry.id)
-                          : [...current, industry.id])}
-                        className={`block w-full rounded-lg px-3 py-2 text-left text-sm transition disabled:cursor-not-allowed disabled:opacity-40 ${selected ? 'bg-primary-50 text-primary-800' : 'text-slate-700 hover:bg-slate-50'}`}
-                      >
-                        <span className="font-semibold">{industry.name}</span>
-                        <span className="text-slate-500"> - {industry.description || 'No description'}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
+            <div className="mt-1.5">
+              <StartupIndustryPicker
+                industries={industries}
+                selectedIds={selectedIndustryIds}
+                onChange={setSelectedIndustryIds}
+                labelId="direction-startup-industry-label"
+                loading={industriesLoading}
+                error={industriesError}
+                onRetry={() => {
+                  setIndustriesLoading(true);
+                  setIndustriesError('');
+                  setIndustriesReload((value) => value + 1);
+                }}
+                disabled={busy || isProfileChangeProposal}
+                invalid={selectedIndustryIds.length === 0 && !industriesLoading}
+                errorMessage={!industriesLoading && !industriesError && selectedIndustryIds.length === 0 ? 'Select at least one startup industry.' : ''}
+              />
             </div>
-            <div className="mt-1 flex items-center justify-between gap-3 text-xs">
-              <span className="text-red-600">{!industriesLoading && !industriesError && selectedIndustryIds.length === 0 ? 'Select at least one startup industry.' : ''}</span>
-              <span className="text-slate-400">{selectedIndustryIds.length}/3 selected</span>
-            </div>
-            {industriesError && (
-              <div className="mt-2 flex items-center justify-between gap-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">
-                <span>{industriesError}</span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIndustriesLoading(true);
-                    setIndustriesError('');
-                    setIndustriesReload((value) => value + 1);
-                  }}
-                  className="inline-flex shrink-0 items-center gap-1 font-semibold hover:text-red-900"
-                >
-                  <RefreshCw className="h-3.5 w-3.5" /> Retry
-                </button>
-              </div>
-            )}
           </div>
-          <div className="flex flex-wrap items-center justify-between gap-3"><p className={`text-xs ${valid ? 'text-slate-500' : 'text-red-500'}`}>{summary.length}/2000 characters · minimum 20</p><div className="flex gap-2"><button type="button" onClick={save} disabled={busy || !valid || !hasUnsavedChanges} className="inline-flex items-center gap-2 rounded-lg border border-primary-200 px-4 py-2 text-sm font-semibold text-primary disabled:opacity-50">{activeAction === 'save' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} {activeAction === 'save' ? 'Saving...' : 'Save draft'}</button>{direction && <button type="button" onClick={submit} disabled={busy || !canSubmit} className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-600 disabled:opacity-100">{activeAction === 'submit' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} {activeAction === 'submit' ? 'Submitting...' : 'Submit'}</button>}</div></div>
+          <div className="flex flex-wrap items-center justify-between gap-3"><p className={`text-xs ${valid ? 'text-slate-500' : 'text-red-500'}`}>{summary.length}/2000 characters · minimum 20</p><div className="flex gap-2"><button type="button" onClick={save} disabled={busy || !valid || !hasUnsavedChanges} className="inline-flex items-center gap-2 rounded-lg border border-primary-200 px-4 py-2 text-sm font-semibold text-primary-700 disabled:opacity-50">{activeAction === 'save' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} {activeAction === 'save' ? 'Saving...' : 'Save draft'}</button><button type="button" onClick={submit} disabled={busy || !canSubmit} className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-600 disabled:opacity-100">{activeAction === 'submit' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} {activeAction === 'submit' ? 'Submitting...' : 'Submit'}</button></div></div>
           {submitGuidance && <p role="status" className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">{submitGuidance}</p>}
         </div>
       ) : (
-          <div className="mt-4 space-y-3">{direction ? <>{isProfileChangeProposal ? <div className="grid gap-3 lg:grid-cols-2"><div className="rounded-xl border border-slate-200 bg-slate-50 p-4"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Current approved profile</p><p className="mt-3 text-xs font-semibold text-slate-500">Project name</p><p className="mt-1 font-semibold text-slate-900">{direction.currentTitle}</p><p className="mt-3 text-xs font-semibold text-slate-500">Description</p><p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-slate-700">{direction.currentSummary}</p></div><div className="rounded-xl border border-violet-200 bg-violet-50/50 p-4"><p className="text-xs font-bold uppercase tracking-wide text-violet-700">Proposed change</p><p className="mt-3 text-xs font-semibold text-violet-600">Project name</p><p className="mt-1 font-semibold text-slate-900">{direction.title}</p><p className="mt-3 text-xs font-semibold text-violet-600">Description</p><p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-slate-700">{direction.summary}</p></div></div> : <><div><p className="text-xs font-bold uppercase tracking-wide text-slate-400">Project Name</p><h3 className="mt-1 font-semibold text-slate-900">{direction.title}</h3></div><div><p className="text-xs font-bold uppercase tracking-wide text-slate-400">Project description</p><p className="mt-1 whitespace-pre-wrap text-sm leading-7 text-slate-700">{direction.summary}</p></div></>}{canEdit && editableState && <p className="rounded-lg bg-primary-50 px-3 py-2 text-sm font-semibold text-primary-700">Click this {isProfileChangeProposal ? 'change request' : 'Project Direction card'} to update the proposed Project name and Description.</p>}</> : <><div><p className="text-xs font-bold uppercase tracking-wide text-slate-400">Imported Project</p><h3 className="mt-1 font-semibold text-slate-900">{project?.projectName || 'Not provided'}</h3><p className="mt-2 whitespace-pre-wrap text-sm leading-7 text-slate-700">{project?.description || 'No project description was imported.'}</p></div><p className={`rounded-lg px-3 py-2 text-sm font-semibold ${canEdit ? 'bg-primary-50 text-primary-700' : 'bg-slate-50 text-slate-600'}`}>{canEdit ? 'Click this card to complete and save the Project Direction.' : 'The team leader must complete the Project Direction.'}</p></>}</div>
+          <div className="mt-4 space-y-3">{direction ? <>{isProfileChangeProposal ? <div className="grid gap-3 lg:grid-cols-2"><div className="rounded-xl border border-slate-200 bg-slate-50 p-4"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Current approved profile</p><p className="mt-3 text-xs font-semibold text-slate-500">Project name</p><p className="mt-1 font-semibold text-slate-900">{direction.currentTitle}</p><p className="mt-3 text-xs font-semibold text-slate-500">Description</p><p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-slate-700">{direction.currentSummary}</p></div><div className="rounded-xl border border-secondary-200 bg-secondary-50 p-4"><p className="text-xs font-bold uppercase tracking-wide text-secondary">Proposed change</p><p className="mt-3 text-xs font-semibold text-secondary">Project name</p><p className="mt-1 font-semibold text-slate-900">{direction.title}</p><p className="mt-3 text-xs font-semibold text-secondary">Description</p><p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-slate-700">{direction.summary}</p></div></div> : <><div><p className="text-xs font-bold uppercase tracking-wide text-slate-400">Project Name</p><h3 className="mt-1 font-semibold text-slate-900">{direction.title}</h3></div><div><p className="text-xs font-bold uppercase tracking-wide text-slate-400">Project description</p><p className="mt-1 whitespace-pre-wrap text-sm leading-7 text-slate-700">{direction.summary}</p></div></>}{canEdit && editableState && <p className="rounded-lg bg-primary-50 px-3 py-2 text-sm font-semibold text-primary-700">Click this {isProfileChangeProposal ? 'change request' : 'Project Direction card'} to update the proposed Project name and Description.</p>}</> : <><div><p className="text-xs font-bold uppercase tracking-wide text-slate-400">Imported Project</p><h3 className="mt-1 font-semibold text-slate-900">{project?.projectName || 'Not provided'}</h3><p className="mt-2 whitespace-pre-wrap text-sm leading-7 text-slate-700">{project?.description || 'No project description was imported.'}</p></div><p className={`rounded-lg px-3 py-2 text-sm font-semibold ${canEdit ? 'bg-primary-50 text-primary-700' : 'bg-slate-50 text-slate-600'}`}>{canEdit ? 'Click this card to complete and save the Project Direction.' : 'The team leader must complete the Project Direction.'}</p></>}</div>
       )}
       {!editing && project?.zaloGroupUrl && <div className="mt-4 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3"><p className="text-xs font-bold uppercase tracking-wide text-blue-600">Zalo group</p><a href={project.zaloGroupUrl} target="_blank" rel="noreferrer" onClick={event => event.stopPropagation()} className="mt-1 block truncate text-sm font-semibold text-blue-800 underline decoration-blue-300 underline-offset-2">{project.zaloGroupUrl}</a></div>}
       {(!canEdit || !editableState || !editing) && direction?.startupIndustries?.length > 0 && <div className="mt-4"><p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-400">Startup Industry</p><div className="flex flex-wrap gap-2">{direction.startupIndustries.map(industry => <span key={industry} className="rounded-full border border-primary-100 bg-primary-50 px-2.5 py-1 text-xs font-semibold text-primary-700">{industry}</span>)}</div></div>}

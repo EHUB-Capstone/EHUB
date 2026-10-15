@@ -32,7 +32,7 @@ const EvaluationHistoryPage = ({
     CREATED: 'bg-blue-100 text-blue-800 border-blue-300',
     UPDATED: 'bg-yellow-100 text-yellow-800 border-yellow-300',
     SUBMITTED: 'bg-green-100 text-green-800 border-green-300',
-    PUBLISHED: 'bg-purple-100 text-purple-800 border-purple-300',
+    PUBLISHED: 'bg-secondary-100 text-secondary border-secondary-200',
   };
 
   const actionIcons = {
@@ -46,7 +46,7 @@ const EvaluationHistoryPage = ({
     return (
       <div className="flex items-center justify-center h-screen">
         <div className="text-center">
-          <div className="loading loading-lg text-primary mb-4"></div>
+          <div className="loading loading-lg text-primary-700 mb-4"></div>
           <p>Loading evaluation history...</p>
         </div>
       </div>
@@ -74,7 +74,7 @@ const EvaluationHistoryPage = ({
     <div className="max-w-6xl mx-auto p-6">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Evaluation History</h1>
+        <h1 className="mb-2 text-heading sm:text-display text-secondary tracking-tight">Evaluation History</h1>
         <p className="text-gray-600">
           {history.length} {history.length === 1 ? 'event' : 'events'} recorded
         </p>
@@ -97,9 +97,9 @@ const EvaluationHistoryPage = ({
             {history.filter(h => h.action === 'UPDATED').length}
           </div>
         </div>
-        <div className="bg-purple-50 rounded-lg p-4 border border-purple-200">
-          <div className="text-sm text-purple-600 font-semibold">Last Modified</div>
-          <div className="text-sm font-bold text-purple-900">
+        <div className="bg-secondary-50 rounded-lg p-4 border border-secondary-200">
+          <div className="text-sm text-secondary font-semibold">Last Modified</div>
+          <div className="text-sm font-bold text-secondary">
             {moment(history[0]?.createdAt).fromNow()}
           </div>
         </div>

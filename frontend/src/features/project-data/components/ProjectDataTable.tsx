@@ -43,7 +43,7 @@ export function MentorLabel({ mentor }: { mentor: ProjectDataMentor | null }) {
       <span>{mentorName(mentor)}</span>
       {mentor.isHistorical && (
         <span
-          className="text-[11px] font-medium text-slate-400"
+          className="text-caption font-medium text-slate-400"
           title={mentor.endedAtUtc ? `Assignment ended ${new Date(mentor.endedAtUtc).toLocaleDateString()}` : 'Assignment ended'}
         >
           Assignment ended
@@ -125,7 +125,7 @@ export default function ProjectDataTable({
                   <td className={cn(cellClass, 'whitespace-nowrap')}>{displayText(item.classCode)}</td>
                   <td className={cellClass}><ChipList values={item.groups} /></td>
                   <td className={cn(cellClass, 'min-w-[10rem]')}>
-                    <button type="button" onClick={() => onOpen(item)} className="text-left font-semibold text-primary hover:underline focus-visible:underline">
+                    <button type="button" onClick={() => onOpen(item)} className="text-left font-semibold text-primary-700 hover:underline focus-visible:underline">
                       {item.projectName}
                     </button>
                   </td>
@@ -147,7 +147,7 @@ export default function ProjectDataTable({
         <ul className={cn('divide-y divide-slate-100 md:hidden', isRefreshing && 'opacity-60')}>
           {page.items.map(item => (
             <li key={item.projectId} className="space-y-2 p-4">
-              <button type="button" onClick={() => onOpen(item)} className="text-left text-sm font-semibold text-primary hover:underline">
+              <button type="button" onClick={() => onOpen(item)} className="text-left text-sm font-semibold text-primary-700 hover:underline">
                 {item.projectName}
               </button>
               <p className="text-xs text-slate-500">

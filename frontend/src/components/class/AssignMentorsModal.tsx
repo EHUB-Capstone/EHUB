@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
+import { Link } from 'react-router-dom';
 import { X, Loader2, Search, Check, Users, Minus, CircleAlert, CheckCircle2 } from 'lucide-react';
 import { classApi } from '../../api/classApi';
 import { teamApi } from '../../api/teamApi';
@@ -170,7 +171,7 @@ export default function AssignMentorsModal({ classId, onClose, onAssigned }: Ass
     [teams, selectedMentor],
   );
   const filteredTeams = useMemo(
-    () => eligibleTeams.filter(team => matchesSearchQuery(bulkTeamSearch, [team.teamName, team.teamCode, team.groupName])),
+    () => eligibleTeams.filter(team => matchesSearchQuery(bulkTeamSearch, [team.teamName, team.groupName])),
     [eligibleTeams, bulkTeamSearch],
   );
   // A tick never survives for a team that can no longer take this mentor (for example after a refresh).
@@ -222,6 +223,7 @@ export default function AssignMentorsModal({ classId, onClose, onAssigned }: Ass
         <div ref={dialogRef} tabIndex={-1} className="relative flex max-h-[calc(100dvh-1rem)] w-full max-w-4xl flex-col overflow-hidden rounded-t-2xl bg-white shadow-float outline-none animate-scale-in sm:max-h-[calc(100dvh-3rem)] sm:rounded-2xl">
           <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-5 py-4">
             <div>
+              <Link to="/mentors" className="text-xs text-primary">Mentor directory</Link>
               <h2 id="manage-mentors-title" className="text-lg font-bold text-slate-900">Manage team mentors</h2>
               <p className="mt-0.5 text-xs font-medium text-slate-400">See which teams still need a mentor, assign, replace or end a mentor</p>
             </div>
@@ -239,11 +241,11 @@ export default function AssignMentorsModal({ classId, onClose, onAssigned }: Ass
                   role="tab"
                   aria-selected={view === key}
                   onClick={() => setView(key)}
-                  className={`border-b-2 px-3 py-2 text-xs font-semibold transition ${view === key ? 'border-primary text-primary' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+                  className={`border-b-2 px-3 py-2 text-xs font-semibold transition ${view === key ? 'border-primary text-primary-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
                 >
                   {label}
                   {key === 'teams' && missingTeamCount > 0 && (
-                    <span className="ml-1.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] text-amber-800">{missingTeamCount} need a mentor</span>
+                    <span className="ml-1.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-overline text-amber-800">{missingTeamCount} need a mentor</span>
                   )}
                 </button>
               ))}
@@ -323,7 +325,7 @@ export default function AssignMentorsModal({ classId, onClose, onAssigned }: Ass
                 <div className="grid gap-4 md:grid-cols-2">
                   <section className="min-w-0" aria-label="Select mentor">
                     <div className="mb-2 flex items-center gap-2">
-                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-white">1</span>
+                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-overline font-bold text-white">1</span>
                       <h3 className="text-xs font-semibold text-slate-700">Select mentor</h3>
                     </div>
                     <div className="mb-2 flex flex-wrap gap-1.5" role="group" aria-label="Mentor type">
@@ -333,7 +335,7 @@ export default function AssignMentorsModal({ classId, onClose, onAssigned }: Ass
                           type="button"
                           aria-pressed={kindFilter === chip.value}
                           onClick={() => setKindFilter(chip.value)}
-                          className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold transition ${kindFilter === chip.value ? 'border-primary bg-primary text-white' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'}`}
+                          className={`rounded-full border px-2.5 py-1 text-caption font-semibold transition ${kindFilter === chip.value ? 'border-primary bg-primary text-white' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'}`}
                         >
                           {chip.label}
                         </button>
@@ -376,7 +378,7 @@ export default function AssignMentorsModal({ classId, onClose, onAssigned }: Ass
                               </div>
                               <div className="min-w-0">
                                 <p className="flex items-center gap-1.5 truncate text-xs font-semibold text-slate-800">{mentor.name}{mentor.isTemporary && <TemporaryMentorBadge />}</p>
-                                <p className="truncate text-[10px] text-slate-400">{style.label}{mentor.contractType ? ` · ${mentor.contractType}` : ''} · {mentor.activeTeamCount} team{mentor.activeTeamCount === 1 ? '' : 's'} this semester</p>
+                                <p className="truncate text-overline text-slate-400">{style.label}{mentor.contractType ? ` · ${mentor.contractType}` : ''} · {mentor.activeTeamCount} team{mentor.activeTeamCount === 1 ? '' : 's'} this semester</p>
                                 <MentorTagChips tags={mentor.tags} />
                               </div>
                             </div>
@@ -391,7 +393,7 @@ export default function AssignMentorsModal({ classId, onClose, onAssigned }: Ass
 
                   <section className="min-w-0" aria-label="Select teams">
                     <div className="mb-2 flex items-center gap-2">
-                      <span className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold ${selectedMentorId ? 'bg-primary text-white' : 'bg-slate-200 text-slate-500'}`}>2</span>
+                      <span className={`flex h-5 w-5 items-center justify-center rounded-full text-overline font-bold ${selectedMentorId ? 'bg-primary text-white' : 'bg-slate-200 text-slate-500'}`}>2</span>
                       <h3 className="text-xs font-semibold text-slate-700">Select teams</h3>
                       {selectedMentor && <span className="ml-auto"><MentorKindTag type={selectedMentor.mentorType} /></span>}
                     </div>
@@ -414,7 +416,7 @@ export default function AssignMentorsModal({ classId, onClose, onAssigned }: Ass
                         aria-checked={selectionState === 'all' ? true : selectionState === 'some' ? 'mixed' : false}
                         disabled={submitting}
                         onClick={() => setSelectedTeamIds(current => setVisibleSelection(current, filteredTeamIds, selectionState !== 'all'))}
-                        className="mb-1.5 flex w-full items-center gap-2 rounded-lg px-2 py-1 text-left text-[11px] font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-60"
+                        className="mb-1.5 flex w-full items-center gap-2 rounded-lg px-2 py-1 text-left text-caption font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-60"
                       >
                         <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${selectionState === 'none' ? 'border-slate-300 bg-white' : 'border-primary bg-primary'}`}>
                           {selectionState === 'all' && <Check className="h-3 w-3 text-white" />}
@@ -428,7 +430,7 @@ export default function AssignMentorsModal({ classId, onClose, onAssigned }: Ass
                         <div className="flex h-full flex-col items-center justify-center px-5 text-center">
                           <Users className="mb-2 h-7 w-7 text-slate-300" />
                           <p className="text-xs font-medium text-slate-500">Select a mentor first</p>
-                          <p className="mt-1 text-[10px] text-slate-400">Teams that still need this kind of mentor will appear here.</p>
+                          <p className="mt-1 text-overline text-slate-400">Teams that still need this kind of mentor will appear here.</p>
                         </div>
                       ) : filteredTeams.length === 0 ? (
                         <div className="flex h-full flex-col items-center justify-center px-5 text-center">
@@ -436,7 +438,7 @@ export default function AssignMentorsModal({ classId, onClose, onAssigned }: Ass
                           <p className="text-xs font-medium text-slate-500">
                             {bulkTeamSearch ? 'No matching teams found' : `Every active team already has a ${MENTOR_KIND_STYLES[selectedMentor?.mentorType ?? 'Enterprise'].label.toLowerCase()}`}
                           </p>
-                          <p className="mt-1 text-[10px] text-slate-400">{bulkTeamSearch ? 'Try a different team name or code.' : 'Use Replace in the By team view to change a mentor.'}</p>
+                          <p className="mt-1 text-overline text-slate-400">{bulkTeamSearch ? 'Try a different team name or code.' : 'Use Replace in the By team view to change a mentor.'}</p>
                         </div>
                       ) : filteredTeams.map(team => {
                         const isChecked = chosenTeamIds.includes(team._id);
@@ -456,8 +458,8 @@ export default function AssignMentorsModal({ classId, onClose, onAssigned }: Ass
                               <Users className="h-4 w-4 shrink-0 text-slate-400" />
                               <div className="min-w-0">
                                 <p className="truncate text-xs font-semibold text-slate-800">{team.teamName || 'Unnamed Team'}</p>
-                                <p className="truncate text-[10px] text-slate-400">
-                                  {team.teamCode || team.groupName || '—'} · {otherMentor ? `${MENTOR_KIND_STYLES[otherSlot].label}: ${otherMentor.mentor.fullName}` : `No ${MENTOR_KIND_STYLES[otherSlot].label.toLowerCase()} yet`}
+                                <p className="truncate text-overline text-slate-400">
+                                  {team.groupName || '—'} · {otherMentor ? `${MENTOR_KIND_STYLES[otherSlot].label}: ${otherMentor.mentor.fullName}` : `No ${MENTOR_KIND_STYLES[otherSlot].label.toLowerCase()} yet`}
                                 </p>
                               </div>
                             </div>
@@ -475,7 +477,7 @@ export default function AssignMentorsModal({ classId, onClose, onAssigned }: Ass
           </div>
 
           <div className="flex shrink-0 flex-col gap-2 border-t border-slate-100 bg-white px-5 py-4 sm:flex-row sm:items-center">
-            <p className="text-[11px] text-slate-400 sm:flex-1" aria-live="polite">
+            <p className="text-caption text-slate-400 sm:flex-1" aria-live="polite">
               {view === 'bulk'
                 ? (selectedMentor
                   ? `${chosenTeamIds.length} of ${eligibleTeams.length} team${eligibleTeams.length === 1 ? '' : 's'} selected for ${selectedMentor.name}. Saved all at once or not at all.`

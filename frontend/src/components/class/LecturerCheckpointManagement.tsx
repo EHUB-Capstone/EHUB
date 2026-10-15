@@ -60,7 +60,7 @@ const statusStyles: Record<string, string> = {
   Open: 'bg-emerald-50 text-emerald-700',
   Pending: 'bg-amber-50 text-amber-700',
   Draft: 'bg-amber-50 text-amber-700',
-  Submitted: 'bg-violet-50 text-violet-700',
+  Submitted: 'bg-secondary-50 text-secondary',
   Closed: 'bg-red-50 text-red-700',
   Mixed: 'bg-amber-50 text-amber-700',
 };
@@ -280,25 +280,26 @@ export default function LecturerCheckpointManagement({
       </section>
 
       <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className={`flex items-center justify-between gap-3 px-5 py-4 ${schedulesExpanded ? 'border-b border-slate-100' : ''}`}>
-          <div>
-            <h2 className="font-bold text-slate-900">Checkpoint schedules</h2>
-            <p className="mt-0.5 text-xs text-slate-500">Set checkpoint deadlines for your classes here.</p>
-          </div>
-          <div className="flex shrink-0 items-center gap-2">
-            {loading && <Loader2 className="h-4 w-4 animate-spin text-primary" />}
-            <button
-              type="button"
-              aria-label={schedulesExpanded ? 'Collapse checkpoint schedules' : 'Expand checkpoint schedules'}
-              aria-expanded={schedulesExpanded}
-              aria-controls="lecturer-checkpoint-schedules"
-              onClick={() => setSchedulesExpanded(current => !current)}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-600 transition hover:border-primary hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
-            >
+        <h2>
+        <button
+          type="button"
+          aria-expanded={schedulesExpanded}
+          aria-controls="lecturer-checkpoint-schedules"
+          onClick={() => setSchedulesExpanded(current => !current)}
+          className={`group flex w-full cursor-pointer items-center justify-between gap-3 px-5 py-4 text-left transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/40 ${schedulesExpanded ? 'rounded-t-2xl border-b border-slate-100' : 'rounded-2xl'}`}
+        >
+          <span className="min-w-0">
+            <span className="block font-bold text-slate-900">Checkpoint schedules</span>
+            <span className="mt-0.5 block text-xs text-slate-500">Set checkpoint deadlines for your classes here.</span>
+          </span>
+          <span className="flex shrink-0 items-center gap-2">
+            {loading && <Loader2 className="h-4 w-4 animate-spin text-primary" aria-hidden="true" />}
+            <span aria-hidden="true" className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-600 transition group-hover:border-primary group-hover:text-primary-700">
               <ChevronDown className={`h-4 w-4 transition-transform ${schedulesExpanded ? 'rotate-180' : ''}`} />
-            </button>
-          </div>
-        </div>
+            </span>
+          </span>
+        </button>
+        </h2>
         <div id="lecturer-checkpoint-schedules" hidden={!schedulesExpanded}>
             {scheduleGroups.length === 0 ? (
               <p className="p-8 text-center text-sm text-slate-500">No checkpoint definitions match the selected classes.</p>
@@ -308,7 +309,7 @@ export default function LecturerCheckpointManagement({
               <article key={group.checkpointNumber} className="rounded-xl border border-slate-200 p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="text-xs font-bold uppercase tracking-wide text-primary">
+                    <p className="text-xs font-bold uppercase tracking-wide text-primary-700">
                       {selectedClassId ? group.schedules[0].classCode : 'All Classes'}
                     </p>
                     <h3 className="mt-1 font-bold text-slate-900">{formatLecturerCheckpointName(group.checkpointNumber)}</h3>
@@ -323,7 +324,7 @@ export default function LecturerCheckpointManagement({
                     <p className="mt-1">{group.schedules.slice(0, 6).map(item => item.classCode).join(' · ')}{group.schedules.length > 6 ? ' · …' : ''}</p>
                     {group.schedules.length > 6 && (
                       <details className="mt-1">
-                        <summary className="cursor-pointer font-semibold text-primary">View all classes</summary>
+                        <summary className="cursor-pointer font-semibold text-primary-700">View all classes</summary>
                         <p className="mt-1 max-h-24 overflow-y-auto">{group.schedules.map(item => item.classCode).join(' · ')}</p>
                       </details>
                     )}
@@ -342,7 +343,7 @@ export default function LecturerCheckpointManagement({
                 <button
                   type="button"
                   onClick={() => openEditor(group)}
-                  className="mt-4 inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700 hover:border-primary hover:text-primary"
+                  className="mt-4 inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700 hover:border-primary hover:text-primary-700"
                 >
                   {group.allClosed ? <RotateCcw className="h-3.5 w-3.5" /> : <CalendarClock className="h-3.5 w-3.5" />}
                   {group.allClosed ? 'Reopen Checkpoint' : !group.uniform ? 'Apply one schedule to all classes' : group.schedules.some(item => item.id) ? 'Edit schedule' : 'Set schedule'}
@@ -364,7 +365,7 @@ export default function LecturerCheckpointManagement({
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-slate-200 text-sm">
-              <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+              <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-600">
                 <tr>
                   <th className="px-4 py-3">Class</th><th className="px-4 py-3">Team</th><th className="px-4 py-3">Checkpoint</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Submitted File</th><th className="px-4 py-3">Submitted Links</th><th className="px-4 py-3">Action</th>
                 </tr>
@@ -402,7 +403,7 @@ export default function LecturerCheckpointManagement({
                                       checkpointNumber: item.checkpointNumber,
                                       file: { _id: file.id, originalName: file.originalName },
                                     })}
-                                    className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-500 transition hover:bg-white hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+                                    className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-500 transition hover:bg-white hover:text-primary-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
                                   >
                                     <Eye className="h-3.5 w-3.5" />
                                   </button>
@@ -413,7 +414,7 @@ export default function LecturerCheckpointManagement({
                                   aria-label={`Download ${file.originalName}`}
                                   disabled={downloadingId === file.id}
                                   onClick={() => void downloadFile(item.teamId, item.checkpointNumber, file.id, file.originalName)}
-                                  className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-500 transition hover:bg-white hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 disabled:opacity-50"
+                                  className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-500 transition hover:bg-white hover:text-primary-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 disabled:opacity-50"
                                 >
                                   {downloadingId === file.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
                                 </button>
@@ -427,7 +428,7 @@ export default function LecturerCheckpointManagement({
                       {item.submittedLinks?.length ? (
                         <div className="space-y-1.5">
                           {item.submittedLinks.slice(0, 3).map(link => (
-                            <a key={link.id} href={link.url} target="_blank" rel="noopener noreferrer" title={link.url} className="flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline">
+                            <a key={link.id} href={link.url} target="_blank" rel="noopener noreferrer" title={link.url} className="flex items-center gap-1.5 text-xs font-semibold text-primary-700 hover:underline">
                               <span className="max-w-48 truncate">{link.name}</span><ExternalLink className="h-3 w-3 shrink-0" />
                             </a>
                           ))}
@@ -439,7 +440,7 @@ export default function LecturerCheckpointManagement({
                       <div className="flex items-center gap-2">
                         <Link
                           to={`/workspace/teams/${item.teamId}`}
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:border-primary hover:text-primary"
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:border-primary hover:text-primary-700"
                         >
                           <ExternalLink className="h-3.5 w-3.5" /> View
                         </Link>
@@ -452,7 +453,7 @@ export default function LecturerCheckpointManagement({
                             checkpointNumber: item.checkpointNumber,
                             checkpointTitle: item.checkpointTitle,
                           })}
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-primary/30 bg-primary-50 px-2.5 py-1.5 text-xs font-semibold text-primary hover:border-primary"
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-primary/30 bg-primary-50 px-2.5 py-1.5 text-xs font-semibold text-primary-700 hover:border-primary"
                         >
                           <Edit3 className="h-3.5 w-3.5" /> Grade
                         </button>
@@ -506,7 +507,7 @@ export default function LecturerCheckpointManagement({
             <div className="space-y-2 text-sm text-slate-700">
               <p><span className="font-semibold">Start:</span> {formatDateTime(parsedStart)}</p>
               <p><span className="font-semibold">End:</span> {formatDateTime(parsedEnd)}</p>
-              <button type="button" onClick={() => setConfirmingBulk(false)} className="text-xs font-semibold text-primary hover:underline">Edit dates</button>
+              <button type="button" onClick={() => setConfirmingBulk(false)} className="text-xs font-semibold text-primary-700 hover:underline">Edit dates</button>
             </div>
           ) : (
             <>
@@ -542,7 +543,7 @@ export default function LecturerCheckpointManagement({
           <div className="flex max-h-[94vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 shadow-2xl">
             <div className="flex items-center justify-between gap-4 border-b border-slate-200 bg-white px-5 py-4">
               <div className="min-w-0">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-primary">{evaluationTarget.classCode} · {evaluationTarget.teamName}</p>
+                <p className="text-overline font-bold uppercase tracking-wider text-primary-700">{evaluationTarget.classCode} · {evaluationTarget.teamName}</p>
                 <h2 id="checkpoint-evaluation-dialog-title" className="truncate text-lg font-black text-slate-900">
                   Grade · Checkpoint {evaluationTarget.checkpointNumber}: {evaluationTarget.checkpointTitle}
                 </h2>

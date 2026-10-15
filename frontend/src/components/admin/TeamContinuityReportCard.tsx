@@ -65,7 +65,7 @@ export default function TeamContinuityReportCard() {
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 p-5">
         <div>
           <h2 id="team-continuity-heading" className="flex items-center gap-2 text-lg font-bold text-slate-900">
-            <History className="h-5 w-5 text-primary" aria-hidden="true" />Team Continuity
+            <History className="h-5 w-5 text-primary-700" aria-hidden="true" />Team Continuity
           </h2>
           <p className="text-sm text-slate-500">Teams and projects continued from the previous semester</p>
         </div>
@@ -116,7 +116,7 @@ export default function TeamContinuityReportCard() {
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[420px] text-sm">
-                  <thead className="text-left text-xs uppercase text-slate-400">
+                  <thead className="text-left text-xs uppercase text-slate-600">
                     <tr><th className="py-2 pr-4">Class</th><th className="py-2 pr-4">Continued</th><th className="py-2">Dissolved</th></tr>
                   </thead>
                   <tbody>

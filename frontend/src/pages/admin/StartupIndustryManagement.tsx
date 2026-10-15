@@ -352,12 +352,12 @@ export default function StartupIndustryManagement({ embedded = false }: StartupI
             <table className="w-full min-w-[860px]">
               <thead>
                 <tr className="bg-slate-50/70 text-left">
-                  <th className="w-16 px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-400">#</th>
-                  <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-400">Industry</th>
-                  <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-400">Description</th>
-                  <th className="w-28 px-5 py-3.5 text-center text-xs font-semibold uppercase tracking-wider text-slate-400">Projects</th>
-                  <th className="w-28 px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-400">Status</th>
-                  <th className="w-28 px-5 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-slate-400">Actions</th>
+                  <th className="w-16 px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-600">#</th>
+                  <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-600">Industry</th>
+                  <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-600">Description</th>
+                  <th className="w-28 px-5 py-3.5 text-center text-xs font-semibold uppercase tracking-wider text-slate-600">Projects</th>
+                  <th className="w-28 px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-600">Status</th>
+                  <th className="w-28 px-5 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-slate-600">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -389,7 +389,7 @@ export default function StartupIndustryManagement({ embedded = false }: StartupI
                           aria-label={`Edit ${industry.name}`}
                           title="Edit industry"
                           onClick={() => openEditForm(industry)}
-                          className="rounded-lg p-2 text-slate-400 transition hover:bg-primary-50 hover:text-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                          className="rounded-lg p-2 text-slate-400 transition hover:bg-primary-50 hover:text-primary-700 focus:outline-none focus:ring-2 focus:ring-primary/20"
                         >
                           <Edit3 className="h-4 w-4" />
                         </button>
@@ -417,7 +417,7 @@ export default function StartupIndustryManagement({ embedded = false }: StartupI
 
         {!isInitialLoading && !loadError && <div className="flex flex-col gap-2 border-t border-slate-100 bg-slate-50/40 px-5 py-3.5 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between">
           <span className="inline-flex items-center gap-2" aria-live="polite">
-            {isRefreshing && <LoaderCircle className="h-3.5 w-3.5 animate-spin text-primary" aria-hidden="true" />}
+            {isRefreshing && <LoaderCircle className="h-3.5 w-3.5 animate-spin text-primary-700" aria-hidden="true" />}
             Showing <strong className="font-semibold text-slate-700">{industries.length}</strong> industries
           </span>
           <span className="inline-flex items-center gap-1.5">

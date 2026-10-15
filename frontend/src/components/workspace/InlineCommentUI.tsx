@@ -75,10 +75,10 @@ function CommentNode({ comment, onReply, onResolve, canResolve, canReply }) {
         <div className="flex-1 min-w-0 space-y-2">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-sm font-bold text-slate-900">{comment.createdBy?.name}</span>
-            <span className={`text-[10px] font-bold px-1.5 py-px border rounded-md ${roleBadge(comment.createdBy?.role)}`}>{roleLabel(comment.createdBy?.role)}</span>
-            {comment.sectionLabel && <span className="text-[10px] font-semibold text-slate-500 bg-slate-100 px-2 py-1 rounded-full">{comment.sectionLabel}</span>}
+            <span className={`text-overline font-bold px-1.5 py-px border rounded-md ${roleBadge(comment.createdBy?.role)}`}>{roleLabel(comment.createdBy?.role)}</span>
+            {comment.sectionLabel && <span className="text-overline font-semibold text-slate-500 bg-slate-100 px-2 py-1 rounded-full">{comment.sectionLabel}</span>}
             {comment.resolved && (
-              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-1 rounded-full">
+              <span className="inline-flex items-center gap-1 text-overline font-bold text-emerald-700 bg-emerald-100 px-2 py-1 rounded-full">
                 <CheckCircle2 className="w-3 h-3" /> Resolved
               </span>
             )}
@@ -93,7 +93,7 @@ function CommentNode({ comment, onReply, onResolve, canResolve, canReply }) {
             {canReply && (
               <button
                 onClick={() => setShowReply((v) => !v)}
-                className="text-xs font-semibold text-primary hover:underline"
+                className="text-xs font-semibold text-primary-700 hover:underline"
               >
                 {showReply ? 'Cancel' : 'Reply'}
               </button>

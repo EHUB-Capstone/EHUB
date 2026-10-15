@@ -4,6 +4,7 @@ import storageClient from '../api/storageClient.ts';
 import { registerClassMockHandlers } from './handlers/classMockHandlers.ts';
 import { registerCoreMockHandlers } from './handlers/coreMockHandlers.ts';
 import { registerTeamMockHandlers } from './handlers/teamMockHandlers.ts';
+import { registerMentoringMockHandlers } from './handlers/mentoringMockHandlers.ts';
 import { registerStorageMockHandlers, registerWorkspaceMockHandlers } from './handlers/workspaceMockHandlers.ts';
 import { resetMockState } from './mockHelpers.ts';
 
@@ -30,6 +31,7 @@ export function enableApiMocks(): void {
   registerClassMockHandlers(activeMock);
   registerTeamMockHandlers(activeMock);
   registerWorkspaceMockHandlers(activeMock);
+  registerMentoringMockHandlers(activeMock);
   activeStorageMock = new MockAdapter(storageClient, { delayResponse: 400, onNoMatch: 'passthrough' });
   registerStorageMockHandlers(activeStorageMock);
 

@@ -140,7 +140,7 @@ export default function EditScheduleModal({
             </div>
           ))}
 
-          <button type="button" onClick={addSchedule} className="inline-flex items-center gap-1.5 rounded-lg border border-primary-200 bg-primary-50 px-3 py-2 text-xs font-semibold text-primary hover:bg-primary-100">
+          <button type="button" onClick={addSchedule} className="inline-flex items-center gap-1.5 rounded-lg border border-primary-200 bg-primary-50 px-3 py-2 text-xs font-semibold text-primary-700 hover:bg-primary-100">
             <Plus className="h-3.5 w-3.5" /> Add session
           </button>
         </div>
