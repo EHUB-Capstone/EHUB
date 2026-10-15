@@ -262,6 +262,8 @@ public sealed class ProjectDirectionDto
     public string? CurrentTitle { get; init; }
     public string? CurrentSummary { get; init; }
     public IReadOnlyCollection<string> StartupIndustries { get; init; } = Array.Empty<string>();
+    // Industries waiting for review in a Project Profile change request; null when no industry change is pending.
+    public IReadOnlyCollection<string>? ProposedStartupIndustries { get; init; }
     public string Status { get; init; } = string.Empty;
     public DateTime? SubmittedAtUtc { get; init; }
     public DateTime? ReviewedAtUtc { get; init; }

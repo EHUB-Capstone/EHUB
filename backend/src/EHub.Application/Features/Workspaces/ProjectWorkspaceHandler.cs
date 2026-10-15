@@ -294,6 +294,23 @@ public sealed class ProjectWorkspaceHandler : IProjectWorkspaceHandler
                 if (validation != null) return Result.Failure<ProjectWorkspaceDto>(validation);
                 var keywords = NormalizeTags(request.Keywords ?? Array.Empty<string>());
 
+                IReadOnlyCollection<StartupIndustry>? requestedIndustries = null;
+                if (request.StartupIndustryIds != null)
+                {
+                    var industryIds = request.StartupIndustryIds;
+                    if (industryIds.Count is < 1 or > 3)
+                        return Failure<ProjectWorkspaceDto>(ErrorCodes.WorkspaceValidationError, "Select between 1 and 3 startup industries.");
+                    if (industryIds.Any(industryId => industryId == Guid.Empty) || industryIds.Distinct().Count() != industryIds.Count)
+                        return Failure<ProjectWorkspaceDto>(ErrorCodes.WorkspaceValidationError, "Startup industry selections must be unique and valid.");
+                    requestedIndustries = await _context.StartupIndustries
+                        .AsNoTracking()
+                        .Where(industry => industry.Status == StartupIndustryStatus.Active && industryIds.Contains(industry.Id))
+                        .OrderBy(industry => industry.Name)
+                        .ToArrayAsync(transactionCancellationToken);
+                    if (requestedIndustries.Count != industryIds.Count)
+                        return Failure<ProjectWorkspaceDto>(ErrorCodes.WorkspaceValidationError, "Select between 1 and 3 active startup industries.");
+                }
+
                 var project = team.Project;
                 var nextName = (request.ProjectName ?? string.Empty).Trim();
                 var nextDescription = (request.Description ?? string.Empty).Trim();
@@ -305,6 +322,10 @@ public sealed class ProjectWorkspaceHandler : IProjectWorkspaceHandler
                 var proposedFields = new List<string>();
                 if (!string.Equals(project.Name, nextName, StringComparison.Ordinal)) proposedFields.Add("projectName");
                 if (!string.Equals(project.Description ?? string.Empty, nextDescription, StringComparison.Ordinal)) proposedFields.Add("description");
+                // Startup industries are reviewed by the lecturer like the project name and description.
+                var industriesChanged = requestedIndustries != null
+                    && !ProjectDirectionHandler.HaveSameStartupIndustries(project, requestedIndustries);
+                if (industriesChanged) proposedFields.Add("startupIndustries");
 
                 var immediateFields = new List<string>();
                 if (!string.Equals(project.Problem ?? string.Empty, nextProblem, StringComparison.Ordinal)) immediateFields.Add("problem");
@@ -350,6 +371,9 @@ public sealed class ProjectWorkspaceHandler : IProjectWorkspaceHandler
                     var direction = team.ProjectDirection;
                     direction.Title = nextName;
                     direction.Summary = nextDescription;
+                    direction.ProposedStartupIndustries = industriesChanged
+                        ? requestedIndustries!.Select(industry => industry.Name).ToList()
+                        : null;
                     direction.Status = ProjectDirectionStatus.Submitted;
                     direction.SubmittedAtUtc = now;
                     direction.ReviewedAtUtc = null;
@@ -363,7 +387,7 @@ public sealed class ProjectWorkspaceHandler : IProjectWorkspaceHandler
                         Project = project,
                         ActorUserId = userId,
                         Action = "PROJECT_PROFILE_CHANGE_PROPOSED",
-                        Summary = $"Submitted proposed changes to {string.Join(" and ", proposedFields.Select(ToDisplayField))} for lecturer review.",
+                        Summary = $"Submitted proposed changes to {ProjectDirectionHandler.JoinFields(proposedFields, lowercase: true)} for lecturer review.",
                         ChangedFieldsJson = JsonSerializer.Serialize(proposedFields),
                         OccurredAtUtc = now
                     };
@@ -378,7 +402,9 @@ public sealed class ProjectWorkspaceHandler : IProjectWorkspaceHandler
                         CurrentTitle = project.Name,
                         ProposedTitle = nextName,
                         CurrentSummary = project.Description ?? string.Empty,
-                        ProposedSummary = nextDescription
+                        ProposedSummary = nextDescription,
+                        CurrentStartupIndustries = ProjectDirectionHandler.CurrentIndustryNames(project),
+                        ProposedStartupIndustries = direction.ProposedStartupIndustries
                     }, now);
                 }
 

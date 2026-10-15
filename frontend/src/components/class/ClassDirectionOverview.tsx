@@ -31,6 +31,14 @@ const statusLabels = {
   NOT_SUBMITTED: 'Not submitted',
 };
 
+const IndustryChips = ({ names }) => (
+  <div className="mt-1 flex flex-wrap gap-2">
+    {names.map((name) => (
+      <span key={name} className="rounded-full border border-orange-200 bg-orange-50 px-2.5 py-1 text-xs font-medium text-orange-700">{name}</span>
+    ))}
+  </div>
+);
+
 export default function ClassDirectionOverview({ semester, year, initialClassId = '', focusTeamId = '', onSelectedClassChange }) {
   const initialClassIdRef = useRef(initialClassId);
   const [classes, setClasses] = useState([]);
@@ -122,6 +130,7 @@ export default function ClassDirectionOverview({ semester, year, initialClassId 
           projectDirectionCurrentTitle: direction?.currentTitle || '',
           projectDirectionCurrentSummary: direction?.currentSummary || '',
           projectDirectionStartupIndustries: direction?.startupIndustries || [],
+          projectDirectionProposedStartupIndustries: direction?.proposedStartupIndustries || null,
           projectDirectionStatus: status,
           projectDirectionReviewComment: direction?.reviews?.[0]?.comment || null,
           projectDirectionRowVersion: direction?.rowVersion || '',
@@ -325,6 +334,9 @@ export default function ClassDirectionOverview({ semester, year, initialClassId 
             const startupIndustries = Array.isArray(team.projectDirectionStartupIndustries)
               ? team.projectDirectionStartupIndustries
               : [];
+            const proposedIndustries = Array.isArray(team.projectDirectionProposedStartupIndustries)
+              ? team.projectDirectionProposedStartupIndustries
+              : null;
             const busy = reviewingTeamId === team._id;
             const isApproved = status === 'APPROVED';
             const approvedExpanded = !isApproved || expandedApprovedTeamIds.has(team._id) || team._id === focusTeamId;
@@ -372,6 +384,12 @@ export default function ClassDirectionOverview({ semester, year, initialClassId 
                           <p className="mt-1 font-semibold text-slate-900">{team.projectDirectionCurrentTitle}</p>
                           <p className="mt-3 text-xs font-semibold text-slate-500">Description</p>
                           <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-slate-700">{team.projectDirectionCurrentSummary}</p>
+                          {proposedIndustries && (
+                            <>
+                              <p className="mt-3 text-xs font-semibold text-slate-500">Startup industries</p>
+                              <IndustryChips names={startupIndustries} />
+                            </>
+                          )}
                         </div>
                         <div className="rounded-xl border border-secondary-200 bg-secondary-50 p-4">
                           <p className="text-xs font-bold uppercase tracking-wide text-secondary">Proposed change</p>
@@ -379,12 +397,18 @@ export default function ClassDirectionOverview({ semester, year, initialClassId 
                           <p className="mt-1 font-semibold text-slate-900">{team.projectDirectionTitle}</p>
                           <p className="mt-3 text-xs font-semibold text-secondary">Description</p>
                           <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-slate-700">{team.projectDirection}</p>
+                          {proposedIndustries && (
+                            <>
+                              <p className="mt-3 text-xs font-semibold text-secondary">Startup industries</p>
+                              <IndustryChips names={proposedIndustries} />
+                            </>
+                          )}
                         </div>
                       </div>
                     ) : (
                       <p className="mt-4 whitespace-pre-wrap text-sm leading-7 text-slate-700">{team.projectDirection}</p>
                     )}
-                    {startupIndustries.length > 0 && (
+                    {startupIndustries.length > 0 && !(isProfileChangeProposal && proposedIndustries) && (
                       <div className="mt-4">
                         <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Startup Industry</p>
                         <div className="mt-2 flex flex-wrap gap-2">

@@ -65,10 +65,19 @@ public sealed class StartupIndustriesController(
         CancellationToken cancellationToken)
     {
         var result = await importHandler.ImportAsync(request.File, cancellationToken);
-        return result.IsFailure
-            ? ToErrorResponse(result.Error)
-            : Ok(ApiResponse<StartupIndustryImportResponse>.SuccessResponse(
-                result.Value!, $"{result.Value!.ImportedCount} startup industries imported successfully."));
+        if (result.IsFailure)
+        {
+            return ToErrorResponse(result.Error);
+        }
+
+        var skipped = result.Value!.SkippedExistingCount + result.Value.SkippedErrorCount;
+        var message = $"{result.Value.ImportedCount} startup industries imported successfully.";
+        if (skipped > 0)
+        {
+            message += $" {skipped} rows were skipped.";
+        }
+
+        return Ok(ApiResponse<StartupIndustryImportResponse>.SuccessResponse(result.Value, message));
     }
 
     [HttpPost("import/preview")]

@@ -1055,6 +1055,20 @@ export function registerWorkspaceMockHandlers(mock: MockAdapter): void {
     const targetUsers = String(body.targetUsers || '').trim();
     const zaloGroupUrl = String(body.zaloGroupUrl || '').trim();
     const keywords = Array.isArray(body.keywords) ? body.keywords.map(String) : [];
+    // Omitted ids leave the startup industries untouched; a changed selection is reviewed by the lecturer.
+    let requestedIndustries: string[] | null = null;
+    if (Array.isArray(body.startupIndustryIds)) {
+      const requestedIds = body.startupIndustryIds.map(String);
+      const activeIndustries = state.startupIndustries.filter((industry) => (
+        industry.status === 'active' && requestedIds.includes(industry.id)
+      ));
+      if (requestedIds.length < 1 || requestedIds.length > 3
+        || new Set(requestedIds).size !== requestedIds.length
+        || activeIndustries.length !== requestedIds.length) {
+        return failure(400, 'WORKSPACE_VALIDATION_ERROR', 'Select between 1 and 3 active startup industries.');
+      }
+      requestedIndustries = requestedIds.map((id) => activeIndustries.find((industry) => industry.id === id)!.name);
+    }
     let isValidZaloGroupUrl = zaloGroupUrl.length === 0;
     if (zaloGroupUrl.length > 0 && zaloGroupUrl.length <= 500) {
       try {
@@ -1072,9 +1086,13 @@ export function registerWorkspaceMockHandlers(mock: MockAdapter): void {
       || !isValidZaloGroupUrl) {
       return failure(400, 'WORKSPACE_VALIDATION_ERROR', 'Required project workspace information is missing or invalid.');
     }
+    const sortedNames = (names: string[]) => [...names].map((name) => name.trim().toUpperCase()).sort().join('|');
+    const industriesChanged = requestedIndustries !== null
+      && sortedNames(requestedIndustries) !== sortedNames(team.startupIndustries || []);
     const proposedFields = [
       team.projectName !== projectName && 'projectName',
       (team.projectDescription || '') !== description && 'description',
+      industriesChanged && 'startupIndustries',
     ].filter(Boolean) as string[];
     const immediateFields = [
       (team.projectProblem || '') !== problem && 'problem',
@@ -1106,6 +1124,7 @@ export function registerWorkspaceMockHandlers(mock: MockAdapter): void {
       const occurredAtUtc = new Date().toISOString();
       direction.title = projectName;
       direction.summary = description;
+      direction.proposedStartupIndustries = industriesChanged ? requestedIndustries : null;
       direction.status = 'Submitted';
       direction.submittedAtUtc = occurredAtUtc;
       direction.reviewedAtUtc = null;

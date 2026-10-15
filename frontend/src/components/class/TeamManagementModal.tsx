@@ -28,6 +28,7 @@ import {
   getTeamProject,
   normalizeManagedTeam,
   isMissingTeamMajor,
+  orderStudentsForTeamEditing,
   TEAM_MEMBER_LIMIT,
   validateTeamDraft,
 } from '../../utils/teamManagement';
@@ -82,11 +83,12 @@ export default function TeamManagementModal({
       .filter((student): student is TeamStudent => Boolean(student)),
     [draft.memberIds, students],
   );
-  const visibleStudents = useMemo(() => {
-    const selectedIds = new Set(draft.memberIds);
-    return students.filter((student) => matchesSearchQuery(search, [student.fullName, student.rollNumber, student.email, student.major]))
-      .sort((left, right) => Number(selectedIds.has(right._id)) - Number(selectedIds.has(left._id)));
-  }, [search, students, draft.memberIds]);
+  const visibleStudents = useMemo(() => orderStudentsForTeamEditing(
+    students.filter((student) => matchesSearchQuery(search, [student.fullName, student.rollNumber, student.email, student.major])),
+    draft.memberIds,
+    assignments,
+    currentTeamId,
+  ), [search, students, draft.memberIds, assignments, currentTeamId]);
   const formationSummary = useMemo(() => {
     const majorCodes = [...new Set(selectedStudents
       .map((student) => student.major?.trim().toUpperCase())

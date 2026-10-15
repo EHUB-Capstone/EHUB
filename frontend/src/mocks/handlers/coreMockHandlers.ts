@@ -1302,7 +1302,7 @@ interface MockIndustryImportRow {
   name: string;
   description: string;
   isValid: boolean;
-  status: 'Ready' | 'Error';
+  status: 'Ready' | 'Exists' | 'Error';
   errorMessage: string | null;
   errorCode: 'STARTUP_INDUSTRY_IMPORT_FILE_INVALID' | 'STARTUP_INDUSTRY_IMPORT_CONFLICT' | null;
 }
@@ -1395,8 +1395,8 @@ async function inspectIndustryImport(config: AxiosRequestConfig): Promise<{ erro
       const existingName = row.isValid ? existingByName.get(row.name.toUpperCase()) : null;
       if (existingName) {
         row.isValid = false;
-        row.status = 'Error';
-        row.errorMessage = `Industry '${existingName}' already exists.`;
+        row.status = 'Exists';
+        row.errorMessage = `Industry '${existingName}' already exists and will be skipped.`;
         row.errorCode = 'STARTUP_INDUSTRY_IMPORT_CONFLICT';
       }
     }
@@ -1439,7 +1439,8 @@ function registerStartupIndustryHandlers(mock: MockAdapter): void {
     return ok({
       totalRows: rows.length,
       validRowsCount: rows.filter((row) => row.isValid).length,
-      errorRowsCount: rows.filter((row) => !row.isValid).length,
+      existingRowsCount: rows.filter((row) => row.status === 'Exists').length,
+      errorRowsCount: rows.filter((row) => row.status === 'Error').length,
       rows: rows.map((row) => ({
         rowNumber: row.rowNumber,
         name: row.name,
@@ -1455,19 +1456,16 @@ function registerStartupIndustryHandlers(mock: MockAdapter): void {
     const inspection = await inspectIndustryImport(config);
     if (inspection.error) return inspection.error;
     const rows = inspection.rows!;
-    const invalidRows = rows.filter((row) => !row.isValid);
-    if (invalidRows.length > 0) {
-      const hasFileError = invalidRows.some((row) => row.errorCode === 'STARTUP_INDUSTRY_IMPORT_FILE_INVALID');
-      return failure(
-        hasFileError ? 400 : 409,
-        hasFileError ? 'STARTUP_INDUSTRY_IMPORT_FILE_INVALID' : 'STARTUP_INDUSTRY_IMPORT_CONFLICT',
-        invalidRows.length === 1
-          ? `Row ${invalidRows[0].rowNumber}: ${invalidRows[0].errorMessage}`
-          : `The workbook contains ${invalidRows.length} invalid rows. Preview the file and resolve every error before importing.`,
-      );
+    const readyRows = rows.filter((row) => row.isValid);
+    const skippedExistingCount = rows.filter((row) => row.status === 'Exists').length;
+    const skippedErrorCount = rows.filter((row) => row.status === 'Error').length;
+    if (readyRows.length === 0) {
+      return skippedErrorCount === 0
+        ? failure(409, 'STARTUP_INDUSTRY_IMPORT_CONFLICT', 'All industries in the file already exist. There is nothing to import.')
+        : failure(400, 'STARTUP_INDUSTRY_IMPORT_FILE_INVALID', 'The workbook contains no valid industry rows to import.');
     }
 
-    const industries = rows.map((candidate) => ({
+    const industries = readyRows.map((candidate) => ({
         id: allocateId(),
         name: candidate.name,
         description: candidate.description || null,
@@ -1475,7 +1473,10 @@ function registerStartupIndustryHandlers(mock: MockAdapter): void {
     }));
     getMockState().startupIndustries.push(...industries);
     persistMockState();
-    return ok({ importedCount: industries.length, industries }, `${industries.length} startup industries imported successfully.`);
+    return ok(
+      { importedCount: industries.length, skippedExistingCount, skippedErrorCount, industries },
+      `${industries.length} startup industries imported successfully.`,
+    );
   });
 
   mock.onPost('/startup-industries').reply((config) => {

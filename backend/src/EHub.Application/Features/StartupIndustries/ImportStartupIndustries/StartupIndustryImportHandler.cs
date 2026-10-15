@@ -16,6 +16,8 @@ public sealed class StartupIndustryImportHandler(
     ICurrentUserService currentUser) : IStartupIndustryImportHandler
 {
     private const long MaximumFileSize = 5 * 1024 * 1024;
+    private const string ExistingStatus = "Exists";
+    private const string ErrorStatus = "Error";
 
     public async Task<Result<StartupIndustryImportPreviewResponse>> PreviewAsync(
         IFormFile file,
@@ -32,7 +34,8 @@ public sealed class StartupIndustryImportHandler(
         {
             TotalRows = rows.Count,
             ValidRowsCount = rows.Count(row => row.IsValid),
-            ErrorRowsCount = rows.Count(row => !row.IsValid),
+            ExistingRowsCount = rows.Count(row => row.Status == ExistingStatus),
+            ErrorRowsCount = rows.Count(row => row.Status == ErrorStatus),
             Rows = rows.Select(row => new StartupIndustryImportRowPreview
             {
                 RowNumber = row.RowNumber,
@@ -55,21 +58,24 @@ public sealed class StartupIndustryImportHandler(
             return Result.Failure<StartupIndustryImportResponse>(validation.Error);
         }
 
+        // Rows that already exist in the system or contain errors are skipped;
+        // only rows that are ready are imported.
         var candidates = validation.Value;
-        var invalidRows = candidates.Where(candidate => !candidate.IsValid).ToArray();
-        if (invalidRows.Length > 0)
+        var readyRows = candidates.Where(candidate => candidate.IsValid).ToArray();
+        var existingCount = candidates.Count(candidate => candidate.Status == ExistingStatus);
+        var errorCount = candidates.Count(candidate => candidate.Status == ErrorStatus);
+        if (readyRows.Length == 0)
         {
-            var hasFileError = invalidRows.Any(row => row.ErrorCode == ErrorCodes.StartupIndustryImportFileInvalid);
-            return Result.Failure<StartupIndustryImportResponse>(new Error(
-                hasFileError
-                    ? ErrorCodes.StartupIndustryImportFileInvalid
-                    : ErrorCodes.StartupIndustryImportConflict,
-                invalidRows.Length == 1
-                    ? $"Row {invalidRows[0].RowNumber}: {invalidRows[0].ErrorMessage}"
-                    : $"The workbook contains {invalidRows.Length} invalid rows. Preview the file and resolve every error before importing."));
+            return errorCount == 0
+                ? Result.Failure<StartupIndustryImportResponse>(new Error(
+                    ErrorCodes.StartupIndustryImportConflict,
+                    "All industries in the file already exist. There is nothing to import."))
+                : Result.Failure<StartupIndustryImportResponse>(new Error(
+                    ErrorCodes.StartupIndustryImportFileInvalid,
+                    "The workbook contains no valid industry rows to import."));
         }
 
-        var industries = candidates.Select(candidate => new StartupIndustry
+        var industries = readyRows.Select(candidate => new StartupIndustry
         {
             Name = candidate.Name,
             NormalizedName = candidate.NormalizedName,
@@ -84,6 +90,8 @@ public sealed class StartupIndustryImportHandler(
         return Result.Success(new StartupIndustryImportResponse
         {
             ImportedCount = industries.Length,
+            SkippedExistingCount = existingCount,
+            SkippedErrorCount = errorCount,
             Industries = industries.Select(ToResponse).ToArray()
         });
     }
@@ -142,8 +150,8 @@ public sealed class StartupIndustryImportHandler(
             candidates[index] = candidate with
             {
                 IsValid = false,
-                Status = "Error",
-                ErrorMessage = $"Industry '{existingName}' already exists.",
+                Status = ExistingStatus,
+                ErrorMessage = $"Industry '{existingName}' already exists and will be skipped.",
                 ErrorCode = ErrorCodes.StartupIndustryImportConflict
             };
         }

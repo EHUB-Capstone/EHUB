@@ -35,6 +35,8 @@ public sealed class StartupIndustryListResponse
 public sealed class StartupIndustryImportResponse
 {
     public int ImportedCount { get; init; }
+    public int SkippedExistingCount { get; init; }
+    public int SkippedErrorCount { get; init; }
     public IReadOnlyCollection<StartupIndustryResponse> Industries { get; init; } = Array.Empty<StartupIndustryResponse>();
 }
 
@@ -52,6 +54,7 @@ public sealed class StartupIndustryImportPreviewResponse
 {
     public int TotalRows { get; init; }
     public int ValidRowsCount { get; init; }
+    public int ExistingRowsCount { get; init; }
     public int ErrorRowsCount { get; init; }
     public IReadOnlyCollection<StartupIndustryImportRowPreview> Rows { get; init; } = Array.Empty<StartupIndustryImportRowPreview>();
 }

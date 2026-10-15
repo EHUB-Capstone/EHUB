@@ -445,6 +445,26 @@ export function buildStudentTeamAssignments(
   return assignments;
 }
 
+/**
+ * Orders the student picker of the team editor: members already in this team first,
+ * then students who are free to add, and students who already belong to another team
+ * last (they cannot be selected). Order inside each group is unchanged.
+ */
+export function orderStudentsForTeamEditing<S extends { _id: string }>(
+  students: S[],
+  memberIds: Iterable<string>,
+  assignments: Map<string, { teamId: string }>,
+  currentTeamId: string,
+): S[] {
+  const members = new Set(memberIds);
+  const rank = (student: S) => {
+    if (members.has(student._id)) return 0;
+    const assignment = assignments.get(student._id);
+    return assignment && assignment.teamId !== currentTeamId ? 2 : 1;
+  };
+  return [...students].sort((left, right) => rank(left) - rank(right));
+}
+
 export function validateTeamDraft(
   draft: TeamDraft,
   teams: ManagedTeam[],

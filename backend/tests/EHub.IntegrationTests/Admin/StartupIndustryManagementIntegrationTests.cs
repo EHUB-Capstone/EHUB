@@ -263,7 +263,7 @@ public sealed class StartupIndustryManagementIntegrationTests
     }
 
     [Fact]
-    public async Task ImportIndustries_Should_Reject_Existing_Name_Without_Partial_Insert()
+    public async Task ImportIndustries_Should_Skip_Existing_Names_And_Import_The_Rest()
     {
         var token = await GetAdminTokenAsync();
         var unique = Guid.NewGuid().ToString("N");
@@ -276,7 +276,7 @@ public sealed class StartupIndustryManagementIntegrationTests
         });
         (await _client.SendAsync(createRequest)).StatusCode.Should().Be(HttpStatusCode.Created);
 
-        var newName = $"Must not be inserted {unique}";
+        var newName = $"Imported next to existing {unique}";
         using var importRequest = CreateAuthorizedRequest(HttpMethod.Post, "/api/startup-industries/import", token);
         importRequest.Content = CreateWorkbookContent(CreateIndustryWorkbook(
             (newName, "Valid new row."),
@@ -293,19 +293,67 @@ public sealed class StartupIndustryManagementIntegrationTests
         var previewBody = await previewResponse.Content.ReadFromJsonAsync<ApiResponse<StartupIndustryImportPreviewResponse>>();
         previewResponse.StatusCode.Should().Be(HttpStatusCode.OK);
         previewBody!.Data!.ValidRowsCount.Should().Be(1);
-        previewBody.Data.ErrorRowsCount.Should().Be(1);
+        previewBody.Data.ExistingRowsCount.Should().Be(1);
+        previewBody.Data.ErrorRowsCount.Should().Be(0);
+
+        var importResponse = await _client.SendAsync(importRequest);
+        var importBody = await importResponse.Content.ReadFromJsonAsync<ApiResponse<StartupIndustryImportResponse>>();
+
+        importResponse.StatusCode.Should().Be(HttpStatusCode.OK, await importResponse.Content.ReadAsStringAsync());
+        importBody!.Data!.ImportedCount.Should().Be(1);
+        importBody.Data.SkippedExistingCount.Should().Be(1);
+        importBody.Data.Industries.Should().ContainSingle(industry => industry.Name == newName);
+
+        var searchRequest = CreateAuthorizedRequest(
+            HttpMethod.Get,
+            $"/api/startup-industries?search={Uri.EscapeDataString(unique)}",
+            token);
+        var searchResponse = await _client.SendAsync(searchRequest);
+        var searchBody = await searchResponse.Content.ReadFromJsonAsync<ApiResponse<StartupIndustryListResponse>>();
+        searchBody!.Data!.Industries.Should().HaveCount(2);
+    }
+
+    [Fact]
+    public async Task ImportIndustries_Should_Return_409_When_Every_Row_Already_Exists()
+    {
+        var token = await GetAdminTokenAsync();
+        var existingName = $"Fully existing {Guid.NewGuid():N}";
+        var createRequest = CreateAuthorizedRequest(HttpMethod.Post, "/api/startup-industries", token);
+        createRequest.Content = JsonContent.Create(new CreateStartupIndustryRequest
+        {
+            Name = existingName,
+            Status = "active"
+        });
+        (await _client.SendAsync(createRequest)).StatusCode.Should().Be(HttpStatusCode.Created);
+
+        using var importRequest = CreateAuthorizedRequest(HttpMethod.Post, "/api/startup-industries/import", token);
+        importRequest.Content = CreateWorkbookContent(CreateIndustryWorkbook((existingName, "Already there.")));
 
         var importResponse = await _client.SendAsync(importRequest);
 
         importResponse.StatusCode.Should().Be(HttpStatusCode.Conflict);
+    }
 
-        var searchRequest = CreateAuthorizedRequest(
-            HttpMethod.Get,
-            $"/api/startup-industries?search={Uri.EscapeDataString(newName)}",
-            token);
-        var searchResponse = await _client.SendAsync(searchRequest);
-        var searchBody = await searchResponse.Content.ReadFromJsonAsync<ApiResponse<StartupIndustryListResponse>>();
-        searchBody!.Data!.Industries.Should().BeEmpty();
+    [Fact]
+    public async Task ImportIndustries_Should_Skip_In_File_Duplicates_And_Import_Valid_Rows()
+    {
+        var token = await GetAdminTokenAsync();
+        var unique = Guid.NewGuid().ToString("N");
+        var validName = $"Valid beside duplicates {unique}";
+        var duplicateName = $"In file duplicate {unique}";
+        using var importRequest = CreateAuthorizedRequest(HttpMethod.Post, "/api/startup-industries/import", token);
+        importRequest.Content = CreateWorkbookContent(CreateIndustryWorkbook(
+            (validName, "Valid row."),
+            (duplicateName, "First."),
+            (duplicateName.ToUpperInvariant(), "Second.")));
+
+        var importResponse = await _client.SendAsync(importRequest);
+        var importBody = await importResponse.Content.ReadFromJsonAsync<ApiResponse<StartupIndustryImportResponse>>();
+
+        importResponse.StatusCode.Should().Be(HttpStatusCode.OK, await importResponse.Content.ReadAsStringAsync());
+        importBody!.Data!.ImportedCount.Should().Be(1);
+        importBody.Data.SkippedErrorCount.Should().Be(2);
+        importBody.Data.Industries.Should().ContainSingle(industry => industry.Name == validName);
     }
 
     private static HttpRequestMessage CreateAuthorizedRequest(HttpMethod method, string uri, string token)

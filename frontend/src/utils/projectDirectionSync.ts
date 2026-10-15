@@ -16,6 +16,8 @@ export interface ProjectDirectionSyncValue {
   currentTitle?: string | null;
   currentSummary?: string | null;
   startupIndustries?: string[] | null;
+  // Industries waiting for review in a Project Profile change request; null when none are pending.
+  proposedStartupIndustries?: string[] | null;
 }
 
 interface ProjectDirectionSeedProject {
@@ -58,7 +60,8 @@ export const hasUnsavedProjectDirectionChanges = (
 ): boolean => !direction
   || title.trim() !== (direction.title || '').trim()
   || summary.trim() !== (direction.summary || '').trim()
-  || (startupIndustries !== undefined && !haveSameValues(startupIndustries, direction.startupIndustries || []));
+  || (startupIndustries !== undefined
+    && !haveSameValues(startupIndustries, direction.proposedStartupIndustries || direction.startupIndustries || []));
 
 export const canSubmitProjectDirection = (
   direction: ProjectDirectionSyncValue | null | undefined,
@@ -99,6 +102,7 @@ interface ProjectDirectionOverviewTeam {
   projectDirectionIsProfileChangeProposal?: boolean;
   projectDirectionCurrentTitle?: string | null;
   projectDirectionCurrentSummary?: string | null;
+  projectDirectionProposedStartupIndustries?: string[] | null;
   [key: string]: unknown;
 }
 
@@ -175,6 +179,7 @@ export const updateProjectDirectionOverviewTeams = <T extends ProjectDirectionOv
     projectDirectionCurrentTitle: direction.currentTitle || '',
     projectDirectionCurrentSummary: direction.currentSummary || '',
     projectDirectionStartupIndustries: direction.startupIndustries || [],
+    projectDirectionProposedStartupIndustries: direction.proposedStartupIndustries || null,
     projectDirectionStatus,
     projectDirectionReviewComment: direction.reviews?.[0]?.comment || null,
     projectDirectionRowVersion: direction.rowVersion || '',
