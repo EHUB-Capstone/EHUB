@@ -1,5 +1,6 @@
 using EHub.Application.Features.Admin.Users.ManageUsers;
 using EHub.Application.Features.Admin.Users.ImportLecturers;
+using EHub.Api.Models.Common;
 using EHub.Contracts.Common;
 using EHub.Contracts.Users;
 using EHub.Shared.Constants;
@@ -67,11 +68,11 @@ public sealed class UsersController(IUserManagementHandler handler) : Controller
     [Authorize(Policy = SystemPolicies.AdminOnly)]
     [Consumes("multipart/form-data")]
     public async Task<IActionResult> PreviewLecturerImport(
-        [FromForm] IFormFile file,
+        [FromForm] FileUploadForm request,
         [FromServices] ILecturerImportHandler importHandler,
         CancellationToken cancellationToken)
     {
-        var result = await importHandler.PreviewAsync(file, cancellationToken);
+        var result = await importHandler.PreviewAsync(request.File, cancellationToken);
 
         return ToActionResult(result, "Lecturer import preview generated successfully.");
     }

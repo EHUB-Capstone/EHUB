@@ -1,5 +1,6 @@
 using EHub.Application.Features.Admin.Mentors;
 using EHub.Application.Features.Admin.Mentors.ExportAssignments;
+using EHub.Api.Models.Common;
 using EHub.Contracts.Common;
 using EHub.Contracts.Mentors;
 using EHub.Shared.Constants;
@@ -27,8 +28,12 @@ public sealed class MentorAdminController(IMentorAdminHandler handler, IMentorAs
     // Imports mentors into the master list: accounts and profiles only. Confirm with imports/commit.
     [HttpPost("master-imports/preview")]
     [Consumes("multipart/form-data")]
-    public async Task<IActionResult> PreviewMasterImport([FromForm] IFormFile file, CancellationToken cancellationToken) =>
-        ToResponse(await handler.PreviewImportAsync(file, cancellationToken), "Mentor master list import preview generated successfully.");
+    public async Task<IActionResult> PreviewMasterImport(
+    [FromForm] FileUploadForm request,
+    CancellationToken cancellationToken) =>
+    ToResponse(
+        await handler.PreviewImportAsync(request.File, cancellationToken),
+        "Mentor master list import preview generated successfully.");
 
     // Mentors kept in the master list without a login account yet.
     [HttpGet("incomplete")]
