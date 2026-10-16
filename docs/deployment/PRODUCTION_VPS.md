@@ -126,15 +126,21 @@ git clone https://github.com/EHUB-Capstone/EHUB.git /opt/ehub/app
 cd /opt/ehub/app
 ```
 
-Replace `REVIEWED_COMMIT_SHA` with the exact 40-character SHA shown in the
-approved Pull Request, then verify that the checkout prints the same value:
+Replace `REVIEWED_COMMIT_SHA` with the exact 40-character SHA of a commit on
+`main` (the merge commit of the approved release Pull Request), then verify that
+the checkout prints the same value:
 
 ```bash
 git checkout --detach REVIEWED_COMMIT_SHA
 git rev-parse HEAD
 ```
 
-Do not deploy a moving branch such as `develop` directly. A detached reviewed
+Production deploys only commits that are reachable from `origin/main`, and the
+content (git tree) must match the commit that was accepted on staging. Staging
+deploys from `develop`. See `RELEASE_PROCESS.md` for the branch model, the
+release Pull Request and the rollback rules.
+
+Do not deploy a moving branch such as `main` directly. A detached reviewed
 SHA makes the deployed source and rollback target unambiguous.
 
 Create the VPS-only environment file:
