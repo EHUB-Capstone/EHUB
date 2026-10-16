@@ -184,9 +184,23 @@ For the first pilot, reviewed source is built directly on the VPS:
 
 ```bash
 sudo docker compose --env-file .env.production -f docker-compose.production.yml build
-sudo docker compose --env-file .env.production -f docker-compose.production.yml up -d postgres
+sudo docker pull ollama/ollama:0.34.0
+sudo docker compose --env-file .env.production -f docker-compose.production.yml up -d postgres ollama
+sudo docker compose --env-file .env.production -f docker-compose.production.yml exec ollama ollama pull bge-m3
+sudo docker compose --env-file .env.production -f docker-compose.production.yml exec ollama ollama list
 sudo docker compose --env-file .env.production -f docker-compose.production.yml run --rm backend --initialize-database
 ```
+
+PostgreSQL runs the `ehub-postgres-pgvector` image built from
+`docker/postgres-pgvector`, because the mentor matching feature stores
+embeddings in a `vector` column. Start `postgres` (and verify the `vector`
+extension is available) before the initializer; otherwise the AI migration
+fails. When an existing database is switched to this image, create and copy a
+backup first and keep the named data volume. Ollama serves the `bge-m3`
+embedding model on the private Docker network only; the model is kept in the
+`ehub-production-ollama-data` volume, so it is downloaded once. The Ollama
+health check only proves that the server answers, not that the model is
+present, so confirm `bge-m3` in `ollama list`.
 
 The one-time initializer applies committed EF Core migrations and idempotent
 reference-data seeders, then exits. Never make it the backend's normal startup
@@ -203,7 +217,8 @@ sudo docker compose --env-file .env.production -f docker-compose.production.yml 
 sudo docker compose --env-file .env.production -f docker-compose.production.yml ps
 ```
 
-All three services must be running and healthy. Before installing host Nginx,
+All four services (`postgres`, `ollama`, `backend`, `frontend`) must be running
+and healthy. Before installing host Nginx,
 verify the loopback entry point:
 
 ```bash
@@ -289,6 +304,13 @@ The script never prints the database password. It creates a PostgreSQL custom
 archive plus a SHA-256 sidecar and removes only EHUB backup files older than 14
 days. This local copy is only a transfer staging area.
 
+Besides this release-time backup, a scheduled job (systemd timer, daily at 02:00
+Vietnam time) takes a backup, uploads it with its checksum to a dedicated private
+Cloudflare R2 bucket, verifies the uploaded size and reports the result to a
+Discord channel. See `BACKUP_RESTORE.md` for installation, daily operation and
+restore tests. Once that job is running, copying the release-time backup to a
+laptop is optional.
+
 From Windows PowerShell, copy the two files named by the script to a folder
 outside the VPS. Replace `BACKUP_FILE_NAME` with the exact filename; do not use
 a wildcard so that the copied release backup is unambiguous:
@@ -315,7 +337,12 @@ not exposed as an unattended script in this pilot runbook.
 
 ## 8. Release and rollback procedure
 
-Before changing a running release, record the current SHA and create/copy an
+Run the whole release inside `tmux` (`sudo apt install -y tmux`, then `tmux new -s release`)
+so a dropped SSH connection cannot interrupt a half-finished release, and
+re-declare the `EHUB_*` shell variables if the session is re-attached.
+
+Before changing a running release, record the current SHA as the previous
+release in the release log (`RELEASE_PROCESS.md`, section 8), and create/copy an
 offsite backup:
 
 ```bash
@@ -366,6 +393,22 @@ Stop application containers without deleting data:
 sudo docker compose --env-file .env.production -f docker-compose.production.yml stop frontend backend
 ```
 
+Every release leaves Docker build cache behind (tens of GB over a few weeks,
+far more than the old images). After a release is verified, remove cache older
+than one day; running containers, images and volumes are not touched:
+
+```bash
+df -h /
+sudo docker builder prune --all -f --filter "until=24h"
+df -h /
+```
+
+Run it once after the production deployment, not between staging and
+production (production reuses the cache staging just created). Do not use
+`docker image prune -a`: it deletes the previous release image needed for a
+rollback. Treat free disk space below about 8 GB as a reason to clean the cache
+before building.
+
 Never run `docker compose down -v` in production; `-v` deletes the PostgreSQL
 volume. Never expose ports 5432/8080, commit `.env.production`, use production
 personal data as test fixtures, or claim a backup is valid before checksum and
@@ -383,5 +426,10 @@ restore verification.
    10 MB and a DOCX, preview both, download the large file, then delete it. A
    browser console CORS error on the `PUT` means the bucket CORS policy does not
    list `https://e-hub.com.vn`.
-8. After the first manual process is proven, publish immutable images to GHCR
+8. Mentor recommendation smoke test (Admin or the class's primary lecturer): in
+   the class page open Manage, choose a team that has a project description and
+   assign a mentor slot. The suggestion list must show scores and reasons, and
+   `select count(*) from mentor_embeddings;` must increase. The backend health
+   check does not cover Ollama or the model, so only this test proves the chain.
+9. After the first manual process is proven, publish immutable images to GHCR
    and add an approval-controlled deployment workflow instead of SSH auto-deploy.

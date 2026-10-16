@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily EHUB PostgreSQL backup
+
+[Timer]
+OnCalendar=*-*-* 02:00:00 Asia/Ho_Chi_Minh
+Persistent=true
+RandomizedDelaySec=300
+Unit=ehub-backup.service
+
+[Install]
+WantedBy=timers.target

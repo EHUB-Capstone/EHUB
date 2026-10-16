@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily check that the EHUB backup is fresh
+
+[Timer]
+OnCalendar=*-*-* 09:00:00 Asia/Ho_Chi_Minh
+Persistent=true
+Unit=ehub-backup-freshness.service
+
+[Install]
+WantedBy=timers.target

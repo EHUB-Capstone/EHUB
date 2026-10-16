@@ -27,6 +27,14 @@ if [[ "$(realpath -- "${BACKUP_DIR}")" != "${BACKUP_DIR}" ]]; then
     exit 1
 fi
 
+# Serialise backups: the scheduled job and a release-time backup must not overlap.
+# Locking the backup directory works for both root (systemd) and ehubadmin (manual).
+exec 9< "${BACKUP_DIR}"
+if ! flock -n 9; then
+    echo "Another PostgreSQL backup is already running." >&2
+    exit 75
+fi
+
 compose=(sudo docker compose --project-name ehub-staging --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}")
 "${compose[@]}" config --quiet
 

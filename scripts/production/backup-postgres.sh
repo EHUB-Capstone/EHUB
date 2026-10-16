@@ -25,6 +25,14 @@ done
 
 install -d -m 0750 "${BACKUP_DIR}"
 
+# Serialise backups: the scheduled job and a release-time backup must not overlap.
+# Locking the backup directory works for both root (systemd) and ehubadmin (manual).
+exec 9< "${BACKUP_DIR}"
+if ! flock -n 9; then
+    echo "Another PostgreSQL backup is already running." >&2
+    exit 75
+fi
+
 compose=(sudo docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}")
 "${compose[@]}" config --quiet
 
