@@ -1,2 +1,5 @@
 # Staging scripts must remain executable by Bash after checkout on Windows or Linux.
 /scripts/staging/*.sh text eol=lf
+# Production operational scripts and systemd units run on Linux and must keep LF endings.
+/scripts/production/*.sh text eol=lf
+/deploy/systemd/* text eol=lf
