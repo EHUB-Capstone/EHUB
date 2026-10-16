@@ -1,0 +1,12 @@
+[Unit]
+Description=EHUB backup freshness and disk check
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/opt/ehub/app
+ExecStart=/bin/bash /opt/ehub/app/scripts/production/check-backup-freshness.sh production
+TimeoutStartSec=300
+Nice=10
