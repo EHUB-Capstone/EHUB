@@ -939,10 +939,11 @@ function registerDirectionHandlers(mock: MockAdapter): void {
       }
       revisedIndustries = selectedIndustries.map((industry) => industry!.name);
     }
-    const industriesChanged = [...revisedIndustries].sort().join('|') !== [...(direction?.startupIndustries || [])].sort().join('|');
-    if (direction?.isProjectProfileChangeProposal && industriesChanged) {
-      return failure(400, 'VALIDATION_ERROR', 'Startup Industry cannot be changed as part of a Project Profile name or description change request.');
-    }
+    // In a Project Profile change request the team edits the pending selection; otherwise the project's own industries.
+    const comparedIndustries = direction?.isProjectProfileChangeProposal
+      ? (direction.proposedStartupIndustries || direction.startupIndustries || [])
+      : (direction?.startupIndustries || []);
+    const industriesChanged = [...revisedIndustries].sort().join('|') !== [...comparedIndustries].sort().join('|');
     if (direction?.status === 'NeedsRevision' && revisedTitle === direction.title && revisedSummary === direction.summary && !industriesChanged) {
       return failure(400, 'VALIDATION_ERROR', 'Change the project direction before saving the requested revision.');
     }
@@ -952,7 +953,12 @@ function registerDirectionHandlers(mock: MockAdapter): void {
     }
     direction.title = revisedTitle;
     direction.summary = revisedSummary;
-    direction.startupIndustries = revisedIndustries;
+    if (direction.isProjectProfileChangeProposal) {
+      const sameAsApproved = [...revisedIndustries].sort().join('|') === [...(direction.startupIndustries || [])].sort().join('|');
+      direction.proposedStartupIndustries = sameAsApproved ? null : revisedIndustries;
+    } else {
+      direction.startupIndustries = revisedIndustries;
+    }
     direction.status = 'Draft';
     direction.rowVersion = allocateRowVersion();
     if (team.projectName && !direction.isProjectProfileChangeProposal) {
@@ -986,10 +992,15 @@ function registerDirectionHandlers(mock: MockAdapter): void {
         const changedFields = [
           team.projectName !== direction.title && 'projectName',
           (team.projectDescription || '') !== direction.summary && 'description',
+          direction.proposedStartupIndustries && 'startupIndustries',
         ].filter(Boolean) as string[];
         const occurredAtUtc = new Date().toISOString();
         team.projectName = direction.title;
         team.projectDescription = direction.summary;
+        if (direction.proposedStartupIndustries) {
+          team.startupIndustries = direction.proposedStartupIndustries;
+          direction.startupIndustries = direction.proposedStartupIndustries;
+        }
         team.projectUpdatedAtUtc = occurredAtUtc;
         team.projectActivities = [{
           id: allocateId(),
@@ -1022,6 +1033,7 @@ function registerDirectionHandlers(mock: MockAdapter): void {
     const review: MockDirectionReview = { id: allocateId(), fromStatus, toStatus, comment: asString(body.comment), reviewedByUserId: getMockState().users.find((user) => user.role === 'LECTURER')?.id || allocateId(), occurredAtUtc: new Date().toISOString() };
     direction.reviews.unshift(review);
     if (toStatus === 'Approved' || toStatus === 'Rejected') {
+      direction.proposedStartupIndustries = null;
       direction.isProjectProfileChangeProposal = false;
       direction.currentTitle = null;
       direction.currentSummary = null;

@@ -91,10 +91,10 @@ export default function CheckpointSection({
     <>
       <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm overflow-hidden">
         {/* Header */}
-        <div className="px-6 py-5 border-b border-slate-100 bg-gradient-to-r from-orange-50/80 via-white to-primary-50/30">
+        <div className="px-6 py-5 border-b border-slate-100 bg-white">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center shadow-md shadow-orange-200/50">
+              <div className="w-11 h-11 rounded-2xl flex items-center justify-center shadow-md shadow-orange-200/50 bg-primary">
                 <Flag className="w-5 h-5 text-white" />
               </div>
               <div>
@@ -124,7 +124,7 @@ export default function CheckpointSection({
           {!loading && configs.length > 0 && (
             <div className="mt-4 h-2 rounded-full bg-slate-100 overflow-hidden">
               <div
-                className="h-full rounded-full bg-gradient-to-r from-orange-400 to-orange-500 transition-all duration-500"
+                className="h-full rounded-full transition-all duration-500 bg-primary"
                 style={{ width: `${(completedCount / configs.length) * 100}%` }}
               />
             </div>

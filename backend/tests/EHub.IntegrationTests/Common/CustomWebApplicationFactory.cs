@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
+using Pgvector.EntityFrameworkCore;
 using EHub.Application.Common.Interfaces.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Configuration;
@@ -17,9 +18,10 @@ namespace EHub.IntegrationTests.Common;
 public sealed class CustomWebApplicationFactory 
     : WebApplicationFactory<Program>, Xunit.IAsyncLifetime
 {
+    public string TestConnectionString => _postgresContainer.GetConnectionString();
     private readonly PostgreSqlContainer _postgresContainer =
         new PostgreSqlBuilder()
-            .WithImage("postgres:16-alpine")
+            .WithImage("pgvector/pgvector:0.8.6-pg16")
             .WithDatabase("ehub_test_db")
             .WithUsername("ehub_test_user")
             .WithPassword("ehub_test_password")
@@ -73,7 +75,7 @@ public sealed class CustomWebApplicationFactory
 
             services.AddDbContext<AppDbContext>(options =>
             {
-                options.UseNpgsql(_postgresContainer.GetConnectionString());
+                options.UseNpgsql(_postgresContainer.GetConnectionString(), b => b.UseVector());
             });
 
             var googleAuthDescriptor = services.SingleOrDefault(

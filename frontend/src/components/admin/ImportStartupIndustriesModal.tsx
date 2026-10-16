@@ -59,6 +59,7 @@ export default function ImportStartupIndustriesModal({
   const [analyzing, setAnalyzing] = useState(false);
   const [importing, setImporting] = useState(false);
   const [dragActive, setDragActive] = useState(false);
+  const [confirmingSkip, setConfirmingSkip] = useState(false);
 
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
@@ -81,6 +82,7 @@ export default function ImportStartupIndustriesModal({
     setResult(null);
     setFileError('');
     setDragActive(false);
+    setConfirmingSkip(false);
     if (inputRef.current) inputRef.current.value = '';
   };
 
@@ -116,14 +118,25 @@ export default function ImportStartupIndustriesModal({
     void inspectFile(event.dataTransfer.files?.[0]);
   };
 
+  const requestImport = () => {
+    if (!preview || preview.validRowsCount === 0) return;
+    // Rows with real errors are skipped, so ask the admin to confirm first.
+    if (preview.errorRowsCount > 0) {
+      setConfirmingSkip(true);
+      return;
+    }
+    void commitImport();
+  };
+
   const commitImport = async () => {
-    if (!file || !preview || preview.validRowsCount === 0 || preview.errorRowsCount > 0) return;
+    if (!file || !preview || preview.validRowsCount === 0) return;
 
     setImporting(true);
     try {
       const response = await startupIndustryApi.import(file);
       const importResult = (response?.data ?? response) as StartupIndustryImportResult;
       setResult(importResult);
+      setConfirmingSkip(false);
       setPhase('result');
       onImported();
       toast.success(`${importResult.importedCount} ${importResult.importedCount === 1 ? 'industry' : 'industries'} imported successfully.`);
@@ -150,7 +163,7 @@ export default function ImportStartupIndustriesModal({
         <header className="shrink-0 border-b border-slate-100 px-5 py-4 sm:px-6">
           <div className="flex items-start justify-between gap-4">
             <div className="flex min-w-0 items-center gap-3">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary-50 text-primary">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary-50 text-primary-700">
                 <FileSpreadsheet className="h-5 w-5" aria-hidden="true" />
               </div>
               <div className="min-w-0">
@@ -196,7 +209,7 @@ export default function ImportStartupIndustriesModal({
                 <div className="text-xs leading-5 text-slate-600">
                   <p><strong className="text-slate-700">Required columns:</strong> Industry name (or Industry) and Description on the first sheet.</p>
                   <p><strong className="text-slate-700">Default status:</strong> Every imported industry is active.</p>
-                  <p><strong className="text-slate-700">Limits:</strong> Excel .xlsx/.xls · maximum 5 MB · maximum 500 rows · names must be unique.</p>
+                  <p><strong className="text-slate-700">Limits:</strong> Excel .xlsx/.xls · maximum 5 MB · maximum 500 rows · names already in the system are skipped.</p>
                 </div>
               </div>
 
@@ -224,7 +237,7 @@ export default function ImportStartupIndustriesModal({
                     event.target.value = '';
                   }}
                 />
-                <div className={`mx-auto flex h-12 w-12 items-center justify-center rounded-2xl ${fileError ? 'bg-red-100 text-red-600' : 'bg-primary-50 text-primary'}`}>
+                <div className={`mx-auto flex h-12 w-12 items-center justify-center rounded-2xl ${fileError ? 'bg-red-100 text-red-600' : 'bg-primary-50 text-primary-700'}`}>
                   {analyzing
                     ? <Loader2 className="h-6 w-6 animate-spin" />
                     : fileError
@@ -266,21 +279,48 @@ export default function ImportStartupIndustriesModal({
                     <p className="text-xs text-slate-500">{file ? formatFileSize(file.size) : ''} · {preview.totalRows} data rows</p>
                   </div>
                 </div>
-                <button type="button" onClick={resetImport} className="flex shrink-0 items-center gap-1.5 text-xs font-semibold text-primary hover:text-primary-dark">
+                <button type="button" onClick={resetImport} className="flex shrink-0 items-center gap-1.5 text-xs font-semibold text-primary-700 hover:text-primary-dark">
                   <RotateCcw className="h-3.5 w-3.5" /> Choose another file
                 </button>
               </div>
 
-              <div className="grid grid-cols-3 gap-2.5">
+              <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
                 <SummaryCard label="Total rows" value={preview.totalRows} tone="neutral" />
                 <SummaryCard label="Valid & Ready" value={preview.validRowsCount} tone="success" />
+                <SummaryCard label="Already exist" value={preview.existingRowsCount} tone="neutral" />
                 <SummaryCard label="Errors" value={preview.errorRowsCount} tone={preview.errorRowsCount > 0 ? 'danger' : 'success'} />
               </div>
+
+              {preview.existingRowsCount > 0 && (
+                <div className="flex items-start gap-2.5 rounded-xl border border-slate-200 bg-slate-50 p-3.5 text-sm text-slate-700">
+                  <Info className="mt-0.5 h-4 w-4 shrink-0 text-secondary" />
+                  <p><strong>{preview.existingRowsCount} industr{preview.existingRowsCount > 1 ? 'ies' : 'y'} already exist{preview.existingRowsCount > 1 ? '' : 's'}</strong> and will be skipped. They are not counted as errors.</p>
+                </div>
+              )}
 
               {preview.errorRowsCount > 0 && (
                 <div className="flex items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50 p-3.5 text-sm text-amber-800">
                   <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-                  <p><strong>{preview.errorRowsCount} row{preview.errorRowsCount > 1 ? 's contain' : ' contains'} errors.</strong> Fix every error and preview the file again. Industry import is committed as one batch.</p>
+                  <p><strong>{preview.errorRowsCount} row{preview.errorRowsCount > 1 ? 's contain' : ' contains'} errors.</strong> {preview.validRowsCount > 0 ? 'You can fix the file and preview it again, or import only the valid rows (you will be asked to confirm).' : 'Fix the errors and preview the file again.'}</p>
+                </div>
+              )}
+
+              {preview.validRowsCount === 0 && preview.errorRowsCount === 0 && (
+                <div className="flex items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50 p-3.5 text-sm text-amber-800">
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                  <p><strong>Nothing to import.</strong> Every industry in this file already exists.</p>
+                </div>
+              )}
+
+              {confirmingSkip && (
+                <div role="alertdialog" aria-labelledby="confirm-skip-title" className="rounded-xl border border-amber-300 bg-amber-50 p-3.5 text-sm text-amber-800">
+                  <p id="confirm-skip-title" className="font-semibold">
+                    Import {preview.validRowsCount} valid {preview.validRowsCount === 1 ? 'industry' : 'industries'} and skip the rest?
+                  </p>
+                  <p className="mt-1">
+                    {preview.errorRowsCount} row{preview.errorRowsCount > 1 ? 's' : ''} with errors
+                    {preview.existingRowsCount > 0 ? ` and ${preview.existingRowsCount} existing` : ''} will not be imported.
+                  </p>
                 </div>
               )}
 
@@ -298,6 +338,11 @@ export default function ImportStartupIndustriesModal({
                 <p className="mt-1 text-sm text-slate-600">
                   {result.importedCount} {result.importedCount === 1 ? 'industry was' : 'industries were'} added as active.
                 </p>
+                {(result.skippedExistingCount > 0 || result.skippedErrorCount > 0) && (
+                  <p className="mt-1 text-xs text-slate-500">
+                    Skipped: {result.skippedExistingCount} already existing, {result.skippedErrorCount} with errors.
+                  </p>
+                )}
               </div>
             </div>
           )}
@@ -307,21 +352,27 @@ export default function ImportStartupIndustriesModal({
           {phase === 'upload' && <Button variant="outline" onClick={onClose} disabled={analyzing}>Cancel</Button>}
           {phase === 'review' && preview && (
             <>
-              <Button variant="outline" icon={ArrowLeft} onClick={resetImport} disabled={importing}>Back</Button>
+              {confirmingSkip ? (
+                <Button variant="outline" onClick={() => setConfirmingSkip(false)} disabled={importing}>Cancel</Button>
+              ) : (
+                <Button variant="outline" icon={ArrowLeft} onClick={resetImport} disabled={importing}>Back</Button>
+              )}
               <Button
-                variant="gradient"
+                variant="primary"
                 icon={Upload}
                 isLoading={importing}
-                disabled={preview.validRowsCount === 0 || preview.errorRowsCount > 0}
-                onClick={() => void commitImport()}
+                disabled={preview.validRowsCount === 0}
+                onClick={confirmingSkip ? () => void commitImport() : requestImport}
               >
-                {preview.errorRowsCount > 0
-                  ? `Resolve ${preview.errorRowsCount} error${preview.errorRowsCount === 1 ? '' : 's'} before import`
-                  : `Import ${preview.validRowsCount} ${preview.validRowsCount === 1 ? 'industry' : 'industries'}`}
+                {preview.validRowsCount === 0
+                  ? 'Nothing to import'
+                  : confirmingSkip
+                    ? `Confirm import of ${preview.validRowsCount} valid ${preview.validRowsCount === 1 ? 'industry' : 'industries'}`
+                    : `Import ${preview.validRowsCount} ${preview.validRowsCount === 1 ? 'industry' : 'industries'}`}
               </Button>
             </>
           )}
-          {phase === 'result' && <Button variant="gradient" icon={Check} onClick={onClose}>Done</Button>}
+          {phase === 'result' && <Button variant="primary" icon={Check} onClick={onClose}>Done</Button>}
         </footer>
       </div>
     </div>
@@ -346,7 +397,7 @@ function SummaryCard({
   return (
     <div className={`rounded-xl border p-3 text-center ${styles[tone]}`}>
       <p className="text-xl font-bold sm:text-2xl">{value}</p>
-      <p className="mt-0.5 text-[11px] font-medium sm:text-xs">{label}</p>
+      <p className="mt-0.5 text-caption font-medium sm:text-xs">{label}</p>
     </div>
   );
 }
@@ -356,7 +407,7 @@ function IndustryRowsTable({ rows }: { rows: StartupIndustryImportRowPreview[] }
     <div className="overflow-hidden rounded-xl border border-slate-200">
       <div className="max-h-80 overflow-auto">
         <table className="w-full min-w-[760px] text-left text-xs">
-          <thead className="sticky top-0 z-10 bg-slate-50 text-slate-500">
+          <thead className="sticky top-0 z-10 bg-slate-50 text-slate-600">
             <tr>
               <th className="w-16 px-3 py-2.5 font-semibold">Row</th>
               <th className="w-56 px-3 py-2.5 font-semibold">Industry name</th>
@@ -366,14 +417,18 @@ function IndustryRowsTable({ rows }: { rows: StartupIndustryImportRowPreview[] }
           </thead>
           <tbody className="divide-y divide-slate-100 bg-white">
             {rows.map((row) => (
-              <tr key={row.rowNumber} className={row.isValid ? 'hover:bg-slate-50/60' : 'bg-red-50/50'}>
+              <tr key={row.rowNumber} className={row.status === 'Error' ? 'bg-red-50/50' : 'hover:bg-slate-50/60'}>
                 <td className="px-3 py-3 font-mono text-slate-400">{row.rowNumber}</td>
                 <td className="px-3 py-3 font-semibold text-slate-700">{row.name || '—'}</td>
                 <td className="px-3 py-3 text-slate-600">{row.description || '—'}</td>
                 <td className="px-3 py-3">
-                  {row.isValid ? (
+                  {row.status === 'Ready' ? (
                     <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-1 font-semibold text-green-700">
                       <CheckCircle2 className="h-3 w-3" /> Ready
+                    </span>
+                  ) : row.status === 'Exists' ? (
+                    <span className="inline-flex items-start gap-1 font-medium text-slate-500">
+                      <Info className="mt-0.5 h-3 w-3 shrink-0" /> {row.errorMessage}
                     </span>
                   ) : (
                     <span className="font-medium text-red-600">• {row.errorMessage}</span>

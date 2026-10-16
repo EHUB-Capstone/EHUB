@@ -38,7 +38,8 @@ export interface CheckpointUploadSession {
   maxFileSize: number;
 }
 
-export type CheckpointUploadStatus = 'queued' | 'uploading' | 'completing' | 'completed' | 'failed';
+/** `staged` files are chosen but not yet sent; the student must confirm the submission first. */
+export type CheckpointUploadStatus = 'staged' | 'queued' | 'uploading' | 'completing' | 'completed' | 'failed';
 
 export interface CheckpointUploadItem {
   id: string;

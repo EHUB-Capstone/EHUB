@@ -90,6 +90,29 @@ export const validateProjectWorkspace = (draft: ProjectWorkspaceDraft): ProjectW
 
 export type ProjectProfileErrors = Partial<Record<keyof ProjectProfileDraft, string>>;
 
+const industryKey = (name: string): string => name.trim().toLocaleUpperCase();
+
+/** Ids of the active industries whose names match, so names saved on a project can seed the picker. */
+export const resolveIndustryIds = (names: string[], options: Array<{ id: string; name: string }>): string[] => {
+  const wanted = new Set(names.map(industryKey));
+  return options.filter((option) => wanted.has(industryKey(option.name))).map((option) => option.id);
+};
+
+/** True when both lists hold the same industries, ignoring order, case and duplicates. */
+export const haveSameIndustrySelection = (left: string[], right: string[]): boolean => {
+  const normalize = (values: string[]) => [...new Set(values.map(industryKey).filter(Boolean))].sort();
+  const a = normalize(left);
+  const b = normalize(right);
+  return a.length === b.length && a.every((value, index) => value === b[index]);
+};
+
+export const validateIndustrySelection = (ids: string[]): string =>
+  ids.length < 1 || ids.length > 3 ? 'Select between 1 and 3 startup industries.' : '';
+
+/** "Project name, Description and Startup industries" for the toast shown after a change request. */
+export const joinChangedFields = (labels: string[]): string =>
+  labels.length <= 1 ? labels.join('') : `${labels.slice(0, -1).join(', ')} and ${labels[labels.length - 1]}`;
+
 const projectProfileFields: Array<keyof ProjectProfileDraft> = [
   'projectName',
   'description',

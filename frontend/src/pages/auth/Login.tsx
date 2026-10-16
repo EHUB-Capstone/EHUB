@@ -14,6 +14,8 @@ import { useAuth } from '../../hooks/useAuth';
 import { AUTH_ERROR_CODES } from '../../types/auth';
 import { parseApiError } from '../../utils/apiError';
 import { classFeatureFlags } from '../../config/classFeatureFlags';
+import { mentorSupportApi } from '../../api/mentorSupportApi';
+import { needsMentorProfileSetup } from '../../utils/mentorProfiles';
 import {
   AUTH_FIELD_LIMITS,
   LOGIN_FIELDS,
@@ -74,7 +76,10 @@ const Login: React.FC = () => {
   const location  = useLocation();
   const state     = location.state as LocationState | null;
   const googleButtonContainer = useRef<HTMLDivElement>(null);
+  const profileCheckController = useRef<AbortController | null>(null);
   const [googleButtonWidth, setGoogleButtonWidth] = useState(320);
+
+  useEffect(() => () => profileCheckController.current?.abort(), []);
 
   useEffect(() => {
     const container = googleButtonContainer.current;
@@ -91,11 +96,25 @@ const Login: React.FC = () => {
     if (state?.isPending) setPendingApproval(true);
   }, [state]);
 
-  const redirectByRole = (roles: string[]) => {
+  const redirectByRole = async (roles: string[]) => {
     const normalizedRoles = roles.map(normalizeRole);
     if (normalizedRoles.includes('ADMIN'))         navigate('/admin');
     else if (normalizedRoles.includes('LECTURER')) navigate('/lecturer');
-    else if (normalizedRoles.includes('MENTOR'))   navigate('/workspace');
+    else if (normalizedRoles.includes('MENTOR')) {
+      profileCheckController.current?.abort();
+      const controller = new AbortController();
+      profileCheckController.current = controller;
+      let destination = '/profile';
+      try {
+        const profile = await mentorSupportApi.getProfile(controller.signal);
+        if (!needsMentorProfileSetup(profile)) destination = '/mentor';
+      } catch {
+        // The profile page provides its own error and retry state if the profile cannot be loaded.
+      } finally {
+        if (profileCheckController.current === controller) profileCheckController.current = null;
+      }
+      if (!controller.signal.aborted) navigate(destination, { replace: true });
+    }
     else if (normalizedRoles.includes('STUDENT')) {
       navigate(classFeatureFlags.studentSelfService ? '/student/classes' : '/student/workspace', { replace: true });
     }
@@ -151,7 +170,7 @@ const Login: React.FC = () => {
     try {
       const user = await loginWithEmail(normalizedPayload);
       toast.success('Login successful!');
-      redirectByRole(user.roles as string[]);
+      await redirectByRole(user.roles as string[]);
     } catch (err: unknown) {
       const { code, message, fieldErrors: apiFieldErrors } = parseApiError(err, 'Login failed.');
       const mappedFieldErrors = mapApiFieldErrors(apiFieldErrors, LOGIN_FIELDS);
@@ -181,7 +200,7 @@ const Login: React.FC = () => {
 
     try {
       const user = await loginWithGoogle(credentialResponse.credential);
-      redirectByRole(user.roles as string[]);
+      await redirectByRole(user.roles as string[]);
     } catch (err: unknown) {
       const { code, message } = parseApiError(err, 'Google sign-in failed.');
       if (code === AUTH_ERROR_CODES.ACCOUNT_NOT_REGISTERED) {
@@ -211,20 +230,20 @@ const Login: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex font-sans transition-colors duration-300 bg-white dark:bg-[#0F172A]">
+    <div className="min-h-screen flex font-sans transition-colors duration-300 bg-white dark:bg-dark-page">
 
       {/* ── LEFT PANEL (branding) ── */}
-      <div className="hidden lg:flex w-[44%] flex-col justify-between p-12 relative overflow-hidden bg-[#0F172A]">
+      <div className="hidden lg:flex w-[44%] flex-col justify-between p-12 relative overflow-hidden bg-secondary">
         {/* BG orbs */}
-        <div className="absolute -top-[10%] -right-[10%] w-[420px] h-[420px] rounded-full bg-[#EA6A12]/12 blur-[110px]" />
+        <div className="absolute -top-[10%] -right-[10%] w-[420px] h-[420px] rounded-full bg-primary/12 blur-[110px]" />
         <div className="absolute bottom-[10%] -left-[5%] w-[320px] h-[320px] rounded-full bg-white/5 blur-[90px]" />
 
         <div className="relative z-10">
           <Link to="/" className="inline-flex items-center gap-2.5 no-underline">
             <img src={logo} alt="EHub" className="w-[42px] h-[42px] object-contain" />
             <span className="text-[22px] font-extrabold tracking-tight">
-              <span className="text-[#F3A07A]">E</span>
-              <span className="text-[#79A8D9]">HUB</span>
+              <span className="text-primary-300">E</span>
+              <span className="text-secondary-300">HUB</span>
             </span>
           </Link>
         </div>
@@ -233,7 +252,7 @@ const Login: React.FC = () => {
           <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7 }}>
             <h2 className="text-4xl font-extrabold text-white leading-[1.2] mb-4 tracking-tight">
               Build tomorrow's startups,{' '}
-              <span className="text-[#EA6A12]">today.</span>
+              <span className="text-primary-600">today.</span>
             </h2>
             <p className="text-white/60 text-[15px] leading-[1.7] mb-9">
               EHub is the all-in-one platform for managing, evaluating, and growing student startup projects from idea to reality.
@@ -242,8 +261,8 @@ const Login: React.FC = () => {
               {sideFeatures.map((f, i) => (
                 <motion.div key={i} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 + i * 0.1, duration: 0.5 }}
                   className="flex items-center gap-3.5">
-                  <div className="w-[38px] h-[38px] rounded-[10px] bg-[#EA6A12]/14 border border-[#EA6A12]/25 flex items-center justify-center shrink-0">
-                    <f.icon size={18} color="#EA6A12" />
+                  <div className="w-[38px] h-[38px] rounded-[10px] bg-primary/14 border border-primary/25 flex items-center justify-center shrink-0">
+                    <f.icon size={18} color="#F56A2A" />
                   </div>
                   <span className="text-white/70 text-[14px] font-medium">{f.text}</span>
                 </motion.div>
@@ -260,7 +279,7 @@ const Login: React.FC = () => {
 
         {/* Theme toggle */}
         <button onClick={toggleTheme}
-          className="absolute top-6 right-6 w-10 h-10 rounded-[14px] border border-[#E5E7EB] dark:border-white/10 bg-white dark:bg-white/5 cursor-pointer flex items-center justify-center text-[#64748B] dark:text-slate-400 transition-all hover:bg-[#F8FAFC] dark:hover:bg-white/10"
+          className="absolute top-6 right-6 w-10 h-10 rounded-[14px] border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 cursor-pointer flex items-center justify-center text-slate-500 dark:text-slate-400 transition-all hover:bg-slate-50 dark:hover:bg-white/10"
           aria-label="Toggle theme"
         >
           {isDark ? <Sun size={18} /> : <Moon size={18} />}
@@ -274,14 +293,14 @@ const Login: React.FC = () => {
             <Link to="/" className="inline-flex items-center gap-2.5 no-underline">
               <img src={logo} alt="EHub" className="w-[38px] h-[38px] object-contain" />
               <span className="text-[20px] font-extrabold tracking-tight">
-                <span className="text-[#F08A5D]">E</span>
-                <span className="text-[#1E5E9F] dark:text-[#79A8D9]">HUB</span>
+                <span className="text-primary-400">E</span>
+                <span className="text-secondary dark:text-secondary-300">HUB</span>
               </span>
             </Link>
           </div>
 
-          <h1 className="text-[28px] font-extrabold text-[#0F172A] dark:text-slate-50 mb-1.5 tracking-tight">Welcome back</h1>
-          <p className="text-[#64748B] dark:text-slate-400 text-[14px] mb-7">Sign in with your FPT Google account</p>
+          <h1 className="text-[28px] font-extrabold text-secondary dark:text-slate-50 mb-1.5 tracking-tight">Welcome back</h1>
+          <p className="text-slate-500 dark:text-slate-400 text-[14px] mb-7">Sign in with your Google account</p>
 
           {/* Alert banners */}
           {pendingApproval && (
@@ -308,11 +327,11 @@ const Login: React.FC = () => {
             <div
               ref={googleButtonContainer}
               aria-busy={googleLoading}
-              className={`group relative mb-5 flex h-[50px] w-full items-center justify-center overflow-hidden rounded-[14px] border border-[#D9E1EC] bg-white shadow-[0_2px_8px_rgba(15,23,42,0.06)] transition-all dark:border-white/10 dark:bg-white/[0.06] dark:shadow-none ${googleLoading ? 'pointer-events-none opacity-80' : 'hover:-translate-y-0.5 hover:border-[#EA6A12]/40 hover:bg-[#FFF9F5] hover:shadow-[0_8px_22px_rgba(234,106,18,0.12)] dark:hover:border-[#EA6A12]/40 dark:hover:bg-white/[0.09]'}`}
+              className={`group relative mb-5 flex h-[50px] w-full items-center justify-center overflow-hidden rounded-[14px] border border-slate-200 bg-white shadow-[0_2px_8px_rgba(15,23,42,0.06)] transition-all dark:border-white/10 dark:bg-white/[0.06] dark:shadow-none ${googleLoading ? 'pointer-events-none opacity-80' : 'hover:-translate-y-0.5 hover:border-primary/40 hover:bg-primary-50 hover:shadow-[0_8px_22px_rgba(245,106,42,0.12)] dark:hover:border-primary/40 dark:hover:bg-white/[0.09]'}`}
               style={{ colorScheme: isDark ? 'dark' : 'light' }}
             >
-              <div className="pointer-events-none flex items-center justify-center gap-3 text-[14px] font-semibold text-[#1E293B] dark:text-slate-100">
-                <span className="flex h-8 w-8 items-center justify-center rounded-[10px] bg-[#F8FAFC] ring-1 ring-slate-200/80 transition-transform group-hover:scale-105 dark:bg-white dark:ring-white">
+              <div className="pointer-events-none flex items-center justify-center gap-3 text-[14px] font-semibold text-slate-800 dark:text-slate-100">
+                <span className="flex h-8 w-8 items-center justify-center rounded-[10px] bg-slate-50 ring-1 ring-slate-200/80 transition-transform group-hover:scale-105 dark:bg-white dark:ring-white">
                   <GoogleIcon />
                 </span>
                 <span>Continue with Google</span>
@@ -331,18 +350,18 @@ const Login: React.FC = () => {
                 />
               </div>
               {googleLoading && (
-                <div role="status" className="absolute inset-0 z-20 flex items-center justify-center gap-2.5 rounded-[14px] bg-white text-sm font-semibold text-[#0F172A] dark:bg-[#171C29] dark:text-slate-100">
-                  <div className="w-[18px] h-[18px] rounded-full border-2 border-[#EA6A12] border-t-transparent animate-spin" />
+                <div role="status" className="absolute inset-0 z-20 flex items-center justify-center gap-2.5 rounded-[14px] bg-white text-sm font-semibold text-slate-900 dark:bg-dark-surface dark:text-slate-100">
+                  <div className="w-[18px] h-[18px] rounded-full border-2 border-primary border-t-transparent animate-spin" />
                   Connecting to Google…
                 </div>
               )}
             </div>
           ) : (
             <button onClick={handleGoogleLogin} disabled={googleLoading}
-              className="w-full flex items-center justify-center gap-2.5 py-3 rounded-[14px] border border-[#E5E7EB] dark:border-white/10 bg-white dark:bg-white/5 text-[#0F172A] dark:text-slate-100 text-[14px] font-semibold cursor-pointer mb-5 transition-all hover:bg-[#F8FAFC] dark:hover:bg-white/10"
+              className="w-full flex items-center justify-center gap-2.5 py-3 rounded-[14px] border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 text-slate-900 dark:text-slate-100 text-[14px] font-semibold cursor-pointer mb-5 transition-all hover:bg-slate-50 dark:hover:bg-white/10"
             >
               {googleLoading
-                ? <div className="w-[18px] h-[18px] rounded-full border-2 border-[#EA6A12] border-t-transparent animate-spin" />
+                ? <div className="w-[18px] h-[18px] rounded-full border-2 border-primary border-t-transparent animate-spin" />
                 : <GoogleIcon />
               }
               {googleLoading ? 'Connecting...' : 'Continue with Google'}
@@ -351,9 +370,9 @@ const Login: React.FC = () => {
 
           {/* Divider */}
           <div className="flex items-center gap-3 mb-5">
-            <div className="flex-1 h-px bg-[#E5E7EB] dark:bg-white/10" />
-            <span className="text-[12px] text-[#64748B] dark:text-slate-400 font-medium">or sign in with email</span>
-            <div className="flex-1 h-px bg-[#E5E7EB] dark:bg-white/10" />
+            <div className="flex-1 h-px bg-slate-200 dark:bg-white/10" />
+            <span className="text-[12px] text-slate-500 dark:text-slate-400 font-medium">or sign in with email</span>
+            <div className="flex-1 h-px bg-slate-200 dark:bg-white/10" />
           </div>
 
           {formError && (
@@ -386,7 +405,7 @@ const Login: React.FC = () => {
                   placeholder="you@example.com" autoComplete="email" required maxLength={AUTH_FIELD_LIMITS.emailMax}
                   aria-invalid={Boolean(fieldErrors.email)}
                   aria-describedby={fieldErrors.email ? 'login-email-error' : undefined}
-                  className={`w-full py-2.5 pr-3.5 pl-10 rounded-[14px] border bg-[#F8FAFC] dark:bg-white/5 text-[#0F172A] dark:text-slate-100 text-[14px] outline-none transition-colors ${fieldErrors.email ? 'border-red-500 focus:border-red-500' : 'border-[#E5E7EB] dark:border-white/10 focus:border-[#EA6A12] dark:focus:border-[#EA6A12]'}`}
+                  className={`w-full py-2.5 pr-3.5 pl-10 rounded-[14px] border bg-slate-50 dark:bg-white/5 text-slate-900 dark:text-slate-100 text-[14px] outline-none transition-colors ${fieldErrors.email ? 'border-red-500 focus:border-red-500' : 'border-slate-200 dark:border-white/10 focus:border-primary dark:focus:border-primary'}`}
                 />
               </div>
               {fieldErrors.email && <p id="login-email-error" role="alert" className="mt-1.5 text-[12px] text-red-500 dark:text-red-400">{fieldErrors.email}</p>}
@@ -404,7 +423,7 @@ const Login: React.FC = () => {
                   minLength={AUTH_FIELD_LIMITS.passwordMin} maxLength={AUTH_FIELD_LIMITS.passwordMax}
                   aria-invalid={Boolean(fieldErrors.password)}
                   aria-describedby={fieldErrors.password ? 'login-password-error' : undefined}
-                  className={`w-full py-2.5 pr-11 pl-10 rounded-[14px] border bg-[#F8FAFC] dark:bg-white/5 text-[#0F172A] dark:text-slate-100 text-[14px] outline-none transition-colors ${fieldErrors.password ? 'border-red-500 focus:border-red-500' : 'border-[#E5E7EB] dark:border-white/10 focus:border-[#EA6A12] dark:focus:border-[#EA6A12]'}`}
+                  className={`w-full py-2.5 pr-11 pl-10 rounded-[14px] border bg-slate-50 dark:bg-white/5 text-slate-900 dark:text-slate-100 text-[14px] outline-none transition-colors ${fieldErrors.password ? 'border-red-500 focus:border-red-500' : 'border-slate-200 dark:border-white/10 focus:border-primary dark:focus:border-primary'}`}
                 />
                 <button type="button" onClick={() => setShowPass(p => !p)}
                   aria-label={showPass ? 'Hide password' : 'Show password'}
@@ -414,7 +433,7 @@ const Login: React.FC = () => {
               </div>
               {fieldErrors.password && <p id="login-password-error" role="alert" className="mt-1.5 text-[12px] text-red-500 dark:text-red-400">{fieldErrors.password}</p>}
               <div className="mt-2 text-right">
-                <Link to="/forgot-password" className="text-[12px] text-[#EA6A12] no-underline font-semibold hover:underline">
+                <Link to="/forgot-password" className="text-[12px] text-primary-600 no-underline font-semibold hover:underline">
                   Forgot password?
                 </Link>
               </div>
@@ -422,7 +441,7 @@ const Login: React.FC = () => {
 
             {/* Submit */}
             <button type="submit" disabled={loading}
-              className={`w-full h-14 rounded-[14px] border-none font-semibold text-[15px] text-white flex items-center justify-center gap-2 mt-1 transition-all duration-200 ease-out bg-[linear-gradient(135deg,#EA6A12,#D97706)] shadow-[0_10px_28px_rgba(234,106,18,0.18)] ${loading ? 'opacity-70 cursor-not-allowed' : 'cursor-pointer hover:-translate-y-0.5 hover:shadow-[0_14px_36px_rgba(234,106,18,0.22)]'}`}
+              className={`w-full h-14 rounded-[14px] border-none font-semibold text-[15px] text-white flex items-center justify-center gap-2 mt-1 transition-all duration-200 ease-out bg-primary shadow-[0_10px_28px_rgba(245,106,42,0.18)] ${loading ? 'opacity-70 cursor-not-allowed' : 'cursor-pointer hover:-translate-y-0.5 hover:shadow-[0_14px_36px_rgba(245,106,42,0.22)]'}`}
             >
               {loading
                 ? <div className="w-[18px] h-[18px] rounded-full border-2 border-white/50 border-t-white animate-spin" />
@@ -433,7 +452,7 @@ const Login: React.FC = () => {
 
           <p className="text-center mt-6 text-[14px] text-slate-500 dark:text-slate-400">
             Don't have an account?{' '}
-            <Link to="/register" className="text-[#EA6A12] font-bold no-underline">Create one</Link>
+            <Link to="/register" className="text-primary-600 font-bold no-underline">Create one</Link>
           </p>
         </motion.div>
       </div>

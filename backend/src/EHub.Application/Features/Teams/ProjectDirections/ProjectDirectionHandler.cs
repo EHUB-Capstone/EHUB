@@ -87,11 +87,12 @@ public sealed class ProjectDirectionHandler : IProjectDirectionHandler
                 return Failure(ErrorCodes.ClassConcurrencyConflict, "The project direction changed concurrently. Refresh and try again.");
             if (direction.Status is not (ProjectDirectionStatus.Draft or ProjectDirectionStatus.NeedsRevision))
                 return Failure(ErrorCodes.ProjectDirectionStateInvalid, "Only Draft or NeedsRevision directions can be edited.");
-            var startupIndustriesChanged = selectedIndustries != null
-                && !HaveSameStartupIndustries(direction.Team.Project!, selectedIndustries);
             var hasApprovedProfileBaseline = HasApprovedProfileBaseline(direction);
-            if (hasApprovedProfileBaseline && startupIndustriesChanged)
-                return Failure(ErrorCodes.ClassValidationError, "Startup Industry cannot be changed as part of a Project Profile name or description change request.");
+            // In a Project Profile change request the pending selection is what the team edits; otherwise it is the project's own industries.
+            var startupIndustriesChanged = selectedIndustries != null
+                && (hasApprovedProfileBaseline
+                    ? !SameIndustryKeys(PendingIndustryKeys(direction, direction.Team.Project!), selectedIndustries)
+                    : !HaveSameStartupIndustries(direction.Team.Project!, selectedIndustries));
             if (direction.Status == ProjectDirectionStatus.NeedsRevision
                 && direction.Title == revisedTitle
                 && direction.Summary == revisedSummary
@@ -105,6 +106,13 @@ public sealed class ProjectDirectionHandler : IProjectDirectionHandler
         }
 
         var project = direction.Team.Project;
+        if (project != null && selectedIndustries != null && HasApprovedProfileBaseline(direction))
+        {
+            // The approved industries stay on the project until the lecturer approves the proposal.
+            direction.ProposedStartupIndustries = HaveSameStartupIndustries(project, selectedIndustries)
+                ? null
+                : selectedIndustries.Select(industry => industry.Name).ToList();
+        }
         if (project != null && !HasApprovedProfileBaseline(direction))
         {
             var changedFields = new List<string>();
@@ -164,10 +172,7 @@ public sealed class ProjectDirectionHandler : IProjectDirectionHandler
         direction.SubmittedAtUtc = now;
         direction.UpdatedBy = userId;
         var project = direction.Team.Project;
-        var isProjectProfileChangeProposal = HasApprovedProfileBaseline(direction)
-            && project != null
-            && (!string.Equals(project.Name, direction.Title, StringComparison.Ordinal)
-                || !string.Equals(project.Description ?? string.Empty, direction.Summary, StringComparison.Ordinal));
+        var isProjectProfileChangeProposal = IsProfileChangeProposal(direction, project);
         ClassOutbox.Enqueue(_context, "ProjectDirection.Submitted.v1", team.ClassId, new
         {
             TeamId = teamId,
@@ -177,7 +182,9 @@ public sealed class ProjectDirectionHandler : IProjectDirectionHandler
             CurrentTitle = project?.Name,
             ProposedTitle = direction.Title,
             CurrentSummary = project?.Description,
-            ProposedSummary = direction.Summary
+            ProposedSummary = direction.Summary,
+            CurrentStartupIndustries = project == null ? Array.Empty<string>() : CurrentIndustryNames(project),
+            ProposedStartupIndustries = direction.ProposedStartupIndustries
         }, now);
         try { await _context.SaveChangesAsync(cancellationToken); }
         catch (DbUpdateConcurrencyException) { return Failure(ErrorCodes.ClassConcurrencyConflict, "The project direction changed concurrently. Refresh and try again."); }
@@ -221,12 +228,23 @@ public sealed class ProjectDirectionHandler : IProjectDirectionHandler
         var project = direction.Team.Project;
         var currentTitle = project?.Name ?? string.Empty;
         var currentSummary = project?.Description ?? string.Empty;
-        var isProjectProfileChangeProposal = HasApprovedProfileBaseline(direction)
-            && project != null
-            && (!string.Equals(currentTitle, direction.Title, StringComparison.Ordinal)
-                || !string.Equals(currentSummary, direction.Summary, StringComparison.Ordinal));
+        var isProjectProfileChangeProposal = IsProfileChangeProposal(direction, project);
         if (decision == ProjectDirectionStatus.Rejected && !isProjectProfileChangeProposal)
             return Failure(ErrorCodes.ProjectDirectionStateInvalid, "Only a Project Profile change request can be rejected.");
+
+        // Approving applies the proposed industries, so each must still exist and be active.
+        IReadOnlyCollection<StartupIndustry>? approvedIndustries = null;
+        if (decision == ProjectDirectionStatus.Approved && project != null && HasPendingStartupIndustryChange(direction, project))
+        {
+            var proposedKeys = direction.ProposedStartupIndustries!.Select(NormalizeIndustryName).ToArray();
+            approvedIndustries = await _context.StartupIndustries.AsNoTracking()
+                .Where(industry => proposedKeys.Contains(industry.NormalizedName) && industry.Status == StartupIndustryStatus.Active)
+                .ToArrayAsync(cancellationToken);
+            if (approvedIndustries.Count != proposedKeys.Length)
+                return Failure(ErrorCodes.ClassValidationError, "A proposed startup industry is no longer available. Request changes so the team can choose again.");
+        }
+        var currentIndustries = project == null ? Array.Empty<string>() : CurrentIndustryNames(project);
+        var proposedIndustries = direction.ProposedStartupIndustries?.ToArray();
 
         var proposedTitle = direction.Title;
         var proposedSummary = direction.Summary;
@@ -251,6 +269,12 @@ public sealed class ProjectDirectionHandler : IProjectDirectionHandler
             var changedFields = new List<string>();
             if (!string.Equals(project.Name, direction.Title, StringComparison.Ordinal)) changedFields.Add("projectName");
             if (!string.Equals(project.Description ?? string.Empty, direction.Summary, StringComparison.Ordinal)) changedFields.Add("description");
+            if (approvedIndustries != null)
+            {
+                ReplaceStartupIndustries(project, approvedIndustries, userId, now);
+                changedFields.Add("startupIndustries");
+            }
+            direction.ProposedStartupIndustries = null;
             project.Name = direction.Title;
             project.Description = direction.Summary;
             project.UpdatedBy = userId;
@@ -261,7 +285,7 @@ public sealed class ProjectDirectionHandler : IProjectDirectionHandler
                 Project = project,
                 ActorUserId = userId,
                 Action = "PROJECT_PROFILE_CHANGE_APPROVED",
-                Summary = $"Approved changes to {string.Join(" and ", changedFields.Select(ToDisplayField))}.",
+                Summary = $"Approved changes to {JoinFields(changedFields)}.",
                 ChangedFieldsJson = JsonSerializer.Serialize(changedFields),
                 OccurredAtUtc = now
             });
@@ -270,6 +294,7 @@ public sealed class ProjectDirectionHandler : IProjectDirectionHandler
         {
             direction.Title = currentTitle;
             direction.Summary = currentSummary;
+            direction.ProposedStartupIndustries = null;
             _context.ProjectActivityLogs.Add(new ProjectActivityLog
             {
                 ProjectId = project.Id,
@@ -293,7 +318,9 @@ public sealed class ProjectDirectionHandler : IProjectDirectionHandler
             CurrentTitle = currentTitle,
             ProposedTitle = proposedTitle,
             CurrentSummary = currentSummary,
-            ProposedSummary = proposedSummary
+            ProposedSummary = proposedSummary,
+            CurrentStartupIndustries = currentIndustries,
+            ProposedStartupIndustries = proposedIndustries
         }, now);
         try { await _context.SaveChangesAsync(cancellationToken); }
         catch (DbUpdateConcurrencyException) { return Failure(ErrorCodes.ClassConcurrencyConflict, "The project direction was reviewed concurrently. Refresh the page."); }
@@ -352,14 +379,45 @@ public sealed class ProjectDirectionHandler : IProjectDirectionHandler
         return null;
     }
 
-    private static bool HaveSameStartupIndustries(Project project, IEnumerable<StartupIndustry> industries)
+    internal static string NormalizeIndustryName(string name) => name.Trim().ToUpperInvariant();
+
+    private static HashSet<string> CurrentIndustryKeys(Project project) => project.ProjectTags
+        .Where(tag => tag.TagType == ProjectTagType.StartupField)
+        .Select(tag => tag.NormalizedTagName)
+        .ToHashSet(StringComparer.Ordinal);
+
+    internal static string[] CurrentIndustryNames(Project project) => project.ProjectTags
+        .Where(tag => tag.TagType == ProjectTagType.StartupField)
+        .Select(tag => tag.TagName)
+        .ToArray();
+
+    internal static bool HaveSameStartupIndustries(Project project, IEnumerable<StartupIndustry> industries) =>
+        CurrentIndustryKeys(project).SetEquals(industries.Select(industry => industry.NormalizedName));
+
+    private static bool SameIndustryKeys(IEnumerable<string> keys, IEnumerable<StartupIndustry> industries) =>
+        keys.ToHashSet(StringComparer.Ordinal).SetEquals(industries.Select(industry => industry.NormalizedName));
+
+    // The industries the team currently proposes, or the project's own when nothing is pending.
+    private static IEnumerable<string> PendingIndustryKeys(ProjectDirection direction, Project project) =>
+        direction.ProposedStartupIndustries?.Select(NormalizeIndustryName) ?? CurrentIndustryKeys(project);
+
+    internal static bool HasPendingStartupIndustryChange(ProjectDirection direction, Project? project) =>
+        project != null
+        && direction.ProposedStartupIndustries != null
+        && !CurrentIndustryKeys(project).SetEquals(direction.ProposedStartupIndustries.Select(NormalizeIndustryName));
+
+    // A change request exists when an approved profile differs from the proposed name, description or startup industries.
+    internal static bool IsProfileChangeProposal(ProjectDirection direction, Project? project) =>
+        HasApprovedProfileBaseline(direction)
+        && project != null
+        && (!string.Equals(project.Name, direction.Title, StringComparison.Ordinal)
+            || !string.Equals(project.Description ?? string.Empty, direction.Summary, StringComparison.Ordinal)
+            || HasPendingStartupIndustryChange(direction, project));
+
+    internal static string JoinFields(IReadOnlyList<string> fields, bool lowercase = false)
     {
-        var current = project.ProjectTags
-            .Where(tag => tag.TagType == ProjectTagType.StartupField)
-            .Select(tag => tag.NormalizedTagName)
-            .ToHashSet(StringComparer.Ordinal);
-        var requested = industries.Select(industry => industry.NormalizedName).ToHashSet(StringComparer.Ordinal);
-        return current.SetEquals(requested);
+        var names = fields.Select(field => lowercase ? ToDisplayField(field).ToLowerInvariant() : ToDisplayField(field)).ToArray();
+        return names.Length <= 1 ? string.Join(string.Empty, names) : $"{string.Join(", ", names.Take(names.Length - 1))} and {names[^1]}";
     }
 
     private void ReplaceStartupIndustries(
@@ -402,10 +460,7 @@ public sealed class ProjectDirectionHandler : IProjectDirectionHandler
         var project = direction.Team?.Project;
         var currentTitle = project?.Name ?? string.Empty;
         var currentSummary = project?.Description ?? string.Empty;
-        var isProjectProfileChangeProposal = HasApprovedProfileBaseline(direction)
-            && project != null
-            && (!string.Equals(currentTitle, direction.Title, StringComparison.Ordinal)
-                || !string.Equals(currentSummary, direction.Summary, StringComparison.Ordinal));
+        var isProjectProfileChangeProposal = IsProfileChangeProposal(direction, project);
         return new ProjectDirectionDto
         {
             Id = direction.Id, TeamId = direction.TeamId, Title = direction.Title, Summary = direction.Summary,
@@ -416,6 +471,7 @@ public sealed class ProjectDirectionHandler : IProjectDirectionHandler
                 .Where(tag => tag.TagType == ProjectTagType.StartupField)
                 .Select(tag => tag.TagName)
                 .ToArray() ?? Array.Empty<string>(),
+            ProposedStartupIndustries = HasPendingStartupIndustryChange(direction, project) ? direction.ProposedStartupIndustries!.ToArray() : null,
             Status = direction.Status.ToString(), SubmittedAtUtc = direction.SubmittedAtUtc, ReviewedAtUtc = direction.ReviewedAtUtc,
             RowVersion = direction.Version.ToString(),
             Reviews = direction.Reviews.OrderByDescending(review => review.OccurredAtUtc).Select(review => new ProjectDirectionReviewDto
@@ -433,6 +489,7 @@ public sealed class ProjectDirectionHandler : IProjectDirectionHandler
     {
         "projectName" => "Project name",
         "description" => "Description",
+        "startupIndustries" => "Startup industries",
         _ => field
     };
 

@@ -141,7 +141,7 @@ export default function ProjectDataDetailModal({
                         type="checkbox"
                         checked={draft.includes(name)}
                         onChange={() => setDraft(toggleAchievement(draft, name), draftNote)}
-                        className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary/30"
+                        className="h-4 w-4 rounded border-slate-300 text-primary-700 focus:ring-primary/30"
                       />
                       <Icon className="h-4 w-4 text-slate-500" aria-hidden="true" />
                       {name}

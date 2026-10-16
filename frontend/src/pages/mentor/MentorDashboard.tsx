@@ -37,10 +37,10 @@ const MentorDashboard = () => {
     <div className="space-y-6">
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-3">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">Welcome back, {user?.name?.split(' ')[0] || 'Mentor'} 👋</h1>
+          <h1 className="text-heading sm:text-display text-secondary tracking-tight">Welcome back, {user?.name?.split(' ')[0] || 'Mentor'} 👋</h1>
           <p className="text-slate-500 mt-1">Here's an overview of your mentoring teams</p>
         </div>
-        <Button variant="gradient" size="sm" icon={Calendar} onClick={() => navigate('/sessions')}>Schedule Session</Button>
+        <Button variant="primary" size="sm" icon={Calendar} onClick={() => navigate('/sessions')}>Schedule Session</Button>
       </motion.div>
 
       {/* Stats */}
@@ -90,7 +90,7 @@ const MentorDashboard = () => {
             <div className="space-y-3">
               <div className="flex justify-between text-sm mb-1">
                 <span className="font-medium text-slate-700">Sprint Tasks</span>
-                <span className="font-bold text-primary">{taskProgress}%</span>
+                <span className="font-bold text-primary-700">{taskProgress}%</span>
               </div>
               <ProgressBar value={taskProgress} size="md" />
               <p className="text-xs text-slate-500 mt-2">Average task completion rate across all your assigned teams.</p>

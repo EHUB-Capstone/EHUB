@@ -107,7 +107,7 @@ export default function AssignLectureModal({ classId, semester, year, currentLec
                   type="button"
                   onClick={() => setSelectedId('')}
                   className={`w-full p-2.5 rounded-xl border text-left text-xs font-semibold transition-all ${
-                    selectedId === '' ? 'bg-primary-50/40 border-primary/20 text-primary' : 'bg-white border-slate-200/60 text-slate-600 hover:bg-slate-50'
+                    selectedId === '' ? 'bg-primary-50/40 border-primary/20 text-primary-700' : 'bg-white border-slate-200/60 text-slate-600 hover:bg-slate-50'
                   }`}
                 >
                   Unassigned (Draft classes only)
@@ -129,12 +129,12 @@ export default function AssignLectureModal({ classId, semester, year, currentLec
                       }`}
                     >
                       <div className="flex items-center gap-2.5 min-w-0">
-                        <div className="w-8 h-8 rounded-full bg-primary-100 flex items-center justify-center text-primary font-bold text-xs shrink-0">
+                        <div className="w-8 h-8 rounded-full bg-primary-100 flex items-center justify-center text-primary-700 font-bold text-xs shrink-0">
                           {l.name?.charAt(0)?.toUpperCase() || 'L'}
                         </div>
                         <div className="min-w-0">
                           <p className="text-xs font-semibold text-slate-800 truncate">{l.name}</p>
-                          <p className="text-[10px] text-slate-400 truncate">{l.email}</p>
+                          <p className="text-overline text-slate-400 truncate">{l.email}</p>
                         </div>
                       </div>
                       {isSelected && (

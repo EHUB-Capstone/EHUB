@@ -13,7 +13,7 @@ interface ImportSemesterGroupsModalProps {
 }
 
 const statusTone: Record<string, string> = {
-  Changed: 'bg-indigo-100 text-indigo-700',
+  Changed: 'bg-secondary-100 text-secondary',
   Unchanged: 'bg-green-100 text-green-700',
   Invalid: 'bg-red-100 text-red-700',
   Duplicate: 'bg-red-100 text-red-700',
@@ -111,7 +111,7 @@ export default function ImportSemesterGroupsModal({
           </div>
 
           <div className="flex-1 space-y-5 overflow-y-auto p-6">
-            <div className="rounded-xl border border-indigo-100 bg-indigo-50 p-3 text-sm text-indigo-800">
+            <div className="rounded-xl border border-secondary-100 bg-secondary-50 p-3 text-sm text-secondary">
               Required columns: <strong>RollNumber</strong> and the exact semester column
               {report ? <> <strong>{report.expectedColumnName}</strong></> : <> such as <strong>Group FA26</strong> or <strong>Group SP27</strong></>}.
               The semester column is detected from this class&apos;s semester; GroupName and Team Name are ignored.
@@ -136,7 +136,7 @@ export default function ImportSemesterGroupsModal({
                 className="hidden"
                 onChange={(event) => selectFile(event.target.files?.[0])}
               />
-              <FileSpreadsheet className={`mx-auto mb-3 h-10 w-10 ${file ? 'text-primary' : 'text-slate-300'}`} />
+              <FileSpreadsheet className={`mx-auto mb-3 h-10 w-10 ${file ? 'text-primary-700' : 'text-slate-300'}`} />
               <p className="font-semibold text-slate-700">{file?.name || 'Drop an Excel file here or click to select'}</p>
               {file && <p className="mt-1 text-xs text-slate-400">{(file.size / 1024).toFixed(1)} KB · Click to choose another file</p>}
             </div>
@@ -169,12 +169,12 @@ export default function ImportSemesterGroupsModal({
                   <table className="w-full text-sm">
                     <thead className="border-b border-slate-200 bg-slate-50">
                       <tr>
-                        <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-500">Row</th>
-                        <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-500">RollNumber</th>
-                        <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-500">Student</th>
-                        <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-500">Current</th>
-                        <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-500">From {report.expectedColumnName}</th>
-                        <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-500">Status</th>
+                        <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-600">Row</th>
+                        <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-600">RollNumber</th>
+                        <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-600">Student</th>
+                        <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-600">Current</th>
+                        <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-600">From {report.expectedColumnName}</th>
+                        <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-600">Status</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
@@ -210,7 +210,7 @@ export default function ImportSemesterGroupsModal({
                   type="button"
                   onClick={preview}
                   disabled={!file || loading || importing}
-                  className="inline-flex items-center gap-2 rounded-xl border border-primary-200 bg-primary-50 px-4 py-2 text-sm font-semibold text-primary hover:bg-primary-100 disabled:opacity-50"
+                  className="inline-flex items-center gap-2 rounded-xl border border-primary-200 bg-primary-50 px-4 py-2 text-sm font-semibold text-primary-700 hover:bg-primary-100 disabled:opacity-50"
                 >
                   {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
                   Preview

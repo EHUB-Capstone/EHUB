@@ -133,7 +133,7 @@ export default function WorkshopCheckInModal({ isOpen, onClose, workshop, onChec
               </div>
             ) : (
               <label className="w-full h-full cursor-pointer flex flex-col items-center justify-center py-8 space-y-3">
-                <div className="p-4 bg-slate-50 rounded-2xl group-hover:bg-primary/5 group-hover:scale-105 transition-all text-slate-400 group-hover:text-primary">
+                <div className="p-4 bg-slate-50 rounded-2xl group-hover:bg-primary/5 group-hover:scale-105 transition-all text-slate-400 group-hover:text-primary-700">
                   <Image className="w-8 h-8" />
                 </div>
                 <div className="text-center">

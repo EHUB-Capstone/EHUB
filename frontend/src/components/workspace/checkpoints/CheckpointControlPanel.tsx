@@ -115,14 +115,14 @@ export default function CheckpointControlPanel({ classId, checkpoints = [], subm
     <section className="rounded-2xl border border-slate-200/60 bg-white p-5 shadow-sm" aria-busy={loadingSchedules}>
       <div className="flex items-start justify-between gap-3 border-b border-slate-100 pb-3">
         <div className="min-w-0">
-          <div className="flex items-center gap-2 text-primary">
+          <div className="flex items-center gap-2 text-primary-700">
             <Settings2 className="h-4 w-4" />
             <h3 className="font-bold text-slate-800">Checkpoint control</h3>
           </div>
           <p className="mt-1 text-xs text-slate-400">Class-wide configuration</p>
-          {loadingSchedules && <p className="mt-1 text-[11px] text-slate-400">Updating class data…</p>}
+          {loadingSchedules && <p className="mt-1 text-caption text-slate-400">Updating class data…</p>}
         </div>
-        <span className="rounded-md bg-primary-50 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-primary">
+        <span className="rounded-md bg-primary-50 px-2 py-1 text-overline font-bold uppercase tracking-wide text-primary-700">
           CP {checkpoint.number}
         </span>
       </div>
@@ -131,11 +131,11 @@ export default function CheckpointControlPanel({ classId, checkpoints = [], subm
         <legend className="text-xs font-bold text-slate-600">Apply to</legend>
         <div className="mt-2 grid grid-cols-2 gap-2">
           <button type="button" onClick={() => setApplyToAllClasses(false)} aria-pressed={!applyToAllClasses}
-            className={`rounded-xl border px-3 py-2 text-xs font-semibold ${!applyToAllClasses ? 'border-primary bg-primary-50 text-primary' : 'border-slate-200 text-slate-500 hover:bg-slate-50'}`}>
+            className={`rounded-xl border px-3 py-2 text-xs font-semibold ${!applyToAllClasses ? 'border-primary bg-primary-50 text-primary-700' : 'border-slate-200 text-slate-500 hover:bg-slate-50'}`}>
             One class
           </button>
           <button type="button" onClick={() => setApplyToAllClasses(true)} aria-pressed={applyToAllClasses}
-            className={`rounded-xl border px-3 py-2 text-xs font-semibold ${applyToAllClasses ? 'border-primary bg-primary-50 text-primary' : 'border-slate-200 text-slate-500 hover:bg-slate-50'}`}>
+            className={`rounded-xl border px-3 py-2 text-xs font-semibold ${applyToAllClasses ? 'border-primary bg-primary-50 text-primary-700' : 'border-slate-200 text-slate-500 hover:bg-slate-50'}`}>
             All accessible classes
           </button>
         </div>
@@ -192,7 +192,7 @@ export default function CheckpointControlPanel({ classId, checkpoints = [], subm
           className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-10 pr-3 text-sm text-slate-700 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15"
         />
       </div>
-      <p className="mt-2 text-[11px] leading-5 text-slate-400">
+      <p className="mt-2 text-caption leading-5 text-slate-400">
         A valid deadline enables this checkpoint automatically. Student access still follows checkpoint order and submission status.
       </p>
 
@@ -207,7 +207,7 @@ export default function CheckpointControlPanel({ classId, checkpoints = [], subm
         <span className="flex items-center gap-2"><Archive className="h-4 w-4" /> Archive checkpoint</span>
         <span>{archived ? 'Archived' : 'Active'}</span>
       </button>
-      <p className="mt-2 text-[11px] leading-5 text-slate-400">
+      <p className="mt-2 text-caption leading-5 text-slate-400">
         Archive is the only manual override. Remove it and save to let the deadline rules apply again.
       </p>
 

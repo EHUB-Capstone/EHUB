@@ -52,7 +52,7 @@ const SortableHeaderCell = ({ id, children, className }) => {
         <span
           {...attributes}
           {...listeners}
-          className="mt-0.5 cursor-grab select-none rounded border border-slate-200 bg-white px-1 text-[10px] text-slate-400 active:cursor-grabbing"
+          className="mt-0.5 cursor-grab select-none rounded border border-slate-200 bg-white px-1 text-overline text-slate-400 active:cursor-grabbing"
           title="Drag column"
         >
           ::
@@ -792,7 +792,7 @@ const DataBankPage = () => {
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Class Data Bank</h1>
+          <h1 className="text-heading sm:text-display text-secondary tracking-tight">Class Data Bank</h1>
           <p className="mt-1 text-sm text-slate-500">Preview-first Excel import/export with snapshots, field history and rollback controls.</p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -950,7 +950,7 @@ const DataBankPage = () => {
               </div>
               <div className="max-h-96 overflow-auto">
                 <table className="w-full text-left text-sm">
-                  <thead className="sticky top-0 bg-slate-50 text-xs uppercase text-slate-500">
+                  <thead className="sticky top-0 bg-slate-50 text-xs uppercase text-slate-600">
                     <tr>
                       <th className="px-3 py-2">Source</th>
                       <th className="px-3 py-2">Action</th>
@@ -974,7 +974,7 @@ const DataBankPage = () => {
                           {mapping.approved ? (
                             <span className="text-xs font-semibold text-green-600">Approved</span>
                           ) : (
-                            <button className="text-xs font-semibold text-primary" onClick={() => approveMapping(index)}>Approve</button>
+                            <button className="text-xs font-semibold text-primary-700" onClick={() => approveMapping(index)}>Approve</button>
                           )}
                         </td>
                       </tr>
@@ -1071,7 +1071,7 @@ const DataBankPage = () => {
           <div>
             <h2 className="text-lg font-semibold text-slate-900">Class Data Grid</h2>
             <p className="mt-1 text-sm text-slate-500">Edit cells, add/delete rows or columns, and filter like a spreadsheet.</p>
-            {groupColumn && <p className="mt-1 text-xs font-semibold text-primary">Grouping rows by {groupColumn}</p>}
+            {groupColumn && <p className="mt-1 text-xs font-semibold text-primary-700">Grouping rows by {groupColumn}</p>}
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5">
@@ -1126,7 +1126,7 @@ const DataBankPage = () => {
               <table className="min-w-full border-separate border-spacing-0 text-left text-xs">
                 <thead>
                   <tr>
-                    <th className="sticky left-0 top-0 z-20 w-16 border-b border-r border-slate-200 bg-slate-100 px-3 py-2 text-center font-semibold text-slate-500">#</th>
+                    <th className="sticky left-0 top-0 z-20 w-16 border-b border-r border-slate-200 bg-slate-100 px-3 py-2 text-center font-semibold text-slate-600">#</th>
                     <SortableContext items={exportColumns}>
                       {exportColumns.map((column, index) => {
                         const isChecked = selectedExportColumns.includes(column);
@@ -1141,13 +1141,13 @@ const DataBankPage = () => {
                                 <label className="flex min-w-0 items-start gap-2">
                                   <input
                                     type="checkbox"
-                                    className="mt-0.5 h-3.5 w-3.5 rounded border-slate-300 text-primary focus:ring-primary"
+                                    className="mt-0.5 h-3.5 w-3.5 rounded border-slate-300 text-primary-700 focus:ring-primary"
                                     checked={isChecked}
                                     disabled={column === 'RollNumber'}
                                     onChange={(e) => toggleExportColumn(column, e.target.checked)}
                                     title="Include in export"
                                   />
-                                  <button type="button" className="min-w-0 truncate text-left font-semibold hover:text-primary" onClick={() => updateSort(column)}>
+                                  <button type="button" className="min-w-0 truncate text-left font-semibold hover:text-primary-700" onClick={() => updateSort(column)}>
                                     {column}{sortConfig.key === column ? (sortConfig.direction === 'asc' ? ' ASC' : ' DESC') : ''}
                                   </button>
                                 </label>

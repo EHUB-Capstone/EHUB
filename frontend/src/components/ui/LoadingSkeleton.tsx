@@ -9,7 +9,7 @@ interface LoadingSkeletonProps {
 const LoadingSkeleton = ({ className, lines = 1, variant = 'text' }: LoadingSkeletonProps) => {
   if (variant === 'card') {
     return (
-      <div className={cn('bg-white rounded-2xl border border-slate-200/60 p-6 animate-pulse', className)}>
+      <div className={cn('bg-white rounded-2xl border border-slate-200 shadow-card p-6 animate-pulse', className)}>
         <div className="flex justify-between items-start mb-4">
           <div className="h-3 w-24 bg-slate-200 rounded" />
           <div className="w-9 h-9 bg-slate-100 rounded-xl" />

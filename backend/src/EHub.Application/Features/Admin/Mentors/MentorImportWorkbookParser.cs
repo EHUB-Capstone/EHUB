@@ -16,6 +16,9 @@ internal static class MentorImportWorkbookParser
     private const int MaximumRowsPerSheet = 500;
     private const int MaximumHeaderSearchRows = 20;
     private const int MaximumColumns = 20;
+    // Spreadsheets saved by Excel or exported from Google Sheets often carry thousands of empty, formatted rows.
+    // They are skipped, so only a sheet that is absurdly large is rejected before it is read in full.
+    private const int MaximumPhysicalRowsPerSheet = 50_000;
     private static readonly IReadOnlyDictionary<string, string[]> EnterpriseColumns = new Dictionary<string, string[]>
     {
         ["stt"] = ["stt"],
@@ -25,15 +28,17 @@ internal static class MentorImportWorkbookParser
         ["contracttype"] = ["loaihd", "loaihopdong"],
         ["educationlevel"] = ["trinhdohocvan", "hocvan"],
         ["address"] = ["diachihiennay", "diachi"],
-        ["email"] = ["email"],
-        ["fptemail"] = ["fptemail", "emailfpt"],
+        // The login email. A column titled with the FPT email also works as a fallback when this one is empty (see ParseEnterprise).
+        ["email"] = ["email", "emaildangnhap", "emaillogin", "maillogin"],
+        ["fptemail"] = ["fptemail", "emailfpt", "mailfpt", "fptmail"],
         ["jobtitle"] = ["vitrichucdanh", "chucdanh", "vitri"],
         ["organization"] = ["congty", "tochuc", "donvi"]
     };
     private static readonly IReadOnlyDictionary<string, string[]> AcademicColumns = new Dictionary<string, string[]>
     {
         ["stt"] = ["stt"],
-        ["email"] = ["emailcongviec", "email"],
+        // For lecturers the FPT email is the work email, so those titles are accepted too (after the preferred ones).
+        ["email"] = ["emailcongviec", "email", "emaildangnhap", "emaillogin", "fptemail", "emailfpt", "mailfpt", "fptmail"],
         ["fullname"] = ["hoten", "hovaten"],
         ["department"] = ["phongbantructiep", "phongban", "bomon"],
         ["jobtitle"] = ["chucdanhvn", "chucdanh", "vitrichucdanh"]
@@ -41,7 +46,7 @@ internal static class MentorImportWorkbookParser
 
     static MentorImportWorkbookParser() => Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
 
-    public static Result<List<MentorImportCandidate>> Parse(IFormFile file)
+    public static Result<ParsedMentorWorkbook> Parse(IFormFile file)
     {
         try
         {
@@ -58,7 +63,7 @@ internal static class MentorImportWorkbookParser
                 if (IsTargetSheet(name))
                 {
                     var sheetRows = ReadSheet(reader, name);
-                    if (sheetRows.IsFailure) return Result.Failure<List<MentorImportCandidate>>(sheetRows.Error);
+                    if (sheetRows.IsFailure) return Result.Failure<ParsedMentorWorkbook>(sheetRows.Error);
                     sheets[name] = sheetRows.Value;
                 }
                 else
@@ -70,13 +75,14 @@ internal static class MentorImportWorkbookParser
             if (!TryGetSheet(sheets, EnterpriseSheetName, out var enterpriseRows) ||
                 !TryGetSheet(sheets, AcademicSheetName, out var academicRows))
             {
-                return Failure($"The workbook must contain both sheets '{EnterpriseSheetName}' and '{AcademicSheetName}'.");
+                return Result.Failure<ParsedMentorWorkbook>(new Error(ErrorCodes.MentorImportFileInvalid, $"The workbook must contain both sheets '{EnterpriseSheetName}' and '{AcademicSheetName}'."));
             }
 
-            var enterprise = ParseEnterprise(enterpriseRows!);
-            if (enterprise.IsFailure) return Result.Failure<List<MentorImportCandidate>>(enterprise.Error);
-            var academic = ParseAcademic(academicRows!);
-            if (academic.IsFailure) return Result.Failure<List<MentorImportCandidate>>(academic.Error);
+            var warnings = new List<string>();
+            var enterprise = ParseEnterprise(enterpriseRows!, warnings);
+            if (enterprise.IsFailure) return Result.Failure<ParsedMentorWorkbook>(enterprise.Error);
+            var academic = ParseAcademic(academicRows!, warnings);
+            if (academic.IsFailure) return Result.Failure<ParsedMentorWorkbook>(academic.Error);
 
             var rows = enterprise.Value.Concat(academic.Value).ToList();
             var duplicateEmails = rows
@@ -88,11 +94,11 @@ internal static class MentorImportWorkbookParser
             foreach (var row in rows.Where(item => duplicateEmails.Contains(item.Email)))
                 row.MarkInvalid($"Login email '{row.Email}' appears more than once in the workbook.");
 
-            return Result.Success(rows);
+            return Result.Success(new ParsedMentorWorkbook(rows, warnings));
         }
         catch
         {
-            return Failure("The mentor workbook could not be read. Verify that it is a valid .xlsx file.");
+            return Result.Failure<ParsedMentorWorkbook>(new Error(ErrorCodes.MentorImportFileInvalid, "The mentor workbook could not be read. Verify that it is a valid .xlsx file."));
         }
     }
 
@@ -103,30 +109,65 @@ internal static class MentorImportWorkbookParser
         while (reader.Read())
         {
             rowNumber++;
-            if (reader.FieldCount > MaximumColumns)
-                return RowFailure(sheetName, $"may contain at most {MaximumColumns} columns.");
-            if (rowNumber > MaximumRowsPerSheet + MaximumHeaderSearchRows + 1)
-                return RowFailure(sheetName, $"may contain at most {MaximumRowsPerSheet} data rows.");
-            rows.Add(new SpreadsheetRow(rowNumber, Enumerable.Range(0, reader.FieldCount)
-                .Select(index => CellText(reader.GetValue(index))).ToArray()));
+            if (rowNumber > MaximumPhysicalRowsPerSheet)
+                return RowFailure(sheetName, $"has more than {MaximumPhysicalRowsPerSheet:N0} rows. Delete the empty rows below the mentor list and upload the file again.");
+
+            var cells = Enumerable.Range(0, reader.FieldCount).Select(index => CellText(reader.GetValue(index))).ToArray();
+            // Columns beyond the limit are ignored while they are empty (leftover formatting); real content there is rejected.
+            if (cells.Skip(MaximumColumns).Any(value => !string.IsNullOrWhiteSpace(value)))
+                return RowFailure(sheetName, $"may contain at most {MaximumColumns} columns. Remove the extra columns that contain data.");
+            // A blank row is not data and never counts toward the row limit.
+            if (cells.All(string.IsNullOrWhiteSpace)) continue;
+            rows.Add(new SpreadsheetRow(rowNumber, cells.Take(MaximumColumns).ToArray()));
         }
         return rows.Count == 0 ? RowFailure(sheetName, "contains no data.") : Result.Success(rows);
     }
 
-    private static Result<List<MentorImportCandidate>> ParseEnterprise(IReadOnlyList<SpreadsheetRow> rows)
+    // A row holds a mentor when any recognised column other than the running number (STT) has a value.
+    // Rows with only a number, or with only notes in unrecognised columns, are leftovers and are ignored.
+    private static SpreadsheetRow[] SelectMentorRows(IReadOnlyList<SpreadsheetRow> rows, (SpreadsheetRow Row, Dictionary<string, int> Columns) header)
+    {
+        var contentColumns = header.Columns.Where(item => !string.Equals(item.Key, "stt", StringComparison.OrdinalIgnoreCase)).Select(item => item.Value).ToArray();
+        return rows
+            .Where(item => item.RowNumber > header.Row.RowNumber)
+            .Where(item => contentColumns.Any(index => index < item.Cells.Count && !string.IsNullOrWhiteSpace(item.Cells[index])))
+            .ToArray();
+    }
+
+    private static Result<List<MentorImportCandidate>> TooManyRows(string sheetName, int count) =>
+        Failure($"Sheet '{sheetName}' has {count} mentor rows; at most {MaximumRowsPerSheet} are allowed per import. Split the list into several files.");
+
+    // Header cells that match no known column are ignored by the import. Naming them lets the admin see why a value is missing.
+    private static void WarnAboutUnrecognizedColumns(string sheetName, SpreadsheetRow headerRow, IReadOnlyDictionary<string, string[]> recognized, List<string> warnings)
+    {
+        var known = recognized.Values.SelectMany(item => item).ToHashSet();
+        var unknown = headerRow.Cells.Where(value => !string.IsNullOrWhiteSpace(value) && !known.Contains(NormalizeHeader(value)))
+            .Select(value => value.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).Take(10).ToArray();
+        if (unknown.Length > 0)
+            warnings.Add($"Sheet '{sheetName}': these columns are not recognised and were ignored: {string.Join(", ", unknown)}.");
+    }
+
+    private static Result<List<MentorImportCandidate>> ParseEnterprise(IReadOnlyList<SpreadsheetRow> rows, List<string> warnings)
     {
         var header = FindHeader(rows, EnterpriseColumns, ["fullname"]);
         if (header is null) return Failure($"Sheet '{EnterpriseSheetName}' must contain a mentor name column such as 'Họ và tên'.");
 
-        var dataRows = rows.Where(item => item.RowNumber > header.Value.Row.RowNumber && item.Cells.Any(value => !string.IsNullOrWhiteSpace(value))).ToArray();
-        if (dataRows.Length > MaximumRowsPerSheet)
-            return Failure($"Sheet '{EnterpriseSheetName}' may contain at most {MaximumRowsPerSheet} data rows.");
+        WarnAboutUnrecognizedColumns(EnterpriseSheetName, header.Value.Row, EnterpriseColumns, warnings);
+        var dataRows = SelectMentorRows(rows, header.Value);
+        if (dataRows.Length > MaximumRowsPerSheet) return TooManyRows(EnterpriseSheetName, dataRows.Length);
         var result = new List<MentorImportCandidate>();
+        var loginFromFpt = 0;
         foreach (var row in dataRows)
         {
             var values = EnterpriseColumns.Keys.ToDictionary(key => key, key => GetOptionalCell(row.Cells, header.Value.Columns, key));
             if (values.Values.All(string.IsNullOrWhiteSpace)) continue;
             var rawEmail = values["email"];
+            // No login email, but an FPT email is given: use it so the mentor is not saved as incomplete.
+            if (string.IsNullOrWhiteSpace(rawEmail) && NormalizeEmail(values["fptemail"]) is not null)
+            {
+                rawEmail = values["fptemail"];
+                loginFromFpt++;
+            }
             var email = NormalizeEmail(rawEmail);
             var candidate = new MentorImportCandidate
             {
@@ -150,17 +191,19 @@ internal static class MentorImportWorkbookParser
             ValidateCommon(candidate, email, rawEmail, values["dateofbirth"]);
             result.Add(candidate);
         }
+        if (loginFromFpt > 0)
+            warnings.Add($"Sheet '{EnterpriseSheetName}': {loginFromFpt} mentor(s) have no Email value, so their FPT email is used as the login email.");
         return result.Count == 0 ? Failure($"Sheet '{EnterpriseSheetName}' contains no mentor rows.") : Result.Success(result);
     }
 
-    private static Result<List<MentorImportCandidate>> ParseAcademic(IReadOnlyList<SpreadsheetRow> rows)
+    private static Result<List<MentorImportCandidate>> ParseAcademic(IReadOnlyList<SpreadsheetRow> rows, List<string> warnings)
     {
         var header = FindHeader(rows, AcademicColumns, ["fullname"]);
         if (header is null) return Failure($"Sheet '{AcademicSheetName}' must contain a mentor name column such as 'Họ tên'.");
 
-        var dataRows = rows.Where(item => item.RowNumber > header.Value.Row.RowNumber && item.Cells.Any(value => !string.IsNullOrWhiteSpace(value))).ToArray();
-        if (dataRows.Length > MaximumRowsPerSheet)
-            return Failure($"Sheet '{AcademicSheetName}' may contain at most {MaximumRowsPerSheet} data rows.");
+        WarnAboutUnrecognizedColumns(AcademicSheetName, header.Value.Row, AcademicColumns, warnings);
+        var dataRows = SelectMentorRows(rows, header.Value);
+        if (dataRows.Length > MaximumRowsPerSheet) return TooManyRows(AcademicSheetName, dataRows.Length);
         var result = new List<MentorImportCandidate>();
         foreach (var row in dataRows)
         {
@@ -245,7 +288,7 @@ internal static class MentorImportWorkbookParser
         return builder.ToString().Normalize(NormalizationForm.FormC);
     }
 
-    private static string? NormalizeEmail(string? value)
+    internal static string? NormalizeEmail(string? value)
     {
         var email = value?.Trim();
         if (string.IsNullOrWhiteSpace(email) || email.Length > 320 || !MailAddress.TryCreate(email, out var parsed) ||
@@ -273,7 +316,7 @@ internal static class MentorImportWorkbookParser
     private static string GetCell(IReadOnlyList<string> cells, int index) => index < cells.Count ? cells[index].Trim() : string.Empty;
     private static string GetOptionalCell(IReadOnlyList<string> cells, IReadOnlyDictionary<string, int> columns, string key) =>
         columns.TryGetValue(key, out var index) ? GetCell(cells, index) : string.Empty;
-    private static string NormalizeName(string value) => string.Join(' ', value.Trim().Normalize(NormalizationForm.FormKC)
+    internal static string NormalizeName(string value) => string.Join(' ', value.Trim().Normalize(NormalizationForm.FormKC)
         .Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)).ToLowerInvariant();
     private static string? EmptyToNull(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
     private static Result<List<MentorImportCandidate>> Failure(string message) => Result.Failure<List<MentorImportCandidate>>(new Error(ErrorCodes.MentorImportFileInvalid, message));
@@ -281,6 +324,8 @@ internal static class MentorImportWorkbookParser
 
     private sealed record SpreadsheetRow(int RowNumber, IReadOnlyList<string> Cells);
 }
+
+internal sealed record ParsedMentorWorkbook(List<MentorImportCandidate> Rows, List<string> Warnings);
 
 internal sealed class MentorImportCandidate
 {

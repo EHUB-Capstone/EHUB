@@ -6,7 +6,7 @@ interface GroupProjectWarningBannerProps {
 }
 
 const Code = ({ children }: { children: string }) => (
-  <code className="rounded bg-white/70 px-1 py-0.5 font-mono text-[11px] text-amber-900">{children}</code>
+  <code className="rounded bg-white/70 px-1 py-0.5 font-mono text-caption text-amber-900">{children}</code>
 );
 
 const joinCodes = (values: string[]) => values.map((value, index) => (

@@ -817,6 +817,121 @@ Các kiểm tra này không thuộc riêng yêu cầu nào nhưng cần đạt �
 
 ---
 
+### Kiểm tra 10.11. Manage mentors theo kỳ (không cần vào từng lớp)
+
+**Làm gì**
+1. Ở **Subject Management > Lecturers & Mentors**, thẻ **Mentor assignment**, bấm **Manage mentors**.
+2. Thử ô tìm kiếm, ô lọc môn (EXE101/EXE201) và ô "Only classes missing mentors".
+3. Bấm **Manage** ở một lớp, gán/thay/kết thúc mentor cho vài nhóm rồi đóng hộp thoại.
+4. Bấm **Close** để đóng danh sách lớp, rồi bấm **Preview assignment** để xem số liệu khớp.
+
+**Phải thấy gì**
+- [ ] Bước 1: danh sách các lớp đang hoạt động của kỳ; mỗi lớp có môn, giảng viên chính, số nhóm và nhãn "N missing" (vàng) hoặc "Complete" (xanh). Lớp thiếu nhiều mentor nhất nằm trên cùng. Lớp có mentor tạm có nhãn **Temporary**.
+- [ ] Bước 2: bộ lọc hoạt động đúng; lớp chưa có nhóm hiện "No teams" và không bấm Manage được.
+- [ ] Bước 3: mở đúng hộp thoại Manage team mentors của lớp đó; sau khi đóng quay lại danh sách lớp và số "missing" đã cập nhật ngay, không cần tải lại trang.
+- [ ] Bước 4: số vị trí còn thiếu khớp với bản xem trước chia mentor.
+- [ ] Giảng viên không phải admin không thấy trang này (vẫn gán mentor ở trang chi tiết lớp của mình).
+
+---
+
+### Kiểm tra 10.12. Đăng ký mentor ở trang Register có chọn loại mentor
+
+**Làm gì**
+1. Mở trang **Register**, chọn Role = **Mentor**.
+2. Bấm **Create Account** khi chưa chọn loại mentor.
+3. Chọn **Enterprise mentor** (hoặc **Lecturer mentor**), nhập đủ thông tin và bấm **Create Account**, nhập mã OTP.
+4. Đăng nhập admin, mở **Account Approvals** duyệt tài khoản, rồi vào **Users** lọc Role = Mentors.
+
+**Phải thấy gì**
+- [ ] Bước 1: khi chọn Mentor xuất hiện thêm ô "Mentor type" với hai lựa chọn Enterprise mentor / Lecturer mentor; chọn Student hoặc Lecturer thì ô này ẩn.
+- [ ] Bước 2: báo "Choose Enterprise mentor or Lecturer mentor." và không gửi đăng ký.
+- [ ] Bước 3: đăng ký thành công, chuyển sang bước nhập OTP.
+- [ ] Bước 4: mentor mới có đúng nhãn loại đã chọn (Enterprise cam / Lecturer xanh lá), sau đó có thể được thêm vào kỳ như các mentor khác.
+- [ ] Nếu báo "The verification email could not be delivered": đây là lỗi cấu hình gửi email của máy chủ (mọi role đều bị), không phải lỗi form. Xem log API dòng "SMTP stage failed" để biết bước lỗi.
+
+---
+
+### Kiểm tra 10.13. Lý do chọn sẵn và thông báo khi đổi mentor
+
+**Chuẩn bị:** lớp có giảng viên chính **khác** tài khoản admin đang thao tác, và một nhóm đang có mentor (có tài khoản) ở vị trí cần đổi.
+
+**Làm gì**
+1. Ở **Preview assignment**, bấm **Change** ở vị trí đã có mentor, chọn mentor khác. Ở ô **Reason for replacing...** chọn một lý do trong danh sách, bấm **Replace**, rồi **Confirm and save**.
+2. Ở trang chi tiết lớp > **Manage** > By team, bấm **Replace** ở một nhóm, chọn lý do rồi lưu.
+3. Cũng ở By team, bấm **End** một mentor và nhập lý do.
+4. Đăng nhập bằng tài khoản **giảng viên chính của lớp** và bằng tài khoản **mentor cũ**, mở chuông thông báo.
+
+**Phải thấy gì**
+- [ ] Bước 1–2: ô lý do là danh sách chọn sẵn (Mentor is no longer available / Mentor is overloaded / Schedule conflict / Team requested a change / Rebalance mentor workload / Other). Chọn lý do có sẵn là đủ; chọn **Other** thì phải nhập mô tả ít nhất 3 ký tự. Ô ghi chú thêm là tuỳ chọn.
+- [ ] Bước 1–2: lịch sử phân công của nhóm ghi lý do dạng "Mentor is overloaded: 6 teams" (nếu có ghi chú).
+- [ ] Bước 4: giảng viên chính nhận "Mentor changed for team ..." nêu tên mentor cũ, mentor mới (hoặc "was removed") và lý do; mentor cũ nhận "You are no longer mentoring team ..." kèm lý do.
+- [ ] Admin thực hiện thay đổi không nhận thông báo về chính thao tác đó. Nếu giảng viên chính là người đổi thì cũng không tự nhận.
+- [ ] Mentor tạm (chưa có tài khoản) bị thay thì chỉ giảng viên chính nhận thông báo.
+- [ ] Sinh viên của nhóm **không** nhận thông báo này.
+
+---
+
+### Kiểm tra 10.14. Import email cho mentor tạm: mentor tự cập nhật trong kỳ, không bị nhân đôi
+
+**Chuẩn bị:** một mentor chưa có email, đã được **Add mentors** vào một kỳ (đang có nhãn **Temporary**), tốt nhất đã gán vào một nhóm.
+
+**Làm gì**
+1. Import file có thêm email cho đúng mentor đó (Users > Import > Import Mentors) và bấm Import.
+2. Mở **Subject Management > Lecturers & Mentors**, chọn đúng kỳ, tìm mentor đó.
+3. (Tuỳ chọn) Trước bước 1, chuyển mentor tạm sang **Inactive** ở kỳ, sau đó làm lại bước 1–2.
+4. Import lại cùng file một lần nữa.
+
+**Phải thấy gì**
+- [ ] Bước 1: thông báo kết quả nêu "N semester entries moved onto the account, no need to add the mentor again" (và "N teams switched..." nếu mentor đang giữ nhóm).
+- [ ] Bước 2: mentor chỉ còn **một dòng**, không còn nhãn **Temporary**, hiện đầy đủ email, trạng thái Active như trước; không cần Add mentors lại. Nhóm đã gán vẫn đúng mentor đó. Số liệu "Teaching staff directory" không còn tăng thừa.
+- [ ] Bước 2: bấm **Preview assignment** (Balanced/Random) vẫn đề xuất được mentor này như mentor thường.
+- [ ] Bước 3: mentor đã chuyển vẫn **Inactive** sau khi có tài khoản.
+- [ ] Bước 4: không thêm dòng mới, không có gì thay đổi.
+- [ ] Sau khi deploy bản có migration làm sạch (chạy `--initialize-database`): các mentor từng bị nhân đôi chỉ còn một dòng. **Sao lưu database trước khi chạy.**
+
+---
+
+### Kiểm tra 10.15. Import: tên cột email FPT và nút xác nhận
+
+**Làm gì**
+1. Mở bản sao file mẫu. Ở cả hai sheet, đổi tên cột email đăng nhập thành **"FPT email"** (hoặc "Email FPT"). Với sheet `DS Mentor_FA26`, xoá luôn cột "Email" cũ. Thêm một cột có tên lạ (ví dụ "Ghi chú riêng").
+2. Import file đó ở Users > Import > Import Mentors và xem bước xem trước.
+3. Import một file chỉ gồm mentor đã có tài khoản (chỉ cập nhật), rồi một file gồm mentor chưa có email vừa được bổ sung email.
+
+**Phải thấy gì**
+- [ ] Bước 2: mentor **không** bị đánh dấu Incomplete vì thiếu email; email trong bảng là email FPT. Có cảnh báo "...FPT email is used as the login email." và cảnh báo "these columns are not recognised and were ignored: Ghi chú riêng".
+- [ ] Bước 3 (chỉ cập nhật): nút ghi **"Update N mentors"**, và có dòng "When you confirm: N updated."
+- [ ] Bước 3 (bổ sung email): có ô **Complete record**; Total khớp tổng các ô; nút ghi **"Create N accounts"** hoặc **"Apply N changes"** (khi lẫn nhiều loại), với N đúng bằng số dòng sẽ thay đổi, không còn con số nhỏ hơn thực tế.
+- [ ] Khi cột "Email" có giá trị thì vẫn dùng cột "Email", cột FPT email chỉ lưu thêm.
+
+---
+
+### Kiểm tra 10.16. User Management: sửa/xoá mentor chưa đủ thông tin, bảng Accounts gọn, xoá tài khoản có kiểm tra
+
+**Làm gì**
+1. Ở **Users > Needs information**, bấm biểu tượng **bút chì** ở một mentor, đổi tên/chức danh/phòng ban (hoặc SĐT, công ty với mentor doanh nghiệp) rồi **Save changes**.
+2. Ở đây bấm **thùng rác** ở một mentor chưa được gán vào nhóm nào, xác nhận xoá. Sau đó thử xoá một mentor đang giữ nhóm (nhãn Temporary "on N teams").
+3. Ở tab **Accounts**, nhìn bảng ở màn hình laptop (khoảng 1280px) và thu nhỏ cửa sổ.
+4. Bấm thùng rác ở: (a) một sinh viên chưa thuộc lớp nào, (b) một sinh viên đang học lớp, (c) giảng viên đang dạy lớp, (d) mentor đang được gán nhóm hoặc đã từng được gán, (e) chính tài khoản admin đang đăng nhập.
+5. Sau khi xoá (a), tạo lại tài khoản mới với đúng email đó.
+
+**Phải thấy gì**
+- [ ] Bước 1: cửa sổ sửa có đúng các ô theo loại mentor; không có ô email đăng nhập (kèm giải thích email thêm bằng import); lưu xong danh sách cập nhật, số "missing" đổi theo. Tên trùng với một mentor chưa có email khác thì báo lỗi rõ ràng và giữ nguyên dữ liệu đã nhập.
+- [ ] Bước 2: mentor chưa dùng ở đâu xoá được và biến mất khỏi danh sách (và khỏi các kỳ đã thêm). Mentor đang giữ nhóm không xoá được, thông báo nêu số nhóm cần thay/kết thúc trước.
+- [ ] Bước 3: các cột giữ nguyên như cũ (User, Role, Status, Student ID / Major, Semester, Class, Group Name, Joined Date, Actions). Cột Actions luôn dính ở mép phải: thấy nút Edit/Delete ngay mà không cần kéo bảng sang trái, kể cả khi cửa sổ hẹp; các cột khác vẫn cuộn ngang được.
+- [ ] Bước 4: hộp thoại xoá tự kiểm tra trước. (a) xoá được. (b)(c)(d)(e) hiện khung đỏ "Why it cannot be deleted" liệt kê lý do cụ thể (ví dụ "the student is enrolled in 1 class", "the lecturer teaches 2 classes (EXE101_..., ...)", "the mentor is assigned to 2 teams right now", "you cannot delete your own account"); nút Delete bị khoá.
+- [ ] Bước 5: tạo lại được, không còn lỗi "email đã tồn tại" hay lỗi 500.
+- [ ] Sau khi xoá, tài khoản không đăng nhập được và biến mất khỏi mọi danh sách.
+
+**Thêm email trực tiếp ở cửa sổ sửa mentor (Needs information)**
+6. Bấm bút chì ở một mentor chưa có email (tốt nhất mentor đang giữ nhóm và đã Add vào một kỳ), nhập **Login email** hợp lệ rồi bấm **Save and create account**. Thử thêm email sai định dạng, và email đã thuộc tài khoản không phải mentor (ví dụ email admin).
+
+- [ ] Bước 6: có thông báo "X now has an account (N teams switched, M semesters moved)". Mentor biến mất khỏi **Needs information**, số trên tab giảm, và xuất hiện ở tab **Accounts** (Role Mentor, đúng loại). Ở **Lecturers & Mentors** mentor chỉ còn một dòng, không còn nhãn Temporary, vẫn thuộc kỳ; nhóm đã gán vẫn giữ đúng mentor đó (không còn nhãn Temporary). Email sai định dạng hoặc thuộc tài khoản khác thì báo lỗi rõ ràng, không lưu gì, dữ liệu đã nhập vẫn còn. Mentor dùng Forgot Password để đặt mật khẩu đầu tiên.
+
+**Lưu ý triển khai:** có migration `AllowReusingDeletedUserEmailAndRollNumber` (đổi ràng buộc duy nhất của email và mã sinh viên thành chỉ áp dụng cho tài khoản chưa xoá). **Sao lưu database trước khi chạy.** Rollback (`Down`) sẽ lỗi nếu lúc đó đã có tài khoản xoá và tài khoản mới trùng email, nên cần xử lý các email trùng trước khi quay lại.
+
+---
+
 ## Phần 4. Hạn chế đã biết (chỉ ghi nhận, chưa tính là lỗi mới)
 
 ### Mở lại lớp đã hoàn thành

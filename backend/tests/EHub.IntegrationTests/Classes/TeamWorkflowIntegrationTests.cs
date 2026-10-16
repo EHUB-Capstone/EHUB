@@ -37,6 +37,7 @@ using EHub.Shared.Errors;
 using EHub.Shared.Results;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
+using Pgvector.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Migrations.Operations;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -360,7 +361,7 @@ public sealed partial class TeamWorkflowIntegrationTests
         seedContext.ChangeTracker.Clear();
         var rowVersion = (await seedContext.TeamProposals.AsNoTracking().SingleAsync(item => item.Id == seed.ProposalId)).Version.ToString();
         var options = new DbContextOptionsBuilder<AppDbContext>()
-            .UseNpgsql(seedContext.Database.GetConnectionString())
+            .UseNpgsql(_factory.TestConnectionString, b => b.UseVector())
             .Options;
 
         await using var firstContext = new AppDbContext(options);
@@ -1807,7 +1808,7 @@ public sealed partial class TeamWorkflowIntegrationTests
         closedFileDelete.Error.Code.Should().Be(ErrorCodes.WorkspaceCheckpointNotOpen);
 
         var options = new DbContextOptionsBuilder<AppDbContext>()
-            .UseNpgsql(context.Database.GetConnectionString()).Options;
+            .UseNpgsql(_factory.TestConnectionString, b => b.UseVector()).Options;
         await using var firstContext = new AppDbContext(options);
         await using var secondContext = new AppDbContext(options);
         var firstWriter = await firstContext.Submissions.SingleAsync(item => item.TeamId == seed.TeamId &&
@@ -2126,7 +2127,7 @@ public sealed partial class TeamWorkflowIntegrationTests
             .Select(item => new { item.RecipientUserId, item.Type, item.Link }).ToArrayAsync();
         reminderNotifications.Select(item => item.RecipientUserId).Should().BeEquivalentTo(studentUserIds);
         reminderNotifications.Should().OnlyContain(item =>
-            item.Type == NotificationType.DeadlineReminder && item.Link == "/student/workspace");
+            item.Type == NotificationType.DeadlineReminder && item.Link == $"/student/workspace/{seed.TeamId}");
 
         var thirdEnd = clock.UtcNow.AddDays(5);
         var revised = await manager.SaveScheduleAsync(seed.ClassId, checkpoint.Id,
@@ -2447,6 +2448,29 @@ public sealed partial class TeamWorkflowIntegrationTests
         saved.Value.RubricScores.Select(item => item.CriterionKey).Should().Equal("clarity", "evidence");
         saved.Value.MemberScores!.Should().HaveCount(seed.StudentIds.Count());
         saved.Value.MemberScores.Should().OnlyContain(item => item.Score == 8.6m && !item.IsOverridden);
+
+        // Saving the same content again is not an update: no new history version and no new timestamp.
+        var historyBeforeUnchangedSave = await context.EvaluationHistories.AsNoTracking()
+            .CountAsync(item => item.EvaluationId == saved.Value.Id);
+        var updatedAtBeforeUnchangedSave = (await context.Evaluations.AsNoTracking().SingleAsync(item => item.Id == saved.Value.Id)).UpdatedAt;
+        var unchangedSave = await handler.SaveAsync(seed.TeamId.Value, 1,
+            new SaveWorkspaceCheckpointEvaluationRequest
+            {
+                Status = "SUBMITTED",
+                OverallFeedback = "Strong evidence and a clear startup direction.",
+                RubricScores = new[]
+                {
+                    new WorkspaceCheckpointCriterionScoreInput { CriterionKey = "clarity", Score = 9, Comment = "Clear." },
+                    new WorkspaceCheckpointCriterionScoreInput { CriterionKey = "evidence", Score = 8, Comment = "Good evidence." }
+                }
+            }, seed.LecturerId, SystemRoles.Lecturer);
+        unchangedSave.IsSuccess.Should().BeTrue();
+        unchangedSave.Value.Id.Should().Be(saved.Value.Id);
+        context.ChangeTracker.Clear();
+        (await context.EvaluationHistories.AsNoTracking().CountAsync(item => item.EvaluationId == saved.Value.Id))
+            .Should().Be(historyBeforeUnchangedSave);
+        (await context.Evaluations.AsNoTracking().SingleAsync(item => item.Id == saved.Value.Id)).UpdatedAt
+            .Should().Be(updatedAtBeforeUnchangedSave);
         var lecturerBatch = await handler.GetGradingBatchAsync(
             new EvaluationGradingBatchRequest { TeamIds = new[] { seed.TeamId.Value, seed.TeamId.Value } },
             seed.LecturerId, SystemRoles.Lecturer);
@@ -2520,6 +2544,20 @@ public sealed partial class TeamWorkflowIntegrationTests
         var published = await handler.PublishAsync(saved.Value.Id, seed.LecturerId, SystemRoles.Lecturer);
         published.IsSuccess.Should().BeTrue();
         published.Value.Status.Should().Be("PUBLISHED");
+        var publicationEvent = await context.OutboxMessages.AsNoTracking()
+            .SingleAsync(item => item.Type == "Evaluation.Published.v1" && item.AggregateId == saved.Value.Id);
+        publicationEvent.PayloadJson.Should().Contain("studentUserIds");
+        publicationEvent.PayloadJson.Should().Contain(seed.TeamId.Value.ToString());
+        await scope.ServiceProvider.GetRequiredService<IOutboxEventDispatcher>().DispatchAsync(publicationEvent);
+        context.ChangeTracker.Clear();
+        var publishedNotifications = await context.Notifications.AsNoTracking()
+            .Where(item => item.SourceEventId == publicationEvent.EventId)
+            .ToArrayAsync();
+        publishedNotifications.Should().HaveCount(seed.StudentIds.Count());
+        publishedNotifications.Should().OnlyContain(item =>
+            item.Type == NotificationType.EvaluationPublished &&
+            item.Title == "Checkpoint 1 result is available" &&
+            item.Link == $"/evaluation-grading?teamId={seed.TeamId.Value}");
 
         context.ChangeTracker.Clear();
         var publishedStudentSummary = await handler.GetSummaryAsync(

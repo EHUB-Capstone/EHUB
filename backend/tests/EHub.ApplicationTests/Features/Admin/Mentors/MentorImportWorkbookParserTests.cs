@@ -22,9 +22,9 @@ public sealed class MentorImportWorkbookParserTests
         var result = MentorImportWorkbookParser.Parse(file);
 
         result.IsSuccess.Should().BeTrue(result.IsFailure ? result.Error.Message : string.Empty);
-        result.Value.Should().HaveCount(2);
-        result.Value.Should().ContainSingle(item => item.MentorType == MentorType.Enterprise && item.FptEmail == null && item.DateOfBirth == new DateOnly(1993, 1, 21));
-        result.Value.Should().ContainSingle(item => item.MentorType == MentorType.Academic && item.Email == "academic@example.edu.vn");
+        result.Value.Rows.Should().HaveCount(2);
+        result.Value.Rows.Should().ContainSingle(item => item.MentorType == MentorType.Enterprise && item.FptEmail == null && item.DateOfBirth == new DateOnly(1993, 1, 21));
+        result.Value.Rows.Should().ContainSingle(item => item.MentorType == MentorType.Academic && item.Email == "academic@example.edu.vn");
     }
 
     [Fact]
@@ -41,7 +41,7 @@ public sealed class MentorImportWorkbookParserTests
         var result = MentorImportWorkbookParser.Parse(file);
 
         result.IsSuccess.Should().BeTrue(result.IsFailure ? result.Error.Message : string.Empty);
-        result.Value.Select(item => item.Email).Should().BeEquivalentTo("enterprise@example.com", "academic@example.com");
+        result.Value.Rows.Select(item => item.Email).Should().BeEquivalentTo("enterprise@example.com", "academic@example.com");
     }
 
     [Fact]
@@ -58,7 +58,7 @@ public sealed class MentorImportWorkbookParserTests
         var result = MentorImportWorkbookParser.Parse(file);
 
         result.IsSuccess.Should().BeTrue(result.IsFailure ? result.Error.Message : string.Empty);
-        result.Value.Should().OnlyContain(item => !item.IsValid && item.Status == "Conflict");
+        result.Value.Rows.Should().OnlyContain(item => !item.IsValid && item.Status == "Conflict");
     }
 
     [Fact]
@@ -79,10 +79,10 @@ public sealed class MentorImportWorkbookParserTests
         var result = MentorImportWorkbookParser.Parse(file);
 
         result.IsSuccess.Should().BeTrue(result.IsFailure ? result.Error.Message : string.Empty);
-        result.Value.Should().HaveCount(2);
-        result.Value.Should().OnlyContain(item => item.IsValid && item.Email == string.Empty);
-        result.Value.Should().ContainSingle(item => item.MentorType == MentorType.Enterprise && item.FullName == "Mentor Doanh nghiệp Chưa Đủ");
-        result.Value.Should().ContainSingle(item => item.MentorType == MentorType.Academic && item.FullName == "Mentor Giảng viên Chưa Đủ");
+        result.Value.Rows.Should().HaveCount(2);
+        result.Value.Rows.Should().OnlyContain(item => item.IsValid && item.Email == string.Empty);
+        result.Value.Rows.Should().ContainSingle(item => item.MentorType == MentorType.Enterprise && item.FullName == "Mentor Doanh nghiệp Chưa Đủ");
+        result.Value.Rows.Should().ContainSingle(item => item.MentorType == MentorType.Academic && item.FullName == "Mentor Giảng viên Chưa Đủ");
     }
 
     [Fact]
@@ -99,8 +99,8 @@ public sealed class MentorImportWorkbookParserTests
         var result = MentorImportWorkbookParser.Parse(file);
 
         result.IsSuccess.Should().BeTrue(result.IsFailure ? result.Error.Message : string.Empty);
-        result.Value.Single(item => item.MentorType == MentorType.Enterprise).IsValid.Should().BeFalse();
-        result.Value.Single(item => item.MentorType == MentorType.Enterprise).Message.Should().Contain("valid email");
+        result.Value.Rows.Single(item => item.MentorType == MentorType.Enterprise).IsValid.Should().BeFalse();
+        result.Value.Rows.Single(item => item.MentorType == MentorType.Enterprise).Message.Should().Contain("valid email");
     }
 
     [Fact]
@@ -116,6 +116,72 @@ public sealed class MentorImportWorkbookParserTests
 
         result.IsFailure.Should().BeTrue();
         result.Error.Message.Should().Contain(MentorImportWorkbookParser.AcademicSheetName);
+    }
+
+    // A workbook whose mentor sheets carry the given header titles; each sheet gets one mentor row with the given cells.
+    private static IFormFile CreateTitledWorkbook(string[] enterpriseHeaders, string[] enterpriseCells, string[] academicHeaders, string[] academicCells) =>
+        CreateWorkbook((enterprise, academic) =>
+        {
+            for (var index = 0; index < enterpriseHeaders.Length; index++) enterprise.Cell(1, index + 1).Value = enterpriseHeaders[index];
+            for (var index = 0; index < enterpriseCells.Length; index++) enterprise.Cell(2, index + 1).Value = enterpriseCells[index];
+            for (var index = 0; index < academicHeaders.Length; index++) academic.Cell(1, index + 1).Value = academicHeaders[index];
+            for (var index = 0; index < academicCells.Length; index++) academic.Cell(2, index + 1).Value = academicCells[index];
+        });
+
+    [Theory]
+    [InlineData("FPT email")]
+    [InlineData("FPT Email")]
+    [InlineData("Email FPT")]
+    [InlineData("Mail FPT")]
+    [InlineData("Email (FPT)")]
+    public void Parse_FptEmailTitle_IsUsedAsTheLoginEmail_WhenThereIsNoEmailColumn(string title)
+    {
+        var file = CreateTitledWorkbook(
+            ["STT", "Họ và tên", title], ["1", "Enterprise Mentor", "enterprise@fpt.edu.vn"],
+            ["STT", "Họ tên", title], ["1", "Lecturer Mentor", "lecturer@fpt.edu.vn"]);
+
+        var result = MentorImportWorkbookParser.Parse(file);
+
+        result.IsSuccess.Should().BeTrue(result.IsFailure ? result.Error.Message : string.Empty);
+        result.Value.Rows.Single(item => item.MentorType == MentorType.Enterprise).Email.Should().Be("enterprise@fpt.edu.vn");
+        result.Value.Rows.Single(item => item.MentorType == MentorType.Academic).Email.Should().Be("lecturer@fpt.edu.vn");
+        result.Value.Warnings.Should().ContainSingle(item => item.Contains("FPT email is used as the login email"));
+    }
+
+    [Fact]
+    public void Parse_EnterpriseEmailColumn_WinsOverTheFptEmail_AndTheFptEmailIsOnlyAFallbackForBlankCells()
+    {
+        var file = CreateTitledWorkbook(
+            ["STT", "Họ và tên", "Email", "Fpt Email"], ["1", "Has Both", "personal@example.com", "work@fpt.edu.vn"],
+            ["STT", "Họ tên", "Email công việc"], ["1", "Lecturer", "lecturer@fpt.edu.vn"]);
+        var blankEmail = MentorImportWorkbookParser.Parse(CreateWorkbook((enterprise, academic) =>
+        {
+            enterprise.Cell(1, 1).Value = "STT"; enterprise.Cell(1, 2).Value = "Họ và tên"; enterprise.Cell(1, 3).Value = "Email"; enterprise.Cell(1, 4).Value = "Fpt Email";
+            enterprise.Cell(2, 1).Value = 1; enterprise.Cell(2, 2).Value = "Blank Email"; enterprise.Cell(2, 4).Value = "fallback@fpt.edu.vn";
+            academic.Cell(1, 1).Value = "STT"; academic.Cell(1, 2).Value = "Họ tên"; academic.Cell(2, 1).Value = 1; academic.Cell(2, 2).Value = "Lecturer";
+        }));
+
+        var both = MentorImportWorkbookParser.Parse(file);
+
+        var kept = both.Value.Rows.Single(item => item.MentorType == MentorType.Enterprise);
+        kept.Email.Should().Be("personal@example.com");
+        kept.FptEmail.Should().Be("work@fpt.edu.vn");
+        both.Value.Warnings.Should().BeEmpty();
+        blankEmail.Value.Rows.Single(item => item.MentorType == MentorType.Enterprise).Email.Should().Be("fallback@fpt.edu.vn");
+    }
+
+    [Fact]
+    public void Parse_ColumnsThatAreNotRecognised_AreNamedInAWarning_InsteadOfBeingIgnoredSilently()
+    {
+        var file = CreateTitledWorkbook(
+            ["STT", "Họ và tên", "Email", "Ghi chú nội bộ"], ["1", "Enterprise", "e@example.com", "note"],
+            ["STT", "Họ tên", "Email công việc", "Mã nhân viên"], ["1", "Lecturer", "l@example.com", "123"]);
+
+        var result = MentorImportWorkbookParser.Parse(file);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.Warnings.Should().Contain(item => item.Contains(MentorImportWorkbookParser.EnterpriseSheetName) && item.Contains("Ghi chú nội bộ"));
+        result.Value.Warnings.Should().Contain(item => item.Contains(MentorImportWorkbookParser.AcademicSheetName) && item.Contains("Mã nhân viên"));
     }
 
     private static IFormFile CreateWorkbook(Action<IXLWorksheet, IXLWorksheet> write, bool reverse = false)

@@ -6,7 +6,7 @@ export default function TeamSuggestionTooltip({ children, label = 'View team sug
       <button
         type="button"
         aria-label={label}
-        className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-indigo-200 bg-indigo-50 text-indigo-700 transition-colors hover:bg-indigo-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+        className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-secondary-200 bg-secondary-50 text-secondary transition-colors hover:bg-secondary-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
       >
         <Info className="h-4 w-4" />
       </button>

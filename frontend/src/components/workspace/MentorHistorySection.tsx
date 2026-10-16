@@ -44,7 +44,7 @@ export default function MentorHistorySection({ items }: MentorHistorySectionProp
                   </div>
                   <MentorKindTag type={item.slot} />
                 </div>
-                <p className="mt-3 border-t border-slate-100 pt-3 text-[11px] text-slate-500">
+                <p className="mt-3 border-t border-slate-100 pt-3 text-caption text-slate-500">
                   {describeMentorHistoryEnd(item)}
                 </p>
                 <span className="sr-only">{MENTOR_KIND_STYLES[item.slot].label}</span>

@@ -373,9 +373,14 @@ public sealed class CheckpointEvaluationHandler(
                 item.RubricCriterion.Key, item.Score, item.Comment)).ToArray(),
             evaluation.MemberScores.Select(item => new ValidatedMemberScore(item.StudentId, item.Score)).ToArray(),
             evaluation.Rubric, team, userId, now);
+        var checkpointNumber = evaluation.Rubric.Checkpoint?.CheckpointNumber;
+        if (checkpointNumber.HasValue)
+        {
+            EvaluationOutbox.EnqueuePublished(
+                context, evaluation, team, checkpointNumber.Value, evaluation.Rubric.Checkpoint!.Name, now);
+        }
         await context.SaveChangesAsync(cancellationToken);
 
-        var checkpointNumber = evaluation.Rubric.Checkpoint?.CheckpointNumber;
         if (checkpointNumber.HasValue)
             await PublishUpdatedAsync(team, checkpointNumber.Value, cancellationToken);
 
@@ -485,6 +490,16 @@ public sealed class CheckpointEvaluationHandler(
                     item.RubricCriterion.Key, item.Score, item.Comment)).ToArray(),
                 evaluation.MemberScores.Select(item => new ValidatedMemberScore(item.StudentId, item.Score)).ToArray(),
                 evaluation.Rubric, evaluation.Project.Team, userId, now);
+            if (isPublish && evaluation.Rubric.Checkpoint is not null)
+            {
+                EvaluationOutbox.EnqueuePublished(
+                    context,
+                    evaluation,
+                    evaluation.Project.Team,
+                    evaluation.Rubric.Checkpoint.CheckpointNumber,
+                    evaluation.Rubric.Checkpoint.Name,
+                    now);
+            }
         }
 
         if (changed.Length > 0)
@@ -517,6 +532,10 @@ public sealed class CheckpointEvaluationHandler(
             return Denied<WorkspaceCheckpointEvaluationResponse>("Only the assigned lecturer can grade this checkpoint.");
         var validation = ValidateRequest(request, evaluationContext.Rubric.Criteria, evaluationContext.Team);
         if (validation.IsFailure) return Result.Failure<WorkspaceCheckpointEvaluationResponse>(validation.Error);
+
+        // Saving identical content is not an update: no new history version, timestamp or event.
+        if (IsUnchanged(evaluation, evaluationContext.Rubric.Criteria, validation.Value))
+            return Result.Success(ToEvaluationResponse(evaluation, evaluationContext.Team, userId, SystemRoles.Lecturer));
 
         var now = DateTime.UtcNow;
         var becameSubmitted = evaluation.Status != EvaluationStatus.Submitted && validation.Value.Status == EvaluationStatus.Submitted;
@@ -610,6 +629,33 @@ public sealed class CheckpointEvaluationHandler(
         return Result.Success(new ValidatedSave(status, overallFeedback, Math.Round(total, 2), normalized, memberScores));
     }
 
+    private static bool IsUnchanged(Evaluation evaluation, ICollection<RubricCriterion> criteria, ValidatedSave request)
+    {
+        if (evaluation.Status != request.Status ||
+            evaluation.TotalScore != request.TotalScore ||
+            !string.Equals(evaluation.OverallFeedback, request.OverallFeedback, StringComparison.Ordinal))
+            return false;
+
+        var criterionIds = criteria.ToDictionary(item => item.Key, item => item.Id, StringComparer.OrdinalIgnoreCase);
+        var currentDetails = evaluation.Details
+            .Where(detail => criterionIds.ContainsValue(detail.RubricCriterionId))
+            .ToDictionary(detail => detail.RubricCriterionId);
+        if (currentDetails.Count != request.Scores.Count) return false;
+        foreach (var score in request.Scores)
+        {
+            if (!criterionIds.TryGetValue(score.CriterionKey, out var criterionId) ||
+                !currentDetails.TryGetValue(criterionId, out var detail) ||
+                detail.Score != score.Score ||
+                !string.Equals(detail.Comment, score.Comment, StringComparison.Ordinal))
+                return false;
+        }
+
+        var currentMembers = evaluation.MemberScores.ToDictionary(item => item.StudentId, item => item.Score);
+        return currentMembers.Count == request.MemberScoreOverrides.Count &&
+            request.MemberScoreOverrides.All(item =>
+                currentMembers.TryGetValue(item.StudentId, out var current) && current == item.Score);
+    }
+
     private void AddOrUpdateDetails(Evaluation evaluation, ICollection<RubricCriterion> criteria,
         IReadOnlyCollection<ValidatedScore> scores, Guid userId, DateTime now)
     {
@@ -635,14 +681,18 @@ public sealed class CheckpointEvaluationHandler(
             }
             else
             {
-                evaluation.Details.Add(new EvaluationDetail
+                var newDetail = new EvaluationDetail
                 {
                     RubricCriterionId = criterion.Id,
                     Score = score.Score,
                     Comment = score.Comment,
                     CreatedAt = now,
                     CreatedBy = userId
-                });
+                };
+                evaluation.Details.Add(newDetail);
+                // IDs are assigned before EF tracks the entity, so without this EF treats a new score
+                // as an existing row and the UPDATE hits 0 rows (DbUpdateConcurrencyException).
+                context.EvaluationDetails.Add(newDetail);
             }
         }
     }

@@ -54,7 +54,7 @@ const CommentThread = ({
       {/* Comment Header */}
       <div className="flex items-start justify-between mb-2">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white font-bold text-sm">
+          <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm bg-secondary">
             {comment.authorName.charAt(0)}
           </div>
           <div>
@@ -154,8 +154,10 @@ const CommentThread = ({
         {comment.replies && comment.replies.length > 0 && (
           <div>
             <button
+              type="button"
               onClick={() => setExpandReplies(!expandReplies)}
-              className="text-xs text-blue-600 hover:text-blue-800 font-semibold mb-2"
+              aria-expanded={expandReplies}
+              className="-ml-2 mb-1 rounded-lg px-2 py-1.5 text-xs font-semibold text-blue-600 hover:bg-blue-50 hover:text-blue-800"
             >
               {expandReplies ? '▼' : '▶'} {comment.replies.length} {comment.replies.length === 1 ? 'reply' : 'replies'}
             </button>
@@ -169,7 +171,7 @@ const CommentThread = ({
                   >
                     <div className="flex items-start justify-between mb-2">
                       <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gray-400 to-gray-600 flex items-center justify-center text-white font-bold text-xs">
+                        <div className="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-xs bg-slate-500">
                           {reply.authorName.charAt(0)}
                         </div>
                         <div>

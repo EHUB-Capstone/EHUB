@@ -86,9 +86,9 @@ const mapRosterStudents = (rawStudents, currentClassId, proposals = []) => {
 
 const classActionTone = {
   neutral: 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-800',
-  primary: 'border-primary-200 bg-primary-50 text-primary hover:border-primary-300 hover:bg-primary-100',
+  primary: 'border-primary-200 bg-primary-50 text-primary-700 hover:border-primary-300 hover:bg-primary-100',
   secondary: 'border-secondary-200 bg-secondary-50 text-secondary hover:border-secondary-300 hover:bg-secondary-100 dark:hover:bg-secondary-900/30',
-  indigo: 'border-indigo-200 bg-indigo-50/70 text-indigo-600 hover:border-indigo-300 hover:bg-indigo-50 dark:border-indigo-800 dark:bg-indigo-950/30 dark:text-indigo-300',
+  indigo: 'border-secondary-200 bg-secondary-50 text-secondary hover:border-secondary-300 hover:bg-secondary-100',
   success: 'border-green-200 bg-green-50 text-green-700 hover:border-green-300 hover:bg-green-100 dark:hover:bg-green-950/30',
   danger: 'border-red-200 bg-red-50 text-red-600 hover:border-red-300 hover:bg-red-100 dark:hover:bg-red-950/30',
 };
@@ -741,7 +741,7 @@ export default function ClassDetail() {
               <ArrowLeft className="h-4.5 w-4.5" />
             </button>
             <div className="min-w-0">
-              <h1 className="truncate text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">{cls.classCode}</h1>
+              <h1 className="truncate text-heading sm:text-display text-secondary tracking-tight">{cls.classCode}</h1>
               <p className="mt-0.5 truncate text-xs font-medium text-slate-500 sm:text-sm">
                 {cls.subjectCode || '—'} · {cls.semester || '—'} {cls.year || ''}
               </p>
@@ -929,15 +929,15 @@ export default function ClassDetail() {
             <div className="min-w-0">
             </div>
             <div className="min-w-0">
-              <p className="text-[10px] text-slate-400 uppercase font-semibold tracking-wider">Lecturer</p>
+              <p className="text-overline text-slate-400 uppercase font-semibold tracking-wider">Lecturer</p>
               <p className="font-semibold text-slate-800 text-sm truncate">{cls.lectureId?.name || <span className="text-amber-500">Not assigned</span>}</p>
-              {cls.lectureId?.email && <p className="text-[11px] text-slate-400 truncate">{cls.lectureId.email}</p>}
+              {cls.lectureId?.email && <p className="text-caption text-slate-400 truncate">{cls.lectureId.email}</p>}
             </div>
           </div>
           {!isReadOnly && user?.role === 'ADMIN' && (
             <button
               onClick={() => setShowAssignLecturer(true)}
-              className="shrink-0 cursor-pointer rounded-md border border-primary-100 bg-primary-50 px-2 py-1 text-[11px] font-semibold text-primary transition-colors hover:border-primary-200 hover:bg-primary-100"
+              className="shrink-0 cursor-pointer rounded-md border border-primary-100 bg-primary-50 px-2 py-1 text-caption font-semibold text-primary-700 transition-colors hover:border-primary-200 hover:bg-primary-100"
             >
               Edit
             </button>
@@ -947,11 +947,11 @@ export default function ClassDetail() {
         {/* Schedule Card */}
         <div className="group relative flex min-h-20 items-center justify-between gap-2.5 rounded-xl border border-slate-200/70 bg-white p-3.5 shadow-xs transition-all hover:border-slate-300 hover:shadow-sm">
           <div className="flex min-w-0 items-center gap-2.5">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-indigo-100">
-              <Calendar className="h-4.5 w-4.5 text-indigo-500" />
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-secondary-100">
+              <Calendar className="h-4.5 w-4.5 text-secondary" />
             </div>
             <div className="min-w-0">
-              <p className="text-[10px] text-slate-400 uppercase font-semibold tracking-wider">Schedule</p>
+              <p className="text-overline text-slate-400 uppercase font-semibold tracking-wider">Schedule</p>
               {primarySchedule ? (
                 <div className="space-y-0.5">
                   {schedules.slice(0, 3).map((schedule, index) => {
@@ -960,7 +960,7 @@ export default function ClassDetail() {
                     const room = schedule.room ?? schedule.Room ?? cls.room;
                     return <p key={`${day}-${slot}-${index}`} className="truncate text-xs font-semibold text-slate-700">{typeof day === 'number' ? scheduleDayNames[day] : day}, Slot {slot} · Room {room || 'TBD'}</p>;
                   })}
-                  {schedules.length > 3 && <p className="text-[11px] font-medium text-primary">+{schedules.length - 3} more sessions</p>}
+                  {schedules.length > 3 && <p className="text-caption font-medium text-primary-700">+{schedules.length - 3} more sessions</p>}
                 </div>
               ) : (
                 <p className="font-semibold text-slate-800 text-sm truncate">TBD</p>
@@ -970,7 +970,7 @@ export default function ClassDetail() {
           {!isReadOnly && canManageClass && (
             <button
               onClick={() => setShowEditSchedule(true)}
-              className="shrink-0 cursor-pointer rounded-md border border-primary-100 bg-primary-50 px-2 py-1 text-[11px] font-semibold text-primary transition-colors hover:border-primary-200 hover:bg-primary-100"
+              className="shrink-0 cursor-pointer rounded-md border border-primary-100 bg-primary-50 px-2 py-1 text-caption font-semibold text-primary-700 transition-colors hover:border-primary-200 hover:bg-primary-100"
             >
               Edit
             </button>
@@ -984,13 +984,13 @@ export default function ClassDetail() {
               <Users className="h-4.5 w-4.5 text-amber-500" />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-[10px] text-slate-400 uppercase font-semibold tracking-wider">Mentors</p>
+              <p className="text-overline text-slate-400 uppercase font-semibold tracking-wider">Mentors</p>
               {activeMentors.length > 0 ? (
                 <>
                   <p className="font-semibold text-slate-800 text-sm truncate">
                     {activeMentors.map(m => m.name || 'Unknown').join(', ')}
                   </p>
-                  <p className="text-[11px] text-slate-400">{activeMentors.length} assigned</p>
+                  <p className="text-caption text-slate-400">{activeMentors.length} assigned</p>
                 </>
               ) : (
                 <p className="text-xs text-slate-400">No mentors assigned</p>
@@ -1000,7 +1000,7 @@ export default function ClassDetail() {
           {!isReadOnly && isFeatureVisible(classFeatureFlags.mentorAssignment) && canManageClass && (
             <button
               onClick={() => runFeatureAction(classFeatureFlags.mentorAssignment, 'Mentor assignment', () => setShowAssignMentors(true))}
-              className="shrink-0 cursor-pointer rounded-md border border-primary-100 bg-primary-50 px-2 py-1 text-[11px] font-semibold text-primary transition-colors hover:border-primary-200 hover:bg-primary-100"
+              className="shrink-0 cursor-pointer rounded-md border border-primary-100 bg-primary-50 px-2 py-1 text-caption font-semibold text-primary-700 transition-colors hover:border-primary-200 hover:bg-primary-100"
             >
               Manage
             </button>
@@ -1013,9 +1013,9 @@ export default function ClassDetail() {
             <Users className="h-4.5 w-4.5 text-secondary" />
           </div>
           <div>
-            <p className="text-[10px] text-slate-400 uppercase font-semibold tracking-wider">Students</p>
+            <p className="text-overline text-slate-400 uppercase font-semibold tracking-wider">Students</p>
             <p className="mt-0.5 text-xl font-bold leading-none text-slate-900">{rosterLoadError ? '—' : (cls.studentCount ?? rosterMeta.totalCount)}</p>
-            <p className="mt-1 text-[11px] text-slate-400">{rosterLoadError ? 'Unable to load roster' : `${unassignedCount} unassigned`}</p>
+            <p className="mt-1 text-caption text-slate-400">{rosterLoadError ? 'Unable to load roster' : `${unassignedCount} unassigned`}</p>
           </div>
         </div>
       </div>

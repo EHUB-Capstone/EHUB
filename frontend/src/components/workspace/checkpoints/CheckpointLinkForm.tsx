@@ -71,9 +71,10 @@ export default function CheckpointLinkForm({
   return (
     <form onSubmit={submit} className="space-y-4">
       <div className="grid gap-4 md:grid-cols-2">
-        <label className="space-y-1.5 text-sm font-semibold text-slate-700">
+        <label htmlFor="checkpoint-link-name" className="space-y-1.5 text-sm font-semibold text-slate-700">
           <span>Link name <span className="text-red-500">*</span></span>
           <input
+            id="checkpoint-link-name"
             value={name}
             onChange={(event) => setName(event.target.value)}
             autoFocus={Boolean(editingLink)}
@@ -82,18 +83,22 @@ export default function CheckpointLinkForm({
             className="w-full rounded-xl border border-slate-300 px-3 py-2.5 outline-none focus:border-primary focus:ring-2 focus:ring-primary/15"
           />
         </label>
-        <label className="space-y-1.5 text-sm font-semibold text-slate-700">
+        <label htmlFor="checkpoint-link-url" className="space-y-1.5 text-sm font-semibold text-slate-700">
           <span>Public HTTPS link <span className="text-red-500">*</span></span>
           <input
+            id="checkpoint-link-url"
             value={url}
             onChange={(event) => { setUrl(event.target.value); setUrlError(''); }}
             onBlur={() => setUrlError(validateCheckpointLinkUrl(url) ?? '')}
             placeholder="https://drive.google.com/..."
             inputMode="url"
             aria-invalid={Boolean(urlError)}
-            className="w-full rounded-xl border border-slate-300 px-3 py-2.5 outline-none focus:border-primary focus:ring-2 focus:ring-primary/15"
+            aria-describedby="checkpoint-link-url-hint"
+            className={`w-full rounded-xl border px-3 py-2.5 outline-none focus:ring-2 focus:ring-primary/15 ${urlError ? 'border-red-300 focus:border-red-400' : 'border-slate-300 focus:border-primary'}`}
           />
-          {urlError && <span className="block text-xs font-normal text-red-600">{urlError}</span>}
+          <span id="checkpoint-link-url-hint" role={urlError ? 'alert' : undefined} className={`block text-xs font-normal ${urlError ? 'text-red-600' : 'text-slate-500'}`}>
+            {urlError || 'Google Drive, Figma, GitHub, YouTube… must be publicly viewable.'}
+          </span>
         </label>
       </div>
       <div className="flex items-center justify-between gap-3">

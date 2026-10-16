@@ -250,6 +250,7 @@ public sealed class MentorAssignmentHandler : IMentorAssignmentHandler
         if (request.AssignmentId == Guid.Empty)
             return Result.Failure(new Error(ErrorCodes.ClassValidationError, "Assignment id is required."));
         var current = await _context.MentorAssignments.Include(item => item.Team).ThenInclude(item => item.Class)
+            .Include(item => item.MentorProfile).ThenInclude(profile => profile.User)
             .FirstOrDefaultAsync(item => item.Id == request.AssignmentId && item.TeamId == teamId && item.Status == MentorAssignmentStatus.Active && item.EndedAt == null, cancellationToken);
         if (current == null) return await EndTemporaryAsync(teamId, request, userId, role, cancellationToken);
 
@@ -275,6 +276,8 @@ public sealed class MentorAssignmentHandler : IMentorAssignmentHandler
             DetailsJson = JsonSerializer.Serialize(new { TeamId = teamId, current.MentorProfileId, Slot = current.Slot.ToString(), Reason = request.Reason.Trim() })
         });
         ClassOutbox.Enqueue(_context, "Team.MentorAssignmentChanged.v1", current.Team.ClassId, new { TeamId = teamId, Action = "Ended" }, now);
+        MentorChangeNotifications.Enqueue(_context, current.Team.ClassId, teamId, current.Team.TeamCode, current.MentorProfile.UserId,
+            current.MentorProfile.User.FullName, null, request.Reason.Trim(), userId, now);
         await _context.SaveChangesAsync(cancellationToken);
         return Result.Success();
     }
@@ -368,7 +371,7 @@ public sealed class MentorAssignmentHandler : IMentorAssignmentHandler
                     return Failure(ErrorCodes.ClassValidationError, "The selected mentor is already assigned to this slot.");
 
                 var now = DateTime.UtcNow;
-                AddEndEffects(current, reason, userId, now);
+                AddEndEffects(current, reason, userId, now, mentor.User.FullName);
                 // The old assignment is saved as ended before the new one is added, inside the same transaction.
                 await _context.SaveChangesAsync(token);
                 var assignment = AddAssignEffects(team, mentor, userId, request.Note, now);
@@ -459,10 +462,15 @@ public sealed class MentorAssignmentHandler : IMentorAssignmentHandler
     }
 
     // Mentors who have no account yet. They are listed once per person (same type and name), preferring the master-list record.
+    // Mentors who have no account yet. Like mentors with an account they must first be added to the semester, so the class
+    // dialog offers exactly the people Balanced and Random can use. One entry per person (same type and name).
     private async Task<List<MentorCandidateDto>> LoadTemporaryCandidatesAsync(Guid semesterId, CancellationToken token)
     {
-        var drafts = await _context.MentorImportDrafts.AsNoTracking()
-            .Where(item => item.Status == MentorImportDraftStatus.NeedsCompletion).ToListAsync(token);
+        var drafts = await _context.SemesterTemporaryMentors.AsNoTracking()
+            .Where(item => item.SemesterId == semesterId && item.Status == SemesterStaffStatus.Active &&
+                           item.Draft.Status == MentorImportDraftStatus.NeedsCompletion)
+            .Select(item => item.Draft)
+            .ToListAsync(token);
         var chosen = drafts
             .GroupBy(item => (item.Type, item.NormalizedFullName))
             .Select(group => group.OrderBy(item => item.SemesterId == null ? 0 : 1).ThenByDescending(item => item.UpdatedAt ?? item.CreatedAt).First())
@@ -492,8 +500,10 @@ public sealed class MentorAssignmentHandler : IMentorAssignmentHandler
         }).ToList();
     }
 
-    private Task<MentorImportDraft?> LoadUsableDraftAsync(Guid draftId, CancellationToken token) =>
-        _context.MentorImportDrafts.FirstOrDefaultAsync(item => item.Id == draftId && item.Status == MentorImportDraftStatus.NeedsCompletion, token);
+    // The mentor must still lack an account and must have been added to the semester, the same rule as for mentors with an account.
+    private Task<MentorImportDraft?> LoadUsableDraftAsync(Guid draftId, Guid semesterId, CancellationToken token) =>
+        _context.MentorImportDrafts.FirstOrDefaultAsync(item => item.Id == draftId && item.Status == MentorImportDraftStatus.NeedsCompletion &&
+            _context.SemesterTemporaryMentors.Any(entry => entry.DraftId == item.Id && entry.SemesterId == semesterId && entry.Status == SemesterStaffStatus.Active), token);
 
     private TemporaryMentorAssignment AddTemporaryAssignEffects(Team team, MentorImportDraft draft, Guid userId, string? note, DateTime now)
     {
@@ -522,7 +532,7 @@ public sealed class MentorAssignmentHandler : IMentorAssignmentHandler
         return assignment;
     }
 
-    private void AddTemporaryEndEffects(TemporaryMentorAssignment current, string reason, Guid userId, DateTime now)
+    private void AddTemporaryEndEffects(TemporaryMentorAssignment current, string reason, Guid userId, DateTime now, string? replacementName)
     {
         current.Status = MentorAssignmentStatus.Ended;
         current.EndedAt = now;
@@ -536,6 +546,9 @@ public sealed class MentorAssignmentHandler : IMentorAssignmentHandler
             OccurredAtUtc = now,
             DetailsJson = JsonSerializer.Serialize(new { TeamId = current.TeamId, current.DraftId, Slot = current.Slot.ToString(), Reason = reason })
         });
+        // A mentor without an account cannot be notified, but the lecturer of the class is told.
+        MentorChangeNotifications.Enqueue(_context, current.Team.ClassId, current.TeamId, current.Team.TeamCode, null,
+            current.Draft.FullName, replacementName, reason, userId, now);
     }
 
     // True when the team slot already has a real or a temporary active mentor, optionally ignoring one temporary assignment.
@@ -559,8 +572,8 @@ public sealed class MentorAssignmentHandler : IMentorAssignmentHandler
                 var mutationError = ClassStateRules.GetMutationError(team.Class.Status);
                 if (mutationError != null) return Failure(mutationError.Code, mutationError.Message);
 
-                var draft = await LoadUsableDraftAsync(request.MentorProfileId, token);
-                if (draft == null) return Failure(ErrorCodes.MentorNotAvailable, "The selected mentor is not available.");
+                var draft = await LoadUsableDraftAsync(request.MentorProfileId, team.Class.SemesterId, token);
+                if (draft == null) return Failure(ErrorCodes.MentorNotAvailable, "The selected mentor is not active in this semester's teaching staff list.");
 
                 var temporaryInSlot = await _context.TemporaryMentorAssignments.Include(item => item.Draft)
                     .Where(item => item.TeamId == teamId && item.Slot == draft.Type && item.Status == MentorAssignmentStatus.Active && item.EndedAt == null)
@@ -603,7 +616,7 @@ public sealed class MentorAssignmentHandler : IMentorAssignmentHandler
             return Result.Failure(new Error(ErrorCodes.ClassAccessDenied, "Only an administrator or assigned lecturer can end a mentor assignment."));
         var mutationError = ClassStateRules.GetMutationError(current.Team.Class.Status);
         if (mutationError != null) return Result.Failure(mutationError);
-        AddTemporaryEndEffects(current, request.Reason.Trim(), userId, DateTime.UtcNow);
+        AddTemporaryEndEffects(current, request.Reason.Trim(), userId, DateTime.UtcNow, null);
         await _context.SaveChangesAsync(cancellationToken);
         return Result.Success();
     }
@@ -641,8 +654,8 @@ public sealed class MentorAssignmentHandler : IMentorAssignmentHandler
                 MentorImportDraft? newDraft = null;
                 if (request.Temporary)
                 {
-                    newDraft = await LoadUsableDraftAsync(request.MentorProfileId, token);
-                    if (newDraft == null) return Failure(ErrorCodes.MentorNotAvailable, "The selected mentor is not available.");
+                    newDraft = await LoadUsableDraftAsync(request.MentorProfileId, team.Class.SemesterId, token);
+                    if (newDraft == null) return Failure(ErrorCodes.MentorNotAvailable, "The selected mentor is not active in this semester's teaching staff list.");
                     if (newDraft.Type != slot) return Failure(ErrorCodes.ClassValidationError, "The replacement must be the same type of mentor as the current one.");
                     if (temporaryCurrent != null && temporaryCurrent.DraftId == newDraft.Id)
                         return Failure(ErrorCodes.ClassValidationError, "The selected mentor is already assigned to this slot.");
@@ -658,8 +671,9 @@ public sealed class MentorAssignmentHandler : IMentorAssignmentHandler
                 }
 
                 var now = DateTime.UtcNow;
-                if (realCurrent != null) AddEndEffects(realCurrent, reason, userId, now);
-                else AddTemporaryEndEffects(temporaryCurrent!, reason, userId, now);
+                var replacementName = newDraft?.FullName ?? newMentor?.User.FullName;
+                if (realCurrent != null) AddEndEffects(realCurrent, reason, userId, now, replacementName);
+                else AddTemporaryEndEffects(temporaryCurrent!, reason, userId, now, replacementName);
                 // The old assignment is saved as ended before the new one is added, inside the same transaction.
                 await _context.SaveChangesAsync(token);
 
@@ -698,8 +712,8 @@ public sealed class MentorAssignmentHandler : IMentorAssignmentHandler
                 var mutationError = ClassStateRules.GetMutationError(targetClass.Status);
                 if (mutationError != null) return BatchFailure(mutationError.Code, mutationError.Message);
 
-                var draft = await LoadUsableDraftAsync(draftId, token);
-                if (draft == null) return BatchFailure(ErrorCodes.MentorNotAvailable, "The selected mentor is not available.");
+                var draft = await LoadUsableDraftAsync(draftId, targetClass.SemesterId, token);
+                if (draft == null) return BatchFailure(ErrorCodes.MentorNotAvailable, "The selected mentor is not active in this semester's teaching staff list.");
 
                 var teams = await _context.Teams.Where(item => item.ClassId == classId && teamIds.Contains(item.Id)).ToListAsync(token);
                 if (teams.Count != teamIds.Length)
@@ -798,7 +812,7 @@ public sealed class MentorAssignmentHandler : IMentorAssignmentHandler
         return assignment;
     }
 
-    private void AddEndEffects(MentorAssignment current, string reason, Guid userId, DateTime now)
+    private void AddEndEffects(MentorAssignment current, string reason, Guid userId, DateTime now, string? replacementName = null)
     {
         current.Status = MentorAssignmentStatus.Ended;
         current.EndedAt = now;
@@ -812,6 +826,8 @@ public sealed class MentorAssignmentHandler : IMentorAssignmentHandler
             DetailsJson = JsonSerializer.Serialize(new { TeamId = current.TeamId, current.MentorProfileId, Slot = current.Slot.ToString(), Reason = reason })
         });
         ClassOutbox.Enqueue(_context, "Team.MentorAssignmentChanged.v1", current.Team.ClassId, new { TeamId = current.TeamId, Action = "Ended" }, now);
+        MentorChangeNotifications.Enqueue(_context, current.Team.ClassId, current.TeamId, current.Team.TeamCode, current.MentorProfile.UserId,
+            current.MentorProfile.User.FullName, replacementName, reason, userId, now);
     }
 
     private static Result<AssignMentorBatchResponse> BatchFailure(string code, string message) => Result.Failure<AssignMentorBatchResponse>(new Error(code, message));

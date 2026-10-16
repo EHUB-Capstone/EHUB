@@ -44,6 +44,9 @@ public class MentorProfileConfiguration : IEntityTypeConfiguration<MentorProfile
         builder.Property(mp => mp.Version)
             .IsRowVersion()
             .HasColumnName("xmin");
+        builder.Ignore(mp => mp.Tags);
+        builder.HasMany(mp => mp.Experiences).WithOne().HasForeignKey(x => x.MentorProfileId)
+            .OnDelete(DeleteBehavior.Cascade);
 
         builder.Property(mp => mp.Organization)
             .HasColumnName("organization")
@@ -53,6 +56,15 @@ public class MentorProfileConfiguration : IEntityTypeConfiguration<MentorProfile
             .HasColumnName("linkedin_url")
             .HasMaxLength(500);
 
+        builder.Ignore(mp => mp.MentorType);
+        builder.Property(mp => mp.Experience).HasColumnName("experience").HasMaxLength(4000);
+        builder.Property(mp => mp.PortfolioUrl).HasColumnName("portfolio_url").HasMaxLength(1000);
+        builder.Property(mp => mp.CvStorageUrl).HasColumnName("cv_storage_url").HasMaxLength(1000);
+        builder.Property(mp => mp.CvPublicId).HasColumnName("cv_public_id").HasMaxLength(500);
+        builder.Property(mp => mp.CvFileName).HasColumnName("cv_file_name").HasMaxLength(255);
+        builder.Property(mp => mp.PortfolioStorageUrl).HasColumnName("portfolio_storage_url").HasMaxLength(1000);
+        builder.Property(mp => mp.PortfolioPublicId).HasColumnName("portfolio_public_id").HasMaxLength(500);
+        builder.Property(mp => mp.PortfolioFileName).HasColumnName("portfolio_file_name").HasMaxLength(255);
         builder.Property(mp => mp.Type)
             .HasColumnName("mentor_type")
             .HasConversion<string>()

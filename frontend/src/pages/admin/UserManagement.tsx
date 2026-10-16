@@ -52,6 +52,8 @@ export default function UserManagement() {
   const [incompleteRefresh, setIncompleteRefresh] = useState(0);
   const [deleteTarget, setDeleteTarget] = useState<any | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  // Whether the account can be deleted, asked from the server when the dialog opens: { loading } | { canDelete, reasons }.
+  const [deleteCheck, setDeleteCheck] = useState<{ loading: boolean; canDelete: boolean; reasons: string[] }>({ loading: false, canDelete: true, reasons: [] });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingUser, setEditingUser] = useState<any | null>(null);
   const [rowActionId, setRowActionId] = useState<string | null>(null);
@@ -215,8 +217,17 @@ export default function UserManagement() {
     setIsModalOpen(true);
   };
 
-  const handleDelete = (id: string, name: string) => {
+  const handleDelete = async (id: string, name: string) => {
     setDeleteTarget({ id, name });
+    setDeleteCheck({ loading: true, canDelete: true, reasons: [] });
+    try {
+      const response = await userApi.deletionCheck(id);
+      const result = response?.data ?? response;
+      setDeleteCheck({ loading: false, canDelete: Boolean(result?.canDelete), reasons: result?.reasons ?? [] });
+    } catch {
+      // If the check itself fails the server still refuses an unsafe delete when the admin confirms.
+      setDeleteCheck({ loading: false, canDelete: true, reasons: [] });
+    }
   };
 
   const confirmDelete = async () => {
@@ -228,7 +239,9 @@ export default function UserManagement() {
       toast.success('User account deleted successfully!');
       setDeleteTarget(null);
     } catch (error) {
-      toast.error(parseApiError(error, 'Failed to delete user').message);
+      // The server names what still depends on the account, so the message is shown in full and the dialog closes.
+      toast.error(parseApiError(error, 'Failed to delete user').message, { duration: 8000 });
+      setDeleteTarget(null);
     } finally {
       setIsDeleting(false);
     }
@@ -289,7 +302,7 @@ export default function UserManagement() {
       {/* ── Header ── */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
         <div className="min-w-0">
-          <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">User Management</h1>
+          <h1 className="text-heading sm:text-display text-secondary tracking-tight">User Management</h1>
           <p className="text-slate-500 mt-1">
             {view === 'accounts'
               ? `${totalItems} user accounts registered on the platform`
@@ -318,7 +331,7 @@ export default function UserManagement() {
           >
             {label}
             {key === 'incomplete' && incompleteCount > 0 && (
-              <span className={`rounded-full px-1.5 text-[11px] font-bold ${view === key ? 'bg-white/25 text-white' : 'bg-amber-100 text-amber-800'}`}>{incompleteCount}</span>
+              <span className={`rounded-full px-1.5 text-caption font-bold ${view === key ? 'bg-white/25 text-white' : 'bg-amber-100 text-amber-800'}`}>{incompleteCount}</span>
             )}
           </button>
         ))}
@@ -389,6 +402,7 @@ export default function UserManagement() {
           search={debouncedSearch}
           mentorType={mentorTypeFilter}
           onUnfilteredTotal={setIncompleteCount}
+          onChanged={() => { void loadIncompleteCount(); void fetchUsers(); }}
         />
       )}
 
@@ -403,7 +417,7 @@ export default function UserManagement() {
           <div className="relative">
             {isRefreshing && (
               <div
-                className="pointer-events-none absolute right-4 top-3 z-10 flex items-center gap-2 rounded-full border border-primary-100 bg-white/95 px-3 py-1.5 text-xs font-medium text-primary shadow-sm"
+                className="pointer-events-none absolute right-4 top-3 z-10 flex items-center gap-2 rounded-full border border-primary-100 bg-white/95 px-3 py-1.5 text-xs font-medium text-primary-700 shadow-sm"
                 role="status"
                 aria-live="polite"
               >
@@ -418,15 +432,16 @@ export default function UserManagement() {
               <table className="w-full min-w-[1220px]">
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50/60">
-                  <th className="py-3.5 px-6 text-xs text-slate-400 uppercase text-left font-semibold tracking-wider">User</th>
-                  <th className="py-3.5 px-6 text-xs text-slate-400 uppercase text-left font-semibold tracking-wider">Role</th>
-                  <th className="py-3.5 px-6 text-xs text-slate-400 uppercase text-left font-semibold tracking-wider">Status</th>
-                  <th className="py-3.5 px-6 text-xs text-slate-400 uppercase text-left font-semibold tracking-wider">Student ID / Major</th>
-                  <th className="py-3.5 px-6 text-xs text-slate-400 uppercase text-left font-semibold tracking-wider">Semester</th>
-                  <th className="py-3.5 px-6 text-xs text-slate-400 uppercase text-left font-semibold tracking-wider">Class</th>
-                  <th className="py-3.5 px-6 text-xs text-slate-400 uppercase text-left font-semibold tracking-wider">Group Name</th>
-                  <th className="py-3.5 px-6 text-xs text-slate-400 uppercase text-left font-semibold tracking-wider">Joined Date</th>
-                  <th className="py-3.5 px-6 text-xs text-slate-400 uppercase text-right font-semibold tracking-wider">Actions</th>
+                  <th className="py-3.5 px-6 text-xs text-slate-600 uppercase text-left font-semibold tracking-wider">User</th>
+                  <th className="py-3.5 px-6 text-xs text-slate-600 uppercase text-left font-semibold tracking-wider">Role</th>
+                  <th className="py-3.5 px-6 text-xs text-slate-600 uppercase text-left font-semibold tracking-wider">Status</th>
+                  <th className="py-3.5 px-6 text-xs text-slate-600 uppercase text-left font-semibold tracking-wider">Student ID / Major</th>
+                  <th className="py-3.5 px-6 text-xs text-slate-600 uppercase text-left font-semibold tracking-wider">Semester</th>
+                  <th className="py-3.5 px-6 text-xs text-slate-600 uppercase text-left font-semibold tracking-wider">Class</th>
+                  <th className="py-3.5 px-6 text-xs text-slate-600 uppercase text-left font-semibold tracking-wider">Group Name</th>
+                  <th className="py-3.5 px-6 text-xs text-slate-600 uppercase text-left font-semibold tracking-wider">Joined Date</th>
+                  {/* Stays pinned to the right edge, so Edit and Delete are visible without scrolling the table sideways. */}
+                  <th className="sticky right-0 z-[1] bg-slate-50 py-3.5 px-6 text-xs text-slate-600 uppercase text-right font-semibold tracking-wider shadow-[-8px_0_8px_-8px_rgba(15,23,42,0.12)]">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -437,13 +452,13 @@ export default function UserManagement() {
                         {user.avatar ? (
                           <img src={user.avatar} alt="" className="w-9 h-9 rounded-xl object-cover shrink-0" />
                         ) : (
-                          <div className="w-9 h-9 rounded-xl bg-primary-100 flex items-center justify-center font-bold text-primary shrink-0">
+                          <div className="w-9 h-9 rounded-xl bg-primary-100 flex items-center justify-center font-bold text-primary-700 shrink-0">
                             {user.name?.charAt(0)?.toUpperCase() || '?'}
                           </div>
                         )}
                         <div className="min-w-0">
                           {user.role === 'MENTOR' && user.mentorProfileId
-                            ? <Link to={`/admin/mentors/${user.mentorProfileId}`} className="block truncate font-semibold text-slate-900 hover:text-primary hover:underline" title="Open mentor profile">{user.name}</Link>
+                            ? <Link to={`/admin/mentors/${user.mentorProfileId}`} className="block truncate font-semibold text-slate-900 hover:text-primary-700 hover:underline" title="Open mentor profile">{user.name}</Link>
                             : <div className="font-semibold text-slate-900 truncate">{user.name}</div>}
                           <div className="text-xs text-slate-400 truncate flex items-center gap-1">
                             <Mail className="w-3 h-3 inline" /> {user.email}
@@ -488,7 +503,7 @@ export default function UserManagement() {
                     <td className="py-3.5 px-6 text-xs text-slate-400">
                       {user.createdAt ? new Date(user.createdAt).toLocaleDateString() : '—'}
                     </td>
-                    <td className="py-3.5 px-6 text-right">
+                    <td className="sticky right-0 z-[1] bg-white py-3.5 px-6 text-right shadow-[-8px_0_8px_-8px_rgba(15,23,42,0.12)] group-hover:bg-slate-50">
                       <div className="flex items-center justify-end gap-1.5">
                         {user.status === 'PENDING' && (
                           <>
@@ -518,7 +533,7 @@ export default function UserManagement() {
                           type="button"
                           aria-label={`Edit ${user.name}`}
                           title="Edit User"
-                          className="p-1.5 rounded-lg text-slate-400 hover:text-primary hover:bg-primary-50 transition-all"
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-primary-700 hover:bg-primary-50 transition-all"
                           onClick={() => openEditModal(user)}
                         >
                           <Edit className="w-4 h-4" />
@@ -528,7 +543,7 @@ export default function UserManagement() {
                           aria-label={`Delete ${user.name}`}
                           title="Delete User"
                           className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-all"
-                          onClick={() => handleDelete(user.id || user._id, `${user.name} (${user.email})`)}
+                          onClick={() => void handleDelete(user.id || user._id, `${user.name} (${user.email})`)}
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
@@ -697,7 +712,7 @@ export default function UserManagement() {
           )}
 
           {formData.role === 'MENTOR' && editingUser?.mentorProfileId && (
-            <Link to={`/admin/mentors/${editingUser.mentorProfileId}`} className="inline-flex text-xs font-semibold text-primary hover:underline">
+            <Link to={`/admin/mentors/${editingUser.mentorProfileId}`} className="inline-flex text-xs font-semibold text-primary-700 hover:underline">
               Open the full mentor profile (expertise, background, availability)
             </Link>
           )}
@@ -791,8 +806,22 @@ export default function UserManagement() {
         onClose={() => setDeleteTarget(null)}
         onConfirm={confirmDelete}
         title="Delete User Account"
-        description={`Are you sure you want to delete ${deleteTarget?.name}? This action cannot be undone.`}
+        description={deleteCheck.loading
+          ? `Checking whether ${deleteTarget?.name} can be deleted...`
+          : deleteCheck.canDelete
+            ? `Are you sure you want to delete ${deleteTarget?.name}? This action cannot be undone.`
+            : `${deleteTarget?.name} cannot be deleted right now.`}
         isSubmitting={isDeleting}
+        confirmDisabled={deleteCheck.loading || !deleteCheck.canDelete}
+        details={!deleteCheck.loading && !deleteCheck.canDelete ? (
+          <div role="alert" className="rounded-xl bg-red-50 px-4 py-3 text-left text-sm text-red-700">
+            <p className="font-semibold">Why it cannot be deleted</p>
+            <ul className="mt-1 list-disc space-y-0.5 pl-5">
+              {deleteCheck.reasons.map(reason => <li key={reason}>{reason.charAt(0).toUpperCase() + reason.slice(1)}</li>)}
+            </ul>
+            <p className="mt-2 text-xs text-red-600">Remove or reassign these first, or block the account instead so it can no longer sign in.</p>
+          </div>
+        ) : undefined}
       />
     </div>
   );

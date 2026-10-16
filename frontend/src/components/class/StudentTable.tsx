@@ -3,7 +3,7 @@ import toast from 'react-hot-toast';
 import { Search, Users, AlertTriangle, UserMinus, RotateCcw, ChevronLeft, ChevronRight, RefreshCw, Loader2 } from 'lucide-react';
 import EmptyState from '../ui/EmptyState';
 import { getMajorName, TEAM_MAJOR_GROUPS } from '../../constants/majors';
-import { isMissingTeamMajor } from '../../utils/teamManagement';
+import { isMissingTeamMajor, orderStudentsByTeamBlock } from '../../utils/teamManagement';
 import { shortenSemesterCode } from '../../utils/semester';
 import { matchesSearchQuery } from '../../utils/searchText';
 
@@ -88,7 +88,11 @@ export default function StudentTable({
   editableStudentId = undefined,
   onMajorChange = undefined,
   updatingMajor = false,
+  priorityTeamId = undefined,
+  descriptionFromWidth = '5xl',
 }) {
+  // Tailwind needs complete class names, so the two supported breakpoints are spelled out.
+  const descriptionVisibility = descriptionFromWidth === '4xl' ? '@4xl:table-cell' : '@5xl:table-cell';
   const students = useMemo(() => (Array.isArray(rawStudents) ? rawStudents : []), [rawStudents]);
   const teams = useMemo(() => (Array.isArray(rawTeams) ? rawTeams : []), [rawTeams]);
   const semesterCode = shortenSemesterCode(
@@ -127,33 +131,10 @@ export default function StudentTable({
       return matchSearch && matchMajor;
     });
 
-    const teamIndexMap = new Map();
-    teams.forEach((t, index) => teamIndexMap.set(t._id.toString(), index));
-
-    result.sort((a, b) => {
-      if (a.teamId && b.teamId) {
-        const aTeamId = a.teamId.toString();
-        const bTeamId = b.teamId.toString();
-        if (aTeamId === bTeamId) {
-          const t = teamMap.get(aTeamId);
-          // Leader first
-          const aId = typeof a._id === 'object' ? a._id.toString() : a._id;
-          const bId = typeof b._id === 'object' ? b._id.toString() : b._id;
-          const leaderId = t?.leaderId?._id ? t.leaderId._id.toString() : (typeof t?.leaderId === 'string' ? t.leaderId : null);
-          
-          if (leaderId === aId) return -1;
-          if (leaderId === bId) return 1;
-          return 0;
-        }
-        return (teamIndexMap.get(aTeamId) ?? 999) - (teamIndexMap.get(bTeamId) ?? 999);
-      }
-      if (a.teamId) return -1;
-      if (b.teamId) return 1;
-      return 0;
-    });
+    result = orderStudentsByTeamBlock(result, teams, priorityTeamId);
 
     return result;
-  }, [students, teams, deferredSearch, filterMajor, teamMap, serverQuery]);
+  }, [students, teams, deferredSearch, filterMajor, serverQuery, priorityTeamId]);
 
   const hideProjectName = useMemo(() => {
     if (teams.length === 0) return false;
@@ -283,7 +264,7 @@ export default function StudentTable({
           </select>
         )}
         {selected.length > 0 && (
-          <span className="inline-flex min-h-8 items-center rounded-lg bg-primary-50 px-2.5 py-1 text-xs font-semibold text-primary">
+          <span className="inline-flex min-h-8 items-center rounded-lg bg-primary-50 px-2.5 py-1 text-xs font-semibold text-primary-700">
             {selected.length} selected
           </span>
         )}
@@ -324,18 +305,18 @@ export default function StudentTable({
                     />
                   </th>
                 )}
-                <th className="min-w-[220px] px-3 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-slate-500">Student</th>
-                <th className="hidden px-3 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-slate-500 sm:table-cell">Roll No.</th>
-                <th className="px-3 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-slate-500">Major</th>
-                <th className="hidden px-3 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-slate-500 lg:table-cell">{groupColumnLabel}</th>
+                <th className="min-w-[220px] px-3 py-2.5 text-left text-overline font-bold uppercase tracking-wider text-slate-600">Student</th>
+                <th className="hidden px-3 py-2.5 text-left text-overline font-bold uppercase tracking-wider text-slate-600 sm:table-cell">Roll No.</th>
+                <th className="px-3 py-2.5 text-left text-overline font-bold uppercase tracking-wider text-slate-600">Major</th>
+                <th className="hidden px-3 py-2.5 text-left text-overline font-bold uppercase tracking-wider text-slate-600 lg:table-cell">{groupColumnLabel}</th>
                 {!hideProjectName && (
-                  <th className="hidden px-3 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-slate-500 @4xl:table-cell">Project Name</th>
+                  <th className="hidden px-3 py-2.5 text-left text-overline font-bold uppercase tracking-wider text-slate-600 @4xl:table-cell">Project Name</th>
                 )}
-                <th className="hidden w-1/4 px-3 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-slate-500 @5xl:table-cell">Description</th>
-                <th className="px-3 py-2.5 text-center text-[10px] font-bold uppercase tracking-wider text-slate-500">Team Status</th>
-                <th className="px-3 py-2.5 text-center text-[10px] font-bold uppercase tracking-wider text-slate-500">Enrollment</th>
+                <th className={`hidden w-1/4 px-3 py-2.5 text-left text-overline font-bold uppercase tracking-wider text-slate-600 ${descriptionVisibility}`}>Description</th>
+                <th className="px-3 py-2.5 text-center text-overline font-bold uppercase tracking-wider text-slate-600">Team Status</th>
+                <th className="px-3 py-2.5 text-center text-overline font-bold uppercase tracking-wider text-slate-600">Enrollment</th>
                 {(onDeleteStudent || onReEnrollStudent) && (
-                  <th className="px-3 py-2.5 text-center text-[10px] font-bold uppercase tracking-wider text-slate-500">Action</th>
+                  <th className="px-3 py-2.5 text-center text-overline font-bold uppercase tracking-wider text-slate-600">Action</th>
                 )}
               </tr>
             </thead>
@@ -370,14 +351,14 @@ export default function StudentTable({
 
                     <td className="min-w-[220px] px-3 py-2.5">
                       <div className="flex items-center gap-2.5">
-                        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary-300 to-secondary text-[11px] font-bold text-white">
+                        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-caption font-bold text-white bg-primary">
                           {s.fullName?.charAt(0)?.toUpperCase() || '?'}
                         </div>
                         <div className="flex min-w-0 flex-col">
                           <span className="flex flex-wrap items-center gap-1 whitespace-normal break-words text-sm font-medium leading-snug text-slate-800">
                             {s.fullName || 'Unknown'}
                             {team && team.leaderId && (typeof team.leaderId === 'string' ? team.leaderId : team.leaderId._id).toString() === s._id.toString() && (
-                              <span className="px-1.5 py-0.5 bg-amber-100 text-amber-700 text-[10px] rounded font-bold ml-1">L</span>
+                              <span className="px-1.5 py-0.5 bg-amber-100 text-amber-700 text-overline rounded font-bold ml-1">L</span>
                             )}
                           </span>
                         </div>
@@ -409,37 +390,37 @@ export default function StudentTable({
                               </optgroup>
                             ))}
                           </select>
-                          <span className="text-[10px] text-slate-400">Your profile and active classes update together</span>
+                          <span className="text-overline text-slate-400">Your profile and active classes update together</span>
                         </div>
                       ) : mLabel ? (
                         <div className="flex flex-col items-start gap-1">
-                          <span className={`rounded-full px-1.5 py-0.5 text-[11px] font-semibold ${majorColor(s.major)}`} title={mTooltip}>
+                          <span className={`rounded-full px-1.5 py-0.5 text-caption font-semibold ${majorColor(s.major)}`} title={mTooltip}>
                             {mLabel}
                           </span>
                           {s.majorVerificationStatus && (
-                            <span className="text-[10px] font-medium text-slate-400">
+                            <span className="text-overline font-medium text-slate-400">
                               {s.majorVerificationStatus === 'Matched' ? 'Verified' : s.majorVerificationStatus}
                             </span>
                           )}
                           {s.hasMajorMismatch && (
                             <span
-                              className="flex items-center gap-1 rounded bg-orange-50 px-1.5 py-0.5 text-[10px] font-semibold text-orange-700"
+                              className="flex items-center gap-1 rounded bg-orange-50 px-1.5 py-0.5 text-overline font-semibold text-orange-700"
                               title={`Registered major: ${s.profileMajorCode}. Official imported major: ${s.major}.`}
                             >
                               <AlertTriangle className="h-2.5 w-2.5" /> Registered as {s.profileMajorCode}
                             </span>
                           )}
                           {isOwnRow && s.isMajorLocked && (
-                            <span className="text-[10px] font-semibold text-red-600">Locked by an active class</span>
+                            <span className="text-overline font-semibold text-red-600">Locked by an active class</span>
                           )}
                         </div>
                       ) : (
                         <div className="flex flex-col items-start gap-1">
-                          <span className="flex w-fit items-center gap-1 rounded-full bg-amber-100 px-1.5 py-0.5 text-[11px] font-semibold text-amber-700" title="Missing major">
+                          <span className="flex w-fit items-center gap-1 rounded-full bg-amber-100 px-1.5 py-0.5 text-caption font-semibold text-amber-700" title="Missing major">
                             <AlertTriangle className="h-2.5 w-2.5" /> Missing
                           </span>
                           {isOwnRow && s.isMajorLocked && (
-                            <span className="text-[10px] font-semibold text-red-600">Locked by an active class</span>
+                            <span className="text-overline font-semibold text-red-600">Locked by an active class</span>
                           )}
                         </div>
                       )}
@@ -455,7 +436,7 @@ export default function StudentTable({
                       </td>
                     )}
 
-                    <td className="hidden px-3 py-2.5 text-xs text-slate-500 @5xl:table-cell" title={team?.projectDescription || team?.description}>
+                    <td className={`hidden px-3 py-2.5 text-xs text-slate-500 ${descriptionVisibility}`} title={team?.projectDescription || team?.description}>
                       {(!s.teamId || isFirstInTeam) ? (
                         <div className="max-w-sm whitespace-pre-wrap break-words leading-5">{team?.projectDescription || team?.description || '—'}</div>
                       ) : ''}
@@ -465,17 +446,17 @@ export default function StudentTable({
                       {(!s.teamId || isFirstInTeam) ? (
                         team ? (
                           team.status === 'PENDING' ? (
-                            <span className="rounded-full bg-orange-100 px-1.5 py-0.5 text-[11px] font-semibold text-orange-700">Pending</span>
+                            <span className="rounded-full bg-orange-100 px-1.5 py-0.5 text-caption font-semibold text-orange-700">Pending</span>
                           ) : team.status === 'NEEDS_REVISION' ? (
-                            <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[11px] font-semibold text-amber-700">Needs revision</span>
+                            <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-caption font-semibold text-amber-700">Needs revision</span>
                           ) : team.status === 'REJECTED' ? (
-                            <span className="rounded-full bg-red-100 px-1.5 py-0.5 text-[11px] font-semibold text-red-700">Rejected</span>
+                            <span className="rounded-full bg-red-100 px-1.5 py-0.5 text-caption font-semibold text-red-700">Rejected</span>
                           ) : (
-                            <span className="rounded-full bg-green-100 px-1.5 py-0.5 text-[11px] font-semibold text-green-700">Approved</span>
+                            <span className="rounded-full bg-green-100 px-1.5 py-0.5 text-caption font-semibold text-green-700">Approved</span>
                           )
                         ) : s.hasPendingTeamInvitation ? (
                           <span
-                            className="inline-flex max-w-[190px] flex-col items-center rounded-lg bg-amber-100 px-2 py-1 text-[11px] font-semibold leading-tight text-amber-800"
+                            className="inline-flex max-w-[190px] flex-col items-center rounded-lg bg-amber-100 px-2 py-1 text-caption font-semibold leading-tight text-amber-800"
                             title={selectionBlockReason}
                           >
                             <span>
@@ -488,13 +469,13 @@ export default function StudentTable({
                             )}
                           </span>
                         ) : (
-                          <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[11px] font-semibold text-slate-500">Unassigned</span>
+                          <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-caption font-semibold text-slate-500">Unassigned</span>
                         )
                       ) : ''}
                     </td>
 
                     <td className="px-3 py-2.5 text-center">
-                      <span className={`rounded-full px-1.5 py-0.5 text-[11px] font-semibold ${
+                      <span className={`rounded-full px-1.5 py-0.5 text-caption font-semibold ${
                         s.enrollmentStatus === 'Active'
                           ? 'bg-green-100 text-green-700'
                           : s.enrollmentStatus === 'Dropped'
@@ -536,7 +517,7 @@ export default function StudentTable({
         </div>
       )}
 
-      <div className="flex flex-col gap-2 border-t border-slate-100 px-3 py-2.5 text-[11px] text-slate-400 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-2 border-t border-slate-100 px-3 py-2.5 text-caption text-slate-400 sm:flex-row sm:items-center sm:justify-between">
         <span>
           Showing {filtered.length} of {serverQuery?.totalCount ?? students.length} students · {students.filter(s => s.teamId).length} assigned on this page
         </span>

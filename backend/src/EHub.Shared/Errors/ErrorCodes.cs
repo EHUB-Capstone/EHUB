@@ -10,6 +10,7 @@ public static class ErrorCodes
     public const string CommonForbiddenError = "COMMON_FORBIDDEN";
     public const string CommonUnauthorizedError = "COMMON_UNAUTHORIZED";
     public const string CommonBusinessRuleViolation = "COMMON_BUSINESS_RULE_VIOLATION";
+    public const string MentorCvExtractionUnavailable = "MENTOR_CV_EXTRACTION_UNAVAILABLE";
 
     // Auth error codes
     public const string AuthInvalidCredentials = "AUTH_INVALID_CREDENTIALS";
@@ -30,6 +31,8 @@ public static class ErrorCodes
     public const string AuthPasswordConfirmationMismatch = "AUTH_PASSWORD_CONFIRMATION_MISMATCH";
     public const string AuthStudentMajorRequired = "AUTH_STUDENT_MAJOR_REQUIRED";
     public const string AuthInvalidMajor = "AUTH_INVALID_MAJOR";
+    public const string AuthMentorTypeRequired = "AUTH_MENTOR_TYPE_REQUIRED";
+    public const string AuthInvalidMentorType = "AUTH_INVALID_MENTOR_TYPE";
     public const string AuthEmailVerificationRequired = "AUTH_EMAIL_VERIFICATION_REQUIRED";
     public const string AuthRegistrationNotFound = "AUTH_REGISTRATION_NOT_FOUND";
     public const string AuthVerificationCodeInvalid = "AUTH_VERIFICATION_CODE_INVALID";
@@ -65,6 +68,9 @@ public static class ErrorCodes
     public const string MentorImportSessionExpired = "MENTOR_IMPORT_SESSION_EXPIRED";
     public const string MentorImportSessionAlreadyProcessing = "MENTOR_IMPORT_SESSION_ALREADY_PROCESSING";
     public const string MentorImportConflict = "MENTOR_IMPORT_CONFLICT";
+    public const string MentorIncompleteNotFound = "MENTOR_INCOMPLETE_NOT_FOUND";
+    public const string MentorIncompleteInUseConflict = "MENTOR_INCOMPLETE_IN_USE_CONFLICT";
+    public const string MentorIncompleteNameConflict = "MENTOR_INCOMPLETE_NAME_CONFLICT";
     public const string MentorAllocationInvalid = "MENTOR_ALLOCATION_INVALID";
     public const string MentorAllocationSessionInvalid = "MENTOR_ALLOCATION_SESSION_INVALID";
     public const string MentorAllocationSessionExpired = "MENTOR_ALLOCATION_SESSION_EXPIRED";
@@ -151,6 +157,7 @@ public static class ErrorCodes
     public const string MentorProfileConflict = "MENTOR_PROFILE_CONFLICT";
     public const string MentorCapacityReached = "MENTOR_CAPACITY_REACHED";
     public const string MentorAssignmentConflict = "MENTOR_ASSIGNMENT_CONFLICT";
+    public const string MentorMatchingUnavailable = "MENTOR_MATCHING_UNAVAILABLE";
     public const string ProjectDirectionNotFound = "PROJECT_DIRECTION_NOT_FOUND";
     public const string ProjectDirectionStateInvalid = "PROJECT_DIRECTION_STATE_INVALID";
     public const string NotificationNotFound = "NOTIFICATION_NOT_FOUND";

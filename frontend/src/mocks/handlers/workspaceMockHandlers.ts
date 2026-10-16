@@ -395,6 +395,8 @@ interface MockUploadSession {
 
 // Not persisted: an upload session only matters within one page load.
 const mockUploadSessions = new Map<string, MockUploadSession>();
+const MOCK_MAX_CHECKPOINT_FILES = 5;
+const MOCK_FILE_LIMIT_MESSAGE = `A checkpoint can contain at most ${MOCK_MAX_CHECKPOINT_FILES} files. Delete a file before uploading another.`;
 const mockPreviewPolls = new Map<string, number>();
 
 /** Stands in for the presigned R2 URL: the browser PUTs here through storageClient. */
@@ -1053,6 +1055,20 @@ export function registerWorkspaceMockHandlers(mock: MockAdapter): void {
     const targetUsers = String(body.targetUsers || '').trim();
     const zaloGroupUrl = String(body.zaloGroupUrl || '').trim();
     const keywords = Array.isArray(body.keywords) ? body.keywords.map(String) : [];
+    // Omitted ids leave the startup industries untouched; a changed selection is reviewed by the lecturer.
+    let requestedIndustries: string[] | null = null;
+    if (Array.isArray(body.startupIndustryIds)) {
+      const requestedIds = body.startupIndustryIds.map(String);
+      const activeIndustries = state.startupIndustries.filter((industry) => (
+        industry.status === 'active' && requestedIds.includes(industry.id)
+      ));
+      if (requestedIds.length < 1 || requestedIds.length > 3
+        || new Set(requestedIds).size !== requestedIds.length
+        || activeIndustries.length !== requestedIds.length) {
+        return failure(400, 'WORKSPACE_VALIDATION_ERROR', 'Select between 1 and 3 active startup industries.');
+      }
+      requestedIndustries = requestedIds.map((id) => activeIndustries.find((industry) => industry.id === id)!.name);
+    }
     let isValidZaloGroupUrl = zaloGroupUrl.length === 0;
     if (zaloGroupUrl.length > 0 && zaloGroupUrl.length <= 500) {
       try {
@@ -1070,9 +1086,13 @@ export function registerWorkspaceMockHandlers(mock: MockAdapter): void {
       || !isValidZaloGroupUrl) {
       return failure(400, 'WORKSPACE_VALIDATION_ERROR', 'Required project workspace information is missing or invalid.');
     }
+    const sortedNames = (names: string[]) => [...names].map((name) => name.trim().toUpperCase()).sort().join('|');
+    const industriesChanged = requestedIndustries !== null
+      && sortedNames(requestedIndustries) !== sortedNames(team.startupIndustries || []);
     const proposedFields = [
       team.projectName !== projectName && 'projectName',
       (team.projectDescription || '') !== description && 'description',
+      industriesChanged && 'startupIndustries',
     ].filter(Boolean) as string[];
     const immediateFields = [
       (team.projectProblem || '') !== problem && 'problem',
@@ -1104,6 +1124,7 @@ export function registerWorkspaceMockHandlers(mock: MockAdapter): void {
       const occurredAtUtc = new Date().toISOString();
       direction.title = projectName;
       direction.summary = description;
+      direction.proposedStartupIndustries = industriesChanged ? requestedIndustries : null;
       direction.status = 'Submitted';
       direction.submittedAtUtc = occurredAtUtc;
       direction.reviewedAtUtc = null;
@@ -1156,6 +1177,8 @@ export function registerWorkspaceMockHandlers(mock: MockAdapter): void {
       return failure(400, 'WORKSPACE_VALIDATION_ERROR', 'The file is empty.');
     if (size > MOCK_MAX_UPLOAD_BYTES)
       return failure(400, 'WORKSPACE_VALIDATION_ERROR', 'Files must not exceed 100 MB.');
+    if (filesForCheckpoint(teamId, number).length >= MOCK_MAX_CHECKPOINT_FILES)
+      return failure(400, 'WORKSPACE_VALIDATION_ERROR', MOCK_FILE_LIMIT_MESSAGE);
     const uploadId = allocateId();
     const now = Date.now();
     mockUploadSessions.set(uploadId, { teamId, number, fileName, extension, size, userId: user.id, putDone: false });
@@ -1187,6 +1210,8 @@ export function registerWorkspaceMockHandlers(mock: MockAdapter): void {
       return failure(409, 'WORKSPACE_UPLOAD_OBJECT_MISSING', 'The file has not finished uploading. Please retry.');
     const key = `${teamId}:${number}`;
     const existingFiles = filesForCheckpoint(teamId, number);
+    if (existingFiles.length >= MOCK_MAX_CHECKPOINT_FILES)
+      return failure(400, 'WORKSPACE_VALIDATION_ERROR', MOCK_FILE_LIMIT_MESSAGE);
     const existingLinks = linksForCheckpoint(teamId, number);
     const uploaded = {
       _id: allocateId(),

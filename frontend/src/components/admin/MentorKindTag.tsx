@@ -16,7 +16,7 @@ export default function MentorKindTag({ type, className, children }: MentorKindT
   return (
     <span
       title={style.hint}
-      className={cn('inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-2 py-0.5 text-[11px] font-semibold', style.badge, className)}
+      className={cn('inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-2 py-0.5 text-caption font-semibold', style.badge, className)}
     >
       <Icon className="h-3 w-3" aria-hidden="true" />
       {style.label}

@@ -182,7 +182,7 @@ export default function ProjectData() {
       />
 
       {isRefreshing && (
-        <p className="mb-2 flex items-center gap-2 text-xs font-medium text-primary" role="status" aria-live="polite">
+        <p className="mb-2 flex items-center gap-2 text-xs font-medium text-primary-700" role="status" aria-live="polite">
           <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" /> Updating results...
         </p>
       )}

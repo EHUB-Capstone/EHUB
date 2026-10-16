@@ -5,7 +5,7 @@ export default function BoardHeader({ canCreate, onCreate }) {
   return (
     <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
       <div>
-        <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight text-slate-950">
+        <h1 className="flex items-center gap-2 text-heading sm:text-display text-secondary tracking-tight">
           <CheckSquare className="h-6 w-6 text-blue-600" />
           Execution Board
         </h1>

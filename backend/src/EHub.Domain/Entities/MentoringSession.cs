@@ -28,4 +28,5 @@ public class MentoringSession : AuditableEntity
     // Navigation properties
     public virtual ICollection<MentoringActionItem> ActionItems { get; set; } = new List<MentoringActionItem>();
     public virtual ICollection<MentoringAttendance> Attendances { get; set; } = new List<MentoringAttendance>();
+    public virtual ICollection<MentoringFeedback> Feedback { get; set; } = new List<MentoringFeedback>();
 }

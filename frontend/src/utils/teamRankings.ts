@@ -13,7 +13,7 @@ export function filterTeamRankingRows(
 ): TeamRankingViewItem[] {
   return rows.filter(item =>
     matchesSearchQuery(filters.search, [item.projectName, item.projectDescription, item.semesterGroupName, item.teamName,
-      item.teamCode, item.classCode, item.courseCode])
+      item.classCode, item.courseCode])
     && (!filters.teamId || item.teamId === filters.teamId)
     && (!filters.status || item.status === filters.status));
 }

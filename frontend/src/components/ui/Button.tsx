@@ -4,13 +4,16 @@ import { cn } from '../../utils/cn';
 import { Loader2 } from 'lucide-react';
 
 const variants = {
-  primary: 'bg-primary text-white hover:bg-primary-dark shadow-sm hover:shadow-glow-primary',
-  secondary: 'bg-slate-900 text-white hover:bg-slate-800 shadow-sm dark:bg-slate-700 dark:hover:bg-slate-600',
+  // Brand orange by product decision; white on it is 3.0:1 (below AA for small text).
+  primary: 'bg-primary text-white hover:bg-primary-600 active:bg-primary-700 shadow-sm',
+  secondary: 'bg-secondary text-white hover:bg-secondary-700 shadow-sm dark:bg-secondary-500 dark:hover:bg-secondary-400',
   outline: 'border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-400',
   ghost: 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
-  danger: 'bg-danger text-white hover:bg-danger-dark shadow-sm',
-  gradient: 'bg-gradient-primary text-white shadow-sm hover:shadow-glow-primary hover:opacity-95',
-  'ghost-primary': 'text-primary hover:bg-primary-50',
+  danger: 'bg-danger-dark text-white hover:bg-red-800 shadow-sm',
+  'danger-outline': 'border border-red-300 bg-white text-danger-dark hover:bg-danger-50',
+  // Kept so existing call sites keep working; it renders identically to primary.
+  gradient: 'bg-primary text-white hover:bg-primary-600 active:bg-primary-700 shadow-sm',
+  'ghost-primary': 'text-primary-700 hover:bg-primary-50',
 };
 
 const sizes = {
@@ -51,7 +54,7 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(({
       type={type}
       disabled={disabled || isLoading}
       className={cn(
-        'inline-flex items-center justify-center font-medium rounded-xl transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:ring-offset-1 disabled:opacity-50 disabled:pointer-events-none active:scale-[0.98]',
+        'inline-flex items-center justify-center font-medium rounded-lg transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-600 focus-visible:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none',
         variants[variant],
         sizes[size],
         className

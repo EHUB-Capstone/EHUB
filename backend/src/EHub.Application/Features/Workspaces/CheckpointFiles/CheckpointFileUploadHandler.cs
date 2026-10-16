@@ -38,6 +38,9 @@ public sealed class CheckpointFileUploadHandler(
         var availability = CheckpointWorkspaceAccess.EnsureOpen(access.Value.Schedule, now);
         if (availability.IsFailure) return Result.Failure<CheckpointFileUploadSessionResponse>(availability.Error);
 
+        if (await CountActiveFilesAsync(teamId, access.Value.Checkpoint.Id, cancellationToken) >= SubmissionFileLimits.MaxActiveFilesPerCheckpoint)
+            return Invalid<CheckpointFileUploadSessionResponse>(FileLimitMessage);
+
         var pending = await context.SubmissionUploadSessions.CountAsync(item =>
             item.TeamId == teamId && item.UserId == userId &&
             item.Status == SubmissionUploadSessionStatus.Pending && item.ExpiresAtUtc > now, cancellationToken);
@@ -121,6 +124,10 @@ public sealed class CheckpointFileUploadHandler(
         {
             return await AbortAsync(session.Id, session.ObjectKey, "The uploaded file size does not match the declared size.", cancellationToken);
         }
+
+        // Re-check at completion: several uploads can be initiated before any of them finishes.
+        if (await CountActiveFilesAsync(teamId, access.Value.Checkpoint.Id, cancellationToken) >= SubmissionFileLimits.MaxActiveFilesPerCheckpoint)
+            return await AbortAsync(session.Id, session.ObjectKey, FileLimitMessage, cancellationToken);
 
         var extension = Path.GetExtension(session.OriginalName).ToLowerInvariant();
         var header = await storage.ReadRangeAsync(session.ObjectKey, 0, CheckpointFileTypes.HeaderLength, cancellationToken);
@@ -268,6 +275,13 @@ public sealed class CheckpointFileUploadHandler(
         return Result.Failure<WorkspaceCheckpointFileResponse>(ErrorCodes.WorkspaceConcurrencyConflict,
             "Another upload changed this checkpoint at the same time. Please retry.");
     }
+
+    private static string FileLimitMessage =>
+        $"A checkpoint can contain at most {SubmissionFileLimits.MaxActiveFilesPerCheckpoint} files. Delete a file before uploading another.";
+
+    private Task<int> CountActiveFilesAsync(Guid teamId, Guid checkpointId, CancellationToken cancellationToken) =>
+        context.SubmissionFiles.CountAsync(file =>
+            file.Submission.TeamId == teamId && file.Submission.CheckpointId == checkpointId, cancellationToken);
 
     private async Task<Result<WorkspaceCheckpointFileResponse>> AbortAsync(
         Guid sessionId, string objectKey, string message, CancellationToken cancellationToken)

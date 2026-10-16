@@ -32,4 +32,21 @@ public interface IEmailService
         string title,
         string message,
         CancellationToken cancellationToken = default);
+
+    Task SendClassNotificationWithActionAsync(
+        string toEmail,
+        string fullName,
+        string subject,
+        string title,
+        string message,
+        string actionLabel,
+        string actionUrl,
+        CancellationToken cancellationToken = default) =>
+        SendClassNotificationAsync(
+            toEmail,
+            fullName,
+            subject,
+            title,
+            $"{message}\n\n{actionLabel}: {actionUrl}",
+            cancellationToken);
 }

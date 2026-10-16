@@ -149,19 +149,19 @@ export default function VersionHistory({ proposalId, versions, isEditable, onRef
             >
               <div className="min-w-0 flex-1 pr-2">
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-primary">v{ver.versionNumber}</span>
-                  <span className="text-[10px] text-slate-400 font-semibold flex items-center gap-0.5">
+                  <span className="text-xs font-bold text-primary-700">v{ver.versionNumber}</span>
+                  <span className="text-overline text-slate-400 font-semibold flex items-center gap-0.5">
                     <Calendar className="w-3 h-3" /> {new Date(ver.createdAt).toLocaleDateString()}
                   </span>
                 </div>
                 <p className="text-xs font-medium text-slate-700 mt-1 truncate" title={ver.changeNote}>
                   {ver.changeNote || 'No change note'}
                 </p>
-                <p className="text-[10px] text-slate-400 mt-0.5 flex items-center gap-0.5">
+                <p className="text-overline text-slate-400 mt-0.5 flex items-center gap-0.5">
                   <User className="w-2.5 h-2.5" /> {ver.changedBy?.name || 'Unknown'}
                 </p>
                 {getWorkspaceLabel(ver.teamId) && (
-                  <p className="text-[10px] text-slate-500 mt-1 font-semibold">
+                  <p className="text-overline text-slate-500 mt-1 font-semibold">
                     {getWorkspaceLabel(ver.teamId)}
                   </p>
                 )}
@@ -170,7 +170,7 @@ export default function VersionHistory({ proposalId, versions, isEditable, onRef
               <div className="flex gap-1 shrink-0">
                 <button
                   onClick={() => showDetail(ver)}
-                  className="p-1.5 border border-slate-200/50 bg-white text-slate-500 rounded-lg hover:text-primary transition-all"
+                  className="p-1.5 border border-slate-200/50 bg-white text-slate-500 rounded-lg hover:text-primary-700 transition-all"
                   title="View Snapshot"
                 >
                   <Eye className="w-3.5 h-3.5" />
@@ -179,7 +179,7 @@ export default function VersionHistory({ proposalId, versions, isEditable, onRef
                   <button
                     disabled={restoring}
                     onClick={() => handleRestore(ver._id, ver.versionNumber)}
-                    className="p-1.5 border border-slate-200/50 bg-white text-slate-500 rounded-lg hover:text-primary transition-all disabled:opacity-50"
+                    className="p-1.5 border border-slate-200/50 bg-white text-slate-500 rounded-lg hover:text-primary-700 transition-all disabled:opacity-50"
                     title="Restore Version"
                   >
                     <RotateCcw className="w-3.5 h-3.5" />
@@ -220,7 +220,7 @@ export default function VersionHistory({ proposalId, versions, isEditable, onRef
                     onClick={() => setCompareMode(!compareMode)}
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all shadow-sm ${
                       compareMode 
-                        ? 'bg-primary-50 text-primary border-primary-200 hover:bg-primary-100' 
+                        ? 'bg-primary-50 text-primary-700 border-primary-200 hover:bg-primary-100' 
                         : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
                     }`}
                   >

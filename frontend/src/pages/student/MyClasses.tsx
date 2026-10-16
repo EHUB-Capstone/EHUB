@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { GraduationCap, User, Mail, Calendar, ArrowRight, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { classApi } from '../../api/classApi';
@@ -10,7 +10,6 @@ export default function MyClasses() {
   const [classes, setClasses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [scope, setScope] = useState<'Current' | 'History'>('Current');
-  const navigate = useNavigate();
 
   useEffect(() => {
     const fetchClasses = async () => {
@@ -41,7 +40,7 @@ export default function MyClasses() {
       {/* Page Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">My Classes</h1>
+          <h1 className="text-heading sm:text-display text-secondary tracking-tight">My Classes</h1>
           <p className="text-sm text-slate-500 mt-1">View current enrollments or completed academic history.</p>
         </div>
         <div className="inline-flex self-start rounded-xl border border-slate-200 bg-slate-50 p-1">
@@ -78,20 +77,26 @@ export default function MyClasses() {
             return (
               <div
                 key={cls.id || cls._id}
-                className="bg-white rounded-2xl border border-slate-200/60 shadow-sm hover:shadow-md hover:border-slate-300 transition-all flex flex-col justify-between overflow-hidden group"
+                className="relative bg-white rounded-2xl border border-slate-200/60 shadow-sm hover:shadow-md hover:border-slate-300 focus-within:ring-2 focus-within:ring-primary/40 transition-all flex flex-col justify-between overflow-hidden group"
               >
                 {/* Header Gradient Accent */}
-                <div className="h-2 bg-gradient-to-r from-primary-400 to-secondary" />
+                <div className="h-2 bg-primary" />
 
                 <div className="p-6 flex-1 space-y-4">
                   {/* Subject and Semester info */}
                   <div className="flex justify-between items-start">
                     <div>
-                      <span className="px-2.5 py-1 bg-primary-50 text-primary text-xs font-semibold rounded-lg uppercase tracking-wider">
+                      <span className="px-2.5 py-1 bg-primary-50 text-primary-700 text-xs font-semibold rounded-lg uppercase tracking-wider">
                         {cls.subjectCode}
                       </span>
-                      <h2 className="text-xl font-bold text-slate-900 mt-2 group-hover:text-primary transition-colors">
-                        {cls.classCode}
+                      <h2 className="text-xl font-bold text-slate-900 mt-2 group-hover:text-primary-700 transition-colors">
+                        {/* Stretched link: the whole card is the click target. */}
+                        <Link
+                          to={`/student/classes/${cls.slug || cls._id || cls.id}`}
+                          className="after:absolute after:inset-0 after:content-[''] focus-visible:outline-none"
+                        >
+                          {cls.classCode}
+                        </Link>
                       </h2>
                     </div>
                     <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 bg-slate-50 border border-slate-100 rounded-lg px-2 py-1">
@@ -119,7 +124,7 @@ export default function MyClasses() {
                         className="w-10 h-10 rounded-full object-cover border border-slate-100 shrink-0"
                       />
                     ) : (
-                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-slate-100 to-slate-200 border border-slate-200 flex items-center justify-center shrink-0">
+                      <div className="w-10 h-10 rounded-full border border-slate-200 flex items-center justify-center shrink-0 bg-slate-100">
                         <User className="w-5 h-5 text-slate-400" />
                       </div>
                     )}
@@ -147,12 +152,12 @@ export default function MyClasses() {
                 {/* Footer action */}
                 <div className="px-6 py-4 bg-slate-50/50 border-t border-slate-100 flex justify-between items-center group-hover:bg-slate-50 transition-colors">
                   <span className="text-xs text-slate-400 font-medium">Click to see your team or classmates</span>
-                  <button
-                    onClick={() => navigate(`/student/classes/${cls.slug || cls._id || cls.id}`)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 text-slate-700 rounded-xl text-xs font-semibold hover:bg-slate-50 shadow-xs active:scale-[0.98] transition-all"
+                  <span
+                    aria-hidden="true"
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 text-slate-700 rounded-xl text-xs font-semibold shadow-xs group-hover:border-primary group-hover:text-primary-700 transition-colors"
                   >
                     Enter Class <ArrowRight className="w-3.5 h-3.5" />
-                  </button>
+                  </span>
                 </div>
               </div>
             );

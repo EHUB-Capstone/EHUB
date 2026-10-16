@@ -300,6 +300,70 @@ export function mergeTeamsWithLinkedProposals(
   ];
 }
 
+const idString = (value: unknown): string => (
+  value == null ? '' : typeof value === 'object' ? String((value as { _id?: unknown })._id ?? '') : String(value)
+);
+
+/**
+ * Orders a roster as team blocks: members of the same team stay together with the leader first, blocks
+ * follow the order of `teams`, and students without a team come last. `priorityTeamId` moves one block
+ * (the signed-in student's own team) to the very top. Sorting is stable, so ties keep their order.
+ */
+export function orderStudentsByTeamBlock<S extends { _id?: unknown; teamId?: unknown }>(
+  students: S[],
+  teams: Array<{ _id?: unknown; leaderId?: unknown }>,
+  priorityTeamId?: string | null,
+): S[] {
+  const blockIndex = new Map<string, number>();
+  teams.forEach((team, index) => blockIndex.set(idString(team._id), index));
+  const priority = idString(priorityTeamId);
+  if (priority) blockIndex.set(priority, -1);
+  const leaderByTeam = new Map(teams.map((team) => [idString(team._id), idString(team.leaderId)]));
+
+  return [...students].sort((left, right) => {
+    const leftTeam = idString(left.teamId);
+    const rightTeam = idString(right.teamId);
+    if (leftTeam && rightTeam) {
+      if (leftTeam === rightTeam) {
+        const leader = leaderByTeam.get(leftTeam);
+        if (leader && leader === idString(left._id)) return -1;
+        if (leader && leader === idString(right._id)) return 1;
+        return 0;
+      }
+      return (blockIndex.get(leftTeam) ?? 999) - (blockIndex.get(rightTeam) ?? 999);
+    }
+    if (leftTeam) return -1;
+    if (rightTeam) return 1;
+    return 0;
+  });
+}
+
+/**
+ * Orders teams by their team code, comparing the trailing number numerically so `TEAM_2` comes before
+ * `TEAM_10`. The code is only a sort key for the student view; it is no longer shown there.
+ */
+export function sortTeamsByCode<T extends Pick<ManagedTeam, 'teamCode' | 'teamName'>>(teams: T[]): T[] {
+  const key = (team: T) => team.teamCode || team.teamName || '';
+  return [...teams].sort((left, right) => key(left).localeCompare(key(right), undefined, { numeric: true, sensitivity: 'base' }));
+}
+
+/**
+ * Moves the cards that belong to the current student (their active team, then their own open
+ * proposals) to the top. Everything else keeps the incoming order, so the sort is stable.
+ */
+export function prioritizeOwnTeams(
+  teams: ManagedTeam[],
+  currentStudentId?: string | null,
+  ownTeamId?: string | null,
+): ManagedTeam[] {
+  if (!currentStudentId && !ownTeamId) return teams;
+  const isOwn = (team: ManagedTeam) => (
+    (Boolean(ownTeamId) && !team.isProposal && String(team._id) === String(ownTeamId))
+    || (Boolean(currentStudentId) && getTeamMemberIds(team).includes(String(currentStudentId)))
+  );
+  return [...teams.filter(isOwn), ...teams.filter((team) => !isOwn(team))];
+}
+
 export function entityId(reference: EntityReference): string {
   if (!reference) return '';
   if (typeof reference === 'string') return reference;
@@ -364,7 +428,7 @@ export function buildStudentTeamAssignments(
 
   teams.forEach((team) => {
     getTeamMemberIds(team).forEach((studentId) => {
-      assignments.set(studentId, { teamId: team._id, teamName: team.teamName || team.teamCode || 'Another team' });
+      assignments.set(studentId, { teamId: team._id, teamName: team.teamName || 'Another team' });
     });
   });
 
@@ -374,11 +438,31 @@ export function buildStudentTeamAssignments(
     const team = teams.find((candidate) => candidate._id === teamId);
     assignments.set(student._id, {
       teamId,
-      teamName: team?.teamName || team?.teamCode || 'Another team',
+      teamName: team?.teamName || 'Another team',
     });
   });
 
   return assignments;
+}
+
+/**
+ * Orders the student picker of the team editor: members already in this team first,
+ * then students who are free to add, and students who already belong to another team
+ * last (they cannot be selected). Order inside each group is unchanged.
+ */
+export function orderStudentsForTeamEditing<S extends { _id: string }>(
+  students: S[],
+  memberIds: Iterable<string>,
+  assignments: Map<string, { teamId: string }>,
+  currentTeamId: string,
+): S[] {
+  const members = new Set(memberIds);
+  const rank = (student: S) => {
+    if (members.has(student._id)) return 0;
+    const assignment = assignments.get(student._id);
+    return assignment && assignment.teamId !== currentTeamId ? 2 : 1;
+  };
+  return [...students].sort((left, right) => rank(left) - rank(right));
 }
 
 export function validateTeamDraft(

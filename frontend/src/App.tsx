@@ -28,6 +28,9 @@ const UserManagement = lazy(() => import('./pages/admin/UserManagement'));
 const AccountApprovals = lazy(() => import('./pages/admin/AccountApprovals'));
 const LecturerDashboard = lazy(() => import('./pages/lecturer/LecturerDashboard'));
 const LecturerClasses = lazy(() => import('./pages/lecturer/LecturerClasses'));
+const MentorDashboard = lazy(() => import('./pages/mentor/MentorOverview'));
+const MentorDirectory = lazy(() => import('./pages/shared/MentorDirectory'));
+const MentoringSessionsPage = lazy(() => import('./pages/common/MentoringSessionsPage'));
 const StudentDashboard = lazy(() => import('./pages/student/StudentDashboard'));
 const IdeaForm = lazy(() => import('./pages/student/IdeaForm'));
 const MyClasses = lazy(() => import('./pages/student/MyClasses'));
@@ -37,7 +40,6 @@ const AIAnalysis = lazy(() => import('./pages/common/AIAnalysis'));
 const ExecutionBoard = lazy(() => import('./pages/common/ExecutionBoard'));
 const GroupChat = lazy(() => import('./pages/common/GroupChat'));
 const IdeaDetail = lazy(() => import('./pages/common/IdeaDetail'));
-const MentoringSessions = lazy(() => import('./pages/common/MentoringSessions'));
 const StartupWorkspaceHub = lazy(() => import('./pages/workspace/StartupWorkspaceHub'));
 const TeamWorkspace = lazy(() => import('./pages/workspace/TeamWorkspace'));
 const ProposalEditor = lazy(() => import('./pages/workspace/ProposalEditor'));
@@ -74,14 +76,14 @@ function App(): React.ReactElement {
                     background: 'var(--app-toast-bg)',
                     color: 'var(--app-toast-color)',
                     border: '1px solid var(--app-toast-border)',
-                    borderRadius: '12px',
+                    borderRadius: '10px',
                     fontFamily: 'Inter, sans-serif',
                     fontSize: '14px',
                     padding: '12px 16px',
-                    boxShadow: '0 4px 16px -4px rgb(0 0 0 / 0.2)',
+                    boxShadow: '0 4px 16px -4px rgb(23 54 93 / 0.18)',
                   },
-                  success: { iconTheme: { primary: '#51B848', secondary: '#fff' } },
-                  error: { duration: 3500, iconTheme: { primary: '#ef4444', secondary: '#fff' } },
+                  success: { iconTheme: { primary: '#16A34A', secondary: '#fff' } },
+                  error: { duration: 3500, iconTheme: { primary: '#DC2626', secondary: '#fff' } },
                 }}
               />
 
@@ -108,7 +110,9 @@ function App(): React.ReactElement {
                   <Route path="/lecturer" element={<ProtectedRoute allowedRoles={[...classRouteAccess.lecturerArea]}>{releaseFeatureFlags.roleDashboards ? <LecturerDashboard /> : <Navigate to="/lecturer/classes" replace />}</ProtectedRoute>} />
                   <Route path="/lecturer/classes" element={<ProtectedRoute allowedRoles={[...classRouteAccess.lecturerArea]}><LecturerClasses /></ProtectedRoute>} />
                   {releaseFeatureFlags.dataBank && <Route path="/lecturer/data-bank" element={<ProtectedRoute allowedRoles={['ADMIN', 'LECTURER']}><DataBankPage /></ProtectedRoute>} />}
-                  <Route path="/mentor" element={<ProtectedRoute allowedRoles={['MENTOR']}><Navigate to="/workspace" replace /></ProtectedRoute>} />
+                  <Route path="/mentor" element={<ProtectedRoute allowedRoles={['MENTOR']}>{releaseFeatureFlags.roleDashboards ? <MentorDashboard /> : <Navigate to="/workspace" replace />}</ProtectedRoute>} />
+                  <Route path="/mentor/profile" element={<ProtectedRoute allowedRoles={['MENTOR']}><Navigate to="/profile" replace /></ProtectedRoute>} />
+                  <Route path="/mentors" element={<ProtectedRoute allowedRoles={['ADMIN', 'LECTURER']}><MentorDirectory /></ProtectedRoute>} />
 
                   <Route path="/classes/:slug" element={<ProtectedRoute allowedRoles={[...classRouteAccess.classDetail]}><ClassDetail /></ProtectedRoute>} />
 
@@ -139,7 +143,7 @@ function App(): React.ReactElement {
                   {releaseFeatureFlags.rankings && <Route path="/rankings" element={<ProtectedRoute allowedRoles={[...evaluationRankingRoles]}><Navigate to="/evaluation-grading?tab=rankings" replace /></ProtectedRoute>} />}
                   {releaseFeatureFlags.evaluations && <Route path="/evaluations" element={<IdeaDetail />} />}
                   <Route path="/executionboard" element={<ExecutionBoard />} />
-                  {releaseFeatureFlags.mentoring && <Route path="/sessions" element={<MentoringSessions />} />}
+                  {releaseFeatureFlags.mentoring && <Route path="/sessions" element={<MentoringSessionsPage />} />}
                   {releaseFeatureFlags.workshops && <Route path="/workshops" element={<Workshops />} />}
                   {releaseFeatureFlags.chat && <Route path="/chat" element={<GroupChat />} />}
                   <Route path="/settings" element={<ProfileSettings />} />

@@ -9,15 +9,40 @@ export function validateMentorWorkbook(file: { name: string; size: number }): st
   return null;
 }
 
-/** Rows that change something when the master import is confirmed: accounts, and incomplete mentors saved for later. */
-export function countMasterImportChanges(
-  preview: Pick<MentorImportPreview, 'createCount' | 'updateCount' | 'needsCompletionCount'>,
-): number {
-  return preview.createCount + preview.updateCount + preview.needsCompletionCount;
+type ImportCounts = Pick<MentorImportPreview, 'createCount' | 'updateCount' | 'needsCompletionCount'> & Partial<Pick<MentorImportPreview, 'completeDraftCount'>>;
+
+/**
+ * Rows that change something when the master import is confirmed: new accounts, updated mentors, mentors who now get their
+ * account because the email arrived ("Complete record"), and incomplete mentors saved for later.
+ */
+export function countMasterImportChanges(preview: ImportCounts): number {
+  return preview.createCount + preview.updateCount + (preview.completeDraftCount ?? 0) + preview.needsCompletionCount;
 }
 
 function plural(count: number, singular: string, pluralForm = `${singular}s`): string {
   return `${count} ${count === 1 ? singular : pluralForm}`;
+}
+
+/** The label of the confirm button and a one-line breakdown, so the button says what the import will really do. */
+export function describeImportAction(preview: ImportCounts): { label: string; breakdown: string } {
+  const created = preview.createCount;
+  const completed = preview.completeDraftCount ?? 0;
+  const updated = preview.updateCount;
+  const incomplete = preview.needsCompletionCount;
+  const total = countMasterImportChanges(preview);
+  const parts = [
+    created > 0 ? `${created} new` : '',
+    completed > 0 ? `${completed} completed with an email` : '',
+    updated > 0 ? `${updated} updated` : '',
+    incomplete > 0 ? `${incomplete} saved as incomplete` : '',
+  ].filter(Boolean);
+  const breakdown = parts.join(' · ');
+
+  if (total === 0) return { label: 'Nothing to import', breakdown };
+  if (created + completed === 0 && incomplete === 0) return { label: `Update ${plural(total, 'mentor')}`, breakdown };
+  if (updated === 0 && incomplete === 0) return { label: `Create ${plural(total, 'account')}`, breakdown };
+  if (created + completed + updated === 0) return { label: `Save ${plural(total, 'mentor')} as incomplete`, breakdown };
+  return { label: `Apply ${plural(total, 'change')}`, breakdown };
 }
 
 export function describeMasterImportResult(result: MentorImportCommitResult): string {
@@ -26,6 +51,8 @@ export function describeMasterImportResult(result: MentorImportCommitResult): st
   if (result.draftCompletedCount > 0) parts.push(`${result.draftCompletedCount} completed`);
   const converted = result.temporaryAssignmentsConverted ?? 0;
   if (converted > 0) parts.push(`${plural(converted, 'team')} switched from a temporary mentor to the new account`);
+  const semesters = result.temporarySemestersConverted ?? 0;
+  if (semesters > 0) parts.push(`${plural(semesters, 'semester entry', 'semester entries')} moved onto the account, no need to add the mentor again`);
   const hint = result.createdCount > 0 ? ' New accounts can use Forgot Password to set their first password.' : '';
   return `Mentor import completed: ${parts.join(', ')}.${hint}`;
 }

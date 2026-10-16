@@ -20,6 +20,14 @@ export const isProjectDirectionSubmittedNotification = (
   notification: NotificationNavigationSource,
 ): boolean => normalizeNotificationType(notification.type) === 'PROJECTDIRECTIONSUBMITTED';
 
+export const isProjectDirectionReviewedNotification = (
+  notification: NotificationNavigationSource,
+): boolean => [
+  'PROJECTDIRECTIONAPPROVED',
+  'PROJECTDIRECTIONREJECTED',
+  'PROJECTDIRECTIONNEEDSREVISION',
+].includes(normalizeNotificationType(notification.type));
+
 export const getLegacyNotificationClassId = (
   notification: NotificationNavigationSource,
 ): string => {

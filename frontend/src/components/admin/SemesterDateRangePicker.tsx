@@ -209,7 +209,7 @@ export default function SemesterDateRangePicker({
                   type="button"
                   disabled={!canGoPrevious}
                   onClick={() => canGoPrevious && setDisplayedMonth(previousMonth)}
-                  className="rounded-lg p-2 text-slate-500 transition hover:bg-slate-50 hover:text-primary disabled:cursor-not-allowed disabled:opacity-30"
+                  className="rounded-lg p-2 text-slate-500 transition hover:bg-slate-50 hover:text-primary-700 disabled:cursor-not-allowed disabled:opacity-30"
                   aria-label="Go to the previous month"
                 >
                   <ChevronLeft className="h-4 w-4" />
@@ -228,7 +228,7 @@ export default function SemesterDateRangePicker({
                   type="button"
                   disabled={!canGoNext}
                   onClick={() => canGoNext && setDisplayedMonth(nextMonth)}
-                  className="rounded-lg p-2 text-slate-500 transition hover:bg-slate-50 hover:text-primary disabled:cursor-not-allowed disabled:opacity-30"
+                  className="rounded-lg p-2 text-slate-500 transition hover:bg-slate-50 hover:text-primary-700 disabled:cursor-not-allowed disabled:opacity-30"
                   aria-label="Go to the next month"
                 >
                   <ChevronRight className="h-4 w-4" />
@@ -248,7 +248,7 @@ export default function SemesterDateRangePicker({
                           if (candidate > lastCalendarMonth) return lastCalendarMonth;
                           return candidate;
                         })}
-                        className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${displayedMonth.getFullYear() === calendarYear ? 'bg-primary text-white' : 'bg-slate-50 text-slate-600 hover:bg-primary-50 hover:text-primary'}`}
+                        className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${displayedMonth.getFullYear() === calendarYear ? 'bg-primary text-white' : 'bg-slate-50 text-slate-600 hover:bg-primary-50 hover:text-primary-700'}`}
                       >
                         {calendarYear}
                       </button>
@@ -265,7 +265,7 @@ export default function SemesterDateRangePicker({
                           type="button"
                           disabled={disabled}
                           onClick={() => chooseMonth(month)}
-                          className={`rounded-lg px-2 py-2 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-30 ${selected ? 'bg-primary-50 text-primary ring-1 ring-primary/30' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`}
+                          className={`rounded-lg px-2 py-2 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-30 ${selected ? 'bg-primary-50 text-primary-700 ring-1 ring-primary/30' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`}
                         >
                           {monthName}
                         </button>

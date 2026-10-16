@@ -29,7 +29,6 @@ export default function TeamMajorWarningBanner({ teams, onViewTeams }: TeamMajor
         {warnings.map(({ team, warning }) => (
           <li key={team._id}>
             <span className="font-semibold">{team.teamName}</span>
-            {team.teamCode ? <span className="font-mono text-amber-600"> ({team.teamCode})</span> : null}
             {' — '}{warning.message}
           </li>
         ))}

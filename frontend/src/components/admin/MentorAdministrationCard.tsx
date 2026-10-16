@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { FileSpreadsheet, Shuffle, Users } from 'lucide-react';
+import { FileSpreadsheet, Shuffle, UserCog, Users } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { mentorAdminApi } from '../../api/mentorAdminApi';
 import type {
@@ -13,6 +13,7 @@ import { keepAppliedEdits, removeEdit, upsertEdit } from '../../utils/mentorAllo
 import Button from '../ui/Button';
 import ConfirmDialog from '../ui/ConfirmDialog';
 import MentorAllocationPreviewModal from './MentorAllocationPreviewModal';
+import SemesterMentorManager from './SemesterMentorManager';
 
 interface MentorAdministrationCardProps {
   semesterId?: string;
@@ -28,6 +29,7 @@ export default function MentorAdministrationCard({ semesterId, semesterLabel, te
   const [includeTemporary, setIncludeTemporary] = useState(true);
   const [edits, setEdits] = useState<MentorAllocationEdit[]>([]);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [managerOpen, setManagerOpen] = useState(false);
   const [previewStale, setPreviewStale] = useState(false);
   const [confirmReplacement, setConfirmReplacement] = useState(false);
   const [busy, setBusy] = useState<'export' | 'preview-allocation' | 'refresh-allocation' | 'commit-allocation' | null>(null);
@@ -146,7 +148,7 @@ export default function MentorAdministrationCard({ semesterId, semesterLabel, te
     : 'Random picks any eligible mentor for each missing slot, whatever their current load.';
 
   return (
-    <section className="rounded-2xl border border-primary-100 bg-white px-4 py-3 shadow-sm dark:border-primary/35 dark:bg-[#111827] dark:shadow-[0_10px_30px_rgba(0,0,0,0.18)]">
+    <section className="rounded-2xl border border-primary-100 bg-white px-4 py-3 shadow-sm dark:border-primary/35 dark:bg-dark-surface dark:shadow-[0_10px_30px_rgba(0,0,0,0.18)]">
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
         <div className="flex min-w-0 items-center gap-3">
           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary text-white shadow-sm ring-1 ring-primary-200 dark:ring-primary/50">
@@ -155,7 +157,7 @@ export default function MentorAdministrationCard({ semesterId, semesterLabel, te
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="font-bold text-slate-900">Mentor assignment</h2>
-              <span className="rounded-full bg-primary-50 px-2 py-0.5 text-[11px] font-semibold text-primary">{semesterLabel}</span>
+              <span className="rounded-full bg-primary-50 px-2 py-0.5 text-caption font-semibold text-primary-700">{semesterLabel}</span>
             </div>
             <p className="text-xs text-slate-500">Keeps mentors of continuing teams, fills only missing slots. Nothing is saved before you confirm.</p>
           </div>
@@ -178,6 +180,7 @@ export default function MentorAdministrationCard({ semesterId, semesterLabel, te
               ))}
             </div>
             <Button size="sm" className="whitespace-nowrap" icon={Shuffle} onClick={() => void previewAllocation()} isLoading={busy === 'preview-allocation'}>Preview assignment</Button>
+            <Button size="sm" variant="outline" className="whitespace-nowrap" icon={UserCog} onClick={() => setManagerOpen(true)}>Manage mentors</Button>
             <Button size="sm" variant="outline" className="whitespace-nowrap" icon={FileSpreadsheet} onClick={() => void exportAssignments()} isLoading={busy === 'export'}>Export</Button>
           </div>
         )}
@@ -199,8 +202,15 @@ export default function MentorAdministrationCard({ semesterId, semesterLabel, te
               Include {temporaryMentorCount} mentor{temporaryMentorCount === 1 ? '' : 's'} without an account yet
             </label>
           )}
-          <p className="mt-2 text-[11px] text-slate-400">{strategyHint} New mentors are imported in User Management, then added with Add mentors.</p>
+          <p className="mt-2 text-caption text-slate-400">{strategyHint} New mentors are imported in User Management, then added with Add mentors.</p>
 
+          <SemesterMentorManager
+            isOpen={managerOpen}
+            semesterId={semesterId}
+            semesterLabel={semesterLabel}
+            onClose={() => setManagerOpen(false)}
+            onChanged={onImportCommitted}
+          />
           <MentorAllocationPreviewModal
             isOpen={previewOpen}
             preview={allocationPreview}

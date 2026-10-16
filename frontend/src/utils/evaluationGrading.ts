@@ -63,7 +63,6 @@ export function filterEvaluationRecords(
   return records.filter(record => {
     const searchableValues = [
       record.team.teamName,
-      record.team.teamCode,
       record.team.projectName,
       record.team.projectDescription,
       record.team.semesterGroupName,

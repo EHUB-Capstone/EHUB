@@ -3,6 +3,7 @@ import test from 'node:test';
 import {
   MASTER_IMPORT_MAX_BYTES,
   countMasterImportChanges,
+  describeImportAction,
   describeMasterImportResult,
   emailCellText,
   summarizeMissingFields,
@@ -49,4 +50,33 @@ test('emailCellText shows a neutral hint when the file has no email', () => {
 test('summarizeMissingFields keeps the first few names and counts the rest', () => {
   assert.deepEqual(summarizeMissingFields(['Email', 'SDT', 'Công ty', 'Loại HĐ', 'Địa chỉ']), { count: 5, preview: ['Email', 'SDT', 'Công ty'], hiddenCount: 2 });
   assert.deepEqual(summarizeMissingFields([]), { count: 0, preview: [], hiddenCount: 0 });
+});
+
+test('describeMasterImportResult says when semester entries moved onto the new account', () => {
+  assert.match(describeMasterImportResult({ ...emptyResult, temporarySemestersConverted: 2 }), /2 semester entries moved onto the account/);
+  assert.match(describeMasterImportResult({ ...emptyResult, temporarySemestersConverted: 1 }), /1 semester entry moved/);
+  assert.doesNotMatch(describeMasterImportResult(emptyResult), /semester entr/);
+});
+
+test('countMasterImportChanges also counts mentors who get their account because the email arrived', () => {
+  assert.equal(countMasterImportChanges({ createCount: 0, updateCount: 7, needsCompletionCount: 0, completeDraftCount: 48 }), 55);
+});
+
+test('the confirm button says what the import will do', () => {
+  const counts = { createCount: 0, updateCount: 0, needsCompletionCount: 0, completeDraftCount: 0 };
+  assert.equal(describeImportAction({ ...counts, updateCount: 54 }).label, 'Update 54 mentors');
+  assert.equal(describeImportAction({ ...counts, updateCount: 1 }).label, 'Update 1 mentor');
+  assert.equal(describeImportAction({ ...counts, createCount: 3 }).label, 'Create 3 accounts');
+  assert.equal(describeImportAction({ ...counts, completeDraftCount: 2 }).label, 'Create 2 accounts');
+  assert.equal(describeImportAction({ ...counts, needsCompletionCount: 4 }).label, 'Save 4 mentors as incomplete');
+  assert.equal(describeImportAction({ ...counts, updateCount: 7, completeDraftCount: 48 }).label, 'Apply 55 changes');
+  assert.equal(describeImportAction({ ...counts, createCount: 1, needsCompletionCount: 1 }).label, 'Apply 2 changes');
+  assert.equal(describeImportAction(counts).label, 'Nothing to import');
+});
+
+test('the breakdown lists only the kinds of change that are present', () => {
+  const counts = { createCount: 0, updateCount: 0, needsCompletionCount: 0, completeDraftCount: 0 };
+  assert.equal(describeImportAction({ ...counts, updateCount: 7, completeDraftCount: 48 }).breakdown, '48 completed with an email · 7 updated');
+  assert.equal(describeImportAction({ ...counts, createCount: 2, needsCompletionCount: 1 }).breakdown, '2 new · 1 saved as incomplete');
+  assert.equal(describeImportAction(counts).breakdown, '');
 });
