@@ -9,6 +9,7 @@ import type { ProjectAchievement, ProjectDataItem } from '../../../types/project
 import {
   PROJECT_ACHIEVEMENT_NOTE_MAX_LENGTH,
   PROJECT_DATA_EMPTY_VALUE,
+  describeIndustryDraft,
   displayText,
   normalizeNote,
   projectWorkspacePath,
@@ -18,6 +19,7 @@ import {
   toggleAchievement,
 } from '../../../utils/projectData';
 import { ACHIEVEMENT_STYLES } from '../achievementStyles';
+import { useActiveStartupIndustries } from '../hooks/useActiveStartupIndustries';
 import ProjectAchievementBadges from './ProjectAchievementBadges';
 import ProjectAchievementHistory from './ProjectAchievementHistory';
 import { MentorLabel } from './ProjectDataTable';
@@ -29,6 +31,12 @@ export interface ProjectDataSaveError {
   isConflict: boolean;
 }
 
+/** What a save sends: each part only when it changed, so achievements and industries stay independent. */
+export interface ProjectDataChanges {
+  achievements?: { labels: ProjectAchievement[]; note: string | null };
+  startupIndustryIds?: string[];
+}
+
 interface ProjectDataDetailModalProps {
   item: ProjectDataItem | null;
   canManage: boolean;
@@ -36,9 +44,8 @@ interface ProjectDataDetailModalProps {
   isReloading: boolean;
   error: ProjectDataSaveError | null;
   onClose: () => void;
-  onSave: (achievements: ProjectAchievement[], note: string | null) => void;
-  onSaveIndustries: (startupIndustryIds: string[]) => void;
-  isSavingIndustries: boolean;
+  onSave: (changes: ProjectDataChanges) => void;
+  /** Error of the industries part of a save; `error` belongs to the achievements part. */
   industryError: ProjectDataSaveError | null;
   onReload: () => void;
 }
@@ -69,8 +76,6 @@ export default function ProjectDataDetailModal({
   error,
   onClose,
   onSave,
-  onSaveIndustries,
-  isSavingIndustries,
   industryError,
   onReload,
 }: ProjectDataDetailModalProps) {
@@ -80,8 +85,9 @@ export default function ProjectDataDetailModal({
   const itemKey = item ? `${item.projectId}:${item.rowVersion}` : '';
   const [draftState, setDraftState] = useState<{ key: string; labels: ProjectAchievement[]; note: string } | null>(null);
   const [confirmKey, setConfirmKey] = useState<string | null>(null);
-  // Industry edits also belong to one version of one project; saving moves the version and so ends the edit.
-  const [industryDraft, setIndustryDraft] = useState<{ key: string; ids: string[] | null } | null>(null);
+  // The industry pick is kept per project, not per version: saving the achievements first moves the version, and a
+  // pick that then fails to save must not vanish.
+  const [industryDraft, setIndustryDraft] = useState<{ projectId: string; ids: string[] } | null>(null);
   const savedNote = item?.achievementNote ?? '';
   const draft = draftState?.key === itemKey ? draftState.labels : item?.achievements ?? [];
   const draftNote = draftState?.key === itemKey ? draftState.note : savedNote;
@@ -90,29 +96,42 @@ export default function ProjectDataDetailModal({
   const setDraft = (labels: ProjectAchievement[], note: string) => setDraftState({ key: itemKey, labels, note });
   const confirmingRemoval = confirmKey === itemKey && itemKey !== '';
   const setConfirmingRemoval = (open: boolean) => setConfirmKey(open ? itemKey : null);
-  const editingIndustries = industryDraft?.key === itemKey && itemKey !== '';
-  const busy = isSaving || isSavingIndustries;
+  // A closed dialog keeps no pick, so reopening the project starts from its saved industries.
+  if (!item && industryDraft) setIndustryDraft(null);
+  const industryOptions = useActiveStartupIndustries(canManage && Boolean(item));
+  const industryView = describeIndustryDraft(
+    item?.startupIndustries ?? [],
+    industryOptions.industries,
+    industryDraft && industryDraft.projectId === item?.projectId ? industryDraft.ids : null,
+    industryOptions.isLoaded,
+  );
 
   useEffect(() => {
     if (!item) return undefined;
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape' || busy || confirmingRemoval) return;
-      // Escape first leaves the industry editor, then closes the dialog.
-      if (editingIndustries) setIndustryDraft(null);
-      else onClose();
+      if (event.key === 'Escape' && !isSaving && !confirmingRemoval) onClose();
     };
     window.addEventListener('keydown', closeOnEscape);
     return () => window.removeEventListener('keydown', closeOnEscape);
-  }, [item, busy, confirmingRemoval, editingIndustries, onClose]);
+  }, [item, isSaving, confirmingRemoval, onClose]);
 
   if (!item) return null;
 
-  const dirty = !sameAchievements(draft, item.achievements) || !sameNote(effectiveNote, savedNote);
+  const achievementsDirty = !sameAchievements(draft, item.achievements) || !sameNote(effectiveNote, savedNote);
+  const industriesDirty = industryView.dirty;
+  const dirty = achievementsDirty || industriesDirty;
+  // An invalid industry pick blocks the whole save, so a half-applied change never needs explaining.
+  const blocked = Boolean(industryView.validationMessage);
   const removed = removedAchievements(item.achievements, draft);
-  const save = () => onSave(draft, normalizeNote(effectiveNote));
+  // Reloading shows what others saved, so a pick made against the old data is dropped like the label draft is.
+  const reload = () => { setIndustryDraft(null); onReload(); };
+  const save = () => onSave({
+    ...(achievementsDirty ? { achievements: { labels: draft, note: normalizeNote(effectiveNote) } } : {}),
+    ...(industriesDirty ? { startupIndustryIds: industryView.selectedIds } : {}),
+  });
   const submit = () => {
-    if (!dirty || isSaving) return;
-    if (removed.length > 0) setConfirmingRemoval(true);
+    if (!dirty || blocked || isSaving) return;
+    if (achievementsDirty && removed.length > 0) setConfirmingRemoval(true);
     else save();
   };
 
@@ -120,12 +139,12 @@ export default function ProjectDataDetailModal({
     <>
       <Modal
         isOpen
-        onClose={() => { if (!busy) onClose(); }}
+        onClose={() => { if (!isSaving) onClose(); }}
         title={item.projectName}
         size="lg"
-        submitText="Save achievements"
+        submitText="Save changes"
         isSubmitting={isSaving}
-        submitDisabled={!dirty || editingIndustries}
+        submitDisabled={!dirty || blocked}
         onSubmit={canManage ? submit : undefined}
       >
         <div className="space-y-6">
@@ -140,17 +159,18 @@ export default function ProjectDataDetailModal({
               <ProjectStartupIndustryEditor
                 item={item}
                 canManage={canManage}
-                editing={editingIndustries}
-                draftIds={editingIndustries ? industryDraft?.ids ?? null : null}
-                lockedReason={dirty ? 'Save or discard the achievement changes first.' : isSaving ? 'Saving achievements…' : null}
-                isSaving={isSavingIndustries}
+                industries={industryOptions.industries}
+                industriesLoading={industryOptions.isLoading}
+                industriesError={industryOptions.errorMessage}
+                onRetryIndustries={industryOptions.retry}
+                selectedIds={industryView.selectedIds}
+                onChange={ids => setIndustryDraft({ projectId: item.projectId, ids })}
+                retired={industryView.retired}
+                validationMessage={industryView.validationMessage}
+                isSaving={isSaving}
                 isReloading={isReloading}
-                error={editingIndustries ? industryError : null}
-                onStartEdit={() => setIndustryDraft({ key: itemKey, ids: null })}
-                onDraftChange={ids => setIndustryDraft({ key: itemKey, ids })}
-                onCancel={() => setIndustryDraft(null)}
-                onSave={onSaveIndustries}
-                onReload={onReload}
+                error={industryError}
+                onReload={reload}
               />
             </div>
             <div className="sm:col-span-2">
@@ -165,7 +185,7 @@ export default function ProjectDataDetailModal({
           <section aria-labelledby={legendId}>
             <h3 id={legendId} className="text-xs font-medium uppercase tracking-wider text-slate-400">Achievements</h3>
             {canManage ? (
-              <fieldset className="mt-2 space-y-2" disabled={isSaving || editingIndustries} aria-labelledby={legendId}>
+              <fieldset className="mt-2 space-y-2" disabled={isSaving} aria-labelledby={legendId}>
                 {PROJECT_ACHIEVEMENTS.map(name => {
                   const { icon: Icon } = ACHIEVEMENT_STYLES[name];
                   return (
@@ -211,7 +231,7 @@ export default function ProjectDataDetailModal({
               <div role="alert" className="mt-3 rounded-xl border border-danger-light bg-danger-50 p-3 text-sm text-danger">
                 <p>{error.message}</p>
                 {error.isConflict && (
-                  <Button variant="outline" size="sm" icon={RefreshCw} isLoading={isReloading} onClick={onReload} className="mt-2">
+                  <Button variant="outline" size="sm" icon={RefreshCw} isLoading={isReloading} onClick={reload} className="mt-2">
                     Reload latest data
                   </Button>
                 )}
@@ -224,7 +244,7 @@ export default function ProjectDataDetailModal({
               variant="primary"
               icon={Rocket}
               iconRight={ArrowRight}
-              disabled={busy}
+              disabled={isSaving}
               onClick={() => navigate(projectWorkspacePath(item.teamId))}
             >
               Open Startup Workspace
