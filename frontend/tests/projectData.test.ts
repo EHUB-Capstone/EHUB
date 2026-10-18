@@ -24,6 +24,7 @@ import {
   summarizeList,
   projectDataSummaryKey,
   projectWorkspacePath,
+  describeIndustryDraft,
   projectDataHistoryKey,
   projectStartupIndustryHistoryKey,
   historyActionLabel,
@@ -378,4 +379,28 @@ test('the startup industry history is read per project and keyed by the row vers
   } finally {
     mock.restore();
   }
+});
+
+test('the industry draft is untouched until picked, validated 1 to 3, and reports retired names', () => {
+  const options = [{ id: 'i1', name: 'EdTech' }, { id: 'i2', name: 'Fintech' }, { id: 'i3', name: 'AgriTech' }, { id: 'i4', name: 'Health' }];
+
+  // Untouched: the saved names show as the selection and there is nothing to save.
+  const untouched = describeIndustryDraft(['edtech', 'Old Industry'], options, null, true);
+  assert.deepEqual(untouched.selectedIds, ['i1']);
+  assert.deepEqual(untouched.retired, ['Old Industry']);
+  assert.equal(untouched.dirty, false);
+
+  // Nothing can be matched before the options load, so nothing is reported.
+  const loading = describeIndustryDraft(['EdTech'], [], null, false);
+  assert.deepEqual(loading.retired, []);
+  assert.equal(loading.dirty, false);
+
+  assert.equal(describeIndustryDraft(['EdTech'], options, ['i1'], true).dirty, false);
+  assert.equal(describeIndustryDraft(['EdTech'], options, ['i2', 'i1'], true).dirty, true);
+  // A retired name is replaced on save even when the pick matches the rest.
+  assert.equal(describeIndustryDraft(['EdTech', 'Old Industry'], options, ['i1'], true).dirty, true);
+
+  assert.match(describeIndustryDraft(['EdTech'], options, [], true).validationMessage, /between 1 and 3/);
+  assert.match(describeIndustryDraft(['EdTech'], options, ['i1', 'i2', 'i3', 'i4'], true).validationMessage, /between 1 and 3/);
+  assert.equal(describeIndustryDraft(['EdTech'], options, ['i1', 'i2', 'i3'], true).validationMessage, '');
 });

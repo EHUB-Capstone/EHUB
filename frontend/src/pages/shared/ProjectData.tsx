@@ -6,7 +6,7 @@ import ErrorState from '../../components/ui/ErrorState';
 import LoadingSkeleton from '../../components/ui/LoadingSkeleton';
 import PageHeader from '../../components/ui/PageHeader';
 import ProjectDataDetailModal from '../../features/project-data/components/ProjectDataDetailModal';
-import type { ProjectDataSaveError } from '../../features/project-data/components/ProjectDataDetailModal';
+import type { ProjectDataChanges, ProjectDataSaveError } from '../../features/project-data/components/ProjectDataDetailModal';
 import ProjectDataDistribution from '../../features/project-data/components/ProjectDataDistribution';
 import ProjectDataTrends from '../../features/project-data/components/ProjectDataTrends';
 import ProjectDataSummaryCards from '../../features/project-data/components/ProjectDataSummaryCards';
@@ -15,7 +15,7 @@ import ProjectDataTabs, { projectDataPanelId, projectDataTabId } from '../../fea
 import ProjectDataTable from '../../features/project-data/components/ProjectDataTable';
 import { useProjectData } from '../../features/project-data/hooks/useProjectData';
 import { useAuth } from '../../hooks/useAuth';
-import type { ProjectAchievement, ProjectDataItem } from '../../types/projectData';
+import type { ProjectDataItem } from '../../types/projectData';
 import { parseApiError } from '../../utils/apiError';
 import { findItem, hasActiveSearchOrFilters, nextProjectDataSort } from '../../utils/projectData';
 
@@ -47,66 +47,70 @@ export default function ProjectData() {
     updateStartupIndustries.reset();
   }, [updateAchievements, updateStartupIndustries]);
 
-  const saveAchievements = useCallback((achievements: ProjectAchievement[], note: string | null) => {
-    if (!selected || updateAchievements.isPending) return;
-    setSaveError(null);
-    updateAchievements.mutate(
-      { projectId: selected.projectId, payload: { achievements, note, rowVersion: selected.rowVersion } },
-      {
-        onSuccess: result => {
-          setSelected(current => current && current.projectId === result.projectId
-            ? {
-                ...current,
-                achievements: result.achievements,
-                achievementNote: result.note,
-                achievementsUpdatedAtUtc: result.updatedAtUtc,
-                achievementsUpdatedBy: result.updatedBy,
-                rowVersion: result.rowVersion,
-              }
-            : current);
-          toast.success('Achievements updated.');
-        },
-        onError: error => {
-          const parsed = parseApiError(error, 'Unable to update achievements.');
-          const isConflict = parsed.code === CONCURRENCY_CONFLICT_CODE;
-          setSaveError({
-            isConflict,
-            message: isConflict
-              ? 'This project was changed by someone else. Reload the latest data before saving again; your selection is kept until then.'
-              : parsed.message,
-          });
-          toast.error(isConflict ? 'Project data is out of date.' : parsed.message);
-        },
-      },
-    );
-  }, [selected, updateAchievements]);
+  const conflictMessage = 'This project was changed by someone else. Reload the latest data before saving again; your changes are kept until then.';
 
-  const saveStartupIndustries = useCallback((startupIndustryIds: string[]) => {
-    if (!selected || updateStartupIndustries.isPending) return;
+  // Achievements and industries are separate requests: each is sent only when it changed, and one failing never undoes
+  // the other. Every save moves the project's row version, so the second request uses the version the first returned.
+  const saveChanges = useCallback(async (changes: ProjectDataChanges) => {
+    if (!selected || updateAchievements.isPending || updateStartupIndustries.isPending) return;
+    setSaveError(null);
     setIndustryError(null);
-    updateStartupIndustries.mutate(
-      { projectId: selected.projectId, payload: { startupIndustryIds, rowVersion: selected.rowVersion } },
-      {
-        onSuccess: result => {
-          setSelected(current => current && current.projectId === result.projectId
-            ? { ...current, startupIndustries: result.startupIndustries, rowVersion: result.rowVersion }
-            : current);
-          toast.success('Startup industries updated.');
-        },
-        onError: error => {
-          const parsed = parseApiError(error, 'Unable to update startup industries.');
-          const isConflict = parsed.code === CONCURRENCY_CONFLICT_CODE;
-          setIndustryError({
-            isConflict,
-            message: isConflict
-              ? 'This project was changed by someone else. Reload the latest data before saving again; your selection is kept until then.'
-              : parsed.message,
-          });
-          toast.error(isConflict ? 'Project data is out of date.' : parsed.message);
-        },
-      },
-    );
-  }, [selected, updateStartupIndustries]);
+    const projectId = selected.projectId;
+    let rowVersion = selected.rowVersion;
+    let saved = 0;
+
+    if (changes.achievements) {
+      try {
+        const result = await updateAchievements.mutateAsync({
+          projectId,
+          payload: { achievements: changes.achievements.labels, note: changes.achievements.note, rowVersion },
+        });
+        rowVersion = result.rowVersion;
+        saved += 1;
+        setSelected(current => current && current.projectId === projectId
+          ? {
+              ...current,
+              achievements: result.achievements,
+              achievementNote: result.note,
+              achievementsUpdatedAtUtc: result.updatedAtUtc,
+              achievementsUpdatedBy: result.updatedBy,
+              rowVersion: result.rowVersion,
+            }
+          : current);
+      } catch (error) {
+        const parsed = parseApiError(error, 'Unable to update achievements.');
+        const isConflict = parsed.code === CONCURRENCY_CONFLICT_CODE;
+        setSaveError({ isConflict, message: isConflict ? conflictMessage : parsed.message });
+        toast.error(isConflict ? 'Project data is out of date.' : parsed.message);
+        return;
+      }
+    }
+
+    if (changes.startupIndustryIds) {
+      try {
+        const result = await updateStartupIndustries.mutateAsync({
+          projectId,
+          payload: { startupIndustryIds: changes.startupIndustryIds, rowVersion },
+        });
+        saved += 1;
+        setSelected(current => current && current.projectId === projectId
+          ? { ...current, startupIndustries: result.startupIndustries, rowVersion: result.rowVersion }
+          : current);
+      } catch (error) {
+        const parsed = parseApiError(error, 'Unable to update startup industries.');
+        const isConflict = parsed.code === CONCURRENCY_CONFLICT_CODE;
+        setIndustryError({ isConflict, message: isConflict ? conflictMessage : parsed.message });
+        toast.error(saved > 0
+          ? `Achievements were saved, but the startup industries were not: ${isConflict ? 'the project is out of date.' : parsed.message}`
+          : isConflict ? 'Project data is out of date.' : parsed.message);
+        return;
+      }
+    }
+
+    if (saved === 2) toast.success('Changes saved.');
+    else if (changes.achievements) toast.success('Achievements updated.');
+    else toast.success('Startup industries updated.');
+  }, [selected, updateAchievements, updateStartupIndustries]);
 
   const reloadSelected = useCallback(async () => {
     if (!selected) return;
@@ -267,13 +271,11 @@ export default function ProjectData() {
       <ProjectDataDetailModal
         item={selected}
         canManage={canManage}
-        isSaving={updateAchievements.isPending}
+        isSaving={updateAchievements.isPending || updateStartupIndustries.isPending}
         isReloading={isReloading}
         error={saveError}
         onClose={closeDetail}
-        onSave={saveAchievements}
-        onSaveIndustries={saveStartupIndustries}
-        isSavingIndustries={updateStartupIndustries.isPending}
+        onSave={changes => { void saveChanges(changes); }}
         industryError={industryError}
         onReload={() => { void reloadSelected(); }}
       />

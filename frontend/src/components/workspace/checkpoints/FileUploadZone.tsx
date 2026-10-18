@@ -32,6 +32,8 @@ interface FileUploadZoneProps {
   variant?: 'default' | 'large';
 }
 
+// Stays below the backend's pending upload session limit per user and team.
+const MAX_PARALLEL_UPLOADS = 3;
 const ACTIVE_STATUSES = ['queued', 'uploading', 'completing'] as const;
 const isActive = (item: CheckpointUploadItem) =>
   (ACTIVE_STATUSES as readonly string[]).includes(item.status);
@@ -62,7 +64,8 @@ export default function FileUploadZone({
   // The queue loop reads the latest items synchronously, so state is mirrored in a ref.
   const itemsRef = useRef<CheckpointUploadItem[]>([]);
   const controllersRef = useRef(new Map<string, AbortController>());
-  const runningRef = useRef(false);
+  // Each "complete" creates a new submission version, so completes run one at a time to avoid version conflicts.
+  const completeChainRef = useRef<Promise<unknown>>(Promise.resolve());
   const mountedRef = useRef(true);
   const completedSinceRefreshRef = useRef(0);
   const onUploadedRef = useRef(onUploaded);
@@ -140,16 +143,15 @@ export default function FileUploadZone({
 
       stage = 'request';
       patch(item.id, { status: 'completing', error: undefined });
-      const completed = await checkpointApi.completeUpload(
-        teamId,
-        checkpointNumber,
-        (session as CheckpointUploadSession).uploadId,
-        { signal: controller.signal },
-      );
+      const uploadId = (session as CheckpointUploadSession).uploadId;
+      const completion = completeChainRef.current
+        .catch(() => undefined)
+        .then(() => checkpointApi.completeUpload(teamId, checkpointNumber, uploadId, { signal: controller.signal }));
+      completeChainRef.current = completion;
+      const completed = await completion;
       const version = completed?.data?.versionNumber as number | undefined;
       patch(item.id, { status: 'completed', percent: 100, versionNumber: version });
       completedSinceRefreshRef.current += 1;
-      toast.success(`"${item.file.name}" uploaded${version ? ` as Version ${version}` : ''}!`);
     } catch (error) {
       if (isCancelled(error)) {
         commit(itemsRef.current.filter(candidate => candidate.id !== item.id));
@@ -164,24 +166,30 @@ export default function FileUploadZone({
     }
   }, [checkpointNumber, commit, patch, teamId]);
 
-  const runQueue = useCallback(async () => {
-    if (runningRef.current) return;
-    runningRef.current = true;
-    try {
-      while (mountedRef.current) {
-        const next = itemsRef.current.find(item => item.status === 'queued');
-        if (!next) break;
-        await processItem(next);
-      }
-    } finally {
-      runningRef.current = false;
+  // Starts queued items until MAX_PARALLEL_UPLOADS are running; refreshes the host once the whole batch settles.
+  const pump = useCallback(function pump() {
+    while (mountedRef.current && controllersRef.current.size < MAX_PARALLEL_UPLOADS) {
+      const next = itemsRef.current.find(item => item.status === 'queued');
+      if (!next) break;
+      // processItem registers its controller synchronously, so the running count is current on the next loop.
+      void processItem(next).finally(pump);
     }
 
-    if (completedSinceRefreshRef.current > 0) {
+    if (controllersRef.current.size === 0 && completedSinceRefreshRef.current > 0) {
       completedSinceRefreshRef.current = 0;
-      await onUploadedRef.current?.();
+      const settledIds = new Set(
+        itemsRef.current.filter(item => item.status === 'completed').map(item => item.id),
+      );
+      // Submitted files live in the list below. Keep their rows until that list has refreshed so none vanish in between.
+      void (async () => {
+        try {
+          await onUploadedRef.current?.();
+        } finally {
+          if (mountedRef.current) commit(itemsRef.current.filter(item => !settledIds.has(item.id)));
+        }
+      })();
     }
-  }, [processItem]);
+  }, [commit, processItem]);
 
   const addFiles = (rawFiles: FileList | File[] | null) => {
     const files = Array.from(rawFiles ?? []);
@@ -222,7 +230,7 @@ export default function FileUploadZone({
   const submitStaged = () => {
     commit(itemsRef.current.map(item => (item.status === 'staged' ? { ...item, status: 'queued' as const } : item)));
     setConfirmOpen(false);
-    void runQueue();
+    pump();
   };
 
   const retry = (id: string) => {
@@ -235,7 +243,7 @@ export default function FileUploadZone({
       error: undefined,
       ...(reset ? { session: undefined, putDone: false, percent: 0 } : {}),
     });
-    void runQueue();
+    pump();
   };
 
   const cancelOrDismiss = (id: string) => {
@@ -439,7 +447,7 @@ function UploadRow({
       <p className={`mt-1 text-overline ${item.status === 'failed' ? 'text-danger-dark' : 'text-slate-500'}`}>
         {item.status === 'failed' && item.error}
         {item.status === 'staged' && `${formatFileSize(item.file.size)} · will be submitted when you confirm`}
-        {item.status === 'queued' && `${formatFileSize(item.file.size)} · waiting for earlier uploads`}
+        {item.status === 'queued' && `${formatFileSize(item.file.size)} · waiting for an upload slot`}
         {item.status === 'uploading' && `${item.percent}% · ${formatFileSize(sentBytes)} of ${formatFileSize(item.file.size)}`}
         {item.status === 'completing' && 'Saving and validating file… not submitted until this finishes'}
         {item.status === 'completed' && `Submitted · ${formatFileSize(item.file.size)}${item.versionNumber ? ` · Version ${item.versionNumber}` : ''}`}

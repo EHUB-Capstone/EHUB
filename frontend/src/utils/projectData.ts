@@ -17,6 +17,7 @@ import type {
   ProjectDataSortField,
   ProjectDataTab,
 } from '../types/projectData.ts';
+import { haveSameIndustrySelection, resolveIndustryIds, validateIndustrySelection } from './projectWorkspace.ts';
 
 export const PROJECT_DATA_SEARCH_MAX_LENGTH = 100;
 export const PROJECT_ACHIEVEMENT_NOTE_MAX_LENGTH = 500;
@@ -255,6 +256,42 @@ export function historyTruncationNotice(history: { totalCount: number; items: re
 /** Includes the row version so a saved change makes an open industry history list refetch. */
 export function projectStartupIndustryHistoryKey(userId: string | undefined, projectId: string, rowVersion: string) {
   return ['project-data', userId ?? 'anonymous', 'industry-history', projectId, rowVersion] as const;
+}
+
+export interface IndustryDraftView {
+  /** What the picker shows: the user's pick, or the project's saved industries until they pick. */
+  selectedIds: string[];
+  /** Saved names that match no active industry anymore; saving replaces them. */
+  retired: string[];
+  /** True when saving would change the project's industries. */
+  dirty: boolean;
+  /** Why the pick cannot be saved; empty while it is valid or untouched. */
+  validationMessage: string;
+}
+
+/**
+ * `draftIds` is null until the user touches the picker, so an untouched dialog never offers a save. Until the active
+ * industries have loaded nothing can be matched, so nothing is reported as retired or changed.
+ */
+export function describeIndustryDraft(
+  savedNames: readonly string[],
+  industries: ReadonlyArray<{ id: string; name: string }>,
+  draftIds: readonly string[] | null,
+  optionsLoaded: boolean,
+): IndustryDraftView {
+  const options = [...industries];
+  const savedIds = resolveIndustryIds([...savedNames], options);
+  const retired = optionsLoaded
+    ? savedNames.filter(name => !options.some(option => haveSameIndustrySelection([name], [option.name])))
+    : [];
+  if (draftIds === null || !optionsLoaded) {
+    return { selectedIds: draftIds ? [...draftIds] : savedIds, retired, dirty: false, validationMessage: '' };
+  }
+
+  const selectedIds = [...draftIds];
+  const validationMessage = validateIndustrySelection(selectedIds);
+  const dirty = !haveSameIndustrySelection(selectedIds, savedIds) || retired.length > 0;
+  return { selectedIds, retired, dirty, validationMessage };
 }
 
 export function projectDataOptionsKey(userId: string | undefined) {
