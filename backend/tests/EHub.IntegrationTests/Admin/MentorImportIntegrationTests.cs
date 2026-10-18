@@ -1034,6 +1034,46 @@ public sealed class MentorImportIntegrationTests(CustomWebApplicationFactory fac
     }
 
     [Fact]
+    public async Task MasterImportCommit_NewAccounts_ShouldAllGetAnUnusablePassword_ThatCannotBeGuessed()
+    {
+        var tag = Guid.NewGuid().ToString("N")[..6];
+        var emails = Enumerable.Range(0, 5).Select(index => $"hash-{tag}-{index}@example.com").ToArray();
+        using var workbook = new XLWorkbook();
+        var enterprise = workbook.Worksheets.Add("DS Mentor_FA26");
+        enterprise.Cell(1, 1).Value = "STT"; enterprise.Cell(1, 2).Value = "Họ và tên"; enterprise.Cell(1, 3).Value = "Email";
+        for (var index = 0; index < emails.Length; index++)
+        {
+            enterprise.Cell(index + 2, 1).Value = index + 1;
+            enterprise.Cell(index + 2, 2).Value = $"Hashed Mentor {tag} {index}";
+            enterprise.Cell(index + 2, 3).Value = emails[index];
+        }
+        var academic = workbook.Worksheets.Add("Mentor IT_FA26");
+        academic.Cell(1, 1).Value = "STT"; academic.Cell(1, 2).Value = "Họ tên"; academic.Cell(1, 3).Value = "Email công việc";
+        academic.Cell(2, 1).Value = 1; academic.Cell(2, 2).Value = $"Hashed Lecturer {tag}"; academic.Cell(2, 3).Value = $"hash-l-{tag}@example.com";
+        using var stream = new MemoryStream();
+        workbook.SaveAs(stream);
+
+        var (status, preview, body) = await PreviewWorkbookAsync(stream.ToArray());
+        status.Should().Be(HttpStatusCode.OK, body);
+        preview!.CreateCount.Should().Be(6);
+        var commit = await CommitImportAsync(await GetAdminTokenAsync(), preview.SessionId);
+        commit.StatusCode.Should().Be(HttpStatusCode.OK, await commit.Content.ReadAsStringAsync());
+
+        using var scope = factory.Services.CreateScope();
+        var hasher = scope.ServiceProvider.GetRequiredService<IPasswordHasher>();
+        var created = await scope.ServiceProvider.GetRequiredService<AppDbContext>().Users.AsNoTracking()
+            .Where(user => user.NormalizedEmail.StartsWith($"hash-{tag}") || user.NormalizedEmail.StartsWith($"hash-l-{tag}")).ToListAsync();
+        created.Should().HaveCount(6);
+        created.Should().OnlyContain(user => user.PasswordHash.StartsWith("$2"), "a real bcrypt hash is stored, never an empty value");
+        foreach (var user in created)
+        {
+            hasher.Verify(string.Empty, user.PasswordHash).Should().BeFalse();
+            hasher.Verify(user.Email, user.PasswordHash).Should().BeFalse("the email is not the password");
+            hasher.Verify("Password123", user.PasswordHash).Should().BeFalse();
+        }
+    }
+
+    [Fact]
     public async Task MasterImportPreview_ShouldIgnoreLeftoverRows_BelowTheMentorList()
     {
         // Empty but formatted rows far below the data, as left by a re-saved Excel file or a Google Sheets export.
