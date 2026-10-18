@@ -40,7 +40,8 @@ public sealed class GetProjectDataSummaryQueryHandler(IApplicationDbContext cont
             {
                 Total = group.Count(),
                 Potential = group.Count(project => project.IsHighPotential),
-                Funded = group.Count(project => project.IsFunded),
+                InternallyFunded = group.Count(project => project.IsInternallyFunded),
+                ExternallyFunded = group.Count(project => project.IsExternallyFunded),
                 Awarded = group.Count(project => project.IsAwarded),
             })
             .FirstOrDefaultAsync(cancellationToken);
@@ -49,7 +50,8 @@ public sealed class GetProjectDataSummaryQueryHandler(IApplicationDbContext cont
         {
             TotalGroups = counts?.Total ?? 0,
             PotentialGroups = counts?.Potential ?? 0,
-            FundedGroups = counts?.Funded ?? 0,
+            InternallyFundedGroups = counts?.InternallyFunded ?? 0,
+            ExternallyFundedGroups = counts?.ExternallyFunded ?? 0,
             AwardedGroups = counts?.Awarded ?? 0,
         });
     }

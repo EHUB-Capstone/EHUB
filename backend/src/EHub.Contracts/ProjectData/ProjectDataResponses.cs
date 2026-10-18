@@ -49,7 +49,8 @@ public sealed class ProjectDataSummaryResponse
     /// <summary>Groups (one project per team) matching the current scope, search and filters.</summary>
     public int TotalGroups { get; init; }
     public int PotentialGroups { get; init; }
-    public int FundedGroups { get; init; }
+    public int InternallyFundedGroups { get; init; }
+    public int ExternallyFundedGroups { get; init; }
     public int AwardedGroups { get; init; }
 }
 
@@ -72,7 +73,51 @@ public sealed class ProjectDataFilterOptionsResponse
     public IReadOnlyCollection<int> Years { get; init; } = Array.Empty<int>();
     public IReadOnlyCollection<string> Groups { get; init; } = Array.Empty<string>();
     public IReadOnlyCollection<string> StartupIndustries { get; init; } = Array.Empty<string>();
+    public IReadOnlyCollection<string> Majors { get; init; } = Array.Empty<string>();
     public IReadOnlyCollection<ProjectDataPersonResponse> Lecturers { get; init; } = Array.Empty<ProjectDataPersonResponse>();
     public IReadOnlyCollection<ProjectDataMentorOptionResponse> Mentors { get; init; } = Array.Empty<ProjectDataMentorOptionResponse>();
     public IReadOnlyCollection<string> Achievements { get; init; } = ProjectAchievementNames.All;
+}
+
+public sealed class ProjectDataDistributionBucketResponse
+{
+    public string Name { get; init; } = string.Empty;
+    public int Count { get; init; }
+}
+
+public sealed class ProjectDataDistributionSemesterResponse
+{
+    public string Code { get; init; } = string.Empty;
+    public int Year { get; init; }
+
+    /// <summary>SP, SU or FA.</summary>
+    public string Term { get; init; } = string.Empty;
+    public int Count { get; init; }
+}
+
+/// <summary>
+/// Project counts grouped by dimension, for the same scope and filters as the list and the summary.
+/// Semester buckets add up to <see cref="TotalGroups"/>. Major, startup industry and outcome buckets can overlap
+/// (a project may have several majors, industries or labels), so their sums can be larger than the total.
+/// </summary>
+public sealed class ProjectDataDistributionResponse
+{
+    public int TotalGroups { get; init; }
+    public IReadOnlyCollection<ProjectDataDistributionSemesterResponse> Semesters { get; init; } = Array.Empty<ProjectDataDistributionSemesterResponse>();
+
+    /// <summary>Distinct effective majors of active team members. <see cref="ProjectDataDistributionRules.UnspecifiedMajor"/> collects missing or invalid codes.</summary>
+    public IReadOnlyCollection<ProjectDataDistributionBucketResponse> Majors { get; init; } = Array.Empty<ProjectDataDistributionBucketResponse>();
+
+    /// <summary>Startup industry, which is also the project topic.</summary>
+    public IReadOnlyCollection<ProjectDataDistributionBucketResponse> StartupIndustries { get; init; } = Array.Empty<ProjectDataDistributionBucketResponse>();
+    public int UnspecifiedStartupIndustryCount { get; init; }
+    public IReadOnlyCollection<ProjectDataDistributionBucketResponse> Outcomes { get; init; } = Array.Empty<ProjectDataDistributionBucketResponse>();
+
+    /// <summary>Projects with none of the Potential, Internally Funded, Externally Funded or Awarded labels.</summary>
+    public int NoOutcomeCount { get; init; }
+}
+
+public static class ProjectDataDistributionRules
+{
+    public const string UnspecifiedMajor = "UNSPECIFIED";
 }

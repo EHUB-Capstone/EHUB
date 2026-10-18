@@ -23,25 +23,25 @@ public sealed partial class ProjectDataIntegrationTests
             current.Achievements.Should().BeEmpty();
 
             var updated = await PutAchievements(client, world.Admin, SystemRoles.Admin, world.ProjectB,
-                ["Funded", "awarded", "Funded"], current.RowVersion);
-            updated.Achievements.Should().Equal("Funded", "Awarded");
+                ["Internally Funded", "externally funded", "awarded", "Internally Funded"], current.RowVersion);
+            updated.Achievements.Should().Equal("Internally Funded", "Externally Funded", "Awarded");
             updated.RowVersion.Should().NotBe(current.RowVersion);
 
             var listed = await CurrentAchievements(client, world, world.ProjectB);
-            listed.Achievements.Should().Equal("Funded", "Awarded");
+            listed.Achievements.Should().Equal("Internally Funded", "Externally Funded", "Awarded");
             (await Ids(client, world, $"search={world.Token}&achievement=Awarded")).Should().Equal(world.ProjectB);
 
             await using (var scope = factory.Services.CreateAsyncScope())
             {
                 var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
                 var project = await context.Projects.AsNoTracking().SingleAsync(item => item.Id == world.ProjectB);
-                (project.IsFunded, project.IsAwarded, project.IsHighPotential).Should().Be((true, true, false));
+                (project.IsInternallyFunded, project.IsExternallyFunded, project.IsAwarded, project.IsHighPotential).Should().Be((true, true, true, false));
                 project.UpdatedBy.Should().Be(world.Admin.Id);
 
                 var log = await context.ProjectActivityLogs.AsNoTracking()
                     .SingleAsync(item => item.ProjectId == world.ProjectB && item.Action == "PROJECT_ACHIEVEMENTS_CHANGED");
                 log.ActorUserId.Should().Be(world.Admin.Id);
-                log.Summary.Should().Contain("none").And.Contain("Funded, Awarded");
+                log.Summary.Should().Contain("none").And.Contain("Internally Funded, Externally Funded, Awarded");
                 log.OccurredAtUtc.Kind.Should().Be(DateTimeKind.Utc);
             }
 
@@ -139,7 +139,7 @@ public sealed partial class ProjectDataIntegrationTests
             var first = await PutAchievements(client, world.Lecturer, SystemRoles.Lecturer, world.ProjectB,
                 ["Potential"], (await CurrentAchievements(client, world, world.ProjectB)).RowVersion, "First reason");
             var second = await PutAchievements(client, world.Admin, SystemRoles.Admin, world.ProjectB,
-                ["Potential", "Funded"], first.RowVersion, "Second reason");
+                ["Potential", "Internally Funded"], first.RowVersion, "Second reason");
             await PutAchievements(client, world.Lecturer, SystemRoles.Lecturer, world.ProjectB,
                 [], second.RowVersion);
 
@@ -150,15 +150,15 @@ public sealed partial class ProjectDataIntegrationTests
             history.Items.Select(item => item.OccurredAtUtc).Should().BeInDescendingOrder();
             history.Items.Select(item => item.Action).Should().OnlyContain(action => action == "PROJECT_ACHIEVEMENTS_CHANGED");
             history.Items.Select(item => item.Summary).Should().SatisfyRespectively(
-                latest => latest.Should().Contain("from Potential, Funded to none"),
-                middle => middle.Should().Contain("Funded").And.Contain("Second reason"),
+                latest => latest.Should().Contain("from Potential, Internally Funded to none"),
+                middle => middle.Should().Contain("Internally Funded").And.Contain("Second reason"),
                 oldest => oldest.Should().Contain("from none to Potential").And.Contain("First reason"));
 
             // The structured fields drive the display: what was added, removed and kept, and the note per entry.
             var (latest, middle, oldest) = (history.Items.ElementAt(0), history.Items.ElementAt(1), history.Items.ElementAt(2));
-            (latest.Added, latest.Removed, latest.Kept).Should().BeEquivalentTo((Array.Empty<string>(), new[] { "Potential", "Funded" }, Array.Empty<string>()));
+            (latest.Added, latest.Removed, latest.Kept).Should().BeEquivalentTo((Array.Empty<string>(), new[] { "Potential", "Internally Funded" }, Array.Empty<string>()));
             (latest.NoteChanged, latest.Note).Should().Be((true, (string?)null));
-            (middle.Added, middle.Removed, middle.Kept).Should().BeEquivalentTo((new[] { "Funded" }, Array.Empty<string>(), new[] { "Potential" }));
+            (middle.Added, middle.Removed, middle.Kept).Should().BeEquivalentTo((new[] { "Internally Funded" }, Array.Empty<string>(), new[] { "Potential" }));
             (middle.NoteChanged, middle.Note).Should().Be((true, "Second reason"));
             (oldest.Added, oldest.Removed, oldest.Kept).Should().BeEquivalentTo((new[] { "Potential" }, Array.Empty<string>(), Array.Empty<string>()));
             (oldest.NoteChanged, oldest.Note).Should().Be((true, "First reason"));
@@ -283,10 +283,10 @@ public sealed partial class ProjectDataIntegrationTests
         {
             using var client = factory.CreateClient();
             var current = await CurrentAchievements(client, world, world.ProjectA);
-            current.Achievements.Should().Equal("Potential", "Funded");
+            current.Achievements.Should().Equal("Potential", "Internally Funded");
 
             var result = await PutAchievements(client, world.Admin, SystemRoles.Admin, world.ProjectA,
-                ["Funded", "Potential"], current.RowVersion);
+                ["Internally Funded", "Potential"], current.RowVersion);
             result.RowVersion.Should().Be(current.RowVersion);
 
             await using var scope = factory.Services.CreateAsyncScope();
@@ -320,7 +320,7 @@ public sealed partial class ProjectDataIntegrationTests
                 .StatusCode.Should().Be(HttpStatusCode.Forbidden);
 
             // IDOR: a lecturer of another class cannot label this project, and nothing changed.
-            var outsiderResponse = await Put(client, world.Outsider, SystemRoles.Lecturer, world.ProjectA, ["Funded"], projectA.RowVersion);
+            var outsiderResponse = await Put(client, world.Outsider, SystemRoles.Lecturer, world.ProjectA, ["Internally Funded"], projectA.RowVersion);
             outsiderResponse.StatusCode.Should().Be(HttpStatusCode.Forbidden);
             (await CurrentAchievements(client, world, world.ProjectB)).Achievements.Should().Equal("Potential");
         }
@@ -338,14 +338,14 @@ public sealed partial class ProjectDataIntegrationTests
         {
             using var client = factory.CreateClient();
             var stale = await CurrentAchievements(client, world, world.ProjectB);
-            await PutAchievements(client, world.Admin, SystemRoles.Admin, world.ProjectB, ["Funded"], stale.RowVersion);
+            await PutAchievements(client, world.Admin, SystemRoles.Admin, world.ProjectB, ["Internally Funded"], stale.RowVersion);
 
             var response = await Put(client, world.Lecturer, SystemRoles.Lecturer, world.ProjectB, ["Awarded"], stale.RowVersion);
             response.StatusCode.Should().Be(HttpStatusCode.Conflict);
             var body = await response.Content.ReadFromJsonAsync<ApiResponse<object>>();
             body!.Code.Should().Be("PROJECT_DATA_CONCURRENCY_CONFLICT");
 
-            (await CurrentAchievements(client, world, world.ProjectB)).Achievements.Should().Equal("Funded");
+            (await CurrentAchievements(client, world, world.ProjectB)).Achievements.Should().Equal("Internally Funded");
         }
         finally
         {
@@ -367,7 +367,7 @@ public sealed partial class ProjectDataIntegrationTests
             (await Put(client, world.Admin, SystemRoles.Admin, world.ProjectB, ["Potential"], "not-a-version"))
                 .StatusCode.Should().Be(HttpStatusCode.BadRequest);
             (await Put(client, world.Admin, SystemRoles.Admin, world.ProjectB,
-                ["Potential", "Funded", "Awarded", "Potential"], current.RowVersion))
+                ["Potential", "Internally Funded", "Externally Funded", "Awarded", "Potential"], current.RowVersion))
                 .StatusCode.Should().Be(HttpStatusCode.BadRequest);
             // A note describes labels, so it needs at least one, and it has a length limit.
             (await Put(client, world.Admin, SystemRoles.Admin, world.ProjectB, [], current.RowVersion, "Orphan note"))

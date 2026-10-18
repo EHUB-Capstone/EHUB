@@ -24,6 +24,7 @@ internal static partial class ProjectAchievementHistoryParser
 {
     private const string NoteSetPrefix = "note=";
     private const string NoteCleared = "note-";
+    private const string LegacyFundedLabel = "Funded";
 
     internal static string[] BuildTokens(
         IReadOnlyCollection<string> before,
@@ -75,7 +76,7 @@ internal static partial class ProjectAchievementHistoryParser
             {
                 noteChanged = true;
             }
-            else if (token.Length > 1 && ProjectAchievementMapping.Canonicalize(token[1..]) is { } label)
+            else if (token.Length > 1 && ReadStoredLabel(token[1..]) is { } label)
             {
                 (token[0] switch { '+' => added, '-' => removed, _ => kept }).Add(label);
             }
@@ -93,7 +94,7 @@ internal static partial class ProjectAchievementHistoryParser
 
         if (action == ProjectAchievementMapping.CarriedOverAction)
         {
-            var carried = tokens.Select(ProjectAchievementMapping.Canonicalize).OfType<string>().ToList();
+            var carried = tokens.Select(ReadStoredLabel).OfType<string>().ToList();
             return new ParsedAchievementChange(Order(carried), [], [], noteChanged, note);
         }
 
@@ -108,9 +109,18 @@ internal static partial class ProjectAchievementHistoryParser
 
     private static List<string> ReadLabels(string text) =>
         text.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
-            .Select(ProjectAchievementMapping.Canonicalize)
+            .Select(ReadStoredLabel)
             .OfType<string>()
             .ToList();
+
+    /// <summary>
+    /// Entries written before the funding label was split say "Funded"; the migration turned those projects into
+    /// Internally Funded, so the history reads them the same way.
+    /// </summary>
+    private static string? ReadStoredLabel(string? value) =>
+        string.Equals(value?.Trim(), LegacyFundedLabel, StringComparison.OrdinalIgnoreCase)
+            ? ProjectAchievementNames.InternallyFunded
+            : ProjectAchievementMapping.Canonicalize(value);
 
     private static string[] Order(IEnumerable<string> labels)
     {

@@ -133,7 +133,6 @@ export default function EvaluationPanel({
     } catch (err) {
       const message = err.response?.data?.message || err.response?.data?.error || 'Failed to load evaluations';
       setError(message);
-      toast.error(message);
     } finally {
       setLoading(false);
     }

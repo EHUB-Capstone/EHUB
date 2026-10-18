@@ -14,7 +14,7 @@ public sealed class UpdateProjectAchievementsRequestValidator : AbstractValidato
             .WithMessage("Too many achievements were supplied.");
         RuleForEach(request => request.Achievements)
             .Must(value => ProjectAchievementMapping.Canonicalize(value) is not null)
-            .WithMessage("Achievement must be Potential, Funded or Awarded.");
+            .WithMessage("Achievement must be Potential, Internally Funded, Externally Funded or Awarded.");
         RuleFor(request => request.Note)
             .MaximumLength(ProjectAchievementMapping.NoteMaxLength);
         RuleFor(request => request)
