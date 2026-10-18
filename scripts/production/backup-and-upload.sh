@@ -36,7 +36,7 @@ trap 'rm -f -- "${LOG_FILE}"' EXIT
 fail() {
     local code="$1"
     trap - ERR
-    ehub_notify "[LOI] EHUB ${EHUB_ENV_NAME}: sao luu that bai o buoc \"${STEP}\" (ma loi ${code}). Xem log: journalctl -u ehub-backup.service -n 100"
+    ehub_notify "[LOI] EHUB ${EHUB_ENV_NAME}: sao luu that bai o buoc \"${STEP}\" (ma loi ${code}). Xem log: sudo journalctl -u ehub-backup.service -n 100"
     exit "${code}"
 }
 trap 'fail $?' ERR

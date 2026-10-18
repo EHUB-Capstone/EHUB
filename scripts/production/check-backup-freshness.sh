@@ -20,7 +20,7 @@ if ! command -v rclone >/dev/null 2>&1; then
     exit 1
 fi
 
-trap 'code=$?; trap - ERR; ehub_notify "[LOI] EHUB ${EHUB_ENV_NAME}: job kiem tra sao luu gap loi (ma ${code}). Xem log: journalctl -u ehub-backup-freshness.service -n 100"; exit "${code}"' ERR
+trap 'code=$?; trap - ERR; ehub_notify "[LOI] EHUB ${EHUB_ENV_NAME}: job kiem tra sao luu gap loi (ma ${code}). Xem log: sudo journalctl -u ehub-backup-freshness.service -n 100"; exit "${code}"' ERR
 
 NOW="$(date +%s)"
 LIMIT=$(( BACKUP_MAX_AGE_HOURS * 3600 ))

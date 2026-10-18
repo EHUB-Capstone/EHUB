@@ -38,11 +38,12 @@ boundaries.
   Kubernetes and managed cloud platforms are not used.
 - Hosted cleanup and outbox processing are shown inside the backend process,
   not as a separate worker container.
-- SignalR, Discord, staging and automated CD are not shown because they are not
-  part of the verified production architecture represented here.
-- The deployment diagram shows the existing host-side PostgreSQL export script.
-  The off-site copy is a manual operational step with no chosen provider, so it
-  is described in the report text and not drawn.
+- SignalR, staging and automated CD are not shown because they are not part of
+  the verified production architecture represented here. Discord appears only as
+  the channel that receives backup status alerts.
+- The deployment diagram shows the host-side backup job (daily systemd timer)
+  uploading to a dedicated private Cloudflare R2 bucket and sending status
+  alerts to a Discord channel.
 - The System Context Diagram remains in Report 3 and should be referenced from
   the opening of Report 4 as C4 Level 1.
 
