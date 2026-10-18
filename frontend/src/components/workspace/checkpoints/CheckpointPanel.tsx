@@ -72,21 +72,26 @@ export default function CheckpointPanel({
   const [showEvaluation, setShowEvaluation] = useState(false);
   const Icon = ICONS[checkpoint?.icon] || FileText;
 
-  const fetchData = useCallback(async () => {
-    if (!teamId || !checkpoint) return;
-    setLoading(true);
+  // Depend on the number, not the object: the parent rebuilds checkpoint objects on every silent stats refresh,
+  // which would otherwise refetch here and flash the loading state over the file list.
+  const checkpointNumber = checkpoint?.number;
+
+  // Silent refreshes keep the current list on screen instead of swapping it for the loading placeholder.
+  const fetchData = useCallback(async (silent = false) => {
+    if (!teamId || checkpointNumber == null) return;
+    if (!silent) setLoading(true);
     try {
       const res = await checkpointApi.getCheckpointData(String(teamId));
       if (res.success) {
         const sub = res.data.submissions.find(
-          (s) => Number(s.checkpointNumber) === Number(checkpoint.number)
+          (s) => Number(s.checkpointNumber) === Number(checkpointNumber)
         );
         setFiles(sub?.files || []);
         setSubmissionMeta({ status: sub?.status ?? null, submittedAt: sub?.submittedAt ?? null });
         setLinks(sub?.links || []);
         setFeedbacks(
           res.data.feedbacks.filter(
-            (f) => Number(f.checkpointNumber) === Number(checkpoint.number)
+            (f) => Number(f.checkpointNumber) === Number(checkpointNumber)
           )
         );
       }
@@ -95,7 +100,9 @@ export default function CheckpointPanel({
     } finally {
       setLoading(false);
     }
-  }, [teamId, checkpoint]);
+  }, [teamId, checkpointNumber]);
+
+  const refreshQuietly = useCallback(() => fetchData(true), [fetchData]);
 
   const addFeedback = useCallback((feedback) => {
     if (!feedback?._id) return;
@@ -125,11 +132,11 @@ export default function CheckpointPanel({
     if (event.eventType === 'CheckpointRequirementsUpdated'
       && String(event.teamId) === String(teamId)
       && Number(event.checkpointNumber) === Number(checkpoint.number)) {
-      void fetchData();
+      void fetchData(true);
       onRequirementsSaved?.();
     }
   }, (reconnected) => {
-    if (reconnected) void fetchData();
+    if (reconnected) void fetchData(true);
   }), [addFeedback, checkpoint.number, fetchData, onRequirementsSaved, removeFeedback, teamId]);
 
   // Leaving with selected or uploading files would discard them, so ask in the system dialog first.
@@ -348,7 +355,7 @@ export default function CheckpointPanel({
                 teamId={String(teamId)}
                 downloadingId={downloadingId}
                 editingLink={editingLink}
-                onRefresh={fetchData}
+                onRefresh={refreshQuietly}
                 onPreview={setPreviewFile}
                 onDownload={handleDownload}
                 onRequestDeleteFile={setDeleteTarget}
