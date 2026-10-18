@@ -7,8 +7,11 @@ import LoadingSkeleton from '../../components/ui/LoadingSkeleton';
 import PageHeader from '../../components/ui/PageHeader';
 import ProjectDataDetailModal from '../../features/project-data/components/ProjectDataDetailModal';
 import type { ProjectDataSaveError } from '../../features/project-data/components/ProjectDataDetailModal';
+import ProjectDataDistribution from '../../features/project-data/components/ProjectDataDistribution';
+import ProjectDataTrends from '../../features/project-data/components/ProjectDataTrends';
 import ProjectDataSummaryCards from '../../features/project-data/components/ProjectDataSummaryCards';
 import ProjectDataFilters from '../../features/project-data/components/ProjectDataFilters';
+import ProjectDataTabs, { projectDataPanelId, projectDataTabId } from '../../features/project-data/components/ProjectDataTabs';
 import ProjectDataTable from '../../features/project-data/components/ProjectDataTable';
 import { useProjectData } from '../../features/project-data/hooks/useProjectData';
 import { useAuth } from '../../hooks/useAuth';
@@ -21,11 +24,14 @@ const WRITE_ROLES = ['ADMIN', 'LECTURER'];
 
 export default function ProjectData() {
   const { user } = useAuth();
-  const { query, updateQuery, clearFilters, searchInput, setSearchInput, list, summary, options, updateAchievements } = useProjectData();
+  const { query, tab, setTab, updateQuery, clearFilters, searchInput, setSearchInput, list, summary, distribution, trends, options, updateAchievements, updateStartupIndustries } = useProjectData();
   const [selected, setSelected] = useState<ProjectDataItem | null>(null);
   const [saveError, setSaveError] = useState<ProjectDataSaveError | null>(null);
+  const [industryError, setIndustryError] = useState<ProjectDataSaveError | null>(null);
   const [isReloading, setIsReloading] = useState(false);
 
+  // The scope's subject list is fixed by the user's classes, so chart colors do not change when a filter narrows it.
+  const subjectOrder = useMemo(() => (options.data?.subjects ?? []).map(item => item.code), [options.data]);
   // The backend decides what each role may change; this only avoids offering controls that cannot work.
   const canManage = WRITE_ROLES.includes((user?.role ?? '').toUpperCase());
   const page = list.data;
@@ -36,8 +42,10 @@ export default function ProjectData() {
   const closeDetail = useCallback(() => {
     setSelected(null);
     setSaveError(null);
+    setIndustryError(null);
     updateAchievements.reset();
-  }, [updateAchievements]);
+    updateStartupIndustries.reset();
+  }, [updateAchievements, updateStartupIndustries]);
 
   const saveAchievements = useCallback((achievements: ProjectAchievement[], note: string | null) => {
     if (!selected || updateAchievements.isPending) return;
@@ -73,6 +81,33 @@ export default function ProjectData() {
     );
   }, [selected, updateAchievements]);
 
+  const saveStartupIndustries = useCallback((startupIndustryIds: string[]) => {
+    if (!selected || updateStartupIndustries.isPending) return;
+    setIndustryError(null);
+    updateStartupIndustries.mutate(
+      { projectId: selected.projectId, payload: { startupIndustryIds, rowVersion: selected.rowVersion } },
+      {
+        onSuccess: result => {
+          setSelected(current => current && current.projectId === result.projectId
+            ? { ...current, startupIndustries: result.startupIndustries, rowVersion: result.rowVersion }
+            : current);
+          toast.success('Startup industries updated.');
+        },
+        onError: error => {
+          const parsed = parseApiError(error, 'Unable to update startup industries.');
+          const isConflict = parsed.code === CONCURRENCY_CONFLICT_CODE;
+          setIndustryError({
+            isConflict,
+            message: isConflict
+              ? 'This project was changed by someone else. Reload the latest data before saving again; your selection is kept until then.'
+              : parsed.message,
+          });
+          toast.error(isConflict ? 'Project data is out of date.' : parsed.message);
+        },
+      },
+    );
+  }, [selected, updateStartupIndustries]);
+
   const reloadSelected = useCallback(async () => {
     if (!selected) return;
     setIsReloading(true);
@@ -82,6 +117,7 @@ export default function ProjectData() {
       if (latest) {
         setSelected(latest);
         setSaveError(null);
+        setIndustryError(null);
       } else {
         toast('This project is no longer on the current page.');
         closeDetail();
@@ -167,6 +203,10 @@ export default function ProjectData() {
         isError={summary.isError}
         isRefreshing={summary.isFetching && !summary.isPending}
         onRetry={() => { void summary.refetch(); }}
+        achievement={query.achievement}
+        hasFilters={hasActiveSearchOrFilters(query)}
+        onSelectAchievement={achievement => updateQuery({ achievement })}
+        onClearFilters={clearFilters}
       />
 
       <ProjectDataFilters
@@ -181,6 +221,33 @@ export default function ProjectData() {
         onRetryOptions={() => { void options.refetch(); }}
       />
 
+      <ProjectDataTabs value={tab} onChange={setTab} />
+
+      {tab === 'analytics' && (
+        <div role="tabpanel" id={projectDataPanelId('analytics')} aria-labelledby={projectDataTabId('analytics')}>
+          <ProjectDataDistribution
+            distribution={distribution.data}
+            query={query}
+            isLoading={distribution.isPending && !distribution.data}
+            isError={distribution.isError}
+            isRefreshing={distribution.isFetching && !distribution.isPending}
+            onRetry={() => { void distribution.refetch(); }}
+            onFilter={updateQuery}
+            onViewTable={() => setTab('overview')}
+          />
+          <ProjectDataTrends
+            trends={trends.data}
+            isLoading={trends.isPending && !trends.data}
+            isError={trends.isError}
+            isRefreshing={trends.isFetching && !trends.isPending}
+            onRetry={() => { void trends.refetch(); }}
+            subjectOrder={subjectOrder}
+          />
+        </div>
+      )}
+
+      {tab === 'overview' && (
+      <div role="tabpanel" id={projectDataPanelId('overview')} aria-labelledby={projectDataTabId('overview')}>
       {isRefreshing && (
         <p className="mb-2 flex items-center gap-2 text-xs font-medium text-primary-700" role="status" aria-live="polite">
           <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" /> Updating results...
@@ -194,6 +261,8 @@ export default function ProjectData() {
       )}
 
       {content}
+      </div>
+      )}
 
       <ProjectDataDetailModal
         item={selected}
@@ -203,6 +272,9 @@ export default function ProjectData() {
         error={saveError}
         onClose={closeDetail}
         onSave={saveAchievements}
+        onSaveIndustries={saveStartupIndustries}
+        isSavingIndustries={updateStartupIndustries.isPending}
+        industryError={industryError}
         onReload={() => { void reloadSelected(); }}
       />
     </div>

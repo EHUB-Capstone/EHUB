@@ -1,9 +1,13 @@
 using EHub.Application.Common.Interfaces.Identity;
 using EHub.Application.Features.ProjectData.GetProjectAchievementHistory;
 using EHub.Application.Features.ProjectData.GetProjectData;
+using EHub.Application.Features.ProjectData.GetProjectDataDistribution;
 using EHub.Application.Features.ProjectData.GetProjectDataFilterOptions;
+using EHub.Application.Features.ProjectData.GetProjectDataTrends;
 using EHub.Application.Features.ProjectData.GetProjectDataSummary;
+using EHub.Application.Features.ProjectData.GetProjectStartupIndustryHistory;
 using EHub.Application.Features.ProjectData.ManageAchievements;
+using EHub.Application.Features.ProjectData.ManageStartupIndustries;
 using EHub.Contracts.Common;
 using EHub.Contracts.ProjectData;
 using EHub.Shared.Constants;
@@ -39,6 +43,26 @@ public sealed class ProjectDataController(ICurrentUserService currentUser) : Con
             await handler.HandleAsync(request, UserId, Role, cancellationToken),
             "Project data summary retrieved.");
 
+    [HttpGet("distribution")]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    public async Task<IActionResult> GetDistribution(
+        [FromQuery] GetProjectDataRequest request,
+        [FromServices] IGetProjectDataDistributionQueryHandler handler,
+        CancellationToken cancellationToken) =>
+        ToResponse(
+            await handler.HandleAsync(request, UserId, Role, cancellationToken),
+            "Project data distribution retrieved.");
+
+    [HttpGet("trends")]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    public async Task<IActionResult> GetTrends(
+        [FromQuery] GetProjectDataRequest request,
+        [FromServices] IGetProjectDataTrendsQueryHandler handler,
+        CancellationToken cancellationToken) =>
+        ToResponse(
+            await handler.HandleAsync(request, UserId, Role, cancellationToken),
+            "Project data trends retrieved.");
+
     [HttpGet("filter-options")]
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     public async Task<IActionResult> GetFilterOptions(
@@ -67,6 +91,26 @@ public sealed class ProjectDataController(ICurrentUserService currentUser) : Con
         ToResponse(
             await handler.HandleAsync(projectId, request, UserId, Role, cancellationToken),
             "Project achievements updated.");
+
+    [HttpGet("{projectId:guid}/startup-industries/history")]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    public async Task<IActionResult> GetStartupIndustryHistory(
+        Guid projectId,
+        [FromServices] IGetProjectStartupIndustryHistoryQueryHandler handler,
+        CancellationToken cancellationToken) =>
+        ToResponse(
+            await handler.HandleAsync(projectId, UserId, Role, cancellationToken),
+            "Project startup industry history retrieved.");
+
+    [HttpPut("{projectId:guid}/startup-industries")]
+    public async Task<IActionResult> UpdateStartupIndustries(
+        Guid projectId,
+        [FromBody] UpdateProjectStartupIndustriesRequest request,
+        [FromServices] IUpdateProjectStartupIndustriesCommandHandler handler,
+        CancellationToken cancellationToken) =>
+        ToResponse(
+            await handler.HandleAsync(projectId, request, UserId, Role, cancellationToken),
+            "Project startup industries updated.");
 
     private Guid UserId => currentUser.UserId ?? Guid.Empty;
 

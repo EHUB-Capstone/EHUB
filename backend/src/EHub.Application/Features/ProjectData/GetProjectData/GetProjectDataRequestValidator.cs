@@ -16,6 +16,10 @@ public sealed class GetProjectDataRequestValidator : AbstractValidator<GetProjec
         RuleFor(request => request.SubjectCode).MaximumLength(50);
         RuleFor(request => request.Group).MaximumLength(100);
         RuleFor(request => request.StartupIndustry).MaximumLength(100);
+        RuleFor(request => request.Major)
+            .Must(ProjectDataQuery.IsMajorFilterValue)
+            .When(request => !string.IsNullOrWhiteSpace(request.Major))
+            .WithMessage("Major must be a known major code or UNSPECIFIED.");
         RuleFor(request => request.Semester)
             .Must(value => ProjectDataQuery.ParseTerm(value) is not null)
             .When(request => !string.IsNullOrWhiteSpace(request.Semester))
@@ -26,7 +30,7 @@ public sealed class GetProjectDataRequestValidator : AbstractValidator<GetProjec
         RuleFor(request => request.Achievement)
             .Must(value => ProjectAchievementMapping.Canonicalize(value) is not null)
             .When(request => !string.IsNullOrWhiteSpace(request.Achievement))
-            .WithMessage("Achievement must be Potential, Funded or Awarded.");
+            .WithMessage("Achievement must be Potential, Internally Funded, Externally Funded or Awarded.");
         RuleFor(request => request.SortBy)
             .Must(value => ProjectDataQuery.AllowedSortFields.Contains(value!.Trim(), StringComparer.OrdinalIgnoreCase))
             .When(request => !string.IsNullOrWhiteSpace(request.SortBy))

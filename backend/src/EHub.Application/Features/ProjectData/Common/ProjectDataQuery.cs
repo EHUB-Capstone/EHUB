@@ -87,16 +87,59 @@ internal static class ProjectDataQuery
             query = ProjectAchievementMapping.Canonicalize(achievement) switch
             {
                 ProjectAchievementNames.Potential => query.Where(project => project.IsHighPotential),
-                ProjectAchievementNames.Funded => query.Where(project => project.IsFunded),
+                ProjectAchievementNames.InternallyFunded => query.Where(project => project.IsInternallyFunded),
+                ProjectAchievementNames.ExternallyFunded => query.Where(project => project.IsExternallyFunded),
                 ProjectAchievementNames.Awarded => query.Where(project => project.IsAwarded),
                 _ => query,
             };
         }
 
+        if (Normalize(request.Major)?.ToUpperInvariant() is { } major)
+            query = ApplyMajorFilter(query, major);
+
         if (Normalize(request.Search) is { } search)
             query = ApplySearch(query, search.ToLower());
 
         return query;
+    }
+
+    /// <summary>Every major a filter can name: the real majors plus the bucket for missing or invalid ones.</summary>
+    internal static readonly string[] MajorFilterOptions = [.. MajorCodes.All, ProjectDataDistributionRules.UnspecifiedMajor];
+
+    internal static bool IsMajorFilterValue(string? value) =>
+        Normalize(value)?.ToUpperInvariant() is { } major &&
+        (major == ProjectDataDistributionRules.UnspecifiedMajor || MajorCodes.IsValid(major));
+
+    /// <summary>
+    /// Keeps projects with at least one active team member whose effective major is <paramref name="major"/>. The
+    /// effective major is the enrollment major, or the profile major when the enrollment one is blank or UNDECLARED
+    /// (<c>StudentEnrollmentRules.ResolveEffectiveMajorCode</c>), written inline because EF cannot translate that method.
+    /// UNSPECIFIED also keeps projects with no active members, like the distribution does.
+    /// </summary>
+    private static IQueryable<Project> ApplyMajorFilter(IQueryable<Project> query, string major)
+    {
+        const string undeclared = "UNDECLARED";
+
+        if (major == ProjectDataDistributionRules.UnspecifiedMajor)
+        {
+            var valid = MajorCodes.All;
+            return query.Where(project =>
+                !project.Team.TeamMembers.Any(member => member.CountsTowardActiveTeam) ||
+                project.Team.TeamMembers.Any(member => member.CountsTowardActiveTeam &&
+                    !(valid.Contains(member.ClassStudent.MajorCodeAtEnrollment.Trim().ToUpper()) ||
+                      ((member.ClassStudent.MajorCodeAtEnrollment.Trim().ToUpper() == "" ||
+                        member.ClassStudent.MajorCodeAtEnrollment.Trim().ToUpper() == undeclared) &&
+                       member.ClassStudent.Student.MajorCode != null &&
+                       valid.Contains(member.ClassStudent.Student.MajorCode.Trim().ToUpper())))));
+        }
+
+        return query.Where(project => project.Team.TeamMembers.Any(member =>
+            member.CountsTowardActiveTeam &&
+            (member.ClassStudent.MajorCodeAtEnrollment.Trim().ToUpper() == major ||
+             ((member.ClassStudent.MajorCodeAtEnrollment.Trim().ToUpper() == "" ||
+               member.ClassStudent.MajorCodeAtEnrollment.Trim().ToUpper() == undeclared) &&
+              member.ClassStudent.Student.MajorCode != null &&
+              member.ClassStudent.Student.MajorCode.Trim().ToUpper() == major))));
     }
 
     /// <summary>

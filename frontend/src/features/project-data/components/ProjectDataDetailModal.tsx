@@ -21,6 +21,8 @@ import { ACHIEVEMENT_STYLES } from '../achievementStyles';
 import ProjectAchievementBadges from './ProjectAchievementBadges';
 import ProjectAchievementHistory from './ProjectAchievementHistory';
 import { MentorLabel } from './ProjectDataTable';
+import ProjectStartupIndustryEditor from './ProjectStartupIndustryEditor';
+import ProjectStartupIndustryHistory from './ProjectStartupIndustryHistory';
 
 export interface ProjectDataSaveError {
   message: string;
@@ -35,6 +37,9 @@ interface ProjectDataDetailModalProps {
   error: ProjectDataSaveError | null;
   onClose: () => void;
   onSave: (achievements: ProjectAchievement[], note: string | null) => void;
+  onSaveIndustries: (startupIndustryIds: string[]) => void;
+  isSavingIndustries: boolean;
+  industryError: ProjectDataSaveError | null;
   onReload: () => void;
 }
 
@@ -64,6 +69,9 @@ export default function ProjectDataDetailModal({
   error,
   onClose,
   onSave,
+  onSaveIndustries,
+  isSavingIndustries,
+  industryError,
   onReload,
 }: ProjectDataDetailModalProps) {
   const legendId = useId();
@@ -72,6 +80,8 @@ export default function ProjectDataDetailModal({
   const itemKey = item ? `${item.projectId}:${item.rowVersion}` : '';
   const [draftState, setDraftState] = useState<{ key: string; labels: ProjectAchievement[]; note: string } | null>(null);
   const [confirmKey, setConfirmKey] = useState<string | null>(null);
+  // Industry edits also belong to one version of one project; saving moves the version and so ends the edit.
+  const [industryDraft, setIndustryDraft] = useState<{ key: string; ids: string[] | null } | null>(null);
   const savedNote = item?.achievementNote ?? '';
   const draft = draftState?.key === itemKey ? draftState.labels : item?.achievements ?? [];
   const draftNote = draftState?.key === itemKey ? draftState.note : savedNote;
@@ -80,15 +90,20 @@ export default function ProjectDataDetailModal({
   const setDraft = (labels: ProjectAchievement[], note: string) => setDraftState({ key: itemKey, labels, note });
   const confirmingRemoval = confirmKey === itemKey && itemKey !== '';
   const setConfirmingRemoval = (open: boolean) => setConfirmKey(open ? itemKey : null);
+  const editingIndustries = industryDraft?.key === itemKey && itemKey !== '';
+  const busy = isSaving || isSavingIndustries;
 
   useEffect(() => {
     if (!item) return undefined;
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && !isSaving && !confirmingRemoval) onClose();
+      if (event.key !== 'Escape' || busy || confirmingRemoval) return;
+      // Escape first leaves the industry editor, then closes the dialog.
+      if (editingIndustries) setIndustryDraft(null);
+      else onClose();
     };
     window.addEventListener('keydown', closeOnEscape);
     return () => window.removeEventListener('keydown', closeOnEscape);
-  }, [item, isSaving, confirmingRemoval, onClose]);
+  }, [item, busy, confirmingRemoval, editingIndustries, onClose]);
 
   if (!item) return null;
 
@@ -105,12 +120,12 @@ export default function ProjectDataDetailModal({
     <>
       <Modal
         isOpen
-        onClose={() => { if (!isSaving) onClose(); }}
+        onClose={() => { if (!busy) onClose(); }}
         title={item.projectName}
         size="lg"
         submitText="Save achievements"
         isSubmitting={isSaving}
-        submitDisabled={!dirty}
+        submitDisabled={!dirty || editingIndustries}
         onSubmit={canManage ? submit : undefined}
       >
         <div className="space-y-6">
@@ -121,7 +136,23 @@ export default function ProjectDataDetailModal({
             <Field label="Lecturer">{displayText(item.lecturer?.fullName)}</Field>
             <Field label="Mentor"><MentorLabel mentor={item.mentor} /></Field>
             <Field label="Mentor - GV"><MentorLabel mentor={item.academicMentor} /></Field>
-            <div className="sm:col-span-2"><Field label="Startup Industry"><Chips values={item.startupIndustries} /></Field></div>
+            <div className="sm:col-span-2">
+              <ProjectStartupIndustryEditor
+                item={item}
+                canManage={canManage}
+                editing={editingIndustries}
+                draftIds={editingIndustries ? industryDraft?.ids ?? null : null}
+                lockedReason={dirty ? 'Save or discard the achievement changes first.' : isSaving ? 'Saving achievements…' : null}
+                isSaving={isSavingIndustries}
+                isReloading={isReloading}
+                error={editingIndustries ? industryError : null}
+                onStartEdit={() => setIndustryDraft({ key: itemKey, ids: null })}
+                onDraftChange={ids => setIndustryDraft({ key: itemKey, ids })}
+                onCancel={() => setIndustryDraft(null)}
+                onSave={onSaveIndustries}
+                onReload={onReload}
+              />
+            </div>
             <div className="sm:col-span-2">
               <Field label="Description">
                 <p className="whitespace-pre-wrap">{displayText(item.description)}</p>
@@ -129,10 +160,12 @@ export default function ProjectDataDetailModal({
             </div>
           </dl>
 
+          {canManage && <ProjectStartupIndustryHistory key={item.projectId} projectId={item.projectId} rowVersion={item.rowVersion} />}
+
           <section aria-labelledby={legendId}>
             <h3 id={legendId} className="text-xs font-medium uppercase tracking-wider text-slate-400">Achievements</h3>
             {canManage ? (
-              <fieldset className="mt-2 space-y-2" disabled={isSaving} aria-labelledby={legendId}>
+              <fieldset className="mt-2 space-y-2" disabled={isSaving || editingIndustries} aria-labelledby={legendId}>
                 {PROJECT_ACHIEVEMENTS.map(name => {
                   const { icon: Icon } = ACHIEVEMENT_STYLES[name];
                   return (
@@ -191,7 +224,7 @@ export default function ProjectDataDetailModal({
               variant="primary"
               icon={Rocket}
               iconRight={ArrowRight}
-              disabled={isSaving}
+              disabled={busy}
               onClick={() => navigate(projectWorkspacePath(item.teamId))}
             >
               Open Startup Workspace

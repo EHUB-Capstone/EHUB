@@ -1,8 +1,12 @@
-export const PROJECT_ACHIEVEMENTS = ['Potential', 'Funded', 'Awarded'] as const;
+export const PROJECT_ACHIEVEMENTS = ['Potential', 'Internally Funded', 'Externally Funded', 'Awarded'] as const;
 export type ProjectAchievement = (typeof PROJECT_ACHIEVEMENTS)[number];
 
 export const PROJECT_DATA_SEMESTER_TERMS = ['SP', 'SU', 'FA'] as const;
 export type ProjectDataSemesterTerm = (typeof PROJECT_DATA_SEMESTER_TERMS)[number];
+
+export const PROJECT_DATA_TABS = ['overview', 'analytics'] as const;
+export type ProjectDataTab = (typeof PROJECT_DATA_TABS)[number];
+export const DEFAULT_PROJECT_DATA_TAB: ProjectDataTab = 'overview';
 
 export const PROJECT_DATA_PAGE_SIZES = [10, 20, 50, 100] as const;
 export type ProjectDataPageSize = (typeof PROJECT_DATA_PAGE_SIZES)[number];
@@ -66,6 +70,8 @@ export interface ProjectDataQuery {
   year: string;
   group: string;
   startupIndustry: string;
+  /** A major code or UNSPECIFIED; matches projects with at least one active member of that major. */
+  major: string;
   lecturerId: string;
   mentorId: string;
   achievement: ProjectAchievement | '';
@@ -78,8 +84,63 @@ export interface ProjectDataQuery {
 export interface ProjectDataSummary {
   totalGroups: number;
   potentialGroups: number;
-  fundedGroups: number;
+  internallyFundedGroups: number;
+  externallyFundedGroups: number;
   awardedGroups: number;
+}
+
+export interface ProjectDataDistributionBucket {
+  name: string;
+  count: number;
+}
+
+export interface ProjectDataDistributionSemester {
+  code: string;
+  year: number;
+  term: ProjectDataSemesterTerm;
+  count: number;
+}
+
+/** Groups counted per dimension. Semester buckets add up to `totalGroups`; the others can overlap. */
+export interface ProjectDataDistribution {
+  totalGroups: number;
+  semesters: ProjectDataDistributionSemester[];
+  majors: ProjectDataDistributionBucket[];
+  /** Startup industry, which is also the project topic. */
+  startupIndustries: ProjectDataDistributionBucket[];
+  unspecifiedStartupIndustryCount: number;
+  outcomes: ProjectDataDistributionBucket[];
+  noOutcomeCount: number;
+}
+
+export interface ProjectDataTrendRow {
+  semesterCode: string;
+  year: number;
+  term: ProjectDataSemesterTerm;
+  subjectCode: string | null;
+  classId: string | null;
+  classCode: string | null;
+  totalGroups: number;
+  /** Groups whose course score is official: every weighted component has a published evaluation. */
+  gradedGroups: number;
+  /** Official course score out of 10; null while no group in the row is graded. */
+  averageScore: number | null;
+  potentialGroups: number;
+  internallyFundedGroups: number;
+  externallyFundedGroups: number;
+  awardedGroups: number;
+  /** Change since the previous semester of the same subject or class code; null for the earliest one. */
+  averageScoreChange: number | null;
+  potentialChange: number | null;
+  internallyFundedChange: number | null;
+  externallyFundedChange: number | null;
+  awardedChange: number | null;
+}
+
+export interface ProjectDataTrends {
+  semesters: ProjectDataTrendRow[];
+  subjects: ProjectDataTrendRow[];
+  classes: ProjectDataTrendRow[];
 }
 
 export interface ProjectDataSubjectOption {
@@ -96,6 +157,7 @@ export interface ProjectDataFilterOptions {
   years: number[];
   groups: string[];
   startupIndustries: string[];
+  majors: string[];
   lecturers: ProjectDataPerson[];
   mentors: ProjectDataMentorOption[];
   achievements: ProjectAchievement[];
@@ -105,6 +167,34 @@ export interface UpdateProjectAchievementsPayload {
   achievements: ProjectAchievement[];
   note: string | null;
   rowVersion: string;
+}
+
+export interface UpdateProjectStartupIndustriesPayload {
+  startupIndustryIds: string[];
+  rowVersion: string;
+}
+
+export interface ProjectStartupIndustriesResult {
+  projectId: string;
+  startupIndustries: string[];
+  rowVersion: string;
+}
+
+export interface ProjectStartupIndustryHistoryItem {
+  id: string;
+  summary: string;
+  actorName: string | null;
+  occurredAtUtc: string;
+  /** What the change did. All empty means unreadable: show `summary` instead. */
+  added: string[];
+  removed: string[];
+  kept: string[];
+}
+
+export interface ProjectStartupIndustryHistory {
+  /** Every recorded change; `items` holds only the latest ones, newest first. */
+  totalCount: number;
+  items: ProjectStartupIndustryHistoryItem[];
 }
 
 export interface ProjectAchievementHistoryItem {
