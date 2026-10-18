@@ -16,11 +16,27 @@ Nếu máy bạn đã cài sẵn PostgreSQL từ trước, nó sẽ tranh chấp
 *   **Cách tắt:** Nhấn phím Windows $\rightarrow$ gõ **`Services`** $\rightarrow$ Tìm dịch vụ bắt đầu bằng tên **`postgresql...`** (ví dụ: `postgresql-x64-16`) $\rightarrow$ Click chuột phải chọn **`Stop`**.
 
 ### 3. Khởi chạy Database Docker
-Mở Terminal tại thư mục gốc của dự án (`d:\EHUB\EHUB\`) và chạy lệnh:
+Mở Terminal tại thư mục gốc của repo (ví dụ: `D:\FA26\EHUB`) và chạy lệnh:
 ```bash
-docker compose -f docker-compose.local.yml up -d
+docker compose -f docker-compose.local.yml pull postgres
+docker compose -f docker-compose.local.yml up -d postgres
 ```
 *(Lưu ý: File `docker-compose.local.yml` chỉ chứa credential chạy local development giả lập để cả nhóm dùng chung. Tuyệt đối không dùng các thông tin này cho môi trường staging hoặc production).*
+
+Sau đó kiểm tra PostgreSQL đã dùng đúng image, đang chạy và đã qua healthcheck:
+```bash
+docker compose -f docker-compose.local.yml ps postgres
+docker ps --filter name=ehub-postgres --format "{{.Image}} {{.Status}}"
+```
+
+Kết quả cần có image `pgvector/pgvector:0.8.6-pg18` và trạng thái `healthy`. Nếu trạng thái là `starting`, đợi vài giây rồi chạy lại lệnh; nếu là `unhealthy` hoặc container không xuất hiện, xem phần Troubleshooting bên dưới.
+
+Kiểm tra extension `vector` đã có trong image:
+```bash
+docker exec ehub-postgres psql -U ehub_user -d ehub_db -c "select name, default_version from pg_available_extensions where name='vector';"
+```
+
+Kết quả mong đợi là một dòng có `vector`. Backend sẽ tạo extension này khi migration yêu cầu; việc extension xuất hiện trong danh sách xác nhận image PostgreSQL hỗ trợ pgvector.
 
 ### 4. Thiết lập Chuỗi kết nối (User Secrets)
 Bạn có thể thiết lập chuỗi kết nối local trực tiếp từ thư mục gốc của dự án bằng lệnh:
@@ -45,16 +61,47 @@ Trong quá trình chạy local, nếu gặp lỗi liên quan đến Database, b�
 
 *   **Kiểm tra xem container database có đang chạy hay không:**
     ```bash
-    docker ps
+    docker compose -f docker-compose.local.yml ps postgres
+    docker ps --filter name=ehub-postgres --format "{{.Image}} {{.Status}}"
     ```
 *   **Xem logs của container database để phát hiện lỗi khởi động/mật khẩu:**
     ```bash
-    docker logs ehub-postgres
+    docker compose -f docker-compose.local.yml logs --tail=100 postgres
     ```
+*   **Kiểm tra database có thực sự nhận kết nối từ bên trong container không:**
+    ```bash
+    docker exec ehub-postgres pg_isready -U ehub_user -d ehub_db
+    docker exec ehub-postgres psql -U ehub_user -d ehub_db -c "select 1;"
+    ```
+
+### Lỗi kết nối database
+
+Khi backend báo `Connection refused`, `No connection could be made`, `password authentication failed`, hoặc `database ... does not exist`, xử lý theo thứ tự sau:
+
+1. Kiểm tra Docker Desktop đang chạy, sau đó chạy các lệnh kiểm tra trạng thái và log ở trên. Nếu service không chạy, khởi động lại bằng:
+   ```bash
+   docker compose -f docker-compose.local.yml up -d postgres
+   ```
+2. Khi chạy backend **trực tiếp trên Windows**, User Secrets phải dùng `Host=localhost;Port=5432`. Cài lại cấu hình local nếu cần:
+   ```bash
+   dotnet user-secrets set "ConnectionStrings:DefaultConnection" "Host=localhost;Port=5432;Database=ehub_db;Username=ehub_user;Password=ehub_password" --project backend/src/EHub.Api
+   ```
+   Khi chạy backend **trong Docker Compose**, cấu hình phải dùng `Host=postgres;Port=5432`; không thay bằng `localhost` vì `localhost` lúc đó là chính container backend.
+3. Nếu log nêu cổng `5432` đang được sử dụng hoặc tên container `ehub-postgres` đã tồn tại, xác định container đang chiếm bằng `docker ps -a`. Nếu đó là container PostgreSQL local cũ và dữ liệu đã được sao lưu hoặc không cần giữ, dừng/xóa **đúng container đó** rồi khởi động lại service Compose:
+   ```bash
+   docker stop ehub-postgres
+   docker rm ehub-postgres
+   docker compose -f docker-compose.local.yml up -d postgres
+   ```
+   `docker rm` không tự xóa volume, nhưng cần kiểm tra volume cũ có phải `ehub_postgres_data` trước khi thực hiện nếu dữ liệu quan trọng.
+4. Nếu PostgreSQL kết nối được nhưng backend lỗi migration như `relation "..." does not exist`, schema và lịch sử EF Core migration đang không đồng bộ. Với database development không cần giữ dữ liệu, làm mới database bằng các lệnh ở phần kế tiếp. Nếu cần giữ dữ liệu, dừng lại để kiểm tra bảng `__EFMigrationsHistory` và migration tạo bảng bị thiếu; không tự tạo/sửa bảng bằng pgAdmin.
+
+> [!NOTE]
+> Không dùng `docker run postgres` cho database E-HUB. Hãy dùng Docker Compose để giữ đúng image pgvector, tên container, volume, mạng và healthcheck của repo.
 *   **Reset toàn bộ Database local về trạng thái ban đầu (Cảnh báo: Lệnh này sẽ xóa sạch dữ liệu local hiện tại):**
     ```bash
     docker compose -f docker-compose.local.yml down -v
-    docker compose -f docker-compose.local.yml up -d
+    docker compose -f docker-compose.local.yml up -d postgres
     ```
 
 ---

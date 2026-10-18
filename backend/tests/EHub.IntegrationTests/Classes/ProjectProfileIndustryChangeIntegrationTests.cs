@@ -59,6 +59,27 @@ public sealed partial class TeamWorkflowIntegrationTests
     }
 
     [Fact]
+    public async Task LecturerCanReplaceStartupIndustriesWhileApprovingProjectDirection()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var (seed, workspace, directions) = await CreateApprovedProfileAsync(scope, context);
+        (await workspace.UpdateAsync(seed.TeamId!.Value, ProfileRequest([seed.StartupIndustryIds[0]]),
+            seed.ProposerUserId, SystemRoles.Student)).IsSuccess.Should().BeTrue();
+
+        var current = await directions.GetAsync(seed.TeamId.Value, seed.ProposerUserId, SystemRoles.Student);
+        var reviewed = await directions.ReviewAsync(seed.TeamId.Value, new ReviewProjectDirectionRequest
+        {
+            Decision = "Approved",
+            StartupIndustryIds = [seed.StartupIndustryIds[1]],
+            RowVersion = current.Value.RowVersion
+        }, seed.LecturerId, SystemRoles.Lecturer);
+
+        reviewed.IsSuccess.Should().BeTrue($"{reviewed.Error?.Code}: {reviewed.Error?.Message}");
+        reviewed.Value.StartupIndustries.Should().Equal(await IndustryNamesAsync(context, seed.StartupIndustryIds[1]));
+    }
+
+    [Fact]
     public async Task ProfileIndustryChange_WhenRejected_KeepsTheApprovedIndustries()
     {
         using var scope = _factory.Services.CreateScope();
