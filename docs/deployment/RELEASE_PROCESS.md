@@ -90,4 +90,4 @@ Ghi mỗi lần deploy production để có điểm rollback và dấu vết ki�
 
 | Ngày | SHA trên `main` | SHA nghiệm thu trên staging | SHA bản trước | Người thực hiện | Ghi chú |
 | --- | --- | --- | --- | --- | --- |
-| | | | | | |
+| 16/10/2026 | d9779fd69081be1062350d655e19677ba4b6707b | 823a6a2ee363b2e0d3013ecd60d45bbcd3959b61 | eb8bc5e2f37be5cc0a47da3644e30c0fd26f3cda | Quản trị viên phụ trách deploy | Release đầu tiên theo mô hình main/develop: health check Ollama và backup tự động lên R2 |

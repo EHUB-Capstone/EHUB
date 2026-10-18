@@ -76,10 +76,14 @@ frontend exposes `/healthz`. Docker Compose uses these checks to start the
 containers in the correct order. Docker also restarts a container automatically
 if it stops unexpectedly (`restart: unless-stopped`).
 
-The host-side backup job uses the existing production script to create and
-validate a PostgreSQL export with a checksum and a 14-day local retention.
-Copying the export off the VPS is currently a manual operational step, so no
-off-site storage is drawn in the figure.
+A scheduled host-side backup job (systemd timer, daily at 02:00 Vietnam time)
+creates and validates a PostgreSQL export with a SHA-256 checksum, keeps 14 days
+of copies on the VPS, uploads each export to a dedicated private Cloudflare R2
+bucket (30-day lifecycle rule) and reports success or failure to a Discord
+channel. A second daily check alerts when no fresh backup exists or disk usage is
+high. The same script also runs before each release with the application
+stopped. Restoring the R2 copy into a disposable database has been verified: the
+restore took about five seconds and the table counts matched production.
 
 The backend makes outbound connections to Google Identity, Cloudinary (profile
 avatars), Cloudflare R2 (submission files) and Gmail SMTP, with Brevo as an SMTP
