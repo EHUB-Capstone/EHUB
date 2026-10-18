@@ -146,6 +146,7 @@ public sealed class EvaluationReportExportHandler(IApplicationDbContext context)
                                      member.ClassStudent.EnrollmentStatus == EnrollmentStatus.Active)
                     .Select(member => new EvaluationReportStudentRow(
                         member.ClassStudent.Student.RollNumber ?? string.Empty,
+                        member.ClassStudent.Student.FullName,
                         team.Class.CourseId,
                         team.Project?.Id,
                         member.StudentId,
