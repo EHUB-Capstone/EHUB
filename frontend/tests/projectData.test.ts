@@ -25,6 +25,7 @@ import {
   projectDataSummaryKey,
   projectWorkspacePath,
   projectDataHistoryKey,
+  projectStartupIndustryHistoryKey,
   historyActionLabel,
   describeHistoryEntry,
   formatHistoryDate,
@@ -56,7 +57,7 @@ test('query state round-trips through URL search params', () => {
     startupIndustry: 'Health Tech',
     lecturerId: 'lecturer-1',
     mentorId: 'mentor-1',
-    achievement: 'Funded' as const,
+    achievement: 'Internally Funded' as const,
     pageIndex: 3,
     pageSize: 50 as const,
     sortBy: 'group' as const,
@@ -132,8 +133,8 @@ test('clicking a sort header toggles direction on the same field and starts asce
 
 test('summary params carry only search and filters, so paging and sorting never change the counters', () => {
   assert.deepEqual(toProjectDataSummaryParams(DEFAULT_PROJECT_DATA_QUERY), {});
-  const filtered = { ...DEFAULT_PROJECT_DATA_QUERY, search: 'ai', semester: 'SU' as const, year: '2026', achievement: 'Funded' as const };
-  assert.deepEqual(toProjectDataSummaryParams(filtered), { search: 'ai', semester: 'SU', year: '2026', achievement: 'Funded' });
+  const filtered = { ...DEFAULT_PROJECT_DATA_QUERY, search: 'ai', semester: 'SU' as const, year: '2026', achievement: 'Internally Funded' as const };
+  assert.deepEqual(toProjectDataSummaryParams(filtered), { search: 'ai', semester: 'SU', year: '2026', achievement: 'Internally Funded' });
   const paged = { ...filtered, pageIndex: 5, pageSize: 100 as const, sortBy: 'group' as const, isDescending: true };
   assert.deepEqual(projectDataSummaryKey('user-a', paged), projectDataSummaryKey('user-a', filtered));
   assert.notDeepEqual(projectDataSummaryKey('user-a', filtered), projectDataSummaryKey('user-a', { ...filtered, year: '2025' }));
@@ -153,10 +154,11 @@ test('query keys are scoped to the signed-in user so another account never reuse
 test('achievement labels are independent, ordered and diffed against the saved set', () => {
   assert.deepEqual(toggleAchievement([], 'Awarded'), ['Awarded']);
   assert.deepEqual(toggleAchievement(['Awarded'], 'Potential'), ['Potential', 'Awarded']);
-  assert.deepEqual(toggleAchievement(['Potential', 'Funded', 'Awarded'], 'Funded'), ['Potential', 'Awarded']);
-  assert.equal(sameAchievements(['Funded', 'Potential'], ['Potential', 'Funded']), true);
-  assert.equal(sameAchievements(['Potential'], ['Potential', 'Funded']), false);
-  assert.deepEqual(removedAchievements(['Potential', 'Funded'], ['Funded']), ['Potential']);
+  assert.deepEqual(toggleAchievement(['Awarded', 'Internally Funded'], 'Externally Funded'), ['Internally Funded', 'Externally Funded', 'Awarded']);
+  assert.deepEqual(toggleAchievement(['Potential', 'Internally Funded', 'Awarded'], 'Internally Funded'), ['Potential', 'Awarded']);
+  assert.equal(sameAchievements(['Internally Funded', 'Potential'], ['Potential', 'Internally Funded']), true);
+  assert.equal(sameAchievements(['Potential'], ['Potential', 'Internally Funded']), false);
+  assert.deepEqual(removedAchievements(['Potential', 'Internally Funded'], ['Internally Funded']), ['Potential']);
   assert.deepEqual(removedAchievements(['Potential'], ['Potential', 'Awarded']), []);
 });
 
@@ -278,8 +280,8 @@ test('the API client sends server-side query params, honours abort signals and m
     assert.equal(seenParams.pageSize, 20);
     assert.equal('search' in seenParams, false);
 
-    mock.onGet('/project-data/filter-options').reply(200, { success: true, message: 'ok', data: { semesters: [], subjects: [], groups: [], startupIndustries: [], lecturers: [], mentors: [], achievements: ['Potential', 'Funded', 'Awarded'] } });
-    assert.deepEqual((await projectDataApi.getFilterOptions()).data.achievements, ['Potential', 'Funded', 'Awarded']);
+    mock.onGet('/project-data/filter-options').reply(200, { success: true, message: 'ok', data: { semesters: [], subjects: [], groups: [], startupIndustries: [], lecturers: [], mentors: [], achievements: ['Potential', 'Internally Funded', 'Awarded'] } });
+    assert.deepEqual((await projectDataApi.getFilterOptions()).data.achievements, ['Potential', 'Internally Funded', 'Awarded']);
 
     const controller = new AbortController();
     controller.abort();
@@ -295,12 +297,12 @@ test('the summary request sends search and filters only and maps the counters', 
     let seenParams: Record<string, unknown> = {};
     mock.onGet('/project-data/summary').reply(config => {
       seenParams = config.params;
-      return [200, { success: true, message: 'ok', data: { totalGroups: 8, potentialGroups: 3, fundedGroups: 2, awardedGroups: 1 } }];
+      return [200, { success: true, message: 'ok', data: { totalGroups: 8, potentialGroups: 3, internallyFundedGroups: 2, externallyFundedGroups: 1, awardedGroups: 1 } }];
     });
     const response = await projectDataApi.getSummary({
       ...DEFAULT_PROJECT_DATA_QUERY, subjectCode: 'EXE101', pageIndex: 4, pageSize: 50, sortBy: 'group', isDescending: true,
     });
-    assert.deepEqual(response.data, { totalGroups: 8, potentialGroups: 3, fundedGroups: 2, awardedGroups: 1 });
+    assert.deepEqual(response.data, { totalGroups: 8, potentialGroups: 3, internallyFundedGroups: 2, externallyFundedGroups: 1, awardedGroups: 1 });
     assert.deepEqual(seenParams, { subjectCode: 'EXE101' });
   } finally {
     mock.restore();
@@ -313,10 +315,10 @@ test('updating achievements PUTs the full label set with the row version and sur
     let body: unknown;
     mock.onPut('/project-data/project-1/achievements').replyOnce(config => {
       body = JSON.parse(config.data);
-      return [200, { success: true, message: 'ok', data: { projectId: 'project-1', achievements: ['Potential', 'Funded'], rowVersion: '8', note: 'Strong pilot', updatedAtUtc: '2026-10-04T00:00:00Z', updatedBy: { userId: 'u1', fullName: 'EHUB' } } }];
+      return [200, { success: true, message: 'ok', data: { projectId: 'project-1', achievements: ['Potential', 'Internally Funded'], rowVersion: '8', note: 'Strong pilot', updatedAtUtc: '2026-10-04T00:00:00Z', updatedBy: { userId: 'u1', fullName: 'EHUB' } } }];
     });
-    const result = await projectDataApi.updateAchievements('project-1', { achievements: ['Potential', 'Funded'], note: 'Strong pilot', rowVersion: '7' });
-    assert.deepEqual(body, { achievements: ['Potential', 'Funded'], note: 'Strong pilot', rowVersion: '7' });
+    const result = await projectDataApi.updateAchievements('project-1', { achievements: ['Potential', 'Internally Funded'], note: 'Strong pilot', rowVersion: '7' });
+    assert.deepEqual(body, { achievements: ['Potential', 'Internally Funded'], note: 'Strong pilot', rowVersion: '7' });
     assert.equal(result.data.rowVersion, '8');
     assert.equal(result.data.note, 'Strong pilot');
     assert.equal(result.data.updatedBy?.fullName, 'EHUB');
@@ -326,6 +328,52 @@ test('updating achievements PUTs the full label set with the row version and sur
       projectDataApi.updateAchievements('project-1', { achievements: [], note: null, rowVersion: '7' }),
       (error: { response?: { status?: number; data?: { code?: string } } }) =>
         error.response?.status === 409 && error.response.data?.code === 'PROJECT_DATA_CONCURRENCY_CONFLICT',
+    );
+  } finally {
+    mock.restore();
+  }
+});
+
+test('updating startup industries PUTs the industry ids with the row version and surfaces conflicts', async () => {
+  const mock = new MockAdapter(axiosClient);
+  try {
+    let body: unknown;
+    mock.onPut('/project-data/project-1/startup-industries').replyOnce(config => {
+      body = JSON.parse(config.data);
+      return [200, { success: true, message: 'ok', data: { projectId: 'project-1', startupIndustries: ['EdTech', 'Fintech'], rowVersion: '9' } }];
+    });
+    const result = await projectDataApi.updateStartupIndustries('project-1', { startupIndustryIds: ['i1', 'i2'], rowVersion: '8' });
+    assert.deepEqual(body, { startupIndustryIds: ['i1', 'i2'], rowVersion: '8' });
+    assert.deepEqual(result.data.startupIndustries, ['EdTech', 'Fintech']);
+    assert.equal(result.data.rowVersion, '9');
+
+    mock.onPut('/project-data/project-1/startup-industries').replyOnce(409, { success: false, message: 'changed', code: 'PROJECT_DATA_CONCURRENCY_CONFLICT' });
+    await assert.rejects(
+      projectDataApi.updateStartupIndustries('project-1', { startupIndustryIds: ['i1'], rowVersion: '8' }),
+      (error: { response?: { status?: number } }) => error.response?.status === 409,
+    );
+  } finally {
+    mock.restore();
+  }
+});
+
+test('the startup industry history is read per project and keyed by the row version', async () => {
+  const mock = new MockAdapter(axiosClient);
+  try {
+    mock.onGet('/project-data/project-1/startup-industries/history').reply(200, {
+      success: true,
+      message: 'ok',
+      data: { totalCount: 1, items: [{ id: 'h1', summary: 'Startup industries changed from none to EdTech.', actorName: 'EHUB', occurredAtUtc: '2026-10-18T00:00:00Z', added: ['EdTech'], removed: [], kept: [] }] },
+    });
+    const history = (await projectDataApi.getStartupIndustryHistory('project-1')).data;
+    assert.equal(history.items[0].added[0], 'EdTech');
+    assert.notDeepEqual(
+      projectStartupIndustryHistoryKey('user-a', 'project-1', '1'),
+      projectStartupIndustryHistoryKey('user-a', 'project-1', '2'),
+    );
+    assert.notDeepEqual(
+      projectStartupIndustryHistoryKey('user-a', 'project-1', '1'),
+      projectStartupIndustryHistoryKey('user-b', 'project-1', '1'),
     );
   } finally {
     mock.restore();

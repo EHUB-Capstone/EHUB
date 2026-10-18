@@ -32,7 +32,8 @@ const statusColors: Record<string, string> = {
   Rejected: badgeTones.danger,
   Published: badgeTones.info,
   Potential: badgeTones.brand,
-  Funded: badgeTones.success,
+  'Internally Funded': badgeTones.success,
+  'Externally Funded': badgeTones.info,
   Awarded: badgeTones.warning,
 };
 

@@ -85,7 +85,7 @@ public sealed partial class ProjectDataIntegrationTests(CustomWebApplicationFact
             active.Mentor!.UserId.Should().Be(world.EnterpriseMentor.Id);
             active.Mentor.IsHistorical.Should().BeFalse();
             active.AcademicMentor!.UserId.Should().Be(world.AcademicMentor.Id);
-            active.Achievements.Should().Equal("Potential", "Funded");
+            active.Achievements.Should().Equal("Potential", "Internally Funded");
             active.RowVersion.Should().NotBeNullOrEmpty();
 
             var completed = page.Items.Single(item => item.ProjectId == world.ProjectB);
@@ -162,7 +162,7 @@ public sealed partial class ProjectDataIntegrationTests(CustomWebApplicationFact
             (await Ids(client, world, $"{baseQuery}&year={world.SemesterYear + 1}")).Should().BeEmpty();
             (await Ids(client, world, $"{baseQuery}&semester={world.SemesterTerm}&year={world.SemesterYear}")).Should().HaveCount(4);
             (await Ids(client, world, $"{baseQuery}&semester={otherTerm}&year={world.SemesterYear}")).Should().BeEmpty();
-            (await Ids(client, world, $"{baseQuery}&achievement=Funded")).Should().Equal(world.ProjectA);
+            (await Ids(client, world, $"{baseQuery}&achievement=Internally%20Funded")).Should().Equal(world.ProjectA);
             (await Ids(client, world, $"{baseQuery}&achievement=Awarded")).Should().BeEmpty();
             (await Ids(client, world, $"{baseQuery}&lecturerId={world.CoLecturer.Id}")).Should().Equal(world.ProjectA);
             (await Ids(client, world, $"{baseQuery}&mentorId={world.EnterpriseMentor.Id}")).Should().Equal(world.ProjectA);
@@ -291,15 +291,15 @@ public sealed partial class ProjectDataIntegrationTests(CustomWebApplicationFact
             using var client = factory.CreateClient();
             var search = $"search={world.Token}";
 
-            // Admin sees A (Potential + Funded), B, C and the other lecturer's E; nothing is Awarded yet.
+            // Admin sees A (Potential + Internally Funded), B, C and the other lecturer's E; nothing is Awarded yet.
             (await GetSummary(client, world.Admin, SystemRoles.Admin, search))
                 .Should().BeEquivalentTo(new ProjectDataSummaryResponse
-                { TotalGroups = 4, PotentialGroups = 1, FundedGroups = 1, AwardedGroups = 0 });
+                { TotalGroups = 4, PotentialGroups = 1, InternallyFundedGroups = 1, AwardedGroups = 0 });
 
             // A lecturer only counts the classes they teach.
             (await GetSummary(client, world.Lecturer, SystemRoles.Lecturer, search))
                 .Should().BeEquivalentTo(new ProjectDataSummaryResponse
-                { TotalGroups = 3, PotentialGroups = 1, FundedGroups = 1, AwardedGroups = 0 });
+                { TotalGroups = 3, PotentialGroups = 1, InternallyFundedGroups = 1, AwardedGroups = 0 });
             (await GetSummary(client, world.Outsider, SystemRoles.Lecturer, search))
                 .Should().BeEquivalentTo(new ProjectDataSummaryResponse { TotalGroups = 1 });
 
@@ -307,17 +307,17 @@ public sealed partial class ProjectDataIntegrationTests(CustomWebApplicationFact
             (await GetSummary(client, world.Admin, SystemRoles.Admin, $"{search}&subjectCode={world.OtherCourseCode}"))
                 .Should().BeEquivalentTo(new ProjectDataSummaryResponse { TotalGroups = 1 });
             (await GetSummary(client, world.Admin, SystemRoles.Admin, $"{search}&achievement=Potential&pageIndex=7&pageSize=10&sortBy=group"))
-                .Should().BeEquivalentTo(new ProjectDataSummaryResponse { TotalGroups = 1, PotentialGroups = 1, FundedGroups = 1 });
+                .Should().BeEquivalentTo(new ProjectDataSummaryResponse { TotalGroups = 1, PotentialGroups = 1, InternallyFundedGroups = 1 });
             (await GetSummary(client, world.Admin, SystemRoles.Admin, $"{search}&semester={(world.SemesterTerm == "FA" ? "SP" : "FA")}"))
                 .Should().BeEquivalentTo(new ProjectDataSummaryResponse());
 
             // Labels are independent: a project can be counted in several cards, and the totals follow edits.
             var current = await CurrentAchievements(client, world, world.ProjectB);
             await PutAchievements(client, world.Lecturer, SystemRoles.Lecturer, world.ProjectB,
-                ["Potential", "Funded", "Awarded"], current.RowVersion);
+                ["Potential", "Internally Funded", "Awarded"], current.RowVersion);
             (await GetSummary(client, world.Admin, SystemRoles.Admin, search))
                 .Should().BeEquivalentTo(new ProjectDataSummaryResponse
-                { TotalGroups = 4, PotentialGroups = 2, FundedGroups = 2, AwardedGroups = 1 });
+                { TotalGroups = 4, PotentialGroups = 2, InternallyFundedGroups = 2, AwardedGroups = 1 });
         }
         finally
         {
@@ -364,7 +364,7 @@ public sealed partial class ProjectDataIntegrationTests(CustomWebApplicationFact
             options.Lecturers.Select(item => item.UserId).Should().Contain([world.Lecturer.Id, world.Outsider.Id]);
             options.Mentors.Should().Contain(item => item.UserId == world.HistoricalMentor.Id && item.Slot == "Enterprise");
             options.Mentors.Should().NotContain(item => item.UserId == world.EarlyEndedMentor.Id);
-            options.Achievements.Should().Equal("Potential", "Funded", "Awarded");
+            options.Achievements.Should().Equal("Potential", "Internally Funded", "Externally Funded", "Awarded");
             options.Years.Should().Contain(world.SemesterYear).And.BeInDescendingOrder();
         }
         finally
@@ -525,7 +525,7 @@ public sealed partial class ProjectDataIntegrationTests(CustomWebApplicationFact
         var projectA = NewProject(teamA, $"Alpha {token} Health");
         projectA.Description = $"A quiet-{token} description";
         projectA.IsHighPotential = true;
-        projectA.IsFunded = true;
+        projectA.IsInternallyFunded = true;
         projectA.ProjectTags.Add(Tag("Health Tech"));
         projectA.ProjectTags.Add(Tag("EdTech"));
         projectA.ProjectTags.Add(new ProjectTag

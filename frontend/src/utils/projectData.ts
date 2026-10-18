@@ -1,8 +1,10 @@
 import {
+  DEFAULT_PROJECT_DATA_TAB,
   PROJECT_ACHIEVEMENTS,
   PROJECT_DATA_PAGE_SIZES,
   PROJECT_DATA_SEMESTER_TERMS,
   PROJECT_DATA_SORT_FIELDS,
+  PROJECT_DATA_TABS,
 } from '../types/projectData.ts';
 import type {
   ProjectAchievement,
@@ -13,6 +15,7 @@ import type {
   ProjectDataQuery,
   ProjectDataSemesterTerm,
   ProjectDataSortField,
+  ProjectDataTab,
 } from '../types/projectData.ts';
 
 export const PROJECT_DATA_SEARCH_MAX_LENGTH = 100;
@@ -27,6 +30,7 @@ export const DEFAULT_PROJECT_DATA_QUERY: ProjectDataQuery = {
   year: '',
   group: '',
   startupIndustry: '',
+  major: '',
   lecturerId: '',
   mentorId: '',
   achievement: '',
@@ -36,10 +40,10 @@ export const DEFAULT_PROJECT_DATA_QUERY: ProjectDataQuery = {
   isDescending: false,
 };
 
-type FilterKey = 'subjectCode' | 'semester' | 'year' | 'group' | 'startupIndustry' | 'lecturerId' | 'mentorId' | 'achievement';
+type FilterKey = 'subjectCode' | 'semester' | 'year' | 'group' | 'startupIndustry' | 'major' | 'lecturerId' | 'mentorId' | 'achievement';
 
 const FILTER_KEYS: readonly FilterKey[] = [
-  'subjectCode', 'semester', 'year', 'group', 'startupIndustry', 'lecturerId', 'mentorId', 'achievement',
+  'subjectCode', 'semester', 'year', 'group', 'startupIndustry', 'major', 'lecturerId', 'mentorId', 'achievement',
 ];
 
 export const FILTER_LABELS: Record<FilterKey, string> = {
@@ -48,6 +52,7 @@ export const FILTER_LABELS: Record<FilterKey, string> = {
   year: 'Year',
   group: 'Group',
   startupIndustry: 'Startup industry',
+  major: 'Major',
   lecturerId: 'Lecturer',
   mentorId: 'Mentor',
   achievement: 'Achievement',
@@ -77,6 +82,7 @@ export function parseProjectDataQuery(params: URLSearchParams): ProjectDataQuery
     year: /^\d{4}$/.test(year) ? year : '',
     group: text('group'),
     startupIndustry: text('startupIndustry'),
+    major: /^[A-Za-z_]{1,20}$/.test(params.get('major')?.trim() ?? '') ? (params.get('major') ?? '').trim().toUpperCase() : '',
     lecturerId: text('lecturerId', 64),
     mentorId: text('mentorId', 64),
     achievement: isOneOf(PROJECT_ACHIEVEMENTS, achievement as ProjectAchievement) ? (achievement as ProjectAchievement) : '',
@@ -91,9 +97,19 @@ export function parseProjectDataQuery(params: URLSearchParams): ProjectDataQuery
   };
 }
 
+/** The open tab. It is screen state, not a filter, so it stays out of the query and the request keys. */
+export function parseProjectDataTab(params: URLSearchParams): ProjectDataTab {
+  const value = params.get('tab') ?? '';
+  return PROJECT_DATA_TABS.includes(value as ProjectDataTab) ? (value as ProjectDataTab) : DEFAULT_PROJECT_DATA_TAB;
+}
+
 /** Serialises the screen state to the URL, leaving out defaults so shared links stay short. */
-export function toProjectDataSearchParams(query: ProjectDataQuery): URLSearchParams {
+export function toProjectDataSearchParams(
+  query: ProjectDataQuery,
+  tab: ProjectDataTab = DEFAULT_PROJECT_DATA_TAB,
+): URLSearchParams {
   const params = new URLSearchParams();
+  if (tab !== DEFAULT_PROJECT_DATA_TAB) params.set('tab', tab);
   if (query.search) params.set('search', query.search);
   for (const key of FILTER_KEYS) {
     if (query[key]) params.set(key, query[key]);
@@ -175,6 +191,21 @@ export function projectDataSummaryKey(userId: string | undefined, query: Project
   return ['project-data', userId ?? 'anonymous', 'summary', toProjectDataSummaryParams(query)] as const;
 }
 
+/** Same rows as the summary, so it shares the summary's params and ignores paging and sorting. */
+export function projectDataDistributionKey(userId: string | undefined, query: ProjectDataQuery) {
+  return ['project-data', userId ?? 'anonymous', 'distribution', toProjectDataSummaryParams(query)] as const;
+}
+
+/** A trend spans semesters, so the semester and year filters are left out. */
+export function toProjectDataTrendParams(query: ProjectDataQuery): Record<string, string> {
+  const { semester: _semester, year: _year, ...params } = toProjectDataSummaryParams(query);
+  return params;
+}
+
+export function projectDataTrendsKey(userId: string | undefined, query: ProjectDataQuery) {
+  return ['project-data', userId ?? 'anonymous', 'trends', toProjectDataTrendParams(query)] as const;
+}
+
 /** Includes the row version so a saved change makes an open history list refetch. */
 export function projectDataHistoryKey(userId: string | undefined, projectId: string, rowVersion: string) {
   return ['project-data', userId ?? 'anonymous', 'history', projectId, rowVersion] as const;
@@ -219,6 +250,11 @@ export function historyTruncationNotice(history: { totalCount: number; items: re
   return history.totalCount > history.items.length
     ? `Showing the latest ${history.items.length} of ${history.totalCount} updates.`
     : null;
+}
+
+/** Includes the row version so a saved change makes an open industry history list refetch. */
+export function projectStartupIndustryHistoryKey(userId: string | undefined, projectId: string, rowVersion: string) {
+  return ['project-data', userId ?? 'anonymous', 'industry-history', projectId, rowVersion] as const;
 }
 
 export function projectDataOptionsKey(userId: string | undefined) {

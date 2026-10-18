@@ -23,9 +23,13 @@ using EHub.Application.Features.Notifications.GetNotifications;
 using EHub.Application.Features.Notifications.MarkNotificationRead;
 using EHub.Application.Features.ProjectData.GetProjectAchievementHistory;
 using EHub.Application.Features.ProjectData.GetProjectData;
+using EHub.Application.Features.ProjectData.GetProjectDataDistribution;
 using EHub.Application.Features.ProjectData.GetProjectDataFilterOptions;
+using EHub.Application.Features.ProjectData.GetProjectDataTrends;
+using EHub.Application.Features.ProjectData.GetProjectStartupIndustryHistory;
 using EHub.Application.Features.ProjectData.GetProjectDataSummary;
 using EHub.Application.Features.ProjectData.ManageAchievements;
+using EHub.Application.Features.ProjectData.ManageStartupIndustries;
 using EHub.Application.Features.Rankings.TeamRankings;
 using EHub.Application.Features.Subjects.Curriculum;
 using EHub.Application.Features.Subjects.ManageSemester;
@@ -83,8 +87,12 @@ public static class DependencyInjection
         services.AddScoped<IGetProjectDataQueryHandler, GetProjectDataQueryHandler>();
         services.AddScoped<IGetProjectDataFilterOptionsQueryHandler, GetProjectDataFilterOptionsQueryHandler>();
         services.AddScoped<IGetProjectDataSummaryQueryHandler, GetProjectDataSummaryQueryHandler>();
+        services.AddScoped<IGetProjectDataDistributionQueryHandler, GetProjectDataDistributionQueryHandler>();
+        services.AddScoped<IGetProjectDataTrendsQueryHandler, GetProjectDataTrendsQueryHandler>();
         services.AddScoped<IGetProjectAchievementHistoryQueryHandler, GetProjectAchievementHistoryQueryHandler>();
         services.AddScoped<IUpdateProjectAchievementsCommandHandler, UpdateProjectAchievementsCommandHandler>();
+        services.AddScoped<IGetProjectStartupIndustryHistoryQueryHandler, GetProjectStartupIndustryHistoryQueryHandler>();
+        services.AddScoped<IUpdateProjectStartupIndustriesCommandHandler, UpdateProjectStartupIndustriesCommandHandler>();
         services.AddScoped<IGetNotificationsQueryHandler, GetNotificationsQueryHandler>();
         services.AddScoped<IMarkNotificationReadCommandHandler, MarkNotificationReadCommandHandler>();
 

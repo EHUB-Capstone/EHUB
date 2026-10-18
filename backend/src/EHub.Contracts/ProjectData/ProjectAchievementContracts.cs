@@ -3,10 +3,11 @@ namespace EHub.Contracts.ProjectData;
 public static class ProjectAchievementNames
 {
     public const string Potential = "Potential";
-    public const string Funded = "Funded";
+    public const string InternallyFunded = "Internally Funded";
+    public const string ExternallyFunded = "Externally Funded";
     public const string Awarded = "Awarded";
 
-    public static readonly IReadOnlyList<string> All = [Potential, Funded, Awarded];
+    public static readonly IReadOnlyList<string> All = [Potential, InternallyFunded, ExternallyFunded, Awarded];
 }
 
 public sealed class UpdateProjectAchievementsRequest

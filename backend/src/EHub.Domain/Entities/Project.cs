@@ -22,7 +22,8 @@ public class Project : AuditableEntity
 
     public ProjectStatus Status { get; set; } = ProjectStatus.Draft;
     public bool IsHighPotential { get; set; } = false;
-    public bool IsFunded { get; set; } = false;
+    public bool IsInternallyFunded { get; set; } = false;
+    public bool IsExternallyFunded { get; set; } = false;
     public bool IsAwarded { get; set; } = false;
 
     // Why the project carries its achievement labels, and who last changed them and when. These are kept apart from
