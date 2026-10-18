@@ -7,7 +7,11 @@ import type {
   MentorType,
 } from '../../types/mentorAdmin';
 import {
+  ALL_CLASSES,
   buildTeamGrid,
+  filterTeamGrid,
+  resolveClassFilter,
+  teamClassOptions,
   getMentorCandidates,
   getSubjectColumns,
   skipReasonLabel,
@@ -17,9 +21,11 @@ import {
   type TeamGridRow,
 } from '../../utils/mentorAllocationPreview';
 import { buildChangeReason, isChangeReasonValid } from '../../utils/mentorChangeReasons';
+import Badge, { badgeTones, type BadgeTone } from '../ui/Badge';
 import Button from '../ui/Button';
 import Modal from '../ui/Modal';
 import MentorChangeReasonField from './MentorChangeReasonField';
+import MentorSearchSelect from './MentorSearchSelect';
 
 type PreviewTab = 'teams' | 'mentors' | 'attention';
 type TeamFilter = 'all' | 'attention' | 'changed';
@@ -46,13 +52,15 @@ interface MentorAllocationPreviewModalProps {
 
 const slotLabel: Record<MentorType, string> = { Enterprise: 'Enterprise mentor', Academic: 'Lecturer mentor' };
 
-const stateStyle: Record<SlotState, { label: string; className: string }> = {
-  existing: { label: 'Current', className: 'bg-slate-100 text-slate-600' },
-  retained: { label: 'Kept', className: 'bg-primary-50 text-primary-700' },
-  allocated: { label: 'New', className: 'bg-green-50 text-green-700' },
-  manual: { label: 'Manual', className: 'bg-amber-50 text-amber-700' },
-  unfilled: { label: 'Missing', className: 'bg-red-50 text-red-700' },
+// The same tone is used for a status wherever it appears: the chip in a slot and the figure at the top.
+const stateStyle: Record<SlotState, { label: string; tone: BadgeTone }> = {
+  existing: { label: 'Current', tone: 'neutral' },
+  retained: { label: 'Kept', tone: 'info' },
+  allocated: { label: 'New', tone: 'success' },
+  manual: { label: 'Manual', tone: 'brand' },
+  unfilled: { label: 'Missing', tone: 'danger' },
 };
+const replacedTone: BadgeTone = 'warning';
 
 export default function MentorAllocationPreviewModal({
   isOpen,
@@ -70,22 +78,15 @@ export default function MentorAllocationPreviewModal({
   const [tab, setTab] = useState<PreviewTab>('teams');
   const [filter, setFilter] = useState<TeamFilter>('all');
   const [search, setSearch] = useState('');
+  const [classFilter, setClassFilter] = useState(ALL_CLASSES);
   const [editor, setEditor] = useState<EditorTarget | null>(null);
 
   const grid = useMemo(() => (preview ? buildTeamGrid(preview) : []), [preview]);
   const summary = useMemo(() => (preview ? summarizePreview(preview) : null), [preview]);
-  const visibleRows = useMemo(() => {
-    const term = search.trim().toLowerCase();
-    return grid.filter(row => {
-      const needsAttention = row.enterprise.state === 'unfilled' || row.academic.state === 'unfilled';
-      const changed = [row.enterprise, row.academic].some(slot => slot.state !== 'existing');
-      if (filter === 'attention' && !needsAttention) return false;
-      if (filter === 'changed' && !changed) return false;
-      if (!term) return true;
-      return [row.teamName, row.classCode, row.enterprise.mentorName, row.academic.mentorName]
-        .some(value => value?.toLowerCase().includes(term));
-    });
-  }, [grid, filter, search]);
+  const classOptions = useMemo(() => teamClassOptions(grid), [grid]);
+  const activeClass = resolveClassFilter(classFilter, classOptions);
+  const visibleRows = useMemo(() => filterTeamGrid(grid, { filter, search, classCode: activeClass }), [grid, filter, search, activeClass]);
+  const classOfTeam = useMemo(() => new Map(grid.map(row => [row.teamId, row.classCode])), [grid]);
 
   if (!preview || !summary) return null;
 
@@ -99,6 +100,7 @@ export default function MentorAllocationPreviewModal({
     setTab('teams');
     setFilter('all');
     setSearch('');
+    setClassFilter(ALL_CLASSES);
     setEditor(target);
   };
 
@@ -122,7 +124,7 @@ export default function MentorAllocationPreviewModal({
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-xs leading-5 text-slate-500">
             Nothing is saved until you confirm. Existing mentors are never replaced unless you choose to replace them.
-            {' '}Strategy: <strong className="text-slate-700">{preview.strategy ?? 'Balanced'}</strong> · seed {preview.seed}.
+            {' '}Strategy: <strong className="text-slate-700">{preview.strategy ?? 'Balanced'}</strong>.
           </p>
           <Button size="sm" variant="outline" icon={RefreshCw} onClick={onRegenerate} disabled={busy}>
             Regenerate{edits.length > 0 ? ' (clears edits)' : ''}
@@ -142,13 +144,13 @@ export default function MentorAllocationPreviewModal({
         )}
 
         <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-4 lg:grid-cols-7">
-          <Metric label="Teams" value={summary.teams} />
-          <Metric label="Kept" value={summary.retained} />
-          <Metric label="New" value={summary.allocated} />
-          <Metric label="Manual" value={summary.manual} />
-          <Metric label="Replaced" value={summary.replacements} warning={summary.replacements > 0} />
-          <Metric label="Missing enterprise" value={summary.unfilledEnterprise} danger={summary.unfilledEnterprise > 0} />
-          <Metric label="Missing lecturer" value={summary.unfilledAcademic} danger={summary.unfilledAcademic > 0} />
+          <Metric label="Teams" value={summary.teams} tone="neutral" />
+          <Metric label={stateStyle.retained.label} value={summary.retained} tone={stateStyle.retained.tone} />
+          <Metric label={stateStyle.allocated.label} value={summary.allocated} tone={stateStyle.allocated.tone} />
+          <Metric label={stateStyle.manual.label} value={summary.manual} tone={stateStyle.manual.tone} />
+          <Metric label="Replaced" value={summary.replacements} tone={summary.replacements > 0 ? replacedTone : 'neutral'} />
+          <Metric label="Missing enterprise" value={summary.unfilledEnterprise} tone={summary.unfilledEnterprise > 0 ? stateStyle.unfilled.tone : 'neutral'} />
+          <Metric label="Missing lecturer" value={summary.unfilledAcademic} tone={summary.unfilledAcademic > 0 ? stateStyle.unfilled.tone : 'neutral'} />
         </div>
 
         <div role="tablist" aria-label="Preview views" className="flex flex-wrap gap-1 border-b border-slate-200">
@@ -168,6 +170,17 @@ export default function MentorAllocationPreviewModal({
                   aria-label="Search teams"
                   className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-primary"
                 />
+                {classOptions.length > 1 && (
+                  <select
+                    value={activeClass}
+                    onChange={event => setClassFilter(event.target.value)}
+                    aria-label="Filter by class"
+                    className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-primary"
+                  >
+                    <option value={ALL_CLASSES}>All classes ({grid.length})</option>
+                    {classOptions.map(option => <option key={option.classCode} value={option.classCode}>{option.classCode} ({option.teamCount})</option>)}
+                  </select>
+                )}
                 <select
                   value={filter}
                   onChange={event => setFilter(event.target.value as TeamFilter)}
@@ -180,7 +193,7 @@ export default function MentorAllocationPreviewModal({
                 </select>
               </div>
               {visibleRows.length === 0 ? (
-                <p className="rounded-xl bg-slate-50 px-3 py-6 text-center text-sm text-slate-500">No team matches the current filter.</p>
+                <p className="rounded-xl bg-slate-50 px-3 py-6 text-center text-sm text-slate-500">No team matches the current filters.</p>
               ) : (
                 <div className="max-h-[48vh] overflow-auto rounded-xl border border-slate-200 bg-white">
                   <table className="w-full min-w-[820px] text-left text-xs">
@@ -216,11 +229,14 @@ export default function MentorAllocationPreviewModal({
 
           {tab === 'mentors' && <MentorLoadTable preview={preview} />}
 
+          {tab === 'attention' && activeClass !== ALL_CLASSES && (
+            <p className="mb-2 text-xs text-slate-500">Showing only class <strong className="text-slate-700">{activeClass}</strong>. <button type="button" className="font-semibold text-primary-700 underline" onClick={() => setClassFilter(ALL_CLASSES)}>Show all classes</button></p>
+          )}
           {tab === 'attention' && (
             <AttentionPanel
-              conflicts={conflicts}
-              skipped={skipped}
-              unfilled={unfilled}
+              conflicts={activeClass === ALL_CLASSES ? conflicts : conflicts.filter(item => item.teamId && classOfTeam.get(item.teamId) === activeClass)}
+              skipped={activeClass === ALL_CLASSES ? skipped : skipped.filter(item => item.classCode === activeClass)}
+              unfilled={activeClass === ALL_CLASSES ? unfilled : unfilled.filter(item => item.classCode === activeClass)}
               onReplace={(conflict) => conflict.teamId && openEditor({
                 teamId: conflict.teamId,
                 mentorType: conflict.mentorType,
@@ -296,7 +312,7 @@ function SlotCell({ slot }: { slot: SlotView }) {
   return (
     <div>
       <div className="flex flex-wrap items-center gap-1.5">
-        <span className={`rounded-full px-2 py-0.5 text-overline font-semibold ${style.className}`}>{style.label}</span>
+        <Badge variant={style.tone} className="rounded-full text-overline">{style.label}</Badge>
         {slot.mentorName
           ? <span className="font-medium text-slate-800">{slot.mentorName}</span>
           : <span className="text-slate-400">No mentor</span>}
@@ -327,8 +343,14 @@ function SlotEditor({
   const sameAsCurrent = occupied && mentorId !== '' && mentorId === (slot.currentMentorProfileId ?? slot.mentorProfileId);
   const needsReason = occupied && mentorId !== '' && !sameAsCurrent;
   const reasonOk = !needsReason || isChangeReasonValid(reasonCode, reasonNote);
-  const canApply = !sameAsCurrent && reasonOk && (mentorId !== '' || !occupied);
+  const alreadyEmpty = slot.state === 'unfilled' && mentorId === '';
+  const canApply = !sameAsCurrent && !alreadyEmpty && reasonOk && (mentorId !== '' || !occupied);
   const fieldId = `${teamId}-${type}`;
+  const options = useMemo(() => candidates.map(candidate => ({
+    id: candidate.mentorProfileId,
+    label: candidate.mentorName,
+    detail: `${candidate.mentorEmail ? `${candidate.mentorEmail} · ` : ''}${candidate.totalAfter} team${candidate.totalAfter === 1 ? '' : 's'}`,
+  })), [candidates]);
 
   const apply = () => {
     if (!canApply) return;
@@ -345,19 +367,14 @@ function SlotEditor({
       <label htmlFor={`mentor-${fieldId}`} className="block text-caption font-semibold text-slate-600">
         {slotLabel[type]} for {teamName}
       </label>
-      <select
+      <MentorSearchSelect
         id={`mentor-${fieldId}`}
+        options={options}
         value={mentorId}
-        onChange={event => setMentorId(event.target.value)}
-        className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-700 outline-none focus:border-primary"
-      >
-        <option value="">{occupied ? 'Choose a mentor...' : 'Leave empty'}</option>
-        {candidates.map(candidate => (
-          <option key={candidate.mentorProfileId} value={candidate.mentorProfileId}>
-            {candidate.mentorName} · {candidate.totalAfter} team{candidate.totalAfter === 1 ? '' : 's'}
-          </option>
-        ))}
-      </select>
+        onChange={setMentorId}
+        emptyLabel={occupied ? undefined : 'Leave empty (no mentor)'}
+        placeholder={occupied ? 'Search or choose a mentor...' : 'Search a mentor, or leave empty'}
+      />
       {candidates.length === 0 && <p className="text-caption text-amber-700">No active {slotLabel[type].toLowerCase()} in this semester.</p>}
       {needsReason && (
         <MentorChangeReasonField
@@ -371,7 +388,7 @@ function SlotEditor({
       )}
       <div className="flex justify-end gap-1.5">
         <Button size="xs" variant="ghost" onClick={onCancel}>Cancel</Button>
-        <Button size="xs" disabled={!canApply} onClick={apply}>{needsReason ? 'Replace' : 'Apply'}</Button>
+        <Button size="xs" disabled={!canApply} onClick={apply}>{needsReason ? 'Replace' : mentorId === '' && !occupied ? 'Leave empty' : occupied ? 'Replace' : 'Apply'}</Button>
       </div>
     </div>
   );
@@ -498,10 +515,10 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
   );
 }
 
-function Metric({ label, value, danger = false, warning = false }: { label: string; value: number; danger?: boolean; warning?: boolean }) {
+function Metric({ label, value, tone }: { label: string; value: number; tone: BadgeTone }) {
   return (
-    <div className={`rounded-lg px-3 py-2 ${danger ? 'bg-red-50 text-red-700' : warning ? 'bg-amber-50 text-amber-700' : 'bg-slate-50 text-slate-700'}`}>
-      <span className="block text-overline uppercase text-slate-400">{label}</span>
+    <div className={`rounded-lg border px-3 py-2 ${badgeTones[tone]}`}>
+      <span className="block text-overline uppercase opacity-70">{label}</span>
       <strong className="text-base">{value}</strong>
     </div>
   );

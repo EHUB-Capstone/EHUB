@@ -15,6 +15,7 @@ using EHub.Shared.Errors;
 using EHub.Shared.Results;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace EHub.Application.Features.Admin.Mentors;
 
@@ -23,7 +24,8 @@ public sealed class MentorAdminHandler(
     ICurrentUserService currentUser,
     IPasswordHasher passwordHasher,
     IDateTimeProvider dateTimeProvider,
-    IUnitOfWork unitOfWork) : IMentorAdminHandler
+    IUnitOfWork unitOfWork,
+    ILogger<MentorAdminHandler> logger) : IMentorAdminHandler
 {
     private const long MaximumFileSize = 5 * 1024 * 1024;
     private static readonly TimeSpan SessionLifetime = TimeSpan.FromMinutes(30);
@@ -320,14 +322,23 @@ public sealed class MentorAdminHandler(
         {
             var response = await unitOfWork.ExecuteInSerializableTransactionAsync(async token =>
             {
+                var timer = System.Diagnostics.Stopwatch.StartNew();
                 await ValidateImportRowsAsync(rows, token);
                 if (rows.Any(item => !item.IsValid)) throw new MentorAdminConflictException("Mentor accounts changed after preview.");
+                var validateMs = timer.ElapsedMilliseconds;
+                timer.Restart();
                 var applied = await ApplyImportRowsAsync(rows, adminId, token);
+                var applyMs = timer.ElapsedMilliseconds;
+                timer.Restart();
                 var now = dateTimeProvider.UtcNow;
                 session.Status = MentorAdminSessionStatus.Consumed;
                 session.ConsumedAtUtc = now;
                 session.ProcessingStartedAtUtc = null;
                 await context.SaveChangesAsync(token);
+                // Where the time goes, so a slow import can be explained from the log alone (no names or emails).
+                logger.LogInformation(
+                    "Mentor import committed: {Rows} rows, {Created} created, {Updated} updated, {Completed} completed, {Saved} saved as incomplete; validate {ValidateMs} ms, apply {ApplyMs} ms, save {SaveMs} ms",
+                    rows.Length, applied.Created, applied.Updated, applied.DraftsCompleted, applied.DraftsSaved, validateMs, applyMs, timer.ElapsedMilliseconds);
                 return new MentorImportCommitResponse
                 {
                     CreatedCount = applied.Created,
@@ -934,6 +945,9 @@ public sealed class MentorAdminHandler(
         var draftsSaved = 0;
         var draftsCompleted = 0;
         var now = dateTimeProvider.UtcNow;
+        // New accounts get a password nobody knows (the mentor sets one with Forgot Password). Hashing is deliberately slow, so
+        // it is done once per import and shared instead of once per account.
+        string? unusablePasswordHash = null;
         foreach (var row in rows)
         {
             if (row.WillSaveDraft)
@@ -979,7 +993,7 @@ public sealed class MentorAdminHandler(
                     Email = row.Email,
                     NormalizedEmail = row.Email,
                     Phone = row.Phone,
-                    PasswordHash = passwordHasher.Hash(Convert.ToBase64String(RandomNumberGenerator.GetBytes(32))),
+                    PasswordHash = unusablePasswordHash ??= passwordHasher.Hash(Convert.ToBase64String(RandomNumberGenerator.GetBytes(32))),
                     Status = UserStatus.Active,
                     // Admin-provisioned accounts use the existing Forgot Password flow to set their first password.
                     IsEmailVerified = true,
