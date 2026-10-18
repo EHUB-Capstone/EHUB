@@ -115,7 +115,8 @@ export default function StudentClassDetail() {
     const currentClassId = String(data?.class?.id || data?.class?._id || '');
     if (currentClassId && (event.eventType === 'ClassMajorUpdated' || event.eventType === 'ClassMajorsChanged'
       || event.eventType === 'TeamProposalReviewed'
-      || event.eventType === 'TeamFormationChanged' || event.eventType === 'TeamCreated')
+      || event.eventType === 'TeamFormationChanged' || event.eventType === 'TeamCreated'
+      || event.eventType === 'ProjectDirectionReviewed')
       && String(event.classId) === currentClassId) {
       void fetchClassDetail();
     }

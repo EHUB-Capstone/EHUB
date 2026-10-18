@@ -288,6 +288,9 @@ public sealed class ReviewProjectDirectionRequest
 {
     public string Decision { get; init; } = string.Empty;
     public string? Comment { get; init; }
+    // When supplied on approval, the lecturer's selection replaces the team's startup industries.
+    // Null deliberately means keep the selection submitted by the team.
+    public IReadOnlyCollection<Guid>? StartupIndustryIds { get; init; }
     public string RowVersion { get; init; } = string.Empty;
 }
 
