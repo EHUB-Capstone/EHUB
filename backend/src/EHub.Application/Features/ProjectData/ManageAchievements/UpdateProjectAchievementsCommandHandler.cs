@@ -36,7 +36,7 @@ public sealed class UpdateProjectAchievementsCommandHandler(
         foreach (var value in request.Achievements ?? [])
         {
             if (ProjectAchievementMapping.Canonicalize(value) is not { } canonical)
-                return Failure(ErrorCodes.ProjectDataValidationError, "Achievement must be Potential, Funded or Awarded.");
+                return Failure(ErrorCodes.ProjectDataValidationError, "Achievement must be Potential, Internally Funded, Externally Funded or Awarded.");
             requested.Add(canonical);
         }
 
@@ -63,11 +63,13 @@ public sealed class UpdateProjectAchievementsCommandHandler(
 
         var before = ProjectAchievementMapping.ToNames(project);
         var nextPotential = requested.Contains(ProjectAchievementNames.Potential);
-        var nextFunded = requested.Contains(ProjectAchievementNames.Funded);
+        var nextInternallyFunded = requested.Contains(ProjectAchievementNames.InternallyFunded);
+        var nextExternallyFunded = requested.Contains(ProjectAchievementNames.ExternallyFunded);
         var nextAwarded = requested.Contains(ProjectAchievementNames.Awarded);
 
         var labelsChanged = project.IsHighPotential != nextPotential ||
-                            project.IsFunded != nextFunded ||
+                            project.IsInternallyFunded != nextInternallyFunded ||
+                            project.IsExternallyFunded != nextExternallyFunded ||
                             project.IsAwarded != nextAwarded;
         var noteChanged = !string.Equals(project.AchievementNote, note, StringComparison.Ordinal);
 
@@ -77,7 +79,8 @@ public sealed class UpdateProjectAchievementsCommandHandler(
 
         var now = dateTimeProvider.UtcNow;
         project.IsHighPotential = nextPotential;
-        project.IsFunded = nextFunded;
+        project.IsInternallyFunded = nextInternallyFunded;
+        project.IsExternallyFunded = nextExternallyFunded;
         project.IsAwarded = nextAwarded;
         project.AchievementNote = note;
         project.AchievementsUpdatedAt = now;

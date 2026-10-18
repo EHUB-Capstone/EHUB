@@ -106,6 +106,9 @@ public sealed partial class TeamWorkflowIntegrationTests
         var rollNumbers = await context.Students.AsNoTracking()
             .Where(item => seed.StudentIds.Contains(item.Id))
             .ToDictionaryAsync(item => item.Id, item => item.RollNumber ?? string.Empty);
+        var fullNames = await context.Students.AsNoTracking()
+            .Where(item => seed.StudentIds.Contains(item.Id))
+            .ToDictionaryAsync(item => item.Id, item => item.FullName);
         var tokenService = scope.ServiceProvider.GetRequiredService<IJwtTokenService>();
         using var client = _factory.CreateClient();
         const string url = "/api/workspace/checkpoints/evaluation-grading/export";
@@ -151,13 +154,16 @@ public sealed partial class TeamWorkflowIntegrationTests
         using var workbook = new XLWorkbook(new MemoryStream(reportBytes));
         var worksheet = workbook.Worksheet("Evaluation Report");
         worksheet.Cell(1, 1).GetString().Should().Be("MSSV");
-        worksheet.Cell(1, 2).GetString().Should().Be("Business Model");
-        worksheet.Cell(1, 3).GetString().Should().Be("Checkpoint 1");
+        worksheet.Cell(1, 2).GetString().Should().Be("Họ Tên");
+        worksheet.Cell(1, 3).GetString().Should().Be("Business Model");
+        worksheet.Cell(1, 4).GetString().Should().Be("Checkpoint 1");
         var rowsByRollNumber = worksheet.RowsUsed().Skip(1)
             .ToDictionary(row => row.Cell(1).GetString());
-        rowsByRollNumber[rollNumbers[seed.StudentIds[0]]].Cell(2).GetValue<decimal>().Should().Be(6.5m);
-        rowsByRollNumber[rollNumbers[seed.StudentIds[0]]].Cell(3).GetValue<decimal>().Should().Be(9m);
-        rowsByRollNumber[rollNumbers[seed.StudentIds[1]]].Cell(2).GetValue<decimal>().Should().Be(8.5m);
-        rowsByRollNumber[rollNumbers[seed.StudentIds[1]]].Cell(3).GetValue<decimal>().Should().Be(7.25m);
+        rowsByRollNumber[rollNumbers[seed.StudentIds[0]]].Cell(2).GetString().Should().Be(fullNames[seed.StudentIds[0]]);
+        rowsByRollNumber[rollNumbers[seed.StudentIds[1]]].Cell(2).GetString().Should().Be(fullNames[seed.StudentIds[1]]);
+        rowsByRollNumber[rollNumbers[seed.StudentIds[0]]].Cell(3).GetValue<decimal>().Should().Be(6.5m);
+        rowsByRollNumber[rollNumbers[seed.StudentIds[0]]].Cell(4).GetValue<decimal>().Should().Be(9m);
+        rowsByRollNumber[rollNumbers[seed.StudentIds[1]]].Cell(3).GetValue<decimal>().Should().Be(8.5m);
+        rowsByRollNumber[rollNumbers[seed.StudentIds[1]]].Cell(4).GetValue<decimal>().Should().Be(7.25m);
     }
 }

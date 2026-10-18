@@ -29,10 +29,10 @@ có nếu trạng thái chưa ghi "Đã hoạt động".
 | Backup thủ công trước mỗi lần deploy (`scripts/production/backup-postgres.sh`) | Đã hoạt động |
 | Bucket R2 backup và token (riêng tư, quy tắc 30 ngày, chỉ Object Read & Write) | Đã có |
 | Discord webhook kênh `ehub-backup` | Đã có (đã thử gửi tin) |
-| Script backup tự động, tải lên R2, báo Discord, kiểm tra backup quá cũ | Đã soạn trong repo; chưa chạy trên VPS |
-| Thử script trên staging | Chưa thực hiện |
-| systemd timer trên production | Chưa bật |
-| Restore thử | Chưa thực hiện |
+| Script backup tự động, tải lên R2, báo Discord, kiểm tra backup quá cũ | Đã hoạt động trên production (từ 16/10/2026) |
+| Thử script trên staging | Đã thực hiện (16/10/2026) |
+| systemd timer trên production | Đã bật; chạy tự động mỗi ngày khoảng 02:00 (lần đầu 17/10/2026) |
+| Restore thử | Đã thực hiện ngày 17/10/2026 (xem mục 6.2) |
 
 Cập nhật bảng này sau mỗi bước hoàn thành trên máy thật.
 
@@ -93,7 +93,7 @@ systemctl list-timers 'ehub-*'
 `list-timers` phải hiện hai timer với thời điểm chạy kế tiếp. Chạy thử đường systemd một lần:
 ```bash
 sudo systemctl start ehub-backup.service
-journalctl -u ehub-backup.service -n 50 --no-pager
+sudo journalctl -u ehub-backup.service -n 50 --no-pager
 ```
 
 ## 5. Vận hành hằng ngày
@@ -102,7 +102,7 @@ journalctl -u ehub-backup.service -n 50 --no-pager
 | --- | --- | --- |
 | `[OK] ... sao luu xong ...` | Backup đã tạo, tải lên R2 và kiểm tra kích thước | Không |
 | `[BO QUA] ...` | Có backup khác đang chạy (thường là lúc deploy) | Không, lần sau sẽ chạy lại |
-| `[LOI] ... buoc "<tên bước>" ...` | Backup thất bại ở bước đó | `journalctl -u ehub-backup.service -n 100`, sửa rồi chạy lại |
+| `[LOI] ... buoc "<tên bước>" ...` | Backup thất bại ở bước đó | `sudo journalctl -u ehub-backup.service -n 100`, sửa rồi chạy lại |
 | `[CANH BAO] ... ban sao luu ... da N gio` | Quá 26 giờ không có backup mới | Kiểm tra `systemctl list-timers` và log |
 | `[CANH BAO] ... o dia ...` | Ổ đĩa vượt 75% | Dọn build cache (xem PRODUCTION_VPS.md mục 9) |
 
@@ -114,6 +114,12 @@ sudo bash /opt/ehub/app/scripts/production/check-backup-freshness.sh production
 ```
 Nếu không thấy tin nhắn "[OK]" nào trong một ngày thì cũng là dấu hiệu lỗi; job kiểm tra lúc 09:00 sẽ báo.
 
+Lưu ý khi đọc log: rclone có thể ghi `ERROR : ... Failed to copy: NotImplemented ... status code: 501`
+rồi `Attempt 2/3 succeeded` cho cả file `.dump` và `.sha256`. Đây là lần thử đầu bị Cloudflare R2
+từ chối một thao tác phụ và lần thử lại thành công; script đã so kích thước trên R2 và
+restore thử đã xác nhận file nguyên vẹn, nên **không phải lỗi**. Lỗi thật là tin `[LOI]` trên
+Discord hoặc `status=1/FAILURE` của dịch vụ.
+
 ## 6. Khôi phục và test restore
 
 Một bản backup chỉ được coi là dùng được sau khi restore thử thành công. Khôi phục thật
@@ -123,12 +129,18 @@ database và tên file (xem PRODUCTION_VPS.md mục 8).
 ### 6.1. Restore thử vào database tạm trên laptop
 1. Tải bản backup: dashboard Cloudflare → R2 → `ehub-db-backups` → `production/` →
    chọn file `.dump` mới nhất và file `.sha256` tương ứng → Download.
-2. So checksum (PowerShell, trong thư mục chứa file):
+2. Cloudflare thêm tiền tố `production_` vào tên file khi tải về; đổi tên bỏ tiền tố
+   (`ehub-postgres-<thời-điểm>.dump` và `.dump.sha256`). Rồi so checksum (PowerShell,
+   trong thư mục chứa file). Đoạn kiểm tra này **báo lỗi nếu thiếu file** và chỉ báo
+   khớp khi có hai mã 64 ký tự giống nhau (hai giá trị rỗng không được coi là khớp):
 ```powershell
 $dump = "<ten-file>.dump"
+if (-not (Test-Path $dump) -or -not (Test-Path "$dump.sha256")) { throw "Thieu file .dump hoac .sha256" }
 $expected = ((Get-Content "$dump.sha256" -TotalCount 1) -split '\s+')[0]
 $actual = (Get-FileHash $dump -Algorithm SHA256).Hash
-if ($expected -ine $actual) { throw "Hash khong khop" } else { "Hash khop" }
+if ($expected -notmatch '^[0-9a-fA-F]{64}$') { throw "File .sha256 khong hop le" }
+if ($actual -notmatch '^[0-9a-fA-F]{64}$') { throw "Khong tinh duoc hash cua file dump" }
+if ($expected -ieq $actual) { "HASH_KHOP" } else { "HASH_KHONG_KHOP" }
 ```
 3. Restore vào container tạm (phải dùng image có pgvector vì dump chứa kiểu `vector`):
 ```powershell
@@ -147,6 +159,6 @@ docker rm -f ehub-restore-drill
 
 | Ngày | Nguồn (R2 hay VPS) | Tên file | Thời gian restore | Kết quả | Số bản ghi đối chiếu | Người thực hiện |
 | --- | --- | --- | --- | --- | --- | --- |
-| | | | | | | |
+| 17/10/2026 | R2 | `ehub-postgres-20261016T190321Z.dump` | 4,64 giây | Thành công, khớp production | migrations 67; users 147; classes 19; teams 16; projects 16; submissions 17; mentor_profiles 61; vector 0.8.6 | Nhóm vận hành EHUB |
 
 Lịch: mỗi tháng một lần và sau thay đổi schema lớn.

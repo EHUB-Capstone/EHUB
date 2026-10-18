@@ -618,3 +618,28 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background-color: #94a3b8;
 }
+
+/* Categorical chart series, in a fixed order (never cycled). Validated with the dataviz palette script against the
+   card surface in each mode; the dark steps are chosen for the dark surface, not an automatic flip. */
+:root {
+  --chart-series-1: #2a78d6;
+  --chart-series-2: #eb6834;
+  --chart-series-3: #1baf7a;
+  --chart-series-4: #eda100;
+  --chart-series-5: #e87ba4;
+  --chart-series-6: #008300;
+  --chart-grid: #e1e0d9;
+  --chart-axis: #898781;
+  --chart-surface: #ffffff;
+}
+.dark {
+  --chart-series-1: #3987e5;
+  --chart-series-2: #d95926;
+  --chart-series-3: #199e70;
+  --chart-series-4: #c98500;
+  --chart-series-5: #d55181;
+  --chart-series-6: #008300;
+  --chart-grid: #2a3f5c;
+  --chart-axis: #8a9bb3;
+  --chart-surface: #12233A;
+}

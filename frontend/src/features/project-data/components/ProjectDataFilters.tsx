@@ -1,5 +1,6 @@
-import { useId, useMemo, useState } from 'react';
-import { Search, SlidersHorizontal, X } from 'lucide-react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import type { KeyboardEvent } from 'react';
+import { Check, ChevronDown, Search, SlidersHorizontal, X } from 'lucide-react';
 import Button from '../../../components/ui/Button';
 import { cn } from '../../../utils/cn';
 import { PROJECT_DATA_SEMESTER_TERMS } from '../../../types/projectData';
@@ -9,6 +10,7 @@ import {
   activeFilterKeys,
   hasActiveSearchOrFilters,
 } from '../../../utils/projectData';
+import { majorLabel } from '../../../utils/projectDistribution';
 import type { ProjectDataFilterOptions, ProjectDataQuery } from '../../../types/projectData';
 
 interface SelectOption {
@@ -52,16 +54,138 @@ function SelectField({ label, value, options, onChange, disabled, compact = fals
   return (
     <div className="min-w-0">
       <label htmlFor={id} className="mb-1 block text-xs font-medium text-slate-500">{label}</label>
-      <select
+      <ListboxSelect id={id} value={value} items={items} disabled={disabled} allLabel={allLabel} onChange={onChange} />
+    </div>
+  );
+}
+
+interface ListboxSelectProps {
+  id: string;
+  value: string;
+  items: SelectOption[];
+  disabled?: boolean;
+  allLabel: string;
+  onChange: (value: string) => void;
+}
+
+/**
+ * Replaces the native select for long option lists: the browser flips a native popup upwards
+ * (covering the page) when it is taller than the space below, so this list always opens downwards
+ * and scrolls inside a capped height.
+ */
+function ListboxSelect({ id, value, items, disabled, allLabel, onChange }: ListboxSelectProps) {
+  const [open, setOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const container = useRef<HTMLDivElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const list = useRef<HTMLDivElement>(null);
+  const listId = `${id}-list`;
+  const entries = useMemo(() => [{ value: '', label: allLabel }, ...items], [allLabel, items]);
+  const selectedLabel = entries.find(entry => entry.value === value)?.label ?? allLabel;
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const onPointer = (event: MouseEvent) => {
+      if (!container.current?.contains(event.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', onPointer);
+    return () => document.removeEventListener('mousedown', onPointer);
+  }, [open]);
+
+  useEffect(() => {
+    if (open) list.current?.focus();
+  }, [open]);
+
+  useEffect(() => {
+    if (open) document.getElementById(`${listId}-${activeIndex}`)?.scrollIntoView({ block: 'nearest' });
+  }, [open, activeIndex, listId]);
+
+  const openList = () => {
+    setActiveIndex(Math.max(0, entries.findIndex(entry => entry.value === value)));
+    setOpen(true);
+  };
+
+  const close = () => {
+    setOpen(false);
+    trigger.current?.focus();
+  };
+
+  const choose = (index: number) => {
+    const entry = entries[index];
+    if (entry && entry.value !== value) onChange(entry.value);
+    close();
+  };
+
+  const onListKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    switch (event.key) {
+      case 'ArrowDown': setActiveIndex(index => Math.min(entries.length - 1, index + 1)); break;
+      case 'ArrowUp': setActiveIndex(index => Math.max(0, index - 1)); break;
+      case 'Home': setActiveIndex(0); break;
+      case 'End': setActiveIndex(entries.length - 1); break;
+      case 'Enter':
+      case ' ': choose(activeIndex); break;
+      case 'Escape': close(); break;
+      case 'Tab': setOpen(false); return;
+      default: return;
+    }
+    event.preventDefault();
+  };
+
+  return (
+    <div ref={container} className="relative">
+      <button
+        ref={trigger}
         id={id}
-        value={value}
+        type="button"
         disabled={disabled}
-        onChange={event => onChange(event.target.value)}
-        className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-controls={open ? listId : undefined}
+        onClick={() => (open ? setOpen(false) : openList())}
+        onKeyDown={event => {
+          if (!open && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
+            event.preventDefault();
+            openList();
+          }
+        }}
+        className="flex h-10 w-full items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-3 text-left text-sm text-slate-700 outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
       >
-        <option value="">All</option>
-        {items.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-      </select>
+        <span className="truncate">{selectedLabel}</span>
+        <ChevronDown className={cn('h-4 w-4 shrink-0 text-slate-400 transition-transform', open && 'rotate-180')} aria-hidden="true" />
+      </button>
+      {open && (
+        <div
+          ref={list}
+          id={listId}
+          role="listbox"
+          tabIndex={-1}
+          aria-activedescendant={`${listId}-${activeIndex}`}
+          onKeyDown={onListKeyDown}
+          className="absolute left-0 top-full z-30 mt-1 max-h-64 min-w-full overflow-y-auto rounded-xl border border-slate-200 bg-white p-1 shadow-lg outline-none"
+        >
+          {entries.map((entry, index) => {
+            const selected = entry.value === value;
+            return (
+              <div
+                key={entry.value || '__all'}
+                id={`${listId}-${index}`}
+                role="option"
+                aria-selected={selected}
+                onMouseEnter={() => setActiveIndex(index)}
+                onClick={() => choose(index)}
+                className={cn(
+                  'flex cursor-pointer items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-sm text-slate-700',
+                  index === activeIndex && 'bg-slate-100',
+                  selected && 'font-semibold text-primary-700',
+                )}
+              >
+                <span className="truncate">{entry.label}</span>
+                {selected && <Check className="h-4 w-4 shrink-0" aria-hidden="true" />}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -110,6 +234,7 @@ export default function ProjectDataFilters({
       years: (options?.years ?? []).map(year => ({ value: String(year), label: String(year) })),
       groups: (options?.groups ?? []).map(value => ({ value, label: value })),
       industries: (options?.startupIndustries ?? []).map(value => ({ value, label: value })),
+      majors: (options?.majors ?? []).map(value => ({ value, label: majorLabel(value) })),
       lecturers: (options?.lecturers ?? []).map(item => ({ value: item.userId, label: item.fullName })),
       mentors: [...mentorsByUser.entries()].map(([value, entry]) => ({ value, label: `${entry.name} (${entry.slots.join(', ')})` })),
       achievements: (options?.achievements ?? []).map(value => ({ value, label: value })),
@@ -123,6 +248,7 @@ export default function ProjectDataFilters({
       year: choices.years,
       group: choices.groups,
       startupIndustry: choices.industries,
+      major: choices.majors,
       lecturerId: choices.lecturers,
       mentorId: choices.mentors,
       achievement: choices.achievements,
@@ -163,9 +289,10 @@ export default function ProjectDataFilters({
         </Button>
       </div>
 
-      <div id={advancedId} hidden={!showAdvanced} className={cn('mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5', !showAdvanced && 'hidden')}>
+      <div id={advancedId} hidden={!showAdvanced} className={cn('mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6', !showAdvanced && 'hidden')}>
         <SelectField label="Group" value={query.group} options={choices.groups} disabled={disabled} onChange={value => onChange({ group: value })} />
         <SelectField label="Startup industry" value={query.startupIndustry} options={choices.industries} disabled={disabled} onChange={value => onChange({ startupIndustry: value })} />
+        <SelectField label="Major" value={query.major} options={choices.majors} disabled={disabled} onChange={value => onChange({ major: value })} />
         <SelectField label="Lecturer" value={query.lecturerId} options={choices.lecturers} disabled={disabled} onChange={value => onChange({ lecturerId: value })} />
         <SelectField label="Mentor" value={query.mentorId} options={choices.mentors} disabled={disabled} onChange={value => onChange({ mentorId: value })} />
         <SelectField label="Achievement" value={query.achievement} options={choices.achievements} disabled={disabled} onChange={value => onChange({ achievement: value as ProjectDataQuery['achievement'] })} />

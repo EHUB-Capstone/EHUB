@@ -88,12 +88,17 @@ export default function CheckpointSubmissionCard({
   onUnsentFilesChange,
 }: CheckpointSubmissionCardProps) {
   const [tab, setTab] = useState<SubmissionTab | null>(null);
+  // Decided once, when the first load finishes, so deleting the last file does not move the user to another tab.
+  const [initialTab, setInitialTab] = useState<SubmissionTab | null>(null);
+  if (initialTab === null && !loading) {
+    setInitialTab(files.length === 0 && links.length > 0 ? 'links' : 'documents');
+  }
   const tabRefs = useRef<Record<SubmissionTab, HTMLButtonElement | null>>({ documents: null, links: null });
 
   const canSubmit = isStudent && isEditable && checkpoint.canUpload;
   const showScheduleNotice = isStudent && isEditable && !checkpoint.canUpload;
-  // Until the user picks a tab, show links first only when they are the only thing submitted.
-  const activeTab: SubmissionTab = tab ?? (!loading && files.length === 0 && links.length > 0 ? 'links' : 'documents');
+  // Until the user picks a tab, open on links only if they were the only thing submitted when the panel loaded.
+  const activeTab: SubmissionTab = tab ?? initialTab ?? 'documents';
   const statusMeta = STATUS_META[status ?? 'NotSubmitted'] ?? STATUS_META.NotSubmitted;
   const StatusIcon = statusMeta.icon;
   const dueLabel = formatDateTime(checkpoint.endDateUtc);

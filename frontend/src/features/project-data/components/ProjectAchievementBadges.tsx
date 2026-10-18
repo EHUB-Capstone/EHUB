@@ -20,7 +20,7 @@ export default function ProjectAchievementBadges({ achievements, className }: Pr
         return (
           <li
             key={name}
-            className={cn('inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-caption font-semibold', tone)}
+            className={cn('inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-2 py-0.5 text-caption font-semibold', tone)}
           >
             <Icon className="h-3 w-3" aria-hidden="true" />
             {name}
