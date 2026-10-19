@@ -29,6 +29,7 @@ import {
   validateIndustrySelection,
   hasPersistedProjectProfile,
   resolveWorkspaceCreationDefaults,
+  resolveStudentWorkspaceStage,
   validateProjectProfile,
   validateProjectWorkspace,
 } from '../src/utils/projectWorkspace.ts';
@@ -411,6 +412,20 @@ test('accepts one to three startup industries for a project workspace', () => {
   assert.equal(errors.startupIndustryIds, 'Select between 1 and 3 startup industries.');
 });
 
+test('student workspace stays gated through first review and requested revisions', () => {
+  const initial = { hasProject: true, requiresWorkspaceCreation: true, canUseWorkspace: false, projectDirectionStatus: 'Draft' };
+  assert.equal(resolveStudentWorkspaceStage({ ...initial, isTeamLeader: true }), 'create');
+  assert.equal(resolveStudentWorkspaceStage({ ...initial, isTeamLeader: false }), 'waiting-for-leader');
+  const pending = { ...initial, requiresWorkspaceCreation: false, projectDirectionStatus: 'Submitted' };
+  for (const isTeamLeader of [true, false])
+    assert.equal(resolveStudentWorkspaceStage({ ...pending, isTeamLeader }), 'waiting-for-review');
+  const revision = { ...pending, projectDirectionStatus: 'NeedsRevision' };
+  assert.equal(resolveStudentWorkspaceStage({ ...revision, isTeamLeader: true }), 'revise');
+  assert.equal(resolveStudentWorkspaceStage({ ...revision, isTeamLeader: false }), 'waiting-for-leader');
+  assert.equal(resolveStudentWorkspaceStage({ ...revision, canUseWorkspace: true, isTeamLeader: true }), 'ready');
+  assert.equal(resolveStudentWorkspaceStage({ ...pending, canUseWorkspace: true, projectDirectionStatus: 'Approved', isTeamLeader: false }), 'ready');
+});
+
 test('workspace creation defaults come from the linked student proposal', () => {
   const defaults = resolveWorkspaceCreationDefaults(
     { teamName: 'Fallback team' },
@@ -425,6 +440,30 @@ test('workspace creation defaults come from the linked student proposal', () => 
   assert.equal(defaults.draft.projectName, 'Student Venture Project');
   assert.equal(defaults.draft.description, 'A balanced student-created proposal ready for lecturer review.');
   assert.equal(defaults.draft.zaloGroupUrl, '');
+});
+
+test('workspace creation pre-fills imported project data and keeps the draft editable', () => {
+  const project = {
+    projectName: 'Imported Project',
+    description: 'The project description supplied by the lecturer.',
+    zaloGroupUrl: 'https://zalo.me/g/imported',
+  };
+  const { draft } = resolveWorkspaceCreationDefaults(
+    { teamName: 'Imported Team' },
+    { projectName: 'Older proposal', description: 'Older description' },
+    project,
+  );
+  assert.equal(draft.teamName, 'Imported Team');
+  assert.equal(draft.projectName, project.projectName);
+  assert.equal(draft.description, project.description);
+  assert.equal(draft.zaloGroupUrl, project.zaloGroupUrl);
+  draft.teamName = 'Updated Team';
+  draft.projectName = 'Updated Project';
+  draft.description = 'An updated project description entered by the leader.';
+  draft.zaloGroupUrl = 'https://zalo.me/g/updated';
+  draft.startupIndustryIds = ['industry-1'];
+  assert.deepEqual(validateProjectWorkspace(draft), {});
+  assert.equal(project.projectName, 'Imported Project');
 });
 
 test('project workspace creation requires an HTTPS zalo.me link', () => {

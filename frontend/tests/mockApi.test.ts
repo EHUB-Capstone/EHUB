@@ -1566,6 +1566,62 @@ test('mock legacy class-manager proposal endpoint still creates its pending proj
   }
 });
 
+test('mock imported draft requires leader creation, saves edits and submits exactly once', async () => {
+  resetMockState();
+  const state = getMockState();
+  const team = state.teams.find((item) => !item.projectName);
+  assert.ok(team?.leaderId);
+  const leader = state.users.find((user) => user.id === team.leaderId);
+  assert.ok(leader);
+  team.projectName = 'Imported Project';
+  team.projectDescription = 'A project description imported by the lecturer.';
+  team.projectZaloGroupUrl = 'https://zalo.me/g/imported';
+  team.projectActivities = [{
+    id: 'imported-draft-activity', action: 'IMPORTED_FROM_CLASS_FILE', summary: 'Imported draft',
+    actorUserId: leader.id, actorName: leader.name, changedFields: ['projectName'],
+    occurredAtUtc: new Date().toISOString(),
+  }];
+  state.directions.push({
+    id: 'imported-draft-direction', teamId: team.id, title: team.projectName,
+    summary: team.projectDescription, status: 'Draft', startupIndustries: [],
+    submittedAtUtc: null, reviewedAtUtc: null, rowVersion: 'imported-v1', reviews: [],
+  });
+  const members = team.members.map((member) => member.studentId);
+  await axiosClient.post('/auth/login', { email: leader.email, password: 'Mock123!' });
+  const before = await axiosClient.get(`/workspace/teams/${team.id}`);
+  assert.equal(before.data.requiresWorkspaceCreation, true);
+  assert.equal(before.data.canUseWorkspace, false);
+  assert.equal(before.data.project.zaloGroupUrl, 'https://zalo.me/g/imported');
+  const body = {
+    teamName: 'Updated Import Team', projectName: 'Updated Import Project',
+    description: 'The final project description entered by the team leader.',
+    zaloGroupUrl: 'https://zalo.me/g/updated-import',
+    startupIndustryIds: state.startupIndustries.filter((industry) => industry.status === 'active').slice(0, 1).map((industry) => industry.id),
+  };
+  await axiosClient.post(`/workspace/teams/${team.id}`, body);
+  const after = await axiosClient.get(`/workspace/teams/${team.id}`);
+  assert.equal(after.data.requiresWorkspaceCreation, false);
+  assert.equal(after.data.canUseWorkspace, false);
+  assert.equal(after.data.projectDirectionStatus, 'Submitted');
+  await assert.rejects(axiosClient.get(`/workspace/checkpoints/teams/${team.id}`),
+    (error: unknown) => (error as { response?: { status?: number } }).response?.status === 403);
+  assert.equal(after.data.team.teamName, body.teamName);
+  assert.equal(after.data.project.projectName, body.projectName);
+  assert.equal(after.data.project.description, body.description);
+  assert.equal(after.data.project.zaloGroupUrl, body.zaloGroupUrl);
+  assert.deepEqual(team.members.map((member) => member.studentId), members);
+  const direction = state.directions.find((item) => item.teamId === team.id)!;
+  assert.equal(direction.status, 'Submitted');
+  assert.equal(direction.title, body.projectName);
+  assert.equal(direction.summary, body.description);
+  assert.equal(after.data.activities.filter((activity: { action: string }) => activity.action === 'WORKSPACE_CREATED').length, 1);
+  await assert.rejects(axiosClient.post(`/workspace/teams/${team.id}`, body),
+    (error: unknown) => (error as { response?: { status?: number } }).response?.status === 409);
+  direction.status = 'Approved';
+  const approved = await axiosClient.get(`/workspace/teams/${team.id}`);
+  assert.equal(approved.data.canUseWorkspace, true);
+});
+
 test('mock team leader creates one project workspace linked to its academic context', async () => {
   resetMockState();
   const state = getMockState();
@@ -1980,6 +2036,8 @@ test('lecturer checkpoint mock follows Admin definitions and shares class schedu
   assert.ok(cls);
   const team = state.teams.find((item) => item.classId === cls.id);
   assert.ok(team);
+  const direction = state.directions.find((item) => item.teamId === team.id);
+  if (direction) direction.status = 'Approved';
   state.curricula[cls.subjectCode].checkpoints.push({
     number: 2,
     title: 'Admin-added checkpoint',
@@ -2169,6 +2227,7 @@ test('bulk checkpoint scheduling checks the visible class scope and updates all 
 test('course assessments expose configured weights and enforce lecturer grading access', async () => {
   resetMockState();
   const state = getMockState();
+  for (const direction of state.directions) direction.status = 'Approved';
   const team = state.teams[0];
   const assessment = state.curricula.EXE101.otherAssessments[0];
 

@@ -17,6 +17,7 @@ using EHub.Application.Features.Classes.Common;
 using EHub.Application.Features.Classes.ImportStudents;
 using EHub.Application.Features.Classes.UpdateClass;
 using EHub.Application.Features.Classes.UpdateClassSchedule;
+using EHub.Application.Features.Workspaces;
 using EHub.Contracts.Classes;
 using EHub.Contracts.Common;
 using EHub.Contracts.Auth;
@@ -1253,6 +1254,13 @@ public sealed class ClassSafetyHotfixIntegrationTests
         team.ProjectDirection!.Title.Should().Be("SnapPose");
         team.ProjectDirection.Summary.Should().Be("An AI-assisted photography application for guided poses and better framing.");
         team.ProjectDirection.Status.Should().Be(ProjectDirectionStatus.Draft);
+        var workspaceHandler = new ProjectWorkspaceHandler(context, new EHub.Infrastructure.Persistence.UnitOfWork(context));
+        var importedWorkspace = await workspaceHandler.GetDetailAsync(team.Id, seed.AdminId, SystemRoles.Admin);
+        importedWorkspace.IsSuccess.Should().BeTrue();
+        importedWorkspace.Value.RequiresWorkspaceCreation.Should().BeTrue();
+        importedWorkspace.Value.Project!.ZaloGroupUrl.Should().Be("https://zalo.me/g/snap-pose");
+        (await context.OutboxMessages.AsNoTracking().AnyAsync(message =>
+            message.AggregateId == seed.ClassId && message.Type == "ProjectWorkspace.Created.v1")).Should().BeFalse();
         (await context.ClassAuditLogs.AsNoTracking().AnyAsync(log =>
             log.ClassId == seed.ClassId && log.Action == "TEAM_ASSIGNMENT_IMPORT_COMMITTED")).Should().BeTrue();
         (await context.ClassImportSessions.AsNoTracking().SingleAsync(item => item.Id == preview.Value.SessionId))

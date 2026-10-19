@@ -5,6 +5,7 @@ import { startupIndustryApi } from '../../api/startupIndustryApi';
 import { workspaceApi } from '../../api/workspaceApi';
 import {
   resolveWorkspaceCreationDefaults,
+  resolveIndustryIds,
   validateProjectWorkspace,
   type ProjectWorkspaceDraft,
   type ProjectWorkspaceErrors,
@@ -12,6 +13,7 @@ import {
 import { parseApiError } from '../../utils/apiError';
 import type { StartupIndustryDto } from '../../types/startupIndustries';
 import StartupIndustryPicker from './StartupIndustryPicker';
+import type { ProjectWorkspaceProfile } from '../../types/projectWorkspace';
 
 interface Props {
   team: { _id?: string; id?: string; teamName?: string; name?: string };
@@ -22,11 +24,12 @@ interface Props {
     description?: string | null;
   } | null;
   classInfo: { classCode?: string; subjectCode?: string; semesterCode?: string };
+  project?: ProjectWorkspaceProfile | null;
   onCreated: () => void | Promise<void>;
 }
 
-export default function CreateProjectWorkspaceForm({ team, proposal, classInfo, onCreated }: Props) {
-  const creationDefaults = resolveWorkspaceCreationDefaults(team, proposal);
+export default function CreateProjectWorkspaceForm({ team, proposal, project, classInfo, onCreated }: Props) {
+  const creationDefaults = resolveWorkspaceCreationDefaults(team, proposal, project);
   const [draft, setDraft] = useState<ProjectWorkspaceDraft>(creationDefaults.draft);
   const [errors, setErrors] = useState<ProjectWorkspaceErrors>({});
   const [submitting, setSubmitting] = useState(false);
@@ -42,7 +45,13 @@ export default function CreateProjectWorkspaceForm({ team, proposal, classInfo, 
     startupIndustryApi.getActiveOptions(controller.signal)
       .then((response) => {
         const payload = response?.data ?? response;
-        setIndustries(Array.isArray(payload?.industries) ? payload.industries : []);
+        if (controller.signal.aborted) return;
+        const options: StartupIndustryDto[] = Array.isArray(payload?.industries) ? payload.industries : [];
+        setIndustries(options);
+        setDraft((current) => current.startupIndustryIds.length > 0 ? current : {
+          ...current,
+          startupIndustryIds: resolveIndustryIds(project?.startupIndustries || [], options),
+        });
       })
       .catch((error) => {
         if (!controller.signal.aborted) {
@@ -54,7 +63,7 @@ export default function CreateProjectWorkspaceForm({ team, proposal, classInfo, 
         if (!controller.signal.aborted) setIndustriesLoading(false);
       });
     return () => controller.abort();
-  }, [industriesReload]);
+  }, [industriesReload, project]);
 
   const setField = <K extends keyof ProjectWorkspaceDraft>(field: K, value: ProjectWorkspaceDraft[K]) => {
     setDraft((current) => ({ ...current, [field]: value }));
@@ -62,6 +71,7 @@ export default function CreateProjectWorkspaceForm({ team, proposal, classInfo, 
   };
 
   const submit = async () => {
+    if (submitting) return;
     const nextErrors = validateProjectWorkspace(draft);
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) {

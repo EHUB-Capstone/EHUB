@@ -41,6 +41,8 @@ internal static class CheckpointWorkspaceAccess
             || (IsRole(role, SystemRoles.Mentor) && team.MentorAssignments.Any(assignment => assignment.Status == MentorAssignmentStatus.Active && assignment.EndedAt == null && assignment.MentorProfile.UserId == userId))
             || (IsRole(role, SystemRoles.Student) && isMember);
         if (!allowed) return Result.Failure<WorkspaceAccess>(ErrorCodes.WorkspaceAccessDenied, "You do not have access to this team workspace.");
+        if (IsStudent(role) && !await ProjectWorkspaceApprovalRules.IsApprovedAsync(context, teamId, cancellationToken))
+            return Result.Failure<WorkspaceAccess>(ErrorCodes.WorkspaceAccessDenied, "The lecturer must approve the project direction before the team can use this workspace.");
         var checkpoint = await context.Checkpoints.AsNoTracking().FirstOrDefaultAsync(item => item.CourseId == team.Class.CourseId && item.ClassId == null && item.CheckpointNumber == checkpointNumber && item.Status != CheckpointStatus.Archived, cancellationToken);
         var project = await context.Projects.AsNoTracking().FirstOrDefaultAsync(item => item.TeamId == teamId, cancellationToken);
         if (checkpoint is null || project is null) return Result.Failure<WorkspaceAccess>(ErrorCodes.WorkspaceNotFound, "The checkpoint workspace was not found.");

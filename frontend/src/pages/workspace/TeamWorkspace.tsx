@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { workspaceApi } from '../../api/workspaceApi';
 import { teamWorkspaceApi } from '../../api/teamWorkspaceApi';
+import { subscribeProjectDirectionRealtime } from '../../api/projectDirectionRealtime';
 import { useAuth } from '../../hooks/useAuth';
 import SprintPanel from '../../components/workspace/SprintPanel';
 import WeeklyRoadmapPlanner from '../../components/workspace/WeeklyRoadmapPlanner';
@@ -20,6 +21,7 @@ import CreateProjectWorkspaceForm from '../../components/workspace/CreateProject
 import { classFeatureFlags } from '../../config/classFeatureFlags';
 import { getDisplayTeamName } from '../../utils/teamDisplay';
 import { resolveWorkspaceTab, workspaceTabSearch } from '../../utils/workspaceNavigation';
+import { resolveStudentWorkspaceStage } from '../../utils/projectWorkspace';
 
 const clearWorkspaceSelectionCache = () => {
   [
@@ -54,9 +56,9 @@ export default function TeamWorkspace() {
     hash: location.hash,
   });
 
-  const fetchWorkspaceData = useCallback(async (targetTeamId = teamId || null) => {
+  const fetchWorkspaceData = useCallback(async (targetTeamId = teamId || null, background = false) => {
     try {
-      setLoading(true);
+      if (!background) setLoading(true);
       setErrorMsg(null);
       setEmptyMessage(null);
 
@@ -111,6 +113,25 @@ export default function TeamWorkspace() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchWorkspaceData();
   }, [fetchWorkspaceData]);
+
+  const pendingReviewTeamId = user?.role === 'STUDENT' && data?.canUseWorkspace === false
+    ? data?.team?._id : null;
+  const waitingForReview = data?.projectDirectionStatus === 'Submitted';
+  useEffect(() => {
+    if (!pendingReviewTeamId) return undefined;
+    const refresh = () => { void fetchWorkspaceData(pendingReviewTeamId, true); };
+    const unsubscribe = subscribeProjectDirectionRealtime((event) => {
+      if (event.teamId === pendingReviewTeamId &&
+          ['ProjectDirectionReviewed', 'ProjectDirectionSubmitted'].includes(event.eventType)) refresh();
+    }, (reconnected) => { if (reconnected && waitingForReview) refresh(); });
+    // Keep the waiting screen in sync when WebSocket delivery is unavailable.
+    // Poll only submitted proposals so editing a requested revision is never interrupted.
+    const timer = waitingForReview ? window.setInterval(refresh, 15000) : null;
+    return () => {
+      unsubscribe();
+      if (timer !== null) window.clearInterval(timer);
+    };
+  }, [pendingReviewTeamId, waitingForReview, fetchWorkspaceData]);
 
   const handleWorkspaceChange = (nextTeamId) => {
     fetchWorkspaceData(nextTeamId);
@@ -167,15 +188,22 @@ export default function TeamWorkspace() {
   const isEditable = !isReadOnly && (privilegedRoles.includes(user?.role) || isTeamMember);
   const currentMember = members?.find((member) => {
     const memberUserId = member.userId?._id || member.userId;
-    return String(memberUserId || '') === String(user?._id || '')
+    return String(memberUserId || '') === String(user?._id || user?.id || '')
       || (user?.email && member.email?.toLowerCase() === user.email.toLowerCase());
   });
   const isTeamLeader = Boolean(
     currentMember && String(team.leaderId?._id || team.leaderId || '') === String(currentMember._id)
   );
   const displayTeamName = getDisplayTeamName(team) || 'Unnamed Team';
+  const workspaceStage = resolveStudentWorkspaceStage({
+    hasProject: Boolean(project),
+    requiresWorkspaceCreation: data.requiresWorkspaceCreation,
+    canUseWorkspace: data.canUseWorkspace,
+    projectDirectionStatus: data.projectDirectionStatus,
+    isTeamLeader,
+  });
 
-  if (!project) {
+  if (!project || data.requiresWorkspaceCreation) {
     return (
       <div className="mx-auto max-w-6xl space-y-6">
         <div className="flex flex-col items-start justify-between gap-4 rounded-2xl border border-slate-200/60 bg-white p-6 shadow-sm sm:flex-row sm:items-center">
@@ -191,13 +219,37 @@ export default function TeamWorkspace() {
         </div>
 
         {isTeamLeader && !isReadOnly ? (
-          <CreateProjectWorkspaceForm key={team._id} team={team} proposal={proposal} classInfo={cls} onCreated={() => fetchWorkspaceData(team._id)} />
+          <CreateProjectWorkspaceForm key={team._id} team={team} proposal={proposal} project={project} classInfo={cls} onCreated={() => fetchWorkspaceData(team._id)} />
         ) : (
           <div className="rounded-2xl border border-amber-200 bg-amber-50 p-8 text-center">
             <Shield className="mx-auto h-8 w-8 text-amber-500" />
             <h2 className="mt-3 text-lg font-bold text-slate-800">Waiting for the team leader</h2>
             <p className="mx-auto mt-1 max-w-md text-sm text-slate-600">
               Only the active team leader can create this project workspace. It will automatically link to the team, class, subject and semester.
+            </p>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  if (user?.role === 'STUDENT' && workspaceStage !== 'ready') {
+    const awaitingLeader = workspaceStage === 'waiting-for-leader';
+    return (
+      <div className="mx-auto max-w-6xl space-y-6">
+        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <p className="text-caption text-slate-500">{cls?.classCode}</p>
+          <h1 className="text-heading sm:text-display text-secondary">{displayTeamName}</h1>
+          <p className="mt-1 text-body-sm text-slate-500">Your project workspace will open after the lecturer approves the project proposal.</p>
+        </div>
+        {workspaceStage === 'revise' ? (
+          <ProjectDirectionCard team={team} project={project} canEdit={isTeamLeader && !isReadOnly} />
+        ) : (
+          <div role="status" className="rounded-2xl border border-amber-200 bg-amber-50 p-8 text-center">
+            <Shield className="mx-auto h-8 w-8 text-amber-500" />
+            <h2 className="mt-3 text-subheading text-slate-800">{awaitingLeader ? 'Waiting for the team leader' : 'Waiting for lecturer approval'}</h2>
+            <p className="mx-auto mt-2 max-w-xl text-body-sm text-slate-600">
+              {awaitingLeader ? 'The team leader is updating the project proposal. Workspace activities will become available after lecturer approval.' : 'The project proposal has been submitted. Workspace activities will become available after lecturer approval.'}
             </p>
           </div>
         )}

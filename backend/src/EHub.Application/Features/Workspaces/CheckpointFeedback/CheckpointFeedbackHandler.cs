@@ -20,7 +20,8 @@ public sealed class CheckpointFeedbackHandler(IApplicationDbContext context, ICh
             .Include(item => item.TeamMembers).ThenInclude(item => item.ClassStudent).ThenInclude(item => item.Student)
             .Include(item => item.MentorAssignments).ThenInclude(item => item.MentorProfile)
             .FirstOrDefaultAsync(item => item.Id == teamId, cancellationToken);
-        if (team is null || !CanAccess(team, userId, role)) return Denied();
+        if (team is null || !CanAccess(team, userId, role) ||
+            (Is(role, SystemRoles.Student) && !await ProjectWorkspaceApprovalRules.IsApprovedAsync(context, teamId, cancellationToken))) return Denied();
         var checkpoint = await context.Checkpoints.FirstOrDefaultAsync(item => item.CourseId == team.Class.CourseId && item.ClassId == null && item.CheckpointNumber == checkpointNumber && item.Status != CheckpointStatus.Archived, cancellationToken);
         var project = await context.Projects.FirstOrDefaultAsync(item => item.TeamId == teamId, cancellationToken);
         if (checkpoint is null || project is null) return Result.Failure<WorkspaceCheckpointFeedbackResponse>(ErrorCodes.WorkspaceNotFound, "The checkpoint workspace was not found.");
@@ -51,7 +52,8 @@ public sealed class CheckpointFeedbackHandler(IApplicationDbContext context, ICh
             .Include(item => item.TeamMembers).ThenInclude(item => item.ClassStudent).ThenInclude(item => item.Student)
             .Include(item => item.MentorAssignments).ThenInclude(item => item.MentorProfile)
             .FirstOrDefaultAsync(item => item.Id == teamId, cancellationToken);
-        if (team is null || !CanAccess(team, userId, role)) return Result.Failure(ErrorCodes.WorkspaceAccessDenied, "You do not have access to this team workspace.");
+        if (team is null || !CanAccess(team, userId, role) ||
+            (Is(role, SystemRoles.Student) && !await ProjectWorkspaceApprovalRules.IsApprovedAsync(context, teamId, cancellationToken))) return Result.Failure(ErrorCodes.WorkspaceAccessDenied, "You do not have access to this team workspace.");
         var feedback = await context.SubmissionFeedbacks.Include(item => item.Submission)
             .FirstOrDefaultAsync(item => item.Id == feedbackId && item.Submission.TeamId == teamId && item.Submission.Checkpoint.CheckpointNumber == checkpointNumber, cancellationToken);
         if (feedback is null) return Result.Failure(ErrorCodes.CommonNotFoundError, "Feedback was not found.");

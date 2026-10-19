@@ -89,6 +89,13 @@ function linksForCheckpoint(teamId: string, number: number): MockCheckpointLink[
   return getMockState().checkpointLinks[`${teamId}:${number}`] || [];
 }
 
+function requiresImportedWorkspaceCreation(team: NonNullable<ReturnType<typeof teamById>>) {
+  return Boolean(team.projectName)
+    && getMockState().directions.some((direction) => direction.teamId === team.id && direction.status === 'Draft')
+    && Boolean(team.projectActivities?.some((activity) => activity.action === 'IMPORTED_FROM_CLASS_FILE'))
+    && !team.projectActivities?.some((activity) => activity.action === 'WORKSPACE_CREATED');
+}
+
 function workspaceOption(teamId: string) {
   const team = teamById(teamId)!;
   const cls = classByTeam(teamId)!;
@@ -102,8 +109,19 @@ function workspaceOption(teamId: string) {
     accessMode: 'READ_WRITE',
     isArchived: cls.status === 'Archived',
     isCurrent: cls.status === 'Active',
-    hasWorkspace: Boolean(team.projectName),
+    hasWorkspace: Boolean(team.projectName) && !requiresImportedWorkspaceCreation(team),
   };
+}
+
+function isWorkspaceApproved(teamId: string) {
+  const direction = getMockState().directions.find((item) => item.teamId === teamId);
+  return !direction || direction.status === 'Approved' || direction.reviews.some((review) => review.toStatus === 'Approved');
+}
+
+function canAccessOperationalTeam(teamId: string) {
+  const state = getMockState();
+  const user = state.users.find((item) => item.id === state.sessionUserId);
+  return canAccessTeam(teamId) && (user?.role !== 'STUDENT' || isWorkspaceApproved(teamId));
 }
 
 function accessibleTeams() {
@@ -130,7 +148,7 @@ function canAccessCheckpointTeam(teamId: string) {
   if (user.role === 'ADMIN') return true;
   if (user.role === 'LECTURER') return cls.primaryLecturerId === user.id;
   if (user.role === 'MENTOR') return team.currentMentorAssignments.some(assignment => assignment.mentor.userId === user.id);
-  return team.members.some((member) => member.studentId === user.id);
+  return isWorkspaceApproved(teamId) && team.members.some((member) => member.studentId === user.id);
 }
 
 function workspaceData(teamId: string) {
@@ -179,6 +197,9 @@ function workspaceData(teamId: string) {
       semesterCode: cls.semesterCode,
     },
     members,
+    requiresWorkspaceCreation: !team.projectName || requiresImportedWorkspaceCreation(team),
+    canUseWorkspace: Boolean(team.projectName) && !requiresImportedWorkspaceCreation(team) && isWorkspaceApproved(teamId),
+    projectDirectionStatus: state.directions.find((item) => item.teamId === teamId)?.status || null,
     lecturer: lecturer ? { _id: lecturer.id, name: lecturer.name, email: lecturer.email } : null,
     mentor: mentors[0]?.user ? { _id: mentors[0].user.id, name: mentors[0].user.name, email: mentors[0].user.email, label: mentors[0].assignment.slot } : null,
     mentors: mentors.map(item => ({ _id: item.user!.id, name: item.user!.name, email: item.user!.email, label: item.assignment.slot })),
@@ -808,7 +829,7 @@ export function registerWorkspaceMockHandlers(mock: MockAdapter): void {
 
   mock.onGet(/^\/weekly-tasks\/team\/[^/]+\/board$/).reply((config) => {
     const teamId = routeId(config, /^\/weekly-tasks\/team\/([^/]+)\/board$/);
-    if (!canAccessTeam(teamId)) return failure(403, 'WORKSPACE_ACCESS_DENIED', 'You do not have access to this workspace.');
+    if (!canAccessOperationalTeam(teamId)) return failure(403, 'WORKSPACE_ACCESS_DENIED', 'You do not have access to this workspace.');
     const teamClass = classByTeam(teamId);
     const params = config.params || {};
     const search = String(params.search || '').trim().toLowerCase();
@@ -865,13 +886,13 @@ export function registerWorkspaceMockHandlers(mock: MockAdapter): void {
 
   mock.onGet(/^\/teams\/[^/]+\/shortcuts$/).reply((config) => {
     const teamId = routeId(config, /^\/teams\/([^/]+)\/shortcuts$/);
-    if (!canAccessTeam(teamId)) return failure(403, 'WORKSPACE_ACCESS_DENIED', 'You do not have access to this workspace.');
+    if (!canAccessOperationalTeam(teamId)) return failure(403, 'WORKSPACE_ACCESS_DENIED', 'You do not have access to this workspace.');
     return ok(mockShortcuts.get(teamId) || [], 'Shortcuts retrieved.');
   });
 
   mock.onPost(/^\/teams\/[^/]+\/shortcuts$/).reply((config) => {
     const teamId = routeId(config, /^\/teams\/([^/]+)\/shortcuts$/);
-    if (!canAccessTeam(teamId)) return failure(403, 'WORKSPACE_ACCESS_DENIED', 'You do not have access to this workspace.');
+    if (!canAccessOperationalTeam(teamId)) return failure(403, 'WORKSPACE_ACCESS_DENIED', 'You do not have access to this workspace.');
     const body = parseBody(config);
     const name = String(body.name || '').trim();
     const url = String(body.url || '').trim().replace(/\/$/, '');
@@ -948,7 +969,7 @@ export function registerWorkspaceMockHandlers(mock: MockAdapter): void {
     if (!currentUser || currentUser.role !== 'STUDENT' || team.leaderId !== currentUser.id) {
       return failure(403, 'WORKSPACE_LEADER_REQUIRED', 'Only the active team leader can create this project workspace.');
     }
-    if (team.projectName) return failure(409, 'WORKSPACE_ALREADY_EXISTS', 'This team already has an active project workspace.');
+    if (team.projectName && !requiresImportedWorkspaceCreation(team)) return failure(409, 'WORKSPACE_ALREADY_EXISTS', 'This team already has an active project workspace.');
     const body = parseBody(config);
     const teamName = String(body.teamName ?? team.teamName).trim();
     const projectName = String(body.projectName || '').trim();
@@ -989,7 +1010,7 @@ export function registerWorkspaceMockHandlers(mock: MockAdapter): void {
     const createdAtUtc = new Date().toISOString();
     team.projectCreatedAtUtc = createdAtUtc;
     team.projectUpdatedAtUtc = null;
-    team.projectActivities = [{
+    team.projectActivities = [...(team.projectActivities || []), {
       id: uuid(1701),
       action: 'WORKSPACE_CREATED',
       summary: 'Created the project workspace.',
