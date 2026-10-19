@@ -932,6 +932,38 @@ Các kiểm tra này không thuộc riêng yêu cầu nào nhưng cần đạt �
 
 ---
 
+### Kiểm tra 10.17. Import: màu trạng thái, bộ lọc trạng thái; Preview: lọc theo lớp
+
+**Làm gì**
+1. Import một file có đủ các loại dòng (tạo mới, bổ sung email cho mentor chưa có email, cập nhật, chưa có email, dòng lỗi) và xem bước xem trước.
+2. Bấm lần lượt các nút lọc phía trên danh sách (All, Create, Complete record, Update, Incomplete, Errors).
+3. Ở **Preview assignment**, mở tab By team, chọn một lớp ở ô "All classes", kết hợp với ô tìm kiếm và ô "All teams"; chuyển sang tab Needs attention.
+4. Bấm **Change** ở một nhóm rồi áp dụng; Regenerate.
+
+**Phải thấy gì**
+- [ ] Bước 1: màu ở ô thống kê và nhãn trạng thái ở từng dòng giống nhau: Create và Complete record màu xanh lá, Update màu xanh dương, Incomplete màu vàng cam, Errors màu đỏ (nhãn Invalid ở dòng).
+- [ ] Bước 2: chỉ hiện các nút trạng thái có trong file, kèm số lượng; bấm một nút thì bảng chỉ còn đúng loại đó, kèm dòng "Showing X of Y rows."; chọn trạng thái không còn dòng nào thì báo "No row has this status."; chọn "Choose another file" thì bộ lọc về All.
+- [ ] Bước 3: ô "All classes (N)" chỉ hiện khi preview có từ 2 lớp trở lên, liệt kê từng lớp kèm số nhóm; lọc lớp kết hợp đúng với tìm kiếm và bộ lọc "Changed by this preview" / "Missing a mentor". Tab Needs attention chỉ hiện mục của lớp đang chọn kèm dòng "Showing only class ... Show all classes". Các ô thống kê (Teams, Kept, New...) và tab By mentor vẫn tính cho toàn bộ preview.
+- [ ] Bước 4: bấm Change thì lớp quay về All classes để thấy được nhóm đang sửa; sau khi Regenerate, nếu lớp đang chọn không còn thì tự quay về All classes.
+
+---
+
+### Kiểm tra 10.18. Preview assignment: gõ tìm mentor, để trống, màu trạng thái; tốc độ nút Apply của import
+
+**Làm gì**
+1. Mở **Preview assignment**, nhìn dòng giải thích ở đầu và hàng ô thống kê.
+2. Bấm **Change** ở một vị trí đang là Kept/New/Manual: gõ một phần tên mentor (có dấu hoặc không dấu), dùng phím mũi tên và Enter hoặc bấm chuột để chọn; thử chọn "Leave empty (no mentor)" rồi bấm **Leave empty**.
+3. Bấm **Change** ở vị trí đang là **Current** (mentor đã lưu).
+4. Import một file có nhiều dòng "Create" hoặc "Complete record" (khoảng 50 dòng) rồi bấm Apply.
+
+**Phải thấy gì**
+- [ ] Bước 1: không còn chữ "seed ...", chỉ còn "Strategy: Balanced/Random". Các ô Kept / New / Manual / Replaced / Missing có màu khác nhau, khớp màu nhãn tương ứng ở từng nhóm (Current xám, Kept xanh dương, New xanh lá, Manual cam, Replaced vàng, Missing đỏ).
+- [ ] Bước 2: ô mentor gõ được để lọc theo tên/email; chọn "Leave empty" thì vị trí hiển thị "No mentor" và không lưu mentor nào cho vị trí đó khi Confirm. Vị trí đang Missing thì nút Leave empty bị khoá (không có gì để đổi).
+- [ ] Bước 3: không có lựa chọn "Leave empty"; chỉ chọn được mentor khác và phải nhập lý do. Muốn bỏ mentor đã lưu thì dùng **End** ở Manage team mentors.
+- [ ] Bước 4: nút ghi "Applying N changes..." khi đang chạy; với 50 tài khoản mới thời gian xử lý giảm rõ rệt (trước đây khoảng 8 giây chỉ riêng bước lưu). Log API có dòng "Mentor import committed: ... validate X ms, apply Y ms, save Z ms".
+
+---
+
 ## Phần 4. Hạn chế đã biết (chỉ ghi nhận, chưa tính là lỗi mới)
 
 ### Mở lại lớp đã hoàn thành

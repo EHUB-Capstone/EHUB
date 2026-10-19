@@ -90,6 +90,7 @@ public sealed class GetProjectDataFilterOptionsQueryHandler(IApplicationDbContex
             Years = years,
             Groups = ProjectDataQuery.DistinctSortedNaturally(groupNames),
             StartupIndustries = ProjectDataQuery.DistinctSorted(industryNames),
+            Majors = ProjectDataQuery.MajorFilterOptions,
             Lecturers = lecturers,
             Mentors = mentors,
         });

@@ -26,11 +26,12 @@ interface ModalProps {
 const Modal = ({ isOpen, onClose, title, children, submitText = 'Save', isSubmitting = false, submitDisabled = false, onSubmit, size = 'md' }: ModalProps) => {
   // Prevent body scroll when modal is open
   useEffect(() => {
-    if (isOpen) {
-      document.body.style.overflow = 'hidden';
-    }
+    if (!isOpen) return undefined;
+    // Restore the previous value, not '': a host (e.g. a full-screen panel) may already be locking scroll.
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
     return () => {
-      document.body.style.overflow = '';
+      document.body.style.overflow = previousOverflow;
     };
   }, [isOpen]);
 

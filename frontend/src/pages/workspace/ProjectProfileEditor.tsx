@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import { workspaceApi } from '../../api/workspaceApi';
 import { teamApi } from '../../api/teamApi';
 import { startupIndustryApi } from '../../api/startupIndustryApi';
+import { subscribeProjectDirectionRealtime } from '../../api/projectDirectionRealtime';
 import StartupIndustryPicker from '../../components/workspace/StartupIndustryPicker';
 import { useAuth } from '../../hooks/useAuth';
 import { parseApiError } from '../../utils/apiError';
@@ -125,6 +126,12 @@ export default function ProjectProfileEditor() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void load();
   }, [load]);
+
+  useEffect(() => subscribeProjectDirectionRealtime((event) => {
+    if (event.eventType === 'ProjectDirectionReviewed' && String(event.teamId) === teamId) {
+      void load();
+    }
+  }), [load, teamId]);
 
   useEffect(() => {
     const controller = new AbortController();

@@ -3722,17 +3722,23 @@ namespace EHub.Infrastructure.Persistence.Migrations
                         .HasDefaultValue(false)
                         .HasColumnName("is_deleted");
 
-                    b.Property<bool>("IsFunded")
+                    b.Property<bool>("IsExternallyFunded")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
                         .HasDefaultValue(false)
-                        .HasColumnName("is_funded");
+                        .HasColumnName("is_externally_funded");
 
                     b.Property<bool>("IsHighPotential")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
                         .HasDefaultValue(false)
                         .HasColumnName("is_high_potential");
+
+                    b.Property<bool>("IsInternallyFunded")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("is_internally_funded");
 
                     b.Property<string>("Name")
                         .IsRequired()

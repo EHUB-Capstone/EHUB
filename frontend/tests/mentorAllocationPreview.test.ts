@@ -6,8 +6,13 @@ import type {
   MentorAllocationPreview,
   MentorAllocationRowPreview,
 } from '../src/types/mentorAdmin.ts';
+import type { TeamGridRow } from '../src/utils/mentorAllocationPreview.ts';
 import {
+  ALL_CLASSES,
   buildTeamGrid,
+  filterTeamGrid,
+  resolveClassFilter,
+  teamClassOptions,
   findEdit,
   getMentorCandidates,
   getSubjectColumns,
@@ -187,4 +192,39 @@ test('keepAppliedEdits keeps applied and leave-empty edits and drops rejected or
   }));
 
   assert.deepEqual(kept, [applied, leaveEmpty]);
+});
+
+const gridRow = (teamId: string, classCode: string, enterprise: string, academic: string): TeamGridRow => ({
+  teamId, teamCode: teamId, teamName: `Team ${teamId}`, classCode, subjectCode: 'EXE201',
+  enterprise: { state: enterprise, mentorName: enterprise === 'unfilled' ? null : 'Mentor E' },
+  academic: { state: academic, mentorName: academic === 'unfilled' ? null : 'Mentor A' },
+} as unknown as TeamGridRow);
+
+test('the class filter lists each class once with its team count, in natural order', () => {
+  const grid = [gridRow('1', 'EXE201_10', 'existing', 'existing'), gridRow('2', 'EXE201_2', 'existing', 'existing'), gridRow('3', 'EXE201_2', 'existing', 'existing')];
+  assert.deepEqual(teamClassOptions(grid), [{ classCode: 'EXE201_2', teamCount: 2 }, { classCode: 'EXE201_10', teamCount: 1 }]);
+});
+
+test('filtering by class combines with the other filters and the search', () => {
+  const grid = [
+    gridRow('1', 'EXE101_1', 'unfilled', 'existing'),
+    gridRow('2', 'EXE201_1', 'allocated', 'existing'),
+    gridRow('3', 'EXE201_1', 'unfilled', 'unfilled'),
+  ];
+  const ids = (classCode: string, filter: 'all' | 'attention' | 'changed' = 'all', search = '') =>
+    filterTeamGrid(grid, { classCode, filter, search }).map(item => item.teamId);
+  assert.deepEqual(ids(ALL_CLASSES), ['1', '2', '3']);
+  assert.deepEqual(ids('EXE201_1'), ['2', '3']);
+  assert.deepEqual(ids('EXE201_1', 'attention'), ['3']);
+  assert.deepEqual(ids('EXE201_1', 'changed'), ['2', '3']);
+  assert.deepEqual(ids('EXE101_1', 'changed'), ['1']);
+  assert.deepEqual(ids('EXE201_1', 'all', 'team 2'), ['2']);
+  assert.deepEqual(ids('EXE999'), []);
+});
+
+test('a class that disappeared after regenerating falls back to every class', () => {
+  const options = [{ classCode: 'EXE201_1' }];
+  assert.equal(resolveClassFilter('EXE201_1', options), 'EXE201_1');
+  assert.equal(resolveClassFilter('EXE101_1', options), ALL_CLASSES);
+  assert.equal(resolveClassFilter(ALL_CLASSES, options), ALL_CLASSES);
 });

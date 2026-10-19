@@ -167,12 +167,16 @@ const Sidebar = ({ mobileOpen, onMobileClose }: SidebarProps) => {
       )}
     >
       {/* Brand */}
-      <div className="flex items-center justify-between h-16 border-b border-white/10 px-4">
-        <div className="flex items-center gap-3">
-          <img src={logo} alt="EHub" className="w-9 h-9 rounded-xl object-contain shrink-0" />
+      <div className="flex items-center justify-between gap-3 border-b border-white/[0.08] p-4">
+        <div className="flex min-w-0 items-center gap-3">
+          {/* logo.png is 1800px square with the mark filling ~43% of it, so the image is
+              scaled up inside the clipped tile to show the mark at roughly 30x34px. */}
+          <div className="flex h-[46px] w-[46px] shrink-0 items-center justify-center overflow-hidden rounded-[11px] bg-secondary-50 ring-2 ring-white/25 dark:bg-secondary-100">
+            <img src={logo} alt="EHub" className="h-[71px] w-[71px] max-w-none object-contain" />
+          </div>
           <div className="min-w-0">
-            <h1 className="text-[15px] font-bold leading-tight tracking-tight"><span className="text-primary">E</span><span className="text-white">HUB</span></h1>
-            <p className="text-overline text-white/60 uppercase tracking-[0.12em]">Startup Portal</p>
+            <h1 className="text-[21px] font-semibold leading-none"><span className="text-primary-400">E</span><span className="text-white">HUB</span></h1>
+            <p className="mt-1 truncate text-[11px] font-medium uppercase tracking-[0.16em] text-secondary-200">Startup Portal</p>
           </div>
         </div>
         <button
@@ -206,7 +210,7 @@ const Sidebar = ({ mobileOpen, onMobileClose }: SidebarProps) => {
 
         <button
           onClick={handleLogout}
-          className="w-full flex items-center gap-3 rounded-lg text-red-300 hover:text-red-200 hover:bg-white/10 transition-colors text-[13px] font-medium px-3 py-2.5"
+          className="w-full flex items-center gap-3 rounded-lg text-primary hover:text-primary-300 hover:bg-white/10 transition-colors text-[13px] font-medium px-3 py-2.5"
         >
           <LogOut className="w-[18px] h-[18px]" />
           <span>Sign Out</span>

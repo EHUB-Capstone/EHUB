@@ -315,6 +315,8 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
             case "ProjectDirection.Reviewed.v1":
                 var directionDecision = ReadString(data, "decision");
                 var isProfileChangeReview = ReadBoolean(data, "isProjectProfileChangeProposal");
+                var startupIndustriesChangedByLecturer = ReadBoolean(data, "startupIndustriesChangedByLecturer");
+                var approvedStartupIndustries = ReadStrings(data, "approvedStartupIndustries");
                 realtimeNotificationRecipients = ReadGuids(data, "studentUserIds");
                 realtimeNotificationTeamId = ReadGuid(data, "teamId");
                 foreach (var userId in realtimeNotificationRecipients)
@@ -332,11 +334,15 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
                             : isProfileChangeReview ? "Project Profile change reviewed" : "Project direction reviewed",
                         isProfileChangeReview
                             ? directionDecision == "Approved"
-                                ? "Your proposed Project Profile changes were approved and are now applied."
+                                ? startupIndustriesChangedByLecturer
+                                    ? $"Your proposed Project Profile changes were approved. The lecturer updated Startup Industry to: {string.Join(", ", approvedStartupIndustries)}."
+                                    : "Your proposed Project Profile changes were approved and are now applied."
                                 : directionDecision == "Rejected"
                                     ? "Your proposed Project Profile changes were rejected. The approved profile remains unchanged."
                                     : "Your proposed Project Profile changes need revision. The approved profile remains unchanged."
-                            : $"Your project direction was reviewed: {directionDecision}.", cancellationToken);
+                            : startupIndustriesChangedByLecturer && directionDecision == "Approved"
+                                ? $"Your project direction was approved. The lecturer updated Startup Industry to: {string.Join(", ", approvedStartupIndustries)}."
+                                : $"Your project direction was reviewed: {directionDecision}.", cancellationToken);
                 }
                 break;
             case "Team.MentorAssignmentChanged.v1" when ReadString(data, "action") is "Assigned" or "Reassigned":
@@ -1028,6 +1034,16 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
                 .Where(value => value.HasValue)
                 .Select(value => value!.Value)
                 .Distinct()
+                .ToArray()
+            : [];
+
+    private static string[] ReadStrings(JsonElement data, string propertyName) =>
+        data.TryGetProperty(propertyName, out var values) && values.ValueKind == JsonValueKind.Array
+            ? values.EnumerateArray()
+                .Where(value => value.ValueKind == JsonValueKind.String)
+                .Select(value => value.GetString())
+                .Where(value => !string.IsNullOrWhiteSpace(value))
+                .Select(value => value!)
                 .ToArray()
             : [];
 

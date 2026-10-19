@@ -8,7 +8,7 @@ import {
   UserPlus, Users, Wifi, WifiOff,
 } from 'lucide-react';
 import {
-  Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart,
+  Bar, BarChart, CartesianGrid, Cell, LabelList, Legend, Line, LineChart, Pie, PieChart,
   ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts';
 import { dashboardApi } from '../../api/dashboardApi';
@@ -40,6 +40,46 @@ const ago = (value?: string) => {
 
 function SectionUnavailable({ title }: { title: string }) {
   return <div className="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-500">{title}: Data unavailable</div>;
+}
+
+type TeamScore = { rank: number; name: string; score: number; classCode?: string; startup?: string };
+
+const truncate = (value: string, max = 18) => (value.length > max ? `${value.slice(0, max - 1)}…` : value);
+
+function RankingTooltip({ active, payload }: { active?: boolean; payload?: Array<{ payload: TeamScore }> }) {
+  const team = active ? payload?.[0]?.payload : undefined;
+  if (!team) return null;
+  return <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-body-sm shadow-md">
+    <p className="font-semibold text-slate-900">#{team.rank} · {team.name}</p>
+    {team.startup && <p className="text-slate-500">{team.startup}</p>}
+    {team.classCode && <p className="text-slate-500">Class {team.classCode}</p>}
+    <p className="mt-1 font-bold text-secondary">{team.score.toFixed(2)} / 10</p>
+  </div>;
+}
+
+function TopTeamRankingsChart({ teams }: { teams: AnyRecord[] }) {
+  const data: TeamScore[] = teams.slice(0, 10).map((team, index) => ({
+    rank: index + 1,
+    name: team.team?.name ?? `Team ${index + 1}`,
+    score: number(team.avgScore),
+    classCode: team.team?.classId?.classCode,
+    startup: team.startupName,
+  }));
+  const summary = data.map(team => `#${team.rank} ${team.name}: ${team.score.toFixed(2)}`).join(', ');
+  return <div role="img" aria-label={`Top team rankings by average score. ${summary}`} className="text-slate-500">
+    <ResponsiveContainer width="100%" height={Math.max(140, data.length * 48 + 40)}>
+      <BarChart data={data} layout="vertical" margin={{ top: 4, right: 48, bottom: 4, left: 8 }} barCategoryGap="28%">
+        <CartesianGrid stroke={CHART_COLORS.grid} strokeDasharray="3 3" horizontal={false} />
+        <XAxis type="number" domain={[0, 10]} ticks={[0, 2, 4, 6, 8, 10]} tick={{ fontSize: 12, fill: 'currentColor' }} axisLine={false} tickLine={false} />
+        <YAxis type="category" dataKey="name" width={150} tick={{ fontSize: 13, fill: 'currentColor' }} tickFormatter={(value: string, index: number) => `#${index + 1}  ${truncate(value)}`} axisLine={false} tickLine={false} />
+        <Tooltip content={<RankingTooltip />} cursor={{ fill: CHART_COLORS.grid, fillOpacity: 0.35 }} />
+        <Bar dataKey="score" radius={[0, 6, 6, 0]} maxBarSize={28} background={{ fill: CHART_COLORS.grid, fillOpacity: 0.3, radius: 6 }}>
+          {data.map(team => <Cell key={team.rank} fill={team.rank === 1 ? CHART_COLORS.brand : CHART_COLORS.navy} />)}
+          <LabelList dataKey="score" position="right" formatter={(value: unknown) => number(value).toFixed(2)} style={{ fontSize: 13, fontWeight: 700, fill: 'currentColor' }} />
+        </Bar>
+      </BarChart>
+    </ResponsiveContainer>
+  </div>;
 }
 
 function ActivityUser({ user, online }: { user: AnyRecord; online: boolean }) {
@@ -133,7 +173,7 @@ export default function AdminDashboard() {
     <section className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">{statCards.map(([title, value, icon, color, description], index) => <StatCard key={title} title={title} value={typeof value === 'string' ? value : formatNumber(value)} icon={icon} color={color} change={description} delay={index * 0.04} />)}</section>
 
     <section className="grid gap-5 lg:grid-cols-3">
-      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm lg:col-span-2"><h2 className="mb-5 flex items-center gap-2 text-lg font-bold text-slate-900"><BarChart3 className="h-5 w-5 text-primary" />Top Team Rankings</h2>{topTeams.length === 0 ? <EmptyState icon={Trophy} title="No data yet" description="Complete some evaluations first" size="sm" /> : <ResponsiveContainer width="100%" height={250}><BarChart data={topTeams.slice(0, 8).map((team: AnyRecord, index: number) => ({ name: team.team?.name ?? `Team ${index + 1}`, score: number(team.avgScore) }))}><CartesianGrid stroke={CHART_COLORS.grid} strokeDasharray="3 3" /><XAxis dataKey="name" tick={{ fontSize: 11 }} /><YAxis domain={[0, 10]} /><Tooltip formatter={(value: number) => [value.toFixed(2), 'Score']} /><Bar dataKey="score" fill={CHART_COLORS.navy} radius={[5, 5, 0, 0]} /></BarChart></ResponsiveContainer>}</div>
+      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm lg:col-span-2"><div className="mb-4"><h2 className="flex items-center gap-2 text-lg font-bold text-slate-900"><BarChart3 className="h-5 w-5 text-primary" />Top Team Rankings</h2><p className="mt-0.5 text-sm text-slate-500">Average evaluation score (0–10)</p></div>{topTeams.length === 0 ? <EmptyState icon={Trophy} title="No data yet" description="Complete some evaluations first" size="sm" /> : <TopTeamRankingsChart teams={topTeams} />}</div>
       <div className="space-y-5"><div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><h2 className="mb-3 text-base font-bold text-slate-900">Users by Role</h2><div className="flex items-center gap-4"><PieChart width={108} height={108}><Pie data={roleCounts} dataKey="value" cx={50} cy={50} innerRadius={28} outerRadius={46}>{roleCounts.map(item => <Cell key={item.name} fill={roleColors[item.name]} />)}</Pie></PieChart><div className="space-y-1.5">{roleCounts.map(item => <div key={item.name} className="flex items-center gap-2 text-sm"><span className="h-2.5 w-2.5 rounded-full" style={{ background: roleColors[item.name] }} /><span className="text-slate-600">{item.name}</span><b>{formatNumber(item.value)}</b></div>)}</div></div></div>
       <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><h2 className="mb-3 text-base font-bold text-slate-900">Ideas by Status</h2>{(dashboard?.ideasByStatus ?? []).length ? <div className="space-y-2">{dashboard.ideasByStatus.map((item: AnyRecord, index: number) => <div key={item.status} className="flex items-center justify-between text-sm"><span className="flex items-center gap-2 text-slate-600"><span className="h-2.5 w-2.5 rounded-full" style={{ background: statusColors[index % statusColors.length] }} />{item.status}</span><b>{formatNumber(item.count)}</b></div>)}</div> : <p className="text-sm text-slate-400">No data yet</p>}</div></div>
     </section>

@@ -191,3 +191,37 @@ export const skipReasonLabel: Record<MentorAllocationSkipReason, string> = {
   SlotAlreadyFilled: 'Slot already filled',
   NoContinuedTeam: 'Team does not continue',
 };
+
+export type TeamGridFilter = 'all' | 'attention' | 'changed';
+export const ALL_CLASSES = 'ALL';
+
+/** The classes that appear in the preview with how many of their teams are listed, for the class filter. */
+export function teamClassOptions(grid: readonly TeamGridRow[]): { classCode: string; teamCount: number }[] {
+  const counts = new Map<string, number>();
+  for (const row of grid) counts.set(row.classCode, (counts.get(row.classCode) ?? 0) + 1);
+  return [...counts.entries()]
+    .map(([classCode, teamCount]) => ({ classCode, teamCount }))
+    .sort((left, right) => left.classCode.localeCompare(right.classCode, undefined, { numeric: true }));
+}
+
+/** A class that is no longer in the preview (for example after regenerating it) falls back to every class. */
+export function resolveClassFilter(classCode: string, options: readonly { classCode: string }[]): string {
+  return classCode !== ALL_CLASSES && options.some(option => option.classCode === classCode) ? classCode : ALL_CLASSES;
+}
+
+export function filterTeamGrid(
+  grid: readonly TeamGridRow[],
+  filters: { filter: TeamGridFilter; search: string; classCode: string },
+): TeamGridRow[] {
+  const term = filters.search.trim().toLowerCase();
+  return grid.filter(row => {
+    if (filters.classCode !== ALL_CLASSES && row.classCode !== filters.classCode) return false;
+    const needsAttention = row.enterprise.state === 'unfilled' || row.academic.state === 'unfilled';
+    const changed = [row.enterprise, row.academic].some(slot => slot.state !== 'existing');
+    if (filters.filter === 'attention' && !needsAttention) return false;
+    if (filters.filter === 'changed' && !changed) return false;
+    if (!term) return true;
+    return [row.teamName, row.classCode, row.enterprise.mentorName, row.academic.mentorName]
+      .some(value => value?.toLowerCase().includes(term));
+  });
+}

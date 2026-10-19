@@ -12,6 +12,7 @@ import {
   isProjectDirectionSubmittedNotification,
 } from '../../utils/notificationNavigation';
 import { subscribeProjectDirectionRealtime } from '../../api/projectDirectionRealtime';
+import TruncatedText from '../ui/TruncatedText';
 
 const NotificationDropdown = () => {
   const [notifications, setNotifications] = useState([]);
@@ -205,9 +206,12 @@ const NotificationDropdown = () => {
                     <p className={`text-[13px] leading-snug text-slate-800 ${!n.isRead ? 'font-semibold' : 'font-medium'}`}>
                       {n.title}
                     </p>
-                    <p className="text-[12px] text-slate-500 mt-1 line-clamp-2 leading-relaxed">
-                      {n.message}
-                    </p>
+                    <TruncatedText
+                      as="p"
+                      text={n.message || ''}
+                      lines={2}
+                      className="mt-1 text-[12px] leading-relaxed text-slate-500"
+                    />
                     <span className="text-[10px] text-slate-400 font-semibold block mt-1.5">
                       {new Date(n.createdAt).toLocaleDateString()} at {new Date(n.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </span>

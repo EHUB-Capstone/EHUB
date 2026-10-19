@@ -13,9 +13,12 @@ public sealed class GetAdminDashboardQueryHandler(IApplicationDbContext context)
         var totalTasks = await context.SprintTasks.CountAsync(cancellationToken);
         var completedTasks = await context.SprintTasks.CountAsync(task => task.Status == SprintTaskStatus.Done, cancellationToken);
         var topTeams = await context.Evaluations.AsNoTracking().Where(item => item.Status != EvaluationStatus.Draft && item.MaxTotalScore > 0)
-            .GroupBy(item => new { item.Project.Team.TeamName, item.Project.Team.Class.ClassCode, item.Project.Name })
-            .Select(group => new TopTeamResponse { StartupName = group.Key.Name, Team = new TeamSummaryResponse { Name = group.Key.TeamName, ClassId = new ClassSummaryResponse { ClassCode = group.Key.ClassCode } }, AvgScore = Math.Round(group.Average(item => item.TotalScore / item.MaxTotalScore * 10m), 2) })
-            .OrderByDescending(item => item.AvgScore).Take(10).ToArrayAsync(cancellationToken);
+            // Group by team ID: names and class codes repeat across semesters. Team-Project is 1-1, so the other key parts only carry display values.
+            .GroupBy(item => new { item.Project.TeamId, item.Project.Team.TeamName, item.Project.Team.Class.ClassCode, item.Project.Name })
+            .Select(group => new { group.Key.TeamId, group.Key.TeamName, group.Key.ClassCode, group.Key.Name, AvgScore = Math.Round(group.Average(item => item.TotalScore / item.MaxTotalScore * 10m), 2) })
+            .OrderByDescending(item => item.AvgScore).ThenBy(item => item.TeamName).ThenBy(item => item.TeamId).Take(10)
+            .Select(item => new TopTeamResponse { StartupName = item.Name, Team = new TeamSummaryResponse { Name = item.TeamName, ClassId = new ClassSummaryResponse { ClassCode = item.ClassCode } }, AvgScore = item.AvgScore })
+            .ToArrayAsync(cancellationToken);
         return Result.Success(new AdminDashboardResponse
         {
             Stats = new AdminDashboardStatsResponse { TotalUsers = await context.Users.CountAsync(cancellationToken), TotalClasses = await context.Classes.CountAsync(cancellationToken), TotalTeams = await context.Teams.CountAsync(cancellationToken), TotalIdeas = await context.Projects.CountAsync(cancellationToken), TotalEvaluations = await context.Evaluations.CountAsync(cancellationToken), SubmittedProposals = await context.ProjectProposals.CountAsync(item => item.Status == ProjectProposalStatus.Submitted, cancellationToken), TotalMentoringSessions = await context.MentoringSessions.CountAsync(cancellationToken), TotalTasks = totalTasks, CompletedTasks = completedTasks, OverallTaskProgress = totalTasks == 0 ? 0 : Math.Round(completedTasks * 100m / totalTasks, 2) },

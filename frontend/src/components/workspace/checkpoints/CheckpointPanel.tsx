@@ -1,18 +1,16 @@
 // @ts-nocheck
 // Full-screen checkpoint detail view
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
-  X, CheckCircle2, Award, FileText, Loader2,
-  MessageSquare, ArrowLeft, Users, BarChart2, Layers, TrendingUp, Save,
-  ClipboardList, Eye, ClipboardCheck, PanelRightOpen, PanelRightClose,
-  ChevronDown,
+  X, Award, FileText, Loader2,
+  MessageSquare, ArrowLeft, Users, BarChart2, Layers, TrendingUp,
+  ClipboardCheck, PanelRightOpen, PanelRightClose, Link2,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { checkpointApi } from '../../../api/checkpointApi';
 import { useAuth } from '../../../hooks/useAuth';
-import Button from '../../ui/Button';
 import ConfirmDialog from '../../ui/ConfirmDialog';
 import CheckpointSubmissionCard from './CheckpointSubmissionCard';
 import CheckpointFilePreviewModal from './CheckpointFilePreviewModal';
@@ -58,9 +56,6 @@ export default function CheckpointPanel({
   const [files, setFiles] = useState([]);
   const [links, setLinks] = useState([]);
   const [feedbacks, setFeedbacks] = useState([]);
-  const [requirementContents, setRequirementContents] = useState({});
-  const [savingRequirements, setSavingRequirements] = useState(false);
-  const [requirementsOpen, setRequirementsOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [submissionMeta, setSubmissionMeta] = useState({ status: null, submittedAt: null });
   const [downloadingId, setDownloadingId] = useState(null);
@@ -75,36 +70,28 @@ export default function CheckpointPanel({
   const isStudent = user?.role?.toUpperCase() === 'STUDENT';
   const isLecturer = user?.role?.toUpperCase() === 'LECTURER';
   const [showEvaluation, setShowEvaluation] = useState(false);
-  const canEditRequirements = isStudent && isEditable && checkpoint?.canUpload;
   const Icon = ICONS[checkpoint?.icon] || FileText;
 
-  const buildContentsMap = useCallback((sub) => {
-    const map = {};
-    checkpoint.requirements.forEach((label, index) => {
-      const saved = sub?.requirementContents?.find(
-        (r) => Number(r.index) === index
-      );
-      map[index] = saved?.content || '';
-    });
-    return map;
-  }, [checkpoint.requirements]);
+  // Depend on the number, not the object: the parent rebuilds checkpoint objects on every silent stats refresh,
+  // which would otherwise refetch here and flash the loading state over the file list.
+  const checkpointNumber = checkpoint?.number;
 
-  const fetchData = useCallback(async () => {
-    if (!teamId || !checkpoint) return;
-    setLoading(true);
+  // Silent refreshes keep the current list on screen instead of swapping it for the loading placeholder.
+  const fetchData = useCallback(async (silent = false) => {
+    if (!teamId || checkpointNumber == null) return;
+    if (!silent) setLoading(true);
     try {
       const res = await checkpointApi.getCheckpointData(String(teamId));
       if (res.success) {
         const sub = res.data.submissions.find(
-          (s) => Number(s.checkpointNumber) === Number(checkpoint.number)
+          (s) => Number(s.checkpointNumber) === Number(checkpointNumber)
         );
         setFiles(sub?.files || []);
         setSubmissionMeta({ status: sub?.status ?? null, submittedAt: sub?.submittedAt ?? null });
         setLinks(sub?.links || []);
-        setRequirementContents(buildContentsMap(sub));
         setFeedbacks(
           res.data.feedbacks.filter(
-            (f) => Number(f.checkpointNumber) === Number(checkpoint.number)
+            (f) => Number(f.checkpointNumber) === Number(checkpointNumber)
           )
         );
       }
@@ -113,7 +100,9 @@ export default function CheckpointPanel({
     } finally {
       setLoading(false);
     }
-  }, [teamId, checkpoint, buildContentsMap]);
+  }, [teamId, checkpointNumber]);
+
+  const refreshQuietly = useCallback(() => fetchData(true), [fetchData]);
 
   const addFeedback = useCallback((feedback) => {
     if (!feedback?._id) return;
@@ -143,11 +132,11 @@ export default function CheckpointPanel({
     if (event.eventType === 'CheckpointRequirementsUpdated'
       && String(event.teamId) === String(teamId)
       && Number(event.checkpointNumber) === Number(checkpoint.number)) {
-      void fetchData();
+      void fetchData(true);
       onRequirementsSaved?.();
     }
   }, (reconnected) => {
-    if (reconnected) void fetchData();
+    if (reconnected) void fetchData(true);
   }), [addFeedback, checkpoint.number, fetchData, onRequirementsSaved, removeFeedback, teamId]);
 
   // Leaving with selected or uploading files would discard them, so ask in the system dialog first.
@@ -165,14 +154,6 @@ export default function CheckpointPanel({
       window.removeEventListener('keydown', onKey);
     };
   }, [requestClose, previewFile, leaveConfirmOpen]);
-
-  const reqFilledCount = useMemo(
-    () =>
-      checkpoint.requirements.filter((_, i) =>
-        String(requirementContents[i] || '').trim()
-      ).length,
-    [checkpoint.requirements, requirementContents]
-  );
 
   const handleDownload = async (file) => {
     setDownloadingId(file._id);
@@ -208,10 +189,6 @@ export default function CheckpointPanel({
     }
   };
 
-  const handleRequirementChange = (index, value) => {
-    setRequirementContents((prev) => ({ ...prev, [index]: value }));
-  };
-
   const handleDeleteLink = async (linkId) => {
     setDeletingLink(true);
     try {
@@ -227,30 +204,6 @@ export default function CheckpointPanel({
       toast.error(error?.response?.data?.message || 'Unable to delete the submitted link.');
     } finally {
       setDeletingLink(false);
-    }
-  };
-
-  const handleSaveAllRequirements = async () => {
-    setSavingRequirements(true);
-    try {
-      const contents = checkpoint.requirements.map((_, index) => ({
-        index,
-        content: requirementContents[index] || '',
-      }));
-      const res = await checkpointApi.updateRequirements(
-        teamId,
-        checkpoint.number,
-        contents
-      );
-      if (res.success) {
-        setRequirementContents(buildContentsMap(res.data));
-        toast.success('Requirements saved successfully.');
-        onRequirementsSaved?.();
-      }
-    } catch (e) {
-      toast.error(e?.response?.data?.error || 'Failed to save requirements.');
-    } finally {
-      setSavingRequirements(false);
     }
   };
 
@@ -333,14 +286,12 @@ export default function CheckpointPanel({
                 {loading ? '…' : `${files.length} file${files.length !== 1 ? 's' : ''}`}
               </span>
               <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/80 border border-orange-200/70 text-slate-700 text-xs font-semibold shadow-sm">
-                <MessageSquare className="w-3.5 h-3.5" />
-                {loading ? '…' : `${feedbacks.length} feedback`}
+                <Link2 className="w-3.5 h-3.5" />
+                {loading ? '…' : `${links.length} link${links.length !== 1 ? 's' : ''}`}
               </span>
               <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/80 border border-orange-200/70 text-slate-700 text-xs font-semibold shadow-sm">
-                <ClipboardList className="w-3.5 h-3.5" />
-                {loading
-                  ? '…'
-                  : `${reqFilledCount}/${checkpoint.requirements.length} requirements`}
+                <MessageSquare className="w-3.5 h-3.5" />
+                {loading ? '…' : `${feedbacks.length} feedback`}
               </span>
               <button
                 type="button"
@@ -358,116 +309,10 @@ export default function CheckpointPanel({
 
         {/* Body */}
         <div className="relative flex-1 flex flex-col lg:flex-row min-h-0 overflow-hidden">
-          {/* Requirements sidebar */}
-          <aside className={`lg:w-[380px] xl:w-[420px] shrink-0 flex flex-col bg-white border-b lg:border-b-0 lg:border-r border-slate-200/80 min-h-0 ${showEvaluation ? 'lg:hidden' : ''}`}>
-            <button
-              type="button"
-              id="checkpoint-requirements-toggle"
-              aria-expanded={requirementsOpen}
-              aria-controls="checkpoint-requirements-content"
-              onClick={() => setRequirementsOpen((open) => !open)}
-              className="w-full flex items-center gap-3 px-5 py-4 border-b border-orange-100/70 bg-orange-50/40 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/40"
-            >
-              <span className="w-8 h-8 shrink-0 rounded-lg bg-primary-50 flex items-center justify-center border border-primary-100">
-                {canEditRequirements ? <ClipboardList className="w-4 h-4 text-primary" /> : <Eye className="w-4 h-4 text-primary" />}
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block text-sm font-bold text-slate-800">
-                  Requirements <span className="font-medium text-slate-400">(optional)</span>
-                </span>
-                <span className="block text-xs text-slate-500">
-                  {canEditRequirements
-                    ? 'Complete all fields, then save once below.'
-                    : isStudent && isEditable
-                      ? checkpoint.availabilityReason || 'This checkpoint is not open for submission.'
-                      : 'Submitted answers from the team (read-only).'}
-                </span>
-              </span>
-              {checkpoint.requirements.length > 0 && (
-                <span className="shrink-0 text-xs font-bold text-primary-700 bg-primary-50 px-2.5 py-0.5 rounded-full border border-primary-100">
-                  {reqFilledCount}/{checkpoint.requirements.length}
-                </span>
-              )}
-              <ChevronDown className={`w-4 h-4 shrink-0 text-slate-500 transition-transform ${requirementsOpen ? 'rotate-180' : ''}`} />
-            </button>
-
-            <div className="flex-1 overflow-y-auto scrollbar-thin px-5 py-4 space-y-3">
-              {requirementsOpen && checkpoint.requirements.map((req, i) => {
-                const filled = Boolean(String(requirementContents[i] || '').trim());
-                return (
-                  <div
-                    key={i}
-                    className={`rounded-xl border bg-white transition-colors ${filled
-                        ? 'border-primary-200 shadow-sm'
-                        : 'border-slate-200/80'
-                      }`}
-                  >
-                    <div
-                      className={`flex items-center gap-2 px-3 py-2 border-b text-xs font-bold uppercase tracking-wide ${filled
-                          ? 'bg-primary-50/80 border-primary-100 text-primary-800'
-                          : 'bg-slate-50 border-slate-100 text-slate-500'
-                        }`}
-                    >
-                      <span
-                        className={`w-5 h-5 rounded-md flex items-center justify-center text-overline ${filled
-                            ? 'bg-primary text-white'
-                            : 'bg-slate-200 text-slate-600'
-                          }`}
-                      >
-                        {i + 1}
-                      </span>
-                      <span className="truncate">{req}</span>
-                      {filled && !canEditRequirements && (
-                        <CheckCircle2 className="w-3.5 h-3.5 text-primary ml-auto shrink-0" />
-                      )}
-                    </div>
-
-                    <div className="p-3">
-                      {canEditRequirements ? (
-                        <textarea
-                          value={requirementContents[i] ?? ''}
-                          onChange={(e) => handleRequirementChange(i, e.target.value)}
-                          placeholder={`Describe your ${req.toLowerCase()}…`}
-                          rows={3}
-                          className="w-full text-sm text-slate-700 rounded-lg border border-slate-200 bg-slate-50/50 px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary focus:bg-white resize-y min-h-[80px] transition-colors"
-                        />
-                      ) : loading ? (
-                        <div className="h-16 flex items-center justify-center">
-                          <Loader2 className="w-5 h-5 text-primary animate-spin" />
-                        </div>
-                      ) : filled ? (
-                        <p className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">
-                          {requirementContents[i]}
-                        </p>
-                      ) : (
-                        <p className="text-sm text-slate-400 italic">No content submitted yet.</p>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-
-              {requirementsOpen && canEditRequirements && checkpoint.requirements.length > 0 && (
-                <div id="checkpoint-requirements-actions" className="pt-1">
-                  <Button
-                    type="button"
-                    variant="primary"
-                    size="lg"
-                    className="w-full"
-                    isLoading={savingRequirements}
-                    disabled={loading}
-                    icon={Save}
-                    onClick={handleSaveAllRequirements}
-                  >
-                    Save all requirements
-                  </Button>
-                  <p className="text-overline text-slate-400 text-center mt-2">
-                    Saves all requirement fields for this checkpoint
-                  </p>
-                </div>
-              )}
-
-              {checkpoint.rubrics?.length > 0 && (
+          {/* Rubric sidebar */}
+          {checkpoint.rubrics?.length > 0 && (
+            <aside className={`lg:w-[380px] xl:w-[420px] shrink-0 flex flex-col bg-white border-b lg:border-b-0 lg:border-r border-slate-200/80 min-h-0 ${showEvaluation ? 'lg:hidden' : ''}`}>
+              <div className="flex-1 overflow-y-auto scrollbar-thin px-5 py-4 space-y-3">
                 <section className="space-y-3">
                   <SectionTitle icon={Award}>Evaluation rubric</SectionTitle>
                   <ul className="space-y-2">
@@ -479,30 +324,20 @@ export default function CheckpointPanel({
                         <div className="flex items-start gap-3">
                           <Award className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
                           <div className="min-w-0">
-                            <div className="font-semibold text-slate-900 flex items-center gap-2 flex-wrap">
+                            <div className="font-semibold text-slate-900">
                               <span>{r.label}</span>
-                              <span className="text-overline font-bold px-2 py-0.5 rounded-full bg-white text-amber-700 border border-amber-200">{r.weight}%</span>
+                              <span className="ml-2 inline-block align-middle whitespace-nowrap text-overline font-bold px-2 py-0.5 rounded-full bg-white text-amber-700 border border-amber-200">{r.weight}%</span>
                             </div>
                             {r.description && <p className="text-xs text-slate-600 mt-1">{r.description}</p>}
-                            {Array.isArray(r.levels) && r.levels.length > 0 && (
-                              <div className="mt-2 flex flex-wrap gap-1.5 text-overline text-slate-500">
-                                {r.levels.map((level) => (
-                                  <span key={level.key} className="px-2 py-1 rounded-full bg-white border border-slate-200">
-                                    {level.label} {level.range}
-                                  </span>
-                                ))}
-                              </div>
-                            )}
                           </div>
                         </div>
                       </li>
                     ))}
                   </ul>
                 </section>
-              )}
-            </div>
-
-          </aside>
+              </div>
+            </aside>
+          )}
 
           {/* Main column */}
           <main className="flex-1 overflow-y-auto scrollbar-thin bg-orange-50/20">
@@ -520,7 +355,7 @@ export default function CheckpointPanel({
                 teamId={String(teamId)}
                 downloadingId={downloadingId}
                 editingLink={editingLink}
-                onRefresh={fetchData}
+                onRefresh={refreshQuietly}
                 onPreview={setPreviewFile}
                 onDownload={handleDownload}
                 onRequestDeleteFile={setDeleteTarget}

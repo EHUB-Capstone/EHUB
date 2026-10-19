@@ -78,8 +78,12 @@ public class ProjectConfiguration : IEntityTypeConfiguration<Project>
             .HasColumnName("is_high_potential")
             .HasDefaultValue(false);
 
-        builder.Property(p => p.IsFunded)
-            .HasColumnName("is_funded")
+        builder.Property(p => p.IsInternallyFunded)
+            .HasColumnName("is_internally_funded")
+            .HasDefaultValue(false);
+
+        builder.Property(p => p.IsExternallyFunded)
+            .HasColumnName("is_externally_funded")
             .HasDefaultValue(false);
 
         builder.Property(p => p.IsAwarded)

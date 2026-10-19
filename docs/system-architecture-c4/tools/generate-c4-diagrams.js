@@ -38,6 +38,7 @@ const genericIcons = {
   cloud: '<path d="M17.5 19H6a4 4 0 0 1-.6-7.95A7 7 0 0 1 19 9.5 4.5 4.5 0 0 1 17.5 19Z"/>',
   brain: '<path d="M9.5 4a3 3 0 0 0-5 2.2A3.5 3.5 0 0 0 5 13a3 3 0 0 0 4.5 3M14.5 4a3 3 0 0 1 5 2.2A3.5 3.5 0 0 1 19 13a3 3 0 0 1-4.5 3M9.5 4v16M14.5 4v16M7 8h2.5M14.5 8H17M7 15h2.5M14.5 15H17"/>',
   archive: '<rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v11h14V9M9 13h6"/>',
+  message: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
 };
 
 function esc(value) {
@@ -136,7 +137,7 @@ const diagrams = [
     groups: [
       group('vps', 540, 110, 770, 770, 'Deployment Node: Production VPS', 'Ubuntu 24.04 · 4 vCPU · 8 GB RAM · 50 GB disk · UFW'),
       group('docker', 790, 180, 500, 510, 'Docker Engine · Docker Compose', 'Single host · private network · restart: unless-stopped'),
-      group('managed', 1330, 130, 240, 640, 'Managed External Systems', 'Cloud services'),
+      group('managed', 1330, 130, 240, 760, 'Managed External Systems', 'Cloud services'),
     ],
     nodes: [
       node('browser', 20, 300, 220, 155, 'User Browser', '«Deployment Node»', '', [], 'actor', 'user'),
@@ -146,11 +147,12 @@ const diagrams = [
       node('backend-container', 1060, 300, 220, 170, 'Backend Container', '«Container»', '.NET 10 · :8080', ['health: /health/ready'], 'backend', 'dotnet'),
       node('postgres-container', 1060, 510, 220, 150, 'PostgreSQL Container', '«Container»', 'PostgreSQL 18 + pgvector · :5432', ['health: pg_isready'], 'data', 'postgresql'),
       node('ollama-container', 820, 510, 220, 150, 'Ollama Container', '«Container»', 'Ollama · BGE-M3 · :11434', [], 'application', 'brain'),
-      node('backup-job', 820, 740, 220, 135, 'Backup Job', '«Host Operation»', 'Validated database export', [], 'infrastructure', 'archive'),
+      node('backup-job', 820, 740, 220, 135, 'Backup Job', '«Host Operation»', 'Daily 02:00 · systemd timer', [], 'infrastructure', 'archive'),
       node('google-managed', 1360, 150, 180, 125, 'Google Identity', '«External System»', 'Google Sign-In (OIDC)', [], 'external', 'google'),
       node('cloudinary-managed', 1360, 290, 180, 125, 'Cloudinary', '«External System»', 'Profile avatars', [], 'external', 'cloudinary'),
-      node('r2-managed', 1360, 430, 180, 125, 'Cloudflare R2', '«External System»', 'Submission files', [], 'external', 'cloudflare'),
+      node('r2-managed', 1360, 430, 180, 125, 'Cloudflare R2', '«External System»', 'Submission files · DB backups', [], 'external', 'cloudflare'),
       node('smtp-managed', 1360, 570, 180, 125, 'Gmail SMTP', '«External System»', 'Brevo fallback', [], 'external', 'mail'),
+      node('discord-managed', 1360, 753, 180, 125, 'Discord', '«External System»', 'Backup alerts', [], 'external', 'message'),
     ],
     edges: [
       edge('d1', 'browser', 'cloudflare', 'HTTPS :443', { sourceSide: 'right', targetSide: 'left', labelX: 255, labelY: 322 }),
@@ -160,7 +162,9 @@ const diagrams = [
       edge('d5', 'backend-container', 'postgres-container', 'Npgsql :5432', { sourceSide: 'full-bottom', targetSide: 'top', labelX: 1230, labelY: 500 }),
       edge('d7', 'backend-container', 'ollama-container', 'HTTP :11434', { sourceSide: 'full-bottom', sourceRatio: 26 / 220, targetSide: 'right', via: [[1086, 550]], labelX: 1024, labelY: 536 }),
       edge('d6', 'postgres-container', 'backup-job', 'DB export', { sourceSide: 'full-bottom', sourceRatio: 209 / 220, targetSide: 'top', via: [[1269, 715], [930, 715]], labelX: 1100, labelY: 710, dashed: true }),
-      edge('d8', 'backend-container', 'managed', 'HTTPS / SMTP', { sourceSide: 'right', targetSide: 'left', targetRatio: 210 / 640, labelX: 1266, labelY: 322 }),
+      edge('d8', 'backend-container', 'managed', 'HTTPS / SMTP', { sourceSide: 'right', targetSide: 'left', targetRatio: 210 / 760, labelX: 1266, labelY: 322 }),
+      edge('d9', 'backup-job', 'r2-managed', 'Daily backup [S3 API]', { sourceSide: 'full-right', sourceRatio: 20 / 135, targetSide: 'left', via: [[1320, 760], [1320, 470]], labelX: 1180, labelY: 775 }),
+      edge('d10', 'backup-job', 'discord-managed', 'Alerts [HTTPS]', { sourceSide: 'full-right', sourceRatio: 61 / 135, targetSide: 'left', targetRatio: 40 / 64, labelX: 1180, labelY: 816 }),
     ],
     footer: '',
   },

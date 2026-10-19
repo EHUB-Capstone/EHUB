@@ -23,6 +23,15 @@ import {
   emailCellText,
   validateMentorWorkbook,
 } from '../../utils/mentorMasterImport';
+import {
+  IMPORT_FILTER_ORDER,
+  IMPORT_STATUS_META,
+  countImportRows,
+  filterImportRows,
+  importRowCategory,
+  type ImportStatusFilter,
+} from '../../utils/mentorImportStatus';
+import Badge, { badgeTones } from '../ui/Badge';
 import Button from '../ui/Button';
 
 interface ImportMentorsModalProps {
@@ -49,6 +58,7 @@ export default function ImportMentorsModal({ onClose, onImported }: ImportMentor
   const [importing, setImporting] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [dragActive, setDragActive] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<ImportStatusFilter>('all');
 
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
@@ -70,6 +80,7 @@ export default function ImportMentorsModal({ onClose, onImported }: ImportMentor
     setResult(null);
     setError('');
     setDragActive(false);
+    setStatusFilter('all');
     if (inputRef.current) inputRef.current.value = '';
   };
 
@@ -207,11 +218,11 @@ export default function ImportMentorsModal({ onClose, onImported }: ImportMentor
 
               <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-6">
                 <SummaryCard label="Total" value={preview.totalRows} tone="neutral" />
-                <SummaryCard label="Create" value={preview.createCount} tone="success" />
-                <SummaryCard label="Complete record" value={preview.completeDraftCount} tone="success" />
-                <SummaryCard label="Update" value={preview.updateCount} tone="warning" />
-                <SummaryCard label="Incomplete" value={preview.needsCompletionCount} tone="warning" />
-                <SummaryCard label="Errors" value={preview.errorCount} tone="danger" />
+                <SummaryCard label={IMPORT_STATUS_META.create.label} value={preview.createCount} tone={IMPORT_STATUS_META.create.tone} />
+                <SummaryCard label={IMPORT_STATUS_META.complete.label} value={preview.completeDraftCount} tone={IMPORT_STATUS_META.complete.tone} />
+                <SummaryCard label={IMPORT_STATUS_META.update.label} value={preview.updateCount} tone={IMPORT_STATUS_META.update.tone} />
+                <SummaryCard label={IMPORT_STATUS_META.incomplete.label} value={preview.needsCompletionCount} tone={IMPORT_STATUS_META.incomplete.tone} />
+                <SummaryCard label="Errors" value={preview.errorCount} tone={IMPORT_STATUS_META.invalid.tone} />
               </div>
 
               {preview.canCommit && changeCount > 0 && action.breakdown && <p role="status" className="text-xs font-semibold text-slate-600">When you confirm: {action.breakdown}.</p>}
@@ -219,7 +230,8 @@ export default function ImportMentorsModal({ onClose, onImported }: ImportMentor
               {preview.needsCompletionCount > 0 && <Notice text={`${preview.needsCompletionCount} mentor(s) have no login email yet. They will be saved as incomplete and no account is created until an email is provided.`} />}
               {preview.errorCount > 0 && <Notice text="Resolve every invalid row in the source file, then preview again. No account has been changed." />}
               {!preview.canCommit && preview.errorCount === 0 && <Notice text="There is nothing to import from this file." />}
-              <MentorRowsTable rows={preview.rows} />
+              <StatusFilter rows={preview.rows} value={statusFilter} onChange={setStatusFilter} />
+              <MentorRowsTable rows={filterImportRows(preview.rows, statusFilter)} totalRows={preview.rows.length} />
             </div>
           )}
 
@@ -236,7 +248,7 @@ export default function ImportMentorsModal({ onClose, onImported }: ImportMentor
 
         <footer className="flex shrink-0 flex-col-reverse gap-2 border-t border-slate-100 bg-slate-50/60 px-5 py-4 sm:flex-row sm:justify-end sm:px-6">
           {phase === 'upload' && <Button variant="outline" onClick={onClose}>Cancel</Button>}
-          {phase === 'review' && <><Button variant="outline" icon={ArrowLeft} onClick={reset} disabled={importing}>Back</Button><Button variant="primary" icon={Upload} isLoading={importing} disabled={!preview?.canCommit} onClick={() => void commit()}>{action.label}</Button></>}
+          {phase === 'review' && <><Button variant="outline" icon={ArrowLeft} onClick={reset} disabled={importing}>Back</Button><Button variant="primary" icon={Upload} isLoading={importing} disabled={!preview?.canCommit} onClick={() => void commit()}>{importing ? `Applying ${changeCount} changes...` : action.label}</Button></>}
           {phase === 'result' && <Button variant="primary" icon={Check} onClick={onClose}>Done</Button>}
         </footer>
       </div>
@@ -244,29 +256,61 @@ export default function ImportMentorsModal({ onClose, onImported }: ImportMentor
   );
 }
 
-function SummaryCard({ label, value, tone }: { label: string; value: number; tone: 'neutral' | 'success' | 'danger' | 'warning' }) {
-  const styles = { neutral: 'border-slate-200 bg-slate-50 text-slate-900', success: 'border-green-200 bg-green-50 text-green-700', danger: 'border-red-200 bg-red-50 text-red-600', warning: 'border-orange-200 bg-orange-50 text-orange-700' };
-  return <div className={`rounded-xl border p-3 text-center ${styles[tone]}`}><p className="text-xl font-bold">{value}</p><p className="mt-0.5 text-xs font-medium">{label}</p></div>;
+function SummaryCard({ label, value, tone }: { label: string; value: number; tone: 'neutral' | 'success' | 'info' | 'warning' | 'danger' }) {
+  return <div className={`rounded-xl border p-3 text-center ${badgeTones[tone]}`}><p className="text-xl font-bold">{value}</p><p className="mt-0.5 text-xs font-medium">{label}</p></div>;
+}
+
+/** Filter chips: only statuses that occur in the file are offered, each with its count and the same colour as its tile. */
+function StatusFilter({ rows, value, onChange }: { rows: MentorImportPreview['rows']; value: ImportStatusFilter; onChange: (value: ImportStatusFilter) => void }) {
+  const counts = countImportRows(rows);
+  const options: { key: ImportStatusFilter; label: string; tone: 'neutral' | 'success' | 'info' | 'warning' | 'danger' }[] = [
+    { key: 'all', label: 'All', tone: 'neutral' },
+    ...IMPORT_FILTER_ORDER.filter(key => counts[key] > 0).map(key => ({ key, label: key === 'invalid' ? 'Errors' : IMPORT_STATUS_META[key].label, tone: IMPORT_STATUS_META[key].tone })),
+  ];
+  return (
+    <div role="group" aria-label="Filter rows by status" className="flex flex-wrap items-center gap-1.5">
+      {options.map(option => (
+        <button
+          key={option.key}
+          type="button"
+          aria-pressed={value === option.key}
+          onClick={() => onChange(option.key)}
+          className={`rounded-full border px-3 py-1 text-xs font-semibold transition-all ${badgeTones[option.tone]} ${value === option.key ? 'ring-2 ring-primary/60 ring-offset-1' : 'opacity-70 hover:opacity-100'}`}
+        >
+          {option.label} · {counts[option.key]}
+        </button>
+      ))}
+    </div>
+  );
 }
 
 function Notice({ text }: { text: string }) {
   return <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3.5 text-sm text-amber-800"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /><p>{text}</p></div>;
 }
 
-function MentorRowsTable({ rows }: { rows: MentorImportPreview['rows'] }) {
+function MentorRowsTable({ rows, totalRows }: { rows: MentorImportPreview['rows']; totalRows: number }) {
+  if (rows.length === 0) {
+    return <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-6 text-center text-sm text-slate-500">No row has this status.</p>;
+  }
   return (
-    <div className="overflow-hidden rounded-xl border border-slate-200"><div className="max-h-80 overflow-auto">
-      <table className="w-full min-w-[680px] text-left text-xs">
-        <thead className="sticky top-0 z-10 bg-slate-50 text-slate-600"><tr><th className="px-3 py-2.5">Sheet / row</th><th className="px-3 py-2.5">Type</th><th className="px-3 py-2.5">Mentor</th><th className="px-3 py-2.5">Result</th></tr></thead>
-        <tbody className="divide-y divide-slate-100 bg-white">{rows.map((row) => (
-          <tr key={`${row.sheetName}-${row.rowNumber}`} className={!row.isValid ? 'bg-red-50/50' : 'hover:bg-slate-50'}>
-            <td className="px-3 py-3 text-slate-600">{row.sheetName} · {row.rowNumber}</td>
-            <td className="px-3 py-3 text-slate-600">{row.mentorType === 'Enterprise' ? 'Enterprise' : 'Lecturer'}</td>
-            <td className="px-3 py-3"><span className="block font-semibold text-slate-700">{row.fullName || '—'}</span><span className={emailCellText(row.email).provided ? 'text-slate-400' : 'font-medium text-amber-600'}>{emailCellText(row.email).text}</span>{row.missingFields.length > 0 && <span className="mt-1 block max-w-sm text-caption text-slate-400">Missing: {row.missingFields.join(', ')}</span>}</td>
-            <td className={`px-3 py-3 ${row.isValid ? 'text-green-700' : 'text-red-700'}`}><span className="block font-semibold">{!row.isValid ? 'Invalid' : row.status === 'NeedsCompletion' || row.status === 'UpdateIncomplete' ? 'Incomplete' : row.status === 'CompleteIncomplete' ? 'Complete record' : row.status}</span>{row.message && <span className="mt-1 block max-w-xs text-caption leading-4 text-slate-500">{row.message}</span>}</td>
-          </tr>
-        ))}</tbody>
-      </table>
-    </div></div>
+    <div className="space-y-1.5">
+      {rows.length !== totalRows && <p className="text-xs text-slate-500" aria-live="polite">Showing {rows.length} of {totalRows} rows.</p>}
+      <div className="overflow-hidden rounded-xl border border-slate-200"><div className="max-h-80 overflow-auto">
+        <table className="w-full min-w-[680px] text-left text-xs">
+          <thead className="sticky top-0 z-10 bg-slate-50 text-slate-600"><tr><th className="px-3 py-2.5">Sheet / row</th><th className="px-3 py-2.5">Type</th><th className="px-3 py-2.5">Mentor</th><th className="px-3 py-2.5">Result</th></tr></thead>
+          <tbody className="divide-y divide-slate-100 bg-white">{rows.map((row) => {
+            const meta = IMPORT_STATUS_META[importRowCategory(row)];
+            return (
+              <tr key={`${row.sheetName}-${row.rowNumber}`} className={!row.isValid ? 'bg-red-50/50' : 'hover:bg-slate-50'}>
+                <td className="px-3 py-3 text-slate-600">{row.sheetName} · {row.rowNumber}</td>
+                <td className="px-3 py-3 text-slate-600">{row.mentorType === 'Enterprise' ? 'Enterprise' : 'Lecturer'}</td>
+                <td className="px-3 py-3"><span className="block font-semibold text-slate-700">{row.fullName || '—'}</span><span className={emailCellText(row.email).provided ? 'text-slate-400' : 'font-medium text-amber-600'}>{emailCellText(row.email).text}</span>{row.missingFields.length > 0 && <span className="mt-1 block max-w-sm text-caption text-slate-400">Missing: {row.missingFields.join(', ')}</span>}</td>
+                <td className="px-3 py-3"><Badge variant={meta.tone}>{meta.label}</Badge>{row.message && <span className="mt-1 block max-w-xs text-caption leading-4 text-slate-500">{row.message}</span>}</td>
+              </tr>
+            );
+          })}</tbody>
+        </table>
+      </div></div>
+    </div>
   );
 }
