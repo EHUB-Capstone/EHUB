@@ -17,6 +17,8 @@ import {
 import type { ProjectDirectionSyncValue } from '../../utils/projectDirectionSync';
 import { subscribeProjectDirectionRealtime } from '../../api/projectDirectionRealtime';
 import ConfirmDialog from '../ui/ConfirmDialog';
+import StartupIndustryPicker from '../workspace/StartupIndustryPicker';
+import type { StartupIndustryDto } from '../../types/startupIndustries';
 
 const statusStyles = {
   PENDING: 'bg-amber-50 text-amber-700 border-amber-200',
@@ -48,9 +50,11 @@ export default function ClassDirectionOverview({ semester, year, initialClassId 
   const [loadingClasses, setLoadingClasses] = useState(true);
   const [loadingTeams, setLoadingTeams] = useState(false);
   const [comments, setComments] = useState({});
-  const [industries, setIndustries] = useState([]);
+  const [industries, setIndustries] = useState<StartupIndustryDto[]>([]);
+  const [industriesLoading, setIndustriesLoading] = useState(true);
+  const [industriesError, setIndustriesError] = useState('');
+  const [industriesReload, setIndustriesReload] = useState(0);
   const [lecturerIndustrySelections, setLecturerIndustrySelections] = useState({});
-  const [editingLecturerIndustries, setEditingLecturerIndustries] = useState({});
   const [reviewingTeamId, setReviewingTeamId] = useState('');
   const [rejectTarget, setRejectTarget] = useState<{ teamId: string; projectName: string } | null>(null);
   const [expandedApprovedTeamIds, setExpandedApprovedTeamIds] = useState(() => new Set<string>());
@@ -95,16 +99,23 @@ export default function ClassDirectionOverview({ semester, year, initialClassId 
 
   useEffect(() => {
     const controller = new AbortController();
+    setIndustriesLoading(true);
+    setIndustriesError('');
     startupIndustryApi.getActiveOptions(controller.signal)
       .then((response) => {
         const payload = response?.data ?? response;
         setIndustries(Array.isArray(payload?.industries) ? payload.industries : []);
       })
-      .catch(() => {
-        if (!controller.signal.aborted) setIndustries([]);
+      .catch((error) => {
+        if (controller.signal.aborted) return;
+        setIndustries([]);
+        setIndustriesError(parseApiError(error, 'Failed to load startup industries.').message);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setIndustriesLoading(false);
       });
     return () => controller.abort();
-  }, []);
+  }, [industriesReload]);
 
   const loadOverview = useCallback(async (classId: string) => {
     const requestId = ++overviewRequestIdRef.current;
@@ -285,11 +296,6 @@ export default function ClassDirectionOverview({ semester, year, initialClassId 
         delete next[teamId];
         return next;
       });
-      setEditingLecturerIndustries((current) => {
-        const next = { ...current };
-        delete next[teamId];
-        return next;
-      });
       if (decision === 'APPROVED' || decision === 'REJECTED') {
         setExpandedApprovedTeamIds((current) => {
           const next = new Set(current);
@@ -316,37 +322,6 @@ export default function ClassDirectionOverview({ semester, year, initialClassId 
       const next = new Set(current);
       if (next.has(teamId)) next.delete(teamId);
       else next.add(teamId);
-      return next;
-    });
-  };
-
-  const toggleLecturerIndustry = (teamId, industryId) => {
-    setLecturerIndustrySelections((current) => {
-      const selected = current[teamId] || [];
-      return {
-        ...current,
-        [teamId]: selected.includes(industryId)
-          ? selected.filter((id) => id !== industryId)
-          : [...selected, industryId],
-      };
-    });
-  };
-
-  const beginLecturerIndustryChange = (team) => {
-    // Start empty so choosing one industry means exactly one industry is sent on approval.
-    setLecturerIndustrySelections((current) => ({ ...current, [team._id]: [] }));
-    setEditingLecturerIndustries((current) => ({ ...current, [team._id]: true }));
-  };
-
-  const cancelLecturerIndustryChange = (teamId) => {
-    setLecturerIndustrySelections((current) => {
-      const next = { ...current };
-      delete next[teamId];
-      return next;
-    });
-    setEditingLecturerIndustries((current) => {
-      const next = { ...current };
-      delete next[teamId];
       return next;
     });
   };
@@ -401,6 +376,9 @@ export default function ClassDirectionOverview({ semester, year, initialClassId 
             const proposedIndustries = Array.isArray(team.projectDirectionProposedStartupIndustries)
               ? team.projectDirectionProposedStartupIndustries
               : null;
+            const submittedIndustries = proposedIndustries || startupIndustries;
+            const selectedLecturerIndustryIds = lecturerIndustrySelections[team._id]
+              ?? industries.filter((industry) => submittedIndustries.includes(industry.name)).map((industry) => industry.id);
             const busy = reviewingTeamId === team._id;
             const isApproved = status === 'APPROVED';
             const approvedExpanded = !isApproved || expandedApprovedTeamIds.has(team._id) || team._id === focusTeamId;
@@ -493,53 +471,23 @@ export default function ClassDirectionOverview({ semester, year, initialClassId 
                         <p className="mt-1 text-sm text-slate-700">{team.projectDirectionReviewComment}</p>
                       </div>
                     )}
-                    {status === 'PENDING' && industries.length > 0 && !editingLecturerIndustries[team._id] && (
-                      <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
-                        <div>
-                          <p className="text-sm font-bold text-slate-800">Startup Industry</p>
-                          <p className="mt-1 text-xs text-slate-600">Keep the team&apos;s selection, or change it before confirming.</p>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => beginLecturerIndustryChange(team)}
-                          disabled={busy}
-                          className="rounded-lg border border-primary-200 bg-white px-3 py-2 text-sm font-semibold text-primary-700 transition hover:bg-primary-50 disabled:opacity-50"
-                        >
-                          Change Startup Industry
-                        </button>
-                      </div>
-                    )}
-                    {status === 'PENDING' && industries.length > 0 && editingLecturerIndustries[team._id] && (
-                      <div className="mt-4 rounded-xl border border-primary-200 bg-primary-50 p-4">
-                        <div className="flex flex-wrap items-baseline justify-between gap-2">
-                          <p className="text-sm font-bold text-slate-800">Change Startup Industry</p>
-                          <button
-                            type="button"
-                            onClick={() => cancelLecturerIndustryChange(team._id)}
+                    {status === 'PENDING' && (
+                      <div className="mt-4">
+                        <label id={`lecturer-startup-industries-${team._id}`} className="text-sm font-semibold text-slate-700">Startup industries <span className="text-red-500">*</span></label>
+                        <div className="mt-1.5">
+                          <StartupIndustryPicker
+                            industries={industries}
+                            selectedIds={selectedLecturerIndustryIds}
+                            onChange={(ids) => setLecturerIndustrySelections((current) => ({ ...current, [team._id]: ids }))}
+                            labelId={`lecturer-startup-industries-${team._id}`}
+                            loading={industriesLoading}
+                            error={industriesError}
+                            onRetry={() => setIndustriesReload((value) => value + 1)}
+                            max={3}
                             disabled={busy}
-                            className="text-xs font-semibold text-primary-700 disabled:opacity-50"
-                          >
-                            Cancel change
-                          </button>
+                          />
                         </div>
-                        <p className="mt-1 text-xs text-slate-600">Choose 1–3 industries. This selection will be sent to the team when you approve.</p>
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          {industries.map((industry) => {
-                            const selected = (lecturerIndustrySelections[team._id] || []).includes(industry.id);
-                            return (
-                              <button
-                                key={industry.id}
-                                type="button"
-                                onClick={() => toggleLecturerIndustry(team._id, industry.id)}
-                                disabled={busy}
-                                aria-pressed={selected}
-                                className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${selected ? 'border-primary bg-primary text-white' : 'border-primary-200 bg-white text-primary-700 hover:bg-primary-50'}`}
-                              >
-                                {industry.name}
-                              </button>
-                            );
-                          })}
-                        </div>
+                        <p className="mt-1 text-xs text-slate-500">Team selection: {submittedIndustries.length > 0 ? submittedIndustries.join(', ') : 'None'} · Choose 1–3 industries to change it before approving.</p>
                       </div>
                     )}
                     {status === 'PENDING' && <div className="mt-4">

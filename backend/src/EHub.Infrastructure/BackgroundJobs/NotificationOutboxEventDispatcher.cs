@@ -84,6 +84,24 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
                     $"You have been added to class {importedClassDetails.ClassCode}.", cancellationToken);
                 await QueueStudentImportEmailsAsync(message, data, importedClassDetails, cancellationToken);
                 break;
+            case "Class.StudentEnrollmentAdded.v1":
+                var enrolledClassCode = await GetClassCodeAsync(message.AggregateId, cancellationToken);
+                await AddForStudentIdsAsync(
+                    message,
+                    ReadGuidAsArray(data, "studentId"),
+                    "You have been added to a class",
+                    $"You have been added to class {enrolledClassCode}.",
+                    cancellationToken);
+                break;
+            case "Class.StudentReEnrolled.v1":
+                var reEnrolledClassCode = await GetClassCodeAsync(message.AggregateId, cancellationToken);
+                await AddForStudentIdsAsync(
+                    message,
+                    ReadGuidAsArray(data, "studentId"),
+                    "You have been re-enrolled in a class",
+                    $"You have been re-enrolled in class {reEnrolledClassCode}.",
+                    cancellationToken);
+                break;
             case "Class.EnrollmentMajorsAutoLocked.v1":
                 var lockedClassCode = await GetClassCodeAsync(message.AggregateId, cancellationToken);
                 await AddForUsersAsync(
@@ -670,9 +688,26 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
         CancellationToken cancellationToken)
     {
         if (studentIds.Length == 0) return;
-        var userIds = await _context.Students.AsNoTracking()
-            .Where(item => studentIds.Contains(item.Id) && item.UserId.HasValue)
-            .Select(item => item.UserId!.Value).Distinct().ToArrayAsync(cancellationToken);
+        var students = await _context.Students.AsNoTracking()
+            .Where(item => studentIds.Contains(item.Id))
+            .Select(item => new { item.UserId, item.Email })
+            .ToArrayAsync(cancellationToken);
+        var linkedUserIds = students
+            .Where(item => item.UserId.HasValue)
+            .Select(item => item.UserId!.Value);
+        var studentEmails = students
+            .Select(item => item.Email?.Trim().ToLowerInvariant())
+            .Where(email => !string.IsNullOrWhiteSpace(email))
+            .Cast<string>()
+            .Distinct()
+            .ToArray();
+        var emailMatchedUserIds = studentEmails.Length == 0
+            ? Array.Empty<Guid>()
+            : await _context.Users.AsNoTracking()
+                .Where(user => user.Email != null && studentEmails.Contains(user.Email.ToLower()))
+                .Select(user => user.Id)
+                .ToArrayAsync(cancellationToken);
+        var userIds = linkedUserIds.Concat(emailMatchedUserIds).Distinct().ToArray();
         foreach (var userId in userIds)
             await AddAsync(message, userId, NotificationType.SystemAnnouncement, title, body, cancellationToken);
     }
@@ -978,9 +1013,23 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
                 : "/evaluation-grading";
         }
 
+        if (message.Type is "Class.StudentRosterImported.v1" or "Class.StudentEnrollmentAdded.v1" or "Class.StudentReEnrolled.v1")
+        {
+            var classSlug = await _context.Classes.AsNoTracking()
+                .Where(item => item.Id == message.AggregateId)
+                .Select(item => item.Slug)
+                .FirstOrDefaultAsync(cancellationToken);
+            return string.IsNullOrWhiteSpace(classSlug)
+                ? "/student/classes"
+                : $"/student/classes/{Uri.EscapeDataString(classSlug)}";
+        }
+
         return message.Type switch
         {
             "AccountApproval.Requested.v1" => "/admin/account-approvals",
+            // Class.Created only notifies the primary lecturer, so take them directly
+            // to their My Classes area rather than a generic or student class route.
+            "Class.Created.v1" => "/lecturer/classes",
             "TeamProposal.Submitted.v1" => $"/classes/{message.AggregateId}",
             "TeamProposal.Reviewed.v1" or
                 "Class.EnrollmentMajorsAutoLocked.v1" => $"/student/classes/{message.AggregateId}",
