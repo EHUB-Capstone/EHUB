@@ -131,7 +131,9 @@ public sealed class ProjectWorkspaceHandler : IProjectWorkspaceHandler
                     member.ClassStudent.EnrollmentStatus == EnrollmentStatus.Active);
                 if (leader?.ClassStudent.Student.UserId != userId)
                     return Failure<ProjectWorkspaceDto>(ErrorCodes.WorkspaceLeaderRequired, "Only the active team leader can create this project workspace.");
-                if (team.Project != null || await _context.Projects.AnyAsync(project => project.TeamId == teamId, transactionCancellationToken))
+                var completingImportedWorkspace = RequiresImportedWorkspaceCreation(team);
+                if (!completingImportedWorkspace && (team.Project != null ||
+                    await _context.Projects.AnyAsync(project => project.TeamId == teamId, transactionCancellationToken)))
                     return Failure<ProjectWorkspaceDto>(ErrorCodes.WorkspaceAlreadyExists, "This team already has an active project workspace.");
 
                 var requestedTeamName = (request.TeamName ?? team.TeamName).Trim();
@@ -163,7 +165,7 @@ public sealed class ProjectWorkspaceHandler : IProjectWorkspaceHandler
                     team.UpdatedAt = now;
                     team.UpdatedBy = userId;
                 }
-                var project = new Project
+                var project = team.Project ?? new Project
                 {
                     TeamId = team.Id,
                     Team = team,
@@ -175,8 +177,20 @@ public sealed class ProjectWorkspaceHandler : IProjectWorkspaceHandler
                     CreatedBy = userId,
                     CreatedAt = now
                 };
-                foreach (var tag in industryTags)
-                    project.ProjectTags.Add(CreateTag(project, tag, ProjectTagType.StartupField, userId, now));
+                if (completingImportedWorkspace)
+                {
+                    project.Name = (request.ProjectName ?? string.Empty).Trim();
+                    project.Description = (request.Description ?? string.Empty).Trim();
+                    project.ZaloGroupUrl = (request.ZaloGroupUrl ?? string.Empty).Trim();
+                    project.UpdatedAt = now;
+                    project.UpdatedBy = userId;
+                    SyncTags(project, ProjectTagType.StartupField, industryTags, userId, now);
+                }
+                else
+                {
+                    foreach (var tag in industryTags)
+                        project.ProjectTags.Add(CreateTag(project, tag, ProjectTagType.StartupField, userId, now));
+                }
 
                 var direction = team.ProjectDirection;
                 var directionSubmitted = false;
@@ -187,7 +201,7 @@ public sealed class ProjectWorkspaceHandler : IProjectWorkspaceHandler
                         TeamId = team.Id,
                         Team = team,
                         Title = project.Name,
-                        Summary = project.Description,
+                        Summary = project.Description ?? string.Empty,
                         Status = ProjectDirectionStatus.Submitted,
                         SubmittedAtUtc = now,
                         CreatedBy = userId
@@ -198,7 +212,7 @@ public sealed class ProjectWorkspaceHandler : IProjectWorkspaceHandler
                 else if (direction.Status is ProjectDirectionStatus.Draft or ProjectDirectionStatus.NeedsRevision)
                 {
                     direction.Title = project.Name;
-                    direction.Summary = project.Description;
+                    direction.Summary = project.Description ?? string.Empty;
                     direction.Status = ProjectDirectionStatus.Submitted;
                     direction.SubmittedAtUtc = now;
                     direction.ReviewedAtUtc = null;
@@ -207,7 +221,7 @@ public sealed class ProjectWorkspaceHandler : IProjectWorkspaceHandler
                     directionSubmitted = true;
                 }
 
-                project.ActivityLogs.Add(new ProjectActivityLog
+                var creationActivity = new ProjectActivityLog
                 {
                     ProjectId = project.Id,
                     Project = project,
@@ -218,9 +232,11 @@ public sealed class ProjectWorkspaceHandler : IProjectWorkspaceHandler
                         ? new[] { "teamName", "projectName", "description", "zaloGroupUrl", "startupIndustries" }
                         : new[] { "projectName", "description", "zaloGroupUrl", "startupIndustries" }),
                     OccurredAtUtc = now
-                });
+                };
+                project.ActivityLogs.Add(creationActivity);
+                if (completingImportedWorkspace) _context.ProjectActivityLogs.Add(creationActivity);
 
-                _context.Projects.Add(project);
+                if (!completingImportedWorkspace) _context.Projects.Add(project);
                 ClassOutbox.Enqueue(_context, "ProjectWorkspace.Created.v1", team.ClassId, new
                 {
                     ProjectId = project.Id,
@@ -468,7 +484,7 @@ public sealed class ProjectWorkspaceHandler : IProjectWorkspaceHandler
             .Include(team => team.TeamMembers).ThenInclude(member => member.ClassStudent).ThenInclude(enrollment => enrollment.Student)
             .Include(team => team.Project).ThenInclude(project => project!.ProjectTags)
             .Include(team => team.Project).ThenInclude(project => project!.ActivityLogs).ThenInclude(activity => activity.ActorUser)
-            .Include(team => team.ProjectDirection)
+            .Include(team => team.ProjectDirection).ThenInclude(direction => direction!.Reviews)
             .Include(team => team.MentorAssignments).ThenInclude(assignment => assignment.MentorProfile).ThenInclude(profile => profile.User);
     }
 
@@ -605,6 +621,15 @@ public sealed class ProjectWorkspaceHandler : IProjectWorkspaceHandler
         }
     }
 
+    // Imported metadata is a draft until the leader explicitly creates and submits the workspace.
+    // The activity marker also recognizes imports made before this flow was introduced.
+    private static bool RequiresImportedWorkspaceCreation(Team team) =>
+        team.Project != null &&
+        team.Project.Status == ProjectStatus.Draft &&
+        team.ProjectDirection?.Status == ProjectDirectionStatus.Draft &&
+        team.Project.ActivityLogs.Any(activity => activity.Action == "IMPORTED_FROM_CLASS_FILE") &&
+        !team.Project.ActivityLogs.Any(activity => activity.Action == "WORKSPACE_CREATED");
+
     private static WorkspaceOptionDto MapOption(Team team)
     {
         var readOnly = team.Class.Status is ClassStatus.Completed or ClassStatus.Archived;
@@ -619,7 +644,7 @@ public sealed class ProjectWorkspaceHandler : IProjectWorkspaceHandler
             AccessMode = readOnly ? "READ_ONLY" : "READ_WRITE",
             IsArchived = team.Class.Status == ClassStatus.Archived,
             IsCurrent = team.Class.Semester.Status == SemesterStatus.Active && !readOnly,
-            HasWorkspace = team.Project != null
+            HasWorkspace = team.Project != null && !RequiresImportedWorkspaceCreation(team)
         };
     }
 
@@ -643,6 +668,10 @@ public sealed class ProjectWorkspaceHandler : IProjectWorkspaceHandler
             .FirstOrDefault();
         return new ProjectWorkspaceDetailDto
         {
+            RequiresWorkspaceCreation = team.Project == null || RequiresImportedWorkspaceCreation(team),
+            CanUseWorkspace = team.Project != null && !RequiresImportedWorkspaceCreation(team) &&
+                ProjectWorkspaceApprovalRules.IsApproved(team.ProjectDirection),
+            ProjectDirectionStatus = team.ProjectDirection?.Status.ToString(),
             Team = new WorkspaceTeamDto
             {
                 Id = team.Id,

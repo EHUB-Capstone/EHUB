@@ -104,6 +104,9 @@ public sealed class WorkspaceProjectProposalDto
 
 public sealed class ProjectWorkspaceDetailDto
 {
+    public bool RequiresWorkspaceCreation { get; init; }
+    public bool CanUseWorkspace { get; init; }
+    public string? ProjectDirectionStatus { get; init; }
     public WorkspaceTeamDto Team { get; init; } = new();
     public WorkspaceClassDto Class { get; init; } = new();
     public IReadOnlyCollection<WorkspaceMemberDto> Members { get; init; } = Array.Empty<WorkspaceMemberDto>();

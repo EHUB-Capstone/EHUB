@@ -49,6 +49,10 @@ public sealed class GetWorkspaceCheckpointOverviewQueryHandler(
             return AccessDenied();
         }
 
+        if (string.Equals(role, SystemRoles.Student, StringComparison.OrdinalIgnoreCase) &&
+            !await ProjectWorkspaceApprovalRules.IsApprovedAsync(context, teamId, cancellationToken))
+            return AccessDenied();
+
         var checkpoints = await context.Checkpoints
             .AsNoTracking()
             .Include(checkpoint => checkpoint.Rubrics)

@@ -215,6 +215,8 @@ public sealed class CheckpointLinkHandler(
         var member = team.TeamMembers.FirstOrDefault(item => item.CountsTowardActiveTeam &&
             item.ClassStudent.EnrollmentStatus == EnrollmentStatus.Active && item.ClassStudent.Student.UserId == userId);
         if (!IsStudent(role) || member is null) return Result.Failure<Access>(ErrorCodes.WorkspaceAccessDenied, "You do not have access to this team workspace.");
+        if (!await ProjectWorkspaceApprovalRules.IsApprovedAsync(context, teamId, cancellationToken))
+            return Result.Failure<Access>(ErrorCodes.WorkspaceAccessDenied, "The lecturer must approve the project direction before the team can use this workspace.");
         var checkpoint = await context.Checkpoints.AsNoTracking().FirstOrDefaultAsync(item =>
             item.CourseId == team.Class.CourseId && item.ClassId == null && item.CheckpointNumber == checkpointNumber &&
             item.Status != CheckpointStatus.Archived, cancellationToken);

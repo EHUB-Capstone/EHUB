@@ -44,6 +44,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using System.Text.Json;
 using System.Net;
 using System.Net.Http.Headers;
+using System.Net.Http.Json;
 
 namespace EHub.IntegrationTests.Classes;
 
@@ -3171,6 +3172,187 @@ public sealed partial class TeamWorkflowIntegrationTests
         studentProposals.Value.Single(item => item.Id == seed.ProposalId).LatestReviewComment.Should().Be(comment);
         (await context.TeamProposals.AsNoTracking().SingleAsync(item => item.Id == seed.ProposalId))
             .LatestReviewComment.Should().Be(comment);
+    }
+
+    [Theory]
+    [InlineData(ProjectDirectionStatus.Draft, true)]
+    [InlineData(ProjectDirectionStatus.Submitted, false)]
+    [InlineData(ProjectDirectionStatus.Approved, false)]
+    public async Task ImportedWorkspace_LeaderCompletesDraftOnceWithoutReplacingProjectOrMembers(
+        ProjectDirectionStatus status, bool requiresCreation)
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateSeedAsync(context, createProposal: false, createTeam: true);
+        var teamId = seed.TeamId!.Value;
+        var project = new Project
+        {
+            TeamId = teamId,
+            Name = "Imported Project",
+            Description = "An imported project description to be confirmed by the leader.",
+            ZaloGroupUrl = "https://zalo.me/g/imported",
+            Status = ProjectStatus.Draft,
+            CreatedById = seed.AdminId,
+            CreatedBy = seed.AdminId
+        };
+        project.ActivityLogs.Add(new ProjectActivityLog
+        {
+            ProjectId = project.Id,
+            Project = project,
+            Action = "IMPORTED_FROM_CLASS_FILE",
+            Summary = "Imported project draft.",
+            ActorUserId = seed.AdminId
+        });
+        context.Projects.Add(project);
+        context.ProjectDirections.Add(new ProjectDirection
+        {
+            TeamId = teamId,
+            Title = project.Name,
+            Summary = project.Description,
+            Status = status,
+            CreatedBy = seed.AdminId
+        });
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+        var handler = new ProjectWorkspaceHandler(context,
+            scope.ServiceProvider.GetRequiredService<EHub.Application.Common.Interfaces.Persistence.IUnitOfWork>());
+        var before = await handler.GetDetailAsync(teamId, seed.ProposerUserId, SystemRoles.Student);
+        before.IsSuccess.Should().BeTrue();
+        before.Value.RequiresWorkspaceCreation.Should().Be(requiresCreation);
+        before.Value.CanUseWorkspace.Should().Be(status == ProjectDirectionStatus.Approved);
+        var request = new CreateProjectWorkspaceRequest
+        {
+            TeamName = "Updated Imported Team",
+            ProjectName = "Updated Imported Project",
+            Description = "The final project description chosen by the team leader.",
+            ZaloGroupUrl = "https://zalo.me/g/updated-import",
+            StartupIndustryIds = new[] { seed.StartupIndustryIds[0] }
+        };
+        var nonLeaderId = (await context.Students.AsNoTracking()
+            .SingleAsync(student => student.Id == seed.StudentIds[1])).UserId!.Value;
+        if (requiresCreation)
+        {
+            using var client = _factory.CreateClient();
+            using var anonymous = await client.PostAsJsonAsync($"/api/workspace/teams/{teamId}", request);
+            anonymous.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+            var memberUser = await context.Users.SingleAsync(user => user.Id == nonLeaderId);
+            var tokenService = scope.ServiceProvider.GetRequiredService<IJwtTokenService>();
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer",
+                tokenService.GenerateAccessToken(memberUser, [SystemRoles.Student]).Token);
+            using var forbiddenResponse = await client.PostAsJsonAsync($"/api/workspace/teams/{teamId}", request);
+            forbiddenResponse.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        }
+        var forbidden = await handler.CreateAsync(teamId, request, nonLeaderId, SystemRoles.Student);
+        forbidden.Error.Code.Should().Be(ErrorCodes.WorkspaceLeaderRequired);
+        var result = await handler.CreateAsync(teamId, request, seed.ProposerUserId, SystemRoles.Student);
+        if (!requiresCreation)
+        {
+            result.IsFailure.Should().BeTrue();
+            result.Error.Code.Should().Be(ErrorCodes.WorkspaceAlreadyExists);
+            return;
+        }
+        result.IsSuccess.Should().BeTrue();
+        result.Value.Id.Should().Be(project.Id);
+        result.Value.ProjectName.Should().Be(request.ProjectName);
+        result.Value.Description.Should().Be(request.Description);
+        result.Value.ZaloGroupUrl.Should().Be(request.ZaloGroupUrl);
+        result.Value.StartupIndustries.Should().HaveCount(1);
+        context.ChangeTracker.Clear();
+        var after = await handler.GetDetailAsync(teamId, seed.LecturerId, SystemRoles.Lecturer);
+        after.Value.RequiresWorkspaceCreation.Should().BeFalse();
+        after.Value.CanUseWorkspace.Should().BeFalse();
+        after.Value.Team.TeamName.Should().Be(request.TeamName);
+        after.Value.Members.Select(member => member.StudentId).Should().BeEquivalentTo(seed.StudentIds);
+        (await context.Projects.CountAsync(item => item.TeamId == teamId)).Should().Be(1);
+        var direction = await context.ProjectDirections.AsNoTracking().SingleAsync(item => item.TeamId == teamId);
+        direction.Status.Should().Be(ProjectDirectionStatus.Submitted);
+        direction.Title.Should().Be(request.ProjectName);
+        direction.Summary.Should().Be(request.Description);
+        direction.SubmittedAtUtc.Should().NotBeNull();
+        (await context.OutboxMessages.CountAsync(message => message.AggregateId == seed.ClassId &&
+            message.Type == "ProjectDirection.Submitted.v1")).Should().Be(1);
+        (await context.OutboxMessages.CountAsync(message => message.AggregateId == seed.ClassId &&
+            message.Type == "ProjectWorkspace.Created.v1")).Should().Be(1);
+        var duplicate = await handler.CreateAsync(teamId, request, seed.ProposerUserId, SystemRoles.Student);
+        duplicate.Error.Code.Should().Be(ErrorCodes.WorkspaceAlreadyExists);
+    }
+
+    [Fact]
+    public async Task WorkspaceApproval_StudentsWaitThroughRequestedChangesUntilLecturerApproves()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var seed = await CreateSeedAsync(context, createProposal: false, createTeam: true);
+        var teamId = seed.TeamId!.Value;
+        var workspaceHandler = scope.ServiceProvider.GetRequiredService<IProjectWorkspaceHandler>();
+        var created = await workspaceHandler.CreateAsync(teamId, new CreateProjectWorkspaceRequest
+        {
+            TeamName = "Approval Gate Team",
+            ProjectName = "Approval Gate Project",
+            Description = "A complete project description that must be approved before workspace access.",
+            ZaloGroupUrl = "https://zalo.me/g/approval-gate",
+            StartupIndustryIds = new[] { seed.StartupIndustryIds[0] }
+        }, seed.ProposerUserId, SystemRoles.Student);
+        created.IsSuccess.Should().BeTrue();
+        var tokens = scope.ServiceProvider.GetRequiredService<IJwtTokenService>();
+        using var client = _factory.CreateClient();
+        using var anonymous = await client.GetAsync($"/api/workspace/checkpoints/teams/{teamId}");
+        anonymous.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+        var studentUserIds = await context.Students.Where(student => seed.StudentIds.Contains(student.Id))
+            .Select(student => student.UserId!.Value).ToArrayAsync();
+        var paths = new[] { $"/api/workspace/checkpoints/teams/{teamId}",
+            $"/api/weekly-tasks/team/{teamId}/board", $"/api/teams/{teamId}/shortcuts" };
+        foreach (var userId in studentUserIds)
+        {
+            var user = await context.Users.SingleAsync(item => item.Id == userId);
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer",
+                tokens.GenerateAccessToken(user, [SystemRoles.Student]).Token);
+            var detail = await workspaceHandler.GetDetailAsync(teamId, userId, SystemRoles.Student);
+            detail.Value.CanUseWorkspace.Should().BeFalse();
+            detail.Value.ProjectDirectionStatus.Should().Be("Submitted");
+            foreach (var path in paths)
+            {
+                using var denied = await client.GetAsync(path);
+                denied.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+            }
+        }
+        var directions = scope.ServiceProvider.GetRequiredService<IProjectDirectionHandler>();
+        var submitted = await directions.GetAsync(teamId, seed.LecturerId, SystemRoles.Lecturer);
+        var changes = await directions.ReviewAsync(teamId, new ReviewProjectDirectionRequest
+        {
+            Decision = "NeedsRevision", Comment = "Please clarify the target market.", RowVersion = submitted.Value.RowVersion
+        }, seed.LecturerId, SystemRoles.Lecturer);
+        changes.IsSuccess.Should().BeTrue();
+        (await workspaceHandler.GetDetailAsync(teamId, seed.ProposerUserId, SystemRoles.Student))
+            .Value.CanUseWorkspace.Should().BeFalse();
+        var revised = await directions.SaveAsync(teamId, new SaveProjectDirectionRequest
+        {
+            Title = "Revised Approval Gate Project", Summary = "A revised project description that explains the target market clearly.",
+            RowVersion = changes.Value.RowVersion
+        }, seed.ProposerUserId, SystemRoles.Student);
+        revised.IsSuccess.Should().BeTrue();
+        var resubmitted = await directions.SubmitAsync(teamId, new ProjectDirectionStateRequest
+        {
+            RowVersion = revised.Value.RowVersion
+        }, seed.ProposerUserId, SystemRoles.Student);
+        resubmitted.IsSuccess.Should().BeTrue();
+        var approved = await directions.ReviewAsync(teamId, new ReviewProjectDirectionRequest
+        {
+            Decision = "Approved", RowVersion = resubmitted.Value.RowVersion
+        }, seed.LecturerId, SystemRoles.Lecturer);
+        approved.IsSuccess.Should().BeTrue();
+        foreach (var userId in studentUserIds)
+        {
+            (await workspaceHandler.GetDetailAsync(teamId, userId, SystemRoles.Student)).Value.CanUseWorkspace.Should().BeTrue();
+            var user = await context.Users.SingleAsync(item => item.Id == userId);
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer",
+                tokens.GenerateAccessToken(user, [SystemRoles.Student]).Token);
+            foreach (var path in paths)
+            {
+                using var allowed = await client.GetAsync(path);
+                allowed.StatusCode.Should().Be(HttpStatusCode.OK);
+            }
+        }
     }
 
     [Fact]
