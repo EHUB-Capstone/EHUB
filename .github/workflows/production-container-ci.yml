@@ -52,7 +52,7 @@ jobs:
         run: bash -n scripts/production/*.sh
 
       - name: Check staging shell scripts
-        run: bash -n scripts/staging/backup-postgres.sh
+        run: bash -n scripts/staging/*.sh
 
       - name: Prepare temporary TLS files for Nginx syntax check
         run: |
