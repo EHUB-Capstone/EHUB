@@ -75,7 +75,7 @@ public sealed class AdminDashboardIntegrationTests(CustomWebApplicationFactory f
                 Code = $"RK{suffix}",
                 Name = $"Ranking {suffix}",
                 Term = SemesterTerm.Spring,
-                Year = 2071,
+                Year = 2072,
                 Status = SemesterStatus.Planned
             };
             course = new Course

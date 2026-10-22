@@ -1,0 +1,194 @@
+name: Deploy Production
+
+# Deploys one commit of main to production on the VPS through the restricted production
+# ehub-deployer SSH key (forced command, see docs/deployment/PRODUCTION_CD.md).
+#
+# Manual only, never triggered by a push. The full commit SHA is a required input, only the
+# accounts listed in ALLOWED_ACTORS can run it, and only from the main branch. The VPS script
+# enforces the real gates: commit on origin/main, content already deployed to staging (unless
+# skip_staging_gate), and a fresh database backup uploaded to R2 before anything changes.
+#
+# This workflow never checks out the repository.
+
+on:
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: Full 40-character commit SHA on main to deploy
+        required: true
+        type: string
+      skip_staging_gate:
+        description: Hotfix or rollback only - allow content that never ran on staging
+        required: false
+        type: boolean
+        default: false
+
+permissions: {}
+
+jobs:
+  deploy:
+    name: Deploy to production
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    environment:
+      name: production
+      url: https://e-hub.com.vn
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    permissions:
+      contents: read
+    env:
+      # Space-separated GitHub usernames allowed to deploy production.
+      ALLOWED_ACTORS: phanhoaian1203
+
+    steps:
+      - name: Check who is deploying and from where
+        env:
+          ACTOR: ${{ github.triggering_actor }}
+          REF: ${{ github.ref }}
+        run: |
+          if [[ "${REF}" != "refs/heads/main" ]]; then
+            echo "::error::Run this workflow from the main branch (got ${REF})."
+            exit 1
+          fi
+          allowed=false
+          for name in ${ALLOWED_ACTORS}; do
+            if [[ "${ACTOR,,}" == "${name,,}" ]]; then
+              allowed=true
+            fi
+          done
+          if [[ "${allowed}" != "true" ]]; then
+            echo "::error::${ACTOR} is not allowed to deploy production."
+            exit 1
+          fi
+
+      - name: Resolve commit
+        id: commit
+        env:
+          INPUT_SHA: ${{ inputs.sha }}
+          SKIP_GATE: ${{ inputs.skip_staging_gate }}
+        run: |
+          sha="${INPUT_SHA//[[:space:]]/}"
+          sha="${sha,,}"
+          if [[ ! "${sha}" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::The commit must be a full 40-character hexadecimal SHA."
+            exit 1
+          fi
+          remote_command="${sha}"
+          if [[ "${SKIP_GATE}" == "true" ]]; then
+            remote_command="${sha} skip-staging-gate"
+            echo "::warning::The staging gate is skipped for this run."
+          fi
+          {
+            echo "sha=${sha}"
+            echo "short=${sha:0:12}"
+            echo "remote_command=${remote_command}"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Deploy over SSH
+        id: deploy
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.PRODUCTION_SSH_PRIVATE_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.PRODUCTION_SSH_KNOWN_HOSTS }}
+          SSH_HOST: ${{ secrets.PRODUCTION_SSH_HOST }}
+          SHA: ${{ steps.commit.outputs.sha }}
+          REMOTE_COMMAND: ${{ steps.commit.outputs.remote_command }}
+        run: |
+          for variable in SSH_PRIVATE_KEY SSH_KNOWN_HOSTS SSH_HOST; do
+            if [[ -z "${!variable}" ]]; then
+              echo "::error::Secret for ${variable} is missing in the 'production' environment."
+              exit 1
+            fi
+          done
+          install -d -m 0700 "${HOME}/.ssh"
+          printf '%s\n' "${SSH_PRIVATE_KEY}" | tr -d '\r' > "${HOME}/.ssh/ehub_cd_production"
+          printf '%s\n' "${SSH_KNOWN_HOSTS}" | tr -d '\r' > "${HOME}/.ssh/known_hosts"
+          chmod 0600 "${HOME}/.ssh/ehub_cd_production" "${HOME}/.ssh/known_hosts"
+
+          log_file="${RUNNER_TEMP}/deploy-production.log"
+          set +e
+          ssh -i "${HOME}/.ssh/ehub_cd_production" \
+            -o IdentitiesOnly=yes \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="${HOME}/.ssh/known_hosts" \
+            -o ConnectTimeout=20 \
+            -o ServerAliveInterval=30 \
+            -o ServerAliveCountMax=10 \
+            "ehub-deployer@${SSH_HOST}" "${REMOTE_COMMAND}" 2>&1 | tee "${log_file}"
+          ssh_status="${PIPESTATUS[0]}"
+          set -e
+
+          echo "log_file=${log_file}" >> "${GITHUB_OUTPUT}"
+          if (( ssh_status != 0 )); then
+            echo "::error::Deployment command exited with status ${ssh_status}."
+            exit "${ssh_status}"
+          fi
+          if ! grep -q "^EHUB_DEPLOY_RESULT=success sha=${SHA} " "${log_file}"; then
+            echo "::error::The VPS did not report a successful deployment of ${SHA}."
+            exit 1
+          fi
+
+      - name: Report result
+        if: ${{ always() && steps.commit.outcome == 'success' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_DEPLOY_WEBHOOK }}
+          SHA: ${{ steps.commit.outputs.sha }}
+          SHORT: ${{ steps.commit.outputs.short }}
+          DEPLOY_OUTCOME: ${{ steps.deploy.outcome }}
+          LOG_FILE: ${{ steps.deploy.outputs.log_file }}
+          ACTOR: ${{ github.triggering_actor }}
+        run: |
+          subject="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${SHA}" --jq '.commit.message | split("\n")[0]' 2>/dev/null || true)"
+          subject="${subject:0:150}"
+          run_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          previous=""
+          gate=""
+          stage=""
+
+          if [[ -n "${LOG_FILE}" && -f "${LOG_FILE}" ]]; then
+            result_line="$(grep '^EHUB_DEPLOY_RESULT=success' "${LOG_FILE}" | tail -n 1 || true)"
+            previous="$(sed -n 's/.* previous=\([0-9a-f]\{40\}\).*/\1/p' <<< "${result_line}")"
+            gate="$(sed -n 's/.* gate=\([^ ]*\).*/\1/p' <<< "${result_line}")"
+            stage="$(grep -o 'EHUB_DEPLOY_RESULT=failed stage=[a-z-]*' "${LOG_FILE}" | tail -n 1 | sed 's/.*stage=//' || true)"
+          fi
+
+          detail=""
+          if [[ "${DEPLOY_OUTCOME}" == "success" ]]; then
+            icon="✅"; title="Production deployed"
+            detail="Previous release: \`${previous:0:12}\`. Staging gate: ${gate:-unknown}."
+          elif [[ "${DEPLOY_OUTCOME}" == "failure" ]]; then
+            icon="❌"; title="Production deploy FAILED"
+            if [[ -n "${stage}" ]]; then
+              detail="Failed at stage: ${stage}. No automatic rollback was done; check production before anything else."
+            else
+              detail="No result from the VPS (refused, or connection lost). Check /var/log/ehub-production-deploy.log on the VPS."
+            fi
+          else
+            icon="⚠️"; title="Production deploy did not finish"
+            detail="The run was cancelled or interrupted. Check /var/log/ehub-production-deploy.log on the VPS."
+          fi
+
+          {
+            echo "### ${title}"
+            echo "- Commit: \`${SHORT}\` ${subject}"
+            echo "- Run by: ${ACTOR}"
+            echo "- ${detail}"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+          if [[ -z "${DISCORD_WEBHOOK}" ]]; then
+            echo "No DISCORD_DEPLOY_WEBHOOK secret; skipping Discord notification."
+            exit 0
+          fi
+          message="${icon} **${title}** \`${SHORT}\`"$'\n'"${subject}"$'\n'"By ${ACTOR}"$'\n'"${detail}"$'\n'"${run_url}"
+          payload="$(jq -n --arg content "${message}" '{content: $content, allowed_mentions: {parse: []}}')"
+          curl --silent --show-error --fail --max-time 20 \
+            --header 'Content-Type: application/json' \
+            --data "${payload}" "${DISCORD_WEBHOOK}" \
+            || echo "::warning::Discord notification failed."
+
+      - name: Remove SSH material
+        if: ${{ always() }}
+        run: rm -f "${HOME}/.ssh/ehub_cd_production" "${HOME}/.ssh/known_hosts"

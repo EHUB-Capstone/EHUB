@@ -1,0 +1,223 @@
+name: Deploy Staging
+
+# Deploys one develop commit to the staging stack on the VPS through the restricted
+# ehub-deployer SSH key (forced command, see docs/deployment/STAGING_CD.md).
+#
+# - push to develop: deploys automatically after CI is green, unless the repository
+#   variable STAGING_AUTO_DEPLOY is not "true" (freeze switch while staging is being
+#   accepted).
+# - manual run: redeploys a chosen develop commit, e.g. to repeat or go back.
+#
+# This workflow never checks out the repository: it needs no repository code to deploy.
+
+on:
+  push:
+    branches:
+      - develop
+    paths:
+      - backend/**
+      - frontend/**
+      - docker/**
+      - docker-compose.staging.yml
+      - scripts/staging/backup-postgres.sh
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: Full 40-character develop commit SHA (empty = tip of develop)
+        required: false
+        type: string
+      skip_ci_check:
+        description: Skip waiting for CI (only to redeploy an older known-good commit)
+        required: false
+        type: boolean
+        default: false
+
+permissions: {}
+
+jobs:
+  deploy:
+    name: Deploy to staging
+    if: github.ref == 'refs/heads/develop' && (github.event_name != 'push' || vars.STAGING_AUTO_DEPLOY == 'true')
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment:
+      name: staging
+      url: https://staging.e-hub.com.vn
+    # One deployment at a time; a newer waiting run replaces an older waiting one.
+    concurrency:
+      group: deploy-staging
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      checks: read
+
+    steps:
+      - name: Resolve commit
+        id: commit
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_SHA: ${{ inputs.sha }}
+          CONTEXT_SHA: ${{ github.sha }}
+        run: |
+          sha="${CONTEXT_SHA}"
+          input_sha="${INPUT_SHA//[[:space:]]/}"
+          if [[ "${EVENT_NAME}" == "workflow_dispatch" && -n "${input_sha}" ]]; then
+            sha="${input_sha}"
+          fi
+          sha="${sha,,}"
+          if [[ ! "${sha}" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::The commit must be a full 40-character hexadecimal SHA."
+            exit 1
+          fi
+          echo "sha=${sha}" >> "${GITHUB_OUTPUT}"
+          echo "short=${sha:0:12}" >> "${GITHUB_OUTPUT}"
+
+      - name: Wait for required CI checks
+        id: wait
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.skip_ci_check != true }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ steps.commit.outputs.sha }}
+        run: |
+          required=("Build and Test Backend" "Type Check and Build Frontend")
+          # Checks appear a few seconds after a push; an older commit may have none at all.
+          missing_limit=180
+          overall_limit=2400
+          while true; do
+            checks="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${SHA}/check-runs?per_page=100" --jq '.check_runs')"
+            waiting=false
+            for name in "${required[@]}"; do
+              state="$(jq -r --arg name "${name}" '
+                [.[] | select(.name == $name)] | sort_by(.id) | last
+                | if . == null then "missing"
+                  elif .status != "completed" then "pending"
+                  else .conclusion end' <<< "${checks}")"
+              case "${state}" in
+                success) ;;
+                pending) waiting=true ;;
+                missing)
+                  if (( SECONDS > missing_limit )); then
+                    echo "::error::No '${name}' check exists for ${SHA}. Rerun with skip_ci_check only if this commit is known to be good."
+                    exit 1
+                  fi
+                  waiting=true
+                  ;;
+                *)
+                  echo "::error::'${name}' finished as '${state}' for ${SHA}. Nothing was deployed."
+                  exit 1
+                  ;;
+              esac
+            done
+            if [[ "${waiting}" == "false" ]]; then
+              echo "Required checks passed for ${SHA}."
+              break
+            fi
+            if (( SECONDS > overall_limit )); then
+              echo "::error::Timed out waiting for required checks."
+              exit 1
+            fi
+            sleep 20
+          done
+
+      - name: Deploy over SSH
+        id: deploy
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.STAGING_SSH_PRIVATE_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.STAGING_SSH_KNOWN_HOSTS }}
+          SSH_HOST: ${{ secrets.STAGING_SSH_HOST }}
+          SHA: ${{ steps.commit.outputs.sha }}
+        run: |
+          for variable in SSH_PRIVATE_KEY SSH_KNOWN_HOSTS SSH_HOST; do
+            if [[ -z "${!variable}" ]]; then
+              echo "::error::Secret for ${variable} is missing in the 'staging' environment."
+              exit 1
+            fi
+          done
+          install -d -m 0700 "${HOME}/.ssh"
+          printf '%s\n' "${SSH_PRIVATE_KEY}" | tr -d '\r' > "${HOME}/.ssh/ehub_cd_staging"
+          printf '%s\n' "${SSH_KNOWN_HOSTS}" | tr -d '\r' > "${HOME}/.ssh/known_hosts"
+          chmod 0600 "${HOME}/.ssh/ehub_cd_staging" "${HOME}/.ssh/known_hosts"
+
+          log_file="${RUNNER_TEMP}/deploy-staging.log"
+          set +e
+          ssh -i "${HOME}/.ssh/ehub_cd_staging" \
+            -o IdentitiesOnly=yes \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="${HOME}/.ssh/known_hosts" \
+            -o ConnectTimeout=20 \
+            -o ServerAliveInterval=30 \
+            -o ServerAliveCountMax=10 \
+            "ehub-deployer@${SSH_HOST}" "${SHA}" 2>&1 | tee "${log_file}"
+          ssh_status="${PIPESTATUS[0]}"
+          set -e
+
+          echo "log_file=${log_file}" >> "${GITHUB_OUTPUT}"
+          if (( ssh_status != 0 )); then
+            echo "::error::Deployment command exited with status ${ssh_status}."
+            exit "${ssh_status}"
+          fi
+          if ! grep -q "^EHUB_DEPLOY_RESULT=success sha=${SHA} " "${log_file}"; then
+            echo "::error::The VPS did not report a successful deployment of ${SHA}."
+            exit 1
+          fi
+
+      - name: Report result
+        if: ${{ always() && steps.commit.outcome == 'success' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_DEPLOY_WEBHOOK }}
+          SHA: ${{ steps.commit.outputs.sha }}
+          SHORT: ${{ steps.commit.outputs.short }}
+          WAIT_OUTCOME: ${{ steps.wait.outcome }}
+          DEPLOY_OUTCOME: ${{ steps.deploy.outcome }}
+          LOG_FILE: ${{ steps.deploy.outputs.log_file }}
+          EVENT_NAME: ${{ github.event_name }}
+          ACTOR: ${{ github.actor }}
+        run: |
+          subject="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${SHA}" --jq '.commit.message | split("\n")[0]' 2>/dev/null || true)"
+          subject="${subject:0:150}"
+          run_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+
+          if [[ "${DEPLOY_OUTCOME}" == "success" ]]; then
+            icon="✅"; title="Staging deployed"; detail=""
+          elif [[ "${WAIT_OUTCOME}" == "failure" ]]; then
+            icon="⛔"; title="Staging NOT deployed"; detail="CI checks did not pass or timed out."
+          elif [[ "${DEPLOY_OUTCOME}" == "failure" ]]; then
+            icon="❌"; title="Staging deploy FAILED"
+            stage=""
+            if [[ -n "${LOG_FILE}" && -f "${LOG_FILE}" ]]; then
+              stage="$(grep -o 'EHUB_DEPLOY_RESULT=failed stage=[a-z-]*' "${LOG_FILE}" | tail -n 1 | sed 's/.*stage=//' || true)"
+            fi
+            if [[ -n "${stage}" ]]; then
+              detail="Failed at stage: ${stage}. No automatic rollback was done."
+            else
+              detail="No result from the VPS (connection lost?). Check /var/log/ehub-staging-deploy.log on the VPS before retrying."
+            fi
+          else
+            icon="⚠️"; title="Staging deploy did not finish"; detail="The run was cancelled or interrupted."
+          fi
+
+          {
+            echo "### ${title}"
+            echo "- Commit: \`${SHORT}\` ${subject}"
+            echo "- Trigger: ${EVENT_NAME} by ${ACTOR}"
+            [[ -n "${detail}" ]] && echo "- ${detail}"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+          if [[ -z "${DISCORD_WEBHOOK}" ]]; then
+            echo "No DISCORD_DEPLOY_WEBHOOK secret; skipping Discord notification."
+            exit 0
+          fi
+          message="${icon} **${title}** \`${SHORT}\`"$'\n'"${subject}"$'\n'"By ${ACTOR} (${EVENT_NAME})"
+          [[ -n "${detail}" ]] && message+=$'\n'"${detail}"
+          message+=$'\n'"${run_url}"
+          payload="$(jq -n --arg content "${message}" '{content: $content, allowed_mentions: {parse: []}}')"
+          curl --silent --show-error --fail --max-time 20 \
+            --header 'Content-Type: application/json' \
+            --data "${payload}" "${DISCORD_WEBHOOK}" \
+            || echo "::warning::Discord notification failed."
+
+      - name: Remove SSH material
+        if: ${{ always() }}
+        run: rm -f "${HOME}/.ssh/ehub_cd_staging" "${HOME}/.ssh/known_hosts"
