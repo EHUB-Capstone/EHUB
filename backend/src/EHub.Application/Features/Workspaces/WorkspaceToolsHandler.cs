@@ -276,6 +276,8 @@ public sealed class WorkspaceToolsHandler(
 
     private async Task<bool> CanAccessTeamAsync(Guid teamId, Guid userId, string role, CancellationToken ct)
     {
+        if (IsRole(role, SystemRoles.Student) && !await ProjectWorkspaceApprovalRules.IsApprovedAsync(context, teamId, ct))
+            return false;
         if (IsRole(role, SystemRoles.Admin)) return await context.Teams.AnyAsync(team => team.Id == teamId, ct);
         if (IsRole(role, SystemRoles.Lecturer)) return await context.Teams.AnyAsync(team => team.Id == teamId && team.Class.PrimaryLecturerId == userId, ct);
         if (IsRole(role, SystemRoles.Mentor)) return await context.Teams.AnyAsync(team => team.Id == teamId && team.MentorAssignments.Any(item => item.MentorProfile.UserId == userId && item.EndedAt == null), ct);
@@ -283,13 +285,15 @@ public sealed class WorkspaceToolsHandler(
         return false;
     }
 
-    private Task<bool> CanMutateTeamAsync(Guid teamId, Guid userId, string role, CancellationToken ct)
+    private async Task<bool> CanMutateTeamAsync(Guid teamId, Guid userId, string role, CancellationToken ct)
     {
+        if (IsRole(role, SystemRoles.Student) && !await ProjectWorkspaceApprovalRules.IsApprovedAsync(context, teamId, ct))
+            return false;
         var mutable = context.Teams.Where(team => team.Id == teamId && team.Status == TeamStatus.Active && team.Class.Status != ClassStatus.Archived && team.Class.Status != ClassStatus.Completed);
-        if (IsRole(role, SystemRoles.Admin)) return mutable.AnyAsync(ct);
-        if (IsRole(role, SystemRoles.Lecturer)) return mutable.AnyAsync(team => team.Class.PrimaryLecturerId == userId, ct);
-        if (IsRole(role, SystemRoles.Student)) return mutable.AnyAsync(team => team.TeamMembers.Any(member => member.CountsTowardActiveTeam && member.ClassStudent.Student.UserId == userId), ct);
-        return Task.FromResult(false);
+        if (IsRole(role, SystemRoles.Admin)) return await mutable.AnyAsync(ct);
+        if (IsRole(role, SystemRoles.Lecturer)) return await mutable.AnyAsync(team => team.Class.PrimaryLecturerId == userId, ct);
+        if (IsRole(role, SystemRoles.Student)) return await mutable.AnyAsync(team => team.TeamMembers.Any(member => member.CountsTowardActiveTeam && member.ClassStudent.Student.UserId == userId), ct);
+        return false;
     }
 
     private async Task<bool> CanAccessClassAsync(Guid classId, Guid userId, string role, CancellationToken ct)

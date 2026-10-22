@@ -777,23 +777,11 @@ public sealed class CommitImportStudentsCommandHandler : ICommitImportStudentsCo
                 .Select(userId => userId!.Value)
                 .Distinct()
                 .ToArray();
-            var leaderUserId = team.TeamMembers
-                .FirstOrDefault(member => member.RoleInTeam == TeamMemberRole.Leader)?
-                .ClassStudent.Student.UserId;
             ClassOutbox.Enqueue(_context, "Team.Created.v1", targetClass.Id, new
             {
                 TeamId = team.Id,
                 team.TeamName,
                 StudentUserIds = memberUserIds
-            }, now);
-            ClassOutbox.Enqueue(_context, "ProjectWorkspace.Created.v1", targetClass.Id, new
-            {
-                ProjectId = project.Id,
-                TeamId = team.Id,
-                ClassId = targetClass.Id,
-                SubjectId = targetClass.CourseId,
-                SemesterId = targetClass.SemesterId,
-                LeaderUserId = leaderUserId
             }, now);
 
             existingTeamNames.Add(team.TeamName);

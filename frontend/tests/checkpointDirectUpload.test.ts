@@ -95,6 +95,9 @@ async function openCheckpointAsStudent() {
     reopenCount: 0,
   };
   const lecturerId = state.sessionUserId;
+  // File upload tests exercise an operational workspace after the initial approval.
+  const direction = state.directions.find((item) => item.teamId === team.id);
+  if (direction) direction.status = 'Approved';
   state.sessionUserId = team.leaderId;
   return { team, number: definition.number as number, state, lecturerId };
 }

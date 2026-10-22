@@ -34,6 +34,9 @@ export interface WorkspaceProjectProposal {
 }
 
 export interface ProjectWorkspaceDetail {
+  requiresWorkspaceCreation?: boolean;
+  canUseWorkspace?: boolean;
+  projectDirectionStatus?: string | null;
   team: {
     id?: string;
     _id?: string;

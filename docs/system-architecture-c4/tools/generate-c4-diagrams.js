@@ -93,7 +93,7 @@ const diagrams = [
       edge('c6', 'backend-api', 'cloudinary', 'Uploads avatars [HTTPS API]', { sourceSide: 'full-right', sourceRatio: 0.1, targetSide: 'left', via: [[1090, 457], [1090, 325]], labelX: 1260, labelY: 340 }),
       edge('c7', 'backend-api', 'email', 'Sends email [SMTP/TLS]', { sourceSide: 'right', targetSide: 'left', labelX: 1250, labelY: 495 }),
       edge('c9', 'backend-api', 'r2', 'Verifies and manages files [S3 API]', { sourceSide: 'full-right', sourceRatio: 100 / 170, targetSide: 'left', targetRatio: 0.25, via: [[1150, 540], [1150, 619]], labelX: 1290, labelY: 634 }),
-      edge('c10', 'web-app', 'r2', 'Uploads and downloads files via presigned URL [HTTPS]', { sourceSide: 'full-bottom', sourceRatio: 209 / 220, targetSide: 'left', targetRatio: 0.75, via: [[539, 890], [1300, 890], [1300, 651]], labelX: 920, labelY: 905 }),
+      edge('c10', 'web-app', 'r2', 'Uploads and downloads files via presigned URL [HTTPS]', { sourceSide: 'full-bottom', sourceRatio: 0.5, targetSide: 'left', targetRatio: 0.75, via: [[440, 890], [1300, 890], [1300, 651]], labelX: 920, labelY: 905 }),
     ],
     footer: '',
   },

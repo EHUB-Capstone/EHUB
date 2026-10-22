@@ -54,7 +54,7 @@
     <rect x="1167.25" y="620" width="245.5" height="22" rx="5" fill="#F8FAFC" fill-opacity="0.97"/><text x="1290" y="635" class="edge-label">Verifies and manages files [S3 API]</text>
   </g>
 <g id="c10" class="diagram-edge">
-    <path d="M 539 605 L 539 890 L 1300 890 L 1300 651 L 1428 651" fill="none" stroke="#64748B" stroke-width="1.7"  marker-end="url(#arrow)"/>
+    <path d="M 440 605 L 440 890 L 1300 890 L 1300 651 L 1428 651" fill="none" stroke="#64748B" stroke-width="1.7"  marker-end="url(#arrow)"/>
     <rect x="738.75" y="891" width="362.5" height="22" rx="5" fill="#F8FAFC" fill-opacity="0.97"/><text x="920" y="906" class="edge-label">Uploads and downloads files via presigned URL [HTTPS]</text>
   </g>
   <g id="users" class="diagram-node">

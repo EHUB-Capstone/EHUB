@@ -77,6 +77,12 @@ const NotificationDropdown = () => {
     const notificationId = getNotificationId(n);
     let targetLink = n.link;
 
+    // Keep existing class-assignment notifications useful even when they were
+    // created before the backend started storing the My Classes deep link.
+    if (n.title === 'You have been assigned to a class') {
+      targetLink = '/lecturer/classes';
+    }
+
     // Older review notifications were saved with a My Classes link. Keep them
     // useful after the deep-link target moved to the team's workspace.
     if (isProjectDirectionReviewedNotification(n) && n.data?.teamId) {

@@ -6,6 +6,21 @@ export interface ProjectWorkspaceDraft {
   startupIndustryIds: string[];
 }
 
+export const resolveStudentWorkspaceStage = (workspace: {
+  hasProject: boolean;
+  requiresWorkspaceCreation?: boolean;
+  canUseWorkspace?: boolean;
+  projectDirectionStatus?: string | null;
+  isTeamLeader: boolean;
+}): 'create' | 'waiting-for-leader' | 'waiting-for-review' | 'revise' | 'ready' => {
+  if (!workspace.hasProject || workspace.requiresWorkspaceCreation)
+    return workspace.isTeamLeader ? 'create' : 'waiting-for-leader';
+  if (workspace.canUseWorkspace !== false) return 'ready';
+  if (['Draft', 'NeedsRevision'].includes(workspace.projectDirectionStatus || ''))
+    return workspace.isTeamLeader ? 'revise' : 'waiting-for-leader';
+  return 'waiting-for-review';
+};
+
 export interface ProjectProfileDraft {
   projectName: string;
   description: string;
@@ -27,15 +42,23 @@ interface WorkspaceCreationProposalSource {
   description?: string | null;
 }
 
+interface WorkspaceCreationProjectSource {
+  projectName?: string | null;
+  description?: string | null;
+  zaloGroupUrl?: string | null;
+  startupIndustries?: string[];
+}
+
 export const resolveWorkspaceCreationDefaults = (
   team: WorkspaceCreationTeamSource,
   proposal?: WorkspaceCreationProposalSource | null,
+  project?: WorkspaceCreationProjectSource | null,
 ): { draft: ProjectWorkspaceDraft } => ({
   draft: {
     teamName: team.teamName?.trim() || team.name?.trim() || proposal?.teamName?.trim() || '',
-    projectName: proposal?.projectName?.trim() || team.teamName?.trim() || team.name?.trim() || '',
-    description: proposal?.projectDescription?.trim() || proposal?.description?.trim() || '',
-    zaloGroupUrl: '',
+    projectName: project?.projectName?.trim() || proposal?.projectName?.trim() || team.teamName?.trim() || team.name?.trim() || '',
+    description: project?.description?.trim() || proposal?.projectDescription?.trim() || proposal?.description?.trim() || '',
+    zaloGroupUrl: project?.zaloGroupUrl?.trim() || '',
     startupIndustryIds: [],
   },
 });
