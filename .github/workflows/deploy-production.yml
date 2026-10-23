@@ -147,18 +147,20 @@ jobs:
           previous=""
           gate=""
           stage=""
+          provider=""
 
           if [[ -n "${LOG_FILE}" && -f "${LOG_FILE}" ]]; then
             result_line="$(grep '^EHUB_DEPLOY_RESULT=success' "${LOG_FILE}" | tail -n 1 || true)"
             previous="$(sed -n 's/.* previous=\([0-9a-f]\{40\}\).*/\1/p' <<< "${result_line}")"
             gate="$(sed -n 's/.* gate=\([^ ]*\).*/\1/p' <<< "${result_line}")"
             stage="$(grep -o 'EHUB_DEPLOY_RESULT=failed stage=[a-z-]*' "${LOG_FILE}" | tail -n 1 | sed 's/.*stage=//' || true)"
+            provider="$(grep '^EHUB_DEPLOY_RESULT=' "${LOG_FILE}" | tail -n 1 | sed -n 's/.* provider=\([A-Za-z]*\).*/\1/p' || true)"
           fi
 
           detail=""
           if [[ "${DEPLOY_OUTCOME}" == "success" ]]; then
             icon="✅"; title="Production deployed"
-            detail="Previous release: \`${previous:0:12}\`. Staging gate: ${gate:-unknown}."
+            detail="Previous release: \`${previous:0:12}\`. Staging gate: ${gate:-unknown}. AI provider: ${provider:-unknown}."
           elif [[ "${DEPLOY_OUTCOME}" == "failure" ]]; then
             icon="❌"; title="Production deploy FAILED"
             if [[ -n "${stage}" ]]; then
@@ -169,6 +171,9 @@ jobs:
           else
             icon="⚠️"; title="Production deploy did not finish"
             detail="The run was cancelled or interrupted. Check /var/log/ehub-production-deploy.log on the VPS."
+          fi
+          if [[ "${DEPLOY_OUTCOME}" == "failure" && -n "${provider}" ]]; then
+            detail+=" (AI provider: ${provider})"
           fi
 
           {

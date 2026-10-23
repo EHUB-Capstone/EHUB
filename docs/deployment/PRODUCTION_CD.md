@@ -197,3 +197,21 @@ Thông báo lỗi tương ứng bước dừng:
   `ssh`, `curl`, `gh` giả; chưa có lần chạy production thật cho tới khi nhóm release lần đầu.
 - Không có blue-green: gián đoạn ngắn khi backend/frontend khởi động lại là chấp nhận được
   ở quy mô pilot hiện tại.
+
+## 8. Công tắc provider AI (Ollama hoặc Hybrid)
+
+Giống staging: dòng `MENTOR_MATCHING_PROVIDER=Ollama|Hybrid` trong `/opt/ehub/app/.env.production`
+(không có dòng nghĩa là `Ollama`). **Production giữ `Ollama`** cho tới khi pilot Hybrid trên
+staging được chấp nhận ([HYBRID_MENTOR_VPS.md](HYBRID_MENTOR_VPS.md) mục 7). Khi bật `Hybrid`:
+
+- Script từ chối nếu RAM khả dụng dưới 1536 MB (VPS không có swap), trước cả bước backup.
+- `postgres` và `ollama` vẫn **không bao giờ** bị build hay tạo lại. Bước migrate và bước
+  khởi động ứng dụng dùng `--no-deps`, vì Compose tạo lại container database nếu định nghĩa
+  của nó lệch so với container đang chạy (điều này đã được kiểm chứng bằng Docker Compose thật).
+- `mentor-semantic` được gỡ và tạo lại cùng backend ở mỗi lần deploy; sức khỏe, revision model
+  và image của nó được kiểm tra riêng. Thất bại ở các kiểm tra này làm workflow đỏ.
+- Quay lui: đặt `Ollama` (hoặc xóa dòng), chạy Deploy Production với SHA đang chạy và tích
+  `skip_staging_gate` chỉ khi SHA đó chưa từng chạy trên staging. Script gỡ container
+  `mentor-semantic` còn lại.
+- Discord ghi "AI provider: ..." trong tin thành công và thất bại.
+- Sau khi sửa script này, cài lại bản mới vào `/opt/ehub/deploy/` (mục 2.3).
