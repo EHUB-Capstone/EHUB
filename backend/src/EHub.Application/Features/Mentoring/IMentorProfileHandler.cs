@@ -13,4 +13,5 @@ public interface IMentorProfileHandler
         string fileName, long length, CancellationToken cancellationToken);
     Task<Result<(byte[] Content, string FileName, string ContentType)>> DownloadDocumentAsync(Guid mentorId,
         string kind, Guid userId, string role, CancellationToken cancellationToken);
+    Task<Result<byte[]>> PreviewMyCvAsync(Guid userId, CancellationToken cancellationToken);
 }

@@ -11,9 +11,16 @@
 # to a commit that was deployed to staging (skip-staging-gate bypasses only this, for a hotfix
 # or a rollback); a fresh database backup must exist locally and in R2 before anything changes.
 #
-# Unlike staging, postgres and ollama are never recreated: only backend and frontend are.
+# Unlike staging, postgres and ollama are never recreated: only backend and frontend are (and
+# mentor-semantic when the Hybrid provider is on). Every later compose call uses --no-deps so a
+# changed postgres/ollama definition can never replace those containers during a release.
 # There is no automatic rollback: a migration may already have been applied, and rolling back
 # code onto a newer schema is unsafe (see docs/deployment/PRODUCTION_VPS.md section 8).
+#
+# AI provider switch: the line MENTOR_MATCHING_PROVIDER=Ollama|Hybrid in .env.production (a missing
+# line means Ollama). Hybrid adds docker-compose.hybrid.yml and the mentor-semantic container,
+# which shares the backend's network namespace and is therefore recreated with the backend.
+# Switching back to Ollama removes a leftover mentor-semantic container.
 # Exit codes: 0 success, 64 bad usage/SHA, 75 another deployment held the lock too long,
 #             77 not root, anything else = failed stage (see EHUB_DEPLOY_RESULT).
 set -Eeuo pipefail
@@ -42,9 +49,17 @@ readonly HEALTH_ATTEMPTS=24
 readonly HEALTH_INTERVAL_SECONDS=5
 readonly COMPOSE_WAIT_SECONDS=300
 readonly MIN_FREE_GB=8
+readonly COMPOSE_PROJECT="ehub-production"
+# Hybrid mentor matching (see docs/deployment/HYBRID_MENTOR_VPS.md).
+readonly SEMANTIC_OVERRIDE="${APP_DIR}/docker-compose.hybrid.yml"
+readonly SEMANTIC_PREPARE_MODEL="${APP_DIR}/tools/mentor-matching/semantic/prepare_model.py"
+readonly SEMANTIC_HEALTH_ATTEMPTS=24
+readonly SEMANTIC_HEALTH_INTERVAL_SECONDS=5
+readonly MIN_AVAILABLE_MEMORY_MB=1536
 
 STAGE="init"
 TARGET_SHA=""
+PROVIDER="Ollama"
 IMAGE_TAG=""
 SKIP_STAGING_GATE="false"
 GATE_RESULT="unknown"
@@ -71,8 +86,8 @@ finish() {
 on_error() {
     local exit_code=$?
     trap - ERR
-    record "FAILED stage=${STAGE} sha=${TARGET_SHA:-none} previous=${PREVIOUS_SHA} exit=${exit_code}"
-    echo "EHUB_DEPLOY_RESULT=failed stage=${STAGE} sha=${TARGET_SHA:-none} previous=${PREVIOUS_SHA}" >&2
+    record "FAILED stage=${STAGE} sha=${TARGET_SHA:-none} previous=${PREVIOUS_SHA} provider=${PROVIDER} exit=${exit_code}"
+    echo "EHUB_DEPLOY_RESULT=failed stage=${STAGE} sha=${TARGET_SHA:-none} previous=${PREVIOUS_SHA} provider=${PROVIDER}" >&2
     echo "No automatic rollback was attempted. Inspect production before doing anything else." >&2
     exit "${exit_code}"
 }
@@ -165,6 +180,37 @@ if (( free_gb < MIN_FREE_GB )); then
     false
 fi
 
+# The AI provider is chosen per environment in the VPS-only env file. It is read, never sourced.
+provider_lines="$(grep -c '^MENTOR_MATCHING_PROVIDER=' "${ENV_FILE}" || true)"
+if (( provider_lines > 1 )); then
+    echo "${ENV_FILE} must contain at most one MENTOR_MATCHING_PROVIDER= line." >&2
+    false
+fi
+if (( provider_lines == 1 )); then
+    provider_value="$(grep '^MENTOR_MATCHING_PROVIDER=' "${ENV_FILE}" | cut -d= -f2-)"
+    provider_value="$(printf '%s' "${provider_value}" | tr -d "\"' \t\r")"
+else
+    provider_value=""
+fi
+case "${provider_value,,}" in
+    ""|ollama) PROVIDER="Ollama" ;;
+    hybrid) PROVIDER="Hybrid" ;;
+    *)
+        echo "MENTOR_MATCHING_PROVIDER must be Ollama or Hybrid." >&2
+        false
+        ;;
+esac
+echo "AI provider: ${PROVIDER}"
+
+if [[ "${PROVIDER}" == "Hybrid" ]]; then
+    # The VPS has no swap: refuse to start another memory consumer when RAM is already short.
+    available_mb="$(awk '/^MemAvailable:/ { printf "%d", $2 / 1024 }' /proc/meminfo)"
+    if (( available_mb < MIN_AVAILABLE_MEMORY_MB )); then
+        echo "Only ${available_mb} MB of memory is available; Hybrid needs at least ${MIN_AVAILABLE_MEMORY_MB} MB." >&2
+        false
+    fi
+fi
+
 stage "verify-commit"
 git_in "${APP_DIR}" fetch --quiet origin "+refs/heads/main:refs/remotes/origin/main"
 git_in "${APP_DIR}" cat-file -e "${TARGET_SHA}^{commit}"
@@ -205,7 +251,7 @@ else
     fi
     echo "Staging gate passed: same content as staging commit ${GATE_RESULT#staging-match:}"
 fi
-record "START sha=${TARGET_SHA} previous=${PREVIOUS_SHA} gate=${GATE_RESULT}"
+record "START sha=${TARGET_SHA} previous=${PREVIOUS_SHA} gate=${GATE_RESULT} provider=${PROVIDER}"
 
 # The backup (local dump plus verified R2 upload) runs from the already-deployed checkout.
 # backup-and-upload.sh exits 0 without a backup when another backup is running, so a dump
@@ -244,7 +290,14 @@ if ! awk -v tag="${IMAGE_TAG}" '/^IMAGE_TAG=/ { print "IMAGE_TAG=" tag; next } {
 fi
 mv -f -- "${temporary_env}" "${ENV_FILE}"
 
-compose=(docker compose --project-name ehub-production --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}")
+compose=(docker compose --project-name "${COMPOSE_PROJECT}" --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}")
+if [[ "${PROVIDER}" == "Hybrid" ]]; then
+    if [[ ! -f "${SEMANTIC_OVERRIDE}" || ! -f "${SEMANTIC_PREPARE_MODEL}" ]]; then
+        echo "This commit has no Hybrid support files (docker-compose.hybrid.yml, semantic service)." >&2
+        false
+    fi
+    compose+=(-f "${SEMANTIC_OVERRIDE}")
+fi
 
 stage "validate-compose"
 "${compose[@]}" config --quiet
@@ -252,6 +305,9 @@ stage "validate-compose"
 stage "build"
 "${compose[@]}" build backend
 "${compose[@]}" build frontend
+if [[ "${PROVIDER}" == "Hybrid" ]]; then
+    "${compose[@]}" build mentor-semantic
+fi
 
 # --no-recreate: a running database or model server is left alone even if its Compose
 # definition changed; changing those is a deliberate manual operation.
@@ -266,10 +322,32 @@ fi
 
 # One-time initializer: applies committed EF Core migrations and idempotent seeders, then exits.
 stage "migrate"
-"${compose[@]}" run --rm -T backend --initialize-database
+"${compose[@]}" run --rm -T --no-deps backend --initialize-database
+
+# mentor-semantic shares the backend's network namespace, so it only works while attached to the
+# backend container that exists right now. It is therefore always removed first and, for Hybrid,
+# created again after the backend; this never relies on Compose recreating it implicitly.
+remove_semantic_containers() {
+    local ids
+    local -a id_list
+    ids="$(docker ps -aq \
+        --filter "label=com.docker.compose.project=${COMPOSE_PROJECT}" \
+        --filter "label=com.docker.compose.service=mentor-semantic")"
+    if [[ -n "${ids}" ]]; then
+        echo "Removing mentor-semantic container(s) so none stays attached to an old backend."
+        mapfile -t id_list <<< "${ids}"
+        docker rm -f "${id_list[@]}" > /dev/null
+    fi
+}
 
 stage "start-application"
-"${compose[@]}" up -d --wait --wait-timeout "${COMPOSE_WAIT_SECONDS}" backend frontend
+remove_semantic_containers
+# --no-deps: postgres and ollama are never touched here, even if their definition changed.
+if [[ "${PROVIDER}" == "Hybrid" ]]; then
+    "${compose[@]}" up -d --wait --no-deps --wait-timeout "${COMPOSE_WAIT_SECONDS}" backend mentor-semantic frontend
+else
+    "${compose[@]}" up -d --wait --no-deps --wait-timeout "${COMPOSE_WAIT_SECONDS}" backend frontend
+fi
 
 check_endpoint() {
     local path="$1" attempt
@@ -285,13 +363,43 @@ check_endpoint() {
     return 1
 }
 
+# The backend readiness endpoint does not cover the semantic service, so it is checked on its own
+# from inside the backend's network namespace: ready, and the model revision the commit pins.
+check_semantic() {
+    local expected_revision attempt body
+    expected_revision="$(sed -n 's/^REVISION = "\([0-9a-f]\{40\}\)".*/\1/p' "${SEMANTIC_PREPARE_MODEL}")"
+    if [[ -z "${expected_revision}" ]]; then
+        echo "Could not read the pinned model revision from prepare_model.py." >&2
+        return 1
+    fi
+    for (( attempt = 1; attempt <= SEMANTIC_HEALTH_ATTEMPTS; attempt++ )); do
+        if body="$("${compose[@]}" exec -T backend curl --fail --silent --max-time 5 \
+                http://127.0.0.1:8091/health 2> /dev/null)" \
+            && grep -Eq '"ready"[[:space:]]*:[[:space:]]*true' <<< "${body}" \
+            && grep -Eq "\"revision\"[[:space:]]*:[[:space:]]*\"${expected_revision}\"" <<< "${body}"; then
+            echo "ok mentor-semantic (model revision ${expected_revision:0:12})"
+            return 0
+        fi
+        sleep "${SEMANTIC_HEALTH_INTERVAL_SECONDS}"
+    done
+    echo "mentor-semantic is not ready with the pinned model after ${SEMANTIC_HEALTH_ATTEMPTS} attempts." >&2
+    return 1
+}
+
 stage "health-check"
 check_endpoint /healthz
 check_endpoint /health/live
 check_endpoint /health/ready
+if [[ "${PROVIDER}" == "Hybrid" ]]; then
+    check_semantic
+fi
 
 stage "verify-running-images"
-for service in backend frontend; do
+services_to_verify=(backend frontend)
+if [[ "${PROVIDER}" == "Hybrid" ]]; then
+    services_to_verify+=(mentor-semantic)
+fi
+for service in "${services_to_verify[@]}"; do
     container_id="$("${compose[@]}" ps -q "${service}")"
     running_image="$(docker inspect --format '{{.Config.Image}}' "${container_id}")"
     if [[ "${running_image}" != *":${IMAGE_TAG}" ]]; then
@@ -301,5 +409,5 @@ for service in backend frontend; do
 done
 
 trap - ERR
-record "SUCCESS sha=${TARGET_SHA} previous=${PREVIOUS_SHA} gate=${GATE_RESULT}"
-echo "EHUB_DEPLOY_RESULT=success sha=${TARGET_SHA} previous=${PREVIOUS_SHA} gate=${GATE_RESULT}"
+record "SUCCESS sha=${TARGET_SHA} previous=${PREVIOUS_SHA} gate=${GATE_RESULT} provider=${PROVIDER}"
+echo "EHUB_DEPLOY_RESULT=success sha=${TARGET_SHA} previous=${PREVIOUS_SHA} gate=${GATE_RESULT} provider=${PROVIDER}"

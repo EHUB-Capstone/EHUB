@@ -39,6 +39,23 @@ public static class DependencyInjection
             client.BaseAddress = new Uri(baseUrl.EndsWith('/') ? baseUrl : baseUrl + "/", UriKind.Absolute);
             client.Timeout = TimeSpan.FromSeconds(90);
         });
+        var matchingProvider = configuration["Mentoring:MatchingProvider"] ?? "Ollama";
+        if (string.Equals(matchingProvider, "Trained", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(matchingProvider, "Hybrid", StringComparison.OrdinalIgnoreCase))
+        {
+            services.AddSingleton<IMentorFitRanker, FileMentorFitRanker>();
+            if (string.Equals(matchingProvider, "Hybrid", StringComparison.OrdinalIgnoreCase))
+            {
+                var semanticUri = LocalSemanticMentorReranker.ServiceUri(configuration);
+                services.AddHttpClient<IMentorSemanticReranker, LocalSemanticMentorReranker>(client =>
+                {
+                    client.BaseAddress = semanticUri;
+                    client.Timeout = TimeSpan.FromSeconds(40);
+                }).ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false, UseProxy = false });
+            }
+        }
+        else if (!string.Equals(matchingProvider, "Ollama", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("Mentoring:MatchingProvider must be Ollama, Trained or Hybrid.");
 
         services.AddScoped<IApplicationDbContext>(provider => provider.GetRequiredService<AppDbContext>());
         services.AddHostedService<ClassImportSessionCleanupService>();

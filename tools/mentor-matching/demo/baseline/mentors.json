@@ -1,0 +1,76 @@
+{
+  "isSynthetic": true,
+  "description": "14 mentor hoàn toàn hư cấu để thử đường đi CV DOCX → hồ sơ → xếp hạng. Tên chỉ là bí danh mô phỏng, không phải người thật. Không lấy dữ liệu từ CV người dùng. Loại Business/IT được khai báo trước, không do model suy đoán.",
+  "mentors": [
+    {
+      "id": "B01", "name": "Mai (giả lập)", "type": "Business",
+      "summary": "Marketing F&B, nghiên cứu khách hàng, bán hàng và định giá gói sản phẩm.",
+      "cvText": "PHIẾU THÔNG TIN MENTOR GIẢ LẬP\nI. THÔNG TIN CÁ NHÂN\nPRIVATE_DEMO_B01\nII. THÔNG TIN NGƯỜI THÂN\nPRIVATE_FAMILY_B01\nIII. QUÁ TRÌNH ĐÀO TẠO\nCử nhân Marketing.\nIV. KINH NGHIỆM LÀM VIỆC\nPhụ trách marketing cho chuỗi F&B và nhà hàng. Thực hiện nghiên cứu thị trường, phỏng vấn khách hàng, thử nghiệm bán hàng và định giá sản phẩm cho dịch vụ đồ ăn theo tuần. Hướng dẫn đội khởi nghiệp kiểm chứng nhu cầu và phát triển kênh phân phối tại khu dân cư.\nV. TRÌNH ĐỘ NGOẠI NGỮ\nTiếng Anh phục vụ công việc.\nVI. KỸ NĂNG\nMarketing F&B, nghiên cứu thị trường, bán hàng, định giá sản phẩm.\nNGƯỜI KHAI\nPRIVATE_SIGNATURE_B01"
+    },
+    {
+      "id": "B02", "name": "Nam (giả lập)", "type": "Business",
+      "summary": "Tài chính startup, dòng tiền, ngân sách, gọi vốn và pitch deck.",
+      "cvText": "PHIẾU THÔNG TIN MENTOR GIẢ LẬP\nI. THÔNG TIN CÁ NHÂN\nPRIVATE_DEMO_B02\nII. THÔNG TIN NGƯỜI THÂN\nPRIVATE_FAMILY_B02\nIII. QUÁ TRÌNH ĐÀO TẠO\nCử nhân Tài chính doanh nghiệp.\nIV. KINH NGHIỆM LÀM VIỆC\nQuản lý tài chính cho doanh nghiệp giai đoạn đầu. Lập kế hoạch dòng tiền, ngân sách, dự phóng chi phí và thời gian duy trì hoạt động. Đồng hành với nhóm sáng lập chuẩn bị gọi vốn, pitch deck, phương án huy động vốn và thuyết trình với nhà đầu tư.\nVI. KỸ NĂNG\nFinance, cash flow, fundraising, phân tích phương án tài chính.\nNGƯỜI KHAI\nPRIVATE_SIGNATURE_B02"
+    },
+    {
+      "id": "B03", "name": "Linh (giả lập)", "type": "Business",
+      "summary": "Vận hành kho, logistics, chuỗi cung ứng thực phẩm và phân phối nông sản.",
+      "cvText": "PHIẾU THÔNG TIN MENTOR GIẢ LẬP\nI. THÔNG TIN CÁ NHÂN\nPRIVATE_DEMO_B03\nII. THÔNG TIN NGƯỜI THÂN\nPRIVATE_FAMILY_B03\nIII. QUÁ TRÌNH ĐÀO TẠO\nCử nhân Quản lý chuỗi cung ứng.\nIV. KINH NGHIỆM LÀM VIỆC\nĐiều hành vận hành kho và logistics cho mạng lưới bán lẻ thực phẩm. Thiết kế quy trình nhập xuất tồn, thu mua, quản lý chất lượng và giao nhận nông sản. Phát triển kênh phân phối, tổ chức chuỗi cung ứng tới cửa hàng thương mại điện tử và giảm hàng hỏng trong vận chuyển.\nVI. KỸ NĂNG\nOperations, supply chain, logistics, quản lý kho và phân phối hàng hóa.\nNGƯỜI KHAI\nPRIVATE_SIGNATURE_B03"
+    },
+    {
+      "id": "B04", "name": "Vy (giả lập)", "type": "Business",
+      "summary": "Nghiên cứu thị trường giáo dục, phỏng vấn người dùng và khám phá sản phẩm.",
+      "cvText": "PHIẾU THÔNG TIN MENTOR GIẢ LẬP\nI. THÔNG TIN CÁ NHÂN\nPRIVATE_DEMO_B04\nII. THÔNG TIN NGƯỜI THÂN\nPRIVATE_FAMILY_B04\nIII. QUÁ TRÌNH ĐÀO TẠO\nCử nhân Tâm lý học giáo dục.\nIV. KINH NGHIỆM LÀM VIỆC\nNghiên cứu thị trường cho sản phẩm giáo dục ở giai đoạn ý tưởng. Thực hiện phỏng vấn khách hàng gồm phụ huynh và học sinh, khảo sát khách hàng và kiểm chứng nhu cầu. Phụ trách product discovery, thiết kế sản phẩm và thử nghiệm trải nghiệm người dùng trước khi phát triển sản phẩm đầu tiên.\nVI. KỸ NĂNG\nCustomer discovery, nghiên cứu thị trường, product management và UX trong giáo dục.\nNGƯỜI KHAI\nPRIVATE_SIGNATURE_B04"
+    },
+    {
+      "id": "B05", "name": "Hà (giả lập)", "type": "Business",
+      "summary": "Bán hàng B2B và phát triển khách hàng doanh nghiệp cho edtech.",
+      "cvText": "PHIẾU THÔNG TIN MENTOR GIẢ LẬP\nI. THÔNG TIN CÁ NHÂN\nPRIVATE_DEMO_B05\nII. THÔNG TIN NGƯỜI THÂN\nPRIVATE_FAMILY_B05\nIII. QUÁ TRÌNH ĐÀO TẠO\nCử nhân Thương mại.\nIV. KINH NGHIỆM LÀM VIỆC\nPhụ trách bán hàng B2B và business development cho giải pháp edtech. Xây quy trình tiếp cận khách hàng doanh nghiệp, chào bán giải pháp đào tạo trực tuyến, đàm phán và chốt đơn. Phát triển khách hàng tổ chức, trường học và đơn vị đào tạo; quản lý kênh phân phối dịch vụ giáo dục.\nVI. KỸ NĂNG\nSales B2B, bán hàng giải pháp, phát triển kinh doanh và edtech.\nNGƯỜI KHAI\nPRIVATE_SIGNATURE_B05"
+    },
+    {
+      "id": "B06", "name": "Sơn (giả lập)", "type": "Business",
+      "summary": "Pháp lý doanh nghiệp, sở hữu trí tuệ, bản quyền và hợp đồng thương mại.",
+      "cvText": "PHIẾU THÔNG TIN MENTOR GIẢ LẬP\nI. THÔNG TIN CÁ NHÂN\nPRIVATE_DEMO_B06\nII. THÔNG TIN NGƯỜI THÂN\nPRIVATE_FAMILY_B06\nIII. QUÁ TRÌNH ĐÀO TẠO\nCử nhân Luật kinh tế.\nIV. KINH NGHIỆM LÀM VIỆC\nTư vấn pháp lý doanh nghiệp và đăng ký doanh nghiệp cho nhóm khởi nghiệp. Rà soát sở hữu trí tuệ, bản quyền thiết kế, quyền sử dụng tài sản số và hợp đồng thương mại. Soạn điều khoản chuyển giao, cấp phép và xử lý tranh chấp hợp đồng.\nVI. KỸ NĂNG\nLegal, sở hữu trí tuệ, hợp đồng thương mại và bản quyền.\nNGƯỜI KHAI\nPRIVATE_SIGNATURE_B06"
+    },
+    {
+      "id": "B07", "name": "Minh (giả lập)", "type": "Business",
+      "summary": "Học tài chính, kinh nghiệm làm việc chủ yếu marketing; không phải chuyên gia quản lý vốn.",
+      "cvText": "PHIẾU THÔNG TIN MENTOR GIẢ LẬP\nI. THÔNG TIN CÁ NHÂN\nPRIVATE_DEMO_B07\nII. THÔNG TIN NGƯỜI THÂN\nPRIVATE_FAMILY_B07\nIII. QUÁ TRÌNH ĐÀO TẠO\nCử nhân Tài chính doanh nghiệp.\nIV. KINH NGHIỆM LÀM VIỆC\nChuyên viên marketing cho sản phẩm tiêu dùng. Thực hiện truyền thông, quảng bá và tổ chức chương trình thu hút khách hàng tại cửa hàng. Phối hợp đội bán hàng chuẩn bị nội dung giới thiệu sản phẩm và theo dõi hiệu quả quảng bá.\nVI. KỸ NĂNG\nMarketing, truyền thông, viết nội dung và khảo sát khách hàng.\nNGƯỜI KHAI\nPRIVATE_SIGNATURE_B07"
+    },
+    {
+      "id": "B08", "name": "Phương (giả lập)", "type": "Business",
+      "summary": "Bán tour, marketing du lịch, kênh phân phối và vận hành trải nghiệm địa phương.",
+      "cvText": "PHIẾU THÔNG TIN MENTOR GIẢ LẬP\nI. THÔNG TIN CÁ NHÂN\nPRIVATE_DEMO_B08\nII. THÔNG TIN NGƯỜI THÂN\nPRIVATE_FAMILY_B08\nIII. QUÁ TRÌNH ĐÀO TẠO\nCử nhân Quản trị du lịch.\nIV. KINH NGHIỆM LÀM VIỆC\nQuản lý vận hành dịch vụ du lịch và trải nghiệm địa phương. Phụ trách bán hàng tour, marketing du lịch và phát triển kênh phân phối với đối tác lữ hành. Tổ chức lịch trình, điều phối nhà cung cấp và kiểm soát chất lượng dịch vụ cho du khách.\nVI. KỸ NĂNG\nTourism, bán tour, vận hành, marketing và phân phối dịch vụ du lịch.\nNGƯỜI KHAI\nPRIVATE_SIGNATURE_B08"
+    },
+    {
+      "id": "I01", "name": "Khoa (giả lập)", "type": "IT",
+      "summary": "Backend C#/.NET, PostgreSQL và xử lý đơn hàng thương mại điện tử, đồ ăn.",
+      "cvText": "PHIẾU THÔNG TIN MENTOR GIẢ LẬP\nI. THÔNG TIN CÁ NHÂN\nPRIVATE_DEMO_I01\nII. THÔNG TIN NGƯỜI THÂN\nPRIVATE_FAMILY_I01\nIII. QUÁ TRÌNH ĐÀO TẠO\nCử nhân Kỹ thuật phần mềm.\nIV. KINH NGHIỆM LÀM VIỆC\nPhát triển backend C# và ASP.NET cho dịch vụ đặt đồ ăn và thương mại điện tử. Thiết kế API, cơ sở dữ liệu PostgreSQL, xử lý đơn hàng và tồn kho. Hướng dẫn nhóm phát triển kiểm soát giao dịch dữ liệu và thiết kế hệ thống phục vụ cửa hàng bán lẻ.\nVI. KỸ NĂNG\nC#, .NET, ASP.NET, backend, REST API, PostgreSQL, thiết kế dữ liệu.\nNGƯỜI KHAI\nPRIVATE_SIGNATURE_I01"
+    },
+    {
+      "id": "I02", "name": "An (giả lập)", "type": "IT",
+      "summary": "Ứng dụng Flutter, Android/iOS cho giáo dục và du lịch.",
+      "cvText": "PHIẾU THÔNG TIN MENTOR GIẢ LẬP\nI. THÔNG TIN CÁ NHÂN\nPRIVATE_DEMO_I02\nII. THÔNG TIN NGƯỜI THÂN\nPRIVATE_FAMILY_I02\nIII. QUÁ TRÌNH ĐÀO TẠO\nCử nhân Kỹ thuật phần mềm.\nIV. KINH NGHIỆM LÀM VIỆC\nPhát triển ứng dụng di động bằng Flutter cho Android và iOS. Triển khai ứng dụng giáo dục hỗ trợ lịch học và ứng dụng du lịch đặt trải nghiệm địa phương. Hướng dẫn kiểm thử trên điện thoại và phát hành sản phẩm lên kho ứng dụng.\nVI. KỸ NĂNG\nMobile, Flutter, Android, iOS và ứng dụng di động.\nNGƯỜI KHAI\nPRIVATE_SIGNATURE_I02"
+    },
+    {
+      "id": "I03", "name": "Trâm (giả lập)", "type": "IT",
+      "summary": "Frontend React/TypeScript, UX và trải nghiệm sản phẩm số.",
+      "cvText": "PHIẾU THÔNG TIN MENTOR GIẢ LẬP\nI. THÔNG TIN CÁ NHÂN\nPRIVATE_DEMO_I03\nII. THÔNG TIN NGƯỜI THÂN\nPRIVATE_FAMILY_I03\nIII. QUÁ TRÌNH ĐÀO TẠO\nCử nhân Công nghệ thông tin.\nIV. KINH NGHIỆM LÀM VIỆC\nPhát triển frontend React và TypeScript cho cổng dịch vụ doanh nghiệp. Thiết kế giao diện web, UX và trải nghiệm người dùng cho quản trị viên và khách hàng. Phối hợp product discovery, thử nghiệm thiết kế sản phẩm và cải thiện thao tác sử dụng.\nVI. KỸ NĂNG\nFrontend, React, TypeScript, UX, giao diện web và thiết kế sản phẩm.\nNGƯỜI KHAI\nPRIVATE_SIGNATURE_I03"
+    },
+    {
+      "id": "I04", "name": "Duy (giả lập)", "type": "IT",
+      "summary": "AI, computer vision, machine learning và phân tích dữ liệu nông nghiệp.",
+      "cvText": "PHIẾU THÔNG TIN MENTOR GIẢ LẬP\nI. THÔNG TIN CÁ NHÂN\nPRIVATE_DEMO_I04\nII. THÔNG TIN NGƯỜI THÂN\nPRIVATE_FAMILY_I04\nIII. QUÁ TRÌNH ĐÀO TẠO\nCử nhân Khoa học dữ liệu.\nIV. KINH NGHIỆM LÀM VIỆC\nXây dựng mô hình AI, machine learning và computer vision để phân loại nông sản và nhận diện lỗi từ hình ảnh hàng hóa. Phân tích dữ liệu nông nghiệp, đánh giá chất lượng dữ liệu và dự báo sản lượng. Hướng dẫn nhóm thử nghiệm mô hình và đánh giá sai số trên dữ liệu mới.\nVI. KỸ NĂNG\nAI, computer vision, machine learning, data analysis, phân tích dữ liệu.\nNGƯỜI KHAI\nPRIVATE_SIGNATURE_I04"
+    },
+    {
+      "id": "I05", "name": "Bảo (giả lập)", "type": "IT",
+      "summary": "Cloud, DevOps, triển khai và bảo mật hệ thống.",
+      "cvText": "PHIẾU THÔNG TIN MENTOR GIẢ LẬP\nI. THÔNG TIN CÁ NHÂN\nPRIVATE_DEMO_I05\nII. THÔNG TIN NGƯỜI THÂN\nPRIVATE_FAMILY_I05\nIII. QUÁ TRÌNH ĐÀO TẠO\nCử nhân An toàn thông tin.\nIV. KINH NGHIỆM LÀM VIỆC\nThiết kế hạ tầng cloud và quy trình DevOps cho nền tảng số. Triển khai Docker, Kubernetes và AWS; xây kiểm soát phân quyền truy cập, lưu trữ dữ liệu và bảo mật hệ thống. Thực hiện đánh giá an toàn thông tin, khôi phục dữ liệu và kiểm thử xâm nhập theo phạm vi được giao.\nVI. KỸ NĂNG\nCloud, DevOps, AWS, Docker, Kubernetes, cybersecurity và bảo mật.\nNGƯỜI KHAI\nPRIVATE_SIGNATURE_I05"
+    },
+    {
+      "id": "I06", "name": "Quân (giả lập)", "type": "IT",
+      "summary": "Backend Node.js/PostgreSQL; CV ghi rõ không có kinh nghiệm AI hoặc computer vision.",
+      "cvText": "PHIẾU THÔNG TIN MENTOR GIẢ LẬP\nI. THÔNG TIN CÁ NHÂN\nPRIVATE_DEMO_I06\nII. THÔNG TIN NGƯỜI THÂN\nPRIVATE_FAMILY_I06\nIII. QUÁ TRÌNH ĐÀO TẠO\nCử nhân Kỹ thuật phần mềm.\nIV. KINH NGHIỆM LÀM VIỆC\nPhát triển backend Node.js và cơ sở dữ liệu PostgreSQL cho quản lý đơn hàng, tồn kho và thương mại điện tử. Thiết kế API và tối ưu truy vấn dữ liệu. Không có kinh nghiệm AI, machine learning hoặc computer vision.\nVI. KỸ NĂNG\nNode.js, backend, PostgreSQL, REST API và cơ sở dữ liệu.\nNGƯỜI KHAI\nPRIVATE_SIGNATURE_I06"
+    }
+  ]
+}

@@ -5,4 +5,5 @@ namespace EHub.Application.Common.Interfaces.Services;
 public interface IMentorCvTextReader
 {
     Task<Result<string>> ReadAsync(byte[] content, string extension, CancellationToken cancellationToken);
+    Task<Result<byte[]>> PreviewPdfAsync(byte[] content, string extension, CancellationToken cancellationToken);
 }

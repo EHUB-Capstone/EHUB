@@ -19,6 +19,8 @@ on:
       - frontend/**
       - docker/**
       - docker-compose.staging.yml
+      - docker-compose.hybrid.yml
+      - tools/mentor-matching/semantic/**
       - scripts/staging/backup-postgres.sh
   workflow_dispatch:
     inputs:
@@ -179,8 +181,13 @@ jobs:
           subject="${subject:0:150}"
           run_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
 
+          provider=""
+          if [[ -n "${LOG_FILE}" && -f "${LOG_FILE}" ]]; then
+            provider="$(grep '^EHUB_DEPLOY_RESULT=' "${LOG_FILE}" | tail -n 1 | sed -n 's/.* provider=\([A-Za-z]*\).*/\1/p' || true)"
+          fi
+
           if [[ "${DEPLOY_OUTCOME}" == "success" ]]; then
-            icon="✅"; title="Staging deployed"; detail=""
+            icon="✅"; title="Staging deployed"; detail="AI provider: ${provider:-unknown}."
           elif [[ "${WAIT_OUTCOME}" == "failure" ]]; then
             icon="⛔"; title="Staging NOT deployed"; detail="CI checks did not pass or timed out."
           elif [[ "${DEPLOY_OUTCOME}" == "failure" ]]; then
@@ -196,6 +203,9 @@ jobs:
             fi
           else
             icon="⚠️"; title="Staging deploy did not finish"; detail="The run was cancelled or interrupted."
+          fi
+          if [[ "${DEPLOY_OUTCOME}" == "failure" && -n "${provider}" ]]; then
+            detail+=" (AI provider: ${provider})"
           fi
 
           {

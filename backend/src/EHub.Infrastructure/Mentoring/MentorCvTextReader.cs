@@ -52,6 +52,21 @@ public sealed class MentorCvTextReader(IDocumentPreviewConverter converter) : IM
         }
     }
 
+    public async Task<Result<byte[]>> PreviewPdfAsync(byte[] content, string extension, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (content.Length is <= 0 or > 10 * 1024 * 1024 || extension is not (".pdf" or ".doc" or ".docx"))
+            return Result.Failure<byte[]>(ErrorCodes.CommonValidationError,
+                "Không thể xem trước CV. Hãy dùng PDF, DOC hoặc DOCX hợp lệ, tối đa 10 MB.");
+        if (extension == ".pdf") return Result.Success(content);
+
+        var converted = await converter.ConvertToPdfAsync(content, extension, cancellationToken);
+        return converted.IsSuccess
+            ? Result.Success(converted.Value.Content)
+            : Result.Failure<byte[]>(ErrorCodes.MentorCvExtractionUnavailable,
+                "Chưa thể tạo bản xem trước CV. Vui lòng tải file xuống để xem.");
+    }
+
     private static string ReadDocx(byte[] content, CancellationToken cancellationToken)
     {
         using var zip = new ZipArchive(new MemoryStream(content), ZipArchiveMode.Read);

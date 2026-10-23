@@ -1,44 +1,16 @@
 // @ts-nocheck
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, ChevronUp, RotateCcw, Users } from 'lucide-react';
 import toast from 'react-hot-toast';
+import {
+  decideEvaluationSync, editableSnapshot, evaluationSyncKey, initialRows, normalizeCriteria, savedOverrides,
+} from '../../utils/rubricFormState';
+import {
+  applyDraftToRows, clearRubricDraft, decideDraftRestore, getBrowserStorage, loadRubricDraft, rubricDraftKey, saveRubricDraft,
+} from '../../utils/rubricDraft';
 
-const normalizeCriteria = (criteria = []) => {
-  const source = Array.isArray(criteria) ? criteria : [];
-  return source.map((item) => ({
-    criterionKey: item.key || item.criterionKey,
-    criterionName: item.label || item.criterionName,
-    description: item.description || '',
-    weight: Number(item.weight ?? 1),
-    maxScore: Number(item.maxScore ?? 10),
-  }));
-};
-
-const initialRows = (criteria, initialData) => {
-  const byKey = new Map((initialData?.rubricScores || []).map((item) => [item.criterionKey, item]));
-  return criteria.map((criterion) => {
-    const existing = byKey.get(criterion.criterionKey) || {};
-    return {
-      ...criterion,
-      score: existing.score ?? existing.manualScore ?? '',
-      comment: existing.comment || '',
-    };
-  });
-};
-
-// Comparable form of everything the lecturer can edit, so opening the form and saving is not an update.
-const toNumberOrNull = (value) => (value === '' || value == null || !Number.isFinite(Number(value)) ? null : Number(value));
-const editableSnapshot = (rows, feedback, overrides) => JSON.stringify({
-  scores: rows.map((row) => [row.criterionKey, toNumberOrNull(row.score), row.comment || '']),
-  feedback: feedback || '',
-  members: Object.entries(overrides)
-    .map(([studentId, score]) => [studentId, toNumberOrNull(score)])
-    .sort(([left], [right]) => String(left).localeCompare(String(right))),
-});
-const savedOverrides = (initialData) => Object.fromEntries(
-  (initialData?.memberScores || [])
-    .filter((item) => item.isOverridden)
-    .map((item) => [item.studentId, String(item.score)]));
+const DRAFT_WRITE_DELAY_MS = 500;
+const formatDraftTime = (value) => new Date(value).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
 const evaluationStatusPresentation = {
   DRAFT: {
@@ -69,15 +41,36 @@ export default function RubricForm({
   checkpointNumber,
   checkpointTitle,
   compact = false,
+  draftScope,
 }) {
   const criteria = useMemo(() => normalizeCriteria(customCriteria), [customCriteria]);
-  const [rubricScores, setRubricScores] = useState(() => initialRows(criteria, initialData));
-  const [overallFeedback, setOverallFeedback] = useState(initialData?.overallFeedback || '');
+
+  // Unsaved edits survive a reload through sessionStorage. Without a scope (user + team) the feature is off.
+  const draftStorage = draftScope?.userId && draftScope?.teamId ? getBrowserStorage() : null;
+  const draftKey = draftStorage
+    ? rubricDraftKey(draftScope.userId, draftScope.teamId, checkpointNumber, initialData?._id)
+    : null;
+  const [storedDraft] = useState(() => {
+    const draft = draftKey ? loadRubricDraft(draftStorage, draftKey) : null;
+    if (!draft) return null;
+    const serverRows = initialRows(criteria, initialData);
+    const rows = applyDraftToRows(serverRows, draft);
+    const action = decideDraftRestore({
+      draftBaselineKey: draft.baselineKey,
+      currentSyncKey: evaluationSyncKey(initialData, criteria),
+      draftSnapshot: editableSnapshot(rows, draft.feedback, draft.overrides),
+      serverSnapshot: editableSnapshot(serverRows, initialData?.overallFeedback, savedOverrides(initialData)),
+    });
+    return action === 'discard' ? null : { action, draft, rows };
+  });
+  const restoredNow = storedDraft?.action === 'restore';
+  const [restoredAt, setRestoredAt] = useState(() => (restoredNow ? storedDraft.draft.savedAt : null));
+  const [draftOffer, setDraftOffer] = useState(() => (storedDraft?.action === 'offer' ? storedDraft : null));
+
+  const [rubricScores, setRubricScores] = useState(() => (restoredNow ? storedDraft.rows : initialRows(criteria, initialData)));
+  const [overallFeedback, setOverallFeedback] = useState(() => (restoredNow ? storedDraft.draft.feedback : initialData?.overallFeedback || ''));
   const [memberScoresExpanded, setMemberScoresExpanded] = useState(false);
-  const [memberOverrides, setMemberOverrides] = useState(() => Object.fromEntries(
-    (initialData?.memberScores || [])
-      .filter((item) => item.isOverridden)
-      .map((item) => [item.studentId, String(item.score)])));
+  const [memberOverrides, setMemberOverrides] = useState(() => (restoredNow ? storedDraft.draft.overrides : savedOverrides(initialData)));
   const [attemptedSubmit, setAttemptedSubmit] = useState(false);
   const isSubmitted = initialData?.status === 'SUBMITTED' || initialData?.status === 'PUBLISHED';
   const savedSnapshot = useMemo(
@@ -89,17 +82,107 @@ export default function RubricForm({
   const statusPresentation = evaluationStatusPresentation[evaluationStatus]
     || evaluationStatusPresentation.NOT_GRADED;
 
-  useEffect(() => {
-    // Keep existing scores and comments visible when loading or switching evaluations.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+  // Background refreshes (realtime, reconnect) hand us a new initialData object even when nothing changed.
+  // Only replace what the lecturer is typing when it is safe; otherwise keep the edits and offer a reload.
+  const syncKey = evaluationSyncKey(initialData, criteria);
+  const currentSnapshot = editableSnapshot(rubricScores, overallFeedback, memberOverrides);
+  const baselineRef = useRef({ key: syncKey, snapshot: savedSnapshot });
+  const [hasNewerVersion, setHasNewerVersion] = useState(false);
+
+  const applyServerVersion = () => {
+    baselineRef.current = { key: syncKey, snapshot: savedSnapshot };
     setRubricScores(initialRows(criteria, initialData));
     setOverallFeedback(initialData?.overallFeedback || '');
-    setMemberOverrides(Object.fromEntries(
-      (initialData?.memberScores || [])
-        .filter((item) => item.isOverridden)
-        .map((item) => [item.studentId, String(item.score)])));
+    setMemberOverrides(savedOverrides(initialData));
     setAttemptedSubmit(false);
-  }, [criteria, initialData]);
+    setHasNewerVersion(false);
+    setRestoredAt(null);
+  };
+
+  // Debounced write of unsaved edits. The latest payload is also flushed on unmount and page hide, so a reload
+  // right after typing does not lose the last keystrokes.
+  const latestDraftRef = useRef(null);
+  const draftTimerRef = useRef(null);
+  const cancelPendingDraft = () => {
+    if (draftTimerRef.current !== null) clearTimeout(draftTimerRef.current);
+    draftTimerRef.current = null;
+    latestDraftRef.current = null;
+  };
+  const flushDraft = () => {
+    if (draftTimerRef.current !== null) clearTimeout(draftTimerRef.current);
+    draftTimerRef.current = null;
+    if (latestDraftRef.current && draftKey) saveRubricDraft(draftStorage, draftKey, latestDraftRef.current);
+    latestDraftRef.current = null;
+  };
+  const discardStoredDraft = () => {
+    cancelPendingDraft();
+    if (draftKey) clearRubricDraft(draftStorage, draftKey);
+  };
+
+  useEffect(() => {
+    // While the lecturer has not answered the restore offer, the stored draft must stay untouched.
+    if (!draftKey || draftOffer) return;
+    if (!hasChanges) {
+      discardStoredDraft();
+      return;
+    }
+    latestDraftRef.current = {
+      version: 1,
+      baselineKey: baselineRef.current.key,
+      savedAt: Date.now(),
+      rows: rubricScores.map((row) => ({ criterionKey: row.criterionKey, score: row.score ?? '', comment: row.comment || '' })),
+      feedback: overallFeedback,
+      overrides: memberOverrides,
+    };
+    if (draftTimerRef.current !== null) clearTimeout(draftTimerRef.current);
+    draftTimerRef.current = setTimeout(flushDraft, DRAFT_WRITE_DELAY_MS);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftKey, draftOffer, hasChanges, currentSnapshot]);
+
+  useEffect(() => {
+    window.addEventListener('pagehide', flushDraft);
+    return () => {
+      window.removeEventListener('pagehide', flushDraft);
+      flushDraft();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const discardRestoredDraft = () => {
+    applyServerVersion();
+    discardStoredDraft();
+  };
+
+  const restoreOfferedDraft = () => {
+    setRubricScores(draftOffer.rows);
+    setOverallFeedback(draftOffer.draft.feedback);
+    setMemberOverrides(draftOffer.draft.overrides);
+    setRestoredAt(draftOffer.draft.savedAt);
+    setDraftOffer(null);
+  };
+
+  const discardOfferedDraft = () => {
+    setDraftOffer(null);
+    discardStoredDraft();
+  };
+
+  useEffect(() => {
+    const action = decideEvaluationSync({
+      baselineKey: baselineRef.current.key,
+      incomingKey: syncKey,
+      baselineSnapshot: baselineRef.current.snapshot,
+      incomingSnapshot: savedSnapshot,
+      currentSnapshot,
+    });
+    if (action === 'keep') return;
+    if (action === 'notify') {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setHasNewerVersion(true);
+      return;
+    }
+    applyServerVersion();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [syncKey, savedSnapshot, currentSnapshot]);
 
   const updateRow = (index, patch) => {
     if (readOnly) return;
@@ -148,7 +231,7 @@ export default function RubricForm({
       : '';
   };
 
-  const handleSubmit = (status) => {
+  const handleSubmit = async (status) => {
     if (readOnly || !onSubmit) return;
     // Saving an unchanged draft or submitted evaluation is not an update; submitting a draft still is.
     if ((status === 'DRAFT' || isSubmitted) && !hasChanges) return;
@@ -169,7 +252,7 @@ export default function RubricForm({
       return;
     }
 
-    onSubmit({
+    const saved = await onSubmit({
       checkpointNumber,
       checkpointTitle,
       rubricScores: rubricScores.map((item) => ({
@@ -184,6 +267,8 @@ export default function RubricForm({
       })),
       status: isSubmitted ? 'SUBMITTED' : status,
     });
+    // Only a successful save makes the browser copy redundant; on failure it stays as the lecturer's safety net.
+    if (saved === true) discardStoredDraft();
   };
 
   const title = checkpointTitle && checkpointTitle !== `Checkpoint ${checkpointNumber}`
@@ -213,6 +298,38 @@ export default function RubricForm({
           </div>
         )}
       </div>
+
+      {restoredAt !== null && (
+        <div role="status" className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+          <span>Restored your unsaved changes from {formatDraftTime(restoredAt)}.</span>
+          <button type="button" onClick={discardRestoredDraft} disabled={readOnly} className="shrink-0 rounded-lg border border-amber-200 bg-white px-3 py-1.5 font-semibold text-amber-700 hover:bg-amber-50 disabled:opacity-50">
+            Discard
+          </button>
+        </div>
+      )}
+
+      {draftOffer && (
+        <div role="status" className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+          <span>You have unsaved changes from {formatDraftTime(draftOffer.draft.savedAt)}, but this evaluation was updated since then.</span>
+          <span className="flex shrink-0 gap-2">
+            <button type="button" onClick={restoreOfferedDraft} disabled={readOnly} className="rounded-lg border border-amber-200 bg-white px-3 py-1.5 font-semibold text-amber-700 hover:bg-amber-50 disabled:opacity-50">
+              Restore my changes
+            </button>
+            <button type="button" onClick={discardOfferedDraft} disabled={readOnly} className="rounded-lg border border-amber-200 bg-white px-3 py-1.5 font-semibold text-amber-700 hover:bg-amber-50 disabled:opacity-50">
+              Discard
+            </button>
+          </span>
+        </div>
+      )}
+
+      {hasNewerVersion && (
+        <div role="status" className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+          <span>A newer version of this evaluation was saved elsewhere. Your unsaved edits are kept.</span>
+          <button type="button" onClick={applyServerVersion} disabled={readOnly} className="shrink-0 rounded-lg border border-amber-200 bg-white px-3 py-1.5 font-semibold text-amber-700 hover:bg-amber-50 disabled:opacity-50">
+            Load latest and discard my edits
+          </button>
+        </div>
+      )}
 
       <div className="divide-y divide-slate-100 rounded-xl border border-slate-200">
         {rubricScores.length === 0 && (
