@@ -1,0 +1,39 @@
+services:
+  backend:
+    environment:
+      Mentoring__MatchingProvider: Hybrid
+      Mentoring__Semantic__BaseUrl: http://127.0.0.1:8091/
+
+  mentor-semantic:
+    image: ehub-mentor-semantic:${IMAGE_TAG:-local}
+    build:
+      context: .
+      dockerfile: tools/mentor-matching/semantic/Dockerfile
+    restart: unless-stopped
+    # The backend accepts only a loopback HTTP origin for this local service.
+    # Sharing its network namespace keeps port 8091 off the public host network.
+    network_mode: "service:backend"
+    depends_on:
+      backend:
+        condition: service_started
+    cpus: "2.0"
+    mem_limit: 2g
+    memswap_limit: 2g
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8091/health', timeout=3)"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    logging:
+      driver: local
+      options:
+        max-size: "10m"
+        max-file: "5"
+    security_opt:
+      - no-new-privileges:true
+    init: true

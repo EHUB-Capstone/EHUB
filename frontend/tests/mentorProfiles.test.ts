@@ -3,6 +3,7 @@ import test from 'node:test';
 import { mentorSearchText, needsMentorProfileSetup, parseMentorTags, validateMentorMetadata } from '../src/utils/mentorProfiles.ts';
 import type { MentorProfile, MentorProfileDraft } from '../src/types/mentoring.ts';
 import { resolveProfileTab } from '../src/utils/profileNavigation.ts';
+import { formatMentorDirectoryBio, isMentorCvFormLabel, parseMentorCvFormBio, parseMentorProfessionalExperience } from '../src/utils/mentorDirectoryBio.ts';
 
 const profile: MentorProfileDraft = { mentorType: 'Business', expertise: ['Product'], startupDomains: ['Education'],
   technologySkills: ['Cloud'], tags: ['Founder'], bio: 'Advisor', experience: null, organization: null,
@@ -39,6 +40,31 @@ test('mentor experience rejects duplicates, invalid years and missing area', () 
 test('mentor search includes domains, technology, tags and structured experience', () => {
   const text = mentorSearchText(profile);
   for (const term of ['education', 'cloud', 'founder', 'ai', 'advanced', 'platform']) assert.ok(text.includes(term));
+});
+
+test('mentor directory removes CV form instructions but preserves profile details', () => {
+  const formatted = formatMentorDirectoryBio('Thời gian (Từ tháng/năm đến tháng/năm) 2012-2015 Tên trường/cơ sở đào tạo, quốc gia Đại học Demo Chuyên ngành đào tạo Thiết kế UX/UI Xếp loại Giỏi Các ngoại ngữ có thể sử dụng Tiếng Anh');
+  assert.equal(formatted, '2012-2015 Đại học Demo Thiết kế UX/UI Giỏi Tiếng Anh');
+  assert.equal(formatMentorDirectoryBio('Advisor in software product design.'), 'Advisor in software product design.');
+  assert.equal(formatMentorDirectoryBio(null), '');
+  assert.equal(isMentorCvFormLabel('Thời gian'), true);
+  assert.equal(isMentorCvFormLabel('AI'), false);
+});
+
+test('mentor profile separates education rows from extra details in the standard CV form', () => {
+  const parsed = parseMentorCvFormBio(`Thời gian\n(Từ tháng/năm\nđến tháng/năm)\nTên trường/cơ sở đào tạo, quốc gia\nChuyên ngành đào tạo\nLoại hình đào tạo\nXếp loại\n2009-2012\nTHPT Tri Thức Demo\nPhổ thông\nTHPT\nKhá\n2012-2016\nĐại học Hạ tầng Số Demo\nMạng máy tính\nKỹ sư\nGiỏi\n* Tên chuyên đề luận án tốt nghiệp bậc cao nhất: Giám sát hạ tầng\nCác ngoại ngữ có thể sử dụng\nTiếng Anh\nTOEFL iBT\n100\nBằng/\n(nếu có)\nXếp loại/\nĐiểm\nNgày cấp`);
+  assert.equal(parsed?.education.length, 2);
+  assert.equal(parsed?.education[1].institution, 'Đại học Hạ tầng Số Demo');
+  assert.deepEqual(parsed?.education[1].details, ['Mạng máy tính', 'Kỹ sư', 'Giỏi']);
+  assert.deepEqual(parsed?.thesis, ['Giám sát hạ tầng']);
+  assert.deepEqual(parsed?.languagesAndCertificates, ['Tiếng Anh', 'TOEFL iBT', '100']);
+  assert.equal(parseMentorCvFormBio('Experienced software architect.'), null);
+});
+
+test('work experience hides blank date prompts while preserving entered details', () => {
+  assert.deepEqual(parseMentorProfessionalExperience('Thời gian\n(Từ tháng/năm\nđến tháng/năm)\n2019-2023\nProduct Manager\nCông ty Demo'),
+    ['2019-2023', 'Product Manager', 'Công ty Demo']);
+  assert.deepEqual(parseMentorProfessionalExperience('Thời gian (Từ tháng/năm đến tháng/năm)'), []);
 });
 
 const emptyMentor: MentorProfile = {
