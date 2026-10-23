@@ -10,6 +10,7 @@ import type {
   WorkspaceUser,
 } from '../types/auth';
 import { clearPreviewDocumentCache } from '../utils/previewDocumentCache';
+import { clearAllRubricDrafts, getBrowserStorage } from '../utils/rubricDraft';
 
 // ─── Context shape ───────────────────────────────────────────────────────────
 
@@ -131,6 +132,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(null);
       // Documents opened in previews must not stay in memory for the next user of this tab.
       clearPreviewDocumentCache();
+      // Unsaved rubric scores must not stay in this tab for the next user.
+      clearAllRubricDrafts(getBrowserStorage());
     }
   }, []);
 

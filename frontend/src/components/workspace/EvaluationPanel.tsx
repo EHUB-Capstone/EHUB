@@ -106,6 +106,8 @@ export default function EvaluationPanel({
   const isMentor = user?.role === 'MENTOR';
   const canViewHistory = user?.role === 'LECTURER' || user?.role === 'ADMIN';
   const canEdit = !isReadOnly && user?.role === 'LECTURER';
+  // Scopes the browser copy of unsaved scores to this lecturer and team.
+  const draftScope = { userId: user?._id, teamId };
   const activeEvaluation = useMemo(
     () => evaluations.find((ev) => ev.lecturerId?._id === user?._id) || null,
     [evaluations, user?._id]
@@ -195,10 +197,13 @@ export default function EvaluationPanel({
             ? 'Official evaluation submitted.'
             : 'Draft saved.');
         await fetchCheckpointData({ silent: true });
+        return true;
       }
+      return false;
     } catch (err) {
       const message = err.response?.data?.message || err.response?.data?.error || 'Failed to save evaluation';
       toast.error(message);
+      return false;
     } finally {
       setSaving(false);
     }
@@ -227,6 +232,7 @@ export default function EvaluationPanel({
           key={`${selectedCheckpoint}-${activeEvaluation?._id || 'new'}`}
           initialData={activeEvaluation || EMPTY_EVALUATION}
           onSubmit={saveEvaluation}
+          draftScope={draftScope}
           readOnly={saving}
           criteria={checkpointData?.rubrics || EMPTY_CRITERIA}
           members={checkpointData?.members || EMPTY_CRITERIA}
@@ -298,6 +304,7 @@ export default function EvaluationPanel({
             key={`${selectedCheckpoint}-${activeEvaluation?._id || 'new'}`}
             initialData={activeEvaluation || EMPTY_EVALUATION}
             onSubmit={saveEvaluation}
+            draftScope={draftScope}
             readOnly={saving}
             criteria={checkpointData?.rubrics || EMPTY_CRITERIA}
             members={checkpointData?.members || EMPTY_CRITERIA}
@@ -447,6 +454,7 @@ export default function EvaluationPanel({
                   key={`${selectedCheckpoint}-${activeEvaluation?._id || 'new'}`}
                   initialData={activeEvaluation || EMPTY_EVALUATION}
                   onSubmit={saveEvaluation}
+                  draftScope={draftScope}
                   readOnly={saving}
                   criteria={checkpointData?.rubrics || EMPTY_CRITERIA}
                   members={checkpointData?.members || EMPTY_CRITERIA}
