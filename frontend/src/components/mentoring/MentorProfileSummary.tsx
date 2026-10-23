@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Building2, Download, FileText, Link2 } from 'lucide-react';
 import Button from '../ui/Button';
 import type { MentorProfile } from '../../types/mentoring';
@@ -24,6 +25,8 @@ function ProfileLink({ label, value }: { label: string; value: string | null }) 
 }
 
 export default function MentorProfileSummary({ profile, onDownload, downloading }: MentorProfileSummaryProps) {
+  const [bioExpanded, setBioExpanded] = useState(false);
+  const bio = profile.bio?.trim() ?? '';
   const tagGroups = [
     { title: 'Expertise', values: profile.expertise },
     { title: 'Skills', values: profile.technologySkills },
@@ -45,7 +48,13 @@ export default function MentorProfileSummary({ profile, onDownload, downloading 
 
     <section className="border-t border-slate-200 pt-5">
       <h3 className="text-subheading text-secondary">Professional bio</h3>
-      <p className="mt-2 whitespace-pre-wrap break-words text-body leading-7 text-slate-600">{profile.bio?.trim() || 'No bio added yet.'}</p>
+      <p id="mentor-professional-bio" className={`mt-2 whitespace-pre-wrap break-words text-body leading-7 text-slate-600 ${bio && !bioExpanded ? 'line-clamp-3' : ''}`}>
+        {bio || 'No bio added yet.'}
+      </p>
+      {bio.length > 180 && <button type="button" aria-expanded={bioExpanded} aria-controls="mentor-professional-bio"
+        onClick={() => setBioExpanded(expanded => !expanded)} className="mt-2 text-body-sm font-medium text-primary-700 hover:underline">
+        {bioExpanded ? 'Thu gọn' : 'Xem đầy đủ'}
+      </button>}
     </section>
     <section className="border-t border-slate-200 pt-5">
       <h3 className="text-subheading text-secondary">Work experience</h3>

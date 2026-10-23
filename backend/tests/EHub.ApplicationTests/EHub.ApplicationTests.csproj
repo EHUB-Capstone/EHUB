@@ -23,6 +23,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <None Include="..\..\..\tools\mentor-matching\parity-fixtures.json"
+          Link="Mentoring\parity-fixtures.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\src\EHub.Application\EHub.Application.csproj" />
     <ProjectReference Include="..\..\src\EHub.Domain\EHub.Domain.csproj" />
     <ProjectReference Include="..\..\src\EHub.Contracts\EHub.Contracts.csproj" />

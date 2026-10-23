@@ -16,6 +16,7 @@ using EHub.Infrastructure.Mentoring;
 using EHub.Infrastructure.Persistence;
 using EHub.IntegrationTests.Common;
 using EHub.Shared.Constants;
+using EHub.Shared.Errors;
 using EHub.Shared.Results;
 using FluentAssertions;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -61,7 +62,7 @@ public sealed class MentorCvUploadIntegrationTests(CustomWebApplicationFactory f
         var profile = (await response.Content.ReadFromJsonAsync<ApiResponse<MentorProfileResponse>>())!.Data!;
         profile.Experience.Should().Contain("Giám đốc Marketing").And.NotContain("PRIVATE");
         profile.Bio.Should().Contain("Đại học Demo");
-        profile.Expertise.Should().Contain(["Marketing", "Finance"]);
+        profile.Expertise.Should().Contain("Marketing").And.NotContain("Finance");
         profile.TechnologySkills.Should().BeEmpty();
 
         using var recommend = Authorized(HttpMethod.Get, $"/api/mentoring/teams/{teamId}/recommendations", lecturer.Token);
@@ -81,6 +82,146 @@ public sealed class MentorCvUploadIntegrationTests(CustomWebApplicationFactory f
         using var downloaded = await client.SendAsync(download);
         downloaded.StatusCode.Should().Be(HttpStatusCode.OK);
         (await downloaded.Content.ReadAsByteArrayAsync()).Should().Equal(cvBytes);
+    }
+
+    [Fact]
+    public async Task TrainedProviderRanksUploadedProfessionalEvidenceWithoutOllamaOrVectorCache()
+    {
+        var ollama = new RecordingOllama();
+        using var app = App(ollama, trained: true);
+        using var client = app.CreateClient();
+        app.Services.GetRequiredService<IMentorFitRanker>().Should().BeOfType<FileMentorFitRanker>();
+        var mentor = await Identity(SystemRoles.Mentor, withProfile: true);
+        var lecturer = await Identity(SystemRoles.Lecturer);
+        var teamId = await Team(mentor.Id, lecturer.Id);
+        const string syntheticSkillsCv = "Education\nDemo Academy\nTechnical skills\nMarketing, sales and negotiation\nPersonal information\nPRIVATE_PERSON_MARKER";
+        using var upload = Upload(mentor.Token, Docx(syntheticSkillsCv));
+        using var uploaded = await client.SendAsync(upload);
+        uploaded.StatusCode.Should().Be(HttpStatusCode.OK);
+        var profile = (await uploaded.Content.ReadFromJsonAsync<ApiResponse<MentorProfileResponse>>())!.Data!;
+        profile.Bio.Should().Contain("Marketing, sales and negotiation").And.NotContain("PRIVATE");
+        profile.TechnologySkills.Should().BeEmpty();
+        profile.MentorType.Should().Be("Business");
+
+        using var request = Authorized(HttpMethod.Get, $"/api/mentoring/teams/{teamId}/recommendations", lecturer.Token);
+        using var response = await client.SendAsync(request);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var recommendation = (await response.Content.ReadFromJsonAsync<ApiResponse<MentorRecommendationResponse[]>>())!.Data!.Single();
+        recommendation.Mentor.Id.Should().Be(profile.Id);
+        recommendation.FitScore.Should().BeInRange(1, 100);
+        recommendation.Reasons.Should().Contain(reason => reason.Contains("Marketing", StringComparison.OrdinalIgnoreCase));
+        recommendation.Reasons.Should().NotContain(reason => reason.Contains("PRIVATE"));
+        ollama.Inputs.Should().BeEmpty();
+        using var scope = factory.Services.CreateScope();
+        (await scope.ServiceProvider.GetRequiredService<AppDbContext>().MentorEmbeddings.AsNoTracking()
+            .AnyAsync(x => x.MentorProfileId == profile.Id)).Should().BeFalse();
+    }
+
+    [LocalSemanticFact]
+    public async Task HybridProviderUsesRealLocalOnnxAndUploadedExperienceThroughTheApi()
+    {
+        var ollama = new RecordingOllama();
+        using var app = App(ollama, trained: true, hybrid: true);
+        using var client = app.CreateClient();
+        client.Timeout = TimeSpan.FromSeconds(60);
+        var mentor = await Identity(SystemRoles.Mentor, withProfile: true);
+        var lecturer = await Identity(SystemRoles.Lecturer);
+        var teamId = await Team(mentor.Id, lecturer.Id);
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var team = await db.Teams.SingleAsync(x => x.Id == teamId);
+            team.TeamName = "Synthetic cash planning";
+            team.Description = "Nhóm muốn biết còn duy trì được bao lâu với số tiền đang có. Cần tính các khoản phải chi mỗi tháng trước khi nhận thêm vốn.";
+            await db.SaveChangesAsync();
+        }
+        using var upload = Upload(mentor.Token, Docx("Work experience\nQuản lý tài chính cho nhóm sáng lập. Lập kế hoạch dòng tiền, ngân sách và thời gian duy trì hoạt động."));
+        using var uploaded = await client.SendAsync(upload);
+        uploaded.StatusCode.Should().Be(HttpStatusCode.OK);
+        using var request = Authorized(HttpMethod.Get, $"/api/mentoring/teams/{teamId}/recommendations", lecturer.Token);
+        using var response = await client.SendAsync(request);
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var items = (await response.Content.ReadFromJsonAsync<ApiResponse<MentorRecommendationResponse[]>>())!.Data!;
+        items.Should().ContainSingle();
+        items[0].Reasons.Should().Contain(x => x.Contains("Đối chiếu ngữ nghĩa với kinh nghiệm"));
+        ollama.Inputs.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task TrainedProviderReturnsNoSuggestionWhenTheUploadedCvExplicitlyDeniesTheRequiredExpertise()
+    {
+        var ollama = new RecordingOllama();
+        using var app = App(ollama, trained: true);
+        using var client = app.CreateClient();
+        var mentor = await Identity(SystemRoles.Mentor, withProfile: true);
+        var lecturer = await Identity(SystemRoles.Lecturer);
+        var teamId = await Team(mentor.Id, lecturer.Id);
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var profile = await db.MentorProfiles.SingleAsync(x => x.UserId == mentor.Id);
+            profile.MentorType = "IT";
+            profile.Expertise = ["AI"]; // Previously inferred tag must not override the new CV denial.
+            (await db.Teams.SingleAsync(x => x.Id == teamId)).Description = "AI và computer vision để phân loại ảnh";
+            await db.SaveChangesAsync();
+        }
+        using var upload = Upload(mentor.Token, Docx("Work experience\nBackend Node.js. Không có kinh nghiệm AI, computer vision hoặc machine learning."));
+        using var uploaded = await client.SendAsync(upload);
+        uploaded.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        using var request = Authorized(HttpMethod.Get, $"/api/mentoring/teams/{teamId}/recommendations", lecturer.Token);
+        using var response = await client.SendAsync(request);
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        (await response.Content.ReadFromJsonAsync<ApiResponse<MentorRecommendationResponse[]>>())!.Data.Should().BeEmpty();
+        ollama.Inputs.Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData(null, HttpStatusCode.Unauthorized, false)]
+    [InlineData(SystemRoles.Lecturer, HttpStatusCode.Forbidden, false)]
+    [InlineData(SystemRoles.Mentor, HttpStatusCode.Forbidden, false)]
+    [InlineData(SystemRoles.Student, HttpStatusCode.Forbidden, false)]
+    [InlineData(null, HttpStatusCode.Unauthorized, true)]
+    [InlineData(SystemRoles.Lecturer, HttpStatusCode.Forbidden, true)]
+    [InlineData(SystemRoles.Mentor, HttpStatusCode.Forbidden, true)]
+    [InlineData(SystemRoles.Student, HttpStatusCode.Forbidden, true)]
+    public async Task TrainedRecommendationsEnforceAuthenticationRoleAndClassScope(string? role, HttpStatusCode expected, bool hybrid)
+    {
+        using var app = App(trained: true, hybrid: hybrid);
+        using var client = app.CreateClient();
+        var mentor = await Identity(SystemRoles.Mentor, withProfile: true);
+        var lecturer = await Identity(SystemRoles.Lecturer);
+        var teamId = await Team(mentor.Id, lecturer.Id);
+        var token = role is null ? null : (await Identity(role)).Token;
+        using var request = Authorized(HttpMethod.Get, $"/api/mentoring/teams/{teamId}/recommendations", token);
+
+        using var response = await client.SendAsync(request);
+
+        response.StatusCode.Should().Be(expected);
+    }
+
+    [Fact]
+    public async Task ExplicitMissingTrainedModelReturns503WithoutLeakingItsPathOrUsingOllama()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"ehub-private-model-marker-{Guid.NewGuid():N}", "missing.json");
+        var ollama = new RecordingOllama();
+        using var app = App(ollama, trained: true, trainedModelPath: path);
+        using var client = app.CreateClient();
+        var mentor = await Identity(SystemRoles.Mentor, withProfile: true);
+        var lecturer = await Identity(SystemRoles.Lecturer);
+        var teamId = await Team(mentor.Id, lecturer.Id);
+        using var request = Authorized(HttpMethod.Get, $"/api/mentoring/teams/{teamId}/recommendations", lecturer.Token);
+
+        using var response = await client.SendAsync(request);
+
+        response.StatusCode.Should().Be(HttpStatusCode.ServiceUnavailable);
+        var body = await response.Content.ReadAsStringAsync();
+        body.Should().NotContain(path).And.NotContain("ehub-private-model-marker").And.NotContain("Exception");
+        var error = JsonSerializer.Deserialize<ApiResponse<object>>(body, new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
+        error.Code.Should().Be(ErrorCodes.MentorMatchingUnavailable);
+        error.Message.Should().Be("Mô hình gợi ý mentor tạm thời chưa sẵn sàng.");
+        ollama.Inputs.Should().BeEmpty();
     }
 
     [Theory]
@@ -144,9 +285,11 @@ public sealed class MentorCvUploadIntegrationTests(CustomWebApplicationFactory f
         replaced.StatusCode.Should().Be(HttpStatusCode.OK);
         var replacementProfile = (await replaced.Content.ReadFromJsonAsync<ApiResponse<MentorProfileResponse>>())!.Data!;
         replacementProfile.TechnologySkills.Should().Equal("Negotiation", "Facilitation");
-        replacementProfile.Bio.Should().Be("Demo University - Software engineering");
+        replacementProfile.Bio.Should().Be("Demo University - Software engineering\nAWS, Azure");
         replacementProfile.Experience.Should().Be("Built Python and PostgreSQL tools");
-        replacementProfile.Expertise.Should().Contain("Software engineering");
+        // Preserve the manually entered Finance tag; an education-only degree is
+        // kept in Bio without being promoted to declared professional expertise.
+        replacementProfile.Expertise.Should().Contain("Finance").And.NotContain("Software engineering");
 
         using var invalid = Upload(mentor.Token, "%PDF-invalid"u8.ToArray(), "invalid.pdf");
         (await client.SendAsync(invalid)).StatusCode.Should().Be(HttpStatusCode.BadRequest);
@@ -224,17 +367,39 @@ public sealed class MentorCvUploadIntegrationTests(CustomWebApplicationFactory f
         output.WriteLine($"REAL BGE-M3: CV upload 200; recommendations 200; fit score {item.FitScore}; vector 1024 dimensions persisted in PostgreSQL.");
     }
 
-    private WebApplicationFactory<Program> App(RecordingOllama? ollama = null) => factory.WithWebHostBuilder(builder =>
+    private WebApplicationFactory<Program> App(RecordingOllama? ollama = null, bool trained = false,
+        string? trainedModelPath = null, bool hybrid = false) => factory.WithWebHostBuilder(builder =>
+    {
+        builder.ConfigureAppConfiguration((_, configuration) => configuration.AddInMemoryCollection(
+            new Dictionary<string, string?>
+            {
+                ["Mentoring:MatchingProvider"] = hybrid ? "Hybrid" : trained ? "Trained" : "Ollama",
+                ["Mentoring:TrainedModelPath"] = trainedModelPath
+            }));
         builder.ConfigureServices(services =>
         {
             services.RemoveAll<IMentorDocumentStorageService>();
             services.AddSingleton<IMentorDocumentStorageService, MemoryDocuments>();
+            // Minimal-host configuration overrides arrive after Program registers services.
+            // Exercise the real file provider here; separate unit tests verify provider selection.
+            services.RemoveAll<IMentorFitRanker>();
+            if (trained)
+                services.AddSingleton<IMentorFitRanker>(provider =>
+                    new FileMentorFitRanker(provider.GetRequiredService<IConfiguration>()));
+            services.RemoveAll<IMentorSemanticReranker>();
+            if (hybrid)
+                services.AddHttpClient<IMentorSemanticReranker, LocalSemanticMentorReranker>(client =>
+                {
+                    client.BaseAddress = new Uri("http://127.0.0.1:8091/");
+                    client.Timeout = TimeSpan.FromSeconds(40);
+                }).ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false, UseProxy = false });
             if (ollama is null) return;
             services.RemoveAll<IMentorEmbeddingSearch>();
             services.AddScoped<IMentorEmbeddingSearch>(provider => new OllamaMentorEmbeddingSearch(
                 provider.GetRequiredService<AppDbContext>(), new HttpClient(ollama, disposeHandler: false)
                 { BaseAddress = new Uri("http://localhost:11434/") }, provider.GetRequiredService<IConfiguration>()));
-        }));
+        });
+    });
 
     private async Task<(Guid Id, string Token)> Identity(string roleName, bool withProfile = false)
     {
@@ -344,5 +509,14 @@ public sealed class RealOllamaFactAttribute : FactAttribute
     {
         if (Environment.GetEnvironmentVariable("EHUB_TEST_REAL_OLLAMA") != "1")
             Skip = "Set EHUB_TEST_REAL_OLLAMA=1 with local Ollama/bge-m3 running to test the actual model.";
+    }
+}
+
+public sealed class LocalSemanticFactAttribute : FactAttribute
+{
+    public LocalSemanticFactAttribute()
+    {
+        if (Environment.GetEnvironmentVariable("EHUB_TEST_LOCAL_SEMANTIC") != "1")
+            Skip = "Set EHUB_TEST_LOCAL_SEMANTIC=1 with the pinned local ONNX service running to test real semantic inference.";
     }
 }

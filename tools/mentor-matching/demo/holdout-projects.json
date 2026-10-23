@@ -1,0 +1,147 @@
+{
+  "isSynthetic": true,
+  "description": "Các mô tả mới ngoài curriculum và demo cũ. Không dùng file này để train. Không có trường nhu cầu Business/IT làm đầu vào.",
+  "projects": [
+    {
+      "id": "H01",
+      "name": "Sổ chăm sóc thú cưng — giả lập",
+      "description": "Ứng dụng di động bằng Flutter trên Android và iOS giúp chủ nuôi theo dõi lịch chăm sóc thú cưng. Nhóm đang nghiên cứu thị trường và phỏng vấn khách hàng để kiểm chứng nhu cầu trước khi phát hành.",
+      "kind": "holdout",
+      "expectedBusiness": [
+        "B01",
+        "B04"
+      ],
+      "expectedIT": [
+        "I02"
+      ],
+      "expectationNote": "Kỳ vọng tác giả cho ca kiểm tra mới, không phải nhãn chuẩn thực tế. Chỉ name và description được đưa vào handler.",
+      "checks": []
+    },
+    {
+      "id": "H02",
+      "name": "Xưởng đồ da tái sử dụng — giả lập",
+      "description": "Xưởng đang tính ngân sách, lập dòng tiền và chuẩn bị gọi vốn cho sáu tháng sản xuất tiếp theo. Giai đoạn này không phát triển phần mềm, không cần ứng dụng di động hoặc hệ thống backend.",
+      "kind": "holdout",
+      "expectedBusiness": [
+        "B02"
+      ],
+      "expectedIT": [],
+      "expectationNote": "Kỳ vọng tác giả cho ca kiểm tra mới, không phải nhãn chuẩn thực tế. Chỉ name và description được đưa vào handler.",
+      "checks": [
+        "business-only-no-it"
+      ]
+    },
+    {
+      "id": "H03",
+      "name": "Kho cấp phép thiết kế — giả lập",
+      "description": "Dịch vụ quản lý quyền sử dụng thiết kế và hợp đồng thương mại, cần làm rõ bản quyền và sở hữu trí tuệ. Dữ liệu lưu trên AWS; nhóm đang chuẩn bị triển khai cloud và kiểm tra bảo mật.",
+      "kind": "holdout",
+      "expectedBusiness": [
+        "B06"
+      ],
+      "expectedIT": [
+        "I05"
+      ],
+      "expectationNote": "Kỳ vọng tác giả cho ca kiểm tra mới, không phải nhãn chuẩn thực tế. Chỉ name và description được đưa vào handler.",
+      "checks": []
+    },
+    {
+      "id": "H04",
+      "name": "Cổng AI đơn hàng — giả lập",
+      "description": "Phiên bản hiện tại KHÔNG cần AI, computer vision hoặc machine learning. Hệ thống chỉ xử lý đơn hàng bằng C#/.NET và PostgreSQL; không cần tư vấn kinh doanh trong lần đánh giá này.",
+      "kind": "holdout",
+      "expectedBusiness": [],
+      "expectedIT": [
+        "I01"
+      ],
+      "expectationNote": "Kỳ vọng tác giả cho ca kiểm tra mới, không phải nhãn chuẩn thực tế. Chỉ name và description được đưa vào handler.",
+      "checks": [
+        "negated-project-need",
+        "negated-cv-expertise"
+      ]
+    },
+    {
+      "id": "H05",
+      "name": "Lớp học trên điện thoại — giả lập",
+      "description": "Ứng dụng React Native cho Android và iOS cung cấp nội dung học ngắn. Nhóm edtech muốn bán hàng B2B cho doanh nghiệp để tổ chức chương trình đào tạo.",
+      "kind": "holdout",
+      "expectedBusiness": [
+        "B05"
+      ],
+      "expectedIT": [
+        "I02"
+      ],
+      "expectationNote": "Kỳ vọng tác giả cho ca kiểm tra mới, không phải nhãn chuẩn thực tế. Chỉ name và description được đưa vào handler.",
+      "checks": [
+        "react-native-not-react-web"
+      ]
+    },
+    {
+      "id": "H06",
+      "name": "Động cơ quỹ đạo — giả lập",
+      "description": "Dự án nghiên cứu động cơ ion cho vệ tinh, cần chuyên môn vật lý plasma và thử nghiệm buồng chân không trong môi trường quỹ đạo.",
+      "kind": "holdout",
+      "expectedBusiness": [],
+      "expectedIT": [],
+      "expectationNote": "Kỳ vọng tác giả cho ca kiểm tra mới, không phải nhãn chuẩn thực tế. Chỉ name và description được đưa vào handler.",
+      "checks": [
+        "unsupported-specialty"
+      ]
+    },
+    {
+      "id": "H07",
+      "name": "Bữa trưa theo tuần — giả lập",
+      "description": "Dịch vụ F&B không chỉ làm marketing mà còn nghiên cứu thị trường, bán hàng và thử nghiệm giá bán suất ăn cho sinh viên. Nhóm chưa có nhu cầu phần mềm hoặc ứng dụng di động.",
+      "kind": "holdout",
+      "expectedBusiness": [
+        "B01"
+      ],
+      "expectedIT": [],
+      "expectationNote": "Kỳ vọng tác giả cho ca kiểm tra mới, không phải nhãn chuẩn thực tế. Chỉ name và description được đưa vào handler.",
+      "checks": [
+        "business-only-no-it"
+      ]
+    },
+    {
+      "id": "H08",
+      "name": "Ý tưởng kết nối — giả lập",
+      "description": "Một nền tảng giúp mọi người kết nối thuận tiện và làm việc hiệu quả hơn.",
+      "kind": "holdout",
+      "expectedBusiness": [],
+      "expectedIT": [],
+      "expectationNote": "Kỳ vọng tác giả cho ca kiểm tra mới, không phải nhãn chuẩn thực tế. Chỉ name và description được đưa vào handler.",
+      "checks": [
+        "unsupported-specialty"
+      ]
+    },
+    {
+      "id": "H09",
+      "name": "Hộp cơm tiện lợi — giả lập",
+      "description": "Trang web đặt hàng trực tuyến các suất ăn theo tuần cho người đi làm. Nhóm muốn tìm khách mới và thử các mức giá bán trước khi mở rộng dịch vụ.",
+      "kind": "holdout",
+      "expectedBusiness": [
+        "B01"
+      ],
+      "expectedIT": [
+        "I01",
+        "I03"
+      ],
+      "expectationNote": "Mô tả không chỉ định công nghệ: chấp nhận mentor xử lý đặt hàng hoặc giao diện web; không suy đoán framework bắt buộc.",
+      "checks": []
+    },
+    {
+      "id": "H10",
+      "name": "Ghé thăm làng — giả lập",
+      "description": "Ứng dụng trên điện thoại giúp du khách chọn chuyến tham quan làng nghề. Nhóm đang tổ chức hoạt động cùng người dân địa phương và xây kênh phân phối các trải nghiệm.",
+      "kind": "holdout",
+      "expectedBusiness": [
+        "B08"
+      ],
+      "expectedIT": [
+        "I02"
+      ],
+      "expectationNote": "Chỉ có mô tả tiếng Việt thông thường; không nêu Flutter, Android/iOS, marketing hay operations.",
+      "checks": []
+    }
+  ]
+}

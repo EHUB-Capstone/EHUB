@@ -15,9 +15,6 @@ export default function MentorDirectory() {
   const [editing, setEditing] = useState<MentorProfile | 'new' | null>(null);
   const [availability, setAvailability] = useState<MentorProfile | null>(null);
   const [notice, setNotice] = useState('');
-  const [domain, setDomain] = useState('');
-  const [technology, setTechnology] = useState('');
-  const [tag, setTag] = useState('');
   const [profiles, setProfiles] = useState<MentorProfile[]>([]);
   const [query, setQuery] = useState('');
   const [type, setType] = useState('All');
@@ -43,11 +40,8 @@ export default function MentorDirectory() {
   }, []);
   const filtered = useMemo(() => profiles.filter(profile =>
     (type === 'All' || profile.mentorType === type) &&
-    `${profile.fullName} ${profile.organization ?? ''} ${mentorSearchText(profile)}`.toLowerCase().includes(query.toLowerCase()) &&
-    (!domain || profile.startupDomains.includes(domain) || profile.experiences.some(x => x.kind === 'Startup' && x.area === domain)) &&
-    (!technology || profile.technologySkills.includes(technology) || profile.experiences.some(x => x.kind === 'Technology' && x.area === technology)) &&
-    (!tag || profile.tags.includes(tag))),
-  [profiles, query, type, domain, technology, tag]);
+    `${profile.fullName} ${profile.organization ?? ''} ${mentorSearchText(profile)}`.toLowerCase().includes(query.toLowerCase())),
+  [profiles, query, type]);
 
   const download = async (profile: MentorProfile, kind: 'cv' | 'portfolio') => {
     try {
@@ -67,12 +61,6 @@ export default function MentorDirectory() {
     <div className="flex flex-wrap gap-3"><input aria-label="Search mentors" value={query} onChange={event => setQuery(event.target.value)} placeholder="Search name or expertise" className="min-w-48 flex-1 rounded-lg border p-2" />
       <select aria-label="Filter mentor type" value={type} onChange={event => setType(event.target.value)} className="rounded-lg border p-2">
         <option value="All">All types</option><option value="Business">Business</option><option value="IT">IT</option><option value="Unspecified">Unspecified</option></select></div>
-    <div className="flex flex-wrap gap-3">{[
-      { label: 'Startup domain', value: domain, set: setDomain, options: profiles.flatMap(x => [...x.startupDomains, ...x.experiences.filter(e => e.kind === 'Startup').map(e => e.area)]) },
-      { label: 'Technology skill', value: technology, set: setTechnology, options: profiles.flatMap(x => [...x.technologySkills, ...x.experiences.filter(e => e.kind === 'Technology').map(e => e.area)]) },
-      { label: 'Mentor tag', value: tag, set: setTag, options: profiles.flatMap(x => x.tags) },
-    ].map(filter => <label key={filter.label} className="text-body">{filter.label}<select className="ml-2 rounded-lg border p-2" value={filter.value} onChange={e => filter.set(e.target.value)}>
-      <option value="">All</option>{[...new Set(filter.options)].sort().map(value => <option key={value}>{value}</option>)}</select></label>)}</div>
     {loading ? <p>Loading mentors…</p> : filtered.length === 0 ? <p className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-slate-600 shadow-card">No mentors match your search.</p> :
       <div className="grid gap-4 md:grid-cols-2">{filtered.map(profile => <article key={profile.id} className="space-y-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-card">
         <div className="flex flex-wrap items-start justify-between gap-2"><div><h2 className="text-heading text-secondary">{profile.fullName}</h2>
@@ -81,8 +69,6 @@ export default function MentorDirectory() {
         <p className="text-body text-slate-700">{profile.bio || 'No biography yet.'}</p>
         {isAdmin && <p className="text-body text-slate-500">{profile.email}</p>}
         <div className="flex flex-wrap gap-1">{profile.expertise.map(skill => <Badge key={skill} variant="neutral">{skill}</Badge>)}</div>
-        <dl className="space-y-1 text-body">{[['Domains', profile.startupDomains], ['Technology', profile.technologySkills], ['Tags', profile.tags]].map(([label, values]) =>
-          <div key={String(label)}><dt className="inline font-medium">{label}: </dt><dd className="inline text-slate-600">{(values as string[]).join(', ') || '—'}</dd></div>)}</dl>
         {profile.experiences.length > 0 && <ul className="space-y-1 text-body text-slate-600">{profile.experiences.map(entry =>
           <li key={`${entry.kind}:${entry.area}`}><span className="font-medium">{entry.kind} · {entry.area}</span>{entry.years !== null && ` · ${entry.years} years`}{entry.level && ` · ${entry.level}`}{entry.notes && <p>{entry.notes}</p>}</li>)}</ul>}
         <dl className="grid grid-cols-2 gap-2 border-t pt-3 text-body sm:grid-cols-4">

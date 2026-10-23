@@ -68,16 +68,19 @@ public sealed class MentorCvExtractionTests
         result.Value.Bio.Should().Contain("Đại học Demo").And.Contain("TOEFL");
         result.Value.Experience.Should().Contain("Demo Growth").And.Contain("Giám đốc Marketing")
             .And.Contain("2015 - 2020");
-        result.Value.Expertise.Should().Contain(["Marketing", "Finance", "Operations management", "Project management", "Strategy"]);
+        result.Value.Expertise.Should().Contain(["Marketing", "Operations management", "Project management", "Strategy"])
+            .And.NotContain("Finance");
         (result.Value.Bio + result.Value.Experience).Should().NotContain("PRIVATE_").And.NotContain("private-marker");
     }
 
     [Theory]
-    [InlineData("Skills: React, TypeScript, C#; cybersecurity")]
-    [InlineData("Technical skills\nReact, TypeScript, C#; cybersecurity")]
-    [InlineData("Vi tính\nReact, TypeScript, C#; cybersecurity")]
-    [InlineData("VI. KỸ NĂNG\nReact, TypeScript, C#; cybersecurity")]
-    public void SkillsSectionsAreExcludedWhileEducationAndExperienceAreExtracted(string skills)
+    [InlineData("Vi tính\nWord, Excel, PowerPoint")]
+    [InlineData("5.2. Vi tính\nWord, Excel, PowerPoint")]
+    [InlineData("Computer skills: Word, Excel, PowerPoint")]
+    [InlineData("Computer literacy\nWord, Excel, PowerPoint")]
+    [InlineData("Office skills\nWord, Excel, PowerPoint")]
+    [InlineData("Tin học văn phòng\nWord, Excel, PowerPoint")]
+    public void OfficeLiteracyIsExcludedWhileEducationAndExperienceAreExtracted(string skills)
     {
         var result = MentorCvProfileParser.Parse($"Personal information\nPRIVATE_MARKER\nEducation\nDemo University\n{skills}\nWork experience\nMarketing director\nReferences\nPRIVATE_REFERENCE");
         result.IsSuccess.Should().BeTrue();
@@ -87,6 +90,84 @@ public sealed class MentorCvExtractionTests
         MentorCvProfileParser.Parse(skills).IsFailure.Should().BeTrue();
     }
 
+    [Theory]
+    [InlineData("Skills: React, TypeScript, C#; cybersecurity")]
+    [InlineData("Technical skills\nReact, TypeScript, C#; cybersecurity")]
+    [InlineData("Technology skills\nReact, TypeScript, C#; cybersecurity")]
+    [InlineData("Professional skills\nReact, TypeScript, C#; cybersecurity")]
+    [InlineData("VI. KỸ NĂNG\nReact, TypeScript, C#; cybersecurity")]
+    [InlineData("VI.KỸ NĂNG: React, TypeScript, C#; cybersecurity")]
+    [InlineData("(VI) KỸ NĂNG: React, TypeScript, C#; cybersecurity")]
+    [InlineData("6.1 Kỹ năng: React, TypeScript, C#; cybersecurity")]
+    [InlineData("6: Skills: React, TypeScript, C#; cybersecurity")]
+    public void ProfessionalSkillsAreKeptForMatchingWithNumberedAndInlineHeadings(string skills)
+    {
+        var result = MentorCvProfileParser.Parse($"Education\nDemo University\n{skills}\nWork experience\nSynthetic product delivery");
+        result.IsSuccess.Should().BeTrue();
+        result.Value.Bio.Should().Be("Demo University\nReact, TypeScript, C#; cybersecurity");
+        result.Value.Experience.Should().Be("Synthetic product delivery");
+        result.Value.Expertise.Should().Contain("Cybersecurity");
+        MentorCvProfileParser.Parse(skills).IsSuccess.Should().BeTrue();
+    }
+
+    [Fact]
+    public void BusinessSkillsKeepTheirProfessionalNarrativeAndStripContactsAndPrivateSections()
+    {
+        var result = MentorCvProfileParser.Parse("""
+            VI. KỸ NĂNG
+            Marketing, sales and negotiation for a fictional product
+            Reach specialist@example.test or https://example.test/profile or +84 912 345 678
+            6.1. THÔNG TIN CÁ NHÂN
+            PRIVATE_PERSON_MARKER
+            6.2. SỞ THÍCH
+            PRIVATE_HOBBY_MARKER
+            VIII. CÁC CÔNG TRÌNH NGHIÊN CỨU
+            Nghiên cứu chiến lược cho sản phẩm giả định
+            NGƯỜI KHAI
+            PRIVATE_SIGNATURE_MARKER
+            """);
+        result.IsSuccess.Should().BeTrue();
+        result.Value.Bio.Should().Contain("Marketing, sales and negotiation")
+            .And.Contain("Nghiên cứu chiến lược")
+            .And.NotContain("PRIVATE_").And.NotContain("example.test").And.NotContain("912");
+        result.Value.Expertise.Should().Contain(["Marketing", "Sales", "Strategy"]);
+        result.Value.Expertise.Should().NotContain("Software engineering");
+    }
+
+    [Fact]
+    public void CombinedAwardsAndHobbiesRequireExplicitProfessionalSubheading()
+    {
+        var result = MentorCvProfileParser.Parse("""
+            VII. CÁC THÀNH TÍCH, GIẢI THƯỞNG, SỞ THÍCH
+            PRIVATE_AMBIGUOUS_MARKER
+            7.1.Giải thưởng
+            Chứng nhận thành tích nghiên cứu Demo
+            7.2.Sở thích
+            PRIVATE_HOBBY_MARKER
+            VIII.CÁC CÔNG TRÌNH NGHIÊN CỨU
+            Nghiên cứu công nghệ giả định
+            """);
+        result.IsSuccess.Should().BeTrue();
+        result.Value.Bio.Should().Contain("Chứng nhận thành tích nghiên cứu Demo")
+            .And.Contain("Nghiên cứu công nghệ giả định").And.NotContain("PRIVATE_");
+    }
+
+    [Fact]
+    public void CombinedLanguageAndComputerSectionKeepsLanguagesUntilExplicitOfficeSubsection()
+    {
+        var result = MentorCvProfileParser.Parse("""
+            V. TRÌNH ĐỘ NGOẠI NGỮ & VI TÍNH
+            TOEFL demo level
+            5.2. Vi tính
+            Word, Excel, PowerPoint
+            VI. KỸ NĂNG
+            Marketing and sales
+            """);
+        result.IsSuccess.Should().BeTrue();
+        result.Value.Bio.Should().Contain("TOEFL demo level").And.Contain("Marketing and sales")
+            .And.NotContain("Word").And.NotContain("Excel");
+    }
+
     [Fact]
     public void EducationAndExperienceKeepTechnologyNarrativeWithoutASkillsSection()
     {
@@ -94,7 +175,7 @@ public sealed class MentorCvExtractionTests
         result.IsSuccess.Should().BeTrue();
         result.Value.Bio.Should().Be("Demo University - Software engineering");
         result.Value.Experience.Should().Be("Built React applications with PostgreSQL");
-        result.Value.Expertise.Should().Contain("Software engineering");
+        result.Value.Expertise.Should().NotContain("Software engineering");
     }
 
     [Fact]
@@ -106,6 +187,31 @@ public sealed class MentorCvExtractionTests
         result.Value.Experience.Should().HaveLength(4000);
     }
 
+    [Theory]
+    [InlineData("Phát triển ứng dụng trên điện thoại bằng Flutter.")]
+    [InlineData("Xây hệ thống email marketing cho ngân hàng.")]
+    public void ProfessionalPhoneEmailAndBankingNarrativesAreNotContactLabels(string narrative)
+    {
+        var parsed = MentorCvProfileParser.Parse("Work experience\n" + narrative);
+        parsed.IsSuccess.Should().BeTrue();
+        parsed.Value.Experience.Should().Be(narrative);
+    }
+
+    [Theory]
+    [InlineData("Điện thoại: PRIVATE_PHONE")]
+    [InlineData("Phone: PRIVATE_PHONE")]
+    [InlineData("Ngân hàng: PRIVATE_BANK")]
+    [InlineData("Email: PRIVATE_EMAIL")]
+    [InlineData("Address: PRIVATE_ADDRESS")]
+    public void ContactLabelsStillExcludeTheirPrivateSection(string contact)
+    {
+        var parsed = MentorCvProfileParser.Parse("Work experience\nMarketing\n" + contact + "\nPRIVATE_VALUE\nTechnical skills\nReact");
+        parsed.IsSuccess.Should().BeTrue();
+        parsed.Value.Experience.Should().Be("Marketing");
+        parsed.Value.Bio.Should().Be("React");
+        (parsed.Value.Bio + parsed.Value.Experience).Should().NotContain("PRIVATE_");
+    }
+
     [Fact]
     public async Task DocxReaderPreservesVietnameseRunsAndTableParagraphs()
     {
@@ -113,7 +219,7 @@ public sealed class MentorCvExtractionTests
         var result = await reader.ReadAsync(Docx(EmployeeForm), ".docx", default);
         result.IsSuccess.Should().BeTrue();
         result.Value.Should().Contain("QUÁ TRÌNH ĐÀO TẠO").And.Contain("Giám đốc Marketing");
-        MentorCvProfileParser.Parse(result.Value).Value.Expertise.Should().Contain("Finance");
+        MentorCvProfileParser.Parse(result.Value).Value.Bio.Should().Contain("Tài chính");
     }
 
     [Fact]
@@ -172,7 +278,7 @@ public sealed class MentorCvExtractionTests
         result.IsSuccess.Should().BeTrue();
         result.Value.Experience.Should().Contain("Giám đốc Marketing").And.NotContain("PRIVATE");
         result.Value.Bio.Should().Contain("Đại học Demo");
-        result.Value.Expertise.Should().Contain(["Manual skill", "Marketing", "Finance"]);
+        result.Value.Expertise.Should().Contain(["Manual skill", "Marketing"]).And.NotContain("Finance");
         result.Value.MentorType.Should().Be("Business");
         result.Value.Organization.Should().Be("Manual organization");
         result.Value.Tags.Should().Equal("Manual tag");
@@ -185,6 +291,42 @@ public sealed class MentorCvExtractionTests
         download.Value.Content.Should().Equal(bytes);
         download.Value.ContentType.Should().Contain("wordprocessingml");
         (await handler.DownloadDocumentAsync(profile.Id, "cv", Guid.NewGuid(), SystemRoles.Mentor, default)).Error.Code.Should().Be(ErrorCodes.ClassAccessDenied);
+    }
+
+    [Theory]
+    [InlineData("Business", "Rust services and cybersecurity", "Cybersecurity")]
+    [InlineData("IT", "Marketing, sales and negotiation", "Marketing")]
+    public async Task ProfessionalSkillsUploadKeepsAdminTypeAndManualSkills(string mentorType, string narrative, string expertise)
+    {
+        await using var db = Context();
+        var profile = Profile();
+        profile.MentorType = mentorType;
+        profile.Experience = "Existing manually reviewed experience";
+        db.MentorProfiles.Add(profile);
+        await db.SaveChangesAsync();
+        var bytes = Docx($"VI. KỸ NĂNG\n{narrative}\nVII. THÔNG TIN NGƯỜI THÂN\nPRIVATE_FAMILY_MARKER");
+        var storage = Substitute.For<IMentorDocumentStorageService>();
+        storage.UploadAsync(Arg.Any<Stream>(), "skills.docx", profile.Id, "cv", default)
+            .Returns(Result.Success(("https://storage.example.test/skills", "skills-cv")));
+        var handler = new MentorProfileHandler(db, storage, Substitute.For<IMentorEmbeddingSearch>(),
+            new MentorCvTextReader(Substitute.For<IDocumentPreviewConverter>()));
+        using var stream = new MemoryStream(bytes);
+
+        var result = await handler.UploadDocumentAsync(profile.UserId, "cv", stream, "skills.docx", bytes.Length, default);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.Bio.Should().Be(narrative);
+        result.Value.MentorType.Should().Be(mentorType);
+        result.Value.TechnologySkills.Should().Equal("Negotiation", "Python");
+        result.Value.Expertise.Should().Contain(["Manual skill", expertise]);
+        result.Value.Experience.Should().Be("Existing manually reviewed experience");
+        result.Value.Organization.Should().Be("Manual organization");
+        result.Value.Tags.Should().Equal("Manual tag");
+        db.ChangeTracker.Clear();
+        var saved = await db.MentorProfiles.SingleAsync();
+        saved.Bio.Should().Be(narrative);
+        saved.MentorType.Should().Be(mentorType);
+        saved.TechnologySkills.Should().Equal("Negotiation", "Python");
     }
 
     [Theory]

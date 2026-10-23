@@ -14,7 +14,8 @@ using Microsoft.EntityFrameworkCore;
 namespace EHub.Application.Features.Mentoring;
 
 public sealed class MentorProfileHandler(IApplicationDbContext context, IMentorDocumentStorageService storage,
-    IMentorEmbeddingSearch embeddingSearch, IMentorCvTextReader cvTextReader) : IMentorProfileHandler
+    IMentorEmbeddingSearch embeddingSearch, IMentorCvTextReader cvTextReader,
+    IMentorFitRanker? trainedRanker = null, IMentorSemanticReranker? semanticReranker = null) : IMentorProfileHandler
 {
     public async Task<Result<MentorProfileResponse>> UploadDocumentAsync(Guid userId, string kind, Stream content,
         string fileName, long length, CancellationToken cancellationToken)
@@ -94,6 +95,18 @@ public sealed class MentorProfileHandler(IApplicationDbContext context, IMentorD
             _ => "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         };
         return Result.Success((downloaded.Value, name, contentType));
+    }
+
+    public async Task<Result<byte[]>> PreviewMyCvAsync(Guid userId, CancellationToken cancellationToken)
+    {
+        var profileId = await context.MentorProfiles.AsNoTracking()
+            .Where(x => x.UserId == userId).Select(x => (Guid?)x.Id).FirstOrDefaultAsync(cancellationToken);
+        if (profileId is null)
+            return Result.Failure<byte[]>(ErrorCodes.CommonNotFoundError, "Mentor profile was not found.");
+
+        var document = await DownloadDocumentAsync(profileId.Value, "cv", userId, SystemRoles.Mentor, cancellationToken);
+        if (document.IsFailure) return Result.Failure<byte[]>(document.Error);
+        return await cvTextReader.PreviewPdfAsync(document.Value.Content, Path.GetExtension(document.Value.FileName).ToLowerInvariant(), cancellationToken);
     }
 
     private static bool ValidDocument(byte[] bytes, string extension)
@@ -197,21 +210,34 @@ public sealed class MentorProfileHandler(IApplicationDbContext context, IMentorD
         var occupiedSlots = await context.MentorAssignments.AsNoTracking()
             .Where(x => x.TeamId == teamId && x.Status == MentorAssignmentStatus.Active && x.EndedAt == null)
             .Select(x => x.Slot).ToListAsync(cancellationToken);
+        var temporarySlots = await context.TemporaryMentorAssignments.AsNoTracking()
+            .Where(x => x.TeamId == teamId && x.Status == MentorAssignmentStatus.Active && x.EndedAt == null)
+            .Select(x => x.Slot).ToListAsync(cancellationToken);
+        occupiedSlots.AddRange(temporarySlots);
         profiles = profiles.Where(x => !occupiedSlots.Contains(x.Type)).ToList();
-        var projectDetails = new[] { team.Project?.Technology, team.Project?.StartupField,
-            team.ProjectDirection?.Summary, team.Project?.Description, team.Project?.Problem,
-            team.Project?.Solution, team.Description }.Where(x => !string.IsNullOrWhiteSpace(x))
-            .Concat(team.Project?.ProjectTags.Select(x => x.TagName) ?? []).ToArray();
-        if (projectDetails.Length == 0)
+        // Matching accepts the same two fields students provide: title and description.
+        var description = !string.IsNullOrWhiteSpace(team.Project?.Description)
+            ? team.Project.Description : team.Description;
+        if (string.IsNullOrWhiteSpace(description))
             return Result.Failure<IReadOnlyCollection<MentorRecommendationResponse>>(
-                ErrorCodes.CommonValidationError, "Cần mô tả hoặc tag dự án trước khi gợi ý mentor.");
-        var projectText = string.Join(' ', projectDetails.Concat(
-            new[] { team.ProjectDirection?.Title, team.Project?.Name, team.TeamName }
-                .Where(x => !string.IsNullOrWhiteSpace(x))));
-        IReadOnlyDictionary<Guid, double> similarities;
+                ErrorCodes.CommonValidationError, "Cần mô tả dự án trước khi gợi ý mentor.");
+        var title = team.Project?.Name ?? team.ProjectDirection?.Title ?? team.TeamName;
+        var projectText = description + "\n" + title;
+        IReadOnlyDictionary<Guid, double> similarities = new Dictionary<Guid, double>();
+        IReadOnlyDictionary<Guid, MentorFitRanking>? trainedScores = null;
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         deadline.CancelAfter(TimeSpan.FromSeconds(45));
-        try { similarities = await embeddingSearch.SimilaritiesAsync(projectText, profiles, deadline.Token); }
+        try
+        {
+            if (trainedRanker is not null)
+            {
+                trainedScores = trainedRanker.Rank(projectText, profiles, deadline.Token);
+                if (semanticReranker is not null)
+                    trainedScores = await semanticReranker.RerankAsync(projectText, profiles, trainedScores, deadline.Token);
+            }
+            else
+                similarities = await embeddingSearch.SimilaritiesAsync(projectText, profiles, deadline.Token);
+        }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
             return Result.Failure<IReadOnlyCollection<MentorRecommendationResponse>>(
@@ -222,14 +248,22 @@ public sealed class MentorProfileHandler(IApplicationDbContext context, IMentorD
             return Result.Failure<IReadOnlyCollection<MentorRecommendationResponse>>(
                 ErrorCodes.MentorMatchingUnavailable, "Dịch vụ gợi ý mentor tạm thời chưa sẵn sàng.");
         }
-        var items = profiles.Select(profile =>
+        catch (MentorFitRankerUnavailableException)
+        {
+            return Result.Failure<IReadOnlyCollection<MentorRecommendationResponse>>(
+                ErrorCodes.MentorMatchingUnavailable, "Mô hình gợi ý mentor tạm thời chưa sẵn sàng.");
+        }
+        var items = profiles.Where(profile => trainedScores is null || trainedScores[profile.Id].HasEvidence).Select(profile =>
         {
             var count = counts.GetValueOrDefault(profile.Id);
-            var fit = MentorFitScorer.Score(profile, projectText,
-                similarities.GetValueOrDefault(profile.Id), count);
+            var fit = trainedScores is not null
+                ? (Score: trainedScores[profile.Id].Score,
+                    Reasons: trainedScores[profile.Id].Reasons.Append($"Đang phụ trách {count} nhóm").ToArray(), HasCapacity: true)
+                : MentorFitScorer.Score(profile, projectText, similarities.GetValueOrDefault(profile.Id), count);
             return new MentorRecommendationResponse { Mentor = Map(profile), FitScore = fit.Score, Reasons = fit.Reasons,
                 ActiveTeamCount = count, HasCapacity = fit.HasCapacity };
-        }).OrderByDescending(x => x.HasCapacity).ThenByDescending(x => x.FitScore)
+        }).OrderByDescending(x => x.HasCapacity).ThenByDescending(x =>
+            trainedScores?.GetValueOrDefault(x.Mentor.Id)?.RankingValue ?? x.FitScore)
             .ThenBy(x => x.Mentor.FullName).ToArray();
         return Result.Success<IReadOnlyCollection<MentorRecommendationResponse>>(items);
     }

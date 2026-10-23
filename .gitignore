@@ -143,6 +143,11 @@ artifacts/
 out/
 publish/
 
+# Local mentor training inputs and Python cache must not enter Git.
+tools/mentor-matching/local/
+tools/mentor-matching/__pycache__/
+tools/mentor-matching/semantic/__pycache__/
+
 
 # =========================
 # Testing / Coverage

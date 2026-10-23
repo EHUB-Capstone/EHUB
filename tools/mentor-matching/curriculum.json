@@ -1,0 +1,394 @@
+{
+  "description": "Entirely fictional startup scenarios. Topic annotations express the author's simulated needs, not lecturer labels or production suitability.",
+  "scenarios": [
+    {
+      "id": "food-discovery",
+      "slot": "Business",
+      "context": "Một nhóm thử nghiệm sản phẩm đồ ăn giao cho sinh viên.",
+      "needs": [
+        "market_research",
+        "strategy"
+      ],
+      "domain": "food"
+    },
+    {
+      "id": "food-growth",
+      "slot": "Business",
+      "context": "Dịch vụ thực phẩm muốn tìm khách mới và mở kênh tiếp cận.",
+      "needs": [
+        "marketing",
+        "sales"
+      ],
+      "domain": "food"
+    },
+    {
+      "id": "food-cost",
+      "slot": "Business",
+      "context": "Nhóm bán suất ăn muốn kiểm soát chi phí và tồn kho.",
+      "needs": [
+        "finance",
+        "operations"
+      ],
+      "domain": "food"
+    },
+    {
+      "id": "food-app",
+      "slot": "IT",
+      "context": "Nhóm đồ ăn đang xây hệ thống nhận đơn.",
+      "needs": [
+        "backend",
+        "database"
+      ],
+      "domain": "food"
+    },
+    {
+      "id": "food-phone",
+      "slot": "IT",
+      "context": "Dịch vụ đặt món cần phiên bản trên điện thoại.",
+      "needs": [
+        "mobile",
+        "product"
+      ],
+      "domain": "food"
+    },
+    {
+      "id": "learning-discovery",
+      "slot": "Business",
+      "context": "Nhóm giáo dục muốn xác định người học sẵn sàng trả phí.",
+      "needs": [
+        "market_research",
+        "product"
+      ],
+      "domain": "education"
+    },
+    {
+      "id": "learning-funding",
+      "slot": "Business",
+      "context": "Sản phẩm học trực tuyến đang chuẩn bị giới thiệu với đối tác vốn.",
+      "needs": [
+        "fundraising",
+        "finance"
+      ],
+      "domain": "education"
+    },
+    {
+      "id": "learning-growth",
+      "slot": "Business",
+      "context": "Nhóm edtech đã có sản phẩm và muốn tiếp cận trường học.",
+      "needs": [
+        "sales",
+        "marketing"
+      ],
+      "domain": "education"
+    },
+    {
+      "id": "learning-web",
+      "slot": "IT",
+      "context": "Nhóm giáo dục cần hoàn thiện sản phẩm trên trình duyệt.",
+      "needs": [
+        "frontend",
+        "backend"
+      ],
+      "domain": "education"
+    },
+    {
+      "id": "learning-ai",
+      "slot": "IT",
+      "context": "Dịch vụ học trực tuyến cần thử nghiệm tính năng gợi ý bài học.",
+      "needs": [
+        "ai",
+        "data"
+      ],
+      "domain": "education"
+    },
+    {
+      "id": "retail-cost",
+      "slot": "Business",
+      "context": "Một cửa hàng trực tuyến muốn quản lý chi phí và nguồn hàng.",
+      "needs": [
+        "operations",
+        "finance"
+      ],
+      "domain": "retail"
+    },
+    {
+      "id": "retail-entry",
+      "slot": "Business",
+      "context": "Nhóm bán lẻ đang xác định phân khúc và hướng đi.",
+      "needs": [
+        "market_research",
+        "strategy"
+      ],
+      "domain": "retail"
+    },
+    {
+      "id": "retail-legal",
+      "slot": "Business",
+      "context": "Nhóm thương mại điện tử đang chuẩn bị hoạt động với đối tác.",
+      "needs": [
+        "legal",
+        "operations"
+      ],
+      "domain": "retail"
+    },
+    {
+      "id": "retail-checkout",
+      "slot": "IT",
+      "context": "Cửa hàng trực tuyến cần hoàn thiện luồng đặt hàng.",
+      "needs": [
+        "frontend",
+        "database"
+      ],
+      "domain": "retail"
+    },
+    {
+      "id": "retail-infrastructure",
+      "slot": "IT",
+      "context": "Nhóm bán lẻ cần triển khai hệ thống có kiểm soát truy cập.",
+      "needs": [
+        "cloud",
+        "security"
+      ],
+      "domain": "retail"
+    },
+    {
+      "id": "travel-discovery",
+      "slot": "Business",
+      "context": "Nhóm du lịch thử nghiệm dịch vụ cho nhóm khách mới.",
+      "needs": [
+        "market_research",
+        "marketing"
+      ],
+      "domain": "tourism"
+    },
+    {
+      "id": "travel-operations",
+      "slot": "Business",
+      "context": "Nhóm lữ hành cần phối hợp đối tác và lịch cung cấp dịch vụ.",
+      "needs": [
+        "operations",
+        "project_management"
+      ],
+      "domain": "tourism"
+    },
+    {
+      "id": "travel-capital",
+      "slot": "Business",
+      "context": "Nhóm du lịch muốn hoàn thiện phương án phát triển để trình bày với đối tác.",
+      "needs": [
+        "strategy",
+        "fundraising"
+      ],
+      "domain": "tourism"
+    },
+    {
+      "id": "travel-app",
+      "slot": "IT",
+      "context": "Sản phẩm du lịch cần bản trên điện thoại kết nối máy chủ.",
+      "needs": [
+        "mobile",
+        "backend"
+      ],
+      "domain": "tourism"
+    },
+    {
+      "id": "travel-data",
+      "slot": "IT",
+      "context": "Nhóm du lịch muốn tổng hợp và phân tích hành vi sử dụng sản phẩm.",
+      "needs": [
+        "data",
+        "database"
+      ],
+      "domain": "tourism"
+    },
+    {
+      "id": "reuse-validation",
+      "slot": "Business",
+      "context": "Nhóm tái sử dụng vật liệu đang tìm hướng phục vụ khách hàng.",
+      "needs": [
+        "market_research",
+        "strategy"
+      ]
+    },
+    {
+      "id": "craft-sales",
+      "slot": "Business",
+      "context": "Nhóm sản phẩm thủ công cần tiếp cận khách mua.",
+      "needs": [
+        "marketing",
+        "sales"
+      ],
+      "domain": "retail"
+    },
+    {
+      "id": "service-finance",
+      "slot": "Business",
+      "context": "Nhóm cung cấp dịch vụ muốn quản lý ngân sách trước khi mở rộng.",
+      "needs": [
+        "finance",
+        "strategy"
+      ]
+    },
+    {
+      "id": "platform-security",
+      "slot": "IT",
+      "context": "Nhóm xây nền tảng kết nối đối tác cần bảo vệ thông tin.",
+      "needs": [
+        "security",
+        "backend"
+      ]
+    },
+    {
+      "id": "device-cloud",
+      "slot": "IT",
+      "context": "Nhóm thiết bị thông minh cần đưa dịch vụ lên môi trường vận hành.",
+      "needs": [
+        "cloud",
+        "database"
+      ]
+    },
+    {
+      "id": "product-usability",
+      "slot": "IT",
+      "context": "Nhóm sản phẩm số muốn cải thiện trải nghiệm sử dụng trên web.",
+      "needs": [
+        "product",
+        "frontend"
+      ]
+    },
+    {
+      "id": "delivery-process",
+      "slot": "Business",
+      "context": "Nhóm dịch vụ giao nhận cần tổ chức thực hiện công việc.",
+      "needs": [
+        "operations",
+        "project_management"
+      ]
+    },
+    {
+      "id": "subscription-legal",
+      "slot": "Business",
+      "context": "Nhóm dịch vụ thuê bao chuẩn bị phương án kinh doanh với đối tác.",
+      "needs": [
+        "legal",
+        "finance"
+      ]
+    },
+    {
+      "id": "visual-inspection",
+      "slot": "IT",
+      "context": "Nhóm kiểm tra sản phẩm qua hình ảnh cần thử nghiệm mô hình.",
+      "needs": [
+        "ai",
+        "cloud"
+      ]
+    },
+    {
+      "id": "team-planning",
+      "slot": "Business",
+      "context": "Nhóm khởi nghiệp muốn quản lý tiến độ ra mắt sản phẩm.",
+      "needs": [
+        "project_management",
+        "product"
+      ]
+    },
+    {
+      "id": "distribution-cold-chain",
+      "slot": "Business",
+      "context": "Thu mua và giao nhận hàng cần giảm thất thoát.",
+      "needs": [
+        "logistics",
+        "operations"
+      ],
+      "domain": "agriculture"
+    },
+    {
+      "id": "b2b-market-entry",
+      "slot": "Business",
+      "context": "Dịch vụ cho khách hàng doanh nghiệp chuẩn bị tìm hợp đồng mới.",
+      "needs": [
+        "b2b_sales",
+        "sales"
+      ],
+      "domain": "education"
+    },
+    {
+      "id": "consumer-price-study",
+      "slot": "Business",
+      "context": "Nhóm đang thử các mức giá và nhu cầu mua.",
+      "needs": [
+        "pricing",
+        "market_research"
+      ],
+      "domain": "food"
+    },
+    {
+      "id": "dotnet-inventory",
+      "slot": "IT",
+      "context": "Nhóm xây phần mềm tồn kho.",
+      "needs": [
+        "dotnet",
+        "postgresql"
+      ],
+      "domain": "retail"
+    },
+    {
+      "id": "node-services",
+      "slot": "IT",
+      "context": "Nhóm xây dịch vụ nhận yêu cầu từ cửa hàng.",
+      "needs": [
+        "node",
+        "database"
+      ],
+      "domain": "retail"
+    },
+    {
+      "id": "react-product",
+      "slot": "IT",
+      "context": "Nhóm cần giao diện để thao tác nhanh.",
+      "needs": [
+        "react",
+        "typescript"
+      ]
+    },
+    {
+      "id": "flutter-client",
+      "slot": "IT",
+      "context": "Nhóm làm sản phẩm trên điện thoại.",
+      "needs": [
+        "flutter",
+        "mobile"
+      ],
+      "domain": "tourism"
+    },
+    {
+      "id": "image-quality",
+      "slot": "IT",
+      "context": "Nhóm kiểm tra chất lượng ảnh của hàng hóa.",
+      "needs": [
+        "computer_vision",
+        "data"
+      ],
+      "domain": "agriculture"
+    },
+    {
+      "id": "java-api",
+      "slot": "IT",
+      "context": "Nhóm xây hệ thống xử lý giao dịch.",
+      "needs": [
+        "java",
+        "database"
+      ]
+    },
+    {
+      "id": "mobile-native",
+      "slot": "IT",
+      "context": "Nhóm làm ứng dụng điện thoại cho người dùng.",
+      "needs": [
+        "react_native",
+        "mobile"
+      ],
+      "domain": "education"
+    }
+  ]
+}
