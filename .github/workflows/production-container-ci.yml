@@ -10,10 +10,12 @@ on:
       - .env.staging.example
       - docker-compose.production.yml
       - docker-compose.staging.yml
+      - docker-compose.hybrid.yml
       - backend/**
       - frontend/**
       - deploy/**
       - docker/**
+      - tools/mentor-matching/semantic/**
       - scripts/production/**
       - scripts/staging/**
       - .gitattributes
@@ -27,10 +29,12 @@ on:
       - .env.staging.example
       - docker-compose.production.yml
       - docker-compose.staging.yml
+      - docker-compose.hybrid.yml
       - backend/**
       - frontend/**
       - deploy/**
       - docker/**
+      - tools/mentor-matching/semantic/**
       - scripts/production/**
       - scripts/staging/**
       - .gitattributes
@@ -113,6 +117,12 @@ jobs:
       - name: Validate staging configuration
         run: docker compose --project-name ehub-staging --env-file .env.staging.example -f docker-compose.staging.yml config --quiet
 
+      - name: Validate production configuration with the Hybrid override
+        run: docker compose --env-file .env.production.example -f docker-compose.production.yml -f docker-compose.hybrid.yml config --quiet
+
+      - name: Validate staging configuration with the Hybrid override
+        run: docker compose --project-name ehub-staging --env-file .env.staging.example -f docker-compose.staging.yml -f docker-compose.hybrid.yml config --quiet
+
   build-images:
     name: Build ${{ matrix.component }} image
     runs-on: ubuntu-latest
@@ -153,3 +163,57 @@ jobs:
           build-args: ${{ matrix.build-args }}
           cache-from: type=gha,scope=${{ matrix.component }}
           cache-to: type=gha,mode=max,scope=${{ matrix.component }}
+
+  semantic-smoke:
+    name: Hybrid semantic service smoke test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build the semantic image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./tools/mentor-matching/semantic/Dockerfile
+          load: true
+          push: false
+          tags: ehub-mentor-semantic:ci
+          cache-from: type=gha,scope=mentor-semantic
+          cache-to: type=gha,mode=max,scope=mentor-semantic
+
+      - name: Start the service on the runner loopback
+        # The service binds 127.0.0.1 inside its container; host networking makes that the
+        # runner's loopback, which is what the backend integration test connects to.
+        run: docker run -d --name mentor-semantic --network host ehub-mentor-semantic:ci
+
+      - name: Wait for the pinned model
+        run: |
+          expected="$(sed -n 's/^REVISION = "\([0-9a-f]\{40\}\)".*/\1/p' tools/mentor-matching/semantic/prepare_model.py)"
+          for _ in $(seq 1 30); do
+            body="$(curl --fail --silent --max-time 5 http://127.0.0.1:8091/health || true)"
+            if grep -Eq '"ready"[[:space:]]*:[[:space:]]*true' <<< "${body}" && grep -q "${expected}" <<< "${body}"; then
+              echo "mentor-semantic is ready with model revision ${expected}"
+              exit 0
+            fi
+            sleep 2
+          done
+          docker logs mentor-semantic || true
+          echo "::error::mentor-semantic did not become ready with the pinned model revision."
+          exit 1
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Run the real ONNX integration test
+        working-directory: backend
+        env:
+          EHUB_TEST_LOCAL_SEMANTIC: "1"
+        run: dotnet test tests/EHub.IntegrationTests/EHub.IntegrationTests.csproj --configuration Release --filter "FullyQualifiedName~HybridProviderUsesRealLocalOnnx" --verbosity normal

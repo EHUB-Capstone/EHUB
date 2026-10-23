@@ -275,3 +275,21 @@ Trạng thái có trong tab Actions, trong phần Summary của lần chạy, v�
 `#ehub-deploy` (✅ thành công, ❌ lỗi kèm tên bước, ⛔ không deploy vì CI, ⚠️ bị hủy). Nếu
 Discord báo mất kết nối: deploy có thể vẫn đang chạy trên VPS; xem
 `/var/log/ehub-staging-deploy.log` trước khi chạy lại.
+
+## 7. Công tắc provider AI (Ollama hoặc Hybrid)
+
+Script đọc dòng `MENTOR_MATCHING_PROVIDER=Ollama|Hybrid` trong `.env.staging` (không có dòng
+nghĩa là `Ollama`). `Hybrid` ghép thêm `docker-compose.hybrid.yml`, build và khởi động
+container `mentor-semantic` cùng backend, kiểm tra riêng sức khỏe và model của nó. Quay về
+`Ollama` thì script gỡ container còn lại. Chi tiết, điều kiện RAM, pilot và quay lui:
+[HYBRID_MENTOR_VPS.md](HYBRID_MENTOR_VPS.md).
+
+- Dòng kết quả cuối có thêm `provider=...` (`EHUB_DEPLOY_RESULT=success sha=... previous=... provider=Hybrid`),
+  và Discord ghi "AI provider".
+- Bước migrate và bước khởi động ứng dụng dùng `--no-deps`. Lý do: Compose tạo lại container
+  `postgres` nếu định nghĩa của nó lệch so với container đang chạy, kể cả khi lệnh chỉ nhắm
+  `backend` hoặc `run backend`. Việc hội tụ `postgres` và `ollama` chỉ xảy ra ở bước
+  `start-dependencies`.
+- Đổi công tắc không cần đổi code: sửa dòng trong `.env.staging`, rồi chạy tay Deploy Staging
+  với SHA đang chạy (đừng để ô SHA trống, vì sẽ deploy luôn code mới nhất của `develop`).
+- **Sau khi sửa script này, phải cài lại bản mới vào `/opt/ehub/deploy/`** (xem mục 4).
