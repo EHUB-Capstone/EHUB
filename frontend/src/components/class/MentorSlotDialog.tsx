@@ -103,7 +103,7 @@ export default function MentorSlotDialog({ team, slot, current, mentors, onClose
         <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-5">
           <section className="rounded-xl border border-slate-100 bg-slate-50/50 p-3" aria-label="Mentor recommendations">
             <h4 className="text-sm font-semibold text-slate-900">Suggested mentors for this team</h4>
-            <p className="mt-1 text-xs text-slate-600">Scores use project descriptions, tags and mentor expertise. A lecturer makes the final choice.</p>
+            <p className="mt-1 text-xs text-slate-600">Recommendations compare the project title and description with mentor profiles. Review the evidence before assigning.</p>
             {recommendationsLoading ? <p className="mt-2 text-xs">Calculating recommendations…</p> :
               recommendationsError ? <div role="alert" className="mt-2 text-xs text-red-700">{recommendationsError}
                 <button type="button" className="ml-2 underline" disabled={saving} onClick={() => setRecommendationAttempt(value => value + 1)}>Retry</button>

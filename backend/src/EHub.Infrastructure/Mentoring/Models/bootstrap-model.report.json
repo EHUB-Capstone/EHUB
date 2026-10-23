@@ -1,0 +1,83 @@
+{
+  "seed": 17,
+  "trainingSource": "synthetic-bootstrap",
+  "suitabilityValidated": false,
+  "bestEpoch": 1,
+  "train": {
+    "ndcgAt5": 0.9877766966431087,
+    "recallAt3": 0.7336805555555556,
+    "groups": 24,
+    "rows": 485,
+    "groupsWithoutRelevantMentor": 0
+  },
+  "validation": {
+    "ndcgAt5": 0.9676638337494009,
+    "recallAt3": 0.6800595238095238,
+    "groups": 8,
+    "rows": 164,
+    "groupsWithoutRelevantMentor": 0
+  },
+  "test": {
+    "ndcgAt5": 0.9650378964484488,
+    "recallAt3": 0.80625,
+    "groups": 8,
+    "rows": 164,
+    "groupsWithoutRelevantMentor": 0
+  },
+  "splitProjectIds": {
+    "train": [
+      "consumer-price-study",
+      "device-cloud",
+      "flutter-client",
+      "food-app",
+      "food-discovery",
+      "food-growth",
+      "food-phone",
+      "image-quality",
+      "learning-discovery",
+      "learning-funding",
+      "learning-growth",
+      "learning-web",
+      "mobile-native",
+      "node-services",
+      "product-usability",
+      "retail-cost",
+      "retail-legal",
+      "service-finance",
+      "subscription-legal",
+      "team-planning",
+      "travel-data",
+      "travel-discovery",
+      "travel-operations",
+      "visual-inspection"
+    ],
+    "validation": [
+      "craft-sales",
+      "delivery-process",
+      "distribution-cold-chain",
+      "dotnet-inventory",
+      "platform-security",
+      "retail-checkout",
+      "retail-entry",
+      "travel-app"
+    ],
+    "test": [
+      "b2b-market-entry",
+      "food-cost",
+      "java-api",
+      "learning-ai",
+      "react-product",
+      "retail-infrastructure",
+      "reuse-validation",
+      "travel-capital"
+    ]
+  },
+  "limitations": [
+    "Bootstrap metrics measure fictional curriculum labels, not real mentor suitability.",
+    "Metrics sort unrounded scores; exact ties use anonymous mentorRef, while the API uses display name.",
+    "No comparison with the existing BGE-M3 70/30 recommender was performed.",
+    "This model learns field importance over a finite topic vocabulary; it is not an LLM or semantic encoder.",
+    "A high rank score is not a calibrated probability; no evidence produces score zero."
+  ],
+  "trainingSeconds": 10.158
+}

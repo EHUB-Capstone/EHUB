@@ -46,6 +46,14 @@ public sealed class MentoringController(ICurrentUserService currentUser, IMentor
         return Respond(await profiles.UploadDocumentAsync(UserId, kind, stream, file.FileName, file.Length, ct));
     }
 
+    [HttpGet("profile/cv/preview")]
+    [Authorize(Policy = SystemPolicies.MentorOnly)]
+    public async Task<IActionResult> PreviewMyCv(CancellationToken ct)
+    {
+        var result = await profiles.PreviewMyCvAsync(UserId, ct);
+        return result.IsSuccess ? File(result.Value, "application/pdf") : Respond(result);
+    }
+
     [HttpGet("profiles/{mentorId:guid}/documents/{kind}")]
     public async Task<IActionResult> DownloadDocument(Guid mentorId, string kind, CancellationToken ct)
     {

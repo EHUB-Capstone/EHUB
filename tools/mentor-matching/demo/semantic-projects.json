@@ -1,0 +1,78 @@
+{
+  "isSynthetic": true,
+  "description": "Ca diễn đạt tự nhiên do tác giả tạo cho thử nghiệm ngữ nghĩa; không phải nhãn thực tế, không dùng train model. Ghi kỳ vọng trước lần chạy đầu.",
+  "projects": [
+    {
+      "id": "S01", "name": "Bếp theo tuần — giả lập", "kind": "semantic",
+      "description": "Nhóm bán các suất ăn giao tận nhà. Muốn tìm hiểu người mua thực sự cần gì, họ chịu trả bao nhiêu cho một tuần ăn trưa và nên tiếp cận họ qua kênh nào. Dự định bán thử ở hai khu dân cư trước khi mở rộng.",
+      "expectedBusiness": ["B01"], "expectedIT": [], "checks": [],
+      "expectationNote": "Kỳ vọng tác giả, không phải đánh giá độc lập."
+    },
+    {
+      "id": "S02", "name": "Tiền đủ dùng — giả lập", "kind": "semantic",
+      "description": "Nhóm cần người giúp tính tiền vào và tiền ra từng tháng, biết khoản nào phải chi trước và còn duy trì được bao lâu nếu chưa có thêm doanh thu. Sau đó nhóm sẽ chuẩn bị hồ sơ trình bày với người muốn góp vốn.",
+      "expectedBusiness": ["B02"], "expectedIT": [], "checks": [],
+      "expectationNote": "Kỳ vọng tác giả, không phải đánh giá độc lập."
+    },
+    {
+      "id": "S03", "name": "Rau ít hao hụt — giả lập", "kind": "semantic",
+      "description": "Dịch vụ đưa rau từ nông trại đến cửa hàng. Nhiều hàng bị hỏng giữa đường hoặc nằm chờ quá lâu. Nhóm muốn sắp xếp việc nhận hàng, bảo quản và đưa hàng đến nơi đúng lúc, tránh thiếu hàng tại điểm bán.",
+      "expectedBusiness": ["B03"], "expectedIT": [], "checks": [],
+      "expectationNote": "Kỳ vọng tác giả, không phải đánh giá độc lập."
+    },
+    {
+      "id": "S04", "name": "Đồ họa được phép dùng — giả lập", "kind": "semantic",
+      "description": "Nhóm bán mẫu tranh số do cộng tác viên sáng tạo. Cần làm rõ ai sở hữu mẫu, người mua được sử dụng trong trường hợp nào, có được bán lại hay không và nên ghi các thỏa thuận giữa các bên như thế nào.",
+      "expectedBusiness": ["B06"], "expectedIT": [], "checks": [],
+      "expectationNote": "Kỳ vọng tác giả, không phải đánh giá độc lập."
+    },
+    {
+      "id": "S05", "name": "Phụ huynh có cần không — giả lập", "kind": "semantic",
+      "description": "Nhóm có ý tưởng giúp trẻ học ở nhà nhưng chưa biết phụ huynh có muốn dùng hay không. Muốn gặp và hỏi chuyện phụ huynh, quan sát trẻ sử dụng bản mẫu, rồi quyết định giữ tính năng nào trước khi bỏ tiền làm tiếp.",
+      "expectedBusiness": ["B04"], "expectedIT": [], "checks": [],
+      "expectationNote": "Kỳ vọng tác giả, không phải đánh giá độc lập."
+    },
+    {
+      "id": "S06", "name": "Bán khóa học cho tổ chức — giả lập", "kind": "semantic",
+      "description": "Nhóm cung cấp chương trình học trực tuyến cho các công ty. Cần tiếp cận người phụ trách đào tạo, trình bày lợi ích, bàn điều kiện mua và làm cho công ty đồng ý trả tiền cho chương trình.",
+      "expectedBusiness": ["B05"], "expectedIT": [], "checks": [],
+      "expectationNote": "Kỳ vọng tác giả, không phải đánh giá độc lập."
+    },
+    {
+      "id": "S07", "name": "Cổng đặt dịch vụ — giả lập", "kind": "semantic",
+      "description": "Nhóm cần làm phần backend C#/.NET và PostgreSQL cho cổng đặt dịch vụ. Người hướng dẫn phải giúp tổ chức phần xử lý dữ liệu, kiểm tra đơn đặt trùng nhau và bảo vệ thao tác của từng tài khoản. Không cần AI trong phiên bản này.",
+      "expectedBusiness": [], "expectedIT": ["I01"], "checks": ["negated-project-need", "negated-cv-expertise"],
+      "expectationNote": "Kỳ vọng tác giả; giữ yêu cầu công nghệ cụ thể."
+    },
+    {
+      "id": "S08", "name": "Giao diện người học — giả lập", "kind": "semantic",
+      "description": "Nhóm đã có dịch vụ học tập và cần frontend React, TypeScript. Học viên thường bấm nhầm và bỏ cuộc lúc đăng ký, nên nhóm muốn sắp xếp lại màn hình và thử cách thao tác thuận tiện hơn trên trình duyệt.",
+      "expectedBusiness": [], "expectedIT": ["I03"], "checks": [],
+      "expectationNote": "Kỳ vọng tác giả; giữ yêu cầu React web."
+    },
+    {
+      "id": "S09", "name": "Chạy dịch vụ ổn định — giả lập", "kind": "semantic",
+      "description": "Dự án cần triển khai cloud trên AWS. Khi người dùng tăng, nhóm muốn dịch vụ vẫn hoạt động, tự nhận biết lỗi, khôi phục khi gặp sự cố và bảo vệ dữ liệu người dùng. Cần hướng dẫn quy trình đưa bản cập nhật lên hệ thống.",
+      "expectedBusiness": [], "expectedIT": ["I05"], "checks": [],
+      "expectationNote": "Kỳ vọng tác giả; cần cloud và vận hành kỹ thuật."
+    },
+    {
+      "id": "S10", "name": "Chỉ cần hỏi khách hàng — giả lập", "kind": "semantic",
+      "description": "Nhóm muốn nghiên cứu thị trường giáo dục bằng các cuộc gặp phụ huynh. Không cần làm website, không cần ứng dụng di động và không cần AI. Mục tiêu hiện tại là xác định có người muốn mua dịch vụ hay không.",
+      "expectedBusiness": ["B04"], "expectedIT": [], "checks": ["business-only-no-it"],
+      "expectationNote": "Kỳ vọng tác giả; không được tạo nhu cầu IT từ ngành giáo dục."
+    },
+    {
+      "id": "S11", "name": "Một ý tưởng — giả lập", "kind": "semantic",
+      "description": "Nhóm muốn làm một sản phẩm hữu ích và phát triển trong tương lai. Chưa xác định sản phẩm hay khách hàng cụ thể.",
+      "expectedBusiness": [], "expectedIT": [], "checks": [],
+      "expectationNote": "Mô tả mơ hồ cần quyền không gợi ý."
+    },
+    {
+      "id": "S12", "name": "Thiết bị sinh học — giả lập", "kind": "semantic",
+      "description": "Nhóm cần chuyên gia công nghệ lên men, thiết kế thiết bị phản ứng sinh học và tăng sản lượng vi sinh vật trong nhà máy. Không có nhu cầu phát triển phần mềm hay tư vấn kinh doanh.",
+      "expectedBusiness": [], "expectedIT": [], "checks": [],
+      "expectationNote": "Không có chuyên môn phù hợp trong bộ mentor giả lập."
+    }
+  ]
+}

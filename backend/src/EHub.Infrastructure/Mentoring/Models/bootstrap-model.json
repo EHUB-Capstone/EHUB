@@ -1,0 +1,621 @@
+{
+  "version": 1,
+  "featureSchema": "ehub-mentor-fit-v2",
+  "trainingSource": "synthetic-bootstrap",
+  "suitabilityValidated": false,
+  "featureNames": [
+    "experience_topic_coverage",
+    "expertise_topic_coverage",
+    "domain_topic_coverage",
+    "technology_topic_coverage",
+    "bio_topic_coverage",
+    "experience_token_coverage",
+    "profile_token_coverage",
+    "project_topic_count_normalized"
+  ],
+  "weights": [
+    5.133265498145849,
+    1.4446640523528453,
+    1.3054053579654876,
+    2.533355359641628,
+    2.1721734784577666,
+    0.39994139658557404,
+    1.1421153314468837,
+    -0.5508845014822032
+  ],
+  "bias": -1.7498203545103945,
+  "topics": [
+    {
+      "id": "marketing",
+      "label": "Marketing",
+      "aliases": [
+        "marketing",
+        "tiếp thị",
+        "quảng bá",
+        "truyền thông",
+        "thu hút khách hàng",
+        "tìm khách hàng",
+        "tìm khách mới"
+      ],
+      "role": "Business"
+    },
+    {
+      "id": "sales",
+      "label": "Bán hàng và phát triển kinh doanh",
+      "aliases": [
+        "sales",
+        "bán hàng",
+        "phát triển kinh doanh",
+        "business development",
+        "kênh phân phối",
+        "chốt đơn",
+        "tìm khách mua",
+        "tìm khách hàng doanh nghiệp"
+      ],
+      "role": "Business"
+    },
+    {
+      "id": "market_research",
+      "label": "Nghiên cứu thị trường",
+      "aliases": [
+        "market research",
+        "nghiên cứu thị trường",
+        "kiểm chứng nhu cầu",
+        "customer discovery",
+        "phỏng vấn khách hàng",
+        "khảo sát khách hàng",
+        "nghiên cứu khách hàng",
+        "phỏng vấn phụ huynh",
+        "khám phá nhu cầu"
+      ],
+      "role": "Business"
+    },
+    {
+      "id": "strategy",
+      "label": "Chiến lược và mô hình kinh doanh",
+      "aliases": [
+        "strategy",
+        "chiến lược",
+        "business model",
+        "mô hình kinh doanh",
+        "quản trị kinh doanh",
+        "business administration"
+      ],
+      "role": "Business"
+    },
+    {
+      "id": "finance",
+      "label": "Tài chính và dòng tiền",
+      "aliases": [
+        "finance",
+        "tài chính",
+        "dòng tiền",
+        "cash flow",
+        "kế toán",
+        "accounting",
+        "ngân sách",
+        "dự phóng chi phí"
+      ],
+      "role": "Business"
+    },
+    {
+      "id": "fundraising",
+      "label": "Gọi vốn",
+      "aliases": [
+        "fundraising",
+        "gọi vốn",
+        "pitch deck",
+        "huy động vốn",
+        "thuyết trình với nhà đầu tư",
+        "kêu gọi đầu tư",
+        "vốn đầu tư"
+      ],
+      "role": "Business"
+    },
+    {
+      "id": "operations",
+      "label": "Vận hành",
+      "aliases": [
+        "operations",
+        "vận hành",
+        "quản lý chất lượng",
+        "tổ chức hoạt động",
+        "quy trình vận hành"
+      ],
+      "role": "Business"
+    },
+    {
+      "id": "product",
+      "label": "Phát triển sản phẩm",
+      "aliases": [
+        "product management",
+        "quản lý sản phẩm",
+        "product discovery",
+        "thiết kế sản phẩm",
+        "roadmap",
+        "trải nghiệm người dùng",
+        "ux"
+      ],
+      "role": "Both"
+    },
+    {
+      "id": "legal",
+      "label": "Pháp lý doanh nghiệp",
+      "aliases": [
+        "legal",
+        "pháp lý",
+        "sở hữu trí tuệ",
+        "đăng ký doanh nghiệp",
+        "hợp đồng thương mại"
+      ],
+      "role": "Business"
+    },
+    {
+      "id": "project_management",
+      "label": "Quản lý dự án",
+      "aliases": [
+        "project management",
+        "quản lý dự án",
+        "điều phối dự án",
+        "quản trị dự án",
+        "agile",
+        "scrum"
+      ],
+      "role": "Both"
+    },
+    {
+      "id": "backend",
+      "label": "Backend và thiết kế hệ thống",
+      "aliases": [
+        "backend",
+        "back-end",
+        "thiết kế api",
+        "rest api",
+        "thiết kế hệ thống",
+        "hệ thống đặt hàng",
+        "xử lý đơn hàng",
+        "quản lý đơn hàng",
+        "ứng dụng web",
+        "web application",
+        "hệ thống đặt món",
+        "đặt hàng trực tuyến",
+        "nhận đơn trực tuyến"
+      ],
+      "role": "IT"
+    },
+    {
+      "id": "frontend",
+      "label": "Phát triển giao diện",
+      "aliases": [
+        "frontend",
+        "front-end",
+        "javascript",
+        "giao diện web",
+        "website",
+        "trang web"
+      ],
+      "role": "IT"
+    },
+    {
+      "id": "mobile",
+      "label": "Ứng dụng di động",
+      "aliases": [
+        "mobile",
+        "android",
+        "ios",
+        "ứng dụng di động",
+        "trên điện thoại",
+        "app di động",
+        "mobile app"
+      ],
+      "role": "IT"
+    },
+    {
+      "id": "ai",
+      "label": "Trí tuệ nhân tạo",
+      "aliases": [
+        "ai",
+        "artificial intelligence",
+        "trí tuệ nhân tạo",
+        "machine learning",
+        "học máy",
+        "nhận diện hình ảnh"
+      ],
+      "role": "IT"
+    },
+    {
+      "id": "data",
+      "label": "Phân tích dữ liệu",
+      "aliases": [
+        "data science",
+        "khoa học dữ liệu",
+        "data analysis",
+        "phân tích dữ liệu",
+        "business intelligence"
+      ],
+      "role": "IT"
+    },
+    {
+      "id": "database",
+      "label": "Cơ sở dữ liệu",
+      "aliases": [
+        "database",
+        "cơ sở dữ liệu",
+        "sql server",
+        "thiết kế dữ liệu",
+        "quản lý dữ liệu",
+        "tồn kho",
+        "lưu trữ dữ liệu",
+        "lưu dữ liệu"
+      ],
+      "role": "IT"
+    },
+    {
+      "id": "cloud",
+      "label": "Hạ tầng và triển khai",
+      "aliases": [
+        "cloud",
+        "điện toán đám mây",
+        "aws",
+        "azure",
+        "devops",
+        "docker",
+        "kubernetes"
+      ],
+      "role": "IT"
+    },
+    {
+      "id": "security",
+      "label": "An toàn thông tin",
+      "aliases": [
+        "cybersecurity",
+        "an toàn thông tin",
+        "bảo mật",
+        "security",
+        "kiểm thử xâm nhập",
+        "bảo vệ dữ liệu",
+        "phân quyền truy cập"
+      ],
+      "role": "IT"
+    },
+    {
+      "id": "food",
+      "label": "Thực phẩm và dịch vụ ăn uống",
+      "aliases": [
+        "f&b",
+        "thực phẩm",
+        "nhà hàng",
+        "đồ ăn",
+        "food",
+        "quán cà phê",
+        "suất ăn",
+        "bữa ăn",
+        "nấu ăn"
+      ],
+      "role": "Domain"
+    },
+    {
+      "id": "education",
+      "label": "Giáo dục",
+      "aliases": [
+        "edtech",
+        "giáo dục",
+        "đào tạo trực tuyến",
+        "học trực tuyến",
+        "education",
+        "học sinh",
+        "học viên",
+        "giáo viên"
+      ],
+      "role": "Domain"
+    },
+    {
+      "id": "retail",
+      "label": "Bán lẻ và thương mại điện tử",
+      "aliases": [
+        "retail",
+        "bán lẻ",
+        "thương mại điện tử",
+        "e-commerce",
+        "cửa hàng trực tuyến"
+      ],
+      "role": "Domain"
+    },
+    {
+      "id": "tourism",
+      "label": "Du lịch",
+      "aliases": [
+        "tourism",
+        "du lịch",
+        "lữ hành",
+        "khách sạn",
+        "travel",
+        "du khách",
+        "tour"
+      ],
+      "role": "Domain"
+    },
+    {
+      "id": "pricing",
+      "label": "Định giá sản phẩm",
+      "aliases": [
+        "định giá sản phẩm",
+        "giá bán",
+        "định giá gói"
+      ],
+      "role": "Business"
+    },
+    {
+      "id": "logistics",
+      "label": "Logistics và chuỗi cung ứng",
+      "aliases": [
+        "chuỗi cung ứng",
+        "supply chain",
+        "logistics",
+        "quản lý kho",
+        "giao nhận",
+        "thu mua"
+      ],
+      "role": "Business",
+      "parent": "operations"
+    },
+    {
+      "id": "dotnet",
+      "label": "C# và .NET",
+      "aliases": [
+        "c#",
+        ".net",
+        "asp.net"
+      ],
+      "role": "IT",
+      "parent": "backend"
+    },
+    {
+      "id": "java",
+      "label": "Java",
+      "aliases": [
+        "java"
+      ],
+      "role": "IT",
+      "parent": "backend"
+    },
+    {
+      "id": "node",
+      "label": "Node.js",
+      "aliases": [
+        "node.js"
+      ],
+      "role": "IT",
+      "parent": "backend"
+    },
+    {
+      "id": "react",
+      "label": "React",
+      "aliases": [
+        "react"
+      ],
+      "role": "IT",
+      "parent": "frontend"
+    },
+    {
+      "id": "typescript",
+      "label": "TypeScript",
+      "aliases": [
+        "typescript"
+      ],
+      "role": "IT",
+      "parent": "frontend"
+    },
+    {
+      "id": "flutter",
+      "label": "Flutter",
+      "aliases": [
+        "flutter"
+      ],
+      "role": "IT",
+      "parent": "mobile"
+    },
+    {
+      "id": "react_native",
+      "label": "React Native",
+      "aliases": [
+        "react native"
+      ],
+      "role": "IT",
+      "parent": "mobile"
+    },
+    {
+      "id": "computer_vision",
+      "label": "Thị giác máy tính",
+      "aliases": [
+        "computer vision",
+        "thị giác máy tính",
+        "nhận diện lỗi từ hình ảnh",
+        "phân loại ảnh"
+      ],
+      "role": "IT",
+      "parent": "ai"
+    },
+    {
+      "id": "postgresql",
+      "label": "PostgreSQL",
+      "aliases": [
+        "postgresql"
+      ],
+      "role": "IT",
+      "parent": "database"
+    },
+    {
+      "id": "b2b_sales",
+      "label": "Bán hàng doanh nghiệp",
+      "aliases": [
+        "bán hàng b2b",
+        "sales b2b",
+        "b2b sales",
+        "bán hàng doanh nghiệp",
+        "chào bán giải pháp"
+      ],
+      "role": "Business",
+      "parent": "sales"
+    },
+    {
+      "id": "agriculture",
+      "label": "Nông nghiệp",
+      "aliases": [
+        "nông nghiệp",
+        "nông sản",
+        "agriculture",
+        "agritech",
+        "nông hộ"
+      ],
+      "role": "Domain"
+    },
+    {
+      "id": "biotechnology",
+      "label": "Công nghệ sinh học",
+      "aliases": [
+        "công nghệ sinh học",
+        "lên men",
+        "vật liệu sinh học",
+        "biotechnology",
+        "fermentation"
+      ],
+      "role": "Domain"
+    },
+    {
+      "id": "health",
+      "label": "Y tế",
+      "aliases": [
+        "y tế",
+        "healthcare",
+        "medtech"
+      ],
+      "role": "Domain"
+    },
+    {
+      "id": "manufacturing",
+      "label": "Sản xuất công nghiệp",
+      "aliases": [
+        "sản xuất công nghiệp",
+        "manufacturing"
+      ],
+      "role": "Domain"
+    }
+  ],
+  "stopWords": [
+    "va",
+    "voi",
+    "cua",
+    "cho",
+    "cac",
+    "nhung",
+    "mot",
+    "nay",
+    "trong",
+    "theo",
+    "can",
+    "duoc",
+    "dang",
+    "den",
+    "tu",
+    "co",
+    "la",
+    "ve",
+    "de",
+    "du",
+    "an",
+    "nhom",
+    "ho",
+    "tro",
+    "mentor",
+    "startup",
+    "kinh",
+    "nghiem",
+    "chuyen",
+    "mon",
+    "phu",
+    "trach",
+    "phat",
+    "trien",
+    "thiet",
+    "ke",
+    "san",
+    "pham",
+    "ung",
+    "dung",
+    "nen",
+    "tang",
+    "dich",
+    "vu",
+    "thuc",
+    "hien",
+    "nhu",
+    "cau",
+    "viec",
+    "lam",
+    "phoi",
+    "hop",
+    "to",
+    "chuc",
+    "truc",
+    "tiep",
+    "he",
+    "thong",
+    "quan",
+    "hoat",
+    "dong",
+    "xay",
+    "phuc",
+    "nguoi",
+    "nhan",
+    "vien",
+    "tung",
+    "noi",
+    "nham",
+    "su",
+    "the",
+    "and",
+    "with",
+    "for",
+    "from",
+    "this",
+    "that",
+    "project",
+    "team",
+    "needs",
+    "need",
+    "support",
+    "experience",
+    "expert",
+    "professional",
+    "help",
+    "worked",
+    "working",
+    "developed",
+    "build",
+    "built",
+    "demo",
+    "synthetic",
+    "khong",
+    "chua",
+    "only",
+    "without",
+    "none",
+    "nhu",
+    "quy",
+    "trinh",
+    "cung",
+    "nhieu",
+    "nhat",
+    "moi",
+    "cac",
+    "mo",
+    "hinh"
+  ],
+  "trainingMetadata": {
+    "seed": 17,
+    "trainingRows": 485,
+    "bestEpoch": 1,
+    "dataFingerprint": "979fafb3423720e8ab7bd9a713168854daf97bd6654945209081491ff1517903"
+  }
+}

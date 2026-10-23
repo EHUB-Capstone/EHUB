@@ -3,10 +3,11 @@ import { mentorSupportApi } from '../../api/mentorSupportApi';
 import type { MentorProfile, MentorProfileDraft } from '../../types/mentoring';
 import { parseApiError } from '../../utils/apiError';
 import { needsMentorProfileSetup, parseMentorTags, validateMentorMetadata } from '../../utils/mentorProfiles';
-import { CheckCircle2, Pencil, Save, X } from 'lucide-react';
+import { CheckCircle2, Eye, Pencil, Save, X } from 'lucide-react';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
 import MentorProfileSummary from '../../components/mentoring/MentorProfileSummary';
+import Modal from '../../components/ui/Modal';
 
 const emptyProfile: MentorProfileDraft = {
   mentorType: 'Unspecified', expertise: [], bio: '', experience: '', organization: '', linkedInUrl: '', portfolioUrl: '',
@@ -22,6 +23,8 @@ export default function MentorProfilePage({ embedded = false }: { embedded?: boo
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [downloading, setDownloading] = useState<'cv' | 'portfolio' | null>(null);
+  const [previewingCv, setPreviewingCv] = useState(false);
+  const [cvPreviewUrl, setCvPreviewUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState<'cv' | 'portfolio' | null>(null);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -30,6 +33,7 @@ export default function MentorProfilePage({ embedded = false }: { embedded?: boo
   const wasEditing = useRef(false);
 
   useEffect(() => () => uploadController.current?.abort(), []);
+  useEffect(() => () => { if (cvPreviewUrl) URL.revokeObjectURL(cvPreviewUrl); }, [cvPreviewUrl]);
   useEffect(() => {
     if (wasEditing.current && !editing) {
       headingRef.current?.focus({ preventScroll: true });
@@ -117,6 +121,16 @@ export default function MentorProfilePage({ embedded = false }: { embedded?: boo
     finally { setDownloading(null); }
   };
 
+  const previewCv = async () => {
+    if (previewingCv || !profile?.cvFileName) return;
+    setPreviewingCv(true); setError('');
+    try {
+      const blob = await mentorSupportApi.previewMyCv();
+      setCvPreviewUrl(URL.createObjectURL(blob));
+    } catch (cause) { setError(parseApiError(cause, 'Could not preview CV').message); }
+    finally { setPreviewingCv(false); }
+  };
+
   const resetDraft = (edit: boolean) => {
     if (!profile) return;
     setDraft(profile); setExpertiseText(profile.expertise.join(', '));
@@ -150,7 +164,11 @@ export default function MentorProfilePage({ embedded = false }: { embedded?: boo
       {(['cv', 'portfolio'] as const).map(kind => <div key={kind} className="flex flex-wrap items-center gap-3 border-t py-3">
         <label htmlFor={`mentor-${kind}-file`} className="min-w-24 text-body font-medium">{kind === 'cv' ? 'CV / résumé' : 'Portfolio'}</label>
         <input id={`mentor-${kind}-file`} type="file" accept=".pdf,.doc,.docx" className="min-w-0 max-w-full text-body text-slate-500 file:mr-3 file:rounded-lg file:border-0 file:bg-primary-50 file:px-3 file:py-2 file:text-body-sm file:font-medium file:text-primary-700 hover:file:bg-primary-100 dark:file:bg-dark-surface dark:file:text-primary-light dark:hover:file:bg-secondary-700" disabled={uploading !== null || saving} onChange={event => { void upload(kind, event.target.files?.[0]); event.target.value = ''; }} />
-        {(kind === 'cv' ? profile.cvFileName : profile.portfolioFileName) && <p className="w-full break-all text-caption text-slate-500">Current: {kind === 'cv' ? profile.cvFileName : profile.portfolioFileName}</p>}
+        {(kind === 'cv' ? profile.cvFileName : profile.portfolioFileName) && <div className="flex w-full flex-wrap items-center gap-3">
+          <p className="min-w-0 flex-1 break-all text-caption text-slate-500">Current: {kind === 'cv' ? profile.cvFileName : profile.portfolioFileName}</p>
+          {kind === 'cv' && <Button type="button" variant="outline" size="sm" icon={Eye} isLoading={previewingCv}
+            disabled={uploading !== null || saving} onClick={() => void previewCv()}>Preview CV</Button>}
+        </div>}
       </div>)}
       {uploading && <p role="status">{uploading === 'cv' ? 'Uploading and extracting CV…' : 'Uploading portfolio…'}</p>}
     </section>
@@ -160,8 +178,9 @@ export default function MentorProfilePage({ embedded = false }: { embedded?: boo
         <select disabled title="Managed by the administrator" id="mentor-type" required value={draft.mentorType} onChange={event => setDraft({ ...draft, mentorType: event.target.value as MentorProfile['mentorType'] })} className="mt-1 w-full rounded-lg border p-2">
           <option value="Unspecified">Select type</option><option value="Business">Business mentor</option><option value="IT">IT lecturer or technical mentor</option>
         </select></div>
-      <div><label htmlFor="mentor-expertise" className="block text-body font-medium">Expertise (comma separated)</label>
-        <input id="mentor-expertise" required maxLength={1600} value={expertiseText} onChange={event => setExpertiseText(event.target.value)} className="mt-1 w-full rounded-lg border p-2" placeholder="Product management, AI, marketing" /></div>
+      <div><label htmlFor="mentor-expertise" className="block text-body font-medium">Expertise (optional, comma separated)</label>
+        <input id="mentor-expertise" aria-describedby="mentor-expertise-help" maxLength={1600} value={expertiseText} onChange={event => setExpertiseText(event.target.value)} className="mt-1 w-full rounded-lg border p-2" placeholder="Product management, AI, marketing" />
+        <p id="mentor-expertise-help" className="mt-1 text-caption text-slate-500">You can leave this blank. We use your CV and professional experience for matching; add expertise manually if CV extraction misses it.</p></div>
       <div><label htmlFor="mentor-skills" className="block text-body font-medium">Skills (comma separated)</label>
         <input id="mentor-skills" aria-describedby="mentor-skills-help" maxLength={1640} value={skillsText} onChange={event => setSkillsText(event.target.value)} className="mt-1 w-full rounded-lg border p-2" placeholder="Leadership, Python, project planning" />
         <p id="mentor-skills-help" className="mt-1 text-caption text-slate-500">Enter up to 20 distinct skills, each at most 80 characters. Skills are entered manually and kept when you upload a CV.</p></div>
@@ -175,5 +194,8 @@ export default function MentorProfilePage({ embedded = false }: { embedded?: boo
       </fieldset>
     </form>
     </>}
+    <Modal isOpen={Boolean(cvPreviewUrl)} onClose={() => setCvPreviewUrl(null)} title="CV preview" size="2xl">
+      {cvPreviewUrl && <iframe title="CV preview" src={cvPreviewUrl} className="h-[70vh] w-full rounded-lg border border-slate-200 bg-white" />}
+    </Modal>
   </Container>;
 }

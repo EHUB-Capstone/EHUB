@@ -1,0 +1,142 @@
+{
+  "isSynthetic": true,
+  "description": "12 tình huống dự án khởi nghiệp hoàn toàn giả lập. Nhóm mentor chấp nhận được được người viết khai báo trước khi chạy mô hình, chỉ phục vụ kiểm tra mô phỏng; không phải nhãn chuẩn hoặc phép đo độ chính xác ngoài thực tế.",
+  "projects": [
+    {
+      "id": "P01",
+      "name": "Bếp Lành Sinh Viên — dự án giả lập",
+      "kind": "standard",
+      "description": "Dự án cung cấp suất ăn lành mạnh theo tuần cho sinh viên. Nhóm đã thử bán tại hai khu trọ và đang xây dựng công cụ nhận đơn trực tuyến.",
+      "businessNeed": "Cần mentor có kinh nghiệm F&B, nghiên cứu khách hàng, marketing, bán hàng và định giá để kiểm chứng giá gói ăn và tìm khách hàng đầu tiên.",
+      "itNeed": "Cần mentor thiết kế backend C#/.NET, PostgreSQL và xử lý đơn hàng thương mại điện tử cho dịch vụ đặt đồ ăn.",
+      "expectedBusiness": ["B01"],
+      "expectedIT": ["I01"],
+      "expectationNote": "Ưu tiên kinh nghiệm F&B, marketing và định giá cho vị trí Business; backend .NET, PostgreSQL và đặt đồ ăn cho vị trí IT."
+    },
+    {
+      "id": "P02",
+      "name": "Bạn Học Nhỏ — dự án giả lập",
+      "kind": "standard",
+      "description": "Dự án hỗ trợ học sinh tự tổ chức lịch học và luyện tập ngắn mỗi ngày. Nhóm mới có bản thiết kế và cần kiểm chứng cách sử dụng trước khi xây sản phẩm đầu tiên.",
+      "businessNeed": "Cần mentor nghiên cứu thị trường giáo dục, phỏng vấn phụ huynh và học sinh, khám phá sản phẩm và kiểm chứng nhu cầu người dùng.",
+      "itNeed": "Cần mentor phát triển ứng dụng di động giáo dục bằng Flutter cho Android và iOS.",
+      "expectedBusiness": ["B04"],
+      "expectedIT": ["I02"],
+      "expectationNote": "Nhu cầu hiện tại là khám phá sản phẩm giáo dục và nghiên cứu khách hàng, không phải bán giải pháp B2B cho trường học."
+    },
+    {
+      "id": "P03",
+      "name": "Chuyến Đi Bản Địa — dự án giả lập",
+      "kind": "standard",
+      "description": "Dự án kết nối du khách với trải nghiệm địa phương theo nhóm nhỏ. Một số trải nghiệm đã được thử nghiệm và nhóm muốn tổ chức hoạt động ổn định hơn.",
+      "businessNeed": "Cần mentor có kinh nghiệm du lịch, bán tour, marketing du lịch, phát triển kênh phân phối và vận hành dịch vụ trải nghiệm.",
+      "itNeed": "Cần mentor xây ứng dụng du lịch trên điện thoại bằng Flutter, Android và iOS để khách xem lịch trình và đặt trải nghiệm.",
+      "expectedBusiness": ["B08"],
+      "expectedIT": ["I02"],
+      "expectationNote": "Cả ngành du lịch và nhu cầu vận hành, phân phối phải được đối chiếu với kinh nghiệm cụ thể trong CV."
+    },
+    {
+      "id": "P04",
+      "name": "Kho Gọn Cửa Hàng — dự án giả lập",
+      "kind": "standard",
+      "description": "Dự án hỗ trợ các cửa hàng nhỏ xử lý hàng hóa và đơn bán trực tuyến. Nhóm đang thử nghiệm với một số cửa hàng có nhiều điểm lưu kho.",
+      "businessNeed": "Cần mentor quản lý vận hành kho, chuỗi cung ứng, logistics, nhập xuất tồn và phân phối hàng hóa để thiết kế quy trình phục vụ cửa hàng.",
+      "itNeed": "Cần mentor thiết kế backend và cơ sở dữ liệu PostgreSQL cho tồn kho, đơn hàng và thương mại điện tử; nhóm có thể chọn C#/.NET hoặc Node.js.",
+      "expectedBusiness": ["B03"],
+      "expectedIT": ["I01", "I06"],
+      "expectationNote": "Chấp nhận cả hai mentor backend có kinh nghiệm PostgreSQL; chưa có lý do nghiệp vụ để buộc chọn duy nhất một ngôn ngữ."
+    },
+    {
+      "id": "P05",
+      "name": "Nông Sản Đúng Chuyến — dự án giả lập",
+      "kind": "standard",
+      "description": "Dự án kết nối nông hộ với điểm bán nông sản. Nhóm đã có mô hình AI dự báo sản lượng và đang thử nghiệm việc đưa sản phẩm tới người mua.",
+      "businessNeed": "Nút thắt hiện tại là thu mua, logistics, vận hành chuỗi cung ứng và phân phối nông sản. Cần mentor giúp giảm hàng hỏng và tổ chức giao nhận.",
+      "itNeed": "Cần mentor AI, phân tích dữ liệu nông nghiệp và computer vision để đánh giá chất lượng dữ liệu và cải thiện mô hình dự báo, phân loại nông sản hiện có.",
+      "expectedBusiness": ["B03"],
+      "expectedIT": ["I04"],
+      "expectationNote": "Từ AI trong mô tả không được làm lệch nhu cầu Business khỏi logistics và phân phối."
+    },
+    {
+      "id": "P06",
+      "name": "Mắt Kiểm Hàng — dự án giả lập",
+      "kind": "standard",
+      "description": "Dự án cung cấp sản phẩm số hỗ trợ kiểm tra bề ngoài hàng hóa từ hình ảnh. Nhóm đã có bản thử nghiệm và muốn chuẩn bị giai đoạn thử nghiệm thương mại tiếp theo.",
+      "businessNeed": "Cần mentor tài chính, lập kế hoạch dòng tiền, dự phóng chi phí và chuẩn bị gọi vốn để xác định số vốn cần huy động cho giai đoạn tiếp theo.",
+      "itNeed": "Cần mentor có kinh nghiệm AI, computer vision, machine learning và phân tích dữ liệu để đánh giá, cải thiện mô hình nhận diện lỗi từ hình ảnh.",
+      "expectedBusiness": ["B02"],
+      "expectedIT": ["I04"],
+      "expectationNote": "Business được chọn theo nhu cầu tài chính thực tế; IT cần bằng chứng kinh nghiệm AI và computer vision."
+    },
+    {
+      "id": "P07",
+      "name": "Bản Quyền Sáng Tạo — dự án giả lập",
+      "kind": "standard",
+      "description": "Dự án cung cấp nền tảng số cho nhóm sáng tạo quản lý và chuyển giao tài sản thiết kế. Nhóm chuẩn bị thử nghiệm với những khách hàng tổ chức đầu tiên.",
+      "businessNeed": "Cần mentor pháp lý, sở hữu trí tuệ, bản quyền và hợp đồng thương mại để rà soát quyền sử dụng tài sản và điều khoản chuyển giao.",
+      "itNeed": "Cần mentor cloud, DevOps và bảo mật để thiết kế triển khai, phân quyền truy cập, lưu trữ dữ liệu và bảo vệ hệ thống.",
+      "expectedBusiness": ["B06"],
+      "expectedIT": ["I05"],
+      "expectationNote": "Phải phân biệt nhu cầu pháp lý, sở hữu trí tuệ với kiến thức kinh doanh chung; bảo mật và triển khai là nhu cầu IT chính."
+    },
+    {
+      "id": "P08",
+      "name": "Cổng Dịch Vụ Đào Tạo — dự án giả lập",
+      "kind": "standard",
+      "description": "Dự án cung cấp dịch vụ số giúp đơn vị đào tạo tổ chức chương trình học cho doanh nghiệp. Nhóm có bản sản phẩm thử nghiệm và đang tìm khách hàng tổ chức trả phí.",
+      "businessNeed": "Cần mentor bán hàng B2B, phát triển khách hàng doanh nghiệp, xây quy trình tiếp cận và chào bán giải pháp edtech cho tổ chức.",
+      "itNeed": "Cần mentor frontend React, TypeScript, UX và thiết kế trải nghiệm sản phẩm để cải thiện cổng dịch vụ cho người quản trị và học viên.",
+      "expectedBusiness": ["B05"],
+      "expectedIT": ["I03"],
+      "expectationNote": "Ưu tiên kinh nghiệm bán hàng B2B và edtech, không đánh đồng với nghiên cứu sản phẩm giáo dục ở giai đoạn ý tưởng."
+    },
+    {
+      "id": "P09",
+      "name": "Vật Liệu Lên Men — dự án giả lập",
+      "kind": "edge",
+      "description": "Dự án phát triển vật liệu sinh học bằng quy trình lên men trong phòng thí nghiệm. Nhóm cần chuyển công thức thử nghiệm sang sản xuất vật liệu ở quy mô lớn hơn.",
+      "businessNeed": "Cần chuyên gia có kinh nghiệm trực tiếp về công nghệ lên men, sản xuất vật liệu sinh học, thiết kế dây chuyền và mở rộng quy trình từ phòng thí nghiệm sang nhà máy.",
+      "itNeed": "Cần chuyên gia kỹ thuật công nghệ sinh học và thiết bị lên men công nghiệp. Hiện không có nhu cầu phát triển phần mềm.",
+      "expectedBusiness": [],
+      "expectedIT": [],
+      "expectationNote": "Danh sách mentor giả lập không có chuyên môn sản xuất vật liệu sinh học hoặc lên men công nghiệp. Kết quả cần thể hiện thiếu ứng viên đáp ứng chuyên môn, không khẳng định mentor chung là phù hợp.",
+      "checks": ["unsupported-specialty"]
+    },
+    {
+      "id": "P10",
+      "name": "Đơn Hàng Rõ Ràng — dự án giả lập",
+      "kind": "edge",
+      "description": "Dự án xây hệ thống quản lý đơn hàng cho cửa hàng. Phạm vi phiên bản này KHÔNG cần AI, KHÔNG cần computer vision và KHÔNG cần machine learning. Nhóm chỉ cần hoàn thiện phần mềm quản lý dữ liệu thông thường.",
+      "businessNeed": "",
+      "itNeed": "Cần mentor backend C#/.NET và PostgreSQL để thiết kế API, đơn hàng và cơ sở dữ liệu. Các chủ đề AI, machine learning và computer vision đều nằm ngoài nhu cầu cố vấn hiện tại.",
+      "expectedBusiness": [],
+      "expectedIT": ["I01"],
+      "expectationNote": "I01 phù hợp với nhu cầu C#/.NET, PostgreSQL. Không được xem các từ AI bị phủ định trong dự án hoặc câu I06 không có kinh nghiệm AI trong CV là bằng chứng chuyên môn AI.",
+      "checks": ["negated-project-need", "negated-cv-expertise"]
+    },
+    {
+      "id": "P11",
+      "name": "Kế Hoạch Vốn Ban Đầu — dự án giả lập",
+      "kind": "edge",
+      "description": "Dự án đang chuẩn bị kế hoạch triển khai trong sáu tháng tới. Nhóm cần đánh giá khả năng duy trì hoạt động trước khi quyết định nhận thêm vốn.",
+      "businessNeed": "Cần mentor có kinh nghiệm thực tế quản lý tài chính, dòng tiền, dự phóng ngân sách và gọi vốn để rà soát kế hoạch vốn và thời gian duy trì hoạt động.",
+      "itNeed": "",
+      "expectedBusiness": ["B02"],
+      "expectedIT": [],
+      "expectationNote": "B02 phải được ưu tiên hơn B07: bằng cấp tài chính của B07 không thay thế bằng chứng kinh nghiệm làm việc tài chính khi CV chủ yếu mô tả công việc marketing.",
+      "checks": ["experience-over-degree"]
+    },
+    {
+      "id": "P12",
+      "name": "Ý Tưởng Mới — dự án giả lập",
+      "kind": "edge",
+      "description": "",
+      "businessNeed": "",
+      "itNeed": "",
+      "expectedBusiness": [],
+      "expectedIT": [],
+      "expectationNote": "Chỉ có tên dự án; thiếu mô tả và nhu cầu cố vấn. Hệ thống cần yêu cầu bổ sung thông tin hoặc thể hiện không đủ cơ sở để xếp hạng đáng tin cậy.",
+      "checks": ["missing-project-description"]
+    }
+  ]
+}

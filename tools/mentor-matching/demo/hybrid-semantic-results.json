@@ -1,0 +1,1062 @@
+{
+  "isSynthetic": true,
+  "description": "Chạy kiểm tra mô phỏng bằng hồ sơ CV và dự án tự tạo. Kỳ vọng tác giả được khai báo trước khi chạy, không phải nhãn chuẩn hoặc độ chính xác ngoài thực tế. Không huấn luyện hoặc chỉnh model bằng dữ liệu demo.",
+  "startedAtUtc": "2026-10-21T16:37:01.7562225Z",
+  "completedAtUtc": "2026-10-21T16:37:04.7215536Z",
+  "totalElapsedMilliseconds": 2965.2873,
+  "pipeline": {
+    "cvInput": "Synthetic DOCX generated in memory from mentors.json",
+    "upload": "UploadDocumentAsync",
+    "textReader": "MentorCvTextReader",
+    "recommendation": "RecommendAsync",
+    "ranker": "FileMentorFitRanker + local multilingual ONNX semantics",
+    "semanticModel": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+    "semanticRevision": "e8f8c211226b894fcb81acc59f3b34ba3efd5f42",
+    "database": "Unique EF Core InMemory database; no production database",
+    "storage": "In-memory fake; no external upload",
+    "roleFiltering": "Business and IT lists are filtered from the same actual API-handler response",
+    "embeddingCalls": 0,
+    "documentConverterCalls": 0,
+    "actualStorageUploadCount": 14,
+    "projectText": "Only Team.Description + TeamName; no Business/IT needs, technology, tags, rubric or expected IDs",
+    "timingsNote": "Observed local handler timings, including in-memory persistence and first model load; not VPS latency or a production benchmark"
+  },
+  "model": {
+    "path": "backend/src/EHub.Infrastructure/Mentoring/Models/bootstrap-model.json",
+    "sha256Before": "c069e746e24ad9c64472deaca8b59088872242c76de0bd449585098f73368311",
+    "sha256After": "c069e746e24ad9c64472deaca8b59088872242c76de0bd449585098f73368311",
+    "unchanged": true,
+    "retrained": false
+  },
+  "inputs": {
+    "mentorsSha256": "6b65b89b8db3c5eed380b8e97239c1512bebf67b05fbe5dc0d7d23fe1bedcaba",
+    "projectsFile": "semantic-projects.json",
+    "projectsSha256": "3192a8e42778e3513c6510766071bd24539251ad737445cacc963e574f266503",
+    "mentorCount": 14,
+    "projectCount": 12
+  },
+  "implementation": {
+    "sourceHashes": {
+      "backend/src/EHub.Application/Features/Mentoring/ExtractCv/MentorCvProfileParser.cs": "7f64036eabffe4a2f2a78db79d74f6b744ada16a398e82c46470de3ec43e3617",
+      "backend/src/EHub.Application/Features/Mentoring/MentorProfileHandler.cs": "373a3361859b891c64607d6f980a93eb94212cdb9f22d00c1fc529e07d04b129",
+      "backend/src/EHub.Application/Features/Mentoring/TrainedRanking/MentorEvidenceText.cs": "463fe58857a77d8358341cc4aa9e8e798247169dd28faaca0a2a9cd9a916f583",
+      "backend/src/EHub.Application/Features/Mentoring/TrainedRanking/MentorRankingFeatures.cs": "19569ce130fdd281dd2fb652d2330c184f1e091ce77be71393eb5e24929931d9",
+      "backend/src/EHub.Application/Features/Mentoring/TrainedRanking/MentorRankingModel.cs": "e4cf263a11f00bc914ac93e75e3680cf695648ef2e646db2a5b17f00bbb72556",
+      "backend/src/EHub.Application/Features/Mentoring/TrainedRanking/MentorSemanticEvidence.cs": "32c4ec533f21cd79799adbc89cb6a8296978f11a47dccaaf8065e71f038aad4d",
+      "backend/src/EHub.Application/Features/Mentoring/TrainedRanking/TrainedMentorFitScorer.cs": "786c20e71d8405d73f197b250d18aeeb1554246158afbe79fe69b700f253902b",
+      "backend/src/EHub.Infrastructure/Mentoring/FileMentorFitRanker.cs": "9c5eb9b42d3530d03e0371152970d0b7d3400e9c23b5474b391a6eb3b4533a9d",
+      "backend/src/EHub.Infrastructure/Mentoring/LocalSemanticMentorReranker.cs": "5009a7f27077141d2ae13a8dcf0cb989b67a1c92b00c93391ab66138978e7e00",
+      "backend/src/EHub.Infrastructure/Mentoring/MentorCvTextReader.cs": "321c33696fa5edcf89ddf3584fadab490fa8ea03d87c11f1fb23f0093bb86dd0",
+      "tools/mentor-matching/demo/Program.cs": "5868734caf2ebed31ffa875f13dad2bfc0d3928d90df2b2f17134700972a5d6e",
+      "tools/mentor-matching/semantic/encoder.py": "a949e4bde59dc988ee03d27a47413cc85589951468bc81cabf00154d56a33e82",
+      "tools/mentor-matching/semantic/prepare_model.py": "541c717f7ac11090686fd6af6a439f8f910cff0d7cccf83bdee0b2607a65a2d2",
+      "tools/mentor-matching/semantic/server.py": "f648f6a004c45334896307dbe4958d781759525cd7a82715ef5bdc0a59875d33"
+    },
+    "sourcesUnchangedDuringRun": true,
+    "applicationAssemblySha256": "c69b1b6cfbcd3614825d209b0ff678c93f7bb1edb9754c573bb7bd75846f46bc",
+    "infrastructureAssemblySha256": "56b64f3acc0111c8529056a58d1231dec182501c793d5f426d45972a867c8c77"
+  },
+  "summary": {
+    "successfulCvUploads": 14,
+    "cvUploadCount": 14,
+    "allPrivateMarkersExcluded": true,
+    "standardDeclaredRoleComparisons": 10,
+    "standardTop1ExpectationMatches": 9,
+    "standardTop3ExpectationMatches": 9,
+    "edgeChecksPassed": 3,
+    "edgeCheckCount": 3,
+    "scoreNote": "FitScore is the existing model's ranking score, not a calibrated probability of a correct match"
+  },
+  "uploads": [
+    {
+      "mentorId": "B01",
+      "name": "Mai (giả lập)",
+      "type": "Business",
+      "succeeded": true,
+      "elapsedMilliseconds": 231.889,
+      "errorCode": null,
+      "errorMessage": null,
+      "sourceContainsPrivateMarker": true,
+      "privateMarkerExcluded": true,
+      "hasProfessionalText": true,
+      "bio": "Cử nhân Marketing.\nTiếng Anh phục vụ công việc.\nMarketing F&B, nghiên cứu thị trường, bán hàng, định giá sản phẩm.",
+      "experience": "Phụ trách marketing cho chuỗi F&B và nhà hàng. Thực hiện nghiên cứu thị trường, phỏng vấn khách hàng, thử nghiệm bán hàng và định giá sản phẩm cho dịch vụ đồ ăn theo tuần. Hướng dẫn đội khởi nghiệp kiểm chứng nhu cầu và phát triển kênh phân phối tại khu dân cư.",
+      "expertise": [
+        "Marketing",
+        "Sales"
+      ],
+      "startupDomains": [],
+      "technologySkills": [],
+      "cvFileName": "B01-synthetic-cv.docx"
+    },
+    {
+      "mentorId": "B02",
+      "name": "Nam (giả lập)",
+      "type": "Business",
+      "succeeded": true,
+      "elapsedMilliseconds": 8.2685,
+      "errorCode": null,
+      "errorMessage": null,
+      "sourceContainsPrivateMarker": true,
+      "privateMarkerExcluded": true,
+      "hasProfessionalText": true,
+      "bio": "Cử nhân Tài chính doanh nghiệp.\nFinance, cash flow, fundraising, phân tích phương án tài chính.",
+      "experience": "Quản lý tài chính cho doanh nghiệp giai đoạn đầu. Lập kế hoạch dòng tiền, ngân sách, dự phóng chi phí và thời gian duy trì hoạt động. Đồng hành với nhóm sáng lập chuẩn bị gọi vốn, pitch deck, phương án huy động vốn và thuyết trình với nhà đầu tư.",
+      "expertise": [
+        "Finance"
+      ],
+      "startupDomains": [],
+      "technologySkills": [],
+      "cvFileName": "B02-synthetic-cv.docx"
+    },
+    {
+      "mentorId": "B03",
+      "name": "Linh (giả lập)",
+      "type": "Business",
+      "succeeded": true,
+      "elapsedMilliseconds": 4.12,
+      "errorCode": null,
+      "errorMessage": null,
+      "sourceContainsPrivateMarker": true,
+      "privateMarkerExcluded": true,
+      "hasProfessionalText": true,
+      "bio": "Cử nhân Quản lý chuỗi cung ứng.\nOperations, supply chain, logistics, quản lý kho và phân phối hàng hóa.",
+      "experience": "Điều hành vận hành kho và logistics cho mạng lưới bán lẻ thực phẩm. Thiết kế quy trình nhập xuất tồn, thu mua, quản lý chất lượng và giao nhận nông sản. Phát triển kênh phân phối, tổ chức chuỗi cung ứng tới cửa hàng thương mại điện tử và giảm hàng hỏng trong vận chuyển.",
+      "expertise": [
+        "Operations management"
+      ],
+      "startupDomains": [],
+      "technologySkills": [],
+      "cvFileName": "B03-synthetic-cv.docx"
+    },
+    {
+      "mentorId": "B04",
+      "name": "Vy (giả lập)",
+      "type": "Business",
+      "succeeded": true,
+      "elapsedMilliseconds": 4.0592,
+      "errorCode": null,
+      "errorMessage": null,
+      "sourceContainsPrivateMarker": true,
+      "privateMarkerExcluded": true,
+      "hasProfessionalText": true,
+      "bio": "Cử nhân Tâm lý học giáo dục.\nCustomer discovery, nghiên cứu thị trường, product management và UX trong giáo dục.",
+      "experience": "Nghiên cứu thị trường cho sản phẩm giáo dục ở giai đoạn ý tưởng. Thực hiện phỏng vấn khách hàng gồm phụ huynh và học sinh, khảo sát khách hàng và kiểm chứng nhu cầu. Phụ trách product discovery, thiết kế sản phẩm và thử nghiệm trải nghiệm người dùng trước khi phát triển sản phẩm đầu tiên.",
+      "expertise": [
+        "Product management"
+      ],
+      "startupDomains": [],
+      "technologySkills": [],
+      "cvFileName": "B04-synthetic-cv.docx"
+    },
+    {
+      "mentorId": "B05",
+      "name": "Hà (giả lập)",
+      "type": "Business",
+      "succeeded": true,
+      "elapsedMilliseconds": 4.1333,
+      "errorCode": null,
+      "errorMessage": null,
+      "sourceContainsPrivateMarker": true,
+      "privateMarkerExcluded": true,
+      "hasProfessionalText": true,
+      "bio": "Cử nhân Thương mại.\nSales B2B, bán hàng giải pháp, phát triển kinh doanh và edtech.",
+      "experience": "Phụ trách bán hàng B2B và business development cho giải pháp edtech. Xây quy trình tiếp cận khách hàng doanh nghiệp, chào bán giải pháp đào tạo trực tuyến, đàm phán và chốt đơn. Phát triển khách hàng tổ chức, trường học và đơn vị đào tạo; quản lý kênh phân phối dịch vụ giáo dục.",
+      "expertise": [
+        "Business development",
+        "Sales"
+      ],
+      "startupDomains": [],
+      "technologySkills": [],
+      "cvFileName": "B05-synthetic-cv.docx"
+    },
+    {
+      "mentorId": "B06",
+      "name": "Sơn (giả lập)",
+      "type": "Business",
+      "succeeded": true,
+      "elapsedMilliseconds": 12.1227,
+      "errorCode": null,
+      "errorMessage": null,
+      "sourceContainsPrivateMarker": true,
+      "privateMarkerExcluded": true,
+      "hasProfessionalText": true,
+      "bio": "Cử nhân Luật kinh tế.\nLegal, sở hữu trí tuệ, hợp đồng thương mại và bản quyền.",
+      "experience": "Tư vấn pháp lý doanh nghiệp và đăng ký doanh nghiệp cho nhóm khởi nghiệp. Rà soát sở hữu trí tuệ, bản quyền thiết kế, quyền sử dụng tài sản số và hợp đồng thương mại. Soạn điều khoản chuyển giao, cấp phép và xử lý tranh chấp hợp đồng.",
+      "expertise": [],
+      "startupDomains": [],
+      "technologySkills": [],
+      "cvFileName": "B06-synthetic-cv.docx"
+    },
+    {
+      "mentorId": "B07",
+      "name": "Minh (giả lập)",
+      "type": "Business",
+      "succeeded": true,
+      "elapsedMilliseconds": 4.1341,
+      "errorCode": null,
+      "errorMessage": null,
+      "sourceContainsPrivateMarker": true,
+      "privateMarkerExcluded": true,
+      "hasProfessionalText": true,
+      "bio": "Cử nhân Tài chính doanh nghiệp.\nMarketing, truyền thông, viết nội dung và khảo sát khách hàng.",
+      "experience": "Chuyên viên marketing cho sản phẩm tiêu dùng. Thực hiện truyền thông, quảng bá và tổ chức chương trình thu hút khách hàng tại cửa hàng. Phối hợp đội bán hàng chuẩn bị nội dung giới thiệu sản phẩm và theo dõi hiệu quả quảng bá.",
+      "expertise": [
+        "Marketing",
+        "Sales"
+      ],
+      "startupDomains": [],
+      "technologySkills": [],
+      "cvFileName": "B07-synthetic-cv.docx"
+    },
+    {
+      "mentorId": "B08",
+      "name": "Phương (giả lập)",
+      "type": "Business",
+      "succeeded": true,
+      "elapsedMilliseconds": 4.0042,
+      "errorCode": null,
+      "errorMessage": null,
+      "sourceContainsPrivateMarker": true,
+      "privateMarkerExcluded": true,
+      "hasProfessionalText": true,
+      "bio": "Cử nhân Quản trị du lịch.\nTourism, bán tour, vận hành, marketing và phân phối dịch vụ du lịch.",
+      "experience": "Quản lý vận hành dịch vụ du lịch và trải nghiệm địa phương. Phụ trách bán hàng tour, marketing du lịch và phát triển kênh phân phối với đối tác lữ hành. Tổ chức lịch trình, điều phối nhà cung cấp và kiểm soát chất lượng dịch vụ cho du khách.",
+      "expertise": [
+        "Marketing",
+        "Operations management",
+        "Sales"
+      ],
+      "startupDomains": [],
+      "technologySkills": [],
+      "cvFileName": "B08-synthetic-cv.docx"
+    },
+    {
+      "mentorId": "I01",
+      "name": "Khoa (giả lập)",
+      "type": "IT",
+      "succeeded": true,
+      "elapsedMilliseconds": 4.1672,
+      "errorCode": null,
+      "errorMessage": null,
+      "sourceContainsPrivateMarker": true,
+      "privateMarkerExcluded": true,
+      "hasProfessionalText": true,
+      "bio": "Cử nhân Kỹ thuật phần mềm.\nC#, .NET, ASP.NET, backend, REST API, PostgreSQL, thiết kế dữ liệu.",
+      "experience": "Phát triển backend C# và ASP.NET cho dịch vụ đặt đồ ăn và thương mại điện tử. Thiết kế API, cơ sở dữ liệu PostgreSQL, xử lý đơn hàng và tồn kho. Hướng dẫn nhóm phát triển kiểm soát giao dịch dữ liệu và thiết kế hệ thống phục vụ cửa hàng bán lẻ.",
+      "expertise": [],
+      "startupDomains": [],
+      "technologySkills": [],
+      "cvFileName": "I01-synthetic-cv.docx"
+    },
+    {
+      "mentorId": "I02",
+      "name": "An (giả lập)",
+      "type": "IT",
+      "succeeded": true,
+      "elapsedMilliseconds": 4.4248,
+      "errorCode": null,
+      "errorMessage": null,
+      "sourceContainsPrivateMarker": true,
+      "privateMarkerExcluded": true,
+      "hasProfessionalText": true,
+      "bio": "Cử nhân Kỹ thuật phần mềm.\nMobile, Flutter, Android, iOS và ứng dụng di động.",
+      "experience": "Phát triển ứng dụng di động bằng Flutter cho Android và iOS. Triển khai ứng dụng giáo dục hỗ trợ lịch học và ứng dụng du lịch đặt trải nghiệm địa phương. Hướng dẫn kiểm thử trên điện thoại và phát hành sản phẩm lên kho ứng dụng.",
+      "expertise": [],
+      "startupDomains": [],
+      "technologySkills": [],
+      "cvFileName": "I02-synthetic-cv.docx"
+    },
+    {
+      "mentorId": "I03",
+      "name": "Trâm (giả lập)",
+      "type": "IT",
+      "succeeded": true,
+      "elapsedMilliseconds": 4.5631,
+      "errorCode": null,
+      "errorMessage": null,
+      "sourceContainsPrivateMarker": true,
+      "privateMarkerExcluded": true,
+      "hasProfessionalText": true,
+      "bio": "Cử nhân Công nghệ thông tin.\nFrontend, React, TypeScript, UX, giao diện web và thiết kế sản phẩm.",
+      "experience": "Phát triển frontend React và TypeScript cho cổng dịch vụ doanh nghiệp. Thiết kế giao diện web, UX và trải nghiệm người dùng cho quản trị viên và khách hàng. Phối hợp product discovery, thử nghiệm thiết kế sản phẩm và cải thiện thao tác sử dụng.",
+      "expertise": [],
+      "startupDomains": [],
+      "technologySkills": [],
+      "cvFileName": "I03-synthetic-cv.docx"
+    },
+    {
+      "mentorId": "I04",
+      "name": "Duy (giả lập)",
+      "type": "IT",
+      "succeeded": true,
+      "elapsedMilliseconds": 4.59,
+      "errorCode": null,
+      "errorMessage": null,
+      "sourceContainsPrivateMarker": true,
+      "privateMarkerExcluded": true,
+      "hasProfessionalText": true,
+      "bio": "Cử nhân Khoa học dữ liệu.\nAI, computer vision, machine learning, data analysis, phân tích dữ liệu.",
+      "experience": "Xây dựng mô hình AI, machine learning và computer vision để phân loại nông sản và nhận diện lỗi từ hình ảnh hàng hóa. Phân tích dữ liệu nông nghiệp, đánh giá chất lượng dữ liệu và dự báo sản lượng. Hướng dẫn nhóm thử nghiệm mô hình và đánh giá sai số trên dữ liệu mới.",
+      "expertise": [
+        "AI"
+      ],
+      "startupDomains": [],
+      "technologySkills": [],
+      "cvFileName": "I04-synthetic-cv.docx"
+    },
+    {
+      "mentorId": "I05",
+      "name": "Bảo (giả lập)",
+      "type": "IT",
+      "succeeded": true,
+      "elapsedMilliseconds": 4.5082,
+      "errorCode": null,
+      "errorMessage": null,
+      "sourceContainsPrivateMarker": true,
+      "privateMarkerExcluded": true,
+      "hasProfessionalText": true,
+      "bio": "Cử nhân An toàn thông tin.\nCloud, DevOps, AWS, Docker, Kubernetes, cybersecurity và bảo mật.",
+      "experience": "Thiết kế hạ tầng cloud và quy trình DevOps cho nền tảng số. Triển khai Docker, Kubernetes và AWS; xây kiểm soát phân quyền truy cập, lưu trữ dữ liệu và bảo mật hệ thống. Thực hiện đánh giá an toàn thông tin, khôi phục dữ liệu và kiểm thử xâm nhập theo phạm vi được giao.",
+      "expertise": [
+        "Cloud",
+        "Cybersecurity"
+      ],
+      "startupDomains": [],
+      "technologySkills": [],
+      "cvFileName": "I05-synthetic-cv.docx"
+    },
+    {
+      "mentorId": "I06",
+      "name": "Quân (giả lập)",
+      "type": "IT",
+      "succeeded": true,
+      "elapsedMilliseconds": 5.034,
+      "errorCode": null,
+      "errorMessage": null,
+      "sourceContainsPrivateMarker": true,
+      "privateMarkerExcluded": true,
+      "hasProfessionalText": true,
+      "bio": "Cử nhân Kỹ thuật phần mềm.\nNode.js, backend, PostgreSQL, REST API và cơ sở dữ liệu.",
+      "experience": "Phát triển backend Node.js và cơ sở dữ liệu PostgreSQL cho quản lý đơn hàng, tồn kho và thương mại điện tử. Thiết kế API và tối ưu truy vấn dữ liệu. Không có kinh nghiệm AI, machine learning hoặc computer vision.",
+      "expertise": [],
+      "startupDomains": [],
+      "technologySkills": [],
+      "cvFileName": "I06-synthetic-cv.docx"
+    }
+  ],
+  "projects": [
+    {
+      "id": "S01",
+      "name": "Bếp theo tuần — giả lập",
+      "kind": "semantic",
+      "description": "Nhóm bán các suất ăn giao tận nhà. Muốn tìm hiểu người mua thực sự cần gì, họ chịu trả bao nhiêu cho một tuần ăn trưa và nên tiếp cận họ qua kênh nào. Dự định bán thử ở hai khu dân cư trước khi mở rộng.",
+      "expectationNote": "Kỳ vọng tác giả, không phải đánh giá độc lập.",
+      "succeeded": true,
+      "elapsedMilliseconds": 263.9176,
+      "errorCode": null,
+      "errorMessage": null,
+      "business": [
+        {
+          "rank": 1,
+          "id": "B01",
+          "name": "Mai (giả lập)",
+          "type": "Business",
+          "fitScore": 89,
+          "reasons": [
+            "Đối chiếu ngữ nghĩa với kinh nghiệm: «Thực hiện nghiên cứu thị trường, phỏng vấn khách hàng, thử nghiệm bán hàng và định giá sản phẩm cho dịch vụ đồ ăn theo tuần»",
+            "Kinh nghiệm có nội dung liên quan: f&b",
+            "Mô hình chưa được kiểm chứng bằng đánh giá ghép mentor thực tế",
+            "Đang phụ trách 0 nhóm"
+          ],
+          "activeTeamCount": 0,
+          "hasCapacity": true
+        },
+        {
+          "rank": 2,
+          "id": "B03",
+          "name": "Linh (giả lập)",
+          "type": "Business",
+          "fitScore": 87,
+          "reasons": [
+            "Đối chiếu ngữ nghĩa với kinh nghiệm: «Điều hành vận hành kho và logistics cho mạng lưới bán lẻ thực phẩm»",
+            "Kinh nghiệm có nội dung liên quan: thực phẩm",
+            "Mô hình chưa được kiểm chứng bằng đánh giá ghép mentor thực tế",
+            "Đang phụ trách 0 nhóm"
+          ],
+          "activeTeamCount": 0,
+          "hasCapacity": true
+        }
+      ],
+      "it": [],
+      "businessExpectation": {
+        "expectedIds": [
+          "B01"
+        ],
+        "hasDeclaredExpectation": true,
+        "actualTop1": "B01",
+        "actualTop3": [
+          "B01",
+          "B03"
+        ],
+        "top1Matches": true,
+        "top3Matches": true
+      },
+      "itExpectation": {
+        "expectedIds": [],
+        "hasDeclaredExpectation": false,
+        "actualTop1": null,
+        "actualTop3": [],
+        "top1Matches": null,
+        "top3Matches": null
+      },
+      "checks": [],
+      "privateMarkerExcludedFromReasons": true
+    },
+    {
+      "id": "S02",
+      "name": "Tiền đủ dùng — giả lập",
+      "kind": "semantic",
+      "description": "Nhóm cần người giúp tính tiền vào và tiền ra từng tháng, biết khoản nào phải chi trước và còn duy trì được bao lâu nếu chưa có thêm doanh thu. Sau đó nhóm sẽ chuẩn bị hồ sơ trình bày với người muốn góp vốn.",
+      "expectationNote": "Kỳ vọng tác giả, không phải đánh giá độc lập.",
+      "succeeded": true,
+      "elapsedMilliseconds": 15.164,
+      "errorCode": null,
+      "errorMessage": null,
+      "business": [
+        {
+          "rank": 1,
+          "id": "B02",
+          "name": "Nam (giả lập)",
+          "type": "Business",
+          "fitScore": 60,
+          "reasons": [
+            "Đối chiếu ngữ nghĩa với kinh nghiệm: «Lập kế hoạch dòng tiền, ngân sách, dự phóng chi phí và thời gian duy trì hoạt động»",
+            "Gợi ý bổ sung theo ngữ nghĩa; cần kiểm tra chuyên môn trước khi phân công",
+            "Mô hình chưa được kiểm chứng bằng đánh giá ghép mentor thực tế",
+            "Đang phụ trách 0 nhóm"
+          ],
+          "activeTeamCount": 0,
+          "hasCapacity": true
+        }
+      ],
+      "it": [],
+      "businessExpectation": {
+        "expectedIds": [
+          "B02"
+        ],
+        "hasDeclaredExpectation": true,
+        "actualTop1": "B02",
+        "actualTop3": [
+          "B02"
+        ],
+        "top1Matches": true,
+        "top3Matches": true
+      },
+      "itExpectation": {
+        "expectedIds": [],
+        "hasDeclaredExpectation": false,
+        "actualTop1": null,
+        "actualTop3": [],
+        "top1Matches": null,
+        "top3Matches": null
+      },
+      "checks": [],
+      "privateMarkerExcludedFromReasons": true
+    },
+    {
+      "id": "S03",
+      "name": "Rau ít hao hụt — giả lập",
+      "kind": "semantic",
+      "description": "Dịch vụ đưa rau từ nông trại đến cửa hàng. Nhiều hàng bị hỏng giữa đường hoặc nằm chờ quá lâu. Nhóm muốn sắp xếp việc nhận hàng, bảo quản và đưa hàng đến nơi đúng lúc, tránh thiếu hàng tại điểm bán.",
+      "expectationNote": "Kỳ vọng tác giả, không phải đánh giá độc lập.",
+      "succeeded": true,
+      "elapsedMilliseconds": 12.773,
+      "errorCode": null,
+      "errorMessage": null,
+      "business": [
+        {
+          "rank": 1,
+          "id": "B03",
+          "name": "Linh (giả lập)",
+          "type": "Business",
+          "fitScore": 56,
+          "reasons": [
+            "Đối chiếu ngữ nghĩa với kinh nghiệm: «Thiết kế quy trình nhập xuất tồn, thu mua, quản lý chất lượng và giao nhận nông sản»",
+            "Gợi ý bổ sung theo ngữ nghĩa; cần kiểm tra chuyên môn trước khi phân công",
+            "Mô hình chưa được kiểm chứng bằng đánh giá ghép mentor thực tế",
+            "Đang phụ trách 0 nhóm"
+          ],
+          "activeTeamCount": 0,
+          "hasCapacity": true
+        }
+      ],
+      "it": [],
+      "businessExpectation": {
+        "expectedIds": [
+          "B03"
+        ],
+        "hasDeclaredExpectation": true,
+        "actualTop1": "B03",
+        "actualTop3": [
+          "B03"
+        ],
+        "top1Matches": true,
+        "top3Matches": true
+      },
+      "itExpectation": {
+        "expectedIds": [],
+        "hasDeclaredExpectation": false,
+        "actualTop1": null,
+        "actualTop3": [],
+        "top1Matches": null,
+        "top3Matches": null
+      },
+      "checks": [],
+      "privateMarkerExcludedFromReasons": true
+    },
+    {
+      "id": "S04",
+      "name": "Đồ họa được phép dùng — giả lập",
+      "kind": "semantic",
+      "description": "Nhóm bán mẫu tranh số do cộng tác viên sáng tạo. Cần làm rõ ai sở hữu mẫu, người mua được sử dụng trong trường hợp nào, có được bán lại hay không và nên ghi các thỏa thuận giữa các bên như thế nào.",
+      "expectationNote": "Kỳ vọng tác giả, không phải đánh giá độc lập.",
+      "succeeded": true,
+      "elapsedMilliseconds": 9.6818,
+      "errorCode": null,
+      "errorMessage": null,
+      "business": [],
+      "it": [],
+      "businessExpectation": {
+        "expectedIds": [
+          "B06"
+        ],
+        "hasDeclaredExpectation": true,
+        "actualTop1": null,
+        "actualTop3": [],
+        "top1Matches": false,
+        "top3Matches": false
+      },
+      "itExpectation": {
+        "expectedIds": [],
+        "hasDeclaredExpectation": false,
+        "actualTop1": null,
+        "actualTop3": [],
+        "top1Matches": null,
+        "top3Matches": null
+      },
+      "checks": [],
+      "privateMarkerExcludedFromReasons": true
+    },
+    {
+      "id": "S05",
+      "name": "Phụ huynh có cần không — giả lập",
+      "kind": "semantic",
+      "description": "Nhóm có ý tưởng giúp trẻ học ở nhà nhưng chưa biết phụ huynh có muốn dùng hay không. Muốn gặp và hỏi chuyện phụ huynh, quan sát trẻ sử dụng bản mẫu, rồi quyết định giữ tính năng nào trước khi bỏ tiền làm tiếp.",
+      "expectationNote": "Kỳ vọng tác giả, không phải đánh giá độc lập.",
+      "succeeded": true,
+      "elapsedMilliseconds": 21.6155,
+      "errorCode": null,
+      "errorMessage": null,
+      "business": [
+        {
+          "rank": 1,
+          "id": "B04",
+          "name": "Vy (giả lập)",
+          "type": "Business",
+          "fitScore": 51,
+          "reasons": [
+            "Đối chiếu ngữ nghĩa với kinh nghiệm: «Thực hiện phỏng vấn khách hàng gồm phụ huynh và học sinh, khảo sát khách hàng và kiểm chứng nhu cầu»",
+            "Gợi ý bổ sung theo ngữ nghĩa; cần kiểm tra chuyên môn trước khi phân công",
+            "Mô hình chưa được kiểm chứng bằng đánh giá ghép mentor thực tế",
+            "Đang phụ trách 0 nhóm"
+          ],
+          "activeTeamCount": 0,
+          "hasCapacity": true
+        }
+      ],
+      "it": [],
+      "businessExpectation": {
+        "expectedIds": [
+          "B04"
+        ],
+        "hasDeclaredExpectation": true,
+        "actualTop1": "B04",
+        "actualTop3": [
+          "B04"
+        ],
+        "top1Matches": true,
+        "top3Matches": true
+      },
+      "itExpectation": {
+        "expectedIds": [],
+        "hasDeclaredExpectation": false,
+        "actualTop1": null,
+        "actualTop3": [],
+        "top1Matches": null,
+        "top3Matches": null
+      },
+      "checks": [],
+      "privateMarkerExcludedFromReasons": true
+    },
+    {
+      "id": "S06",
+      "name": "Bán khóa học cho tổ chức — giả lập",
+      "kind": "semantic",
+      "description": "Nhóm cung cấp chương trình học trực tuyến cho các công ty. Cần tiếp cận người phụ trách đào tạo, trình bày lợi ích, bàn điều kiện mua và làm cho công ty đồng ý trả tiền cho chương trình.",
+      "expectationNote": "Kỳ vọng tác giả, không phải đánh giá độc lập.",
+      "succeeded": true,
+      "elapsedMilliseconds": 10.5847,
+      "errorCode": null,
+      "errorMessage": null,
+      "business": [
+        {
+          "rank": 1,
+          "id": "B05",
+          "name": "Hà (giả lập)",
+          "type": "Business",
+          "fitScore": 93,
+          "reasons": [
+            "Đối chiếu ngữ nghĩa với kinh nghiệm: «Phát triển khách hàng tổ chức, trường học và đơn vị đào tạo»",
+            "Kinh nghiệm có nội dung liên quan: edtech",
+            "Mô hình chưa được kiểm chứng bằng đánh giá ghép mentor thực tế",
+            "Đang phụ trách 0 nhóm"
+          ],
+          "activeTeamCount": 0,
+          "hasCapacity": true
+        },
+        {
+          "rank": 2,
+          "id": "B04",
+          "name": "Vy (giả lập)",
+          "type": "Business",
+          "fitScore": 89,
+          "reasons": [
+            "Đối chiếu ngữ nghĩa với kinh nghiệm: «Nghiên cứu thị trường cho sản phẩm giáo dục ở giai đoạn ý tưởng»",
+            "Kinh nghiệm có nội dung liên quan: giáo dục",
+            "Mô hình chưa được kiểm chứng bằng đánh giá ghép mentor thực tế",
+            "Đang phụ trách 0 nhóm"
+          ],
+          "activeTeamCount": 0,
+          "hasCapacity": true
+        }
+      ],
+      "it": [],
+      "businessExpectation": {
+        "expectedIds": [
+          "B05"
+        ],
+        "hasDeclaredExpectation": true,
+        "actualTop1": "B05",
+        "actualTop3": [
+          "B05",
+          "B04"
+        ],
+        "top1Matches": true,
+        "top3Matches": true
+      },
+      "itExpectation": {
+        "expectedIds": [],
+        "hasDeclaredExpectation": false,
+        "actualTop1": null,
+        "actualTop3": [],
+        "top1Matches": null,
+        "top3Matches": null
+      },
+      "checks": [],
+      "privateMarkerExcludedFromReasons": true
+    },
+    {
+      "id": "S07",
+      "name": "Cổng đặt dịch vụ — giả lập",
+      "kind": "semantic",
+      "description": "Nhóm cần làm phần backend C#/.NET và PostgreSQL cho cổng đặt dịch vụ. Người hướng dẫn phải giúp tổ chức phần xử lý dữ liệu, kiểm tra đơn đặt trùng nhau và bảo vệ thao tác của từng tài khoản. Không cần AI trong phiên bản này.",
+      "expectationNote": "Kỳ vọng tác giả; giữ yêu cầu công nghệ cụ thể.",
+      "succeeded": true,
+      "elapsedMilliseconds": 13.7607,
+      "errorCode": null,
+      "errorMessage": null,
+      "business": [],
+      "it": [
+        {
+          "rank": 1,
+          "id": "I01",
+          "name": "Khoa (giả lập)",
+          "type": "IT",
+          "fitScore": 91,
+          "reasons": [
+            "Đối chiếu ngữ nghĩa với kinh nghiệm: «Phát triển backend C# và ASP.NET cho dịch vụ đặt đồ ăn và thương mại điện tử»",
+            "Kinh nghiệm có nội dung liên quan: backend",
+            "Kinh nghiệm có nội dung liên quan: c#",
+            "Kinh nghiệm có nội dung liên quan: cơ sở dữ liệu",
+            "Kinh nghiệm có nội dung liên quan: postgresql",
+            "Mô hình chưa được kiểm chứng bằng đánh giá ghép mentor thực tế",
+            "Đang phụ trách 0 nhóm"
+          ],
+          "activeTeamCount": 0,
+          "hasCapacity": true
+        },
+        {
+          "rank": 2,
+          "id": "I06",
+          "name": "Quân (giả lập)",
+          "type": "IT",
+          "fitScore": 90,
+          "reasons": [
+            "Đối chiếu ngữ nghĩa với kinh nghiệm: «Phát triển backend Node.js và cơ sở dữ liệu PostgreSQL cho quản lý đơn hàng, tồn kho và thương mại điện tử»",
+            "Kinh nghiệm có nội dung liên quan: backend",
+            "Kinh nghiệm có nội dung liên quan: cơ sở dữ liệu",
+            "Kinh nghiệm có nội dung liên quan: postgresql",
+            "Chưa tìm thấy bằng chứng trong hồ sơ cho: C# và .NET",
+            "Mô hình chưa được kiểm chứng bằng đánh giá ghép mentor thực tế",
+            "Đang phụ trách 0 nhóm"
+          ],
+          "activeTeamCount": 0,
+          "hasCapacity": true
+        },
+        {
+          "rank": 3,
+          "id": "I05",
+          "name": "Bảo (giả lập)",
+          "type": "IT",
+          "fitScore": 42,
+          "reasons": [
+            "Đối chiếu ngữ nghĩa với kinh nghiệm: «xây kiểm soát phân quyền truy cập, lưu trữ dữ liệu và bảo mật hệ thống»",
+            "Kinh nghiệm có nội dung liên quan: lưu trữ dữ liệu",
+            "Chưa tìm thấy bằng chứng trong hồ sơ cho: Backend và thiết kế hệ thống, C# và .NET, PostgreSQL",
+            "Mô hình chưa được kiểm chứng bằng đánh giá ghép mentor thực tế",
+            "Đang phụ trách 0 nhóm"
+          ],
+          "activeTeamCount": 0,
+          "hasCapacity": true
+        }
+      ],
+      "businessExpectation": {
+        "expectedIds": [],
+        "hasDeclaredExpectation": false,
+        "actualTop1": null,
+        "actualTop3": [],
+        "top1Matches": null,
+        "top3Matches": null
+      },
+      "itExpectation": {
+        "expectedIds": [
+          "I01"
+        ],
+        "hasDeclaredExpectation": true,
+        "actualTop1": "I01",
+        "actualTop3": [
+          "I01",
+          "I06",
+          "I05"
+        ],
+        "top1Matches": true,
+        "top3Matches": true
+      },
+      "checks": [
+        {
+          "name": "negated-project-need",
+          "passed": true,
+          "detail": "Expected C#/.NET backend mentor I01 first; actual first IT mentor: I01."
+        },
+        {
+          "name": "negated-cv-expertise",
+          "passed": true,
+          "detail": "I06 CV explicitly denies AI experience; extracted AI expertise tag: False."
+        }
+      ],
+      "privateMarkerExcludedFromReasons": true
+    },
+    {
+      "id": "S08",
+      "name": "Giao diện người học — giả lập",
+      "kind": "semantic",
+      "description": "Nhóm đã có dịch vụ học tập và cần frontend React, TypeScript. Học viên thường bấm nhầm và bỏ cuộc lúc đăng ký, nên nhóm muốn sắp xếp lại màn hình và thử cách thao tác thuận tiện hơn trên trình duyệt.",
+      "expectationNote": "Kỳ vọng tác giả; giữ yêu cầu React web.",
+      "succeeded": true,
+      "elapsedMilliseconds": 11.2109,
+      "errorCode": null,
+      "errorMessage": null,
+      "business": [
+        {
+          "rank": 1,
+          "id": "B05",
+          "name": "Hà (giả lập)",
+          "type": "Business",
+          "fitScore": 87,
+          "reasons": [
+            "Đối chiếu ngữ nghĩa với kinh nghiệm: «quản lý kênh phân phối dịch vụ giáo dục»",
+            "Kinh nghiệm có nội dung liên quan: edtech",
+            "Mô hình chưa được kiểm chứng bằng đánh giá ghép mentor thực tế",
+            "Đang phụ trách 0 nhóm"
+          ],
+          "activeTeamCount": 0,
+          "hasCapacity": true
+        },
+        {
+          "rank": 2,
+          "id": "B04",
+          "name": "Vy (giả lập)",
+          "type": "Business",
+          "fitScore": 86,
+          "reasons": [
+            "Đối chiếu ngữ nghĩa với kinh nghiệm: «Nghiên cứu thị trường cho sản phẩm giáo dục ở giai đoạn ý tưởng»",
+            "Kinh nghiệm có nội dung liên quan: giáo dục",
+            "Mô hình chưa được kiểm chứng bằng đánh giá ghép mentor thực tế",
+            "Đang phụ trách 0 nhóm"
+          ],
+          "activeTeamCount": 0,
+          "hasCapacity": true
+        }
+      ],
+      "it": [
+        {
+          "rank": 1,
+          "id": "I03",
+          "name": "Trâm (giả lập)",
+          "type": "IT",
+          "fitScore": 87,
+          "reasons": [
+            "Đối chiếu ngữ nghĩa với kinh nghiệm: «Phát triển frontend React và TypeScript cho cổng dịch vụ doanh nghiệp»",
+            "Kinh nghiệm có nội dung liên quan: frontend",
+            "Kinh nghiệm có nội dung liên quan: react",
+            "Kinh nghiệm có nội dung liên quan: typescript",
+            "Mô hình chưa được kiểm chứng bằng đánh giá ghép mentor thực tế",
+            "Đang phụ trách 0 nhóm"
+          ],
+          "activeTeamCount": 0,
+          "hasCapacity": true
+        }
+      ],
+      "businessExpectation": {
+        "expectedIds": [],
+        "hasDeclaredExpectation": false,
+        "actualTop1": "B05",
+        "actualTop3": [
+          "B05",
+          "B04"
+        ],
+        "top1Matches": null,
+        "top3Matches": null
+      },
+      "itExpectation": {
+        "expectedIds": [
+          "I03"
+        ],
+        "hasDeclaredExpectation": true,
+        "actualTop1": "I03",
+        "actualTop3": [
+          "I03"
+        ],
+        "top1Matches": true,
+        "top3Matches": true
+      },
+      "checks": [],
+      "privateMarkerExcludedFromReasons": true
+    },
+    {
+      "id": "S09",
+      "name": "Chạy dịch vụ ổn định — giả lập",
+      "kind": "semantic",
+      "description": "Dự án cần triển khai cloud trên AWS. Khi người dùng tăng, nhóm muốn dịch vụ vẫn hoạt động, tự nhận biết lỗi, khôi phục khi gặp sự cố và bảo vệ dữ liệu người dùng. Cần hướng dẫn quy trình đưa bản cập nhật lên hệ thống.",
+      "expectationNote": "Kỳ vọng tác giả; cần cloud và vận hành kỹ thuật.",
+      "succeeded": true,
+      "elapsedMilliseconds": 11.9865,
+      "errorCode": null,
+      "errorMessage": null,
+      "business": [],
+      "it": [
+        {
+          "rank": 1,
+          "id": "I05",
+          "name": "Bảo (giả lập)",
+          "type": "IT",
+          "fitScore": 90,
+          "reasons": [
+            "Đối chiếu ngữ nghĩa với kinh nghiệm: «Thiết kế hạ tầng cloud và quy trình DevOps cho nền tảng số»",
+            "Kinh nghiệm có nội dung liên quan: cloud",
+            "Kinh nghiệm có nội dung liên quan: phân quyền truy cập",
+            "Mô hình chưa được kiểm chứng bằng đánh giá ghép mentor thực tế",
+            "Đang phụ trách 0 nhóm"
+          ],
+          "activeTeamCount": 0,
+          "hasCapacity": true
+        }
+      ],
+      "businessExpectation": {
+        "expectedIds": [],
+        "hasDeclaredExpectation": false,
+        "actualTop1": null,
+        "actualTop3": [],
+        "top1Matches": null,
+        "top3Matches": null
+      },
+      "itExpectation": {
+        "expectedIds": [
+          "I05"
+        ],
+        "hasDeclaredExpectation": true,
+        "actualTop1": "I05",
+        "actualTop3": [
+          "I05"
+        ],
+        "top1Matches": true,
+        "top3Matches": true
+      },
+      "checks": [],
+      "privateMarkerExcludedFromReasons": true
+    },
+    {
+      "id": "S10",
+      "name": "Chỉ cần hỏi khách hàng — giả lập",
+      "kind": "semantic",
+      "description": "Nhóm muốn nghiên cứu thị trường giáo dục bằng các cuộc gặp phụ huynh. Không cần làm website, không cần ứng dụng di động và không cần AI. Mục tiêu hiện tại là xác định có người muốn mua dịch vụ hay không.",
+      "expectationNote": "Kỳ vọng tác giả; không được tạo nhu cầu IT từ ngành giáo dục.",
+      "succeeded": true,
+      "elapsedMilliseconds": 11.5994,
+      "errorCode": null,
+      "errorMessage": null,
+      "business": [
+        {
+          "rank": 1,
+          "id": "B04",
+          "name": "Vy (giả lập)",
+          "type": "Business",
+          "fitScore": 91,
+          "reasons": [
+            "Đối chiếu ngữ nghĩa với kinh nghiệm: «Nghiên cứu thị trường cho sản phẩm giáo dục ở giai đoạn ý tưởng»",
+            "Kinh nghiệm có nội dung liên quan: nghiên cứu thị trường",
+            "Kinh nghiệm có nội dung liên quan: giáo dục",
+            "Mô hình chưa được kiểm chứng bằng đánh giá ghép mentor thực tế",
+            "Đang phụ trách 0 nhóm"
+          ],
+          "activeTeamCount": 0,
+          "hasCapacity": true
+        },
+        {
+          "rank": 2,
+          "id": "B01",
+          "name": "Mai (giả lập)",
+          "type": "Business",
+          "fitScore": 81,
+          "reasons": [
+            "Đối chiếu ngữ nghĩa với kinh nghiệm: «Hướng dẫn đội khởi nghiệp kiểm chứng nhu cầu và phát triển kênh phân phối tại khu dân cư»",
+            "Kinh nghiệm có nội dung liên quan: nghiên cứu thị trường",
+            "Mô hình chưa được kiểm chứng bằng đánh giá ghép mentor thực tế",
+            "Đang phụ trách 0 nhóm"
+          ],
+          "activeTeamCount": 0,
+          "hasCapacity": true
+        },
+        {
+          "rank": 3,
+          "id": "B07",
+          "name": "Minh (giả lập)",
+          "type": "Business",
+          "fitScore": 40,
+          "reasons": [
+            "Đối chiếu ngữ nghĩa với kinh nghiệm: «Chuyên viên marketing cho sản phẩm tiêu dùng»",
+            "Giới thiệu có nội dung liên quan: khảo sát khách hàng",
+            "Mô hình chưa được kiểm chứng bằng đánh giá ghép mentor thực tế",
+            "Đang phụ trách 0 nhóm"
+          ],
+          "activeTeamCount": 0,
+          "hasCapacity": true
+        }
+      ],
+      "it": [],
+      "businessExpectation": {
+        "expectedIds": [
+          "B04"
+        ],
+        "hasDeclaredExpectation": true,
+        "actualTop1": "B04",
+        "actualTop3": [
+          "B04",
+          "B01",
+          "B07"
+        ],
+        "top1Matches": true,
+        "top3Matches": true
+      },
+      "itExpectation": {
+        "expectedIds": [],
+        "hasDeclaredExpectation": false,
+        "actualTop1": null,
+        "actualTop3": [],
+        "top1Matches": null,
+        "top3Matches": null
+      },
+      "checks": [
+        {
+          "name": "business-only-no-it",
+          "passed": true,
+          "detail": "Business-only description returned 3 Business and 0 IT candidates."
+        }
+      ],
+      "privateMarkerExcludedFromReasons": true
+    },
+    {
+      "id": "S11",
+      "name": "Một ý tưởng — giả lập",
+      "kind": "semantic",
+      "description": "Nhóm muốn làm một sản phẩm hữu ích và phát triển trong tương lai. Chưa xác định sản phẩm hay khách hàng cụ thể.",
+      "expectationNote": "Mô tả mơ hồ cần quyền không gợi ý.",
+      "succeeded": true,
+      "elapsedMilliseconds": 10.151,
+      "errorCode": null,
+      "errorMessage": null,
+      "business": [],
+      "it": [],
+      "businessExpectation": {
+        "expectedIds": [],
+        "hasDeclaredExpectation": false,
+        "actualTop1": null,
+        "actualTop3": [],
+        "top1Matches": null,
+        "top3Matches": null
+      },
+      "itExpectation": {
+        "expectedIds": [],
+        "hasDeclaredExpectation": false,
+        "actualTop1": null,
+        "actualTop3": [],
+        "top1Matches": null,
+        "top3Matches": null
+      },
+      "checks": [],
+      "privateMarkerExcludedFromReasons": true
+    },
+    {
+      "id": "S12",
+      "name": "Thiết bị sinh học — giả lập",
+      "kind": "semantic",
+      "description": "Nhóm cần chuyên gia công nghệ lên men, thiết kế thiết bị phản ứng sinh học và tăng sản lượng vi sinh vật trong nhà máy. Không có nhu cầu phát triển phần mềm hay tư vấn kinh doanh.",
+      "expectationNote": "Không có chuyên môn phù hợp trong bộ mentor giả lập.",
+      "succeeded": true,
+      "elapsedMilliseconds": 11.2377,
+      "errorCode": null,
+      "errorMessage": null,
+      "business": [],
+      "it": [],
+      "businessExpectation": {
+        "expectedIds": [],
+        "hasDeclaredExpectation": false,
+        "actualTop1": null,
+        "actualTop3": [],
+        "top1Matches": null,
+        "top3Matches": null
+      },
+      "itExpectation": {
+        "expectedIds": [],
+        "hasDeclaredExpectation": false,
+        "actualTop1": null,
+        "actualTop3": [],
+        "top1Matches": null,
+        "top3Matches": null
+      },
+      "checks": [],
+      "privateMarkerExcludedFromReasons": true
+    }
+  ]
+}

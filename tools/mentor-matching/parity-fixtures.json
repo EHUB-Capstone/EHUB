@@ -1,0 +1,745 @@
+[
+  {
+    "projectText": "Một nhóm thử nghiệm sản phẩm đồ ăn giao cho sinh viên. Nhu cầu cố vấn: market research; strategy.",
+    "mentor": {
+      "mentorType": "Business",
+      "expertise": [],
+      "technologySkills": [],
+      "startupDomains": [
+        "f&b"
+      ],
+      "tags": [],
+      "bio": "",
+      "experience": "Đã trực tiếp phụ trách tiếp thị."
+    },
+    "features": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.375
+    ]
+  },
+  {
+    "projectText": "Nhóm bán suất ăn muốn kiểm soát chi phí và tồn kho. Nhu cầu cố vấn: dòng tiền; quản lý chất lượng.",
+    "mentor": {
+      "mentorType": "Business",
+      "expertise": [],
+      "technologySkills": [],
+      "startupDomains": [
+        "nhà hàng"
+      ],
+      "tags": [],
+      "bio": "",
+      "experience": "Đã trực tiếp phụ trách tổ chức hoạt động."
+    },
+    "features": [
+      0.3333333333333333,
+      0.0,
+      0.3333333333333333,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.375
+    ]
+  },
+  {
+    "projectText": "Dịch vụ đặt món cần phiên bản trên điện thoại. Nhu cầu cố vấn: trên điện thoại; roadmap.",
+    "mentor": {
+      "mentorType": "IT",
+      "expertise": [
+        "ai"
+      ],
+      "technologySkills": [],
+      "startupDomains": [],
+      "tags": [],
+      "bio": "",
+      "experience": "Đã trực tiếp phụ trách nhận diện hình ảnh."
+    },
+    "features": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.25
+    ]
+  },
+  {
+    "projectText": "Sản phẩm học trực tuyến đang chuẩn bị giới thiệu với đối tác vốn. Nhu cầu cố vấn: vốn đầu tư; ngân sách.",
+    "mentor": {
+      "mentorType": "Business",
+      "expertise": [
+        "finance"
+      ],
+      "technologySkills": [],
+      "startupDomains": [
+        "học viên"
+      ],
+      "tags": [],
+      "bio": "",
+      "experience": "Đã trực tiếp phụ trách dự phóng chi phí."
+    },
+    "features": [
+      0.3333333333333333,
+      0.3333333333333333,
+      0.3333333333333333,
+      0.0,
+      0.0,
+      0.0,
+      0.08333333333333333,
+      0.375
+    ]
+  },
+  {
+    "projectText": "Nhóm giáo dục cần hoàn thiện sản phẩm trên trình duyệt. Nhu cầu cố vấn: javascript; ứng dụng web.",
+    "mentor": {
+      "mentorType": "IT",
+      "expertise": [
+        ".net"
+      ],
+      "technologySkills": [
+        ".net"
+      ],
+      "startupDomains": [
+        "edtech"
+      ],
+      "tags": [],
+      "bio": "",
+      "experience": "Đã trực tiếp phụ trách c#."
+    },
+    "features": [
+      0.3333333333333333,
+      0.3333333333333333,
+      0.3333333333333333,
+      0.3333333333333333,
+      0.0,
+      0.0,
+      0.0,
+      0.375
+    ]
+  },
+  {
+    "projectText": "Một cửa hàng trực tuyến muốn quản lý chi phí và nguồn hàng. Nhu cầu cố vấn: operations; dòng tiền.",
+    "mentor": {
+      "mentorType": "Business",
+      "expertise": [
+        "customer discovery"
+      ],
+      "technologySkills": [],
+      "startupDomains": [
+        "retail"
+      ],
+      "tags": [],
+      "bio": "",
+      "experience": "Đã trực tiếp phụ trách kiểm chứng nhu cầu."
+    },
+    "features": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.375
+    ]
+  },
+  {
+    "projectText": "Nhóm thương mại điện tử đang chuẩn bị hoạt động với đối tác. Nhu cầu cố vấn: sở hữu trí tuệ; quản lý chất lượng.",
+    "mentor": {
+      "mentorType": "Business",
+      "expertise": [
+        "hợp đồng thương mại"
+      ],
+      "technologySkills": [],
+      "startupDomains": [
+        "thương mại điện tử"
+      ],
+      "tags": [],
+      "bio": "",
+      "experience": "Đã trực tiếp phụ trách đăng ký doanh nghiệp."
+    },
+    "features": [
+      0.3333333333333333,
+      0.3333333333333333,
+      0.3333333333333333,
+      0.0,
+      0.0,
+      0.0,
+      0.25,
+      0.375
+    ]
+  },
+  {
+    "projectText": "Nhóm bán lẻ cần triển khai hệ thống có kiểm soát truy cập. Nhu cầu cố vấn: cloud; cybersecurity.",
+    "mentor": {
+      "mentorType": "IT",
+      "expertise": [
+        "database"
+      ],
+      "technologySkills": [],
+      "startupDomains": [],
+      "tags": [],
+      "bio": "",
+      "experience": "Đã trực tiếp phụ trách lưu dữ liệu."
+    },
+    "features": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.375
+    ]
+  },
+  {
+    "projectText": "Nhóm lữ hành cần phối hợp đối tác và lịch cung cấp dịch vụ. Nhu cầu cố vấn: vận hành; agile.",
+    "mentor": {
+      "mentorType": "Business",
+      "expertise": [],
+      "technologySkills": [],
+      "startupDomains": [
+        "lữ hành"
+      ],
+      "tags": [],
+      "bio": "",
+      "experience": "Đã trực tiếp phụ trách quản lý chất lượng."
+    },
+    "features": [
+      0.3333333333333333,
+      0.0,
+      0.3333333333333333,
+      0.0,
+      0.0,
+      0.0,
+      0.14285714285714285,
+      0.375
+    ]
+  },
+  {
+    "projectText": "Sản phẩm du lịch cần bản trên điện thoại kết nối máy chủ. Nhu cầu cố vấn: trên điện thoại; hệ thống đặt hàng.",
+    "mentor": {
+      "mentorType": "IT",
+      "expertise": [],
+      "technologySkills": [
+        "node.js"
+      ],
+      "startupDomains": [
+        "travel"
+      ],
+      "tags": [],
+      "bio": "",
+      "experience": "Đã trực tiếp phụ trách node.js."
+    },
+    "features": [
+      0.3333333333333333,
+      0.0,
+      0.3333333333333333,
+      0.3333333333333333,
+      0.0,
+      0.0,
+      0.0,
+      0.375
+    ]
+  },
+  {
+    "projectText": "Nhóm tái sử dụng vật liệu đang tìm hướng phục vụ khách hàng. Nhu cầu cố vấn: kiểm chứng nhu cầu; business model.",
+    "mentor": {
+      "mentorType": "Business",
+      "expertise": [
+        "ngân sách"
+      ],
+      "technologySkills": [],
+      "startupDomains": [],
+      "tags": [],
+      "bio": "",
+      "experience": "Đã trực tiếp phụ trách accounting."
+    },
+    "features": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.25
+    ]
+  },
+  {
+    "projectText": "Nhóm cung cấp dịch vụ muốn quản lý ngân sách trước khi mở rộng. Nhu cầu cố vấn: ngân sách; quản trị kinh doanh.",
+    "mentor": {
+      "mentorType": "Business",
+      "expertise": [
+        "định giá sản phẩm"
+      ],
+      "technologySkills": [],
+      "startupDomains": [],
+      "tags": [],
+      "bio": "",
+      "experience": "Đã trực tiếp phụ trách định giá gói."
+    },
+    "features": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.25
+    ]
+  },
+  {
+    "projectText": "Nhóm thiết bị thông minh cần đưa dịch vụ lên môi trường vận hành. Nhu cầu cố vấn: azure; database.",
+    "mentor": {
+      "mentorType": "IT",
+      "expertise": [],
+      "technologySkills": [],
+      "startupDomains": [],
+      "tags": [],
+      "bio": "",
+      "experience": "Đã trực tiếp phụ trách kiểm thử xâm nhập."
+    },
+    "features": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.25
+    ]
+  },
+  {
+    "projectText": "Nhóm dịch vụ giao nhận cần tổ chức thực hiện công việc. Nhu cầu cố vấn: vận hành; điều phối dự án.",
+    "mentor": {
+      "mentorType": "Business",
+      "expertise": [
+        "kênh phân phối"
+      ],
+      "technologySkills": [],
+      "startupDomains": [],
+      "tags": [],
+      "bio": "",
+      "experience": "Đã trực tiếp phụ trách business development."
+    },
+    "features": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.375
+    ]
+  },
+  {
+    "projectText": "Nhóm kiểm tra sản phẩm qua hình ảnh cần thử nghiệm mô hình. Nhu cầu cố vấn: học máy; cloud.",
+    "mentor": {
+      "mentorType": "IT",
+      "expertise": [
+        "lưu trữ dữ liệu"
+      ],
+      "technologySkills": [],
+      "startupDomains": [],
+      "tags": [],
+      "bio": "",
+      "experience": "Đã trực tiếp phụ trách tồn kho."
+    },
+    "features": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.25
+    ]
+  },
+  {
+    "projectText": "Thu mua và giao nhận hàng cần giảm thất thoát. Nhu cầu cố vấn: chuỗi cung ứng; operations.",
+    "mentor": {
+      "mentorType": "Business",
+      "expertise": [],
+      "technologySkills": [],
+      "startupDomains": [
+        "nông nghiệp"
+      ],
+      "tags": [],
+      "bio": "",
+      "experience": "Đã trực tiếp phụ trách vận hành."
+    },
+    "features": [
+      0.5,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.1111111111111111,
+      0.1111111111111111,
+      0.25
+    ]
+  },
+  {
+    "projectText": "Nhóm đang thử các mức giá và nhu cầu mua. Nhu cầu cố vấn: định giá gói; khảo sát khách hàng.",
+    "mentor": {
+      "mentorType": "Business",
+      "expertise": [],
+      "technologySkills": [],
+      "startupDomains": [
+        "quán cà phê"
+      ],
+      "tags": [],
+      "bio": "",
+      "experience": "Đã trực tiếp phụ trách bán hàng doanh nghiệp."
+    },
+    "features": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.25
+    ]
+  },
+  {
+    "projectText": "Nhóm xây dịch vụ nhận yêu cầu từ cửa hàng. Nhu cầu cố vấn: node.js; sql server.",
+    "mentor": {
+      "mentorType": "IT",
+      "expertise": [
+        "java"
+      ],
+      "technologySkills": [],
+      "startupDomains": [],
+      "tags": [],
+      "bio": "",
+      "experience": "Đã trực tiếp phụ trách java."
+    },
+    "features": [
+      0.3333333333333333,
+      0.3333333333333333,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.375
+    ]
+  },
+  {
+    "projectText": "Nhóm làm sản phẩm trên điện thoại. Nhu cầu cố vấn: flutter; android.",
+    "mentor": {
+      "mentorType": "IT",
+      "expertise": [],
+      "technologySkills": [],
+      "startupDomains": [],
+      "tags": [],
+      "bio": "",
+      "experience": "Đã trực tiếp phụ trách front-end."
+    },
+    "features": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.25
+    ]
+  },
+  {
+    "projectText": "Nhóm kiểm tra chất lượng ảnh của hàng hóa. Nhu cầu cố vấn: thị giác máy tính; data analysis.",
+    "mentor": {
+      "mentorType": "IT",
+      "expertise": [],
+      "technologySkills": [],
+      "startupDomains": [
+        "agriculture"
+      ],
+      "tags": [],
+      "bio": "",
+      "experience": "Đã trực tiếp phụ trách phân loại ảnh; business intelligence"
+    },
+    "features": [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.07142857142857142,
+      0.07142857142857142,
+      0.375
+    ]
+  },
+  {
+    "projectText": "Nhóm làm ứng dụng điện thoại cho người dùng. Nhu cầu cố vấn: react native; trên điện thoại.",
+    "mentor": {
+      "mentorType": "IT",
+      "expertise": [
+        "java"
+      ],
+      "technologySkills": [],
+      "startupDomains": [],
+      "tags": [],
+      "bio": "",
+      "experience": "Đã trực tiếp phụ trách java."
+    },
+    "features": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.25
+    ]
+  },
+  {
+    "projectText": "C# API, C++ và ASP.NET cho bán hàng",
+    "mentor": {
+      "mentorType": "IT",
+      "technologySkills": [
+        "C#",
+        "C++",
+        "ASP.NET"
+      ],
+      "experience": "Thiết kế API"
+    },
+    "features": [
+      0.5,
+      0.0,
+      0.0,
+      1.0,
+      0.0,
+      0.16666666666666666,
+      0.6666666666666666,
+      0.25
+    ]
+  },
+  {
+    "projectText": "Java không phải JavaScript",
+    "mentor": {
+      "mentorType": "IT",
+      "technologySkills": [
+        "JavaScript"
+      ]
+    },
+    "features": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.25
+    ]
+  },
+  {
+    "projectText": "ĐỊNH GIÁ SẢN PHẨM — dòng tiền",
+    "mentor": {
+      "experience": "Quản lý tài chính",
+      "bio": "Được đào tạo về kế toán"
+    },
+    "features": [
+      0.5,
+      0.0,
+      0.0,
+      0.0,
+      0.5,
+      0.0,
+      0.0,
+      0.25
+    ]
+  },
+  {
+    "projectText": "Nội dung chưa có bằng chứng",
+    "mentor": {},
+    "features": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ]
+  },
+  {
+    "projectText": "Không cần AI, nhưng cần C#/.NET và PostgreSQL.\nCổng AI",
+    "mentor": {
+      "mentorType": "IT",
+      "experience": "Backend Node.js và PostgreSQL. Không có kinh nghiệm AI.",
+      "expertise": [
+        "AI"
+      ]
+    },
+    "features": [
+      0.75,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.25,
+      0.25,
+      0.5
+    ]
+  },
+  {
+    "projectText": "AI và computer vision",
+    "mentor": {
+      "mentorType": "IT",
+      "experience": "Không có kinh nghiệm AI, machine learning hoặc computer vision.",
+      "expertise": [
+        "AI"
+      ]
+    },
+    "features": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.25
+    ]
+  },
+  {
+    "projectText": "Cần marketing và sales",
+    "mentor": {
+      "experience": "Không chỉ marketing mà còn bán hàng."
+    },
+    "features": [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.5,
+      0.5,
+      0.25
+    ]
+  },
+  {
+    "projectText": "React Native cho điện thoại",
+    "mentor": {
+      "mentorType": "IT",
+      "experience": "React và TypeScript"
+    },
+    "features": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.25
+    ]
+  },
+  {
+    "projectText": "React Native cho điện thoại",
+    "mentor": {
+      "mentorType": "IT",
+      "experience": "React Native và Flutter"
+    },
+    "features": [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.5,
+      0.5,
+      0.25
+    ]
+  },
+  {
+    "projectText": "Marketing.\nTài chính",
+    "mentor": {
+      "experience": "Không có kinh nghiệm tài chính\nMarketing",
+      "expertise": [
+        "Finance"
+      ]
+    },
+    "features": [
+      0.5,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.3333333333333333,
+      0.3333333333333333,
+      0.25
+    ]
+  },
+  {
+    "projectText": "AI is not required. Need backend.",
+    "mentor": {
+      "mentorType": "IT",
+      "experience": "Backend. No AI."
+    },
+    "features": [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      1.0,
+      1.0,
+      0.125
+    ]
+  },
+  {
+    "projectText": "Cần logistics nông sản",
+    "mentor": {
+      "experience": "Vận hành du lịch"
+    },
+    "features": [
+      0.3333333333333333,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.375
+    ]
+  },
+  {
+    "projectText": "Nghiên cứu thị trường giáo dục",
+    "mentor": {
+      "mentorType": "IT",
+      "experience": "Flutter trong giáo dục"
+    },
+    "features": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.125
+    ]
+  }
+]
