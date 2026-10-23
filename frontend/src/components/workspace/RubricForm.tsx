@@ -1,44 +1,10 @@
 // @ts-nocheck
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, ChevronUp, RotateCcw, Users } from 'lucide-react';
 import toast from 'react-hot-toast';
-
-const normalizeCriteria = (criteria = []) => {
-  const source = Array.isArray(criteria) ? criteria : [];
-  return source.map((item) => ({
-    criterionKey: item.key || item.criterionKey,
-    criterionName: item.label || item.criterionName,
-    description: item.description || '',
-    weight: Number(item.weight ?? 1),
-    maxScore: Number(item.maxScore ?? 10),
-  }));
-};
-
-const initialRows = (criteria, initialData) => {
-  const byKey = new Map((initialData?.rubricScores || []).map((item) => [item.criterionKey, item]));
-  return criteria.map((criterion) => {
-    const existing = byKey.get(criterion.criterionKey) || {};
-    return {
-      ...criterion,
-      score: existing.score ?? existing.manualScore ?? '',
-      comment: existing.comment || '',
-    };
-  });
-};
-
-// Comparable form of everything the lecturer can edit, so opening the form and saving is not an update.
-const toNumberOrNull = (value) => (value === '' || value == null || !Number.isFinite(Number(value)) ? null : Number(value));
-const editableSnapshot = (rows, feedback, overrides) => JSON.stringify({
-  scores: rows.map((row) => [row.criterionKey, toNumberOrNull(row.score), row.comment || '']),
-  feedback: feedback || '',
-  members: Object.entries(overrides)
-    .map(([studentId, score]) => [studentId, toNumberOrNull(score)])
-    .sort(([left], [right]) => String(left).localeCompare(String(right))),
-});
-const savedOverrides = (initialData) => Object.fromEntries(
-  (initialData?.memberScores || [])
-    .filter((item) => item.isOverridden)
-    .map((item) => [item.studentId, String(item.score)]));
+import {
+  decideEvaluationSync, editableSnapshot, evaluationSyncKey, initialRows, normalizeCriteria, savedOverrides,
+} from '../../utils/rubricFormState';
 
 const evaluationStatusPresentation = {
   DRAFT: {
@@ -74,10 +40,7 @@ export default function RubricForm({
   const [rubricScores, setRubricScores] = useState(() => initialRows(criteria, initialData));
   const [overallFeedback, setOverallFeedback] = useState(initialData?.overallFeedback || '');
   const [memberScoresExpanded, setMemberScoresExpanded] = useState(false);
-  const [memberOverrides, setMemberOverrides] = useState(() => Object.fromEntries(
-    (initialData?.memberScores || [])
-      .filter((item) => item.isOverridden)
-      .map((item) => [item.studentId, String(item.score)])));
+  const [memberOverrides, setMemberOverrides] = useState(() => savedOverrides(initialData));
   const [attemptedSubmit, setAttemptedSubmit] = useState(false);
   const isSubmitted = initialData?.status === 'SUBMITTED' || initialData?.status === 'PUBLISHED';
   const savedSnapshot = useMemo(
@@ -89,17 +52,39 @@ export default function RubricForm({
   const statusPresentation = evaluationStatusPresentation[evaluationStatus]
     || evaluationStatusPresentation.NOT_GRADED;
 
-  useEffect(() => {
-    // Keep existing scores and comments visible when loading or switching evaluations.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+  // Background refreshes (realtime, reconnect) hand us a new initialData object even when nothing changed.
+  // Only replace what the lecturer is typing when it is safe; otherwise keep the edits and offer a reload.
+  const syncKey = evaluationSyncKey(initialData, criteria);
+  const currentSnapshot = editableSnapshot(rubricScores, overallFeedback, memberOverrides);
+  const baselineRef = useRef({ key: syncKey, snapshot: savedSnapshot });
+  const [hasNewerVersion, setHasNewerVersion] = useState(false);
+
+  const applyServerVersion = () => {
+    baselineRef.current = { key: syncKey, snapshot: savedSnapshot };
     setRubricScores(initialRows(criteria, initialData));
     setOverallFeedback(initialData?.overallFeedback || '');
-    setMemberOverrides(Object.fromEntries(
-      (initialData?.memberScores || [])
-        .filter((item) => item.isOverridden)
-        .map((item) => [item.studentId, String(item.score)])));
+    setMemberOverrides(savedOverrides(initialData));
     setAttemptedSubmit(false);
-  }, [criteria, initialData]);
+    setHasNewerVersion(false);
+  };
+
+  useEffect(() => {
+    const action = decideEvaluationSync({
+      baselineKey: baselineRef.current.key,
+      incomingKey: syncKey,
+      baselineSnapshot: baselineRef.current.snapshot,
+      incomingSnapshot: savedSnapshot,
+      currentSnapshot,
+    });
+    if (action === 'keep') return;
+    if (action === 'notify') {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setHasNewerVersion(true);
+      return;
+    }
+    applyServerVersion();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [syncKey, savedSnapshot, currentSnapshot]);
 
   const updateRow = (index, patch) => {
     if (readOnly) return;
@@ -213,6 +198,15 @@ export default function RubricForm({
           </div>
         )}
       </div>
+
+      {hasNewerVersion && (
+        <div role="status" className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+          <span>A newer version of this evaluation was saved elsewhere. Your unsaved edits are kept.</span>
+          <button type="button" onClick={applyServerVersion} disabled={readOnly} className="shrink-0 rounded-lg border border-amber-200 bg-white px-3 py-1.5 font-semibold text-amber-700 hover:bg-amber-50 disabled:opacity-50">
+            Load latest and discard my edits
+          </button>
+        </div>
+      )}
 
       <div className="divide-y divide-slate-100 rounded-xl border border-slate-200">
         {rubricScores.length === 0 && (

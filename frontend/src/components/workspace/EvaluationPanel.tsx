@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ClipboardCheck, Loader2, Sparkles, History, Layers3 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { evaluationApi } from '../../api/evaluationApi';
@@ -118,23 +118,38 @@ export default function EvaluationPanel({
     setSelectedCheckpoint(Number(checkpointNumber));
   }, [checkpointNumber]);
 
-  const fetchCheckpointData = useCallback(async () => {
+  // Only the latest request may update state, so a slow background refresh cannot overwrite a newer checkpoint.
+  const latestRequestRef = useRef(0);
+  const hasDataRef = useRef(false);
+
+  // Silent refreshes (realtime events, reconnects, after saving) keep the form mounted. Showing the loading
+  // placeholder would unmount RubricForm and discard whatever the lecturer has typed but not saved yet.
+  const fetchCheckpointData = useCallback(async ({ silent = false } = {}) => {
     if (!teamId) return;
+    const requestId = ++latestRequestRef.current;
     try {
-      setLoading(true);
-      setError(null);
+      if (!silent) {
+        hasDataRef.current = false;
+        setLoading(true);
+        setError(null);
+      }
       const res = await evaluationApi.getCheckpointSummary(teamId, selectedCheckpoint);
+      if (requestId !== latestRequestRef.current) return;
       if (res.success) {
+        hasDataRef.current = true;
         setCheckpointData(res.data.checkpoint || null);
         setEvaluations(res.data.evaluations || []);
         setHistory(res.data.history || []);
         setSummary(res.data.summary || null);
       }
     } catch (err) {
+      if (requestId !== latestRequestRef.current) return;
+      // A failed background refresh keeps what is already on screen instead of replacing the form with an error.
+      if (silent && hasDataRef.current) return;
       const message = err.response?.data?.message || err.response?.data?.error || 'Failed to load evaluations';
       setError(message);
     } finally {
-      setLoading(false);
+      if (requestId === latestRequestRef.current) setLoading(false);
     }
   }, [selectedCheckpoint, teamId]);
 
@@ -148,10 +163,10 @@ export default function EvaluationPanel({
     if (event.eventType === 'CheckpointEvaluationUpdated'
       && String(event.teamId) === String(teamId)
       && Number(event.checkpointNumber) === Number(selectedCheckpoint)) {
-      void fetchCheckpointData();
+      void fetchCheckpointData({ silent: true });
     }
   }, (reconnected) => {
-    if (reconnected) void fetchCheckpointData();
+    if (reconnected) void fetchCheckpointData({ silent: true });
   }), [fetchCheckpointData, selectedCheckpoint, teamId]);
 
   const saveEvaluation = async (formData) => {
@@ -179,7 +194,7 @@ export default function EvaluationPanel({
           : formData.status === 'SUBMITTED'
             ? 'Official evaluation submitted.'
             : 'Draft saved.');
-        await fetchCheckpointData();
+        await fetchCheckpointData({ silent: true });
       }
     } catch (err) {
       const message = err.response?.data?.message || err.response?.data?.error || 'Failed to save evaluation';

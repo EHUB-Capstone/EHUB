@@ -159,11 +159,13 @@ const NotificationDropdown = () => {
           if (!isOpen) fetchNotifications();
         }}
         className="relative w-9 h-9 rounded-xl flex items-center justify-center text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-colors focus-visible:outline-primary-600"
-        aria-label="Notifications"
+        aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : 'Notifications'}
+        aria-haspopup="true"
+        aria-expanded={isOpen}
       >
         <Bell className="w-[18px] h-[18px]" />
         {unreadCount > 0 && (
-          <span className="absolute top-1.5 right-1.5 min-w-[16px] h-4 px-1 rounded-full bg-primary text-white font-bold text-[9px] flex items-center justify-center border border-white ring-2 ring-white animate-pulse">
+          <span aria-hidden="true" className="absolute top-0 right-0 min-w-[16px] h-4 px-1 rounded-full bg-primary-700 text-white font-bold text-[9px] flex items-center justify-center ring-2 ring-white">
             {unreadCount > 9 ? '9+' : unreadCount}
           </span>
         )}

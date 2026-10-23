@@ -82,7 +82,7 @@ export default function CheckpointSection({
 
   const completedCount = configs.filter((cp) => {
     const s = stats[cp.number];
-    return (s?.count || 0) > 0 || (s?.linkCount || 0) > 0 || (s?.reqFilled || 0) > 0;
+    return (s?.count || 0) > 0 || (s?.linkCount || 0) > 0;
   }).length;
 
   if (error) return <section className="rounded-2xl border border-slate-200 bg-white p-5"><h2 className="mb-3 text-lg font-bold">Startup Checkpoints</h2><ErrorState message={error} onRetry={() => void fetchStats()} /></section>;
