@@ -22,14 +22,11 @@ export default function CheckpointCard({
   const stat = submissionStats[checkpoint.number] || {};
   const fileCount = stat.count || 0;
   const linkCount = stat.linkCount || 0;
-  const reqFilled = stat.reqFilled || 0;
-  const reqTotal = stat.reqTotal || checkpoint.requirements?.length || 0;
   const latest = stat.latest || null;
   const latestVersion = stat.latestVersion || null;
   const hasFiles = fileCount > 0;
   const hasLinks = linkCount > 0;
-  const hasRequirements = reqFilled > 0;
-  const hasSubmission = hasFiles || hasLinks || hasRequirements;
+  const hasSubmission = hasFiles || hasLinks;
   const scheduleStyle = {
     Open: 'bg-emerald-100 text-emerald-700',
     Upcoming: 'bg-blue-100 text-blue-700',
@@ -98,11 +95,6 @@ export default function CheckpointCard({
               <span className={`rounded-md px-2.5 py-1 text-overline font-bold ${scheduleStyle}`}>
                 {checkpoint.scheduleStatus}
               </span>
-              {reqTotal > 0 && (
-                <span className={`rounded-md px-2.5 py-1 text-overline font-bold ${hasRequirements ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
-                  {reqFilled}/{reqTotal} requirements
-                </span>
-              )}
               <span className={`rounded-md px-2.5 py-1 text-overline font-bold ${hasFiles ? 'bg-orange-100 text-orange-700' : 'bg-slate-100 text-slate-500'}`}>
                 {fileCount} file{fileCount !== 1 ? 's' : ''}
               </span>
