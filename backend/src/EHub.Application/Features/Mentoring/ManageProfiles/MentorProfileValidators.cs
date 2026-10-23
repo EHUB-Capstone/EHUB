@@ -8,7 +8,7 @@ public sealed class UpdateMentorProfileRequestValidator : AbstractValidator<Upda
     public UpdateMentorProfileRequestValidator()
     {
         RuleFor(x => x.MentorType).Must(x => x is "Business" or "IT");
-        RuleFor(x => x.Expertise).Must(x => ValidTags(x, true)).WithMessage("Provide 1–20 distinct expertise fields, each up to 80 characters.");
+        RuleFor(x => x.Expertise).Must(x => ValidTags(x)).WithMessage("Expertise must contain up to 20 distinct values, each up to 80 characters.");
         RuleFor(x => x.StartupDomains).Must(x => ValidTags(x)).WithMessage("Startup domains must be distinct and valid.");
         RuleFor(x => x.TechnologySkills).Must(x => ValidTags(x)).WithMessage("Technology skills must be distinct and valid.");
         RuleFor(x => x.Tags).Must(x => ValidTags(x)).WithMessage("Mentor tags must be distinct and valid.");

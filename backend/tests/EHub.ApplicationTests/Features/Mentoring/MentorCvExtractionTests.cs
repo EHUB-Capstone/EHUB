@@ -5,6 +5,7 @@ using EHub.Application.Common.Interfaces.Services;
 using EHub.Application.Common.Interfaces.Storage;
 using EHub.Application.Features.Mentoring;
 using EHub.Application.Features.Mentoring.ExtractCv;
+using EHub.Contracts.Mentoring;
 using EHub.Domain.Entities;
 using EHub.Infrastructure.Mentoring;
 using EHub.Infrastructure.Persistence;
@@ -291,6 +292,32 @@ public sealed class MentorCvExtractionTests
         download.Value.Content.Should().Equal(bytes);
         download.Value.ContentType.Should().Contain("wordprocessingml");
         (await handler.DownloadDocumentAsync(profile.Id, "cv", Guid.NewGuid(), SystemRoles.Mentor, default)).Error.Code.Should().Be(ErrorCodes.ClassAccessDenied);
+    }
+
+    [Fact]
+    public async Task EmptyExpertiseCanBeSavedWhenProfessionalInformationComesFromCv()
+    {
+        await using var db = Context();
+        var profile = Profile();
+        profile.Expertise = [];
+        db.MentorProfiles.Add(profile);
+        await db.SaveChangesAsync();
+        var handler = new MentorProfileHandler(db, Substitute.For<IMentorDocumentStorageService>(),
+            Substitute.For<IMentorEmbeddingSearch>(), Substitute.For<IMentorCvTextReader>());
+        var request = new UpdateMentorProfileRequest
+        {
+            MentorType = "Business",
+            Expertise = [],
+            Bio = "Professional skills extracted from the CV",
+            Experience = "Marketing experience extracted from the CV"
+        };
+
+        var result = await handler.UpdateMineAsync(profile.UserId, request, default);
+
+        result.IsSuccess.Should().BeTrue(result.IsFailure ? result.Error.Message : string.Empty);
+        result.Value.Expertise.Should().BeEmpty();
+        result.Value.Bio.Should().Be("Professional skills extracted from the CV");
+        result.Value.Experience.Should().Be("Marketing experience extracted from the CV");
     }
 
     [Theory]

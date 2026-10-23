@@ -14,7 +14,7 @@ export const parseMentorTags = (text: string): string[] => text.trim() ? text.sp
 export function validateMentorMetadata(profile: MentorProfileDraft): string | null {
   if (!['Business', 'IT'].includes(profile.mentorType)) return 'Choose a mentor type.';
   for (const [label, values, required] of [
-    ['Expertise', profile.expertise, true], ['Startup domains', profile.startupDomains, false],
+    ['Expertise', profile.expertise, false], ['Startup domains', profile.startupDomains, false],
     ['Technology skills', profile.technologySkills, false], ['Mentor tags', profile.tags, false],
   ] as const) {
     if (!Array.isArray(values) || values.length > 20 || (required && values.length === 0) ||

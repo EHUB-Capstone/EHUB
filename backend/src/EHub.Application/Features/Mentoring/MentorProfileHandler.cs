@@ -134,7 +134,7 @@ public sealed class MentorProfileHandler(IApplicationDbContext context, IMentorD
         var validation = await new ManageProfiles.UpdateMentorProfileRequestValidator().ValidateAsync(request, cancellationToken);
         if (!validation.IsValid)
             return Result.Failure<MentorProfileResponse>(ErrorCodes.CommonValidationError, validation.Errors[0].ErrorMessage);
-        if (request.MentorType is not ("Business" or "IT") || request.Expertise.Length is 0 or > 20 ||
+        if (request.MentorType is not ("Business" or "IT") || request.Expertise.Length > 20 ||
             request.Expertise.Any(x => string.IsNullOrWhiteSpace(x) || x.Length > 80) ||
             (request.Bio?.Length ?? 0) > 2000 || (request.Experience?.Length ?? 0) > 4000 ||
             (request.Organization?.Length ?? 0) > 200 ||

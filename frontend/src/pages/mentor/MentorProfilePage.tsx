@@ -178,8 +178,9 @@ export default function MentorProfilePage({ embedded = false }: { embedded?: boo
         <select disabled title="Managed by the administrator" id="mentor-type" required value={draft.mentorType} onChange={event => setDraft({ ...draft, mentorType: event.target.value as MentorProfile['mentorType'] })} className="mt-1 w-full rounded-lg border p-2">
           <option value="Unspecified">Select type</option><option value="Business">Business mentor</option><option value="IT">IT lecturer or technical mentor</option>
         </select></div>
-      <div><label htmlFor="mentor-expertise" className="block text-body font-medium">Expertise (comma separated)</label>
-        <input id="mentor-expertise" required maxLength={1600} value={expertiseText} onChange={event => setExpertiseText(event.target.value)} className="mt-1 w-full rounded-lg border p-2" placeholder="Product management, AI, marketing" /></div>
+      <div><label htmlFor="mentor-expertise" className="block text-body font-medium">Expertise (optional, comma separated)</label>
+        <input id="mentor-expertise" aria-describedby="mentor-expertise-help" maxLength={1600} value={expertiseText} onChange={event => setExpertiseText(event.target.value)} className="mt-1 w-full rounded-lg border p-2" placeholder="Product management, AI, marketing" />
+        <p id="mentor-expertise-help" className="mt-1 text-caption text-slate-500">You can leave this blank. We use your CV and professional experience for matching; add expertise manually if CV extraction misses it.</p></div>
       <div><label htmlFor="mentor-skills" className="block text-body font-medium">Skills (comma separated)</label>
         <input id="mentor-skills" aria-describedby="mentor-skills-help" maxLength={1640} value={skillsText} onChange={event => setSkillsText(event.target.value)} className="mt-1 w-full rounded-lg border p-2" placeholder="Leadership, Python, project planning" />
         <p id="mentor-skills-help" className="mt-1 text-caption text-slate-500">Enter up to 20 distinct skills, each at most 80 characters. Skills are entered manually and kept when you upload a CV.</p></div>

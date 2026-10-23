@@ -12,7 +12,7 @@ test('mentor metadata accepts structured experience and rejects duplicate and bl
   assert.equal(validateMentorMetadata(profile), null);
   assert.ok(validateMentorMetadata({ ...profile, tags: parseMentorTags('AI, ai') }));
   assert.ok(validateMentorMetadata({ ...profile, tags: parseMentorTags('AI,') }));
-  assert.ok(validateMentorMetadata({ ...profile, expertise: [] }));
+  assert.equal(validateMentorMetadata({ ...profile, expertise: [] }), null);
 });
 
 test('manual skills accept trimmed values and can be cleared', () => {
