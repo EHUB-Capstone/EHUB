@@ -6,6 +6,10 @@ import toast from 'react-hot-toast';
 import { checkpointApi } from '../../../api/checkpointApi';
 import { useAuth } from '../../../hooks/useAuth';
 import ConfirmDialog from '../../ui/ConfirmDialog';
+import AutoSizeTextarea from '../../ui/AutoSizeTextarea';
+
+// Enter sends through the form's own submit handler, so the empty/duplicate checks stay in one place.
+const submitForm = (event) => event.currentTarget.form?.requestSubmit();
 
 // ─── Helper badges ────────────────────────────────────────────────────────────
 const ROLE_COLORS = {
@@ -44,7 +48,7 @@ function FeedbackItem({ comment, replies, teamId, checkpointNumber, onPosted, on
 
   const handleReply = async (e) => {
     e.preventDefault();
-    if (!text.trim()) return;
+    if (!text.trim() || sending) return;
     setSending(true);
     try {
       const res = await checkpointApi.addFeedback(teamId, checkpointNumber, {
@@ -120,14 +124,18 @@ function FeedbackItem({ comment, replies, teamId, checkpointNumber, onPosted, on
 
       {/* Reply input */}
       {open && (
-        <form onSubmit={handleReply} className="pl-11 flex gap-2 items-center">
+        <form onSubmit={handleReply} className="pl-11 flex gap-2 items-end">
           <Avatar name={user?.name} avatarUrl={user?.avatarUrl || user?.avatar} size="sm" />
-          <input
+          <AutoSizeTextarea
             autoFocus
+            minRows={1}
+            maxRows={6}
             value={text}
             onChange={(e) => setText(e.target.value)}
+            submitOnEnter={submitForm}
+            aria-label="Write a reply"
             placeholder="Write a reply…"
-            className="flex-1 text-xs border border-slate-200 rounded-xl px-3 py-1.5 focus:outline-none focus:border-orange-400 bg-white"
+            className="flex-1 text-xs leading-5 border border-slate-200 rounded-xl px-3 py-1.5 focus:outline-none focus:border-orange-400 bg-white"
           />
           <button
             type="submit"
@@ -155,7 +163,7 @@ export default function FeedbackThread({ feedbacks, teamId, checkpointNumber, on
 
   const handlePost = async (e) => {
     e.preventDefault();
-    if (!text.trim()) return;
+    if (!text.trim() || sending) return;
     setSending(true);
     try {
       const res = await checkpointApi.addFeedback(teamId, checkpointNumber, { comment: text.trim() });
@@ -214,14 +222,18 @@ export default function FeedbackThread({ feedbacks, teamId, checkpointNumber, on
       <form onSubmit={handlePost} className="flex gap-3 items-start pt-1">
         <Avatar name={user?.name} avatarUrl={user?.avatarUrl || user?.avatar} />
         <div className="flex-1 space-y-2">
-          <textarea
+          <AutoSizeTextarea
+            minRows={2}
+            maxRows={10}
             value={text}
             onChange={(e) => setText(e.target.value)}
-            rows={2}
+            submitOnEnter={submitForm}
+            aria-label="Share feedback"
             placeholder="Share feedback or ask a question about this checkpoint…"
-            className="w-full text-sm border border-slate-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-orange-400/30 focus:border-orange-400 bg-slate-50/50 resize-none leading-relaxed"
+            className="w-full text-sm border border-slate-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-orange-400/30 focus:border-orange-400 bg-slate-50/50 leading-relaxed"
           />
-          <div className="flex justify-end">
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-caption text-slate-400">Enter to send · Shift+Enter for a new line</span>
             <button
               type="submit"
               disabled={!text.trim() || sending}

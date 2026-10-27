@@ -10,7 +10,7 @@ import { workspaceApi } from '../../api/workspaceApi';
 import { submissionAnalyticsApi } from '../../api/submissionAnalyticsApi';
 import type { SubmissionAnalyticsResponse } from '../../types/submissionAnalytics';
 import { includeTeamsWithoutWorkspace, matchesSubmissionStatus, submissionKey } from '../../utils/submissionAnalytics';
-import EvaluationPanel from '../../components/workspace/EvaluationPanel';
+import CheckpointGradingDialog, { type CheckpointGradingDialogHandle } from '../../components/evaluation/CheckpointGradingDialog';
 import StudentPreviousScoresDialog from '../../components/evaluation/StudentPreviousScoresDialog';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import EmptyState from '../../components/ui/EmptyState';
@@ -357,7 +357,7 @@ export default function EvaluationGrading() {
   const [reloadKey, setReloadKey] = useState(0);
   const [feedbackRecord, setFeedbackRecord] = useState<EvaluationGradingRecord | null>(null);
   const [previousScoresStudent, setPreviousScoresStudent] = useState<{ classId: string; studentId: string; fullName: string } | null>(null);
-  const [editingRecord, setEditingRecord] = useState<EvaluationGradingRecord | null>(null);
+  const gradingDialogRef = useRef<CheckpointGradingDialogHandle>(null);
   const [editingAssessment, setEditingAssessment] = useState<{ team: EvaluationTeam; assessment: CourseAssessmentEvaluation } | null>(null);
   const [publishingEvaluationId, setPublishingEvaluationId] = useState<string | null>(null);
   const [bulkPublicationSubmitting, setBulkPublicationSubmitting] = useState(false);
@@ -633,6 +633,16 @@ export default function EvaluationGrading() {
   const averageScore = completedCourseScores.length === 0 ? 0 : completedCourseScores.reduce((total, item) => total + item.score, 0) / completedCourseScores.length;
   const feedbackCount = evaluatedRecords.reduce((total, record) => total + (record.evaluation?.overallFeedback ? 1 : 0) + (record.evaluation?.rubricScores.filter(score => score.comment).length || 0), 0);
   const retry = () => setReloadKey(value => value + 1);
+  const openGradingDialog = (record: EvaluationGradingRecord) => gradingDialogRef.current?.open({
+    teamId: record.team.teamId,
+    classCode: record.team.classCode,
+    teamName: record.team.teamName,
+    checkpointNumber: record.checkpoint.number,
+    checkpointTitle: record.checkpoint.title,
+    isReadOnly: record.team.accessMode === 'READ_ONLY',
+  });
+  // Grades may have changed while the dialog was open: refresh the list quietly instead of blanking the page.
+  const refreshAfterGrading = () => { void loadEvaluationRecords(scopedTeams); };
   const exportEvaluationReport = async () => {
     if (evaluationReportScope.length === 0) return;
     setExportingReport(true);
@@ -874,14 +884,14 @@ export default function EvaluationGrading() {
                                       <button type="button" onClick={() => setFeedbackRecord(record)} className="mt-1.5 text-caption font-bold text-secondary hover:underline">View feedback</button>
                                       {canEdit && teamGroup.team.accessMode !== 'READ_ONLY' && record.evaluation.lecturerId?._id === currentUserId && record.status === 'SUBMITTED' && <button type="button" disabled={bulkPublicationSubmitting || publishingEvaluationId === record.evaluation._id} onClick={() => setPublicationConfirmation({ evaluationIds: [record.evaluation!._id], teamCount: 1, scope: 'single', action: 'publish' })} className="mt-1 inline-flex items-center gap-1 text-overline font-bold text-emerald-700 hover:underline disabled:opacity-50">{publishingEvaluationId === record.evaluation._id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />} Publish</button>}
                                       {canEdit && teamGroup.team.accessMode !== 'READ_ONLY' && record.evaluation.lecturerId?._id === currentUserId && record.status === 'PUBLISHED' && <button type="button" disabled={bulkPublicationSubmitting || publishingEvaluationId === record.evaluation._id} onClick={() => setPublicationConfirmation({ evaluationIds: [record.evaluation!._id], teamCount: 1, scope: 'single', action: 'unpublish' })} className="mt-1 inline-flex items-center gap-1 text-overline font-bold text-amber-700 hover:underline disabled:opacity-50">{publishingEvaluationId === record.evaluation._id ? <Loader2 className="h-3 w-3 animate-spin" /> : <EyeOff className="h-3 w-3" />} Hide scores</button>}
-                                      {canEdit && teamGroup.team.accessMode !== 'READ_ONLY' && <button type="button" onClick={() => setEditingRecord(record)} className="mt-1 inline-flex items-center gap-1 text-overline font-bold text-primary-700 hover:underline"><Edit3 className="h-3 w-3" /> Edit grading</button>}
+                                      {canEdit && teamGroup.team.accessMode !== 'READ_ONLY' && <button type="button" onClick={() => openGradingDialog(record)} className="mt-1 inline-flex items-center gap-1 text-overline font-bold text-primary-700 hover:underline"><Edit3 className="h-3 w-3" /> Edit grading</button>}
                                     </div>
                                   ) : (
                                     <div className="flex min-h-24 flex-col items-center justify-center">
                                       <span className="text-xl font-black text-slate-300">—</span>
                                       <span className="mt-1 text-overline font-bold uppercase tracking-wide text-slate-400">Not graded</span>
                                       {!teamGroup.team.hasWorkspace && <span className="mt-1 text-overline text-slate-400">Workspace not created</span>}
-                                      {canEdit && teamGroup.team.hasWorkspace && teamGroup.team.accessMode !== 'READ_ONLY' && record && <button type="button" onClick={() => setEditingRecord(record)} className="mt-1.5 inline-flex items-center gap-1 text-overline font-bold text-primary-700 hover:underline"><Edit3 className="h-3 w-3" /> Start grading</button>}
+                                      {canEdit && teamGroup.team.hasWorkspace && teamGroup.team.accessMode !== 'READ_ONLY' && record && <button type="button" onClick={() => openGradingDialog(record)} className="mt-1.5 inline-flex items-center gap-1 text-overline font-bold text-primary-700 hover:underline"><Edit3 className="h-3 w-3" /> Start grading</button>}
                                     </div>
                                   )}
                                 </td>
@@ -951,7 +961,7 @@ export default function EvaluationGrading() {
           : publicationConfirmation?.action === 'unpublish' ? 'Hide scores' : 'Publish scores'}
         confirmVariant={publicationConfirmation?.action === 'unpublish' ? 'danger' : 'primary'}
       />
-      {editingRecord && canEdit && <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/50 p-3 backdrop-blur-sm sm:p-6" role="dialog" aria-modal="true" aria-labelledby="grading-dialog-title"><div className="flex max-h-[94vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 shadow-2xl"><div className="flex items-center justify-between gap-4 border-b border-slate-200 bg-white px-5 py-4"><div className="min-w-0"><p className="text-overline font-bold uppercase tracking-wider text-primary-700">{editingRecord.team.classCode} · {editingRecord.team.teamName}</p><h2 id="grading-dialog-title" className="truncate text-lg font-black text-slate-900">Checkpoint {editingRecord.checkpoint.number}: {editingRecord.checkpoint.title}</h2></div><button type="button" onClick={() => { setEditingRecord(null); retry(); }} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700" aria-label="Close grading dialog"><X className="h-5 w-5" /></button></div><div className="overflow-y-auto"><EvaluationPanel teamId={editingRecord.team.teamId} proposalId={undefined} pitchDeckId={undefined} checkpointNumber={editingRecord.checkpoint.number} embedded isReadOnly={editingRecord.team.accessMode === 'READ_ONLY'} /></div></div></div>}
+      {canEdit && <CheckpointGradingDialog ref={gradingDialogRef} onClosed={refreshAfterGrading} />}
       </>}
     </div>
   );

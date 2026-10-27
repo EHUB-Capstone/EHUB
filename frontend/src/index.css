@@ -587,6 +587,10 @@ body {
   animation: scaleIn 0.15s ease-out;
 }
 
+.animate-fade-in-fast {
+  animation: fadeIn 0.15s ease-out;
+}
+
 .animate-slide-down {
   animation: slideDown 0.3s ease-out;
 }
