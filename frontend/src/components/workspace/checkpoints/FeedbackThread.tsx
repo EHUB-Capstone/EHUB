@@ -113,7 +113,7 @@ const roleLabel = (role) =>
   ] || role);
 
 function TechnicalReviewDisplay({ content }) {
-  if (!content?.startsWith('TECHNICAL REVIEW\n')) return <p className="text-xs text-slate-600 leading-relaxed whitespace-pre-wrap">{content}</p>;
+  if (!content?.startsWith('TECHNICAL REVIEW\n')) return <p className="text-xs text-slate-600 leading-relaxed whitespace-pre-wrap break-words">{content}</p>;
   const lines = content.split('\n');
   const metadata = lines.slice(1, 3);
   const rows = lines.slice(4).reduce((items, line) => {
@@ -124,7 +124,7 @@ function TechnicalReviewDisplay({ content }) {
   }, []);
   return <div className="overflow-hidden rounded-lg border border-primary-100 bg-white">
     <div className="border-b border-primary-100 bg-primary-50 px-3 py-2"><p className="text-caption font-bold text-primary-700">Technical review</p><p className="text-caption text-slate-600">{metadata.join(' · ')}</p></div>
-    <div className="divide-y divide-slate-100">{rows.map((row) => { const criterion = TECHNICAL_REVIEW_CRITERIA.find((item) => item.label === row.label); return <div key={row.label} className="grid gap-2 px-3 py-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)] sm:gap-4"><div><p className="text-caption font-semibold text-slate-800">{row.label}</p><p className="mt-0.5 text-caption leading-5 text-slate-500"><span className="font-semibold text-slate-600">Assessment:</span> {criterion?.description || '—'}</p><p className="mt-1 text-caption text-primary-700">Evidence: {row.evidence}</p></div><p className="text-caption whitespace-pre-wrap text-slate-600">{row.review}</p></div>; })}</div>
+    <div className="divide-y divide-slate-100">{rows.map((row) => { const criterion = TECHNICAL_REVIEW_CRITERIA.find((item) => item.label === row.label); return <div key={row.label} className="grid gap-2 px-3 py-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)] sm:gap-4"><div><p className="text-caption font-semibold text-slate-800">{row.label}</p><p className="mt-0.5 text-caption leading-5 text-slate-500"><span className="font-semibold text-slate-600">Assessment:</span> {criterion?.description || '—'}</p><p className="mt-1 text-caption text-primary-700">Evidence: {row.evidence}</p></div><p className="text-caption whitespace-pre-wrap break-words text-slate-600">{row.review}</p></div>; })}</div>
   </div>;
 }
 

@@ -104,13 +104,22 @@ public sealed class CheckpointFeedbackHandler(IApplicationDbContext context, ICh
         sheet.Cell(5, 1).Value = "Reviewer"; sheet.Cell(5, 2).Value = feedback.Creator?.FullName ?? "";
         sheet.Cell(7, 1).Value = "Criteria"; sheet.Cell(7, 2).Value = "Assessment"; sheet.Cell(7, 3).Value = "Evidence"; sheet.Cell(7, 4).Value = "Feedback / issues to fix";
         sheet.Range(7, 1, 7, 4).Style.Font.SetBold(); sheet.Range(7, 1, 7, 4).Style.Fill.BackgroundColor = XLColor.FromHtml("#FFF2CC");
-        var rowIndex = 8; foreach (var row in rows) { var labelAndEvidence = row[0].Split(" (", 2); sheet.Cell(rowIndex, 1).Value = labelAndEvidence[0]; sheet.Cell(rowIndex, 2).Value = string.Empty; sheet.Cell(rowIndex, 3).Value = labelAndEvidence.Length > 1 ? labelAndEvidence[1].TrimEnd(')') : string.Empty; sheet.Cell(rowIndex++, 4).Value = row[1]; }
+        var rowIndex = 8; foreach (var row in rows) { var labelAndEvidence = row[0].Split(" (", 2); sheet.Cell(rowIndex, 1).Value = labelAndEvidence[0]; sheet.Cell(rowIndex, 2).Value = AssessmentFor(labelAndEvidence[0]); sheet.Cell(rowIndex, 3).Value = labelAndEvidence.Length > 1 ? labelAndEvidence[1].TrimEnd(')') : string.Empty; sheet.Cell(rowIndex++, 4).Value = row[1]; }
         sheet.Range(7, 1, Math.Max(7, rowIndex - 1), 4).Style.Border.OutsideBorder = XLBorderStyleValues.Thin; sheet.Range(7, 1, Math.Max(7, rowIndex - 1), 4).Style.Border.InsideBorder = XLBorderStyleValues.Thin; sheet.Columns().AdjustToContents(); sheet.Column(2).Width = 45; sheet.Column(4).Width = 55; sheet.Range(1, 1, rowIndex, 4).Style.Alignment.WrapText = true;
         using var stream = new MemoryStream(); workbook.SaveAs(stream);
         var fileName = $"{Safe(feedback.Creator?.FullName ?? "Lecturer")}_{Safe(team.Class.Course.Code)}_{Safe(team.TeamName)}_Review Startup_{Safe(team.Class.Semester.Code)}.xlsx";
         return Result.Success((stream.ToArray(), ExcelContentType, fileName));
     }
     private static string Safe(string value) => string.Concat(value.Select(character => Path.GetInvalidFileNameChars().Contains(character) ? '_' : character));
+    private static string AssessmentFor(string criterion) => criterion switch
+    {
+        "Core functionality" => "The core user flow works and meets the selected requirements.",
+        "Interface and user experience" => "Easy to understand and use, with an appropriate display across devices.",
+        "Technology and architecture" => "The chosen technology is suitable and the team can explain how the system works.",
+        "Data and basic security" => "Input validation, appropriate permissions, and protection for passwords and API keys.",
+        "Testing and improvement" => "Core functions are tested; issues are logged and verified after fixes.",
+        _ => string.Empty
+    };
 
     private async Task<IReadOnlyCollection<Guid>> RecipientUserIdsAsync(Team team, CancellationToken ct)
     {
