@@ -6,16 +6,18 @@ using EHub.Domain.Enums;
 using EHub.Shared.Constants;
 using EHub.Shared.Errors;
 using EHub.Shared.Results;
+using ClosedXML.Excel;
 using Microsoft.EntityFrameworkCore;
 
 namespace EHub.Application.Features.Workspaces.CheckpointFeedback;
 
 public sealed class CheckpointFeedbackHandler(IApplicationDbContext context, ICheckpointFeedbackRealtimePublisher realtimePublisher) : ICheckpointFeedbackHandler
 {
+    private const string ExcelContentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
     public async Task<Result<WorkspaceCheckpointFeedbackResponse>> CreateAsync(Guid teamId, int checkpointNumber, CreateWorkspaceCheckpointFeedbackRequest request, Guid userId, string role, CancellationToken cancellationToken = default)
     {
         var content = request.Comment?.Trim() ?? string.Empty;
-        if (content.Length is < 1 or > 2000) return Result.Failure<WorkspaceCheckpointFeedbackResponse>(ErrorCodes.WorkspaceValidationError, "A comment must contain between 1 and 2000 characters.");
+        if (content.Length is < 1 or > 20_000) return Result.Failure<WorkspaceCheckpointFeedbackResponse>(ErrorCodes.WorkspaceValidationError, "A comment must contain between 1 and 20,000 characters.");
         var team = await context.Teams.Include(item => item.Class).ThenInclude(item => item.ClassLecturers)
             .Include(item => item.TeamMembers).ThenInclude(item => item.ClassStudent).ThenInclude(item => item.Student)
             .Include(item => item.MentorAssignments).ThenInclude(item => item.MentorProfile)
@@ -66,6 +68,49 @@ public sealed class CheckpointFeedbackHandler(IApplicationDbContext context, ICh
         await realtimePublisher.PublishDeletedAsync(await RecipientUserIdsAsync(team, cancellationToken), teamId, checkpointNumber, feedbackId, cancellationToken);
         return Result.Success();
     }
+
+    public async Task<Result<(byte[] FileBytes, string ContentType, string FileName)>> ExportAsync(Guid teamId, int checkpointNumber, Guid feedbackId, Guid userId, string role, CancellationToken cancellationToken = default)
+    {
+        var isAdmin = Is(role, SystemRoles.Admin);
+        var isLecturer = Is(role, SystemRoles.Lecturer);
+        var isMentor = Is(role, SystemRoles.Mentor);
+        if (!isAdmin && !isLecturer && !isMentor) return Result.Failure<(byte[], string, string)>(ErrorCodes.WorkspaceAccessDenied, "You do not have permission to export technical reviews.");
+        var team = await context.Teams.AsNoTracking().Include(item => item.Class).ThenInclude(item => item.Course)
+            .Include(item => item.Class).ThenInclude(item => item.Semester).Include(item => item.Project)
+            .Include(item => item.MentorAssignments).ThenInclude(item => item.MentorProfile)
+            .FirstOrDefaultAsync(item => item.Id == teamId && (isAdmin ||
+                (isLecturer && (item.Class.PrimaryLecturerId == userId || item.Class.ClassLecturers.Any(link => link.LecturerId == userId))) ||
+                (isMentor && item.MentorAssignments.Any(link => link.Status == MentorAssignmentStatus.Active && link.EndedAt == null && link.MentorProfile.UserId == userId && link.MentorProfile.Type == MentorType.Academic))), cancellationToken);
+        if (team is null) return Result.Failure<(byte[], string, string)>(ErrorCodes.WorkspaceAccessDenied, "You do not have access to this team workspace.");
+        var feedback = await context.SubmissionFeedbacks.AsNoTracking().Include(item => item.Creator)
+            .FirstOrDefaultAsync(item => item.Id == feedbackId && item.Submission.TeamId == teamId && item.Submission.Checkpoint.CheckpointNumber == checkpointNumber, cancellationToken);
+        if (feedback is null || !feedback.Content.StartsWith("TECHNICAL REVIEW\n", StringComparison.Ordinal)) return Result.Failure<(byte[], string, string)>(ErrorCodes.CommonNotFoundError, "Technical review was not found.");
+        if (isMentor && feedback.CreatedById != userId) return Result.Failure<(byte[], string, string)>(ErrorCodes.WorkspaceAccessDenied, "IT mentors can export only their own technical reviews.");
+        var lines = feedback.Content.Split('\n');
+        var rows = new List<string[]>();
+        foreach (var line in lines.Skip(4))
+        {
+            if (line.StartsWith("• "))
+            {
+                var parts = line[2..].Split(": ", 2);
+                if (parts.Length == 2) rows.Add(parts);
+            }
+            else if (rows.Count > 0) rows[^1][1] += $"\n{line}";
+        }
+        using var workbook = new XLWorkbook(); var sheet = workbook.Worksheets.Add("Technical Review");
+        sheet.Cell(1, 1).Value = "STARTUP TEAM REVIEW"; sheet.Range(1, 1, 1, 4).Merge().Style.Font.SetBold().Font.SetFontSize(16); sheet.Range(1, 1, 1, 4).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+        sheet.Cell(3, 1).Value = "Project / Team"; sheet.Cell(3, 2).Value = $"{team.Project?.Name ?? team.TeamName} / {team.TeamName}";
+        sheet.Cell(4, 1).Value = "Review date"; sheet.Cell(4, 2).Value = lines.ElementAtOrDefault(1)?.Replace("Review date: ", string.Empty) ?? string.Empty;
+        sheet.Cell(5, 1).Value = "Reviewer"; sheet.Cell(5, 2).Value = feedback.Creator?.FullName ?? "";
+        sheet.Cell(7, 1).Value = "Criteria"; sheet.Cell(7, 2).Value = "Assessment"; sheet.Cell(7, 3).Value = "Evidence"; sheet.Cell(7, 4).Value = "Feedback / issues to fix";
+        sheet.Range(7, 1, 7, 4).Style.Font.SetBold(); sheet.Range(7, 1, 7, 4).Style.Fill.BackgroundColor = XLColor.FromHtml("#FFF2CC");
+        var rowIndex = 8; foreach (var row in rows) { var labelAndEvidence = row[0].Split(" (", 2); sheet.Cell(rowIndex, 1).Value = labelAndEvidence[0]; sheet.Cell(rowIndex, 2).Value = string.Empty; sheet.Cell(rowIndex, 3).Value = labelAndEvidence.Length > 1 ? labelAndEvidence[1].TrimEnd(')') : string.Empty; sheet.Cell(rowIndex++, 4).Value = row[1]; }
+        sheet.Range(7, 1, Math.Max(7, rowIndex - 1), 4).Style.Border.OutsideBorder = XLBorderStyleValues.Thin; sheet.Range(7, 1, Math.Max(7, rowIndex - 1), 4).Style.Border.InsideBorder = XLBorderStyleValues.Thin; sheet.Columns().AdjustToContents(); sheet.Column(2).Width = 45; sheet.Column(4).Width = 55; sheet.Range(1, 1, rowIndex, 4).Style.Alignment.WrapText = true;
+        using var stream = new MemoryStream(); workbook.SaveAs(stream);
+        var fileName = $"{Safe(feedback.Creator?.FullName ?? "Lecturer")}_{Safe(team.Class.Course.Code)}_{Safe(team.TeamName)}_Review Startup_{Safe(team.Class.Semester.Code)}.xlsx";
+        return Result.Success((stream.ToArray(), ExcelContentType, fileName));
+    }
+    private static string Safe(string value) => string.Concat(value.Select(character => Path.GetInvalidFileNameChars().Contains(character) ? '_' : character));
 
     private async Task<IReadOnlyCollection<Guid>> RecipientUserIdsAsync(Team team, CancellationToken ct)
     {
