@@ -1,6 +1,6 @@
 // @ts-nocheck
 // src/api/checkpointApi.js
-import axiosClient from './axiosClient.ts';
+import axiosClient, { getAccessToken } from './axiosClient.ts';
 import storageClient from './storageClient.ts';
 import { CHECKPOINT_UPLOAD_TIMEOUT_MS, checkpointPutTimeoutMs } from '../utils/checkpointUpload.ts';
 
@@ -125,4 +125,13 @@ export const checkpointApi = {
     ),
   deleteFeedback: (teamId, checkpointNumber, feedbackId) =>
     axiosClient.delete(`/workspace/checkpoints/teams/${teamId}/checkpoints/${checkpointNumber}/feedback/${feedbackId}`),
+  exportTechnicalReview: async (teamId, checkpointNumber, feedbackId) => {
+    const response = await fetch(`/api/workspace/checkpoints/teams/${teamId}/checkpoints/${checkpointNumber}/feedback/${feedbackId}/export`, {
+      credentials: 'include', headers: getAccessToken() ? { Authorization: `Bearer ${getAccessToken()}` } : {},
+    });
+    if (!response.ok) throw new Error('Export failed.');
+    const disposition = response.headers.get('content-disposition') || '';
+    const fileName = disposition.match(/filename="?([^";]+)"?/i)?.[1] || 'technical-review.xlsx';
+    return { blob: await response.blob(), fileName };
+  },
 };

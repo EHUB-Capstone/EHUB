@@ -109,7 +109,10 @@ export default function CheckpointPanel({
     setFeedbacks((current) => current.some((item) => item._id === feedback._id)
       ? current
       : [...current, feedback]);
-  }, []);
+    // Re-read the persisted source of truth after the optimistic/realtime update.
+    // This prevents a delayed overview request from leaving the mentor with a stale thread.
+    void fetchData(true);
+  }, [fetchData]);
 
   const removeFeedback = useCallback((feedbackId) => {
     setFeedbacks((current) => current.filter((item) => item._id !== feedbackId));
