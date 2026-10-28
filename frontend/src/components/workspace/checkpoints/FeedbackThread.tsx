@@ -71,7 +71,7 @@ function FeedbackItem({ comment, replies, teamId, checkpointNumber, onPosted, on
       {/* Root comment */}
       <div className="flex gap-3">
         <Avatar name={comment.user?.name} avatarUrl={comment.user?.avatarUrl} />
-        <div className="flex-1 space-y-1">
+        <div className="min-w-0 flex-1 space-y-1">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-xs font-bold text-slate-800">{comment.user?.name}</span>
             <span className={`text-[9px] font-bold px-1.5 py-px border rounded-md ${roleBadge(comment.user?.role)}`}>
@@ -82,7 +82,7 @@ function FeedbackItem({ comment, replies, teamId, checkpointNumber, onPosted, on
               {new Date(comment.createdAt).toLocaleString()}
             </span>
           </div>
-          <p className="text-xs text-slate-600 leading-relaxed whitespace-pre-wrap">
+          <p className="text-xs text-slate-600 leading-relaxed whitespace-pre-wrap [overflow-wrap:anywhere]">
             {comment.comment}
           </p>
           <button
@@ -102,7 +102,7 @@ function FeedbackItem({ comment, replies, teamId, checkpointNumber, onPosted, on
             <div key={r._id} className="flex gap-2.5">
               <CornerDownRight className="w-3.5 h-3.5 text-slate-300 mt-1 shrink-0" />
               <Avatar name={r.user?.name} avatarUrl={r.user?.avatarUrl} size="sm" />
-              <div className="flex-1 bg-slate-50/60 border border-slate-100 rounded-xl px-3 py-2 space-y-1">
+              <div className="min-w-0 flex-1 bg-slate-50/60 border border-slate-100 rounded-xl px-3 py-2 space-y-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-caption font-bold text-slate-800">{r.user?.name}</span>
                   <span className={`text-[8px] font-bold px-1.5 py-px border rounded-md ${roleBadge(r.user?.role)}`}>
@@ -112,7 +112,7 @@ function FeedbackItem({ comment, replies, teamId, checkpointNumber, onPosted, on
                     {new Date(r.createdAt).toLocaleString()}
                   </span>
                 </div>
-                <p className="text-caption text-slate-600 leading-relaxed whitespace-pre-wrap">
+                <p className="text-caption text-slate-600 leading-relaxed whitespace-pre-wrap [overflow-wrap:anywhere]">
                   {r.comment}
                 </p>
                 {(user?.role?.toUpperCase() === 'ADMIN' || r.user?._id === user?._id) && <button onClick={() => onRequestDelete(r)} className="inline-flex items-center gap-1 text-[9px] font-bold text-slate-400 hover:text-red-600"><Trash2 className="w-3 h-3" />Delete</button>}
